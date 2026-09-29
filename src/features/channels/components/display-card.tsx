@@ -1,77 +1,122 @@
 "use client";
 
 /**
- * **THE DISPLAY CARD — what an agent showed on the glasses (or posted as a display), in chat.**
- * One module for every channel surface: `transcript.tsx` draws it inside `AuthoredRow` for any
- * message carrying `metadata.display` (`lib/message-device.ts`), so the channels page, the desktop
- * workspace pages and the /home record pane all get it from the one transcript.
+ * **THE DISPLAY CARD — every display an agent shows, and every decision** (docs/specs/
+ * unified-display.md §7.3). A decision IS a display with a `choice` block; old decision rows
+ * (`metadata.escalation` only) and v1 glasses displays arrive here through the one read-time
+ * adapter (`display/core/adapt.ts › displayOf`), so there is one card and no second face.
  *
- * ⚠ **THE AGENT CARD'S SHELL, BY REFERENCE** (`escalation-card-face.ts › AGENT_CARD_*`): the bar
- * in the posting agent's paint, the white panel inset under it. The blocks are
- * `display-blocks.tsx`'s; the plain-text body stays the fallback for surfaces that do not know
- * displays (the glasses inbox, MCP readers, an older desktop).
+ * Hosts: `transcript.tsx` (inside `AuthoredRow`: the channels page, the desktop workspace pages and
+ * the /home pane) at the `row` step, and `agent-stream.tsx` at the `stream` step.
  *
- * ⚠ **LIVE BY CONSTRUCTION.** An update rewrites the SAME message's `metadata.display`; the
- * transcript's doorbell refetch re-renders this card, which holds no copy of the blocks.
+ * ⚠ **THE SHELL IS THE DECISION CARD'S** (`escalation-card-face.ts › AGENT_CARD_FACE`): the bar in
+ * the posting agent's paint (black when ended), the white panel inset under it. The bar says
+ * `Needs Your Decision` when the display has a choice, else `Display`.
+ *
+ * ⚠ **LIVE BY CONSTRUCTION.** A replace rewrites the SAME message's `metadata.display`; the
+ * transcript's re-read redraws this card, which holds no copy of the blocks — only the press in
+ * flight.
  */
 
+import { useState } from "react";
 import { cn } from "@/shared/lib/utils";
-import type { MessageDisplay } from "../lib/message-device";
-import { useDisplayWrites } from "../hooks/use-display-writes";
+import { choiceOf, type Display } from "@/features/display/core/types";
+import { useDisplaySave, type AnswerDisplay } from "../hooks/use-display-writes";
 import { DisplayBlocks } from "./display-blocks";
+import { DisplayChoice, isDecisionFace } from "./display-choice";
 import {
-  AGENT_CARD_BAR,
-  AGENT_CARD_BAR_TYPE,
-  AGENT_CARD_PANEL,
-  AGENT_CARD_SHELL,
+  AGENT_CARD_FACE,
+  DECISION_CARD_LABEL,
+  type AgentCardSize,
 } from "./escalation-card-face";
 
 export const DISPLAY_CARD_LABEL = "Display";
 
+/** What a host knows about a display beyond its blocks — built once in the view model. */
+export interface DisplayView {
+  display: Display;
+  /** The viewer is in `answerersOf` (tagged, else the author account) — the server's 403 rule. */
+  answerable: boolean;
+  /** "You" / the answerer's name, when the answer can say who. */
+  answeredBy: string | null;
+  /** Save as template is offered (the viewer's own agent's display, not a legacy decision). */
+  saveable: boolean;
+}
+
 export function DisplayCard({
   channelId,
   messageId,
-  display,
+  view,
   paint,
-  canAct,
+  size = "row",
+  onAnswer,
 }: {
   channelId: string;
   messageId: string;
-  display: MessageDisplay;
+  view: DisplayView;
   /** `escalation-card-face.ts › decisionCardPaint` of the posting agent. */
   paint: string;
-  /** The viewer's own agent showed it (the row is on their side): choices and Save are theirs.
-   *  False renders the same card read-only — no dead buttons. */
-  canAct: boolean;
+  size?: AgentCardSize;
+  /** The host's answer write; ABSENT draws no buttons anywhere (absent-not-disabled). */
+  onAnswer?: AnswerDisplay;
 }) {
-  const writes = useDisplayWrites(channelId, messageId);
+  const { display } = view;
+  const face = AGENT_CARD_FACE[size];
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+  const choice = choiceOf(display.blocks);
+  const choose =
+    choice && view.answerable && onAnswer && !display.answer
+      ? async (index: number) => {
+          setPendingIndex(index);
+          if (!(await onAnswer({ channelId, messageId, index }))) setPendingIndex(null);
+        }
+      : undefined;
   return (
     <div
-      data-display-screen={display.screenId || undefined}
-      className={AGENT_CARD_SHELL}
+      data-display-id={display.display_id || undefined}
+      data-escalation-id={display.decision ? messageId : undefined}
+      className={face.shell}
       style={{ backgroundColor: paint }}
     >
-      <div className={AGENT_CARD_BAR}>
-        <span className={cn(AGENT_CARD_BAR_TYPE, "flex-1")}>{DISPLAY_CARD_LABEL}</span>
-        {canAct && (
-          <button
-            type="button"
-            disabled={writes.busy || writes.saved}
-            onClick={() => void writes.save()}
-            className="shrink-0 text-caption font-medium text-text-on-cta/80 transition-colors hover:text-text-on-cta disabled:cursor-default"
-          >
-            {writes.saved ? "Saved" : "Save"}
-          </button>
-        )}
+      <div className={face.bar}>
+        <span className={cn(face.barType, "flex-1")}>
+          {choice ? DECISION_CARD_LABEL : DISPLAY_CARD_LABEL}
+        </span>
+        {view.saveable && <SaveButton channelId={channelId} messageId={messageId} />}
       </div>
-      <div className={AGENT_CARD_PANEL}>
+      <div className={face.panel}>
         <DisplayBlocks
           display={display}
-          onChoose={canAct ? (choice) => void writes.answer(choice) : undefined}
-          pending={writes.pending}
-          busy={writes.busy}
+          face={face}
+          choice={
+            choice && (
+              <DisplayChoice
+                choice={choice}
+                decisionFace={isDecisionFace(choice, display.from === "escalation")}
+                answer={display.answer}
+                answeredBy={view.answeredBy}
+                pendingIndex={pendingIndex}
+                face={face}
+                onChoose={choose}
+              />
+            )
+          }
         />
       </div>
     </div>
+  );
+}
+
+function SaveButton({ channelId, messageId }: { channelId: string; messageId: string }) {
+  const writes = useDisplaySave(channelId, messageId);
+  return (
+    <button
+      type="button"
+      disabled={writes.busy || writes.saved}
+      onClick={() => void writes.save()}
+      className="shrink-0 text-caption font-medium text-text-on-cta/80 transition-colors hover:text-text-on-cta disabled:cursor-default"
+    >
+      {writes.saved ? "Saved" : "Save"}
+    </button>
   );
 }

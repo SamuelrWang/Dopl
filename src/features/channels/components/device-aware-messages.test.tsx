@@ -25,6 +25,7 @@ vi.mock("@/shared/ui/toast", () => ({
 
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { Transcript } from "./transcript";
+import { useDisplayAnswer } from "../hooks/use-display-writes";
 import { indexMembers } from "./view-model";
 import { channelRows } from "./view-model-rows";
 import { CHANNEL_ID, ME, PEER, member, message } from "./test-fixtures";
@@ -49,16 +50,25 @@ function route(path: string, opts: Record<string, unknown> = {}): Promise<unknow
   return Promise.reject(new Error(`unrouted ${method} ${path}`));
 }
 
-function renderMessages(messages: ChannelMessage[]) {
+/** The channel surface's wiring: the transcript handed the one answer write (`useDisplayAnswer`). */
+function Host({ messages, write }: { messages: ChannelMessage[]; write: boolean }) {
+  const answer = useDisplayAnswer();
+  return (
+    <Transcript
+      rows={channelRows(messages, [], INDEX, formatChannelTimestamp)}
+      index={INDEX}
+      flashId={null}
+      onOpenThread={() => {}}
+      onAnswerDisplay={write ? answer : undefined}
+    />
+  );
+}
+
+function renderMessages(messages: ChannelMessage[], write = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <Transcript
-        rows={channelRows(messages, [], INDEX, formatChannelTimestamp)}
-        index={INDEX}
-        flashId={null}
-        onOpenThread={() => {}}
-      />
+      <Host messages={messages} write={write} />
     </QueryClientProvider>
   );
 }
@@ -132,13 +142,14 @@ describe("the display card", () => {
     expect(screen.queryByText(/Credits 62%/)).toBeNull();
   });
 
-  it("answers a selectable list on the message's display route", async () => {
+  it("answers a v1 selectable list (read as a choice) on the message's display route", async () => {
     renderMessages([agentDisplay()]);
+    expect(screen.getByText("Needs Your Decision")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith(
         `/api/channels/${CHANNEL_ID}/messages/m-display/display/answer`,
-        { method: "POST", body: { block_id: "options", index: 1, choice: "Pause" } }
+        { method: "POST", body: { index: 1 } }
       )
     );
     // Pending: the choice holds its face and the strip stops being pressable.
@@ -168,6 +179,12 @@ describe("the display card", () => {
     );
     expect(await screen.findByRole("button", { name: "Saved" })).toBeTruthy();
     expect(toasts).toContain("Saved as template");
+  });
+
+  it("draws no buttons when the host carries no write — absent, not disabled", () => {
+    renderMessages([agentDisplay()], false);
+    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+    expect(screen.getByText("Pause")).toBeTruthy();
   });
 
   it("is read-only on a peer's display: no choices to press, no Save", () => {

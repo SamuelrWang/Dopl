@@ -14,8 +14,8 @@ import { DevicePill } from "./device-pill";
 import { DisplayCard } from "./display-card";
 import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
-import { EscalationCardMessage } from "./escalation-card-row";
 import { MessageMarkdown } from "./message-markdown";
+import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { recipientTags } from "../lib/recipient-tags";
 import type { AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, TranscriptRow } from "./view-model-rows";
@@ -28,8 +28,7 @@ export function Transcript({
   launchBusy = false,
   onLaunchAgent,
   onOpenAgent,
-  onAnswerEscalation,
-  answerBusy = false,
+  onAnswerDisplay,
   onOpenThread,
   newestSeq = null,
   onJumpToSeq,
@@ -46,13 +45,9 @@ export function Transcript({
   onLaunchAgent?: (threadId: string) => void;
   /** Open an agent's pane from its pill (`agents-model.ts › agentKey`); absent = inert pill. */
   onOpenAgent?: (agentId: string) => void;
-  /**
-   * Answer an escalation by its message id — the server derives who is woken, never the client.
-   * Absent renders no buttons, not disabled ones.
-   */
-  onAnswerEscalation?: (escalationMessageId: string, optionIndex: number) => void;
-  /** An answer is in flight — the double-submit guard, not a capability. */
-  answerBusy?: boolean;
+  /** Answer a display's choice (every decision too) — the server derives who is woken, never the
+   *  client. Absent renders no buttons, not disabled ones. */
+  onAnswerDisplay?: AnswerDisplay;
   onOpenThread: (id: string) => void;
   /** The newest loaded seq — the citation ceiling (`lib/message-refs.ts › isCitableSeq`); null
    *  draws no citation pills. */
@@ -113,23 +108,6 @@ export function Transcript({
             />
           );
         }
-        if (row.kind === "escalation") {
-          return (
-            <EscalationCardMessage
-              key={row.id}
-              row={row}
-              index={index}
-              flash={row.id === flashId}
-              onOpenAgent={onOpenAgent}
-              busy={answerBusy}
-              onAnswer={
-                onAnswerEscalation
-                  ? (optionIndex) => onAnswerEscalation(row.id, optionIndex)
-                  : undefined
-              }
-            />
-          );
-        }
         return (
           <Message
             key={row.id}
@@ -137,6 +115,7 @@ export function Transcript({
             index={index}
             flash={row.id === flashId}
             onOpenAgent={onOpenAgent}
+            onAnswerDisplay={onAnswerDisplay}
             newestSeq={newestSeq}
             onJumpToSeq={onJumpToSeq}
           />
@@ -182,6 +161,7 @@ function Message({
   index,
   flash,
   onOpenAgent,
+  onAnswerDisplay,
   newestSeq = null,
   onJumpToSeq,
 }: {
@@ -189,6 +169,7 @@ function Message({
   index: AuthorIndex;
   flash: boolean;
   onOpenAgent?: (agentId: string) => void;
+  onAnswerDisplay?: AnswerDisplay;
   /** Passed straight through to the body — see `Transcript`'s props. */
   newestSeq?: number | null;
   onJumpToSeq?: (seq: number) => void;
@@ -210,14 +191,15 @@ function Message({
   );
   // The same predicate `transcript-filter.tsx` uses for "People", so filter and paint agree.
   const box = agentBoxOf(row, index);
-  // A display replaces the markdown body; the body is its plain-text fallback for other readers.
+  // A display (every decision too) replaces the markdown body; the body is its plain-text fallback
+  // for readers that do not know displays. Painted like the attribution: the posting agent, else black.
   const body = row.display && row.channelId ? (
     <DisplayCard
       channelId={row.channelId}
       messageId={row.id}
-      display={row.display}
+      view={row.display}
       paint={decisionCardPaint(box?.color)}
-      canAct={row.side === "me"}
+      onAnswer={onAnswerDisplay}
     />
   ) : (
     <MessageMarkdown

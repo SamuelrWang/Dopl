@@ -72,6 +72,10 @@ import type { BodyContext } from "./message-markdown-context";
 import { MentionText } from "./message-markdown-mentions";
 import { normalizePipeTables } from "./message-markdown-tables";
 
+/** The table's cell recipes — shared by reference with `display-blocks.tsx`'s `table` block. */
+export const MD_TABLE = "w-full border-collapse text-text-primary";
+export const MD_TH = "border-b border-border-default px-2 py-1 text-left font-semibold";
+export const MD_TD = "border-b border-border-subtle px-2 py-1 align-top";
 
 export function MessageMarkdown({
   text,
@@ -278,13 +282,13 @@ function Block({
       const t = token as Tokens.Table;
       return (
         <div className={cn(block, "overflow-x-auto")}>
-          <table className="w-full border-collapse text-body text-text-primary">
+          <table className={cn(MD_TABLE, "text-body")}>
             <thead>
               <tr>
                 {t.header.map((cell, i) => (
                   <th
                     key={i}
-                    className="border-b border-border-default px-2 py-1 text-left font-semibold"
+                    className={MD_TH}
                   >
                     <Inline tokens={cell.tokens} ctx={ctx} />
                   </th>
@@ -295,7 +299,7 @@ function Block({
               {t.rows.map((row, i) => (
                 <tr key={i}>
                   {row.map((cell, j) => (
-                    <td key={j} className="border-b border-border-subtle px-2 py-1 align-top">
+                    <td key={j} className={MD_TD}>
                       <Inline tokens={cell.tokens} ctx={ctx} />
                     </td>
                   ))}

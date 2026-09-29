@@ -30,7 +30,14 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AgentStream } from "./agent-stream";
 import { buildAgentStream } from "./agent-stream-model";
 import { ESCALATION_METADATA_KEY } from "../escalation";
-import { ME, message } from "./test-fixtures";
+import { MENTIONS_METADATA_KEY } from "../lib/mentions";
+import { CHANNEL_ID, ME, message } from "./test-fixtures";
+import { indexMembers } from "./view-model";
+import { answersByEscalation } from "./view-model-display";
+
+const ANSWER = async () => true;
+/** The panel hands the viewer (`agent-panel.tsx`); without it every card is read-only. */
+const VIEWER = indexMembers([], ME);
 
 afterEach(cleanup);
 
@@ -80,9 +87,10 @@ function draw(
 describe("the card renders in the stream", () => {
   it("shows the four fields, as its own box", () => {
     const { container } = draw([ESCALATION_POST], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
+      displayIndex: VIEWER,
     });
-    expect(container.querySelector("[data-agent-escalation]")).toBeTruthy();
+    expect(container.querySelector("[data-agent-display] [data-escalation-id]")).toBeTruthy();
     expect(screen.getByText("Ship the migration now or wait?")).toBeTruthy();
     expect(screen.getByText("It is additive and reversible.")).toBeTruthy();
     expect(screen.getByText("Live in ten minutes.")).toBeTruthy();
@@ -90,8 +98,8 @@ describe("the card renders in the stream", () => {
   });
 
   it("leaves an ORDINARY sent post on the plain box", () => {
-    const { container } = draw([PLAIN_POST], { onAnswerEscalation: () => {} });
-    expect(container.querySelector("[data-agent-escalation]")).toBeNull();
+    const { container } = draw([PLAIN_POST], { onAnswerDisplay: ANSWER, displayIndex: VIEWER });
+    expect(container.querySelector("[data-agent-display] [data-escalation-id]")).toBeNull();
     expect(
       screen.getByText("Done — the report is in the knowledge base.")
     ).toBeTruthy();
@@ -109,20 +117,21 @@ describe("the card renders in the stream", () => {
           text: "**Escalation:** Ship the migration now or wait?",
         },
       ],
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
+      displayIndex: VIEWER,
     });
-    expect(container.querySelector("[data-agent-escalation]")).toBeNull();
+    expect(container.querySelector("[data-agent-display] [data-escalation-id]")).toBeNull();
   });
 });
 
 describe("answering from the stream", () => {
   it("reports the escalation's own message id and the index", () => {
-    const onAnswer = vi.fn();
-    draw([ESCALATION_POST], { onAnswerEscalation: onAnswer });
+    const onAnswer = vi.fn(async () => true);
+    draw([ESCALATION_POST], { onAnswerDisplay: onAnswer, displayIndex: VIEWER });
     fireEvent.click(
       screen.getByRole("button", { name: "Option B: Wait for review" })
     );
-    expect(onAnswer).toHaveBeenCalledWith("m-esc", 1);
+    expect(onAnswer).toHaveBeenCalledWith({ channelId: CHANNEL_ID, messageId: "m-esc", index: 1 });
   });
 
   it("renders NO buttons without a callback — absent, not disabled", () => {
@@ -134,37 +143,44 @@ describe("answering from the stream", () => {
   });
 
   it("renders no buttons when the viewer is not the answerer", () => {
-    draw([ESCALATION_POST], {
-      onAnswerEscalation: () => {},
-      escalationAnswerable: false,
+    // Tagged someone else: the answerers rule (`answerersOf`) excludes the viewer.
+    draw([{ ...ESCALATION_POST, metadata: { ...ESCALATION_POST.metadata, [MENTIONS_METADATA_KEY]: ["u-other"] } }], {
+      onAnswerDisplay: ANSWER,
+      displayIndex: VIEWER,
     });
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
-  it("disables while an answer is in flight — busy is not a capability", () => {
-    draw([ESCALATION_POST], {
-      onAnswerEscalation: () => {},
-      answerBusy: true,
-    });
-    expect(
-      screen
-        .getByRole("button", { name: "Option A: Ship now" })
-        .hasAttribute("disabled")
-    ).toBe(true);
+  it("no viewer handed (the pop-out window) — read-only even with a write", () => {
+    draw([ESCALATION_POST], { onAnswerDisplay: ANSWER });
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
   it("an ANSWERED card shows the choice and drops the buttons", () => {
     const { container } = draw([ESCALATION_POST], {
-      onAnswerEscalation: () => {},
-      answeredEscalations: new Map([["m-esc", 1]]),
+      onAnswerDisplay: ANSWER,
+      displayIndex: VIEWER,
+      displayAnswers: answersByEscalation(
+        [
+          message({
+            id: "m-ans",
+            seq: 6,
+            authorUserId: ME,
+            body: "Wait for review",
+            metadata: { escalationAnswer: { escalationMessageId: "m-esc", optionIndex: 1 } },
+          }),
+        ],
+        VIEWER
+      ),
     });
     expect(screen.queryAllByRole("button")).toHaveLength(0);
-    expect(screen.getByText("Wait for review")).toBeTruthy();
+    // …and says who chose it, like the transcript card.
+    expect(screen.getByText(/You chose/).textContent).toBe("You chose Wait for review");
     // ⚠ THE STRIP STAYS AND SAYS WHICH ONE WON (Samuel, 2026-09-20): the chosen
     // option keeps the black face, the rest take the switcher's grey. It is the
     // transcript card's rule, in the surface that must not drift from it.
     const options = Array.from(
-      container.querySelectorAll("[data-agent-escalation] [data-option-index]")
+      container.querySelectorAll("[data-agent-display] [data-escalation-id] [data-option-index]")
     ) as HTMLElement[];
     expect(options.map((el) => el.textContent)).toEqual(["Option A", "Option B"]);
     expect(options[1].className).toContain("auth-btn-3d");
@@ -175,34 +191,37 @@ describe("answering from the stream", () => {
 describe("the 2026-09-20 face, shared with the transcript card", () => {
   it("says Needs Your Decision and wears THIS agent's colour", () => {
     const { container } = draw([ESCALATION_POST], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
+      displayIndex: VIEWER,
       color: "agent-07",
     });
     expect(screen.getByText("Needs Your Decision")).toBeTruthy();
     expect(screen.queryByText("Needs a decision")).toBeNull();
     const card = container.querySelector(
-      "[data-agent-escalation]"
+      "[data-agent-display] [data-escalation-id]"
     ) as HTMLElement;
     expect(card.style.backgroundColor).toBe("var(--agent-color-07)");
   });
 
   it("falls back to BLACK with no colour assigned", () => {
     const { container } = draw([ESCALATION_POST], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
+      displayIndex: VIEWER,
     });
     const card = container.querySelector(
-      "[data-agent-escalation]"
+      "[data-agent-display] [data-escalation-id]"
     ) as HTMLElement;
     expect(card.style.backgroundColor).toBe("var(--surface-cta)");
   });
 
   it("names the recommendation in the option's own badge, and carries no dash", () => {
     const { container } = draw([ESCALATION_POST], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
+      displayIndex: VIEWER,
     });
     expect(screen.getByText("Recommended:")).toBeTruthy();
     const card = container.querySelector(
-      "[data-agent-escalation]"
+      "[data-agent-display] [data-escalation-id]"
     ) as HTMLElement;
     const badge = Array.from(card.querySelectorAll("span")).find(
       (el) => el.textContent === "Option A" && el.className.includes("rounded-[6px]")
@@ -222,11 +241,13 @@ describe("the model carries the message id beside the payload", () => {
       sent: [ESCALATION_POST],
       delivered: [ESCALATION_POST],
     });
-    const item = items.find((i) => i.escalation);
-    expect(item?.escalation?.messageId).toBe("m-esc");
-    expect(item?.escalation?.payload.issue).toBe(
-      "Ship the migration now or wait?"
-    );
+    const item = items.find((i) => i.display);
+    expect(item?.display?.messageId).toBe("m-esc");
+    expect(item?.display?.display.from).toBe("escalation");
+    expect(item?.display?.display.blocks[0]).toMatchObject({
+      type: "text",
+      content: "Ship the migration now or wait?",
+    });
   });
 
   it("answers `undefined` for every ordinary post, so no row shape moved", () => {
@@ -235,6 +256,6 @@ describe("the model carries the message id beside the payload", () => {
       sent: [PLAIN_POST],
       delivered: [PLAIN_POST],
     });
-    expect(items.every((i) => i.escalation === undefined)).toBe(true);
+    expect(items.every((i) => i.display === undefined)).toBe(true);
   });
 });

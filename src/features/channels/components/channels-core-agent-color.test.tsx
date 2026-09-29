@@ -63,11 +63,9 @@ vi.mock("../hooks/use-channel-preference-writes", () => ({
     unaddressedResponder: { mutate: () => {}, pending: false },
   }),
 }));
-vi.mock("../hooks/use-escalation-writes", () => ({
-  useEscalationWrites: () => ({
-    answer: { mutate: () => {}, pending: false },
-    pending: false,
-  }),
+vi.mock("../hooks/use-display-writes", () => ({
+  useDisplayAnswer: () => async () => true,
+  useDisplaySave: () => ({ save: async () => {}, saved: false, busy: false }),
 }));
 vi.mock("../hooks/use-channel-header-writes", () => ({
   useChannelHeaderWrite: () => ({

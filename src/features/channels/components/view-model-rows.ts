@@ -11,7 +11,8 @@ import {
   lifecycleReceiptStatus,
   type ReceiptStatus,
 } from "../lib/message-receipt";
-import { messageDisplayOf, messageSourceOf, type MessageDisplay, type MessageSource } from "../lib/message-device";
+import { messageSourceOf, type MessageSource } from "../lib/message-device";
+import { choiceOf } from "@/features/display/core/types";
 import { authorAgentIdOf } from "./agents-model";
 import {
   fanoutGroupOf,
@@ -20,11 +21,8 @@ import {
   threadIdOf,
   type AuthorIndex,
 } from "./view-model";
-import {
-  answersByEscalation,
-  escalationRowFor,
-  type EscalationRow,
-} from "./view-model-escalation";
+import { answersByEscalation, displayViewOf } from "./view-model-display";
+import type { DisplayView } from "./display-card";
 import type { ArtifactRow } from "./view-model-artifacts";
 import type { ChannelMessage, ChannelThread } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
@@ -67,8 +65,9 @@ export interface MessageRow {
   /** Person rows only: the device it was posted from (`lib/message-device.ts`); absent draws no
    *  pill. */
   source?: MessageSource | null;
-  /** An agent-built display (`lib/message-device.ts`); the card replaces the markdown body. */
-  display?: MessageDisplay | null;
+  /** A display or decision (`view-model-display.ts › displayViewOf`); the card replaces the
+   *  markdown body, which stays the text fallback for readers that do not know displays. */
+  display?: DisplayView | null;
 }
 
 /** A `system` row (joins, topic changes) — no side, avatar or author. */
@@ -156,7 +155,6 @@ export type TranscriptRow =
   | SystemRow
   | ThreadCardRow
   | ReceiptRow
-  | EscalationRow
   // Type-only: `view-model-artifacts.ts` never imports this file back, so no cycle.
   | ArtifactRow;
 
@@ -194,7 +192,8 @@ function toMessageRow(
   message: ChannelMessage,
   previous: ChannelMessage | null,
   index: AuthorIndex,
-  formatTime: (iso: string) => string
+  formatTime: (iso: string) => string,
+  display: DisplayView | null
 ): MessageRow | SystemRow {
   if (message.kind === "system") {
     return { kind: "system", id: message.id, seq: message.seq, body: message.body };
@@ -232,7 +231,7 @@ function toMessageRow(
     channelId: message.channelId,
     // Server-written, reserved keys (stripped from caller input); a person's device, never an agent's.
     source: message.authorKind === "agent" ? null : messageSourceOf(message.metadata),
-    display: messageDisplayOf(message.metadata),
+    display,
   };
 }
 
@@ -273,11 +272,9 @@ export function channelRows(
   for (const message of messages) {
     const threadId = threadIdOf(message);
     const thread = threadId ? threadById.get(threadId) : undefined;
-    // Before the thread branch: an escalation stays in the channel view even when threaded.
-    const escalationRow = escalationRowFor(message, index, answers, formatTime);
-    if (escalationRow) {
-      rows.push(escalationRow);
-      // A card has no pill, so the run must not continue across it (F-251).
+    const display = displayViewOf(message, index, answers);
+    // Before the thread branch: a decision stays in the channel view even when threaded.
+    if (pushDecision(rows, message, index, formatTime, display)) {
       previous = null;
       continue;
     }
@@ -313,10 +310,27 @@ export function channelRows(
       previous = null;
       continue;
     }
-    rows.push(toMessageRow(message, previous, index, formatTime));
+    rows.push(toMessageRow(message, previous, index, formatTime, display));
     previous = message;
   }
   return rows;
+}
+
+/**
+ * A DECISION (a display with a `choice`) is its own run: it never continues the row above and
+ * nothing continues it (F-251), and in the channel view it stays even when threaded — a question
+ * waiting on a human must not be one click away. `true` when it was pushed.
+ */
+function pushDecision(
+  rows: TranscriptRow[],
+  message: ChannelMessage,
+  index: AuthorIndex,
+  formatTime: (iso: string) => string,
+  display: DisplayView | null
+): boolean {
+  if (!display || !choiceOf(display.display.blocks)) return false;
+  rows.push(toMessageRow(message, null, index, formatTime, display));
+  return true;
 }
 
 /** The thread view: only the messages tagged for that thread. */
@@ -331,9 +345,8 @@ export function threadRows(
   let previous: ChannelMessage | null = null;
   for (const message of messages) {
     if (threadIdOf(message) !== threadId) continue;
-    const escalationRow = escalationRowFor(message, index, answers, formatTime);
-    if (escalationRow) {
-      rows.push(escalationRow);
+    const display = displayViewOf(message, index, answers);
+    if (pushDecision(rows, message, index, formatTime, display)) {
       previous = null;
       continue;
     }
@@ -343,7 +356,7 @@ export function threadRows(
       // `previous` unchanged: a receipt neither breaks nor extends a run.
       continue;
     }
-    rows.push(toMessageRow(message, previous, index, formatTime));
+    rows.push(toMessageRow(message, previous, index, formatTime, display));
     previous = message;
   }
   return rows;

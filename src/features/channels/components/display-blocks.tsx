@@ -1,88 +1,126 @@
 "use client";
 
 /**
- * **THE DISPLAY BLOCKS, IN DOPL'S OWN FACE** — the platform-neutral renderer of the glasses block
- * vocabulary (`glasses/core/screens/spec.ts`: text, list, progress, divider, spacer). The glasses
- * compile the same blocks against their HUD (`glasses/platforms/*`); this draws them in chat, on
- * every channel surface, from the one card (`display-card.tsx`).
+ * **THE DISPLAY BLOCKS, IN DOPL'S OWN FACE** — the desktop/web renderer of the one display
+ * vocabulary (`display/core/types.ts`, docs/specs/unified-display.md §2.5): heading, text, fields,
+ * list, progress, table, divider, spacer. The `choice` block is the host's (`display-card.tsx` →
+ * `display-choice.tsx`), drawn in its place through {@link DisplayBlocks}' `choice` slot. The G2
+ * lens draws the SAME blocks through `display/core/degrade.ts`; text-only readers get the body.
  *
  * ⚠ **NO PIXELS FROM THE SPEC.** `absolute` layout's `x`/`y`/`w`/`h` are HUD coordinates; here they
- * only ORDER the blocks (top-to-bottom, then left-to-right), and `lines` / `brightness` map onto the
- * type scale rather than onto a box.
+ * only ORDER the blocks (top-to-bottom, then left-to-right), and v1 `brightness` maps onto the ink
+ * ramp rather than onto a box.
+ *
+ * ⚠ **AN UNKNOWN BLOCK DRAWS NOTHING** — a newer server's block on an older bundle degrades to the
+ * blocks this build knows (the adapter already dropped anything it could not normalize).
  */
 
+import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
-import type { DisplayAnswer, DisplayBlock, MessageDisplay } from "../lib/message-device";
-import {
-  AGENT_CARD_BODY_TYPE,
-  AGENT_CARD_BTN_BOX,
-  DECISION_BTN_BASE,
-  DECISION_BTN_BLACK,
-  DECISION_BTN_GREY,
-} from "./escalation-card-face";
+import type {
+  Display,
+  DisplayBlock,
+  Positioned,
+  TextBlock,
+} from "@/features/display/core/types";
+import type { AgentCardFace } from "./escalation-card-face";
+import { MD_TABLE, MD_TD, MD_TH } from "./message-markdown";
 
-/** The spec's default ids (`b1`, `b2`, …), so an answer names the block the agent would. */
-export const blockIdOf = (block: DisplayBlock, index: number): string =>
-  typeof block.id === "string" && block.id ? block.id : `b${index + 1}`;
-
-/** HUD brightness 0-4 onto the ink ramp; unset is full brightness. */
-function inkOf(brightness: unknown): string {
-  if (typeof brightness !== "number" || brightness >= 3) return "text-text-primary";
-  return brightness >= 2 ? "text-text-secondary" : "text-text-muted";
+/** v1 HUD brightness 0-4 onto the ink ramp; v2 `tone` wins; unset is full ink. */
+function inkOf(block: TextBlock): string | false {
+  if (block.tone === "strong") return "font-semibold";
+  if (block.tone === "muted") return "text-text-secondary";
+  const b = block.brightness;
+  if (typeof b !== "number" || b >= 3) return false;
+  return b >= 2 ? "text-text-secondary" : "text-text-muted";
 }
 
-const itemsOf = (block: DisplayBlock): string[] =>
-  Array.isArray(block.items) ? block.items.filter((item) => typeof item === "string") : [];
-
 /** Top-to-bottom, then left-to-right, for `absolute`; the agent's order for `stack`. */
-function ordered(display: MessageDisplay): { block: DisplayBlock; id: string }[] {
-  const rows = display.blocks.map((block, i) => ({ block, id: blockIdOf(block, i) }));
-  if (display.layout !== "absolute") return rows;
-  const at = (value: unknown) => (typeof value === "number" ? value : 0);
-  return rows.sort((a, b) => at(a.block.y) - at(b.block.y) || at(a.block.x) - at(b.block.x));
+function ordered(display: Display): Positioned<DisplayBlock>[] {
+  if (display.layout !== "absolute") return display.blocks;
+  const at = (value: number | undefined) => value ?? 0;
+  return [...display.blocks].sort((a, b) => at(a.y) - at(b.y) || at(a.x) - at(b.x));
 }
 
 export function DisplayBlocks({
   display,
-  onChoose,
-  pending = null,
-  busy = false,
+  face,
+  choice,
 }: {
-  display: MessageDisplay;
-  /** Answer a selectable list. ABSENT renders read-only choices, never disabled buttons. */
-  onChoose?: (answer: DisplayAnswer) => void;
-  /** The choice in flight, shown chosen until the stored answer arrives. */
-  pending?: DisplayAnswer | null;
-  busy?: boolean;
+  display: Display;
+  /** The host's size step (`escalation-card-face.ts › AGENT_CARD_FACE`). */
+  face: AgentCardFace;
+  /** What the `choice` block draws, in its place (at most one per display). */
+  choice?: ReactNode;
 }) {
-  const answer = display.answer ?? pending;
   return (
     <>
-      {ordered(display).map(({ block, id }) => {
+      {ordered(display).map((block) => {
+        const key = block.id;
         switch (block.type) {
+          case "heading":
+            return (
+              <p key={key} data-block={key} className={cn(face.body, "font-semibold")}>
+                {block.text}
+              </p>
+            );
           case "text":
             return (
               <p
-                key={id}
-                data-block={id}
+                key={key}
+                data-block={key}
                 className={cn(
-                  AGENT_CARD_BODY_TYPE,
+                  face.body,
                   "whitespace-pre-wrap",
-                  inkOf(block.brightness),
+                  inkOf(block),
                   block.border && "rounded-[8px] border border-border-default px-2 py-1"
                 )}
               >
-                {typeof block.content === "string" ? block.content : ""}
+                {block.content}
               </p>
             );
+          case "fields":
+            return (
+              <dl
+                key={key}
+                data-block={key}
+                className={cn(face.body, "grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5")}
+              >
+                {block.rows.map((row, i) => (
+                  <div key={i} className="contents">
+                    <dt className="text-text-muted">{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            );
+          case "list": {
+            const List = block.style === "number" ? "ol" : "ul";
+            return (
+              <List
+                key={key}
+                data-block={key}
+                className={cn(
+                  face.body,
+                  "pl-5",
+                  block.style === "number" ? "list-decimal" : "list-disc"
+                )}
+              >
+                {block.items.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </List>
+            );
+          }
+          case "choice":
+            return <div key={key} data-block={key} className="contents">{choice}</div>;
           case "progress": {
-            const value = typeof block.value === "number" ? Math.min(1, Math.max(0, block.value)) : 0;
-            const pct = Math.round(value * 100);
+            const pct = Math.round(Math.min(1, Math.max(0, block.value)) * 100);
             return (
               <UsageMeter
-                key={id}
-                label={typeof block.label === "string" ? block.label : undefined}
+                key={key}
+                label={block.label}
                 used={pct}
                 limit={100}
                 readout={`${pct}%`}
@@ -90,22 +128,42 @@ export function DisplayBlocks({
               />
             );
           }
-          case "divider":
-            return <hr key={id} className="border-border-default" />;
-          case "spacer": {
-            const lines = typeof block.lines === "number" ? Math.min(4, Math.max(1, block.lines)) : 1;
-            return <div key={id} aria-hidden style={{ height: `${lines * 0.75}rem` }} />;
-          }
-          case "list":
+          case "table":
             return (
-              <DisplayList
-                key={id}
-                id={id}
-                items={itemsOf(block)}
-                selectable={block.selectable !== false}
-                answer={answer}
-                busy={busy}
-                onChoose={onChoose}
+              <div key={key} data-block={key} className="overflow-x-auto">
+                <table className={cn(MD_TABLE, face.body)}>
+                  <thead>
+                    <tr>
+                      {block.columns.map((column, i) => (
+                        <th key={i} className={cn(MD_TH, "text-text-muted")}>
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.rows.map((row, i) => (
+                      <tr key={i}>
+                        {row.map((cell, j) => (
+                          <td key={j} className={MD_TD}>
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          case "divider":
+            return <hr key={key} data-block={key} className="border-border-default" />;
+          case "spacer":
+            return (
+              <div
+                key={key}
+                data-block={key}
+                aria-hidden
+                style={{ height: `${Math.min(4, Math.max(1, block.lines ?? 1)) * 0.75}rem` }}
               />
             );
           default:
@@ -113,69 +171,5 @@ export function DisplayBlocks({
         }
       })}
     </>
-  );
-}
-
-/**
- * A list. SELECTABLE, it is the decision card's button strip (`escalation-card-face.ts`): black
- * before a choice, the chosen one black and the rest grey after — the same state wherever it was
- * answered, because the answer is the message's metadata, not this component's.
- */
-function DisplayList({
-  id,
-  items,
-  selectable,
-  answer,
-  busy,
-  onChoose,
-}: {
-  id: string;
-  items: string[];
-  selectable: boolean;
-  answer: DisplayAnswer | null;
-  busy: boolean;
-  onChoose?: (answer: DisplayAnswer) => void;
-}) {
-  if (!selectable) {
-    return (
-      <ul data-block={id} className={cn(AGENT_CARD_BODY_TYPE, "list-disc pl-5")}>
-        {items.map((item, i) => (
-          <li key={i}>{item}</li>
-        ))}
-      </ul>
-    );
-  }
-  const answered = answer !== null && (answer.blockId === null || answer.blockId === id);
-  return (
-    <div data-block={id} className="flex flex-wrap items-center gap-1.5">
-      {items.map((item, i) => {
-        const chosen = answered && answer.index === i;
-        const face = cn(
-          DECISION_BTN_BASE,
-          AGENT_CARD_BTN_BOX,
-          "max-w-full",
-          answered && !chosen ? DECISION_BTN_GREY : DECISION_BTN_BLACK
-        );
-        if (!onChoose || answered) {
-          return (
-            <span key={i} data-choice-index={i} data-chosen={chosen || undefined} className={face}>
-              <span className="truncate">{item}</span>
-            </span>
-          );
-        }
-        return (
-          <button
-            key={i}
-            type="button"
-            disabled={busy}
-            data-choice-index={i}
-            onClick={() => onChoose({ blockId: id, choice: item, index: i })}
-            className={cn(face, "disabled:opacity-60")}
-          >
-            <span className="truncate">{item}</span>
-          </button>
-        );
-      })}
-    </div>
   );
 }

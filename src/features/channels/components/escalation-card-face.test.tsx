@@ -35,6 +35,8 @@ import { channelRows } from "./view-model-rows";
 import { ESCALATION_METADATA_KEY, ESCALATION_ANSWER_METADATA_KEY } from "../escalation";
 import { ME, PEER, member, message } from "./test-fixtures";
 
+const ANSWER = async () => true;
+
 afterEach(cleanup);
 
 const INDEX = indexMembers(
@@ -99,7 +101,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
     // the bolded text that's in the badge for the name of the agent"* — the pill
     // spells it inline (`attribution-pill.tsx`), so the pairing can only be held
     // by asserting both faces carry the same three classes.
-    draw([escalationMessage()], { onAnswerEscalation: () => {} });
+    draw([escalationMessage()], { onAnswerDisplay: ANSWER });
     const label = screen.getByText("Needs Your Decision");
     for (const face of ["text-body", "font-semibold", "leading-tight"]) {
       expect(label.className).toContain(face);
@@ -126,7 +128,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
         index={index}
         flashId={null}
         onOpenThread={() => {}}
-        onAnswerEscalation={() => {}}
+        onAnswerDisplay={ANSWER}
       />
     );
     expect(bar(container).style.backgroundColor).toBe("var(--agent-color-04)");
@@ -137,7 +139,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
     // literally black, which is also the face every card wore before the
     // restyle. The row's ring keeps its own neutral; they are different marks.
     const { container } = draw([escalationMessage()], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
     });
     expect(bar(container).style.backgroundColor).toBe("var(--surface-cta)");
   });
@@ -169,7 +171,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
         index={index}
         flashId={null}
         onOpenThread={() => {}}
-        onAnswerEscalation={() => {}}
+        onAnswerDisplay={ANSWER}
       />
     );
     expect(screen.getByText("Decision Card Coder")).toBeTruthy();
@@ -189,7 +191,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
     // have on the agents, where you have the ended badge … the badge and then
     // under it is the text … No more dashes"*.
     const { container } = draw([escalationMessage()], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
     });
     const panel = container.querySelector(
       "[data-escalation-id='m-esc']"
@@ -211,7 +213,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
 
   it("every option is BLACK before a press, and they are named Option A / Option B", () => {
     const { container } = draw([escalationMessage()], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
     });
     const options = strip(container);
     expect(options.map((el) => el.textContent)).toEqual(["Option A", "Option B"]);
@@ -237,7 +239,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
           },
         }),
       ],
-      { onAnswerEscalation: () => {} }
+      { onAnswerDisplay: ANSWER }
     );
     const [chosen, rest] = strip(container);
     expect(chosen.className).toContain("auth-btn-3d");
@@ -254,7 +256,7 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
     // card drawn with that row absent — the state cannot be stale because there
     // is none to keep.
     const { container } = draw([escalationMessage()], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
     });
     for (const el of strip(container)) {
       expect(el.className).not.toContain("bg-[var(--seg-fill)]");

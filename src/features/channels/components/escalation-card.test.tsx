@@ -27,14 +27,16 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { Transcript } from "./transcript";
 import { indexMembers } from "./view-model";
 import { channelRows, threadRows } from "./view-model-rows";
 import { ESCALATION_METADATA_KEY, ESCALATION_ANSWER_METADATA_KEY } from "../escalation";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
-import { ME, PEER, member, message } from "./test-fixtures";
+import { CHANNEL_ID, ME, PEER, member, message } from "./test-fixtures";
+
+const ANSWER = async () => true;
 
 afterEach(cleanup);
 
@@ -94,7 +96,7 @@ function draw(
 
 describe("the card renders the four fields", () => {
   it("shows the issue, the context, every option with its consequence, and the recommendation", () => {
-    draw([escalationMessage()], { onAnswerEscalation: () => {} });
+    draw([escalationMessage()], { onAnswerDisplay: ANSWER });
     expect(
       screen.getByText("Ship the migration now or wait for review?")
     ).toBeTruthy();
@@ -118,7 +120,7 @@ describe("the card renders the four fields", () => {
     // never notify (`main/targeting.js › classify` drops every other kind), so
     // this assertion is a security property wearing a rendering test's clothes.
     const { container } = draw([escalationMessage()], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
     });
     expect(container.querySelector("[data-escalation-id='m-esc']")).toBeTruthy();
   });
@@ -136,7 +138,7 @@ describe("the card renders the four fields", () => {
         index={INDEX}
         flashId={null}
         onOpenThread={() => {}}
-        onAnswerEscalation={() => {}}
+        onAnswerDisplay={ANSWER}
       />
     );
     expect(
@@ -149,7 +151,7 @@ describe("the card renders the four fields", () => {
     // channel view. A question waiting on a human is the one row that must not
     // be one click away from being seen.
     draw([escalationMessage({}, { taskId: "t-1" })], {
-      onAnswerEscalation: () => {},
+      onAnswerDisplay: ANSWER,
     });
     expect(
       screen.getByText("Ship the migration now or wait for review?")
@@ -177,14 +179,14 @@ describe("who gets buttons — the server's rule, restated", () => {
         index={index}
         flashId={null}
         onOpenThread={() => {}}
-        onAnswerEscalation={() => {}}
+        onAnswerDisplay={ANSWER}
       />
     );
     expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
   });
 
   it("with NOBODY tagged, the AUTHOR's operator gets them", () => {
-    draw([escalationMessage()], { onAnswerEscalation: () => {} });
+    draw([escalationMessage()], { onAnswerDisplay: ANSWER });
     expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
   });
 
@@ -207,7 +209,7 @@ describe("who gets buttons — the server's rule, restated", () => {
         index={index}
         flashId={null}
         onOpenThread={() => {}}
-        onAnswerEscalation={() => {}}
+        onAnswerDisplay={ANSWER}
       />
     );
     expect(screen.queryAllByRole("button")).toHaveLength(0);
@@ -224,27 +226,29 @@ describe("who gets buttons — the server's rule, restated", () => {
 });
 
 describe("pressing an option", () => {
-  it("reports the escalation's OWN message id and the index", () => {
-    // ⚠ IT NEVER NAMES AN AGENT. The server derives which one to wake off the
-    // escalation's stamp; a client-supplied id would aim the wake anywhere.
-    const onAnswer = vi.fn();
-    draw([escalationMessage()], { onAnswerEscalation: onAnswer });
+  it("answers on the display route with the message's OWN id and the index — never an agent", async () => {
+    // ⚠ The server derives which agent to wake off the stored message; the client names the index.
+    const onAnswer = vi.fn(async () => true);
+    draw([escalationMessage()], { onAnswerDisplay: onAnswer });
     fireEvent.click(
       screen.getByRole("button", { name: "Option B: Wait for review" })
     );
-    expect(onAnswer).toHaveBeenCalledWith("m-esc", 1);
+    expect(onAnswer).toHaveBeenCalledWith({ channelId: CHANNEL_ID, messageId: "m-esc", index: 1 });
   });
 
-  it("disables while an answer is in flight — busy is not a capability", () => {
-    draw([escalationMessage()], {
-      onAnswerEscalation: () => {},
-      answerBusy: true,
-    });
-    expect(
-      screen
-        .getByRole("button", { name: "Option A: Ship now" })
-        .hasAttribute("disabled")
-    ).toBe(true);
+  it("holds the pressed face while the answer is in flight, then gives the buttons back on a failure", async () => {
+    let settle: (ok: boolean) => void = () => {};
+    const onAnswer = vi.fn(() => new Promise<boolean>((resolve) => (settle = resolve)));
+    const { container } = draw([escalationMessage()], { onAnswerDisplay: onAnswer });
+    fireEvent.click(screen.getByRole("button", { name: "Option A: Ship now" }));
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    const [chosen, rest] = Array.from(
+      container.querySelectorAll("[data-escalation-id='m-esc'] [data-option-index]")
+    ) as HTMLElement[];
+    expect(chosen.className).toContain("auth-btn-3d");
+    expect(rest.className).toContain("bg-[var(--seg-fill)]");
+    await act(async () => settle(false));
+    expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
   });
 });
 
@@ -265,7 +269,7 @@ describe("an ANSWERED card", () => {
   });
 
   it("names who chose what, and drops the buttons", () => {
-    draw([escalationMessage(), answer], { onAnswerEscalation: () => {} });
+    draw([escalationMessage(), answer], { onAnswerDisplay: ANSWER });
     expect(screen.getByText(/Diana Taylor chose/)).toBeTruthy();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
@@ -276,7 +280,7 @@ describe("an ANSWERED card", () => {
         escalationMessage(),
         message({ ...answer, authorUserId: ME, authorName: "Sam Wang" }),
       ],
-      { onAnswerEscalation: () => {} }
+      { onAnswerDisplay: ANSWER }
     );
     expect(screen.getByText(/You chose/)).toBeTruthy();
   });
@@ -303,7 +307,7 @@ describe("an ANSWERED card", () => {
           },
         }),
       ],
-      { onAnswerEscalation: () => {} }
+      { onAnswerDisplay: ANSWER }
     );
     expect(screen.getByText(/Diana Taylor chose/)).toBeTruthy();
     expect(screen.queryByText(/Ada Lovelace chose/)).toBeNull();
@@ -319,7 +323,7 @@ describe("it DEGRADES rather than breaking", () => {
       body: "**Escalation:** an older row, in prose",
       metadata: {},
     });
-    const { container } = draw([stale], { onAnswerEscalation: () => {} });
+    const { container } = draw([stale], { onAnswerDisplay: ANSWER });
     expect(container.querySelector("[data-escalation-id]")).toBeNull();
     expect(
       screen.getByText(/an older row, in prose/)
@@ -330,7 +334,7 @@ describe("it DEGRADES rather than breaking", () => {
     const broken = escalationMessage({ id: "m-bad", body: "still readable" }, {
       [ESCALATION_METADATA_KEY]: { issue: "only an issue" },
     });
-    const { container } = draw([broken], { onAnswerEscalation: () => {} });
+    const { container } = draw([broken], { onAnswerDisplay: ANSWER });
     expect(container.querySelector("[data-escalation-id]")).toBeNull();
     expect(screen.getByText("still readable")).toBeTruthy();
   });

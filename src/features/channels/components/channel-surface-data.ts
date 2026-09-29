@@ -25,22 +25,20 @@
  */
 
 import { CONSENT_INBOX_POLL_MS } from "../constants";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { liveAgentsFromKey, liveAgentsKey } from "../lib/live-agents";
 import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useChannelMembers } from "../hooks/use-channel-members";
 import { useChannelThreads } from "../hooks/use-channel-threads";
 import { useChannelMentions } from "../hooks/use-channel-mentions";
 import { useMentionWrites } from "../hooks/use-mention-writes";
-import { useEscalationWrites } from "../hooks/use-escalation-writes";
+import { useDisplayAnswer, type AnswerDisplay } from "../hooks/use-display-writes";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useChannelsLive } from "./live";
 import { useDesktopSessions } from "./use-desktop-sessions";
 import { useAgentsPanel } from "./use-agents-panel";
 import { useChannelsDerivations } from "./derivations";
-import { escalationOf, viewerPerson } from "./view-model";
-import { newClientMsgId } from "../lib/optimistic-cache";
 import { useInlineConsent } from "./use-inline-consent";
 // ⚠ **THE ONE CROSS-FEATURE READ ON THIS SURFACE, AND IT IS MOUNTED HERE ON
 // PURPOSE (F-316, 2026-09-05).** §7's rule is that the HOST fetches and the panes
@@ -118,17 +116,11 @@ export interface ChannelSurfaceData extends ChannelsDerivations {
   decideOutbound: (id: string, decision: "allow" | "deny") => void;
   consentBusy: boolean;
   /**
-   * ANSWER AN ESCALATION CARD — the SIXTH write family on this surface (Samuel,
-   * 2026-08-31), on the same `gate` as the other five.
-   *
-   * ⚠ IT IS AN ORDINARY POST: a question asked in a shared room gets a public
-   * answer, so it goes to the same messages route and reaches the asking agent the
-   * way every other human message does. The client never names an agent — the
-   * server derives which one to wake off the escalation's own stamp.
+   * ANSWER A DISPLAY'S CHOICE — every decision too (docs/specs/unified-display.md §7.2 C2). The
+   * server posts the public answer message (a decision) and derives which agent to wake off the
+   * stored message; the client names only the index. Both answering panes call THIS.
    */
-  answerEscalation: (escalationMessageId: string, optionIndex: number) => void;
-  /** An answer is in flight — the double-submit guard, not a capability. */
-  answerBusy: boolean;
+  answerDisplay: AnswerDisplay;
   /**
    * THE INFO TAB'S ACTIVITY STRIP — real messages-per-day for THIS channel
    * (F-316 closed, 2026-09-05). Empty until the host supplies a workspace segment,
@@ -284,20 +276,8 @@ export function useChannelSurfaceData({
   // `consent` decides the OUTBOUND send box and the Inbox's rows — same mutation,
   // same gate. ⚠ Its INBOUND callers are gone (Samuel, 2026-08-22).
   const { favorite, consent } = useChannelPreferenceWrites({ workspaceId, gate });
-  // THE ESCALATION ANSWER (Samuel, 2026-08-31) — the SIXTH family, same gate.
-  //
-  // ⚠ THE AUTHOR DISPLAY FOR THE PENDING ROW IS RESOLVED OFF THE TRANSCRIPT the
-  // viewer is already reading (`view-model.ts › viewerPerson`) rather than off the
-  // roster: no new read, and `null` is "cannot say" — a viewer who has never posted
-  // here gets a pending row with no name, which the reconcile fills in.
-  const viewer = viewerPerson(messages, currentUserId);
-  const escalationWrites = useEscalationWrites({
-    workspaceId,
-    currentUserId,
-    currentUserName: viewer?.displayName ?? null,
-    currentUserAvatarUrl: viewer?.avatarUrl ?? null,
-    gate,
-  });
+  // THE DISPLAY ANSWER — the sixth write family: one route for every display and decision.
+  const answerDisplay = useDisplayAnswer();
 
   const derivations = useChannelsDerivations({
     members,
@@ -317,37 +297,6 @@ export function useChannelSurfaceData({
     // (`channel_sessions.display_name`), so their "Bug Reviewer" renders on their posts too.
     peerSessions: agentsPanel.peerSessions,
   });
-
-  /**
-   * ANSWER ONE ESCALATION — bound here so the option LABEL is resolved in ONE
-   * place.
-   *
-   * ⚠ THE BODY IS THE OPTION'S OWN LABEL, so the transcript reads as a sentence
-   * rather than an index. Both surfaces that can answer (the transcript, the agent
-   * pane) call THIS — a second resolution is how the two post different words for
-   * one press.
-   *
-   * ⚠ IT IS A NO-OP FOR A MESSAGE THAT IS NOT AN ANSWERABLE ESCALATION — a belt;
-   * the server's own 404 is the fence.
-   */
-  const channelId = channel?.id ?? null;
-  const answerEscalation = useCallback(
-    (escalationMessageId: string, optionIndex: number) => {
-      const target = messages.find((m) => m.id === escalationMessageId);
-      const label = target
-        ? escalationOf(target)?.options[optionIndex]?.label
-        : undefined;
-      if (!label || !channelId) return;
-      escalationWrites.answer.mutate({
-        channelId,
-        escalationMessageId,
-        optionIndex,
-        optionLabel: label,
-        clientMsgId: newClientMsgId(),
-      });
-    },
-    [messages, escalationWrites.answer, channelId]
-  );
 
   // ⚠ THE ACTIVITY SERIES (F-316, closed 2026-09-05). It was a fixture for a COST
   // reason — 31 counted bins per channel selection — and Samuel's 2026-09-05 ruling
@@ -433,7 +382,6 @@ export function useChannelSurfaceData({
     outboundByThread,
     decideOutbound,
     consentBusy,
-    answerEscalation,
-    answerBusy: escalationWrites.pending,
+    answerDisplay,
   };
 }

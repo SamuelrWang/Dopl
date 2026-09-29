@@ -287,10 +287,9 @@ export function ChannelSurface({
       // (`channels-core.tsx`) and /home's pane (`channel-surface-standalone.tsx`)
       // mount this same component.
       onOpenAgent={sel.toggleAgent}
-      // ANSWER AN ESCALATION — the transcript's one WRITE. The pop-out hands
+      // ANSWER A DISPLAY / DECISION — the transcript's one WRITE. The pop-out hands
       // none, so a card there is read-only.
-      onAnswerEscalation={data.answerEscalation}
-      answerBusy={data.answerBusy}
+      onAnswerDisplay={data.answerDisplay}
       onOpenThread={sel.openThread}
     />
   );
