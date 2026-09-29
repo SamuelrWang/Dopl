@@ -90,8 +90,8 @@ function textOf(row: FakeRow, column: string): string {
  *
  * It models the RAW form, the only one the repositories send (F-717):
  * `query-text.ts › buildPrefixTsQuery` hands over a tsquery it built itself, so
- * there is no normalisation to imitate, and `|`, `!`, `<->` cannot survive its
- * allow-list. The real parser splits `a_b` into two lexemes and this keeps it
+ * there is no normalisation to imitate, and `|`, `!` cannot survive its
+ * allow-list; `<->` is only ever the builder's own (apostrophe phrases). The real parser splits `a_b` into two lexemes and this keeps it
  * whole; no case turns on that.
  */
 function matchesTsQuery(haystack: string, query: string): boolean {
@@ -102,12 +102,19 @@ function matchesTsQuery(haystack: string, query: string): boolean {
     .map((arm) => arm.trim())
     .filter((arm) => arm.length > 0);
   if (arms.length === 0) return false;
+  const lexemeMatches = (word: string | undefined, lexeme: string) => {
+    if (word === undefined) return false;
+    return lexeme.endsWith(":*")
+      ? word.startsWith(lexeme.slice(0, -2))
+      : word === lexeme;
+  };
+  // `a <-> b` (2026-09-29, the apostrophe phrase): the lexemes at ADJACENT
+  // positions, as the real parser reads `can't` — `can` at n, `t` at n + 1.
   return arms.every((arm) => {
-    if (arm.endsWith(":*")) {
-      const stem = arm.slice(0, -2);
-      return words.some((w) => w.startsWith(stem));
-    }
-    return words.includes(arm);
+    const phrase = arm.split("<->").map((p) => p.trim());
+    return words.some((_, start) =>
+      phrase.every((lexeme, i) => lexemeMatches(words[start + i], lexeme))
+    );
   });
 }
 

@@ -86,14 +86,20 @@ export function HomeHeader({
           weight="semibold"
         />
       </div>
-      <div className="flex items-center gap-2.5">
+      {/* ⚠ `relative` IS THE SEARCH POPUP'S ANCHOR (2026-09-29, Samuel: flush
+          with the search bar on the left, with Profile on the right). The card
+          is `left-0 right-0` of THIS box, which is exactly pill-left to
+          Profile-right because those are its first and last children — so the
+          group takes no padding, and nothing may be added before the pill or
+          after Profile without moving the card's edges with it. */}
+      <div className="relative flex items-center gap-2.5">
         {/* ⚠ **SEARCH IS BACK IN THIS GROUP (Samuel, 2026-09-15: "And move the
             search bar back")** — a PAGE control at its own fixed width, which is
             what its kit face is built for. The `[data-fill]` variant the one
             revision in the list column needed left the kit with it. */}
-        {/* ⚠ **AND IT HOSTS THE SEARCH POPUP SINCE 2026-09-17** — the card
-            hangs off the pill's own relative slot, so it is inside this group
-            and right-aligned to the pill by construction. */}
+        {/* ⚠ **AND IT HOSTS THE SEARCH POPUP SINCE 2026-09-17** — since
+            2026-09-29 the card hangs off THIS group, not the pill's own slot,
+            so it spans the pill and Profile by construction. */}
         <HomeSearch
           query={query}
           onQueryChange={onQueryChange}

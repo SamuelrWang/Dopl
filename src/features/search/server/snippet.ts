@@ -10,9 +10,9 @@ import "server-only";
  * inserts markup SECOND, the only order in which the contract holds. (Secondly,
  * PostgREST cannot ask for a SELECT-list expression at all.)
  *
- * The match is substring and case-insensitive, deliberately wider than the
- * `tsquery` that selected the row: the row is already a hit and this only decides
- * where to point. A narrower highlighter would return a hit with nothing marked.
+ * The match is word-start and case-insensitive (`queryMatcher` uses the same
+ * rule to decide which rows are hits at all), so a returned row always has
+ * something marked, and what is marked is a word, never a stray letter.
  */
 
 /** Characters that would change the shape of the HTML around them. */
@@ -41,26 +41,48 @@ const LEAD_CHARS = 40;
 const MAX_TERM_LENGTH = 64;
 
 /**
- * The terms a snippet highlights: the whole trimmed query, plus each
- * whitespace-separated word.
+ * Every apostrophe a person or a keyboard produces: ASCII, the two curly quotes
+ * (macOS smart punctuation turns `can't` into `can’t`) and the modifier letter.
+ * One class, used on BOTH sides, so `can't` finds `can’t` and the reverse.
+ */
+const APOSTROPHE_CLASS = "['\u2018\u2019\u02BC]";
+const APOSTROPHES = /['\u2018\u2019\u02BC]/g;
+
+/** A word character, for the boundary checks below. */
+const WORD_CHAR = /[\p{L}\p{N}_]/u;
+
+/**
+ * (2026-09-29) The query as the WORDS a person typed: apostrophes folded to one
+ * spelling, surrounding quotation marks and a leading `-` stripped, split on
+ * whitespace only. `or` is a word like any other: the tsquery builder ANDs it.
+ *
+ * ⚠ **AN APOSTROPHE IS PART OF THE WORD, NEVER A SEPARATOR.** The old
+ * `replace(/["']/g, " ")` turned `can't` into the words `can` and `t`, and a
+ * one-letter `t` then marked every `t` in every snippet (Samuel, 2026-09-29).
+ */
+export function queryWords(query: string): string[] {
+  return query
+    .replace(APOSTROPHES, "'")
+    .replace(/["\u201C\u201D]/g, " ")
+    .split(/\s+/)
+    .map((w) => w.replace(/^-+/, "").replace(/^'+|'+$/g, ""))
+    .filter((w) => w.length > 0);
+}
+
+/**
+ * The terms a snippet highlights: the whole query as a phrase, plus each word of
+ * two or more characters.
  *
  * Whole query first, then longest words: the highlighter takes the first
  * alternative matching at a position, so `["ship","shipping"]` would mark only
  * `ship` and leave `ping` bare.
- * Quotation marks and the `websearch_to_tsquery` operators are stripped — they
- * steer which ROWS come back, and are not text to point at inside one.
+ * ⚠ A ONE-LETTER WORD IS NEVER ITS OWN TERM — it would mark letters, not words.
+ * It is still highlighted inside the phrase term.
  */
 export function highlightTerms(query: string): string[] {
-  const trimmed = query.trim();
-  if (trimmed.length === 0) return [];
-  const cleaned = trimmed.replace(/["']/g, " ").trim();
-  const words = cleaned
-    .split(/\s+/)
-    .map((w) => w.replace(/^-+/, ""))
-    .filter((w) => w.length > 0 && w.toLowerCase() !== "or");
-  // Built from the cleaned words, not the raw query: `cats or dogs` hunted
-  // verbatim could mark a literal "or" somebody wrote.
-  const all = [words.join(" "), ...words]
+  const words = queryWords(query.trim());
+  if (words.length === 0) return [];
+  const all = [words.join(" "), ...words.filter((w) => w.length >= 2)]
     .filter((t) => t.length > 0)
     .map((t) => t.slice(0, MAX_TERM_LENGTH));
   const seen = new Set<string>();
@@ -78,11 +100,54 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * One term as a regex SOURCE that matches it only at the START of a word:
+ * `pick` matches *picker* but not *unpick*, and `t` can never match the `t` of
+ * `can't`. Apostrophes match any spelling, runs of whitespace any run.
+ *
+ * The boundary is skipped when the term itself starts on punctuation (`#dev`,
+ * `.env`) — there is no word for it to start.
+ */
+function termSource(term: string): string {
+  const body = escapeRegExp(term)
+    .replace(/'/g, APOSTROPHE_CLASS)
+    .replace(/\s+/g, "\\s+");
+  if (!WORD_CHAR.test(term.charAt(0))) return body;
+  // Not after a word character, and not after an apostrophe that is itself
+  // inside a word (`can|'t`) — but an opening quote (`'hello'`) still counts.
+  return `(?<![\\p{L}\\p{N}_])(?<![\\p{L}\\p{N}]${APOSTROPHE_CLASS})${body}`;
+}
+
 /** Built once per search, never per row — a regex compiled inside a row loop
  *  turns a 50-row page into 50 compilations. */
 export function highlightPattern(terms: string[]): RegExp | null {
   if (terms.length === 0) return null;
-  return new RegExp(terms.map(escapeRegExp).join("|"), "gi");
+  return new RegExp(terms.map(termSource).join("|"), "giu");
+}
+
+/**
+ * (2026-09-29) Does a row actually say what was searched? Every typed word must
+ * start a word somewhere in the row's text (case-insensitive, any apostrophe).
+ *
+ * The database arms are a CANDIDATE set, never the answer: an `ilike '%ca%'`
+ * matches *scan* and a tsquery can only approximate a word with an apostrophe
+ * in it. This is the one test every group's hits pass before they are ranked,
+ * so a result with nothing to highlight cannot be returned.
+ *
+ * @returns `null` for a query with no words — the caller keeps what it has.
+ */
+export function queryMatcher(
+  query: string
+): ((texts: ReadonlyArray<string | null | undefined>) => boolean) | null {
+  const words = queryWords(query.trim());
+  if (words.length === 0) return null;
+  const patterns = words.map(
+    (w) => new RegExp(termSource(w.slice(0, MAX_TERM_LENGTH)), "iu")
+  );
+  return (texts) => {
+    const haystack = texts.filter((t): t is string => !!t).join("\n");
+    return patterns.every((p) => p.test(haystack));
+  };
 }
 
 /**

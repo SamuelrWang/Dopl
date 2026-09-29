@@ -40,7 +40,16 @@ describe("🔒 buildPrefixTsQuery", () => {
     expect(buildPrefixTsQuery("a & b | !c")).toBe("a & b & c:*");
     expect(buildPrefixTsQuery("(one)'two':*")).toBe("one & two:*");
     expect(buildPrefixTsQuery('"quoted phrase"')).toBe("quoted & phrase:*");
-    expect(buildPrefixTsQuery("don't stop")).toBe("don & t & stop:*");
+  });
+
+  it("🔒 reads an apostrophe as a PHRASE join, never an AND (2026-09-29)", () => {
+    // `can & t:*` meant "can anywhere, and ANY t-word anywhere" — nearly every
+    // row. The parser holds `can't` as adjacent lexemes, so the query must too.
+    expect(buildPrefixTsQuery("can't")).toBe("can <-> t:*");
+    expect(buildPrefixTsQuery("can’t")).toBe("can <-> t:*");
+    expect(buildPrefixTsQuery("don't stop")).toBe("don <-> t & stop:*");
+    // A trailing apostrophe mid-typing is just the word so far.
+    expect(buildPrefixTsQuery("can'")).toBe("can:*");
   });
 
   it("keeps digits and underscores, which cannot be operators", () => {
@@ -74,6 +83,11 @@ describe("the like patterns", () => {
     expect(escapeLikeLiteral("100%_x")).toBe("100\\%\\_x");
     expect(containsPattern("100%")).toBe("%100\\%%");
     expect(prefixPattern("sam")).toBe("sam%");
+  });
+
+  it("lets an apostrophe reach either spelling", () => {
+    expect(containsPattern("can't")).toBe("%can_t%");
+    expect(containsPattern("can’t")).toBe("%can_t%");
   });
 });
 

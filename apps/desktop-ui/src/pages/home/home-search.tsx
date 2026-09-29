@@ -21,9 +21,15 @@ import type { SearchItem } from "@/features/search/contracts";
  * face and the selection. Moving it in here would put one control's state in two
  * places the day anything else wants to read it.
  *
- * ⚠ **THE POPUP IS A CHILD OF `.search-expand`, WHICH IS `position: relative`**
- * — that is what puts the card's right edge on the pill's with a plain
- * `right-0`, rather than on a measurement.
+ * ⚠ **THE POPUP IS A SIBLING OF `.search-expand`, NOT ITS CHILD, SINCE
+ * 2026-09-29 (Samuel: "have it start at the same place that the search bar
+ * starts … and have it extend on the right, so that it is flush with the end of
+ * the profile button").** `.search-expand` is `position: relative`, so a child
+ * card could only ever measure the pill. Out here its containing block is the
+ * header's action group (`home-header.tsx`, `relative`), whose first child is
+ * this pill and whose last is Profile — so `left-0 right-0` IS pill-left to
+ * Profile-right, by construction, with no measured width. **This component
+ * must be rendered inside a positioned group for that reason.**
  *
  * ⚠ **ESCAPE CLEARS AND BLURS** — here for a closed popup, and in the popup for
  * an open one (its handler is on the WINDOW, because the caret never leaves this
@@ -61,30 +67,32 @@ export function HomeSearch({
   // `.search-expand` keeps its open face at a FIXED 260px; the round toggle is
   // gone — the glyph is decoration and the field is always reachable.
   return (
-    <div className="search-expand" data-open="true">
-      <div className="auth-btn-3d-light search-expand-shell">
-        <span className="search-expand-toggle" aria-hidden="true">
-          <Search size={15} strokeWidth={2} />
-        </span>
-        <input
-          id="home-search-field"
-          ref={inputRef}
-          className="search-expand-input"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="Search…"
-          aria-label="Search"
-          value={query}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onChange={(event) => onQueryChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Escape") return;
-            event.preventDefault();
-            close();
-          }}
-        />
+    <>
+      <div className="search-expand" data-open="true">
+        <div className="auth-btn-3d-light search-expand-shell">
+          <span className="search-expand-toggle" aria-hidden="true">
+            <Search size={15} strokeWidth={2} />
+          </span>
+          <input
+            id="home-search-field"
+            ref={inputRef}
+            className="search-expand-input"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Search…"
+            aria-label="Search"
+            value={query}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.preventDefault();
+              close();
+            }}
+          />
+        </div>
       </div>
       <SearchPopup
         query={query}
@@ -103,7 +111,9 @@ export function HomeSearch({
            reviewed before the route existed; that table is TEST AND DEV DATA
            now, and swapping back is the same one import. */
         fetcher={apiSearchFetcher}
+        /* The group's full width: pill-left to Profile-right (see above). */
+        className="left-0 w-auto"
       />
-    </div>
+    </>
   );
 }

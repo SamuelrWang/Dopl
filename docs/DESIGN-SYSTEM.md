@@ -687,16 +687,21 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   is why a dropdown of results and every other dropdown in the app share one face.
   `src/features/search/components/search-popup.tsx`, mounted by /home's header pill and
   by the workspace channels column's field.
-  - **THE CARD HANGS OFF THE FIELD'S OWN RELATIVE SLOT** — `absolute top-full right-0
-    mt-2` inside `.search-expand` (which is `position: relative` already), so "aligned
-    with the bar's edge" is true by construction rather than by a measurement. `!p-0` +
-    `overflow-hidden`, because the legend bar runs edge to edge and clips to the card's
-    corners.
+  - 🔒 **ON /home THE CARD SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29:**
+    *"have it start at the same place that the search bar starts. so it's aligned
+    flush. and have it extend on the right, so that it is flush with the end of the
+    profile button"*). The card is `absolute top-full mt-2`; /home renders it as a
+    SIBLING of `.search-expand` (whose own `position: relative` would otherwise be its
+    containing block) and passes `left-0 w-auto`, so it fills the header's `relative`
+    action group (`pages/home/home-header.tsx`), whose first child is the pill and last
+    is Profile — edges by construction, no measured width. The workspace sidebar host
+    keeps `SEARCH_CARD_W` below. `!p-0` + `overflow-hidden`, because the legend bar runs
+    edge to edge and clips to the card's corners.
   - 🔒 **IT IS THE PILL'S WIDTH PLUS ITS OWN PADDING, AND THE WHOLE CARD IS ONE STEP
     SMALLER THAN IT SHIPPED (Samuel, 2026-09-17:** *"right now, the search bar, i feel
     like it's too big. Can we scale it down in its entirety, meaning, I think we scale
     down fontsizes and stuff like that too."*) — `search-popup.tsx › SEARCH_CARD_W` is
-    **280px**: the kit's open pill is a flat 260px (`.search-expand[data-open="true"]`)
+    **280px** (the DEFAULT; /home's header overrides it since 2026-09-29, above): the kit's open pill is a flat 260px (`.search-expand[data-open="true"]`)
     and the body carries `px-2.5` a side, so the ROWS land on the pill's own edges. It
     was `w-[420px]`, i.e. the card overhung the control it hangs from by 160px, and the
     channels sidebar carried a SECOND copy of that number (`!w-[420px]`, now the pin
@@ -740,8 +745,10 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
     `bg-card-surface-subtle` flush to the card's edges. ⚠ It was 22px at `text-caption`
     until 2026-09-17; the legend came down with the card.
   - **MINIMAL COPY.** Section labels are nouns, never counts; an empty answer is the one
-    line `No results`; loading is a DIM over the previous answer, not a spinner and not a
-    cleared card. ⚠ **AND THE SECTION ORDER IS THE WIRE'S, NOT THE CARD'S**
+    line `No results`; loading is the one line `Loading results` (Samuel, 2026-09-29),
+    shown from the keystroke until THIS query's answer lands — never an empty card, and
+    never the previous query's rows (`use-search.ts › useSearch` keys each answer to
+    its request). ⚠ **AND THE SECTION ORDER IS THE WIRE'S, NOT THE CARD'S**
     (`features/search/contracts.ts › SEARCH_GROUP_ORDER`) — the renderer draws the groups
     in the order they arrive.
 - **Pills/chips**: `rounded-full border border-border-strong` +

@@ -201,6 +201,56 @@ describe("the sections", () => {
   });
 });
 
+describe("🔒 the loading line (Samuel, 2026-09-29)", () => {
+  /** A fetcher whose answers the test releases by hand. */
+  function heldFetcher() {
+    const pending: Array<{ q: string; resolve: () => void }> = [];
+    const fetcher: SearchFetcher = ({ q }) =>
+      new Promise((resolve) => {
+        pending.push({
+          q,
+          resolve: () =>
+            resolve({ ...ANSWER, q, groups: q === "orch" ? ANSWER.groups : [] }),
+        });
+      });
+    return { fetcher, pending };
+  }
+
+  it("says `Loading results` from the keystroke until the answer lands", async () => {
+    const { fetcher, pending } = heldFetcher();
+    render(<Host fetcher={fetcher} />);
+    type("orch");
+    await card();
+    // During the debounce, before any request: never an empty card.
+    expect(screen.getByText("Loading results")).not.toBeNull();
+    expect(screen.queryByText("No results")).toBeNull();
+    await waitFor(() => expect(pending).toHaveLength(1));
+    expect(screen.getByText("Loading results")).not.toBeNull();
+
+    pending[0].resolve();
+    expect(await screen.findByText("q4-outbound")).not.toBeNull();
+    expect(screen.queryByText("Loading results")).toBeNull();
+  });
+
+  it("does not show the LAST query's rows under a new query", async () => {
+    const { fetcher, pending } = heldFetcher();
+    render(<Host fetcher={fetcher} />);
+    type("orch");
+    await waitFor(() => expect(pending).toHaveLength(1));
+    pending[0].resolve();
+    await screen.findByText("q4-outbound");
+
+    type("zzz");
+    // The old answer is for `orch`; the field says `zzz`.
+    expect(screen.queryByText("q4-outbound")).toBeNull();
+    expect(screen.getByText("Loading results")).not.toBeNull();
+    await waitFor(() => expect(pending).toHaveLength(2));
+    pending[1].resolve();
+    expect(await screen.findByText("No results")).not.toBeNull();
+    expect(screen.queryByText("Loading results")).toBeNull();
+  });
+});
+
 describe("the keyboard", () => {
   it("↓/↑ walk the flat order ACROSS groups and wrap", async () => {
     const { fetcher } = stubFetcher();
