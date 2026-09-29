@@ -147,7 +147,7 @@ describe("every v2 block", () => {
   });
 
   it("an unreadable display falls back to the plain body", () => {
-    draw([shown([{ type: "choice", options: [{ label: "only one" }] }])]);
+    draw([shown([{ type: "bogus", content: "?" }])]);
     expect(screen.getByText("fallback body")).toBeTruthy();
   });
 });
