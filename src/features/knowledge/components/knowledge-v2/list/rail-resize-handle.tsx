@@ -24,7 +24,7 @@ import {
 } from "@/shared/ui/use-split-resize";
 
 export const RAIL_RESIZE_LABEL = "Resize files";
-export const RAIL_WIDTH_VAR = "--kv-rail-w";
+const RAIL_WIDTH_VAR = "--kv-rail-w";
 /** Per device, like the channel's. */
 export const RAIL_WIDTH_STORAGE_KEY = "dopl.knowledge.railWidth";
 /** The width the rail has always had — paired with `.rail`'s CSS fallback. */

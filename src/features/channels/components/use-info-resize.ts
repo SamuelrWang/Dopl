@@ -11,17 +11,12 @@
  * `info-panel.tsx`'s own `w-[…]`, and `agent-panel.tsx`'s overlay, which is
  * absolutely positioned against the SAME right edge and would otherwise make the
  * divider jump sideways the moment an agent view opens (the pairing that file
- * names in as many words). One imperative write per pointer move, no layout
- * thrash, and **nothing about the width is rendered into HTML** — which is also
- * why there is no hydration mismatch to answer for on the web.
+ * names in as many words).
  *
- * ⚠ **THE ROOT IS FOUND, NOT PASSED, AND THAT IS WHAT KEEPS THIS TO ONE
- * IMPLEMENTATION.** `channel-surface.tsx` is a FRAGMENT by construction (two flex
- * siblings — its own docblock says why), so the handle's wrapper is a DIRECT CHILD
- * of whichever host mounted the surface: `channels-core.tsx`'s `.page-float`
- * row on the workspace page, `channel-surface-standalone.tsx`'s row on the desktop
- * Home pane. `parentElement` is therefore the surface root on both, and neither
- * host needed an edit.
+ * ⚠ **THE ROOT IS FOUND, NOT PASSED.** `channel-surface.tsx` is a FRAGMENT, so
+ * the handle's wrapper is a DIRECT CHILD of whichever host mounted the surface
+ * (`channels-core.tsx`'s `.page-float` row, `channel-surface-standalone.tsx`'s row
+ * on the desktop Home pane) and `parentElement` is the surface root on both.
  *
  * ⚠ **THE LIMITS ARE SAMUEL'S, BOTH OF THEM, AND THEY ARE NOT SYMMETRIC.**
  * Dragging LEFT stops at half the surface — *"it should only go left so that the
@@ -34,24 +29,15 @@
  * it already absorbs that (`message-pane.tsx › section` carries
  * `contain: inline-size`; §5).
  *
- * ⚠ **THE MECHANISM IS SHARED SINCE 2026-09-29** —
- * `shared/ui/use-split-resize.ts › useSplitResize` (the knowledge rail is its
- * other config). This file is the channel's CONFIG: variable, key, limits, side.
- * The two-numbers rule (preference vs applied) lives there.
+ * The mechanism is `shared/ui/use-split-resize.ts › useSplitResize` (the
+ * knowledge rail is its other config); this file is the channel's CONFIG.
  */
 
 import {
-  clampSplitWidth,
-  readStoredSplitWidth,
-  splitMax,
   useSplitResize,
   type SplitResize,
   type SplitResizeConfig,
 } from "@/shared/ui/use-split-resize";
-
-/** The variable every consumer reads. Its FALLBACK is {@link INFO_WIDTH_DEFAULT}
- *  stated at each consumer, so the column is correct before this hook ever runs. */
-export const INFO_WIDTH_VAR = "--info-w";
 
 /** Per DEVICE, not per channel and not per workspace — a window's proportions are
  *  a property of the screen it is on. */
@@ -62,16 +48,15 @@ export const INFO_WIDTH_STORAGE_KEY = "dopl.channel.infoWidth";
  *  pinned on all three by `app-shell/frame-palette.test.ts`. */
 export const INFO_WIDTH_DEFAULT = 380;
 
-/** One arrow-key press. */
-export const INFO_NUDGE_PX = 16;
-
 /** Set on the surface root WHILE DRAGGING, so the 200ms width transition stands
  *  down and the column tracks the pointer instead of lagging it. The CSS half is
  *  `[data-info-resizing="true"] .channel-info-slide` in both kit copies. */
 export const INFO_RESIZING_ATTR = "data-info-resizing";
 
 const INFO_RESIZE_CONFIG: SplitResizeConfig = {
-  variable: INFO_WIDTH_VAR,
+  // Its FALLBACK is INFO_WIDTH_DEFAULT, stated at each consumer, so the column is
+  // correct before this hook ever runs.
+  variable: "--info-w",
   storageKey: INFO_WIDTH_STORAGE_KEY,
   defaultWidth: INFO_WIDTH_DEFAULT,
   min: INFO_WIDTH_DEFAULT,
@@ -80,26 +65,9 @@ const INFO_RESIZE_CONFIG: SplitResizeConfig = {
   // The column is RIGHT of the handle and grows leftward.
   side: "right",
   resizingAttr: INFO_RESIZING_ATTR,
-  nudgePx: INFO_NUDGE_PX,
+  nudgePx: 16,
 };
 
-/** 50/50 with the transcript, never below the floor — a surface too narrow to
- *  halve has no range at all rather than an inverted one. */
-export function infoWidthMax(surfaceWidth: number): number {
-  return splitMax(INFO_RESIZE_CONFIG, surfaceWidth);
-}
-
-export function clampInfoWidth(width: number, surfaceWidth: number): number {
-  return clampSplitWidth(INFO_RESIZE_CONFIG, width, surfaceWidth);
-}
-
-/** `null` for "nothing stored" — the caller clamps. */
-export function readStoredInfoWidth(): number | null {
-  return readStoredSplitWidth(INFO_WIDTH_STORAGE_KEY);
-}
-
-export type InfoResize = SplitResize;
-
-export function useInfoResize(): InfoResize {
+export function useInfoResize(): SplitResize {
   return useSplitResize(INFO_RESIZE_CONFIG);
 }

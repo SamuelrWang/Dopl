@@ -4,9 +4,8 @@
  * THE GRAB HANDLE ON A DRAGGABLE DIVIDER — a black pill, flanked by arrows on
  * hover/focus (Samuel, 2026-09-13: *"a vertical black line … a little thick,
  * rounded at the edges, and centered. If I hover over it, it should show the left
- * and right arrows."*). Extracted 2026-09-29 from
- * `channels/components/info-resize-handle.tsx` so the knowledge rail's divider is
- * the SAME component; the mechanism is `./use-split-resize.ts`.
+ * and right arrows."*). The channel and knowledge-rail dividers both render it;
+ * the mechanism is `./use-split-resize.ts`.
  *
  * ⚠ **IT OCCUPIES NO WIDTH, WHICH IS WHY IT IS A SIBLING OF BOTH COLUMNS.** The
  * wrapper is `w-0`, so the row's box math is unchanged; the pill and the 12px hit
