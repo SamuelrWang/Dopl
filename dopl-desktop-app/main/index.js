@@ -104,11 +104,9 @@ const shellHelpers = makeShellHelpers({
 });
 const createShellWindow = shellHelpers.createShellWindow;
 const navigateToChannels = shellHelpers.navigateToChannels;
-// 🔒 THE THREE "OPEN THE APP" DOORS GO THROUGH THIS, not through
-// `showMainWindow` (2026-09-09). It reveals the window AND, when there already
-// was one, puts it back on `/` so the launch decision re-runs and the operator
-// lands on /home. The reasoning — and why deep links and notifications must NOT
-// use it — is on `shell-mode.js › openMainWindow`.
+// THE THREE "OPEN THE APP" DOORS GO THROUGH THIS. It only REVEALS the window,
+// exactly where it was (Samuel, 2026-09-29): Home is for a cold launch only, which
+// lands there on its own. The reasoning is on `shell-mode.js › openMainWindow`.
 const openMainWindow = shellHelpers.openMainWindow;
 
 // The menu's "Home". The renderer owns routing, so this asks it to go to boot.
@@ -163,8 +161,7 @@ if (!gotLock) {
     // Windows/Linux deliver deep links as a launch arg; macOS uses 'open-url'.
     const link = argv.find((a) => a.startsWith(PROTOCOL + '://'));
     // ⚠ A SECOND LAUNCH CARRYING A DEEP LINK IS NOT A PLAIN OPEN: the link names
-    // where to land and `deepLink.handle` reveals the window itself, so resetting
-    // to `/` here would be a race against its own push.
+    // where to land and `deepLink.handle` reveals the window itself.
     if (link) { deepLink.handle(link); return; }
     openMainWindow();
   });

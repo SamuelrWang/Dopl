@@ -51,6 +51,11 @@ function signInFull() {
   return require('../../claude-auth').signInFull();
 }
 
+/** Cancel: stop the sign-in child running now (either flow) → true when one ran. */
+function cancelSignIn() {
+  return require('../../claude-auth').cancel();
+}
+
 /** Drop Dopl's token and its full login (a Dopl sign-out). True when no token is left. */
 function signOut() {
   if (tokenStore().hasFullLogin()) require('../../claude-auth').signOutFull();
@@ -64,6 +69,6 @@ const descriptor = {
 };
 
 module.exports = {
-  credentialState, withCredential, withFullLogin, hasFullLogin, signIn, signInFull, signOut, descriptor,
+  credentialState, withCredential, withFullLogin, hasFullLogin, signIn, signInFull, cancelSignIn, signOut, descriptor,
   TOKEN_ENV, SECURE_STORE_ENV,
 };

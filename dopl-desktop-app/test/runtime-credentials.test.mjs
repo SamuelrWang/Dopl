@@ -10,8 +10,9 @@ import { bootIpc } from "./_ipc-harness.mjs";
 const registry = real("./runtime");
 const settle = () => new Promise((r) => setImmediate(r));
 
-function world({ signedIn = [], focused = false, signIns = {}, signOuts = {}, full = { on: false, answer: { ok: true } } } = {}) {
+function world({ signedIn = [], focused = false, signIns = {}, signOuts = {}, full = { on: false, answer: { ok: true } }, cancels = {} } = {}) {
   const sent = [];
+  const focus = [];
   const notes = [];
   const shown = [];
   const resumed = [];
@@ -32,6 +33,7 @@ function world({ signedIn = [], focused = false, signIns = {}, signOuts = {}, fu
       return id in signOuts ? signOuts[id] : true;
     },
     hasFullLogin: () => full.on,
+    ...(cancels[id] ? { cancelSignIn: cancels[id] } : {}),
     signInFull: async () => {
       ran.push(`${id}:full`);
       const answer = typeof full.answer === "function" ? await full.answer() : full.answer;
@@ -48,15 +50,49 @@ function world({ signedIn = [], focused = false, signIns = {}, signOuts = {}, fu
   const mod = loadWithStubs("runtime-credentials.js", {
     "./runtime": { ...registry, runtimeFor },
     "./diag": { diag: () => {} },
-    electron: { BrowserWindow: { getFocusedWindow: () => (focused ? {} : null) }, Notification },
+    electron: { app: { focus: (o) => focus.push(o) }, BrowserWindow: { getFocusedWindow: () => (focused ? {} : null) }, Notification },
     "./session-auth": { resumeHeldSessions: async (id) => { resumed.push(id); return 2; } },
   });
   const win = { webContents: { send: (channel, payload) => sent.push({ channel, payload }) } };
   mod.start({ getWindows: () => [win], showWindow: () => shown.push(true) });
   const rows = () => sent[sent.length - 1].payload.runtimes;
   const row = (id) => rows().find((r) => r.runtimeId === id);
-  return { mod, sent, notes, shown, resumed, ran, cred, rows, row };
+  return { mod, sent, notes, shown, resumed, ran, cred, rows, row, focus };
 }
+
+// ── A SIGN-IN THAT TOOK BRINGS DOPL TO THE FRONT (Samuel, 2026-09-29) ───────────────────────
+
+test("a sign-in that took shows the window and takes focus from the browser, with no notification", async () => {
+  const w = world({ signIns: { claude: { ok: true }, codex: { ok: false } } });
+  await w.mod.signIn("codex");
+  assert.deepEqual([w.shown, w.focus], [[], []], "a failed sign-in moves nothing");
+  await w.mod.signIn("claude");
+  assert.deepEqual(w.shown, [true]);
+  assert.deepEqual(w.focus, [{ steal: true }]);
+  await w.mod.signInFull("claude");
+  assert.equal(w.shown.length, 2, "the full login too");
+  assert.equal(w.notes.length, 0, "no notification: the row turning Connected is the signal");
+});
+
+// ── CANCEL ON "SIGNING IN…" ──────────────────────────────────────────────────────────────────
+
+test("Cancel stops the runtime's flow; the row leaves signing-in once the flow answers", async () => {
+  let finish = () => {};
+  const w = world({
+    signIns: { claude: () => new Promise((r) => { finish = r; }) },
+    cancels: { claude: () => { finish({ ok: false }); return true; } },
+  });
+  const pending = w.mod.signIn("claude");
+  await settle();
+  assert.equal(w.row("claude").state, "signing-in");
+  assert.equal(w.mod.cancelSignIn("claude"), true);
+  assert.deepEqual(await pending, { ok: false });
+  await settle();
+  assert.equal(w.row("claude").state, "not-connected");
+  assert.deepEqual(w.shown, [], "a cancelled sign-in does not jump to the front");
+  assert.equal(w.mod.cancelSignIn("codex"), false, "a runtime with no cancel op answers false");
+  assert.equal(w.mod.cancelSignIn("cursor"), false, "no in-app flow, nothing to cancel");
+});
 
 // ── STATUS AND ITS PUSH ──────────────────────────────────────────────────────────────────────
 

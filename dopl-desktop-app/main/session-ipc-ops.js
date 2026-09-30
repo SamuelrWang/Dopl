@@ -218,6 +218,12 @@ function register(opts = {}) {
     return runtimeId === null ? { ok: false } : require('./runtime-credentials').signInFull(runtimeId);
   }));
 
+  // Cancel on "Signing in…": stop one runtime's sign-in in flight (body: `runtime-credentials.js › cancelSignIn`).
+  ipcMain.handle('runtime:cancelSignIn', appWindowOnly('runtime:cancelSignIn', { ok: false }, (_event, payload) => {
+    const runtimeId = runtimeIdOf(payload);
+    return { ok: runtimeId !== null && require('./runtime-credentials').cancelSignIn(runtimeId) };
+  }));
+
   // Every in-app-sign-in runtime's credential status; the same rows `dopl:runtime-credentials` pushes.
   ipcMain.handle('runtime:credentialStatus', appWindowOnly('runtime:credentialStatus', { runtimes: [] }, async () => (
     { runtimes: await require('./runtime-credentials').list() }

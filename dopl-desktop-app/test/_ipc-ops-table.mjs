@@ -74,6 +74,8 @@ export const OPS = [
   ["runtime:signIn", { runtimeId: "codex" }, { ok: false }, { runtimeId: "../codex" }],
   // 2026-09-25 (ruling 4): "Enable Chrome & connectors" — the same shape, one runtime's optional full login.
   ["runtime:signInFull", { runtimeId: "claude" }, { ok: false }, { runtimeId: "../claude" }],
+  // 2026-09-29: the Cancel on "Signing in…" — the same shape; it stops a flow, starts none.
+  ["runtime:cancelSignIn", { runtimeId: "codex" }, { ok: false }, { runtimeId: "../codex" }],
   // Every in-app-sign-in runtime's status (no payload) and one runtime's prompt dismissal: states and
   // a flag, never a credential. A refused read is the empty list.
   ["runtime:credentialStatus", undefined, { runtimes: [] }],

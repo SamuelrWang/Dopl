@@ -128,6 +128,8 @@ const runtime = {
   signOut() { return credential.signOut(); },
   // Optional, declared by `descriptor.credential.fullSignIn` ("Enable Chrome & connectors").
   signInFull() { return credential.signInFull(); },
+  // Optional: stop a sign-in in flight (the Cancel on "Signing in…").
+  cancelSignIn() { return credential.cancelSignIn(); },
   hasFullLogin() { return credential.hasFullLogin(); },
 };
 

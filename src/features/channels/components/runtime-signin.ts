@@ -38,6 +38,16 @@ export function signInFullToRuntime(runtimeId: string): Promise<{ ok: boolean }>
   return run("signInFull", runtimeId);
 }
 
+/** Whether this build can cancel a sign-in in flight (the bridge op; absent on an older desktop). */
+export function canCancelRuntimeSignIn(): boolean {
+  return typeof getSpaBridge()?.runtimeAuth?.cancelSignIn === "function";
+}
+
+/** Cancel on "Signing in…": main stops the flow, which then answers `{ ok: false }` and pushes the row. */
+export function cancelRuntimeSignIn(runtimeId: string): void {
+  void getSpaBridge()?.runtimeAuth?.cancelSignIn?.(runtimeId).catch(() => {});
+}
+
 /** Close one runtime's sign-in prompt; main keeps it closed until that runtime's next sign-in. */
 export function dismissSignInPrompt(runtimeId: string): void {
   void getSpaBridge()?.runtimeAuth?.dismissPrompt?.(runtimeId).catch(() => {});

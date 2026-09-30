@@ -8,7 +8,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TAB_ACTION } from "./bits";
-import { canSignInToRuntime, signInToRuntime } from "./runtime-signin";
+import {
+  cancelRuntimeSignIn,
+  canCancelRuntimeSignIn,
+  canSignInToRuntime,
+  signInToRuntime,
+} from "./runtime-signin";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
 import { canSignIn, SIGN_IN_BUSY, signInAction, signInFailedCopy } from "../lib/runtime-copy";
 
@@ -33,6 +38,8 @@ export function RuntimeSignInButton({
   const can = useCanSignInToRuntime();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  // A cancelled flow answers `{ ok: false }` too; that is not a failed sign-in.
+  const cancelled = useRef(false);
   // A sign-in can outlive the surface that started it (a dialog closed mid-flow).
   const mounted = useRef(true);
   useEffect(() => {
@@ -48,12 +55,18 @@ export function RuntimeSignInButton({
     if (busy) return;
     setBusy(true);
     setFailed(false);
+    cancelled.current = false;
     void signInToRuntime(runtime?.id ?? runtimeId).then((res) => {
       if (!mounted.current) return;
       setBusy(false);
       if (res.ok) onSignedIn?.();
-      else setFailed(true);
+      else if (!cancelled.current) setFailed(true);
     });
+  };
+
+  const cancel = () => {
+    cancelled.current = true;
+    cancelRuntimeSignIn(runtime?.id ?? runtimeId ?? "");
   };
 
   return (
@@ -68,6 +81,11 @@ export function RuntimeSignInButton({
         {/* `signInAction` is null exactly where `canSignIn` is false; the fallback is the unnamed lane. */}
         {busy ? SIGN_IN_BUSY : (signInAction(runtime) ?? "Sign in")}
       </button>
+      {busy && canCancelRuntimeSignIn() && (
+        <button type="button" onClick={cancel} className={TAB_ACTION}>
+          Cancel
+        </button>
+      )}
       {failed && (
         <p role="status" className="text-caption text-danger">
           {signInFailedCopy(runtime)}

@@ -185,6 +185,7 @@ contextBridge.exposeInMainWorld('dopl', {
   runtimeAuth: {
     signIn: (runtimeId) => ipcRenderer.invoke('runtime:signIn', { runtimeId: asId(runtimeId) }),
     signInFull: (runtimeId) => ipcRenderer.invoke('runtime:signInFull', { runtimeId: asId(runtimeId) }),
+    cancelSignIn: (runtimeId) => ipcRenderer.invoke('runtime:cancelSignIn', { runtimeId: asId(runtimeId) }),
     status: () => ipcRenderer.invoke('runtime:credentialStatus'),
     onStatus: (callback) => {
       if (typeof callback !== 'function') return () => {};

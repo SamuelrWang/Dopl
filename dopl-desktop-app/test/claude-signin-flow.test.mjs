@@ -1,5 +1,5 @@
-// THE IN-APP CLAUDE CODE SIGN-INS (`main/claude-auth.js`) over FAKE children spawned directly (no pty, no paste
-// window): the token `setup-token` prints becomes Dopl's own, and "Enable Chrome & connectors" runs
+// THE IN-APP CLAUDE CODE SIGN-INS (`main/claude-auth.js`) over FAKE children (setup-token under script(1) for a
+// terminal, no paste window): the token `setup-token` prints becomes Dopl's own, and "Enable Chrome & connectors" runs
 // `auth login` into Dopl's private store. No real login and no network. Nothing here opens Terminal, a native
 // dialog or a notification.
 
@@ -63,16 +63,35 @@ function world({ bundled = "/bundle/claude", env = { PATH: "/bin" } } = {}) {
 
 const tick = () => new Promise((r) => setImmediate(r));
 
-test("spawns setup-token directly, and the token it PRINTS is stored as Dopl's own", async () => {
+// What the REAL CLI draws under a pty (measured, claude 2.1.220): words spaced by cursor moves, not spaces.
+function drawn(token) {
+  const words = (line) => line.split(" ").map((w, i) => (i ? `\x1b[${i * 5}G${w}` : w)).join("");
+  return `${words("Your OAuth token (valid for 1 year):")}\r\r\n\x1b[2G${token.slice(0, 60)}\r\r\n\x1b[2G${token.slice(60)}\r\r\n${words("Store this token securely. You won't be able to see it again.")}\r\r\n`;
+}
+
+test("setup-token runs under script(1) for a terminal — without one it prints nothing (2026-09-29)", async () => {
   const w = world();
   const p = w.auth.signIn();
   await tick();
+  const bin = "/bundle/claude";
+  const [cmd, args] = process.platform === "darwin"
+    ? ["/usr/bin/script", ["-q", "/dev/null", bin, "setup-token"]]
+    : [bin, ["setup-token"]];
   assert.deepEqual(w.calls.spawn[0], {
-    cmd: "/bundle/claude",
-    args: ["setup-token"],
-    env: { PATH: "/bin" },
+    cmd,
+    args,
+    env: { PATH: "/bin", TERM: "xterm-256color" },
     stdio: ["ignore", "pipe", "pipe"],
-  });
+  }, "stdin is /dev/null: script(1) refuses a pipe on stdin (EOPNOTSUPP), not on stdout");
+  w.out(drawn(TOKEN));
+  assert.deepEqual(await p, { ok: true });
+  assert.deepEqual(w.calls.stored, [TOKEN], "markers matched whatever the spacing");
+});
+
+test("the token it PRINTS is stored as Dopl's own", async () => {
+  const w = world();
+  const p = w.auth.signIn();
+  await tick();
   w.out(printed(TOKEN).slice(0, 120)); // a token still arriving is never taken
   assert.deepEqual(w.calls.stored, []);
   w.out(printed(TOKEN).slice(120));
@@ -126,7 +145,8 @@ test("no bundled binary falls back to the external CLI", async () => {
   const w = world({ bundled: null });
   const p = w.auth.signIn();
   await tick();
-  assert.equal(w.calls.spawn[0].cmd, "/usr/local/bin/claude");
+  const { cmd, args } = w.calls.spawn[0];
+  assert.ok(cmd === "/usr/local/bin/claude" || args.includes("/usr/local/bin/claude"), "the external CLI runs");
   w.exit(1);
   assert.deepEqual(await p, { ok: false });
 });
@@ -141,9 +161,24 @@ test("the token is read between its markers, or as one whole bare line", () => {
   assert.equal(extractLoneToken(`${TOKEN}\n${TOKEN}x\n`), null, "two candidates is none");
 });
 
-test("THE TERMINAL PATH, THE PTY AND THE PASTE WINDOW ARE GONE", () => {
+test("Cancel stops the child at once: the flow answers { ok: false } and stores nothing", async () => {
+  const w = world();
+  const p = w.auth.signIn();
+  await tick();
+  assert.equal(w.auth.cancel(), true, "one child was running");
+  assert.deepEqual(await p, { ok: false });
+  assert.deepEqual(w.calls.stored, []);
+  assert.equal(w.auth.cancel(), false, "nothing left to cancel");
+  const again = w.auth.signIn();
+  assert.notEqual(again, p, "a new click after a cancel starts a new flow");
+  await tick();
+  w.out(printed(TOKEN));
+  assert.deepEqual(await again, { ok: true });
+});
+
+test("THE TERMINAL APP PATH AND THE PASTE WINDOW ARE GONE", () => {
   const code = codeOf(SRC);
-  for (const gone of [/osascript/, /\/login/, /Terminal/, /showMessageBox/, /Notification/, /terminalFallback/, /BrowserWindow/, /ipcMain/, /\/dev\/null/, /code-prompt/]) {
+  for (const gone of [/osascript/, /\/login/, /Terminal/, /showMessageBox/, /Notification/, /terminalFallback/, /BrowserWindow/, /ipcMain/, /code-prompt/, /stdio: \['pipe'/]) {
     assert.equal(gone.test(code), false, `claude-auth.js still carries ${gone}`);
   }
 });

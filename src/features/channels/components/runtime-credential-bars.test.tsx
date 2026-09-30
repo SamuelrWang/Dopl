@@ -21,18 +21,20 @@ function bridge(first: Row[]) {
   let push: (p: { runtimes: Row[] }) => void = () => {};
   const signIn = vi.fn().mockResolvedValue({ ok: true });
   const signInFull = vi.fn().mockResolvedValue({ ok: true });
+  const cancelSignIn = vi.fn().mockResolvedValue({ ok: true });
   const off = vi.fn();
   (window as { dopl?: unknown }).dopl = {
     apiRequest: vi.fn(),
     runtimeAuth: {
       signIn,
       signInFull,
+      cancelSignIn,
       status: () => Promise.resolve({ runtimes: first }),
       onStatus: (cb: typeof push) => { push = cb; return off; },
       dismissPrompt: vi.fn(),
     },
   };
-  return { signIn, signInFull, off, push: (runtimes: Row[]) => act(() => push({ runtimes })) };
+  return { signIn, signInFull, cancelSignIn, off, push: (runtimes: Row[]) => act(() => push({ runtimes })) };
 }
 
 const bar = (label: string) => screen.getByText(label).closest("li") as HTMLElement;
@@ -49,6 +51,13 @@ describe("each state is its label and its control, nothing more", () => {
     const buttons = within(bar("Codex")).queryAllByRole("button");
     expect(buttons.map((b) => b.textContent)).toEqual(control ? [control] : []);
     expect(bar("Codex").textContent).toBe(`Codex${text}${control ?? ""}`);
+  });
+
+  it("signing-in: Cancel stops THAT runtime's flow", async () => {
+    const b = bridge([row("claude", "Claude Code", "signing-in")]);
+    render(<RuntimeCredentialBars />);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel Claude Code sign-in" }));
+    expect(b.cancelSignIn).toHaveBeenCalledWith("claude");
   });
 
   it("signing-in: the control is busy and cannot be pressed again", async () => {

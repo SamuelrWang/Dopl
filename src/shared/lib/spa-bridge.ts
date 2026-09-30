@@ -123,6 +123,8 @@ export interface SpaBridgeSurface {
   runtimeAuth?: {
     signIn(runtimeId?: string): Promise<{ ok: boolean; resumed?: number }>;
     signInFull(runtimeId?: string): Promise<{ ok: boolean }>;
+    /** Cancel on "Signing in…": stop that runtime's flow in flight; its row then leaves `signing-in`. */
+    cancelSignIn?(runtimeId: string): Promise<{ ok: boolean }>;
     status(): Promise<{ runtimes: RuntimeCredentialStatus[] }>;
     onStatus(callback: (payload: { runtimes: RuntimeCredentialStatus[] }) => void): () => void;
     dismissPrompt(runtimeId: string): Promise<{ ok: boolean }>;

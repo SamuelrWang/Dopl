@@ -125,38 +125,24 @@ function makeShellHelpers(deps) {
     navigateTo(`${page}/${channelId}${suffix}`);
   }
 
-  // 🔒 AN EXPLICIT OPEN LANDS ON THE LAUNCH DECISION — `/` — NOT ON WHATEVER
-  // ROUTE THE WINDOW WAS LEFT ON (Samuel, 2026-09-09: *"every time i go to the
-  // desktop app/open it, it auto has it on my original workspace. The user
-  // should be auto at the Home space. (This is for new opens)."*).
+  // 🔒 REVEAL, NEVER RE-ROUTE (Samuel, 2026-09-29, narrowing his 2026-09-09 ruling). The 09-09 ruling
+  // (*"The user should be auto at the Home space. (This is for new opens)."*) meant a NEW OPEN: the app
+  // fully quit and launched again. That is already true with nothing here — a cold launch loads the
+  // index with no hash, the router resolves `/` to `pages/boot`, and boot lands on `/home`.
   //
-  // MEASURED CAUSE, and it was NOT the renderer. A COLD process launch already
-  // lands on /home: `spa-window.js` loads the index with no hash, the hash
-  // router resolves `/` to `pages/boot`, and boot navigates to `/home` whenever
-  // `POST /api/boot`'s no-segment answer is the caller's `kind='home'`
-  // container (`c37e4942`). Nothing persists a route on either side — main
-  // stores none and the SPA's IndexedDB cache is queries only, which boot
-  // refuses to navigate on (`refetchOnMount: "always"` + `isFetchedAfterMount`).
-  // What is NOT a cold launch is the common case: Dopl lives in the tray, so the
-  // dock icon, the tray's "Open Dopl" and a second launch all resolve to
-  // `showMainWindow()`, which REVEALS the live window — still showing the
-  // workspace page it was left on. That is the "every time I open it".
+  // It does NOT mean revealing a window that is still alive. From 2026-09-09 to 2026-09-29 this pushed
+  // `/` at every existing window, so every Dock click back into the app re-ran boot: a full-app
+  // "reload" that also threw away whatever the page held — onboarding restarted at step 1 mid-flow.
+  // Samuel: *"It should only go to home if the user had fully closed the app and was reopening it. If
+  // it's just them hiding it or refocusing it this should not be happening whatsoever."*
   //
-  // ⚠ ONLY WHEN THE WINDOW ALREADY EXISTED. A window main has to BUILD is
-  // already loading the index at `/`; pushing a route into a renderer that has
-  // not subscribed yet is dropped on the floor (`deep-link.js` carries that
-  // trap in full), and it would be a no-op even if it landed.
-  //
-  // ⚠ AND ONLY FROM THE THREE "OPEN THE APP" DOORS (`index.js`). A DEEP LINK
-  // and a clicked channel NOTIFICATION reveal the window too, and both must
-  // still win — they name a destination. They call `showMainWindow()` /
-  // `navigateToChannels` directly and never this, so there is no race to lose:
-  // this function is not on their path at all.
+  // So the three "open the app" doors (dock `activate`, the tray's Open Dopl, a second launch) only
+  // reveal: the window comes back exactly where it was. A window main has to BUILD (none was alive)
+  // loads at `/` on its own, which is the cold path above. Do not add a navigation here.
   function openMainWindow() {
     const win = deps.getMainWindow();
     const existed = !!win && !win.isDestroyed();
     deps.showMainWindow();
-    if (existed) navigateTo('/');
     return existed;
   }
 

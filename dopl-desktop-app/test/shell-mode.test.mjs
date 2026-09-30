@@ -154,16 +154,14 @@ test("registration is optional at the WIRING level and fatal at neither end", ()
   assert.doesNotThrow(() => helpers.createShellWindow({ show: false }));
 });
 
-// ── AN EXPLICIT OPEN LANDS ON THE LAUNCH DECISION (2026-09-09) ─────────────
+// ── AN OPEN REVEALS, IT NEVER RE-ROUTES (2026-09-29) ───────────────────────
 //
-// Samuel: *"every time i go to the desktop app/open it, it auto has it on my
-// original workspace. The user should be auto at the Home space. (This is for
-// new opens)."* A COLD launch already did: the SPA loads its index with no hash,
-// the hash router resolves `/` to the boot page, and boot navigates to `/home`
-// for a `kind='home'` boot answer (`c37e4942`). What did not was every OTHER
-// "open": Dopl lives in the tray, so the dock icon, "Open Dopl" and a second
-// launch all revealed the SAME window, still on the workspace route it was left
-// on. `openMainWindow` is that gap, and nothing else.
+// The 2026-09-09 ruling ("auto at the Home space … for new opens") means a COLD
+// launch, which lands on /home by itself (the SPA loads its index at `/`, boot
+// sends a `kind='home'` answer to `/home`). From 09-09 to 09-29 `openMainWindow`
+// also pushed `/` at a LIVE window, so every Dock click re-ran boot and wiped the
+// page (onboarding restarted mid-flow). Samuel, 2026-09-29: hiding or refocusing
+// must never navigate. `openMainWindow` now only reveals.
 
 function openCtx({ existing = true } = {}) {
   const sent = [];
@@ -189,22 +187,19 @@ function openCtx({ existing = true } = {}) {
   return { helpers, sent, shownCount: () => shown };
 }
 
-test("an explicit open puts a LIVE window back on the launch route", () => {
-  // 🔒 THE WHOLE FIX. Without the push the operator sees the route the window
-  // was left on, which is a workspace page — the report.
+test("an open REVEALS a live window and pushes no route — it stays where it was", () => {
+  // 🔒 THE WHOLE FIX. A push here re-runs boot: the full-app "reload" on every
+  // Dock click, and an onboarding flow thrown back to step 1.
   const ctx = openCtx({ existing: true });
   assert.equal(ctx.helpers.openMainWindow(), true, "it saw a live window");
-  assert.equal(ctx.shownCount(), 1, "the window is still revealed");
-  assert.deepEqual(ctx.sent, [{ path: "/" }], "…and landed on boot");
+  assert.equal(ctx.shownCount(), 1, "the window is revealed");
+  assert.deepEqual(ctx.sent, [], "…and nothing navigated it");
+  assert.doesNotMatch(fnOf(SHELL, "openMainWindow"), /navigateTo\(/, "no navigation in the open verb");
 });
 
-test("…and pushes NOTHING when it had to build the window", () => {
-  // A window main just created is already loading the index at `/`, and a send
-  // to a renderer that has not subscribed yet is dropped on the floor with no
-  // error (deep-link.js carries that trap in full). Pushing here would be a
-  // no-op that reads like a mechanism.
+test("…and pushes NOTHING when it had to build the window (the cold path lands on / itself)", () => {
   const ctx = openCtx({ existing: false });
-  assert.equal(ctx.helpers.openMainWindow(), false, "there was nothing to reset");
+  assert.equal(ctx.helpers.openMainWindow(), false, "there was no live window");
   assert.deepEqual(ctx.sent, [], "no route was pushed at a cold window");
 });
 
@@ -387,9 +382,8 @@ test("a deep link is parked only before app-ready, never on a missing window", (
   assert.match(INDEX, /deepLinkModule\.arm\(\{/);
   assert.match(INDEX, /deepLink\.flushPending\(\)/);
   // ⚠ AND IT RETURNS (2026-09-09). A second launch carrying a link is not a
-  // plain "open the app": `openMainWindow` would push `/` on top of the link's
-  // own route. `deepLink.handle` reveals the window itself, so the early return
-  // loses nothing.
+  // plain "open the app": the link names where to land, and `deepLink.handle`
+  // reveals the window itself, so the early return loses nothing.
   assert.match(INDEX, /if \(link\) \{ deepLink\.handle\(link\); return; \}/);
 });
 

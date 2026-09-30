@@ -109,6 +109,13 @@ function dismissPrompt(runtimeId) {
   return true;
 }
 
+// A sign-in that took brings Dopl to the front by itself (Samuel, 2026-09-29): the operator finished in the
+// browser, and the app, whose row now reads "Connected", is where they go next. No notification.
+function bringToFront() {
+  try { host.showWindow(); } catch (err) { diag('runtime credentials: show failed —', err && err.message); }
+  try { require('electron').app.focus({ steal: true }); } catch (_) { /* no app (tests) */ }
+}
+
 // One in-app flow on runtime `id`, its busy counter `busy` pushed around it → true when it took (`onOk` first).
 async function runFlow(id, busy, method, onOk) {
   const f = flagsFor(id);
@@ -124,6 +131,7 @@ async function runFlow(id, busy, method, onOk) {
   f[busy] -= 1;
   if (ok && onOk) onOk(f);
   void push();
+  if (ok) bringToFront();
   return ok;
 }
 
@@ -147,6 +155,22 @@ async function signInFull(runtimeId) {
   return { ok: await runFlow(id, 'fullInFlight', 'signInFull') };
 }
 
+/**
+ * Cancel on "Signing in…": stop the runtime's flow in flight (`runtime.cancelSignIn`, optional). The flow then
+ * answers `{ ok: false }` and `runFlow` drops the busy count, so the row cannot stay "signing-in" past its child.
+ */
+function cancelSignIn(runtimeId) {
+  const id = runtimeId || runtimeRegistry.DEFAULT_ID;
+  if (signInIds().indexOf(id) === -1) return false;
+  try {
+    const rt = runtimeRegistry.runtimeFor(id);
+    return typeof rt.cancelSignIn === 'function' && rt.cancelSignIn() === true;
+  } catch (err) {
+    diag('runtime credentials: cancel threw for', id, '—', err && err.message);
+    return false;
+  }
+}
+
 /** A Dopl sign-out: every runtime drops Dopl's own credential. True when none is left behind. */
 async function signOutAll() {
   let cleared = true;
@@ -163,4 +187,4 @@ async function signOutAll() {
   return cleared;
 }
 
-module.exports = { start, list, needSignIn, noteRejected, dismissPrompt, signIn, signInFull, signOutAll, STATUS_EVENT };
+module.exports = { start, list, needSignIn, noteRejected, dismissPrompt, signIn, signInFull, cancelSignIn, signOutAll, STATUS_EVENT };

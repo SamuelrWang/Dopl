@@ -93,6 +93,8 @@ export const APP_OPS = [
   // `{ runtimeId, label, state, prompt, full? }`; `dismissPrompt(runtimeId)` closes one runtime's sign-in prompt;
   // `signInFull(runtimeId)` is "Enable Chrome & connectors" (2026-09-25), the runtime's optional full login.
   // NO CREDENTIAL CROSSES ANY OF THEM: main opens the OAuth page in the SYSTEM BROWSER.
+  // `cancelSignIn(runtimeId)` (2026-09-29): the Cancel on "Signing in…" — stops that runtime's flow in flight.
+  "runtimeAuth.cancelSignIn",
   "runtimeAuth.dismissPrompt",
   "runtimeAuth.onStatus",
   "runtimeAuth.signIn",

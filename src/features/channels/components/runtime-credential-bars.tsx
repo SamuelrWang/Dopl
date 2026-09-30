@@ -9,7 +9,13 @@ import { cn } from "@/shared/lib/utils";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import type { RuntimeCredentialStatus } from "@/shared/lib/spa-bridge";
 import { SIGN_IN_BUSY } from "../lib/runtime-copy";
-import { signInFullToRuntime, signInToRuntime, useRuntimeCredentials } from "./runtime-signin";
+import {
+  cancelRuntimeSignIn,
+  canCancelRuntimeSignIn,
+  signInFullToRuntime,
+  signInToRuntime,
+  useRuntimeCredentials,
+} from "./runtime-signin";
 
 const FULL_LABEL = "Enable Chrome & connectors";
 
@@ -29,6 +35,7 @@ export function RuntimeCredentialBars({
   variant?: "bars" | "rows";
 }) {
   const runtimes = useRuntimeCredentials();
+  const canCancel = canCancelRuntimeSignIn();
   if (!runtimes.length) return null;
   const rows = variant === "rows";
   return (
@@ -69,6 +76,14 @@ export function RuntimeCredentialBars({
                   className="disabled:opacity-60"
                 >
                   {r.full === "signing-in" ? SIGN_IN_BUSY : FULL_LABEL}
+                </OpenScaleButton>
+              )}
+              {canCancel && (busy || r.full === "signing-in") && (
+                <OpenScaleButton
+                  onClick={() => cancelRuntimeSignIn(r.runtimeId)}
+                  aria-label={`Cancel ${r.label} sign-in`}
+                >
+                  Cancel
                 </OpenScaleButton>
               )}
             </span>

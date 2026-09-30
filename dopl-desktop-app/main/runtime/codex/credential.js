@@ -19,6 +19,11 @@ async function signIn() {
   }
 }
 
+/** Cancel the sign-in in flight (`login.js › cancel`) → true when one ran. */
+function cancelSignIn() {
+  try { return require('./login').cancel() === true; } catch (_) { return false; }
+}
+
 /** Remove Dopl's `auth.json` (a Dopl sign-out). True when none is left. */
 function signOut() {
   try {
@@ -34,4 +39,4 @@ const descriptor = {
   probe: 'dopl-auth-file',
 };
 
-module.exports = { credentialState, signIn, signOut, descriptor };
+module.exports = { credentialState, signIn, cancelSignIn, signOut, descriptor };

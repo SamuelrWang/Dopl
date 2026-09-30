@@ -87,6 +87,13 @@ async function signIn(overrides) {
   }
 }
 
+/** Cancel the flow in flight (`reason: 'cancelled'`) → true when one ran. */
+function cancel() {
+  if (!current) return false;
+  void current.end({ ok: false, reason: 'cancelled' });
+  return true;
+}
+
 function run(d) {
   const s = { conn: null, loginId: null, settled: false, exited: false, waiter: null, completions: new Map() };
   let settle;
@@ -206,4 +213,4 @@ function run(d) {
   return { outcome, end };
 }
 
-module.exports = { signIn, isOpenAiUrl, redactUrl, LOGIN_TIMEOUT_MS };
+module.exports = { signIn, cancel, isOpenAiUrl, redactUrl, LOGIN_TIMEOUT_MS };

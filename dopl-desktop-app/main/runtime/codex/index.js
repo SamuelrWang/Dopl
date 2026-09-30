@@ -153,6 +153,8 @@ const runtime = {
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },
   signIn() { return credential.signIn(); },
+  // Optional: stop a sign-in in flight (the Cancel on "Signing in…").
+  cancelSignIn() { return credential.cancelSignIn(); },
   signOut() { return credential.signOut(); },
 };
 
