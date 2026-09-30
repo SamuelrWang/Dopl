@@ -50,13 +50,14 @@ export function RuntimeSignInButton({
   }, []);
 
   if (!can || (runtime != null && !canSignIn(runtime))) return null;
+  const id = runtime?.id ?? runtimeId ?? "";
 
   const signIn = () => {
     if (busy) return;
     setBusy(true);
     setFailed(false);
     cancelled.current = false;
-    void signInToRuntime(runtime?.id ?? runtimeId).then((res) => {
+    void signInToRuntime(id).then((res) => {
       if (!mounted.current) return;
       setBusy(false);
       if (res.ok) onSignedIn?.();
@@ -66,7 +67,7 @@ export function RuntimeSignInButton({
 
   const cancel = () => {
     cancelled.current = true;
-    cancelRuntimeSignIn(runtime?.id ?? runtimeId ?? "");
+    cancelRuntimeSignIn(id);
   };
 
   return (

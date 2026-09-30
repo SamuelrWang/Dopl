@@ -104,9 +104,8 @@ const shellHelpers = makeShellHelpers({
 });
 const createShellWindow = shellHelpers.createShellWindow;
 const navigateToChannels = shellHelpers.navigateToChannels;
-// THE THREE "OPEN THE APP" DOORS GO THROUGH THIS. It only REVEALS the window,
-// exactly where it was (Samuel, 2026-09-29): Home is for a cold launch only, which
-// lands there on its own. The reasoning is on `shell-mode.js › openMainWindow`.
+// THE THREE "OPEN THE APP" DOORS GO THROUGH THIS: reveal only, never re-route
+// (`shell-mode.js › openMainWindow`).
 const openMainWindow = shellHelpers.openMainWindow;
 
 // The menu's "Home". The renderer owns routing, so this asks it to go to boot.

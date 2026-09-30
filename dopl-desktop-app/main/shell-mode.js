@@ -125,25 +125,12 @@ function makeShellHelpers(deps) {
     navigateTo(`${page}/${channelId}${suffix}`);
   }
 
-  // 🔒 REVEAL, NEVER RE-ROUTE (Samuel, 2026-09-29, narrowing his 2026-09-09 ruling). The 09-09 ruling
-  // (*"The user should be auto at the Home space. (This is for new opens)."*) meant a NEW OPEN: the app
-  // fully quit and launched again. That is already true with nothing here — a cold launch loads the
-  // index with no hash, the router resolves `/` to `pages/boot`, and boot lands on `/home`.
-  //
-  // It does NOT mean revealing a window that is still alive. From 2026-09-09 to 2026-09-29 this pushed
-  // `/` at every existing window, so every Dock click back into the app re-ran boot: a full-app
-  // "reload" that also threw away whatever the page held — onboarding restarted at step 1 mid-flow.
-  // Samuel: *"It should only go to home if the user had fully closed the app and was reopening it. If
-  // it's just them hiding it or refocusing it this should not be happening whatsoever."*
-  //
-  // So the three "open the app" doors (dock `activate`, the tray's Open Dopl, a second launch) only
-  // reveal: the window comes back exactly where it was. A window main has to BUILD (none was alive)
-  // loads at `/` on its own, which is the cold path above. Do not add a navigation here.
+  // 🔒 REVEAL, NEVER RE-ROUTE (Samuel, 2026-09-29): the three "open the app" doors (dock `activate`, tray
+  // Open Dopl, a second launch) bring the window back exactly where it was. Home is for a cold launch only,
+  // which lands there by itself (index at `/` → boot → `/home`). Pushing `/` at a live window re-ran boot on
+  // every Dock click and restarted onboarding mid-flow. Do not add a navigation here.
   function openMainWindow() {
-    const win = deps.getMainWindow();
-    const existed = !!win && !win.isDestroyed();
     deps.showMainWindow();
-    return existed;
   }
 
   // Replace whatever is on screen with the window the CURRENT gate verdict calls

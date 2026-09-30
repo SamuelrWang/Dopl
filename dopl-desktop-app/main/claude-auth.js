@@ -10,14 +10,9 @@
 //                 `.credentials.json`) and the operator's `~/.claude.json` and Keychain item are never written
 //                 (measured, claude 2.1.220). The CLI refreshes it itself; Dopl stores only a marker.
 //
-// ⚠ setup-token NEEDS A TERMINAL, AND GETS ONE FROM `script(1)` (2026-09-29, measured, claude 2.1.220). With a
-// plain pipe for stdout the CLI still opens the browser and still takes the redirect on its localhost listener
-// (so the browser says "authenticated"), but it PRINTS NOTHING — not the URL, not the token — until it is
-// killed, when it writes one "\n". The flow could only ever end at the 5-minute timeout: "Signing in…"
-// endlessly. Under `/usr/bin/script -q /dev/null <claude> setup-token` the same binary draws its screen
-// (words spaced by cursor moves, hence the whitespace-blind marker match below) and prints the token.
-// The 2026-09-24 pty attempt failed only because stdin was a PIPE (Electron's socketpair: EOPNOTSUPP);
-// with stdin `ignore` (/dev/null) script(1) runs, and killing it takes the CLI down with its pty.
+// setup-token needs a terminal (measured, claude 2.1.220): with a piped stdout it takes the redirect but prints
+// nothing until killed. It runs under `script -q /dev/null`, which works only with stdin `ignore` (a piped stdin
+// fails with EOPNOTSUPP); killing script(1) takes the CLI down with its pty.
 
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -33,7 +28,6 @@ const SETUP_TIMEOUT_MS = 5 * 60 * 1000;
 // words with cursor moves, not spaces. Both are required, so a token still arriving is never taken.
 const TOKEN_OPEN = 'YourOAuthtoken';
 const TOKEN_CLOSE = 'Storethistokensecurely';
-// The pseudo-terminal wrapper (macOS only — Dopl is macOS only). See the header.
 const SCRIPT_BIN = '/usr/bin/script';
 
 const ANSI_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g;
@@ -71,8 +65,7 @@ function isClaudeAiLogin(out) {
 const stoppers = new Set();
 
 // One CLI child → `{ code, out, picked }`: at its exit, at the timeout or a Cancel (`code: null`), or as soon as
-// `pick(out)` answers (the child is then stopped). A failed spawn is `code: null` too. `tty`: run it under
-// script(1) so it has a terminal (setup-token prints nothing without one — see the header).
+// `pick(out)` answers (the child is then stopped). A failed spawn is `code: null` too. `tty`: run under script(1).
 function runChild(bin, args, env, pick, { tty = false } = {}) {
   return new Promise((resolve) => {
     let child;

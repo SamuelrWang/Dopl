@@ -21,7 +21,7 @@ async function signIn() {
 
 /** Cancel the sign-in in flight (`login.js › cancel`) → true when one ran. */
 function cancelSignIn() {
-  try { return require('./login').cancel() === true; } catch (_) { return false; }
+  return require('./login').cancel();
 }
 
 /** Remove Dopl's `auth.json` (a Dopl sign-out). True when none is left. */
