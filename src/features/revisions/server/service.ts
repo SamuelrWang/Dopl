@@ -262,7 +262,7 @@ export async function listRevisions(
     resource.resourceId,
     query
   );
-  return pageOf(rows, limit, reach);
+  return withActorProfiles(pageOf(rows, limit, reach));
 }
 
 /**
@@ -284,7 +284,28 @@ export async function listRevisionsAcross(
     refs.map((r) => r.resourceId),
     query
   );
-  return pageOf(rows, limit, reach);
+  return withActorProfiles(pageOf(rows, limit, reach));
+}
+
+/**
+ * Each row's writer, by face: the actor's display name and avatar (Samuel,
+ * 2026-10-01 — *"show the profile image of the user who did the change"*). An
+ * AGENT row resolves to the user it acted for; `kind` still says it was an
+ * agent, which the renderer marks. Joined AFTER the reach filter, so only the
+ * actors of rows the caller may see are looked up.
+ */
+async function withActorProfiles(page: RevisionPage): Promise<RevisionPage> {
+  const ids = [
+    ...new Set(page.revisions.map((r) => r.actor.userId).filter((id): id is string => !!id)),
+  ];
+  const profiles = await repo.listActorProfiles(ids);
+  return {
+    ...page,
+    revisions: page.revisions.map((r) => {
+      const profile = r.actor.userId ? profiles.get(r.actor.userId) : undefined;
+      return profile ? { ...r, actor: { ...r.actor, ...profile } } : r;
+    }),
+  };
 }
 
 /**

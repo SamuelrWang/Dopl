@@ -14,7 +14,7 @@ import { err, type ToolResponse } from "./respond";
 // Two hand-typed copies is how an agent ends up holding a sharing model the
 // operator does not have.
 import { DESTINATION_HEADINGS } from "./container-destination";
-import { kindNote, linkSpan } from "./ontology-fields";
+import { kindNote, linkSpan, templateFieldFor } from "./ontology-fields";
 
 /*
  * ⚠ THE VALUE/BODY LINE, DRAWN TWICE. The graph is workspace-scoped and nothing
@@ -257,10 +257,12 @@ export function renderObject(
     lines.push("", "## Attributes");
     for (const attr of object.attributes) {
       // ⚠ The note and the description are the FIELD's (2026-10-01): a select
-      // names its choices, so an agent never guesses a value the server refuses.
+      // names its choices, so an agent never guesses a value the server refuses,
+      // and the description is the TYPE's — the one every card of it shares.
+      const field = templateFieldFor(snapshot, object, attr.label, attr.key);
       lines.push(
         indented(
-          `- ${inlineOr(attr.label, NO_NAME)}${kindNote(attr.value.kind, attr.options)}: ${renderValue(attr.value, nameOf, handles)}${describedAs(attr.description)}`,
+          `- ${inlineOr(attr.label, NO_NAME)}${kindNote(attr.value.kind, attr.options)}: ${renderValue(attr.value, nameOf, handles)}${describedAs(field?.description)}`,
         ),
       );
     }

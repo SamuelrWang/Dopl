@@ -22,9 +22,9 @@ import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 // The field rules (kinds, value checks, description, options) — mirrored from
 // the server schema so a bad value fails here, field-named.
 import {
+  attributeDescriptionRefusal,
   isStringKind,
   kindNote,
-  nextDescription,
   optionsProblem,
   cleanOptions,
   stringValue,
@@ -283,6 +283,8 @@ async function withObject(
 async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<ToolResponse> {
   return withObject(client, args.object as string, async (object, snapshot) => {
     const label = (args.label as string).trim();
+    // ⚠ One field, one description — the TYPE's (2026-10-01).
+    if (args.description !== undefined) return attributeDescriptionRefusal(snapshot, object, label);
     const needle = label.toLowerCase();
     const existingIndex = object.attributes.findIndex((a) => a.label.toLowerCase() === needle);
     const existing = existingIndex >= 0 ? object.attributes[existingIndex] : undefined;
@@ -304,8 +306,6 @@ async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<T
         : undefined;
     const badOptions = options && optionsProblem(options);
     if (badOptions) return err(badOptions);
-    const described = nextDescription(args.description, existing?.description);
-    if ("fail" in described) return described.fail;
 
     let value: OntologyObject["attributes"][number]["value"];
     if (isStringKind(kind)) {
@@ -331,7 +331,6 @@ async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<T
       key: label.toLowerCase().replace(/\s+/g, "-"),
       label,
       value,
-      ...described,
       ...(options ? { options } : {}),
     };
     const attributes =

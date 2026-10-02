@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, ChevronRight, RotateCcw, User } from "lucide-react";
+import { Bot, ChevronRight, RotateCcw } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { Avatar } from "@/shared/ui/avatar";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { Revision, RevisionDay } from "../types";
 import { bundleOf, fieldLineOf, NO_VALUE } from "../lib/field-format";
@@ -13,8 +14,12 @@ import { RevisionDiff } from "./revision-diff";
  * **THE CHANGELOG LIST — the one recipe both changelog surfaces render**
  * (2026-09-09; `docs/DESIGN-SYSTEM.md › Changelog list`).
  *
- * Day-grouped rows, each `who · what · when`; an agent row carries the bot mark
- * and its session name. Expanding one shows the WORD-LEVEL DIFF against the
+ * Day-grouped rows, each `who · what · when`. WHO is a FACE (Samuel, 2026-10-01:
+ * *"instead of it showing the green bot icon, can you show the profile image of
+ * the user who did the change"*): the writer's `Avatar` — initials when they have
+ * no picture — and an agent row is its OPERATOR's face with a small bot badge on
+ * it, plus its session name. The profile rides the row (`RevisionActor.
+ * displayName` / `avatarUrl`, joined by `server/service.ts › withActorProfiles`). Expanding one shows the WORD-LEVEL DIFF against the
  * previous revision OF THAT SAME RESOURCE, and offers Restore behind a
  * confirmation that NAMES THE DATE.
  *
@@ -47,8 +52,6 @@ export interface ChangelogListProps {
   /** `undefined` disables Restore for every row — the base roll-up spans
    *  several entries and a restore is addressed to ONE. */
   onRestore?: (revision: Revision) => Promise<void>;
-  /** Display name per actor user id, when the surface has one. */
-  actorNames?: Record<string, string>;
 }
 
 const OP_LABEL: Record<Revision["op"], string> = {
@@ -88,7 +91,6 @@ export function ChangelogList({
   onLoadMore,
   canRestore,
   onRestore,
-  actorNames,
 }: ChangelogListProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Revision | null>(null);
@@ -135,9 +137,7 @@ export function ChangelogList({
             const field = fieldLineOf(revision);
             const bundle = bundleOf(revision);
             const bundleName = bundle.find((f) => f.label === "Name")?.value;
-            const who =
-              (revision.actor.userId && actorNames?.[revision.actor.userId]) ??
-              (isAgent ? "Agent" : "Someone");
+            const who = revision.actor.displayName || (isAgent ? "Agent" : "Someone");
             return (
               <div key={revision.id} className="rounded-md">
                 <button
@@ -153,11 +153,7 @@ export function ChangelogList({
                       open && "rotate-90"
                     )}
                   />
-                  {isAgent ? (
-                    <Bot size={14} className="flex-none text-agent-on" aria-label="agent" />
-                  ) : (
-                    <User size={14} className="flex-none text-text-muted" aria-label="person" />
-                  )}
+                  <ActorFace revision={revision} />
                   <span className="truncate text-small text-text-primary">{who}</span>
                   {field ? (
                     /* ⚠ THE FIELD ROW — READABLE without expanding, which is
@@ -279,6 +275,38 @@ export function ChangelogList({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The writer's face: their profile picture, or the kit's initials fallback.
+ * ⚠ AN AGENT ROW IS ITS OPERATOR'S FACE — `actor.userId` is the user the agent
+ * acted for — with a small bot badge, so "who" and "by an agent" both read at a
+ * glance and never as two people.
+ */
+function ActorFace({ revision }: { revision: Revision }) {
+  const { actor } = revision;
+  return (
+    <span className="relative flex-none">
+      <Avatar
+        size="xs"
+        person={{
+          userId: actor.userId ?? "",
+          email: null,
+          displayName: actor.displayName ?? null,
+          avatarUrl: actor.avatarUrl ?? null,
+        }}
+      />
+      {actor.kind === "agent" ? (
+        <span
+          role="img"
+          aria-label="agent"
+          className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-surface-cta text-text-on-cta"
+        >
+          <Bot size={9} aria-hidden />
+        </span>
+      ) : null}
+    </span>
   );
 }
 

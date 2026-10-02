@@ -203,6 +203,9 @@ async function withObject(client, ref, fn) {
 async function opSetAttribute(client, args) {
     return withObject(client, args.object, async (object, snapshot) => {
         const label = args.label.trim();
+        // ⚠ One field, one description — the TYPE's (2026-10-01).
+        if (args.description !== undefined)
+            return (0, ontology_fields_1.attributeDescriptionRefusal)(snapshot, object, label);
         const needle = label.toLowerCase();
         const existingIndex = object.attributes.findIndex((a) => a.label.toLowerCase() === needle);
         const existing = existingIndex >= 0 ? object.attributes[existingIndex] : undefined;
@@ -222,9 +225,6 @@ async function opSetAttribute(client, args) {
         const badOptions = options && (0, ontology_fields_1.optionsProblem)(options);
         if (badOptions)
             return (0, respond_1.err)(badOptions);
-        const described = (0, ontology_fields_1.nextDescription)(args.description, existing?.description);
-        if ("fail" in described)
-            return described.fail;
         let value;
         if ((0, ontology_fields_1.isStringKind)(kind)) {
             if (args.value === undefined) {
@@ -250,7 +250,6 @@ async function opSetAttribute(client, args) {
             key: label.toLowerCase().replace(/\s+/g, "-"),
             label,
             value,
-            ...described,
             ...(options ? { options } : {}),
         };
         const attributes = existingIndex >= 0

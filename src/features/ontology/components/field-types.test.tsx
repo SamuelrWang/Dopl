@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
  * The 2026-10-01 field wave in the panel (Samuel): a ⋯ on each saved field with
- * "Edit description" (and "Edit options" on a select), and the three typed
- * kinds — select (only its options), date, link (a real hyperlink).
+ * "Edit description" (and "Edit options" on a select) — both the TYPE's, edited
+ * from a card too — and the three typed kinds — select (only its options),
+ * date, link (a real hyperlink).
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -120,29 +121,63 @@ describe("a select field", () => {
 });
 
 describe("the ⋯ menu", () => {
-  it("edits a saved field's description", async () => {
+  // ⚠ ONE FIELD, ONE DESCRIPTION (Samuel, 2026-10-01): it is the TYPE's, so a
+  // card's ⋯ writes the type's template and never the card's row.
+  it("edits the TYPE's description from a card's field", async () => {
     const dispatch = renderPanel(
+      graph({ attributes: [{ key: "company", label: "Company", value: { kind: "enum", value: "" } }] })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Field actions for Company" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Edit description/ }));
+    fireEvent.change(await screen.findByLabelText("Field description"), {
+      target: { value: "Where they work" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "OBJECT_UPDATE",
+      id: LANE_ID,
+      patch: {
+        template: [
+          {
+            key: "company",
+            label: "Company",
+            kind: "enum",
+            options: OPTIONS,
+            description: "Where they work",
+          },
+        ],
+      },
+    });
+  });
+
+  it("reads the type's description, never a stray per-card copy", () => {
+    renderPanel(
+      graph({
+        attributes: [
+          {
+            key: "company",
+            label: "Company",
+            value: { kind: "enum", value: "" },
+            // a pre-ruling row: the type cannot see it, so it is ignored
+            ...({ description: "Card copy" } as object),
+          },
+        ],
+      })
+    );
+    expect(screen.getByText("Employer")).toBeTruthy();
+    expect(screen.queryByText("Card copy")).toBeNull();
+  });
+
+  it("offers no description on a field its type does not have", () => {
+    renderPanel(
       graph({ attributes: [{ key: "stage", label: "Stage", value: { kind: "text", value: "New" } }] })
     );
     fireEvent.click(screen.getByRole("button", { name: "Field actions for Stage" }));
-    // a text field has no options to edit
+    // a text field has no options to edit, and no type field to describe
     expect(screen.queryByRole("menuitem", { name: /Edit options/ })).toBeNull();
-    fireEvent.click(screen.getByRole("menuitem", { name: /Edit description/ }));
-    fireEvent.change(await screen.findByLabelText("Field description"), {
-      target: { value: "Where the deal is" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "ATTRIBUTE_UPSERT",
-      id: CARD_ID,
-      index: 0,
-      attribute: {
-        key: "stage",
-        label: "Stage",
-        value: { kind: "text", value: "New" },
-        description: "Where the deal is",
-      },
-    });
+    expect(screen.queryByRole("menuitem", { name: /Edit description/ })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /Remove field/ })).toBeTruthy();
   });
 
   it("is on the type's template rows too", () => {

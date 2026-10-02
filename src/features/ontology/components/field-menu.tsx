@@ -15,6 +15,10 @@ import { ROW_REMOVE_BUTTON } from "./panel-section";
  * Edit description, Edit options (select fields only), Remove. A draft row keeps
  * its naked ✕ instead — it has no key yet, so there is nothing to describe.
  *
+ * ⚠ BOTH "Edit" items write the TYPE's field when opened on a card — the
+ * description and a select's choices are the field's, shared by every card of
+ * the type. A card attribute with no field on its type offers no description.
+ *
  * Coordinate mode, like `SelectMenu`: the panel scrolls and clips, and an
  * anchored card renders as a sliver.
  */
@@ -30,7 +34,8 @@ export function FieldMenu({
   description: string;
   /** Present only for a select field — the menu offers "Edit options" then. */
   options?: string[];
-  onDescription: (next: string) => void;
+  /** Absent: the field has no type-level home, so no "Edit description". */
+  onDescription?: (next: string) => void;
   onOptions?: (next: string[]) => void;
   onRemove: () => void;
 }) {
@@ -62,9 +67,11 @@ export function FieldMenu({
         <MoreHorizontal size={12} />
       </button>
       <Popover open={at !== null} at={at ?? undefined} onClose={() => setAt(null)}>
-        <MenuItem icon={<Pencil size={12} />} onSelect={() => open("description")}>
-          Edit description
-        </MenuItem>
+        {onDescription && (
+          <MenuItem icon={<Pencil size={12} />} onSelect={() => open("description")}>
+            Edit description
+          </MenuItem>
+        )}
         {options && onOptions && (
           <MenuItem icon={<ListChecks size={12} />} onSelect={() => open("options")}>
             Edit options
@@ -81,7 +88,7 @@ export function FieldMenu({
           Remove field
         </MenuItem>
       </Popover>
-      {dialog === "description" && (
+      {dialog === "description" && onDescription && (
         <DescriptionDialog
           label={label}
           initial={description}
