@@ -36,7 +36,7 @@ export interface RankRow {
  * measurement. A percentage of a SCANNED denominator drawn without it beside is
  * exactly what a payload's `scanned` field exists to prevent.
  */
-export function RankRail({ rows, empty }: { rows: RankRow[]; empty: string }) {
+function RankRail({ rows, empty }: { rows: RankRow[]; empty: string }) {
   const top = Math.max(1, ...rows.map((row) => row.value));
   if (rows.length === 0) {
     return <p className="mt-3 text-caption text-text-muted">{empty}</p>;
@@ -70,7 +70,7 @@ export function RankRail({ rows, empty }: { rows: RankRow[]; empty: string }) {
   );
 }
 
-export function RailCard({
+function RailCard({
   title,
   meta,
   children,

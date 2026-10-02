@@ -92,7 +92,7 @@ interface Lane {
  * moved most recently, which is the reading order somebody scanning a board
  * wants. Re-sorting by name here would bury the live room behind an alphabet.
  */
-export function agentLanes(rows: readonly BoardAgent[]): Lane[] {
+function agentLanes(rows: readonly BoardAgent[]): Lane[] {
   const lanes = new Map<string, Lane>();
   for (const row of rows) {
     const found = lanes.get(row.laneId);

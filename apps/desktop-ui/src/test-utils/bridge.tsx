@@ -68,14 +68,14 @@ export function resolveBody(over: Record<string, unknown> = {}) {
 }
 
 /** `GET /api/workspaces/me` — role + caller id for the resolved workspace. */
-export function meBody(over: Record<string, unknown> = {}) {
+function meBody(over: Record<string, unknown> = {}) {
   return { role: "owner", userId: USER_ID, ...over };
 }
 
 /** `GET /api/user/profile` — the caller's OWN row, bare (no envelope), as
  *  `src/app/api/user/profile/route.ts` answers it. Account-level, like
  *  `bootBody`: any surface that paints the operator's face reads it. */
-export function profileBody(over: Record<string, unknown> = {}) {
+function profileBody(over: Record<string, unknown> = {}) {
   return {
     id: USER_ID,
     display_name: "Sam Operator",

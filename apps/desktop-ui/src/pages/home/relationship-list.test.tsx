@@ -15,7 +15,7 @@ import {
 import {
   HOME_CARD_FACE,
   HOME_CARD_FACE_SELECTED,
-} from "./channel-row-marks";
+} from "@/shared/ui/home-card-marks";
 
 /**
  * THE LIST COLUMN AS SAMUEL RE-SPECIFIED IT (live reviews 2026-09-13 and

@@ -21,7 +21,7 @@
    shared `.selected-ring` (his 2026-09-09 ruling) — a rule that only means
    anything while the selection IS a ring on a white card. The selected row is
    now the page's black button face outright
-   (`channel-row-marks.tsx › HOME_CARD_FACE_SELECTED`, `.auth-btn-3d`), which
+   (`@/shared/ui/home-card-marks.tsx › HOME_CARD_FACE_SELECTED`, `.auth-btn-3d`), which
    brings its own 1px black edge, so there is no line left to darken and nothing
    left to beat the kit about.
 

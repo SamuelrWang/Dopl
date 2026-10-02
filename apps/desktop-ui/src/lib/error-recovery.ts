@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { getBridge } from "./dopl-bridge";
 
 /** Refetch every mounted query sitting in `error`; a fetch already in flight is left alone. */
-export function refetchErroredQueries(client: QueryClient): Promise<void> {
+function refetchErroredQueries(client: QueryClient): Promise<void> {
   return client.refetchQueries(
     { type: "active", predicate: (query) => query.state.status === "error" },
     { cancelRefetch: false }

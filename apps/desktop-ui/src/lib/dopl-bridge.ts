@@ -24,7 +24,7 @@ export interface BridgeOpResult {
   error?: string;
 }
 
-export type SignInProvider = "google" | "github";
+type SignInProvider = "google" | "github";
 
 export interface DoplBridge extends SpaBridgeSurface {
   apiRequest(path: string, opts?: BridgeRequestOpts): Promise<BridgeResponse>;

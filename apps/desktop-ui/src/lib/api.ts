@@ -3,7 +3,6 @@ import {
   decodeResponse,
   withQuery,
   type ApiRequestOpts,
-  type RawApiResponse,
 } from "@/shared/api/api-envelope";
 import { sendRequest } from "./api-transport";
 
@@ -30,7 +29,6 @@ import { sendRequest } from "./api-transport";
  */
 
 export { ApiError, decodeResponse, withQuery };
-export type { ApiRequestOpts, RawApiResponse };
 
 export async function apiRequest<T>(
   path: string,

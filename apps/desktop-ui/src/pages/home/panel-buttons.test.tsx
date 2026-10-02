@@ -36,7 +36,7 @@ import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import { LaunchIntoChannelButton } from "./identity-card-launch";
 import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "./panel-buttons";
-import { HOME_CARD_FACE_SELECTED } from "./channel-row-marks";
+import { HOME_CARD_FACE_SELECTED } from "@/shared/ui/home-card-marks";
 
 /** This directory, and the knowledge module up in the web tree. See the note
  *  in the scan below for why neither is written inline. */

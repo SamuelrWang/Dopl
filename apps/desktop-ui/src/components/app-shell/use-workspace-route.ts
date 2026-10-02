@@ -24,7 +24,7 @@ export interface ResolvedWorkspace {
 }
 
 export const RESOLVE_PATH = "/api/workspaces/resolve";
-export const ME_PATH = "/api/workspaces/me";
+const ME_PATH = "/api/workspaces/me";
 
 /**
  * ⚠ Named EXPLICITLY even though it now equals the app-wide default. The boot
@@ -54,7 +54,7 @@ export interface WorkspaceRoute {
 }
 
 /** `GET /api/workspaces/[segment]/my-access` — the shell's access matrix. */
-export function myAccessPath(segment: string): string {
+function myAccessPath(segment: string): string {
   return `/api/workspaces/${encodeURIComponent(segment)}/my-access`;
 }
 

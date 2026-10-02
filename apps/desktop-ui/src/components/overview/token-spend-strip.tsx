@@ -45,7 +45,7 @@ export interface TokenSpendReport {
   truncated: boolean;
 }
 
-export const TOKEN_SPEND_WINDOW_DAYS = 31;
+const TOKEN_SPEND_WINDOW_DAYS = 31;
 
 export function TokenSpendStrip({
   report,
