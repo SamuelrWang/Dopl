@@ -31,11 +31,19 @@ import type { McpClientInfo } from "@/shared/auth/mcp-client-info";
 /** Server-owned metadata key. Stripped from caller metadata, re-stamped in `service-writes.ts`. */
 export const VIA_METADATA_KEY = "via";
 
-/** Allow-listed vendors, keyed by display name. Subdomains match; look-alikes do not. */
+/**
+ * Allow-listed vendors, keyed by display name. A bare entry is a DOMAIN: it and its subdomains
+ * match; look-alikes do not. An entry starting with `=` is an EXACT HOST: only that host matches.
+ *
+ * ⚠ Gemini is exact-host only. `google.com` (and its subdomains) is never a vendor domain:
+ * script.google.com, sites.google.com etc. serve user-deployed content, so a suffix match there
+ * would hand anyone a verified "Gemini" check.
+ */
 const VERIFIED_VENDORS = {
   Claude: ["claude.ai", "claude.com", "anthropic.com"],
   ChatGPT: ["chatgpt.com", "openai.com"],
   Grok: ["grok.com", "x.ai"],
+  Gemini: ["=gemini.google.com"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type VerifiedVendor = keyof typeof VERIFIED_VENDORS;
@@ -46,7 +54,10 @@ const isVendor = (v: unknown): v is VerifiedVendor =>
 function vendorOfHost(host: string): VerifiedVendor | null {
   const h = host.toLowerCase();
   for (const [vendor, domains] of Object.entries(VERIFIED_VENDORS)) {
-    if (domains.some((d) => h === d || h.endsWith(`.${d}`))) return vendor as VerifiedVendor;
+    const hit = domains.some((d: string) =>
+      d.startsWith("=") ? h === d.slice(1) : h === d || h.endsWith(`.${d}`)
+    );
+    if (hit) return vendor as VerifiedVendor;
   }
   return null;
 }

@@ -8,6 +8,18 @@ describe("verifiedVendorOf — the one verification rule", () => {
     expect(verifiedVendorOf(["https://chatgpt.com/connector_platform_oauth_redirect"])).toBe("ChatGPT");
     expect(verifiedVendorOf(["https://grok.com/cb"])).toBe("Grok");
     expect(verifiedVendorOf(["https://auth.x.ai/cb"])).toBe("Grok");
+    expect(verifiedVendorOf(["https://gemini.google.com/cb"])).toBe("Gemini");
+  });
+
+  it("Gemini is exact-host only: no other google.com host, no subdomain, no look-alike", () => {
+    expect(verifiedVendorOf(["https://script.google.com/macros/s/x/exec"])).toBeNull();
+    expect(verifiedVendorOf(["https://sites.google.com/view/x"])).toBeNull();
+    expect(verifiedVendorOf(["https://google.com/cb"])).toBeNull();
+    expect(verifiedVendorOf(["https://x.gemini.google.com/cb"])).toBeNull();
+    expect(verifiedVendorOf(["https://evil.google.com.attacker.com/cb"])).toBeNull();
+    expect(verifiedVendorOf(["https://gemini.google.com.attacker.com/cb"])).toBeNull();
+    expect(verifiedVendorOf(["http://gemini.google.com/cb"])).toBeNull();
+    expect(verifiedVendorOf(["https://gemini.google.com/cb", "https://script.google.com/cb"])).toBeNull();
   });
 
   it("refuses one foreign redirect, http, look-alikes, mixed vendors, custom schemes, empty", () => {
