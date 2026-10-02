@@ -8,7 +8,8 @@ import { AccountSection } from "./sections/account-section";
 // than deleted, recorded as a finding: the uploader is the tree's only
 // workspace-image control and the page that should host it is mid-overhaul.
 import { WorkspacesSectionCore } from "./sections/workspaces-section-core";
-import { ConnectSectionCore } from "./sections/connect-section-core";
+import { AgentsSectionCore } from "./sections/agents-section-core";
+import { DevicesSectionCore } from "./sections/devices-section-core";
 import { PlansBilling } from "./sections/plans-billing";
 import { SettingsModalCore, type SettingsSection } from "./settings-modal-core";
 
@@ -54,7 +55,9 @@ export function SettingsModal({
       section={section}
       onSectionChange={onSectionChange}
       workspacesPane={<WorkspacesSectionCore activeWorkspaceId={workspaceId} />}
-      connectPane={<ConnectSectionCore />}
+      agentsPane={<AgentsSectionCore />}
+      devicesPane={<DevicesSectionCore />}
+      // ⚠ NO `configurationPane`: default agent settings live in the desktop's own store.
       accountPane={<AccountSection workspaceId={workspaceId} role={role} />}
       billingPane={
         <PlansBilling

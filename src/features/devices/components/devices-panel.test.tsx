@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Settings → Connect → Devices, over a mocked TRANSPORT (not mocked hooks): the real API paths,
+ * Settings → Devices, over a mocked TRANSPORT (not mocked hooks): the real API paths,
  * bodies and cache invalidation are what is under test — computers (`/api/devices`) and paired
  * glasses (`/api/glasses/devices`) in one list.
  */

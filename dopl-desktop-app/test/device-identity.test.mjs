@@ -1,4 +1,4 @@
-// DEVICE IDENTITY — this install as a "computer" under Settings > Connect > Devices.
+// DEVICE IDENTITY — this install as a "computer" under Settings > Devices.
 // The pure pieces (name cleanup, clamp, platform), the async name/OS read, the persisted install
 // id, the seam header, and mcp-config's token-link helper the heartbeat reports once.
 

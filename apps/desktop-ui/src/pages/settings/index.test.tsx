@@ -128,8 +128,8 @@ describe("settings page", () => {
   });
 
   // ⚠ "revokes a connected app over the bridge" MOVED WITH THE SECTION — it is
-  // `components/settings-modal/settings-modal.test.tsx › revokes a connected app
-  // from the Connect tab` now. The fixture below is what it still needs here:
+  // `components/settings-modal/settings-modal.test.tsx › disconnects an agent app
+  // from the Agents tab` now. The fixture below is what it still needs here:
   // nothing, which is what the test above asserts.
 
   it("shows the danger zone to owners only", async () => {

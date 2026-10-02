@@ -1,6 +1,6 @@
 # Devices and connected agents
 
-Settings > Connect has two panels (Samuel, 2026-09-28):
+Settings has two tabs for this (Samuel, 2026-09-28; split from one Connect tab on 2026-10-02):
 
 - **Agents**: the agent apps connected to Dopl (Claude, Claude Code, Codex, Cursor, and so on), one row
   per app, plus how to connect one.

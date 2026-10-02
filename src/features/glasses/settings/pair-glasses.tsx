@@ -14,7 +14,7 @@ import {
 import { useInvalidateGlassesDevices } from "./use-glasses";
 
 /**
- * Pair a pair of glasses by the code on its lens (Settings > Connect > Devices). Code only: the
+ * Pair a pair of glasses by the code on its lens (Settings > Devices). Code only: the
  * device picks its channel on the glasses (Samuel, 2026-09-28 — no channel picker here).
  */
 export function PairGlasses() {

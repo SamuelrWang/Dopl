@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Profile popup "Agents" pane: the default launch settings a new channel starts with. It mounts the
- * channel tab's own `AgentLaunchPostureRows`, so the two scopes cannot drift.
+ * Profile popup "Configuration" pane: the default launch settings a new channel starts with. It
+ * mounts the channel tab's own `AgentLaunchPostureRows`, so the two scopes cannot drift.
  * No Tool access row: it is a cloud per-member column that does not exist before the channel does.
  * No folder, orchestrator or direct-agents row: a per-channel path, or already machine-wide.
  */

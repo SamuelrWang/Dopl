@@ -1,4 +1,4 @@
-// The device heartbeat: this computer's online/last-seen row under Settings > Connect > Devices.
+// The device heartbeat: this computer's online/last-seen row under Settings > Devices.
 // Pure and injectable so `node --test` drives it; `device-registry.js` is the wiring.
 //
 // It has no timer of its own — presence's 30s loop calls `beat(posture)` (presence-core `onBeat`),

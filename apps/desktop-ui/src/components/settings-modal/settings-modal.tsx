@@ -7,7 +7,8 @@ import {
 } from "@/shared/layout/settings-modal/settings-modal-core";
 import { AccountSectionCore } from "@/shared/layout/settings-modal/sections/account-section-core";
 import { WorkspacesSectionCore } from "@/shared/layout/settings-modal/sections/workspaces-section-core";
-import { ConnectSectionCore } from "@/shared/layout/settings-modal/sections/connect-section-core";
+import { AgentsSectionCore } from "@/shared/layout/settings-modal/sections/agents-section-core";
+import { DevicesSectionCore } from "@/shared/layout/settings-modal/sections/devices-section-core";
 import { AgentDefaultsSettings } from "@/features/channels/components/agent-defaults-settings";
 import { useApiQuery } from "#/hooks/use-api-query";
 // ⚠ Deep import, not the `#/components/app-shell` barrel: that barrel exports
@@ -42,8 +43,8 @@ interface Props {
  * gear opens a modal over the current page (the `/settings` route still works
  * for deep links).
  *
- * Workspaces, Connect and the Account profile form come from the shared cores
- * unchanged.
+ * Workspaces, Agents, Devices and the Account profile form come from the
+ * shared cores unchanged.
  * ⚠ THERE IS NO MEMBERS PANE (Samuel, 2026-08-30 — ledger ASK-1): `/members` is
  * the one console, and the v1 one this modal used to mount is deleted.
  * What the renderer cannot do arrives as SLOTS: multipart icon
@@ -94,7 +95,8 @@ export function SettingsModal({
           }}
         />
       }
-      connectPane={<ConnectSectionCore />}
+      agentsPane={<AgentsSectionCore />}
+      devicesPane={<DevicesSectionCore />}
       accountPane={
         <AccountSectionCore
           workspaceId={workspaceId}
@@ -108,13 +110,13 @@ export function SettingsModal({
           dangerZone={<AccountActions workspaceSegment={workspaceSegment} />}
         />
       }
-      // DEFAULT AGENT SETTINGS (2026-09-18, Samuel's ruling) — what a channel created from now on
-      // starts its agents on. ⚠ DESKTOP ONLY, AND NOT BECAUSE OF A POLICY: the record is in this
+      // CONFIGURATION — DEFAULT AGENT SETTINGS (2026-09-18, Samuel's ruling; its own tab since
+      // 2026-10-02) — what a channel created from now on starts its agents on. ⚠ DESKTOP ONLY, AND NOT BECAUSE OF A POLICY: the record is in this
       // machine's electron-store and is reached over `window.dopl.channels`, so the web binding
       // passes no pane and `SettingsModalCore` draws no nav entry (no dead rows).
       // ⚠ IT TAKES NO WORKSPACE AND NO CHANNEL. One operator, one Mac, one answer — which is why
       // it is the one pane here that needs nothing from the props above it.
-      agentsPane={<AgentDefaultsSettings />}
+      configurationPane={<AgentDefaultsSettings />}
       billingPane={
         <BillingPane
           workspaceSegment={workspaceSegment}

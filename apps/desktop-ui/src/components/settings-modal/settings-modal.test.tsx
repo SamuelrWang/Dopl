@@ -145,16 +145,18 @@ const gear = () => screen.getByRole("button", { name: "Settings" });
 /**
  * The rail, in order, AS THE DESKTOP DRAWS IT.
  *
- * ⚠ **FIVE ROWS HERE AND FOUR ON THE WEB, and that split is the contract, not a
- * fixture detail.** "Agents" is default agent settings, held in this machine's
- * own store, so `SettingsModalCore` draws it only when a binding passes
- * `agentsPane` — the desktop does, the web passes nothing. Flattening this list
- * to one shared set would pin a row the web is right not to have.
+ * ⚠ **SIX ROWS HERE AND FIVE ON THE WEB, and that split is the contract, not a
+ * fixture detail.** "Configuration" is default agent settings, held in this
+ * machine's own store, so `SettingsModalCore` draws it only when a binding passes
+ * `configurationPane` — the desktop does, the web passes nothing. Flattening this
+ * list to one shared set would pin a row the web is right not to have.
+ * ⚠ **NO "Connect" ROW (Samuel, 2026-10-02)** — it split into Agents + Devices.
  */
 const NAV_LABELS = [
   "Workspaces",
-  "Connect",
   "Agents",
+  "Devices",
+  "Configuration",
   "Account",
   "Plans & Billing",
 ];
@@ -214,6 +216,7 @@ describe("settings modal", () => {
     expect(
       rail.map((b) => b.textContent).filter((t) => NAV_LABELS.includes(t ?? ""))
     ).toEqual(NAV_LABELS);
+    expect(within(dialog).queryByRole("button", { name: "Connect" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText("WORKSPACE")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("ACCOUNT")).not.toBeInTheDocument();
   });
@@ -239,8 +242,8 @@ describe("settings modal", () => {
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
   });
 
-  /** Connect = Agents (one row per app) + Devices, account-scoped, all over the bridge. */
-  it("disconnects an agent app from the Connect tab", async () => {
+  /** Agents = one row per agent app, account-scoped, over the bridge — and no Devices panel. */
+  it("disconnects an agent app from the Agents tab", async () => {
     apiRequest.mockImplementation((path: string) =>
       path === "/api/oauth/apps"
         ? Promise.resolve(
@@ -261,10 +264,11 @@ describe("settings modal", () => {
     renderShell();
     await screen.findByText("page body");
     fireEvent.click(gear());
-    await screen.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Agents" }));
 
     expect(await screen.findByRole("heading", { name: "Agents" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Devices" })).not.toBeInTheDocument();
     expect(await screen.findByText("Claude Code")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
     fireEvent.click(
@@ -285,14 +289,15 @@ describe("settings modal", () => {
   });
 
   /** Devices lists computers and glasses in one panel, both reads account-scoped (no workspace). */
-  it("lists devices on the Connect tab and pairs glasses there", async () => {
+  it("lists devices on the Devices tab and pairs glasses there", async () => {
     renderShell();
     await screen.findByText("page body");
     fireEvent.click(gear());
-    await screen.findByRole("dialog", { name: "Settings" });
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Devices" }));
 
     expect(await screen.findByRole("heading", { name: "Devices" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Agents" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pair glasses" }));
     expect(screen.getByLabelText("Pairing code")).toBeInTheDocument();
     await waitFor(() => {

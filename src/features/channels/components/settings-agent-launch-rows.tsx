@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The launch-posture group — one component for the channel Settings tab and the profile Agents pane,
- * over one record shape (`hooks/use-launch-selection.ts`). Rows: runtime → permissions → messaging.
+ * The launch-posture group — one component for the channel Settings tab and the profile
+ * Configuration pane, over one record shape (`hooks/use-launch-selection.ts`). Rows: runtime → permissions → messaging.
  * Permissions is ONE control (Ask / Auto / Full) for every runtime; each runtime applies it in its
  * own settings, and Details shows that reading, in main's words (`permissionLevels`), never derived here.
  */

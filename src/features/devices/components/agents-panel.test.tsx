@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Settings → Connect → Agents over a mocked transport: one row per agent app, Disconnect behind a
+ * Settings → Agents over a mocked transport: one row per agent app, Disconnect behind a
  * confirm, and the "Connect an agent" recipes behind the header control.
  */
 

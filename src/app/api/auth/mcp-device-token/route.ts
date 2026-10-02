@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  *
  * ⚠ `sessionOnly` gates BOTH to cookie callers: an OAuth agent token of ANY scope is refused, so
  * a background agent can never bootstrap a fresh 90-day credential for itself.
- * The token is returned ONCE (only its hash is stored); Settings > Connect > Devices › Remove
+ * The token is returned ONCE (only its hash is stored); Settings > Devices › Remove
  * revokes it with its computer.
  */
 const BodySchema = z.object({

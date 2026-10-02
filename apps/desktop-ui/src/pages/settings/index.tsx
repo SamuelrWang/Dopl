@@ -9,8 +9,8 @@ import {
 } from "@/shared/layout/settings-modal/sections/workspace-section-core";
 // ⚠ `ConnectedAppsSection` STOOD IN THE BODY'S `extras` SLOT AND IS GONE
 // (Samuel, 2026-09-18): the connect/login content — that list AND the MCP URL
-// block the body itself used to render — is the settings popup's **Connect**
-// tab now (`shared/layout/settings-modal/sections/connect-section-core.tsx`).
+// block the body itself used to render — is the settings popup's **Agents**
+// tab now (`shared/layout/settings-modal/sections/agents-section-core.tsx`).
 // Both are ACCOUNT-scoped and this page is a WORKSPACE page.
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading } from "#/components/page-states";

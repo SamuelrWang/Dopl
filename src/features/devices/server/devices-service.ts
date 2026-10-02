@@ -9,7 +9,7 @@ import type {
 } from "./desktop-devices-types";
 
 /**
- * The computer source of Settings > Connect > Devices.
+ * The computer source of Settings > Devices.
  *
  * A desktop heartbeats every ~60s while signed in (it rides the presence loop, which beats every
  * 30s and skips alternate sends), so a row is online while its last beat is inside this window and
@@ -145,7 +145,7 @@ export async function heartbeat(
 const notFound = () => new HttpError(404, "DEVICE_NOT_FOUND", "No such device.");
 
 /**
- * Rename a computer (Settings > Connect > Devices). The rename is an override column, so the
+ * Rename a computer (Settings > Devices). The rename is an override column, so the
  * heartbeat's detected name keeps updating underneath it; a blank or null name clears the
  * override and the detected name shows again. A legacy computer (a token, no row) cannot be renamed.
  */

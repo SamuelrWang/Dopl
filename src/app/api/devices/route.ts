@@ -6,7 +6,7 @@ import { devicesDeps, requestInstallId } from "@/features/devices/server/runtime
 
 export const dynamic = "force-dynamic";
 
-/** GET — the caller's computers (Settings > Connect > Devices). Glasses come from `/api/glasses/devices`. */
+/** GET — the caller's computers (Settings > Devices). Glasses come from `/api/glasses/devices`. */
 export const GET = withUserAuth(
   async (request, { userId }) => {
     try {

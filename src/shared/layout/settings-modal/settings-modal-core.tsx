@@ -1,6 +1,13 @@
 "use client";
 
-import { Bot, CreditCard, LayoutGrid, Plug, UserRound } from "lucide-react";
+import {
+  Bot,
+  CreditCard,
+  LayoutGrid,
+  Monitor,
+  SlidersHorizontal,
+  UserRound,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
@@ -26,13 +33,20 @@ import styles from "./settings-modal.module.css";
  * (`sections/workspace-section-core.tsx › WorkspaceSectionBody`), which is the
  * one surface that edits a workspace now.
  *
- * ⚠ **`"agents"` IS THE ONE OPTIONAL MEMBER** — DEFAULT AGENT SETTINGS, desktop
- * only, drawn only when `agentsPane` is passed (see the prop, and `has` below).
+ * ⚠ **`"connect"` IS DELETED, NOT RENAMED (Samuel, 2026-10-02).** Its two panels
+ * split into their own tabs: `"agents"` (connected agent apps + sign-in + how to
+ * connect one) and `"devices"` (computers + glasses). The default agent settings
+ * that `"agents"` used to hold moved to `"configuration"`.
+ *
+ * ⚠ **`"configuration"` IS THE ONE OPTIONAL MEMBER** — DEFAULT AGENT SETTINGS,
+ * desktop only, drawn only when `configurationPane` is passed (see the prop, and
+ * `has` below).
  */
 export type SettingsSection =
   | "workspaces"
-  | "connect"
   | "agents"
+  | "devices"
+  | "configuration"
   | "account"
   | "billing";
 
@@ -50,15 +64,15 @@ interface NavItem {
  * titled are DELETED, not hidden: they were the only thing indenting this rail,
  * and a header over a single row was naming a group of one.
  *
- * ⚠ **"Agents" SITS BELOW Connect** (Samuel, same review) and is the one row
- * that may be ABSENT — `has` below is what drops it, so the WEB draws four rows
- * and the DESKTOP five. It is not reordered by that: the list is the order,
- * filtered, never two lists.
+ * ⚠ **"Configuration" is the one row that may be ABSENT** (Samuel, 2026-10-02) —
+ * `has` below is what drops it, so the WEB draws five rows and the DESKTOP six.
+ * It is not reordered by that: the list is the order, filtered, never two lists.
  */
 const NAV: ReadonlyArray<NavItem> = [
   { id: "workspaces", label: "Workspaces", icon: LayoutGrid },
-  { id: "connect", label: "Connect", icon: Plug },
   { id: "agents", label: "Agents", icon: Bot },
+  { id: "devices", label: "Devices", icon: Monitor },
+  { id: "configuration", label: "Configuration", icon: SlidersHorizontal },
   { id: "account", label: "Account", icon: UserRound },
   { id: "billing", label: "Plans & Billing", icon: CreditCard },
 ];
@@ -70,8 +84,10 @@ export interface SettingsModalCoreProps {
   onSectionChange: (section: SettingsSection) => void;
   /** Every container this account belongs to, home space included. */
   workspacesPane: React.ReactNode;
-  /** Agents (connected agent apps + how to connect one) and Devices (computers + glasses). */
-  connectPane: React.ReactNode;
+  /** Connected agent apps, runtime sign-in, and how to connect one. */
+  agentsPane: React.ReactNode;
+  /** Computers and glasses connected to the caller's agents. */
+  devicesPane: React.ReactNode;
   /** From `AccountSectionCore` in both apps; danger zone differs (web deletes
    *  in place, desktop links out). */
   accountPane: React.ReactNode;
@@ -79,13 +95,14 @@ export interface SettingsModalCoreProps {
    *  desktop, whose CSP refuses the Stripe script and every network origin. */
   billingPane: React.ReactNode;
   /**
-   * DEFAULT AGENT SETTINGS (2026-09-18) — the one pane that is OPTIONAL, and the omission is the
+   * CONFIGURATION — DEFAULT AGENT SETTINGS (2026-09-18; its own tab since 2026-10-02) — the one
+   * pane that is OPTIONAL, and the omission is the
    * contract rather than a convenience. The record it edits lives in the desktop's own local
    * store, so the WEB binding passes nothing and the nav entry is not drawn at all: the
    * no-dead-rows rule (INVARIANTS §5), and the strong version of it here, since a tab that
    * persisted nothing would promise new channels inherit settings that cannot exist.
    */
-  agentsPane?: React.ReactNode;
+  configurationPane?: React.ReactNode;
 }
 
 /**
@@ -104,15 +121,17 @@ export function SettingsModalCore({
   section,
   onSectionChange,
   workspacesPane,
-  connectPane,
+  agentsPane,
+  devicesPane,
+  configurationPane,
   accountPane,
   billingPane,
-  agentsPane,
 }: SettingsModalCoreProps) {
   // ⚠ ONE PREDICATE, READ BY BOTH THE RAIL AND THE PANE. A nav entry whose pane is absent is a
   // row that selects nothing, and a pane rendered under no entry is unreachable — so which
   // sections EXIST is decided once, here, rather than by two conditions that can disagree.
-  const has = (id: SettingsSection) => id !== "agents" || agentsPane != null;
+  const has = (id: SettingsSection) =>
+    id !== "configuration" || configurationPane != null;
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
       <nav className={styles.nav}>
@@ -153,10 +172,11 @@ export function SettingsModalCore({
 
       <div className={styles.pane}>
         {section === "workspaces" && workspacesPane}
-        {section === "connect" && connectPane}
+        {section === "agents" && agentsPane}
+        {section === "devices" && devicesPane}
+        {section === "configuration" && has("configuration") && configurationPane}
         {section === "account" && accountPane}
         {section === "billing" && billingPane}
-        {section === "agents" && has("agents") && agentsPane}
       </div>
     </ModalShell>
   );

@@ -1,4 +1,4 @@
-// This install's identity as a "computer" device of the signed-in user (Settings > Connect >
+// This install's identity as a "computer" device of the signed-in user (Settings >
 // Devices). `X-Dopl-Device` rides both fetch seams (api.js, listener-io.js) so the server can link
 // the MCP tokens it mints to this computer; the heartbeat body is `descriptor()`.
 //

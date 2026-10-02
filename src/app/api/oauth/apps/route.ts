@@ -6,7 +6,7 @@ import { agentAppRepository } from "@/features/devices/server/agent-apps-reposit
 
 export const dynamic = "force-dynamic";
 
-/** GET — the caller's connected agent apps, one row per app (Settings > Connect > Agents). */
+/** GET — the caller's connected agent apps, one row per app (Settings > Agents). */
 export const GET = withUserAuth(
   async (_request, { userId }) => {
     try {

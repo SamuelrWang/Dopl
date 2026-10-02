@@ -5,8 +5,8 @@ import { meetsMinRole, type Role, type Workspace } from "@/features/workspaces/t
 import { WorkspaceSettingsFormCore } from "@/features/workspaces/components/workspace-settings-form-core";
 import { WorkspaceDangerZoneCore } from "@/features/workspaces/components/workspace-danger-zone-core";
 // ⚠ `RemoteConnect` STOOD HERE AND IS GONE (Samuel, 2026-09-18). The
-// connect/login block is the settings popup's own **Connect** tab now
-// (`./connect-section-core.tsx`), account-scoped where it always belonged: it
+// connect/login block is the settings popup's own **Agents** tab now
+// (`./agents-section-core.tsx`), account-scoped where it always belonged: it
 // renders one `/api/mcp` URL for the caller and reads no workspace at all.
 import { SectionShell } from "./section-shell";
 
@@ -31,7 +31,7 @@ interface BodyProps {
   imageUploader?: (workspace: Workspace) => React.ReactNode;
   /** Rendered after the form, before the owner-only danger zone. ⚠ NO CALLER
    *  SINCE 2026-09-18 — the desktop `/settings` page hung connected-apps here
-   *  and that block is the popup's Connect tab now. Kept as the body's one
+   *  and that block is the popup's Agents tab now. Kept as the body's one
    *  extension point; a second composition of this fragment is what the slot
    *  exists to avoid. */
   extras?: React.ReactNode;

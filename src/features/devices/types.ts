@@ -1,5 +1,5 @@
 /**
- * DEVICES — the hardware a person's agents reach them through (Settings > Connect > Devices).
+ * DEVICES — the hardware a person's agents reach them through (Settings > Devices).
  *
  * `kind` is OPEN on purpose: computers (the desktop app) and glasses exist today; phones, robots
  * and whatever comes next join as new kinds with their own source, and every surface that lists
