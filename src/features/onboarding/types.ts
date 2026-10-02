@@ -1,11 +1,7 @@
 import type { z } from "zod";
-import type {
-  SurveySubmissionSchema,
-  CompleteOnboardingSchema,
-} from "./schema";
+import type { SurveySubmissionSchema } from "./schema";
 
 export type SurveySubmission = z.infer<typeof SurveySubmissionSchema>;
-export type CompleteOnboardingInput = z.infer<typeof CompleteOnboardingSchema>;
 
 export interface OnboardingStatus {
   onboarded: boolean;

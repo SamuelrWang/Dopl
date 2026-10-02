@@ -4,11 +4,11 @@
  * derive from here or they drift.
  */
 
-export const PASSWORD_MIN_LENGTH = 10;
+const PASSWORD_MIN_LENGTH = 10;
 
-export type PasswordCheck = { id: string; label: string; met: boolean };
+type PasswordCheck = { id: string; label: string; met: boolean };
 
-export type PasswordStrength = "weak" | "fair" | "good" | "strong";
+type PasswordStrength = "weak" | "fair" | "good" | "strong";
 
 export type PasswordEvaluation = {
   checks: PasswordCheck[];

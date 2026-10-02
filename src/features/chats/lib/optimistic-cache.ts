@@ -74,7 +74,7 @@ export function scopeBody(scope: ChatScope, teamIds: string[]): ScopeBody {
 }
 
 /** Marks a row that exists only in this client's cache. */
-export const PENDING_ID_PREFIX = "pending:";
+const PENDING_ID_PREFIX = "pending:";
 
 /** True for a row the server has not acknowledged yet. */
 export function isPendingId(id: string): boolean {

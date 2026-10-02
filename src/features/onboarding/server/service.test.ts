@@ -36,7 +36,6 @@ vi.mock("@/features/workspaces/server/service", () => ({
   renameHomeSpaceIfPlaceholder: vi.fn(),
 }));
 vi.mock("./repository", () => ({
-  findDisplayName: vi.fn(),
   findOnboardedAt: vi.fn(),
   hasActiveMcpToken: vi.fn(),
   markOnboarded: vi.fn(),

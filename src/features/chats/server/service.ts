@@ -17,7 +17,6 @@ import "server-only";
  */
 
 export { buildChatContext } from "./service-shared";
-export type { ChatContext, AuthLike } from "./service-shared";
 
 export { listChats, getChat } from "./service-reads";
 

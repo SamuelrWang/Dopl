@@ -35,7 +35,7 @@ export interface KnowledgeViewFolder {
   children: KnowledgeViewFolder[];
 }
 
-export interface KnowledgeViewDoc {
+interface KnowledgeViewDoc {
   folderName: string | null;
   title: string;
   excerpt: string | null;
@@ -138,7 +138,7 @@ function buildModel(
 }
 
 /** Member/agent-authored markdown-ish body → plain-text paragraphs. */
-export function splitBody(body: string): string[] {
+function splitBody(body: string): string[] {
   return body
     .split(/\r?\n[ \t]*\r?\n+/)
     .map((chunk) => chunk.trim())

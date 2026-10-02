@@ -9,15 +9,6 @@ export function buildClaudeCliHttp(url: string): string {
   return `claude mcp add --transport http dopl ${url}`;
 }
 
-/** Claude Desktop / Cursor / generic `mcpServers` JSON, remote HTTP server. */
-export function buildClaudeConfigHttp(url: string): string {
-  return JSON.stringify(
-    { mcpServers: { dopl: { type: "http", url } } },
-    null,
-    2,
-  );
-}
-
 /** Codex CLI one-liner for the remote HTTP server; Codex runs the OAuth sign-in on first use. */
 export function buildCodexCliHttp(url: string): string {
   return `codex mcp add dopl --url ${url}`;

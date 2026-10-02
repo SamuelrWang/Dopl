@@ -6,21 +6,21 @@ import { PasswordRequirements } from "./password-requirements";
 
 /** ToS/Privacy link shape. Web wraps `next/link`; desktop SPA opens system
  *  browser — `file://` document cannot navigate to `/terms`. */
-export type LegalLinkProps = { href: string; className?: string; children: ReactNode };
-export type LegalLinkComponent = (props: LegalLinkProps) => ReactNode;
+type LegalLinkProps = { href: string; className?: string; children: ReactNode };
+type LegalLinkComponent = (props: LegalLinkProps) => ReactNode;
 
 /** Mode-switch renderer input: destination mode + class/label of in-place
  *  fallback, so host's link is same control, not lookalike. `onSelect` is the
  *  core's ANIMATED switch (fade out → swap → fade in) — a host that wants the
  *  in-place transition calls it instead of navigating; a host that navigates
  *  may ignore it. */
-export type ModeSwitchProps = {
+type ModeSwitchProps = {
   to: LoginMode;
   className: string;
   children: ReactNode;
   onSelect: () => void;
 };
-export type ModeSwitchComponent = (props: ModeSwitchProps) => ReactNode;
+type ModeSwitchComponent = (props: ModeSwitchProps) => ReactNode;
 
 /** One leg of the switch crossfade — out, then in, so the whole beat is 2×. */
 const SWITCH_FADE_MS = 180;

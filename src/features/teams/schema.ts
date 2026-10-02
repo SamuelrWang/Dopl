@@ -50,7 +50,6 @@ export type TeamUpdateInput = z.infer<typeof TeamUpdateSchema>;
 export const TeamMembersAddSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1).max(100),
 });
-export type TeamMembersAddInput = z.infer<typeof TeamMembersAddSchema>;
 
 /** `level: null` removes the grant. */
 export const TeamGrantSetSchema = z.object({
@@ -58,11 +57,9 @@ export const TeamGrantSetSchema = z.object({
   resourceId: z.string().uuid(),
   level: z.enum(["read", "edit"]).nullable(),
 });
-export type TeamGrantSetInput = z.infer<typeof TeamGrantSetSchema>;
 
 export const AccessModeSetSchema = z.object({
   resourceType: z.enum(CONSOLE_RESOURCE_TYPES),
   resourceId: z.string().uuid(),
   accessMode: z.enum(["workspace", "teams"]),
 });
-export type AccessModeSetInput = z.infer<typeof AccessModeSetSchema>;

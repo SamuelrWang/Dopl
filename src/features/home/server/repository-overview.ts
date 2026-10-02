@@ -52,7 +52,7 @@ const EXCLUDE_AWAIT_POLLING = "tool.neq.channel,op.not.like.await*";
  * window the shares describe rather than inventing a zero for an old bin —
  * the trade `listRecentUserMessageAuthors` documents.
  */
-export const HOME_SCAN_LIMIT = 20_000;
+const HOME_SCAN_LIMIT = 20_000;
 
 /* ⚠ `HOME_SESSION_LIMIT` (2,000) LIVED HERE AND IS DELETED WITH ITS ONE READER
    (`listSessionTokens`, 2026-09-01). The two session reads that remain take a

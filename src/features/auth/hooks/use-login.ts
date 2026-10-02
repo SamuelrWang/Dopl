@@ -8,9 +8,7 @@ import {
   explicitPostAuthTarget,
 } from "@/shared/lib/url/post-auth-landing";
 import { isDesktopApp } from "@/shared/lib/desktop";
-import type { LoginActions, SocialProvider } from "./use-login-core";
-
-export type { SocialProvider };
+import type { LoginActions } from "./use-login-core";
 
 /** Origin Supabase sends auth emails / OAuth callbacks to. ⚠ Pinned to
  *  NEXT_PUBLIC_APP_URL in prod so links never embed a preview or localhost

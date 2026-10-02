@@ -76,7 +76,6 @@ export const DESCRIPTOR_OPTIONS: Record<EntityType, SurveyOption[]> = {
 
 /** Size buckets for the slider, in order. */
 export const SIZE_BUCKETS = ["1-2", "2-10", "10-50", "50-100", "100-1000", "1000+"] as const;
-export type SizeBucket = (typeof SIZE_BUCKETS)[number];
 
 /** Slider label per identity — solo never shows it. */
 export const SIZE_LABEL: Record<Exclude<EntityType, "solo">, string> = {

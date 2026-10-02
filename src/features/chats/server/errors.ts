@@ -1,4 +1,4 @@
-export class ChatError extends Error {
+class ChatError extends Error {
   constructor(message: string) {
     super(message);
     this.name = new.target.name;

@@ -16,9 +16,3 @@ export function chatScope(
   if (chat.visibility === "private") return "private";
   return chat.accessMode === "teams" ? "team" : "workspace";
 }
-
-export const CHAT_SCOPE_LABEL: Record<ChatScope, string> = {
-  private: "Private",
-  team: "Team",
-  workspace: "Public",
-};

@@ -21,7 +21,7 @@ import * as repo from "./repository";
 
 /** Pending links a page will render. ⚠ A NON-REPORTING ceiling on §9's sanctioned
  *  terms for this family — links are an account's own invitations, not a feed. */
-export const HOME_LINK_LIMIT = 50;
+const HOME_LINK_LIMIT = 50;
 
 /**
  * ONE container, hydrated through the CHANNELS projection — what every home WRITE

@@ -12,7 +12,6 @@ import "server-only";
 export type { ChannelLinkRow } from "@/shared/links/dto";
 export {
   CHANNEL_LINK_COLS,
-  claimUrl,
   isClaimable,
   linkState,
   mapLinkRow,

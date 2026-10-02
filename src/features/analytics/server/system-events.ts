@@ -10,9 +10,9 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * Fire-and-forget: never throws, never blocks the caller.
  */
 
-export type SystemEventSeverity = "info" | "warn" | "error" | "critical";
+type SystemEventSeverity = "info" | "warn" | "error" | "critical";
 
-export type SystemEventCategory =
+type SystemEventCategory =
   | "ingestion"
   | "external_api"
   | "db"

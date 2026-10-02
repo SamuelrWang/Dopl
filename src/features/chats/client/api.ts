@@ -3,7 +3,7 @@ import type { ApiRequestOpts } from "@/shared/api/api-envelope";
 import type { ApiMutationRequestFn } from "@/shared/hooks/use-api-mutation";
 
 /** Domain error wrapper so components can branch on `code`. */
-export class ChatApiError extends Error {
+class ChatApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,

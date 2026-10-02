@@ -45,14 +45,3 @@ export async function hasActiveMcpToken(userId: string): Promise<boolean> {
   if (error) throw error;
   return !!data;
 }
-
-/** display_name for the workspace-naming fallback chain. */
-export async function findDisplayName(userId: string): Promise<string | null> {
-  const { data, error } = await supabaseAdmin()
-    .from("profiles")
-    .select("display_name")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data?.display_name as string | null) ?? null;
-}

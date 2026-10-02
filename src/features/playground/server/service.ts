@@ -30,7 +30,7 @@ import {
 /** Session lifetime. Short on purpose — a demo, not a workspace; the token
  *  dies at expiry (`validateAccessToken`) and the reaper deletes the data
  *  after expiry + grace. */
-export const PLAYGROUND_TTL_S = 10 * 60;
+const PLAYGROUND_TTL_S = 10 * 60;
 
 /** Provisioning is the expensive call — user + workspace + seed + token. */
 const CREATE_RPM = 2;

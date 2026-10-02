@@ -85,7 +85,7 @@ interface Props {
  * That one has an upgrade behind it; upgrading does not move this ceiling, and a
  * clip rendered as a plan limit would sell a fix for a different problem.
  */
-export const CHATS_CLIPPED_NOTE =
+const CHATS_CLIPPED_NOTE =
   "Showing the most recent chats. Older ones are not loaded, and search does not reach them.";
 
 /** Left list pane: count header, search well, All/Private/Team/Shared

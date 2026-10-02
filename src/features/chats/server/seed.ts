@@ -6,7 +6,7 @@ import type { ChatExportInput } from "../schema";
  *  the sample dates to the workspace's creation day. */
 
 /** Stable idempotency handle for the seeded sample chat. */
-export const SEED_CHAT_SESSION_ID = "dopl-seed-getting-started";
+const SEED_CHAT_SESSION_ID = "dopl-seed-getting-started";
 
 export function buildChatSeed(): ChatExportInput {
   return {

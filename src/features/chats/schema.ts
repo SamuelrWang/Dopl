@@ -17,13 +17,13 @@ const ChatProjectSchema = safeLabel("Project", 120);
 /** Folder NAME (resolved / created by the service), not an id. */
 const ChatFolderNameSchema = safeLabel("Folder name", 80);
 
-export const ChatMessageSchema = z.object({
+const ChatMessageSchema = z.object({
   role: z.enum(["user", "agent"]),
   summary: z.string().min(1).max(4000),
   verbatim: z.string().min(1).max(20000).nullish(),
 });
 
-export const DeliverableSchema = z.object({
+const DeliverableSchema = z.object({
   label: z.string().min(1).max(300),
   done: z.boolean(),
 });
@@ -129,7 +129,6 @@ export type ChatAppendInput = z.infer<typeof ChatAppendSchema>;
 export const ChatFolderCreateSchema = z.object({
   name: ChatFolderNameSchema,
 });
-export type ChatFolderCreateInput = z.infer<typeof ChatFolderCreateSchema>;
 
 /** Folder rename and/or scope change. ⚠ Scope propagates to every chat filed
  *  in the folder — the folder's scope is authoritative. */
