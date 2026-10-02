@@ -157,6 +157,7 @@ export function InlineUnderlineField({
   readOnly,
   onKeyDown,
   onBlur,
+  type = "text",
 }: {
   /** The hint inside the line, and the accessible name. */
   label: string;
@@ -184,6 +185,8 @@ export function InlineUnderlineField({
   onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void;
   /** Fired AFTER the active class clears, so a commit may unmount the field. */
   onBlur?: () => void;
+  /** The input's own type — `date` / `url` for the ontology's typed fields. */
+  type?: "text" | "date" | "url";
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -196,7 +199,7 @@ export function InlineUnderlineField({
       )}
     >
       <input
-        type="text"
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}

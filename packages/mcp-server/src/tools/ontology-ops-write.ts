@@ -19,6 +19,19 @@ import { err, isConflict, missingParams, ok, type ToolResponse } from "./respond
 import { resolveOntologyRef, resolveObjectRef } from "./ontology-render";
 import { opAnchor, opGet, opMap, opResolve } from "./ontology-ops-read";
 import { UNKNOWN_CALLER, type CallerIdentity } from "./identity";
+// The field rules (kinds, value checks, description, options) — mirrored from
+// the server schema so a bad value fails here, field-named.
+import {
+  isStringKind,
+  kindNote,
+  nextDescription,
+  optionsProblem,
+  cleanOptions,
+  stringValue,
+  templateFieldFor,
+  upsertTemplateField,
+  type FieldKind,
+} from "./ontology-fields";
 
 /*
  * ⚠ Write confirmations read the STORED name back (the server canonicalises it,
@@ -38,9 +51,11 @@ export interface OntologyArgs {
   purpose?: string;
   subtitle?: string;
   label?: string;
-  kind?: "text" | "pill" | "ref" | "knowledge" | "skill";
+  kind?: FieldKind;
   value?: string;
   values?: string[];
+  /** set_template_field / set_attribute, kind="enum": the closed set of choices. */
+  options?: string[];
   targets?: string[];
   description?: string;
   outcome?: string;
@@ -49,12 +64,6 @@ export interface OntologyArgs {
   /** A16's response-size knob — read ops only; the writes render one line. */
   response_format?: "concise" | "detailed";
 }
-
-// ⚠ HAND-MIRRORED from the server schema (attributeValueSchema) so an
-// oversized value fails with a field-named message at the tool boundary
-// instead of an opaque downstream VALIDATION_FAILED.
-const TEXT_VALUE_MAX = 4000;
-const PILL_VALUE_MAX = 400;
 
 const REQUIRED: Record<string, string[]> = {
   resolve: ["query"],
@@ -160,23 +169,13 @@ export async function dispatch(
       });
     case "set_template_field":
       return withObject(client, args.object as string, async (object) => {
-        const label = (args.label as string).trim();
-        if (!label) return err("set_template_field needs a non-empty `label`.");
-        const kind = args.kind ?? "text";
-        const needle = label.toLowerCase();
-        const current = object.template ?? [];
-        const existing = current.find((f) => f.label.toLowerCase() === needle);
-        const field = {
-          key: existing?.key ?? label.toLowerCase().replace(/\s+/g, "-"),
-          label,
-          kind,
-        };
-        const template = existing
-          ? current.map((f) => (f === existing ? field : f))
-          : [...current, field];
+        const built = upsertTemplateField(object.template ?? [], args);
+        if ("fail" in built) return built.fail;
+        const { template, field } = built;
         await client.updateOntologyObject(object.id, { template }, args.expected_version);
+        const note = kindNote(field.kind, field.options) || ` (${field.kind})`;
         return ok(
-          `Set default field ${inlineOr(label, NO_NAME)} (${kind}) on ${inlineOr(object.name, NO_NAME)} — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => inlineOr(f.label, NO_NAME)).join(", ")}.`
+          `Set default field ${inlineOr(field.label, NO_NAME)}${note} on ${inlineOr(object.name, NO_NAME)} — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => inlineOr(f.label, NO_NAME)).join(", ")}.`
         );
       });
     case "remove_template_field":
@@ -284,20 +283,38 @@ async function withObject(
 async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<ToolResponse> {
   return withObject(client, args.object as string, async (object, snapshot) => {
     const label = (args.label as string).trim();
-    const kind = args.kind ?? "text";
+    const needle = label.toLowerCase();
+    const existingIndex = object.attributes.findIndex((a) => a.label.toLowerCase() === needle);
+    const existing = existingIndex >= 0 ? object.attributes[existingIndex] : undefined;
+    const field = templateFieldFor(snapshot, object, label);
+    // ⚠ An omitted kind KEEPS the field's (stored, else its template's) — a
+    // value sent to a select must not silently retype it as text.
+    const kind = args.kind ?? existing?.value.kind ?? field?.kind ?? "text";
+    if (args.options !== undefined && kind !== "enum") {
+      return err('`options` apply only to kind="enum".');
+    }
+    // A select's choices: the ones sent, else the type's field, else its own.
+    const options =
+      kind === "enum"
+        ? cleanOptions(
+            args.options ??
+              (field?.kind === "enum" ? field.options : existing?.options) ??
+              [],
+          )
+        : undefined;
+    const badOptions = options && optionsProblem(options);
+    if (badOptions) return err(badOptions);
+    const described = nextDescription(args.description, existing?.description);
+    if ("fail" in described) return described.fail;
 
     let value: OntologyObject["attributes"][number]["value"];
-    if (kind === "text" || kind === "pill") {
+    if (isStringKind(kind)) {
       if (args.value === undefined) {
         return err(`set_attribute kind="${kind}" needs \`value\`.`);
       }
-      const cap = kind === "pill" ? PILL_VALUE_MAX : TEXT_VALUE_MAX;
-      if (args.value.length > cap) {
-        return err(
-          `set_attribute kind="${kind}" value for ${inlineOr(label, NO_NAME)} is ${args.value.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`
-        );
-      }
-      value = { kind, value: args.value };
+      const checked = stringValue(kind, args.value, label, options ?? []);
+      if ("fail" in checked) return checked.fail;
+      value = { kind, value: checked.value };
     } else {
       if (!args.values?.length) {
         return err(`set_attribute kind="${kind}" needs \`values\` (at least one).`);
@@ -310,21 +327,19 @@ async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<T
       value = { kind, value: resolved.ids };
     }
 
-    const needle = label.toLowerCase();
     const attribute = {
       key: label.toLowerCase().replace(/\s+/g, "-"),
       label,
       value,
+      ...described,
+      ...(options ? { options } : {}),
     };
-    const existing = object.attributes.findIndex(
-      (a) => a.label.toLowerCase() === needle
-    );
     const attributes =
-      existing >= 0
-        ? object.attributes.map((a, i) => (i === existing ? attribute : a))
+      existingIndex >= 0
+        ? object.attributes.map((a, i) => (i === existingIndex ? attribute : a))
         : [...object.attributes, attribute];
     await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
-    return ok(`Set attribute ${inlineOr(label, NO_NAME)} on ${inlineOr(object.name, NO_NAME)}.`);
+    return ok(`Set attribute ${inlineOr(label, NO_NAME)}${kindNote(kind, options)} on ${inlineOr(object.name, NO_NAME)}.`);
   });
 }
 

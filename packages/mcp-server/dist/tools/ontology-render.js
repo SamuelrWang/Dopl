@@ -19,6 +19,7 @@ const respond_1 = require("./respond");
 // Two hand-typed copies is how an agent ends up holding a sharing model the
 // operator does not have.
 const container_destination_1 = require("./container-destination");
+const ontology_fields_1 = require("./ontology-fields");
 /*
  * ⚠ THE VALUE/BODY LINE, DRAWN TWICE. The graph is workspace-scoped and nothing
  * in `features/ontology/schema.ts` carries a charset rule (object `name`
@@ -191,7 +192,9 @@ format) {
     if (object.attributes.length > 0) {
         lines.push("", "## Attributes");
         for (const attr of object.attributes) {
-            lines.push(indented(`- ${(0, narration_1.inlineOr)(attr.label, narration_1.NO_NAME)}: ${renderValue(attr.value, nameOf, handles)}`));
+            // ⚠ The note and the description are the FIELD's (2026-10-01): a select
+            // names its choices, so an agent never guesses a value the server refuses.
+            lines.push(indented(`- ${(0, narration_1.inlineOr)(attr.label, narration_1.NO_NAME)}${(0, ontology_fields_1.kindNote)(attr.value.kind, attr.options)}: ${renderValue(attr.value, nameOf, handles)}${describedAs(attr.description)}`));
         }
     }
     if (object.relationships.length > 0) {
@@ -220,7 +223,7 @@ format) {
             ? []
             : ["_New objects created inside this one are born with these fields, empty:_"]));
         for (const f of object.template) {
-            lines.push(`- ${(0, narration_1.inlineOr)(f.label, narration_1.NO_NAME)} (${f.kind})`);
+            lines.push(indented(`- ${(0, narration_1.inlineOr)(f.label, narration_1.NO_NAME)}${(0, ontology_fields_1.kindNote)(f.kind, f.options) || ` (${f.kind})`}${describedAs(f.description)}`));
         }
     }
     if (object.childIds.length > 0) {
@@ -250,13 +253,25 @@ format) {
     }
     return lines.join("\n");
 }
+/**
+ * A field's description on the line under it. PROSE the user wrote FOR the
+ * agent, so it is kept whole like an action's description — the caller's
+ * {@link indented} takes away only its ability to begin a line.
+ */
+function describedAs(description) {
+    return description ? `\nDescription: ${description}` : "";
+}
 function renderValue(value, nameOf, handles) {
     switch (value.kind) {
         // ⚠ A pill is a short label by construction (max 400) → value. A text
         // attribute is 4000 chars of the user's prose → stays whole, and the caller
         // ({@link renderObject}) indents it.
         case "pill":
+        case "enum":
+        case "date":
             return (0, narration_1.inlineOr)(value.value, "—");
+        case "link":
+            return value.value ? (0, ontology_fields_1.linkSpan)(value.value) : "—";
         case "text":
             return value.value || "—";
         case "ref":

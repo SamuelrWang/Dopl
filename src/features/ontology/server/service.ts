@@ -14,6 +14,7 @@ import type {
   OntologyObjectCreateInput,
   OntologyObjectUpdateInput,
 } from "../schema";
+import { attributeFromField } from "../field-kinds";
 import { mapObjectRow, pushEdge } from "./dto";
 import * as repo from "./repository";
 import * as anchorRepo from "./repository-anchor";
@@ -179,14 +180,7 @@ export async function createObject(
     workspaceId = parent.workspace_id;
     // Columns act as templates: new card born with column's default fields as
     // empty attributes, plus a copy of its relationships and actions.
-    attributes = (parent.template ?? []).map((f) => ({
-      key: f.key,
-      label: f.label,
-      value:
-        f.kind === "text" || f.kind === "pill"
-          ? { kind: f.kind, value: "" }
-          : { kind: f.kind, value: [] },
-    }));
+    attributes = (parent.template ?? []).map(attributeFromField);
     methods = parent.methods ?? [];
     inheritedEdges = await currentRelationships(ctx, parent.id);
   }

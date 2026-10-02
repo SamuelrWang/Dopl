@@ -3,6 +3,7 @@
 import { createPortal } from "react-dom";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import { containerNameOf, type GraphState } from "../graph-state";
+import { formatIsoDate } from "../field-kinds";
 import type { OntologyObject } from "../types";
 
 /** Cursor-following quick view: fixed portal at cursor + 14px, clamped to
@@ -59,7 +60,9 @@ export function ObjectHoverCard({
                         .map((id) => graph.objects[id]?.name)
                         .filter(Boolean)
                         .join(", ") || "—"
-                    : attr.value.value || "—"}
+                    : attr.value.kind === "date" && attr.value.value
+                      ? formatIsoDate(attr.value.value)
+                      : attr.value.value || "—"}
               </p>
             ))}
             {object.attributes.length > 5 && (

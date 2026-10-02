@@ -10,6 +10,7 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 import { type CallerIdentity } from "./identity";
+import { type FieldKind } from "./ontology-fields";
 export interface OntologyArgs {
     op: string;
     query?: string;
@@ -20,9 +21,11 @@ export interface OntologyArgs {
     purpose?: string;
     subtitle?: string;
     label?: string;
-    kind?: "text" | "pill" | "ref" | "knowledge" | "skill";
+    kind?: FieldKind;
     value?: string;
     values?: string[];
+    /** set_template_field / set_attribute, kind="enum": the closed set of choices. */
+    options?: string[];
     targets?: string[];
     description?: string;
     outcome?: string;

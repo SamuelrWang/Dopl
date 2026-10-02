@@ -14,6 +14,7 @@ import { err, type ToolResponse } from "./respond";
 // Two hand-typed copies is how an agent ends up holding a sharing model the
 // operator does not have.
 import { DESTINATION_HEADINGS } from "./container-destination";
+import { kindNote, linkSpan } from "./ontology-fields";
 
 /*
  * ⚠ THE VALUE/BODY LINE, DRAWN TWICE. The graph is workspace-scoped and nothing
@@ -255,8 +256,12 @@ export function renderObject(
   if (object.attributes.length > 0) {
     lines.push("", "## Attributes");
     for (const attr of object.attributes) {
+      // ⚠ The note and the description are the FIELD's (2026-10-01): a select
+      // names its choices, so an agent never guesses a value the server refuses.
       lines.push(
-        indented(`- ${inlineOr(attr.label, NO_NAME)}: ${renderValue(attr.value, nameOf, handles)}`),
+        indented(
+          `- ${inlineOr(attr.label, NO_NAME)}${kindNote(attr.value.kind, attr.options)}: ${renderValue(attr.value, nameOf, handles)}${describedAs(attr.description)}`,
+        ),
       );
     }
   }
@@ -294,7 +299,11 @@ export function renderObject(
         : ["_New objects created inside this one are born with these fields, empty:_"])
     );
     for (const f of object.template) {
-      lines.push(`- ${inlineOr(f.label, NO_NAME)} (${f.kind})`);
+      lines.push(
+        indented(
+          `- ${inlineOr(f.label, NO_NAME)}${kindNote(f.kind, f.options) || ` (${f.kind})`}${describedAs(f.description)}`,
+        ),
+      );
     }
   }
 
@@ -326,6 +335,15 @@ export function renderObject(
   return lines.join("\n");
 }
 
+/**
+ * A field's description on the line under it. PROSE the user wrote FOR the
+ * agent, so it is kept whole like an action's description — the caller's
+ * {@link indented} takes away only its ability to begin a line.
+ */
+function describedAs(description: string | undefined): string {
+  return description ? `\nDescription: ${description}` : "";
+}
+
 function renderValue(
   value: OntologyObject["attributes"][number]["value"],
   nameOf: (id: string) => string,
@@ -336,7 +354,11 @@ function renderValue(
     // attribute is 4000 chars of the user's prose → stays whole, and the caller
     // ({@link renderObject}) indents it.
     case "pill":
+    case "enum":
+    case "date":
       return inlineOr(value.value, "—");
+    case "link":
+      return value.value ? linkSpan(value.value) : "—";
     case "text":
       return value.value || "—";
     case "ref":

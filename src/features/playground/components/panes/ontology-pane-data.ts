@@ -45,6 +45,9 @@ export interface PaneOntology {
 const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
   pill: "Tag",
+  enum: "Select",
+  date: "Date",
+  link: "Link",
   ref: "Object",
   knowledge: "Knowledge",
   skill: "Skill",

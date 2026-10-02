@@ -24,6 +24,7 @@ const ontology_ops_write_1 = require("./ontology-ops-write");
 const tool_errors_1 = require("./tool-errors");
 const tool_style_1 = require("./tool-style");
 const legacy_aliases_1 = require("../legacy-aliases");
+const ontology_fields_1 = require("./ontology-fields");
 /**
  * ⚠ THE ONE PROSE BUDGET ON THIS SURFACE THAT IS NOT
  * {@link DESCRIPTION_MAX_CHARS}, RECORDED IN CODE RATHER THAN QUIETLY ABSORBED.
@@ -130,10 +131,10 @@ caller = identity_1.UNKNOWN_CALLER) {
         subtitle: zod_1.z.string().optional().describe("update_object: short description agents browse."),
         label: zod_1.z.string().max(200).optional().describe("Attribute, relationship, or template-field label."),
         kind: zod_1.z
-            .enum(["text", "pill", "ref", "knowledge", "skill"])
+            .enum(ontology_fields_1.FIELD_KINDS)
             .optional()
-            .describe("set_attribute / set_template_field: value kind (default text)."),
-        value: zod_1.z.string().max(4000).optional().describe("set_attribute (text/pill): the value."),
+            .describe("set_attribute / set_template_field: value kind (default: the field's)."),
+        value: zod_1.z.string().max(4000).optional().describe("set_attribute (text/pill/enum/date/link): the value."),
         values: zod_1.z
             .array(zod_1.z.string())
             .max(100)
@@ -144,7 +145,12 @@ caller = identity_1.UNKNOWN_CALLER) {
             .max(100)
             .optional()
             .describe("set_relationship: target objects (ids or exact names)."),
-        description: zod_1.z.string().max(4000).optional().describe("set_action: what the action does."),
+        options: zod_1.z.array(zod_1.z.string()).max(50).optional().describe('kind="enum": the allowed values.'),
+        description: zod_1.z
+            .string()
+            .max(4000)
+            .optional()
+            .describe("set_action: what it does. Field ops: the field's description."),
         outcome: zod_1.z
             .string()
             .max(4000)

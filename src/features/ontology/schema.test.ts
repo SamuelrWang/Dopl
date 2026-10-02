@@ -68,3 +68,51 @@ describe("object/ontology caps", () => {
     expect(OntologyObjectUpdateSchema.safeParse({ attributes: Array(101).fill(one) }).success).toBe(false);
   });
 });
+
+/** The typed kinds and field metadata (2026-10-01) — the server is the fence. */
+describe("enum / date / link and field metadata", () => {
+  const withMeta = (a: Record<string, unknown>) =>
+    OntologyObjectUpdateSchema.safeParse({ attributes: [{ key: "k", label: "L", ...a }] });
+
+  it("an enum value must be one of the attribute's options (empty = unset)", () => {
+    const options = ["Even Realities", "Real Kids"];
+    expect(withMeta({ value: { kind: "enum", value: "Real Kids" }, options }).success).toBe(true);
+    expect(withMeta({ value: { kind: "enum", value: "" }, options }).success).toBe(true);
+    expect(withMeta({ value: { kind: "enum", value: "Acme" }, options }).success).toBe(false);
+    expect(withMeta({ value: { kind: "enum", value: "Acme" } }).success).toBe(false);
+  });
+
+  it("options are unique (case-insensitive) and capped", () => {
+    expect(withMeta({ value: { kind: "enum", value: "" }, options: ["A", "a"] }).success).toBe(false);
+    const many = Array.from({ length: 51 }, (_, i) => `o${i}`);
+    expect(withMeta({ value: { kind: "enum", value: "" }, options: many }).success).toBe(false);
+  });
+
+  it("a date is a real YYYY-MM-DD day", () => {
+    expect(attr({ kind: "date", value: "2026-10-01" }).success).toBe(true);
+    expect(attr({ kind: "date", value: "" }).success).toBe(true);
+    expect(attr({ kind: "date", value: "2026-02-30" }).success).toBe(false);
+    expect(attr({ kind: "date", value: "10/01/2026" }).success).toBe(false);
+  });
+
+  it("a link is an absolute http(s) URL", () => {
+    expect(attr({ kind: "link", value: "https://evenrealities.com" }).success).toBe(true);
+    expect(attr({ kind: "link", value: "" }).success).toBe(true);
+    for (const bad of ["evenrealities.com", "javascript:alert(1)", "file:///etc/passwd", "mailto:a@b.c"]) {
+      expect(attr({ kind: "link", value: bad }).success, bad).toBe(false);
+    }
+  });
+
+  it("descriptions ride attributes and template fields; legacy rows still parse", () => {
+    expect(withMeta({ value: { kind: "text", value: "" }, description: "why" }).success).toBe(true);
+    expect(
+      OntologyObjectUpdateSchema.safeParse({
+        template: [
+          { key: "c", label: "C", kind: "enum", options: ["A"], description: "d" },
+          { key: "t", label: "T", kind: "text" },
+        ],
+      }).success
+    ).toBe(true);
+    expect(withMeta({ value: { kind: "text", value: "" }, description: "x".repeat(1001) }).success).toBe(false);
+  });
+});
