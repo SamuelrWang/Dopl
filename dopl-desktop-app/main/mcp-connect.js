@@ -161,11 +161,6 @@ function doplStatus(servers) {
   return STATUS_MISSING;
 }
 
-/** The same read from the RAW init message — the shape the tests drive and the adapters forward. */
-function doplStatusFromInit(msg) {
-  return doplStatus(msg && msg.mcp_servers);
-}
-
 /** Is this the one word that means a dopl tool call can land? */
 function isConnected(status) {
   return status === CONNECTED;
@@ -247,17 +242,14 @@ async function warmMcpRoute(a) {
 }
 
 module.exports = {
-  DOPL_SERVER_KEY,
   CONNECTED,
   STATUS_MISSING,
   STATUS_UNREPORTED,
   CLI_CONNECT_TIMEOUT_ENV, // the CLI's ONE knob; there is no flag (measured, see above)
   CLI_CONNECT_TIMEOUT_MS,
   WARM_TIMEOUT_MS,
-  WARM_RPC,
   MCP_UNAVAILABLE_LABEL,
   doplStatus,
-  doplStatusFromInit,
   isConnected,
   mcpConnectVerdict,
   mcpDownText,

@@ -191,6 +191,5 @@ const descriptor = {
 };
 
 module.exports = {
-  models, forget, descriptor, entryFrom, rosterFrom, cacheKey,
-  DIMENSION, LIST_TIMEOUT_MS, MAX_PAGES,
+  models, forget, descriptor, entryFrom, rosterFrom, DIMENSION, LIST_TIMEOUT_MS, MAX_PAGES,
 };

@@ -145,7 +145,6 @@ function refreshFailureCode(bodyText) {
 
 module.exports = {
   NEAR_EXPIRY_SEC,
-  REFRESH_AT_FRACTION,
   MIN_SCHEDULE_MS,
   MAX_SCHEDULE_MS,
   DEFAULT_LIFETIME_SEC,

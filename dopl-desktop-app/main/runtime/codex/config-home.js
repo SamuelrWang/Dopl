@@ -138,5 +138,5 @@ function isolatedEnv(env, userDataRoot) {
 module.exports = {
   isolatedEnv, privateHome, hasAmbientConfig, onlyTrustEntries, projectTrustFence,
   hasAuth, removeAuth, loginEnv, clearLoginHome, installAuth,
-  PRIVATE_HOME, LOGIN_HOME, AUTH_STORE_ARGS,
+  PRIVATE_HOME, AUTH_STORE_ARGS,
 };

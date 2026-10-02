@@ -171,4 +171,4 @@ function apply(d) {
   return { refused: 'no-bridge' };
 }
 
-module.exports = { apply, endAgent, renameAgent, setAgentMode };
+module.exports = { apply, endAgent, setAgentMode };

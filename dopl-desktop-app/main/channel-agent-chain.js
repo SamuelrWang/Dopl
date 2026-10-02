@@ -52,7 +52,6 @@ module.exports = {
   AGENT_CHAIN_KEY,
   getAgentChain: agentChain.get,
   setAgentChain: agentChain.set,
-  USE_MY_TOOLS_KEY,
   getUseMyTools: useMyTools.get,
   setUseMyTools: useMyTools.set,
 };

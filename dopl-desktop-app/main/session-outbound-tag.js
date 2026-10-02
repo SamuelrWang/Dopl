@@ -256,8 +256,6 @@ module.exports = {
   threadTagFor,
   nextOwnPostId, // 2026-08-21: the per-instance stamp the fan-out self-filter reads
   markOwnPost, // 2026-09-02: T51's staleness clock — ALLOW branches only
-  MAX_OWN_POST_IDS,
-  CLIENT_MSG_ID_ARG,
   allowResult,
   wrapAllow,
 };

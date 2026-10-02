@@ -239,7 +239,6 @@ module.exports = {
   MAX_LAUNCH_DEPTH,
   normalizeLaunchDepth,
   launchDepthExhausted,
-  launchChainEnabled, // 2026-08-31: the channel setting that lifts the depth bound, `=== true`
   isOwnMachineLaunch,
   launchLaneVerdict,
 };

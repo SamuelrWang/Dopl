@@ -492,7 +492,6 @@ module.exports = {
   storedVerdict,
   planFor,
   addressingFor,
-  authoredBySession,
   mayFeed,
   mayWake,
   dormant,

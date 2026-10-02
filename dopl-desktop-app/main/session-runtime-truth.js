@@ -36,7 +36,6 @@ module.exports = {
   USAGE_RESETS,
   USAGE_CONTINUES,
   USAGE_UNVERIFIED,
-  USAGE_BASELINES,
   usageBaseline,
   runtimeTruthFields,
   durableRuntimeTruth,

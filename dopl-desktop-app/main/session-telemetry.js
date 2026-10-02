@@ -143,7 +143,6 @@ module.exports = {
   labelOrNull,
   isoOrNull,
   contextBucket,
-  quantize,
   quantizeContext,
   quantizeTokens,
   telemetryFields,

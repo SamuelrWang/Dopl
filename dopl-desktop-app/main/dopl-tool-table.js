@@ -62,5 +62,5 @@ function namesTouching(shorts) {
 }
 
 module.exports = {
-  GRANULAR_NAMES, granularRow, parseBinding, jobsOf, bindingsOf, jobOf, namesBoundWithin, namesTouching,
+  GRANULAR_NAMES, granularRow, parseBinding, jobsOf, jobOf, namesBoundWithin, namesTouching,
 };

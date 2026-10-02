@@ -113,4 +113,4 @@ const descriptor = {
   probe: 'env-or-cli-status',
 };
 
-module.exports = { credentialState, signIn, signOut, descriptor, STATUS_TIMEOUT_MS };
+module.exports = { credentialState, signIn, signOut, descriptor };

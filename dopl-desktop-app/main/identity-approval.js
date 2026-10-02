@@ -49,7 +49,6 @@ function approveIdentity(identityId) {
 }
 
 module.exports = {
-  IDENTITY_APPROVAL_KEY,
   isIdentityApproved,
   approveIdentity,
 };

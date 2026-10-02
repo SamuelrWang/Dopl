@@ -114,8 +114,6 @@ function listeningState(state) {
 // ─── END SESSION-PILL-PURE ───────────────────────────────────────────────────────────
 
 module.exports = {
-  PILL_WORKING,
-  PILL_IDLE,
   PILL_ENDED,
   PILL_STATES,
   ACTIVITY_PILL,

@@ -187,4 +187,4 @@ function arm(deps) {
   };
 }
 
-module.exports = { arm, handle, flushPending, openDeepLink, pushRoute, MOUNT_GAP_MS };
+module.exports = { arm, handle, flushPending, openDeepLink, pushRoute };

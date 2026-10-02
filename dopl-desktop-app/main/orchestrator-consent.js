@@ -138,10 +138,8 @@ function setOrchestratorDirect(on) {
 }
 
 module.exports = {
-  ORCHESTRATOR_LAUNCH_KEY,
   getOrchestratorLaunch,
   setOrchestratorLaunch,
-  ORCHESTRATOR_DIRECT_KEY,
   getOrchestratorDirect,
   setOrchestratorDirect,
 };

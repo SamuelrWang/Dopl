@@ -115,4 +115,4 @@ async function passwordAuth(payload) {
   }
 }
 
-module.exports = { passwordAuth, normalizeCredentials, gotrueErrorMessage, sessionFragment };
+module.exports = { passwordAuth, sessionFragment };

@@ -97,6 +97,5 @@ function failVisibly(s, status, attempt) {
 
 module.exports = {
   bind,
-  attemptOf,
   handleMcpStatus,
 };

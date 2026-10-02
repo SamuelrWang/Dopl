@@ -98,4 +98,4 @@ function postTextOf(input) {
   return input && input.body != null ? String(input.body) : '';
 }
 
-module.exports = { TO_CAP, KIND_CAP, oneLineField, postAddress, postKindOf, postTextOf, withPostSurface };
+module.exports = { postAddress, postKindOf, postTextOf, withPostSurface };

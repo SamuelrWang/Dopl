@@ -80,4 +80,4 @@ function isAgentId(value) {
   return typeof value === 'string' && AGENT_ID_RE.test(value);
 }
 
-module.exports = { AGENT_ID_LEN, AGENT_ID_RE, newAgentId, isAgentId };
+module.exports = { AGENT_ID_RE, newAgentId, isAgentId };

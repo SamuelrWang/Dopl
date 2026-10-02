@@ -213,4 +213,4 @@ function run(d) {
   return { outcome, end };
 }
 
-module.exports = { signIn, cancel, isOpenAiUrl, redactUrl, LOGIN_TIMEOUT_MS };
+module.exports = { signIn, cancel, isOpenAiUrl, redactUrl };

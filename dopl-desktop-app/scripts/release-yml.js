@@ -192,7 +192,7 @@ function assertAssets(json, expected) {
   return { ok: true, names: expected.slice(), extra: assets.map((a) => a.name).filter((n) => !expected.includes(n)) };
 }
 
-module.exports = { patchDmgEntry, assertAssets, fileEntries, hashFile };
+module.exports = { patchDmgEntry, assertAssets, fileEntries };
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 // ⚠ At the bottom behind a require.main guard so the test can import the pure halves without

@@ -139,5 +139,5 @@ function canonicalDoplCall(toolName, input) {
 }
 
 module.exports = {
-  mcpShortName, canonicalDoplName, canonicalDoplCall, isDoplToolName, DOPL_SHORT_NAMES, DOPL_TOOL_PREFIX,
+  mcpShortName, canonicalDoplName, canonicalDoplCall, isDoplToolName, DOPL_SHORT_NAMES,
 };

@@ -259,7 +259,6 @@ module.exports = {
   agentSlug,
   escalationAnswerAgentIds,
   handleOf,
-  buildAgentHandleIndex,
   slugMentionedAgentIds,
   handleIndexFor,
   // the cross-tree fixture table — read by BOTH suites, never by production

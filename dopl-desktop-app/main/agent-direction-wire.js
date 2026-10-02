@@ -14,8 +14,6 @@
 
 // ─── BEGIN AGENT-DIRECTION-WIRE (pure; unit-tested via source extraction) ─────
 
-const DIRECTION_TABLE = 'channel_agent_directions';
-
 const ROUTES = {
   claim: '/api/channels/agent-directions/claim',
   decide: '/api/channels/agent-directions/decide',
@@ -36,12 +34,6 @@ const STATUSES = [
 // sixth is a schema change in both trees, deliberately, so an unknown value can neither be
 // stored nor reach an MCP render as raw text.
 const REFUSAL_REASONS = ['no-session', 'auth-hold', 'busy', 'blocked', 'no-bridge'];
-
-const REQUEST_KEYS = {
-  claim: ['directionId'],
-  decide: ['directionId', 'status', 'reply', 'refusalReason'],
-};
-const RESPONSE_KEYS = { claim: ['ok', 'direction', 'reason'] };
 
 // ⚠ A LOCAL COPY, on `launch-directive-wire.js`'s terms: this block may hold no `require`,
 // so `ipc-guards.js › isUuid` is unreachable from it. `uuid-rule-parity.test.mjs` records
@@ -191,19 +183,14 @@ function decideBody(directionId, outcome) {
 // ─── END AGENT-DIRECTION-WIRE ────────────────────────────────────────────────
 
 module.exports = {
-  DIRECTION_TABLE,
   ROUTES,
   STATUSES,
   STATUS_PENDING,
   STATUS_CLAIMED,
-  STATUS_DELIVERED,
   STATUS_REFUSED,
   STATUS_EXPIRED,
   REFUSAL_REASONS,
-  REQUEST_KEYS,
-  RESPONSE_KEYS,
   BODY_MAX,
-  UNSAFE_BODY_RE,
   text,
   directionFrom,
   refusalFor,

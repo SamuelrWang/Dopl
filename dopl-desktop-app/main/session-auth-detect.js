@@ -46,7 +46,6 @@ function authFailureText(msg) {
 // ─── END SESSION-AUTH-DETECT ─────────────────────────────────────────────────
 
 module.exports = {
-  AUTH_ERROR_RE,
   CLI_LOGIN_SENTINEL,
   isAuthShapedError,
   authFailureText,

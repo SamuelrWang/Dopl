@@ -144,4 +144,4 @@ function defaultGoal(channelLevel, title) {
   return `Join ${which} as my agent: read it first, then carry the work forward.`;
 }
 
-module.exports = { launchFromButton, approveIdentity, wantsIdentity, defaultGoal };
+module.exports = { launchFromButton, approveIdentity, defaultGoal };

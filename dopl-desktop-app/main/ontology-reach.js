@@ -64,4 +64,4 @@ async function fetchOntologyReach(workspaceId) {
   }
 }
 
-module.exports = { fetchOntologyReach, narrow, REACH_PATH, MAX_ONTOLOGIES };
+module.exports = { fetchOntologyReach, narrow, MAX_ONTOLOGIES };

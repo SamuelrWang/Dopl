@@ -190,4 +190,4 @@ function gateCall(s, name, input, opts, dispatch, log) {
   };
 }
 
-module.exports = { gateCall, logGateVerdict, channelOpLabel, shortToolLabel };
+module.exports = { gateCall, logGateVerdict, channelOpLabel };

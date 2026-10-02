@@ -84,9 +84,6 @@ function isWakeAbort(err, signal) {
 }
 
 module.exports = {
-  AWAIT_TIMEOUT_FLOOR_MS,
-  FETCH_TIMEOUT_FLOOR_MS,
-  clampBudget,
   awaitTimeoutFor,
   fetchTimeoutFor,
   isWakeAbort,

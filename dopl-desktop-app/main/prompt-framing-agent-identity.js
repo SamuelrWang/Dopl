@@ -275,5 +275,4 @@ function identityRoleFraming(ctx, nonce) {
 module.exports = {
   identityRoleFraming,
   kbReadable,
-  FOREIGN_HEADER,
 };

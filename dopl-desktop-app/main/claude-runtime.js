@@ -70,4 +70,4 @@ async function checkRuntimeAtStart({ externalCli, notify, log }) {
   return true;
 }
 
-module.exports = { sessionSpawnAvailable, checkRuntimeAtStart, NO_RUNTIME_NOTICE };
+module.exports = { sessionSpawnAvailable, checkRuntimeAtStart };

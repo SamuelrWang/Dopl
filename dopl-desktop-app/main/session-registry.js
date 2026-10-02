@@ -59,11 +59,6 @@ function liveOnThread(a) {
   return out;
 }
 
-/** The agent ids of every live session on a thread (or in the main room). */
-function agentIdsOnThread(a) {
-  return liveOnThread(a).map((s) => String(s.agentId || '')).filter(Boolean);
-}
-
 /**
  * EVERY LIVE SESSION OF THIS OPERATOR'S IN ONE CHANNEL, thread-scoped or not —
  * the ROOM ROSTER's local half (2026-09-18).
@@ -140,4 +135,4 @@ function noteSiblings(s) {
 
 // ─── END SESSION-REGISTRY-PURE ────────────────────────────────────────────────────
 
-module.exports = { bind, liveOnThread, liveInChannel, agentIdsOnThread, sessionOn, noteSiblings };
+module.exports = { bind, liveOnThread, liveInChannel, sessionOn, noteSiblings };

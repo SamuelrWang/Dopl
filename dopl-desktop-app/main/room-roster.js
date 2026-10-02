@@ -201,7 +201,6 @@ module.exports = {
   agentAuthorNote,
   authorAddress,
   ownAgents,
-  peerAgents,
   people,
   buildRoster,
   MAX_LISTED,

@@ -137,8 +137,6 @@ function refuse(text) {
 
 module.exports = {
   SERVER_KEY,
-  RENAME_TOOL,
-  END_TOOL,
   AGENT_OPS_TOOL_NAMES, // ridden on allowedTools via runtime/claude/tools.js — SHADOWED, see header
   // pure core (unit-tested directly; electron-free)
   renameTargetFor,

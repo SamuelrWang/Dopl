@@ -84,4 +84,4 @@ function skillsFence(opts) {
   return { include_instructions: false, bundled: { enabled: false }, config };
 }
 
-module.exports = { skillsFence, skillRoots, ancestors };
+module.exports = { skillsFence, skillRoots };
