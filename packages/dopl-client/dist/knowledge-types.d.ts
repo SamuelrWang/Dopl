@@ -10,7 +10,7 @@ export type KnowledgeWriteSource = "user" | "agent";
  * `public` = visible to every workspace member at their role's default access;
  * `private` = owner-only.
  */
-export type KnowledgeVisibility = "public" | "private";
+type KnowledgeVisibility = "public" | "private";
 export interface KnowledgeBase {
     id: string;
     workspaceId: string;
@@ -326,3 +326,4 @@ export interface KnowledgeSearchHit {
     baseSlug?: string;
     path?: string;
 }
+export {};

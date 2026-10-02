@@ -72,12 +72,7 @@ import type {
   ChannelInfoCard,
 } from "./info-card-types.js";
 
-export type {
-  ChannelInfoCard,
-  ChannelInfoCardBuiltInKey,
-  ChannelInfoCardRow,
-  ChannelUpdateInput,
-} from "./info-card-types.js";
+export type { ChannelUpdateInput } from "./info-card-types.js";
 
 export interface Channel {
   id: string;
@@ -291,8 +286,7 @@ export interface ChannelThreadPage {
 // PROJECTION moves, and everything else here when a channel shape does.
 import type { ChannelSessionStateOwn } from "./session-types.js";
 // ⚠ `SessionPillState` and `ChannelSessionTelemetry` are NOT re-exported through
-// this line: they come from `@dopl/contracts` above (A13), and `session-types.ts`
-// re-exports them for its own readers. One name, one declaration, one door here.
+// this line: they come from `@dopl/contracts` above (A13). One name, one door.
 export type {
   ChannelSessionState,
   ChannelSessionStateOwn,

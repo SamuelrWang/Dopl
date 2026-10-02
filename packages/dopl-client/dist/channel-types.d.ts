@@ -39,7 +39,7 @@ import type { ChannelContainer } from "./types.js";
 import type { ChannelVisibility, ChannelRole as ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, MessageAuthorKind as ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry } from "@dopl/contracts";
 export type { ChannelVisibility, ChannelMemberRole, ThreadMode, ThreadStatus, ThreadOutcome, ChannelAuthorKind, ChannelMessageKind, MessageIntent, SessionPillState, ChannelSessionTelemetry, };
 import type { ChannelInfoCard } from "./info-card-types.js";
-export type { ChannelInfoCard, ChannelInfoCardBuiltInKey, ChannelInfoCardRow, ChannelUpdateInput, } from "./info-card-types.js";
+export type { ChannelUpdateInput } from "./info-card-types.js";
 export interface Channel {
     id: string;
     workspaceId: string;

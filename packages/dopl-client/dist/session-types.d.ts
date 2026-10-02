@@ -13,17 +13,7 @@
  * session projection changes, and it is a different contract from a channel's.
  */
 import type { ChannelSessionHealth } from "./session-health-types.js";
-/**
- * ⚠ **`SessionPillState` AND `ChannelSessionTelemetry` ARE DECLARED IN
- * `@dopl/contracts` AND RE-EXPORTED HERE** (2026-09-02, A13 × A9). A9 split this
- * projection out of `channel-types.ts` under §1's 500-line cap; A13 had already
- * moved the closed set and the operator-only telemetry shape to the one
- * type-only package both trees can name. Re-typing either here would put back
- * exactly the hand-mirror A13 deleted — `canonical-sets.test.ts` is the gate
- * that says so, and the docblocks that argued for each field now live there.
- */
 import type { SessionPillState, ChannelSessionTelemetry } from "@dopl/contracts";
-export type { SessionPillState, ChannelSessionTelemetry };
 /**
  * ONE of a member's live (or just-ended) sessions, from
  * `dopl_channel(op="read_sessions")`. Server-visible projection of the

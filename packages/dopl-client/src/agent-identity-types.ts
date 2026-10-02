@@ -7,7 +7,7 @@ import type { IdentityVisibility } from "@dopl/contracts";
 export type { IdentityVisibility };
 
 /** How a field's value is typed in the editor; absent = `text`. */
-export type IdentityFieldType = "text" | "number" | "date" | "boolean" | "url";
+type IdentityFieldType = "text" | "number" | "date" | "boolean" | "url";
 
 /** One custom field; both halves are short labels spliced into the launch payload. */
 export interface IdentityField {
