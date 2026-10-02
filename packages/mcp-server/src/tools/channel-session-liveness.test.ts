@@ -217,7 +217,10 @@ describe("F-293 — a model id can never split into two bare names", () => {
     ).toBeGreaterThanOrEqual(1);
     const source = blanked.join("");
     // Behaviour, not just source: each character must come back joined.
-    for (const ch of ["`", "*", "_", "#", ">", "[", "]", "{", "}", "|"]) {
+    // ⚠ `_` left the neutralizer's class on 2026-10-01 (it mangled identifiers;
+    // `narration.ts › neutralizeInline`). `shortModelLabel` still joins it — a
+    // superset is fine; what F-293 forbids is a blanked character it misses.
+    for (const ch of ["`", "*", "#", ">", "[", "]", "{", "}", "|"]) {
       expect(source, `${ch} left neutralizeInline's blanking class`).toContain(
         ch,
       );

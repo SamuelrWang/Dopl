@@ -46,7 +46,7 @@ function expectContained(text: string): void {
   const spans = [...line.matchAll(/`([^`]*)`/g)].map((m) => m[1]);
   const span = spans.find((s) => s.includes(MARKER));
   expect(span, `"${MARKER}" should render inside a code span`).toBeDefined();
-  expect(span).not.toMatch(/[`*_#>[\]{}|]/);
+  expect(span).not.toMatch(/[`*#>[\]{}|]/);
 }
 
 /**

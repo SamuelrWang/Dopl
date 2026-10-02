@@ -62,7 +62,7 @@ function expectContained(text: string, marker = MARKER): void {
   const spans = [...line.matchAll(/`([^`]*)`/g)].map((m) => m[1]);
   const span = spans.find((s) => s.includes(marker));
   expect(span, `"${marker}" should render inside a code span`).toBeDefined();
-  expect(span).not.toMatch(/[`*_#>[\]{}|]/);
+  expect(span).not.toMatch(/[`*#>[\]{}|]/);
 }
 
 /** No line of the result is structure the ATTACKER wrote. */

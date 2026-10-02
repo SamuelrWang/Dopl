@@ -115,7 +115,7 @@ describe('Q9 · send thread="new" — a 400 is read off its CODE', () => {
     expect(line).toBeDefined();
     const span = [...line.matchAll(/`([^`]*)`/g)].map((m) => m[1]).find((s) => s.includes("SYSTEM"));
     expect(span).toBeDefined();
-    expect(span).not.toMatch(/[`*_#>[\]{}|]/);
+    expect(span).not.toMatch(/[`*#>[\]{}|]/);
     expect(text.split("\n").some((l) => l.startsWith("## SYSTEM"))).toBe(false);
   });
 

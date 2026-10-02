@@ -57,7 +57,7 @@ function expectLineContains(line: string, marker: string): void {
     .map((m) => m[1])
     .find((s) => s.includes(marker));
   expect(span, `"${marker}" should render inside a code span`).toBeDefined();
-  expect(span).not.toMatch(/[`*_#>[\]{}|]/);
+  expect(span).not.toMatch(/[`*#>[\]{}|]/);
 }
 
 /**
