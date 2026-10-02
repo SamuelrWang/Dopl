@@ -663,11 +663,16 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
     draws a line reading `undefined: — → —`. A bundle renders the op label plus the object's name,
     and expands to a `dt`/`dd` list at `text-caption`.
   - **ROW** — a full-width `button` at `px-1 py-1`, `rounded-md`, `hover:bg-surface-raised-1`,
-    reading **`who · what · when`**: a 13px chevron that rotates on open, a 14px actor mark
-    (`Bot` at `text-agent-on` for an agent, `User` at `text-text-muted` for a person — each with an
-    `aria-label`), the actor name at `text-small text-text-primary`, the op + path at
+    reading **`who · what · when`**: a 13px chevron that rotates on open, the writer's FACE —
+    `shared/ui/avatar.tsx › Avatar` at `xs`, initials when they have no picture (Samuel,
+    2026-10-01: *"instead of it showing the green bot icon, can you show the profile image of the
+    user who did the change"*) — the actor name at `text-small text-text-primary`, the op + path at
     `text-caption text-text-secondary`, an agent's session name at `text-caption text-text-muted`,
-    and the time pushed right with `ml-auto`.
+    and the time pushed right with `ml-auto`. ⚠ **AN AGENT ROW IS ITS OPERATOR'S FACE** (`actor.userId`
+    is the user the agent acted for) **plus a 14px `bg-surface-cta` / `text-text-on-cta` bot badge
+    on the avatar's corner** (`role="img"`, `aria-label="agent"`) — one person, marked as acting
+    through an agent, never two marks side by side. The name and picture ride the row
+    (`RevisionActor.displayName` / `.avatarUrl`), joined server-side per page.
   - **EXPANDED** — indented `pl-7`, holding the summary (when the row has one) and the word-level
     diff. **The diff's two washes are `bg-success/10` for an addition and `bg-danger/10` +
     `line-through` for a removal, taken BY REFERENCE from

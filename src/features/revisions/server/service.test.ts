@@ -35,6 +35,7 @@ vi.mock("./repository", () => ({
   findRevisionById: vi.fn(),
   listRevisionsForResource: vi.fn(),
   listRevisionsForResources: vi.fn(),
+  listActorProfiles: vi.fn(),
 }));
 
 import * as repo from "./repository";
@@ -85,6 +86,7 @@ beforeEach(() => {
   mockRepo.findLatestRevision.mockResolvedValue(null);
   mockRepo.appendRevision.mockImplementation(async (args) => rev({ ...args } as never));
   mockRepo.replaceRevisionSnapshot.mockImplementation(async (id) => rev({ id }));
+  mockRepo.listActorProfiles.mockResolvedValue(new Map());
 });
 
 afterEach(() => {
@@ -331,6 +333,44 @@ describe("listRevisions — keyset paging", () => {
     ]);
     const result = await listRevisions(RESOURCE, REACH, { limit: 10 });
     expect(result.revisions.map((r) => r.id)).toEqual(["mine"]);
+  });
+
+  it("each row wears its writer's face — an agent row its operator's — looked up once per page", async () => {
+    // Samuel, 2026-10-01: the history shows WHO made the change, by profile image.
+    mockRepo.listRevisionsForResource.mockResolvedValue([
+      rev({ id: "a", actor: { userId: "u-sam", kind: "agent", agentSessionId: "s-1" } }),
+      rev({ id: "b", actor: { userId: "u-sam", kind: "user", agentSessionId: null } }),
+      rev({ id: "c", actor: { userId: null, kind: "user", agentSessionId: null } }),
+    ]);
+    mockRepo.listActorProfiles.mockResolvedValue(
+      new Map([["u-sam", { displayName: "Samuel", avatarUrl: "https://img/sam.png" }]])
+    );
+    const result = await listRevisions(RESOURCE, REACH, { limit: 10 });
+    expect(mockRepo.listActorProfiles).toHaveBeenCalledTimes(1);
+    expect(mockRepo.listActorProfiles).toHaveBeenCalledWith(["u-sam"]);
+    expect(result.revisions[0].actor).toEqual({
+      userId: "u-sam",
+      kind: "agent",
+      agentSessionId: "s-1",
+      displayName: "Samuel",
+      avatarUrl: "https://img/sam.png",
+    });
+    expect(result.revisions[1].actor.avatarUrl).toBe("https://img/sam.png");
+    // a deleted account keeps its row, faceless
+    expect(result.revisions[2].actor).toEqual({ userId: null, kind: "user", agentSessionId: null });
+  });
+
+  it("🔒 looks up only the writers of rows the caller may see", async () => {
+    mockRepo.listRevisionsForResource.mockResolvedValue([
+      rev({ id: "mine", actor: { userId: "u-me", kind: "user", agentSessionId: null } }),
+      rev({
+        id: "theirs",
+        resourceId: "e-other",
+        actor: { userId: "u-other", kind: "user", agentSessionId: null },
+      }),
+    ]);
+    await listRevisions(RESOURCE, REACH, { limit: 10 });
+    expect(mockRepo.listActorProfiles).toHaveBeenCalledWith(["u-me"]);
   });
 });
 

@@ -202,3 +202,34 @@ export async function listRevisionsForResources(
   if (error) throw error;
   return (data ?? []).map((row) => mapRevisionRow(row as RevisionRow));
 }
+
+/** A writer's face — `profiles` by id, ONE `IN` query per page. */
+export interface ActorProfile {
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * The profiles behind a page's actor ids. ⚠ Names and pictures only, never the
+ * email: the rows are read by everyone who can read the resource. The id set is
+ * the page's own actors, which a fenced read already produced.
+ */
+export async function listActorProfiles(
+  userIds: string[]
+): Promise<Map<string, ActorProfile>> {
+  const out = new Map<string, ActorProfile>();
+  if (userIds.length === 0) return out;
+  const { data, error } = await supabaseAdmin()
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .in("id", userIds);
+  if (error) throw error;
+  for (const row of (data ?? []) as Array<{
+    id: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  }>) {
+    out.set(row.id, { displayName: row.display_name, avatarUrl: row.avatar_url });
+  }
+  return out;
+}

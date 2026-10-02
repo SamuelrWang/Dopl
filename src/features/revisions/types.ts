@@ -56,10 +56,16 @@ export type RevisionActorKind = "user" | "agent";
  *  AUTHORIZATION SIGNAL (`shared/auth/session-header.ts`) — the desktop's slot
  *  key, forgeable, read only to GROUP a session's writes. */
 export interface RevisionActor {
-  /** `null` only when the account was deleted (`ON DELETE SET NULL`). */
+  /** `null` only when the account was deleted (`ON DELETE SET NULL`). On an
+   *  AGENT row this is the user the agent acted FOR — its operator. */
   userId: string | null;
   kind: RevisionActorKind;
   agentSessionId: string | null;
+  /** The person's profile, joined on the LIST reads (2026-10-01) so a row can
+   *  wear their face. ⚠ OPTIONAL: absent on a write's echo and on a page cached
+   *  before the join existed — a renderer falls back to initials. */
+  displayName?: string | null;
+  avatarUrl?: string | null;
 }
 
 /**

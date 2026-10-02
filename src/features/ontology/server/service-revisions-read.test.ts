@@ -31,6 +31,7 @@ vi.mock("@/features/revisions/server/repository", () => ({
   findRevisionById: vi.fn(async () => null),
   listRevisionsForResource: vi.fn(async () => []),
   listRevisionsForResources: vi.fn(async () => []),
+  listActorProfiles: vi.fn(async () => new Map()),
 }));
 
 vi.mock("@/features/billing/server/workspace-billing", () => ({

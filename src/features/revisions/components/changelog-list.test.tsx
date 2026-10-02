@@ -77,21 +77,54 @@ describe("day groups", () => {
     expect(screen.getByText("No changes yet.")).toBeTruthy();
   });
 
-  it("an AGENT row carries the agent mark and its session name", () => {
+  // Samuel, 2026-10-01: WHO is the writer's face, not a bot / person glyph.
+  it("an AGENT row wears its OPERATOR's face, a bot badge and its session name", () => {
     mount([
       rev({
         id: "a",
-        actor: { userId: "u-me", kind: "agent", agentSessionId: "chan-1:abc" },
+        actor: {
+          userId: "u-me",
+          kind: "agent",
+          agentSessionId: "chan-1:abc",
+          displayName: "Samuel",
+          avatarUrl: "https://img.test/sam.png",
+        },
       }),
     ]);
+    expect(screen.getByRole("img", { name: "Samuel" }).getAttribute("src")).toBe(
+      "https://img.test/sam.png"
+    );
     expect(screen.getByLabelText("agent")).toBeTruthy();
+    expect(screen.getByText("Samuel")).toBeTruthy();
     expect(screen.getByText("chan-1:abc")).toBeTruthy();
   });
 
-  it("a human row carries the person mark and NO session name", () => {
-    mount([rev({ id: "a" })]);
-    expect(screen.getByLabelText("person")).toBeTruthy();
+  it("a human row wears their face, NO agent badge and NO session name", () => {
+    mount([
+      rev({
+        id: "a",
+        actor: {
+          userId: "u-me",
+          kind: "user",
+          agentSessionId: null,
+          displayName: "Samuel",
+          avatarUrl: "https://img.test/sam.png",
+        },
+      }),
+    ]);
+    expect(screen.getByRole("img", { name: "Samuel" })).toBeTruthy();
     expect(screen.queryByLabelText("agent")).toBeNull();
+  });
+
+  it("no picture falls back to the name's initial", () => {
+    mount([
+      rev({
+        id: "a",
+        actor: { userId: "u-me", kind: "user", agentSessionId: null, displayName: "Riley", avatarUrl: null },
+      }),
+    ]);
+    expect(screen.getByText("R")).toBeTruthy();
+    expect(screen.getByText("Riley")).toBeTruthy();
   });
 
   it("names the op and the path — `who · what · when`", () => {
