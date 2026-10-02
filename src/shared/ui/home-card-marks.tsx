@@ -15,8 +15,8 @@ import { cn } from "@/shared/lib/utils";
  * 2026-09-17, AND THE REASON IS A SECOND TREE.** The landing page's hero demo
  * renders /home's own chrome (`features/marketing/components/banner-demo/`) and
  * the Next tree cannot import `apps/` at all. apps → root `src/` is the
- * direction that works, so the one declaration lives here and
- * `channel-row-marks.tsx` re-exports it under every name it used to declare.
+ * direction that works, so the one declaration lives here (the SPA's re-export
+ * shim was deleted 2026-10-02; readers import this module directly).
  * **Nothing about any of the four faces changed in the move.**
  */
 

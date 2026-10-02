@@ -186,7 +186,7 @@ id, workspace_id, name, slug, description     id, workspace_id,                 
    `dopl_workflow_admin`. Verify this matches intent.
 
 6. **Committed edges re-derive facing-side anchors** rather than attaching at the
-   exact dragged site (`edge-layer.tsx` uses `facingAnchors`). The visible edge may
+   exact dragged site (the edge layer used `facingAnchors`; deleted 2026-10-02). The visible edge may
    "snap" to a side midpoint on commit. Cosmetic; the 12 sites are interaction
    handles, not persisted anchors.
 

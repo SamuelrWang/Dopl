@@ -1145,7 +1145,7 @@ COMMIT;
 
 ## F-181 — The mutation layer cannot express a PREDICATE invalidation, and `setResourceScope` is where that first costs something
 
-- Location: `src/features/members/hooks/use-access-writes.ts:156-161` (`setResourceScopeConfig.invalidate` names `teams` only); contrast `:106-108` (`setGrantConfig`, which enumerates `draft.memberIds`)
+- Location: the members access-writes hook, lines 156-161 (`setResourceScopeConfig.invalidate` names `teams` only); contrast lines 106-108 (`setGrantConfig`, which enumerates `draft.memberIds`). The hook was deleted as dead code on 2026-10-02.
 - Found during: adversarial review of the members conversion
 - Severity: smell (a layer limitation, surfaced by one call site)
 - Description: §7 rule 1 records that a per-item key cannot be reached by a prefix — TanStack matches per ARRAY element, so `[…/members]` invalidates no `[…/members/<id>/access]` entry. `setGrantConfig` answers that by NAMING each id, captured at submit. **`setResourceScopeConfig` cannot use the same answer**: flipping a resource into or out of teams mode changes what EVERY member's per-member access pane says, and the write has no member list to enumerate — there is no `memberIds` on a `ResourceScopeDraft` and no bound on how many members a workspace has.
@@ -1161,7 +1161,7 @@ COMMIT;
 
 ⛔ **CLOSED, AND NOT BY A FIX.** `autoGrant` existed only to resolve the workflow↔KB invariant, and that invariant (`src/features/teams/server/invariant.ts`) was deleted with workflows on 2026-08-11. The flag is gone from the schema, both routes, `GrantDraft` / `ResourceScopeDraft` and the mutation configs; `TEAM_KB_ACCESS_CONFLICT` has no producer left, so the retry path this finding describes cannot be entered. **No code writes grants on another team any more, so there are no other teams' panes to invalidate.** The class of bug survives and F-181 (predicate invalidation) is still the general answer — this instance simply has no site.
 
-- Location (historical): `src/features/members/hooks/use-access-writes.ts` — `invalidate` added `teamsKey` when `draft.autoGrant`, then enumerated `draft.memberIds` (this team's members only)
+- Location (historical): the members access-writes hook (deleted as dead code 2026-10-02) — `invalidate` added `teamsKey` when `draft.autoGrant`, then enumerated `draft.memberIds` (this team's members only)
 - Found during: adversarial review of the members conversion
 - Severity: smell
 - Description: the config's own comment states the mechanism and stops one step short of the consequence: *"an autoGrant asks the SERVER to write additional grants on OTHER teams to satisfy the KB invariant, and those are the rows no client can guess."* It invalidates the teams cache for that reason — but the rows the server wrote belong to members of the CONFLICT teams, and `draft.memberIds` is the acting team's roster. Those members' `…/members/<id>/access` panes keep rendering the pre-grant answer until something else refreshes them, and the pane does not unmount.
@@ -1293,7 +1293,7 @@ COMMIT;
 
 ## F-195 — Client-side optimistic-write idempotency covers 1 of 9 hooks (2026-08-11)
 
-- Location: `src/features/channels/hooks/use-thread-writes.ts` (mints `client_msg_id`; the one) vs the 8 optimistic-write hook files that do not (chats `use-chat-writes.ts`, members `use-member-writes.ts` / `use-team-writes.ts` / `use-access-writes.ts` / `use-invitation-writes.ts` / `use-join-requests.ts`, channels `use-channel-lifecycle-writes.ts` / `use-channel-preference-writes.ts`; ontology creates ride the reducer)
+- Location: `src/features/channels/hooks/use-thread-writes.ts` (mints `client_msg_id`; the one) vs the 8 optimistic-write hook files that do not (chats `use-chat-writes.ts`, members `use-member-writes.ts` / `use-team-writes.ts` / access-writes (deleted 2026-10-02) / `use-invitation-writes.ts` / `use-join-requests.ts`, channels `use-channel-lifecycle-writes.ts` / `use-channel-preference-writes.ts`; ontology creates ride the reducer)
 - Found during: the 2026-08-11 INVARIANTS verification (its W5 — the doc claimed "every optimistic write mints one"; measurement said one of nine)
 - Severity: smell
 - Description: §7's idempotency rule ("a retry after a rolled-back failure returns the FIRST attempt's stored row instead of double-posting") is implemented only where the server already carried the unique index (`channel_messages.client_msg_id`). The other write families rely on UI inertness (`pendingRow`, disabled controls) to prevent double-submission — honest, but a layer down from where §7 says the guarantee lives. Extending it is per-family work: each needs a server-side unique key before a client mint means anything, so this is not a client-only sweep.
@@ -10195,7 +10195,7 @@ The claim had been restated in five places from one sentence, which is how it su
   `src/features/knowledge/components/knowledge-v2/detail/use-content-descriptions.ts` (102) ·
   `src/features/channels/hooks/use-channel-auto-send.ts` (40) ·
   the copy-paste skill template under `src/features/mcp-connect/` (112; deleted 2026-09-24) ·
-  `src/shared/layout/page-top-bar.tsx` (40).
+  the shared layout's page top bar (40; deleted 2026-10-02).
 - Found during: the final whole-set review of the nine parity waves.
 - ⚠ **THE FIRST TWO ARE THE SHARP ONES, BECAUSE THE CODE ADMITS IT.** `knowledge-v2/detail/base-overview.tsx` says they are *"deliberately left in the tree, unmounted"* — which is precisely the state INVARIANTS §15's **DEAD CODE IS DELETED (2026-09-17)** rules out: *"Not disarmed, not parked, not left behind a flag nobody passes."* A rule made the same day is being contradicted by a comment in the tree it governs.
 - ⚠ **NOT DELETED IN THIS REVIEW, AND THE REASON IS SCOPE.** None of the five is wave output — `git log origin/master..master` touches only the knowledge pair, and only through R-38's palette commit. The review's mandate was the stacked diff; deleting pre-existing modules is a separate change with its own doc-anchor and test blast radius (the skill template was cited three times by `docs/RETIREMENT-UNWIRING-PLAN.md`, so its deletion moved that document too).
