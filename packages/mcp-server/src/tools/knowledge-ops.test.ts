@@ -16,9 +16,7 @@ import type {
 } from "@dopl/client";
 import { opGetTree, opListDir } from "./knowledge-ops-read.js";
 import { opCreateFolder, opWriteFile } from "./knowledge-ops-write.js";
-// ⚠ THE BASE OPS LIVE IN THEIR OWN MODULE SINCE THE 2026-09-18 SPLIT (A3) —
-// `knowledge-ops-write.ts` was AT the 500-line cap. They are re-exported there,
-// but a test addresses the file that OWNS the behaviour it is about.
+// The base ops live in their own module (2026-09-18 split, A3).
 import { opCreateBase, opUpdateBase } from "./knowledge-ops-base-writes.js";
 
 const BASE: KnowledgeBase = {
