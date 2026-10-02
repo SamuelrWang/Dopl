@@ -92,3 +92,22 @@ export function safeOptionalLabel(subject: string, max: number) {
       message: safeLabelMessage(subject),
     });
 }
+
+/** The same forbidden class as {@link SAFE_LABEL_RE}, as a global replacer. */
+const UNSAFE_LABEL_CHARS =
+  /[\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+/gu;
+
+/**
+ * SCRUB, not reject — for an UNTRUSTED label this server did not validate on the way in (an MCP
+ * client's self-declared `clientInfo`, an OAuth DCR `client_name`). Forbidden characters become a
+ * space, whitespace collapses, the result is trimmed and clipped to `max`. `null` when nothing
+ * survives, so a caller drops the label rather than rendering an empty one.
+ *
+ * ⚠ Same character class as {@link SAFE_LABEL_RE}: one rule, two verbs.
+ */
+export function scrubLabel(raw: unknown, max: number): string | null {
+  if (typeof raw !== "string") return null;
+  const flat = raw.replace(UNSAFE_LABEL_CHARS, " ").replace(/\s+/g, " ").trim();
+  if (flat === "") return null;
+  return flat.length > max ? flat.slice(0, max).trimEnd() : flat;
+}

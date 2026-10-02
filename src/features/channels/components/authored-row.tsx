@@ -5,6 +5,7 @@ import { AttributionPill } from "./attribution-pill";
 import { RecipientTags } from "./recipient-tags";
 import type { MessageRow } from "./view-model-rows";
 import type { RecipientTag } from "../lib/recipient-tags";
+import type { MessageVia } from "../lib/message-via";
 import type { AgentColorKey } from "../types";
 
 /** Frozen default so every row does not get a fresh array identity per render. */
@@ -59,6 +60,7 @@ export function AuthoredRow({
   time,
   agent,
   external = false,
+  via = null,
   agentId = null,
   agentName = null,
   recipients = NO_RECIPIENTS,
@@ -76,6 +78,8 @@ export function AuthoredRow({
   agent: boolean;
   /** An outside session wrote it; forwarded from `lib/desktop-handle.ts › authorViewOf`. */
   external?: boolean;
+  /** The outside session's client, `view-model-rows.ts › MessageRow.via`. */
+  via?: MessageVia | null;
   /** WHICH agent, when the writer stamped it. */
   agentId?: string | null;
   /** Its current name, resolved by the caller from `AuthorIndex.agents`; never a row field. */
@@ -98,6 +102,7 @@ export function AuthoredRow({
       authorLabel={authorLabel}
       agent={agent}
       external={external}
+      via={via}
       agentId={agentId}
       agentName={agentName}
       // The same paint as the bar and frame, so one agent cannot show two hues.

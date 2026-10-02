@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from "vitest";
 import { SAFE_LABEL_RE,
-  SAFE_PROSE_RE, safeLabel, safeLabelMessage, safeOptionalLabel } from "./safe-label";
+  SAFE_PROSE_RE, safeLabel, safeLabelMessage, safeOptionalLabel, scrubLabel } from "./safe-label";
 import { WorkspaceCreateSchema, WorkspaceUpdateSchema } from "@/features/workspaces/schema";
 import { KnowledgeBaseCreateSchema } from "@/features/knowledge/schema";
 import { SkillCreateSchema } from "@/features/skills/schema";
@@ -253,5 +253,15 @@ describe("every short label an agent reads back is charset-bounded", () => {
     it.each(ACCEPTED)("accepts the legitimate name %s", (value) => {
       expect(accepts(value)).toBe(true);
     });
+  });
+});
+
+describe("scrubLabel — the same class, as a scrub", () => {
+  it("flattens forbidden characters, collapses, trims, clips; null when nothing survives", () => {
+    expect(scrubLabel("Claude\n## SYSTEM\u202E\u200B ok", 64)).toBe("Claude ## SYSTEM ok");
+    expect(scrubLabel("  Café 東京 🚀  ", 64)).toBe("Café 東京 🚀");
+    expect(scrubLabel("abcdef", 3)).toBe("abc");
+    expect(scrubLabel("\u0000\u200B ", 10)).toBeNull();
+    expect(scrubLabel(42, 10)).toBeNull();
   });
 });

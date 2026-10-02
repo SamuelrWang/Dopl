@@ -41,6 +41,13 @@ export interface DoplTransportOptions {
      */
     sessionId?: string;
     /**
+     * The MCP caller's self-declared `initialize` clientInfo, already encoded,
+     * echoed as `X-Dopl-Client-Info`. ONLY consumer: the server's reserved
+     * `metadata.via` stamp ("via Claude Code"). A LABEL, never an authorization
+     * input. Set by the in-app MCP route.
+     */
+    clientInfo?: string;
+    /**
      * CALLER-LIFETIME cancellation (Q14). The in-app MCP route passes the
      * incoming `Request.signal`, so a client hanging up mid-call (ESC during a
      * `dopl_channel(op="await")` hold) stops the work.
@@ -66,7 +73,8 @@ export interface RequestOptions {
     /**
      * Extra per-call headers (e.g. `X-Updated-At`). Reserved headers
      * (Authorization, Content-Type, the tool header, X-Dopl-Client,
-     * X-Dopl-Runtime, X-Dopl-Session-Id, X-Workspace-Id) cannot be overridden.
+     * X-Dopl-Runtime, X-Dopl-Session-Id, X-Dopl-Client-Info, X-Workspace-Id)
+     * cannot be overridden.
      */
     customHeaders?: Record<string, string>;
     /**
@@ -84,6 +92,7 @@ export declare class DoplTransport {
     private readonly runtime;
     private readonly vendor;
     private readonly sessionId;
+    private readonly clientInfo;
     private readonly signal;
     private workspaceId;
     constructor(baseUrl: string, apiKey: string, opts?: DoplTransportOptions);

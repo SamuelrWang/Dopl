@@ -222,6 +222,7 @@ function Message({
       time={row.time}
       agent={row.agent}
       external={row.external}
+      via={row.via}
       agentId={row.agentId}
       agentName={agentName}
       recipients={recipients}

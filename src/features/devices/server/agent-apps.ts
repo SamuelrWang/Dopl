@@ -44,8 +44,9 @@ const slug = (text: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-/** The first redirect URI's host (`claude.ai`, `localhost`), or null when none parses. */
-function redirectHost(uris: string[] | null): string | null {
+/** The first redirect URI's host (`claude.ai`, `localhost`), or null when none parses. Also the
+ *  display host of a channel post's `metadata.via` (`channels/server/message-via.ts`). */
+export function redirectHost(uris: string[] | null): string | null {
   for (const uri of uris ?? []) {
     try {
       const host = new URL(uri).hostname;

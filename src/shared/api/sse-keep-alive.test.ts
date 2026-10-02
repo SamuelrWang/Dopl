@@ -158,8 +158,10 @@ describe("/api/mcp transport shape", () => {
     // ⚠ Re-adding this flag restores the 60s time-to-headers abort for every
     // client, and no SDK-mocking test would notice.
     expect(routeCode).not.toMatch(/enableJsonResponse/);
+    // ⚠ STATELESS except on `initialize`, where the generator mints the client-info carrier id
+    // (`shared/auth/mcp-client-info.ts`); every other request keeps `undefined`.
     expect(routeCode).toMatch(
-      /new WebStandardStreamableHTTPServerTransport\(\{\s*sessionIdGenerator: undefined,\s*\}\)/
+      /new WebStandardStreamableHTTPServerTransport\(\{\s*sessionIdGenerator: initClientInfo\s*\?\s*\(\) => clientInfoSessionId\(initClientInfo\)\s*:\s*undefined,\s*\}\)/
     );
   });
 

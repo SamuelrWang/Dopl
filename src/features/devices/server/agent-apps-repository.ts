@@ -38,3 +38,25 @@ export const agentAppRepository: AgentAppStore = {
     return (data ?? []).length;
   },
 };
+
+/** Where one credential came from — the `metadata.via` read (`channels/server/message-via.ts`). */
+export interface GrantOrigin {
+  client_id: string;
+  client_name: string | null;
+  redirect_uris: string[] | null;
+}
+
+/** One `mcp_tokens` row by id with its client's redirect URIs, or `null`. Service-role. */
+export async function readGrantOrigin(tokenId: string): Promise<GrantOrigin | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("mcp_tokens")
+    .select("client_id, client_name, oauth_clients(redirect_uris)")
+    .eq("id", tokenId)
+    .maybeSingle();
+  if (error) throw new Error(`grant origin read failed: ${error.message}`);
+  if (!data) return null;
+  const { oauth_clients, ...row } = data as unknown as Omit<GrantOrigin, "redirect_uris"> & {
+    oauth_clients: { redirect_uris: string[] | null } | null;
+  };
+  return { ...row, redirect_uris: oauth_clients?.redirect_uris ?? null };
+}

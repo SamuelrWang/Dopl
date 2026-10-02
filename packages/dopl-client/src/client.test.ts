@@ -293,3 +293,15 @@ describe("updateAgentIdentity — optimistic concurrency", () => {
     });
   });
 });
+
+describe("X-Dopl-Client-Info", () => {
+  it("is sent when set, and a per-call custom header cannot clobber it", async () => {
+    const { DoplTransport } = await import("./transport.js");
+    const t = new DoplTransport("https://x.test", "dopl_at_k", { clientInfo: "abc" });
+    expect(t.buildHeaders(undefined, true, undefined, { "x-dopl-client-info": "forged" })["X-Dopl-Client-Info"]).toBe("abc");
+    expect(new DoplTransport("https://x.test", "k").buildHeaders()).not.toHaveProperty("X-Dopl-Client-Info");
+    expect(
+      new DoplTransport("https://x.test", "k").buildHeaders(undefined, true, undefined, { "X-Dopl-Client-Info": "forged" })
+    ).not.toHaveProperty("X-Dopl-Client-Info");
+  });
+});

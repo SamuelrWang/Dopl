@@ -27,6 +27,9 @@ import {
   isExternalSessionAuthor,
 } from "../lib/desktop-handle";
 import { resolveWakeVerdict } from "./service-wake-verdict";
+// The outside session's CLIENT ("via Claude Code") — `lib/message-via.ts` says what, this says when.
+import { VIA_METADATA_KEY } from "../lib/message-via";
+import { resolveViaStamp } from "./message-via";
 import { deviceStamps } from "./service-writes-device";
 // Best effort: the answer stamp + lens release after an answer insert; the nudge on an agent's
 // structured-looking plain send.
@@ -302,6 +305,9 @@ export async function postMessage(
   if (isExternalSessionAuthor(authorKind, ctx.runtime ?? null)) {
     stored[EXTERNAL_SESSION_METADATA_KEY] = true;
   }
+  // ⚠ ABSENT unless there is a client to name — same one-value rule as `external_session`.
+  const via = await resolveViaStamp(ctx, authorKind);
+  if (via) stored[VIA_METADATA_KEY] = via;
 
   // ⚠ THE INSERT, PARAMETERISED ON ITS METADATA FOR ONE REASON: the typed
   // escalation answer below has to be droppable and the row written anyway.

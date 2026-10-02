@@ -2,6 +2,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { AgentChip, AttributionPill } from "./attribution-pill";
+import { indexMembers } from "./view-model";
+import { channelRows, type MessageRow } from "./view-model-rows";
+import { ME, member, message } from "./test-fixtures";
 
 /**
  * **AN OUTSIDE SESSION SAYS SO ON THE ROW** (2026-09-18, Samuel's ruling on the
@@ -130,5 +133,73 @@ describe("the pill", () => {
       />,
     );
     expect(chipText(container)).toBeNull();
+  });
+});
+
+// ── "via <client>" (`lib/message-via.ts`) ───────────────────────────────────
+describe("the via chip", () => {
+  const VERIFIED = { label: "Claude", verified: true, detail: "claude.ai · claude-ai 0.1.0" };
+  const DECLARED = { label: "Claude Code", verified: false, detail: "claude-code 2.1.0 · self-reported" };
+
+  it("replaces `outside session` with the client; the tooltip carries version + provenance", () => {
+    const { container } = render(<AgentChip external via={DECLARED} />);
+    expect(chipText(container)).toBe("via Claude Code");
+    const chip = container.querySelector("[title]");
+    expect(chip?.getAttribute("title")).toBe("claude-code 2.1.0 · self-reported");
+    expect(container.querySelector("[data-via-verified]")).toBeNull();
+    expect(container.querySelector('[aria-label="verified"]')).toBeNull();
+  });
+
+  it("marks a verified client — and only a verified one", () => {
+    const { container } = render(<AgentChip external via={VERIFIED} />);
+    expect(chipText(container)).toBe("via Claude");
+    expect(container.querySelector("[data-via-verified]")).not.toBeNull();
+    expect(container.querySelector('[aria-label="verified"]')).not.toBeNull();
+  });
+
+  it("never rides a non-outside row, and wears no literal colour/size", () => {
+    const { container } = render(<AgentChip via={VERIFIED} />);
+    expect(chipText(container)).toBe("agent");
+    const html = render(<AgentChip external via={VERIFIED} />).container.innerHTML;
+    expect(html).not.toMatch(/#[0-9a-f]{3,6}/i);
+    expect(html).not.toMatch(/\btext-(xs|sm|base|lg)\b/);
+  });
+
+  it("renders a hostile label as text, never markup", () => {
+    const { container } = render(
+      <AgentChip external via={{ label: "<img src=x onerror=alert(1)>", verified: false, detail: "" }} />,
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(chipText(container)).toBe("via <img src=x onerror=alert(1)>");
+  });
+});
+
+describe("MessageRow.via — the stale-payload fallback", () => {
+  const INDEX = indexMembers([member({ userId: ME, displayName: "Sam Wang" })], ME);
+  const rowOf = (metadata: Record<string, unknown>) =>
+    channelRows([message({ authorKind: "agent", metadata })], [], INDEX, (iso) => iso)[0] as MessageRow;
+
+  it("a cached outside-session row with no `via` is an explicit null — the plain chip renders", () => {
+    const row = rowOf({ external_session: true });
+    expect(row.external).toBe(true);
+    expect(row.via).toBeNull();
+  });
+
+  it("a stamped row carries the projection; a non-outside row never does", () => {
+    const via = { client: { name: "claude-code", version: "2.1.0" } };
+    expect(rowOf({ external_session: true, via }).via).toEqual({
+      label: "Claude Code",
+      verified: false,
+      detail: "claude-code 2.1.0 · self-reported",
+    });
+    expect(rowOf({ via }).via).toBeNull();
+  });
+
+  it("renders through the pill end to end", () => {
+    const row = rowOf({ external_session: true, via: { vendor: "Grok", host: "grok.com" } });
+    const { container } = render(
+      <AttributionPill author={person} authorLabel="Samuel Wang" agent external via={row.via} radius="full" time="now" />,
+    );
+    expect(chipText(container)).toBe("via Grok");
   });
 });

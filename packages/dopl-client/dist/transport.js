@@ -26,6 +26,7 @@ class DoplTransport {
     runtime;
     vendor;
     sessionId;
+    clientInfo;
     signal;
     workspaceId;
     constructor(baseUrl, apiKey, opts = {}) {
@@ -36,6 +37,7 @@ class DoplTransport {
         this.runtime = opts.runtime ?? null;
         this.vendor = opts.vendor ?? null;
         this.sessionId = opts.sessionId ?? null;
+        this.clientInfo = opts.clientInfo ?? null;
         this.signal = opts.signal;
         this.workspaceId = opts.workspaceId ?? null;
     }
@@ -185,6 +187,8 @@ class DoplTransport {
             headers["X-Dopl-Vendor"] = this.vendor;
         if (this.sessionId)
             headers["X-Dopl-Session-Id"] = this.sessionId;
+        if (this.clientInfo)
+            headers["X-Dopl-Client-Info"] = this.clientInfo;
         // Order: per-call override > AsyncLocalStorage (set by the MCP
         // `registerTool` wrapper) > stored workspaceId (session default). Falling
         // through omits the header; the server then resolves fail-closed from
@@ -203,6 +207,7 @@ class DoplTransport {
                 "x-dopl-runtime",
                 "x-dopl-vendor",
                 "x-dopl-session-id",
+                "x-dopl-client-info",
                 "x-workspace-id",
             ]);
             for (const [key, value] of Object.entries(customHeaders)) {

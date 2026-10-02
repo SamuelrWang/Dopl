@@ -3,6 +3,7 @@ import { meetsMinRole, type Role, type WorkspaceKind } from "@/features/workspac
 import { narrowAppVersion } from "@/shared/auth/app-version-header";
 import { narrowRuntime, type DoplRuntime } from "@/shared/auth/runtime-header";
 import { narrowSessionId } from "@/shared/auth/session-header";
+import { narrowClientInfo, type McpClientInfo } from "@/shared/auth/mcp-client-info";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { ChannelForbiddenError, ChannelNotFoundError } from "./errors";
 import {
@@ -46,6 +47,11 @@ export interface ChannelContext {
   /** Server-resolved device a MEMBER posts from (`message-source.ts`); stamped as `metadata.source`
    *  on a member post only. Never a request field. */
   messageSource?: MessageSourceStamp;
+  /** The presenting `mcp_tokens` row (agent credentials only) — the `metadata.via` lookup key
+   *  (`message-via.ts`). Never a request field, never a gate. */
+  agentTokenId?: string;
+  /** The MCP caller's SELF-DECLARED `initialize` clientInfo (`shared/auth/mcp-client-info.ts`). */
+  clientInfo?: McpClientInfo;
 }
 
 export interface AuthLike {
@@ -61,6 +67,7 @@ export interface AuthLike {
   runtime?: string | null;
   appVersion?: string | null;
   sessionId?: string | null;
+  clientInfo?: McpClientInfo | null;
 }
 
 export function buildChannelContext(auth: AuthLike): ChannelContext {
@@ -81,6 +88,10 @@ export function buildChannelContext(auth: AuthLike): ChannelContext {
     // Re-narrowed too: both stamps below are rendered on another member's screen.
     appVersion: narrowAppVersion(auth.appVersion),
     sessionId: narrowSessionId(auth.sessionId),
+    // Present only on an agent credential, so a person's ctx keeps its old shape.
+    ...(auth.agentTokenId && { agentTokenId: auth.agentTokenId }),
+    ...(auth.agentTokenId &&
+      auth.clientInfo && { clientInfo: narrowClientInfo(auth.clientInfo) ?? undefined }),
   };
 }
 

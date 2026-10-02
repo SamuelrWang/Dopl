@@ -7,6 +7,10 @@ import { readToolSetClaim } from "@/shared/auth/tool-set-header";
 import { withSseKeepAlive } from "@/shared/api/sse-keep-alive";
 import { loopbackClient } from "@/shared/api/loopback-client";
 import { exposeGlassesTools } from "@/features/glasses/core/mcp/exposure";
+import {
+  clientInfoSessionId,
+  initializeClientInfo,
+} from "@/shared/auth/mcp-client-info";
 
 // ⚠ Node runtime required (SDK uses node:crypto); never Edge. Per-request auth ⇒ no caching.
 //
@@ -42,12 +46,15 @@ async function handle(request: Request): Promise<Response> {
   // ones — aborting a loopback mid-write would tear a non-atomic thread-create. See
   // `DoplTransport.request` in packages/dopl-client.
   // All of it is built once in `shared/api/loopback-client.ts › loopbackClient`.
+  // `initClientInfo` is non-null on an `initialize` request only (a cloned-body peek); every later
+  // request of the connection carries it back in the `Mcp-Session-Id` minted below.
+  const initClientInfo = await initializeClientInfo(request);
   const {
     client,
     runtime: callerRuntime,
     vendor: callerVendor,
     sessionId: callerSessionId,
-  } = loopbackClient(request, credential, apiKeyWorkspaceId);
+  } = loopbackClient(request, credential, apiKeyWorkspaceId, initClientInfo);
   // THE CONTAINMENT PROFILE this connection is running under, so `createServer`
   // can offer it a narrower tool set. ⚠ It may only NARROW and it GATES NOTHING
   // — the vocabulary lives in `@dopl/mcp-server › gating.ts › TOOL_PROFILES`,
@@ -118,8 +125,16 @@ async function handle(request: Request): Promise<Response> {
   //
   // The stream stays open and SILENT for an ~215s `op="await"` hold, which intermediaries reap,
   // hence `withSseKeepAlive` (SSE comments only; non-SSE responses pass through untouched).
+  //
+  // ⚠ STILL STATELESS. A generator is set ONLY on an `initialize` request, where the SDK calls it
+  // once to mint the `Mcp-Session-Id` it returns — an id that ENCODES the client's self-declared
+  // `clientInfo` (`shared/auth/mcp-client-info.ts`), which the client then echoes on every later
+  // request. Every other request keeps `undefined`, so the SDK never validates (never refuses) an
+  // id. Nothing is stored; the id is a label carrier, never a lock.
   const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
+    sessionIdGenerator: initClientInfo
+      ? () => clientInfoSessionId(initClientInfo)
+      : undefined,
   });
   await server.connect(transport);
 

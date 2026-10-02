@@ -65,6 +65,13 @@ export interface DoplTransportOptions {
    */
   sessionId?: string;
   /**
+   * The MCP caller's self-declared `initialize` clientInfo, already encoded,
+   * echoed as `X-Dopl-Client-Info`. ONLY consumer: the server's reserved
+   * `metadata.via` stamp ("via Claude Code"). A LABEL, never an authorization
+   * input. Set by the in-app MCP route.
+   */
+  clientInfo?: string;
+  /**
    * CALLER-LIFETIME cancellation (Q14). The in-app MCP route passes the
    * incoming `Request.signal`, so a client hanging up mid-call (ESC during a
    * `dopl_channel(op="await")` hold) stops the work.
@@ -91,7 +98,8 @@ export interface RequestOptions {
   /**
    * Extra per-call headers (e.g. `X-Updated-At`). Reserved headers
    * (Authorization, Content-Type, the tool header, X-Dopl-Client,
-   * X-Dopl-Runtime, X-Dopl-Session-Id, X-Workspace-Id) cannot be overridden.
+   * X-Dopl-Runtime, X-Dopl-Session-Id, X-Dopl-Client-Info, X-Workspace-Id)
+   * cannot be overridden.
    */
   customHeaders?: Record<string, string>;
   /**
@@ -110,6 +118,7 @@ export class DoplTransport {
   private readonly runtime: string | null;
   private readonly vendor: string | null;
   private readonly sessionId: string | null;
+  private readonly clientInfo: string | null;
   private readonly signal: AbortSignal | undefined;
   private workspaceId: string | null;
 
@@ -121,6 +130,7 @@ export class DoplTransport {
     this.runtime = opts.runtime ?? null;
     this.vendor = opts.vendor ?? null;
     this.sessionId = opts.sessionId ?? null;
+    this.clientInfo = opts.clientInfo ?? null;
     this.signal = opts.signal;
     this.workspaceId = opts.workspaceId ?? null;
   }
@@ -353,6 +363,7 @@ export class DoplTransport {
     if (this.runtime) headers["X-Dopl-Runtime"] = this.runtime;
     if (this.vendor) headers["X-Dopl-Vendor"] = this.vendor;
     if (this.sessionId) headers["X-Dopl-Session-Id"] = this.sessionId;
+    if (this.clientInfo) headers["X-Dopl-Client-Info"] = this.clientInfo;
     // Order: per-call override > AsyncLocalStorage (set by the MCP
     // `registerTool` wrapper) > stored workspaceId (session default). Falling
     // through omits the header; the server then resolves fail-closed from
@@ -371,6 +382,7 @@ export class DoplTransport {
         "x-dopl-runtime",
         "x-dopl-vendor",
         "x-dopl-session-id",
+        "x-dopl-client-info",
         "x-workspace-id",
       ]);
       for (const [key, value] of Object.entries(customHeaders)) {

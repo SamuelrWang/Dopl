@@ -6,10 +6,12 @@
  * in `view-model-rows.ts › toMessageRow`.
  */
 
+import { BadgeCheck } from "lucide-react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import { agentFaceName } from "@/shared/lib/agent-name";
 import { agentAccent } from "./bits";
+import type { MessageVia } from "../lib/message-via";
 
 /** The name line: a human's `authorLabel`; a stamped agent's `agentFaceName(agentName)` (the
  *  rename, else "New Agent"); an unstamped agent's "Agent" (no session to name). */
@@ -29,18 +31,37 @@ export function attributionName({
   return agentId ? agentFaceName(agentName) : "Agent";
 }
 
-/** The "agent" (or "outside session") chip beside the name, filled with the agent's paint. */
+/** The "agent" (or "outside session" / "via <client>") chip beside the name, filled with the
+ *  agent's paint. */
 export function AgentChip({
   paint,
   external = false,
+  via = null,
 }: {
   paint?: string | null;
   /** An outside session wrote the row: replaces the word, always grey (it holds no colour). */
   external?: boolean;
+  /** Which client that outside session was (`lib/message-via.ts › viaOf`); `null` keeps
+   *  "outside session". Label + tooltip only; React escapes the (already scrubbed) text. */
+  via?: MessageVia | null;
 }) {
   // Explicit height + `items-center` centres the text box at every font size.
   const shape =
     "inline-flex h-[16px] shrink-0 items-center justify-center rounded-full px-1.5 text-micro leading-none";
+  if (external && via) {
+    return (
+      <span
+        data-via-verified={via.verified ? "" : undefined}
+        title={via.detail || undefined}
+        className={cn(shape, "max-w-[160px] gap-0.5 bg-bg-inset text-text-muted")}
+      >
+        <span className="truncate">via {via.label}</span>
+        {via.verified && (
+          <BadgeCheck size={10} strokeWidth={2.25} aria-label="verified" className="shrink-0" />
+        )}
+      </span>
+    );
+  }
   if (external) {
     return (
       <span className={cn(shape, "bg-bg-inset text-text-muted")}>
@@ -67,6 +88,7 @@ export function AttributionPill({
   agent,
   // Default is load-bearing: without it `external` resolves to the DOM global and reads truthy.
   external = false,
+  via = null,
   agentId = null,
   agentName = null,
   agentPaint = null,
@@ -79,6 +101,8 @@ export function AttributionPill({
   authorLabel: string;
   /** An outside session wrote it — narrows {@link agent}, never a sibling. */
   external?: boolean;
+  /** That outside session's client — see {@link AgentChip}. */
+  via?: MessageVia | null;
   /** Display claim off `authorKind` — never a side, never an identity. */
   agent: boolean;
   /** WHICH agent, when the writer stamped it; `null` is "cannot say". */
@@ -116,7 +140,7 @@ export function AttributionPill({
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
           {/* `wrap-anywhere`: an unbroken name must not size the pill past the pane. */}
           <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
-          {agent && <AgentChip paint={agentPaint} external={external} />}
+          {agent && <AgentChip paint={agentPaint} external={external} via={via} />}
         </span>
         <span className="text-micro leading-tight text-text-muted">{time}</span>
       </span>

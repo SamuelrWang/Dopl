@@ -14,6 +14,7 @@ import {
   type DoplRuntime,
 } from "./runtime-header";
 import { readSessionIdHeader } from "./session-header";
+import { readClientInfoHeader, type McpClientInfo } from "./mcp-client-info";
 import { withUserAuth } from "./with-auth";
 
 export interface WorkspaceAuthContext {
@@ -78,6 +79,12 @@ export interface WorkspaceAuthContext {
    * NEVER an authz signal (`session-header.ts`).
    */
   sessionId?: string;
+  /**
+   * `X-Dopl-Client-Info` — the MCP caller's SELF-DECLARED `initialize` clientInfo, agent
+   * credentials only, else undefined. ⚠ Read once here. LABEL for `metadata.via`, NEVER an
+   * authz signal (`mcp-client-info.ts`).
+   */
+  clientInfo?: McpClientInfo;
   params?: Record<string, string>;
 }
 
@@ -212,6 +219,7 @@ export function withWorkspaceAuth(
         }),
         appVersion: readAppVersionHeader(request),
         sessionId: readSessionIdHeader(request),
+        clientInfo: ctx.agentTokenId ? readClientInfoHeader(request) : undefined,
         params: ctx.params,
       });
     } catch (err) {

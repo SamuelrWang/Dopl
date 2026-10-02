@@ -3,6 +3,7 @@
 
 import { mentionedUserIdsOf } from "../lib/mentions";
 import { authorViewOf, desktopAddresseeOf } from "../lib/desktop-handle";
+import { viaOf, type MessageVia } from "../lib/message-via";
 // The module the server's router reads, so the faced tag and the woken agent agree.
 import { serverRoutedAgentIds } from "../lib/agent-post-stamp";
 import { addressKey } from "../lib/recipient-tags";
@@ -39,6 +40,9 @@ export interface MessageRow {
   agent: boolean;
   /** An outside session wrote it — a narrowing of `agent` (both are true). */
   external: boolean;
+  /** WHICH client that outside session was ("via Claude Code"), `lib/message-via.ts › viaOf`.
+   *  ⚠ `null` = the server did not say (an older row, a pasted token) — the plain chip renders. */
+  via: MessageVia | null;
   /** Addressed `to=@desktop` — about the recipient, independent of `external`. */
   routedDesktop: boolean;
   /** Which of the author's agents wrote it (`lib/agent-post-stamp.ts › authorAgentIdOf`);
@@ -206,6 +210,8 @@ function toMessageRow(
     agent: message.authorKind === "agent",
     // Both derived from server-stamped metadata (`lib/desktop-handle.ts`).
     external: authorViewOf(message) === "external",
+    // Outside-session rows only; a stale or unstamped row is an explicit `null`.
+    via: authorViewOf(message) === "external" ? viaOf(message.metadata) ?? null : null,
     routedDesktop: desktopAddresseeOf(message) !== null,
     // Agent rows only: a human may pick a stamp-shaped `client_msg_id`. The fallback,
     // `metadata.session_id`, is server-stamped and stripped from caller input.

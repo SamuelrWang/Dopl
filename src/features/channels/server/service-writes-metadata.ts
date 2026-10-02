@@ -12,12 +12,9 @@ import {
 import { takeCalmFlags } from "./service-writes-metadata-markers";
 import { resolveBodyMentions } from "./service-writes-metadata-mentions";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
-// ⚠ The outside-session vocabulary, stated once — the reserved key names and the
-// ONE discriminator. See `lib/desktop-handle.ts` for its failure modes.
-import {
-  DESKTOP_TO_METADATA_KEY,
-  EXTERNAL_SESSION_METADATA_KEY,
-} from "../lib/desktop-handle";
+// ⚠ The outside-session vocabulary, stated once — the reserved key names (`via`: the client).
+import { DESKTOP_TO_METADATA_KEY, EXTERNAL_SESSION_METADATA_KEY } from "../lib/desktop-handle";
+import { VIA_METADATA_KEY } from "../lib/message-via";
 import {
   ESCALATION_ANSWER_METADATA_KEY,
   ESCALATION_METADATA_KEY,
@@ -308,6 +305,7 @@ export async function resolvePostMetadata(
   // desktop's own cookie-lane agent posts.
   delete metadata[DESKTOP_TO_METADATA_KEY];
   delete metadata[EXTERNAL_SESSION_METADATA_KEY];
+  delete metadata[VIA_METADATA_KEY]; // same terms: a settable copy could wear "via Claude" verified
   // ⚠ Desktop reads `handoff` to decide whether to OPEN A WINDOW, so a
   // caller-set value could open a session on the operator's machine without
   // going through validated `create_thread`. Re-stamped only from `opts` below.
