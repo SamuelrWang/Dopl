@@ -79,7 +79,7 @@ import type { AgentToolProfile, ResolvedAgentToolProfile } from "../types";
  * reason the row vocabulary does — it is a rendering constant with no reader,
  * writer or decision in it.
  */
-export const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
+const TOOL_PROFILE_OPTIONS: ReadonlyArray<{
   value: AgentToolProfile;
   description: string;
 }> = [

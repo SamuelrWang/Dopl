@@ -49,7 +49,7 @@ const CALM_FLAG_KEYS = [
   "session_ended",
 ] as const;
 
-export type CalmFlagKey = (typeof CALM_FLAG_KEYS)[number];
+type CalmFlagKey = (typeof CALM_FLAG_KEYS)[number];
 
 /**
  * Strip every calm-terminal flag from caller metadata and report which were

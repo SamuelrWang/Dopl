@@ -38,7 +38,7 @@ export const TRANSCRIPT_FILTER_PEOPLE: TranscriptFilter = {
 };
 
 /** One agent's dropdown entry; `color` is read live (`view-model.ts › AgentRosterEntry`). */
-export interface TranscriptFilterAgent {
+interface TranscriptFilterAgent {
   agentId: string;
   label: string;
   /** `null` renders the gray dot — ended, never assigned, or outside the key set. */
@@ -51,12 +51,12 @@ export function agentTranscriptFilter(agentId: string): TranscriptFilter {
 }
 
 /** Nothing selected — the unfiltered transcript. */
-export function transcriptFilterIsAll(filter: TranscriptFilter): boolean {
+function transcriptFilterIsAll(filter: TranscriptFilter): boolean {
   return !filter.people && filter.agentIds.length === 0;
 }
 
 /** How many rows are ticked. */
-export function transcriptFilterCount(filter: TranscriptFilter): number {
+function transcriptFilterCount(filter: TranscriptFilter): number {
   return (filter.people ? 1 : 0) + filter.agentIds.length;
 }
 
@@ -69,12 +69,12 @@ function narrow(people: boolean, agentIds: readonly string[]): TranscriptFilter 
 }
 
 /** Tick or untick People. Pure — the pane owns the state. */
-export function toggleTranscriptPeople(filter: TranscriptFilter): TranscriptFilter {
+function toggleTranscriptPeople(filter: TranscriptFilter): TranscriptFilter {
   return narrow(!filter.people, filter.agentIds);
 }
 
 /** Tick or untick one agent, leaving every other tick alone. */
-export function toggleTranscriptAgent(
+function toggleTranscriptAgent(
   filter: TranscriptFilter,
   agentId: string
 ): TranscriptFilter {

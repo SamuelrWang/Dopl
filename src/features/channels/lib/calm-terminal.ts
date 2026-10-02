@@ -42,7 +42,7 @@ import type { ChannelMessage } from "../types";
  * (never alarm-red) treatment. `failed` is deliberately absent: the point of
  * this read is to tell a real failure from an operator-chosen stop.
  */
-export type CalmTerminalStatus =
+type CalmTerminalStatus =
   | "declined"
   | "dropped"
   | "interrupted"

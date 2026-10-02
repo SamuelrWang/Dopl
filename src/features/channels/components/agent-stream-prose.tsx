@@ -76,7 +76,7 @@ const NO_AUTHORS: AuthorIndex = indexMembers([], "");
 
 /** The stream's own body type — `text-caption` on `text-primary`, the size every
  *  message face in this column already uses. */
-export const STREAM_PROSE_TEXT = "text-caption text-text-primary";
+const STREAM_PROSE_TEXT = "text-caption text-text-primary";
 
 export function StreamProse({
   text,

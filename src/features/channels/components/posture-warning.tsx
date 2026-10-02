@@ -189,7 +189,7 @@ type PendingPostureChange =
  */
 export type PosturePatch = { messages?: MessageMode; runtime?: string };
 
-export interface PostureWarningGate {
+interface PostureWarningGate {
   /** Call INSTEAD OF the posture write; commits, or opens the dialog first. */
   changePosture: (patch: PosturePatch) => void;
   /** Call INSTEAD OF the tool-profile write; same contract. */

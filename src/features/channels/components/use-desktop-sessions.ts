@@ -40,7 +40,7 @@ import { getSpaBridge, type DesktopSessionSummary } from "@/shared/lib/spa-bridg
  * stops showing a live-looking agent that is not there. It is NOT a poll and
  * must not become one.
  */
-export interface DesktopSessionsFeed {
+interface DesktopSessionsFeed {
   /** `null` = could not ask; `[]` = asked, nothing is running. Never collapse
    *  one into the other (INVARIANTS §11 — UNKNOWN is not EMPTY). */
   sessions: DesktopSessionSummary[] | null;

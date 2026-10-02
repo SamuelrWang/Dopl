@@ -51,7 +51,7 @@ import type { ChannelMember } from "../types";
 /** The deleted panel's wording, kept — a request nobody receives says so at CREATE time.
  *  ⚠ EXPORTED because INVARIANTS §5 counts the places this rule is stated, and a doc anchor on a
  *  string literal inside a JSX body is not resolvable. */
-export const NO_ADDRESSEE_NOTE = "No agent addressed — this thread reaches nobody.";
+const NO_ADDRESSEE_NOTE = "No agent addressed — this thread reaches nobody.";
 
 /** "Diana Taylor" → "Diana's agent". */
 function agentLabel(displayName: string | null): string {

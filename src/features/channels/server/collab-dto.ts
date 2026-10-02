@@ -173,7 +173,7 @@ const SESSION_DETAIL_KEYS: ReadonlySet<string> = new Set<SessionDetailKey>([
 ]);
 
 /** Narrowed, never cast: an unknown key would be an empty `var()` and an invisible border. */
-export function narrowSessionColor(
+function narrowSessionColor(
   value: string | null | undefined
 ): AgentColorKey | null {
   return agentColorOrNull(value);

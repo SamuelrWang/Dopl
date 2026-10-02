@@ -129,7 +129,7 @@ function toDirection(row: AgentDirectionRow, now: number): AgentDirection {
  */
 const SENDER_AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
 
-export function senderAgentIdFrom(sessionId: string | null | undefined): string | null {
+function senderAgentIdFrom(sessionId: string | null | undefined): string | null {
   if (typeof sessionId !== "string" || sessionId === "") return null;
   // ⚠ THE LAST SEGMENT, and it is read by SPLITTING rather than by a regex over
   // the whole key: the key's internal shape is main's, not this tree's, and the
@@ -170,7 +170,7 @@ async function operatorIsOnline(ctx: ChannelContext): Promise<boolean> {
  * twice and it answers twice, with no way for either side to tell which answer
  * belonged to which.
  */
-export type CreateDirectionResult =
+type CreateDirectionResult =
   | { offline: true; direction: null }
   | { offline: false; direction: AgentDirection; existing: boolean };
 
@@ -369,7 +369,7 @@ export async function claimAgentDirection(
   return toDirection(claimed, Date.now());
 }
 
-export type DecideDirectionInput =
+type DecideDirectionInput =
   | { status: "delivered"; reply?: string }
   | { status: "refused"; refusalReason: DirectionRefusalReason };
 

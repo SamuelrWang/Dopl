@@ -10,7 +10,7 @@ import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS, REAL_PERMISSION_LEVELS } from "
 import type { PermissionLevel, PermissionLevels } from "../lib/launch-selection";
 import type { LaunchSelectionState } from "./use-launch-selection";
 
-export interface CatalogModelInput {
+interface CatalogModelInput {
   id: string;
   /** Omitted = the id; `null` = a model the runtime does not name. */
   label?: string | null;

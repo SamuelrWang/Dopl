@@ -78,7 +78,7 @@ import { isMissingRelation } from "./repository-sessions";
  * may refuse on this row without bounding its age (see
  * {@link agentIsAnotherMembers}).
  */
-export type AgentInstanceOwner = {
+type AgentInstanceOwner = {
   userId: string;
   /** `null` on a row a PostgREST projection returned without the column. */
   updatedAt: string | null;

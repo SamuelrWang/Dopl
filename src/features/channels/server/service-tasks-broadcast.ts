@@ -101,7 +101,7 @@ export function fanoutGroupId(createdBy: string, base: string): string {
 
 /** What one fan-out hands back — the threads in addressee order, plus the
  *  group id the card is drawn from. */
-export interface TaskFanOutResult {
+interface TaskFanOutResult {
   threads: TaskCreateResult[];
   groupId: string;
 }

@@ -79,7 +79,7 @@ import { profilesById } from "./service-shared";
  * channel resolves to nobody, so a mention can never reach outside the room it
  * was written in.
  */
-export interface BodyMentions {
+interface BodyMentions {
   /** The stamped set — every roster member this body tags. */
   userIds: string[];
   /**

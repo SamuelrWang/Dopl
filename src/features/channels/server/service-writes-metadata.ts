@@ -73,7 +73,7 @@ import {
  * MCP `post` result). With no closer left, the only threads it could ever fire on
  * are legacy ones — the column is unread now, so the notice went with it.
  */
-export interface PostMetadataResult {
+interface PostMetadataResult {
   metadata: Record<string, unknown>;
   /**
    * **A THREAD TAG THE POSTER WAS NOT ENTITLED TO, DROPPED** (2026-09-02, v2
@@ -136,7 +136,7 @@ export interface PostMetadataResult {
  * `proposeTaskClose`) and `reopened` (stamped `threadReopened` for the deleted
  * `reopenTask`).
  */
-export interface PostMetadataOptions {
+interface PostMetadataOptions {
   /**
    * Stamp reserved `metadata.handoff` true. Only caller:
    * `service-tasks.createTask`, forwarding validated `TaskCreateInput.handoff`.

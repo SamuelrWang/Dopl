@@ -68,7 +68,7 @@ const RESPONDER_OPTIONS: {
   { value: UNADDRESSED_RESPONDER_DEFAULT, label: "Last addressed" },
 ];
 
-export interface ChannelAgentsSettingsProps {
+interface ChannelAgentsSettingsProps {
   /**
    * ⚠ **THE ROSTER, NOT THE CHANNEL** (2026-09-07). The setting is a fact about the viewer's own
    * membership row, and this surface already holds the roster for the members list. Passing

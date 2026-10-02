@@ -57,7 +57,7 @@ export interface OwnAgentSessionRow {
  * refusal branch unreachable, and the next cleanup would remove it. Same argument
  * `OwnAgentSessionRow.color` above carries, and `view-model.ts › indexAgents` before both.
  */
-export interface PeerAgentSessionRow {
+interface PeerAgentSessionRow {
   name: string;
   displayName?: string | null;
   color?: unknown;

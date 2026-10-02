@@ -140,7 +140,7 @@ export function authorAgentIdOf(row: {
  * stamps existed simply do not testify; the walk continues past them (INVARIANTS §11 — UNKNOWN is
  * not EMPTY, and neither is a reason to stop).
  */
-export function isAuthorTypedAgentTag(row: {
+function isAuthorTypedAgentTag(row: {
   recipientAgentIds?: readonly string[] | null;
   metadata?: Record<string, unknown> | null;
 }): boolean {

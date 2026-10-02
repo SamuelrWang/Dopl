@@ -64,23 +64,23 @@ import type { Channel, ChannelVisibility } from "../types";
 // is a later wave's migration (see the WRITTEN-NOT-APPLIED file under
 // `supabase/migrations/`).
 
-export interface VisibilityDraft {
+interface VisibilityDraft {
   channelId: string;
   visibility: ChannelVisibility;
 }
 
-export interface DeleteDraft {
+interface DeleteDraft {
   channelId: string;
   /** Decides soft-close vs. hard delete — and therefore whether to evict. */
   isDirect: boolean;
 }
 
-export interface JoinDraft {
+interface JoinDraft {
   channelId: string;
   userId: string;
 }
 
-export interface LeaveDraft {
+interface LeaveDraft {
   channelId: string;
   userId: string;
   /** Private leaves the caller's list entirely; public stays read-only.
@@ -253,7 +253,7 @@ export function leaveConfig(
   };
 }
 
-export interface ChannelLifecycleParams {
+interface ChannelLifecycleParams {
   channel: Channel | null;
   workspaceId: string;
   currentUserId: string;

@@ -59,7 +59,7 @@ export type LaunchDirectiveRow = {
 
 /** What a create supplies. `operator_user_id` is absent on purpose: it is a separate argument so
  *  no caller can pass one inside an object built from a request body. */
-export type LaunchDirectiveInsert = {
+type LaunchDirectiveInsert = {
   /** Omitted = `launch`, the column DEFAULT. */
   kind?: "launch" | "end" | "rename" | "set_agent_mode";
   workspace_id: string;
@@ -94,7 +94,7 @@ export type LaunchDirectiveInsert = {
 };
 
 
-export type LaunchDecision = {
+type LaunchDecision = {
   /** `done` is the non-launch kinds' success and carries no agent id. */
   status: "launched" | "done" | "refused";
   agent_id: string | null;

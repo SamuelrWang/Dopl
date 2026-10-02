@@ -18,7 +18,7 @@ import type { PosturePatch } from "./posture-warning";
 import type { LaunchSelectionState } from "../hooks/use-launch-selection";
 import type { RuntimeDescriptor } from "../lib/runtime-capability";
 
-export interface AgentLaunchPostureRowsProps {
+interface AgentLaunchPostureRowsProps {
   /** The record at this scope, and the only writer of every field below. */
   selection: LaunchSelectionState;
   /** Routes the Messaging write through the channel's posture warning. Absent (defaults pane, no

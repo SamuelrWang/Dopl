@@ -92,7 +92,7 @@ export interface WorkspaceAwaitCounters {
   revalidations: number;
 }
 
-export interface WorkspaceAwaitOptions {
+interface WorkspaceAwaitOptions {
   since: number | undefined;
   /** Absolute epoch-ms deadline; the hold returns empty once it passes. */
   deadline: number;
@@ -115,7 +115,7 @@ export interface WorkspaceChannelMessage extends ChannelMessage {
   channelSlug: string | null;
 }
 
-export interface WorkspaceAwaitResult {
+interface WorkspaceAwaitResult {
   messages: WorkspaceChannelMessage[];
   /** How many channels the hold was watching when it returned. ⚠ Reported so a
    *  caller with ZERO memberships is told that rather than shown an empty page

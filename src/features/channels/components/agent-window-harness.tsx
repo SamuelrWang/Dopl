@@ -44,7 +44,7 @@ export function summary(
   };
 }
 
-export interface BridgeOver {
+interface BridgeOver {
   sessions?: DesktopSessionSummary[];
   entries?: unknown[];
   message?: ReturnType<typeof vi.fn>;
@@ -57,7 +57,7 @@ export interface BridgeOver {
 }
 
 /** One live push, as `main/session-narration.js › flush` sends it. */
-export type NarrationPush = (e: {
+type NarrationPush = (e: {
   sessionKey: string;
   entries: unknown[];
 }) => void;

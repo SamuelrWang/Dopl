@@ -43,16 +43,16 @@ import { safeLabel, safeOptionalLabel, safeOptionalProse } from "@/shared/lib/sa
 
 /** ISSUE — one line, and it is the card's title. A LABEL by `safe-label.ts`'s
  *  rule: spliced into chrome we wrote, never rendered as its own prose. */
-export const ESCALATION_ISSUE_MAX = 200;
+const ESCALATION_ISSUE_MAX = 200;
 /** CONTEXT — the one genuinely prose field, so newlines are legal here and
  *  nowhere else on the card. Bounded because "bounded context" is the ruling. */
-export const ESCALATION_CONTEXT_MAX = 2000;
+const ESCALATION_CONTEXT_MAX = 2000;
 /** One option's LABEL — the button's face. */
 export const ESCALATION_OPTION_LABEL_MAX = 80;
 /** One option's CONSEQUENCE — the muted line under the button. One line. */
-export const ESCALATION_CONSEQUENCE_MAX = 200;
+const ESCALATION_CONSEQUENCE_MAX = 200;
 /** The recommendation's reason. One line, beside the option it names. */
-export const ESCALATION_WHY_MAX = 200;
+const ESCALATION_WHY_MAX = 200;
 
 /**
  * ⚠ 2–6, AND BOTH ENDS ARE THE RULING. One option is a statement, not a
@@ -60,8 +60,8 @@ export const ESCALATION_WHY_MAX = 200;
  * what `op="milestone"` is for. Seven is the prose wall in a costume, and a card
  * that scrolls is not a card.
  */
-export const ESCALATION_MIN_OPTIONS = 2;
-export const ESCALATION_MAX_OPTIONS = 6;
+const ESCALATION_MIN_OPTIONS = 2;
+const ESCALATION_MAX_OPTIONS = 6;
 /**
  * ⚠ THE STORED CEILING IS WIDER THAN THE INPUT ONE (unified display, 2026-09-28). A `dopl_show`
  * display with a `choice` block is a decision too, and its decision INDEX (`display/core/adapt.ts ›

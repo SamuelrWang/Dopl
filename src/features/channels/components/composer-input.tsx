@@ -143,7 +143,7 @@ const FIELD_TEXT = "py-[4px] text-lead leading-[22px] pointer-coarse:text-[16px]
 const FIELD_WRAP = "break-words [scrollbar-gutter:stable]";
 
 /** THE ARROW'S WIRING — what it does, never how it looks. */
-export type ComposerSendWiring = {
+type ComposerSendWiring = {
   onSend: () => void;
   sendDisabled: boolean;
   /** ⚠ A DISABLED SEND SAYS WHY (INVARIANTS §8, rule 4). */

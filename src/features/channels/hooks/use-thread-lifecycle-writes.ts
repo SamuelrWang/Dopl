@@ -44,19 +44,19 @@ import type { ChannelThread, ThreadMode } from "../types";
  * (INVARIANTS §7/§8).
  */
 
-export interface ThreadModeDraft {
+interface ThreadModeDraft {
   /** Captured at the click; never re-read from the selection. */
   channelId: string;
   threadId: string;
   mode: ThreadMode;
 }
 
-export interface ThreadDeleteDraft {
+interface ThreadDeleteDraft {
   channelId: string;
   threadId: string;
 }
 
-export interface ThreadLifecycleParams {
+interface ThreadLifecycleParams {
   workspaceId: string;
   /** Holds realtime refetches open for the life of each write. ⚠ REQUIRED, not
    *  optional — a config buildable without a gate re-opens the race where some

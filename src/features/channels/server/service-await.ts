@@ -51,7 +51,7 @@ export interface AwaitHoldCounters {
   revalidations: number;
 }
 
-export interface AwaitHoldOptions {
+interface AwaitHoldOptions {
   /** Cursor: only messages with `seq > since` end the hold. */
   since: number | undefined;
   /** Absolute epoch-ms deadline; the hold returns empty once it passes. */
@@ -75,7 +75,7 @@ export interface AwaitHoldOptions {
   counters?: AwaitHoldCounters;
 }
 
-export interface AwaitHoldResult {
+interface AwaitHoldResult {
   messages: ChannelMessage[];
   /** DIAG (Q8): message queries issued — existence probes plus row reads. */
   polls: number;

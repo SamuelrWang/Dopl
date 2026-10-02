@@ -71,7 +71,7 @@ export const RECENCY_WELLS = [
   },
 ] as const;
 
-export type RecencyWellId = (typeof RECENCY_WELLS)[number]["id"];
+type RecencyWellId = (typeof RECENCY_WELLS)[number]["id"];
 
 /**
  * WHICH WELL A STAMP FALLS IN.

@@ -44,7 +44,7 @@ import { sessionRowsWhere } from "./repository-sessions";
 
 /** A read that may have hit its ceiling. ⚠ AT the ceiling counts as clipped —
  *  at is indistinguishable from over (INVARIANTS §9). */
-export interface AccountScan<T> {
+interface AccountScan<T> {
   rows: T[];
   truncated: boolean;
 }
@@ -74,7 +74,7 @@ export interface AccountChannelRef {
 export const ACCOUNT_CHANNEL_LIMIT = 500;
 
 /** One row of the account fence's PROOF. */
-export interface AccountMembershipRef {
+interface AccountMembershipRef {
   channel_id: string;
   workspace_id: string;
 }
@@ -127,7 +127,7 @@ export const ACCOUNT_MESSAGE_LIMIT = 200;
  * service says so — a count rendered as exact when it was clipped is the §9
  * failure this constant exists to make visible.
  */
-export const ACCOUNT_TALLY_LIMIT = 1_000;
+const ACCOUNT_TALLY_LIMIT = 1_000;
 
 /** How many "addressed to you" items one status answer carries. */
 export const ACCOUNT_ADDRESSED_LIMIT = 50;
@@ -138,7 +138,7 @@ export const ACCOUNT_ADDRESSED_LIMIT = 50;
  * SHOWING AN EXTRA CARD rather than hiding one: a channel whose rows all fall
  * below this window contributes no "I replied" evidence, so its item stays open.
  */
-export const ACCOUNT_OWN_REPLY_LIMIT = 500;
+const ACCOUNT_OWN_REPLY_LIMIT = 500;
 
 /**
  * 🔒 **THE PROOF OF ACCESS FOR EVERY ACCOUNT-WIDE READ** — every LIVE channel
@@ -290,7 +290,7 @@ export async function tallyAccountMessagesAfter(
 }
 
 /** The high-water mark of one channel. */
-export interface ChannelHighWater {
+interface ChannelHighWater {
   seq: number;
   at: string;
 }

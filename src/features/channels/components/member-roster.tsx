@@ -31,7 +31,7 @@ import type { ChannelMember } from "../types";
  * The subline is the member's email, not a job title: the model has no such
  * field, and the chip states the one role a channel roster carries (INVARIANTS §5).
  */
-export function MemberRow({
+function MemberRow({
   member,
   online,
   action,

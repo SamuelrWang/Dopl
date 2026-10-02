@@ -17,7 +17,7 @@ import type { SearchItem } from "@/features/search/contracts";
 import { splitChannels } from "./view-model";
 import { useChannelsSelection } from "./use-channels-selection";
 
-export interface ChannelsCoreProps {
+interface ChannelsCoreProps {
   workspaceId: string;
   workspaceSlug: string;
   currentUserId: string;

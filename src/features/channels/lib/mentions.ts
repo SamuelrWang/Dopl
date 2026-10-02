@@ -197,7 +197,7 @@ const TRAILING_HTML_TAG = /<\/?[A-Za-z][A-Za-z0-9-]*\s*\/?>$/;
 
 /** Handle -> the member it names, or `null` when two or more members claim it
  *  (rule 5: ambiguity resolves to nobody). */
-export type MentionIndex = ReadonlyMap<string, string | null>;
+type MentionIndex = ReadonlyMap<string, string | null>;
 
 /**
  * THE HANDLE CONVENTION — lowercase, whitespace runs to a single `-`

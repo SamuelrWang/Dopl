@@ -40,7 +40,7 @@ import { getSpaBridge, type DesktopNarrationEntry } from "@/shared/lib/spa-bridg
  */
 export type AgentNarrationEntry = DesktopNarrationEntry;
 
-export interface AgentNarrationFeed {
+interface AgentNarrationFeed {
   entries: AgentNarrationEntry[] | null;
   /** Whether this build can show the lane at all — drives the window's empty wording. */
   supported: boolean;

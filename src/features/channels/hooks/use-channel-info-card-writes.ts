@@ -32,7 +32,7 @@ import type { Channel } from "../types";
  * (INVARIANTS §8 rules 1 and 5).
  */
 
-export interface InfoCardDraft {
+interface InfoCardDraft {
   /** Captured at the gesture; never re-read from the selection (§8 rule 4). */
   channelId: string;
   /** THE WHOLE CARD. The server replaces rather than merges — see
@@ -40,7 +40,7 @@ export interface InfoCardDraft {
   card: ChannelInfoCard;
 }
 
-export interface InfoCardWriteDeps {
+interface InfoCardWriteDeps {
   workspaceId: string;
   /**
    * The host surface's `useRefetchGate` gate. ⚠ REQUIRED, for the reason
@@ -51,7 +51,7 @@ export interface InfoCardWriteDeps {
   gate: MutationGate;
 }
 
-export function infoCardConfig(
+function infoCardConfig(
   deps: InfoCardWriteDeps
 ): UseApiMutationConfig<InfoCardDraft, { channel: Channel }> {
   return {

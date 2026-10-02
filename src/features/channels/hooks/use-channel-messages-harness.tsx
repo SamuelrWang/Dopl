@@ -69,7 +69,7 @@ export function page(top: number, count: number): ChannelMessage[] {
   return Array.from({ length: count }, (_, i) => msg(top - count + 1 + i));
 }
 
-export type Hook = ReturnType<typeof useChannelMessages>;
+type Hook = ReturnType<typeof useChannelMessages>;
 
 /** The reads this mount saw, as `{limit, before?}` — the query half alone. */
 export function requests(): Array<Record<string, unknown>> {

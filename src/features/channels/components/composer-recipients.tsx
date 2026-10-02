@@ -89,7 +89,7 @@ const VIA_NOTE: Partial<Record<DraftReach["via"], string>> = {
  * ADDRESS** — `via: "responder"`. RR1's `thread` note is untouched: that address
  * is the thread's own two parties and Escape does not apply to it.
  */
-export const CANCEL_NOTE = "esc to cancel";
+const CANCEL_NOTE = "esc to cancel";
 
 /**
  * ⚠ **IT TAKES THE FACTS AND DERIVES THE ANSWER, rather than being handed one** — the derivation

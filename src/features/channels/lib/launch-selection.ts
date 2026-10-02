@@ -31,7 +31,7 @@ export interface LaunchSelection {
   byRuntime: Readonly<Record<string, PermissionLevel>>;
 }
 
-export interface LaunchSelectionRead {
+interface LaunchSelectionRead {
   selection: LaunchSelection;
   /** Main's sentences for a record it narrowed. A note, never a failure of the read. */
   review: ReadonlyArray<string>;
@@ -46,7 +46,7 @@ const asLevel = (v: unknown): PermissionLevel | null =>
   (LAUNCH_PERMISSION_LEVELS as ReadonlyArray<string>).includes(str(v)) ? (str(v) as PermissionLevel) : null;
 
 /** The selection an unconfigured channel resolves to: the restrictive one. */
-export function emptySelection(): LaunchSelection {
+function emptySelection(): LaunchSelection {
   return { v: 0, runtime: "", messages: "ask", level: LAUNCH_PERMISSION_LEVELS[0], byRuntime: NO_OVERRIDES };
 }
 

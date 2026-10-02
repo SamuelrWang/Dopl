@@ -11,10 +11,10 @@ import type { AuthorIndex } from "./view-model";
 import type { MessageRow } from "./view-model-rows";
 
 /** `{ color: null }` is a neutral accent (ended/unassigned agent), unlike no accent (`null`). */
-export type AgentBox = { color: AgentColorKey | null };
+type AgentBox = { color: AgentColorKey | null };
 
 /** Structural so escalation rows ask the same question as message rows. */
-export type AgentAuthored = Pick<MessageRow, "agent" | "agentId">;
+type AgentAuthored = Pick<MessageRow, "agent" | "agentId">;
 
 /** An ended agent's paint: still an accent, in the neutral the filter's ended dot also uses. */
 export const AGENT_ACCENT_NEUTRAL = "var(--border-strong)";

@@ -5,7 +5,7 @@ import { UNIQUE_VIOLATION } from "./service-shared";
 /** The race half of the agent mailboxes' idempotency rule: two concurrent retries both miss the probe
  *  and the partial unique index refuses the second insert. The probe stays in each create, above its
  *  identity/thread/presence gates, so a filed request is never re-decided. No key = a plain insert. */
-export type MailboxInsert<TRow> = {
+type MailboxInsert<TRow> = {
   /** Absent or `""` = no key (both route schemas hold it to `.min(1)`). */
   clientMsgId: string | null | undefined;
   /** Called exactly once. */

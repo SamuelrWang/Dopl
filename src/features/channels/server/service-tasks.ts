@@ -164,7 +164,7 @@ async function convergeOnThread(
  * CALLER of `createTask`, never a second create path — can put its group id on
  * the opening message through the one function that posts it.
  */
-export interface TaskCreateOptions {
+interface TaskCreateOptions {
   /** Stamped as reserved `metadata.fanoutGroup` on the opening message. */
   fanoutGroupId?: string;
 }

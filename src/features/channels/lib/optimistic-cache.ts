@@ -66,7 +66,7 @@ function nextSeq(messages: ChannelMessage[]): number {
   return max + 1;
 }
 
-export interface PendingMessageInput {
+interface PendingMessageInput {
   channelId: string;
   clientMsgId: string;
   body: string;

@@ -22,10 +22,10 @@ import type {
 } from "./dto";
 import type { ChannelContext } from "./service-shared";
 
-export const WS = "ws-1";
-export const USER = "11111111-e29b-41d4-a716-446655440000";
+const WS = "ws-1";
+const USER = "11111111-e29b-41d4-a716-446655440000";
 export const PEER = "22222222-e29b-41d4-a716-446655440000";
-export const THIRD = "33333333-e29b-41d4-a716-446655440000";
+const THIRD = "33333333-e29b-41d4-a716-446655440000";
 export const ESC_ID = "44444444-e29b-41d4-a716-446655440000";
 
 export const ctx: ChannelContext = {
@@ -49,7 +49,7 @@ export const ESCALATION = {
   recommendation: { index: 0, why: "Reversible." },
 };
 
-export function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
+function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
   return {
     id: "chan-1",
     workspace_id: WS,
@@ -68,7 +68,7 @@ export function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
   };
 }
 
-export function memberRow(userId: string, role = "member"): ChannelMemberRow {
+function memberRow(userId: string, role = "member"): ChannelMemberRow {
   return {
     channel_id: "chan-1",
     user_id: userId,
@@ -83,11 +83,11 @@ export function memberRow(userId: string, role = "member"): ChannelMemberRow {
   };
 }
 
-export function profile(id: string, name: string, email: string): ProfileRef {
+function profile(id: string, name: string, email: string): ProfileRef {
   return { id, display_name: name, email, avatar_url: null };
 }
 
-export function insertedRow(
+function insertedRow(
   row: Parameters<typeof repoMessages.insertMessage>[0]
 ): ChannelMessageRow {
   return {

@@ -54,7 +54,7 @@ export interface ChannelContext {
   clientInfo?: McpClientInfo;
 }
 
-export interface AuthLike {
+interface AuthLike {
   userId: string;
   workspaceId: string;
   role?: Role | null;

@@ -58,7 +58,7 @@ import {
  * the caller has that many unread mentions across the page, and the badge then
  * UNDER-counts rather than claiming there is nothing.
  */
-export const CHANNEL_MENTION_SCAN_LIMIT = 500;
+const CHANNEL_MENTION_SCAN_LIMIT = 500;
 
 /**
  * Roster rows one list read will pull. ⚠ The per-channel cap is
@@ -359,7 +359,7 @@ export async function listAccountChannels(
  * answers with, so a row from a mutation echo and a row from the list are the same
  * shape. ⚠ It is the only reason a write needs no second DTO.
  */
-export async function hydrateOneChannel(
+async function hydrateOneChannel(
   row: ChannelRow,
   membership: ChannelMemberRow | null,
   viewerId: string

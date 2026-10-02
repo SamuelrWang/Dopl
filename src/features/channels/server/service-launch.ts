@@ -26,7 +26,7 @@ export { toDirective } from "./service-launch-dto";
 import { operatorIsOnline } from "./service-launch-presence";
 export { operatorIsOnline };
 
-export type CreateLaunchInput = {
+type CreateLaunchInput = {
   /** Slug or id. */
   channel: string;
   /** Must belong to `channel`. */
@@ -52,7 +52,7 @@ export type CreateLaunchInput = {
 
 /** `offline`: no row was created. `existing: true`: a resent `clientMsgId` returned the first
  *  request's directive and this call filed nothing. */
-export type CreateLaunchResult =
+type CreateLaunchResult =
   | { offline: true; directive: null }
   | { offline: false; directive: LaunchDirective; existing: boolean };
 
@@ -202,7 +202,7 @@ export async function claimLaunchDirective(
   return toDirective(row, now);
 }
 
-export type DecideLaunchInput =
+type DecideLaunchInput =
   /**
    * A launch's success (the column CHECK pairs `launched` with `kind = 'launch'`). The `applied*`
    * echo is optional forever: an older desktop reports none (INVARIANTS §13).

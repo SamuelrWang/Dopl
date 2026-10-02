@@ -68,7 +68,7 @@ const DICTATION_SILENT = new Set(["no-speech", "aborted"]);
 
 /** Exported for `use-dictation.test.ts`: the mapping is the whole rule, and it is worth pinning
  *  without driving a fake engine through four events to reach each branch. */
-export function dictationFault(code: string | undefined | null): string | null {
+function dictationFault(code: string | undefined | null): string | null {
   if (!code || DICTATION_SILENT.has(code)) return null;
   return DICTATION_FAULT[code] ?? "Dictation failed";
 }

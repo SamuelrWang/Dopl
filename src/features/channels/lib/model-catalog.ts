@@ -17,7 +17,7 @@ const STATUSES: ReadonlyArray<CatalogStatus> = [
   "stale",
 ];
 
-export interface ModelDimensionOption {
+interface ModelDimensionOption {
   value: string;
   label: string;
   description: string | null;

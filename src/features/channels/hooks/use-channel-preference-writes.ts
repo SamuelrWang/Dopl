@@ -69,7 +69,7 @@ import type {
  * **Do not add it back for convenience** — a hook that takes an identity it does
  * not use invites a caller to point a write at somebody else.
  */
-export interface PreferenceWritesParams {
+interface PreferenceWritesParams {
   workspaceId: string;
   gate: MutationGate;
 }
@@ -78,7 +78,7 @@ function failed(err: unknown, fallback: string) {
   toast({ title: userFacingMessage(err, fallback) });
 }
 
-export interface ToolProfileDraft {
+interface ToolProfileDraft {
   channelId: string;
   profile: AgentToolProfile;
 }
@@ -90,17 +90,17 @@ export interface ToolProfileDraft {
  *
  * ⚠ **THE DESIRED STATE, never a toggle verb** — two clicks racing must converge.
  */
-export interface UnaddressedResponderDraft {
+interface UnaddressedResponderDraft {
   channelId: string;
   setting: UnaddressedResponderSetting;
 }
-export interface ConsentDraft {
+interface ConsentDraft {
   id: string;
   decision: "allow" | "deny";
 }
 /** ⚠ The DESIRED state, never a "toggle" verb: two clicks racing must converge
  *  on the same answer, and a flip-relative write cannot. */
-export interface FavoriteDraft {
+interface FavoriteDraft {
   channelId: string;
   favorite: boolean;
 }

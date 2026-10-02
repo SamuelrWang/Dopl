@@ -58,8 +58,8 @@ import {
  * `agent-window-chrome.test.tsx` — jsdom drops properties it does not know, so a render assertion
  * would pass while the real window sat frozen on screen.
  */
-export const DRAG_REGION = { WebkitAppRegion: "drag" } as React.CSSProperties;
-export const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
+const DRAG_REGION = { WebkitAppRegion: "drag" } as React.CSSProperties;
+const NO_DRAG_REGION = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
 
 /** The window buttons' naked glyphs — `IconButton bare` re-inked and re-boxed to the Wispr scale:
  *  a 30px hit area (`--action-h-sm`'s number) around an 18px glyph, muted at rest. */

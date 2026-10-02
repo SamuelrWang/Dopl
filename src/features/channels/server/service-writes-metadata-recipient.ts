@@ -62,7 +62,7 @@ import type { ChannelContext } from "./service-shared";
  * `delivery=none` wearing a different name, and the resolver exists to make that
  * unrepresentable.
  */
-export type ResolvedRecipient =
+type ResolvedRecipient =
   | { kind: "member"; userId: string }
   | { kind: "agent"; agentId: string }
   /**
@@ -118,7 +118,7 @@ function handleTokenOf(to: string): string | null {
  * the second hides the handle the caller needed. Freshness gates the WAKE, in
  * `service-wake-verdict.ts`, where dropping a stale row costs nothing.
  */
-export async function liveAgentHandles(
+async function liveAgentHandles(
   ctx: ChannelContext,
   channelId: string
 ): Promise<{ handles: string[]; index: ReturnType<typeof buildAgentMentionIndex> }> {
@@ -177,7 +177,7 @@ export async function liveAgentHandles(
  * `→` arrow prints, and naming the same agent twice is one address, not two
  * wakes.
  */
-export interface ResolvedRecipients {
+interface ResolvedRecipients {
   memberUserIds: string[];
   agentIds: string[];
   /**

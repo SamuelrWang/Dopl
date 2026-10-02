@@ -67,7 +67,7 @@ import { ChannelAgentsSettings } from "./settings-channel-agents";
 import { ChannelsSettingsTab } from "./settings-tab";
 import type { AgentToolProfile, Channel, ChannelMember } from "../types";
 
-export interface ChannelsManageProps {
+interface ChannelsManageProps {
   channel: Channel;
   workspaceId: string;
   workspaceSlug: string;

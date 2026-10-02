@@ -70,7 +70,7 @@ export interface ChannelInfoCardEdit {
  * `INFO_CARD_SECTION` goes on the element that wraps the whole list; nothing
  * else may wear it, or the affordance appears for the wrong region.
  */
-export const INFO_CARD_SECTION = "group/infocard";
+const INFO_CARD_SECTION = "group/infocard";
 
 /**
  * One row, mid-edit. Pure UI: it owns the DRAFT and nothing else, and hands the

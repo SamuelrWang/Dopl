@@ -59,7 +59,7 @@ import type { ChannelMessage, ChannelThread, MessageIntent } from "../types";
  * all three per-channel reads use `keepPreviousData`.
  */
 
-export interface SendDraft {
+interface SendDraft {
   /** Captured at submit; never re-read from the selection. */
   channelId: string;
   clientMsgId: string;
@@ -67,7 +67,7 @@ export interface SendDraft {
   intent?: MessageIntent;
 }
 
-export interface OpenThreadDraft {
+interface OpenThreadDraft {
   channelId: string;
   clientMsgId: string;
   title: string;

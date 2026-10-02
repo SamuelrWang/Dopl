@@ -64,7 +64,7 @@ export class ArtifactNotFoundError extends ChannelError {
  * channel, or is already in another artifact simply does not fold. Reporting the
  * count alone would let a caller believe it boxed a run it only half boxed.
  */
-export interface ArtifactWriteResult {
+interface ArtifactWriteResult {
   artifact: ChannelArtifact;
   requested: number[];
   folded: number[];

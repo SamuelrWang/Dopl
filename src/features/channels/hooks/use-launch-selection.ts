@@ -31,7 +31,7 @@ const EMPTY_IDS: ReadonlyArray<string> = [];
 const NO_LINES: ReadonlyArray<string> = [];
 
 /** A channel scope with an empty id reads nothing (the pop-out mounts before its channel resolves). */
-export type LaunchSelectionScope =
+type LaunchSelectionScope =
   | { kind: "channel"; channelId: string }
   | { kind: "defaults" };
 

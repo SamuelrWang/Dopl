@@ -5,7 +5,7 @@
 
 import { Bookmark, FileText, Sparkles, type LucideIcon } from "lucide-react";
 
-export interface NavRowSpec {
+interface NavRowSpec {
   id: string;
   label: string;
   icon: LucideIcon;

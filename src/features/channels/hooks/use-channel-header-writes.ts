@@ -50,7 +50,7 @@ export interface HeaderDraft {
   patch: { name: string } | { topic: string };
 }
 
-export interface HeaderWriteDeps {
+interface HeaderWriteDeps {
   workspaceId: string;
   /**
    * The host surface's `useRefetchGate` gate. ⚠ REQUIRED, for the reason

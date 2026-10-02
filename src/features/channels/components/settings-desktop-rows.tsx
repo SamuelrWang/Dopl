@@ -127,12 +127,12 @@ export function AgentFolderRows({
  * "Launch agents": two records at two scopes, chaining `(this channel)` and orchestrator launches
  * `(this Mac)`, as one pick — the scope is the thing the operator picks.
  */
-export const LAUNCH_AGENTS_OFF = "off";
-export const LAUNCH_AGENTS_CHANNEL = "channel";
-export const LAUNCH_AGENTS_EVERY = "every";
+const LAUNCH_AGENTS_OFF = "off";
+const LAUNCH_AGENTS_CHANNEL = "channel";
+const LAUNCH_AGENTS_EVERY = "every";
 
 /** The three picks, and what each one means on BOTH records. */
-export type LaunchAgentsValue =
+type LaunchAgentsValue =
   | typeof LAUNCH_AGENTS_OFF
   | typeof LAUNCH_AGENTS_CHANNEL
   | typeof LAUNCH_AGENTS_EVERY;
@@ -152,7 +152,7 @@ const LAUNCH_AGENTS_OPTIONS: ReadonlyArray<SelectMenuOption<LaunchAgentsValue>> 
  * machine would be the control lying about the machine's actual state. The chain
  * flag is only decisive once the machine-wide one is off.
  */
-export function launchAgentsValue(chainOn: boolean, orchestratorOn: boolean): LaunchAgentsValue {
+function launchAgentsValue(chainOn: boolean, orchestratorOn: boolean): LaunchAgentsValue {
   if (orchestratorOn) return LAUNCH_AGENTS_EVERY;
   return chainOn ? LAUNCH_AGENTS_CHANNEL : LAUNCH_AGENTS_OFF;
 }
@@ -213,14 +213,14 @@ export function LaunchAgentsRow({
   );
 }
 
-export const DIRECT_AGENTS_OFF = "off";
-export const DIRECT_AGENTS_EVERY = "every";
+const DIRECT_AGENTS_OFF = "off";
+const DIRECT_AGENTS_EVERY = "every";
 
 /** The two picks. ⚠ There is no per-channel middle pick and there must not be one
  *  — the record is a single machine-wide boolean
  *  (`main/orchestrator-consent.js › ORCHESTRATOR_DIRECT_KEY`), so a third option
  *  would be a label with no storage behind it. */
-export type DirectAgentsValue = typeof DIRECT_AGENTS_OFF | typeof DIRECT_AGENTS_EVERY;
+type DirectAgentsValue = typeof DIRECT_AGENTS_OFF | typeof DIRECT_AGENTS_EVERY;
 
 /**
  * ⚠ **THE OPTION TEXT IS "In every channel" ON PURPOSE, WORD FOR WORD FROM

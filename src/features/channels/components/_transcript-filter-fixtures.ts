@@ -26,7 +26,7 @@ export const ROVER = "a1b2c3d4";
 /** In the machine's index and has posted NOTHING in this room. */
 export const IDLE = "z9y8x7w6";
 
-export const AGENTS: ReadonlyMap<string, AgentRosterEntry> = new Map([
+const AGENTS: ReadonlyMap<string, AgentRosterEntry> = new Map([
   [SCOUT, { displayName: "Scout", description: null, ended: false, color: "agent-03" }],
   [ROVER, { displayName: "Rover", description: null, ended: true, color: null }],
   [IDLE, { displayName: "Idle hands", description: null, ended: false, color: "agent-07" }],
@@ -53,9 +53,9 @@ function byAgent(id: string | null, over: Partial<ChannelMessage>): ChannelMessa
   });
 }
 
-export const THREAD = thread({ id: "t-1", title: "UI-kit design" });
+const THREAD = thread({ id: "t-1", title: "UI-kit design" });
 
-export const MESSAGES: ChannelMessage[] = [
+const MESSAGES: ChannelMessage[] = [
   message({ id: "m-1", seq: 1, body: "sam line" }),
   byAgent(SCOUT, { id: "m-2", seq: 2, body: "scout line" }),
   byAgent(ROVER, { id: "m-3", seq: 3, body: "rover line" }),

@@ -57,7 +57,7 @@ export type {
   MentionsLayout,
 } from "./channel-surface-contract";
 
-export interface ChannelSurfaceProps {
+interface ChannelSurfaceProps {
   workspaceId: string;
   /** The workspace SEGMENT — the pop-out's route and the agent window's. */
   workspaceSlug: string;

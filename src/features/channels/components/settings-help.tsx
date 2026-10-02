@@ -11,7 +11,7 @@ import { cn } from "@/shared/lib/utils";
 import { Popover } from "@/shared/ui/popover-menu";
 
 /** One setting's explanation: what it is, then what each option does. */
-export interface SettingHelpCopy {
+interface SettingHelpCopy {
   /** One short paragraph: what this setting governs, and its scope. */
   body: string;
   /** At most one line per option. */

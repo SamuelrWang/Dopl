@@ -18,7 +18,7 @@ import type { RuntimeDescriptor } from "../lib/runtime-capability";
 import { canSignIn, SIGN_IN_BUSY, signInAction, signInFailedCopy } from "../lib/runtime-copy";
 
 /** Read once after mount via lazy state, so server and first client render agree. */
-export function useCanSignInToRuntime(): boolean {
+function useCanSignInToRuntime(): boolean {
   const [can] = useState(() => canSignInToRuntime());
   return can;
 }

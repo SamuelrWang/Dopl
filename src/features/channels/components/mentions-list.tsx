@@ -72,7 +72,7 @@ import type { ChannelMention } from "../types";
  * silently inherits the other one's indent, which is the defect this prop exists
  * to end.
  */
-export type MentionsListInset = "nested" | "flush";
+type MentionsListInset = "nested" | "flush";
 
 const MENTIONS_INSET: Record<MentionsListInset, string> = {
   nested: "pl-7",

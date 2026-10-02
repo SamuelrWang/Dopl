@@ -28,7 +28,7 @@ import {
  * The model pick and rewritten instructions, or `undefined` when nothing changed so the payload
  * equals a one-click launch. Instructions compare to the identity baseline, not to empty.
  */
-export function launchOverridesOf(
+function launchOverridesOf(
   panel: AgentLaunchPanel
 ): IdentityLaunchOverrides | undefined {
   const overrides: IdentityLaunchOverrides = {};

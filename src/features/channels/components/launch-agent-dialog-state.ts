@@ -94,7 +94,7 @@ interface ModelRowInput {
   fromIdentity: string;
 }
 
-export interface ModelRow {
+interface ModelRow {
   /** `''` means "the platform's own pick". */
   shown: string;
   shownLabel: string;
@@ -164,14 +164,14 @@ function ownPickSurvives(
 }
 
 /** The fields read off an identity row — a structural shape, not `AgentIdentity`. */
-export interface IdentityModelRow {
+interface IdentityModelRow {
   id: string;
   model?: string | null;
   /** The identity's runtime; absent/null/`''` = no preference. */
   runtime?: string | null;
 }
 
-export interface LaunchDialogRuntime {
+interface LaunchDialogRuntime {
   /** Every reported runtime — never filtered by connectivity. */
   runtimes: ReadonlyArray<RuntimeDescriptor>;
   /** Always sent; `''` only where nothing was reported. */

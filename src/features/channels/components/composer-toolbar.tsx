@@ -11,10 +11,10 @@ import type { Dictation } from "./use-dictation";
 import type { AgentLaunchControls } from "./use-agents-panel";
 
 /** The toolbar glyph face; the hover fill is `IconButton`'s own. */
-export const TOOLBAR_ICON = "h-6 w-6 rounded-full";
+const TOOLBAR_ICON = "h-6 w-6 rounded-full";
 
 /** The glyph for the 24px square. */
-export const TOOLBAR_GLYPH = 15;
+const TOOLBAR_GLYPH = 15;
 
 export function ComposerToolbar({
   newAgent,

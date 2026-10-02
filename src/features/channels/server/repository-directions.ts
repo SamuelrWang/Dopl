@@ -61,7 +61,7 @@ export type AgentDirectionRow = {
 /** What a create supplies. ⚠ `operator_user_id` is ABSENT ON PURPOSE — it is a
  *  separate argument so no caller can pass one inside an object it built from a
  *  request body. Same discipline as `LaunchDirectiveInsert`. */
-export type AgentDirectionInsert = {
+type AgentDirectionInsert = {
   workspace_id: string;
   channel_id: string;
   task_id: string | null;
@@ -211,7 +211,7 @@ export async function claimAgentDirection(
 }
 
 /** What a terminal decision writes. */
-export type AgentDirectionDecision = {
+type AgentDirectionDecision = {
   status: "delivered" | "refused";
   refusal_reason: string | null;
   reply: string | null;

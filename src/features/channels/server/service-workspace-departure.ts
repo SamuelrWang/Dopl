@@ -56,7 +56,7 @@ import * as repo from "./repository";
  */
 
 /** What one sweep actually did — for the caller's log line and for tests. */
-export interface DepartedMemberSweep {
+interface DepartedMemberSweep {
   /** `channel_members` rows deleted (one per channel the user belonged to). */
   membershipsRemoved: number;
   /** Live 1:1s closed by stamping `channels.deleted_at`. */

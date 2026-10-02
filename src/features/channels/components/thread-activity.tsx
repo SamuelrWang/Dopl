@@ -89,7 +89,7 @@ export function activityLevels(bins: readonly ActivityBin[]): number[] {
  * (`info-tab.tsx`) can render the identical squares from its fixture LEVELS
  * without being handed a way to pass off invented counts as measured ones.
  */
-export function ActivityCells({
+function ActivityCells({
   levels,
   label,
   titles,

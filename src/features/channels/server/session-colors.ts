@@ -67,7 +67,7 @@ export type ForeignColorsByChannel = ReadonlyMap<string, ReadonlySet<string>>;
  * Rule 1's input: what each `session_key` held BEFORE this push.
  * ⚠ Read out of the reconcile's own SELECT, so it costs no extra query.
  */
-export type StoredColorsByKey = ReadonlyMap<string, string | null>;
+type StoredColorsByKey = ReadonlyMap<string, string | null>;
 
 export function resolveReportedColors({
   reported,

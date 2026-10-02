@@ -79,7 +79,7 @@ export function resolveEscalation(
  * nobody else otherwise. That is what makes another member's card render
  * read-only without a second concept.
  */
-export function escalationAnswerers(row: ChannelMessageRow): string[] {
+function escalationAnswerers(row: ChannelMessageRow): string[] {
   // ⚠ The rule itself lives in `display/core/answerers.ts` (client-safe), so the server's 403
   // and every renderer's buttons read ONE predicate (unified display, 2026-09-28).
   return answerersOf(row.metadata as Record<string, unknown> | null, row.author_user_id);
@@ -227,7 +227,7 @@ function stampEscalationAnswer(
  * SEES (the rendered list), never off `options` directly; "0" is therefore not an
  * answer, and neither is "3" on a two-option card.
  */
-export function matchTypedOption(
+function matchTypedOption(
   escalation: ChannelEscalation,
   body: string
 ): number | null {

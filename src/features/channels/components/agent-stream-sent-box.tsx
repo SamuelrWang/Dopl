@@ -77,7 +77,7 @@ export function postedToLabel(to: PostDestination | null | undefined): string {
  * sibling blocks. Bounding the CONTAINER touches neither the string nor the
  * renderer — every character is still in the DOM and one press shows it.
  */
-export const COLLAPSED_BODY_LINES = 6;
+const COLLAPSED_BODY_LINES = 6;
 
 /**
  * **THE BANNER'S GEOMETRY** — the dark strip across the top of this card.
@@ -97,7 +97,7 @@ export const COLLAPSED_BODY_LINES = 6;
  * outer-edge bar have nothing here to attach to. What Samuel's ruling item 5 gave it is the
  * COLOUR, and the colour is unchanged.
  */
-export const AGENT_BAR = "flex items-center gap-1.5 px-2.5 py-[5px]";
+const AGENT_BAR = "flex items-center gap-1.5 px-2.5 py-[5px]";
 
 /**
  * ⚠ READ IN `em`, AGAINST `text-caption`, SO A TOKEN CHANGE MOVES THE CLAMP WITH

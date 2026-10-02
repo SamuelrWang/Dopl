@@ -152,7 +152,7 @@ export async function listSessionStates(
  * header says so) — so this names the builder rather than inferring a row type,
  * and the cast to `SessionStateRow[]` stays at the single point below.
  */
-export type SessionQuery = ReturnType<
+type SessionQuery = ReturnType<
   ReturnType<typeof supabaseAdmin>["from"]
 >["select"] extends (...args: never[]) => infer Q
   ? Q

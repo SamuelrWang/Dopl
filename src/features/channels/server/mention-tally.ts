@@ -13,7 +13,7 @@
  */
 
 /** When one message tagging the caller landed, and where. */
-export interface MentionStamp {
+interface MentionStamp {
   channelId: string;
   createdAt: string;
 }

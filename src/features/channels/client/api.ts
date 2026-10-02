@@ -5,7 +5,7 @@ import { channelPath, channelsPath } from "./query-keys";
 import type { Channel, ChannelMember, ChannelVisibility } from "../types";
 
 /** Domain error wrapper so components can branch on `code`. */
-export class ChannelApiError extends Error {
+class ChannelApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
@@ -49,7 +49,7 @@ export const channelRequest: ApiMutationRequestFn = request;
  * Create-channel body: normal (`name`, …) OR direct (`direct: true` +
  * `memberUserId`). The server dedups a repeat DM and returns the existing one.
  */
-export type ChannelCreateBody =
+type ChannelCreateBody =
   | {
       name: string;
       slug?: string;

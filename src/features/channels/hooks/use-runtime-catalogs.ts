@@ -26,7 +26,7 @@ export const MAIN_ROSTER_SETTLE_MS = 13000;
 
 export const MAX_RELOADS = Math.ceil((MAIN_ROSTER_SETTLE_MS + 2000) / RELOAD_DELAY_MS);
 
-export interface RuntimeCatalogsState {
+interface RuntimeCatalogsState {
   catalogs: ModelCatalogs;
   /** Adopt a raw settings reply. A reply that is not an object (a failed read) keeps what is held. */
   adopt: (reply: unknown) => void;

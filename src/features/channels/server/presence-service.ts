@@ -4,7 +4,7 @@ import * as collab from "./repository-collab";
 import type { ChannelContext } from "./service-shared";
 
 /** Result of a heartbeat: the stamped time + the label the desktop sent. */
-export interface PresenceHeartbeat {
+interface PresenceHeartbeat {
   userId: string;
   workspaceId: string;
   lastSeenAt: string;

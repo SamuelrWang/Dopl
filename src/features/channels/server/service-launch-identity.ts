@@ -17,7 +17,7 @@ import type { ChannelContext } from "./service-shared";
 
 /** Id plus a name snapshot, never content: the desktop reads instructions and knowledge bases under
  *  the operator's own credential at spawn, so the caller's reach never attaches to the session. */
-export type DirectiveIdentity = { id: string; name: string } | null;
+type DirectiveIdentity = { id: string; name: string } | null;
 
 /** The create-time fence: the caller cannot name what it cannot see. The desktop's spawn-time fence
  *  (the operator cannot run what they cannot see) is separate; either may refuse (`no-identity`).

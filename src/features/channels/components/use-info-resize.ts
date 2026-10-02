@@ -51,7 +51,7 @@ export const INFO_WIDTH_DEFAULT = 380;
 /** Set on the surface root WHILE DRAGGING, so the 200ms width transition stands
  *  down and the column tracks the pointer instead of lagging it. The CSS half is
  *  `[data-info-resizing="true"] .channel-info-slide` in both kit copies. */
-export const INFO_RESIZING_ATTR = "data-info-resizing";
+const INFO_RESIZING_ATTR = "data-info-resizing";
 
 const INFO_RESIZE_CONFIG: SplitResizeConfig = {
   // Its FALLBACK is INFO_WIDTH_DEFAULT, stated at each consumer, so the column is

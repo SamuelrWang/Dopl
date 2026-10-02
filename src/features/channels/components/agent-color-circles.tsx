@@ -12,8 +12,8 @@ import { AGENT_COLOR_KEYS, agentColorVar, freeAgentColors } from "../lib/agent-c
 import type { AgentColorKey } from "../types";
 
 /** Module-level so default props keep a stable identity and `free` is not recomputed per render. */
-export const EMPTY_TAKEN: ReadonlySet<AgentColorKey> = new Set();
-export const EMPTY_HOLDERS: ReadonlyMap<AgentColorKey, string> = new Map();
+const EMPTY_TAKEN: ReadonlySet<AgentColorKey> = new Set();
+const EMPTY_HOLDERS: ReadonlyMap<AgentColorKey, string> = new Map();
 
 const CIRCLE = "h-5 w-5 shrink-0 rounded-full";
 

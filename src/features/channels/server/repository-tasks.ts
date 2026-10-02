@@ -100,7 +100,7 @@ export async function findTaskByChannelAndId(
  * renders identically to an exhausted list is the bug, not the fix, so every
  * surface that renders this list says so when it is true.
  */
-export interface ChannelTaskPage {
+interface ChannelTaskPage {
   rows: ChannelTaskActivityRow[];
   truncated: boolean;
 }

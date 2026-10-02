@@ -19,10 +19,10 @@ import type { ArtifactMember } from "./view-model-artifacts";
 import type { ChannelFoldedArtifact, ChannelMessage } from "../types";
 
 /** This face's own wells key — never shared with `dopl.threads.wells`. */
-export const ARTIFACT_WELLS_STORAGE_KEY = "dopl.artifacts.wells";
+const ARTIFACT_WELLS_STORAGE_KEY = "dopl.artifacts.wells";
 
 /** Fold time (epoch ms) from `createdAt`, an artifact's only date; `null` (absent/unparseable) lands in Recent. */
-export function artifactFoldedAt(folded: ChannelFoldedArtifact): number | null {
+function artifactFoldedAt(folded: ChannelFoldedArtifact): number | null {
   if (!folded.artifact.createdAt) return null;
   const ts = new Date(folded.artifact.createdAt).getTime();
   return Number.isNaN(ts) ? null : ts;

@@ -99,11 +99,11 @@ export function recentAgentPosts(
   );
 }
 
-export function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
+function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
   return { id: "chan-1", workspace_id: "ws-1", ...over } as ChannelRow;
 }
 
-export interface ResolveOpts {
+interface ResolveOpts {
   kind?: "message" | "task_progress";
   authorKind?: string;
   /** Fixture convenience; the contract is `toAgentIds` (folds into a one-element list). */

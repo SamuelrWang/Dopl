@@ -29,7 +29,7 @@ export type TokenSpendMark = {
 };
 
 /** One stored run, as the Overview read returns it. */
-export type TokenSpendRow = {
+type TokenSpendRow = {
   started_at: string;
   tokens: number;
   agent_name: string | null;

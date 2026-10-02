@@ -7,7 +7,7 @@ import {
   type DoplChannelsBridge,
 } from "@/shared/lib/desktop";
 
-export interface ChannelFolderState {
+interface ChannelFolderState {
   /**
    * The desktop folder bridge, or null in a plain browser (and on an older
    * desktop build without the folder API). Every consumer renders NOTHING when

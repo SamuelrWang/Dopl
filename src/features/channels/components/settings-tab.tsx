@@ -52,7 +52,7 @@ import { PanelHeading } from "./bits";
 import { SettingDivider } from "./settings-agent-rows";
 import type { Channel } from "../types";
 
-export interface ChannelsSettingsTabProps {
+interface ChannelsSettingsTabProps {
   channel: Channel;
   /** Owner OR workspace admin — the server gate (`service-shared.ts › canManageChannel`). */
   canManage: boolean;

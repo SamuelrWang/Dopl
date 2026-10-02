@@ -41,7 +41,7 @@ export const DECISION_CARD_LABEL = "Needs Your Decision";
  * `lib/agent-colors.ts › agentColorVar` stays the only place the palette token
  * name is spelled.
  */
-export const DECISION_CARD_INK = "var(--surface-cta)";
+const DECISION_CARD_INK = "var(--surface-cta)";
 
 export function decisionCardPaint(color: AgentColorKey | null | undefined): string {
   return color ? agentColorVar(color) : DECISION_CARD_INK;

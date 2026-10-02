@@ -21,7 +21,7 @@ export interface WellItem<Id extends string = string> {
 }
 
 /** Must match `.collapse-grid`'s 200ms transition (globals.css + desktop `kit.css`); 0 under reduced motion. */
-export const WELL_COLLAPSE_MS = 200;
+const WELL_COLLAPSE_MS = 200;
 
 /**
  * Whether a well's content is rendered: open, or one transition past close (collapsed = unmounted,
@@ -54,7 +54,7 @@ const WELL_HEADER =
  * One well. The whole header row is the button (no nested button); its `h3` supplies the
  * accessible name. One rotated chevron, not a swapped pair, so the turn can animate.
  */
-export function Well({
+function Well({
   label,
   open,
   onToggle,

@@ -90,7 +90,7 @@ import {
 } from "../lib/channel-display";
 import type { Channel, ChannelMember, ChannelThread } from "../types";
 
-export interface ChannelsSidebarProps {
+interface ChannelsSidebarProps {
   /** THE CONTAINER THE SEARCH POPUP RUNS IN — `scope="container"` is this id.
    *  Handed straight to `sidebar-search.tsx`; this column reads it for nothing
    *  else. */

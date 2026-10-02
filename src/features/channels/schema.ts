@@ -335,7 +335,7 @@ export const TaskCreatePayloadSchema = z.union([
   TaskFanOutSchema,
   TaskCreateSchema,
 ]);
-export type TaskCreatePayloadInput = z.infer<typeof TaskCreatePayloadSchema>;
+type TaskCreatePayloadInput = z.infer<typeof TaskCreatePayloadSchema>;
 
 /** True for the fan-out arm of {@link TaskCreatePayloadSchema}. */
 export function isTaskFanOutInput(
@@ -370,7 +370,7 @@ const TaskUpdateUnion = z.discriminatedUnion("op", [
  * refinement always fails), so the union's inferred output describes three results the
  * parser cannot return; `Extract` states what `safeParse` can actually hand back.
  */
-export type TaskUpdateInput = Extract<
+type TaskUpdateInput = Extract<
   z.infer<typeof TaskUpdateUnion>,
   { op: "set_mode" }
 >;

@@ -71,7 +71,7 @@ export const ARTIFACT_COLLAPSE_LABEL = "Show less";
  * `pb-[9px]` or the member header's `pt-1.5` below and reconsider this number.
  * That pairing is why it is spelled out rather than being one magic pixel count.
  */
-export const COLLAPSED_RUN_LINES = 6;
+const COLLAPSED_RUN_LINES = 6;
 const COLLAPSED_RUN_MAX_HEIGHT = `calc(${COLLAPSED_RUN_LINES} * 1.5em + 18px)`;
 
 /**
@@ -101,7 +101,7 @@ export function artifactSpanLabel(
  * printed "12 messages" over four bodies and said nothing would read as a card
  * that had lost eight.
  */
-export function artifactPartialLabel(shown: number, count: number): string {
+function artifactPartialLabel(shown: number, count: number): string {
   return `Showing ${shown} of ${count} here — open the artifact for the rest`;
 }
 

@@ -34,7 +34,7 @@ import type { ChannelMention } from "../types";
  * 200 no-op. Nothing here needs to guard against re-marking.
  */
 
-export interface MarkMentionsReadDraft {
+interface MarkMentionsReadDraft {
   /** Captured at the click; never re-read from the selection. Every cache key
    *  below is built from it, so an in-flight mark cannot land in the inbox of a
    *  channel the user switched to (all per-channel reads keep previous data). */
@@ -44,12 +44,12 @@ export interface MarkMentionsReadDraft {
 
 /** The RAW response body the read hook caches; `select` applies on read
  *  (INVARIANTS §8 — patches operate on the raw body). */
-export interface MentionsCache {
+interface MentionsCache {
   mentions: ChannelMention[];
   truncated?: boolean;
 }
 
-export interface MentionWriteDeps {
+interface MentionWriteDeps {
   workspaceId: string;
   gate: MutationGate;
 }

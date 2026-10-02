@@ -24,7 +24,7 @@ export const MESSAGE_AUTH_HELD = agentAuthHeldCopy(null);
 
 /** Detects the bridge op (never the always-defined wrapper), read once after mount via lazy state
  *  so server and first client render agree. */
-export function useCanMessageAgent(): boolean {
+function useCanMessageAgent(): boolean {
   const [can] = useState(() => canMessageAgent());
   return can;
 }

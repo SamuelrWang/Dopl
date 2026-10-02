@@ -159,7 +159,7 @@ export function isOutsideSessionCaller(
 /** Just enough of a stored message to answer the two questions below. ⚠ Both
  *  fields OPTIONAL: a caller may hold a row, a DTO or a fixture, and every one
  *  of them must be answerable without a cast. */
-export interface DesktopTagReadable {
+interface DesktopTagReadable {
   authorKind?: string | null;
   metadata?: Record<string, unknown> | null;
 }
@@ -194,7 +194,7 @@ export function isExternalSessionPost(m: DesktopTagReadable): boolean {
  * whatever metadata it carries and `system` is server-minted; promoting either
  * would be inventing an authorship claim out of a flag that was never about it.
  */
-export type MessageAuthorView = "user" | "agent" | "system" | "external";
+type MessageAuthorView = "user" | "agent" | "system" | "external";
 
 export function authorViewOf(m: DesktopTagReadable): MessageAuthorView {
   if (m.authorKind === "agent" && isExternalSessionPost(m)) return "external";

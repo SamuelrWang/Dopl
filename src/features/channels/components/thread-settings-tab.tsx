@@ -52,7 +52,7 @@ const MODE_OPTIONS: ReadonlyArray<SelectMenuOption<ThreadMode>> = (
   ["interactive", "autonomous"] as const
 ).map((value) => ({ value, label: THREAD_MODE_LABELS[value] }));
 
-export interface ChannelsThreadSettingsTabProps {
+interface ChannelsThreadSettingsTabProps {
   thread: ChannelThread;
   /** Creator only — mirrors the server's set-mode gate. */
   canSetMode: boolean;

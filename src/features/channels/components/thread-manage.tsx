@@ -31,7 +31,7 @@ import { ownAgentsFor } from "./agents-model";
 import { ChannelsThreadSettingsTab } from "./thread-settings-tab";
 import type { ChannelThread, ThreadMode } from "../types";
 
-export interface ChannelsThreadManageProps {
+interface ChannelsThreadManageProps {
   thread: ChannelThread;
   workspaceId: string;
   currentUserId: string;

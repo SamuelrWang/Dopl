@@ -13,7 +13,7 @@ import { AGENT_MODEL_DEFAULT } from "../lib/agent-models";
 /** One fresh instance id from main, or `null` when this build cannot mint one. Detects
  *  `sessions.mintAgentId`, never `sessions.launch`: every build has launch, and older ones drop
  *  the forwarded id. */
-export async function mintAgentId(): Promise<string | null> {
+async function mintAgentId(): Promise<string | null> {
   const sessions = getSpaBridge()?.sessions;
   if (typeof sessions?.mintAgentId !== "function") return null;
   // A failed mint is "no pre-assigned id" — the launch reply supplies one.
