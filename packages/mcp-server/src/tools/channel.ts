@@ -103,6 +103,7 @@ import { isDesktopRun, UNKNOWN_CALLER, type CallerIdentity } from "./identity";
 import { ACCOUNT_SCOPE, noteHold, pollSubject } from "./channel-poll-detector";
 import { DESKTOP_HOLD_REFUSAL } from "./channel-hold-budget";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
+import { routeHomeChannel } from "./channel-home-rooms";
 
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
@@ -152,7 +153,10 @@ export function registerChannelTool(
     "dopl_channel",
     CHANNEL_DESCRIPTION,
     CHANNEL_INPUT_SHAPE,
-    async (args): Promise<ToolResponse> => {
+    // ⚠ FROM HOME A CHANNEL REF ROUTES ONTO ITS OWN CONTAINER — Home holds no
+    // channels (`channel-home-rooms.ts`). `status` is account-wide and filters by the ref itself.
+    (args): Promise<ToolResponse> =>
+      routeHomeChannel(client, directory, args.op === "status" ? undefined : args.channel, async () => {
       switch (args.op) {
         // ── THE ONE WRITE ────────────────────────────────────────────────
         //
@@ -457,6 +461,6 @@ export function registerChannelTool(
         default:
           return err(unknownOpRefusal(args.op));
       }
-    },
+      }),
   );
 }

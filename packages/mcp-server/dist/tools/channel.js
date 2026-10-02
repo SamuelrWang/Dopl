@@ -87,6 +87,7 @@ const identity_1 = require("./identity");
 // has exactly one statement.
 const channel_poll_detector_1 = require("./channel-poll-detector");
 const channel_hold_budget_1 = require("./channel-hold-budget");
+const channel_home_rooms_1 = require("./channel-home-rooms");
 /**
  * `caller` — the session's ONE identity record (`identity.ts`), resolved once
  * at boot:
@@ -126,7 +127,10 @@ directory) {
     // (`shared/auth/session-header.ts`), so it may decide what to SHOW and nothing
     // else. Null for every caller that sent no stamp.
     const selfSessionId = caller.sessionId;
-    register("dopl_channel", channel_description_1.CHANNEL_DESCRIPTION, channel_schema_1.CHANNEL_INPUT_SHAPE, async (args) => {
+    register("dopl_channel", channel_description_1.CHANNEL_DESCRIPTION, channel_schema_1.CHANNEL_INPUT_SHAPE, 
+    // ⚠ FROM HOME A CHANNEL REF ROUTES ONTO ITS OWN CONTAINER — Home holds no
+    // channels (`channel-home-rooms.ts`). `status` is account-wide and filters by the ref itself.
+    (args) => (0, channel_home_rooms_1.routeHomeChannel)(client, directory, args.op === "status" ? undefined : args.channel, async () => {
         switch (args.op) {
             // ── THE ONE WRITE ────────────────────────────────────────────────
             //
@@ -384,5 +388,5 @@ directory) {
             default:
                 return (0, respond_1.err)((0, channel_vocab_1.unknownOpRefusal)(args.op));
         }
-    });
+    }));
 }

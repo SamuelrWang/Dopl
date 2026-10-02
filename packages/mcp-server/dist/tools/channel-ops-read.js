@@ -51,9 +51,17 @@ const channel_poll_detector_1 = require("./channel-poll-detector");
 // statement, in channel-session-render.ts, shared with the HOLD's session block.
 const channel_session_render_1 = require("./channel-session-render");
 const channel_session_table_1 = require("./channel-session-table");
+const channel_home_rooms_1 = require("./channel-home-rooms");
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
-async function opList(client) {
+async function opList(client, 
+// ⚠ Optional only for older test call sites; without it Home lists as empty.
+directory) {
+    // ⚠ HOME HOLDS NO CHANNELS (1.37.1) — each home channel is its own container,
+    // so the container list is always empty there. `channel-home-rooms.ts`.
+    const atHome = await (0, channel_home_rooms_1.homeRooms)(client, directory);
+    if (atHome)
+        return (0, channel_home_rooms_1.formatHomeList)(atHome);
     const channels = await client.listChannels();
     if (channels.length === 0) {
         return (0, respond_1.ok)(`No channels yet. Create one with ${(0, call_ref_js_1.callRef)("channel.rooms.open", { name: '"..."' })}.`);
@@ -66,7 +74,7 @@ async function opList(client) {
     const lines = [`## Channels — ${channels.length}\n`];
     for (const c of channels)
         lines.push((0, channel_render_1.formatChannelLine)(c));
-    lines.push(`\nRead a channel with ${(0, call_ref_js_1.callRef)("channel.read", { channel: "<slug|id>" })}; post with ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })}; WAIT for new ones by HOLDING — ${(0, call_ref_js_1.callRef)("channel.read", {}, { form: "op" })} with wait_ms, never a timed re-read.`);
+    lines.push((0, channel_home_rooms_1.channelListFooter)());
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**

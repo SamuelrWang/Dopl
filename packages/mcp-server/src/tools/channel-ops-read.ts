@@ -65,11 +65,21 @@ import { notePollingRead, pollingDetectedLine } from "./channel-poll-detector";
 // statement, in channel-session-render.ts, shared with the HOLD's session block.
 import { sessionIsStale, sessionLegend } from "./channel-session-render";
 import { SESSION_TABLE_HEAD, sessionRow } from "./channel-session-table";
+import { channelListFooter, formatHomeList, homeRooms } from "./channel-home-rooms";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
 
 /** Peer text that neutralized to nothing — never an empty span. */
 const NO_ID = "(unreadable id)";
 
-export async function opList(client: DoplClient): Promise<ToolResponse> {
+export async function opList(
+  client: DoplClient,
+  // ⚠ Optional only for older test call sites; without it Home lists as empty.
+  directory?: WorkspaceDirectory,
+): Promise<ToolResponse> {
+  // ⚠ HOME HOLDS NO CHANNELS (1.37.1) — each home channel is its own container,
+  // so the container list is always empty there. `channel-home-rooms.ts`.
+  const atHome = await homeRooms(client, directory);
+  if (atHome) return formatHomeList(atHome);
   const channels = await client.listChannels();
   if (channels.length === 0) {
     return ok(
@@ -83,9 +93,7 @@ export async function opList(client: DoplClient): Promise<ToolResponse> {
   // read/list/await is what the orchestrator loop actually pays.
   const lines = [`## Channels — ${channels.length}\n`];
   for (const c of channels) lines.push(formatChannelLine(c));
-  lines.push(
-    `\nRead a channel with ${callRef("channel.read", { channel: "<slug|id>" })}; post with ${callRef("channel.send", {}, { form: "op" })}; WAIT for new ones by HOLDING — ${callRef("channel.read", {}, { form: "op" })} with wait_ms, never a timed re-read.`,
-  );
+  lines.push(channelListFooter());
   return ok(lines.join("\n"));
 }
 

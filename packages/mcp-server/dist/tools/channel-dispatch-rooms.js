@@ -42,7 +42,7 @@ function isRoomsAction(action) {
 async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin, directory) {
     switch (action) {
         case "list":
-            return (0, channel_ops_read_1.opList)(client);
+            return (0, channel_ops_read_1.opList)(client, directory);
         // ⚠ THE DOCTRINE DOOR. Returns a CONSTANT and makes no request at all — the
         // same text as the MCP resource `dopl://doctrine/channels`, for a client
         // that lists tools and never reads resources, so the rules can never be

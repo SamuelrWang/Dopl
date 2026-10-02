@@ -60,7 +60,7 @@ export async function dispatchRoomsAction(
 ): Promise<ToolResponse> {
   switch (action) {
     case "list":
-      return opList(client);
+      return opList(client, directory);
 
     // ⚠ THE DOCTRINE DOOR. Returns a CONSTANT and makes no request at all — the
     // same text as the MCP resource `dopl://doctrine/channels`, for a client
