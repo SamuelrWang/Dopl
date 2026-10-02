@@ -9082,7 +9082,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   its counters and its conversation handle; the work lane of the run that was interrupted starts
   empty, which is the honest answer rather than a regression.
 
-### F-695 — a BLANK agent's launch-time instructions are dropped in main: `applyOverrides` has no template to splice them onto, and `identityRoleFraming` emits nothing without a role NAME (found 2026-09-13, OPEN — needs a ruling)
+### F-695 — a BLANK agent's launch-time instructions are dropped in main: `applyOverrides` has no template to splice them onto, and `identityRoleFraming` emits nothing without a role NAME (found 2026-09-13, ✅ RESOLVED 2026-09-13 — ruled; see the last bullet)
 
 **What was measured.** Samuel's 2026-09-13 ruling added an **Instructions** field to the New agent
 popup (*"we should add an Instructions field in the New agent popup. That should be a field under

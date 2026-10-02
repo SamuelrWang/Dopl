@@ -100,7 +100,7 @@ Measured through `listTools()` on 2026-09-02. **Served** is the whole descriptio
 
 ### Open fixes
 
-- **FIX A — `dopl_members` has no `fields=`.** Its roster row is the widest on
+- ✅ **FIX A — DONE 2026-09-02 (`175db662`):** `packages/mcp-server/src/tools/members.ts` takes `fields: FIELDS_FIELD` and filters each row through `fieldFilter` (`opList`). The original note follows. **FIX A — `dopl_members` has no `fields=`.** Its roster row is the widest on
   the surface (name, email, role, status, last active, team chips) and an agent
   looking up one person's role pays for all six on every row. `fieldFilter` is
   written and tested (`response-size.ts`); it is not wired here. ⚠ **Wiring it

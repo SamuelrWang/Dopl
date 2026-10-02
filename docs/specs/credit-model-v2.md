@@ -2,8 +2,8 @@
 
 **Status:** **BUILT through v2.1 and SHIPPED** — merged to master 2026-09-10 (`b34aa355`, *Merge
 feat/credit-model-v2*) and first released in v1.33.0. Migrations: `20260930120000_credit_wallets.sql`
-then `20260930130000_workspace_billing_plan_pro.sql`; applied state is a measurement — re-derive with
-`supabase migration list` joined ON THE NAME. ⚠ The 2026-10-02 audit notes: the home container
+then `20260930130000_workspace_billing_plan_pro.sql`; both APPLIED in prod as `credit_wallets` /
+`workspace_billing_plan_pro` (measured 2026-10-02 by MCP `list_migrations` joined ON THE NAME; re-derive, do not trust). ⚠ The 2026-10-02 audit notes: the home container
 was renamed `kind='personal'` → `kind='home'` in 1.37.1 (`20261023120000_home_vocabulary_rename.sql`);
 the wallet kind is still `personal`. Read `kind='personal'` below as `kind='home'`. Samuel's
 ruling, verbatim intent, then the contract every slice built against. **The code now outranks this
