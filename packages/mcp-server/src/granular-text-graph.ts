@@ -54,7 +54,7 @@ export const GRAPH_TEXT: Readonly<Record<string, ToolText>> = {
       values: "set_attribute, kind ref, knowledge or skill: ids, slugs or names (knowledge also `<base>/<path>`).",
       options: 'kind="enum": the allowed values.',
       targets: "set_relationship: the target objects.",
-      description: "set_action: what it does. Field ops: the field's description.",
+      description: "set_action: what it does. set_template_field: what it means.",
       outcome: "set_action: its expected outcome.",
       tools: "set_action: the tools to use.",
       expected_version: "Version from dopl_get_object; omitted, last writer wins.",

@@ -39,6 +39,8 @@ type AttrRowValue = Omit<ObjectAttribute, "key">;
  * field defines the choices; Samuel, 2026-10-01), so editing them on the type
  * reaches every card without rewriting each card's row. The card's own
  * `options` copy is what the server checks, and it is re-synced on every pick.
+ * ⚠ THE DESCRIPTION IS THE TEMPLATE'S ONLY — there is no card copy to fall back
+ * to (`types.ts › ObjectAttribute`), so a card attribute with no field has none.
  */
 function templateFieldOf(
   object: OntologyObject,
@@ -105,6 +107,17 @@ export function AttributesEditor({
     drop(index);
   };
 
+  /** One field of the card's TYPE, rewritten in place on the container. */
+  const writeField = (
+    { container, field }: { field: TemplateField; container: OntologyObject },
+    edit: (f: TemplateField) => TemplateField
+  ) =>
+    dispatch({
+      type: "OBJECT_UPDATE",
+      id: container.id,
+      patch: { template: container.template.map((f) => (f.key === field.key ? edit(f) : f)) },
+    });
+
   if (object.attributes.length === 0 && !canEdit) {
     return <PanelSection label="Attributes">{null}</PanelSection>;
   }
@@ -131,19 +144,17 @@ export function AttributesEditor({
               canEdit={canEdit}
               onChange={upsert}
               onRemove={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
+              // The TYPE's field owns the description — written there, so every
+              // card of the type reads the one text.
+              onDescription={
+                source
+                  ? (next) => writeField(source, (f) => withDescription(f, next))
+                  : undefined
+              }
               onOptions={(options) => {
                 if (source?.field.kind === "enum") {
                   // The TYPE's field owns the choices — write them there.
-                  const { container, field } = source;
-                  dispatch({
-                    type: "OBJECT_UPDATE",
-                    id: container.id,
-                    patch: {
-                      template: container.template.map((f) =>
-                        f.key === field.key ? { ...f, options } : f
-                      ),
-                    },
-                  });
+                  writeField(source, (f) => ({ ...f, options }));
                   return;
                 }
                 // A free-standing select: its own list. A value the new list
@@ -210,6 +221,7 @@ function AttrRow({
   onChange,
   onCommit,
   onRemove,
+  onDescription,
   onOptions,
 }: {
   row: AttrRowValue;
@@ -221,12 +233,14 @@ function AttrRow({
   onChange: (row: AttrRowValue) => void;
   onCommit?: () => void;
   onRemove: () => void;
+  /** Writes the TYPE's field — absent when the card's type has no such field. */
+  onDescription?: (next: string) => void;
   /** Persisted rows only — present means the ⋯ menu replaces the ✕. */
   onOptions?: (options: string[]) => void;
 }) {
   const options =
     field?.kind === "enum" ? (field.options ?? []) : (row.options ?? []);
-  const description = row.description || field?.description;
+  const description = field?.description;
   return (
     <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
       <InlineUnderlineField
@@ -267,7 +281,7 @@ function AttrRow({
           label={row.label}
           description={description ?? ""}
           options={row.value.kind === "enum" ? options : undefined}
-          onDescription={(next) => onChange(withDescription(row, next))}
+          onDescription={onDescription}
           onOptions={onOptions}
           onRemove={onRemove}
         />

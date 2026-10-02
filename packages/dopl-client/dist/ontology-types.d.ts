@@ -34,7 +34,6 @@ export interface OntologyAttribute {
     key: string;
     label: string;
     value: OntologyAttributeValue;
-    description?: string;
     /** `enum` only: the closed set `value` must come from. */
     options?: string[];
 }

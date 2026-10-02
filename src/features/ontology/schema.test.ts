@@ -103,8 +103,7 @@ describe("enum / date / link and field metadata", () => {
     }
   });
 
-  it("descriptions ride attributes and template fields; legacy rows still parse", () => {
-    expect(withMeta({ value: { kind: "text", value: "" }, description: "why" }).success).toBe(true);
+  it("a description rides the TEMPLATE field only; an attribute's copy is dropped, not refused", () => {
     expect(
       OntologyObjectUpdateSchema.safeParse({
         template: [
@@ -113,6 +112,16 @@ describe("enum / date / link and field metadata", () => {
         ],
       }).success
     ).toBe(true);
-    expect(withMeta({ value: { kind: "text", value: "" }, description: "x".repeat(1001) }).success).toBe(false);
+    expect(
+      OntologyObjectUpdateSchema.safeParse({
+        template: [{ key: "t", label: "T", kind: "text", description: "x".repeat(1001) }],
+      }).success
+    ).toBe(false);
+    // ⚠ One field, one description (2026-10-01): a per-card copy — an older
+    // client's, or a stray stored one — parses (no 400 on the whole-bag PATCH)
+    // and never reaches the row.
+    const parsed = withMeta({ value: { kind: "text", value: "" }, description: "why" });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.attributes?.[0]).not.toHaveProperty("description");
   });
 });

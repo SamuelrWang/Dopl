@@ -25,10 +25,11 @@ describe("field-kinds", () => {
     }
   });
 
-  it("a child is born with the field's description and (enum) options", () => {
+  it("a child is born with the field's (enum) options and NOT its description", () => {
+    // The description is the type's alone (2026-10-01) — no per-card copy.
     expect(
       attributeFromField({ key: "c", label: "C", kind: "enum", options: ["A"], description: "d" })
-    ).toEqual({ key: "c", label: "C", value: { kind: "enum", value: "" }, options: ["A"], description: "d" });
+    ).toEqual({ key: "c", label: "C", value: { kind: "enum", value: "" }, options: ["A"] });
     // A legacy field births exactly the old shape — no new keys.
     expect(attributeFromField({ key: "s", label: "S", kind: "pill" })).toEqual({
       key: "s",

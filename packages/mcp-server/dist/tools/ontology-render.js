@@ -193,8 +193,10 @@ format) {
         lines.push("", "## Attributes");
         for (const attr of object.attributes) {
             // ⚠ The note and the description are the FIELD's (2026-10-01): a select
-            // names its choices, so an agent never guesses a value the server refuses.
-            lines.push(indented(`- ${(0, narration_1.inlineOr)(attr.label, narration_1.NO_NAME)}${(0, ontology_fields_1.kindNote)(attr.value.kind, attr.options)}: ${renderValue(attr.value, nameOf, handles)}${describedAs(attr.description)}`));
+            // names its choices, so an agent never guesses a value the server refuses,
+            // and the description is the TYPE's — the one every card of it shares.
+            const field = (0, ontology_fields_1.templateFieldFor)(snapshot, object, attr.label, attr.key);
+            lines.push(indented(`- ${(0, narration_1.inlineOr)(attr.label, narration_1.NO_NAME)}${(0, ontology_fields_1.kindNote)(attr.value.kind, attr.options)}: ${renderValue(attr.value, nameOf, handles)}${describedAs(field?.description)}`));
         }
     }
     if (object.relationships.length > 0) {

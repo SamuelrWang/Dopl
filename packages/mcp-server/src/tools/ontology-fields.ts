@@ -93,22 +93,47 @@ export function nextDescription(
 }
 
 /**
- * The template field a card's attribute was born from: same label on a
- * container that holds the card. A select field's options are the TEMPLATE's
- * when one exists (the panel reads them the same way).
+ * The template field a card's attribute was born from: same label (else same
+ * `key`, the panel's address) on a container that holds the card. A select
+ * field's options are the TEMPLATE's when one exists (the panel reads them the
+ * same way), and its DESCRIPTION is the template's ONLY (2026-10-01) — a card
+ * carries no copy, and a stray stored one is never read.
  */
 export function templateFieldFor(
   snapshot: OntologySnapshot,
   object: OntologyObject,
   label: string,
+  key?: string,
 ): OntologyTemplateField | undefined {
   const needle = label.toLowerCase();
   for (const o of Object.values(snapshot.objects)) {
     if (!o.childIds.includes(object.id)) continue;
-    const field = (o.template ?? []).find((f) => f.label.toLowerCase() === needle);
+    const template = o.template ?? [];
+    const field =
+      template.find((f) => f.label.toLowerCase() === needle) ??
+      (key ? template.find((f) => f.key === key) : undefined);
     if (field) return field;
   }
   return undefined;
+}
+
+/**
+ * `set_attribute` was sent a `description` — refused, naming the door that
+ * takes it. One field, one description: it is the object TYPE's
+ * (`set_template_field` on the container), shared by every card of the type.
+ */
+export function attributeDescriptionRefusal(
+  snapshot: OntologySnapshot,
+  object: OntologyObject,
+  label: string,
+): ToolResponse {
+  const container = Object.values(snapshot.objects).find((o) => o.childIds.includes(object.id));
+  const where = container
+    ? `set_template_field on ${inlineOr(container.name, NO_NAME)} (the object type ${inlineOr(object.name, NO_NAME)} is in)`
+    : `set_template_field on the object type ${inlineOr(object.name, NO_NAME)} is in`;
+  return err(
+    `set_attribute takes no \`description\`: a field's description belongs to its object type and applies to every object of it. Set it with ${where}, label=${inlineOr(label, NO_NAME)}.`,
+  );
 }
 
 /**

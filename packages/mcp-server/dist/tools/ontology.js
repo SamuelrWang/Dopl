@@ -150,7 +150,7 @@ caller = identity_1.UNKNOWN_CALLER) {
             .string()
             .max(4000)
             .optional()
-            .describe("set_action: what it does. Field ops: the field's description."),
+            .describe("set_action: what it does. set_template_field: what it means."),
         outcome: zod_1.z
             .string()
             .max(4000)

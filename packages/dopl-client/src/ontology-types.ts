@@ -17,9 +17,10 @@ export interface OntologyAttribute {
   key: string;
   label: string;
   value: OntologyAttributeValue;
-  description?: string;
   /** `enum` only: the closed set `value` must come from. */
   options?: string[];
+  // No `description`: a field's description is its type's
+  // (`OntologyTemplateField.description` on the container).
 }
 
 export interface OntologyMethod {

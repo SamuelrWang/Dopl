@@ -115,15 +115,16 @@ export function valueProblem(
  * A template field → the empty attribute a new child is born with. ONE copy for
  * the server (`server/service.ts › createObject`) and the optimistic row
  * (`optimistic-create.ts › pendingObject`), so the two cannot drift.
- * Description and options travel with the field so the child can render and
- * validate on its own.
+ * Options travel with the field so the server can validate the child's value.
+ * ⚠ The DESCRIPTION does not: it is the type's alone (2026-10-01), read off the
+ * container's field by every surface (`templateFieldOf` in the panel,
+ * `templateFieldFor` in MCP).
  */
 export function attributeFromField(field: TemplateField): ObjectAttribute {
   return {
     key: field.key,
     label: field.label,
     value: emptyValue(field.kind),
-    ...(field.description ? { description: field.description } : {}),
     ...(field.kind === "enum" && field.options?.length ? { options: [...field.options] } : {}),
   };
 }

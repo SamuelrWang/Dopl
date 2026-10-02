@@ -33,11 +33,19 @@ export declare function nextDescription(given: string | undefined, stored: strin
     fail: ToolResponse;
 };
 /**
- * The template field a card's attribute was born from: same label on a
- * container that holds the card. A select field's options are the TEMPLATE's
- * when one exists (the panel reads them the same way).
+ * The template field a card's attribute was born from: same label (else same
+ * `key`, the panel's address) on a container that holds the card. A select
+ * field's options are the TEMPLATE's when one exists (the panel reads them the
+ * same way), and its DESCRIPTION is the template's ONLY (2026-10-01) — a card
+ * carries no copy, and a stray stored one is never read.
  */
-export declare function templateFieldFor(snapshot: OntologySnapshot, object: OntologyObject, label: string): OntologyTemplateField | undefined;
+export declare function templateFieldFor(snapshot: OntologySnapshot, object: OntologyObject, label: string, key?: string): OntologyTemplateField | undefined;
+/**
+ * `set_attribute` was sent a `description` — refused, naming the door that
+ * takes it. One field, one description: it is the object TYPE's
+ * (`set_template_field` on the container), shared by every card of the type.
+ */
+export declare function attributeDescriptionRefusal(snapshot: OntologySnapshot, object: OntologyObject, label: string): ToolResponse;
 /**
  * One string value for `kind`, checked: the select's choice (matched
  * case-insensitively, stored as the option's own spelling), a day, a link.

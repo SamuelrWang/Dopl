@@ -42,10 +42,9 @@ const attributeValueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("skill"), value: z.array(z.string()).max(50) }),
 ]);
 
-/** A field's description and (enum) options — shared by attributes and template
- *  fields. Optional, so every row stored before 2026-10-01 parses unchanged. */
-const fieldMetaShape = {
-  description: z.string().max(FIELD_DESCRIPTION_MAX).optional(),
+/** A select's options — shared by attributes and template fields. Optional, so
+ *  every row stored before 2026-10-01 parses unchanged. */
+const optionsShape = {
   options: z
     .array(z.string().trim().min(1).max(ENUM_OPTION_MAX))
     .max(ENUM_OPTIONS_MAX)
@@ -56,12 +55,19 @@ const fieldMetaShape = {
     .optional(),
 };
 
+/**
+ * ⚠ NO `description` ON AN ATTRIBUTE (Samuel, 2026-10-01: *"that description
+ * applies to that field across the entire object"*). It lives on the TYPE's
+ * template field only. `z.object` STRIPS an unknown key, so a client that still
+ * sends one (or a row carrying a stray copy) loses it on the next write instead
+ * of 400ing the whole-bag PATCH; every read renders the type's.
+ */
 const attributeSchema = z
   .object({
     key: z.string().min(1).max(200),
     label: z.string().max(200),
     value: attributeValueSchema,
-    ...fieldMetaShape,
+    ...optionsShape,
   })
   .superRefine((attr, ctx) => {
     // ⚠ THE ENUM FENCE. An enum value outside its options is refused here, at the
@@ -76,7 +82,8 @@ const templateFieldSchema = z.object({
   key: z.string().min(1).max(200),
   label: z.string().max(200),
   kind: z.enum(FIELD_KINDS),
-  ...fieldMetaShape,
+  description: z.string().max(FIELD_DESCRIPTION_MAX).optional(),
+  ...optionsShape,
 });
 
 const methodSchema = z.object({

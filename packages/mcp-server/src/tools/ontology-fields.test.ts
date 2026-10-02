@@ -1,6 +1,7 @@
 /**
  * Ontology FIELDS over MCP (2026-10-01): the underscore regression, field
- * descriptions, and the three typed kinds — enum (closed set), date, link.
+ * descriptions (the object TYPE's only), and the three typed kinds — enum
+ * (closed set), date, link.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -164,13 +165,44 @@ describe("set_attribute — the typed kinds", () => {
     }
   });
 
-  it("an update keeps the attribute's description unless one is sent", async () => {
+});
+
+// ⚠ ONE FIELD, ONE DESCRIPTION (Samuel, 2026-10-01): the object TYPE's.
+describe("set_attribute — a description is the type's, never the card's", () => {
+  it("refuses `description`, naming set_template_field on the card's type", async () => {
+    const { client, update } = setup();
+    const r = await dispatch(client, {
+      op: "set_attribute",
+      object: CARD,
+      label: "Note",
+      value: "a",
+      description: "why",
+    });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain("set_template_field on `Lead`");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("a stray per-card description is dropped on the next write", async () => {
     const { client, update } = setup(
       {},
-      { attributes: [{ key: "note", label: "Note", value: { kind: "text", value: "a" }, description: "why" }] },
+      {
+        attributes: [
+          {
+            key: "note",
+            label: "Note",
+            value: { kind: "text", value: "a" },
+            ...({ description: "why" } as object),
+          },
+        ],
+      },
     );
     await dispatch(client, { op: "set_attribute", object: CARD, label: "Note", value: "b" });
-    expect(update.mock.calls[0][1].attributes[0]).toMatchObject({ description: "why", value: { value: "b" } });
+    expect(update.mock.calls[0][1].attributes[0]).toEqual({
+      key: "note",
+      label: "Note",
+      value: { kind: "text", value: "b" },
+    });
   });
 });
 
@@ -182,15 +214,23 @@ describe("get — kinds, options and descriptions reach the agent", () => {
         attributes: [
           { key: "company", label: "Company", value: { kind: "enum", value: "A" }, options: ["A", "B"] },
           { key: "due", label: "Due", value: { kind: "date", value: "2026-10-01" } },
-          { key: "site", label: "Site", value: { kind: "link", value: "https://x.com/a_b#c" }, description: "Home page" },
+          {
+            key: "site",
+            label: "Site",
+            value: { kind: "link", value: "https://x.com/a_b#c" },
+            // a stray per-card copy — never read (the type has no Site field)
+            ...({ description: "Card copy" } as object),
+          },
         ],
       },
     );
     const card = renderObject(snapshot.objects[CARD], snapshot);
-    expect(card).toContain("- `Company` (enum: `A`, `B`): `A`");
+    // the card's field reads the TYPE's description
+    expect(card).toContain("- `Company` (enum: `A`, `B`): `A`\n  Description: Employer");
     expect(card).toContain("- `Due` (date): `2026-10-01`");
     // the URL survives whole — `_` and `#` included
-    expect(card).toContain("- `Site` (link): `https://x.com/a_b#c`\n  Description: Home page");
+    expect(card).toContain("- `Site` (link): `https://x.com/a_b#c`");
+    expect(card).not.toContain("Card copy");
     const lane = renderObject(snapshot.objects[LANE], snapshot);
     expect(lane).toContain("- `Company` (enum: `A`, `B`)\n  Description: Employer");
   });

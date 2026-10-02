@@ -21,20 +21,22 @@ export interface ObjectAttribute {
   key: string;
   label: string;
   value: AttributeValue;
-  /** What the field means — shown under the row, served to agents. Optional:
-   *  every row written before 2026-10-01 has none. */
-  description?: string;
   /** `enum` only: the closed set `value` must come from (server-enforced). */
   options?: string[];
+  // ⚠ NO `description` (Samuel, 2026-10-01): a field's description is its
+  // TYPE's — `TemplateField.description` on the container — so one field never
+  // reads two ways on two cards. The server schema drops the key on write.
 }
 
 /** One field of a column's object template: label + kind, no value. New
- *  children are born with these as empty attributes (description and options
- *  copied — `field-kinds.ts › attributeFromField`). */
+ *  children are born with these as empty attributes (options copied —
+ *  `field-kinds.ts › attributeFromField`). */
 export interface TemplateField {
   key: string;
   label: string;
   kind: AttributeValue["kind"];
+  /** What the field means — the ONE copy: every card of the type shows it
+   *  under the row and agents read it on every card (2026-10-01). */
   description?: string;
   /** `enum` only. */
   options?: string[];
