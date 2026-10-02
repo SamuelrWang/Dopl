@@ -8,10 +8,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opLaunchAgent = opLaunchAgent;
-exports.identityMatches = identityMatches;
 exports.launchIdentityAmbiguous = launchIdentityAmbiguous;
-exports.identityElsewhere = identityElsewhere;
-exports.launchIdentityNotFound = launchIdentityNotFound;
 const respond_1 = require("./respond");
 const channel_directive_hold_1 = require("./channel-directive-hold");
 const channel_shared_1 = require("./channel-shared");

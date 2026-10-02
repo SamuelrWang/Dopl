@@ -16,7 +16,7 @@ export const DELETE_BLOCKED_OPS: Record<string, Set<string>> = {
   dopl_agent: new Set(["delete"]),
 };
 
-export const DELETE_OP_SHAPE = /^(delete|destroy|purge|trash|remove)(_|$)/;
+const DELETE_OP_SHAPE = /^(delete|destroy|purge|trash|remove)(_|$)/;
 
 /** The name-shape fallback stays `*_admin`-only: `dopl_ontology`'s `remove_*` ops edit, not delete. */
 export function isBlockedDeleteOp(tool: string, op: string): boolean {

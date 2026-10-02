@@ -18,7 +18,7 @@ import path from "node:path";
  * disallowed by the CommonJS tsc target and `__dirname` is not guaranteed under
  * the ESM-transformed test.
  */
-export const TOOLS_DIR = path.resolve(process.cwd(), "src", "tools");
+const TOOLS_DIR = path.resolve(process.cwd(), "src", "tools");
 
 /**
  * ⚠ **THE META TOOLS REGISTER FROM `src/`, NOT `src/tools/`** — they go on the

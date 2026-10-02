@@ -31,12 +31,12 @@ import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 /** What the tool accepts for one row. ⚠ `id` OPTIONAL: ids are client-minted and
  *  an agent has no reason to invent one, so an absent id is minted here. */
-export interface InfoCardRowArg {
+interface InfoCardRowArg {
     id?: string;
     label: string;
     value?: string;
 }
-export interface InfoCardArg {
+interface InfoCardArg {
     hidden?: string[];
     rows?: InfoCardRowArg[];
 }

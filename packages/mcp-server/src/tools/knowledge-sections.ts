@@ -21,7 +21,7 @@ import { inlineOr, NO_NAME } from "./narration";
 /** One heading, as the API sends it. ⚠ Structurally mirrored from
  *  `@dopl/client › KnowledgeOutlineRow`; declared here so the renderers can be
  *  driven by a literal in a test. */
-export interface OutlineRow {
+interface OutlineRow {
   heading: string;
   level: number;
   chars: number;

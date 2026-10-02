@@ -18,7 +18,7 @@
 /** One heading, as the API sends it. ⚠ Structurally mirrored from
  *  `@dopl/client › KnowledgeOutlineRow`; declared here so the renderers can be
  *  driven by a literal in a test. */
-export interface OutlineRow {
+interface OutlineRow {
     heading: string;
     level: number;
     chars: number;
@@ -88,3 +88,4 @@ export declare function sectionMiss(heading: string, outline: Outline | undefine
  * an un-pinned copy is the actual bug. **Every REASON lives in the app's file.**
  */
 export declare const KB_SECTION_NUDGE_CHARS = 1500;
+export {};

@@ -16,7 +16,7 @@
  */
 import type { Channel, ChannelMember, ChannelMessage, ChannelThread } from "@dopl/client";
 import { type MemberView } from "./channel-render-identity";
-export { addresseeOf, formatAuthor, memberRef, sessionIdOf, NO_MEMBER_VIEW, type MemberView, } from "./channel-render-identity";
+export { addresseeOf, sessionIdOf, type MemberView, } from "./channel-render-identity";
 import { type ResponseFormat } from "./response-size";
 /**
  * Message lines plus, when anything is tagged, the id legend. `selfUserId`

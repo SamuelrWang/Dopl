@@ -1,11 +1,5 @@
 import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opLaunchAgent } from "./channel-ops-launch";
-export declare const CHANNEL: {
-    id: string;
-    slug: string;
-    name: string;
-    visibility: string;
-};
 /** The full channel row, for suites driven through `registerChannelTool`. */
 export declare const CHANNEL_ROW: {
     workspaceId: string;

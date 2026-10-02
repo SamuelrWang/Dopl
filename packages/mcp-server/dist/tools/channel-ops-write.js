@@ -26,7 +26,7 @@
  * back as "not a member" instead of the 400 that lists the live handles.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SEND_MAX_RECIPIENTS = exports.DECISION_CONTEXT_MAX_CHARS = exports.MILESTONE_MAX_CHARS = void 0;
+exports.SEND_MAX_RECIPIENTS = exports.MILESTONE_MAX_CHARS = void 0;
 exports.milestoneRefusal = milestoneRefusal;
 exports.unaddressedRefusal = unaddressedRefusal;
 exports.recordAddressedRefusal = recordAddressedRefusal;
@@ -82,7 +82,7 @@ function milestoneRefusal(body) {
  * never named, so the tighter bound is checked here, before the wire, and the
  * refusal says which lane the extra prose belongs in.
  */
-exports.DECISION_CONTEXT_MAX_CHARS = 2000;
+const DECISION_CONTEXT_MAX_CHARS = 2000;
 /**
  * **HOW MANY RECIPIENTS ONE `to=` MAY NAME.** ⚠ HAND-MIRRORED from
  * `src/features/channels/constants.ts › CHANNEL_SEND_MAX_RECIPIENTS` — there is
@@ -151,9 +151,9 @@ function tooManyRecipientsRefusal(to) {
     return (0, respond_1.err)(`Nothing was posted: \`to\` named ${count} recipients and a send addresses at most ${exports.SEND_MAX_RECIPIENTS}. Address the ones who must act; anyone else can read it in the room.`);
 }
 function decisionRefusal(body) {
-    if (body.length <= exports.DECISION_CONTEXT_MAX_CHARS)
+    if (body.length <= DECISION_CONTEXT_MAX_CHARS)
         return null;
-    return (0, respond_1.err)(`Nothing was posted: on kind="decision" the \`body\` is the CONTEXT on the card, and a card is read at a glance — yours is ${body.length} characters against a cap of ${exports.DECISION_CONTEXT_MAX_CHARS}. Say what a person needs to know to CHOOSE and nothing else; the options carry their own consequences. Send the working detail as an ordinary message on the same thread first, then ask.`);
+    return (0, respond_1.err)(`Nothing was posted: on kind="decision" the \`body\` is the CONTEXT on the card, and a card is read at a glance — yours is ${body.length} characters against a cap of ${DECISION_CONTEXT_MAX_CHARS}. Say what a person needs to know to CHOOSE and nothing else; the options carry their own consequences. Send the working detail as an ordinary message on the same thread first, then ask.`);
 }
 /**
  * **THE AGENTS THIS SEND PUT IN FRONT OF A TURN** — `wake=`, read off the STORED

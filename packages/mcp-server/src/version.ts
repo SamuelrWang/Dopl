@@ -24,6 +24,5 @@ function loadPackageJson(): PackageJson {
 
 const pkg = loadPackageJson();
 
-export const packageName: string = pkg.name;
 export const packageVersion: string = pkg.version;
 export const clientIdentifier = `${pkg.name}@${pkg.version}`;

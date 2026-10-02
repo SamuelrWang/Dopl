@@ -11,7 +11,7 @@ import { apiMessage, err, isApiError, type ToolResponse } from "./respond.js";
 import { AGENT_ERRORS, refusal } from "./tool-errors.js";
 
 /** The server's 403 for a shared credential owning a private row. */
-export const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
+const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 
 /** The server's 404 for an identity this caller cannot name — the only refusal the id door swallows. */
 export const IDENTITY_NOT_FOUND_CODE = "AGENT_IDENTITY_NOT_FOUND";
@@ -37,7 +37,7 @@ export type OfferedIdentityVisibility =
 export const VISIBILITY_ENUM_MESSAGE =
   'visibility must be "private" or "workspace", and nothing was written — "team" is no longer a sharing option on this surface.';
 
-export type IdentityRefResolution =
+type IdentityRefResolution =
   | { kind: "found"; identity: AgentIdentity }
   | { kind: "not-found" }
   | { kind: "ambiguous"; matches: AgentIdentity[] };
@@ -49,7 +49,7 @@ export type IdentityRefResolution =
  * Only an API 404 `AGENT_IDENTITY_NOT_FOUND` is swallowed; transport errors rethrow (an outage must not read as "no such identity").
  * Unseen and nonexistent are one answer: 404-never-403, no existence oracle (INVARIANTS §5A).
  */
-export async function resolveIdentityRef(
+async function resolveIdentityRef(
   client: DoplClient,
   ref: string,
 ): Promise<IdentityRefResolution> {
@@ -93,7 +93,7 @@ export async function resolveIdentityOr(
  * Identity names are not unique by design, so an ambiguous name refuses with every candidate listed and never picks.
  * The list discloses only what op="list" would.
  */
-export function ambiguousIdentity(
+function ambiguousIdentity(
   ref: string,
   matches: AgentIdentity[],
 ): ToolResponse {
@@ -116,7 +116,7 @@ export function identityChoiceLines(
   return matches.map((m) => `- \`${m.id}\` — ${inlineOr(m.name, NO_NAME)} (${m.visibility})`);
 }
 
-export function identityNotFound(ref: string): ToolResponse {
+function identityNotFound(ref: string): ToolResponse {
   return err(
     refusal(
       AGENT_ERRORS_BY_REASON.identity_not_found,

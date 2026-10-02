@@ -38,7 +38,6 @@ export const CHANNEL_OPS = [
   "rooms",
   "artifact",
 ] as const;
-export type ChannelOp = (typeof CHANNEL_OPS)[number];
 
 /**
  * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice (slice B16): the

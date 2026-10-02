@@ -4,7 +4,6 @@
  * schema, with each op's required params checked at runtime by {@link missingParams}.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CREDITS_EXHAUSTED_CODE = void 0;
 exports.ok = ok;
 exports.err = err;
 exports.isConflict = isConflict;
@@ -66,7 +65,7 @@ function isAlreadyExists(e) {
         e.status === 409);
 }
 /** Credit allowance spent for the billing period. */
-exports.CREDITS_EXHAUSTED_CODE = tool_errors_1.CREDITS_EXHAUSTED.reason;
+const CREDITS_EXHAUSTED_CODE = tool_errors_1.CREDITS_EXHAUSTED.reason;
 // The code's meaning already says "out of credits" (pinned by `credits.test.ts`); don't repeat it.
 const CREDITS_EXHAUSTED_MESSAGE = (0, tool_errors_1.refusal)(tool_errors_1.CREDITS_EXHAUSTED, "Nothing was deleted — credits reset at the start of the next period, and upgrading raises the monthly allowance.");
 // Plan-gate codes (flat `{ error, message, upgrade_url }` envelope); the data is always intact.
@@ -74,7 +73,7 @@ const ENTITLEMENT_CODES = new Set([
     "over_free_cap",
     "chat_outside_retention",
     "kb_storage_full",
-    exports.CREDITS_EXHAUSTED_CODE,
+    CREDITS_EXHAUSTED_CODE,
 ]);
 /** ISO timestamp → `YYYY-MM-DD`, or null (which omits the "Resets …" sentence). */
 function periodEndDate(periodEnd) {
@@ -136,7 +135,7 @@ function entitlementDenied(e) {
         ? rec.apiMessage
         : code === "chat_outside_retention"
             ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Team to restore full chat history."
-            : code === exports.CREDITS_EXHAUSTED_CODE
+            : code === CREDITS_EXHAUSTED_CODE
                 ? CREDITS_EXHAUSTED_MESSAGE
                 : code === "kb_storage_full"
                     ? "This knowledge base has reached its storage limit. Nothing was deleted — it stays readable, and deleting files or writing a smaller one still works."

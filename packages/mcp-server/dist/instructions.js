@@ -6,7 +6,7 @@
  * loses directory rows, never the contract. Gate: `instructions-budget.test.ts`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LIVE_AGENT_HANDLES = exports.UNTRUSTED_DIRECTORY_NOTE = exports.UNNAMED_WORKSPACE = exports.INSTRUCTIONS_MAX_CHARS = void 0;
+exports.UNTRUSTED_DIRECTORY_NOTE = exports.UNNAMED_WORKSPACE = exports.INSTRUCTIONS_MAX_CHARS = void 0;
 exports.buildInstructions = buildInstructions;
 const narration_js_1 = require("./tools/narration.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
@@ -65,7 +65,7 @@ function directoryBlock(directory, budget) {
     }
     return "";
 }
-exports.LIVE_AGENT_HANDLES = 5;
+const LIVE_AGENT_HANDLES = 5;
 // The operator handle is validated, not neutralized: a neutralized tag resolves to nobody. Unicode
 // letters allowed (`mentionSlug` keeps them); no whitespace, backticks or markdown punctuation.
 const OPERATOR_HANDLE_RE = /^[\p{L}\p{N}][\p{L}\p{N}._-]{0,63}$/u;
@@ -92,8 +92,8 @@ function identityBlock(identity, target) {
     const status = (0, call_ref_js_1.toolName)("status");
     parts.push(handles.length === 0
         ? `your live agents: ${status}`
-        : handles.length > exports.LIVE_AGENT_HANDLES
-            ? `your live agents: ${handles.slice(0, exports.LIVE_AGENT_HANDLES).map((h) => `@agent-${h}`).join(", ")} and ${handles.length - exports.LIVE_AGENT_HANDLES} more — ${status}`
+        : handles.length > LIVE_AGENT_HANDLES
+            ? `your live agents: ${handles.slice(0, LIVE_AGENT_HANDLES).map((h) => `@agent-${h}`).join(", ")} and ${handles.length - LIVE_AGENT_HANDLES} more — ${status}`
             : `your live agents: ${handles.map((h) => `@agent-${h}`).join(", ")}`);
     if (identity.boundChannelId) {
         const posture = identity.posture

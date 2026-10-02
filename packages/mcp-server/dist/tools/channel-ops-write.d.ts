@@ -44,17 +44,6 @@ import { type FactValue } from "./channel-facts";
 export declare const MILESTONE_MAX_CHARS = 240;
 export declare function milestoneRefusal(body: string): ToolResponse | null;
 /**
- * **THE `kind="decision"` BODY CAP, AND IT IS THE ROUTE'S** (2026-09-02, B8).
- * A decision's CONTEXT is the send's `body`, which folds two params into one —
- * and the two had different bounds: a message may be 16,000 characters, an
- * escalation's context 2,000 (`src/features/channels/escalation.ts ›
- * ESCALATION_CONTEXT_MAX`). Publishing the looser cap and letting the route
- * refuse would send back an opaque VALIDATION_FAILED about a field the caller
- * never named, so the tighter bound is checked here, before the wire, and the
- * refusal says which lane the extra prose belongs in.
- */
-export declare const DECISION_CONTEXT_MAX_CHARS = 2000;
-/**
  * **HOW MANY RECIPIENTS ONE `to=` MAY NAME.** ⚠ HAND-MIRRORED from
  * `src/features/channels/constants.ts › CHANNEL_SEND_MAX_RECIPIENTS` — there is
  * no shared source tree between the app and this package, the same arrangement

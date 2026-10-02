@@ -185,7 +185,7 @@ export async function opLaunchAgent(
 /** One `details.matches` row; each already passed the caller's `canSeeIdentity`, so listing it is not an oracle. */
 type IdentityMatch = { id: string; name: string; visibility: string };
 
-export function identityMatches(e: unknown): IdentityMatch[] {
+function identityMatches(e: unknown): IdentityMatch[] {
   const details = (e as { details?: unknown } | null)?.details;
   const raw = (details as { matches?: unknown } | null)?.matches;
   if (!Array.isArray(raw)) return [];
@@ -223,7 +223,7 @@ export function launchIdentityAmbiguous(ref: string, matches: IdentityMatch[]): 
 /** `details.elsewhere`: an identity the caller holds in another of their own tenancies; duck-typed. */
 type IdentityElsewhere = { name: string; label: string };
 
-export function identityElsewhere(e: unknown): IdentityElsewhere | null {
+function identityElsewhere(e: unknown): IdentityElsewhere | null {
   const details = (e as { details?: unknown } | null)?.details;
   const raw = (details as { elsewhere?: unknown } | null)?.elsewhere;
   if (!raw || typeof raw !== "object") return null;
@@ -239,7 +239,7 @@ export function identityElsewhere(e: unknown): IdentityElsewhere | null {
  * container, while an ID resolves wherever it lives (`src/features/agent-identities/server/service-resolve-ref.ts ›
  * resolveIdentityRef`); `details.elsewhere` is fenced by `classifyMissingIdentityRef` to identities the caller could already list.
  */
-export function launchIdentityNotFound(
+function launchIdentityNotFound(
   ref: string,
   elsewhere: IdentityElsewhere | null,
 ): ToolResponse {

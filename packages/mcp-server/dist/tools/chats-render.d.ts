@@ -15,7 +15,7 @@
  * SUMMARY / VERBATIM are the payload the archive exists to hand a future
  * session → intact, and FRAMED by the header below.
  */
-import type { Chat, ChatDetail, ChatOwner } from "@dopl/client";
+import type { Chat, ChatDetail } from "@dopl/client";
 /**
  * Emitted above archive content that can be another member's — i.e. whenever a
  * rendered chat is workspace-shared. ⚠ `visibility === "private"` means only
@@ -27,7 +27,6 @@ export declare const UNTRUSTED_ARCHIVE_HEADER = "SECURITY: this archive contains
 export declare function anyShared(chats: Array<{
     visibility: string;
 }>): boolean;
-export declare function errorMessage(e: unknown): string;
 /**
  * Upstream failure text as a VALUE. ⚠ "It came from our own server" says where
  * the bytes were copied from, not who wrote them — a 4xx can echo a rejected
@@ -36,8 +35,6 @@ export declare function errorMessage(e: unknown): string;
 export declare function failureDetail(e: unknown): string;
 /** A chat title as a value, never as structure. */
 export declare function chatTitle(title: string | null | undefined): string;
-/** An owner as a neutralized display name plus the user id they cannot type. */
-export declare function ownerRef(owner: ChatOwner): string;
 /**
  * The sharing word an AGENT reads for a chat folder. ⚠ Workspace-visible
  * renders as `public`, the same word `op="update_folder"` takes on the wire, so

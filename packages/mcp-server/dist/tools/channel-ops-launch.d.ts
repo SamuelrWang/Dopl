@@ -38,23 +38,9 @@ type IdentityMatch = {
     name: string;
     visibility: string;
 };
-export declare function identityMatches(e: unknown): IdentityMatch[];
 /**
  * Lists the matches and never picks: identity names are deliberately not unique (a unique index would
  * leak private rows). `err`, because nothing was filed.
  */
 export declare function launchIdentityAmbiguous(ref: string, matches: IdentityMatch[]): ToolResponse;
-/** `details.elsewhere`: an identity the caller holds in another of their own tenancies; duck-typed. */
-type IdentityElsewhere = {
-    name: string;
-    label: string;
-};
-export declare function identityElsewhere(e: unknown): IdentityElsewhere | null;
-/**
- * The caller's own visibility failing at create time (`no-identity` is the operator's, after filing).
- * Never says whether the identity exists (404-never-403). A NAME resolves only in the channel's
- * container, while an ID resolves wherever it lives (`src/features/agent-identities/server/service-resolve-ref.ts ›
- * resolveIdentityRef`); `details.elsewhere` is fenced by `classifyMissingIdentityRef` to identities the caller could already list.
- */
-export declare function launchIdentityNotFound(ref: string, elsewhere: IdentityElsewhere | null): ToolResponse;
 export {};

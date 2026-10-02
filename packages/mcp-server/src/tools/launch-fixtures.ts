@@ -5,7 +5,7 @@ import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opEndAgent, opRenameAgent } from "./channel-ops-agent";
 import { opLaunchAgent } from "./channel-ops-launch";
 
-export const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
+const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
 
 /** The full channel row, for suites driven through `registerChannelTool`. */
 export const CHANNEL_ROW = {

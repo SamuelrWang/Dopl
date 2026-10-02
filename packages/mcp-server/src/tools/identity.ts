@@ -39,7 +39,7 @@ export function toolLoaderFor(vendor: string | null | undefined): string {
 }
 
 /** How the presented credential was obtained. Mirrors `McpCredential.kind`. */
-export type CallerCredentialKind = "device" | "oauth-app";
+type CallerCredentialKind = "device" | "oauth-app";
 
 /**
  * Everything the server knows about the caller's session, resolved once at

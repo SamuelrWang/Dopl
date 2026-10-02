@@ -4,7 +4,7 @@
  * filename prefix is required by the parity split-scan.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.neutralizeInline = exports.inlineOr = exports.INLINE_TEXT_MAX = void 0;
+exports.neutralizeInline = exports.inlineOr = void 0;
 exports.metaString = metaString;
 exports.memberNames = memberNames;
 exports.isErr = isErr;
@@ -23,7 +23,6 @@ function metaString(m, key) {
 }
 /** The one neutralizer lives in `narration.ts`; re-exported, never re-declared. */
 var narration_2 = require("./narration");
-Object.defineProperty(exports, "INLINE_TEXT_MAX", { enumerable: true, get: function () { return narration_2.INLINE_TEXT_MAX; } });
 Object.defineProperty(exports, "inlineOr", { enumerable: true, get: function () { return narration_2.inlineOr; } });
 Object.defineProperty(exports, "neutralizeInline", { enumerable: true, get: function () { return narration_2.neutralizeInline; } });
 /** Roster as `userId → raw name` (the render neutralizes once). Fail-soft: enrichment only, ids

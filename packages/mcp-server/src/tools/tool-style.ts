@@ -120,7 +120,7 @@ export const EXAMPLES_MAX_CHARS = 300;
  * failure modes, one line each", and a complete error taxonomy in a pushed
  * string is the prose this whole wave exists to delete.
  */
-export function renderErrors(errors: readonly ToolError[]): string {
+function renderErrors(errors: readonly ToolError[]): string {
   const top = errors.slice(0, 3);
   if (top.length === 0) return "";
   return `Errors: ${top
@@ -137,7 +137,7 @@ export function renderErrors(errors: readonly ToolError[]): string {
  * example is invalid JSON teaching an invalid call, and a build-time throw is
  * how that becomes a test failure instead of a served string.
  */
-export function renderExamples(calls: readonly object[]): string {
+function renderExamples(calls: readonly object[]): string {
   const block = `e.g. ${calls.map((c) => JSON.stringify(c)).join(" · ")}`;
   if (block.length > EXAMPLES_MAX_CHARS) {
     throw new Error(
@@ -167,7 +167,7 @@ interface Bound {
  * three times on every connection, and it was the copy that went stale.
  * `tool-style.test.ts` fails a `.describe()` that types a bound back in.
  */
-export function boundsOf(shape: ZodRawShape): Bound[] {
+function boundsOf(shape: ZodRawShape): Bound[] {
   const schema = z.toJSONSchema(z.object(shape), { io: "input" }) as {
     properties?: Record<string, Record<string, unknown>>;
   };
@@ -204,7 +204,7 @@ function boundPhrase(prop: Record<string, unknown>): string {
  * needs in a pushed string, and the ones worth stating are the ones a caller
  * gets wrong. Omitted, every bound is rendered.
  */
-export function renderLimits(shape: ZodRawShape, only?: readonly string[]): string {
+function renderLimits(shape: ZodRawShape, only?: readonly string[]): string {
   const bounds = boundsOf(shape).filter(
     (b) => !only || only.includes(b.name),
   );

@@ -87,7 +87,7 @@ export function milestoneRefusal(body: string): ToolResponse | null {
  * never named, so the tighter bound is checked here, before the wire, and the
  * refusal says which lane the extra prose belongs in.
  */
-export const DECISION_CONTEXT_MAX_CHARS = 2000;
+const DECISION_CONTEXT_MAX_CHARS = 2000;
 
 /**
  * **HOW MANY RECIPIENTS ONE `to=` MAY NAME.** ⚠ HAND-MIRRORED from

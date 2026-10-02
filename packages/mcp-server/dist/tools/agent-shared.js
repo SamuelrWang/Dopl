@@ -4,12 +4,9 @@
  * The `agent-` filename prefix is load-bearing: `tool-group-files.ts` groups a tool's files on it for the parity scans.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.IDENTITIES_SCOPE_NOTE = exports.VISIBILITY_ENUM_MESSAGE = exports.IDENTITY_VISIBILITY_VALUES = exports.IDENTITY_AMBIGUOUS_CODE = exports.IDENTITY_NOT_FOUND_CODE = exports.PRIVATE_VISIBILITY_DENIED_CODE = void 0;
-exports.resolveIdentityRef = resolveIdentityRef;
+exports.IDENTITIES_SCOPE_NOTE = exports.VISIBILITY_ENUM_MESSAGE = exports.IDENTITY_VISIBILITY_VALUES = exports.IDENTITY_AMBIGUOUS_CODE = exports.IDENTITY_NOT_FOUND_CODE = void 0;
 exports.resolveIdentityOr = resolveIdentityOr;
-exports.ambiguousIdentity = ambiguousIdentity;
 exports.identityChoiceLines = identityChoiceLines;
-exports.identityNotFound = identityNotFound;
 exports.identityWriteDenied = identityWriteDenied;
 exports.knowledgeBaseNotAttachable = knowledgeBaseNotAttachable;
 exports.sharedCredentialPrivateDenied = sharedCredentialPrivateDenied;
@@ -22,7 +19,7 @@ const narration_js_1 = require("./narration.js");
 const respond_js_1 = require("./respond.js");
 const tool_errors_js_1 = require("./tool-errors.js");
 /** The server's 403 for a shared credential owning a private row. */
-exports.PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
+const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 /** The server's 404 for an identity this caller cannot name — the only refusal the id door swallows. */
 exports.IDENTITY_NOT_FOUND_CODE = "AGENT_IDENTITY_NOT_FOUND";
 /** The server's code for a name matching several visible identities (the launch lane's 409). */
@@ -115,7 +112,7 @@ function knowledgeBaseNotAttachable(e) {
 }
 /** 403 `WORKSPACE_KEY_PRIVATE_VISIBILITY`, surfaced with the server's own sentence (this layer cannot tell which credential is in play). */
 function sharedCredentialPrivateDenied(e) {
-    if (!(0, respond_js_1.isApiError)(e, 403, exports.PRIVATE_VISIBILITY_DENIED_CODE))
+    if (!(0, respond_js_1.isApiError)(e, 403, PRIVATE_VISIBILITY_DENIED_CODE))
         return null;
     return (0, respond_js_1.err)(`${(0, respond_js_1.apiMessage)(e) ?? "This credential cannot own a private agent identity."} Nothing was created. A credential that may be shared between humans has no "private to me" to write to — create it with visibility="workspace", or reconnect with a personal credential.`);
 }

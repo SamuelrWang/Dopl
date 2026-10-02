@@ -7,7 +7,6 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UNTRUSTED_SKILL_BODY_HEADER = exports.skillsScopeNote = exports.NO_NAME = void 0;
-exports.errorMessage = errorMessage;
 exports.failureDetail = failureDetail;
 exports.agentWriteDenied = agentWriteDenied;
 const call_ref_js_1 = require("../call-ref.js");

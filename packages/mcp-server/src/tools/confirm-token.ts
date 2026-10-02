@@ -80,7 +80,7 @@ function consume(token: string, fp: string): ConsumeResult {
 }
 
 /** What the gate knows about the workspace a call resolved to. `unknown` fails closed (treated as shared). */
-export interface ConfirmTarget {
+interface ConfirmTarget {
   workspaceId: string | null;
   /** Neutralized display name, or a fallback. */
   label: string;
@@ -97,7 +97,7 @@ const UNKNOWN_TARGET: ConfirmTarget = {
 };
 
 /** Resolves the workspace this call landed in — the per-call ALS override first, then the session default. */
-export async function resolveConfirmTarget(
+async function resolveConfirmTarget(
   client: DoplClient,
 ): Promise<ConfirmTarget> {
   const workspaceId = workspaceContext.getStore() ?? client.getWorkspaceId();
@@ -142,7 +142,7 @@ const PROCEED_ACKNOWLEDGED: ConfirmVerdict = {
 };
 
 /** A token on a call outside the confirm class is refused, not ignored (as `registrar.ts › strictInput` does). */
-export function refuseStrayToken(tool: string, op: string): ToolResponse {
+function refuseStrayToken(tool: string, op: string): ToolResponse {
   return err(
     `\`confirm_token\` was passed to ${calledAs(op, { tool })}, but this call is not audience-changing — it creates something only you can see, so there is no preview to confirm and nothing was created. Re-issue WITHOUT \`confirm_token\`. Tokens are only ever minted for a write that publishes into a shared home channel.`,
   );

@@ -20,7 +20,6 @@
  * agent-write-denied (403), validation (400) — and anything unmapped rethrows.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.opUpdateBase = exports.opSetVisibility = exports.opCreateBase = void 0;
 exports.opCreateFolder = opCreateFolder;
 exports.opMove = opMove;
 exports.opWriteFile = opWriteFile;
@@ -36,13 +35,6 @@ const channel_shared_1 = require("./channel-shared");
 const knowledge_sections_1 = require("./knowledge-sections");
 /** The write's upsert rule, named by the tool the caller is using (`write_file` on a legacy connection). */
 const UPSERT = () => `${(0, call_ref_js_1.bySet)({ legacy: "write_file", granular: (0, call_ref_js_1.toolName)("kb.write_file") })} is an UPSERT`;
-// ⚠ RE-EXPORTED, NOT RE-IMPLEMENTED — `knowledge.ts` and four suites address
-// the base ops through this module's name, and a split is not a reason to move
-// every call site.
-var knowledge_ops_base_writes_1 = require("./knowledge-ops-base-writes");
-Object.defineProperty(exports, "opCreateBase", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opCreateBase; } });
-Object.defineProperty(exports, "opSetVisibility", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opSetVisibility; } });
-Object.defineProperty(exports, "opUpdateBase", { enumerable: true, get: function () { return knowledge_ops_base_writes_1.opUpdateBase; } });
 const knowledge_write_rules_1 = require("./knowledge-write-rules");
 // ⚠ THE `&amp;`-IN-A-TITLE RULE LIVES APART — `knowledge-entity-titles.ts`
 // carries both lanes (the write-side note here, the read-side signal there).

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clientIdentifier = exports.packageVersion = exports.packageName = void 0;
+exports.clientIdentifier = exports.packageVersion = void 0;
 const fs_1 = require("fs");
 const path_1 = require("path");
 function loadPackageJson() {
@@ -20,6 +20,5 @@ function loadPackageJson() {
     }
 }
 const pkg = loadPackageJson();
-exports.packageName = pkg.name;
 exports.packageVersion = pkg.version;
 exports.clientIdentifier = `${pkg.name}@${pkg.version}`;

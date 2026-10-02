@@ -28,7 +28,6 @@
  * would have put a non-delivery on the one op whose whole contract is that it delivers.
  */
 export declare const CHANNEL_OPS: readonly ["send", "read", "status", "manage", "rooms", "artifact"];
-export type ChannelOp = (typeof CHANNEL_OPS)[number];
 /**
  * THE ONE REFUSAL FOR A WORD THAT IS NOT AN OP, written once and used twice (slice B16): the
  * schema's own zod error, and `channel.ts`'s exhaustive `default` for a build where that

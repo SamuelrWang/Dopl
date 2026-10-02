@@ -98,7 +98,7 @@ export interface ConnectionIdentity {
   posture?: string | null;
 }
 
-export const LIVE_AGENT_HANDLES = 5;
+const LIVE_AGENT_HANDLES = 5;
 
 // The operator handle is validated, not neutralized: a neutralized tag resolves to nobody. Unicode
 // letters allowed (`mentionSlug` keeps them); no whitespace, backticks or markdown punctuation.

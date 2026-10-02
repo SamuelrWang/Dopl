@@ -32,7 +32,7 @@ export function anyShared(chats: Array<{ visibility: string }>): boolean {
   return chats.some((c) => c.visibility !== "private");
 }
 
-export function errorMessage(e: unknown): string {
+function errorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) {
     return String((e as { message: unknown }).message);
   }
@@ -54,7 +54,7 @@ export function chatTitle(title: string | null | undefined): string {
 }
 
 /** An owner as a neutralized display name plus the user id they cannot type. */
-export function ownerRef(owner: ChatOwner): string {
+function ownerRef(owner: ChatOwner): string {
   return `${inlineOr(owner.name, "`(unnamed member)`")} (\`${owner.userId}\`)`;
 }
 

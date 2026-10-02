@@ -14,7 +14,7 @@ const AMBIGUOUS_SLUG = KB_ERRORS[2];
 
 const MAX_LISTED_MATCHES = 10;
 
-export type BaseRefResolution =
+type BaseRefResolution =
   | { kind: "found"; base: KnowledgeBase }
   | { kind: "not-found" }
   | { kind: "ambiguous"; matches: KnowledgeBase[] };

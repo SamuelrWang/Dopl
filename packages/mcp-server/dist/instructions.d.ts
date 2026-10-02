@@ -36,7 +36,6 @@ export interface ConnectionIdentity {
     /** The posture the transport spawned this session under, e.g. `full/full chain=on`. */
     posture?: string | null;
 }
-export declare const LIVE_AGENT_HANDLES = 5;
 export declare function buildInstructions(directory: WorkspaceListItem[], guidance?: {
     pin?: WorkspacePin | null;
     directoryLoadFailed?: boolean;

@@ -41,14 +41,6 @@ import {
 /** The write's upsert rule, named by the tool the caller is using (`write_file` on a legacy connection). */
 const UPSERT = () => `${bySet({ legacy: "write_file", granular: toolName("kb.write_file") })} is an UPSERT`;
 
-// ⚠ RE-EXPORTED, NOT RE-IMPLEMENTED — `knowledge.ts` and four suites address
-// the base ops through this module's name, and a split is not a reason to move
-// every call site.
-export {
-  opCreateBase,
-  opSetVisibility,
-  opUpdateBase,
-} from "./knowledge-ops-base-writes";
 import {
   crossRefNudge,
   excerptRefusal,

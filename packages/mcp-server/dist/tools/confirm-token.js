@@ -8,8 +8,6 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RECONFIRM_REMEDY = void 0;
-exports.resolveConfirmTarget = resolveConfirmTarget;
-exports.refuseStrayToken = refuseStrayToken;
 exports.containerPublishUnacknowledged = containerPublishUnacknowledged;
 exports.confirmGate = confirmGate;
 exports.__resetConfirmTokensForTest = __resetConfirmTokensForTest;

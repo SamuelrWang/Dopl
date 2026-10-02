@@ -5,8 +5,6 @@
 import type { AgentIdentity, DoplClient, IdentityKnowledgeRef } from "@dopl/client";
 import { type AudienceLabel } from "./audience-label.js";
 import { type ToolResponse } from "./respond.js";
-/** The server's 403 for a shared credential owning a private row. */
-export declare const PRIVATE_VISIBILITY_DENIED_CODE = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
 /** The server's 404 for an identity this caller cannot name — the only refusal the id door swallows. */
 export declare const IDENTITY_NOT_FOUND_CODE = "AGENT_IDENTITY_NOT_FOUND";
 /** The server's code for a name matching several visible identities (the launch lane's 409). */
@@ -20,37 +18,14 @@ export declare const IDENTITY_VISIBILITY_VALUES: readonly ["private", "workspace
 export type OfferedIdentityVisibility = (typeof IDENTITY_VISIBILITY_VALUES)[number];
 /** zod's refusal for an unoffered `visibility`; it names the retired value so it does not read as a typo. */
 export declare const VISIBILITY_ENUM_MESSAGE = "visibility must be \"private\" or \"workspace\", and nothing was written \u2014 \"team\" is no longer a sharing option on this surface.";
-export type IdentityRefResolution = {
-    kind: "found";
-    identity: AgentIdentity;
-} | {
-    kind: "not-found";
-} | {
-    kind: "ambiguous";
-    matches: AgentIdentity[];
-};
-/**
- * Resolve `ref` (an identity id or exact name) against what this caller may see.
- * Names match exact and case-insensitive over rows the server already filtered — NOT a second copy of `canSeeIdentity`.
- * A UUID missing from the visible list goes to the server's id door and never falls back to a name lookup.
- * Only an API 404 `AGENT_IDENTITY_NOT_FOUND` is swallowed; transport errors rethrow (an outage must not read as "no such identity").
- * Unseen and nonexistent are one answer: 404-never-403, no existence oracle (INVARIANTS §5A).
- */
-export declare function resolveIdentityRef(client: DoplClient, ref: string): Promise<IdentityRefResolution>;
 /** {@link resolveIdentityRef} plus its two refusals: the row, or the tool error to return verbatim. */
 export declare function resolveIdentityOr(client: DoplClient, ref: string): Promise<AgentIdentity | ToolResponse>;
-/**
- * Identity names are not unique by design, so an ambiguous name refuses with every candidate listed and never picks.
- * The list discloses only what op="list" would.
- */
-export declare function ambiguousIdentity(ref: string, matches: AgentIdentity[]): ToolResponse;
 /** One line per candidate — the one rendering both identity lanes (`dopl_agent`, `dopl_channel` launch) use. */
 export declare function identityChoiceLines(matches: ReadonlyArray<{
     id: string;
     name: string;
     visibility: string;
 }>): string[];
-export declare function identityNotFound(ref: string): ToolResponse;
 export declare function identityWriteDenied(e: unknown): ToolResponse | null;
 /** 404 `KNOWLEDGE_BASE_NOT_FOUND` on attach; kept 404-shaped so attach is not an existence oracle for private bases. */
 export declare function knowledgeBaseNotAttachable(e: unknown): ToolResponse | null;

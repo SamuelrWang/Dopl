@@ -1,17 +1,17 @@
 "use strict";
 // Directive rows and client stubs for the channel launch / agent-op suites; not a *.test.ts (imported, never run), excluded from the package build.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAUNCH = exports.launchText = exports.renameText = exports.endText = exports.settledMode = exports.settled = exports.polls = exports.created = exports.modeDirective = exports.agentDirective = exports.launched = exports.DIRECTIVE_ID = exports.AGENT = exports.CHANNEL_ROW = exports.CHANNEL = void 0;
+exports.LAUNCH = exports.launchText = exports.renameText = exports.endText = exports.settledMode = exports.settled = exports.polls = exports.created = exports.modeDirective = exports.agentDirective = exports.launched = exports.DIRECTIVE_ID = exports.AGENT = exports.CHANNEL_ROW = void 0;
 exports.directive = directive;
 exports.launchClient = launchClient;
 exports.agentClient = agentClient;
 const vitest_1 = require("vitest");
 const channel_ops_agent_1 = require("./channel-ops-agent");
 const channel_ops_launch_1 = require("./channel-ops-launch");
-exports.CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
+const CHANNEL = { id: "chan-1", slug: "general", name: "General", visibility: "private" };
 /** The full channel row, for suites driven through `registerChannelTool`. */
 exports.CHANNEL_ROW = {
-    ...exports.CHANNEL,
+    ...CHANNEL,
     workspaceId: "ws-1",
     topic: "",
     visibility: "private",
@@ -26,7 +26,7 @@ exports.DIRECTIVE_ID = "55555555-5555-5555-5555-555555555555";
 function directive(over = {}) {
     return {
         id: exports.DIRECTIVE_ID,
-        channelId: exports.CHANNEL.id,
+        channelId: CHANNEL.id,
         threadId: null,
         goal: "ship the parser",
         model: null,
@@ -70,7 +70,7 @@ const modeDirective = (over = {}) => (0, exports.agentDirective)({
 exports.modeDirective = modeDirective;
 function launchClient(over = {}) {
     return {
-        listChannels: vitest_1.vi.fn(async () => [exports.CHANNEL]),
+        listChannels: vitest_1.vi.fn(async () => [CHANNEL]),
         createLaunchDirective: vitest_1.vi.fn(async () => ({ offline: false, directive: directive() })),
         getLaunchDirective: vitest_1.vi.fn(async () => directive()),
         ...over,
@@ -86,7 +86,7 @@ const polls = (over) => launchClient({ getLaunchDirective: vitest_1.vi.fn(async 
 exports.polls = polls;
 function agentClient(over = {}) {
     return {
-        listChannels: vitest_1.vi.fn(async () => [exports.CHANNEL]),
+        listChannels: vitest_1.vi.fn(async () => [CHANNEL]),
         createAgentDirective: vitest_1.vi.fn(async () => ({ offline: false, directive: (0, exports.agentDirective)() })),
         getLaunchDirective: vitest_1.vi.fn(async () => (0, exports.agentDirective)()),
         ...over,

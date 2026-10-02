@@ -42,7 +42,7 @@ export interface CapturedTool {
   sourceFile: string;
 }
 
-export const REGISTRARS: Array<{
+const REGISTRARS: Array<{
   file: string;
   register: (r: RegisterTool, c: DoplClient) => void;
 }> = [
@@ -87,7 +87,7 @@ export const REGISTRARS: Array<{
  * do not describe. {@link TOOL_BY_NAME} spans both, because the gate tables are
  * keyed on a NAME and do not care which path registered it.
  */
-export const META_REGISTRARS: Array<{
+const META_REGISTRARS: Array<{
   file: string;
   register: (r: RegisterTool, c: DoplClient) => void;
 }> = [
@@ -115,7 +115,7 @@ const STUB_DIRECTORY = {
   lockedWorkspaceId: () => null,
 };
 
-export function captureTools(
+function captureTools(
   registrars = REGISTRARS,
 ): CapturedTool[] {
   const tools: CapturedTool[] = [];
@@ -145,7 +145,7 @@ export const TOOL_BY_NAME = new Map(
 // ⚠ The param-drift scans MUST read a tool's WHOLE file set, not just its
 // registrar, or a handler reading an undeclared arg inside a split-out module
 // slips past the guard. `toolGroupSource` is that scan.
-export const SRC_DIR = path.resolve(process.cwd(), "src");
+const SRC_DIR = path.resolve(process.cwd(), "src");
 
 /**
  * The op enum **AS PUBLISHED**, or null for a tool that dispatches on none.
@@ -245,8 +245,8 @@ function parseToolSet(src: string, name: string, where: string): Set<string> {
  * here means a table was RENAMED or reshaped — the loud failure this parse
  * exists to produce.
  */
-export const GATING_SOURCE = readFileSync(path.join(SRC_DIR, "gating.ts"), "utf8");
-export const DELETE_POLICY_SOURCE = readFileSync(
+const GATING_SOURCE = readFileSync(path.join(SRC_DIR, "gating.ts"), "utf8");
+const DELETE_POLICY_SOURCE = readFileSync(
   path.join(SRC_DIR, "delete-policy.ts"),
   "utf8",
 );

@@ -106,55 +106,6 @@ export declare const HARD_DESCRIPTION_CEILING = 2000;
 export declare const ROUTING_MAX_LINES = 3;
 /** Call shapes teach the surface; a wall of JSON re-buys the prose problem. */
 export declare const EXAMPLES_MAX_CHARS = 300;
-/**
- * The description's ERRORS block — the top three codes for a tool, each with
- * its remedy. ⚠ THREE, not all of them: the reference's pattern 3 is "your top
- * failure modes, one line each", and a complete error taxonomy in a pushed
- * string is the prose this whole wave exists to delete.
- */
-export declare function renderErrors(errors: readonly ToolError[]): string;
-/**
- * The description's EXAMPLES block. ⚠ Call shapes as JSON, which is what the
- * agent has to produce — the reference's pattern 8, and the reason
- * `notion-get-users` teaches its whole surface in six lines.
- *
- * ⚠ Throws past {@link EXAMPLES_MAX_CHARS} rather than clipping. A clipped
- * example is invalid JSON teaching an invalid call, and a build-time throw is
- * how that becomes a test failure instead of a served string.
- */
-export declare function renderExamples(calls: readonly object[]): string;
-/** One published parameter's bound, as the JSON Schema publishes it. */
-interface Bound {
-    name: string;
-    /** The rendered phrase, e.g. `query ≤200 chars` or `limit 1–50`. */
-    phrase: string;
-}
-/**
- * ⚠ THE ONE SOURCE OF EVERY NUMBER IN EVERY DESCRIPTION. It reads the zod shape
- * a tool actually registers — through `z.toJSONSchema`, the same conversion the
- * MCP SDK publishes to clients — so a description cannot state a cap the schema
- * does not enforce, and raising a cap in code cannot leave a stale number in
- * prose.
- *
- * ⚠ IT IS WHY NO `.describe()` ON THIS SURFACE HAND-TYPES A LIMIT ANY MORE. A
- * bound already reaches the client twice over as `maxLength` / `minimum` /
- * `maximum` keywords; a third copy inside the describe was one fact pushed
- * three times on every connection, and it was the copy that went stale.
- * `tool-style.test.ts` fails a `.describe()` that types a bound back in.
- */
-export declare function boundsOf(shape: ZodRawShape): Bound[];
-/**
- * The description's LIMITS block, or "" for a shape with no bounds.
- *
- * ⚠ THE CONSEQUENCE IS PART OF THE SENTENCE, and that is the reference's
- * pattern 4 rather than a flourish: "MAXIMUM 5 keywords; exceeding this returns
- * a validation error" is treated as real, where a bare number reads as advice.
- *
- * @param only restrict to these params — a fourteen-op tool has bounds nobody
- * needs in a pushed string, and the ones worth stating are the ones a caller
- * gets wrong. Omitted, every bound is rendered.
- */
-export declare function renderLimits(shape: ZodRawShape, only?: readonly string[]): string;
 /** What {@link composeDescription} assembles, in the house order. */
 export interface DescriptionSpec {
     /**
@@ -202,4 +153,3 @@ export interface DescriptionSpec {
  * whoever wrote the sentence rather than on an agent months later.
  */
 export declare function composeDescription(spec: DescriptionSpec): string;
-export {};

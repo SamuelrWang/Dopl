@@ -5,7 +5,6 @@
  */
 /** App-owned delete ops by domain tool; each must stay out of its tool's `op` enum. */
 export declare const DELETE_BLOCKED_OPS: Record<string, Set<string>>;
-export declare const DELETE_OP_SHAPE: RegExp;
 /** The name-shape fallback stays `*_admin`-only: `dopl_ontology`'s `remove_*` ops edit, not delete. */
 export declare function isBlockedDeleteOp(tool: string, op: string): boolean;
 /**

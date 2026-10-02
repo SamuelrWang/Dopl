@@ -19,10 +19,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UNTRUSTED_ARCHIVE_HEADER = void 0;
 exports.anyShared = anyShared;
-exports.errorMessage = errorMessage;
 exports.failureDetail = failureDetail;
 exports.chatTitle = chatTitle;
-exports.ownerRef = ownerRef;
 exports.folderScopeLabel = folderScopeLabel;
 exports.hiddenNote = hiddenNote;
 exports.formatChatLine = formatChatLine;

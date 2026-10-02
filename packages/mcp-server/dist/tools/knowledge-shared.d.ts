@@ -1,15 +1,6 @@
 /** Shared base resolution and error mappers for the `dopl_kb` op modules. */
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-export type BaseRefResolution = {
-    kind: "found";
-    base: KnowledgeBase;
-} | {
-    kind: "not-found";
-} | {
-    kind: "ambiguous";
-    matches: KnowledgeBase[];
-};
 /** resolveBaseRef + its two refusals; caller short-circuits on `isError`. */
 export declare function resolveBaseOr(client: DoplClient, ref: string): Promise<KnowledgeBase | ToolResponse>;
 /** Printed above another member's entry body, which renders verbatim inside the fence; the caller's own entries

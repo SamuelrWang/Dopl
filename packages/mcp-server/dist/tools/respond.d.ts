@@ -32,8 +32,6 @@ export declare function apiErrorCode(e: unknown): string | null;
 export declare function apiMessage(e: unknown): string | null;
 /** True for a 409 (name/title/slug already-exists collision). */
 export declare function isAlreadyExists(e: unknown): boolean;
-/** Credit allowance spent for the billing period. */
-export declare const CREDITS_EXHAUSTED_CODE: string;
 /** The consume answer; every field optional (older servers omit some, degraded ones zero them). */
 export interface CreditsOutcome {
     wallet?: "personal" | "seat" | null;

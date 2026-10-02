@@ -26,12 +26,12 @@ export const FIELD_KINDS = [
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export type StringKind = "text" | "pill" | "enum" | "date" | "link";
 
-export const TEXT_VALUE_MAX = 4000;
-export const PILL_VALUE_MAX = 400;
-export const ENUM_OPTION_MAX = 200;
-export const ENUM_OPTIONS_MAX = 50;
-export const LINK_VALUE_MAX = 2000;
-export const FIELD_DESCRIPTION_MAX = 1000;
+const TEXT_VALUE_MAX = 4000;
+const PILL_VALUE_MAX = 400;
+const ENUM_OPTION_MAX = 200;
+const ENUM_OPTIONS_MAX = 50;
+const LINK_VALUE_MAX = 2000;
+const FIELD_DESCRIPTION_MAX = 1000;
 
 export function isStringKind(kind: FieldKind): kind is StringKind {
   return (
@@ -39,7 +39,7 @@ export function isStringKind(kind: FieldKind): kind is StringKind {
   );
 }
 
-export function isIsoDate(value: string): boolean {
+function isIsoDate(value: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!m) return false;
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
@@ -49,7 +49,7 @@ export function isIsoDate(value: string): boolean {
   );
 }
 
-export function isHttpUrl(value: string): boolean {
+function isHttpUrl(value: string): boolean {
   if (value.length > LINK_VALUE_MAX) return false;
   try {
     const url = new URL(value);
@@ -80,7 +80,7 @@ export function optionsProblem(options: readonly string[]): string | null {
 }
 
 /** A field description: trimmed, `""` clears. `undefined` = keep the stored one. */
-export function nextDescription(
+function nextDescription(
   given: string | undefined,
   stored: string | undefined,
 ): { description?: string } | { fail: ToolResponse } {

@@ -13,25 +13,11 @@ import { type ToolResponse } from "./respond";
 export declare const FIELD_KINDS: readonly ["text", "pill", "enum", "date", "link", "ref", "knowledge", "skill"];
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export type StringKind = "text" | "pill" | "enum" | "date" | "link";
-export declare const TEXT_VALUE_MAX = 4000;
-export declare const PILL_VALUE_MAX = 400;
-export declare const ENUM_OPTION_MAX = 200;
-export declare const ENUM_OPTIONS_MAX = 50;
-export declare const LINK_VALUE_MAX = 2000;
-export declare const FIELD_DESCRIPTION_MAX = 1000;
 export declare function isStringKind(kind: FieldKind): kind is StringKind;
-export declare function isIsoDate(value: string): boolean;
-export declare function isHttpUrl(value: string): boolean;
 /** Trimmed, non-empty, first-spelling-wins (case-insensitive). */
 export declare function cleanOptions(options: readonly string[]): string[];
 /** Caps the server would 400 on, named. `null` = fine. */
 export declare function optionsProblem(options: readonly string[]): string | null;
-/** A field description: trimmed, `""` clears. `undefined` = keep the stored one. */
-export declare function nextDescription(given: string | undefined, stored: string | undefined): {
-    description?: string;
-} | {
-    fail: ToolResponse;
-};
 /**
  * The template field a card's attribute was born from: same label (else same
  * `key`, the panel's address) on a container that holds the card. A select

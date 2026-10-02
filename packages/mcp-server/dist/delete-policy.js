@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteRefusal = exports.DELETE_OP_SHAPE = exports.DELETE_BLOCKED_OPS = void 0;
+exports.deleteRefusal = exports.DELETE_BLOCKED_OPS = void 0;
 exports.isBlockedDeleteOp = isBlockedDeleteOp;
 const call_ref_js_1 = require("./call-ref.js");
 const tool_errors_js_1 = require("./tools/tool-errors.js");
@@ -17,12 +17,12 @@ exports.DELETE_BLOCKED_OPS = {
     dopl_ontology: new Set(["delete_object", "delete_ontology"]),
     dopl_agent: new Set(["delete"]),
 };
-exports.DELETE_OP_SHAPE = /^(delete|destroy|purge|trash|remove)(_|$)/;
+const DELETE_OP_SHAPE = /^(delete|destroy|purge|trash|remove)(_|$)/;
 /** The name-shape fallback stays `*_admin`-only: `dopl_ontology`'s `remove_*` ops edit, not delete. */
 function isBlockedDeleteOp(tool, op) {
     if (exports.DELETE_BLOCKED_OPS[tool]?.has(op))
         return true;
-    return tool.endsWith("_admin") && exports.DELETE_OP_SHAPE.test(op);
+    return tool.endsWith("_admin") && DELETE_OP_SHAPE.test(op);
 }
 /**
  * The one refusal: states the rule, names where the user can act, and closes the retry loop. The

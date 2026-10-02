@@ -10,13 +10,10 @@
  * downstream VALIDATION_FAILED. Change both together.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FIELD_DESCRIPTION_MAX = exports.LINK_VALUE_MAX = exports.ENUM_OPTIONS_MAX = exports.ENUM_OPTION_MAX = exports.PILL_VALUE_MAX = exports.TEXT_VALUE_MAX = exports.FIELD_KINDS = void 0;
+exports.FIELD_KINDS = void 0;
 exports.isStringKind = isStringKind;
-exports.isIsoDate = isIsoDate;
-exports.isHttpUrl = isHttpUrl;
 exports.cleanOptions = cleanOptions;
 exports.optionsProblem = optionsProblem;
-exports.nextDescription = nextDescription;
 exports.templateFieldFor = templateFieldFor;
 exports.attributeDescriptionRefusal = attributeDescriptionRefusal;
 exports.stringValue = stringValue;
@@ -35,12 +32,12 @@ exports.FIELD_KINDS = [
     "knowledge",
     "skill",
 ];
-exports.TEXT_VALUE_MAX = 4000;
-exports.PILL_VALUE_MAX = 400;
-exports.ENUM_OPTION_MAX = 200;
-exports.ENUM_OPTIONS_MAX = 50;
-exports.LINK_VALUE_MAX = 2000;
-exports.FIELD_DESCRIPTION_MAX = 1000;
+const TEXT_VALUE_MAX = 4000;
+const PILL_VALUE_MAX = 400;
+const ENUM_OPTION_MAX = 200;
+const ENUM_OPTIONS_MAX = 50;
+const LINK_VALUE_MAX = 2000;
+const FIELD_DESCRIPTION_MAX = 1000;
 function isStringKind(kind) {
     return (kind === "text" || kind === "pill" || kind === "enum" || kind === "date" || kind === "link");
 }
@@ -53,7 +50,7 @@ function isIsoDate(value) {
     return (date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d);
 }
 function isHttpUrl(value) {
-    if (value.length > exports.LINK_VALUE_MAX)
+    if (value.length > LINK_VALUE_MAX)
         return false;
     try {
         const url = new URL(value);
@@ -76,19 +73,19 @@ function cleanOptions(options) {
 }
 /** Caps the server would 400 on, named. `null` = fine. */
 function optionsProblem(options) {
-    if (options.length > exports.ENUM_OPTIONS_MAX) {
-        return `A select field takes at most ${exports.ENUM_OPTIONS_MAX} options; got ${options.length}.`;
+    if (options.length > ENUM_OPTIONS_MAX) {
+        return `A select field takes at most ${ENUM_OPTIONS_MAX} options; got ${options.length}.`;
     }
-    const long = options.find((o) => o.length > exports.ENUM_OPTION_MAX);
-    return long ? `Option ${(0, narration_1.inlineOr)(long, narration_1.NO_NAME)} is over ${exports.ENUM_OPTION_MAX} characters.` : null;
+    const long = options.find((o) => o.length > ENUM_OPTION_MAX);
+    return long ? `Option ${(0, narration_1.inlineOr)(long, narration_1.NO_NAME)} is over ${ENUM_OPTION_MAX} characters.` : null;
 }
 /** A field description: trimmed, `""` clears. `undefined` = keep the stored one. */
 function nextDescription(given, stored) {
     if (given === undefined)
         return stored ? { description: stored } : {};
     const description = given.trim();
-    if (description.length > exports.FIELD_DESCRIPTION_MAX) {
-        return { fail: (0, respond_1.err)(`A field description is at most ${exports.FIELD_DESCRIPTION_MAX} characters.`) };
+    if (description.length > FIELD_DESCRIPTION_MAX) {
+        return { fail: (0, respond_1.err)(`A field description is at most ${FIELD_DESCRIPTION_MAX} characters.`) };
     }
     return description ? { description } : {};
 }
@@ -131,7 +128,7 @@ function attributeDescriptionRefusal(snapshot, object, label) {
  */
 function stringValue(kind, raw, label, options) {
     const name = (0, narration_1.inlineOr)(label, narration_1.NO_NAME);
-    const cap = kind === "text" ? exports.TEXT_VALUE_MAX : kind === "pill" ? exports.PILL_VALUE_MAX : exports.LINK_VALUE_MAX;
+    const cap = kind === "text" ? TEXT_VALUE_MAX : kind === "pill" ? PILL_VALUE_MAX : LINK_VALUE_MAX;
     if (raw.length > cap) {
         return {
             fail: (0, respond_1.err)(`set_attribute kind="${kind}" value for ${name} is ${raw.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`),

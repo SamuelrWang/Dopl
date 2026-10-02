@@ -42,10 +42,7 @@ import {
 
 export {
   addresseeOf,
-  formatAuthor,
-  memberRef,
   sessionIdOf,
-  NO_MEMBER_VIEW,
   type MemberView,
 } from "./channel-render-identity";
 // ⚠ **MARKS, NEVER FILTERS** — see that module for Samuel's ruling (b) and for

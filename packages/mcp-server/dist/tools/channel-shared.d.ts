@@ -7,7 +7,7 @@ import { type ToolResponse } from "./respond";
 /** A non-empty string metadata field; one definition, since both lanes key thread linkage off it. */
 export declare function metaString(m: ChannelMessage, key: string): string | undefined;
 /** The one neutralizer lives in `narration.ts`; re-exported, never re-declared. */
-export { INLINE_TEXT_MAX, inlineOr, neutralizeInline } from "./narration";
+export { inlineOr, neutralizeInline } from "./narration";
 /** Roster as `userId → raw name` (the render neutralizes once). Fail-soft: enrichment only, ids
  *  still render. */
 export declare function memberNames(client: DoplClient, ref: string): Promise<Map<string, string>>;

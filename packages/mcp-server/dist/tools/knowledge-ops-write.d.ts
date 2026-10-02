@@ -20,7 +20,6 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-export { opCreateBase, opSetVisibility, opUpdateBase, } from "./knowledge-ops-base-writes";
 export declare function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse>;
 /**
  * `move_folder` and `move_file` — ONE mover (2026-09-17). They were two

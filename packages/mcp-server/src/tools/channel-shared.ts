@@ -22,7 +22,7 @@ export function metaString(m: ChannelMessage, key: string): string | undefined {
 }
 
 /** The one neutralizer lives in `narration.ts`; re-exported, never re-declared. */
-export { INLINE_TEXT_MAX, inlineOr, neutralizeInline } from "./narration";
+export { inlineOr, neutralizeInline } from "./narration";
 
 /** Roster as `userId → raw name` (the render neutralizes once). Fail-soft: enrichment only, ids
  *  still render. */

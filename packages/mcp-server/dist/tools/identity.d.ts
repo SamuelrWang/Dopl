@@ -29,7 +29,7 @@ export declare const CODEX_VENDOR = "codex";
 /** The loader a deferred tool is fetched with, in the caller's own client; unknown vendor → neutral. */
 export declare function toolLoaderFor(vendor: string | null | undefined): string;
 /** How the presented credential was obtained. Mirrors `McpCredential.kind`. */
-export type CallerCredentialKind = "device" | "oauth-app";
+type CallerCredentialKind = "device" | "oauth-app";
 /**
  * Everything the server knows about the caller's session, resolved once at
  * boot. ⚠ Every field nullable — each has a real way of being unknown, and
@@ -175,3 +175,4 @@ export declare function identityLine(identity: CallerIdentity, self: string | nu
  * whenever the header was absent, unshaped, or not uuid-headed.
  */
 export declare function boundChannelId(identity: CallerIdentity): string | null;
+export {};

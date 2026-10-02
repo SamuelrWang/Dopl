@@ -99,7 +99,7 @@ export function isAlreadyExists(e: unknown): boolean {
 }
 
 /** Credit allowance spent for the billing period. */
-export const CREDITS_EXHAUSTED_CODE = CREDITS_EXHAUSTED.reason;
+const CREDITS_EXHAUSTED_CODE = CREDITS_EXHAUSTED.reason;
 
 // The code's meaning already says "out of credits" (pinned by `credits.test.ts`); don't repeat it.
 const CREDITS_EXHAUSTED_MESSAGE = refusal(

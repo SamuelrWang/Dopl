@@ -16,7 +16,7 @@
  * immutable `authorUserId` — the one half the author does not control.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_MEMBER_VIEW = exports.sessionIdOf = exports.memberRef = exports.formatAuthor = exports.addresseeOf = void 0;
+exports.sessionIdOf = exports.addresseeOf = void 0;
 exports.formatMessages = formatMessages;
 exports.formatChannelLine = formatChannelLine;
 exports.formatThreadLine = formatThreadLine;
@@ -33,10 +33,7 @@ const narration_1 = require("./narration");
 const channel_render_identity_1 = require("./channel-render-identity");
 var channel_render_identity_2 = require("./channel-render-identity");
 Object.defineProperty(exports, "addresseeOf", { enumerable: true, get: function () { return channel_render_identity_2.addresseeOf; } });
-Object.defineProperty(exports, "formatAuthor", { enumerable: true, get: function () { return channel_render_identity_2.formatAuthor; } });
-Object.defineProperty(exports, "memberRef", { enumerable: true, get: function () { return channel_render_identity_2.memberRef; } });
 Object.defineProperty(exports, "sessionIdOf", { enumerable: true, get: function () { return channel_render_identity_2.sessionIdOf; } });
-Object.defineProperty(exports, "NO_MEMBER_VIEW", { enumerable: true, get: function () { return channel_render_identity_2.NO_MEMBER_VIEW; } });
 // ⚠ **MARKS, NEVER FILTERS** — see that module for Samuel's ruling (b) and for
 // why the one-place seam lives on `OutsideRelevance` rather than on the page.
 const channel_desktop_tag_1 = require("./channel-desktop-tag");
