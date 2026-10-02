@@ -7,7 +7,7 @@ import { Popover } from "./popover-menu";
 
 export type ShareScope = "private" | "team" | "workspace";
 
-export type ShareScopeTeam = {
+type ShareScopeTeam = {
   id: string;
   name: string;
   color: string | null;

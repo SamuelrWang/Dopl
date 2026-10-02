@@ -54,7 +54,7 @@ export interface ChannelLinkRow {
  * `billing/server/entitlements.ts`). `shared/lib/app-origin.ts › getAppOrigin`
  * is the client twin and answers `""` here.
  */
-export function claimUrl(token: string): string {
+function claimUrl(token: string): string {
   const base = (
     process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com"
   ).replace(/\/+$/, "");

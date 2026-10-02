@@ -29,7 +29,6 @@ import {
  */
 
 export const MCP_SCOPES = ["dopl.read", "dopl.write"] as const;
-export type McpScope = (typeof MCP_SCOPES)[number];
 
 export {
   ACCESS_PREFIX,
@@ -45,18 +44,18 @@ const REFRESH_PREFIX = "dopl_rt_";
 const CODE_PREFIX = "dopl_ac_";
 const CLIENT_PREFIX = "dopl_client_";
 
-export const ACCESS_TTL_S = 60 * 60; // 1 hour
+const ACCESS_TTL_S = 60 * 60; // 1 hour
 const REFRESH_TTL_S = 60 * 60 * 24 * 30; // 30 days
 const CODE_TTL_S = 5 * 60; // 5 minutes
 /** Device (CLI) token TTL — long-lived so a desktop listener stays connected
  *  without a refresh round-trip. */
-export const DEVICE_TOKEN_TTL_S = 60 * 60 * 24 * 90; // 90 days
+const DEVICE_TOKEN_TTL_S = 60 * 60 * 24 * 90; // 90 days
 
 // ⚠ Reserved device client + row classifier live in `mcp-credential.ts`. ONE
 // definition — do not restate the client id here.
 
 /** Constant-time PKCE S256 check: base64url(sha256(verifier)) === challenge. */
-export function verifyPkceS256(verifier: string, challenge: string): boolean {
+function verifyPkceS256(verifier: string, challenge: string): boolean {
   const computed = createHash("sha256").update(verifier).digest("base64url");
   if (computed.length !== challenge.length) return false;
   let diff = 0;

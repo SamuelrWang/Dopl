@@ -44,7 +44,7 @@ export const SAFE_PROSE_RE =
   /^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/u;
 
 /** Prose twin of {@link safeLabelMessage}. */
-export function safeProseMessage(subject: string): string {
+function safeProseMessage(subject: string): string {
   return `${subject} cannot contain control, zero-width, or line-separator characters`;
 }
 

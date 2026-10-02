@@ -29,8 +29,8 @@ import {
 
 // Re-exported so `instanceof ApiError` means the same thing whichever module a
 // call site reached for.
-export { ApiError, withQuery, decodeResponse };
-export type { ApiRequestOpts, RawApiResponse };
+export { ApiError };
+export type { ApiRequestOpts };
 
 export async function apiRequest<T>(
   path: string,

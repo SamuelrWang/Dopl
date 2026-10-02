@@ -47,7 +47,7 @@ export type ApiMutationRequestFn = <T>(
 ) => Promise<T>;
 
 /** The HTTP call one draft turns into. */
-export interface ApiMutationRequest {
+interface ApiMutationRequest {
   path: string;
   /** Defaults to POST — a mutation that GETs is a query. */
   method?: "POST" | "PATCH" | "PUT" | "DELETE";

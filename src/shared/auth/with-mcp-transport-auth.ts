@@ -21,7 +21,7 @@ const OAUTH_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
  * exactly once per tool call, in one place.
  */
 
-export interface McpAuthContext {
+interface McpAuthContext {
   /** Raw credential to forward to the loopback DoplClient (Authorization: Bearer). */
   credential: string;
   userId: string;

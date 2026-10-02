@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 /** The light card (default) or the small black line. */
-export type ToastVariant = "default" | "invert";
+type ToastVariant = "default" | "invert";
 
 interface ToastAction {
   label: string;

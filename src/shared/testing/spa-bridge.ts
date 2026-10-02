@@ -16,7 +16,7 @@ export function installSpaBridge<T extends Bridge>(api: T = {} as T): T & { apiR
   return bridge;
 }
 
-export function removeSpaBridge(): void {
+function removeSpaBridge(): void {
   if (typeof window !== "undefined") delete (window as { dopl?: unknown }).dopl;
 }
 

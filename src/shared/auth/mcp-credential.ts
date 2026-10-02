@@ -44,7 +44,7 @@ export const PLAYGROUND_CLIENT_NAME = "Dopl Playground";
  *     (`POST /api/auth/mcp-device-token`, cookie-only).
  *   - `oauth-app` — granted to a registered MCP client via authorization-code.
  */
-export type McpCredentialKind = "device" | "oauth-app";
+type McpCredentialKind = "device" | "oauth-app";
 
 export interface McpCredential {
   kind: McpCredentialKind;

@@ -34,7 +34,7 @@ export const LOGIN_BOUNCE_LIMIT = 2;
  * middleware's business — `/canvas` is on the retirement RETIRE list, so the two
  * values have already diverged.
  */
-export const LEGACY_BOUNCE_DESTINATION = "/canvas";
+const LEGACY_BOUNCE_DESTINATION = "/canvas";
 
 /** Long enough that a loop with SLOW hops (degraded GoTrue) still reaches the
  *  limit before expiry; short enough to be gone by the next visit. Also cleared

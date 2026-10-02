@@ -37,7 +37,7 @@ export const LATEST_RELEASE_TTL_MS = 10 * 60 * 1000;
 /** After a failure. Short enough to recover, long enough not to hammer GitHub. */
 export const LATEST_RELEASE_RETRY_MS = 60 * 1000;
 /** Nothing waits on this — bounds a background socket only. */
-export const LATEST_RELEASE_TIMEOUT_MS = 4000;
+const LATEST_RELEASE_TIMEOUT_MS = 4000;
 
 /** Read this much of the body and no more; the rest cannot contain line 1. */
 const MAX_FEED_CHARS = 8 * 1024;

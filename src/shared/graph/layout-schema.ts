@@ -28,5 +28,3 @@ export const graphLayoutSchema = z
   .refine((rec) => Object.keys(rec).length <= MAX_LAYOUT_NODES, {
     message: `layout exceeds ${MAX_LAYOUT_NODES} nodes`,
   });
-
-export type GraphLayoutInput = z.infer<typeof graphLayoutSchema>;

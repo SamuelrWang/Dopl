@@ -80,7 +80,7 @@ export interface DoplThreadWindowsBridge {
   ) => Promise<{ ok: boolean }>;
 }
 
-export interface DoplDesktopBridge {
+interface DoplDesktopBridge {
   isDesktop: boolean;
   platform?: string;
   versions?: { electron?: string; chrome?: string };

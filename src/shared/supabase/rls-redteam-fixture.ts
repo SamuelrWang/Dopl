@@ -26,7 +26,7 @@ const FOREIGN_CONTAINER = "00000000-0000-4000-8000-000000000000";
  * (`credential-audience.ts › isSharedCredential`); the container lock rides both, so a case can
  * prove the lock alone changes no row's visibility.
  */
-export function scopeFor(userId: string, shared = false): CallerScope {
+function scopeFor(userId: string, shared = false): CallerScope {
   return {
     userId,
     sharedCredential: shared,

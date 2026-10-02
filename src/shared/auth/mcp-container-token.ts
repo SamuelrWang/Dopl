@@ -88,7 +88,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * why. A session's own ceiling is the 12h abandonment bound (§11), so this is
  * twice that.
  */
-export const CONTAINER_TOKEN_TTL_S = 60 * 60 * 24;
+const CONTAINER_TOKEN_TTL_S = 60 * 60 * 24;
 
 /**
  * The label these rows carry in "Connected apps" and in the identity surfaces.

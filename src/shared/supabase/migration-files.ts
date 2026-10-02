@@ -12,7 +12,7 @@ import { forwardRenamed, type MigrationText } from "./migration-renames";
 
 const SUPABASE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "supabase");
 
-export const MIGRATIONS_DIR = join(SUPABASE_DIR, "migrations");
+const MIGRATIONS_DIR = join(SUPABASE_DIR, "migrations");
 export const HELD_MIGRATIONS_DIR = join(SUPABASE_DIR, "migrations-held");
 
 /** Line-wise: a `--` inside a string literal also truncates its line. */

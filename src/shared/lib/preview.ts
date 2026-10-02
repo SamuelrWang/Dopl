@@ -10,7 +10,7 @@
  */
 
 /** Chars of body kept for a preview. */
-export const PREVIEW_CHARS = 120;
+const PREVIEW_CHARS = 120;
 
 /** Whitespace-collapsed, clipped at `PREVIEW_CHARS` with an ellipsis. */
 export function truncatePreview(text: string): string {

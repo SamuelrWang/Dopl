@@ -51,10 +51,10 @@ export const DEFAULT_DECLARED_LATEST = "1.38.1";
 const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,4}(?:-[0-9A-Za-z.]{1,16})?$/;
 
 /** Why a configured floor was refused. `null` when the floor was served as-is. */
-export type FloorRejection = "malformed" | "above-latest";
+type FloorRejection = "malformed" | "above-latest";
 
 /** Where `latest` came from — the refusal log must name it, or it misleads. */
-export type LatestSource = "release-feed" | "env";
+type LatestSource = "release-feed" | "env";
 
 export interface DesktopVersionFloor {
   /** The floor a client must meet, or `null` for "no floor" (fail-open). */

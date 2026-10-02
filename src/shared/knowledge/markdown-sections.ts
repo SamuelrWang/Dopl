@@ -30,10 +30,10 @@
  */
 
 /** The three addressable heading levels. `####` and deeper are body text. */
-export type HeadingLevel = 1 | 2 | 3;
+type HeadingLevel = 1 | 2 | 3;
 
 /** The largest heading level this module treats as an address. */
-export const MAX_ADDRESSABLE_LEVEL = 3;
+const MAX_ADDRESSABLE_LEVEL = 3;
 
 export interface MarkdownSection {
   /** Heading text with the `#` marks, trailing `#`s and whitespace removed. */

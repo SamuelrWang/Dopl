@@ -24,7 +24,7 @@ export interface ResourceTable {
 
 /** Both halves required: a `public` row in `access_mode='teams'` is visible to its granted teams, not
  *  the container — naming it would make clause 4 an existence oracle. */
-export const SHARED_WITH_CONTAINER =
+const SHARED_WITH_CONTAINER =
   "and(visibility.eq.public,access_mode.eq.workspace)";
 
 export const RESOURCE_TABLES: Record<ResourceType, ResourceTable> = {

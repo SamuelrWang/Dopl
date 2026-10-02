@@ -18,7 +18,7 @@ import { SECTION_HEADING_TEXT } from "./section-heading";
 
 /** The dialog heading. `px-9` on both sides: the close X is absolutely positioned at the right,
  *  so one-sided padding would centre the text off the box. */
-export const DIALOG_TITLE =
+const DIALOG_TITLE =
   // The section heading type in Title Case; `capitalize` does it, so callers write "New agent".
   cn("px-9 text-center capitalize", SECTION_HEADING_TEXT);
 

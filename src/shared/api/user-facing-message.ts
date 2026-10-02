@@ -33,5 +33,3 @@ export function userFacingMessage(
   }
   return fallback;
 }
-
-export { GENERIC_ERROR_MESSAGE, NETWORK_ERROR_MESSAGE };

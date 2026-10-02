@@ -6,9 +6,9 @@ import { z } from "zod";
  * Level vocabulary depends on scope (`resource_grants_level_check`), hence the cross-field refinement.
  */
 
-export const GRANT_SCOPE_TYPES = ["channel", "container", "team"] as const;
+const GRANT_SCOPE_TYPES = ["channel", "container", "team"] as const;
 
-export const GRANT_RESOURCE_TYPES = [
+const GRANT_RESOURCE_TYPES = [
   "knowledge_base",
   "agent_identity",
   "skill",
@@ -17,13 +17,13 @@ export const GRANT_RESOURCE_TYPES = [
 ] as const;
 
 /** Channel scopes only — two audiences, not a high/low pair. */
-export const CHANNEL_GRANT_LEVELS = ["agent_only", "visible"] as const;
+const CHANNEL_GRANT_LEVELS = ["agent_only", "visible"] as const;
 
 /** Container and team scopes only. */
-export const CONTAINER_GRANT_LEVELS = ["read", "edit"] as const;
+const CONTAINER_GRANT_LEVELS = ["read", "edit"] as const;
 
 /** The level vocabulary a scope speaks. */
-export function levelsForScope(
+function levelsForScope(
   scopeType: (typeof GRANT_SCOPE_TYPES)[number]
 ): readonly string[] {
   return scopeType === "channel" ? CHANNEL_GRANT_LEVELS : CONTAINER_GRANT_LEVELS;

@@ -54,7 +54,7 @@ export const NAV: ReadonlyArray<{
   { label: "Members", icon: Users, section: "members" },
 ];
 
-export function sectionPath(segment: string, section: NavSection): string {
+function sectionPath(segment: string, section: NavSection): string {
   return `/${segment}/${section}`;
 }
 

@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from "./admin";
 
 /** Auth-aware Supabase client for Server Components and API routes. ⚠ Must be
  *  called within a request context (where `cookies()` is available). */
-export async function getServerClient() {
+async function getServerClient() {
   const cookieStore = await cookies();
   return createServerSupabaseClient(cookieStore);
 }
