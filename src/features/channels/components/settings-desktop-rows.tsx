@@ -237,7 +237,7 @@ const DIRECT_AGENTS_OPTIONS: ReadonlyArray<SelectMenuOption<DirectAgentsValue>> 
 /**
  * DIRECT AGENTS — may an outside session of the operator's own send PRIVATE
  * instructions to agents already running on this Mac? (Samuel approved
- * 2026-09-16, off the `DIRECTION-DROP-TRACE.md` finding.)
+ * 2026-09-16, off the `docs/traces/DIRECTION-DROP-TRACE.md` finding.)
  *
  * ⚠ **THIS ROW IS THE FIX FOR A FIFTEEN-DAY SILENT FAILURE, NOT A NEW FEATURE.**
  * The lane, its store key, its IPC pair and its preload bridge all shipped on

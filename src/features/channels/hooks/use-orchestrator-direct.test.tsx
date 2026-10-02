@@ -9,7 +9,7 @@
  * the SPA ever called them — so `orchestratorDirectEnabled` was never written, the
  * consent read `false` forever, and 38 of 38 private directions filed between
  * 2026-08-31 and 2026-09-15 expired unclaimed with no cause reported to anyone.
- * `DIRECTION-DROP-TRACE.md` carries the trace;
+ * `docs/traces/DIRECTION-DROP-TRACE.md` carries the trace;
  * `scripts/check-bridge-caller-drift.mjs` is what makes the absence fail a build.
  *
  * The properties that fail SILENTLY, which is what this file is for:

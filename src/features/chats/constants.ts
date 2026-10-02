@@ -40,7 +40,7 @@ export const FORMAT_LABELS: Record<ExportFormat, string> = {
  * ⚠ THE HEAVIER HALF OF DL-001 IS STILL OPEN — this list ships the full row,
  * JSONB included, where §9 wants a summary projection and the detail path
  * carrying the bodies. A `limit` bounds the blast radius; it does not make the
- * row lean. See docs/DATA-LOADING-AUDIT.md § DL-001.
+ * row lean. See docs/archive/DATA-LOADING-AUDIT.md § DL-001.
  */
 export const CHAT_LIST_LIMIT = 200;
 

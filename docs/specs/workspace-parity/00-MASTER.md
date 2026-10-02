@@ -1,3 +1,5 @@
+> Historical record (2026-09-17) — cited for rationale; may not match current code.
+
 # 00 — MASTER: workspace parity with the desktop home space
 
 **Synthesis of the six area audits (01–06) plus the KB snapshot (07), built 2026-09-17 against
@@ -1821,13 +1823,13 @@ where code and a ruling disagree the code wins, and the disagreement is recorded
 
 | Doc | One line |
 |---|---|
-| `01-channel-surface.md` (513) | The channel record surface: 74 feature rows, 17 capability/slot knobs, 4 duplicated bodies, 23 UI rows, 10 rulings — and the finding that there is no web workspace channel page. |
-| `02-threads-artifacts-agents.md` (517) | Threads, Artifacts, Agents, templates and the launch flow: 79 rows across 9 tables; almost everything is already one implementation, and the gap is one capability, four hand-wirings and two duplicated bodies. |
+| `docs/archive/workspace-parity/01-channel-surface.md` (513) | The channel record surface: 74 feature rows, 17 capability/slot knobs, 4 duplicated bodies, 23 UI rows, 10 rulings — and the finding that there is no web workspace channel page. |
+| `docs/archive/workspace-parity/02-threads-artifacts-agents.md` (517) | Threads, Artifacts, Agents, templates and the launch flow: 79 rows across 9 tables; almost everything is already one implementation, and the gap is one capability, four hand-wirings and two duplicated bodies. |
 | `03-pages-and-ui.md` (510) | Page composition and the UI system: the page map, 26 recipe rows, the shared-tree readiness ledger (≈1,600 lines to move down), 12 rulings, and the six-wave chrome sequence. |
-| `04-workspace-only-modules.md` (964) | The 28 workspace-only modules and the reverse map: three container kinds, the two auth shapes, what is obsolete, the dependency graph, 12 rulings, and the per-wave "do not break" test lists. |
+| `docs/archive/workspace-parity/04-workspace-only-modules.md` (964) | The 28 workspace-only modules and the reverse map: three container kinds, the two auth shapes, what is obsolete, the dependency graph, 12 rulings, and the per-wave "do not break" test lists. |
 | `05-server-api-data.md` (783) | The substrate: 50 fork rows across containers, routes, projections, caches, RLS, credits, MCP and realtime; the duplicate-cache inventory; the container-kind adapter; 8 rulings. |
 | `06-rulings-archive.md` (709) | The decision archive: every ruling bearing on either surface, what is tabled and whether this uplift trips it, the open findings, twelve contradictions, 18 questions, and 25 distilled principles. |
-| `07-kb-tech-debt-snapshot.md` (23) | A verbatim snapshot of the Dopl KB entry "Tech Debt and Tabled Items", copied because the archive researcher could not reach that base. |
+| 07-kb-tech-debt-snapshot (23; deleted 2026-10-02 — the Dopl KB entry is the source) | A verbatim snapshot of the Dopl KB entry "Tech Debt and Tabled Items", copied because the archive researcher could not reach that base. |
 
 
 ---

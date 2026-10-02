@@ -1,3 +1,5 @@
+> Historical record (2026-08-05) — cited for rationale; may not match current code.
+
 # Channels rollback — named agents out, sessions in
 
 Product direction set by Samuel, 2026-08-05, in conversation. This document is the

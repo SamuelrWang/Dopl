@@ -1,3 +1,5 @@
+> Historical record (2026-09-15) — cited for rationale; may not match current code.
+
 # Desktop main-process CPU ceiling — root cause, measurements, fix plan
 
 **Status:** scoping + measured prototype. **UNCOMMITTED.** Measured 2026-09-15 on

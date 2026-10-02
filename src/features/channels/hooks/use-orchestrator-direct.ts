@@ -14,7 +14,7 @@
  * `main/orchestrator-consent.js › getOrchestratorDirect` answered `false` forever,
  * `main/agent-directions.js › handle` dropped every row at its first gate, and
  * **38 of 38 directions filed between 2026-08-31 and 2026-09-15 expired unclaimed
- * with nobody able to tell why.** The trace is `DIRECTION-DROP-TRACE.md`.
+ * with nobody able to tell why.** The trace is `docs/traces/DIRECTION-DROP-TRACE.md`.
  * `scripts/check-bridge-caller-drift.mjs` is what makes a bridge with no caller
  * fail the build rather than ship silent.
  *

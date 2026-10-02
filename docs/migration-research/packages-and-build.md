@@ -1,3 +1,5 @@
+> Historical record (2026-08-02) — cited for rationale; may not match current code.
+
 # Migration research — packages, build pipeline, and the bundled SPA
 
 Companion to [DESKTOP-MIGRATION-PLAN.md](../DESKTOP-MIGRATION-PLAN.md). Scope: what

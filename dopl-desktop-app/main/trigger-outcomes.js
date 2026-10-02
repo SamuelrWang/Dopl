@@ -116,7 +116,7 @@ function echoSeq(info) {
   const cycle = i.sdkSessionId || i.sessionId || 'init';
   return base + '#' + cycle;
 }
-// ⚠ `sessionId` IS THE SLOT KEY `i.key`, NOT `i.sessionId` (2026-09-15, AGENT-BADGE-TRACE.md).
+// ⚠ `sessionId` IS THE SLOT KEY `i.key`, NOT `i.sessionId` (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md).
 // The flat info object carries both and they are different facts: `sessionId` is the PER-LAUNCH
 // ephemeral id (fresh on every resume, a React key on the wire) and `key` is
 // `<channelId>:<taskId>:<agentId>` — `session-store.js › sessionKey`, the same value

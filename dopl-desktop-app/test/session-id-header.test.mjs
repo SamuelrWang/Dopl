@@ -1,6 +1,6 @@
 // `X-Dopl-Session-Id` — the MAIN PROCESS's half of the session stamp (2026-09-15).
 //
-// THE DEFECT THIS FILE EXISTS FOR (AGENT-BADGE-TRACE.md). Samuel: *"occasionally I'll see a
+// THE DEFECT THIS FILE EXISTS FOR (docs/traces/AGENT-BADGE-TRACE.md). Samuel: *"occasionally I'll see a
 // message that says agent ended … the badge says just Agent … I notice it popping up randomly."*
 // Those rows are `task_progress` posts this process writes about a session — the calm ended
 // note, the windowless denial counter — and they arrived carrying NO identity at all:

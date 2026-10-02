@@ -1,3 +1,5 @@
+> Historical record (2026-06-12) — cited for rationale; may not match current code.
+
 # Dead-Code Cleanup Catalog
 
 > Generated 2026-06-12. **EXECUTED 2026-06-12** — Tiers 1–5 + 7 done (typecheck + build green).

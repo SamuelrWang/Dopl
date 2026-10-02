@@ -27,7 +27,7 @@ import { MENTIONS_METADATA_KEY } from "../lib/mentions";
 // ⚠ `client_msg_id` JOINED THE LIST ON 2026-09-15 and it is not decoration: with
 // `metadata` beside it, it is what `lib/agent-post-stamp.ts › authorAgentIdOf` needs to say
 // WHICH of an operator's agents wrote the row. Without it a mention from an agent could only
-// ever render the bare noun, which is the defect AGENT-BADGE-TRACE.md is about, one surface over.
+// ever render the bare noun, which is the defect docs/traces/AGENT-BADGE-TRACE.md is about, one surface over.
 const CHANNEL_MENTION_MESSAGE_COLS =
   "id,seq,channel_id,author_user_id,author_kind,client_msg_id,body,metadata,created_at";
 

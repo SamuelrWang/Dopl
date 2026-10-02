@@ -123,7 +123,7 @@ function transport(opts = {}) {
     return Promise.resolve(r === undefined ? { ok: true, status: 200 } : r);
   };
 
-  // ⚠ `sessionStamp` IS THE REAL MODULE, NOT A STUB: a stub returning `{}` would prove only that the stub does (2026-09-15, AGENT-BADGE-TRACE.md).
+  // ⚠ `sessionStamp` IS THE REAL MODULE, NOT A STUB: a stub returning `{}` would prove only that the stub does (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md).
   const apiFetch = new Function(
     "auth", "appVersion", "sessionStamp", "deviceIdentity", "API_BASE", "fetch", "fetchWithAuthRepair",
     `${asyncFnOf(IO, "sendOnce")}\n${fnOf(IO, "apiFetch")}\n return apiFetch;`

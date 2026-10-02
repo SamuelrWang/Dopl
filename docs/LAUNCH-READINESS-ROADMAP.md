@@ -1,3 +1,5 @@
+> Historical record (2026-08-07) — cited for rationale; may not match current code.
+
 # Launch Readiness Roadmap
 
 **Date:** 2026-08-07 · **Produced by:** four parallel Opus audit agents (performance, database/security, UI feedback, retirement mapping), all read-only, against master `0a3b007` (perf items 3.x re-verified against `25c4ab9`). The retirement half lives in [RETIREMENT-UNWIRING-PLAN.md](RETIREMENT-UNWIRING-PLAN.md).

@@ -64,15 +64,9 @@ const SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.claude', 'out', 'c
 // Docs that state their own capture date and describe the tree as it was then: a dead ref in a
 // snapshot is the record. Never add a live doc here — fix its reference.
 const DATED_CAPTURES = new Map([
-  ['docs/AUDIT-FIX-VERIFICATION.md', 'captured 2026-05-04'],
   ['docs/CHANNELS-AUDIT-2026-08-07.md', 'audited 2026-08-07'],
-  ['docs/DRIFT-LEDGER-2026-08-30.md', 'measured 2026-08-30 @ 6b3b1ead'],
   ['docs/CLEANUP.md', 'generated + executed 2026-06-12'],
-  ['docs/DATA-LOADING-AUDIT.md', 'audited 2026-06-20'],
   ['docs/M5-M6-M10-AUDIT-FINDINGS.md', 'captured 2026-05-04'],
-  ['docs/M7-M11-AUDIT-FINDINGS.md', 'captured 2026-05-04'],
-  ['docs/MCP-MULTI-WORKSPACE.md', 'captured 2026-05-03'],
-  ['docs/NEXT-SESSION-FIXES.md', 'handoff 2026-08-01, ⛔ superseded 2026-08-05'],
 ]);
 
 // Per-reference exemptions for a live doc naming a deliberately deleted file. This list shrinks.

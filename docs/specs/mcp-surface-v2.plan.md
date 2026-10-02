@@ -1,3 +1,5 @@
+> Historical record (2026-08-28) — cited for rationale; may not match current code.
+
 # MCP SURFACE V2 — the whole /home space, from an agent — Scoping Plan
 
 **Repo:** Dopl · branch `master` · HEAD `6d996ec5` · desktop `1.21.0` · verified against the tree 2026-08-28.

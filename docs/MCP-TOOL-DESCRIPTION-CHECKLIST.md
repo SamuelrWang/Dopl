@@ -96,7 +96,7 @@ Measured through `listTools()` on 2026-09-02. **Served** is the whole descriptio
   cannot tighten it"*) and `packages/mcp-server/src/tools/channel-post-guidance.test.ts`, on the
   argument that the ROUTE should be what refuses an over-length summary, by
   name, instead of an opaque client-side `-32602`. See
-  `docs/MCP-V2-WAVE-A-2026-09-02.md` §9.
+  `docs/archive/MCP-V2-WAVE-A-2026-09-02.md` §9.
 
 ### Open fixes
 

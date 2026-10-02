@@ -39,7 +39,7 @@
 //
 // ⚠ **THE COST IS ON RECORD: 38 of 38 directions filed between 2026-08-31 and 2026-09-15
 // expired unclaimed**, because the consent this lane reads had no UI and so was never written
-// (`DIRECTION-DROP-TRACE.md`). Every one of them read `pending, claimed=no` to its sender and
+// (`docs/traces/DIRECTION-DROP-TRACE.md`). Every one of them read `pending, claimed=no` to its sender and
 // named no cause. A lane that drops silently is how that ran for fifteen days without anyone
 // being able to see it.
 //

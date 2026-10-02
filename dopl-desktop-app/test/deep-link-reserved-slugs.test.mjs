@@ -28,7 +28,7 @@ const SEG = "acme-a1b2c3d4e5f6";
 
 /**
  * 🔒 `RESERVED_WORKSPACE_SLUGS` ⊆ (`WEB_ONLY_ROOTS` ∪ `ROOT_ROUTES` ∪ an
- * allowlist that says WHY). G6 in `docs/DRIFT-LEDGER-2026-08-30.md` §3; closes
+ * allowlist that says WHY). G6 in `docs/archive/DRIFT-LEDGER-2026-08-30.md` §3; closes
  * and widens F-317.
  *
  * ⚠ THE TWO LISTS ANSWER THE SAME QUESTION FROM OPPOSITE SIDES.

@@ -6,9 +6,9 @@ put in … for an object template, let's say a specific field is an enumeration.
 able to set what options are in the enumeration … the structure of this gets accessed by the agents
 via MCP … clearly searchable and clearly understandable by agents because it's optimized for agents."*
 
-Research behind this doc (read these before building): `ontology-research/crm-field-types.md`
-(HubSpot / Salesforce / Attio / Airtable / Notion), `ontology-research/current-system-audit.md`
-(what exists, file:line), `ontology-research/agent-facing-schema.md` (how CRMs expose schema to
+Research behind this doc (read these before building): `../archive/ontology-research/crm-field-types.md`
+(HubSpot / Salesforce / Attio / Airtable / Notion), `../archive/ontology-research/current-system-audit.md`
+(what exists, file:line), `../archive/ontology-research/agent-facing-schema.md` (how CRMs expose schema to
 agents; the MCP face). Nothing below is built yet.
 
 ## 1. What exists today (one paragraph)

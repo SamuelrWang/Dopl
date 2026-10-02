@@ -186,7 +186,7 @@ test("AUTH HOLD: the note says the session needs a PERSON, and nothing about thi
 });
 
 // ── 2b. THE PARK-ON-CLAIM SWEEP ──────────────────────────────────────────────────────
-// 2026-09-15, Samuel's ruling off AGENT-BADGE-TRACE.md §3.1 (T5): *"should park-on-claim ends
+// 2026-09-15, Samuel's ruling off docs/traces/AGENT-BADGE-TRACE.md §3.1 (T5): *"should park-on-claim ends
 // say WHY in the post? that's the 'random' feeling, name the cause."* The sweep ends every live
 // session in a container that just gained a person, and it reached the reducer's `{type:'end'}`
 // — the OPERATOR's own End — so the transcript said `Session ended` for something nobody

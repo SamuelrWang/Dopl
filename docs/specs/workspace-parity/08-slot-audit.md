@@ -1,3 +1,5 @@
+> Historical record (2026-09-17) — cited for rationale; may not match current code.
+
 # 08 — THE SLOT-REPLACING-HOST AUDIT
 
 **Wave 0d. It gated Wave 1.** Measured 2026-09-17 against `master` at `cf87e6f6`, worktree
@@ -419,11 +421,11 @@ change that touches the file"*.
    That body lives in **`src/features/channels/components/agent-window.tsx › AgentWindowStats`**;
    `apps/desktop-ui/src/pages/agent-window/index.tsx` is the page that mounts it. The pair is
    `agent-panel.tsx › AgentStats` vs `agent-window.tsx › AgentWindowStats`, both in the shared tree.
-2. **`01-channel-surface.md` §C2** puts the /home Members-heading row and the two `IconButton`s in the
+2. **`docs/archive/workspace-parity/01-channel-surface.md` §C2** puts the /home Members-heading row and the two `IconButton`s in the
    "✘" column without saying which side is right. They have **no `onClick`** in the shared body
    (`info-tab.tsx › InfoTab`), so /home's count-only heading is the correct one and R-46 is a
    deletion, not a port.
-3. **`01-channel-surface.md` §B** rates `capabilities.knowledge` *"⚠ NEITHER — it is now unreachable
+3. **`docs/archive/workspace-parity/01-channel-surface.md` §B** rates `capabilities.knowledge` *"⚠ NEITHER — it is now unreachable
    on every host"*. Confirmed at `cf87e6f6` by measurement, not by reading: no host passes it in
    code. §E-4 / R-18 / X4 are correct as written.
 4. The Wave-0d brief's shorthand **"partly fixed via headerEdit / mentions / activityBins"** is wrong
@@ -438,7 +440,7 @@ change that touches the file"*.
 - **The counts in §2 and the classification in §3.** Every row was opened and read; the two
   derivation commands are in §1 and §5 and both take a second.
 - **§4.2's body diff.** Both files read end to end at `cf87e6f6`. It reproduces
-  `01-channel-surface.md` §C2's findings and adds the `viewerUserId` row, which §C2 does not have.
+  `docs/archive/workspace-parity/01-channel-surface.md` §C2's findings and adds the `viewerUserId` row, which §C2 does not have.
 - **§4.3, the presence defect.** Three files, one expression, no inference:
   `person-members.tsx` passes no `viewerUserId` · `MemberRoster` forwards it ·
   `isPresentForViewer` needs it and is the only caller of `isSpaRenderer()` on that path.
@@ -461,7 +463,7 @@ change that touches the file"*.
 1. ~~**NOBODY HAS COUNTED THE ASSERTIONS THAT MOVE.**~~ Seven test files die or are rewritten in step 4
    — `person-info-tab.test.tsx`, `-description`, `-edit`, `-mentions`, `-mentions-inset`, `-peers`,
    and `person-thread-activity.test.tsx` — plus `surface-slot-fixtures.tsx › standaloneSurfaceStub`
-   and the two inverting tests in §7.3. `01-channel-surface.md` § *Confidence and gaps* named this
+   and the two inverting tests in §7.3. `docs/archive/workspace-parity/01-channel-surface.md` § *Confidence and gaps* named this
    gap on 2026-09-17 and it is **still open**: this audit counted the FILES, not the assertions
    inside them. That count is Wave 1's first task, not this doc's.
 2. **The `stats` slot's two bodies (F4) were diffed by eye, not by test.** They differ on the

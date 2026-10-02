@@ -9,7 +9,7 @@
  * never written, `main/orchestrator-consent.js › getOrchestratorDirect` answered
  * `false` forever, and **38 of 38 private directions filed between 2026-08-31 and
  * 2026-09-15 expired unclaimed**, each one reporting `pending, claimed=no` and naming
- * no cause. Full trace: `DIRECTION-DROP-TRACE.md`.
+ * no cause. Full trace: `docs/traces/DIRECTION-DROP-TRACE.md`.
  *
  * Every layer was individually correct and individually tested. `test/_ipc-ops-table.mjs`
  * asserted both IPC ops existed; `test/preload-parity.test.mjs` asserted the preload
@@ -140,7 +140,7 @@ if (orphans.length > 0) {
       orphans.map((m) => `  dopl.${m}  — exposed by the preload, named by nothing in the SPA`).join("\n") +
       "\n\nA preload member nobody calls is a capability the operator cannot reach. This is\n" +
       "exactly how `orchestratorDirect` shipped dead on 2026-08-31 and dropped 38 private\n" +
-      "directions in silence (DIRECTION-DROP-TRACE.md).\n\n" +
+      "directions in silence (docs/traces/DIRECTION-DROP-TRACE.md).\n\n" +
       "Fix it by building the control, not by exempting it. If something outside the SPA\n" +
       "really does consume this member, add it to EXEMPT with the reason.\n"
   );

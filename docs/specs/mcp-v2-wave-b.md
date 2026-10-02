@@ -1,3 +1,5 @@
+> Historical record (2026-09-02) — cited for rationale; may not match current code.
+
 # MCP / architecture v2 — WAVE B plan, from Samuel's rulings (2026-09-02)
 
 **Status: SPEC. No code changes in this document.** Branch `v2/wave-b-plan`, cut from `v2/wave-a`
@@ -480,7 +482,7 @@ precondition was unsatisfiable), F-633 (a gate's name is part of its scope).
 
 Merged `--no-ff` onto the batch-2 review fixes at `d7e1b2ed`. **Not pushed. No migration applied.
 No KB sync.** Four merges + eight integration commits; 430 files, +12,065 / **−15,299**. Full
-record: `docs/MCP-V2-WAVE-B-BATCH3-2026-09-02.md`.
+record: `docs/archive/MCP-V2-WAVE-B-BATCH3-2026-09-02.md`.
 
 ⚠ **THE ROW ABOVE SAYS "only after batch 2 has run one release" AND THAT IS NOT WHAT HAPPENED.**
 Samuel ruled on 2026-09-02 to proceed straight on. The condition it was protecting — a released

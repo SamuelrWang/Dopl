@@ -1,7 +1,9 @@
+> Historical record (2026-08-03) — cited for rationale; may not match current code.
+
 # Website retirement plan — what stays, what goes, how, and in what order
 
 Phase-4 execution plan for [DESKTOP-MIGRATION-PLAN.md](../DESKTOP-MIGRATION-PLAN.md).
-Builds on [journey-audit.md](./journey-audit.md) (the 23-gap Phase-4 gate),
+Builds on [journey-audit.md](../archive/migration-research/journey-audit.md) (the 23-gap Phase-4 gate),
 verified against the tree as of 2026-08-03 on branch `min-version-gate`
 (desktop `1.8.2`, SPA default shell since 1.8.0, `DOPL_UI=remote` is the
 rollback). Everything below is re-verified against code, not the older research

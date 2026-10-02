@@ -1,6 +1,6 @@
 // `X-Dopl-Session-Id` — WHICH SESSION OF THIS OPERATOR'S A MAIN-PROCESS POST IS ABOUT.
 //
-// ── THE DEFECT IT EXISTS FOR (2026-09-15, AGENT-BADGE-TRACE.md) ──────────────────────────────
+// ── THE DEFECT IT EXISTS FOR (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md) ──────────────────────────────
 //
 // Samuel: *"occasionally I'll see a message that says agent ended. But this isn't one of Dopl's
 // agents. The badge says just Agent … I notice it popping up randomly."*

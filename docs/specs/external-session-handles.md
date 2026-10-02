@@ -1,3 +1,5 @@
+> Historical record (2026-09-18) — cited for rationale; may not match current code.
+
 # Giving an external session an address — options
 
 **DESIGN ONLY. Nothing in this document is built.** Written 2026-09-18 alongside the

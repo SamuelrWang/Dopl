@@ -1,3 +1,5 @@
+> Historical record (2026-08-02) — cited for rationale; may not match current code.
+
 # Desktop-Only Migration — Master Plan
 
 **Goal:** Dopl becomes a desktop-only product. The website is retired; the sole
@@ -17,8 +19,9 @@ protocol; the delta design below is retained as reference only. Backup taken 202
 `pre-desktop-migration-2026-08-02`.
 
 **Research docs (read before building anything):** `docs/migration-research/`
-— `desktop-main.md`, `web-pages.md`, `api-surface.md`, `auth-flows.md`,
-`packages-and-build.md`. Key corrections they made to this plan:
+— `desktop-main.md`, `auth-flows.md`,
+`packages-and-build.md` (and, archived 2026-10-02 under
+`docs/archive/migration-research/`, `web-pages.md` and `api-surface.md`). Key corrections they made to this plan:
 
 - **Auth decision (Phase 2 prerequisite): Supabase-JWT-as-Bearer.** The SPA's
   API calls carry `Authorization: Bearer <supabase access JWT>`;
@@ -45,7 +48,7 @@ protocol; the delta design below is retained as reference only. Backup taken 202
 - **`packages/dopl-client` is main-process material only** (node:async_hooks,
   agent-bearer auth model) — the SPA renderer keeps `src/shared/api/api-client.ts`
   as its HTTP client, with fetch as the future IPC seam. ~50/123 API routes
-  covered by dopl-client; gaps listed in api-surface.md.
+  covered by dopl-client; gaps listed in docs/archive/migration-research/api-surface.md.
 - **6 API gaps to build** for page ports: onboarding gate, default-workspace
   provisioning, overview head-counts, knowledge ownerNames, KB-slug
   resolution (client-side), plus the bearer branch above.
@@ -267,7 +270,7 @@ Code snapshots: tag `pre-<phase>-<date>` before each phase begins
 
 ## Journey-audit consequences (2026-08-02, post-wave-3)
 
-`docs/migration-research/journey-audit.md` traced all 11 user journeys +
+`docs/archive/migration-research/journey-audit.md` traced all 11 user journeys +
 all 33 web pages: **23 gaps (4 S1, 8 S2, 11 S3)**. Standing consequences:
 
 1. **The journey audit is a Phase-4 GATE**: retirement does not execute

@@ -135,7 +135,7 @@ const decidePosts = (h) => h.posts.filter((p) => p.path === wire.ROUTES.decide);
 // is said … SILENCE IS THE DESIGN. A refusal from a machine that has not opted in would itself
 // admit the machine is listening, which is the one thing an un-opted-in machine must not
 // disclose."* It passed every run for fifteen days while **38 of 38 real directions expired
-// unclaimed and nobody could see why** (`DIRECTION-DROP-TRACE.md`).
+// unclaimed and nobody could see why** (`docs/traces/DIRECTION-DROP-TRACE.md`).
 //
 // The premise was false ON THIS LANE. `operator_user_id` is `ctx.userId` and is never a
 // parameter, so the only party who can file a direction against a machine is that machine's own

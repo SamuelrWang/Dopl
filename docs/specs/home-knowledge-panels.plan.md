@@ -21,7 +21,7 @@
 
 
 **Repo:** Dopl · branch `master` · HEAD `9fcdd344` (v1.20.0 armed) · verified against the tree 2026-08-26.
-**Precedent build:** `docs/specs/guest-role.plan.md` (M0–M5 shape, adversarial-pin culture).
+**Precedent build:** `docs/archive/specs/guest-role.plan.md` (M0–M5 shape, adversarial-pin culture).
 **Depends on / touches:** F-323 (agent-authored container KB — this build resolves its shape), F-327 (one-channel-per-container unenforced — design made robust to it), F-328 (untouched).
 
 Samuel's rulings (2026-08-26, decided): three KB scopes on /home (A shared-into-channel / B private-in-channel / C private-across-channels in the HOME workspace = default standard workspace); (KB, channel) grants with three states (absent / agent_only / visible); guests CAN read `visible` grants via a channel-scoped lane; guest-write is a per-grant setting default OFF; the audience ceiling (agent in a shared channel reaches only channel-granted KBs, enforced at the tool boundary, never by prompt); egress already solved by outbound consent — only add the loud warning on `auto_both`+`full`+non-owner; skills/templates follow later (generalizable table, build knowledge only).

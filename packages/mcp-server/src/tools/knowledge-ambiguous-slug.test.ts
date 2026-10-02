@@ -9,7 +9,7 @@
  * three live bases shared `dopl-development`; the row `.find` reached was an
  * empty shell in the home space, and `get_tree` answered "0 folders, 0
  * entries" for ten days while the real base filled up elsewhere
- * (`KB-LOSS-TRACE.md`). Nothing was ever deleted.
+ * (`docs/traces/KB-LOSS-TRACE.md`). Nothing was ever deleted.
  *
  * ⚠ **WHY A SILENT PICK IS THE WORST OF THE OPTIONS.** It cannot be diagnosed
  * from its own answer: an empty tree is exactly what an empty base looks like.

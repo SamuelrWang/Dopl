@@ -1,3 +1,5 @@
+> Historical record (2026-09-17) — cited for rationale; may not match current code.
+
 # 05 — Server, API and data model: the HOME↔WORKSPACE parity substrate
 
 **Area:** containers, routes, projections, caches, RLS, credits, MCP, realtime, desktop main.

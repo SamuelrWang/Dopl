@@ -1,3 +1,5 @@
+> Historical record (2026-08-22) — cited for rationale; may not match current code.
+
 # Agent Templates — engineering spec
 
 **Written 2026-08-22.** Status legend used throughout:

@@ -1,3 +1,5 @@
+> Historical record (2026-08-03) — cited for rationale; may not match current code.
+
 # Auth flows — as-built, and the target design for the bundled SPA
 
 Research doc for the desktop-only migration ([DESKTOP-MIGRATION-PLAN.md](../DESKTOP-MIGRATION-PLAN.md),

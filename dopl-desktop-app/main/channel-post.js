@@ -44,7 +44,7 @@ const { diag } = require('./diag');
 // metadata itself and the receiver's notification reads — and `sessionId`.
 //
 // ⚠ `sessionId` IS THE SLOT KEY AND IT RIDES ON THE HEADER, NEVER IN `metadata`
-// (2026-09-15, AGENT-BADGE-TRACE.md). `resolvePostMetadata` strips a caller-supplied
+// (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md). `resolvePostMetadata` strips a caller-supplied
 // `metadata.session_id` unconditionally — a caller able to set it could attribute its own post
 // to somebody else's session — and re-stamps the reserved key from `X-Dopl-Session-Id` alone.
 // So passing it here is what makes a lifecycle note ATTRIBUTABLE: with it the transcript prints

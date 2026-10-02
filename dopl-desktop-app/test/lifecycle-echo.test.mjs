@@ -190,7 +190,7 @@ test("C-5 survives: the calm note is said ONCE per (thread, cycle)", () => {
   assert.equal(posts.length, 1, "an eviction reaching a held session must not say it twice");
 });
 
-// ── WHICH SESSION WROTE IT (2026-09-15, AGENT-BADGE-TRACE.md) ────────────────────────────
+// ── WHICH SESSION WROTE IT (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md) ────────────────────────────
 //
 // THE DEFECT. This note is ABOUT one session and arrived saying nothing about which. The server
 // strips a caller-supplied `metadata.session_id` and re-stamps the reserved key ONLY from the

@@ -84,7 +84,7 @@ operator's agent. Friction target: link → Google sign-in → talking, under a 
   surface's web-mount requirements (providers, query client, realtime branch,
   transport — the SPA uses an IPC transport; the web needs the fetch transport),
   and the desktop-detection pattern for the claim handoff. Deliverable: a short
-  written plan in this file's directory (`guest-web-channel.plan.md`) with file paths.
+  written plan (`docs/archive/specs/guest-web-channel.plan.md`, archived 2026-10-02) with file paths.
 - **M1 web mount**: the `/c/...` route renders the shared surface for a member of a
   link container, reads working (transcript, threads, info), no realtime yet.
 - **M2 live + writes**: posting, doorbell refetch/realtime, composer parity where it

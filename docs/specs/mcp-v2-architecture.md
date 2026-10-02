@@ -1,3 +1,5 @@
+> Historical record (2026-09-02) — cited for rationale; may not match current code.
+
 # MCP / architecture v2 — target model, guardrails ledger, two-wave build plan
 
 **Status: SPEC. No code changes in this phase.** Branch `v2/architecture`, cut from

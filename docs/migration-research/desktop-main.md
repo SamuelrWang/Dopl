@@ -1,3 +1,5 @@
+> Historical record (2026-08-03) — cited for rationale; may not match current code.
+
 # Desktop main process — migration map
 
 **Scope:** `dopl-desktop-app/main/` (89 modules) + `dopl-desktop-app/renderer/` (preloads and

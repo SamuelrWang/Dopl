@@ -1,3 +1,5 @@
+> Historical record (2026-09-28) — cited for rationale; may not match current code.
+
 # Database cleanup audit — 2026-09-28
 
 Samuel (verbatim): *"look at the database and look for dead tables, dead stuff in the database, and

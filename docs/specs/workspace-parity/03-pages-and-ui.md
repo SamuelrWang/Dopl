@@ -1,3 +1,5 @@
+> Historical record (2026-09-17) — cited for rationale; may not match current code.
+
 # Workspace parity — 03. Pages and the UI system
 
 **Area:** page-level composition and the UI/visual system.

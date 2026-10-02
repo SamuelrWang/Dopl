@@ -1,3 +1,5 @@
+> Historical record (2026-09-02) — cited for rationale; may not match current code.
+
 # RELEASE RUNBOOK — MCP/architecture v2, Waves A+B
 
 **Status at time of writing: NOT RELEASABLE. Two CI gates are red and the

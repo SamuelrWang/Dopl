@@ -1,3 +1,5 @@
+> Historical record (2026-08-07) — cited for rationale; may not match current code.
+
 # Channels Audit — 2026-08-07
 
 **Method:** four independent read-only Opus agents against the current working tree (`master`, post-retirement edits): spec-vs-code, thread/session lifecycle, permissions/multi-party, client wiring/races. Nothing was modified. Findings below are **deduplicated** — several were reached independently from two or three angles, which is noted where it happened (independent confirmation = higher confidence).

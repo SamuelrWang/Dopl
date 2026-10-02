@@ -252,7 +252,7 @@ function announceDenial(s, tool, gateReason) {
       s.taskId || undefined,
       undefined,
       `denied ${tool} (${why}); further denials counted`,
-      // ⚠ TWO IDS, TWO JOBS, DELIBERATELY NOT COLLAPSED (2026-09-15, AGENT-BADGE-TRACE.md). The
+      // ⚠ TWO IDS, TWO JOBS, DELIBERATELY NOT COLLAPSED (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md). The
       // `clientMsgId` keys on the EPHEMERAL id because a resumed session may legitimately start
       // being refused again; the ATTRIBUTION stamp keys on the SLOT key because that is the one
       // naming the AGENT, which is what makes this row say who is being refused rather than the

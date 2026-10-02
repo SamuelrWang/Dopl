@@ -1,3 +1,5 @@
+> Historical record (2026-08-07) — cited for rationale; may not match current code.
+
 # Retirement Unwiring Plan — Canvas, Workflows, Configuration
 
 **Date:** 2026-08-07 · **Goal:** hide these three features from users and agents for launch — code stays in the repo, user-facing wiring goes. Produced by a read-only Opus audit against master `0a3b007`. Companion doc: [LAUNCH-READINESS-ROADMAP.md](LAUNCH-READINESS-ROADMAP.md).
@@ -24,7 +26,7 @@
 | **4 — Seeds + onboarding** | "Workspace upkeep" workflow, `walk-a-workflow` skill, workflow-teaching Dopl Guide KB entries and the `bootstrap-prompt.ts` WORKFLOW rubric all removed; seed order is now KB → skills → ontology → chat. Ontology/knowledge/skills seeds untouched (D5). |
 | **5 — Realtime / DB load** | `useWorkflowsRealtime` is an inert stub (the `WORKFLOW_TABLES` literal is **gone, not emptied** — `ui-sync-tables.test.mjs` regexes for it); `ui-sync.js` `SYNC_TABLES` 22 → 17 bindings; paired with migration `20260807100000` (D8, R4). |
 | **6 — Soft-delete removal (§2b)** | `features/trash/` deleted whole, with the skills trash modal, every `listTrashed*`/`restore*`/`purge*` service fn, the trash/restore API routes and the `purge-trash` cron + its `vercel.json` entry. All deletes are hard deletes behind a confirm dialog. **MCP deletes blocked entirely** at one choke point (`DELETE_BLOCKED_OPS` + the fail-closed `DELETE_OP_SHAPE`, one `DELETE_REFUSAL` string). `/api/workflows/**` deliberately left soft-deleting (D3 — retired surface, don't half-migrate). |
-| **7 — Docs** | This block; ENGINEERING.md §7 rewritten + stale canvas/workflow/cluster references marked retired throughout; RETIRED banners on `WORKFLOW-BUILDER-PLAN.md` and `WORKFLOW-PIVOT-HANDOFF.md`; `LAUNCH-READINESS-ROADMAP.md` scope note updated. `MULTIPLAYER-PLAN.md` needed nothing (zero workflow references). Root `CLAUDE.md` / `README.md` / `CONTRIBUTING.md` re-verified clean. |
+| **7 — Docs** | This block; ENGINEERING.md §7 rewritten + stale canvas/workflow/cluster references marked retired throughout; RETIRED banners on `docs/archive/WORKFLOW-BUILDER-PLAN.md` and the workflow-pivot handoff (deleted 2026-10-02); `LAUNCH-READINESS-ROADMAP.md` scope note updated. `docs/archive/MULTIPLAYER-PLAN.md` needed nothing (zero workflow references). Root `CLAUDE.md` / `README.md` / `CONTRIBUTING.md` re-verified clean. |
 
 ### ✅ Migrations — ALL APPLIED (measured 2026-08-11)
 
@@ -118,7 +120,7 @@ Commit `0a3b007` also matters here: it audited realtime-published tables, wrote 
 Role picker + invite dialog "…KBs, skills, canvas" (`member-bits.tsx:18`, `invite-dialog.tsx:39`) · team detail "Workflow access" section and the members list's "No knowledge bases or workflows yet." (both files DELETED 2026-08-19 with the old members console; the v2 console carries neither string) · conflict dialog naming a workflow (`members/components/conflict-dialog.tsx` — DELETED 2026-08-11 with the whole `TEAM_KB_ACCESS_CONFLICT` path, which had no producer left) · **Trash "Workflows" filter tab** (`workspace-trash-section.tsx` — DELETED with the whole trash feature in Phase 6, so the line numbers this entry carried are unresolvable; see D6) · 409 `SKILL_ATTACHED_TO_WORKFLOWS` user-facing error (`skills/server/service-writes.ts:154-167`) · `layout-shell.tsx:19`.
 
 ### Docs that would mislead a future agent
-`docs/ENGINEERING.md:324` (**highest risk — CLAUDE.md points every agent here**; currently dirty in the other session), `:217` · `docs/WORKFLOW-BUILDER-PLAN.md` · `docs/WORKFLOW-PIVOT-HANDOFF.md` · `docs/migration-research/web-pages.md` · `docs/REFACTOR-FINDINGS.md:208,216` (also dirty). Root `CLAUDE.md`/`README.md`/`CONTRIBUTING.md` clean.
+`docs/ENGINEERING.md:324` (**highest risk — CLAUDE.md points every agent here**; currently dirty in the other session), `:217` · `docs/archive/WORKFLOW-BUILDER-PLAN.md` · the workflow-pivot handoff (deleted 2026-10-02) · `docs/archive/migration-research/web-pages.md` · `docs/REFACTOR-FINDINGS.md:208,216` (also dirty). Root `CLAUDE.md`/`README.md`/`CONTRIBUTING.md` clean.
 
 ---
 
