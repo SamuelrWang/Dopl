@@ -666,8 +666,8 @@ Backend:
   code fences, quotes, short bodies, records, milestones; throttle).
 - MCP/desktop: `tool-manifest.test`, `granular.test` (binding, carry, preset refusal on legacy),
   `call-spelling.test`, `legacy-surface` snapshot re-record, `tool-budget` ceilings,
-  `granular-text.test` (450 cap), `channel-source` guidance, desktop `test/message-source.test.mjs`
-  parity, `test/dopl-write-op-gating.test.mjs` (dopl_show gated as an own-channel post), glasses
+  `granular-text.test` (450 cap), `channel-source` guidance, desktop message-source
+  parity (no `test/message-source.test.mjs` was written; coverage is `src/features/channels/server/message-source.test.ts`), `test/dopl-write-op-gating.test.mjs` (dopl_show gated as an own-channel post), glasses
   `tools.test`, `exposure.test`, `menu` read-mode tests.
 - Gates: `npm run typecheck`, targeted vitest, `npm run build` (root), `packages/mcp-server` tests,
   desktop `npm test`.

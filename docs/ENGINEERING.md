@@ -1,6 +1,6 @@
 # Engineering Guidelines
 
-This document is the source of truth for how code in this repo is organized, named, written, and shipped. It applies to both the ongoing refactor and all future development. When this doc and existing code disagree, this doc wins — and the code is a refactor candidate.
+This document is the rationale and history behind how code in this repo is organized, named, written, and shipped. **It is not the standing read**: precedence is code > docs/INVARIANTS.md > this file (CLAUDE.md). When this doc and the code disagree, the code wins and this doc is the correction candidate; when it disagrees with INVARIANTS.md, INVARIANTS wins. *(Superseded 2026-08-11: this line used to say "this doc wins".)*
 
 Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase · Stripe · Anthropic SDK.
 
@@ -16,7 +16,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 ### Known debt
 
-See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids) — pruned 2026-07-17 to open-only (resolved entries live in that file's git history). At a glance: files still over the 500-line cap (F-093, §2 table below — **the set is down to FIVE as of 2026-08-08, all five exempt-and-listed, and every file that left did so by a real split**), deliberate scale deferrals (ontology snapshot F-026, chat pagination F-027), and the CAS token design smell (F-038). Lint debt is ZERO — keep `npx eslint` at 0 errors; the invariant test suites (root `npx vitest run` + `packages/mcp-server` `npx vitest run`) are part of definition-of-done for MCP/tool and service changes. **RE-MEASURED 2026-08-08 after the split + fix wave: `npx eslint src packages apps` = 0 errors AND 0 WARNINGS, `dopl-desktop-app` `npx eslint .` = clean.** ⚠ The baseline this line carried is retired: it said "1 baseline warning, `proxy.ts:143`" (and REFACTOR-FINDINGS' gate said two, adding `use-boot-state.ts`) — there are none. Both trees are at a true zero, which means **the next warning to appear is a NEW one and there is no baseline to hide it in**. Previously: **it was NOT zero for part of the 2026-07-31 session** — `packages/mcp-server/src/tools/channel-ops-write.ts` sat at **503** mid-wave (an over-cap `max-lines` ERROR, recorded in `channel-ops-open.ts`'s own header) and `dopl-desktop-app/main/realtime.js` was pushed past the cap by the `channel_agents` UPDATE binding (recorded in `realtime-agents.js`'s header). Both were split back under before the wave ended. Record it that way rather than only recording the green end state: the claim on this line is what a later agent trusts instead of running the command, so a session that breaks it and fixes it should say so, and a session that breaks it and stops should not be able to leave this sentence standing.
+See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of findings (`F-NNN` ids). Resolved entries are kept IN PLACE and marked (that file's Status legend, corrected 2026-08-30); the 2026-07-17 and 2026-07-31 prunes were one-off bulk passes. At a glance: files still over the 500-line cap (F-093, §2 table below — **TWO non-generated files as of 2026-10-02, both exempt-and-listed**; it was five on 2026-08-08), deliberate scale deferrals (ontology snapshot F-026, chat transcript pagination F-027), and the CAS token design smell (F-038). Lint debt is ZERO — keep `npx eslint` at 0 errors; the invariant test suites (root `npx vitest run` + `packages/mcp-server` `npx vitest run`) are part of definition-of-done for MCP/tool and service changes. **RE-MEASURED 2026-08-08 after the split + fix wave: `npx eslint src packages apps` = 0 errors AND 0 WARNINGS, `dopl-desktop-app` `npx eslint .` = clean.** ⚠ The baseline this line carried is retired: it said "1 baseline warning, `proxy.ts:143`" (and REFACTOR-FINDINGS' gate said two, adding `use-boot-state.ts`) — there are none. Both trees are at a true zero, which means **the next warning to appear is a NEW one and there is no baseline to hide it in**. Previously: **it was NOT zero for part of the 2026-07-31 session** — `packages/mcp-server/src/tools/channel-ops-write.ts` sat at **503** mid-wave (an over-cap `max-lines` ERROR, recorded in `channel-ops-open.ts`'s own header) and `dopl-desktop-app/main/realtime.js` was pushed past the cap by the `channel_agents` UPDATE binding (recorded in `realtime-agents.js`'s header). Both were split back under before the wave ended. Record it that way rather than only recording the green end state: the claim on this line is what a later agent trusts instead of running the command, so a session that breaks it and fixes it should say so, and a session that breaks it and stops should not be able to leave this sentence standing.
 
 TanStack Query is now the server-state layer (§7) and every feature's client data hooks are on it — the legacy `useApiGet` / per-feature `useFetch` copies are gone. Don't reintroduce `useEffect + fetch + useState` for mount-time GETs; mutations in event handlers use `apiRequest` (plus a `queryClient.setQueryData`/`invalidateQueries` when a cached list must reflect the change).
 
@@ -211,10 +211,10 @@ src/features/<name>/
 
 ### Rules
 
-- **No sideways imports between features.** `features/chat` imports from `features/canvas` → NO. If both need the same thing, it goes in `shared/`.
+- **No sideways imports between features.** `features/chats` imports from `features/channels` → NO. If both need the same thing, it goes in `shared/`.
 - **`server/` folders never run in the browser.** Use `import "server-only"` at the top of `server/service.ts` and `server/repository.ts`.
 - **Barrel files (`index.ts`) are the public API of a feature.** External consumers import `from "@/features/chat"` — not deep paths. Internal files import each other by relative path.
-- **One service per feature.** If a feature has two services (e.g., current `clusters/service.ts` + `community/service.ts`), merge or clarify the boundary (see §8).
+- **One service per feature.** If a feature has two services, merge or clarify the boundary (see §8). *(The original example, `clusters/` + `community/`, is deleted.)*
 
 ---
 
@@ -224,17 +224,17 @@ These are already 99% consistent in this repo. Codifying them so they stay that 
 
 | What | Convention | Example |
 |------|------------|---------|
-| Files | `kebab-case` | `chat-panel.tsx`, `use-panel-ingestion.ts` |
-| Directories | `kebab-case` | `knowledge/`, `canvas/` |
-| React components (exported name) | `PascalCase` | `ChatPanel`, `CanvasStoreProvider` |
-| Functions | `camelCase` | `extractWebContent`, `normalizeTag` |
-| Hooks (file + fn) | `use-kebab-case.ts` exporting `useCamelCase` | `use-chat.ts` → `useChat()` |
+| Files | `kebab-case` | `channel-manage.tsx`, `use-api-mutation.ts` |
+| Directories | `kebab-case` | `knowledge/`, `agent-identities/` |
+| React components (exported name) | `PascalCase` | `ChannelsCore`, `OntologyView` |
+| Functions | `camelCase` | `mentionSlug`, `normalizeDisplay` |
+| Hooks (file + fn) | `use-kebab-case.ts` exporting `useCamelCase` | `use-api-mutation.ts` → `useApiMutation()` |
 | Constants (module-level) | `SCREAMING_SNAKE_CASE` | `MAX_LINK_DEPTH`, `CHUNK_SIZE` |
 | Local consts | `camelCase` | `const now = Date.now()` |
-| Types/interfaces | `PascalCase`, **no** `I`-prefix, **no** `Type`/`Interface` suffix | `Entry`, `IngestRequest` |
-| Enums / union type names | `PascalCase` | `SourceType`, `PanelKind` |
+| Types/interfaces | `PascalCase`, **no** `I`-prefix, **no** `Type`/`Interface` suffix | `ChannelMessage`, `AgentDirection` |
+| Enums / union type names | `PascalCase` | `WorkspaceKind`, `ToolSet` |
 | Redux-style actions | `SCREAMING_SNAKE_CASE`, `DOMAIN_VERB` | `PANEL_MOVE`, `CLUSTER_CREATE` |
-| API route segments | `kebab-case` | `/api/workspaces/[workspaceSlug]/overview-counts` |
+| API route segments | `kebab-case` | `/api/onboarding/mcp-status` |
 | Dynamic route params | `camelCase` in brackets | `[chatId]`, `[panelId]` |
 | DB tables | `snake_case`, plural | `canvas_panels`, `workflow_steps` |
 | DB columns | `snake_case` | `entry_id`, `created_at` |
@@ -327,7 +327,7 @@ Do **not** extract just for "reusability" if there's one caller. Extract when th
 ### Hooks
 
 - One hook per file: `src/features/<name>/hooks/use-<name>.ts`.
-- Hook name matches file name (`use-chat.ts` exports `useChat`).
+- Hook name matches file name (`use-api-mutation.ts` exports `useApiMutation`).
 - A hook that mutates server state should return `{ data, isLoading, error, mutate }` or similar consistent shape.
 - No "mega-hooks." If your hook returns more than ~8 things, split.
 
@@ -626,7 +626,7 @@ Per-message desktop notifications were retired and replaced by a mention gate: a
 
 ⛔ **RETIRED 2026-08-07, DELETED 2026-08-11 / the other side was already dead before that.** `features/community/` (publish / fork / gallery on `published_clusters`) no longer exists in the tree, and `features/clusters/` — per-user CRUD on the `clusters` table, i.e. **workflow** clusters — went with workflows on 2026-08-11 (§7): the feature, `/api/clusters/**`, the `dopl_cluster` tools and the `clusters` table are all gone. There is no live boundary left to keep explicit. Kept as a heading so a reader who greps "cluster" here learns the answer instead of the 2026-06 model.
 
-**The live cluster concept is ONTOLOGY clusters** (`ontology_clusters`, the `dopl_ontology` board) — a different table, a different feature, zero workflow coupling. Check the table name before assuming which one a symbol means.
+**The live concept is an ONTOLOGY** (table `ontologies`, renamed from `ontology_clusters` by `20261022120000_ontology_vocabulary_rename.sql`; the ontology board) — a different table, a different feature, zero workflow coupling. Check the table name before assuming which one a symbol means.
 
 ### Billing & entitlements (Free / Solo / Team — 2026-07-19; workspace model since 2026-07-16)
 
@@ -761,7 +761,7 @@ v1.5 promotes a thread ("task" in the v1.5-era vocabulary) from a message-derive
 
 Five robustness gaps in the `dopl_channel` MCP tool, so an agent can reliably drive cross-user task collaboration. No web/desktop changes; MCP + client + one service change + one migration. Migration `channel_tasks_client_msg_id` **APPLIED LIVE to prod** (`mrefkedvdehahjejreae`).
 
-- **Thread READ ops.** `list_threads` (`channel`) and `get_thread` (`channel`,`thread`) — the first way to enumerate/inspect threads over MCP (previously agents could create/close by id but not discover them). `list_threads` reuses the existing `GET /tasks` + `listChannelTasks` (server lane, storage name); `get_thread` adds `GET /tasks/[taskId]` + `getChannelTask(ctx, channelId, taskId)` (404 for a thread not in the channel — id unprobeable). `@dopl/client` gains `listChannelThreads`/`getChannelThread`; handlers `opListThreads`/`opGetThread` render readably (thread list / detail block) through the `_dopl_status` footer. Both are **READS** — added to `READ_OPS.dopl_channel` in `parity.test.ts` (NOT `WRITE_OPS`, NOT `sessionOnly`); `KNOWN_*_DRIFT` stays `{}`. ⚠ **`get_thread` AND ITS `READ_OPS` ENTRY BOTH LEFT ON 2026-09-02** — the op folded into `read(thread=)` (C15) and the allowlist entry outlived it by a day, which is why `parity.test.ts` now asserts `READ_OPS ⊆ op enum` the way it always did for `WRITE_OPS`: an allowlist entry for an op nobody serves fails nothing and reads as a classification somebody made.
+- **Thread READ ops.** *(Superseded 2026-09-02: `get_thread` folded into `read(thread=)` and `list_threads` is removed vocabulary — `channel-ops-read.ts`, `law-removed-vocabulary.ts`.)* `list_threads` (`channel`) and `get_thread` (`channel`,`thread`) — the first way to enumerate/inspect threads over MCP (previously agents could create/close by id but not discover them). `list_threads` reuses the existing `GET /tasks` + `listChannelTasks` (server lane, storage name); `get_thread` adds `GET /tasks/[taskId]` + `getChannelTask(ctx, channelId, taskId)` (404 for a thread not in the channel — id unprobeable). `@dopl/client` gains `listChannelThreads`/`getChannelThread`; handlers `opListThreads`/`opGetThread` render readably (thread list / detail block) through the `_dopl_status` footer. Both are **READS** — added to `READ_OPS.dopl_channel` in `parity.test.ts` (NOT `WRITE_OPS`, NOT `sessionOnly`); `KNOWN_*_DRIFT` stays `{}`. ⚠ **`get_thread` AND ITS `READ_OPS` ENTRY BOTH LEFT ON 2026-09-02** — the op folded into `read(thread=)` (C15) and the allowlist entry outlived it by a day, which is why `parity.test.ts` now asserts `READ_OPS ⊆ op enum` the way it always did for `WRITE_OPS`: an allowlist entry for an op nobody serves fails nothing and reads as a classification somebody made.
 - **`create_thread` idempotency.** `create_thread` accepts `client_msg_id` (like `post`). Server-side dedup mirrors `channel_messages`: nullable `channel_tasks.client_msg_id` + partial unique index `(channel_id, client_msg_id) WHERE client_msg_id IS NOT NULL`; `createTask` (`service-tasks.ts` since v2.6) returns the existing task on a `client_msg_id` hit (and on a 23505 insert race) **without re-posting the initial request** — so a retried create can't double-create the row OR double-spawn the responder window. Wired through `TaskCreateSchema`, `POST /tasks`, `repository-tasks.findTaskByClientId`, `@dopl/client.createChannelThread`, and `opCreateThread`.
 - **`post task=` error mapping.** `opPost` (`channel-ops-write.ts`) now catches `isBadRequest` **independent of `to`**: an unresolvable `task=<uuid>` with no `to` previously rethrew the raw `CHANNEL_TASK_NOT_IN_CHANNEL` 400; it now maps to "That task is not in this channel — check the task id, or post without `task`."
 - **PEER-AUTHORED TEXT IN `dopl_channel` RESULTS — the one rule, and the module that owns it (Q1, completed on the WRITE side 2026-07-31).** A tool result has TWO ZONES. Message **bodies** are the zone `UNTRUSTED_BODY_HEADER` explicitly disclaims. **Everything else — headings, bullet heads, author labels, the legend, every confirmation and every error line — is read by the model as NARRATION BY THE SERVER**, and any peer-authored string spliced there is read as ours. The rule: **every peer-authored string that reaches a result goes through `neutralizeInline` / `inlineOr` in `packages/mcp-server/src/tools/channel-shared.ts`. ONE definition — do not add a second neutralizer, and do not decide per site whether a value is "really" attacker-reachable.** That per-site judgement is exactly what left `opCloseThread` rendering a raw `**${thread.title}**` through a whole audit: closing is permitted to the thread's TARGET, so the ordinary case renders a title the *peer* typed. Peer-authored = channel `name`/`topic`, thread `title`/`outcomeSummary`, `profiles.display_name`, **and `metadata.taskId`** (stored VERBATIM for any non-UUID value — `resolvePostMetadata` gates only inside `if (isUuid(...))` and the route's `metadata` is an unbounded `z.record`). `ResolvedMember.label` is neutralized AT THE SOURCE in `memberLabel`, so write ops splice it directly and must NOT re-wrap it. Three scoped headers live in `channel-render.ts` (`_BODY_`, `_LISTING_`, `_THREAD_`) and are shared by both sides; a header is emitted **FIRST**, above the content it frames. Backed at the data layer by charset rules in `src/features/channels/schema.ts` (name + topic) and `src/app/api/user/profile/route.ts` (display_name). Pinned by `channel-narration.test.ts` (read), `channel-narration-write.test.ts` (write), `channel-untrusted.test.ts`.
@@ -866,7 +866,7 @@ A naming round, not a behavior round: the product called one exchange a "task", 
 - **MCP HARD CUTOVER, no aliases.** `create_task` → `create_thread`, `close_task` → `close_thread`, `set_task_mode` → `set_thread_mode`, `list_tasks` → `list_threads`, `get_task` → `get_thread`; `post`'s `task=` param → `thread=`. The old names return the standard unknown-op error, so **a connector must be reloaded**. Enum + `WRITE_OPS.dopl_channel` (`server.ts`) + `READ_OPS.dopl_channel` (`parity.test.ts`) + handlers + `@dopl/client` methods moved together; parity 52 green with `KNOWN_*_DRIFT` still `{}`. **Both `dist/` rebuilt** (`npm run build:packages`) — the app loads `dist` at runtime, so a stale `dist` ships the old surface.
 - **`CHANNEL_DESCRIPTION` rewritten.** Leads with THE MODEL verbatim, then the protocol (open or find a thread; thread every post with `thread=<id>`; post progress as it lands; close when the GOAL is done). It also now states the real cost model, correcting a standing inaccuracy: **every** channel op may gate, own-channel `post` included, and the operator's v2.9 Axis-B Messages posture is the only thing that can send without a click (the agent cannot observe it, and any grant is per-session and dropped on park).
 - **Web domain types + copy.** `ChannelTask` → `ChannelThread`, `TaskStatus` → `ThreadStatus`, `TaskMode` → `ThreadMode`, `TaskOutcome` → `ThreadOutcome`; `useChannelTasks` → `useChannelThreads` (`hooks/use-channel-threads.ts`, returns `threads`); `task-panel.tsx` → `thread-panel.tsx` (`TaskPanel` → `ThreadPanel`); client fns → `listChannelThreads` / `createChannelThread` / `closeChannelThread` / `reopenChannelThread` / `setChannelThreadMode`. Visible copy: `Task active|complete|failed` → `Thread active|complete|failed`, `Close task` → `Close thread`, `Reopen task` → `Reopen thread`, `Open window` → `Open session`, the panel heading → `Threads`, and the two session notes now say thread ("This thread has no session on this machine.", "The session was ended on the desktop. The thread stays open."). Route paths and request/response field names are UNCHANGED (storage names) and mapped at the client boundary.
-- **Name clash resolved (F-081).** The channel detail pane is `ChannelPane` (`components/channel-pane.tsx`), so `ChannelThread` now names only the TYPE (one exchange). The transcript component followed one level down: `MessageThread` → **`ChannelTranscript`** (`components/channel-transcript.tsx` + test), imported by `channel-pane.tsx` — it renders the WHOLE channel transcript (every message, session card, and activity row), not one thread. In `lib/group-thread.ts` the pure domain type `TaskOverlay` → `ThreadOverlay`; `SessionGroup.taskId` deliberately KEEPS the `task` spelling (it is the `metadata.taskId` wire value verbatim) and carries a BOUNDARY comment saying so.
+- **Name clash resolved (F-081).** *(Superseded 2026-08-18: `channel-pane.tsx` and `channel-transcript.tsx` were deleted at the channels-v2 cutover; the channels page is the former v2.)* The channel detail pane is `ChannelPane` (`components/channel-pane.tsx`), so `ChannelThread` now names only the TYPE (one exchange). The transcript component followed one level down: `MessageThread` → **`ChannelTranscript`** (`components/channel-transcript.tsx` + test), imported by `channel-pane.tsx` — it renders the WHOLE channel transcript (every message, session card, and activity row), not one thread. In `lib/group-thread.ts` the pure domain type `TaskOverlay` → `ThreadOverlay`; `SessionGroup.taskId` deliberately KEEPS the `task` spelling (it is the `metadata.taskId` wire value verbatim) and carries a BOUNDARY comment saying so.
 - **Not renamed on purpose.** Everything on the storage side: `channel_tasks`, `metadata.task*` keys, `task_*` message kinds, `TASK_*` error codes, `/tasks` routes, and the server lane's own identifiers. See the boundary note at the top of this section.
 
 #### v3.1 additions — server-side audit fixes: thread atomicity, thread-scoped writes, slug allocation (2026-07-30)
@@ -1088,16 +1088,9 @@ logic:
   verbatim — the web path 301s on it, the SPA replaces history. A miss is a
   plain 404: the resolver is membership-scoped, so "not a member" and "does not
   exist" arrive identically and must not be split back apart.
-- `GET /api/workspaces/[workspaceSlug]/overview-counts` → the four stat-card
-  counts + `isMcpConnected`. Membership via `resolveApiWorkspace` (the sibling
-  `[workspaceSlug]` pattern), which must resolve BEFORE any count runs — the
-  counts read through the service-role client, so membership is the only gate.
-
-Counts live in `workspaces/server/service.ts#getWorkspaceOverviewCounts` over
-`repository.ts#countWorkspaceResources`; the `/overview` page imports the
-service. It previously inlined the `supabaseAdmin()` queries — pages don't talk
-to Supabase (§8), and the RSC page and the SPA route must read the same code so
-they can't drift.
+- *(Superseded 2026-08-22: `GET /api/workspaces/[workspaceSlug]/overview-counts`,
+  `getWorkspaceOverviewCounts` and `countWorkspaceResources` are deleted —
+  INVARIANTS. `isMcpConnected` lives at `GET /api/onboarding/mcp-status`.)*
 
 Owner names were folded into `GET /api/knowledge/bases` (`{ bases, ownerNames }`)
 rather than given an endpoint: the lookup takes the base list as its input, so a
@@ -1167,7 +1160,6 @@ Available in `src/shared/`:
 
 - `src/shared/lib/http-error.ts` — `HttpError` class with `status`, `code`, `message`, `details` + convenience constructors (`HttpError.badRequest`, `.unauthorized`, `.notFound`, ...).
 - `src/shared/api/parse-json.ts` — `parseJson(req, schema)` parses JSON body and zod-validates. Throws `HttpError(400, INVALID_JSON | VALIDATION_FAILED)` on failure. `validationResponseBody(err)` returns the same envelope with the FIRST zod issue's own message promoted into `error.message` — use it in routes behind a form, so the user reads the schema's sentence instead of "Request body failed validation".
-- `src/shared/api/error-handler.ts` — `withErrorHandler(source, handler)` catches thrown `HttpError`, converts to typed JSON, logs unexpected throws. Composes inside `withUserAuth`.
 
 **Adopt these for new routes.** When modifying an existing route with inline 4xx/5xx patterns, prefer migrating it to `HttpError` + `parseJson` in the same PR if the diff stays reasonable.
 
@@ -1386,8 +1378,8 @@ enumerated set that must still reach the gate.
 
 ## 11. Types
 
-- **Feature-owned types** live in `src/features/<name>/types.ts`. They describe the domain (`Entry`, `Cluster`, `Panel`).
-- **Shared types** live in `src/shared/types/`. Examples: `ApiError`, `Result<T, E>`, `Paginated<T>`.
+- **Feature-owned types** live in `src/features/<name>/types.ts`. They describe the domain (e.g. `channels/types.ts › ChannelMessage`).
+- **Shared wire types** live in `@dopl/contracts` (`packages/contracts/src/`, e.g. `workspaces.ts › WorkspaceKind`). *(`src/shared/types/` was deleted 2026-08-07.)*
 - **DB types** are auto-generated by Supabase CLI into `src/shared/supabase/types.ts`. Do not hand-edit.
 - **Zod schemas** and types are co-located. Derive TS types from zod with `z.infer`:
   ```ts
@@ -1404,7 +1396,7 @@ Never `any`. Never `@ts-ignore`. If you truly need an escape hatch: `unknown` + 
 ## 12. Error Handling
 
 - **Throw, don't return error tuples** (no Go-style). Use typed error classes.
-- **Feature errors**: each feature has `server/errors.ts` with `class FeatureXError extends Error`. Sub-classes for specific cases (`EntryNotFoundError`, `RateLimitError`).
+- **Feature errors**: a feature that throws typed errors keeps them in `server/errors.ts` with `class FeatureXError extends Error` and sub-classes for specific cases (e.g. `channels/server/errors.ts › ChannelNotFoundError`). Seven features have one (2026-10-02).
 - **At the boundary** (route handler, server action): catch, log, convert to user-facing response.
 - **Never swallow errors silently.** `catch (e) { /* ignore */ }` is a refactor candidate.
 - **Retries** belong in the service layer, not sprinkled in handlers.
@@ -1417,14 +1409,14 @@ Never `any`. Never `@ts-ignore`. If you truly need an escape hatch: `unknown` + 
 
 | Layer | Tool | Coverage goal |
 |-------|------|---------------|
-| Pure business logic (ingestion parsers, cluster math, DTO mappers) | vitest unit tests | High — test every branch |
+| Pure business logic (parsers, reducers, DTO mappers) | vitest unit tests | High — test every branch |
 | Services that hit Supabase | vitest + `supabase start` local | Happy path + auth/RLS edge cases |
 | React components | vitest + `@testing-library/react` | Sparingly — only for components with non-trivial logic |
 | E2E | Playwright (deferred) | 3–5 golden-path flows (signup → ingest → chat) |
 
 ### Rules
 
-- Tests live next to code: `pipeline.ts` → `pipeline.test.ts` in the same folder. No separate `__tests__/` tree.
+- Tests live next to code: `mentions.ts` → `mentions.test.ts` in the same folder. No separate `__tests__/` tree.
 - No mocking Supabase — run against a local Supabase instance, reset per test.
 - No mocking the Anthropic SDK beyond a typed fake at the service boundary.
 - A bug fix PR must include a test that would have caught it.
@@ -1509,7 +1501,10 @@ When doing a large restructure (feature relocation, service split, directory reo
 
 ## 18. Desktop app — build, signing & notarization
 
-The macOS desktop app lives in `dopl-desktop-app/`. It's a thin Electron wrapper
+The macOS desktop app lives in `dopl-desktop-app/`. **Today it is a bundled local SPA**
+(`apps/desktop-ui` → `renderer/app`, loaded by `main/spa-window.js`) with its own
+main-process agent runtime. *(Superseded 2026-08-06, Stage D — the rest of this paragraph
+is history.)* It began as a thin Electron wrapper
 around the production web app (`https://www.usedopl.com/`) — single `BrowserWindow`,
 external links open in the system browser, OAuth popups allowed, offline fallback,
 standard macOS menu. As of 2026-07-25 (modernized to Electron 43) it also registers a
@@ -1553,7 +1548,7 @@ nothing imports it).
 ### Layout
 - `main/index.js` — app entry (window, menu, navigation/link handling).
 - ~~`main/load-guard.js`~~ — **DELETED (Stage D, 2026-08-06).** It owned the main window's load lifecycle (loading screen + hung-load watchdog + auto-retry) and every line of it existed because the product UI arrived **over the network**. It has not since 1.8.0: `spa-window.js` does `loadFile(renderer/app/index.html)` off local disk, so there is no hung remote load to recover, no black-frame window to cover, and no `did-fail-load` to retry. Deleted together with the remote shell it served — `createMainWindow`, the `isSpaMode()` switch, `DOPL_UI=remote`, `authActions.signOut` (which reloaded `HOME_URL` so the WEB app would resolve `/login`), and the `/auth/desktop-complete` page (which existed so that shell could plant its cookie jar). The "Desktop app resilience" section below is kept as **history of a problem that no longer exists**; read it that way. **`version-skew.js` and `auth-cookies.js` were on the plan's deletion list and did NOT go** — see the Stage D note in that section.
-- `renderer/preload.js` — minimal context-isolated bridge (`window.dopl`).
+- ~~`renderer/preload.js`~~ — **DELETED 2026-08-07** (`f2284c78`); `renderer/app-preload.js` is the only preload.
 - `renderer/offline.html` — shown on a fast load failure (`did-fail-load`).
 - `renderer/loading.html` — local loading screen shown before the first remote paint and during retries (so the window is never a bare black backgroundColor).
 - `build/icon.icns` — app icon (keep; don't regenerate casually).
@@ -1561,16 +1556,15 @@ nothing imports it).
 - `scripts/notarize.js` — electron-builder `afterSign` hook (notarizes during build).
 - `scripts/finish-notarize.sh` — standalone notarize+staple of an existing DMG.
 
-**Phase 2 (bundled SPA) — built, NOT wired.** See `dopl-desktop-app/WIRING.md`
-for the two-line `main/index.js` integration and what moves when it flips.
+**Phase 2 (bundled SPA) — WIRED since Stage D (2026-08-06); it is the app's UI.** See `dopl-desktop-app/WIRING.md`.
 - `main/spa-window.js` — the LOCAL UI window (`loadFile renderer/app/index.html`,
-  or `DOPL_UI_DEV_URL` for Vite HMR). Same security shape as `session-window.js`:
-  sandbox + contextIsolation, `window.open` denied, navigation locked to the page.
+  or `DOPL_UI_DEV_URL` for Vite HMR). Sandbox + contextIsolation, `window.open` denied, navigation locked to the page.
 - `renderer/app-preload.js` — `window.dopl` for that window: `apiRequest`,
   `getAuthState`, `onAuthState`, `openExternal`, `avatarDataUri`, plus the
   `channels` and `sessions` namespaces the shared web tree feature-detects.
   **No tokens cross it, and the renderer cannot set headers.**
 
+*(Superseded 2026-08-07, `f2284c78`: `renderer/preload.js` is deleted, so there is no remote preload; parity is now the SPA preload pinned against `test/_app-ops-fixture.mjs › APP_OPS` — 58 ops on 2026-10-02. The paragraph below is history.)*
 **PRELOAD PARITY — every op `renderer/preload.js` exposes must also exist in
 `renderer/app-preload.js`, on the same wire.** The two preloads are not
 symmetric and must not be: the SPA has a large surface the remote shell must
@@ -1619,7 +1613,7 @@ the web tree's feature detector.
 cd dopl-desktop-app
 npm install              # first time / after clone (node_modules not committed)
 npm run start            # run from source (dev)
-npm run smoke            # headless load check against www.usedopl.com
+npm run smoke            # headless load check of the local renderer/app/index.html
 npm run build            # signed DMG -> dist/Dopl-<ver>-arm64.dmg
 npm run notarize         # notarize + staple the built DMG (no rebuild)
 npm run release          # THE supported publish path (scripts/release.sh, F-193):
@@ -1698,6 +1692,8 @@ Two new main-process modules: `main/consent.js` (the decoupled consent gate) and
 
 #### Tool-profile containment (v1.2 Feature 6) — verified facts, do not re-derive
 
+> *(Superseded 2026-09-23, `a113510b`: `buildRestrictionArgs()` and the headless `claude -p` argv builders are deleted; containment is applied per runtime through `main/session-profiles.js` / `session-profiles-runtime.js`. The CLI facts below are history.)*
+
 `channel_members.agent_tool_profile` (§8) bounds what a spawned agent may do. The empirical facts below were **verified against claude 2.1.220** and are the landmine of this feature:
 
 - **`--allowedTools` is ADDITIVE — it pre-approves, it does NOT bound.** The operator's global `~/.claude/settings.local.json` `permissions.allow` list (e.g. `Bash(python3 *)`, `Bash(bash)`, `mcp__dopl__delete_entry`) **keeps applying to spawned sessions** no matter what is passed. v1.1's `read_only` spawn could therefore still run Bash.
@@ -1736,6 +1732,8 @@ Feature 4 (requester side): on the machine that CREATED an **interactive** task,
 - **Out of scope for v1.5:** any responder-side change, any `create_thread`/auto-continuation spawn, and relaxing the `kind === 'message'` inbound guard — task lifecycle markers (`task_*`) stay `'ignore'` inbound (the requester does not spawn on them). Folder-in-popup (web feature 1c) needs NO desktop change; it reuses the existing `channel-dir-ipc.js` handlers via the web create dialog.
 
 ### Desktop app resilience (never-black window + fast wake recovery, 2026-07-27)
+
+> *(Superseded 2026-08-06, Stage D `2ea01269`: `main/load-guard.js` and its tests are deleted — the UI is local, so there is no remote load to guard.)*
 
 Fixes a repeatedly-hit field bug: after a network transition (sleep/wake, wifi change) the connection pools hold **dead keepalive sockets** in BOTH stacks — the renderer's Chromium pool AND the main process's own — so a remote load HANGS on the OS TCP timeout (~minutes) while a fresh `curl` is instant. A hung load fires **neither** `did-finish-load` nor `did-fail-load`, so the old `showOffline()` dead end never triggered and `showMainWindow()`'s unconditional `mainWindow.show()` revealed the window's dark `backgroundColor` = the "solid black window that eventually comes in". New module `main/load-guard.js` (all files still ≤500 per §2); no new dependency, no schema, no API change.
 
@@ -1779,7 +1777,7 @@ Two rounds landed here: **Q4** (the listener went dark while the app looked sign
 
 > **⛔ READ THE BANNER BEFORE THE BULLETS (channels rollback, 2026-08-05, F-141 — "PHASE 2 OF THE ROLLBACK" below).**
 >
-> **STILL LAW:** the SESSION POOL (`session-pool.js`, `MAX_CONCURRENT_SESSIONS = 4`, hand-placed releases) and the PARKED-SHELL machinery, which the requester/reopen paths still use.
+> **STILL LAW (corrected 2026-10-02):** the PARKED-SHELL machinery (`session-park.js`). ~~The SESSION POOL (`session-pool.js`, `MAX_CONCURRENT_SESSIONS = 4`, hand-placed releases)~~ is NOT: `session-pool.js` was deleted 2026-08-20 (`8088db39`); the cap is now `session-windowless.js › MAX_CONCURRENT_SESSIONS` (15 since 2026-09-01).
 > **DELETED:** `main/session-team.js`, `main/channel-agents.js`, `main/channel-roster.js`, `main/session-greeting.js`, `main/realtime-agents.js`. With them go SUMMONING, the durable `teamAgents` count and its third conjunct on the implicit two-member trigger, the `to_agent` → own-session route, the `agent-escalation` verdict, and the dismissed-agent gates. **The room-vs-pair SLOT SHAPE survived and is INERT** (`agentId` beside `taskId` in a session key, `bind: 'room'` accepted and ignored) — do not read its presence as evidence a team session can be created.
 > Each affected bullet below is annotated inline as well; where they disagree, the rollback wins.
 
@@ -1788,7 +1786,7 @@ The desktop half of the multiplayer wave (§8). **CORRECTED 2026-07-31 — the t
 New modules: `main/session-pool.js` (118), `main/session-team.js` (171), `main/channel-agents.js` (382 then, **496 now** — see §2, it is the tightest file in the tree). Modified: `session-store.js`, `session-engine.js`, `session-spawner.js`, `session-history.js`, `session-gate.js`, `session-park.js`, `targeting.js`, `trigger.js`, `task-notify.js`, `prompt-framing.js`, `channel-listener.js`, `listener-io.js`, `listener-messages.js` and five more.
 
 - **THE SESSION POOL replaces per-channel serialization.** `session-pool.js` hands out **per-key claims** with a hard **`MAX_CONCURRENT_SESSIONS = 4`** total. `claim()` returns `{ok:false, reason:'same-key'}` for a key already running and `'at-cap'` for the machine being full; `release()` is synchronous and idempotent. **Read the cap as a COST ceiling, not just a concurrency one:** every per-session bound (turn cap 24, idle TTL, cost cap) is now MULTIPLICATIVE against it, and `MAX_SESSION_WINDOWS` (6) is a *separate*, engine-side ceiling that does not coordinate with this one.
-  - **Release is hand-placed at every settle point, NOT a `finally`.** `session-spawner.js` releases in `bail()`, in the pre-`execOnce` catch, in the `.catch` on `resolveClaude()`, on the normal path, and in the callback-level `catch (fatal)` that wraps the whole execFile callback. It is exhaustive **by inspection, not by construction** — if you add a return path to that function, you add a release. One deliberate non-release: the `--resume` retry HOLDS the slot across re-entry.
+  - *(Gone with `session-pool.js`, 2026-08-20.)* **Release is hand-placed at every settle point, NOT a `finally`.** `session-spawner.js` releases in `bail()`, in the pre-`execOnce` catch, in the `.catch` on `resolveClaude()`, on the normal path, and in the callback-level `catch (fatal)` that wraps the whole execFile callback. It is exhaustive **by inspection, not by construction** — if you add a return path to that function, you add a release. One deliberate non-release: the `--resume` retry HOLDS the slot across re-entry.
 - **`slotKey` is the one key definition (`session-store.js`), and an agent WINS over a thread.** `slotKey({channelId, agentId, taskId})` = `sessionKey(channelId, agentId || taskId)` — never blended. Consequence that makes N agents work at all: a caller with no `agentId` gets a byte-for-byte `sessionKey(channelId, taskId)`, so every pre-multiplayer path is unchanged, while a team session keys on `(channel, agent)` and therefore does not make every other agent in that channel read as `same-key` busy.
 - **SUMMON = A PARKED SHELL. No query, no cost, until the agent is addressed.** `session-team.js` sets `spec.parkedShell`, and `session-engine.js` returns via `sessionPark.emitParkedShell(s)` **before** `startQuery`. The first turn is empty and `startModes` is refused. Summoning does load the SDK module and read history/roster over HTTP — that is not a Claude query. The shell wakes lazily through `resumeQuery` when something addresses it.
 - **ROOM BINDING — the history fence widened on ONE arm.** `session-history.js` widens `pairRows` only under `bind === 'room'`; the single change inside `pairRows` is `if (!room && !isSelf && !isPeer)`, and every pair call site passes no `room` argument, so **pair mode is byte-identical**. Same guard shape on the no-counterparty branch (`const room = s.bind === 'room'`). This is the widening §8 said had to wait for the legacy-id gate; the gate closed first.
@@ -1920,6 +1918,8 @@ Phase 3 of `docs/CHANNELS-ROLLBACK-PLAN.md` (§3.3 + sequencing item 3). The ful
 
 ### Channels — PHASE 4 OF THE ROLLBACK: TWO PILLS, BOTH INSIDE THE INPUT (2026-08-05, F-143)
 
+> *(Superseded 2026-08-20, `db901c39`: the session window — its pill, peer pick and steer (`sendToPeer` / `resolveTarget`) — is deleted.)*
+
 Phase 4 of `docs/CHANNELS-ROLLBACK-PLAN.md` (§3.2, with §3.1 as the semantics behind the first pill). The full story is **F-143 in REFACTOR-FINDINGS.md**. Two composers, one control in each, both inside the text input on the right. The rules a future session must not re-derive:
 
 - **THE PHASE REPLACES SYNTAX WITH CONTROLS, AND A TWO-STATE TOGGLE IS NOT ENOUGH.** Both pills are DROPDOWNS that show every row with its CONSEQUENCE before anything is picked. The surfaces §3.2 replaces (`/new-agent`, a leading `@handle`) failed because nothing on screen said the option existed; a click-through toggle has the same defect in miniature — the state you are not in is invisible until you click — and in BOTH composers the state you are not in is the one that starts somebody else's machine. Do not "simplify" either back into a toggle. `MenuItem`'s `description` is the row's consequence, and the sentence is target-free on purpose (the menu is open before an addressee is resolved; the help line under the composer is where the resolved name goes).
@@ -1938,7 +1938,7 @@ Phase 5 (final) of `docs/CHANNELS-ROLLBACK-PLAN.md` (§3.5 + sequencing item 5).
 - **SPAWN-WITH-HANDOFF IS A DECLARED FLAG ON `create_thread`, AND IT INVERTS THE CASE-3 PIN — ONLY WHEN DECLARED.** `handoff: true` (`TaskCreateSchema`) rides the OPENING MESSAGE as the reserved `metadata.handoff` stamp: `service-writes-metadata.resolvePostMetadata` strips any caller copy and re-stamps `true` only from `PostMessageOptions.handoff`, which only `service-tasks.postOpeningMessage` passes (from the validated field). The desktop honors it in `targeting.requesterTaskOpen` — the runtime-stamp conjunct became `if (!desktopRuntime(m) && !declaresHandoff(m)) return false;`, so an EXTERNAL unstamped create that declares handoff opens a full requester session on the operator's machine, where without the flag it still opens NOTHING (F-140's CASE 3, now inverted-under-the-flag by `operator-typed-request.test.mjs` / `thread-followup-predicate.test.mjs`). **Handoff substitutes for the STAMP, NEVER for the identity pair** (`authorUserId === me` AND `taskCreatedBy === me`, still required around it), which is what makes it unable to open a window on anyone else's machine — a peer's create fails those conjuncts whatever it stamps. `declaresHandoff` reads `metadata.handoff === true` STRICTLY (a server-written literal boolean, never a `metaStr` string). A handoff session arms NO request strip (`requesterTypedByOperator` keys on `desktop-ui`, which a handoff create does not carry) and the MCP `create_thread` result under handoff tells the external agent NOT to arm `await` — the operator's window carries the reply, and a second watcher would race it.
 - **MESSAGE-A-SESSION: THE PEER DIRECTION ALREADY EXISTS; STEER-MY-OWN IS A FLAGGED DESKTOP GAP.** Messaging the peer's running session is a plain `op="post"` REQUEST addressed to the peer member (or a post threaded into the exchange), which triggers their listener — the Phase 1 / §3.1 semantics, pinned in the post/create suites and unchanged. It was NOT rebuilt; the description points at it. An EXTERNAL agent steering its OWN desktop session window (posting into a specific open session on the operator's machine) needs desktop-side IPC that does not exist and is **flagged, not half-built** — an external MCP post reaches the server, not a specific renderer window, so wiring it is a later item.
 - **READ-SESSION-STATE SHIPS AS A SERVER READ CONTRACT + MCP OP; THE DESKTOP-PUSH DELIVERY IS A FLAGGED GAP.** New `dopl_channel` op `read_sessions` → `client.listChannelSessions` (GET `/api/channels/sessions`) → `session-state-service.listSessionStates` → `repository-collab.listSessionStates`, reading the new `channel_sessions` table (migration `20260805120000`), OWN-SCOPED to the caller (`ctx.userId` + RLS). It returns the `ChannelSessionState` shape — the SAME projection the pills show (F-142: "phase 5 lifts `list()` to MCP and adds no second derivation"), with the `working`/`idle`/`ended` vocabulary and NO `thinking`. **The chosen delivery is push-on-state-change (plan §5 option a), NOT a heartbeat** — the desktop would write a row only when a session's derived digest changes (`session-summary.js` already coalesces to exactly that), a handful of writes per session lifetime versus `agent_presence`'s 120/hr, so this is the CHEAP side of §5 and is what lets item 7 proceed. The desktop WRITE is **not wired in this phase** (it needs `session-summary.js` — deliberately network-free above its sentinel — to gain an authenticated writer + the workspace/session-key context the summary shape does not carry today), so the op returns `[]` live and says so honestly ("no live sessions being reported"), never fabricating state. When the push lands, the same op renders it with no server change. **— THE PUSH LANDED: see "PHASE 5's DELIVERY GAP CLOSED" below (F-147). `main/session-state-push.js` is the writer, the op did not change to receive it, and `repository-collab.listSessionStates` is now `repository-sessions.listSessionStates` (§2 split).**
-- **CONSENT POSTURE FOR SPAWN-WITH-HANDOFF (documented for Samuel, no card added).** An external agent causing a window+agent to open on the operator's machine is a real capability, but the caller is the operator's OWN credential, the window opens on the operator's OWN machine, and the opened session's tool use still gates through the untouched inbound consent card (§3.6). The unforgeable bound is the identity pair, and handoff is an explicit opt-in the operator's own agent declares (the operator prompted it: "spin up an agent on Dopl to talk to X"). So the call made here is **"I asked Claude to do this" is sufficient — no extra card for the window-open itself** — with the diag as the observable signal. Flagged for Samuel to confirm before 1.9.0.
+- **CONSENT POSTURE FOR SPAWN-WITH-HANDOFF (documented for Samuel, no card added).** An external agent causing a window+agent to open on the operator's machine is a real capability, but the caller is the operator's OWN credential, the window opens on the operator's OWN machine, and the opened session's tool use still gates through the untouched inbound consent card (§3.6) *(superseded 2026-08-22, `1eeb820b`: inbound consent is retired; tool use is bounded by the identity/credential and the Ask/Auto/Full permission levels)*. The unforgeable bound is the identity pair, and handoff is an explicit opt-in the operator's own agent declares (the operator prompted it: "spin up an agent on Dopl to talk to X"). So the call made here is **"I asked Claude to do this" is sufficient — no extra card for the window-open itself** — with the diag as the observable signal. Flagged for Samuel to confirm before 1.9.0.
 
 ### Channels — THE ROLLBACK REVIEW FIXES: unknown MCP args, the read that 500'd, and four guards that lost their tests (2026-08-05, F-145)
 
@@ -1994,7 +1994,7 @@ F-144 shipped read-session-state as a server READ + MCP op and flagged the deskt
 **RULES A LATER SESSION MUST NOT RE-DERIVE:**
 
 - **The arm may never be presented as a stored preference.** Single use, 30-minute TTL, one consumer (a launch a human is actively approving). Any surface showing it says so; the section heading is *"For the next request you allow"*, never *"this channel"*. Presenting it as durable is the H2 defect's own mental model.
-- **One channel's arm has ONE value across every mounted reader.** `useChannelPermissionPreset` merges a patch onto what is STORED (re-read immediately before the set) and broadcasts the settled pair to every mounted reader of that channel. Per-component snapshots are what let two surfaces revert each other (C-25). A new surface showing the arm inherits this for free; one that keeps its own copy re-opens the bug.
+- **One channel's arm has ONE value across every mounted reader.** *(2026-10-02: the hook is gone; the preset is read/written through the desktop bridge, `window.dopl.channels.get/setPermissionPreset`, from `permission-preset-row.tsx`.)* `useChannelPermissionPreset` merged a patch onto what is STORED (re-read immediately before the set) and broadcasts the settled pair to every mounted reader of that channel. Per-component snapshots are what let two surfaces revert each other (C-25). A new surface showing the arm inherits this for free; one that keeps its own copy re-opens the bug.
 - **The web's fallback for an unresolved tool profile is the DESKTOP's fallback.** `UNRESOLVED_TOOL_PROFILE` (`channels/constants.ts`) is `read_only`, matching `tool-profiles.normalizeProfile` after C-11. Do not "fix" it back to `full` because the column defaults to `full`: null means *this DTO does not know*, and a label reading "Full access" over a session the machine will run `read_only` is a lie in the direction that makes an operator relax.
 - **Per-profile copy says what a profile GRANTS, never what it withholds.** `full` includes the operator's own connected apps and MCP servers — that is the product (a teammate asking your agent to pull something out of your Slack is the feature), so the copy names it plainly and does not hedge. Equally, the restricted profiles are not written as the "safe" or recommended answer: `tool-profiles.js` states that `dopl_only` is deliberately not more dangerous than `full`. **And no UI sentence generalizes the deny floor**: since F-177 both lanes deny exactly `UNIVERSAL_HARD_DENY` under `full` (`SESSION_HARD_DENY` IS that constant), which is the Dopl admin + retired tools — nothing more. A claim like "destructive tools are always denied" is wrong on BOTH lanes now: what a `full` session cannot do WITHOUT A CLICK is the honest statement, and the thing that supervises it is the operator's permission preset.
 - **Trust is WORKSPACE-WIDE and the copy carries the scope.** `UNIQUE (operator_user_id, trusted_user_id, workspace_id)`, no channel column, decided to stay that way. The section states the scope, the effect (no approval card, a session starts), and which tool scope that session gets — and renders an EMPTY STATE rather than vanishing when the channel has no other members.
@@ -2063,7 +2063,7 @@ still the source of the dmg.
 - **THE PAGE IS THE RETIREMENT PLAN'S `/retired`.** Same audience (signed in), same message ("Dopl lives on your desktop"), same download. Stage B's `WEBSITE_RETIRED` redirect map should point at `/get-started` rather than mint a second page that would drift from it.
 - **THE AUTO-START IS A ZERO-SIZED SAME-ORIGIN IFRAME, NOT `location.assign`.** Both download identically when the asset resolves. They differ when it does not, and it did not during this build (see F-131): a top-level navigation to a GitHub 404 COMMITS, throwing the visitor off the page and taking the install instructions with them; the same response in an iframe is `X-Frame-Options: deny` and the page survives. The frame is not `sandbox`ed (Chrome blocks downloads from sandboxed frames) and not `display:none` (not guaranteed to load). Visible "Not working? Download again" is a real `<a href="/download">` — a user-chosen click is the one navigation allowed to leave.
 - **THE PAGE IS TWO FULL-HEIGHT FIELDS, cloned from the reference Samuel supplied** (Wispr Flow's post-login download screen), rebuilt 2026-08-04. Left 43%: brand lockup, a SERIF display heading (`--font-playfair` = Newsreader, the same token the auth wordmarks use — the marketing lockup's own wordmark stays grotesk by `.lp-brand-word`'s explicit rule), three numbered steps, "Not working? Try again."; the reference's bottom-left ornament slot carries the live `role="status"` download line instead, because Dopl's only circular brand object is the app icon already sitting at the top of the same column. Right 57%: the illustration, cropped by the field rather than centred in a box. **BOTH FIELD COLOURS ARE EXISTING TOKENS** — left `--ink` (marketing.css's own black), right `--rail-tile` → `--rail` (globals.css, the app-shell frame, also `--body-bg`): the drawing of the install sits on the colour of the thing being installed. ⚠ **`--rail` was deleted on 2026-08-30** — the app frame is `--home-frame` now and `--body-bg` reads it (`docs/DESIGN-SYSTEM.md`); `--rail-tile` itself is untouched. Re-measure before trusting this sentence: `grep -rn 'rail-tile' src` was empty on 2026-08-30. Below 900px they stack, copy first.
-- **THE INSTALL ANIMATION IS CSS OVER DIVS, ON ONE CLOCK.** `src/features/get-started/` — ten keyframe tracks sharing `--gs-dur`, in a fixed **640×660** coordinate space scaled as a whole by `--gs-k` (cursor targets are literal px; a percentage layout puts the cursor beside the folder at one width and inside it at another). **`--gs-k` reads the FIELD, not the viewport** — `min(calc(100cqw / 640px), calc(100cqh / 636px))` against `.gs-field`'s `container-type: size`, so the width fit keeps the browser fragment bleeding past the left edge and the height fit keeps the volume window off the fold on a short, wide field; the same one factor is therefore correct in the stacked layout too. The composition has TWO anchors — a browser fragment cropped by the field's top and left edges (its recede beat is **opacity-only**, because a scale would walk its hidden corners back into view) and the volume window in the lower right. `prefers-reduced-motion` gets the LAST FRAME, not a blank box. Scoped under `.lp` so type, ink, hairlines and gutter all come from `marketing.css`; the only values added are the mock macOS chrome greys plus alphas of white for on-dark ink, declared once as `--gs-*`. **Three stylesheets, one per purpose** (page/copy · composition · timeline): `get-started.css`, `install-animation.css`, `install-animation-motion.css`, all imported by `page.tsx`.
+- *(Superseded 2026-08-19, `e99932a4`: the install animation was reworked and `--gs-dur` no longer exists.)* **THE INSTALL ANIMATION IS CSS OVER DIVS, ON ONE CLOCK.** `src/features/get-started/` — ten keyframe tracks sharing `--gs-dur`, in a fixed **640×660** coordinate space scaled as a whole by `--gs-k` (cursor targets are literal px; a percentage layout puts the cursor beside the folder at one width and inside it at another). **`--gs-k` reads the FIELD, not the viewport** — `min(calc(100cqw / 640px), calc(100cqh / 636px))` against `.gs-field`'s `container-type: size`, so the width fit keeps the browser fragment bleeding past the left edge and the height fit keeps the volume window off the fold on a short, wide field; the same one factor is therefore correct in the stacked layout too. The composition has TWO anchors — a browser fragment cropped by the field's top and left edges (its recede beat is **opacity-only**, because a scale would walk its hidden corners back into view) and the volume window in the lower right. `prefers-reduced-motion` gets the LAST FRAME, not a blank box. Scoped under `.lp` so type, ink, hairlines and gutter all come from `marketing.css`; the only values added are the mock macOS chrome greys plus alphas of white for on-dark ink, declared once as `--gs-*`. **Three stylesheets, one per purpose** (page/copy · composition · timeline): `get-started.css`, `install-animation.css`, `install-animation-motion.css`, all imported by `page.tsx`.
 
 ## Appendix A — ESLint rules to add
 
@@ -2116,7 +2116,7 @@ Nine audit findings, all on the desktop side. Act on the rules below rather than
 
 **`inactive` is the ONE calm terminal**, shared by the launch watchdog and the eviction. Eviction dispatches it instead of calling `settle()` directly — do not reintroduce a second teardown beside the reducer's.
 
-**C-7 — LOCAL CONSENT EXPIRY ROUTES THROUGH THE SAME RESOLVER AS SERVER EXPIRY.** `MAX_WATCH_MS` equals the server's `CONSENT_TTL_MS` and `createdAt` is stamped after the insert returns, so the local clock ALWAYS wins and `inboundExpired` never ran — leaving a pre-consent window open forever with a live Accept over an expired row, and the operator's armed permission preset armed for the next launch. Routing (not raising the constant) is the fix: one definition of what an expiry does. A belt settles the record if a resolver is missing or throws.
+**C-7 — LOCAL CONSENT EXPIRY ROUTES THROUGH THE SAME RESOLVER AS SERVER EXPIRY.** *(Superseded 2026-08-22, `1eeb820b`: inbound consent and `consent-watcher.js` are retired, so there is no local expiry.)* `MAX_WATCH_MS` equals the server's `CONSENT_TTL_MS` and `createdAt` is stamped after the insert returns, so the local clock ALWAYS wins and `inboundExpired` never ran — leaving a pre-consent window open forever with a live Accept over an expired row, and the operator's armed permission preset armed for the next launch. Routing (not raising the constant) is the fix: one definition of what an expiry does. A belt settles the record if a resolver is missing or throws.
 
 **C-9 — AN ACCEPTED CONSENT ENTRY IS RELEASED ON EVERY TERMINAL THAT IS NOT AN ADOPT.** `decide()` leaves the entry in the registry ON PURPOSE (`takeForAdopt` is the remover), but adoption happens on one branch only; `busy` / `auth-hold` / `cap` / `no-sdk` / `disabled` / `gone` all leaked, `count()` feeds `atWindowCap`, and `evictIdleShell` walks only the SESSION registry — so six leaks capped the desktop permanently. `sessionConsent.release(watcherKey, reason)` (shares `drop()` with `close()`, sends NO `consent_resolved` — the card already said Accepted) is called from `trigger.js` at each terminal. A sweeper was rejected: the caller KNOWS, it is holding the skip reason. `fetched.retry` deliberately does not release.
 
@@ -2579,7 +2579,7 @@ The general rule: when a feature is rolled back, a reserved key whose WRITER is 
 
 ### A test that spells a wire contract the same way on both sides proves nothing
 
-`lib/group-thread-markers.ts` reads `threadReopened` off the wire; `server/service-writes-metadata-markers.ts` stamps it as `REOPEN_MARKER_KEY`. Two processes, one string, no compiler between them.
+*(The example below is history — both sides were deleted 2026-08-18; the rule stands.)* `lib/group-thread-markers.ts` read `threadReopened` off the wire; `server/service-writes-metadata-markers.ts` stamps it as `REOPEN_MARKER_KEY`. Two processes, one string, no compiler between them.
 
 The first version of `group-thread-reopen.test.ts` built its fixtures from the client-side constant AND asserted against the same constant. Renaming that constant would have silently stopped it matching the server's key, every reopen echo would have fallen back into the milestones lane rendering a green ✓ on a thread that had just come back to life — and the whole suite would have stayed green. The gap was found by mutation, not by inspection: the file survived exactly that edit.
 
@@ -2741,6 +2741,8 @@ return scope === 'none' ? 'ignore' : 'trigger';
 
 ### Desktop app — THE 550px STATUS STRIP: what flexbox did with a 320px deficit
 
+> *(Superseded 2026-08-20, `db901c39`: the 520px session window is deleted. Kept for the flexbox lesson.)*
+
 **THE SYMPTOM.** The session window's status strip stood ~550px tall inside a 520px-wide window, with the Messages select clipped at the window edge and the working-directory pill unreachable.
 
 **THE ARITHMETIC.** The window is 520px wide AND 520px MIN wide (`main/session-window.js`), so the row has ~478px of content box. Adding the two `<select>` axes took the row's natural width to ~800px: status pill + model meta + Tools + Messages + the posture line + the folder pill. On ONE non-wrapping line that ~320px deficit has to land somewhere, and flexbox put it on the only children that could take it:
@@ -2756,6 +2758,8 @@ return scope === 'none' ? 'ignore' : 'trigger';
 *Relocated from* `dopl-desktop-app/renderer/session/session.css › .perm-posture`
 
 ### Desktop app — CHANNEL HISTORY: why the two passes are CHOSEN, never tried in order (F17 -> Q1)
+
+> *(Superseded 2026-08-20, `db901c39`: `main/session-history.js` (and `fetchRows`) are deleted with the session window. The seq-is-table-wide bound still holds.)*
 
 `main/session-history.js` paints a reopened parked shell's transcript from the channel, and the same array is also stashed as the fresh run's fenced seed. It has two read passes, and the arc that produced them is why they are selected by a predicate rather than tried in preference order.
 
@@ -4792,6 +4796,8 @@ rule, applied to one more question, instead of a second rule that would drift.
 
 ### A router that reads guest text is a parser problem, not a prompt problem
 
+> *(Superseded 2026-09-02, `45f92c7e`: the LLM triage wake tier is deleted — `parseTriage` with it; wakes are address-only. The parsing lesson stands.)*
+
 The triage prompt is the first place a stranger's words become a decision on the operator's machine,
 so the interesting work is in what happens to the ANSWER, not in the wording. `parseTriage` is an
 equality test against one word — trimmed, **length-capped before the pattern runs**, `/^CLAIM\.?$/i`
@@ -4805,6 +4811,8 @@ the model something to do with the attack instead of leaving it to improvise. Bo
 to a single line at write time, so nothing can forge `END-MESSAGE-<nonce>` on a line of its own.
 
 ### The SDK has no way to say "no tools", so the gate had to be the fence
+
+> *(Superseded 2026-09-02, `45f92c7e`: the triage run this fenced is deleted.)*
 
 `options.tools = []` means NO BOUND — every tool — which `session-profiles.js` already documents and
 which is the opposite of what a router wants. There is no positive way to offer nothing. So the
@@ -6410,7 +6418,7 @@ retry=none`. The alternative refuses the user's content over our formatting tast
 cannot guess the taste is exactly the one being refused. Every write result ends with a one-line
 outline, so the addresses arrive with the confirmation rather than a call later.
 
-**The pin grew a budget because its cost is paid by somebody who is not the caller.** Pinned content
+*(Superseded 2026-09-18, `b0d73353`: knowledge pinning is removed — feature, column and agent surface — so there is no pin budget.)* **The pin grew a budget because its cost is paid by somebody who is not the caller.** Pinned content
 is prepended to every session the workspace launches. Past 4,000 characters a pin lands with
 `reason=PIN_LARGE` and the per-launch number; past 12,000 it is REVERTED and refused. It is measured
 AFTER the write rather than predicted — a base pin's cost is the sum of every entry in it, which the
@@ -6465,7 +6473,7 @@ reroute was answering "which tenant pays for this person's work", and the honest
 to be that no tenant does.
 
 **So the payer became a PERSON, and there are two wallets.** `personal`, one per user, spent by
-every call in that user's home space — their `kind='personal'` container and every `kind='link'`
+every call in that user's home space — their `kind='home'` container (`kind='personal'` until 1.37.1) and every `kind='link'`
 container they own. `seat`, one per (standard workspace, active member), spent by that member's
 calls there. The key of each counter table now contains the payer, which is the entire mechanical
 content of "not pooled". Two consequences fell out for free, and both are worth more than the
@@ -6831,7 +6839,7 @@ stale fixture fails by name and tells you the command.
 
 `max` stays `null` on purpose. Below the floor is a protocol nobody measured. Above it is the future,
 which has not happened — refusing it would strand operators on the day Codex ships a compatible
-release, and `› checkProtocol`'s method check already catches a genuinely incompatible newer CLI by
+release, and `› checkProtocol`'s method check *(deleted 2026-09-23; the floor is now `runtime/codex/protocol.js › versionGate`, enforced at `available()`)* already catches a genuinely incompatible newer CLI by
 naming the method that went missing. **A `max` becomes honest the day a newer CLI is measured and
 found to break something; write it then, with what broke.**
 
@@ -6851,7 +6859,7 @@ resolver's fake-tree unit is not a substitute for either.
 **6 — What still has no answer, so nobody re-derives it as if it did.**
 
 The `model/list` **request** side: the response shape is measured, but no second page was ever
-fetched, so the cursor parameter NAME is a symmetric guess and is marked as one in the code.
+fetched, so the cursor parameter NAME is a symmetric guess and is marked as one in the code. *(Since measured: `runtime/codex/models.js` paginates with `cursor` per the measured `ModelListParams`; `toolNamePrefix` and resume were measured too — see the 2026-09-23 note below.)*
 `mcp.toolNamePrefix` is `null` and remains the highest-stakes unknown — a third tool-name shape misses
 every list in the gate at once. Codex **resume** is still refused, and the refusal names the
 measurement it is waiting on (usage accounting on resume), with a test asserting

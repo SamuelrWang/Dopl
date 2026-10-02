@@ -1,12 +1,11 @@
 # Credit model v2 — personal wallets + per-seat workspace allocations
 
-**Status:** **BUILT through v2.1** (2026-09-08, branch `feat/credit-model-v2` — ⚠ **UNMERGED, and
-TWO migrations are WRITTEN AND NOT APPLIED**: `20260930120000_credit_wallets.sql` then
-`20260930130000_workspace_billing_plan_pro.sql`, in that filename order, the plan CHECK LAST;
-deploy state is a measurement, so re-derive with `supabase migration list` joined ON THE NAME,
-never on the filename prefix. ⚠ Apply `…130000` BEFORE deploying the server: the webhook writes
-`plan = 'pro'`, which raises `23514` against the three-value CHECK and makes Stripe retry an event
-the database will never accept). Samuel's
+**Status:** **BUILT through v2.1 and SHIPPED** — merged to master 2026-09-10 (`b34aa355`, *Merge
+feat/credit-model-v2*) and first released in v1.33.0. Migrations: `20260930120000_credit_wallets.sql`
+then `20260930130000_workspace_billing_plan_pro.sql`; applied state is a measurement — re-derive with
+`supabase migration list` joined ON THE NAME. ⚠ The 2026-10-02 audit notes: the home container
+was renamed `kind='personal'` → `kind='home'` in 1.37.1 (`20261023120000_home_vocabulary_rename.sql`);
+the wallet kind is still `personal`. Read `kind='personal'` below as `kind='home'`. Samuel's
 ruling, verbatim intent, then the contract every slice built against. **The code now outranks this
 document** (CLAUDE.md's precedence: code > INVARIANTS > ENGINEERING > a spec) — read
 `src/features/billing/credits.ts` and `server/credits-service.ts` for what is true, this file for
@@ -40,7 +39,7 @@ below are listed in §10, not silently absorbed.
 
 - **Wallet** — the counter a burn lands on. Two kinds:
   - `personal` — one per user. Pays for every MCP call made **in that user's home space**: their
-    `kind='personal'` container and every `kind='link'` container they OWN (a home channel). A
+    `kind='home'` (was `personal`) container and every `kind='link'` container they OWN (a home channel). A
     guest's/peer's calls inside a link container land on the **owner's** personal wallet (Samuel,
     2026-08-26: "charge MCP calls from a guest to the user"; unchanged, only the wallet moved).
   - `seat` — one per (standard workspace, active member). Pays for calls the member makes **in that
@@ -83,7 +82,7 @@ with it; the webhook grandfather path still uses the function). Every user has e
 personal wallet, so there is nothing left to be ambiguous about.
 
 Round-trip budget (pinned by mock call counts): seat path = billing row + member count
-(concurrent) + RPC = **3**; personal path = owner lookup + RPC = **2** (for `kind='personal'` the
+(concurrent) + RPC = **3**; personal path = owner lookup + RPC = **2** (for `kind='home'` the
 owner IS the caller — skip the lookup: **1**).
 
 ### Surfaces — every credit figure a person sees answers ONE question (2026-09-12)
@@ -333,7 +332,7 @@ Only `allowed === false` refuses (keep). Rebuild BOTH `packages/*/dist` (committ
   team in place). Webhook `derivePlan` STAYS (legacy price → `solo`). `seats.ts` unchanged.
   `entitlements.ts`: `paidEntitlement` unchanged (solo live + ≤1 member = paid; degrades to free
   at 2+), `assertCanAddMember` unchanged.
-- Pricing page: TWO columns (Starter / Team). Rows: Ontology objects, Chat history, Members
+- Pricing page (⚠ superseded by v2.1: Team is `$8.99`, and a Personal Free/Pro section sits beside these): TWO columns (Starter / Team). Rows: Ontology objects, Chat history, Members
   (`Unlimited` both), **Credits (`100` / `5,000`, sub `per member / month`)**, Price (`Free` /
   `$8.00`, sub `/ seat / month`). Upgrade modal: Team only; the `generic` variant no longer offers
   Pro; `PAID_UNLOCKS` credits line → `5,000 credits per member every month`.
@@ -439,7 +438,7 @@ the old $7.99 seat id (recognition only), `STRIPE_SOLO_PRICE_ID` unchanged (lega
 
 ### 11.1 Design — the personal container IS the billing row (no second Stripe pipeline)
 
-A `kind='personal'` container is a real `workspaces` row, one per user, owner = its only member.
+A `kind='home'` (was `personal`) container is a real `workspaces` row, one per user, owner = its only member.
 Its Pro subscription lives in **`workspace_billing` keyed by that container id**, so checkout,
 webhook (metadata `workspace_id` = the container), watermark, claim, portal, invoices, payment
 method and cancel/resume all work UNCHANGED. The only new SQL is widening the plan CHECK.
@@ -470,7 +469,7 @@ method and cancel/resume all work UNCHANGED. The only new SQL is widening the pl
   seat, then legacy seat, then personal pro, then solo, then first item. Webhook `derivePlan`:
   seat OR legacy-seat price → `team`; personal pro price → `pro`; solo → `solo`; else metadata
   (`team` | `pro` | `solo`), else `team`.
-- Checkout route: body `plan` ∈ {team, pro}; `pro` requires `workspaceKind === "personal"`, `team`
+- Checkout route: body `plan` ∈ {team, pro}; `pro` requires a `kind='home'` container (`"personal"` before 1.37.1), `team`
   requires standard; mismatch → 400 `PLAN_NOT_FOR_CONTAINER`; `solo` → 400 `PLAN_RETIRED` (keep).
   `minRole: "admin"` + `sessionOnly` unchanged (the personal owner is `owner`).
 - `url.ts`: `parseCheckoutPlan` accepts `team` | `pro`. `entitlements.ts › upgradeUrl(plan?)`:
@@ -489,7 +488,7 @@ method and cancel/resume all work UNCHANGED. The only new SQL is widening the pl
   **Budget (re-pinned): seat 3 / personal 2 / link 3.** `upgradeUrl` non-empty for seat-on-free
   (team) AND personal-on-free (`upgradeUrl("pro")`); empty on any paid verdict.
 - Status payload: add `containerKind: WorkspaceKind` (client fallback `"standard"`); `plan` on a
-  personal container is `pro` | `free`. Client hook: `isPro`, `isPaid` includes pro,
+  home container (`containerKind === "home"`) is `pro` | `free`. Client hook: `isPro`, `isPaid` includes pro,
   `monthlyTotal` = `PRO_PRICE` when pro, `containerKind` exposed.
 - Registrar refusal (packages, cannot import src — F-668 stands, add the second literal):
   personal free: `Your personal credits are used up for this month ({used}/{limit}). Resets {date}.\n\nUpgrade to Pro for 5,000 credits a month: {upgradeUrl}`;

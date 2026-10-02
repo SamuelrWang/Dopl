@@ -277,7 +277,8 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Description: workspaces, knowledge bases and skills carry `public_id` (migrations `20260504000000/000100/000200`); neither `clusters` nor `ontology_clusters` does. Re-verified 2026-08-08: ontology clusters DO have a user-facing route (`apps/desktop-ui/src/routes.tsx:55` `ontology/:clusterSlug`), but it is auth-gated and workspace-scoped, so cluster-level publicId still isn't required.
 - **Re-scoped 2026-08-08 by the retirement:** WORKFLOW clusters (`features/clusters`, the `clusters` table, `dopl_cluster`) are retired from every surface, so half of this entry now describes a feature no user or agent can reach. Only the ONTOLOGY half could ever matter.
 - Proposed resolution: defer — revisit only if ontology cluster URLs ever need to be enumeration-resistant or rename-stable on their own.
-- Status: open
+- **Re-scoped 2026-10-02 (docs audit):** `src/features/clusters/` and workflow clusters are deleted (2026-08-11), and `ontology_clusters` is now `public.ontologies` (`20261022120000_ontology_vocabulary_rename.sql`, which adds no `public_id`). Only the ontology half survives, and it is about table `ontologies`.
+- Status: open (ontology half only)
 
 ### F-023: Effective-access rules encoded twice (pure display fn vs server enforcement)
 - Location: `src/features/teams/effective-access.ts:34` (`computeEffectiveAccess`, display) and `src/features/teams/server/access.ts:33` (`effectiveResourceAccess`) / `:112` (`listEffectiveAccess`, enforcement)
@@ -295,13 +296,14 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
 - Proposed resolution: defer — the shape is a light cluster index + per-cluster pages + an id→name directory, and F-157's fixture measurement (634 KB → 82 KB on a realistic paid workspace) is the size of the prize. Trigger: a workspace graph large enough that the snapshot is felt.
 - Status: open
 
-### F-027: Chat transcripts + chat list are unbounded
+### F-027: Chat transcripts are unbounded (the chat LIST is bounded since)
 - Location: `src/features/chats/server/repository.ts:168-176` (`listMessages`, no `.limit()`), `:42-62` (`listVisibleChats`, no `.limit()`)
 - Found during: chats cleanup pass (2026-07-10)
 - Severity: smell (scale)
 - Description: opening a chat ships the entire transcript including `verbatim`. Measured at decision time: 3 chats / 14 messages. Windowing needs a UI load-more + a full-fetch copy path + an MCP contract decision.
-- Proposed resolution: defer — trigger is transcripts reaching real size. Shape then: `GET /api/chats/[chatId]/messages?cursor=&limit=` via `parsePageParams`/`Paginated<T>`; detail returns first page + `messageCount`; copy/MCP fetch full explicitly.
-- Status: open
+- Proposed resolution: defer — trigger is transcripts reaching real size. Shape then: `GET /api/chats/[chatId]/messages?cursor=&limit=` with a `Paginated<T>`-style shape (`parsePageParams` no longer exists); detail returns first page + `messageCount`; copy/MCP fetch full explicitly.
+- **Re-verified 2026-10-02 (docs audit):** the LIST half is closed — `src/features/chats/server/repository.ts › listVisibleChats` ends `.limit(CHAT_LIST_LIMIT)` (200, `chats/constants.ts`). `› listMessages` still has no limit.
+- Status: open (transcript half only)
 
 ### F-033: `hiddenCount` retention counter is a deliberate approximation
 - Location: `src/features/chats/server/repository.ts:70-86` (`countHiddenChats`; the predicate at `:82` is still owner-or-public)
@@ -481,7 +483,8 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
   - **4. Autonomous auto-continuation. PARTIALLY built, and the remaining gap is deliberate.** Mode now gates inbound handling (`main/session-io.js:30`), turn caps exist (`main/settings.js:47` `getTurnCap` → `main/session-engine.js:48`), and resume machinery exists (`session-engine.js:126` → `sessionPark.resumeParked`). **Standing consent is deliberately absent**: `main/channel-prefs.js:15-40` records that the durable channel-wide preset was REMOVED (H2) and replaced with a single-use, expiring, one-consumer arm. Do not "finish" item 4 by re-introducing a durable grant — that reverts a security fix.
   - ~~5. DM revive semantics undocumented in the UI~~ — **RESOLVED.** The copy (in `components/channel-pane.tsx` then, `channels/components/channel-manage.tsx` since the 2026-08-18 cutover) reads "Your direct message with {peer} will be hidden. Opening it again later brings the history back."
 - Proposed resolution: (2) post a lightweight system message on mode change, or have the threads query refetch on the messages-realtime tick; (3) needs-user-decision; (4) next-round feature work.
-- Status: open
+- **Re-verified 2026-10-02 (docs audit): items 2 and 3 are OBSOLETE.** `set_thread_mode` was removed (`packages/mcp-server/src/tools/law-removed-vocabulary.ts`, 2026-09-02), and thread closing — with `outcome` and `ThreadCloseIsHumanOnlyError` — was removed 2026-08-18 (INVARIANTS: a thread has no finished state). Item 4 was not re-verified.
+- Status: open (item 4 only; needs re-verification)
 
 ### F-071: Desktop wake recovery — the manual verification and the undici symbol
 - Location: `dopl-desktop-app/main/wake.js:44-53` (the sleep/wake wiring), `main/api.js:79-99` (`resetPool` swapping `globalThis[Symbol.for('undici.globalDispatcher.1')]`, called from `wake.js:50`)
@@ -614,6 +617,7 @@ COMMIT;
 - Status: open (residuals 1-2)
 
 ### F-093: The §2 file-size backlog — RE-MEASURED 2026-08-10 (four over cap)
+- ⚠ **RE-MEASURED 2026-10-02 (docs audit): the backlog is TWO exempt files** — `src/features/knowledge/server/seed-fixtures-data.ts` (656) and `src/features/billing/server/webhook-handler.test.ts` (739), plus the generated `src/shared/supabase/types.ts`; `eslint.config.mjs` exempts exactly those three. No other file under `src`, `packages/*/src`, `apps/*/src` or `dopl-desktop-app/main` is over 500 (`find` + `wc -l`). The tables below are history.
 - Location: `eslint.config.mjs` (the rule at `:34-39`, the exemption list); `docs/ENGINEERING.md` §2
 - Found during: production-hardening batch 1 (item L1); **absorbs F-153, deleted this pass as superseded** — the same way this entry absorbed F-041 on 2026-07-31.
 - Severity: smell (process); the lint half is real drift
@@ -665,13 +669,13 @@ COMMIT;
 - Proposed resolution: fix-now — reconcile: either both coerce or both reject. Rejecting is the honest one; the mint should not silently rename the caller's credential.
 - Status: open (server-side; needs a push)
 
-### F-098: The web consent card cannot name the tool profile that actually bounds the session
+### F-098: The web consent card cannot name the tool profile that actually bounds the session — ✅ RESOLVED (obsolete) 2026-10-02
 - Location: `src/features/channels/types.ts:327-351` (`ChannelConsentRequest` carries no profile field); `src/features/channels/components/consent-card.tsx` (zero references to a profile)
 - Found during: Q5 review (2026-07-31)
 - Severity: smell (copy that gestures at a bound it cannot state)
 - Description: under a `read_only` or `dopl_only` profile the SDK's `disallowedTools` plus the credential-path deny rules fence the session at the tool-binding layer, where no permission axis can reach. The COPY half was fixed (`components/permission-preset-row.tsx:52` reads "Auto approving every command the tool profile allows", carried verbatim into `renderer/session/session-labels.js` and pinned in both suites). **The plumbing half was not.** Note the correction this entry already carries: the channel MEMBERSHIP preference IS plumbed (`types.ts` `AgentToolProfile`/`myAgentToolProfile`, `server/dto.ts`, `server/service-reads.ts`, `constants.ts` `AGENT_TOOL_PROFILE_LABELS`, rendered by `channels/components/settings-agent.tsx` — `channel-settings-popover.tsx` was its renderer until that file was deleted for the tab's inline controls, 2026-08-19) — it is the CONSENT REQUEST that has none, so the card can say "the tool profile" and not WHICH one.
 - Proposed resolution: fix-now — plumb the profile onto the consent-request DTO so the card states the real blast radius. The desktop status strip already names it via `permissionPostureText(toolMode, messageMode, profileLabel)`.
-- Status: open (needs a server push)
+- Status: **closed 2026-10-02 (docs audit) — the subject no longer exists; entry kept as the record.** the consent card was deleted 2026-08-18 (`ea05f5e0`, launch settings replace the consent card) and inbound consent was retired 2026-08-22 (`1eeb820b`); `renderer/session/**` went with the session window 2026-08-20 (`db901c39`). There is no card left to name a profile.
 
 ### F-100: The WEB roster still shows every member's EMAIL to every member — the MCP half is closed, the web DTO is not
 - Location: `packages/mcp-server/src/tools/channel-render.ts:412-416` (`formatMemberLine`, the closed half, kept as the shape to copy); the OPEN half is the web roster — `src/features/members/types.ts:28,46` carry `email` on the member shapes and the console renders it **unconditionally for every member**, with no admin-or-self test anywhere on the path. ⚠ **RE-SITED 2026-08-30**: this named the v1 member row, which was deleted with the rest of the v1 console (ledger ASK-1). **The finding survives the file** — v2 renders the same field at `src/features/members/components/members-v2/member-rows.tsx › MemberSectionCard`, `› member-facts.tsx`, `› member-header.tsx` and `› team-detail-pane.tsx`, four sites where there was one, and `› visibility.ts` is where an admin-or-self test would go; the parity comment is `packages/mcp-server/src/tools/members.ts:176`
@@ -916,7 +920,8 @@ COMMIT;
 - **One residual worth keeping:** `main/ui-sync.js`'s `channel_agents` binding in `SYNC_TABLES` is residue — nothing writes that table and no web hook watches it — but dropping a name is a BEHAVIOUR change with a pinned contract test, so it was annotated in place rather than removed. Sequence it with (c)/(e).
 - Status: open
 
-### F-144: Two flagged items from the session-state phase
+### F-144: Two flagged items from the session-state phase — ✅ RESOLVED (obsolete) 2026-10-02
+- Status: **closed 2026-10-02 (docs audit); entry kept as the record.** (b) defers to F-152, closed the same day; (d) and the CONSENT POSTURE note are about the session window and inbound consent, deleted 2026-08-20 (`db901c39`) and retired 2026-08-22 (`1eeb820b`).
 - Location: `src/features/channels/**`, `dopl-desktop-app/renderer/session/**`
 - Found during: rollback plan Phase 5 (2026-08-05); **rewritten down to the flagged items 2026-08-08**
 - Severity: question + feature work
@@ -954,7 +959,7 @@ COMMIT;
 - Proposed resolution: defer — this belongs with the `@/`-boundary extraction (the 344-module task), not squeezed in beside a window refactor.
 - Status: open
 
-### F-152: steer-my-own is not a missing IPC route — it is a missing PRIVATE transport
+### F-152: steer-my-own is not a missing IPC route — it is a missing PRIVATE transport — ✅ RESOLVED (superseded) 2026-08-22
 - Location: `dopl-desktop-app/main/listener-messages.js:66`, `main/session-dispatch.js:112-114`, `session-ipc.js`'s sender resolution
 - Found during: 2026-08-07, re-deriving F-144 item (b)
 - Severity: question (product + security decision)
@@ -964,7 +969,8 @@ COMMIT;
 - **The value/risk split is bad at both ends.** A GATED steer requires the operator to be at the window they could have typed into — thin value. An UNGATED steer bypasses `feedInbound`'s Accept gate, and under `toolMode: 'bypass'` **one remote post becomes arbitrary tool execution on the operator's Mac with no card and no notification.**
 - **On the peer boundary, in fairness: a steer route would NOT weaken it.** `m.authorUserId` is server-derived and unforgeable. The escalation is on the axis F-144 flags as unresolved — TOKEN CUSTODY. Today a `dopl_at_*` holder can open a NEW session, which starts at `manual`/`ask` so every tool call raises a card. **Ungated steer lets the same token inject into an EXISTING session already holding standing grants for a different purpose.** That is strictly more than the flagged status quo.
 - What would have to be true: (1) a product call on privacy — a visible steer is one key and one predicate; a private one needs a transport that is not the shared thread, i.e. schema + RLS; (2) regardless, a peer-side drop rule shipped FIRST, then a skew window, then the sender flag; (3) an explicit gated-vs-ungated call, which is a token-custody decision and not an agent's to make.
-- Status: **not built, deliberately** — open until (1) and (3) land
+- Was: *not built, deliberately — open until (1) and (3) land.*
+- Status: **closed 2026-10-02 (docs audit) — superseded 2026-08-22; entry kept as the record.** The echo brake this entry turns on is gone: `dopl-desktop-app/main/session-dispatch.js › feedLiveSession` no longer refuses `m.authorUserId === myUserId`, so an operator's own channel message reaches their live agent (the visible steer), under the 2026-08-22 wake rule (`1eeb820b`, operator/@-directed). `session-ipc.js` and the session window are deleted (`db901c39`). A PRIVATE steer was never asked for.
 
 ### F-155: A non-direct channel's delete is "hidden forever, retained forever", and the copy is waiting on the product call — ✅ RESOLVED 2026-08-30
 - Location: `src/features/channels/components/channel-pane.tsx` (the non-DM ConfirmDialog); `server/service-writes.ts#deleteChannel` → `repository.ts:239#softDeleteChannel`; `reviveChannel` at `repository.ts:177`; migration `20260807110000_purge_soft_deleted_rows.sql:48-51`
@@ -988,7 +994,7 @@ COMMIT;
 - Status: open (deferred half)
 
 ### F-159: The write layer — ADOPTED for all four named families; what remains is the layer's own gaps
-- Location: `src/shared/hooks/use-api-mutation.ts`; `src/features/{channels,chats,members}/hooks/**`; `src/features/ontology/graph-state.ts`; `src/features/channels/components/channel-transcript.tsx` (`MessageBubble`)
+- Location: `src/shared/hooks/use-api-mutation.ts`; `src/features/{channels,chats,members}/hooks/**`; `src/features/ontology/graph-state.ts`; `src/features/channels/components/transcript.tsx` (`channel-transcript.tsx` was deleted 2026-08-18)
 - Found during: launch-readiness P0-1 (2026-08-07)
 - Severity: smell (an absent layer, now adopted)
 - ✅ **REWRITTEN 2026-08-08: the "~80 remaining sites" scope is DONE.** Every family this entry named is converted. Yesterday's version of this line said "exactly EIGHT `useApiMutationWith` call sites exist, all in three channels hooks" — that was true when written and expired within a day, which is this file's own doctrine about status lines demonstrated on the entry that states it.
@@ -5573,6 +5579,9 @@ neither can be fixed on the SPA side; the faces were built around them rather th
 **(a) THE PRIVATE DIRECT LANE HAS NO SENDER IDENTITY, AT ANY LAYER.** Samuel's ruling is that the
 directed boxes name the counterparty BY NAME, for both directions. There is nothing to name:
 
+> ✅ **(a) RESOLVED 2026-09-04 (noted by the 2026-10-02 docs audit):** `supabase/migrations/20260904090000_direction_sender_agent.sql` adds `channel_agent_directions.sender_agent_id` (*"WHICH of my agents said this"*). The paragraphs below are the 2026-08-31 record; (b) is not re-verified.
+
+
 - `supabase/migrations/20260903120000_channel_agent_directions.sql` — the columns are
   `id / workspace_id / channel_id / task_id / operator_user_id / agent_id / body / status /
   refusal_reason / reply / claimed_at / decided_at / expires_at / created_at`. **`agent_id` is the
@@ -5883,7 +5892,9 @@ condition this finding's argument is actually about: *a file at the cap does not
 stops being CORRECTABLE.* Adding a five-line comment to it during the integration wiring is what
 found it.
 
-### F-384 — the design's §1.4 `deepLink` prediction for Cursor did not survive the build, so the parity census could not be emptied by deletion (2026-08-31, port step 8)
+### F-384 — the design's §1.4 `deepLink` prediction for Cursor did not survive the build, so the parity census could not be emptied by deletion (2026-08-31, port step 8) — ✅ RESOLVED (obsolete) 2026-10-02
+
+Status: **closed 2026-10-02 (docs audit) — obsolete; entry kept as the record.** The runtime descriptor fields this entry discusses were deleted 2026-09-23 (`bd4a7cad`, *delete descriptor fields, predicates and copy nothing reads*); `deepLink` has no hits under `dopl-desktop-app/main/runtime`.
 
 `test/adapter-parity.test.mjs › PENDING_UNTIL_CURSOR` held **six** descriptor fields that could not
 vary until a third adapter registered. Each row named the value the port design's §1.4 table
@@ -5926,6 +5937,8 @@ smoke items C14 / X5, and only a measurement empties it.
 
 ### F-385 — an in-process runtime has NO ambient environment fence, and the design has no field that says so (2026-08-31, port step 8)
 
+Status: **re-scoped 2026-10-02 (docs audit).** `descriptor.ambientFences` / `envDeny` / `configFlags` were deleted 2026-09-23 (`bd4a7cad`), so there is no descriptor field to carry the fence and the framing below is obsolete. The underlying Cursor config-isolation gap was not re-verified.
+
 `descriptor.ambientFences.envDeny` exists because "ambient config that survives the scrub can flip
 the gate", and both other adapters populate it: they hand a SCRUBBED environment to a CHILD PROCESS
 (`runtime/claude/loader.js › buildScrubbedEnv`, `runtime/codex/launch-spec.js › buildScrubbedEnv`).
@@ -5952,7 +5965,9 @@ reads as "no members" where the honest statement is "no such flag exists, and he
 for it". That is a shape the design should carry rather than a comment in one adapter — proposed as
 a smoke-item-gated field rather than invented here. §5 items X13 and X20.
 
-### F-386 — `descriptor.meter.windowSource` has no honest value on a runtime whose only window signal is a hook the design forbids writing (2026-08-31, port step 8)
+### F-386 — `descriptor.meter.windowSource` has no honest value on a runtime whose only window signal is a hook the design forbids writing (2026-08-31, port step 8) — ✅ RESOLVED (obsolete) 2026-10-02
+
+Status: **closed 2026-10-02 (docs audit) — obsolete; entry kept as the record.** `descriptor.meter.windowSource` was deleted 2026-09-23 (`bd4a7cad`); 0 hits under `dopl-desktop-app/main`.
 
 The port design's §1.4 table predicts Cursor's `meter.windowSource` is `'hook'` (the `preCompact`
 hook's `context_window_size`). **The shipped adapter declares `null`**, and the two statements cannot

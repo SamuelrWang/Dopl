@@ -78,7 +78,7 @@ or the schema is NOT done until it has:
 2. Added the *why* to **docs/ENGINEERING.md** only if the rationale is worth keeping. A rule change with
    no story does not need an entry.
 3. Recorded new debt or resolved findings in **docs/REFACTOR-FINDINGS.md** (`F-NNN`).
-4. Synced the "Dopl Development" knowledge base in the Dopl workspace (via `dopl_kb`) when the change
+4. Synced the "Dopl Development" knowledge base in the Dopl workspace (via `dopl_read_entry` / `dopl_write_entry`; `dopl_kb` is the legacy name) when the change
    affects what a future coding session must know.
 
 Do this before reporting the work complete, not as a follow-up.

@@ -1,8 +1,8 @@
 # Assets
 
-Place icon files here for electron-builder packaging:
-- icon.icns (macOS, 512x512 recommended)
-- icon.ico (Windows)
-- icon.png (Linux, 512x512)
+Runtime images:
+- `icon.png` — the mark on `renderer/offline.html` and `renderer/update-required.html`
+- `trayTemplate.png`, `trayTemplate@2x.png` — macOS menu-bar (template) icons (`main/tray.js`)
 
-Generate from any 512x512 PNG at: https://www.icoconvert.com/
+The packaged app icon is `dopl-desktop-app/build/icon.icns` (electron-builder `mac.icon`).
+Dopl ships macOS only, so there is no Windows/Linux icon.

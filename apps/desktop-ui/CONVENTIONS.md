@@ -125,8 +125,8 @@ run the same router so a URL works in either.
 - `apiRequest` throws `ApiError` (with `status`, `code`, `details`) for a
   non-2xx answer, and a plain `Error` when the request never completed. The
   shared TanStack retry predicate keys off exactly that: 4xx never retries.
-- Do not render a skeleton for a first paint that the main-process cache will
-  serve instantly once Phase 2/3 lands. Quiet beats flashing.
+- Every page renders its own shaped skeleton (docs/INVARIANTS.md §1A,
+  Samuel's ruling 2026-08-28) — not a generic spinner.
 
 ## Design tokens
 
@@ -135,10 +135,10 @@ run the same router so a URL works in either.
 docs/DESIGN-SYSTEM.md applies unchanged: semantic `text-*` ramp, token color
 utilities, kit classes (`.page-float`, `.bento`, `.concave-field`, …).
 
-⚠ They drift silently. That is REFACTOR-FINDINGS **F-074** — the same finding
-already open for `dopl-desktop-app/renderer/session/tokens.css`, which is the
-*first* hand-copy of this palette. **Edit globals.css and these files in the
-same change**, until one file is imported at build time by all three.
+⚠ Drift is caught by the CI gate `scripts/check-css-token-drift.ts` (tokens,
+and the kit class set since 2026-09-17). The debt is REFACTOR-FINDINGS
+**F-194** (successor of F-074). **Edit globals.css and these files in the
+same change.**
 
 ## Sharing code with the web app
 

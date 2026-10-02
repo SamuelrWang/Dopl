@@ -33,6 +33,8 @@ pick up the main-process change).
 
 ## `channel_messages.metadata.display` (reserved, server-written)
 
+> ⚠ Superseded by `docs/specs/unified-display.md` (2026-09-28); display code now lives in `src/features/display/{core,server}`. Kept for history.
+
 > ⚠ **SUPERSEDED 2026-09-28 by docs/specs/unified-display.md** (v2 envelope, one block vocabulary,
 > `dopl_show`, decisions as displays, one answer route). What follows is the v1 shape, kept because
 > v1 rows still exist and are read at read time through `display/core/adapt.ts › displayOf`.
@@ -52,7 +54,7 @@ pick up the main-process change).
 ```
 
 - Vocabulary: `src/features/glasses/core/screens/spec.ts` (one schema). Platform-neutral validation:
-  `src/features/glasses/core/screens/display.ts › normalizeDisplay` (the G2 compiler is only for glasses).
+  now `src/features/display/core/normalize.ts` (was `glasses/core/screens/display.ts`, deleted 2026-09-29).
 - Written when:
   1. `glasses_render` / `glasses_use_template` / `glasses_update` / `glasses_ask` run from a Dopl
      channel session (the MCP call carries `X-Dopl-Session-Id` = `<channelId>:…`). The first call posts
@@ -76,11 +78,10 @@ pick up the main-process change).
 | Route | Auth | Body | Returns |
 | --- | --- | --- | --- |
 | `POST /api/channels/:channelId/messages/:messageId/display/answer` | session only (not guests), channel member, message author's account | `{index: number, block_id?: string \| null, choice?: string}` (`choice` is ignored; `index` decides) | `{ok: true, answer}`; 404 `DISPLAY_NOT_FOUND`, 400 `DISPLAY_BAD_CHOICE`, 403 `DISPLAY_NOT_YOURS`, 409 `DISPLAY_ANSWERED` / `DISPLAY_ANSWER_REFUSED` |
-| `POST /api/channels/:channelId/messages/:messageId/display/save` | any member credential (not guests), channel member | `{name?: string}` (slugified to `a-z0-9_-`, ≤64; default from the first text line) | `{name, variables, updated_at}` (the caller's `glasses_templates` row); 400 `DISPLAY_NOT_A_TEMPLATE` when it exceeds the glasses limits |
+| `POST /api/channels/:channelId/messages/:messageId/display/save` | any member credential (not guests), channel member | `{name?: string}` (slugified to `a-z0-9_-`, ≤64; default from the first text line) | `{name, variables, updated_at}` (the caller's `glasses_templates` row); saving now follows `unified-display.md` (`dopl_show` `save_as`/`template`); `DISPLAY_NOT_A_TEMPLATE` no longer exists |
 | `PATCH /api/devices/:id` | session | `{name: string \| null}` (≤64 chars; `null`/blank restores the detected name) | `{device: ComputerDeviceDto}`; 404 for a legacy/removed/foreign computer |
 
-- Code: `src/features/glasses/core/screens/display-actions.ts` (answer, save), `channel-mirror.ts`
-  (post/patch/answer mirror, best effort), `channel-displays.ts` (the real ports).
+- Code: `src/features/display/{core,server}` (the `glasses/core/screens/` display files were deleted 2026-09-29).
 - A list block is selectable unless `selectable: false` (the glasses default). Agents are told to pass
   `selectable: false` on info-only lists; the UI renders every selectable list as answer buttons.
 - Answer with a linked glasses row runs the glasses answer path (`inbox.ts › answerAsk`), so a waiting
@@ -96,9 +97,8 @@ pick up the main-process change).
   ` · via computer (Samuel's MacBook Pro)` / ` · via web`. When the newest member line on a page came
   from glasses, the page ends with ONE guidance line (`GLASSES_REPLY_GUIDANCE`).
 - `dopl_get_status` waiting items: ` · via …` on the item (`AccountWaitingItem.source = {kind, label}`).
-- `dopl_send_message` carries an optional `display: {blocks, layout?, wait_for_input?}` (granular only, `carry` in
-  `tool-manifest.ts`; strict — an unknown key refuses) on a plain send AND on `kind="record"`. `kind="milestone"`
-  and `thread="new"` REFUSE a display rather than drop it (`channel-ops-write.ts › displayLaneRefusal`).
+- ⚠ Superseded: agents show displays with `dopl_show` (see `unified-display.md`), not a `display` arg on
+  `dopl_send_message`; `displayLaneRefusal` no longer exists.
 - Desktop session inbound (Claude/Codex): one note line above the fence (`Sent via glasses (Even G2).`)
   plus the guidance line for glasses (`main/session-seed.js › frameContinuation`, fed from
   `session-dispatch.js` through the gate/reducer as `source`).

@@ -58,7 +58,7 @@
 |---|---|---|---|
 | 1 | `src/features/channels/components/agents-model.ts › agentDisplayName` | returns `` `#${agentId}` `` when the agent has no operator name. **This is the root leak** — every card, header, window title, rail tab, thread-Info row, rename field, filter dropdown and activity line runs through it | FIX: fall back to `New Agent` |
 | 2 | `src/features/channels/components/attribution-pill.tsx › attributionName` | returns `` `#${agentId}` `` for a stamped agent post with no name. **The transcript half of the same leak** | FIX: fall back to `New Agent` |
-| 3 | `src/features/home/server/overview-tally.ts › mapAgents` | `name: row.display_name \|\| row.name` — `channel_sessions.name` IS the id, so the Home pane's agent board (`apps/desktop-ui/src/pages/home/overview-agent-board.tsx › AgentCard`) prints the raw 8 chars for any unnamed agent | FIX: fall back to `New Agent` |
+| 3 | `src/features/home/server/overview-tally.ts › mapAgents` | `name: row.display_name \|\| row.name` — `channel_sessions.name` IS the id, so the Home pane's agent board (`apps/desktop-ui/src/pages/home/overview-agent-board.tsx › AgentCard`) prints the raw 8 chars for any unnamed agent | FIX: fall back to `New Agent` — ⚠ site gone: the Home agent board was deleted 2026-09-20 |
 | 4 | `src/features/channels/components/use-agent-launch.ts › defaultAgentName` | `` `#${agentId}` ``, written into the launch dialog's Name field by `› openPanel` | FIX: the prefill is deleted; the field starts blank |
 | 5 | `src/features/channels/components/use-agent-launch-run.ts › launchWithIdentity` | compares the typed name against `defaultAgentName(address)` to decide "this is the prefill, not a rename" | FIX: a blank name is the only "not a rename" case left |
 | 6 | `apps/desktop-ui/src/pages/agent-window/index.tsx` (the tab strip) | tab label — goes through `agentDisplayName`, so fixed by #1 | inherited |
@@ -83,7 +83,7 @@ removed by this wave and the file pins the new rule in both directions.
 
 | # | Site | Text | Verdict |
 |---|---|---|---|
-| 1 | `dopl-desktop-app/main/prompt-framing.js › agentIdentityFraming` | `YOUR AGENT ID IS <id>.` — the only identity line a session gets. It says nothing about the NAME and nothing about not posting the id | REWRITE: name + id + "the id is internal" |
+| 1 | `dopl-desktop-app/main/prompt-framing.js › agentIdentityFraming` (now `prompt-framing-self.js › agentSelfFraming`) | `YOUR AGENT ID IS <id>.` — the only identity line a session gets. It says nothing about the NAME and nothing about not posting the id | REWRITE: name + id + "the id is internal" |
 | 2 | `packages/mcp-server/src/tools/channel-doctrine.ts › channelLaw` | *"to=\"@agent-\<id\>\" or `@agent-<id>` in a body wakes THAT agent"* — teaches the id form as THE way to reach an agent | REWRITE: name tag first, id only for a duplicate name |
 | 3 | `packages/mcp-server/src/tools/channel-addressing.ts › rosterAddressingRule` | *"`@agent-<id>` in the BODY … wakes one of YOUR OWN operator's agents by name"* | REWRITE to the name tag |
 | 4 | `packages/mcp-server/src/tools/channel-schema.ts` (the `name` param's describe) | *"`@agent-<id>` stays the only address, nothing resolves an agent by its name"* — **factually false since 2026-08-28**; the name door is live in all three trees | CORRECT |
@@ -269,7 +269,7 @@ common one.
     exists, defaults to `New Agent`, and reports back what was STORED.
 - **The launcher learns the final name**: the MCP result's `name=` is the applied name, slugged
   (`channel-ops-launch.ts`), and the human dialog's card reads it off the summary push.
-- **The agent learns its own**: `main/prompt-framing-identity.js › agentIdentityFraming` takes an
+- **The agent learns its own**: `main/prompt-framing-self.js › agentSelfFraming` takes an
   optional `ctx.agentName` and speaks the STORED name, suffix and all.
 
 ## 5. Surfaces

@@ -69,7 +69,7 @@ them through, so the model is built so that a new device kind is a new source, n
 
 1. Give the kind a source. Either extend `GET /api/devices` with its table, or add its own endpoint
    and a mapper beside `computerToDevice` / `glassesToDevice`.
-2. Add a label to `types.ts › PLATFORM_LABELS` and a glyph to `device-glyph.tsx › ICONS`.
+2. Add a label to `types.ts › COMPUTER_PLATFORM_LABELS` and a glyph to `device-glyph.tsx › ICONS`.
 3. If it needs controls beyond Remove, add a row component and branch on it in
    `devices-panel.tsx › DeviceRow`.
 
