@@ -62,7 +62,7 @@ export function recipientTags(
   for (const id of recipients.agentIds ?? []) {
     if (id.length === 0 || seen.has(`a:${id}`)) continue;
     seen.add(`a:${id}`);
-    // `routedTagLabel`'s treatment: the name, never the machine token; no retypable handle, no `@`.
+    // 🔒 Samuel, 2026-09-15: the name, never the machine token; no retypable handle, no `@`.
     const handle = agentMentionFace(id, agents);
     out.push({
       kind: "agent",

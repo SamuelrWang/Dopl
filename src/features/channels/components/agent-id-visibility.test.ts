@@ -68,7 +68,8 @@ describe("no surface renders a raw agent id", () => {
   });
 
   it("no surface puts the id where text goes", () => {
-    // ⚠ THE HELPER BAN ABOVE IS NOT THE WHOLE RULE, and `bits.tsx › AgentChip` is why. It never
+    // ⚠ THE HELPER BAN ABOVE IS NOT THE WHOLE RULE, and `bits.tsx`'s old `AgentChip` (deleted as
+    // dead code 2026-10-02) is why. It never
     // called `agentDisplayId` — it took an `agentId` prop of its own and printed it verbatim in a
     // mono span, left over from the 2026-08-22 multiplayer chip that `attribution-pill.tsx` has
     // since replaced. The prop had NO caller (`mentions-list.tsx` mounts it bare), so the sweep

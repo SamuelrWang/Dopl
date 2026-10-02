@@ -13,7 +13,6 @@ import { PanelHeading } from "./bits";
 import { usePostureWarning } from "./posture-warning";
 // Re-exported so callers and suites keep importing the container from here.
 export { ChannelAgentSettings } from "./settings-agent-container";
-export type { ChannelAgentSettingsProps } from "./settings-agent-container";
 import { AgentLaunchPostureRows } from "./settings-agent-launch-rows";
 import { ToolAccessRow } from "./settings-agent-rows";
 import type { AgentToolProfile, ChannelMember } from "../types";

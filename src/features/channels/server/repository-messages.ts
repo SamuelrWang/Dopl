@@ -5,8 +5,6 @@ import type { ChannelMessageRow } from "./dto";
 export {
   listRecentRoomAgentPosts,
   listRecentRoomTagsBy,
-  type RecentAgentPostRow,
-  type RecentAuthorTagRow,
 } from "./repository-messages-recent";
 // ⚠ SAME SPLIT, SAME REASON (2026-09-05, task 13b): the two reads that find the
 // typist's most recent OPEN decision card. Re-exported so the service layer
@@ -14,7 +12,6 @@ export {
 export {
   listRecentEscalations,
   listAnsweredEscalationIds,
-  ESCALATION_SCAN_LIMIT,
 } from "./repository-messages-escalations";
 
 /**

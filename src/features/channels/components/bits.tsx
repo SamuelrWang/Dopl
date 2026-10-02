@@ -44,8 +44,7 @@ export function IconTile({ children }: { children: ReactNode }) {
   );
 }
 
-/** Agent chip faces, deliberately off the severity ramp (an identity has no status). Index 0 is the plain
- *  face {@link AgentChip} wears. */
+/** Agent chip faces, deliberately off the severity ramp (an identity has no status). */
 const AGENT_ACCENTS = [
   "border-border-strong bg-bg-inset text-text-secondary",
   "border-link/25 bg-link/10 text-link",
@@ -61,23 +60,6 @@ export function agentAccent(agentId: string): string {
     hash = (hash * 31 + agentId.charCodeAt(i)) >>> 0;
   }
   return AGENT_ACCENTS[hash % AGENT_ACCENTS.length];
-}
-
-/** The bare "Agent" marker — a display claim (`authorKind` is caller-assertable, INVARIANTS §5); it never
- *  names which agent. */
-export function AgentChip({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-micro font-medium",
-        AGENT_ACCENTS[0],
-        className
-      )}
-    >
-      <Bot size={11} aria-hidden />
-      Agent
-    </span>
-  );
 }
 
 /** Right-aligned count pill on a nav row; render only where a real count exists. */

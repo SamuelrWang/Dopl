@@ -4651,7 +4651,8 @@ been *closed against the wrong thing*, and the shape of that error is the same e
   it*.
 - **A sweep that bans a helper cannot see the site that never called the helper.** The agent-id rule
   was enforced by banning `agentDisplayId(` across the family, which correctly caught the six known
-  call sites. `bits.tsx › AgentChip` never called it: it took an `agentId` prop of its own and printed
+  call sites. `AgentChip` in `bits.tsx` (deleted as dead code 2026-10-02) never called it: it took an
+  `agentId` prop of its own and printed
   it verbatim in a mono span, left over from the 2026-08-22 multiplayer chip that `attribution-pill.tsx`
   had since replaced. The prop had **no caller**, so nothing rendered wrong and the sweep stayed green
   over a component that would leak eight machine characters the moment anyone passed them. The ban is

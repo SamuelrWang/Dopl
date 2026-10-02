@@ -419,10 +419,7 @@ export type {
  * (design #1220, accepted #1222) — lives in `schema-artifacts.ts`, re-exported
  * here: this file is the barrel, so there is no second path to a symbol.
  */
-export {
-  ARTIFACT_CREATE_MAX_MESSAGES,
-  ArtifactActionSchema,
-} from "./schema-artifacts";
+export { ArtifactActionSchema } from "./schema-artifacts";
 export type { ArtifactActionInput } from "./schema-artifacts";
 
 
@@ -483,7 +480,7 @@ export type {
 // THE PRIVATE DIRECT LANE (2026-08-31) — same arrangement, same reason.
 export {
   DirectionClaimSchema, DirectionCreateSchema,
-  DirectionDecideSchema, DirectionRefusalReasonSchema,
+  DirectionDecideSchema,
 } from "./schema-direction";
 export type {
   DirectionClaimInput, DirectionCreateInput, DirectionDecideInput,

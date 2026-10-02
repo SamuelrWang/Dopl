@@ -56,7 +56,7 @@ export type DirectionClaimInput = z.infer<typeof DirectionClaimSchema>;
 
 /** ⚠ `closedEnum` so TS-side drift BREAKS THE BUILD. The column CHECK is the
  *  third statement of this set and no TypeScript can reach it. */
-export const DirectionRefusalReasonSchema = closedEnum<DirectionRefusalReason>()(
+const DirectionRefusalReasonSchema = closedEnum<DirectionRefusalReason>()(
   ["no-session", "auth-hold", "busy", "blocked", "no-bridge"]
 );
 

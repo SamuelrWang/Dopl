@@ -98,10 +98,7 @@ export type { AwaitHoldCounters } from "./service-await";
 // vs. a re-proved membership set) and collapsing them would put two
 // authorization stories behind one signature.
 export { awaitWorkspaceMessages } from "./service-await-workspace";
-export type {
-  WorkspaceAwaitCounters,
-  WorkspaceChannelMessage,
-} from "./service-await-workspace";
+export type { WorkspaceAwaitCounters } from "./service-await-workspace";
 
 export {
   createChannel,
@@ -173,10 +170,6 @@ export { recordDeliveryAcks } from "./service-writes-delivery";
 // `channel_sessions` is a live projection deleted when the pill leaves and this
 // outlives it.
 export { readTokenSpend, recordSessionTokenSpend } from "./service-token-spend";
-export type {
-  TokenSpendMarkPoint,
-  TokenSpendReport,
-} from "./service-token-spend";
 
 // LAUNCH-OVER-MCP (Samuel, 2026-08-22) — an operator's external agent asking
 // that operator's OWN desktop to start an agent. ⚠ Its own module because it is
@@ -200,10 +193,6 @@ export {
 // `launch` and gates neither of these.
 export {
   createAgentDirective,
-} from "./service-launch-agent";
-export type {
-  CreateAgentDirectiveInput,
-  CreateAgentDirectiveResult,
 } from "./service-launch-agent";
 
 // THE PRIVATE DIRECT LANE (2026-08-31) — the launch mailbox's sibling, and off
@@ -230,12 +219,8 @@ export {
 // the MCP layer, not by these.
 export { getAccountStatus, readAccountMessages } from "./service-account";
 export type {
-  AccountChannelMessage,
   AccountChannelStatus,
-  AccountMessagesPage,
   AccountStatus,
   AccountStatusClips,
-  AccountStatusOptions,
-  AccountStatusView,
   AccountWaitingItem,
 } from "./service-account";

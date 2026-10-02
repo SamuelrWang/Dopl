@@ -78,14 +78,14 @@ import { agentNamesFor } from "./service-shared";
  */
 
 /** One message on an account-wide page, tagged with where it came from. */
-export interface AccountChannelMessage extends ChannelMessage {
+interface AccountChannelMessage extends ChannelMessage {
   channelName: string;
   channelSlug: string;
   /** 🔒 The tenancy that owns the channel — the `workspace=` handle. */
   workspaceId: string;
 }
 
-export interface AccountMessagesPage {
+interface AccountMessagesPage {
   messages: AccountChannelMessage[];
   /** How many channels were watched. `0` is reported, never rendered as silence. */
   channelCount: number;
@@ -102,9 +102,9 @@ export interface AccountMessagesPage {
  * `"sessions"` exists for the all-sessions read (T22), which wants the session
  * projection and none of the cursor arithmetic behind it.
  */
-export type AccountStatusView = "full" | "sessions";
+type AccountStatusView = "full" | "sessions";
 
-export interface AccountStatusOptions {
+interface AccountStatusOptions {
   /** Global `seq` cursor. Absent ⇒ `unread` is `null` on every row. */
   since?: number;
   view?: AccountStatusView;

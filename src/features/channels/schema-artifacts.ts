@@ -17,7 +17,7 @@ import { safeLabel, safeOptionalProse } from "@/shared/lib/safe-label";
  * unbounded list would be an unbounded query. A caller with more to fold uses
  * `add`, which is the op that exists for it.
  */
-export const ARTIFACT_CREATE_MAX_MESSAGES = 200;
+const ARTIFACT_CREATE_MAX_MESSAGES = 200;
 
 /** ⚠ Same class as `channels.name` and `channel_tasks.title`, by ruling: these
  *  strings render into `dopl_channel` results, so they take the bounds this tree

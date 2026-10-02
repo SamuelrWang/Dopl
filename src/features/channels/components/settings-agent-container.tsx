@@ -15,7 +15,7 @@ import {
 } from "./settings-agent";
 import type { AgentToolProfile, ChannelMember } from "../types";
 
-export interface ChannelAgentSettingsProps {
+interface ChannelAgentSettingsProps {
   /** The channel's DB UUID — handed to the desktop bridges as-is. */
   channelId: string;
   /** The caller's own tool profile for this channel (never a teammate's). */

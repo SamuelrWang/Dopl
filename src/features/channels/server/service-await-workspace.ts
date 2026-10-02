@@ -110,7 +110,7 @@ interface WorkspaceAwaitOptions {
 }
 
 /** A message plus the channel it came from — a workspace page spans several. */
-export interface WorkspaceChannelMessage extends ChannelMessage {
+interface WorkspaceChannelMessage extends ChannelMessage {
   channelName: string | null;
   channelSlug: string | null;
 }

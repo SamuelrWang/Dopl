@@ -216,9 +216,8 @@ export function serverRoutedAgentIds(row: {
  * *"evidence must be the human's own act"* since it was written, and this one has said *"per
  * PERSON"* throughout — the prose was the spec and the predicate was two-thirds of it. Anyone
  * widening this walk again: the sentence is not enforced by being written down.
- * ⚠ **MAIN-ROOM ROWS ONLY**, `seq`-descending: {@link recentAgentPosters}'s rules on those two
- * points and for its reasons — a threaded post is RR1's business, and `seq` is a total order so no
- * tie is representable.
+ * ⚠ **MAIN-ROOM ROWS ONLY**, `seq`-descending: a threaded post is RR1's business, and `seq` is a
+ * total order so no tie is representable.
  *
  * ⚠ **NO TIME WINDOW, AND THAT IS THE RULE RATHER THAN A DEFAULT** (Samuel, 2026-09-06). It was
  * bounded by `RESILIENCE_WINDOW_MS` until then, and that was the bug: fifteen minutes after you
@@ -233,9 +232,8 @@ export function serverRoutedAgentIds(row: {
  * or unparseable row is no longer evidence of nothing — it is an ordinary row with a typed tag on
  * it (INVARIANTS §11: UNKNOWN is not EMPTY). It is still skipped when a caller asks for a window,
  * because a row that cannot say when it happened cannot be shown to be inside one.
- * ⚠ **THIS IS NOT `recentAgentPosters`' CLOCK.** That one still takes a required `windowMs` and
- * the unaddressed-post arm still passes `RESILIENCE_WINDOW_MS` to it: "who spoke here lately" is a
- * FRESHNESS question and goes stale, "who did this person address" is a habit and does not.
+ * ⚠ **THIS IS NOT A FRESHNESS CLOCK.** "Who spoke here lately" is a FRESHNESS question and goes
+ * stale; "who did this person address" is a habit and does not.
  * ⚠ **IT DOES NOT FILTER FOR LIVENESS AND MUST NOT.** This answers "who did they address"; whether
  * that agent still exists is the caller's question, asked against the live candidate set at pick
  * time (`lib/agent-mentions.ts › resolveDefaultResponder`). An ended agent therefore cannot eat the
@@ -261,8 +259,8 @@ export function recentAgentsAddressedBy(
     metadata?: Record<string, unknown> | null;
   }[],
   /** ⚠ `windowMs` OMITTED MEANS UNBOUNDED, which is what both real callers pass. `now` still
-   *  defaults here rather than at a call site, for {@link recentAgentPosters}' reason: a component
-   *  may not read a clock during render and a model may. */
+   *  defaults here rather than at a call site: a component may not read a clock during render and
+   *  a model may. */
   opts: { now?: number; windowMs?: number } = {}
 ): string[] {
   if (authorUserId === null) return [];
@@ -300,33 +298,6 @@ export function recentAgentsAddressedBy(
     for (const id of row.recipientAgentIds ?? []) {
       if (typeof id === "string" && id.length > 0 && !out.includes(id)) out.push(id);
     }
-  }
-  return out;
-}
-
-export function recentAgentPosters(
-  rows: readonly {
-    seq: number;
-    createdAt: string;
-    authorKind?: string | null;
-    clientMsgId?: string | null;
-    metadata?: Record<string, unknown> | null;
-  }[],
-  /** ⚠ `now` DEFAULTS HERE RATHER THAN AT THE CALL SITE, the same arrangement
-   *  `channels/components/agents-model.ts` uses for the same reason: a
-   *  component may not read a clock during render, and a model may. The SERVER
-   *  passes its own write-time clock explicitly. */
-  opts: { now?: number; windowMs: number }
-): string[] {
-  const now = opts.now ?? Date.now();
-  const out: string[] = [];
-  for (const row of [...rows].sort((a, b) => b.seq - a.seq)) {
-    if (row.authorKind !== "agent") continue;
-    if (typeof row.metadata?.taskId === "string") continue;
-    const at = Date.parse(row.createdAt);
-    if (!Number.isFinite(at) || now - at > opts.windowMs) continue;
-    const id = authorAgentIdOf(row);
-    if (id !== null && !out.includes(id)) out.push(id);
   }
   return out;
 }

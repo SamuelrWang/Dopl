@@ -94,7 +94,7 @@ const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/;
  * this ever matters, it is a case for lexing with `marked` here, not for a fourth
  * indentation heuristic.
  */
-export function maskCodeRegions(body: string): string {
+function maskCodeRegions(body: string): string {
   const blank = (text: string): string => " ".repeat(text.length);
   const lines = body.split("\n");
   let openFence: string | null = null;
@@ -175,7 +175,7 @@ const LINK_REFERENCE_DEF = /^ {0,3}\[[^\]\n]+\]:[^\n]*$/gm;
  * would stamp nothing under a visible highlight — manufacturing the exact
  * divergence this change exists to remove. They already agree; leave them.
  */
-export function maskMarkupRegions(body: string): string {
+function maskMarkupRegions(body: string): string {
   const blank = (text: string): string => " ".repeat(text.length);
   return body
     .replace(ESCAPED_AT, (run) => {

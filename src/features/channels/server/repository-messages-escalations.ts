@@ -33,7 +33,7 @@ import type { ChannelMessageRow } from "./dto";
  * case nobody has — the operator answers the card in front of them — at the cost
  * of an unbounded read on the POST path, which every message pays.
  */
-export const ESCALATION_SCAN_LIMIT = 25;
+const ESCALATION_SCAN_LIMIT = 25;
 
 /**
  * The channel's most recent escalation CARDS, newest first.

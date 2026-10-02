@@ -37,8 +37,8 @@
  *     happens to return decides whose inbox a message lands in — silent, and
  *     wrong for exactly one of the two people every time.
  *  6. ⚠ CODE DOES NOT TAG. A handle inside an inline code span or a fenced code
- *     block names NOBODY ({@link maskCodeRegions}) — see THE CODE RULE below.
- *  7. ⚠ MARKUP IS NOT A HANDLE, IN BOTH DIRECTIONS ({@link maskMarkupRegions},
+ *     block names NOBODY (`mentions-mask.ts › maskCodeRegions`) — see THE CODE RULE below.
+ *  7. ⚠ MARKUP IS NOT A HANDLE, IN BOTH DIRECTIONS (`mentions-mask.ts › maskMarkupRegions`,
  *     {@link TRAILING_PUNCTUATION}, {@link TRAILING_HTML_TAG}). Delimiters that
  *     WRAP a handle come off it, so `**@diana**`, `~~@diana~~` and
  *     `<b>@diana</b>` all tag; text markdown reads as structure rather than as
@@ -81,7 +81,7 @@
  * and does not tint; this masker does not model it and the server tags. It is
  * excluded from the parity table BY NAME, with the reason, so the exclusion is a
  * decision a reader can see rather than a case nobody thought of. See
- * {@link maskCodeRegions}.
+ * `mentions-mask.ts › maskCodeRegions`.
  *
  * ⚠ AUTOLINKS LOOK LIKE A GAP AND ARE NOT ONE. A `<https://…/@handle>` and a
  * bare `https://…/@handle` both TINT — `marked` makes the url its own link TEXT
@@ -92,15 +92,11 @@
 import { maskNonTaggingRegions } from "./mentions-mask";
 
 /**
- * ⚠ THE MASKS ARE RE-EXPORTED, NOT RE-DECLARED. `mentions-mask.ts` is the split
+ * ⚠ THE MASK IS RE-EXPORTED, NOT RE-DECLARED. `mentions-mask.ts` is the split
  * half of this module (2026-08-22); every existing `lib/mentions` import keeps
  * working, and there is no second path to the same symbol.
  */
-export {
-  maskCodeRegions,
-  maskMarkupRegions,
-  maskNonTaggingRegions,
-} from "./mentions-mask";
+export { maskNonTaggingRegions } from "./mentions-mask";
 
 /** Roster row reduced to what the match rule reads. Structural on purpose:
  *  the server's `channel_members` + profile join and the client's

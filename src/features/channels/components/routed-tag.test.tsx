@@ -30,9 +30,9 @@
  *
  * ⚠ **THE STORED DATA IS UNTOUCHED AND STILL READ.** `recipient_agent_ids` and
  * `metadata.wake_reason` are still stamped, still carried on the row
- * (`view-model-rows.ts › routedAgentIds`) and still what every machine routes on;
- * `lib/agent-mentions.ts › routedTagLabel` and `lib/agent-post-stamp.ts ›
- * serverRoutedAgentIds` keep their own tests. What went is one renderer.
+ * (`view-model-rows.ts › routedAgentIds`, read through
+ * `lib/agent-post-stamp.ts › serverRoutedAgentIds`) and still what every machine
+ * routes on. What went is one renderer.
  * ⚠ **AND THE BODY IS STILL NEVER REWRITTEN AT REST** — the last case measures
  * that, unchanged. The composer adds the tag to a DRAFT on this machine, before
  * anything is stored; nothing edits a post after the fact.

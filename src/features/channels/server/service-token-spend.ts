@@ -101,9 +101,9 @@ export async function recordSessionTokenSpend(
  * ONE RUN'S SPEND, at the instant it started. ⚠ **AN INSTANT, NOT A DAY** — see
  * `readTokenSpend`; naming a day is the renderer's job now.
  */
-export type TokenSpendMarkPoint = { at: string; tokens: number };
+type TokenSpendMarkPoint = { at: string; tokens: number };
 
-export type TokenSpendReport = {
+type TokenSpendReport = {
   /** The window's runs, newest first, as instants. */
   marks: TokenSpendMarkPoint[];
   /** ⚠ The read hit its row bound, so the window is INCOMPLETE and the surface

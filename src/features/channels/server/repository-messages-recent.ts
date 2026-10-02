@@ -19,8 +19,8 @@ import type { ChannelMessageRow } from "./dto";
 /**
  * **RR3 ARM 3's ONE READ** (2026-09-04): the newest MAIN-ROOM messages in this
  * channel written by an AGENT, inside the resilience window — the raw material
- * `lib/agent-post-stamp.ts › recentAgentPosters` turns into "who spoke here
- * last".
+ * for "who spoke here last" (its reader, `recentAgentPosters`, was deleted as
+ * dead code on 2026-10-02).
  *
  * ⚠ **ISSUED LAZILY AND ALMOST NEVER** — only when a PERSON addressed nobody,
  * the room holds MORE THAN ONE live agent, and the channel has no configured
@@ -34,7 +34,7 @@ import type { ChannelMessageRow } from "./dto";
  */
 const RECENT_AGENT_POSTS_LIMIT = 50;
 
-export type RecentAgentPostRow = Pick<
+type RecentAgentPostRow = Pick<
   ChannelMessageRow,
   "seq" | "created_at" | "author_kind" | "client_msg_id" | "metadata"
 >;
@@ -106,7 +106,7 @@ export async function listRecentRoomAgentPosts(
  * Its own tests still drive it; deleting it is a follow-up for whoever runs the suite green, not a
  * blind edit from a session that cannot run one.
  */
-export type RecentAuthorTagRow = Pick<
+type RecentAuthorTagRow = Pick<
   ChannelMessageRow,
   | "seq"
   | "created_at"

@@ -20,7 +20,7 @@ import { loadVisibleChannel, type ChannelContext } from "./service-shared";
  *  the machine's call (`main/launch-directives.js › handle`); the server never sees the toggle. */
 
 /** Mirrors `schema-launch.ts › AgentDirectiveCreateSchema`; the column CHECK says the same at rest. */
-export type CreateAgentDirectiveInput =
+type CreateAgentDirectiveInput =
   | { kind: "end"; channel: string; agentId: string }
   /** `name: ""` clears the name (back to `Agent #<id>`). */
   | { kind: "rename"; channel: string; agentId: string; name: string }
@@ -35,7 +35,7 @@ export type CreateAgentDirectiveInput =
     };
 
 /** `offline`: no row was created. Same envelope as `CreateLaunchResult`. */
-export type CreateAgentDirectiveResult =
+type CreateAgentDirectiveResult =
   | { offline: true; directive: null }
   | { offline: false; directive: LaunchDirective };
 
