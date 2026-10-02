@@ -24,7 +24,7 @@ export const MENU_LABEL = "Menu";
 
 export const HERO = {
   /** One array entry = one rendered line. */
-  headlineLines: ["The Digital Office Powering", "Agents and Teams"] as const,
+  headlineLines: ["Your Personal AI on Every", "Model and Device"] as const,
   subhead:
     "Dopl is the digital office that powers collaborative agents operated by humans.",
   primaryCta: GET_STARTED_LABEL,
