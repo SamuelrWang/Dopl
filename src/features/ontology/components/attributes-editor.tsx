@@ -7,8 +7,12 @@ import { SelectMenu } from "@/shared/ui/select-menu";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphAction, GraphState } from "../graph-state";
-import type { AttributeValue, OntologyObject } from "../types";
+import { emptyValue, isHttpUrl, isIsoDate } from "../field-kinds";
+import type { AttributeValue, ObjectAttribute, OntologyObject, TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
+import { FieldDescription, withDescription } from "./field-description";
+import { FieldMenu } from "./field-menu";
+import { DateValueEditor, EnumValueEditor, LinkValueEditor } from "./field-value-editors";
 import { KnowledgePickMenu } from "./knowledge-pick-menu";
 import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP } from "./ontology-bits";
@@ -27,13 +31,34 @@ type AttrKind = AttributeValue["kind"];
 
 /** A row's editable half. The persisted attribute carries a `key` beside it; a
  *  draft has none yet, and the two render identically. */
-type AttrRowValue = { label: string; value: AttributeValue };
+type AttrRowValue = Omit<ObjectAttribute, "key">;
+
+/**
+ * The template field this attribute was born from — same `key`, on the object's
+ * container. ⚠ A SELECT FIELD'S OPTIONS ARE THE TEMPLATE'S when it has one (the
+ * field defines the choices; Samuel, 2026-10-01), so editing them on the type
+ * reaches every card without rewriting each card's row. The card's own
+ * `options` copy is what the server checks, and it is re-synced on every pick.
+ */
+function templateFieldOf(
+  object: OntologyObject,
+  graph: GraphState,
+  key: string
+): { field: TemplateField; container: OntologyObject } | null {
+  for (const container of Object.values(graph.objects)) {
+    if (!container.childIds.includes(object.id)) continue;
+    const field = container.template.find((f) => f.key === key);
+    if (field) return { field, container };
+  }
+  return null;
+}
 
 /**
  * Attributes section — one white bar per attribute, showing all three cells at
- * once: label, kind, value. Value kinds: text, tag, object refs (cascade picker),
- * and access-gated knowledge / skills (PickMenu offers only resources the caller
- * can see).
+ * once: label, kind, value. Value kinds: text, tag, select / date / link
+ * (`field-value-editors.tsx`), object refs (cascade picker), and access-gated
+ * knowledge / skills (PickMenu offers only resources the caller can see). A saved
+ * row's ⋯ (`field-menu.tsx`) edits its description and a select's options.
  *
  * 2026-09-13: every cell exists from the moment the row does — `+ Add` appends an
  * empty bar (`panel-section.tsx › useDraftRows`) and the value cell can be typed
@@ -43,8 +68,7 @@ type AttrRowValue = { label: string; value: AttributeValue };
  * at (`set_attribute`), not a cell, and deliberately off screen; the second
  * column a person sets is `value.kind`.
  *
- * Changing the kind empties the value except text↔tag: those two are one string,
- * every other pair is a list of ids of a different kind of thing.
+ * Changing the kind empties the value unless it is still valid (`emptyValueOf`).
  *
  * Flat since 2026-09-12, and the well is not a return of the frame — see
  * `panel-section.tsx › PanelSection`. Text rows are the popup kit's underline
@@ -88,24 +112,51 @@ export function AttributesEditor({
   return (
     <PanelSection label="Attributes">
       <div className={PANEL_ROWS}>
-        {object.attributes.map((attr, i) => (
-          <AttrRow
-            key={`row-${i}`}
-            row={attr}
-            object={object}
-            graph={graph}
-            canEdit={canEdit}
-            onChange={(row) =>
-              dispatch({
-                type: "ATTRIBUTE_UPSERT",
-                id: object.id,
-                index: i,
-                attribute: { ...attr, ...row },
-              })
-            }
-            onRemove={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
-          />
-        ))}
+        {object.attributes.map((attr, i) => {
+          const source = templateFieldOf(object, graph, attr.key);
+          const upsert = (row: AttrRowValue) =>
+            dispatch({
+              type: "ATTRIBUTE_UPSERT",
+              id: object.id,
+              index: i,
+              attribute: { key: attr.key, ...row },
+            });
+          return (
+            <AttrRow
+              key={`row-${i}`}
+              row={attr}
+              field={source?.field}
+              object={object}
+              graph={graph}
+              canEdit={canEdit}
+              onChange={upsert}
+              onRemove={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
+              onOptions={(options) => {
+                if (source?.field.kind === "enum") {
+                  // The TYPE's field owns the choices — write them there.
+                  const { container, field } = source;
+                  dispatch({
+                    type: "OBJECT_UPDATE",
+                    id: container.id,
+                    patch: {
+                      template: container.template.map((f) =>
+                        f.key === field.key ? { ...f, options } : f
+                      ),
+                    },
+                  });
+                  return;
+                }
+                // A free-standing select: its own list. A value the new list
+                // drops is cleared, or the whole save would 400 (`schema.ts`).
+                const value =
+                  attr.value.kind === "enum" && !options.includes(attr.value.value)
+                    ? { kind: "enum" as const, value: "" }
+                    : attr.value;
+                upsert({ ...attr, options, value });
+              }}
+            />
+          );
+        })}
         {drafts.map((row, n) => (
           <AttrRow
             key={`row-${object.attributes.length + n}`}
@@ -152,21 +203,30 @@ const ROW_COLON = <span aria-hidden="true" className="shrink-0 text-text-muted">
  */
 function AttrRow({
   row,
+  field,
   object,
   graph,
   canEdit,
   onChange,
   onCommit,
   onRemove,
+  onOptions,
 }: {
   row: AttrRowValue;
+  /** The template field it was born from, when the type still has one. */
+  field?: TemplateField;
   object: OntologyObject;
   graph: GraphState;
   canEdit: boolean;
   onChange: (row: AttrRowValue) => void;
   onCommit?: () => void;
   onRemove: () => void;
+  /** Persisted rows only — present means the ⋯ menu replaces the ✕. */
+  onOptions?: (options: string[]) => void;
 }) {
+  const options =
+    field?.kind === "enum" ? (field.options ?? []) : (row.options ?? []);
+  const description = row.description || field?.description;
   return (
     <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
       <InlineUnderlineField
@@ -184,6 +244,7 @@ function AttrRow({
       {ROW_COLON}
       <AttrValueEditor
         row={row}
+        options={options}
         object={object}
         graph={graph}
         canEdit={canEdit}
@@ -193,12 +254,25 @@ function AttrRow({
         value={row.value.kind}
         options={KIND_OPTIONS}
         disabled={!canEdit}
-        onChange={(kind) => onChange({ ...row, value: emptyValueOf(kind, row.value) })}
+        onChange={(kind) => {
+          const value = emptyValueOf(kind, row.value, options);
+          onChange(kind === "enum" ? { ...row, options, value } : { ...row, value });
+        }}
         variant="text"
         ariaLabel="Attribute type"
         className="shrink-0"
       />
-      {canEdit && (
+      {canEdit && onOptions && (
+        <FieldMenu
+          label={row.label}
+          description={description ?? ""}
+          options={row.value.kind === "enum" ? options : undefined}
+          onDescription={(next) => onChange(withDescription(row, next))}
+          onOptions={onOptions}
+          onRemove={onRemove}
+        />
+      )}
+      {canEdit && !onOptions && (
         <button
           type="button"
           aria-label={`Remove ${row.label}`}
@@ -208,29 +282,42 @@ function AttrRow({
           <X size={12} />
         </button>
       )}
+      <FieldDescription text={description} />
     </div>
   );
 }
 
-/** A fresh value of `kind`. text↔tag keep the string; every other switch starts
- *  empty rather than reinterpreting one sort of id as another. */
-function emptyValueOf(kind: AttrKind, from: AttributeValue): AttributeValue {
-  const text = from.kind === "text" || from.kind === "pill" ? from.value : "";
-  if (kind === "text") return { kind: "text", value: text };
-  if (kind === "pill") return { kind: "pill", value: text };
-  if (kind === "ref") return { kind: "ref", value: [] };
-  if (kind === "knowledge") return { kind: "knowledge", value: [] };
-  return { kind: "skill", value: [] };
+/**
+ * A fresh value of `kind`. The four one-string kinds keep the string when it is
+ * still valid in the new kind (text↔tag always; a select only if it is one of
+ * the options, a date only if it is a day, a link only if it parses); every
+ * other switch starts empty rather than reinterpreting one sort of id as
+ * another — and rather than writing a value the server would refuse.
+ */
+function emptyValueOf(
+  kind: AttrKind,
+  from: AttributeValue,
+  options: readonly string[]
+): AttributeValue {
+  const text = typeof from.value === "string" ? from.value : "";
+  if (kind === "text" || kind === "pill") return { kind, value: text };
+  if (kind === "enum") return { kind, value: options.includes(text) ? text : "" };
+  if (kind === "date") return { kind, value: isIsoDate(text) ? text : "" };
+  if (kind === "link") return { kind, value: isHttpUrl(text) ? text : "" };
+  return emptyValue(kind);
 }
 
 function AttrValueEditor({
   row,
+  options,
   object,
   graph,
   canEdit,
   onChange,
 }: {
   row: AttrRowValue;
+  /** The select's effective choices (`AttrRow`). */
+  options: string[];
   object: OntologyObject;
   graph: GraphState;
   canEdit: boolean;
@@ -238,6 +325,36 @@ function AttrValueEditor({
 }) {
   const v = row.value;
   const workspaceResources = useWorkspaceResources();
+
+  if (v.kind === "enum") {
+    return (
+      <EnumValueEditor
+        value={v.value}
+        options={options}
+        canEdit={canEdit}
+        // The choices ride along so the server checks against what was offered.
+        onChange={(next) => onChange({ ...row, options, value: { kind: "enum", value: next } })}
+      />
+    );
+  }
+  if (v.kind === "date") {
+    return (
+      <DateValueEditor
+        value={v.value}
+        canEdit={canEdit}
+        onChange={(next) => onChange({ ...row, value: { kind: "date", value: next } })}
+      />
+    );
+  }
+  if (v.kind === "link") {
+    return (
+      <LinkValueEditor
+        value={v.value}
+        canEdit={canEdit}
+        onChange={(next) => onChange({ ...row, value: { kind: "link", value: next } })}
+      />
+    );
+  }
 
   if (v.kind === "knowledge" || v.kind === "skill") {
     const vk = v;

@@ -2,6 +2,15 @@ import { z } from "zod";
 import { graphLayoutSchema } from "@/shared/graph/layout-schema";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { ONTOLOGY_LEVELS } from "./types";
+import {
+  ENUM_OPTION_MAX,
+  ENUM_OPTIONS_MAX,
+  FIELD_DESCRIPTION_MAX,
+  FIELD_KINDS,
+  isHttpUrl,
+  isIsoDate,
+  valueProblem,
+} from "./field-kinds";
 
 /**
  * Ontology/object names are the ontology's short labels (`dopl_map` and
@@ -17,21 +26,57 @@ const OntologyObjectNameSchema = safeLabel("Object name", 300);
 const attributeValueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), value: z.string().max(4000) }),
   z.object({ kind: z.literal("pill"), value: z.string().max(400) }),
+  // ⚠ MEMBERSHIP in the field's `options` is checked one level up
+  // (`attributeSchema`), where the options are in scope.
+  z.object({ kind: z.literal("enum"), value: z.string().max(ENUM_OPTION_MAX) }),
+  z.object({
+    kind: z.literal("date"),
+    value: z.string().refine((v) => v === "" || isIsoDate(v), "A date must be YYYY-MM-DD"),
+  }),
+  z.object({
+    kind: z.literal("link"),
+    value: z.string().refine((v) => v === "" || isHttpUrl(v), "A link must be an http(s) URL"),
+  }),
   z.object({ kind: z.literal("ref"), value: z.array(z.string().uuid()).max(50) }),
   z.object({ kind: z.literal("knowledge"), value: z.array(z.string()).max(50) }),
   z.object({ kind: z.literal("skill"), value: z.array(z.string()).max(50) }),
 ]);
 
-const attributeSchema = z.object({
-  key: z.string().min(1).max(200),
-  label: z.string().max(200),
-  value: attributeValueSchema,
-});
+/** A field's description and (enum) options — shared by attributes and template
+ *  fields. Optional, so every row stored before 2026-10-01 parses unchanged. */
+const fieldMetaShape = {
+  description: z.string().max(FIELD_DESCRIPTION_MAX).optional(),
+  options: z
+    .array(z.string().trim().min(1).max(ENUM_OPTION_MAX))
+    .max(ENUM_OPTIONS_MAX)
+    .refine(
+      (o) => new Set(o.map((x) => x.toLowerCase())).size === o.length,
+      "Options must be unique"
+    )
+    .optional(),
+};
+
+const attributeSchema = z
+  .object({
+    key: z.string().min(1).max(200),
+    label: z.string().max(200),
+    value: attributeValueSchema,
+    ...fieldMetaShape,
+  })
+  .superRefine((attr, ctx) => {
+    // ⚠ THE ENUM FENCE. An enum value outside its options is refused here, at the
+    // one parse every write (panel, MCP, REST) goes through.
+    if (attr.value.kind === "enum") {
+      const problem = valueProblem(attr.value, attr.options);
+      if (problem) ctx.addIssue({ code: "custom", path: ["value"], message: problem });
+    }
+  });
 
 const templateFieldSchema = z.object({
   key: z.string().min(1).max(200),
   label: z.string().max(200),
-  kind: z.enum(["text", "pill", "ref", "knowledge", "skill"]),
+  kind: z.enum(FIELD_KINDS),
+  ...fieldMetaShape,
 });
 
 const methodSchema = z.object({

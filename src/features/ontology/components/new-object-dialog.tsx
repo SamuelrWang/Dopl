@@ -19,8 +19,9 @@ import { KIND_LABELS } from "./template-editor";
  * It wears the kit's face (`shared/ui/form-dialog.tsx`), re-cutting no control.
  *
  * Fields are the column's object template (`types.ts › TemplateField`: `key`,
- * `label`, `kind`) — no per-field description exists on that model and none is
- * invented here. The object's description is the `Description` field above.
+ * `label`, `kind`). A field's description and a select's options are set after
+ * creation, from the field's ⋯ in the panel (`field-menu.tsx`). The object's
+ * description is the `Description` field above.
  */
 export function NewObjectDialog({
   open,

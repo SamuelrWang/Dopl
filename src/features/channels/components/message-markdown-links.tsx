@@ -18,10 +18,6 @@
  * runs one way and there is no cycle to reason about.
  */
 
-import type { ReactNode } from "react";
-import { isSpaRenderer } from "@/shared/lib/spa-bridge";
-import { openExternalUrl } from "@/shared/lib/open-external";
-
 /**
  * THE ONLY PROTOCOLS A MESSAGE MAY LINK TO. Pure and exported for its test.
  *
@@ -53,41 +49,8 @@ export function safeHref(href: string | null | undefined): string | null {
 }
 
 /**
- * ⚠ THE APP'S EXISTING EXTERNAL-LINK IDIOM, not a second one
- * (`channels-onboarding-core.tsx` is the other caller of this exact shape). In
- * the packaged renderer `window.open` is DENIED by the shell, so a bare anchor
- * is a dead click — `shared/lib/open-external.ts › openExternalUrl` routes it
- * through the bridge to the real browser. Off the bridge the anchor's own
- * `target="_blank"` is already right, which is why only the bridged case
- * preempts the default.
- *
- * `rel="noreferrer noopener"` regardless: an untrusted author must not receive a
- * referrer or a handle on the opener.
+ * ⚠ THE APP'S EXTERNAL-LINK IDIOM lives in `shared/ui/external-anchor.tsx`
+ * since 2026-10-01 (the ontology's `link` field is its second feature);
+ * re-exported so this stays the transcript's import path of record.
  */
-export function ExternalAnchor({
-  href,
-  title,
-  children,
-}: {
-  href: string;
-  title?: string;
-  children: ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      title={title}
-      target="_blank"
-      rel="noreferrer noopener"
-      className="text-link underline underline-offset-2"
-      onClick={(e) => {
-        if (isSpaRenderer()) {
-          e.preventDefault();
-          void openExternalUrl(href);
-        }
-      }}
-    >
-      {children}
-    </a>
-  );
-}
+export { ExternalAnchor } from "@/shared/ui/external-anchor";

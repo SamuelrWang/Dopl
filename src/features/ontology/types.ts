@@ -4,6 +4,12 @@ import type { Role } from "@/features/workspaces/types";
 export type AttributeValue =
   | { kind: "text"; value: string }
   | { kind: "pill"; value: string }
+  /** One of the field's `options`, or `""` while unset (`field-kinds.ts`). */
+  | { kind: "enum"; value: string }
+  /** A calendar day, `YYYY-MM-DD`, or `""`. */
+  | { kind: "date"; value: string }
+  /** An absolute http(s) URL, or `""`. */
+  | { kind: "link"; value: string }
   /** References to other objects — individual cards or whole columns. */
   | { kind: "ref"; value: string[] }
   /** Workspace knowledge-base entries the agent should read (access-gated). */
@@ -15,14 +21,23 @@ export interface ObjectAttribute {
   key: string;
   label: string;
   value: AttributeValue;
+  /** What the field means — shown under the row, served to agents. Optional:
+   *  every row written before 2026-10-01 has none. */
+  description?: string;
+  /** `enum` only: the closed set `value` must come from (server-enforced). */
+  options?: string[];
 }
 
 /** One field of a column's object template: label + kind, no value. New
- *  children are born with these as empty attributes. */
+ *  children are born with these as empty attributes (description and options
+ *  copied — `field-kinds.ts › attributeFromField`). */
 export interface TemplateField {
   key: string;
   label: string;
   kind: AttributeValue["kind"];
+  description?: string;
+  /** `enum` only. */
+  options?: string[];
 }
 
 export interface ObjectRelationship {

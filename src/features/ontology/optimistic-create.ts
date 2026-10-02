@@ -1,10 +1,10 @@
 "use client";
 
 import { planOntologyCreateRollback } from "./create-ontology-rollback";
+import { attributeFromField } from "./field-kinds";
 import type { GraphAction } from "./graph-state";
 import type { OntologyObjectUpdateInput } from "./schema";
 import type {
-  AttributeValue,
   Ontology,
   OntologyObject,
   TemplateField,
@@ -49,10 +49,6 @@ export const NEW_ONTOLOGY_NAME = "New ontology";
 export const NEW_COLUMN_NAME = "Untitled object";
 export const NEW_CARD_NAME = "New object";
 
-function emptyValue(kind: AttributeValue["kind"]): AttributeValue {
-  return kind === "text" || kind === "pill" ? { kind, value: "" } : { kind, value: [] };
-}
-
 /**
  * The row the server would build, built locally. Must mirror
  * `server/service.ts › createObject` (columns are templates: card born with
@@ -64,11 +60,7 @@ function pendingObject(name: string, parent?: OntologyObject): OntologyObject {
     id: newPendingId(),
     name,
     subtitle: "",
-    attributes: (parent?.template ?? []).map((f) => ({
-      key: f.key,
-      label: f.label,
-      value: emptyValue(f.kind),
-    })),
+    attributes: (parent?.template ?? []).map(attributeFromField),
     relationships: (parent?.relationships ?? []).map((r) => ({
       ...r,
       targetIds: [...r.targetIds],

@@ -43,7 +43,12 @@ function neutralizeInline(raw) {
         .replace(/[\u0000-\u001F\u007F]+/g, " ")
         // ⚠ Punctuation that lets text pose as markdown structure or as our own
         // quoting — backticks would break out of the code span below.
-        .replace(/[`*_#>[\]{}|]+/g, " ")
+        // ⚠ `_` IS NOT IN THE SET (2026-10-01). It was, and it MANGLED IDENTIFIERS:
+        // an object named `jeremyp_32711` came back as `jeremyp 32711` and
+        // `glitch08_` as `glitch08`, so an agent echoing the name it was shown
+        // missed the exact-name lookup or renamed the row. Inside the code span an
+        // underscore is inert, and with newlines gone it can start no structure.
+        .replace(/[`*#>[\]{}|]+/g, " ")
         .replace(/\s+/g, " ")
         .trim();
     if (flattened === "")

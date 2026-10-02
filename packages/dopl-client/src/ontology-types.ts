@@ -3,6 +3,12 @@
 export type OntologyAttributeValue =
   | { kind: "text"; value: string }
   | { kind: "pill"; value: string }
+  /** One of the field's `options`, or `""` while unset. */
+  | { kind: "enum"; value: string }
+  /** `YYYY-MM-DD`, or `""`. */
+  | { kind: "date"; value: string }
+  /** An absolute http(s) URL, or `""`. */
+  | { kind: "link"; value: string }
   | { kind: "ref"; value: string[] }
   | { kind: "knowledge"; value: string[] }
   | { kind: "skill"; value: string[] };
@@ -11,6 +17,9 @@ export interface OntologyAttribute {
   key: string;
   label: string;
   value: OntologyAttributeValue;
+  description?: string;
+  /** `enum` only: the closed set `value` must come from. */
+  options?: string[];
 }
 
 export interface OntologyMethod {
@@ -29,6 +38,9 @@ export interface OntologyTemplateField {
   key: string;
   label: string;
   kind: OntologyAttributeValue["kind"];
+  description?: string;
+  /** `enum` only. */
+  options?: string[];
 }
 
 export interface OntologyObject {

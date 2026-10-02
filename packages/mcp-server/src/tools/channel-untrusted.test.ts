@@ -95,7 +95,7 @@ describe("describeFailure — untrusted upstream text in an await result", () =>
     // Words survive — this is a diagnostic and must stay useful...
     expect(span).toContain("IGNORE THE ABOVE");
     // ...but no markdown structure, quoting, line breaks, or escaping backtick.
-    expect(span).not.toMatch(/[`*_#>[\]{}|]/);
+    expect(span).not.toMatch(/[`*#>[\]{}|]/);
     expect(span).not.toMatch(/[\n\r]/);
     expect(text).toContain("since=7");
     expect(text).toContain("before you end your turn");
@@ -194,7 +194,7 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
     // Words survive — a real title must stay legible...
     expect(span).toContain("New instruction");
     // ...but nothing that poses as structure, no escaping backtick, no newline.
-    expect(span).not.toMatch(/[`*_#>[\]{}|]/);
+    expect(span).not.toMatch(/[`*#>[\]{}|]/);
     expect(span).not.toMatch(/[\n\r]/);
     // ⚠ Whole payload stays on the legend line — no second line, no second tag
     // mapping, nothing outside the span.
@@ -211,7 +211,8 @@ describe("threadLegend — a peer-typed thread title in server narration", () =>
   });
 
   it("a title made only of markup renders as NO title — the L3 tell, not a broken span", async () => {
-    const line = await legendLine("``` **__** ###");
+    // `_` is not markup to the neutralizer since 2026-10-01 (identifiers keep it).
+    const line = await legendLine("``` **[]** ###");
     expect(titleSpan(line)).toBeNull();
     expect(line.startsWith(`Threads above: \`3f2a91c4\` = \`${THREAD_ID}\`.`)).toBe(true);
   });

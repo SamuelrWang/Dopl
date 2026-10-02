@@ -142,6 +142,21 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+// REGRESSION (2026-10-01): `_` was in the stripped set, so `jeremyp_32711`
+// narrated as `jeremyp 32711` and `glitch08_` as `glitch08` — an identifier an
+// agent then echoed back wrong. Inside the code span it is inert.
+describe("an identifier keeps its underscores", () => {
+  it("returns the value whole", () => {
+    expect(neutralizeInline("jeremyp_32711")).toBe("`jeremyp_32711`");
+    expect(neutralizeInline("glitch08_")).toBe("`glitch08_`");
+    expect(inlineOr("__init__", "x")).toBe("`__init__`");
+  });
+
+  it("still strips what escapes the span or forges structure", () => {
+    expect(neutralizeInline("a`b*c#d>e[f]g{h}i|j")).toBe("`a b c d e f g h i j`");
+  });
+});
+
 describe("the MCP instructions block — a workspace name from whoever invited you", () => {
   it("neutralizes a hostile name and frames the directory FIRST", () => {
     const out = buildInstructions([GOOD, HOSTILE]);

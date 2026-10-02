@@ -23,6 +23,7 @@ import { dispatch } from "./ontology-ops-write";
 import { ONTOLOGY_ERRORS } from "./tool-errors";
 import { composeDescription } from "./tool-style";
 import { legacyOntologyOpMessage } from "../legacy-aliases";
+import { FIELD_KINDS } from "./ontology-fields";
 
 /**
  * ⚠ THE ONE PROSE BUDGET ON THIS SURFACE THAT IS NOT
@@ -141,10 +142,10 @@ export function registerOntologyTool(
       subtitle: z.string().optional().describe("update_object: short description agents browse."),
       label: z.string().max(200).optional().describe("Attribute, relationship, or template-field label."),
       kind: z
-        .enum(["text", "pill", "ref", "knowledge", "skill"])
+        .enum(FIELD_KINDS)
         .optional()
-        .describe("set_attribute / set_template_field: value kind (default text)."),
-      value: z.string().max(4000).optional().describe("set_attribute (text/pill): the value."),
+        .describe("set_attribute / set_template_field: value kind (default: the field's)."),
+      value: z.string().max(4000).optional().describe("set_attribute (text/pill/enum/date/link): the value."),
       values: z
         .array(z.string())
         .max(100)
@@ -155,7 +156,12 @@ export function registerOntologyTool(
         .max(100)
         .optional()
         .describe("set_relationship: target objects (ids or exact names)."),
-      description: z.string().max(4000).optional().describe("set_action: what the action does."),
+      options: z.array(z.string()).max(50).optional().describe('kind="enum": the allowed values.'),
+      description: z
+        .string()
+        .max(4000)
+        .optional()
+        .describe("set_action: what it does. Field ops: the field's description."),
       outcome: z
         .string()
         .max(4000)

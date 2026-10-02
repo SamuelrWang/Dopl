@@ -7,6 +7,8 @@ import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import type { GraphAction } from "../graph-state";
 import type { OntologyObject, TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
+import { FieldDescription, withDescription } from "./field-description";
+import { FieldMenu } from "./field-menu";
 import {
   PANEL_ROW,
   PANEL_ROWS,
@@ -21,6 +23,11 @@ import {
 export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
   pill: "Tag",
+  // "Select", not "Enum": the word a person picks from (Samuel, 2026-10-01:
+  // *"basically a selector"*). The stored kind and the MCP kind stay `enum`.
+  enum: "Select",
+  date: "Date",
+  link: "Link",
   ref: "Object",
   knowledge: "Knowledge",
   skill: "Skill",
@@ -105,6 +112,7 @@ export function TemplateEditor({
               setTemplate(column.template.map((f, j) => (j === i ? { ...f, ...next } : f)))
             }
             onRemove={() => setTemplate(column.template.filter((_, j) => j !== i))}
+            saved
           />
         ))}
         {drafts.map((row, n) => (
@@ -142,6 +150,7 @@ function FieldRow({
   onChange,
   onCommit,
   onRemove,
+  saved = false,
 }: {
   row: Omit<TemplateField, "key">;
   canEdit: boolean;
@@ -149,6 +158,8 @@ function FieldRow({
   /** Draft only — fires on the label's blur and on Enter. */
   onCommit?: () => void;
   onRemove: () => void;
+  /** A persisted field: the ⋯ menu instead of the draft's naked ✕. */
+  saved?: boolean;
 }) {
   return (
     <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
@@ -173,7 +184,17 @@ function FieldRow({
         ariaLabel="Field kind"
         className="shrink-0"
       />
-      {canEdit && (
+      {canEdit && saved && (
+        <FieldMenu
+          label={row.label}
+          description={row.description ?? ""}
+          options={row.kind === "enum" ? (row.options ?? []) : undefined}
+          onDescription={(description) => onChange(withDescription(row, description))}
+          onOptions={(options) => onChange({ ...row, options })}
+          onRemove={onRemove}
+        />
+      )}
+      {canEdit && !saved && (
         <button
           type="button"
           aria-label={`Remove ${row.label}`}
@@ -183,6 +204,7 @@ function FieldRow({
           <X size={12} />
         </button>
       )}
+      <FieldDescription text={row.description} />
     </div>
   );
 }

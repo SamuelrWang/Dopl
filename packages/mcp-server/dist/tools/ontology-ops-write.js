@@ -16,11 +16,9 @@ const respond_1 = require("./respond");
 const ontology_render_1 = require("./ontology-render");
 const ontology_ops_read_1 = require("./ontology-ops-read");
 const identity_1 = require("./identity");
-// ⚠ HAND-MIRRORED from the server schema (attributeValueSchema) so an
-// oversized value fails with a field-named message at the tool boundary
-// instead of an opaque downstream VALIDATION_FAILED.
-const TEXT_VALUE_MAX = 4000;
-const PILL_VALUE_MAX = 400;
+// The field rules (kinds, value checks, description, options) — mirrored from
+// the server schema so a bad value fails here, field-named.
+const ontology_fields_1 = require("./ontology-fields");
 const REQUIRED = {
     resolve: ["query"],
     get: ["object"],
@@ -114,23 +112,13 @@ caller = identity_1.UNKNOWN_CALLER) {
             });
         case "set_template_field":
             return withObject(client, args.object, async (object) => {
-                const label = args.label.trim();
-                if (!label)
-                    return (0, respond_1.err)("set_template_field needs a non-empty `label`.");
-                const kind = args.kind ?? "text";
-                const needle = label.toLowerCase();
-                const current = object.template ?? [];
-                const existing = current.find((f) => f.label.toLowerCase() === needle);
-                const field = {
-                    key: existing?.key ?? label.toLowerCase().replace(/\s+/g, "-"),
-                    label,
-                    kind,
-                };
-                const template = existing
-                    ? current.map((f) => (f === existing ? field : f))
-                    : [...current, field];
+                const built = (0, ontology_fields_1.upsertTemplateField)(object.template ?? [], args);
+                if ("fail" in built)
+                    return built.fail;
+                const { template, field } = built;
                 await client.updateOntologyObject(object.id, { template }, args.expected_version);
-                return (0, respond_1.ok)(`Set default field ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)} (${kind}) on ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => (0, narration_1.inlineOr)(f.label, narration_1.NO_NAME)).join(", ")}.`);
+                const note = (0, ontology_fields_1.kindNote)(field.kind, field.options) || ` (${field.kind})`;
+                return (0, respond_1.ok)(`Set default field ${(0, narration_1.inlineOr)(field.label, narration_1.NO_NAME)}${note} on ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)} — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => (0, narration_1.inlineOr)(f.label, narration_1.NO_NAME)).join(", ")}.`);
             });
         case "remove_template_field":
             return withObject(client, args.object, async (object) => {
@@ -215,17 +203,37 @@ async function withObject(client, ref, fn) {
 async function opSetAttribute(client, args) {
     return withObject(client, args.object, async (object, snapshot) => {
         const label = args.label.trim();
-        const kind = args.kind ?? "text";
+        const needle = label.toLowerCase();
+        const existingIndex = object.attributes.findIndex((a) => a.label.toLowerCase() === needle);
+        const existing = existingIndex >= 0 ? object.attributes[existingIndex] : undefined;
+        const field = (0, ontology_fields_1.templateFieldFor)(snapshot, object, label);
+        // ⚠ An omitted kind KEEPS the field's (stored, else its template's) — a
+        // value sent to a select must not silently retype it as text.
+        const kind = args.kind ?? existing?.value.kind ?? field?.kind ?? "text";
+        if (args.options !== undefined && kind !== "enum") {
+            return (0, respond_1.err)('`options` apply only to kind="enum".');
+        }
+        // A select's choices: the ones sent, else the type's field, else its own.
+        const options = kind === "enum"
+            ? (0, ontology_fields_1.cleanOptions)(args.options ??
+                (field?.kind === "enum" ? field.options : existing?.options) ??
+                [])
+            : undefined;
+        const badOptions = options && (0, ontology_fields_1.optionsProblem)(options);
+        if (badOptions)
+            return (0, respond_1.err)(badOptions);
+        const described = (0, ontology_fields_1.nextDescription)(args.description, existing?.description);
+        if ("fail" in described)
+            return described.fail;
         let value;
-        if (kind === "text" || kind === "pill") {
+        if ((0, ontology_fields_1.isStringKind)(kind)) {
             if (args.value === undefined) {
                 return (0, respond_1.err)(`set_attribute kind="${kind}" needs \`value\`.`);
             }
-            const cap = kind === "pill" ? PILL_VALUE_MAX : TEXT_VALUE_MAX;
-            if (args.value.length > cap) {
-                return (0, respond_1.err)(`set_attribute kind="${kind}" value for ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)} is ${args.value.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`);
-            }
-            value = { kind, value: args.value };
+            const checked = (0, ontology_fields_1.stringValue)(kind, args.value, label, options ?? []);
+            if ("fail" in checked)
+                return checked.fail;
+            value = { kind, value: checked.value };
         }
         else {
             if (!args.values?.length) {
@@ -238,18 +246,18 @@ async function opSetAttribute(client, args) {
                 return resolved.fail;
             value = { kind, value: resolved.ids };
         }
-        const needle = label.toLowerCase();
         const attribute = {
             key: label.toLowerCase().replace(/\s+/g, "-"),
             label,
             value,
+            ...described,
+            ...(options ? { options } : {}),
         };
-        const existing = object.attributes.findIndex((a) => a.label.toLowerCase() === needle);
-        const attributes = existing >= 0
-            ? object.attributes.map((a, i) => (i === existing ? attribute : a))
+        const attributes = existingIndex >= 0
+            ? object.attributes.map((a, i) => (i === existingIndex ? attribute : a))
             : [...object.attributes, attribute];
         await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
-        return (0, respond_1.ok)(`Set attribute ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)} on ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
+        return (0, respond_1.ok)(`Set attribute ${(0, narration_1.inlineOr)(label, narration_1.NO_NAME)}${(0, ontology_fields_1.kindNote)(kind, options)} on ${(0, narration_1.inlineOr)(object.name, narration_1.NO_NAME)}.`);
     });
 }
 async function opSetRelationship(client, args) {

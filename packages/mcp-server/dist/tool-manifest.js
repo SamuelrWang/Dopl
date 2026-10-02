@@ -263,7 +263,7 @@ exports.GRANULAR_TOOLS = [
             claim_anchor: "dopl_ontology:claim_anchor",
         },
         params: [
-            "object", "parent", "name", "subtitle", "label", "kind", "value", "values",
+            "object", "parent", "name", "subtitle", "label", "kind", "value", "values", "options",
             "targets", "description", "outcome", "tools", "expected_version",
         ],
         destructive: true,
