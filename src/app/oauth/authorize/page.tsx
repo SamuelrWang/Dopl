@@ -103,30 +103,14 @@ export default async function AuthorizePage({
               <span className="font-medium text-[#181818]">{user.email}</span>.
             </p>
           ) : (
-            <>
-              <p className="text-[14px] leading-relaxed text-[#5a5a5a]">
-                An application calling itself{" "}
-                <span className="font-semibold text-[#181818]">
-                  &ldquo;{clientLabel}&rdquo;
-                </span>{" "}
-                wants to access your Dopl workspaces as{" "}
-                <span className="font-medium text-[#181818]">{user.email}</span>.
-              </p>
-              <div
-                role="alert"
-                className="mt-4 rounded-[10px] border border-[#e2b04a] bg-[#fdf6e3] px-[14px] py-3"
-              >
-                <p className="text-[12px] font-semibold uppercase tracking-wide text-[#8a6d1a]">
-                  Unverified app
-                </p>
-                <p className="mt-1 text-[13px] leading-relaxed text-[#6a5a2a]">
-                  You have not connected this app before, and Dopl cannot verify
-                  its identity. The name above is chosen by the app itself — it is
-                  not proof that it is an official Dopl application. Only approve
-                  if you started this connection yourself.
-                </p>
-              </div>
-            </>
+            <p className="text-[14px] leading-relaxed text-[#5a5a5a]">
+              An application calling itself{" "}
+              <span className="font-semibold text-[#181818]">
+                &ldquo;{clientLabel}&rdquo;
+              </span>{" "}
+              wants to access your Dopl workspaces as{" "}
+              <span className="font-medium text-[#181818]">{user.email}</span>.
+            </p>
           )}
 
           <div className="auth-field-3d mt-6 space-y-3.5 rounded-[10px] px-[16px] py-4">

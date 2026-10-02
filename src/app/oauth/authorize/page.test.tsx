@@ -1,8 +1,8 @@
 /**
  * `/oauth/authorize` — anti-phishing marking. `client_name` is attacker-controllable (RFC 7591
- * registration is open), so a never-connected client must be marked UNVERIFIED with its name
- * framed as a self-reported claim; a previously-connected client (or the reserved first-party
- * device client) renders clean.
+ * registration is open), so a never-connected client has its name framed as a self-reported
+ * claim (quoted, "An application calling itself …"); a previously-connected client (or the
+ * reserved first-party device client) renders the name plainly. No warning box (Samuel, 2026-10-02).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -64,10 +64,10 @@ beforeEach(() => {
 });
 
 describe("unverified (never-connected) client", () => {
-  it("shows the Unverified badge and frames the name as a self-reported claim", async () => {
+  it("frames the name as a self-reported claim, with no warning box", async () => {
     const html = await markup(params());
-    expect(html).toContain("Unverified app");
-    expect(html).toContain("chosen by the app itself");
+    expect(html).not.toContain("Unverified app");
+    expect(html).not.toContain("chosen by the app itself");
     // Attacker-chosen name is quoted, not an official label.
     expect(html).toContain("“Dopl Official Desktop”");
     expect(html).toContain('action="/api/oauth/authorize"');
