@@ -6,19 +6,11 @@ import { defineConfig, type Plugin } from "vitest/config";
 const src = fileURLToPath(new URL("./src", import.meta.url));
 
 /**
- * The renderer's BUILD IDENTITY, inlined as `__DOPL_RENDERER_BUILD__`.
- *
- * It exists for one consumer: the persisted query cache's buster
- * (`src/lib/query-client.ts`). A dehydrated snapshot survives on disk across
- * launches, so it also survives an app UPDATE — and the entry it restores was
- * written by the previous bundle's understanding of every response shape. The
- * web app keys its buster to the Vercel deployment id; the packaged renderer
- * has no deployment, so the Electron app's version is the equivalent event:
- * shipping a new version is exactly when the bundle can have changed.
- *
- * Read from `dopl-desktop-app/package.json` (the version electron-builder
- * stamps into the app) rather than this workspace's own, which is frozen at
- * 0.1.0. Dev/test fall back to a constant — a dev restart is not a release.
+ * The renderer's build identity, inlined as `__DOPL_RENDERER_BUILD__` — the
+ * persisted query cache's buster (`src/lib/query-client.ts`), so a snapshot
+ * written by the previous bundle is dropped after an app update. Read from
+ * `dopl-desktop-app/package.json` (this workspace is frozen at 0.1.0);
+ * dev/test fall back to a constant.
  */
 function rendererBuildId(): string {
   try {
@@ -34,53 +26,33 @@ function rendererBuildId(): string {
 }
 
 /**
- * Supabase storage — the ONLY remote origin any packaged page is allowed to
- * load bytes from, and images only. Workspace icons are public-bucket objects
- * (`src/features/workspaces/server/icon.ts` → `getPublicUrl`), so `iconUrl` on
- * every rail tile is an absolute URL on this host. Pinned to the exact project
- * origin on purpose: NEVER widen this to `https:` or a wildcard subdomain —
- * `img-src` is the one hole in `default-src 'none'` and a wildcard would turn
- * any rendered URL into an outbound beacon.
+ * 🔒 Supabase storage — the ONLY remote origin a packaged page may load bytes
+ * from, images only (workspace icons are public-bucket URLs,
+ * `src/features/workspaces/server/icon.ts`). NEVER widen to `https:` or a
+ * wildcard: `img-src` is the one hole in `default-src 'none'` and a wildcard
+ * turns any rendered URL into an outbound beacon.
  *
- * Mirrors `NEXT_PUBLIC_SUPABASE_URL`. Inlined rather than read from the
- * environment because this string is baked into the shipped HTML at build
- * time: a missing/typo'd env var would silently ship a policy that blocks
- * every icon again, which is exactly the bug this fixes.
+ * Mirrors `NEXT_PUBLIC_SUPABASE_URL`, inlined (not env) because it is baked
+ * into the shipped HTML — a missing env var would silently block every icon.
  */
 const SUPABASE_STORAGE_ORIGIN = "https://mrefkedvdehahjejreae.supabase.co";
 
 /**
- * The production Content-Security-Policy for the packaged renderer.
+ * 🔒 The production Content-Security-Policy for the packaged renderer — the
+ * precedent for a LOCAL Electron page in this repo. `default-src 'none'` and
+ * no `connect-src` follow from the architecture: the renderer never touches
+ * the network; every request goes `window.dopl.apiRequest` → IPC → main
+ * (docs/migration-research/desktop-main.md §2).
  *
- * Modelled on the v1 session window's page CSP — ⚠ that page is DELETED
- * (2026-08-20) and this comment cited it by a bare LINE NUMBER, which CLAUDE.md
- * doc rule #2 forbids for exactly this reason. Kept as provenance: **this is now
- * the precedent for a LOCAL Electron page in this repo**, not a copy of one. `default-src 'none'` and no
- * `connect-src` are a consequence of the target architecture, not a constraint
- * on it: the renderer never touches the network — every request goes through
- * `window.dopl.apiRequest` → IPC → the main process (see
- * docs/migration-research/desktop-main.md §2).
+ * `style-src 'unsafe-inline'` is the one relaxation (React and deps set inline
+ * styles / inject <style> tags). `img-src` carries only the Supabase storage
+ * origin, for workspace icons (journey-audit GAP-20).
  *
- * `style-src 'unsafe-inline'` is the one relaxation: React and several deps
- * set inline `style` attributes and inject <style> tags at runtime.
- *
- * `img-src` carries the exact Supabase storage origin so workspace icons load
- * (`WorkspaceSwitcherCore`'s glyph `<img src={ws.iconUrl}>` — journey-audit
- * GAP-20; the rail that first motivated this was removed 2026-08-11).
- *
- * CLOSED SEAM — member AVATARS do not need an origin here and must never get
- * one. They are NOT Supabase URLs: `profiles.avatar_url` is copied from the
- * OAuth provider's `raw_user_meta_data` (see
- * `supabase/migrations/20260731090000_profiles_display_name_bounds.sql:85`),
- * so they resolve to `lh3.googleusercontent.com`,
- * `avatars.githubusercontent.com`, and whatever future providers return — an
- * open-ended set that CANNOT be pinned. They now arrive as `data:` URIs
- * instead: `@/shared/hooks/use-bridged-image-src` asks main over
- * `window.dopl.avatarDataUri`, main gates the destination
- * (`dopl-desktop-app/main/avatar-policy.js`) and fetches it bounded + cached
- * (`main/avatar-cache.js`), and the renderer only ever receives inline bytes.
- * A new avatar provider is a one-line allowlist edit in main, never a change
- * here. Do not widen `img-src` to `https:`.
+ * CLOSED SEAM — member AVATARS must never get an origin here: they come from
+ * OAuth providers (an open-ended set that cannot be pinned) and arrive as
+ * `data:` URIs via `window.dopl.avatarDataUri`; main gates and fetches them
+ * (`dopl-desktop-app/main/avatar-policy.js`, `main/avatar-cache.js`). A new
+ * provider is an allowlist edit in main. Do not widen `img-src` to `https:`.
  */
 const PRODUCTION_CSP = [
   "default-src 'none'",
@@ -123,21 +95,17 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
-      // `#` = SPA-local source. `@` = the REPO-ROOT web tree — the same
-      // meaning `@/` has inside that tree, so a reused web module's own
-      // `@/shared/...` / `@/features/...` imports resolve verbatim with no
-      // edits. This is what makes the port playbook's reuse-by-import
-      // instruction executable; a next-coupled module that sneaks into the
-      // graph fails the vite build LOUDLY (unresolvable `next/*`), which is
-      // the guard — plus the eslint fence on `@/app/*`. See CONVENTIONS.md
-      // § Sharing code with the web app.
+      // `#` = SPA-local source. `@` = the repo-root web tree, same meaning as
+      // inside it, so reused web modules' `@/...` imports resolve verbatim.
+      // A next-coupled module in the graph fails the build loudly
+      // (unresolvable `next/*`) — the guard, plus the eslint fence on
+      // `@/app/*`. See CONVENTIONS.md § Sharing code with the web app.
       "#": src,
       "@": fileURLToPath(new URL("../../src", import.meta.url)),
     },
   },
   build: {
-    // Lands inside the Electron app's `files: ["main/**/*", "renderer/**/*"]`
-    // glob, so electron-builder picks it up with no config change
+    // Inside electron-builder's `renderer/**/*` files glob
     // (docs/migration-research/packages-and-build.md §4).
     outDir: fileURLToPath(
       new URL("../../dopl-desktop-app/renderer/app", import.meta.url)
@@ -150,23 +118,15 @@ export default defineConfig({
     // Fixed so DOPL_UI_DEV_URL in the desktop app never has to chase a port.
     port: 5173,
     strictPort: true,
-    // Browser-dev mode (no Electron bridge): the REUSED web feature clients
-    // fetch same-origin ("/api/..."); proxy them to the API so both
-    // transports see one origin — mirroring the packaged topology where
-    // both funnel into main. VITE_API_BASE_URL keeps parity with
-    // api-transport's dev base.
+    // Browser-dev mode (no Electron bridge): reused web clients fetch
+    // same-origin "/api/..."; proxy them so both transports see one origin.
     //
-    // ⚠ `DOPL_DEV_API_TARGET` RETARGETS THE PROXY *WITHOUT* MOVING THE CLIENT,
-    // and that is the only way to point browser-dev at a LOCAL `next dev`.
-    // `VITE_API_BASE_URL` cannot do it: vite's `loadEnv` copies every
-    // `VITE_`-prefixed **shell** variable into `import.meta.env`, so setting it
-    // ALSO makes `src/lib/api-transport.ts` fetch that origin ABSOLUTELY —
-    // cross-origin, which preflights `POST /api/boot`, and no route in this repo
-    // answers OPTIONS. The workspace never resolves and every page stops at its
-    // error state. Unprefixed, this one reaches node only.
+    // ⚠ To point browser-dev at a LOCAL `next dev`, use `DOPL_DEV_API_TARGET`
+    // (retargets the proxy only), NOT `VITE_API_BASE_URL`: any `VITE_` shell
+    // var lands in `import.meta.env`, making api-transport fetch cross-origin —
+    // `POST /api/boot` preflights, no route answers OPTIONS, every page errors.
     //   DOPL_DEV_API_TARGET=http://localhost:3000 npm run dev:ui
-    // The auth cookie rides along because cookies ignore PORT: a session minted
-    // at localhost:3000 is sent to localhost:5173 and forwarded verbatim.
+    // The auth cookie rides along (cookies ignore port).
     proxy: {
       "/api": {
         target:
