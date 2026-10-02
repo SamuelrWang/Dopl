@@ -1,110 +1,47 @@
-# Wiring the bundled SPA window
+# How the bundled SPA window is wired
 
-Phase 2 of [docs/DESKTOP-MIGRATION-PLAN.md](../docs/DESKTOP-MIGRATION-PLAN.md)
-added the three files below.
-
-**THE SPA IS THE DEFAULT NOW — this page said "built but not wired" long after it
-was (corrected 2026-08-05, F-146).** `main/shell-mode.js`'s `isSpaMode()` is
-`process.env.DOPL_UI !== 'remote'`, so the bundled window is what a normal launch
-creates and the REMOTE path is the opt-out, not the default. Setting
-`DOPL_UI=remote` still loads the retired website in a `BrowserWindow` and is the
-manual rollback lever; it is not a shipping surface (the website is retired, see
-ENGINEERING §9.3) and it sends no `X-Dopl-Runtime` stamp, so a request typed
-there opens no session.
+The desktop app has ONE shell: a local `BrowserWindow` loading the bundled SPA
+(`apps/desktop-ui`, built into `renderer/app/`). The remote-website shell and its
+`DOPL_UI=remote` opt-out were deleted in Stage D (2026-08-06). Live rules:
+docs/INVARIANTS.md §11.
 
 | File | Role |
 |---|---|
-| `main/spa-window.js` | The local `BrowserWindow` (loadFile / dev URL, navigation locked down). |
-| `renderer/app-preload.js` | `window.dopl` — 4 members, no tokens, no caller headers. |
-| `main/ui-bridge.js` | The `ipcMain.handle` half, sender-bound to the SPA window. |
+| `main/spa-window.js` | `createSpaWindow` — `loadFile renderer/app/index.html` (or `DOPL_UI_DEV_URL` in dev), sandbox + contextIsolation, navigation locked down. |
+| `main/shell-mode.js` | `makeShellHelpers` (the single shell factory, which the min-version gate rides) and `wireSpaServices` (the one `uiBridge.register` call). |
+| `main/app-windows.js` | Registry of app-owned windows (the shell plus any pop-out thread window, `main/popout-window.js`). IPC sender binding uses `appWindows.senderIds()`. |
+| `renderer/app-preload.js` | `window.dopl`. The op list is `test/_app-ops-fixture.mjs › APP_OPS` (58 ops on 2026-10-02) — read it, do not trust the number. No tokens cross it. |
+| `main/ui-bridge.js` | The `ipcMain.handle` half, sender-bound to app windows. |
+| `main/auth-tokens.js` | The main-process access-token authority; `authTokens.start()` runs unconditionally in `main/index.js`. |
 
-The renderer itself is `apps/desktop-ui` (Vite + React). Its build output lands
-in `renderer/app/`, which `build.files: ["main/**/*", "renderer/**/*"]` already
-covers — **no electron-builder change is needed**.
+`build.files` (`main/**/*`, `renderer/**/*`) already covers `renderer/app/`; no
+electron-builder change is needed.
 
-## The two-line integration
+## Adding a bridge op
 
-In `main/index.js`, inside `app.whenReady()` and next to the existing
-`channelDirIpc.register(...)` call (`main/index.js:345`):
-
-```js
-const spaWindow = require('./spa-window');     // with the other requires
-const uiBridge = require('./ui-bridge');
-
-// … inside app.whenReady(), BEFORE the window is created:
-uiBridge.register({ getMainWindow: () => mainWindow });
-```
-
-and swap the window factory: `createMainWindow()` (`main/index.js:366`) becomes
-`mainWindow = spaWindow.createSpaWindow()`.
-
-The accessor is read lazily on every IPC call, exactly like
-`channelDirIpc.register`, because the window outlives `register()` and is rebuilt
-on reopen. If it answers nothing, every handler fails closed.
-
-⚠ **THE OPTION NAME CHANGED ON 2026-08-18** (wiring plan Phase 10, Samuel's ruling —
-option (a)). Both `register()` calls above now take `getSenderIds: () => appWindows.senderIds()`
-rather than `getMainWindow`: the sender binding's subject is `main/app-windows.js`'s
-registry of APP-OWNED windows — the shell plus any pop-out thread window — not the one
-main-window slot. The lazy-accessor reasoning is unchanged and now covers one more case
-(a pop-out can appear or close at any moment). Live rule: INVARIANTS §11.
-
-## Before flipping the switch, know what else moves
-
-- **`main/load-guard.js` goes inert.** It exists to recover hung *remote* loads
-  after sleep/wake and explicitly ignores `file:` URLs, so a `loadFile` window
-  never marks `remotePainted`. Keep the module for the rollback path; do not
-  expect it to guard the bundled load.
-- **`wireNavigation` is replaced**, not reused — `spa-window.js` owns its own
-  `will-navigate` + `setWindowOpenHandler` policy (`isAllowedNavigation`).
-- **The close-hides-the-window workaround** (`main/index.js:100-107`) exists to
-  keep the renderer alive so its Supabase cookies stay live for the background
-  listener. Once main owns the credential, re-check whether it is still needed —
-  do not let it become load-bearing for something else by accident.
-- **Auth has landed, but is not wired either.** `main/auth-tokens.js` is the
-  main-process access-token authority (proactive refresh at ~80% of token
-  lifetime, near-expiry gate on every read, bounded-drop on refresh failure), and
-  `ui-bridge.js`'s `getBearerToken()` / `getAuthState()` are implemented against
-  it — `getBearerToken()` is now **async**. `broadcastAuthState(win, state)` is
-  still the push channel for `window.dopl.onAuthState`. Three calls in
-  `main/index.js` are required to make it live:
-
-  ```js
-  const authTokens = require('./auth-tokens');
-
-  authTokens.start();                                   // in app.whenReady()
-  authTokens.subscribe((s) => uiBridge.broadcastAuthState(mainWindow, s));
-  // inside the existing powerMonitor onWake() fan-out, next to api.resetPool():
-  try { authTokens.onWake(); } catch (err) { diag('wake token error', err && err.message); }
-  ```
-
-  Optional but recommended: `authTokens.onSignIn()` right after
-  `auth.captureFromFragment()` in `openDeepLink`, and `authTokens.onSignOut()`
-  after `auth.signOut()` — both replace a timing guess with a deterministic
-  re-arm (C15). Until `start()` is called the timer never runs; the cookie path
-  is unaffected either way.
-- **`scripts/smoke.js` (renamed from `smoke-test.js`) still loads the remote site.** After the flip it
-  should `loadFile` the built SPA and assert first paint + the bridge — which
-  makes it a real release gate for the first time.
+Change the preload, the `ipcMain` handler, the SPA's typed mirror
+(`apps/desktop-ui/src/lib/dopl-bridge.ts`) and `test/_app-ops-fixture.mjs › APP_OPS`
+together. CI's `scripts/check-bridge-caller-drift.mjs` fails a preload member with
+no caller in the SPA.
 
 ## Build and run
 
 ```bash
-# production shape: build the renderer, then run/package the app
-npm run build:ui --prefix ../            # → dopl-desktop-app/renderer/app/
-npm start                                # electron .
+# from the repo root
+npm run build:ui            # → dopl-desktop-app/renderer/app/
+cd dopl-desktop-app && npm start
 
-# dev shape: Vite dev server + HMR inside the Electron window
-npm run dev:ui --prefix ../              # http://localhost:5173 (strictPort)
-DOPL_UI_DEV_URL=http://localhost:5173 npm start
+# dev: Vite + HMR inside the Electron window
+npm run dev:ui              # repo root, http://localhost:5173 (strictPort)
+cd dopl-desktop-app && npm run dev   # sets DOPL_UI_DEV_URL=http://localhost:5173
 ```
 
-`renderer/app/` is **git-ignored build output**. A packaging run
-(`npm run dist` / `npm run release`) must be preceded by `npm run build:ui`, or
-the app ships without a UI — there is no build step in electron-builder that
-would catch it.
+Point the app at a local API with `DOPL_APP_URL=http://localhost:3000` (the default
+is `https://www.usedopl.com/`, `main/config.js`), with the web app running via
+`npm run dev` at the root.
 
-`DOPL_UI_DEV_URL` is read per window creation. When it is set, the strict
-production CSP is absent (Vite injects it only at build time) and the dev
-origin is added to the navigation allow-list — both dev-only relaxations, both
-in one place.
+`renderer/app/` is git-ignored build output. `npm run dist` / `npm run release`
+must be preceded by `npm run build:ui`, or the app ships without a UI.
+
+When `DOPL_UI_DEV_URL` is set, the production CSP is absent (Vite injects it at
+build time) and the dev origin joins the navigation allow-list — both dev-only.

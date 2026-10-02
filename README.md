@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dopl
 
-## Getting Started
+Dopl is a shared workspace for people and their AI agents: channels, knowledge bases,
+skills and an ontology, reachable from a macOS desktop app and, for any agent, over a
+remote OAuth-authenticated MCP server (`/api/mcp`).
 
-First, run the development server:
+## Layout
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+| Path | What |
+|---|---|
+| `src/` | Next.js app — API routes, server features, web pages, `/api/mcp` |
+| `apps/desktop-ui/` | `@dopl/desktop-ui`, the bundled SPA the desktop app loads |
+| `dopl-desktop-app/` | Electron main process (separate npm project) |
+| `packages/dopl-client/` | `@dopl/client`, typed HTTP client |
+| `packages/mcp-server/` | `@dopl/mcp-server`, the MCP server engine |
+| `packages/contracts/` | `@dopl/contracts`, shared wire types |
+| `supabase/migrations/` | database migrations |
+| `docs/` | INVARIANTS (current rules), ENGINEERING (history), specs, findings |
+
+## Develop
+
+macOS, Node 22.
+
+```sh
+npm install && (cd dopl-desktop-app && npm install)
+cp .env.example .env.local                       # fill in
+
+npm run dev                                      # web + API on http://localhost:3000
+npm run dev:ui                                   # SPA on http://localhost:5173
+cd dopl-desktop-app && DOPL_APP_URL=http://localhost:3000 npm run dev   # Electron on the local API
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Gates
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Green = five suites, two lints, two typechecks and the non-suite gates listed in
+[CLAUDE.md](CLAUDE.md) and [docs/INVARIANTS.md](docs/INVARIANTS.md) §14 (re-derive:
+`grep -n 'run:' .github/workflows/ci.yml`). Commands: [TESTING.md](TESTING.md).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Read next
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [CLAUDE.md](CLAUDE.md) — which doc to read, precedence (code > INVARIANTS > ENGINEERING), doc rules.
+- [docs/INVARIANTS.md](docs/INVARIANTS.md) — how the system behaves now.
+- [docs/ENGINEERING.md](docs/ENGINEERING.md) — why; dated history.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, packages, conventions.

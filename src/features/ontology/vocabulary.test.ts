@@ -53,7 +53,6 @@ const EXEMPT: ReadonlyArray<readonly [path: string, reason: string]> = [
   ["docs/LAUNCH-READINESS-ROADMAP.md", "dated roadmap"],
   ["docs/MCP-MULTI-WORKSPACE.md", "dated design doc for the legacy graph feature's skills"],
   ["docs/CLEANUP.md", "dated, executed cleanup catalog (2026-06-12)"],
-  ["docs/TRACKED-DEBT.md", "dated debt entries naming files deleted with the legacy graph feature"],
   ["RLS-MIGRATION-PLAN.md", "dated plan"],
   ["MCP-GAP-AUDIT.md", "dated audit"],
   ["KB-LOSS-TRACE.md", "dated incident trace"],

@@ -1,28 +1,45 @@
 # @dopl/client
 
-Shared HTTP client for the Dopl API. Consumed by [`@dopl/cli`](../cli) and [`@dopl/mcp-server`](../mcp-server) — extracted into its own package so behavior never drifts between the two channels.
-
-Most users want one of those packages, not this one directly.
+Typed HTTP client for the Dopl API. Internal workspace package (`private`, not
+published to npm). Consumed by [`@dopl/mcp-server`](../mcp-server) and by the
+Next.js app's loopback calls (e.g. `src/shared/api/loopback-client.ts`).
 
 ## What's inside
 
-- **`DoplClient`** — typed HTTP client with methods across workspaces, knowledge bases, skills, the ontology, channels and agent identities.
-- **`DoplTransport`** — internal transport with retries (jittered exponential backoff for idempotent methods, `Retry-After` honored on 429), structured error parsing, and a `debug` namespace.
-- **Typed errors** — `DoplApiError` (with parsed `code` / `apiMessage` / `details` from the canonical `{ error: { code, message, details } }` body shape), `DoplAuthError`, `DoplNetworkError`, `DoplTimeoutError`.
+- **`DoplClient`** — one class whose methods are split across `src/client-<domain>.ts`
+  (workspaces, knowledge, ontology, chats, members, channels, skills, agent
+  identities, home, billing); the chain order is written in `src/client-base.ts`.
+- **`DoplTransport`** (`src/transport.ts`) — retries with jittered exponential
+  backoff (`src/retry.ts`, honours `Retry-After`), structured error parsing, and
+  the `dopl:client` debug namespace.
+- **Typed errors** (`src/errors.ts`) — `DoplApiError` (parsed `code` / `apiMessage` /
+  `details` from the `{ error: { code, message, details } }` body), `DoplAuthError`,
+  `DoplNetworkError`, `DoplTimeoutError`, `DoplAbortError`.
 
-## Usage (advanced)
+## Usage
 
 ```ts
 import { DoplClient } from "@dopl/client";
 
-const client = new DoplClient("https://www.usedopl.com", process.env.DOPL_API_KEY!, {
-  clientIdentifier: "my-app@1.0.0",
-});
+// The second argument is a bearer token (sent as `Authorization: Bearer …`);
+// in practice an OAuth or loopback token, never a user API key.
+const client = new DoplClient(baseUrl, token, { clientIdentifier: "my-app@1.0.0" });
 
-const { packs } = await client.listPacks();
+const { workspaces } = await client.listWorkspaces();
 ```
 
-The `clientIdentifier` is sent as `X-Dopl-Client` on every request and used for server-side adoption analytics.
+`clientIdentifier` is sent as `X-Dopl-Client` on every request.
+
+## Build
+
+The app loads the committed `dist/` (`next.config.ts › serverExternalPackages`),
+so after editing `src/` run `npm run build:packages` at the repo root and commit
+`dist/` — CI fails if it is not the build of `src/` (CLAUDE.md, gate 9).
+
+```sh
+npm run build -w @dopl/client
+npm test -w @dopl/client
+```
 
 ## Debug
 
@@ -30,12 +47,7 @@ The `clientIdentifier` is sent as `X-Dopl-Client` on every request and used for 
 DEBUG=dopl:client node my-script.js
 ```
 
-Logs each request as `METHOD /path → status in Nms`. The Authorization header is never logged.
+Logs each request as `METHOD /path → status in Nms`. The Authorization header is
+never logged.
 
-## Related
-
-- [`@dopl/cli`](../cli) — `dopl` shell binary built on this client.
-- [`@dopl/mcp-server`](../mcp-server) — MCP server built on this client.
-- [CHANGELOG.md](./CHANGELOG.md) — release history.
-
-MIT License.
+See [CHANGELOG.md](./CHANGELOG.md) for history. MIT License.

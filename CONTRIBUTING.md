@@ -1,88 +1,79 @@
 # Contributing
 
-This monorepo houses the Dopl Next.js app plus two internal workspace packages (not published to npm):
+## Layout
 
-- [`@dopl/client`](packages/dopl-client) — shared HTTP client.
-- [`@dopl/mcp-server`](packages/mcp-server) — the in-process MCP server engine, booted by the app's `/api/mcp` route via `@dopl/mcp-server/factory`.
+The repo is an npm-workspaces monorepo (`apps/*`, `packages/*`) around the Next.js
+app in `src/`, plus the Electron app in `dopl-desktop-app/`:
 
-Users connect to Dopl as a remote, OAuth-authenticated MCP server (`/api/mcp`) — there is no npx/stdio install path and no API keys.
+- `src/` — the Next.js app: API routes, server features, the web pages, and `/api/mcp`.
+- [`apps/desktop-ui`](apps/desktop-ui) (`@dopl/desktop-ui`) — the bundled SPA the desktop app loads.
+- [`packages/dopl-client`](packages/dopl-client) (`@dopl/client`) — typed HTTP client.
+- [`packages/mcp-server`](packages/mcp-server) (`@dopl/mcp-server`) — the MCP server, booted
+  in-process by the app's `/api/mcp` route via `@dopl/mcp-server/factory`.
+- [`packages/contracts`](packages/contracts) (`@dopl/contracts`) — shared wire types.
+- `dopl-desktop-app/` — the Electron main process. A **separate** npm project (own
+  `package.json` and lockfile), not a workspace.
 
-For all conventions — file size cap, naming, error handling, the repository/service split, etc. — read [`docs/ENGINEERING.md`](docs/ENGINEERING.md). When that doc and the existing code disagree, the doc wins.
+All packages are `private`; nothing is published to npm. Users connect to Dopl as a
+remote, OAuth-authenticated MCP server (`/api/mcp`) — there is no stdio install path
+and no API keys.
 
----
+## Which doc wins
 
-## Getting set up
+Read [CLAUDE.md](CLAUDE.md) first. Precedence is **code > [docs/INVARIANTS.md](docs/INVARIANTS.md)
+> [docs/ENGINEERING.md](docs/ENGINEERING.md)**. INVARIANTS is the standing statement of how the
+system behaves; ENGINEERING is the rationale and history. UI work starts at
+[docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md). Findings live in
+[docs/REFACTOR-FINDINGS.md](docs/REFACTOR-FINDINGS.md).
 
-```sh
-git clone https://github.com/SamuelrSun/usedopl.git
-cd usedopl
-npm install                    # links workspaces
-```
+## Setup
 
-Node 18.17+ required. macOS, Linux, and Windows all supported.
-
-## Build order matters
-
-`@dopl/mcp-server` depends on `@dopl/client`. Build the client first:
-
-```sh
-npm run build -w @dopl/client
-npm run build -w @dopl/mcp-server
-```
-
-The CI workflow in `.github/workflows/ci.yml` does this in order on every PR.
-
-## Test
+macOS only (Dopl ships one platform). Node 22, as CI runs.
 
 ```sh
-npm test                          # root suite (src/**)          — 2133
-npm test -w @dopl/client          #                              —   48
-npm test -w @dopl/mcp-server      #                              —  483
-npm test -w @dopl/desktop-ui      # the bundled SPA              —  143
-npm --prefix dopl-desktop-app test  # the Electron main process  — 2313
-
-npm run test:all                  # the four workspace suites in one go
+git clone https://github.com/SamuelrWang/Dopl.git
+cd Dopl
+npm install                              # root + workspaces
+(cd dopl-desktop-app && npm install)     # the desktop project
+cp .env.example .env.local               # then fill it in
 ```
 
-`dopl-desktop-app/` is a SEPARATE npm project, not a workspace — it has its own
-`package.json` and lockfile, so `-w` does not reach it and it needs its own
-`npm install`. Its suite is `node --test` over source-extraction truth tables and
-launches no Electron binary.
-
-**All five run in CI** (`.github/workflows/ci.yml`), on every push and PR, with no
-path filters. Until 2026-08-05 only `@dopl/client` did — 48 of 5 120 tests — and
-the root and mcp-server projects had no `test` script for a workflow to call.
-
-Tests live next to source (`foo.ts` → `foo.test.ts` in the same folder), per `docs/ENGINEERING.md` §13.
-
-## Run the MCP server locally
-
-The MCP server is in-process — it boots inside the Next.js app at the `/api/mcp`
-route (via `@dopl/mcp-server/factory`). Just run the app:
+## Run
 
 ```sh
-npm run dev
+npm run dev                              # web app + /api/mcp on http://localhost:3000
+npm run dev:ui                           # SPA dev server on http://localhost:5173
+cd dopl-desktop-app && DOPL_APP_URL=http://localhost:3000 npm run dev
 ```
 
-Then connect any MCP client to `http://localhost:3000/api/mcp` (a browser opens
-once to sign in via OAuth). In production the endpoint is
-`https://www.usedopl.com/api/mcp`.
+`npm run dev` in `dopl-desktop-app` sets `DOPL_UI_DEV_URL=http://localhost:5173`;
+`DOPL_APP_URL` points the desktop at the local API (default: production).
+Details: [dopl-desktop-app/WIRING.md](dopl-desktop-app/WIRING.md).
 
-## Packages are internal — no npm publishing
+## Packages load from their committed `dist/`
 
-`@dopl/client` and `@dopl/mcp-server` are workspace libraries consumed by the app
-via npm-workspace symlinks (and `transpilePackages` in `next.config.ts`). They are
-marked `private` and are **not published to npm** — there is no release workflow,
-no tags, and nothing to re-pin. Edit them in place; the next app build picks up
-the changes.
+`next.config.ts › serverExternalPackages` keeps `@dopl/client` and `@dopl/mcp-server`
+external, so the app loads their **committed `dist/`**. After editing a package's `src/`:
 
-## Conventions cheat sheet
+```sh
+npm run build:packages     # builds @dopl/client, then @dopl/mcp-server (order matters)
+```
 
-- **Files**: ≤300 lines target / 500 hard cap (CI fails over). Filenames `kebab-case`.
-- **Imports**: external → `@/` → relative.
-- **No `any`, no `@ts-ignore`.**
-- **No comments unless the *why* is non-obvious.**
-- **Commits**: `<scope>: <verb> <what>` — e.g., `cli: add packs validate command`. Banned: `fixes`, `wip`, `updates`, `stuff`.
-- **One PR = one logical change.** Don't bundle.
+and commit the `dist/` changes. CI fails if `dist/` is not the build of `src/`.
 
-See `docs/ENGINEERING.md` for the full set.
+## Test and gates
+
+See [TESTING.md](TESTING.md). "Done" means green on everything in CLAUDE.md
+("Definition of green") and docs/INVARIANTS.md §14 — five suites, two lints, two
+typechecks and the non-suite gates. Re-derive the list from
+`grep -n 'run:' .github/workflows/ci.yml`.
+
+## Conventions (summary)
+
+- 500-line hard cap per file (eslint `max-lines`; CI size-check over `packages/`).
+- Filenames `kebab-case`; tests next to the code (`foo.ts` → `foo.test.ts`).
+- No `any`, no `@ts-ignore`.
+- Commits: `<type>(<scope>): <what>` or `<scope>: <what>` — e.g. `fix(mcp): …`, `channels: …`.
+  One commit, one logical change.
+- Docs: a number carries its measurement date; code references use `path › symbol`,
+  never a line number (CLAUDE.md, "Standing rules for writing docs").
