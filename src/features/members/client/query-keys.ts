@@ -1,5 +1,4 @@
 import { apiResource, type ApiResourceKeys } from "@/shared/api/query-keys";
-import type { TeamResourceType } from "@/features/teams/access-levels";
 
 /**
  * Members console URLs and the cache keys built from them, in one place, so a
@@ -13,7 +12,7 @@ import type { TeamResourceType } from "@/features/teams/access-levels";
  * submit can't land in another workspace's cache after a switch.
  */
 
-export function workspacePath(slug: string, tail = ""): string {
+function workspacePath(slug: string, tail = ""): string {
   return `/api/workspaces/${encodeURIComponent(slug)}${tail}`;
 }
 
@@ -63,10 +62,6 @@ export function teamMemberPath(
   return `${teamMembersPath(slug, teamId)}/${encodeURIComponent(userId)}`;
 }
 
-export function teamAccessPath(slug: string, teamId: string): string {
-  return `${teamPath(slug, teamId)}/access`;
-}
-
 export function accessMatrixPath(slug: string): string {
   return workspacePath(slug, "/access-matrix");
 }
@@ -81,12 +76,6 @@ export function joinRequestPath(slug: string, requestId: string): string {
 
 export function joinLinkPath(slug: string): string {
   return workspacePath(slug, "/join-link");
-}
-
-/** A grant target, as both the access endpoints spell it. */
-export interface ResourceRef {
-  resourceType: TeamResourceType;
-  resourceId: string;
 }
 
 export const memberKeys = {

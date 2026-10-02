@@ -24,7 +24,6 @@ export const WorkspaceCreateSchema = z.object({
   name: WorkspaceNameSchema,
   description: WorkspaceDescriptionSchema.optional(),
 });
-export type WorkspaceCreateInput = z.infer<typeof WorkspaceCreateSchema>;
 
 // ⚠ Must match the output of slugifyWorkspaceName: lowercase alphanumeric +
 // hyphen, no leading/trailing hyphen.
@@ -38,11 +37,9 @@ export const WorkspaceUpdateSchema = z.object({
   // (owner_id, slug) UNIQUE backstop). Omit to keep the current slug.
   slug: z.string().min(1).max(60).regex(slugRegex, "Slug must be kebab-case").optional(),
 });
-export type WorkspaceUpdateInput = z.infer<typeof WorkspaceUpdateSchema>;
 
 export const InvitationCreateSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "member", "viewer"]),
   teamIds: z.array(z.string().uuid()).max(20).optional(),
 });
-export type InvitationCreateInput = z.infer<typeof InvitationCreateSchema>;

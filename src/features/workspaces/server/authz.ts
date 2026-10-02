@@ -70,7 +70,7 @@ export async function requireWorkspaceRole(
  * predicate stays negative on purpose and the MESSAGE branches on the kind,
  * which is the split the rule in `shared-publish.ts` is actually asking for.
  */
-export function assertMemberAddable(workspace: { kind?: WorkspaceKind }): void {
+function assertMemberAddable(workspace: { kind?: WorkspaceKind }): void {
   if (isStandardWorkspace(workspace)) return;
   throw new HttpError(
     403,

@@ -163,7 +163,7 @@ async function listWorkspacesOwnedBy(userId: string): Promise<Workspace[]> {
   return ((data ?? []) as WorkspaceRow[]).map(mapWorkspaceRow);
 }
 
-export async function listWorkspacesForUser(userId: string): Promise<Workspace[]> {
+async function listWorkspacesForUser(userId: string): Promise<Workspace[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("workspace_members")

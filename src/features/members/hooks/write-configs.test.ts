@@ -15,7 +15,6 @@ import {
   type ApiMutationRequestFn,
 } from "@/shared/hooks/use-api-mutation";
 import {
-  accessMatrixPath,
   invitationsPath,
   joinRequestsPath,
   membersPath,
@@ -25,12 +24,10 @@ import type {
   InvitationsCache,
   JoinRequestsCache,
   MembersCache,
-  ResourcesCache,
 } from "../lib/optimistic-cache";
 import { revokeInvitationConfig } from "./use-invitation-writes";
 import { resolveJoinRequestConfig } from "./use-join-requests";
 import { memberRoleConfig, removeMemberConfig } from "./use-member-writes";
-import { setGrantConfig, setResourceScopeConfig } from "./use-access-writes";
 import { teamDeleteConfig } from "./use-team-writes";
 
 vi.mock("@/shared/ui/toast", () => ({ toast: () => {} }));
@@ -284,80 +281,14 @@ describe("member removal — F-045's seat refresh", () => {
   });
 });
 
-describe("resource scope — the segmented control that would not move", () => {
-  it("moves the thumb before the PUT leaves, and invalidates the teams cache it cannot compute", async () => {
-    const qc = client();
-    const key = entry(accessMatrixPath(SLUG));
-    qc.setQueryData(key, {
-      resources: [
-        {
-          resourceType: "skill",
-          resourceId: "s-1",
-          name: "Skill",
-          accessMode: "workspace",
-          createdBy: null,
-        },
-      ],
-    } satisfies ResourcesCache);
-    const invalidate = vi.spyOn(qc, "invalidateQueries");
-    const net = deferredRequest(() => qc.getQueryData<ResourcesCache>(key));
-
-    const run = new MutationObserver(
-      qc,
-      buildApiMutationOptions(qc, net.request, setResourceScopeConfig(SLUG))
-    ).mutate({ resourceType: "skill", resourceId: "s-1", accessMode: "teams" });
-    await flush();
-    expect((net.seen[0] as ResourcesCache).resources[0].accessMode).toBe("teams");
-
-    net.settle(undefined);
-    await run;
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: [teamsPath(SLUG)] });
-  });
-});
-
 /**
- * A grant is a PER-MEMBER fact and its pane is server-computed:
- * `member-detail` reads `…/members/<id>/access` and nothing else refreshes it
- * (the pane never unmounts). Changing a team's reach changes that answer for
- * every member, so ⚠ each member's entry must be named individually — a prefix
- * cannot work: TanStack matches keys per ARRAY ELEMENT and these keys are
- * whole paths, so `[…/members]` reaches no `[…/members/<id>/access]` entry.
+ * ⚠ Each member's `…/members/<id>/access` entry must be named individually —
+ * TanStack matches keys per ARRAY ELEMENT and these keys are whole paths, so
+ * `[…/members]` reaches no `[…/members/<id>/access]` entry.
  */
 const accessKey = (userId: string) => [
   `/api/workspaces/${SLUG}/members/${userId}/access`,
 ];
-
-describe("team grant — the per-member access panes", () => {
-  function grantRun(qc: QueryClient) {
-    qc.setQueryData(entry(teamsPath(SLUG)), {
-      teams: [{ id: "t-1", memberIds: ["u-1", "u-2"], grants: [] }],
-    });
-    const net = deferredRequest();
-    const run = new MutationObserver(
-      qc,
-      buildApiMutationOptions(qc, net.request, setGrantConfig(SLUG))
-    ).mutate({
-      teamId: "t-1",
-      resourceType: "knowledge_base",
-      resourceId: "kb-1",
-      level: "read",
-      memberIds: ["u-1", "u-2"],
-    });
-    net.settle(undefined);
-    return run;
-  }
-
-  it("re-reads every team member's access, and NOT the teams cache it just computed", async () => {
-    const qc = client();
-    const invalidate = vi.spyOn(qc, "invalidateQueries");
-    await grantRun(qc);
-
-    expect(invalidate.mock.calls.map(([args]) => args)).toEqual([
-      { queryKey: accessKey("u-1") },
-      { queryKey: accessKey("u-2") },
-    ]);
-  });
-});
 
 describe("team delete — the grants that go with it", () => {
   it("drops the row and its roster chips before the DELETE leaves, then re-reads each member's access", async () => {

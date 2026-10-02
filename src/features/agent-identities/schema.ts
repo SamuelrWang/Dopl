@@ -56,7 +56,7 @@ export const MAX_FIELD_COUNT = 50;
 export const MAX_FIELD_KEY_CHARS = 80;
 export const MAX_FIELD_VALUE_CHARS = 1000;
 
-export const IdentityFieldSchema = z.object({
+const IdentityFieldSchema = z.object({
   key: safeLabel("Field key", MAX_FIELD_KEY_CHARS),
   /** A label, not prose: a newline would forge a launch-payload line. `""` is legal (a half-filled
    *  form) — `safeLabel` has `.min(1)`, so `SAFE_LABEL_RE` is applied directly, never re-typed. */

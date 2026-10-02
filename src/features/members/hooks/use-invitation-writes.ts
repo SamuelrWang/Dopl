@@ -55,7 +55,7 @@ export function revokeInvitationConfig(
   };
 }
 
-export function resetJoinLinkConfig(
+function resetJoinLinkConfig(
   workspaceSlug: string
 ): UseApiMutationConfig<void, JoinLinkCache> {
   const joinLinkKey = memberKeys.joinLink(workspaceSlug).all;

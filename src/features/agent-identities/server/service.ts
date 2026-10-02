@@ -5,12 +5,7 @@ import "server-only";
  * service composes (the launch-directive lane), so the visibility matrix is never copied (F-278).
  */
 
-export {
-  buildAgentIdentityContext,
-  canSeeIdentity,
-  shareCtxForIdentities,
-} from "./service-shared";
-export type { AuthLike, IdentityShareCtx } from "./service-shared";
+export { buildAgentIdentityContext } from "./service-shared";
 
 export {
   listIdentities,
@@ -27,7 +22,4 @@ export {
 } from "./service-writes";
 
 export { resolveIdentityRef } from "./service-resolve-ref";
-export type {
-  IdentityRefMatch,
-  IdentityRefResolution,
-} from "./service-resolve-ref";
+export type { IdentityRefMatch } from "./service-resolve-ref";

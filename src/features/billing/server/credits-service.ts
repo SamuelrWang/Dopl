@@ -73,7 +73,7 @@ export interface CreditCaller {
  * One reason since 2026-09-07: a home burn lands on the owner's personal wallet,
  * and every user has exactly one of those, so nothing can be missing or ambiguous.
  */
-export type UnmeteredReason = "container-has-no-active-owner";
+type UnmeteredReason = "container-has-no-active-owner";
 
 /**
  * Which counter a burn moves, and whose allowance that is.

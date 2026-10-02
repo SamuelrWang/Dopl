@@ -15,13 +15,10 @@ import {
   patchTeam,
   setMemberRole,
   setMemberTeamRef,
-  setResourceMode,
-  setTeamGrant,
   setTeamMembers,
   type InvitationsCache,
   type JoinRequestsCache,
   type MembersCache,
-  type ResourcesCache,
   type TeamsCache,
 } from "./optimistic-cache";
 
@@ -91,8 +88,6 @@ describe("an unloaded cache is never seeded", () => {
     expect(dropTeam(undefined, "t-1")).toBeUndefined();
     expect(setTeamMembers(undefined, "t-1", ["u-1"], true)).toBeUndefined();
     expect(dropMemberFromTeams(undefined, "u-1")).toBeUndefined();
-    expect(setTeamGrant(undefined, "t-1", "skill", "s-1", "read")).toBeUndefined();
-    expect(setResourceMode(undefined, "skill", "s-1", "teams")).toBeUndefined();
     expect(setMemberTeamRef(undefined, ["u-1"], team(), true)).toBeUndefined();
     expect(dropTeamRef(undefined, "t-1")).toBeUndefined();
   });
@@ -210,94 +205,5 @@ describe("team patches", () => {
     expect(next?.teams.map((t) => t.memberCount)).toEqual([1, 0, 1]);
     // Team that never had them is the same object — no wasted render.
     expect(next?.teams[2]).toBe(cache.teams[2]);
-  });
-});
-
-describe("grants and scope", () => {
-  it("replaces a level in place rather than stacking a second grant", () => {
-    const cache: TeamsCache = {
-      teams: [
-        team({
-          grants: [
-            { teamId: "t-1", resourceType: "skill", resourceId: "s-1", level: "read" },
-          ],
-        }),
-      ],
-    };
-    const next = setTeamGrant(cache, "t-1", "skill", "s-1", "edit");
-    expect(next?.teams[0].grants).toEqual([
-      { teamId: "t-1", resourceType: "skill", resourceId: "s-1", level: "edit" },
-    ]);
-  });
-
-  it("removes the grant row entirely on level null", () => {
-    const cache: TeamsCache = {
-      teams: [
-        team({
-          grants: [
-            { teamId: "t-1", resourceType: "skill", resourceId: "s-1", level: "read" },
-            {
-              teamId: "t-1",
-              resourceType: "knowledge_base",
-              resourceId: "k-1",
-              level: "edit",
-            },
-          ],
-        }),
-      ],
-    };
-    const next = setTeamGrant(cache, "t-1", "skill", "s-1", null);
-    expect(next?.teams[0].grants.map((g) => g.resourceId)).toEqual(["k-1"]);
-  });
-
-  it("does not confuse two resources that share an id across types", () => {
-    const cache: TeamsCache = {
-      teams: [
-        team({
-          grants: [
-            { teamId: "t-1", resourceType: "skill", resourceId: "x", level: "read" },
-            {
-              teamId: "t-1",
-              resourceType: "knowledge_base",
-              resourceId: "x",
-              level: "read",
-            },
-          ],
-        }),
-      ],
-    };
-    const next = setTeamGrant(cache, "t-1", "skill", "x", "edit");
-    expect(next?.teams[0].grants).toContainEqual({
-      teamId: "t-1",
-      resourceType: "knowledge_base",
-      resourceId: "x",
-      level: "read",
-    });
-  });
-
-  it("flips one resource's scope and no other", () => {
-    const cache: ResourcesCache = {
-      resources: [
-        {
-          resourceType: "skill",
-          resourceId: "s-1",
-          name: "Skill",
-          accessMode: "workspace",
-          createdBy: null,
-        },
-        {
-          resourceType: "knowledge_base",
-          resourceId: "k-1",
-          name: "KB",
-          accessMode: "workspace",
-          createdBy: null,
-        },
-      ],
-    };
-    const next = setResourceMode(cache, "skill", "s-1", "teams");
-    expect(next?.resources.map((r) => r.accessMode)).toEqual([
-      "teams",
-      "workspace",
-    ]);
   });
 });

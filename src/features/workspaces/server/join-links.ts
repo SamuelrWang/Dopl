@@ -17,7 +17,7 @@ import { findMembership, findWorkspaceById } from "./repository";
  * note at the foot of this file.
  */
 
-export type JoinRequestStatus = "pending" | "approved" | "declined";
+type JoinRequestStatus = "pending" | "approved" | "declined";
 
 const REQUEST_COLS =
   "id, workspace_id, user_id, status, requested_at, resolved_at, pending_acknowledged_at, resolved_acknowledged_at";

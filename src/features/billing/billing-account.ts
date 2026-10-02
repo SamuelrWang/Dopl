@@ -32,7 +32,7 @@ export type InvoiceStatus =
  * with no deploy here, arriving typed as `InvoiceStatus` — narrow with
  * `isInvoiceStatus` so unknowns render neutral instead of missing a `Record`.
  */
-export const INVOICE_STATUSES: readonly InvoiceStatus[] = [
+const INVOICE_STATUSES: readonly InvoiceStatus[] = [
   "draft",
   "open",
   "paid",

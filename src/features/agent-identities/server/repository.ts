@@ -311,6 +311,5 @@ export {
   listLiveEntryRows,
   type KnowledgeBaseAccessRow,
   type KnowledgeFolderRow,
-  type KnowledgeEntryRow,
   type IdentityKnowledgeLinkRow,
 } from "./repository-knowledge-links";

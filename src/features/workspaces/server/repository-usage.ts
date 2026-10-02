@@ -31,7 +31,7 @@ import type { Role } from "../types";
  * container one person belongs to; this one spans one container's whole
  * membership, and the page gates on it.
  */
-export const WORKSPACE_SCAN_LIMIT = 10_000;
+const WORKSPACE_SCAN_LIMIT = 10_000;
 
 /** A scan that came back AT its ceiling is a FLOOR, and says so. */
 export interface UsageScan<T> {

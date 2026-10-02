@@ -7,10 +7,8 @@ import type {
   AgentIdentity,
   IdentityField,
   IdentityFieldType,
-  IdentityKnowledgeBaseRef,
   IdentityKnowledgeRef,
   IdentityKnowledgeScope,
-  IdentityKnowledgeScopeKind,
   IdentityShelf,
   IdentityVisibility,
 } from "../types";
@@ -23,10 +21,8 @@ export type {
   AgentIdentity,
   IdentityField,
   IdentityFieldType,
-  IdentityKnowledgeBaseRef,
   IdentityKnowledgeRef,
   IdentityKnowledgeScope,
-  IdentityKnowledgeScopeKind,
   IdentityShelf,
   IdentityVisibility,
 };

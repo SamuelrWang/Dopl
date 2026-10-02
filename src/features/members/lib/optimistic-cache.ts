@@ -1,7 +1,5 @@
-import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type {
   AccessMatrixResource,
-  AccessMode,
   TeamView,
 } from "@/features/teams/types";
 import type {
@@ -13,7 +11,7 @@ import type {
 
 /**
  * Pure half of the members console's optimistic layer: how each cache
- * absorbs one membership / team / access change. No React, no DOM, no net.
+ * absorbs one membership / team change. No React, no DOM, no net.
  *
  * ⚠ CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
  * endpoint returned and applies `select` on read, so patch
@@ -205,56 +203,5 @@ export function dropMemberFromTeams(
       const memberIds = t.memberIds.filter((id) => id !== userId);
       return { ...t, memberIds, memberCount: memberIds.length };
     }),
-  };
-}
-
-/** Set (or clear, `level: null`) one team's grant on one resource. Grants
- *  live on the TEAM row, not the resource row, so this one patch moves the
- *  team detail's grant boxes, the resource detail's per-team list, and the
- *  Access tab's "N team grants" caption. */
-export function setTeamGrant(
-  cache: TeamsCache | undefined,
-  teamId: string,
-  resourceType: TeamResourceType,
-  resourceId: string,
-  level: AccessLevel | null
-): TeamsCache | undefined {
-  if (!cache) return cache;
-  return {
-    ...cache,
-    teams: cache.teams.map((t) => {
-      if (t.id !== teamId) return t;
-      const others = t.grants.filter(
-        (g) => !(g.resourceType === resourceType && g.resourceId === resourceId)
-      );
-      return {
-        ...t,
-        grants:
-          level === null
-            ? others
-            : [...others, { teamId, resourceType, resourceId, level }],
-      };
-    }),
-  };
-}
-
-// ── Access matrix ───────────────────────────────────────────────────
-
-/** Flip a resource between workspace-wide and teams-scoped. The segmented
- *  control renders straight off `accessMode`. */
-export function setResourceMode(
-  cache: ResourcesCache | undefined,
-  resourceType: TeamResourceType,
-  resourceId: string,
-  accessMode: AccessMode
-): ResourcesCache | undefined {
-  if (!cache) return cache;
-  return {
-    ...cache,
-    resources: cache.resources.map((r) =>
-      r.resourceType === resourceType && r.resourceId === resourceId
-        ? { ...r, accessMode }
-        : r
-    ),
   };
 }
