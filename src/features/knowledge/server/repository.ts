@@ -6,13 +6,9 @@ import "server-only";
  *
  * Convention: `find*` → `T | null`; `list*` → `T[]`; `insert*` / `update*` /
  * `hardDelete*` throw on error.
- * - `includeDeleted` is a legacy-tombstone escape hatch, not a trash surface
- *     — deletes are permanent. Default `false` keeps the `deleted_at IS NULL`
- *     filter hiding pre-switch rows. ⚠ **THERE ARE NO SUCH ROWS LEFT** (the
- *     purge migration ran; counts read 0 on 2026-09-18) and **NO CALL SITE
- *     PASSES `true`** — re-derive with `grep -rn includeDeleted src`. The
- *     parameter and the filters are inert; **F-730** carries removing them and
- *     the columns together, which the partial-unique indexes make non-mechanical.
+ * - `includeDeleted` is inert: deletes are permanent, no tombstones remain and
+ *     no call site passes `true`. ⚠ **F-730** removes it with the columns
+ *     (partial-unique indexes make that non-mechanical).
  * - The service-role client BYPASSES RLS, so every method taking
  *     `workspaceId` filters by it explicitly.
  *
@@ -28,7 +24,6 @@ export {
   findBaseByClientWriteId,
   listBasesByIds,
   findBaseBySlug,
-  findBaseByPublicId,
   listBasesForWorkspace,
   listBaseSlugsForWorkspace,
   listHomeScopedBaseIds,
@@ -40,7 +35,6 @@ export {
   getBaseStorageBytes,
   fetchProfileNames,
 } from "./repository-bases";
-export type { InsertBaseArgs, UpdateBasePatch } from "./repository-bases";
 
 export {
   findFolderById,
@@ -51,7 +45,6 @@ export {
   updateFolderRow,
   hardDeleteFolder,
 } from "./repository-folders";
-export type { InsertFolderArgs, UpdateFolderPatch } from "./repository-folders";
 
 export {
   findEntryById,
@@ -68,13 +61,7 @@ export {
   updateEntryRow,
   hardDeleteEntry,
 } from "./repository-entries";
-export type {
-  EntryStamp,
-  ListEntriesOpts,
-  InsertEntryArgs,
-  InsertEntriesArgs,
-  UpdateEntryPatch,
-} from "./repository-entries";
+export type { InsertEntriesArgs } from "./repository-entries";
 
 export {
   listStarredBaseIds,

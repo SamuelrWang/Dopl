@@ -34,7 +34,7 @@ import {
   type KnowledgeBaseList,
 } from "./api";
 
-export type FetchStatus = "idle" | "loading" | "success" | "error";
+type FetchStatus = "idle" | "loading" | "success" | "error";
 
 interface Result<T> {
   data: T | null;

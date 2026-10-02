@@ -21,7 +21,7 @@ import {
  */
 
 /** One outline row as it travels: no `end`, which is derivable from the next. */
-export interface KnowledgeOutlineRow {
+interface KnowledgeOutlineRow {
   heading: string;
   level: number;
   /** Cost of reading this section — a parent's count contains its children's. */
@@ -44,7 +44,7 @@ export interface KnowledgeOutlinePayload {
  * heading matched when not as written. Both are additive (absent = the old answer).
  * `heading`/`level`/`start` are the first served section's; `chars` is what was served.
  */
-export type KnowledgeSectionOutcome =
+type KnowledgeSectionOutcome =
   | {
       ok: true;
       heading: string;

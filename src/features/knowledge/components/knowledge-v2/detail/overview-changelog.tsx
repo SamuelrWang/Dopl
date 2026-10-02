@@ -2,10 +2,7 @@
 
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { ChangelogList } from "@/features/revisions/components/changelog-list";
-import {
-  useRestoreRevision,
-  useRevisionHistory,
-} from "@/features/revisions/client/hooks";
+import { useRevisionHistory } from "@/features/revisions/client/hooks";
 import { restoreEntryRevision } from "@/features/revisions/client/api";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Revision } from "@/features/revisions/types";
@@ -48,41 +45,6 @@ export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
         onLoadMore={history.loadMore}
         canRestore={canEdit}
         onRestore={restore}
-      />
-    </SectionPanel>
-  );
-}
-
-/** Re-exported so a surface that wants ONE entry's history mounts the same list
- *  rather than a second one. */
-export function EntryChangelog({
-  entryId,
-  workspaceId,
-  canEdit,
-}: {
-  entryId: string;
-  workspaceId: string;
-  canEdit: boolean;
-}) {
-  const history = useRevisionHistory({ kind: "entry", id: entryId }, workspaceId);
-  const restore = useRestoreRevision(entryId, workspaceId);
-
-  return (
-    <SectionPanel
-      id="entry-changelog"
-      label="Changelog"
-    >
-      <ChangelogList
-        days={history.days}
-        status={history.status}
-        hasMore={history.hasMore}
-        isLoadingMore={history.isLoadingMore}
-        onLoadMore={history.loadMore}
-        canRestore={canEdit}
-        onRestore={async (revision) => {
-          await restore.mutateAsync(revision.id);
-          history.refetch();
-        }}
       />
     </SectionPanel>
   );

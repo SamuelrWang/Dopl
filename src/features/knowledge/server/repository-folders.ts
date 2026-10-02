@@ -99,7 +99,7 @@ export async function listFolderAncestors(
 /** Highest `position` among active folders in a (base, parent) bucket, -1 when
  *  empty. Sibling of `maxEntryPositionIn`; `insertFolder` appends at max + 1 so
  *  insertion order survives position-sorted views (F-8). */
-export async function maxFolderPositionIn(
+async function maxFolderPositionIn(
   baseId: string,
   parentId: string | null
 ): Promise<number> {

@@ -220,11 +220,6 @@ export async function setChannelGrant(
   return data.grant;
 }
 
-export async function fetchBases(workspaceId?: string): Promise<KnowledgeBase[]> {
-  const { bases } = await fetchBaseList(workspaceId);
-  return bases;
-}
-
 export async function fetchTree(
   baseId: string,
   workspaceId?: string

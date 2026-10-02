@@ -9,7 +9,7 @@ import type { KnowledgeEntryType } from "../types";
  * The shape supports nested folders; nothing uses them yet.
  */
 
-export interface SeedEntryInput {
+interface SeedEntryInput {
   /** Stable cross-reference handle, not the DB id. The orchestrator maps
    *  key → inserted uuid so other seeds can point at entries by an
    *  authoring-time name. */
@@ -21,7 +21,7 @@ export interface SeedEntryInput {
   position?: number;
 }
 
-export interface SeedFolderInput {
+interface SeedFolderInput {
   name: string;
   position?: number;
   folders?: SeedFolderInput[];

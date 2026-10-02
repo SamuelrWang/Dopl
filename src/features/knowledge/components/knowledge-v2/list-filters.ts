@@ -25,7 +25,7 @@ export const KB_SCOPE_CARD_LABEL: Record<KbScope, string> = {
 
 /** The word a base shared into a channel carries instead of "Private"
  *  (2026-09-01, Samuel). Matches /home's "Shared in this channel" section. */
-export const KB_SHARED_CARD_LABEL = "Shared";
+const KB_SHARED_CARD_LABEL = "Shared";
 
 /**
  * The pill's word for one base. A channel share overrides `private` and only

@@ -73,23 +73,6 @@ export async function findBaseBySlug(
   return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
 }
 
-export async function findBaseByPublicId(
-  workspaceId: string,
-  publicId: string,
-  includeDeleted = false
-): Promise<KnowledgeBase | null> {
-  const db = readClient();
-  let query = db
-    .from("knowledge_bases")
-    .select(KNOWLEDGE_BASE_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("public_id", publicId);
-  if (!includeDeleted) query = query.is("deleted_at", null);
-  const { data, error } = await query.maybeSingle();
-  if (error) throw error;
-  return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
-}
-
 /**
  * One workspace's bases, optionally narrowed to ONE SHELF.
  *

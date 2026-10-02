@@ -32,7 +32,7 @@ import {
  */
 
 /** PostgREST truncates an un-limited select silently. */
-export const CHANNEL_GRANT_LIMIT = 200;
+const CHANNEL_GRANT_LIMIT = 200;
 
 /** `{ baseId → grant }` on `channelId` among `baseIds`; an ungranted base is absent (never `'none'`). */
 export async function getChannelGrantMap(

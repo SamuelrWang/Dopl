@@ -9,7 +9,6 @@ import {
   fetchEntryRevisions,
   fetchOntologyRevisions,
   fetchOntologyObjectRevisions,
-  restoreEntryRevision,
   restoreOntologyObjectRevision,
   type RevisionPageArgs,
 } from "./api";
@@ -122,27 +121,9 @@ export function useRevisionHistory(
 }
 
 /**
- * Restore one revision. ⚠ **INVALIDATES RATHER THAN PATCHING**, and that is the
- * one place in this feature it is right to: the write appends a revision the
- * client cannot construct (the server assigns its id, stamp and actor), so an
- * optimistic patch would render a row that does not exist yet.
- */
-export function useRestoreRevision(entryId: string | null, workspaceId?: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (revisionId: string) =>
-      restoreEntryRevision(entryId as string, revisionId, workspaceId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["revisions"] });
-      void queryClient.invalidateQueries({ queryKey: ["knowledge"] });
-    },
-  });
-}
-
-/**
- * Restore ONE FIELD of an ontology object. ⚠ INVALIDATES BOTH the changelog and
- * the ontology snapshot, for the reason the knowledge twin invalidates: the
- * write appends a revision the client cannot construct, and it moves a value the
+ * Restore ONE FIELD of an ontology object. ⚠ INVALIDATES (never patches) BOTH the
+ * changelog and the ontology snapshot: the write appends a revision the client
+ * cannot construct (server assigns id, stamp, actor), and it moves a value the
  * board is rendering.
  */
 export function useRestoreOntologyRevision(workspaceId?: string) {

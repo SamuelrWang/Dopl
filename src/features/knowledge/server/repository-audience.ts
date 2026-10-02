@@ -85,7 +85,7 @@ export async function countActiveWorkspaceMembers(
  * SILENTLY. Truncation here fails safe (fewer grants reachable) but invisibly,
  * and a fence that narrows for reasons nobody can see is one nobody can debug.
  */
-export const CONTAINER_CHANNEL_LIMIT = 200;
+const CONTAINER_CHANNEL_LIMIT = 200;
 
 /**
  * Every channel id in the workspace — the SET the ceiling is built on (§4.3).

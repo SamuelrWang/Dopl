@@ -16,7 +16,6 @@ import {
   KnowledgeEntryUpdateSchema,
   KnowledgeFolderCreateSchema,
   KnowledgeFolderUpdateSchema,
-  ChannelLaneEntryUpdateSchema,
 } from "./schema";
 
 describe("decodeHtmlEntities — the exact entity set", () => {
@@ -63,7 +62,7 @@ describe("decodeHtmlEntities — the exact entity set", () => {
 });
 
 describe("the decode runs BEFORE NAME_RE and the length cap", () => {
-  it("normalizes the title on create, update, the guest lane and the folder", () => {
+  it("normalizes the title on create, update and the folder", () => {
     expect(
       KnowledgeEntryCreateSchema.parse({
         knowledgeBaseId: "11111111-1111-4111-8111-111111111111",
@@ -71,7 +70,6 @@ describe("the decode runs BEFORE NAME_RE and the length cap", () => {
       }).title
     ).toBe("R&D notes");
     expect(KnowledgeEntryUpdateSchema.parse({ title: "R&amp;D" }).title).toBe("R&D");
-    expect(ChannelLaneEntryUpdateSchema.parse({ title: "R&amp;D" }).title).toBe("R&D");
     expect(
       KnowledgeFolderCreateSchema.parse({
         knowledgeBaseId: "11111111-1111-4111-8111-111111111111",

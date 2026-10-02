@@ -98,20 +98,13 @@ const KnowledgeBaseNameSchema = decodedLabel(safeLabel("Knowledge base name", 12
 //   - no leading/trailing whitespace (" foo" vs "foo" collide visually)
 //   - no control / zero-width characters (would render identically to a
 //     sibling and let an agent or attacker hide a duplicate)
-// Exported so non-zod call sites (e.g. WriteFileSchema in the path-write route)
-// validate against the same literal.
-export const NAME_RE = /^(?!\s)(?!.*\s$)[^/\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/;
-export const NAME_INVALID_MESSAGE =
+const NAME_RE = /^(?!\s)(?!.*\s$)[^/\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/;
+const NAME_INVALID_MESSAGE =
   "Cannot contain '/', control characters, zero-width characters, or leading/trailing whitespace";
 
-// Backwards-compat aliases — kept so existing import sites don't churn.
-const noSlashRegex = NAME_RE;
-const noSlashMessage = NAME_INVALID_MESSAGE;
-
 /**
- * THE ENTRY TITLE, ONE DECLARATION — create, update, the guest lane, and the
- * path-write route, which imports it rather than re-typing the chain it used to
- * carry under a "keep in sync" comment.
+ * THE ENTRY TITLE, ONE DECLARATION — create, update and the path-write route
+ * all use it.
  *
  * ⚠ **THE PATH's LEAF IS NOT THIS FIELD AND IS DELIBERATELY NOT DECODED.**
  * `server/service-paths.ts › writeFileByPath` defaults an omitted title to the
@@ -121,12 +114,12 @@ const noSlashMessage = NAME_INVALID_MESSAGE;
  * are what the read-path signal and the backfill migration are for.
  */
 export const EntryTitleSchema = decodedLabel(
-  z.string().min(1, "Title is required").max(300).regex(noSlashRegex, noSlashMessage)
+  z.string().min(1, "Title is required").max(300).regex(NAME_RE, NAME_INVALID_MESSAGE)
 );
 
 /** The folder name — same class, same decode, its own cap. */
 const FolderNameSchema = decodedLabel(
-  z.string().min(1, "Name is required").max(200).regex(noSlashRegex, noSlashMessage)
+  z.string().min(1, "Name is required").max(200).regex(NAME_RE, NAME_INVALID_MESSAGE)
 );
 
 // Cap body size to 1 MB: unbounded markdown blows up the search_tsv generated
@@ -134,7 +127,7 @@ const FolderNameSchema = decodedLabel(
 const MAX_BODY_BYTES = 1_048_576;
 const bodyMaxMessage = "Body must be 1 MB or less";
 
-export const KnowledgeEntryTypeSchema = z.enum([
+const KnowledgeEntryTypeSchema = z.enum([
   "note",
   "doc",
   "transcript",
@@ -144,11 +137,11 @@ export const KnowledgeEntryTypeSchema = z.enum([
 // ─── knowledge_bases ────────────────────────────────────────────────
 
 /** One team's grant on a KB — used by create + update sharing payloads. */
-export const KbTeamGrantSchema = z.object({
+const KbTeamGrantSchema = z.object({
   teamId: z.string().uuid(),
   level: z.enum(["read", "edit"]),
 });
-export type KbTeamGrantInput = z.infer<typeof KbTeamGrantSchema>;
+type KbTeamGrantInput = z.infer<typeof KbTeamGrantSchema>;
 
 /**
  * One (KB, channel) grant write — `PUT /api/knowledge/bases/[baseId]/channel-grants`.
@@ -309,11 +302,6 @@ export const KnowledgeBaseUpdateSchema = z
   .superRefine(refineScope(false));
 export type KnowledgeBaseUpdateInput = z.infer<typeof KnowledgeBaseUpdateSchema>;
 
-export const AgentWriteToggleSchema = z.object({
-  agentWriteEnabled: z.boolean(),
-});
-export type AgentWriteToggleInput = z.infer<typeof AgentWriteToggleSchema>;
-
 // ─── knowledge_folders ──────────────────────────────────────────────
 
 export const KnowledgeFolderCreateSchema = z.object({
@@ -375,28 +363,3 @@ export const KnowledgeEntryMoveSchema = z.object({
   position: z.number().int().min(0).optional(),
 });
 export type KnowledgeEntryMoveInput = z.infer<typeof KnowledgeEntryMoveSchema>;
-
-/**
- * `PUT /api/channels/{channelId}/knowledge/entries/{entryId}` — the GUEST LANE's
- * entry write (M2, plan §3.4), and it is a STRICT SUBSET of
- * `KnowledgeEntryUpdateSchema` rather than a reuse of it.
- *
- * The missing fields are the point: `excerpt`, `entryType` and `position` are
- * writable on the workspace PATCH but none is an edit (they reorder, reclassify
- * or rewrite what the owner sees). Samuel's ruling 3 scopes guest writes to
- * editing existing entries — title + body. `.strict()` so a caller that sends
- * more gets a 400 rather than a silent strip.
- *
- * `expectedVersion` is the entry's `updatedAt`, in the BODY where the workspace
- * PATCH takes `X-Updated-At`. Absent = last-write-wins, stale = 412.
- */
-export const ChannelLaneEntryUpdateSchema = z
-  .object({
-    title: EntryTitleSchema.optional(),
-    body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
-    expectedVersion: z.string().min(1).optional(),
-  })
-  .strict();
-export type ChannelLaneEntryUpdateInput = z.infer<
-  typeof ChannelLaneEntryUpdateSchema
->;

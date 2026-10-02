@@ -1,22 +1,9 @@
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { toast } from "@/shared/ui/toast";
-import { kbScope, type KbScope } from "../../scope";
-import type { KnowledgeBase } from "../../types";
 
 /** Toast a knowledge API/unknown error with a friendly fallback title. */
 export function reportError(err: unknown, fallback: string): void {
   toast({ title: fallback, description: userFacingMessage(err) });
-}
-
-/** Stable per-scope tile tint for KB / entry icons. Decorative. */
-const SCOPE_TINT: Record<KbScope, string> = {
-  private: "#8b7cf0",
-  team: "#e0894a",
-  workspace: "#4a7fe0",
-};
-
-export function baseTint(base: Pick<KnowledgeBase, "visibility" | "accessMode">): string {
-  return SCOPE_TINT[kbScope(base)];
 }
 
 /** "Today" / "Yesterday" / "5 May" — list-row timestamp. */
@@ -47,9 +34,4 @@ export function longWhen(iso: string): string {
     })
     .replace(" ", "");
   return `${date} ${time}`;
-}
-
-/** First grapheme of a name, upper-cased — avatar / tile fallback. */
-export function initial(name: string): string {
-  return (name.trim()[0] || "?").toUpperCase();
 }

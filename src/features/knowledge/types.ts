@@ -35,7 +35,7 @@ export type WriteSource = "user" | "agent";
  * `'public'` so existing rows stay visible; `createBase` / `createSkill`
  * override to `'private'` for new items.
  */
-export type Visibility = "public" | "private";
+type Visibility = "public" | "private";
 
 /**
  * Which shelf a base lives on: the /home Knowledge pane's "across all channels"
@@ -221,12 +221,3 @@ export interface KnowledgeTreeSnapshot {
    */
   entryHeadings?: Record<string, string[]>;
 }
-
-// ─── Source provider types ──────────────────────────────────────────
-// Canonical home: @/shared/lib/source-types. Re-exported for
-// knowledge-internal consumers.
-
-export type {
-  SourceConnection,
-  SourceProvider,
-} from "@/shared/lib/source-types";

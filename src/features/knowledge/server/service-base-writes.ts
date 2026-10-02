@@ -35,7 +35,6 @@ import { assertCreateBaseAllowed } from "./service-base-gates";
 import { recordBaseRevision } from "./service-revisions";
 // Re-exported: importers still name the create gate here.
 export { assertCreateBaseAllowed } from "./service-base-gates";
-export type { CreateBasePreconditions } from "./service-base-gates";
 import { setChannelKnowledgeGrant } from "./service-channel-grants";
 
 /** Knowledge base create / update (incl. sharing scope) / delete. Delete is permanent. */

@@ -150,7 +150,7 @@ export async function listEntriesForBase(
  * empty. `insertEntry` appends at `max + 1` so insertion order survives in
  * position-sorted views (F-8) instead of every row landing at 0.
  */
-export async function maxEntryPositionIn(
+async function maxEntryPositionIn(
   baseId: string,
   folderId: string | null
 ): Promise<number> {

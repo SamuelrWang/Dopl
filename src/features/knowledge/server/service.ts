@@ -38,8 +38,7 @@ import "server-only";
  * not a soft delete; it is a column.
  */
 
-export { buildKnowledgeContext, assertBaseWritable } from "./service-shared";
-export type { AuthLike } from "./service-shared";
+export { buildKnowledgeContext } from "./service-shared";
 
 export {
   listBases,
@@ -47,7 +46,6 @@ export {
   listBaseStats,
   listHomeScopedBaseIds,
   getBaseById,
-  getBaseBySlug,
   readBaseById,
 } from "./service-bases";
 
@@ -80,7 +78,7 @@ export {
   moveEntry,
   deleteEntry,
 } from "./service-entries";
-export type { ListEntriesOpts, KnowledgeEntryRef } from "./service-entries";
+export type { ListEntriesOpts } from "./service-entries";
 
 // The changelog's READ half. The capture half is deliberately NOT on this
 // barrel: nothing outside `server/` may record a revision by hand — a write
@@ -92,7 +90,6 @@ export {
 } from "./service-revisions-read";
 
 export { readFileByPath, writeFileByPath } from "./service-paths";
-export type { WriteFileByPathInput } from "./service-paths";
 // ⚠ THE TREE-SHAPE OPS SPLIT OFF AT THE §1 CAP (2026-09-18) — see
 // `service-paths-tree.ts`'s header. Re-exported here, so every importer is
 // unchanged and the seam is invisible outside this feature.
@@ -103,12 +100,7 @@ export {
   listDirByPath,
 } from "./service-paths-tree";
 
-export {
-  assertStorageHeadroom,
-  bodyBytes,
-  kbStorageDeniedBody,
-  resolveKbStorageLimit,
-} from "./service-storage";
+export { resolveKbStorageLimit } from "./service-storage";
 
 export {
   listStarredBaseIds,

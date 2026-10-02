@@ -32,7 +32,7 @@ function intEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export function embeddingsEnabled(): boolean {
+function embeddingsEnabled(): boolean {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
@@ -80,7 +80,7 @@ function toVectorLiteral(vec: number[]): string {
 
 /** Split on blank lines, pack into ~CHUNK_CHARS windows, carry OVERLAP_CHARS
  *  of trailing context forward. Oversized paragraphs hard-split. */
-export function chunkEntryBody(body: string): string[] {
+function chunkEntryBody(body: string): string[] {
   const text = body.trim();
   if (!text) return [];
   const paragraphs = text.split(/\n{2,}/);

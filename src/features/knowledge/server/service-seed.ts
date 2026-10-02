@@ -7,7 +7,7 @@ import { deriveSlug } from "./service-shared";
 
 /** Seeded base with each entry's stable `key` → inserted uuid + title. The
  *  orchestrator threads `entryIdByKey` into the ontology seed. */
-export interface SeededBase {
+interface SeededBase {
   baseId: string;
   slug: string;
   entryIdByKey: Record<string, { id: string; title: string }>;
