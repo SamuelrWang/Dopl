@@ -39,59 +39,40 @@ import {
 } from "@/features/overview-series/windows";
 import * as repo from "./repository";
 /**
- * Containers the OVERVIEW tallies over. ⚠ **DECLARED HERE SINCE WAVE 3** — it was
- * `service-reads.ts › HOME_CHANNEL_LIMIT`, the ceiling on the deleted home channel
- * LIST, and two reads sharing a number they do not share a reason for is how one of
- * them silently inherits the other's page size. A NON-REPORTING ceiling, on §9's
- * sanctioned terms for this surface.
+ * Containers the OVERVIEW tallies over. ⚠ Its own constant, not the channel
+ * list's page size — two reads must not share a number they don't share a
+ * reason for. A NON-REPORTING ceiling, on §9's sanctioned terms.
  */
 const HOME_CONTAINER_TALLY_LIMIT = 200;
 
 /**
  * Everything behind the /home Overview face (2026-09-01).
  *
- * ⚠ **THE FENCE IS THE USER, EXACTLY AS `getHomeChannels`' IS** (INVARIANTS
- * §9's home bullet). Nothing here is workspace-scoped and nothing here resolves
- * a membership: every read enters through
- * `repository-containers.ts › listLinkContainers`, i.e.
- * `workspace_members.user_id = caller AND status = 'active' AND
- * workspaces.kind = 'link'`, and the resulting id list is handed to the
- * repository AS ITS ENTIRE FENCE. The repository runs service-role and bypasses
- * RLS, so **no id a caller sent may ever reach it**.
+ * ⚠ **THE FENCE IS THE USER, EXACTLY AS `getHomeChannels`' IS** (INVARIANTS §9's
+ * home bullet): every read enters through `repository-containers.ts ›
+ * listLinkContainers` and that id list is the repository's ENTIRE fence. The
+ * repository bypasses RLS, so **no id a caller sent may ever reach it**.
  *
- * 🔒 **EXCEPT THE CREDIT READ, WHOSE FENCE IS THE READER'S WALLET (2026-09-12).**
- * A wallet belongs to a PERSON, so the credit rows are selected by
- * `payer_user_id` and by the containers the reader OWNS — see
- * {@link scanPersonalWalletBurns}, which carries the measurement. Membership and
- * ownership are different lists and this face now uses both, each for the
- * question it answers. Still no caller-supplied id on either path.
+ * 🔒 **Except the credit read, fenced on the reader's WALLET (2026-09-12)** — see
+ * {@link scanPersonalWalletBurns}. Still no caller-supplied id on either path.
  *
- * 🔒 **THE FACE IS CROSS-CHANNEL AND THE `?workspaceId=` NARROWING IS GONE
- * (Samuel, 2026-09-01) — THIS IS THE DUPLICATION FIX.** The page used to stack
- * an account-wide panel over a channel-scoped one built from the SAME
- * components, so an operator whose fence held one container saw every stat tile,
- * chart and rail rendered TWICE from two payloads that were identical by
- * construction. Removing the second scope removes the class of bug, not just
- * this instance: there is no longer a second panel that CAN agree or disagree.
- * ⚠ Do not reintroduce a scoped variant of this payload — the left list scopes
- * the CHANNELS face, and the Overview face is about the account.
+ * 🔒 **THE FACE IS CROSS-CHANNEL; THE `?workspaceId=` NARROWING IS GONE (Samuel,
+ * 2026-09-01) — the duplication fix** (a scoped panel rendered everything twice).
+ * ⚠ Do not reintroduce a scoped variant: the left list scopes the CHANNELS face;
+ * the Overview face is about the account.
  *
- * ⚠ **TWO ROUND TRIPS, AND THE SPLIT IS §9'S RULE APPLIED.** `getHomeOverview`
- * is the whole face minus the histogram; the histogram is
- * `getHomeOverviewSeries` because its `metric` is a query PARAMETER the user
- * switches. The credit ALLOWANCE is neither: the page reuses
- * `GET /api/billing/status`, which is also the only place the container→wallet
- * routing is resolved (`billing/server/credits-service.ts ›
- * resolveBillingTarget`). ⚠ That used to be a container→WORKSPACE reroute; since
- * 2026-09-07 a home burn spends the owner's PERSONAL WALLET, so the allowance
- * this page shows is a person's, not a workspace's.
+ * ⚠ **Two round trips (§9):** `getHomeOverview` is the face minus the histogram;
+ * `getHomeOverviewSeries` takes the user-switched `metric`. The credit ALLOWANCE
+ * comes from `GET /api/billing/status`, the one place container→wallet routing is
+ * resolved (`billing/server/credits-service.ts › resolveBillingTarget`); a home
+ * burn spends the owner's PERSONAL wallet.
  */
 
 /**
  * `range` off the query string, or a 400.
  *
- * ⚠ NEVER A SILENT FALL-THROUGH TO A DEFAULT WINDOW (§9): a page that answers
- * for the last 30 days under a "24h" heading is worse than an error.
+ * ⚠ Never a silent fall-through to a default window (§9): 30 days of data under a
+ * "24h" heading is worse than an error.
  */
 export function parseRange(raw: string | null): HomeOverviewRange {
   const found = HOME_OVERVIEW_RANGES.find((candidate) => candidate === raw);
@@ -121,11 +102,9 @@ export function parseMetric(raw: string | null): HomeOverviewMetric {
 /**
  * The bins for one range, oldest first.
  *
- * ⚠ **THE ARITHMETIC MOVED TO `features/overview-series/windows.ts` IN WAVE 8
- * AND NOTHING ABOUT IT CHANGED (R-40: /home's Overview is byte-identical).**
- * The workspace Overview draws the same shape of series over a different fence,
- * and one calendar for both is the whole of P33 — see that file for `month`'s
- * future bins and the rolling ranges' partial last bin.
+ * ⚠ The arithmetic lives in `features/overview-series/windows.ts` — one calendar
+ * shared with the workspace Overview (P33, R-40). See it for `month`'s future bins
+ * and the rolling ranges' partial last bin.
  */
 export function rangeWindows(
   range: HomeOverviewRange,
@@ -150,13 +129,12 @@ export function bucketFor(range: HomeOverviewRange): HomeOverviewBucket {
 /* ----------------------------- the reads ------------------------------- */
 
 /**
- * The fence, plus the display name of every channel in it — and, since rule B,
- * the `channelId → containerId` map the credit rail keys by.
+ * The fence, plus each channel's display name and the `channelId → containerId`
+ * map the credit rail keys by (rule B).
  *
- * ⚠ **THE MAP COSTS NO ROUND TRIP**: it is the read this function already makes,
- * inverted. The credit ledger files a CHANNEL id (`overview-tally.ts ›
- * tallyChannels`) while every home surface addresses a row by its CONTAINER, so
- * one of the two has to be translated and this is where both are in hand.
+ * ⚠ The map costs no round trip: the ledger files a CHANNEL id
+ * (`overview-tally.ts › tallyChannels`) while home surfaces address a CONTAINER,
+ * and this is where both are in hand.
  */
 async function resolveScope(userId: string): Promise<{
   ids: string[];
@@ -165,8 +143,7 @@ async function resolveScope(userId: string): Promise<{
 }> {
   const containers = await repo.listLinkContainers(userId, HOME_CONTAINER_TALLY_LIMIT);
   const ids = containers.map((container) => container.id);
-  // ⚠ THE NAME COMES FROM THE CHANNEL, NOT THE CONTAINER. A container's `slug`
-  // is plumbing; `channels.name` is what every home surface titles a row by.
+  // ⚠ Name from the channel, not the container's `slug` (plumbing).
   const channels = await repo.listContainerChannels(ids);
   const names = new Map<string, string>();
   const channelContainers = new Map<string, string>();

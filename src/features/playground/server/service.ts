@@ -11,37 +11,25 @@ import {
 } from "@/features/workspaces/server/service";
 
 /**
- * Landing-page playground sessions: an anonymous visitor gets a REAL, isolated
- * workspace their agent can read AND write, with no account and no sign-in.
+ * Landing-page playground: an anonymous visitor gets a REAL, isolated
+ * workspace (no account). One throwaway `auth.users` row (can never log in),
+ * one normally-created + seeded workspace, one short-lived playground
+ * `mcp_tokens` bearer. The token IS the session (agent MCP + viewer polling);
+ * membership + RLS provide isolation.
  *
- * Shape: one throwaway `auth.users` row (a foreign-key placeholder the visitor
- * never sees — it can never log in), one workspace created through the normal
- * path (so `seedNewWorkspace` populates the starter corpus), one short-lived
- * `mcp_tokens` bearer under the reserved playground client. The token is the
- * session: it authenticates the agent at `/api/playground/mcp/<token>` and the
- * viewer page's REST polling alike. Isolation is the product's own —
- * membership + RLS scope everything to the guest's workspace.
- *
- * ⚠ Guests are billed as the free plan (no `workspace_billing` row), so MCP
- * credits meter them with no playground-specific carve-out — the free
- * allowance doubles as the abuse cap.
+ * ⚠ Guests bill as free plan — the free credit allowance doubles as the abuse cap.
  */
 
-/** Session lifetime. Short on purpose — a demo, not a workspace; the token
- *  dies at expiry (`validateAccessToken`) and the reaper deletes the data
- *  after expiry + grace. */
+/** Short on purpose; reaper deletes data after expiry + grace. */
 const PLAYGROUND_TTL_S = 10 * 60;
 
 /** Provisioning is the expensive call — user + workspace + seed + token. */
 const CREATE_RPM = 2;
 
-/** Marks the guest row so the reaper can refuse to delete anything else even
- *  if a token row is somehow mislabeled. Belt and braces with the client id. */
+/** Reaper's second gate (with client id) — never delete an unmarked user. */
 const GUEST_METADATA = { playground_guest: true } as const;
 
-/** Synthetic, undeliverable, unique — satisfies the NOT NULL email without
- *  ever being an address anyone can sign in with (no password, no confirm
- *  flow ever sent). */
+/** Synthetic, undeliverable — satisfies NOT NULL email; never sign-in-able. */
 function guestEmail(): string {
   return `guest-${randomUUID()}@playground.usedopl.com`;
 }
@@ -59,11 +47,8 @@ export class PlaygroundRateLimited extends Error {
   }
 }
 
-/**
- * Provision one guest session. `ip` keys the rate limit — the caller passes
- * the first `x-forwarded-for` hop; a blank one shares the "unknown" bucket,
- * which fails toward stricter, not looser.
- */
+/** `ip` (first `x-forwarded-for` hop) keys the rate limit; blank shares the
+ *  "unknown" bucket — fails stricter. */
 export async function createPlaygroundSession(
   ip: string,
 ): Promise<PlaygroundSession> {
@@ -86,8 +71,7 @@ export async function createPlaygroundSession(
   const guestId = created.user.id;
 
   try {
-    // Normal creation path on purpose: it runs `seedNewWorkspace`, so the
-    // demo workspace arrives populated with the real starter corpus.
+    // Normal path on purpose: runs `seedNewWorkspace` (real starter corpus).
     const workspace = await createWorkspaceForUser(guestId, {
       name: "Playground",
       description: "Dopl playground demo workspace",
@@ -98,20 +82,17 @@ export async function createPlaygroundSession(
     });
     return { token, expiresAt, workspaceId: workspace.id };
   } catch (err) {
-    // Half-provisioned guests are invisible junk — take the user row (and via
-    // cascade its workspace, if it got that far) back out. Best-effort: the
-    // reaper's metadata sweep is the backstop.
+    // Roll back the half-provisioned guest (cascades workspace). Best-effort;
+    // the reaper is the backstop.
     await admin.auth.admin.deleteUser(guestId).catch(() => undefined);
     throw err;
   }
 }
 
-/** Cap per reaper run so a backlog drains across runs instead of one
- *  unbounded pass. */
+/** Per-run cap; a backlog drains across runs. */
 const REAP_SCAN_LIMIT = 200;
 
-/** Grace after token expiry before deletion, so a session that just lapsed
- *  mid-demo isn't yanked while the visitor is still looking at the page. */
+/** Grace after expiry so a just-lapsed demo isn't yanked mid-view. */
 const REAP_GRACE_MS = 60 * 60 * 1000;
 
 export interface ReapResult {
@@ -121,14 +102,11 @@ export interface ReapResult {
 }
 
 /**
- * Delete guest users whose playground token expired past the grace window,
- * with their workspaces. Token rows go with the user (FK) or stay revoked —
- * either way `validateAccessToken` refuses them the moment they expire, so
- * the reaper is about storage, not access.
+ * Delete expired-past-grace guest users + their workspaces. Storage, not
+ * access — expired tokens are already refused.
  *
- * ⚠ DOUBLE GATE on deletion: the token row must carry the playground client
- * id AND the user row must carry the guest metadata marker. A row failing the
- * second check is logged and skipped — never deleted on one signal alone.
+ * ⚠ DOUBLE GATE: playground client id on the token AND guest marker on the
+ * user; failing the second is logged and skipped.
  */
 export async function reapExpiredPlaygroundSessions(): Promise<ReapResult> {
   const admin = supabaseAdmin();
@@ -161,8 +139,7 @@ export async function reapExpiredPlaygroundSessions(): Promise<ReapResult> {
       continue;
     }
 
-    // Owned workspaces first, through the role-checked path — the guest owns
-    // exactly the one workspace provisioning created, but walk the list.
+    // Owned workspaces first, via the role-checked path.
     const memberships = await listMyWorkspacesWithRole(userId);
     for (const m of memberships) {
       if (m.role !== "owner") continue;

@@ -1,45 +1,34 @@
 import { z } from "zod";
-// ⚠ THE CHARSET GATE IS THE CHANNELS FEATURE'S, IMPORTED AND NOT RESTATED. A
-// second copy of a neutralizer drifts, and the copy that drifts is the one that
-// stops neutralizing (`shared/lib/safe-label.ts`'s own header).
+// ⚠ Charset gate imported, never restated — a drifted neutralizer copy stops
+// neutralizing (`shared/lib/safe-label.ts`).
 import { safeLabel, safeOptionalLabel } from "@/shared/lib/safe-label";
 
 /**
  * Request shapes for the home surface.
  *
- * ⚠ NOT under `server/`: this is the only module on the surface both sides
- * need, and the desktop renderer's ESLint fence blocks every `features/<x>/
- * server/` path outright. Keeping it here is what lets the SPA import the
- * request types instead of re-declaring them.
+ * ⚠ NOT under `server/`: the SPA imports these, and its ESLint fence blocks
+ * every `features/<x>/server/` path.
  */
 
-/** ⚠ EXPORTED so the popup's `maxLength` is the SERVER's number rather than a
- *  hand-copy of it (`apps/desktop-ui › new-channel-dialog.tsx`). */
+/** ⚠ EXPORTED so the popup's `maxLength` is the server's number
+ *  (`apps/desktop-ui › new-channel-dialog.tsx`). */
 export const HOME_CHANNEL_NAME_MAX = 80;
 /** The DESCRIPTION's ceiling — `channels/schema.ts › ChannelTopicSchema`'s. */
 export const HOME_CHANNEL_DESCRIPTION_MAX = 2000;
 
 /**
- * `POST /api/channels?scope=account` — "New channel" (R-26; it was `POST
- * /api/home/channels`). The name is the CHANNEL's name and
- * the container's name both: the container is plumbing nobody navigates to, so
- * a second name for it would be a second thing to keep in sync and a second
- * thing to get wrong.
+ * `POST /api/channels?scope=account` — "New channel" (R-26). The name is both
+ * the channel's and the container's (the container is unseen plumbing).
  *
- * ⚠ **`topic` IS THE FIELD THE PRODUCT CALLS "DESCRIPTION" (ruling, Samuel,
- * 2026-09-15).** It writes the EXISTING `channels.topic` column (`channels/
- * schema.ts › ChannelTopicSchema`); **there is no new column and there must not
- * be one.** `""` stays legal — the column is `NOT NULL DEFAULT ''`.
+ * ⚠ `topic` IS the product's "Description" (Samuel, 2026-09-15): the EXISTING
+ * `channels.topic` column — no new column, ever. `""` is legal (`NOT NULL
+ * DEFAULT ''`).
  *
- * ⚠ **BOTH GATES ARE THE CHANNELS FEATURE'S, and `name`'s was MISSING until
- * 2026-09-15.** These two doors write the same two columns as `POST
- * /api/channels`, and both columns carry the charset CHECK
- * (`channels_name_check`, `workspaces_name_charset_check`) — so a length-only
- * gate here did not let a forged name through, it turned it into a 23514 from
- * `insertSoloContainer` and an opaque 500 where the channels route answers 400.
- * The bounds must stay `safe-label.ts`'s; `schema.test.ts` pins the two doors
- * against each other. ⚠ The LENGTH differs on purpose — 80, not the channel's
- * 120, because this name is the CONTAINER's too.
+ * ⚠ BOTH GATES ARE THE CHANNELS FEATURE'S: both columns carry the charset CHECK
+ * (`channels_name_check`, `workspaces_name_charset_check`), so a length-only
+ * gate turns a forged name into a 23514 → opaque 500 instead of a 400.
+ * `schema.test.ts` pins the doors together. ⚠ Length is 80, not 120, because
+ * this is the CONTAINER's name too.
  */
 export const HomeChannelCreateSchema = z.object({
   name: safeLabel("Channel name", HOME_CHANNEL_NAME_MAX),

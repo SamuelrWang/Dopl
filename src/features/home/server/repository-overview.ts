@@ -8,56 +8,37 @@ import type { Role } from "@/features/workspaces/types";
  * scans, and the per-bin counter behind the histogram.
  *
  * ⚠ **EVERY FUNCTION TAKES `workspaceIds` AND THAT ARRAY IS THE ENTIRE FENCE.**
- * These run on the service-role admin client, which BYPASSES RLS (INVARIANTS
- * §2), so nothing below may ever be handed an id a caller sent. The service
- * builds the list from `repository-containers.ts › listLinkContainers`, i.e.
- * `workspace_members.user_id = caller AND workspaces.kind = 'link'` — the same
- * user-fence `getHomeChannels` enters through (§9's home bullet).
+ * The admin client BYPASSES RLS (INVARIANTS §2), so never pass an id a caller
+ * sent; the service builds it from `repository-containers.ts ›
+ * listLinkContainers` (the user-fence of §9's home bullet).
  *
- * ⚠ **AN EMPTY `workspaceIds` SHORT-CIRCUITS TO ZERO/EMPTY, IT DOES NOT QUERY.**
- * PostgREST's `.in()` with `[]` matches NOTHING, so the answer would be the
- * same — but a caller with no home channels is the common first state and it
- * should not cost a round trip.
+ * ⚠ An empty `workspaceIds` short-circuits to zero/empty without a round trip.
  *
- * ⚠ **TWO FUNCTIONS TAKE A PERSON INSTEAD, AND THAT IS A SECOND FENCE RATHER
- * THAN AN EXCEPTION TO THE FIRST (2026-09-12).** `listOwnedHomeSpaceIds`
- * and `scanCreditEvents` are fenced on the reader's OWN USER ID, because the
- * thing they answer for is a WALLET and a wallet belongs to a person, not to a
- * container set. Membership and ownership are different lists (see that
- * function), and the credit surfaces follow ownership. Both fences are derived
- * server-side from the session; neither may ever take an id a caller sent.
+ * ⚠ `listOwnedHomeSpaceIds` and `scanCreditEvents` are fenced on the reader's OWN
+ * user id instead — a second fence, not an exception (2026-09-12): a wallet
+ * belongs to a person, and credit surfaces follow ownership, not membership.
+ * Both fences are derived from the session.
  *
- * ⚠ THE ADMIN CLIENT IS UNTYPED HERE for the reason
- * `workspaces/server/repository-overview.ts` gives: the generated `Database`
- * type does not carry the channels tables (nor `workspace_credit_usage`, nor
- * `workspaces.kind`), so results are cast at the boundary.
+ * ⚠ The admin client is untyped here (see `workspaces/server/repository-overview.ts`):
+ * the generated `Database` type lacks the channels tables, `workspace_credit_usage`
+ * and `workspaces.kind`, so results are cast at the boundary.
  */
 
 /**
  * De Morgan of `NOT (tool = 'channel' AND op LIKE 'await%')`.
  *
- * ⚠ **COPIED IN SHAPE FROM `workspaces/server/repository-overview.ts ›
- * countMcpCallsInWindow`, DELIBERATELY, AND IT IS ONE CONSTANT HERE.** The two
- * features cannot share a module without one importing the other's repository
- * (§2 forbids it), so what is shared is the SENTENCE, stated once per feature.
- * `dopl_channel`'s await ops POLL — one logical "wait for a reply" writes a row
- * per tick — and unfiltered they dominate every histogram this page draws.
+ * ⚠ Deliberately copied in shape from `workspaces/server/repository-overview.ts ›
+ * countMcpCallsInWindow` (§2 forbids importing another feature's repository).
+ * The await ops POLL — a row per tick — and unfiltered they dominate every histogram.
  */
 const EXCLUDE_AWAIT_POLLING = "tool.neq.channel,op.not.like.await*";
 
 /**
- * Ceiling on a breakdown SCAN. ⚠ A scan AT its ceiling is indistinguishable
- * from an exhausted one, so every caller returns `truncated` beside the rows
- * and the surface says so (§9). Ordered NEWEST FIRST so a clip NARROWS the
- * window the shares describe rather than inventing a zero for an old bin —
- * the trade `listRecentUserMessageAuthors` documents.
+ * Ceiling on a breakdown SCAN. ⚠ A scan AT its ceiling is indistinguishable from
+ * an exhausted one, so callers return `truncated` and the surface says so (§9).
+ * Newest first, so a clip narrows the window rather than zeroing old bins.
  */
 const HOME_SCAN_LIMIT = 20_000;
-
-/* ⚠ `HOME_SESSION_LIMIT` (2,000) LIVED HERE AND IS DELETED WITH ITS ONE READER
-   (`listSessionTokens`, 2026-09-01). The two session reads that remain take a
-   caller-supplied limit, because both are RENDER lists with a row budget rather
-   than abuse bounds over a scan. */
 
 /** `[startIso, endIso)`. */
 export interface HomeWindow {
@@ -77,27 +58,15 @@ function clipped<T>(rows: T[], limit: number): Scan<T> {
 
 /* ------------------------------- counts -------------------------------- */
 
-/**
- * ⚠ **THE FIVE HEAD-COUNTS THAT STOOD HERE ARE DELETED (Samuel, 2026-09-01).**
- * `countMcpCallsSince`, `countMessagesSince`, `countThreadsSince`,
- * `countSessions` and `listSessionTokens` existed for ONE consumer — the row of
- * stat tiles at the top of the Overview face — and that row is gone. They are
- * removed rather than left exported: a read with no reader is a read nobody
- * re-verifies, and the token one carried a load-bearing `user_id` fence that
- * only made sense beside the card printing its denominator.
- *
- * ⚠ **`countMetricInWindow` BELOW IS NOT ONE OF THEM** — it is the histogram's
- * per-bin counter and it is still the page's only exact read.
- */
+/* ⚠ The stat-tile head-counts were deleted with their tiles (Samuel, 2026-09-01):
+   a read with no reader is a read nobody re-verifies. */
 
 /**
- * ONE BIN of the histogram, counted rather than scanned.
+ * ONE BIN of the histogram, counted rather than scanned — the page's only exact read.
  *
- * ⚠ **COUNTED PER BIN, NEVER HAULED AND GROUPED**, and the reason is
- * `workspaces/server/repository-overview.ts › countMessagesInWindow`'s: a
- * hauling read needs a `limit`, and a clipped series does NOT render as
- * clipped — its oldest bins render as ZERO, which is a measurement nobody took
- * drawn as fact. Counting per bin has no such cliff.
+ * ⚠ Counted per bin, never hauled and grouped: a hauling read needs a `limit`,
+ * and a clipped series renders its oldest bins as ZERO rather than as clipped
+ * (cf. `workspaces/server/repository-overview.ts › countMessagesInWindow`).
  */
 export async function countMetricInWindow(
   workspaceIds: string[],
@@ -141,13 +110,9 @@ export interface McpCallScanRow {
 /**
  * The ONE read behind THREE breakdowns — per channel, per person, per tool.
  *
- * ⚠ FOUR COLUMNS, NEWEST FIRST, CAPPED. This is the sanctioned haul-and-tally
- * shape (§9): it produces SHARES, and the scanned row count travels with them
- * as the denominator. Three separate grouped reads would be three scans of the
- * same rows, and PostgREST cannot `GROUP BY` — the alternative is a
- * `SECURITY DEFINER` binning RPC, which INVARIANTS §9 rules out by name because
- * a route calling an RPC the migration gate has not created is BROKEN rather
- * than slow.
+ * ⚠ Four columns, newest first, capped: the sanctioned haul-and-tally shape
+ * (§9), with the scanned count as the shares' denominator. PostgREST cannot
+ * `GROUP BY`, and a `SECURITY DEFINER` binning RPC is ruled out by INVARIANTS §9.
  */
 export async function scanMcpCalls(
   workspaceIds: string[],
@@ -169,12 +134,10 @@ export async function scanMcpCalls(
 }
 
 /**
- * Which container each message in the window landed in — ONE column, so the
- * per-channel bar has a message figure beside its MCP one.
+ * Which container each message in the window landed in — one column, for the
+ * per-channel bar's message figure.
  *
- * ⚠ NO BODY, NO AUTHOR, NO ID. This read exists to be COUNTED BY GROUP; every
- * other column would put content on the wire for a figure that never renders
- * it (§9).
+ * ⚠ No body, author or id: this read is only counted by group (§9).
  */
 export async function scanMessageChannels(
   workspaceIds: string[],
@@ -197,22 +160,20 @@ export async function scanMessageChannels(
 export interface CreditEventScanRow {
   origin_workspace_id: string | null;
   user_id: string | null;
-  /** WHICH COUNTER MOVED — `personal` | `seat` | `workspace` (the LEGACY pooled
-   *  value, which is the column's `DEFAULT`, so every pre-2026-09-07 row carries
-   *  it). ⚠ Read because it is half the personal-wallet predicate; see
-   *  {@link scanCreditEvents}. */
+  /** Which counter moved — `personal` | `seat` | `workspace` (LEGACY, the column
+   *  `DEFAULT`, on every pre-2026-09-07 row). ⚠ Half the personal-wallet
+   *  predicate; see {@link scanCreditEvents}. */
   wallet: string;
   /** THE PAYER — the person whose wallet moved. `null` on legacy rows (the
    *  payer was a workspace then) and on a deleted account (`SET NULL`). */
   payer_user_id: string | null;
   /**
-   * 🔒 **THE CHANNEL THAT WAS BILLED — RULE B's dimension, which the Usage card's
-   * dropdown keys on (2026-09-13).** `null` = **Desktop agent**: a channel-less
-   * MCP connection, an app click, a HARD-deleted channel (`ON DELETE SET NULL`),
-   * and every row written before `20261003120000_credit_events_channel.sql`.
-   * ⚠ **NOT DERIVABLE FROM `origin_workspace_id`** — that is where the call was
-   * ADDRESSED, which differs whenever an agent reaches across containers
-   * (`billing/server/credit-ledger.ts › CreditUsageEvent`).
+   * 🔒 **The channel that was BILLED — rule B's dimension, keyed by the Usage
+   * dropdown (2026-09-13).** `null` = **Desktop agent**: channel-less MCP, an app
+   * click, a hard-deleted channel, or a row predating
+   * `20261003120000_credit_events_channel.sql`.
+   * ⚠ Not derivable from `origin_workspace_id` — that is where the call was
+   * ADDRESSED (`billing/server/credit-ledger.ts › CreditUsageEvent`).
    */
   channel_id: string | null;
   amount: number;
@@ -220,26 +181,21 @@ export interface CreditEventScanRow {
 }
 
 /**
- * The two container kinds whose burns land on the OWNER's PERSONAL wallet — i.e.
- * `credits-service.ts › resolveBillingTarget`'s two non-`standard` arms, restated
- * for a read, and the same `CASE` the deploy-day backfill runs
- * (`scripts/sql/backfill-credit-wallets-v2.sql`). ⚠ It fences the LEGACY arm of
- * the wallet predicate only; a `standard` workspace's burn is a SEAT wallet's.
+ * Container kinds whose burns land on the OWNER's personal wallet —
+ * `credits-service.ts › resolveBillingTarget`'s non-`standard` arms, as
+ * `scripts/sql/backfill-credit-wallets-v2.sql` maps them. ⚠ Fences the LEGACY
+ * arm only; a `standard` burn is a SEAT wallet's.
  */
 const PERSONAL_WALLET_KINDS = ["home", "link"];
 
 /**
- * Every container whose burns are charged to `userId`'s PERSONAL wallet — their
- * own `kind='home'` container and every `kind='link'` container they OWN.
+ * Every container whose burns charge `userId`'s PERSONAL wallet — their own
+ * `kind='home'` container and every `kind='link'` container they OWN.
  *
- * 🔒 **OWNERSHIP, NOT MEMBERSHIP, AND THE TWO ARE DIFFERENT FENCES ON THIS
- * PAGE.** `repository-containers.ts › listLinkContainers` (the fence every other
- * read here uses) is `workspace_members.user_id = caller` — it includes the
- * channels somebody ELSE owns and the caller merely joined, and a burn in one of
- * those spends the OWNER's wallet, never the reader's. This list is the
- * complement: `workspaces.owner_id = caller`, which is what the wallet follows.
- * ⚠ It is derived from the SESSION user id and nothing a caller sent, which is
- * what lets it be handed to the RLS-bypassing admin client (INVARIANTS §2).
+ * 🔒 **OWNERSHIP, NOT MEMBERSHIP.** `listLinkContainers` (every other read's
+ * fence) includes joined channels whose burns spend the OWNER's wallet; this is
+ * `workspaces.owner_id = caller`. ⚠ Derived from the session user id only, which
+ * is what lets it reach the admin client (INVARIANTS §2).
  */
 export async function listOwnedHomeSpaceIds(
   userId: string
@@ -254,96 +210,63 @@ export async function listOwnedHomeSpaceIds(
 }
 
 /**
- * THE HISTOGRAM'S CHANNEL NARROWING — one channel, or the Desktop-agent bucket.
+ * The histogram's channel narrowing — one channel, or the Desktop-agent bucket.
  *
- * 🔒 **THESE TWO PLUS "no narrowing" PARTITION THE WALLET'S ROWS EXACTLY, WHICH IS
- * THE POINT OF RULE B (Samuel, 2026-09-13: "the wallet needs to match the
- * histogram").** Every row has a `channel_id` or has none, so every credit the
- * wallet charged sits in exactly one bucket of the scope dropdown and the buckets
- * sum to the wallet. ⚠ **THE SUPERSEDED `origin_workspace_id IN (owned
- * containers)` LEAKED BOTH WAYS**: a home-channel agent's burn against a STANDARD
- * workspace was in no bucket, and neither was a NULL origin (a deleted
- * container). ⚠ A CONTAINER id is no longer a valid scope — a channel is named by
- * its own id (`HomeChannel.channelId`).
+ * 🔒 **These two plus "no narrowing" PARTITION the wallet's rows exactly — rule B
+ * (Samuel, 2026-09-13: "the wallet needs to match the histogram").** ⚠ A
+ * container id is not a valid scope (an origin fence leaks rows both ways); a
+ * channel is named by `HomeChannel.channelId`.
  */
 export type CreditChannelScope = { channelId: string } | "unattributed";
 
 /**
- * THE CREDIT LEDGER, fenced to the rows that came out of the READER'S OWN
- * PERSONAL WALLET — the ONE read behind "credits by channel", "credits by
- * person" and the credit histogram.
+ * THE CREDIT LEDGER, fenced to rows out of the READER'S OWN PERSONAL WALLET —
+ * the one read behind credits by channel, credits by person and the credit
+ * histogram.
  *
- * 🔒 **THE FENCE IS THE WALLET, NOT THE CONTAINER SET (Samuel, 2026-09-12: "is
- * the credits usage wired in? I want to make sure").** It used to be
- * `origin_workspace_id IN (every link container the reader is a MEMBER of)`,
- * which sums a DIFFERENT quantity from the one Settings › Plans & billing
- * prints: Samuel's bar said `416 of 500` over a wallet reading `0 of 500`,
- * because his 472 ledger credits for the period split 416 in a link container
- * (his personal wallet under v2.1) and 56 in a standard workspace (a SEAT
- * wallet, somebody else's meter entirely). Two counters, two definitions, one
- * card. **Both surfaces answer one question now — "what came out of MY personal
- * wallet" — and this predicate is that question in SQL.**
+ * 🔒 **THE FENCE IS THE WALLET, NOT THE CONTAINER SET (Samuel, 2026-09-12)**, so
+ * this sums the same quantity Settings › Plans & billing prints. A
+ * membership-container fence mixed in other people's SEAT-wallet burns.
  *
- * ⚠ **TWO ARMS, AND THE SECOND ONE IS THE LEGACY SHAPE.** Exactly the mapping
- * `scripts/sql/backfill-credit-wallets-v2.sql` applies, and
- * `credits-service.ts › resolveBillingTarget` writes:
- *   1. `payer_user_id = reader AND wallet = 'personal'` — every row the v2.1
- *      code writes, wherever the call was made.
- *   2. `wallet = 'workspace' AND origin_workspace_id IN (the reader's OWN
- *      personal/link containers)` — pre-2026-09-07 rows, which carry the column
- *      `DEFAULT` and no payer at all, so the payer is DERIVED from the origin
- *      container's owner, the way the backfill derives it.
- * A `seat` row is matched by NEITHER arm and that is the whole fix: a burn in a
- * standard workspace belongs to THAT workspace's Overview page.
+ * ⚠ Two arms, matching `scripts/sql/backfill-credit-wallets-v2.sql` and
+ * `credits-service.ts › resolveBillingTarget`:
+ *   1. `payer_user_id = reader AND wallet = 'personal'` — every v2.1 row.
+ *   2. `wallet = 'workspace' AND origin_workspace_id IN (reader's own
+ *      personal/link containers)` — pre-2026-09-07 rows with no payer; the
+ *      payer is derived from the origin's owner, as the backfill does.
+ * A `seat` row matches neither: it belongs to that workspace's Overview page.
  *
- * ⚠ **NO `workspaceIds` AND THEREFORE NO EMPTY SHORT-CIRCUIT.** Arm 1 is keyed on
- * a PERSON, so a reader with no home channels still has a wallet and an honest
- * answer; arm 2 is dropped from the `.or()` when the owned list is empty, because
- * PostgREST has no syntax for an empty `in.()`. ⚠ Both arms are built from the
- * SESSION user id and from ids this repository read itself — never from anything a
- * caller sent, the rule the admin client makes non-negotiable (§2).
+ * ⚠ No `workspaceIds`, so no empty short-circuit: arm 1 is keyed on a person.
+ * Arm 2 is dropped when the owned list is empty (PostgREST has no empty
+ * `in.()`). Both arms come from the session user id and ids read here, never
+ * from a caller (§2).
  *
- * ⚠ **THE CHANNEL DIMENSION IS `channel_id` SINCE 2026-09-13 (rule B), NOT
- * `origin_workspace_id`** — the origin is where the call was ADDRESSED, which is
- * a different row from the channel that was BILLED whenever an agent reaches
- * across containers. Both are read; the rails and the histogram key on the
- * channel (`overview-tally.ts › tallyChannels`).
+ * ⚠ The channel dimension is `channel_id` (rule B), not `origin_workspace_id`
+ * (where the call was ADDRESSED); rails and histogram key on it
+ * (`overview-tally.ts › tallyChannels`).
  *
- * ⚠ **A SUM WITH NO `SUM`.** PostgREST cannot aggregate, so this hauls the
- * window's rows and the service adds them up — the sanctioned haul-and-tally
- * shape (§9), with the scanned count travelling beside the shares. `amount` is
- * 1 per MCP tool call today, so the row count and the sum coincide; the column
- * is read anyway, because the cost is a tunable (`credits.ts ›
- * CREDITS_PER_MCP_CALL`) and a reader that assumed 1 would silently misreport
- * the day it changes.
+ * ⚠ A sum with no `SUM`: PostgREST cannot aggregate, so the service adds the
+ * hauled rows (§9). `amount` is read though it is 1 per call today — the cost is
+ * a tunable (`credits.ts › CREDITS_PER_MCP_CALL`).
  *
- * ⚠ **A FLOOR, AND SINCE 2026-09-13 THE CAP IS THE ONLY REASON.** ⚠ **THE
- * SUPERSEDED LINE SAID "TWICE OVER … the writer is fire-and-forget", AND THAT
- * HALF IS DEAD** (F-693): the row is written by the wallet RPC inside the
- * counter's transaction, so no row can be missing — but a clip still can.
+ * ⚠ A FLOOR only because of the cap: rows are written inside the wallet RPC's
+ * transaction (F-693), so none can be missing — but a clip can.
  */
 export async function scanCreditEvents(
   userId: string,
   ownedContainerIds: string[],
   sinceIso: string,
   /**
-   * NARROWINGS INSIDE THE FENCE ABOVE — never a widening, and never a fence of
-   * their own (2026-09-13, the Usage histogram's month arrows + scope
-   * dropdown).
+   * Narrowings INSIDE the fence above — never a widening, never a fence of their
+   * own (2026-09-13, Usage histogram month arrows + scope dropdown).
    *
-   * ⚠ **`channel` IS AN `AND` ON TOP OF THE `.or()`** — PostgREST composes a
-   * second filter as a conjunction, so the WALLET ARMS still decide which rows
-   * EXIST and this only hides some of them. That is what makes it safe to pass a
-   * CALLER-SUPPLIED channel id (parsed by `overview-series-params.ts ›
-   * parseUsageScope`, uuid-shaped) with no ownership intersection in front of it:
-   * the rows it can reach are already fenced to the reader's own wallet by
-   * `payer_user_id`, so the narrowing can only HIDE the reader's rows, never
-   * reveal anybody else's. ⚠ The superseded `originIds` narrowing DID need that
-   * intersection: a container id is an ADDRESSING input.
-   * ⚠ **`untilIso` IS LOAD-BEARING FOR A PAST MONTH, NOT AN OPTIMISATION.** This
-   * scan is newest-first and capped, so an unbounded haul anchored in an OLD
-   * month returns THIS month's 20k rows and the plotted month bins to zeroes with
-   * no clip to report. Bounding it makes `truncated` true instead.
+   * ⚠ **`channel` is an `AND` on top of the `.or()`**, so the wallet arms still
+   * decide which rows exist. That is why a CALLER-SUPPLIED channel id (parsed by
+   * `overview-series-params.ts › parseUsageScope`) needs no ownership check: it
+   * can only hide the reader's own rows.
+   * ⚠ **`untilIso` is load-bearing for a past month**: the scan is newest-first
+   * and capped, so an unbounded haul anchored in an old month returns this
+   * month's rows and plots zeroes with no clip reported.
    */
   opts: {
     untilIso?: string;
@@ -365,9 +288,8 @@ export async function scanCreditEvents(
     .gte("created_at", sinceIso);
   if (opts.untilIso) query = query.lt("created_at", opts.untilIso);
   if (opts.channel) {
-    // ⚠ `IS NULL` AND `eq` ARE THE SAME NARROWING, NOT TWO FEATURES: the
-    // Desktop-agent bucket IS "no channel", so a reader that special-cased only
-    // one of them would leave the other's rows on every filtered view.
+    // ⚠ `IS NULL` and `eq` are one narrowing: the Desktop-agent bucket IS "no
+    // channel", so special-casing only one leaks the other's rows.
     query =
       opts.channel === "unattributed"
         ? query.is("channel_id", null)
@@ -377,27 +299,16 @@ export async function scanCreditEvents(
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
-    // 🔒 **THE ONLY READ ON THIS PAGE THAT DEGRADES INSTEAD OF THROWING, AND
-    // THE REASON IS THE MIGRATION LAG.** `credit_usage_events` ships as an
-    // UNAPPLIED migration (`20260901120000_credit_usage_events.sql`) — Samuel
-    // applies it — so between deploy and apply the table DOES NOT EXIST and
-    // PostgREST answers `42P01`. Rethrowing took the whole Overview face down
-    // with it: this read sits in `getHomeOverview`'s `Promise.all`, so one
-    // missing table 500'd the payload behind every panel, AND it is the
-    // `credits` series arm, which is what blanked the histogram.
-    // ⚠ THE SAME DEGRADE COVERS `wallet` / `payer_user_id` / `channel_id`, which
-    // arrive in two LATER unapplied migrations (`20260930120000` §4 and
-    // `20261003120000_credit_events_channel.sql`): before those applies, a select
-    // naming them answers `42703` and this arm answers empty rather than 500ing
-    // the face. ⚠ EMPTY, not "the old sum" — a fallback to the container fence
-    // would quietly resurrect the two-counter bug this read exists to end.
-    // ⚠ **DEGRADED IS SAFE HERE AND ONLY HERE.** An empty ledger is already an
-    // expected state (the table starts with no history), so "no rows" is a
-    // reading this surface must render correctly anyway — it says "nothing yet"
-    // rather than drawing zeroes. No other read on this page has a truthful
-    // empty answer, which is why none of them may copy this.
-    // ⚠ LOGGED, never silent: an unmetered surface that says nothing is
-    // indistinguishable from a quiet month.
+    // 🔒 **The only read on this page that degrades instead of throwing:
+    // migration lag.** `credit_usage_events` (`20260901120000_credit_usage_events.sql`)
+    // and its `wallet`/`payer_user_id`/`channel_id` columns (`20260930120000` §4,
+    // `20261003120000_credit_events_channel.sql`) ship unapplied; until Samuel
+    // applies them PostgREST answers `42P01`/`42703`, and rethrowing would 500
+    // `getHomeOverview`'s whole `Promise.all`.
+    // ⚠ EMPTY, not a container-fence fallback (that resurrects the two-counter bug).
+    // ⚠ **Safe here and only here**: an empty ledger is already a truthful state
+    // ("nothing yet"); no other read here has one, so none may copy this.
+    // ⚠ Logged, never silent: a quiet unmetered surface looks like a quiet month.
     console.warn(
       `[home/overview] credit ledger unreadable, degrading to empty: ${error.message}`
     );
@@ -409,15 +320,12 @@ export async function scanCreditEvents(
 /**
  * `(workspaceId, userId) → role` across the fence — THE guest/member split.
  *
- * 🔒 **`workspace_members` IS THE ONLY TABLE THAT CAN ANSWER THIS.**
- * `channel_members.role` is `CHECK (role IN ('owner','member'))` and has no
- * `guest` arm at all, so a channel-side read would silently report every guest
- * as a member. `channels/server/dto.ts` states the same rule for the roster.
+ * 🔒 **Only `workspace_members` can answer this**: `channel_members.role` has no
+ * `guest` arm, so it would report every guest as a member (cf.
+ * `channels/server/dto.ts`).
  *
- * ⚠ REVOKED memberships are excluded and PENDING ones are not members yet —
- * `status = 'active'`, the same predicate `listContainerPeers` uses. A person
- * who has since left keeps their calls in the breakdown with a `null` role;
- * dropping their rows would under-count the traffic that really happened.
+ * ⚠ `status = 'active'` (as `listContainerPeers`). Someone who has left keeps
+ * their calls in the breakdown with a `null` role rather than being dropped.
  */
 export async function listContainerRoles(
   workspaceIds: string[]

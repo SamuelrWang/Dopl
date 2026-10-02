@@ -5,36 +5,25 @@ import type { TeamGrant } from "../types";
 import { mapTeamGrantRow, type TeamGrantDbRow } from "./dto";
 
 /**
- * Every read and write of the TEAM slice of `resource_grants`. Nothing here
- * touches the resource's own table — what a grant POINTS AT lives in
- * `repository-resources.ts`. A grant row is only ever
+ * Every read and write of the TEAM slice of `resource_grants`. What a grant
+ * POINTS AT lives in `repository-resources.ts`. A grant row is only ever
  * (team, resource_type, resource_id, level).
  *
- * ⚠ THE TABLE IS `resource_grants`, NOT `team_resource_access` (Wave B, ruling
- * B4, `20260914120000_resource_grants.sql` and `20260916120000`). **The team
- * CAPABILITY is unchanged** — every function below still exists and still means
- * what it meant. What changed is that a team is now ONE VALUE of `scope_type`
- * beside `channel` and `container`, instead of a table, a five-migration trigger
- * chain and four hand-written GC functions of its own.
+ * ⚠ THE TABLE IS `resource_grants` (Wave B, ruling B4): a team is one value of
+ * `scope_type` beside `channel` and `container`.
  *
- * ⚠ `team_id` SURVIVES AS THE PROJECTED NAME. The column is `scope_id`;
- * `team_id:scope_id` in the select keeps `dto.ts › TeamGrantDbRow` and every
- * caller of {@link TeamGrant} exactly as they were.
+ * ⚠ The column is `scope_id`; `team_id:scope_id` in the select keeps
+ * `dto.ts › TeamGrantDbRow` and every {@link TeamGrant} caller unchanged.
  *
- * 🔒 EVERY STATEMENT PINS `scope_type = 'team'`. Without it these reads answer a
- * team question with a channel's grants, and these writes land where the
- * knowledge lane reads. It is stated once, in {@link TEAM_SCOPE}, and spread.
+ * 🔒 EVERY STATEMENT PINS `scope_type = 'team'` (via {@link TEAM_SCOPE}).
+ * Without it reads answer with a channel's grants and writes land where the
+ * knowledge lane reads.
  *
- * ⚠ `created_by` IS LEFT NULL, AND THAT IS THE SAFE DIRECTION.
- * `team_resource_access` had no such column, so there is no grantor to carry;
- * `enforce_resource_grant()` answers an unattributed row with the OLD
- * same-container equality, which is exactly the rule these rows lived under
- * before. A team grant is same-container by construction (the team and the
- * resource are both the workspace's), so nothing here can reach the
- * cross-container lend the new trigger unlocks — that needs a named grantor.
+ * ⚠ `created_by` IS LEFT NULL — the safe direction: `enforce_resource_grant()`
+ * holds an unattributed row to same-container equality, and a team grant is
+ * same-container by construction, so it can never reach a cross-container lend.
  *
- * ⚠ Raw Supabase I/O: every query not pinned to a single team is filtered by
- * `workspace_id`.
+ * ⚠ Every query not pinned to a single team is filtered by `workspace_id`.
  */
 
 const GRANTS_TABLE = "resource_grants";
@@ -148,12 +137,9 @@ export async function insertReadGrantsIfMissing(
 }
 
 /**
- * Resource ids per batched grant statement.
- * ⚠ The bound is the REQUEST, not the DB: PostgREST `.in()` serialises into
- * the URL and uuids run ~40 bytes each, so an unchunked delete over a big
- * folder 414s at the gateway. 100 ids ≈ 4KB, half the smallest limit in the
- * path. The upsert chunk is in ROWS because its payload is the body
- * (resourceIds × teamIds).
+ * ⚠ The bound is the REQUEST URL, not the DB: `.in()` serialises uuids into
+ * the URL, so an unchunked delete over a big folder 414s. 100 ids ≈ 4KB. The
+ * upsert chunk is in ROWS because its payload is the body.
  */
 const GRANT_ID_CHUNK = 100;
 const GRANT_ROW_CHUNK = 500;
@@ -164,9 +150,8 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Set form of `deleteGrantsForResource`, for replace-set propagation (a
- *  folder re-scope rewrites every filed chat's grants). One statement per
- *  chunk, not per resource. */
+/** Set form of `deleteGrantsForResource` (folder re-scope rewrites every filed
+ *  chat's grants). One statement per chunk. */
 export async function deleteGrantsForResources(
   workspaceId: string,
   resourceType: TeamResourceType,

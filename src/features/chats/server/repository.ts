@@ -8,26 +8,16 @@ import { CHAT_LIST_LIMIT } from "../constants";
 /**
  * Raw I/O for chats, their transcripts and their folders.
  *
- * 🔒 TWO CLIENTS, AND WHICH ONE A FUNCTION TAKES IS THE WHOLE OF RLS PHASE 2
- * (Wave B B12); `knowledge/server/repository-bases.ts` states the same split for
- * phase 1. `readClient()` is the CALLER's client when `RLS_CALLER_SCOPED_READS`
- * is on and `supabaseAdmin()` otherwise, so with the flag off this file behaves
- * exactly as it did.
- *
- *   * **A read that answers "what may this caller see" takes `readClient()`,**
- *     and the row filter becomes `chats_member_select`, restated onto
- *     `dopl_chat_readable()` in `20260921120000_rls_phase2_policies` (its
- *     identical twin `chats_owner_select` was dropped in
- *     `20261114130000_drop_dead_tables_and_rpcs`). That predicate equals
+ * 🔒 TWO CLIENTS — which one a function takes IS RLS phase 2 (Wave B B12; phase 1
+ * split: `knowledge/server/repository-bases.ts`). `readClient()` = caller's
+ * client when `RLS_CALLER_SCOPED_READS` is on, else `supabaseAdmin()`.
+ *   * "What may this caller see" reads → `readClient()`; filter is
+ *     `chats_member_select` → `dopl_chat_readable()`, equal to
  *     `service-shared.ts › canSeeChat`.
- *   * **A read that answers a SYSTEM question keeps `supabaseAdmin()`** and says
- *     so at the call site: re-export idempotency, transcript LENGTH after a
- *     write, and the folder-propagation target set are not "what may this caller
- *     see" and would answer wrongly if they were.
- *   * **A read of a table this slice does NOT cover keeps `supabaseAdmin()`**
- *     too — `chat_folders` and `profiles` are not among the seven.
- *   * **Writes are unchanged.** INSERT/UPDATE/DELETE stay on the service role
- *     until RLS plan phase 4.
+ *   * SYSTEM-question reads (re-export idempotency, post-write transcript length,
+ *     folder-propagation targets) keep `supabaseAdmin()`, marked at the call site.
+ *   * Uncovered tables (`chat_folders`, `profiles`) keep `supabaseAdmin()`.
+ *   * Writes stay on the service role until RLS phase 4.
  */
 
 type ChatUpdate = Database["public"]["Tables"]["chats"]["Update"];
@@ -43,9 +33,8 @@ export function countOf(row: ChatRowWithCount): number {
 
 // ─── Retention window ───────────────────────────────────────────────
 
-/** Free-plan retention cutoff, `YYYY-MM-DD`, computed on the DB clock so the
- *  window boundary lives in Postgres, not JS date math. Feed to `.gte`/`.lt`
- *  on `session_date`. Migration: `chats_retention_cutoff`. */
+/** Free-plan retention cutoff `YYYY-MM-DD`, on the DB clock (not JS date math).
+ *  Feed to `.gte`/`.lt` on `session_date`. */
 export async function retentionCutoff(windowDays: number): Promise<string> {
   const db = supabaseAdmin();
   const { data, error } = await db.rpc("chats_retention_cutoff", {
@@ -57,9 +46,8 @@ export async function retentionCutoff(windowDays: number): Promise<string> {
 
 // ─── Chats ──────────────────────────────────────────────────────────
 
-/** Own chats + workspace-public ones. `since` (retention cutoff) excludes
- *  older `session_date` rows in the query — hidden, never deleted. `null` =
- *  full history. */
+/** Own + workspace-public chats. `since` hides (never deletes) older
+ *  `session_date` rows; `null` = full history. */
 export async function listVisibleChats(
   workspaceId: string,
   userId: string,
@@ -70,9 +58,8 @@ export async function listVisibleChats(
     .from("chats")
     .select(CHAT_SELECT)
     .eq("workspace_id", workspaceId)
-    // ⚠ Raw `.or()` string because `deleted_at` is not in the generated
-    // column types. A separate top-level `.or()` AND-combines with the
-    // owner/public predicate below.
+    // ⚠ Raw `.or()`: `deleted_at` isn't in the generated types. Separate
+    // top-level `.or()`s AND-combine.
     .or("deleted_at.is.null")
     .or(`owner_id.eq.${userId},visibility.eq.public`);
   if (since) query = query.gte("session_date", since);
@@ -81,16 +68,13 @@ export async function listVisibleChats(
     .limit(CHAT_LIST_LIMIT);
   if (error) throw error;
   const rows = (data ?? []) as ChatRowWithCount[];
-  // ⚠ AT the ceiling counts as CLIPPED — at is indistinguishable from over
-  // (INVARIANTS §9). And it is measured on the RAW rows, before the caller's
-  // visibility filter: a page that filters down to two chats out of two hundred
-  // read is still a page that did not reach the end of the archive.
+  // ⚠ AT the ceiling = CLIPPED (INVARIANTS §9), measured on RAW rows before
+  // the caller's visibility filter.
   return { rows, truncated: rows.length >= CHAT_LIST_LIMIT };
 }
 
-/** Readable chats OUTSIDE the retention window. Same owner-or-public
- *  predicate as `listVisibleChats`; head-count only. Drives the "N older
- *  chats hidden" upgrade affordance. */
+/** Head-count of readable chats OUTSIDE the retention window ("N older chats
+ *  hidden" upgrade affordance). */
 export async function countHiddenChats(
   workspaceId: string,
   userId: string,
@@ -126,14 +110,10 @@ export async function findChatById(
   return data as ChatRowWithCount | null;
 }
 
-// ⚠ Deliberately does NOT filter `deleted_at`: the (workspace_id, owner_id,
-// client_session_id) unique index spans trashed rows, so a re-export must
-// find a soft-deleted match and revive it rather than collide.
-// ⚠ SERVICE ROLE ON PURPOSE — this is the re-export IDEMPOTENCY lookup, a
-// SYSTEM question about that unique index. Scoped to the caller it would miss a
-// row the caller may not read and the next insert would hit the index instead
-// of reviving; a shared credential re-exporting its own prior session is the
-// case that finds it first.
+// ⚠ No `deleted_at` filter: the (workspace_id, owner_id, client_session_id)
+// unique index spans trashed rows, so re-export must find and revive them.
+// ⚠ SERVICE ROLE ON PURPOSE — idempotency lookup against that index; caller-
+// scoped, it would miss unreadable rows and the next insert would collide.
 export async function findChatByClientSession(
   workspaceId: string,
   ownerId: string,
@@ -151,8 +131,7 @@ export async function findChatByClientSession(
   return data;
 }
 
-// `deleted_at` is not in the generated `ChatUpdate` type, so revive writes
-// widen the patch here and cast on the way to Supabase.
+// `deleted_at` isn't in the generated `ChatUpdate` type; widen + cast.
 type ChatUpdatePatch = ChatUpdate & { deleted_at?: string | null };
 
 export async function updateChat(
@@ -170,12 +149,8 @@ export async function updateChat(
   return data;
 }
 
-/**
- * ⚠ PERMANENT delete of ONE chat — no trash, no restore. `chat_messages`
- * cascade via FK; `chat_grants_cleanup` trigger drops team grants. The
- * `workspace_id` predicate is redundant with the caller but makes a
- * cross-workspace mutation structurally impossible.
- */
+/** ⚠ PERMANENT delete — messages cascade via FK, `chat_grants_cleanup` drops
+ *  grants. Redundant `workspace_id` predicate blocks cross-workspace deletes. */
 export async function hardDeleteChat(workspaceId: string, chatId: string): Promise<void> {
   const db = supabaseAdmin();
   const { error } = await db
@@ -199,10 +174,8 @@ export async function listMessages(chatId: string): Promise<ChatMessageRow[]> {
   return data ?? [];
 }
 
-/** ⚠ SERVICE ROLE ON PURPOSE — the transcript LENGTH returned by a write
- *  (`mergeMessages`, `appendMessagesTx`), not a projection of what the caller
- *  may read. A caller-scoped count would report a shorter transcript than the
- *  one just written. */
+/** ⚠ SERVICE ROLE ON PURPOSE — post-write transcript LENGTH; caller-scoped it
+ *  could under-report what was just written. */
 export async function countMessages(chatId: string): Promise<number> {
   const db = supabaseAdmin();
   const { count, error } = await db
@@ -237,9 +210,7 @@ type ChatCreateHeader = {
   exported_at?: string;
 };
 
-/** Header INSERT + messages INSERT in ONE transaction
- *  (chat_create_with_messages): a failed transcript write rolls the header
- *  back, so no 0-message orphan. Re-export uses `mergeMessages` instead. */
+/** Header + messages in ONE transaction — no 0-message orphan on failure. */
 export async function createChatWithMessages(
   header: ChatCreateHeader,
   messages: MessagePayload
@@ -254,9 +225,8 @@ export async function createChatWithMessages(
   return data as unknown as ChatRow;
 }
 
-/** Non-destructive re-export merge: upsert re-sent messages by position and
- *  KEEP existing rows beyond them, so an op="append"-extended transcript
- *  survives. Returned length = re-sent ∪ preserved. */
+/** Re-export merge: upsert by position, KEEP rows beyond (append-extended
+ *  transcripts survive). Returns re-sent ∪ preserved length. */
 export async function mergeMessages(
   chatId: string,
   workspaceId: string,
@@ -278,9 +248,8 @@ export async function mergeMessages(
   return countMessages(chatId);
 }
 
-/** Positions computed inside the transaction (chat_append_messages, FOR
- *  UPDATE on the chat row), so concurrent appends serialize instead of
- *  racing to a unique violation. Returns new transcript length. */
+/** Positions assigned in-transaction (FOR UPDATE) so concurrent appends
+ *  serialize. Returns new transcript length. */
 export async function appendMessagesTx(
   chatId: string,
   workspaceId: string,
@@ -336,9 +305,8 @@ export async function findFolderByName(
   name: string
 ): Promise<ChatFolderRow | null> {
   const db = supabaseAdmin();
-  // ⚠ ilike is a PATTERN match — escape %, _ and \ so "100%" can't match
-  // "100x" and stray metacharacters can't make maybeSingle() see multiple
-  // rows. ci-unique index on lower(name) → at most one match once escaped.
+  // ⚠ ilike is a PATTERN — escape %, _, \ so maybeSingle() sees ≤1 row
+  // (ci-unique index on lower(name)).
   const literal = name.replace(/[\\%_]/g, "\\$&");
   const { data, error } = await db
     .from("chat_folders")
@@ -387,11 +355,9 @@ export async function updateFolder(
   return data;
 }
 
-/** Ids of every ACTIVE chat filed in the folder — the propagation target set.
- *  ⚠ SERVICE ROLE ON PURPOSE: the folder OWNER re-scopes every chat filed in it,
- *  including ones they cannot read, and a target set narrowed to what they can
- *  see would leave rows behind at the old scope — a partial re-share that
- *  reports itself as success. */
+/** ACTIVE chat ids in the folder — the propagation target set.
+ *  ⚠ SERVICE ROLE ON PURPOSE: caller-scoped, unreadable rows would stay at the
+ *  old scope — a silent partial re-share. */
 export async function listChatIdsInFolder(folderId: string): Promise<string[]> {
   const db = supabaseAdmin();
   const { data, error } = await db

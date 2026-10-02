@@ -1,24 +1,16 @@
 /**
- * ⚠ **DRIFT ALARM, AND THE CONSTANT IT WATCHES CHANGED ON 2026-09-10.**
- * `completeOnboarding` lands a new user on `/home` now, not on
- * `/{segment}/overview`: what onboarding names is a `kind='home'` container,
- * and a container has no workspace shell to open. So the path this file must keep
- * honest is the SPA's ROOT `HOME_PATH`, and `WORKSPACE_HOME_PATH` is pinned here
- * only as the fallback for the branch a non-home space would take.
+ * ⚠ DRIFT ALARM. `completeOnboarding` lands a new user on the SPA's ROOT
+ * `HOME_PATH` (onboarding names a `kind='home'` container, which has no workspace
+ * shell); `WORKSPACE_HOME_PATH` is pinned only for the non-home fallback branch.
  *
- * Source of truth for each:
- * `HOME_PATH` — `apps/desktop-ui/src/components/app-shell/account-rail.tsx`,
- * registered in `routes.tsx` as a ROOT route (sibling of `/:workspaceSegment`,
- * because /home mounts its own frame). Other copies + their alarms:
- * `dopl-desktop-app/main/deep-link-target.js` › ROOT_ROUTES, and
- * `./service.ts` › completeOnboarding (the literal this pins).
- * `WORKSPACE_HOME_PATH` — `apps/desktop-ui/src/routes.tsx`, also copied in
- * `apps/desktop-ui/src/routes.test.tsx` and `deep-link-target.js` ›
- * WORKSPACE_HOME_PAGE.
+ * Sources: `HOME_PATH` — `apps/desktop-ui/src/components/app-shell/account-rail.tsx`
+ * (root route in `routes.tsx`; copies in `dopl-desktop-app/main/deep-link-target.js`
+ * › ROOT_ROUTES and `./service.ts` › completeOnboarding). `WORKSPACE_HOME_PATH` —
+ * `apps/desktop-ui/src/routes.tsx` (copies in `routes.test.tsx`, `deep-link-target.js`
+ * › WORKSPACE_HOME_PAGE).
  *
- * Repointing either would drop a newly onboarded user on "Not found" with the
- * suite green. Server code cannot IMPORT them (different npm workspace, `#/`
- * aliases, pulls in every page component) — so read the source and compare.
+ * A repoint would drop new users on "Not found" with the suite green. Server code
+ * can't import the SPA's constants, so read the source and compare.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -104,8 +96,7 @@ beforeEach(() => {
     slug: "acme",
     publicId: "a1b2c3d4e5f6",
     name: "Acme",
-    // ⚠ THE FIXTURE CARRIES `kind` NOW — it is what the landing branches on, and
-    // the real function only ever answers a home space.
+    // ⚠ `kind` is what the landing branches on; the real function only answers home.
     kind: "home",
   } as never);
   vi.mocked(markOnboarded).mockResolvedValue(false);
@@ -113,30 +104,24 @@ beforeEach(() => {
 
 describe("completeOnboarding redirect target", () => {
   /**
-   * 🔒 **THE NEW USER LANDS ON `/home`, NOT INSIDE THE WORKSPACE SHELL
-   * (2026-09-10).** This case asserted `/{segment}/overview` and was RIGHT about
-   * the thing it was watching — the path existed and rendered — which is why the
-   * wrong room was never caught here. Onboarding names a `kind='home'`
-   * container; that row is a SHELF (`20260920120000`'s header) and its surface is
-   * /home. The segment is deliberately absent from the expectation.
+   * 🔒 New user lands on `/home`, not the workspace shell (2026-09-10): a
+   * `kind='home'` container is a SHELF (`20260920120000`'s header) whose surface
+   * is /home. The segment is deliberately absent.
    */
   it("lands the new user on /home — a home space has no workspace shell", async () => {
-    // ⚠ Not a literal path — that would be a FOURTH copy, passing after a repoint.
+    // ⚠ Not a literal path — that would be a fourth copy, passing after a repoint.
     const { redirectPath } = await completeOnboarding("user-1", {
       mcpConnected: true,
       name: "Acme",
     });
     expect(redirectPath).toBe(spaHomePath());
-    // 🔒 AND NO SEGMENT RODE ALONG. /home is a ROOT route; prefixing it with the
-    // container's segment gives a path that resolves to the SPA's catch-all.
+    // 🔒 No segment: /home is a ROOT route; a prefix hits the SPA's catch-all.
     expect(redirectPath).not.toContain("a1b2c3d4e5f6");
   });
 
   it("⚠ a non-home space would still land on the workspace home page", async () => {
-    // The `kind` check is what makes the rule readable as "a home space
-    // lands on /home". Unreachable today — `renameHomeSpaceIfPlaceholder`
-    // goes through `ensureHomeSpace` — and pinned so that the day
-    // onboarding names a real workspace, the shell landing is already correct.
+    // Unreachable today (`renameHomeSpaceIfPlaceholder` goes through
+    // `ensureHomeSpace`); pinned so a future real-workspace landing is correct.
     vi.mocked(renameHomeSpaceIfPlaceholder).mockResolvedValue({
       id: "ws-1",
       slug: "acme",
@@ -151,8 +136,7 @@ describe("completeOnboarding redirect target", () => {
   });
 
   it("names an unnamed home space \"Home\", never after the user (Samuel, 2026-09-06)", async () => {
-    // "<First>'s Workspace" was read by agents as a second workspace. The
-    // home space is the default space, and its default name says so.
+    // "<First>'s Workspace" was read by agents as a second workspace.
     await completeOnboarding("user-1", { mcpConnected: false });
     expect(renameHomeSpaceIfPlaceholder).toHaveBeenCalledWith(
       "user-1",
@@ -162,11 +146,8 @@ describe("completeOnboarding redirect target", () => {
   });
 
   it("routes to a page the SPA actually has (not the catch-all)", async () => {
-    // Correct-looking path is still "Not found" if no route serves it.
-    // ⚠ /home is registered by the IMPORTED constant, not by a literal, so the
-    // route table is checked for `path: HOME_PATH` — matching on the string
-    // "/home" here would fail against a correct table and pass against a
-    // hardcoded one, i.e. exactly backwards.
+    // ⚠ The route table registers the IMPORTED constant, so check for
+    // `path: HOME_PATH` — matching the literal "/home" would be exactly backwards.
     const { redirectPath } = await completeOnboarding("user-1", {
       mcpConnected: false,
     });

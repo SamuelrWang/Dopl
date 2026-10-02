@@ -2,25 +2,12 @@
  * REDTEAM — the POLICIES, alone, refuse what `service-shared.ts › canSeeChat`
  * refuses (Wave B B12; Samuel's ruling B5, "RLS is the fence").
  *
- * 🔒 CHATS IS THE TABLE THIS WHOLE PLAN IS NAMED AFTER.
- * `20260716150000_chats_team_aware_rls.sql` exists because RLS stayed permissive
- * after the service tightened and a team-scoped transcript leaked through
- * PostgREST to every member for as long as nobody compared the two. Two more
- * gaps of the same shape survived until `20260921120000`:
- *
- *   * **`chats_member_select` led with a blanket admin arm**, so a workspace
- *     admin read every PRIVATE transcript. `canSeeChat` returns false for
- *     `visibility !== "public"` BEFORE its admin arm, so the API has never
- *     returned those rows — the policy was alone in believing it.
- *     `20260916120000`'s probe P2 records the arm as deliberate; ruling B5 asks
- *     the policy to EQUAL the predicate, and `agent_identities` had already made
- *     exactly this correction (`20260915120000`: *"the admin arm is INSIDE the
- *     'team' branch … moving it out is a widening"*).
- *   * **`chats_owner_select` was an unfenced `owner_id = auth.uid()`** — no
- *     membership floor, no credential axis. ⚠ REPAIRING ONE OF A PAIR CHANGES
- *     NOTHING: permissive policies are OR-ed, so both now call the one
- *     predicate, and the first assertion below is the one that keeps it that
- *     way. (`chats_owner_select`, then identical, was dropped in 20261114130000.)
+ * 🔒 Guards the gap class that leaked team-scoped transcripts via PostgREST
+ * (`20260716150000`) and, until `20260921120000`, let a blanket admin arm read
+ * PRIVATE transcripts (`canSeeChat` refuses non-public before its admin arm;
+ * ruling B5: the policy must EQUAL the predicate).
+ * ⚠ Permissive policies are OR-ed — fixing one of a pair changes nothing, so
+ * the first assertion pins EVERY SELECT policy to the one predicate.
  *
  * ⚠ TWO HALVES; see `shared/supabase/rls-policy-scan.ts` (what a structural
  * assertion proves, F-523) and `shared/supabase/rls-redteam-fixture.ts` (why the

@@ -9,11 +9,8 @@ import {
 } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 /**
- * ⚠ **A FOURTH HAND COPY OF THE SPA's `HOME_PATH`, AND IT CANNOT BE AN IMPORT.**
- * `apps/desktop-ui/src/components/app-shell/account-rail.tsx › HOME_PATH` is the
- * source; server code is a different npm workspace with `#/` aliases and pulling
- * it in drags every page component along. `./service.test.ts` reads the SPA's
- * route table and compares, exactly as it already does for `WORKSPACE_HOME_PATH`.
+ * ⚠ Hand copy of `apps/desktop-ui/src/components/app-shell/account-rail.tsx ›
+ * HOME_PATH` (server can't import the SPA). `./service.test.ts` pins it.
  */
 const HOME_PATH = "/home";
 import type { OnboardingStatus, SurveySubmission } from "../types";
@@ -53,33 +50,17 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
 }
 
 /**
- * Finish onboarding: name the caller's HOME — their home space, which
- * is what ruling B10 leaves for a first-run survey to name — stamp
- * onboarded_at, return the URL to land on. Blank name → "Home" (Samuel,
- * 2026-09-06: the home space is every user's default space and must
- * never carry a name that reads as a workspace — "{FirstName}'s Workspace"
- * was mistaken for one). ⚠ Every step idempotent so a retry after partial
- * failure converges.
+ * Finish onboarding: name the caller's home space (ruling B10), stamp
+ * onboarded_at, return the landing URL. Blank name → "Home" (Samuel,
+ * 2026-09-06: "{FirstName}'s Workspace" was mistaken for a workspace).
+ * ⚠ Every step idempotent so a retry after partial failure converges.
  *
- * 🔒 **THE LANDING IS `/home` (2026-09-10, the new-user flow), NOT
- * `/{segment}/overview`.** What onboarding names is a `kind='home'`
- * container, and that container has no workspace shell: `/home` is its surface
- * and the account rail's pinned tile is how it is reached. The old path took a
- * brand-new user THROUGH the workspace shell — sidebar, channels tree, the
- * workspace Overview — for a row that is *"a SHELF, not a workspace"*
- * (`20260920120000_workspace_kind_personal.sql`). It resolved and rendered, which
- * is why nothing caught it; it was simply the wrong room.
+ * 🔒 Lands on `/home` (2026-09-10): a `kind='home'` container is "a SHELF, not a
+ * workspace" (`20260920120000_workspace_kind_personal.sql`) with no workspace
+ * shell. The `kind` check states the rule; its else branch is unreachable today
+ * (`ensureHomeSpace`) but keeps a named workspace on the workspace landing.
  *
- * ⚠ **THE `kind` CHECK IS NOT DEFENSIVE PROSE, IT IS THE STATEMENT OF WHY.** The
- * container is personal by construction here (`renameHomeSpaceIfPlaceholder`
- * goes through `ensureHomeSpace`), so the else branch is unreachable
- * today — and keeping it is what makes the rule READ as "a home space
- * lands on /home" rather than "onboarding hardcodes /home". A workspace
- * onboarding ever names keeps the workspace landing, for free.
- *
- * ⚠ `/home` has NO segment and that is the point — do not re-prefix it. It is a
- * ROOT route in `apps/desktop-ui/src/routes.tsx` (`HOME_PATH`), a sibling of
- * `/:workspaceSegment` rather than a child, because it mounts its own frame.
+ * ⚠ `/home` has NO segment — a ROOT route in `apps/desktop-ui/src/routes.tsx`.
  */
 export async function completeOnboarding(
   userId: string,

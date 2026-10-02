@@ -26,12 +26,10 @@ import { findMessageRow, stampAnswer } from "./repository";
 
 /**
  * **ONE ANSWER ROUTE FOR EVERY DISPLAY** (spec §3.3, contract C2) and the Save button.
- *   - Decision lane (`metadata.escalation`: every new choice display and every legacy decision):
- *     today's escalation answer — a member message carrying `escalationAnswer`, so fold 11's
- *     404/403 order, the derived wake and the one-answer index (409) all apply unchanged. The
- *     post-insert hook (`answer-stamp.ts`) stamps the display and releases a linked lens row.
- *   - Legacy lane (v1 dev rows: a selectable list, no escalation): the pre-unification path,
- *     moved verbatim. ⚠ Remove after 1.38 ships.
+ *   - Decision lane (`metadata.escalation`): a member message carrying `escalationAnswer`, so the
+ *     404/403 order, derived wake and one-answer index (409) apply unchanged; `answer-stamp.ts`
+ *     stamps the display.
+ *   - Legacy lane (v1 dev rows, no escalation). ⚠ Remove after 1.38 ships.
  */
 
 export const DisplayAnswerSchema = z.object({
@@ -82,9 +80,8 @@ export async function answerDisplay(
       body: option.label,
       clientMsgId: `display-answer-${row.id}`,
       escalationAnswer: { escalationMessageId: row.id, optionIndex: input.index },
-      // ⚠ HELD (§3.4): the asking agent's hold returns this answer, so the message wakes and
-      // feeds nobody — `agentId` is already null (fold 11), and `autoAddress:false` stops RR3
-      // re-aiming a person's unaddressed post at the room's most recent agent.
+      // ⚠ HELD (§3.4): the hold returns this answer, so it wakes nobody; `autoAddress:false`
+      // stops RR3 re-aiming it at the room's most recent agent.
       ...(held && { intent: "chat" as const, autoAddress: false }),
     });
   } catch (err) {
@@ -133,10 +130,8 @@ async function legacyLane(
 }
 
 /**
- * A LENS TAP on a row linked to a decision (spec §5.3): after `answerAsk` settled the lens row,
- * the same answer is posted through the decision lane as the device owner, from glasses. When the
- * decision was already answered (in the app, in the gap), the lens row is re-synced to THAT answer
- * so the lens, `glasses_get_answer` and the stamp agree, and the tap reports the conflict.
+ * A LENS TAP on a decision-linked row (spec §5.3) posts through the decision lane as the owner. If
+ * already answered elsewhere, the lens row re-syncs to THAT answer and the tap reports a conflict.
  */
 export async function answerFromLens(userId: string, row: GlassesMessage, source: MessageSourceStamp): Promise<"ok" | "conflict"> {
   if (!row.channel_message_id || !row.answer) return "ok";

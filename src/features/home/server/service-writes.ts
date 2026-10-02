@@ -30,33 +30,24 @@ import { claimBoundLink } from "./service-claim-bound";
 import { hydrateOneChannel } from "./service-reads";
 
 /**
- * Write side of home channels: create a channel, mint the link that adds a
- * person to one, revoke, claim.
+ * Write side of home channels: create, mint the add-a-person link, revoke, claim.
  *
- * ⚠ THE MODEL INVERTED 2026-08-24. Creating a channel and gaining a peer are
- * now two separate acts: `createHomeChannel` mints a SOLO container the operator
- * works in alone, and `mintContainerLink` binds an invitation to a container
- * that already exists. `claimLink` is the FRONT DOOR for both claim shapes: it
- * judges the token, then dispatches on `link.workspace_id` — the legacy unbound
- * branch stays here, the bound one is `service-claim-bound.ts`.
+ * ⚠ Creating a channel and gaining a peer are separate acts (2026-08-24):
+ * `createHomeChannel` mints a SOLO container; `mintContainerLink` binds an
+ * invitation to an existing one. `claimLink` judges the token then dispatches on
+ * `link.workspace_id` — unbound branch here, bound in `service-claim-bound.ts`.
  */
 
 /**
- * ⚠ base64url, CASE-SENSITIVE, like `workspace_invitations.token` and NOT like
- * `workspace_join_links` (lowercase hex, normalized on lookup). A home link is
- * shared as a whole URL and clicked; the hex form exists for tokens that get
- * RETYPED through apps that case-fold, which this one is not. 32 bytes → 43
- * chars.
+ * ⚠ base64url, CASE-SENSITIVE (like `workspace_invitations.token`, unlike
+ * `workspace_join_links`' hex). A home link is clicked as a whole URL, never
+ * retyped through case-folding apps. 32 bytes → 43 chars.
  */
 function generateToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-/**
- * 23505. ⚠ Read locally rather than imported from the channels feature: this is
- * one PostgREST error code, and reaching across a feature boundary for it would
- * make the home surface depend on a channels internal to spell a constant.
- */
+/** 23505. Local on purpose — not worth a cross-feature import of a channels internal. */
 function isUniqueViolation(err: unknown): boolean {
   return (err as { code?: string } | null)?.code === "23505";
 }
@@ -64,17 +55,13 @@ function isUniqueViolation(err: unknown): boolean {
 /**
  * "New channel" — a container with ONE member and one private channel in it.
  *
- * ⚠ THE CHANNEL IS PRIVATE AND NOT DIRECT. `direct: true` would ask
- * `createDirectChannel` for a self-DM (refused) and would bind the channel to a
- * peer that does not exist yet; the whole point of the inversion is that a home
- * channel is usable with nobody else in it, as the place the operator's own
- * agents work. When a person is added later they JOIN this channel — the
- * transcript that is already there is the relationship's history.
+ * ⚠ PRIVATE, NOT DIRECT: `direct: true` would be a refused self-DM bound to a
+ * peer that doesn't exist yet. A home channel works solo; a person added later
+ * JOINS it and inherits the transcript.
  *
- * ⚠ NOT `sessionOnly` at the route, so an agent token may call this — the same
- * posture `POST /api/workspaces` takes (Samuel's ruling, 2026-08-24). Creating a
- * container mints nothing an agent could use to reach a human; the link that
- * does is `mintContainerLink`, and that one is session-gated.
+ * ⚠ NOT `sessionOnly` — agent tokens may call it, like `POST /api/workspaces`
+ * (Samuel's ruling, 2026-08-24). Only `mintContainerLink` reaches a human, and
+ * that one is session-gated.
  */
 export async function createHomeChannel(
   userId: string,
@@ -86,10 +73,8 @@ export async function createHomeChannel(
     slug: slugifyWorkspaceName(input.name),
   });
 
-  // ⚠ THE CHANNELS SERVICE, not a second copy of it: slug collision handling,
-  // the owner member row and the visibility default all live in
-  // `createChannel`. The context is built for the CREATOR — they own the
-  // container, so they own its channel.
+  // ⚠ Reuse the channels service (slugs, owner row, visibility live in
+  // `createChannel`). Context is the CREATOR's — they own the container.
   try {
     await createChannel(
       buildChannelContext({
@@ -98,16 +83,13 @@ export async function createHomeChannel(
         role: "owner",
         credentialSubjectUserId: userId,
       }),
-      // ⚠ **`topic` IS THE PRODUCT'S "DESCRIPTION" (ruling, Samuel, 2026-09-15)**
-      // — the New-channel popup's second field, written into the EXISTING
-      // `channels.topic` column and NOT a new one. Absent ⇒ `createChannel`
-      // pins `""`, which is what this call passed unconditionally until now.
+      // ⚠ `topic` IS the product's "Description" (Samuel, 2026-09-15) — the
+      // existing `channels.topic` column. Absent ⇒ `createChannel` pins `""`.
       { name: input.name, topic: input.topic, visibility: "private" }
     );
   } catch (err) {
-    // ⚠ Roll the container back. A container with no channel is a BRICK:
-    // `hydrateChannels` drops it, so the operator never sees it, and it still
-    // counts as a workspace everywhere that enumerates memberships.
+    // ⚠ Roll back: a channel-less container is a BRICK — hidden by
+    // `hydrateChannels` yet still counted as a membership everywhere.
     await deleteWorkspace(container.id);
     throw err;
   }
@@ -117,70 +99,36 @@ export async function createHomeChannel(
 /**
  * Mint the ADD-A-PERSON link for a container that already exists.
  *
- * ⚠ ANY MEMBER MAY MINT IT, not the owner only (Samuel's ruling, 2026-08-24).
- * A home channel is a relationship, not a tenancy — the second person is as
- * entitled to hand it to somebody as the first. The cap, not the role, is what
- * bounds the outcome.
+ * ⚠ ANY MEMBER MAY MINT, not only the owner (Samuel's ruling, 2026-08-24) — a
+ * home channel is a relationship, not a tenancy.
  *
  * The order is the correctness argument:
- *  1. `findMemberContainer` is the FENCE. A non-member — or a standard
- *     workspace — reads as absent, so this 404s and never 403s (no oracle).
- *  2. The MINT FLOOR and GRANT-ABOVE-SELF are judged BEFORE anything is
- *     inserted — see below. ⚠ **THERE IS NO CAPACITY GATE ANY MORE
- *     (2026-08-26, Samuel's ruling).** A container held two members and this
- *     step 409'd `LINK_CONTAINER_FULL` past that; a home channel may now hold as
- *     many people as it is given, so there is no number left to compare against
- *     and nothing here to refuse. The gates that remain are about WHO is asking,
- *     not HOW MANY are already in.
- *  3. An OPEN link is RETURNED, not replaced — the `getOrCreateJoinLink`
- *     precedent. Pressing "Add person" twice must hand back one URL; rotating
- *     silently would kill a link already pasted into an email. ⚠ BUT "open"
- *     (the index predicate, un-revoked) is NOT "claimable": an expired or
- *     exhausted-yet-unrevoked row matches `channel_links_one_open_per_workspace`
- *     (so it BLOCKS a replacement mint) while `hydrateChannels` drops its
- *     `linkOut` (so no Revoke button) — the channel is permanently un-invitable.
- *     So judge `isClaimable` on the row: claimable → hand it back; dead →
- *     REVOKE it (freeing the index) and fall through to mint fresh.
- *     ⚠ **AND "CLAIMABLE" IS NOT ENOUGH EITHER — AN EXPLICITLY REQUESTED GRANT
- *     HAS TO MATCH (2026-08-26).** M3 put a ROLE PICKER on that button and the
- *     reuse branch returned the open row VERBATIM, without comparing
- *     `granted_role`. The popover renders "Create another", so reuse is the
- *     NORMAL second click: an operator picking "Member — full channel" over an
- *     open GUEST link got a 200 carrying the guest link back, and the peer
- *     landed as a guest. **And the reverse — picking Guest over an open MEMBER
- *     link — pointed the same silence at PRIVILEGE.** So a claimable link whose
- *     requested grant differs is REVOKED and re-minted, reusing the dead-link
- *     path: the operator's explicit choice wins over a URL they may have pasted
- *     somewhere, because the alternative is a link that grants something they
- *     did not choose.
- *     🔒 ⚠ **"REQUESTED" IS THE LOAD-BEARING WORD, AND THE FIRST CUT DID NOT
- *     HAVE IT (2026-08-26, second pass).** `grantedRole` used to carry
- *     `.default("guest")` in the schema, so an ABSENT field was indistinguishable
- *     from a chosen `guest` — and a pre-M2 client (or any body omitting it)
- *     pressing "Add person" against an open **member** link therefore took this
- *     mismatch branch: it revoked the operator's outstanding invitation, minted a
- *     guest one, answered 200, and said nothing. That is a silent ROTATION and a
- *     silent DOWNGRADE of a URL already in somebody's inbox. The field is
- *     `optional()` now: **absent = "reuse whatever is open"** (the pre-M3
- *     semantics), and only an explicit pick can revoke. A FRESH mint with no pick
- *     still lands at `guest` — the fail-closed default now lives HERE, at
- *     `roleToMint`, where it applies to minting and not to matching.
- *  4. The insert can still lose a race, and `channel_links_one_open_per_workspace`
- *     is what makes that CONVERGE: a 23505 means somebody else's mint won, so
- *     re-read and return theirs.
+ *  1. `findMemberContainer` is the FENCE: non-member or standard workspace → 404,
+ *     never 403 (no oracle).
+ *  2. MINT FLOOR and GRANT-ABOVE-SELF are judged BEFORE any insert. ⚠ No
+ *     capacity gate (Samuel's ruling, 2026-08-26): the gates are about WHO asks,
+ *     not HOW MANY are in.
+ *  3. An OPEN link is RETURNED, not replaced (`getOrCreateJoinLink` precedent) —
+ *     rotating would kill a URL already pasted somewhere. ⚠ But "open" ≠
+ *     "claimable": a dead-but-unrevoked row still holds
+ *     `channel_links_one_open_per_workspace` while `hydrateChannels` hides its
+ *     Revoke button → permanently un-invitable. So dead → REVOKE and mint fresh.
+ *     ⚠ An EXPLICITLY REQUESTED grant must also match (2026-08-26): otherwise
+ *     picking Member over an open guest link silently returned the guest link
+ *     (or the reverse, toward privilege). Mismatch → revoke and re-mint.
+ *     🔒 ⚠ "REQUESTED" is load-bearing: `grantedRole` is `optional()`, not
+ *     `.default("guest")`, so an ABSENT field reuses whatever is open instead of
+ *     silently rotating/downgrading an outstanding invitation. The fail-closed
+ *     `guest` default lives at `roleToMint`, for minting only.
+ *  4. A lost insert race converges on the one-open index: 23505 → re-read and
+ *     return the winner's.
  *
- * `maxUses: 1` always, and the cap's retirement did NOT loosen it. ONE TOKEN
- * ADMITS ONE NAMED PERSON: adding a second, third and fourth member is a fresh
- * mint each time, so an operator who pastes a link into the wrong window has let
- * in one stranger rather than opened the room. Single-use is the shape, not a
- * default, and it is now the ONLY thing bounding how a container grows.
+ * `maxUses: 1` always: ONE TOKEN ADMITS ONE PERSON, so a mis-pasted link lets in
+ * one stranger, not the room. It is the ONLY bound on container growth now.
  *
- * ⚠ GRANT-ABOVE-SELF (2026-08-25, M2): the link carries `input.grantedRole` (the
- * role the claimer lands at, default `guest`) and a minter cannot hand out a role
- * ABOVE their own — `meetsMinRole(minterRole, grantedRole)` or 403. In a
- * container the minter is the owner, so this always passes today; the DB CHECK
- * (`granted_role ∈ {guest,viewer,member}`) is the real ceiling. The guard exists
- * so the invariant survives a future where a non-owner can mint.
+ * ⚠ GRANT-ABOVE-SELF (2026-08-25, M2): `meetsMinRole(minterRole, grantedRole)`
+ * or 403. The DB CHECK (`granted_role ∈ {guest,viewer,member}`) is the real
+ * ceiling; the guard keeps the invariant if non-owners with lower roles mint.
  */
 export async function mintContainerLink(
   userId: string,
@@ -192,27 +140,18 @@ export async function mintContainerLink(
     throw new HttpError(404, "CHANNEL_NOT_FOUND", "This channel is not available");
   }
 
-  // ⚠ TWO VALUES, NOT ONE, AND THAT IS THE WHOLE FIX. `requestedRole` is what
-  // the body ASKED FOR — `null` when it said nothing — and it is the only thing
-  // the reuse branch is allowed to compare against. `roleToMint` is what a FRESH
-  // link gets, fail-closed at the floor. Collapsing them (a schema `.default()`)
-  // makes "absent" revoke somebody's open invitation.
+  // ⚠ TWO VALUES on purpose: `requestedRole` (null = no pick) is all reuse may
+  // compare; `roleToMint` is the fail-closed grant for a FRESH link. Collapsing
+  // them makes "absent" revoke an open invitation.
   const requestedRole = input.grantedRole ?? null;
   const roleToMint: Role = requestedRole ?? "guest";
 
-  // ⚠ Grant-above-self, BEFORE the insert. `findMemberContainer` already proved
-  // active membership of this link container; read the minter's ROLE in it (the
-  // fence returns the container, not the role) and refuse a grant above it.
+  // The fence returned the container, not the role — read the minter's role.
   const minter = await findMembership(workspaceId, userId);
-  // 🔒 A GUEST MAY NOT MINT, AND SINCE THE CAP CAME OFF IT IS THE ONLY THING
-  // STANDING HERE (2026-08-26). `meetsMinRole("guest","guest")` is TRUE, so a
-  // guest passes grant-above-self; the two-member cap used to refuse them
-  // anyway whenever the container was full, and that accident is gone. ⚠ **THE
-  // FLOOR NOW CARRIES THE WHOLE CASE ON ITS OWN**: without it a guest — a person
-  // somebody else let in — could hand strangers links into the operator's
-  // transcript, one after another, with nothing counting. "Any MEMBER of a
-  // container may mint it" (Samuel, 2026-08-24) was written when `member` was
-  // the floor role, and that is the reading that survives.
+  // 🔒 A GUEST MAY NOT MINT (2026-08-26). `meetsMinRole("guest","guest")` is
+  // true, so grant-above-self alone lets a guest chain strangers into the
+  // operator's transcript; this floor is the only stop. "Any MEMBER may mint"
+  // (Samuel, 2026-08-24) means `member` and up.
   if (!minter || !meetsMinRole(minter.role, "member")) {
     throw new HttpError(
       403,
@@ -230,26 +169,16 @@ export async function mintContainerLink(
 
   const open = await repo.findOpenLinkForWorkspace(workspaceId);
   if (open) {
-    // ⚠ TWO CONDITIONS, ONE BRANCH. A link is handed back if it is still
-    // CLAIMABLE *and* nothing contradicts it — either the body asked for no
-    // particular role (`requestedRole === null` → reuse whatever is open, the
-    // pre-M3 semantics) or it asked for exactly what this link grants. Any other
-    // combination takes the revoke-and-remint path below. See gate 3: the
-    // second condition is the role picker's, and without it the picker no-ops —
-    // but reading an ABSENT field as a pick is how a silent rotation happens.
+    // ⚠ Reuse only if CLAIMABLE and no pick contradicts it (no pick, or the
+    // same role). Anything else revokes and re-mints — see gate 3.
     if (
       isClaimable(open) &&
       (requestedRole === null || open.granted_role === requestedRole)
     ) {
       return { link: mapLinkRow(open) };
     }
-    // ⚠ Un-revoked but DEAD (expired/exhausted), or alive but granting a role
-    // the caller EXPLICITLY did not ask for. Returning a dead one would hand out
-    // a URL that 410s at claim, and leaving it un-revoked bricks the channel —
-    // the one-open index blocks a replacement and hydrateChannels hides the
-    // Revoke button. Returning a mismatched one silently overrides the
-    // operator's pick. Revoke it (scoped to its OWN creator, since any member
-    // may mint and the link may be the other member's) then mint fresh below.
+    // ⚠ Dead, or granting a role the caller explicitly didn't pick. Revoke as
+    // its OWN creator (it may be another member's), then mint fresh.
     await repo.markLinkRevoked(open.id, open.creator_user_id);
   }
 
@@ -273,9 +202,8 @@ export async function mintContainerLink(
 }
 
 /**
- * Soft-revoke. Creator only, and 404 for anybody else's link so the endpoint
- * cannot confirm a link id. Idempotent: an already-revoked link is not an error
- * — the caller asked for it to be dead and it is.
+ * Soft-revoke. Creator only; 404 for anybody else's link (no id oracle).
+ * Idempotent: already-revoked is not an error.
  */
 export async function revokeLink(
   userId: string,
@@ -295,22 +223,13 @@ function shortName(profile: ProfileSummary | undefined): string {
 }
 
 /**
- * THE FRONT DOOR for every claim, and the ONE place the two branches are told
- * apart.
+ * THE FRONT DOOR for every claim. Token-level checks (unknown → 404, dead → 410)
+ * run once here; then:
+ *  - `workspace_id === null` → legacy unbound branch, MINTS a pair container.
+ *  - otherwise → `service-claim-bound.ts › claimBoundLink`, JOINS the container.
  *
- * ⚠ THE PROLOGUE IS SHARED AND THE BODIES ARE NOT. Unknown token 404 (never an
- * oracle) and a dead link 410 are properties of the TOKEN, so they are judged
- * once, here, before anything knows which shape of claim this is. Everything
- * after depends on what the link is bound to:
- *
- *  - `workspace_id === null` → the LEGACY UNBOUND branch below, which MINTS a
- *    container for the pair.
- *  - otherwise → `service-claim-bound.ts › claimBoundLink`, which JOINS the
- *    container the link names.
- *
- * Their rollback stories are opposites — one may delete the workspace it just
- * created, the other must never delete the workspace it was handed — which is
- * why they are two functions and not one with a flag.
+ * Two functions, not a flag: one may delete the workspace it just created, the
+ * other must never delete the one it was handed.
  */
 export async function claimLink(
   token: string,
@@ -330,34 +249,22 @@ export async function claimLink(
 }
 
 /**
- * The LEGACY UNBOUND branch — a token minted before the 2026-08-24 inversion,
- * with no container behind it, whose claim mints one for the pair.
+ * The LEGACY UNBOUND branch — a pre-2026-08-24 token with no container; its
+ * claim mints one for the pair.
  *
- * ⚠ NOT DEAD CODE. Measured 2026-08-24 against the live project, open claimable
- * tokens exist with `workspace_id IS NULL`; those URLs are in somebody's chat
- * history. Nothing can PRODUCE another one — `HomeLinkMintSchema` requires a
- * `workspaceId` — so this branch only ever shrinks, and it may not be deleted
- * until that count reaches zero.
+ * ⚠ NOT DEAD CODE: live unbound claimable tokens existed (measured 2026-08-24).
+ * Nothing can mint new ones (`HomeLinkMintSchema` requires `workspaceId`);
+ * delete only once that count reaches zero.
  *
  * ⚠ THE ORDER IS THE CORRECTNESS ARGUMENT.
- *  1. Own link → 400: a self-claim would ask `createDirectChannel` for a
- *     self-DM. (The token's own validity was judged by `claimLink`.)
- *  2. Dedup the PAIR before spending anything. A second open of the same link
- *     between the same two people is a no-op that returns the existing channel,
- *     and it must not burn a use to do it.
- *  3. Spend one use ATOMICALLY (`consumeLinkUse`). This is the only thing
- *     standing between a single-use link and two claimers, so it happens before
- *     any row is created and its `false` is a 410, not a retry — after ONE
- *     re-check of the pair, which is the same account racing itself.
- *  4. Mint the container + the direct channel.
- *     ⚠ ACCEPTED WINDOW: the use is spent before the container exists, so a
- *     failure here burns one. Step 4 rolls its own workspace back, which
- *     narrows the window to a rollback that itself failed — and a burned use on
- *     a multi-use link is a smaller harm than a container nobody can see.
- *  5. Record the claim. Its unique `(link_id, claimed_by)` is what makes a
- *     concurrent double-claim by ONE account converge instead of minting two
- *     containers — the loser drops the container it just made and re-reads the
- *     winner's.
+ *  1. Own link → 400 (would be a self-DM).
+ *  2. Dedup the PAIR before spending a use — a re-open is a free no-op.
+ *  3. Spend one use ATOMICALLY (`consumeLinkUse`) before any row is created; the
+ *     only guard against two claimers. `false` → one pair re-check, then 410.
+ *  4. Mint container + direct channel. ⚠ ACCEPTED WINDOW: a failure here burns
+ *     the use; `createContainer` rolls back, so only a failed rollback leaks.
+ *  5. Record the claim; unique `(link_id, claimed_by)` makes one account's
+ *     double-claim converge — the loser drops its container, re-reads the winner.
  */
 async function claimUnboundLink(
   link: ChannelLinkRow,
@@ -374,11 +281,8 @@ async function claimUnboundLink(
   }
 
   if (!(await repo.consumeLinkUse(link.id))) {
-    // ⚠ ONE re-read, and NOT of the link row (`consumeLinkUse` forbids that) —
-    // of the PAIR. Two tabs of the SAME account opening a single-use link race
-    // past the dedup above together; one wins the use and the other reads
-    // exhausted. The loser is looking at a channel that now exists, so
-    // answering 410 would 410 the claimer on their own successful claim.
+    // ⚠ Re-read the PAIR, not the link: two tabs of one account race; the
+    // loser must not 410 on its own successful claim.
     const winner = await repo.findPairContainer(creatorId, userId);
     if (winner) {
       return { channel: await hydrateOneChannel(winner, userId), existing: true, bound: false };
@@ -415,10 +319,8 @@ async function createContainer(
     slug: slugifyWorkspaceName(name),
   });
 
-  // ⚠ THE CHANNELS SERVICE, not a second copy of it: `direct_key` dedup,
-  // membership-of-2 and the self-target refusal all live in
-  // `createDirectChannel` and must not be mirrored here. The context is built
-  // for the CREATOR — they own the container, so they own its channel.
+  // ⚠ Reuse the channels service (`direct_key` dedup, membership-of-2,
+  // self-target refusal live in `createDirectChannel`). Context is the CREATOR's.
   try {
     await createChannel(
       buildChannelContext({
@@ -430,11 +332,8 @@ async function createContainer(
       { direct: true, memberUserId: claimerId }
     );
   } catch (err) {
-    // ⚠ Roll the container back, exactly as the `insertClaim` loser does. A
-    // container with no channel is a BRICK: `hydrateChannels` drops it, so
-    // neither side ever sees it, and `findPairContainer` still finds it — which
-    // would dedup every future claim between this pair onto a channel that can
-    // never render.
+    // ⚠ Roll back: a channel-less container is a BRICK — hidden, yet
+    // `findPairContainer` would dedup every future claim onto it.
     await deleteWorkspace(container.id);
     throw err;
   }

@@ -122,10 +122,7 @@ export async function listEffectiveAccess(
   }
 
   const ceiling = defaultLevelForRole(role);
-  // ⚠ Same as above: a role with no default level reaches no shareable
-  // resource at all, which is the `null` this function already uses for "not an
-  // active member". Unreachable in practice since 2026-08-26 — the route is
-  // `viewer`+ — and stated rather than assumed.
+  // ⚠ Same as above. Unreachable today (route is `viewer`+); stated, not assumed.
   if (ceiling === null) return null;
   const [scoped, teamIds] = await Promise.all([
     listTeamsModeResources(workspaceId),
@@ -157,10 +154,8 @@ export async function listEffectiveAccess(
 }
 
 /**
- * Wire shape of `GET /api/workspaces/[workspaceSlug]/my-access` AND of the
- * `myAccess` half of `POST /api/boot`. ⚠ The SPA seeds one endpoint's cache
- * entry from the other's answer, so the two MUST NOT drift — hence one
- * shared projection rather than inline shapes in either route.
+ * Wire shape of `GET …/my-access` AND `POST /api/boot`'s `myAccess`. ⚠ The SPA
+ * seeds one's cache from the other, so they share this projection.
  */
 export interface MyAccessPayload {
   defaultLevel: AccessLevel;
@@ -172,10 +167,8 @@ export interface MyAccessPayload {
 }
 
 /**
- * ⚠ `level: null` (teams-mode resource with no grant) maps to `"read"`, NOT
- * omission: the client reads a missing entry as the ROLE DEFAULT ("edit" for
- * members), which would flip a just-revoked KB panel back to editable.
- * "read" keeps affordances locked until the lists refetch and drop it.
+ * ⚠ `level: null` maps to `"read"`, NOT omission: a missing entry reads as the
+ * role default ("edit"), which would re-enable a just-revoked KB panel.
  */
 export function toMyAccessPayload(result: EffectiveAccessResult): MyAccessPayload {
   return {

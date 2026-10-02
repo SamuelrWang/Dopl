@@ -9,11 +9,9 @@ import { PasswordRequirements } from "./password-requirements";
 type LegalLinkProps = { href: string; className?: string; children: ReactNode };
 type LegalLinkComponent = (props: LegalLinkProps) => ReactNode;
 
-/** Mode-switch renderer input: destination mode + class/label of in-place
- *  fallback, so host's link is same control, not lookalike. `onSelect` is the
- *  core's ANIMATED switch (fade out → swap → fade in) — a host that wants the
- *  in-place transition calls it instead of navigating; a host that navigates
- *  may ignore it. */
+/** Mode-switch renderer input; class/label match the in-place fallback so the
+ *  host's link is the same control. `onSelect` = the core's animated switch;
+ *  a navigating host may ignore it. */
 type ModeSwitchProps = {
   to: LoginMode;
   className: string;
@@ -28,16 +26,14 @@ const SWITCH_FADE_MS = 180;
 export interface LoginFormCoreProps {
   /** Absent member disables that control and prints one-line reason. */
   actions: LoginActions;
-  /** Brand mark above wordmark, INSIDE form column. Web hosts omit — lockup
-   *  lives page upper-left (`shared/layout/auth-split/auth-split-layout.tsx`,
-   *  `brand` prop). ⚠ Packaged SPA must pass BUNDLED asset: absolute
-   *  `/favicons/…` under `file://` resolves to filesystem root. */
+  /** Brand mark inside the form column; web omits (lockup lives in
+   *  `shared/layout/auth-split/auth-split-layout.tsx`). ⚠ Packaged SPA must pass
+   *  a BUNDLED asset: `/favicons/…` under `file://` hits filesystem root. */
   brand?: ReactNode;
   /** Footer Terms/Privacy renderer. Defaults to plain `<a>`. */
   legalLink?: LegalLinkComponent;
-  /** Sign-up ⇄ sign-in switch renderer. Web passes LINK — each mode own route
-   *  (`/signup`, `/login`), so URL can't lie about on-screen flow. Desktop SPA
-   *  has no router, omits it, falls back to in-place toggle — hence optional. */
+  /** Sign-up ⇄ sign-in switch. Web passes a LINK (own route per mode, so the URL
+   *  can't lie); desktop omits it and gets the in-place toggle. */
   modeSwitch?: ModeSwitchComponent;
   /** Opening mode. Per host, never sniffed: web from ROUTE, desktop always
    *  "signin" (only reachable post-install). */
@@ -85,13 +81,9 @@ export function LoginFormCore({
   const busy = pending !== null;
 
   /**
-   * The animated mode switch: fade the column to transparent, swap the mode
-   * while nothing is visible, let the transition carry it back up. `exitingTo`
-   * doubles as the re-entry guard — a second click mid-fade is ignored rather
-   * than queued — and the effect owns the swap timer, so unmount mid-fade
-   * cleans it up for free. The wrapper div below owns the opacity; content is
-   * never unmounted, so typed email/password survive the switch (sign-up ⇄
-   * sign-in share fields).
+   * Animated mode switch: fade out, swap while invisible, fade in. `exitingTo`
+   * is also the re-entry guard (mid-fade clicks are ignored); the effect owns the
+   * timer so unmount cleans up. Content never unmounts, so typed fields survive.
    */
   const [exitingTo, setExitingTo] = useState<LoginMode | null>(null);
   const requestModeSwitch = (to: LoginMode) => {
@@ -105,9 +97,8 @@ export function LoginFormCore({
       setExitingTo(null);
     }, SWITCH_FADE_MS);
     return () => window.clearTimeout(id);
-    // ⚠ `setMode` deliberately not a dep: `useLoginCore` rebuilds it every
-    // render, so keying on it would restart this timer on any re-render and a
-    // fade could stretch or never land. `exitingTo` is the one real input.
+    // ⚠ `setMode` is rebuilt every render; as a dep it would restart the timer
+    // and a fade could never land. `exitingTo` is the one real input.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exitingTo]);
 
@@ -137,9 +128,8 @@ export function LoginFormCore({
 
   return (
     <div className="w-full max-w-[336px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
-      {/* ⚠ The switch crossfade needs its OWN element. The root's `loginFadeIn`
-          runs with fill `both`, and a filled animation outranks a transition on
-          the same property — opacity set on the root would simply lose. */}
+      {/* ⚠ Crossfade needs its OWN element: the root's filled `loginFadeIn`
+          outranks a transition on opacity. */}
       <div
         style={{
           opacity: exitingTo !== null ? 0 : 1,
@@ -186,13 +176,10 @@ export function LoginFormCore({
       )}
 
       <form onSubmit={isSignUp ? signUpWithPassword : signInWithPassword}>
-        {/* ⚠ No visible label, no leading icon — placeholder is the label, so
-            `aria-label` is the ONLY accessible name (placeholder is not one;
-            vanishes on first keystroke). Tests find fields by label. */}
+        {/* ⚠ No visible label: `aria-label` is the ONLY accessible name.
+            Tests find fields by label. */}
         <div className="mt-7">
-          {/* `rounded-full` at call site (not kit `rounded-[10px]`):
-              `.auth-field-3d`/`.concave-field` carry no radius; every other
-              concave surface keeps its rectangle. */}
+          {/* `rounded-full` here: `.auth-field-3d` carries no radius. */}
           <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-full px-[16px]">
             <input
               id="login-email"
@@ -257,8 +244,7 @@ export function LoginFormCore({
         )}
       </form>
 
-      {/* 12px drop + right-aligned: reads as submit's alternative, not first
-          item of socials block (28px break). */}
+      {/* Tight + right-aligned: reads as submit's alternative, not a social. */}
       <div className="mt-3 flex justify-end leading-[1.55]">
         {modeSwitch ? (
           modeSwitch({

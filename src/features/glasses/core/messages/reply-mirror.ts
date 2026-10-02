@@ -10,21 +10,13 @@ import { RESERVED_CARD_PREFIX } from "./service";
 import type { GlassesStore, ShowPayload } from "./types";
 
 /**
- * Agent replies → glasses. Runs inside the device inbox long-poll (no
- * background worker, at most one pass per device per 5s). A device mirrors
- * replies from its SCOPE:
- *   (a) its current-target channel (set by opening a chat/read view), and
- *   (b) every channel it posted to by voice / Hey Even in the last 24h.
- * There is no linked channel. Per-channel state (cursor, last post) lives in
- * `glasses_device_channel_activity`. Each pass reads agent `message` rows past
- * every in-scope cursor in ONE query and queues one `show` card per row,
- * card_id `reply-<channel message id>`. A `show`, never a `notify`: a notify
- * auto-dismisses, and a reply must stay until the wearer taps it or it expires.
- * Idempotent twice over: cursors only move forward, and
- * `glasses_messages_reply_card_uidx` refuses a second row for the same reply.
- * NO HISTORY REPLAY: a channel entering scope (no row, or a cursor not
- * confirmed within {@link CURSOR_STALE_MS}, e.g. it left scope or the glasses
- * were off) starts at the channel's head; a post starts it at the post's seq.
+ * Agent replies → glasses, run inside the inbox long-poll (≤ one pass per device per 5s).
+ * SCOPE: the device's current-target channel + every channel it posted to (voice / Hey Even)
+ * in 24h. One query per pass; one `show` card per reply (`reply-<message id>`) — a `show`, never
+ * a `notify`, which would auto-dismiss. Idempotent: cursors only move forward and
+ * `glasses_messages_reply_card_uidx` refuses a duplicate.
+ * NO HISTORY REPLAY: a channel entering scope (no row, or cursor older than
+ * {@link CURSOR_STALE_MS}) starts at its head; a post starts it at the post's seq.
  */
 
 const REPLY_TTL_SEC = 600;
@@ -58,10 +50,8 @@ const CURSOR_REFRESH_MS = CURSOR_STALE_MS / 2;
 const age = (nowMs: number, at: string | null) => (at ? nowMs - Date.parse(at) : Infinity);
 
 /**
- * Record a device's post (voice / Hey Even) into `channelId` at `seq`: the
- * channel is in the device's mirror scope for {@link POST_SCOPE_MS}. A fresh
- * cursor there is kept (replies already pending still mirror); otherwise the
- * cursor starts AT the post, so the reply to it is mirrored and nothing older.
+ * Put `channelId` in the device's mirror scope for {@link POST_SCOPE_MS}. A fresh cursor is
+ * kept (pending replies still mirror); else it starts AT the post, so nothing older mirrors.
  */
 export async function recordDevicePost(
   deps: Pick<MirrorDeps, "devices"> & Clock,
@@ -76,14 +66,9 @@ export async function recordDevicePost(
 }
 
 /**
- * Queue every new agent reply in `device`'s scope for its owner (all of the
- * owner's devices see it: the queue is per user). Returns how many were queued
- * and the channels mirrored.
- *
- * 🔒 VISIBILITY IS RE-CHECKED EVERY PASS: replies are read with the service
- * role, so the pass first asks (one batched read) which in-scope channels the
- * owner may still see; any other is skipped and nothing is read from it
- * (departure is removal).
+ * Queue every new agent reply in `device`'s scope for its owner (the queue is per user).
+ * 🔒 VISIBILITY RE-CHECKED EVERY PASS: replies are read with the service role, so channels the
+ * owner may no longer see are skipped unread (departure is removal).
  */
 export async function mirrorReplies(
   deps: MirrorDeps,

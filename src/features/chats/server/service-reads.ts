@@ -14,14 +14,11 @@ import {
   type ChatContext,
 } from "./service-shared";
 
-/** Read-side chats service: visibility-filtered list + single-chat detail.
- *  Both funnel through the visibility gate + grant context in
- *  `service-shared`, then the retention window (hide, never delete) from
- *  `./retention`. */
+/** Read-side chats: visibility gate (`service-shared`) then retention window
+ *  (`./retention`; hide, never delete). */
 
-/** Own chats + workspace-shared + team-scoped ones granted to the caller's
- *  teams, minus anything outside the retention window (excluded in the DB
- *  query). `hiddenCount` = how many the window hid; 0 on full-history plans. */
+/** Own + shared + team-granted chats inside the retention window.
+ *  `hiddenCount` = how many the window hid. */
 export async function listChats(ctx: ChatContext): Promise<ChatList> {
   const { since } = await resolveChatsWindow(ctx.workspaceId);
   const [{ rows, truncated }, hiddenCount] = await Promise.all([
@@ -43,24 +40,17 @@ export async function listChats(ctx: ChatContext): Promise<ChatList> {
       )
     )
   );
-  // ⚠ `truncated` is the READ's, not the filtered list's, and it is passed on
-  // rather than folded into `hiddenCount`: they answer different questions —
-  // one is "your plan hides older chats", the other is "this read did not reach
-  // the end". A clip that rendered as a retention notice would offer an upgrade
-  // as the remedy for a ceiling upgrading does not move (INVARIANTS §9).
+  // ⚠ `truncated` (read hit the ceiling) stays separate from `hiddenCount`
+  // (plan hides older chats) — upgrading doesn't lift the ceiling (INVARIANTS §9).
   return { chats, hiddenCount, truncated };
 }
 
 /**
- * ⚠ Visibility gate only, NO retention window. Used by `service-writes` to echo
- * a just-written chat — an owner backfilling an old session must get their chat
- * back, not a window denial.
+ * ⚠ Visibility gate only, NO retention window — the write echo, so a
+ * backfilled old session comes back.
  *
- * 🔒 ⚠ **KEYED TO `ctx.workspaceId`, AND IT MUST STAY THAT WAY — IT IS THE WRITE
- * ECHO.** Every mutation in `service-writes.ts` returns through it, so the
- * tenancy it reads in is the tenancy that write landed in. The ID-RESOLVING read
- * is {@link getChat}; the split is A12's, restated for this feature
- * (INVARIANTS §T35).
+ * 🔒 ⚠ MUST stay keyed to `ctx.workspaceId` (reads where the write landed).
+ * The id-resolving read is {@link getChat} (INVARIANTS §T35).
  */
 export async function readChatDetail(
   ctx: ChatContext,
@@ -71,9 +61,8 @@ export async function readChatDetail(
   return detail;
 }
 
-/** The read both chat doors share: one chat, in ONE named container, through
- *  the visibility gate and the folder-privacy fold. `null` = not visible, which
- *  the callers turn into the single 404. */
+/** Shared by both doors: one chat in ONE container, gated + folder-privacy
+ *  folded. `null` = not visible (→ 404). */
 async function loadVisibleChat(
   ctx: ChatContext,
   chatId: string
@@ -102,26 +91,18 @@ async function loadVisibleChat(
 }
 
 /**
- * Window-enforced detail read for browsing (web UI + MCP `get`). Throws
- * `ChatOutsideRetentionError` for the route to convert into the upgrade
- * envelope. `sessionDate`/`since` are `YYYY-MM-DD`, so lexical `<` is date
- * order; the boundary is DB-computed (`retentionCutoff`).
+ * Window-enforced detail read (web UI + MCP `get`); throws
+ * `ChatOutsideRetentionError` → upgrade envelope. `YYYY-MM-DD` so lexical `<`
+ * is date order.
  *
- * 🔒 **THE READ DOOR, SO IT FOLLOWS THE ID (B2).** `workspace=` is optional on
- * the way in, and one that contradicts a resolvable id is IGNORED.
+ * 🔒 THE READ DOOR — follows the id (B2); a contradicting `workspace=` is ignored.
  *
- * ⚠ **THE RETENTION WINDOW IS THE RESOLVED CONTAINER'S, WHICH IS WHY THE TWO
- * READS ARE NO LONGER PARALLEL.** The window is a BILLING PLAN
- * (`retention.ts › resolveChatsWindow`), and a chat followed into another
- * container must be measured against THAT container's plan — asking the caller's
- * would let a free container's chat through on a paid caller's window, and hide
- * a paid container's chat from them. One extra round trip on this door, and it
- * is not optional.
+ * ⚠ The window is the RESOLVED container's plan (`retention.ts ›
+ * resolveChatsWindow`), not the caller's — else a paid caller's window would
+ * expose a free container's chat. Hence the sequential round trip.
  *
- * ⚠ **THE WINDOW IS NOT PART OF THE FOLLOW**, deliberately: a chat outside it
- * EXISTS and is visible, and says so with a distinct error the route turns into
- * an upgrade envelope. Folding it into `load` would make "too old" resolve as
- * "no such chat" and then quietly re-read the same chat in another container.
+ * ⚠ The window is NOT part of the follow: "too old" must not resolve as "no
+ * such chat" and re-read elsewhere.
  */
 export async function getChat(ctx: ChatContext, chatId: string): Promise<ChatDetail> {
   const hit = await readResourceById(ctx, "chat", chatId, loadVisibleChat);

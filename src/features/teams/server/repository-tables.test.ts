@@ -1,11 +1,8 @@
 /**
  * Table + filter smoke for the grant/membership queries.
- * ⚠ A query on the wrong table or a dropped filter shows up as no error at
- * all: PostgREST answers a wrong-table read with rows and a `.delete()` that
- * matched nothing returns `{ error: null }`. So these assert on the TABLE NAME
- * and on the `workspace_id` filter every workspace-wide query requires.
- * The last describe pins the re-export surface — `repository.ts` is still the
- * address other features (and the chats tests' `vi.mock`) import.
+ * ⚠ A wrong table or dropped filter raises no error (a no-match `.delete()`
+ * returns `{ error: null }`), so these assert the TABLE NAME and the
+ * `workspace_id` filter. The last describe pins `repository.ts`'s re-exports.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -110,12 +107,9 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("grants — every query is the TEAM slice of resource_grants", () => {
   /**
-   * 🔒 `scope_type` IS THE SECOND FENCE, AND IT IS NEW. `20260914120000` folded
-   * three grant tables into one, so `team_resource_access`'s name no longer
-   * narrows anything: a statement that drops the scope term reads a channel's
-   * grants as a team's, and a DELETE that drops it un-shares the knowledge lane.
-   * Every case below asserts it, and the sweep at the end asserts the ones no
-   * case drives.
+   * 🔒 `scope_type` IS THE SECOND FENCE: `resource_grants` holds every scope, so
+   * dropping it reads a channel's grants as a team's, or un-shares the
+   * knowledge lane on DELETE. The final sweep covers functions no case drives.
    */
   const TEAM_SLICE = { scope_type: "team" };
 
@@ -134,8 +128,7 @@ describe("grants — every query is the TEAM slice of resource_grants", () => {
   });
 
   it("listGrantsForTeam pins the ONE team without a workspace filter", async () => {
-    // The team id IS the tenancy here — a team belongs to exactly one
-    // workspace — which is why this is the one read with no `workspace_id`.
+    // A team belongs to one workspace, so the team id IS the tenancy.
     const calls = install([]);
     await listGrantsForTeam(TEAM);
     expect(calls.match).toEqual([{ scope_id: TEAM, ...TEAM_SLICE }]);
@@ -215,9 +208,7 @@ describe("grants — every query is the TEAM slice of resource_grants", () => {
   });
 
   it("🔒 EVERY statement in the module names the table and spreads the scope", () => {
-    // The enumerated cases above drive seven functions; the module exports
-    // eleven. A twelfth added without the scope term would pass all of them by
-    // simply not being in one.
+    // Catches a new export lacking the scope term that no case above drives.
     const src = readFileSync(
       resolve(__dirname, "repository-grants.ts"),
       "utf8"
@@ -229,8 +220,7 @@ describe("grants — every query is the TEAM slice of resource_grants", () => {
 
     const filterSets = src.match(/\.match\(\{/g)?.length ?? 0;
     const spreads = src.match(/\.\.\.TEAM_SCOPE/g)?.length ?? 0;
-    // Every `.match(` carries the spread; `grantRow()` carries it for all three
-    // write paths, so the write side spends exactly one more.
+    // Every `.match(` carries the spread, plus one in `grantRow()` for all writes.
     expect(filterSets).toBeGreaterThan(0);
     expect(spreads).toBe(filterSets + 1);
   });

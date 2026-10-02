@@ -9,11 +9,8 @@ import type {
 } from "./desktop-devices-types";
 
 /**
- * The computer source of Settings > Devices.
- *
- * A desktop heartbeats every ~60s while signed in (it rides the presence loop, which beats every
- * 30s and skips alternate sends), so a row is online while its last beat is inside this window and
- * it has not said `offline` (quit / sleep / lock post that at once).
+ * The computer source of Settings > Devices. A desktop heartbeats every ~60s while signed in, so a
+ * row is online while its last beat is inside this window and it has not posted `offline`.
  */
 export const COMPUTER_ONLINE_WINDOW_MS = 150_000;
 
@@ -116,10 +113,9 @@ type HeartbeatResult =
   | { device: { revoked: true } };
 
 /**
- * Register or refresh this computer: ONE update in the common case (the row exists and is active).
- * A REMOVED computer stays removed: its heartbeat answers `revoked`, the desktop signs out and mints
- * a fresh install id, so its next sign-in is a new row. A token is linked only when the beat names
- * one (the desktop sends it once after sign-in or a re-mint).
+ * Register or refresh this computer (one update in the common case). A REMOVED computer stays
+ * removed: its beat answers `revoked`, and the desktop re-signs-in as a new row. A token is linked
+ * only when the beat names one.
  */
 export async function heartbeat(
   deps: DevicesDeps,
@@ -145,9 +141,8 @@ export async function heartbeat(
 const notFound = () => new HttpError(404, "DEVICE_NOT_FOUND", "No such device.");
 
 /**
- * Rename a computer (Settings > Devices). The rename is an override column, so the
- * heartbeat's detected name keeps updating underneath it; a blank or null name clears the
- * override and the detected name shows again. A legacy computer (a token, no row) cannot be renamed.
+ * Rename = an override column over the heartbeat's detected name; blank/null clears it. Legacy
+ * (token-only) computers cannot be renamed.
  */
 export async function renameComputer(
   deps: DevicesDeps,

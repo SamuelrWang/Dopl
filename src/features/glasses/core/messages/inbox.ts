@@ -3,11 +3,7 @@ import { isUuid } from "../validation";
 import { REC_MARK } from "@/features/display/core/degrade";
 import type { GlassesMessage, GlassesStatus, GlassesStore, ScreenPayload } from "./types";
 
-/**
- * The glasses' side of the message queue: long-poll inbox, answer, dismiss.
- * Everything here is per USER, so every active device of the user sees the
- * same queue.
- */
+/** The glasses' side of the queue: inbox, answer, dismiss. Per USER: all their devices share it. */
 
 const INBOX_MAX_WAIT_SEC = 25;
 const INBOX_POLL_MS = 2000;

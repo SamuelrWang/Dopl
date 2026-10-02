@@ -3,11 +3,9 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { AccessMode, TeamResourceType } from "../access-levels";
 
 /**
- * The grantable resources themselves — the only part of the teams repository
- * that touches another feature's table. A grant row says WHICH resource;
- * this file knows where it lives, its name column and its creator column.
- * `repository-grants.ts` owns the rows pointing here.
- * ⚠ Raw Supabase I/O: every query filtered by `workspace_id`.
+ * The grantable resources themselves — the only teams code touching another
+ * feature's table. `repository-grants.ts` owns the rows pointing here.
+ * ⚠ Every query filtered by `workspace_id`.
  */
 
 export interface TeamsModeResourceRow {
@@ -62,13 +60,11 @@ export interface ResourceAccessMeta {
 }
 
 /**
- * Where each grantable resource type lives.
- * `team_resource_access.resource_id` is polymorphic across FOUR tables, each
- * spelling "name" and "creator" differently.
- * ⚠ `satisfies Record<TeamResourceType, …>` is load-bearing: a fifth resource
- * type must fail to compile here rather than resolve to the wrong table. A
- * Supabase `.update()` matching zero rows returns `{ error: null }`, so a
- * mis-routed write "succeeds" silently and reverts on the next refetch.
+ * Where each grantable resource type lives (a grant's `resource_id` is
+ * polymorphic across these tables).
+ * ⚠ `satisfies Record<TeamResourceType, …>` is load-bearing: a new type must
+ * fail to compile, since a mis-routed `.update()` matching zero rows
+ * "succeeds" silently.
  */
 const RESOURCE_TABLES = {
   knowledge_base: { table: "knowledge_bases", nameCol: "name", creatorCol: "created_by" },
@@ -110,11 +106,8 @@ export async function getResourceAccessMeta(
 
 /**
  * Flip one resource row between `workspace` and `teams` scope.
- * ⚠ CHATS AND CHAT FOLDERS ARE REFUSED, not routed: a folder's scope is
- * authoritative for every chat filed in it and PROPAGATES to those rows, and
- * a filed chat may not be scoped directly. Writing `chats.access_mode` here
- * would desync folder from contents — silently, since the write succeeds.
- * The chats service owns those transitions.
+ * ⚠ CHATS AND CHAT FOLDERS ARE REFUSED: folder scope propagates to its chats,
+ * so writing here would silently desync them. The chats service owns those.
  */
 export async function setResourceAccessModeRow(
   workspaceId: string,

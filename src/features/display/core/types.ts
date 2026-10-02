@@ -1,8 +1,7 @@
 /**
- * **THE ONE DISPLAY VOCABULARY** (docs/specs/unified-display.md §2). An agent composes a display
- * from these blocks once; every surface draws the SAME spec its own way (the desktop/web card, the
- * G2 lens via `degrade.ts`, text-only readers via `fallback.ts`). Client-safe: no server imports
- * (the desktop renderer's ESLint fence).
+ * **THE ONE DISPLAY VOCABULARY** (docs/specs/unified-display.md §2): every surface draws the SAME
+ * spec its own way (card, lens via `degrade.ts`, text via `fallback.ts`). Client-safe: no server
+ * imports (desktop renderer's ESLint fence).
  */
 
 export const DISPLAY_SPEC_VERSION = 2;
@@ -124,8 +123,7 @@ export interface DisplayEnvelopeV2 {
   glasses_message_id?: string;
   answer?: DisplayAnswerStamp | null;
   origin?: DisplayOrigin;
-  /** Set when a replace by `display_id` dropped this decision's choice: the message that replaced it.
-   *  A superseded display is closed — no answer, no decision index. */
+  /** The message that replaced this decision without its choice. Closed: no answer, no decision index. */
   superseded_by?: string;
 }
 

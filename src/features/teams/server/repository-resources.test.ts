@@ -1,11 +1,8 @@
 /**
- * The polymorphic-resource write path: `team_resource_access.resource_id`
- * points at one of FOUR tables depending on `resource_type`, and the
- * repository is the only thing that knows which.
- * ⚠ A mis-dispatched write is INVISIBLE at any higher layer — a Supabase
- * `.update()` matching zero rows returns `{ error: null }`, so nothing throws,
- * the route 200s and the scope silently never changes. These assert on the
- * TABLE NAME the query builder was handed; that is the only way to catch it.
+ * The polymorphic-resource write path: a grant's `resource_id` points at one
+ * of four tables by `resource_type`.
+ * ⚠ A mis-dispatched write is INVISIBLE higher up (a no-match `.update()`
+ * returns `{ error: null }`), so these assert the TABLE NAME handed over.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -89,8 +86,7 @@ describe("setResourceAccessModeRow — table routing", () => {
   it.each(["chat", "chat_folder"] as const)(
     "refuses %s rather than writing the column directly",
     async (resourceType) => {
-      // ⚠ Folder scope is authoritative for its chats and propagates to them;
-      // setting the column here desyncs the two with no error.
+      // ⚠ Folder scope propagates to its chats; writing here desyncs them silently.
       const { builder, calls } = makeDb();
       vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
 
@@ -153,8 +149,7 @@ describe("getResourceAccessMeta — table + column routing", () => {
   });
 
   it("reads a chat's name from `title` and its creator from `owner_id`", async () => {
-    // Not reachable from the console, but the union member exists and every
-    // table names its columns differently.
+    // Not reachable from the console, but the union member exists.
     const { builder, calls } = makeDb({
       title: "Kickoff",
       access_mode: "teams",

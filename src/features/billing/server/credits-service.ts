@@ -26,62 +26,48 @@ import {
 import { countActiveMembers, getWorkspaceBilling } from "./workspace-billing";
 
 /**
- * MCP credits — business logic between route and repository. Numbers live in
- * `../credits.ts` (the one retune spot); this owns only "may this call proceed"
- * and "how much is left".
+ * MCP credits — "may this call proceed" and "how much is left". Numbers live in
+ * `../credits.ts` (the one retune spot).
  *
  * Rulings:
- * - 2026-09-07: two wallets, and the charged container's kind picks one. A
- *   standard workspace charges the caller's own seat; a home-space container
- *   charges the container owner's personal wallet.
- * - Rule B (2026-09-13): the CALLING CHANNEL's container is charged, falling back
- *   to the addressed resource's container when there is no calling channel. The
- *   channel comes from `./channel-attribution.ts`, which also fences the
- *   forgeable header it is read from.
- * - F-693 (2026-09-13): the attribution row is part of the spend, written by the
- *   wallet RPC in the counter's transaction — this file has no ledger write at
- *   all. Dimensions travel as `credit-ledger.ts › CreditLedgerAttribution`.
- * - 2026-09-08: the personal wallet has a plan (Pro), billed on the owner's own
- *   `kind='home'` container, so both personal arms resolve a billing row via
- *   `./personal-wallet.ts` — one round trip more than before.
+ * - 2026-09-07: the charged container's kind picks the wallet — standard
+ *   workspace → caller's seat; home-space container → owner's personal wallet.
+ * - Rule B (2026-09-13): the CALLING CHANNEL's container is charged, else the
+ *   addressed resource's. `./channel-attribution.ts` resolves and fences it.
+ * - F-693 (2026-09-13): the ledger row is written by the wallet RPC in the
+ *   counter's transaction — this file has no ledger write.
+ * - 2026-09-08: the personal wallet has a plan (Pro), billed on the owner's
+ *   `kind='home'` container (`./personal-wallet.ts`).
  *
  * The plan is always the entitlement verdict, never `workspace_billing.plan`: a
  * solo sub that grew a second member is degraded to free by
- * `entitlements.ts › paidEntitlement`, and the raw column would hand every one of
- * its members the paid allowance.
+ * `entitlements.ts › paidEntitlement`; the raw column would pay every member.
  */
 
-/** Who is burning the credit. The seat wallet is keyed on the caller and the
- *  personal wallet on the container's owner, so there is no wallet to move
- *  without knowing who called. */
+/** Who is burning the credit — needed to pick the seat (caller) or personal
+ *  (container owner) wallet. */
 export interface CreditCaller {
   userId: string;
   /** The addressed workspace's kind. Absent = standard (column not yet applied). */
   workspaceKind?: WorkspaceKind;
   /**
-   * Rule B's input: the channel whose container is charged, from the
-   * `<channelId>:<tail>` head of `X-Dopl-Session-Id`
-   * (`./channel-attribution.ts` fences it). Absent or `null` is ordinary and never
-   * a refusal — external MCP clients, app clicks and older desktop builds all look
-   * like this and charge the resource's container.
+   * Rule B's input: the `<channelId>:<tail>` head of `X-Dopl-Session-Id`
+   * (fenced by `./channel-attribution.ts`). Absent/`null` is ordinary, never a
+   * refusal — external clients, app clicks, older desktops charge the resource's
+   * container.
    */
   channelId?: string | null;
 }
 
-/**
- * Why a burn found no counter to move. Never silent — `consumeMcpCredits` logs it.
- * One reason since 2026-09-07: a home burn lands on the owner's personal wallet,
- * and every user has exactly one of those, so nothing can be missing or ambiguous.
- */
+/** Why a burn found no counter to move. Never silent — `consumeMcpCredits` logs it. */
 type UnmeteredReason = "container-has-no-active-owner";
 
 /**
  * Which counter a burn moves, and whose allowance that is.
  *
- * `workspaceId` is the CHARGED container (the calling channel's under rule B,
- * else the addressed one), never "the workspace that pays" — the payer is always
- * `payerUserId`. The ledger records the ADDRESSED container as the row's origin;
- * the two differ exactly when an agent reaches across containers.
+ * `workspaceId` is the CHARGED container (rule B), not the payer — that is
+ * `payerUserId`. The ledger's origin is the ADDRESSED container; they differ
+ * when an agent reaches across containers.
  */
 export type BillingTarget =
   | {
@@ -96,11 +82,10 @@ export type BillingTarget =
       payerUserId: string;
       channelId: string | null;
       /**
-       * The container to read the personal billing row from, or `null` to reach it
-       * through the payer. Non-null only for a `kind='home'` container, which
-       * is its own billing row — `personal-wallet.ts › readPersonalBilling` refuses
-       * any other id, since a link container has no row and passing its id would
-       * report every Pro operator as free.
+       * The personal billing row's container, or `null` to reach it through the
+       * payer. Non-null only for `kind='home'`; a link container has no row and
+       * would report every Pro operator as free
+       * (`personal-wallet.ts › readPersonalBilling` refuses it).
        */
       personalBillingContainerId: string | null;
     }
@@ -113,15 +98,11 @@ export type BillingTarget =
     };
 
 /**
- * Which container pays, which wallet that is, and whose.
+ * Which container pays, which wallet that is, and whose. Rule B: the calling
+ * channel's container, else the resource's; kind→wallet is {@link containerTarget}.
  *
- * Rule B (2026-09-13): the calling channel's container pays; with no calling
- * channel, the resource's does. Channel resolution and its fence live in
- * `./channel-attribution.ts`; the kind→wallet half is {@link containerTarget}.
- *
- * 2026-08-26: a home-space burn is charged to the container's owner whoever made
- * the call. A `link` container is a relationship and a `home` container is a
- * shelf; neither is a tenant and neither carries a plan.
+ * 2026-08-26: a home-space burn is charged to the container's owner whoever
+ * called — `link`/`home` containers are not tenants and carry no plan.
  */
 export async function resolveBillingTarget(
   workspaceId: string,
@@ -139,17 +120,15 @@ export async function resolveBillingTarget(
 }
 
 /**
- * The whole kind→wallet decision for one container, reached from both of rule B's
- * arms so neither can drift.
+ * The kind→wallet decision for one container, shared by both rule-B arms so
+ * neither can drift.
  *
- * `kind='home'` skips the owner lookup — a round trip saved, not a check
- * skipped: such a container has exactly one member, its owner, so the caller is
- * provably the payer.
+ * `kind='home'` skips the owner lookup: its only member is the owner, so the
+ * caller is provably the payer.
  *
- * `kind` is wide (`string`) because the cross-container arm reads it off a row
- * rather than off the auth context: a value the enum does not carry must land on
- * `isStandardWorkspace`'s negative side and be treated as a home-space container,
- * never crash and never be read as a workspace.
+ * `kind` is wide (`string`) because the cross-container arm reads it off a row:
+ * an unknown value must fall to the home-space side, never crash or read as a
+ * workspace.
  */
 async function containerTarget(
   workspaceId: string,
@@ -209,13 +188,10 @@ export interface CreditConsumeResult extends CreditsSummary {
    *  server-side `upgradeUrl()`. */
   upgradeUrl: string;
   /**
-   * F-668 (2026-09-14): what the offer at `upgradeUrl` buys, `0` when there is no
-   * offer. `packages/mcp-server/src/tools/respond.ts › creditsExhausted` cannot
-   * import `../credits.ts` (separate build, external by `next.config.ts ›
-   * serverExternalPackages`), so the figure was a literal in two places and a
-   * retune left the refusal advertising the old number. The number crosses the
-   * wire, the wording does not. Not `limit` — that is the allowance just
-   * exhausted; this is what an upgrade would give.
+   * F-668 (2026-09-14): what the offer at `upgradeUrl` buys, `0` when none.
+   * Sent on the wire because `packages/mcp-server/src/tools/respond.ts ›
+   * creditsExhausted` cannot import `../credits.ts` (separate build). Not
+   * `limit` — that is the allowance just exhausted.
    */
   upgradeCredits: number;
 }

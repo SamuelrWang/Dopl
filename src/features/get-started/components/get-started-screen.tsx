@@ -7,13 +7,11 @@ import { AUTH_GLASS_SLOT_ID } from "@/shared/layout/auth-split";
 import { InstallAnimation } from "./install-animation";
 
 export interface GetStartedScreenProps {
-  /** dmg name from the release feed, resolved server-side; null when the feed
-   *  could not be read — a NORMAL answer, copy just stops naming a file.
-   *  See `shared/version/mac-download.ts`. */
+  /** dmg name from the release feed (`shared/version/mac-download.ts`); null is
+   *  a NORMAL answer — copy just stops naming a file. */
   asset: string | null;
-  /** `dopl://open/{segment}` when this visit named a workspace (the invite/join
-   *  cards' fallback link, `?workspace=`), else null. ⚠ Already VALIDATED and
-   *  re-composed by the page — this component never parses a URL. */
+  /** `dopl://open/{segment}` when this visit named a workspace (`?workspace=`).
+   *  ⚠ Already VALIDATED by the page — this component never parses a URL. */
   openLink?: string | null;
 }
 
@@ -21,18 +19,12 @@ export interface GetStartedScreenProps {
 const AUTOSTART_DELAY_MS = 500;
 
 /**
- * "Open Dopl in 3 steps" — where a web sign-in lands. Two audiences: new
- * accounts from landing "Get Started", and returning users bounced off a
- * retired app route (this page is the retirement plan's `/retired`) — hence
- * instruction copy. Heading promises three steps, so keep exactly three.
+ * "Open Dopl in 3 steps" — where a web sign-in lands (new accounts, and users
+ * bounced off a retired app route). Heading promises three steps; keep three.
  *
- * ⚠ This is the FORM-COLUMN HALF of the shared `(auth)` split layout — the
- * banner, glass and brand live in `src/app/(auth)/layout.tsx` and persist
- * across the `/authenticate` → here navigation, which is what makes that
- * transition seamless. The install animation is PORTALED onto the layout's
- * glass (`AUTH_GLASS_SLOT_ID`); rendering it inline here would put it in the
- * left column. Styling lives in `../get-started.css`, matched to the auth
- * form column's type.
+ * ⚠ FORM-COLUMN HALF of the `(auth)` split layout (`src/app/(auth)/layout.tsx`
+ * owns banner/glass/brand). The install animation is PORTALED onto the glass
+ * (`AUTH_GLASS_SLOT_ID`); inline it would land in the left column.
  */
 export function GetStartedScreen({
   asset,
@@ -61,23 +53,16 @@ export function GetStartedScreen({
 
         <div className="gs-retry">
           <span className="gs-retry-note">Not working?</span>
-          {/* ⚠ REAL link, not a re-run of the effect: auto-start fails silently
-              (`useAutoDownload`), so recovery must be a user click. Kit pill —
-              `auth-btn-3d` is the auth surfaces' button face. */}
+          {/* ⚠ REAL link: auto-start fails silently, so recovery is a click. */}
           <a href={DOWNLOAD_URL} className="auth-btn-3d gs-retry-btn">
             Try again
           </a>
         </div>
 
-        {/* 🔒 THE WORKSPACE THIS VISIT NAMED (2026-09-10, the new-user flow) —
-            an invite accepted in a browser with no app finishes HERE, and
-            without this the trip ends on a bare app with the invitation
-            forgotten. ⚠ NOT auto-navigated: `DesktopHandoffPanel` may fire the
-            protocol on mount because the caller has just clicked something, and
-            this page has a download in flight that a protocol launch would
-            interrupt. The button is the contract; here it is the WHOLE contract.
-            ⚠ Below the steps on purpose — the heading promises three and this is
-            not a fourth. Label + link. */}
+        {/* 🔒 The workspace this visit named (2026-09-10): an invite accepted
+            with no app finishes here, or the invitation is forgotten.
+            ⚠ NOT auto-navigated — a protocol launch would interrupt the
+            in-flight download. Below the steps: it is not a fourth step. */}
         {openLink && (
           <div className="gs-retry">
             <span className="gs-retry-note">Already installed?</span>
@@ -106,10 +91,8 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
   );
 }
 
-/** Project children onto the shared layout's glass panel. Mount-gated: the
- *  slot is layout-owned DOM, only findable client-side. The rAF defer keeps the
- *  lookup out of the effect's synchronous body (react-hooks/set-state-in-effect)
- *  and costs one frame nobody sees — the panel fades in over 500ms anyway. */
+/** Portal children onto the layout's glass panel (client-only DOM). rAF keeps
+ *  the setState out of the effect body (react-hooks/set-state-in-effect). */
 function GlassSlot({ children }: { children: ReactNode }) {
   const [target, setTarget] = useState<Element | null>(null);
   useEffect(() => {
@@ -124,24 +107,19 @@ function GlassSlot({ children }: { children: ReactNode }) {
 /**
  * Starts the download once after mount; returns the element doing it.
  *
- * ⚠ Zero-sized same-origin IFRAME — never `location.assign` or `<a download>`.
- * Sad path: asset name is cached 10min, so a release inside that window makes
- * `/releases/latest/download/<stale name>` a GitHub 404 PAGE (so is the
- * resolver's releases-page fallback). Top-level navigation COMMITS to it and
- * the instructions are gone; an iframe hits `X-Frame-Options: deny` and fails
- * silently. `<a download>` drops its attribute across a cross-origin redirect.
+ * ⚠ Zero-sized IFRAME — never `location.assign` or `<a download>`. A stale
+ * cached asset name 404s on GitHub: top-level navigation would commit to that
+ * page and lose the instructions; an iframe hits `X-Frame-Options: deny` and
+ * fails silently. `<a download>` drops across a cross-origin redirect.
  *
- * ⚠ NOT `sandbox`ed, NOT `display:none`: Chrome blocks downloads from sandboxed
- * frames without `allow-downloads`; display:none frames may never load.
- *
- * Fires once — src is state on a timer cleanup cancels, so StrictMode's double
- * mount schedules twice and lands once.
+ * ⚠ NOT `sandbox`ed (blocks downloads), NOT `display:none` (may never load).
+ * Timer cleanup makes StrictMode's double mount land once.
  */
 function useAutoDownload(): ReactNode {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    // Beat so the page paints before the download shelf animates over it.
+    // Let the page paint before the download shelf animates over it.
     const timer = window.setTimeout(() => setSrc(DOWNLOAD_URL), AUTOSTART_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, []);

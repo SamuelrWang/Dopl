@@ -37,10 +37,10 @@ import { compileForLens, isReservedLensId, lensState, pushAsk, pushScreen } from
 import { channelWorkspaceOf, findByDisplayId, hasAnswerMessage, replaceDisplay } from "./repository";
 
 /**
- * **`showDisplay` — THE ONE DOOR** (`POST /api/displays`; spec §4). `dopl_show` and every glasses
- * shortcut land here: resolve where it goes (§4.2), post or replace the channel copy through the
- * channels `postMessage` (so authorship, session stamp, mentions and thread tags are exactly a
- * send's), push the caller's own lens copy, and optionally hold for the answer (§3.4).
+ * **`showDisplay` — THE ONE DOOR** (`POST /api/displays`; spec §4) for `dopl_show` and every
+ * glasses shortcut. The channel copy goes through channels `postMessage`, so authorship, session
+ * stamp, mentions and thread tags are exactly a send's. Resolves the destination (§4.2), pushes
+ * the caller's own lens copy, and optionally holds for the answer (§3.4).
  */
 
 const HOLD_GRACE_MS = 5_000;
@@ -109,10 +109,7 @@ function secondsIn(name: string, v: number | undefined, dflt: number, max: numbe
   return Math.floor(v);
 }
 
-/**
- * The blocks this call shows: its own, or a filled template (optionally saved first). Blocks that
- * hold `{{variables}}` are a template: shown only once `data` fills them (P2-6), saved raw.
- */
+/** Own blocks or a filled template. Blocks holding `{{variables}}` show only once `data` fills them (P2-6); saved raw. */
 async function blocksOf(deps: GlassesDeps, userId: string, input: Input) {
   let raw: { blocks: unknown; layout: DisplayLayout };
   let version: 1 | 2 = input.v1 ? 1 : 2;
@@ -147,10 +144,9 @@ async function blocksOf(deps: GlassesDeps, userId: string, input: Input) {
 }
 
 /**
- * The channel this call shows in, and the context to post with. A channel id from ANOTHER of the
- * caller's containers resolves there (P2-11: a session channel id arrives without its container)
- * — only for an unfenced credential, and only through the same membership resolution a signed-in
- * request gets (`resolveActiveWorkspace`), so it reaches nothing the caller could not open.
+ * The channel and post context. A channel id from ANOTHER of the caller's containers resolves there
+ * (P2-11) — only for an unfenced credential, and only via `resolveActiveWorkspace`, so it reaches
+ * nothing the caller could not open.
  */
 async function channelOf(ctx: ChannelContext, input: Input): Promise<{ channel: ChannelRow; ctx: ChannelContext } | null> {
   const ref = input.channel ?? sessionChannelId(ctx.sessionId);
@@ -168,11 +164,7 @@ async function channelOf(ctx: ChannelContext, input: Input): Promise<{ channel: 
   }
 }
 
-/**
- * The channel copy's blocks. A choice that cannot be a decision (a v1-born list of 1, or 13-19,
- * options) is a plain list in chat — answerable on the lens only, never through a lane with no
- * decision behind it (verifier N2).
- */
+/** A choice that cannot be a decision (v1-born, 1 or 13-19 options) is a plain list in chat — lens-answerable only (N2). */
 function channelBlocksOf(blocks: Positioned<DisplayBlock>[], decision: Decision): Positioned<DisplayBlock>[] {
   if (decision || !choiceOf(blocks)) return blocks;
   return blocks.map((b) => {
@@ -246,8 +238,7 @@ export async function showDisplay(ctx: ChannelContext, raw: ShowInput, signal?: 
   const result: ShowResult = {
     display_id: displayId,
     glasses,
-    // A lens row's own status is the glasses shortcuts' (`glasses_render`'s `status`); `dopl_show`
-    // reads `status` only as a hold's outcome.
+    // Lens-row status is for glasses shortcuts only; `dopl_show` reads `status` as a hold's outcome.
     ...(row && { glasses_message_id: row.id, ...(shortcut && { status: row.status }) }),
     ...(posted && resolved && {
       message_id: posted.id,
@@ -297,8 +288,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
     if (prior) {
       const was = displayOf(prior.metadata as Record<string, unknown>);
       const answered = !!was?.answer || (await hasAnswerMessage(channel.id, prior.id));
-      // In place only when the message keeps its lane: a status that gains a choice (or loses one)
-      // is a different post — a decision is a request, a status a record (P2-1).
+      // In place only if the lane holds: gaining/losing a choice is a different post (P2-1).
       const sameLane = !!was?.decision === !!a.decision;
       if (!answered && sameLane) {
         const envelope: DisplayEnvelopeV2 = {
@@ -330,8 +320,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
       authorKind: "agent",
       summary: firstLine(a.blocks),
       display: { blocks: a.blocks, layout: a.layout },
-      // A choice posts like a decision (a request for its answerers); anything else informs and
-      // wakes nobody (the record lane).
+      // A choice posts as a decision; anything else wakes nobody.
       ...(a.decision ? {} : { intent: "chat" as const }),
       ...(input.thread && { metadata: { taskId: input.thread } }),
       ...(input.client_msg_id && { clientMsgId: input.client_msg_id }),
@@ -339,8 +328,7 @@ async function postOrReplace(ctx: ChannelContext, channel: ChannelRow, input: In
     { display: stamp }
   );
   if (withdraw) {
-    // Same statement as a replace: the index goes (no longer "waiting on you"), and the envelope
-    // says what superseded it, so the answer route refuses it and every surface shows it closed.
+    // Drops the decision index; `superseded_by` makes the answer route refuse it.
     await replaceDisplay(withdraw.id, ctx.userId, withdraw.body, { ...withdraw.envelope, superseded_by: message.id }, null);
   }
   return { id: message.id, replaced, tags: tagsOf(message.metadata, handles) };
@@ -350,10 +338,7 @@ function tagsOf(metadata: unknown, handles: string[]): string {
   return `${mentionedUserIdsOf(metadata as Record<string, unknown>).length}/${handles.length}`;
 }
 
-/**
- * Hold for the answer (§3.4): the lens row (a tap) and the channel stamp, every 2s, until
- * `wait_until` + 5s so an answer sent as a record just before the deadline is still returned.
- */
+/** Hold for the answer (§3.4) until `wait_until` + grace, so a just-in-time answer still returns. */
 async function hold(
   deps: GlassesDeps,
   userId: string,
@@ -364,7 +349,7 @@ async function hold(
   const holdMs = Math.min(h.timeout, ASK_HOLD_CAP_SEC) * 1000 + HOLD_GRACE_MS;
   while (nowOf(deps) - start < holdMs && !h.signal?.aborted) {
     await sleep(POLL_MS);
-    // Both sides at once: they are independent reads, and the channel stamp still wins.
+    // The channel stamp wins.
     const [msg, cur] = await Promise.all([
       h.messageId && h.channelId ? findMessageById(h.channelId, h.messageId) : null,
       h.row ? deps.store.get(userId, h.row.id) : null,
