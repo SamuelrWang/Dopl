@@ -13,42 +13,24 @@ import {
 } from "@/features/channels/server/service";
 
 /**
- * FILE A PRIVATE DIRECTION — an operator's own external agent steering one of
- * that operator's own running agent sessions (Samuel's ruling, 2026-08-31).
+ * File a private direction: an operator's external agent steering one of that
+ * operator's own running sessions (Samuel's ruling, 2026-08-31).
  *
- * ⚠ **THE OPERATOR IS `ctx.userId` AND THERE IS NO BODY FIELD FOR IT.** An agent
- * may direct its own operator's machine and no other; the way that stays true is
- * that no schema and no service signature on this path accepts an operator id.
- * `service-directions.test.ts` asserts the absence rather than trusting review.
- *
- * ⚠ **NOT `sessionOnly`, DELIBERATELY, AND FOR THE LAUNCH LANE'S REASON.** The
- * caller here IS an agent token — an external Claude Desktop / Claude Code session
- * over MCP. Gating this to a cookie session would make the op unreachable by the
- * only caller it exists for. The consent that replaces the session gate is the
- * same shape Samuel already ruled for launching: a LOCAL TOGGLE on the desktop,
- * enforced by the machine that would deliver, which simply ignores the row when it
- * is off. ⚠ That is a real trade and it is stated rather than buried: the server
- * cannot verify the toggle, so the server is not the gate — the desktop is, and
- * the desktop is the only party that can be.
- *
- * ⚠ `minRole` stays at the viewer floor because the CHANNEL fence is the real one:
- * the service requires a MEMBERSHIP ROW, not merely readability, so a public
- * channel the caller never joined is refused.
- *
- * 🔒 **A DIRECTION IS NOT A MESSAGE** and never touches `channel_messages` — the
- * loop brake and transcript purity (INVARIANTS §5), plus the third reason that is
- * this lane's own: it is PRIVATE BY DEFINITION, so the shared transcript is not a
- * trade-off but the feature's negation.
+ * ⚠ The operator is `ctx.userId`; no schema or service signature on this path
+ * accepts an operator id (asserted in `service-directions.test.ts`).
+ * ⚠ Deliberately NOT `sessionOnly`: the caller IS an agent token. The gate is the
+ * desktop's local toggle (it ignores rows when off) — the server cannot verify it.
+ * ⚠ Viewer floor; the real fence is the service's membership-row requirement.
+ * 🔒 A direction is not a message and never touches `channel_messages` (INVARIANTS
+ * §5) — it is private by definition.
  */
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, DirectionCreateSchema);
     const ctx = buildChannelContext(auth);
     const result = await createAgentDirection(ctx, input);
-    // ⚠ 200 WITH `offline: true`, NOT AN ERROR STATUS — the launch lane's rule.
-    // Nothing failed: the server looked, the operator's machine is not reporting
-    // in, and NO ROW WAS CREATED. A 4xx here would render a fault for the most
-    // ordinary outcome there is, a closed laptop.
+    // ⚠ Offline machine → 200 with `offline: true` and no row, not a 4xx: a closed
+    // laptop is not a fault (the launch lane's rule).
     return NextResponse.json(result);
   } catch (err) {
     return toChannelErrorResponse(err);
@@ -56,22 +38,12 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 /**
- * **THE BREAKER-OPEN BACKSTOP READ** — what is still awaiting this operator's
- * machine, in this workspace.
- *
- * ⚠ WHY IT EXISTS: realtime is the delivery path, and a desktop that was asleep,
- * reconnecting, or whose subscription went unhealthy never sees the INSERT frame.
- * The launch lane shipped without this route and its backstop self-disabled on the
- * first 404 (F-273); this one ships with it.
- *
- * ⚠ OPERATOR-SCOPED IN THE SQL PREDICATE rather than a branch above it. This is a
- * LIST, so the fence matters more than on the by-id read — and on THIS lane an
- * unfenced version would hand every device token other operators' private
- * direction bodies.
- *
- * ⚠ RETURNS `pending` AND `claimed`, EXPIRED DROPPED. A machine that claimed and
- * crashed must find its own row again; expiry is applied by the service, where the
- * lazy rule has its one home.
+ * Breaker-open backstop read: directions still awaiting this operator's machine.
+ * Exists because a sleeping/reconnecting desktop misses realtime INSERTs (F-273).
+ * ⚠ Operator-scoped in the SQL predicate — unfenced, any device token would read
+ * other operators' private direction bodies.
+ * ⚠ Returns `pending` + `claimed` (a crashed claimer must find its row); expiry is
+ * applied in the service.
  */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {

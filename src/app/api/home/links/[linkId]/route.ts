@@ -9,9 +9,8 @@ interface Ctx {
 }
 
 /**
- * DELETE — revoke a link. Creator only; anybody else's link 404s. SOFT: the row
- * stays as the record of what was minted and who took it, so a revoke never
- * erases an existing relationship.
+ * DELETE — revoke a link. Creator only (else 404). SOFT: the row stays, so a
+ * revoke never erases an existing relationship.
  */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {

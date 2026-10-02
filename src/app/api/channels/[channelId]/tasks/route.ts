@@ -26,23 +26,16 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
       ctx,
       requireChannelId(auth.params)
     );
-    // `tasks` keeps the storage name. `truncated` is ADDITIVE and load-bearing:
-    // the list is bounded and threads never leave it, so a caller that cannot
-    // tell a clipped page from an exhausted one will present a partial list as
-    // the whole one (INVARIANTS §9).
+    // `tasks` keeps the storage name; `truncated` is load-bearing (INVARIANTS §9).
     return NextResponse.json({ tasks: threads, truncated });
   } catch (err) {
     return toChannelErrorResponse(err);
   }
 }
 
-// ⚠ ONE POST, TWO SHAPES — the single-target create and the REQUEST FAN-OUT
-// (`toUserIds`), which raises one thread per addressee and answers with all of
-// them plus the group id their card is drawn from. Same route, same gate: a
-// fan-out is N ordinary creates by the same caller, so giving it its own
-// endpoint would give one resource two auth wrappers and two error mappings
-// (INVARIANTS §9). `toUserIds: []` is refused by the schema, not here — see
-// `TaskFanOutSchema`.
+// ⚠ One POST, two shapes: single create, or fan-out (`toUserIds`, one thread per
+// addressee + group id). Same gate, since a fan-out is N ordinary creates
+// (INVARIANTS §9). Empty `toUserIds` is refused by `TaskFanOutSchema`.
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, TaskCreatePayloadSchema);
@@ -69,20 +62,16 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
       requireChannelId(auth.params),
       input
     );
-    // `task` keeps the storage name (web + @dopl/client read it). `openingSeq` is additive: the
-    // seq of the thread's opening message, so a requester arms `await` on the right cursor
-    // without a follow-up read. ⚠ Null only when the idempotent short-circuit returned another
-    // member's thread.
+    // `task` keeps the storage name. `openingSeq` lets a requester arm `await` without
+    // a follow-up read. ⚠ Null only when the idempotent short-circuit returned
+    // another member's thread.
     return NextResponse.json({ task: thread, openingSeq }, { status: 201 });
   } catch (err) {
     return toChannelErrorResponse(err);
   }
 }
 
-// ⚠ BOTH at `minRole: "guest"` — a guest lists AND creates threads in its
-// channel (INVARIANTS §4A, §2B; Samuel's Q1 ruling: guests may create threads).
-// The true gate is the channel-membership fence: `createTaskFanOut` refuses
-// `!membership` with `ChannelForbiddenError`, so a guest can only open a thread
-// in a channel it belongs to.
+// ⚠ Both at guest (INVARIANTS §4A, §2B; Samuel's Q1 ruling: guests may create
+// threads). The service's membership check (`ChannelForbiddenError`) is the gate.
 export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });

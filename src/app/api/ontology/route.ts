@@ -10,18 +10,11 @@ import {
 import { withLegacySnapshotKeys } from "@/features/ontology/legacy-aliases";
 
 /**
- * `?view=summary` — a PROJECTION parameter, not a second route: both views answer the same
- * question about the same resource and differ only in how much of each row comes back. A split
- * would give them separate auth wrappers, error mapping and futures for one resource whose shape
- * must stay in lockstep.
+ * `?view=summary` — a projection param, not a second route (one resource, one shape).
  *
- * ⚠ FULL IS THE DEFAULT. The board and graph view read `attributes` / `methods` / `template` /
- * `layout` straight off this response, as do the MCP ops that resolve an object out of the
- * snapshot — a thinner default is silent data loss, not a diet.
- *
- * ⚠ An unrecognised `view` is a 400, never a fall-through to `full`: the one failure this
- * parameter can have is a caller believing it opted into the cheap read and getting the expensive
- * one.
+ * ⚠ FULL is the default: the board, graph view and MCP ops read `attributes` / `methods` /
+ * `template` / `layout` off this response — a thinner default is silent data loss.
+ * ⚠ Unrecognised `view` → 400, never a fall-through to `full`.
  */
 const VIEWS = ["full", "summary"] as const;
 
@@ -40,13 +33,9 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes F-685).
-// A home channel's peer is admitted at the role the LINK grants and that
-// DEFAULTS to `guest`, so at the `viewer` default the whole `guests_level`
-// column was a word nobody could exercise. **THE FLOOR GRANTS NOTHING** — it
-// only lets the request reach the fence that refuses it:
-// `ontology/server/service-audience.ts › resolveOntologyAudience` answers `none`
-// for a guest with no share and the read comes back EMPTY, exactly as a 404
-// would. A deliberate entry in `channels/guest-route-floor.test.ts ›
-// GUEST_ALLOWED`.
+// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes F-685):
+// home-channel peers default to `guest`, so `guests_level` needs this floor. It
+// grants nothing — `service-audience.ts › resolveOntologyAudience` answers `none`
+// for a guest with no share (empty read). Listed in
+// `channels/guest-route-floor.test.ts › GUEST_ALLOWED`.
 export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });

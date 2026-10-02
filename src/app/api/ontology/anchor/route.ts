@@ -12,13 +12,9 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes F-685).
-// A home channel's peer is admitted at the role the LINK grants and that
-// DEFAULTS to `guest`, so at the `viewer` default the whole `guests_level`
-// column was a word nobody could exercise. **THE FLOOR GRANTS NOTHING** — it
-// only lets the request reach the fence that refuses it:
-// `ontology/server/service-audience.ts › resolveOntologyAudience` answers `none`
-// for a guest with no share and the read comes back EMPTY, exactly as a 404
-// would. A deliberate entry in `channels/guest-route-floor.test.ts ›
-// GUEST_ALLOWED`.
+// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes F-685):
+// home-channel peers default to `guest`, so `guests_level` needs this floor. It
+// grants nothing — `service-audience.ts › resolveOntologyAudience` answers `none`
+// for a guest with no share (empty read). Listed in
+// `channels/guest-route-floor.test.ts › GUEST_ALLOWED`.
 export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });

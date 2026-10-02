@@ -6,16 +6,12 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 export const dynamic = "force-dynamic";
 
 /**
- * GET ?segment=… — the HTTP face of `resolveWorkspaceSegmentForUser`
- * (`features/workspaces/server/segment.ts`), which the SPA router mirrors client-side. Accepts
- * canonical `{slug}-{publicId}` and legacy slug-only URLs.
- * Returns `{ workspace, canonical, needsRedirect }`; `needsRedirect` cues the caller to rewrite
- * to `canonical`.
- * ⚠ 404 when nothing resolves — membership-scoped, so a non-member gets the same 404 as a
- * nonexistent workspace. Visibility must not be an oracle.
- * 🔒 ⚠ AND `apiKeyWorkspaceId` IS THREADED (2026-08-26): this route is a segment→workspace
- * ORACLE, so a container-locked credential must get the same 404 here that it gets everywhere
- * else in the family. The comparison itself lives once, in `resolveWorkspaceSegmentForUser`.
+ * GET ?segment=… — the HTTP face of `resolveWorkspaceSegmentForUser` (`segment.ts`). Accepts
+ * canonical `{slug}-{publicId}` and legacy slug-only URLs; `needsRedirect` cues a rewrite to
+ * `canonical`.
+ * ⚠ Non-member and nonexistent both 404 — visibility must not be an oracle.
+ * 🔒 `apiKeyWorkspaceId` is threaded so a container-locked credential gets the same 404 here
+ * (comparison lives in `resolveWorkspaceSegmentForUser`).
  */
 export const GET = withUserAuth(async (request: NextRequest, { userId, apiKeyWorkspaceId }) => {
   try {

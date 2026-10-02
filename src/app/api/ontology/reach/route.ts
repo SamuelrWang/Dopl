@@ -7,30 +7,19 @@ import { buildOntologyContext, getReach } from "@/features/ontology/server/servi
  * `GET /api/ontology/reach` — which ontologies the CALLING CREDENTIAL reaches in
  * the container it named, and at what rung. The producer F-681 was missing.
  *
- * ⚠ **ITS ONE CONSUMER IS THE DESKTOP'S PROMPT FRAMING**
- * (`dopl-desktop-app/main/ontology-reach.js` → `main/prompt-framing-ontology.js
- * › ontologyReachLines`), which is a COMPENSATING CONTROL and never a gate
- * (INVARIANTS §4A). Nothing here decides anything: the answer is
- * `service-audience.ts › levelForOntology` per ontology, the same function every
- * ontology read and write already asks.
+ * ⚠ One consumer: the desktop's prompt framing
+ * (`main/prompt-framing-ontology.js › ontologyReachLines`) — a compensating
+ * control, never a gate (INVARIANTS §4A). The answer is
+ * `service-audience.ts › levelForOntology`, the same check every read/write uses.
  *
- * ⚠ **THE ANSWER IS THE CALLER'S, WHICH IS WHY THE DESKTOP PRESENTS THE SESSION'S
- * AGENT BEARER RATHER THAN THE OPERATOR'S COOKIE.** `buildOntologyContext`
- * derives `source` from the presence of an agent token, and the OWNER's own
- * agent is the one row of Samuel's matrix that is not simply its human's
- * (`agents_may_edit` / `owner_agents_level`). A cookie-authed call here would
- * answer the OPERATOR's rung and the framing would promise `EDIT` on a lane the
- * server refuses — over-promising, which is the failure direction that sends an
- * agent to guess.
+ * ⚠ The desktop must call with the session's AGENT bearer, not the operator
+ * cookie: the owner's agent rung can differ from its human's
+ * (`owner_agents_level`), and answering the human's would over-promise `EDIT`.
  *
- * ⚠ **NO `?channelId=`.** The ceiling is resolved per CONTAINER and a home
- * channel is the one channel in its `kind='link'` container — `service-reach.ts
- * › getReach`'s docblock carries the argument.
+ * ⚠ No `?channelId=` — reach is per container (`service-reach.ts › getReach`).
  *
- * 🔒 `minRole: "guest"` — the same floor as the two ontology READ routes, and for
- * the same reason: a guest's agent is told what a guest reaches, which is the
- * half of Samuel's ruling F-685 closed. It grants nothing; a guest with no share
- * gets `[]`.
+ * 🔒 `minRole: "guest"` like the ontology reads (F-685); grants nothing — a
+ * guest with no share gets `[]`.
  */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {

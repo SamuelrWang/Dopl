@@ -34,11 +34,7 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 // PATCH: set mode (creator only). NOT sessionOnly — the service enforces per-op authorization.
-//
-// ⚠ THE CLOSE / PROPOSE_CLOSE / REOPEN ARMS ARE GONE (wiring plan Phase 4, 2026-08-18) along with
-// `service-tasks-lifecycle.ts` and `service-tasks-propose.ts`. Threads do not close, so this
-// handler has exactly one op left and the switch is a single case rather than a lookup. A stale
-// caller sending `{op:"close"}` is refused by `TaskUpdateSchema`'s discriminator, before here.
+// Threads do not close; a stale `{op:"close"}` is refused by `TaskUpdateSchema`.
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, TaskUpdateSchema);
@@ -54,13 +50,9 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// DELETE: hard-delete the thread and everything hanging off it — creator, or
-// someone who can manage the channel. 204, no body: there is nothing left to
-// return. The service (`service-tasks-delete.ts › deleteTask`) owns the
-// authorization and the cascade's ordering.
-//
-// ⚠ THIS IS NOT A CLOSE. Threads still have no finished state (INVARIANTS §5);
-// this is how one stops existing. Nothing here writes `status`.
+// DELETE: hard-delete the thread and its dependents (creator or channel manager);
+// auth + cascade order live in `service-tasks-delete.ts › deleteTask`.
+// ⚠ Not a close — threads have no finished state (INVARIANTS §5).
 async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChannelContext(auth);
@@ -75,17 +67,12 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// ⚠ `minRole: "guest"` — a guest reads a single thread in its channel
-// (INVARIANTS §4A, §2B); the channel-membership fence is the true gate. PATCH
-// (mode) stays member+ and DELETE stays member+/sessionOnly.
+// ⚠ GET at guest (INVARIANTS §4A, §2B; channel fence is the true gate).
 export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
-// ⚠ `sessionOnly` — pinned by `src/shared/auth/write-gate-coverage.test.ts`, and
-// PER-METHOD, so the GET and the PATCH above are untouched. An agent token
-// (`dopl_at_*`) is refused: this deletes a SHARED transcript permanently, with no
-// dialog on the agent's side to gate it, and "no destructive ops over MCP" is the
-// standing rule the MCP surface is built on. There is no `dopl_channel` op that
-// reaches this and there must not be one.
+// ⚠ `sessionOnly` (pinned by `write-gate-coverage.test.ts`): permanently deletes a
+// shared transcript, and "no destructive ops over MCP" is standing. No
+// `dopl_channel` op may reach this.
 export const DELETE = withWorkspaceAuth(handleDelete, {
   minRole: "member",
   sessionOnly: true,

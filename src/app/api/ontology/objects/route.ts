@@ -16,8 +16,7 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
     const object = await createObject(buildOntologyContext(auth), input);
     return NextResponse.json({ object }, { status: 201 });
   } catch (err) {
-    // Free-plan object cap is freeze-don't-delete: surface the upgrade envelope (message +
-    // upgrade_url) so clients — MCP agents included — get an actionable 403, not a 500.
+    // Free-plan object cap: actionable 403 upgrade envelope (MCP agents too), not a 500.
     if (err instanceof EntitlementError) {
       return NextResponse.json(entitlementDeniedBody(), {
         status: 403,
@@ -27,13 +26,8 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes
-// F-685). "are guests access/view or edit" — `edit` is half of that ruling, so
-// the object/relationship/membership writes carry the same floor as the reads.
-// ⚠ THE FLOOR IS THE WEAKEST FENCE HERE, not the gate: `service-gates.ts ›
-// requireObject` demands `edit` on EVERY ontology the object belongs to (Q9),
-// resolved from DB facts, and a guest whose share says `view` — or who has no
-// share — gets the same 404 they got before this floor existed. ⚠ The SHARE
-// lane, ontology create/delete and the `agentsMayEdit` toggle deliberately did
-// NOT move: a guest lends nothing and re-widens nobody's agents.
+// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; F-685).
+// ⚠ The floor is not the gate: `service-gates.ts › requireObject` demands
+// `edit` on EVERY ontology the object belongs to (Q9); no share → 404. Shares,
+// ontology create/delete and `agentsMayEdit` deliberately stay above guest.
 export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });

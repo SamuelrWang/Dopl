@@ -15,14 +15,11 @@ import { listObjectRevisions } from "@/features/ontology/server/service-revision
  * `GET /api/ontology/objects/{objectId}/revisions` — ONE object's per-FIELD
  * history, newest first, paged by an opaque keyset cursor.
  *
- * ⚠ **THE DAY GROUPING IS THE CLIENT'S, NOT THIS ROUTE'S** — the same rule the
- * knowledge changelog routes state: a page boundary must never fall inside a day
- * group on the wire, or the renderer heads one calendar day twice.
+ * ⚠ Day grouping is the client's, not this route's (as in the knowledge
+ * changelog routes) — else a page boundary splits a day.
  *
- * 🔒 GATED IN THE SERVICE at `view` (Q9's read half), and `minRole: "guest"` —
- * the SAME floor `PATCH /api/ontology/objects/{objectId}` carries since the
- * home-ontology ruling. ⚠ The floor is the weakest fence here, not the gate: a
- * guest with no share gets `requireObject`'s 404.
+ * 🔒 Gated in the service at `view` (Q9); `minRole: "guest"` is only the floor —
+ * a guest with no share gets `requireObject`'s 404.
  */
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {

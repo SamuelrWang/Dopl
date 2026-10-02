@@ -56,11 +56,9 @@ export const GET = withUserAuth(
         resources: matrix.resources,
       });
 
-      // ⚠ SELF NEVER RECEIVES `level: null` ROWS. Naming the resources somebody
-      // was deliberately not given leaks the shape of the workspace to the one
-      // person the boundary was drawn against — and a payload they can read in
-      // devtools is a leak whether or not the UI renders it. Admins auditing
-      // ANOTHER member get the full matrix, negative space included.
+      // ⚠ Self never receives `level: null` rows — naming withheld resources
+      // leaks workspace shape (devtools sees the payload). Admins auditing
+      // another member get the full matrix.
       const visible =
         targetUserId === userId ? rows.filter((r) => r.level !== null) : rows;
       return NextResponse.json({ rows: visible });

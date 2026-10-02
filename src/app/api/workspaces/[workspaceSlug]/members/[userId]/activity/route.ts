@@ -25,13 +25,11 @@ interface Ctx {
 /**
  * GET — one member's recent activity, FILTERED BY THE CALLER'S OWN ACCESS.
  *
- * A row survives iff it is workspace-level (`resourceType: null` — roster facts
- * every member can read off the members list) or the CALLER reaches its
- * resource. Self and admins are unfiltered.
+ * A row survives iff it is workspace-level (`resourceType: null`) or the CALLER
+ * reaches its resource. Self and admins are unfiltered.
  *
- * ⚠ The filter runs HERE, not in the renderer. Returning the whole feed and
- * hiding rows client-side would put them in the payload, which is the leak this
- * endpoint exists to prevent. Shape `{ events: ActivityEventRow[] }`.
+ * ⚠ Filter runs HERE, never client-side — hidden rows in the payload are the
+ * leak. Shape `{ events: ActivityEventRow[] }`.
  */
 export const GET = withUserAuth(async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {

@@ -17,21 +17,15 @@ const SOURCE = "api/workspaces/[workspaceSlug]/token-spend";
  * GET — the workspace Overview's token-spend strip: how many tokens the
  * CALLER'S OWN agents have spent IN THIS CONTAINER, per run, over 31 days.
  *
- * 🔒 **TWO FENCES, AND THE OPERATOR ONE IS THE ONE THAT WAS RULED. There is no
- * workspace-wide variant and there must not be one** — INVARIANTS §9 carries
- * the argument, `20260927120000` §2 the refusal it rests on.
+ * 🔒 Two fences (container + operator); there is no workspace-wide variant and
+ * must not be one — INVARIANTS §9, migration `20260927120000` §2.
  *
- * `viewer`+ like its siblings: `resolveApiWorkspace` 404s a non-member — and a
- * `guest` — before any service-role read runs.
+ * `viewer`+: `resolveApiWorkspace` 404s non-members and guests first.
  *
- * ⚠ **ITS OWN ROUTE RATHER THAN A `metric` ON `./overview-series`.** Those four
- * metrics sum `credit_usage_events`; tokens are a different ledger with a
- * different accuracy story — a FLOOR (quantized, and an ended run's last stretch
- * is never pushed) against credits' exact counts, which do not share an axis
- * without a label saying so.
+ * ⚠ Own route, not a `metric` on `./overview-series`: tokens are a different
+ * ledger (a FLOOR) from credits (exact).
  *
- * ⚠ **NO REALTIME AND NO POLL** (INVARIANTS §7): a cold read, `private,
- * no-store`.
+ * ⚠ No realtime, no poll (INVARIANTS §7): cold read, `private, no-store`.
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {

@@ -25,47 +25,21 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 /**
- * ⚠ FIELD-LEVEL `sessionOnly` — pinned by `src/shared/auth/write-gate-coverage.test.ts`.
+ * ⚠ FIELD-LEVEL `sessionOnly` (pinned by `src/shared/auth/write-gate-coverage.test.ts`):
+ * this PATCH is several writes behind one verb that don't share a gate, so §9's
+ * per-method gate would be wrong here. Read the array, not a count.
  *
- * §9's granularity is per-METHOD, which is wrong HERE: this PATCH is FIVE writes behind one verb
- * (`name`, `topic`, `visibility`, `archived`, `infoCard`) and they do not share a gate. Gating
- * the whole method would spend an agent capability for nothing. ⚠ IT WAS SIX UNTIL 2026-09-06
- * and SEVEN until 2026-09-07 — read the array, not this paragraph.
+ * - `visibility`: agents (`dopl_at_*`) may not change it — private→public exposes the
+ *   channel and its history. Both directions gated (no MCP/desktop caller needs it).
+ * - The responder nomination's per-member replacement (`unaddressed_responder`) is
+ *   written via `PATCH /members`, sessionOnly for the whole method — still out of
+ *   an agent credential's reach (self-authorizing lane, §6).
+ * - `name` / `topic` / `archived`: manage-gated in the service (`canManageChannel`);
+ *   credential and role fences are independent.
+ * - `infoCard`: intentionally agent-writable, membership-gated (Samuel, 2026-08-25);
+ *   gate + byte fence live in `service-writes.ts › updateChannel`.
  *
- * - `visibility` is the SESSION-ONLY field gated HERE: an agent (`dopl_at_*`) may not change it at
- *   all. private→public exposes the entire channel AND its history to every workspace member. BOTH
- *   directions are gated because it is simpler and costs nothing — no MCP op or desktop call reaches
- *   this field (`@dopl/client` has no channel-update method), and direction-free means no read of the
- *   current row.
- * - ⚠ **`agentPosture` AND `defaultResponderAgentName` BOTH LEFT THIS LIST — the FIELDS are
- *   deleted (2026-09-06 items 12/13/14, and 2026-09-07 items 10/11), so the list is one field
- *   again.** Neither gate was weakened and neither argument is retracted, so both are recorded
- *   here rather than deleted with the code:
- *     · `agentPosture` was the CEILING on what a launched agent could be granted in this room.
- *       An agent credential able to raise it could widen its own successors' posture — the
- *       self-authorizing lane §6 exists to prevent. No room bounds a peer's agent on any axis
- *       now, so there is no ceiling to raise.
- *     · `defaultResponderAgentName` named the agent answering every UNADDRESSED human message
- *       here, so an agent credential able to set it could nominate ITSELF and route the room's
- *       unaddressed work to its own session — the same self-authorizing reach, including the
- *       WITHDRAWAL, since clearing somebody else's nomination silences that agent as
- *       effectively as taking it.
- *   ⚠ **AND THE SECOND PROTECTION IS INHERITED, NOT DROPPED.** Its per-member replacement,
- *   `channel_members.unaddressed_responder`, is written through `PATCH /members` — a route that
- *   is `sessionOnly: true` for the WHOLE METHOD (`agentToolProfile`'s containment argument), and
- *   whose schema carries no member identifier at all. So an agent credential still cannot reach
- *   it, and cannot reach anybody else's row even with a session.
- * - `name` / `topic` / `archived` stay MANAGE-gated in the service (`canManageChannel`) — the
- *   two fences answer different questions (which CREDENTIAL, and which ROLE) and neither
- *   substitutes for the other.
- * - `infoCard` is intentionally AGENT-WRITABLE and gated on MEMBERSHIP, not session (Samuel,
- *   2026-08-25): a home channel is "a relationship, not a tenancy", the card is its shared scratch
- *   surface, and it changes no visibility, roster, lifecycle or fact — so it is NOT in
- *   `SESSION_ONLY_FIELDS`. That gate and its byte fence both live in
- *   `channels/server/service-writes.ts › updateChannel`, not in this route.
- *
- * Session callers are untouched: cookie (web + desktop main) and Supabase-JWT (SPA) callers never
- * set `agentTokenId`, so `components/go-public-dialog.tsx` is unaffected.
+ * Session callers (cookie, Supabase JWT) never set `agentTokenId`.
  */
 const SESSION_ONLY_FIELDS = ["visibility"] as const;
 
@@ -100,9 +74,8 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// ⚠ `minRole: "guest"` — a guest reads its own channel (INVARIANTS §4A, §2B).
-// `loadVisibleChannel` hides a private channel from a non-member (NOT-FOUND), so
-// the channel-membership fence is the true gate. PATCH/DELETE stay member+.
+// ⚠ GET at guest (INVARIANTS §4A, §2B); `loadVisibleChannel` is the true gate.
+// PATCH/DELETE stay member+.
 export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
 export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });

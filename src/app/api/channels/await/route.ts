@@ -17,32 +17,20 @@ import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { OwnSessionsReport } from "@/features/channels/server/session-state-service";
 
 /**
- * WORKSPACE-WIDE long-poll — the `channel`-less await (2026-08-22).
+ * Workspace-wide long-poll: holds on `seq > since` across every channel the caller is a
+ * MEMBER of. Loop + M2 access invariant: `service-await-workspace.ts › awaitWorkspaceMessages`.
  *
- * Holds on `seq > since` across EVERY channel the caller is a MEMBER of, returning the instant
- * anything lands; on nothing it answers `{ messages: [], timedOut: true }` so the caller re-polls
- * with the same cursor. The hold loop, its membership-proof cadence and the M2 access invariant
- * live in `service-await-workspace.ts › awaitWorkspaceMessages` — read that before touching this.
- *
- * ⚠ **NO `[channelId]` SEGMENT, WHICH IS THE WHOLE POINT AND ALSO THE WHOLE RISK.** There is no
- * channel to resolve and therefore no `resolveReadableChannelId` to fence on; the fence is the
- * MEMBERSHIP SET the service re-proves per its cadence, and it is the `IN (…)` of every query the
- * hold issues. A private channel the caller is not in is never named by any of them.
- *
- * ⚠ It is deliberately NARROWER than `op="read"`: a PUBLIC channel the caller never joined is
- * NOT watched. Rationale in `repository-await-workspace.ts › listMemberChannelRefs`.
- *
- * ⚠ Same budgets as the per-channel hold — `maxDuration` 60, `timeoutMs` capped at 50s by
- * `AwaitQuerySchema` — because the MCP layer assembles a multi-minute hold out of these by
- * re-issuing on the same cursor, and a longer single request is killed mid-flight.
+ * ⚠ No `[channelId]`, so the fence is the re-proved MEMBERSHIP SET — the `IN (…)` of
+ * every query the hold issues.
+ * ⚠ Narrower than `op="read"`: unjoined public channels are not watched
+ * (`repository-await-workspace.ts › listMemberChannelRefs`).
+ * ⚠ Same budgets as the per-channel hold; the MCP layer chains holds on one cursor.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** ⚠ From a `finally`, exactly like the per-channel route's: a hold ended by a throw would
- *  otherwise be missing from the metric, leaving it covering only clean finishes — the wrong
- *  half of the population during an egress incident. */
+/** ⚠ From a `finally`, like the per-channel route, so thrown holds are counted. */
 function logHold(
   started: number,
   counters: WorkspaceAwaitCounters,
@@ -57,9 +45,7 @@ function logHold(
   );
 }
 
-/** ⚠ AT RETURN TIME ONLY — the identical rule the per-channel route states at length. Never
- *  inside the hold loop. Fail-soft: an omitted key reads as "not reported", and a payload
- *  already earned must not become a 500. */
+/** ⚠ At return time only, never in the hold loop; fail-soft (see the per-channel route). */
 async function ownSessionsAtReturn(
   ctx: ChannelContext
 ): Promise<OwnSessionsReport | undefined> {
@@ -84,9 +70,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       AwaitQuerySchema,
       ["since", "timeoutMs", "excludeAuthor"]
     );
-    // ⚠ Deadline struck BEFORE the first membership proof, so the hold stays bounded under
-    // `maxDuration` including that lookup — the same reason the per-channel route strikes it
-    // before resolving its ref.
+    // ⚠ Deadline set before the first membership proof (counts toward `maxDuration`).
     const deadline = Date.now() + (timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS);
 
     const ctx = buildChannelContext(auth);
@@ -103,8 +87,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     return NextResponse.json({
       messages: result.messages,
       timedOut: result.messages.length === 0,
-      // ⚠ REPORTED, not inferred. A caller who belongs to NO channel would otherwise read an
-      // empty page as "nothing happened" and re-arm forever on a hold that can never fire.
+      // ⚠ Reported so a zero-channel caller doesn't re-arm forever on an empty page.
       channelCount: result.channelCount,
       // ⚠ Both keys or neither — the per-channel route states why at length.
       ...(report === undefined
@@ -118,7 +101,5 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// ⚠ `minRole: "guest"` — the workspace-wide await poll; a guest's results are
-// still bounded to its own channels by the service membership fence
-// (INVARIANTS §4A, §2B).
+// ⚠ Guest floor; results bounded by the membership fence (INVARIANTS §4A, §2B).
 export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });

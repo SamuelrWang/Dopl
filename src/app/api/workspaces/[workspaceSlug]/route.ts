@@ -20,8 +20,7 @@ interface Ctx {
 
 /** GET — one workspace by slug, scoped to the caller: (owner_id, slug) first, then
  *  membership-by-slug across workspaces the caller belongs to.
- *  ⚠ `viewer`+ since 2026-08-26 — `resolveApiWorkspace`'s inverted default
- *  (`segment.ts › ApiWorkspaceOpts`). A `guest` gets the non-member 404. */
+ *  ⚠ `viewer`+ (`segment.ts › ApiWorkspaceOpts`); a `guest` gets the non-member 404. */
 export const GET = withUserAuth(async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
   try {
     const workspaceSlug = params?.workspaceSlug;

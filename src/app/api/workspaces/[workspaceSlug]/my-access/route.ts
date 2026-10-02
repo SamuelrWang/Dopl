@@ -21,12 +21,9 @@ interface Ctx {
  * `overrides` carries the resolved level on teams-mode resources (max across their teams);
  * resources they cannot see are omitted.
  *
- * ⚠ `viewer`+ since 2026-08-26 (`segment.ts › ApiWorkspaceOpts`). `overrides`
- * ENUMERATES every teams-mode resource id in the workspace, so at membership-
- * existence a `guest` — who may read no knowledge base, skill or chat at all —
- * got the inventory of them. The 403 `NOT_A_MEMBER` branch below is unchanged
- * and still covers a non-active membership; a guest now never reaches it,
- * because the resolver answers 404 first.
+ * ⚠ `viewer`+ (`segment.ts › ApiWorkspaceOpts`): `overrides` enumerates every
+ * teams-mode resource id, which a `guest` must not see; the resolver 404s them
+ * before the 403 `NOT_A_MEMBER` branch.
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {
@@ -43,8 +40,7 @@ export const GET = withUserAuth(
           { status: 400 },
         );
       }
-      // ⚠ ROLE THREADED, not re-read: the segment resolve already fetched this membership, so
-      // passing its `role` skips an identical `findMembership` per request.
+      // ⚠ Role threaded from the resolve — skips a duplicate `findMembership`.
       const resolved = await resolveApiWorkspaceAccess(workspaceSlug, userId, { apiKeyWorkspaceId });
       if (!resolved) {
         return NextResponse.json(
@@ -71,9 +67,8 @@ export const GET = withUserAuth(
           { status: 403 },
         );
       }
-      // ⚠ Per-user data — never CDN-cacheable by URL alone.
-      // ⚠ The projection is shared with `POST /api/boot`, which seeds this endpoint's client
-      // cache entry: they must not drift.
+      // ⚠ Per-user data — never CDN-cacheable. Projection shared with
+      // `POST /api/boot` (seeds this cache entry); must not drift.
       return NextResponse.json(toMyAccessPayload(result), {
         headers: { "Cache-Control": "private, no-store" },
       });

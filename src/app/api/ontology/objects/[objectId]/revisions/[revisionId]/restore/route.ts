@@ -10,22 +10,14 @@ import { restoreObjectRevision } from "@/features/ontology/server/service-revisi
  * `POST /api/ontology/objects/{objectId}/revisions/{revisionId}/restore` — write
  * ONE FIELD's prior value back.
  *
- * 🔒 **REFUSED AT `view`.** The service gate is `requireObject(…, "edit")` —
- * Q9's every-ontology write gate — so a lent reader granted `view` gets the same
- * 404 every other ontology write gives them. `minRole: "guest"` matches the
- * sibling `PATCH /api/ontology/objects/{objectId}`; the LEVEL is the fence.
+ * 🔒 Refused at `view`: the service gate is `requireObject(…, "edit")` (Q9).
+ * `minRole: "guest"` matches the sibling PATCH; the LEVEL is the fence.
  *
- * 🔒 ⚠ **DELIBERATELY *NOT* `sessionOnly`, AND THAT IS A DECISION RATHER THAN AN
- * OMISSION.** That gate exists for acts that DESTROY (the object DELETE beside
- * this route carries it, and the reasoning is there). A restore destroys
- * nothing: it appends a revision whose value already happened, and the source
- * revision is still there afterwards. The solo toggle and the share level are
- * what fence an agent here, exactly as they fence a PATCH.
+ * 🔒 ⚠ Deliberately NOT `sessionOnly` — that gate is for acts that DESTROY. A
+ * restore appends a revision and destroys nothing; share level fences it like PATCH.
  *
- * ⚠ THE RESPONSE IS THE RESTORED OBJECT, so the caller's board can be patched
- * without a second read. It is taken from the snapshot rather than returned by
- * the service, because the restore writes through `updateObject` and the object
- * the caller wants back is the one their audience can see.
+ * ⚠ Responds with the restored object read from the snapshot (the
+ * audience-visible view), so the board patches without a second read.
  */
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {

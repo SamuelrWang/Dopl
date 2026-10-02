@@ -20,39 +20,24 @@ import {
   ChannelListQuerySchema,
 } from "@/features/channels/schema";
 import { HomeChannelCreateSchema } from "@/features/home/schema";
-// ⚠ **ROUTE-LEVEL COMPOSITION, WHICH IS THE PERMITTED SHAPE.** The account
-// payload folds the caller's LEGACY unbound links, which are the HOME feature's
-// (`channel_links` with no container). §1 forbids `channels → home`, so the fold
-// happens HERE — the same place the channel-knowledge lane composes two features.
+// ⚠ Route-level composition (the permitted shape): the account payload folds in
+// HOME's legacy unbound links; §1 forbids `channels → home`, so the fold lives here.
 import { createHomeChannel } from "@/features/home/server/service-writes";
 import { listMyPendingLinks } from "@/features/home/server/service-reads";
 
 /**
- * 🔒 **THE ONE CHANNEL-LIST RESOURCE — `?scope=container|account`** (R-26 (b),
- * 2026-09-17). The projection and the ruling are `channels/server/service-list.ts`;
- * what this file decides is the FENCE, which is the only thing that may differ per
- * scope:
+ * 🔒 The one channel-list resource, `?scope=container|account` (R-26 (b)). The
+ * projection lives in `channels/server/service-list.ts`; this file owns the FENCE:
+ * - `container` — `withWorkspaceAuth` at guest (§4A, §2B); the real gate is the
+ *   per-channel membership fence in the service, the floor is a tripwire.
+ * - `account` — `withUserAuth`: `withWorkspaceAuth` 400s a 2+-membership caller
+ *   (§4) and hides `kind='link'` containers (§4A). The fence is the USER.
  *
- * - `container` — `withWorkspaceAuth` at `minRole: "guest"`. A guest reaches the
- *   LISTING (§4A, §2B); the real gate is the per-channel membership fence in the
- *   service, and the workspace floor is only a tripwire.
- * - `account` — `withUserAuth`, and it **could not be `withWorkspaceAuth`**: that
- *   wrapper resolves exactly ONE workspace and answers 400 `WORKSPACE_REQUIRED` to
- *   a caller with 2+ standard memberships (§4) — precisely the caller this scope
- *   exists for — and it filters `kind='link'` containers out of auto-targeting
- *   (§4A). **The fence is the USER**, as it is for `GET /api/channels/account/status`.
+ * 🔒 B1 (`apiKeyWorkspaceId`) must be applied on the account arm (R3) — no wrapper
+ * upstream enforces the credential's lock, and it is the only narrowing.
  *
- * 🔒 **B1 — `ctx.apiKeyWorkspaceId` — IS APPLIED ON THE ACCOUNT ARM AND HAS TO BE
- * (R3).** A container-locked credential's lock is a property of the CREDENTIAL and
- * `withWorkspaceAuth` 403s on it everywhere else; this arm does not use that
- * wrapper, so nothing upstream enforces it. There is no caller-supplied scoping
- * parameter, so the lock is the only thing that can narrow this answer.
- *
- * ⚠ **`GET /api/channels/account/status` STAYS AND ANSWERS A DIFFERENT QUESTION** —
- * what NEEDS you, not what the ROWS are. Folding them would give one handler two
- * payload shapes and two ceilings.
- *
- * Fences pinned by `route-scope-fence.test.ts`.
+ * ⚠ `GET /api/channels/account/status` stays separate: it answers what NEEDS you,
+ * not what the rows are. Fences pinned by `route-scope-fence.test.ts`.
  */
 
 async function handleContainerGet(
@@ -61,9 +46,8 @@ async function handleContainerGet(
 ) {
   try {
     const channels = await listChannels(buildChannelContext(auth));
-    // ⚠ **NO `pendingLinks` KEY HERE, NEVER `[]`** — an absent param yields an
-    // absent key (§9's `channelGrants` precedent). `[]` would assert "asked, none
-    // open" where the truth is "this response was not account-scoped".
+    // ⚠ No `pendingLinks` key here, never `[]` (§9 precedent): `[]` would claim
+    // "asked, none open" for a response that was not account-scoped.
     return NextResponse.json({ channels });
   } catch (err) {
     return toChannelErrorResponse(err);
@@ -106,13 +90,9 @@ async function handleContainerPost(
 }
 
 /**
- * POST `?scope=account` — "New channel": a solo `kind='link'` CONTAINER plus one
- * private channel inside it.
- *
- * ⚠ **DELIBERATELY NOT `sessionOnly`** (Samuel, 2026-08-24), matching
- * `POST /api/workspaces`: an agent token may mint a channel it is alone in,
- * because that reaches nobody. `POST /api/home/links` — which reaches a PERSON —
- * is the session-gated one.
+ * POST `?scope=account` — a solo `kind='link'` container plus one private channel.
+ * ⚠ Deliberately NOT `sessionOnly` (Samuel, 2026-08-24): a channel you are alone in
+ * reaches nobody. `POST /api/home/links` (reaches a person) is the gated one.
  */
 async function handleAccountPost(
   request: NextRequest,
@@ -137,10 +117,8 @@ const containerPost = withWorkspaceAuth(handleContainerPost, {
 const accountPost = withUserAuth(handleAccountPost);
 
 /**
- * ⚠ **THE SCOPE IS PARSED BEFORE AUTH, AND IT MUST BE** — it is what CHOOSES the
- * wrapper, so it cannot be read inside one. That is safe because it leaks nothing:
- * the value is a closed two-member enum over no identifier, and a bad one answers
- * 400 to an unauthenticated caller exactly as it does to a member.
+ * ⚠ Scope is parsed BEFORE auth because it chooses the wrapper. Safe: a closed
+ * two-value enum over no identifier; a bad one 400s for everyone alike.
  */
 function scopeOf(request: NextRequest) {
   return parseQuery(request.nextUrl.searchParams, ChannelListQuerySchema, [

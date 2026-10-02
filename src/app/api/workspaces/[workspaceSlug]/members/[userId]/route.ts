@@ -48,10 +48,9 @@ export const PATCH = withUserAuth(
 /**
  * DELETE — remove a member. Admin+; cannot remove the last owner.
  *
- * 🔒 **SELF IS A LEAVE, NOT A REMOVE (R-09, Samuel 2026-09-17).**
- * `leaveWorkspace` keeps the permanent-container and last-owner refusals and
- * drops the admin floor, which is the only difference between the two arms
- * (F-725).
+ * 🔒 Self is a LEAVE, not a remove (R-09, Samuel 2026-09-17; F-725):
+ * `leaveWorkspace` keeps the permanent-container/last-owner refusals, drops the
+ * admin floor.
  */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, apiKeyWorkspaceId, params }: Ctx) => {

@@ -50,11 +50,8 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// PATCH writes only the caller's OWN per-channel prefs, so any channel member may call it
-// regardless of workspace role; the service enforces membership and always targets ctx.userId.
-// TWO fields since 2026-08-19 (`ChannelMemberSelfUpdateSchema`): `agentToolProfile` and
-// `favorite`. The gate below stays per-METHOD — see its own note for why the second field did
-// not turn it into a field gate.
+// PATCH writes only the caller's OWN per-channel prefs (service targets ctx.userId),
+// so any channel member may call it. Gate stays per-METHOD — see the note below.
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const input = await parseJson(request, ChannelMemberSelfUpdateSchema);
@@ -70,38 +67,22 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// ⚠ `minRole: "guest"` — a guest sees who is in its own channel (INVARIANTS
-// §4A, §2B); the channel-membership fence is the true gate. POST/DELETE (roster
-// management) stay member+, so a guest cannot add or remove members.
+// ⚠ GET at guest (INVARIANTS §4A, §2B; channel fence is the true gate).
+// POST/DELETE (roster management) stay member+.
 export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
 export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
 export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
 /**
- * ⚠ `agentToolProfile` IS A CONTAINMENT CONTROL, NOT A PREFERENCE — so this PATCH is
- * `sessionOnly` (§9), like `PATCH /channels/consent/[id]` and `POST|DELETE /channels/trust`.
+ * ⚠ `agentToolProfile` is a CONTAINMENT CONTROL, so this PATCH is `sessionOnly` (§9).
+ * 🔒 Closes: a spawned agent (90-day device token, Bash under a `full` profile) steered by an
+ * untrusted teammate's message, reading its own bearer off disk and PATCHing itself back to
+ * `full` — durably.
  *
- * The attack it closes: the desktop hands every spawned agent a 90-day `dopl.read`+`dopl.write`
- * device token via `--mcp-config`; that agent processes an untrusted teammate's message and a
- * `full` profile has live Bash (`runtime/claude/loader.js` fences only `Read/Grep/Glob` from secret paths).
- * Ungated, the agent reads its own bearer off disk and PATCHes itself back to `full` after the
- * operator tightens it — DURABLY, since the column outlives the session.
+ * Still per-METHOD with `favorite` added (INVARIANTS §3 re-decided, 2026-08-19): neither
+ * field is a legitimate agent write (favorites are the operator's sidebar), and a field
+ * gate would cost a second `SESSION_ONLY_FIELDS` route.
  *
- * ⚠ THE METHOD NOW CARRIES A SECOND FIELD AND IS STILL METHOD-GATED (2026-08-19). INVARIANTS §3
- * says per-method and per-field coincided here only because `agentToolProfile` was the sole
- * field — so `favorite` is exactly the case that rule told us to re-decide rather than inherit.
- * It stays per-METHOD because the answer to "is this a write an agent may legitimately make?" is
- * NO for both fields, for different reasons: the tool profile is a containment control, and a
- * favourite is the OPERATOR's own sidebar shortcut list — an agent reordering a human's sidebar
- * is not a capability with a use, and the cost of refusing it is that nobody can favourite from
- * an MCP session, which nobody asked to do. A field gate would buy an agent-writable `favorite`
- * and cost a second `SESSION_ONLY_FIELDS` route (§3: that is a conscious edit to the coverage
- * test, not a free choice).
- *
- * `GET` stays open; `POST`/`DELETE` (add/remove a member) are deliberately UNGATED — invites are
- * a separate, unmade decision.
- *
- * Not an outage for the operator: the desktop uses Supabase session cookies (`main/api.js`) and
- * the SPA a Supabase access JWT — only a `dopl_at_*` bearer takes the OAuth branch
- * (`with-auth.ts`), so neither reaches this gate.
+ * POST/DELETE stay ungated by session — invites are a separate, unmade decision.
+ * Session callers (cookies, Supabase JWT) never take the `dopl_at_*` branch.
  */
 export const PATCH = withWorkspaceAuth(handlePatch, { sessionOnly: true });

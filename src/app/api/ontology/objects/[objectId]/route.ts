@@ -42,31 +42,18 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; closes
-// F-685). "are guests access/view or edit" — `edit` is half of that ruling, so
-// the object/relationship/membership writes carry the same floor as the reads.
-// ⚠ THE FLOOR IS THE WEAKEST FENCE HERE, not the gate: `service-gates.ts ›
-// requireObject` demands `edit` on EVERY ontology the object belongs to (Q9),
-// resolved from DB facts, and a guest whose share says `view` — or who has no
-// share — gets the same 404 they got before this floor existed. ⚠ The SHARE
-// lane, ontology create/delete and the `agentsMayEdit` toggle deliberately did
-// NOT move: a guest lends nothing and re-widens nobody's agents.
+// 🔒 `minRole: "guest"` (2026-09-09, Samuel's home-ontology ruling; F-685).
+// ⚠ The floor is not the gate: `service-gates.ts › requireObject` demands
+// `edit` on EVERY ontology the object belongs to (Q9); no share → 404. Shares,
+// ontology create/delete and `agentsMayEdit` deliberately stay above guest.
 export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "guest" });
-// 🔒 `sessionOnly` (2026-09-02). `dopl_ontology` advertises this deletion as
-// APP-ONLY — "there is no MCP path to it, for any role or token" — and
-// `packages/mcp-server/src/gating.ts › opRefusal` was the ONLY thing enforcing
-// that sentence. A `full`-profile session has Bash and its own `dopl_at_*`
-// bearer, so it reached THIS route over loopback and deleted the row the
-// refusal had just declined: a prompt is not a fence. ⚠ AND THIS GATE IS NOW
-// THE WHOLE FENCE: the `_admin` tool that carried the refusal was deleted once
-// this landed, so removing `sessionOnly` here removes the RULE, not a second
-// copy of it. ⚠ Per-METHOD — the reads and the PATCH stay ungated, because
-// editing and rewriting are exactly what `delete-policy.ts › deleteRefusal`
-// redirects an agent to instead.
-// Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
+// 🔒 `sessionOnly` (2026-09-02): deletion is APP-ONLY — a `full`-profile
+// session's own bearer must not reach it over loopback (a prompt is not a
+// fence). ⚠ This gate is now the WHOLE fence; removing it removes the rule.
+// Per-METHOD — PATCH stays ungated (it's what `delete-policy.ts › deleteRefusal`
+// redirects agents to). Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {
-  // 🔒 `guest` since 2026-09-09 — see the PATCH above. `sessionOnly` is
-  // UNTOUCHED and is what still keeps this verb app-only for every role.
+  // 🔒 `guest` since 2026-09-09 (see PATCH); `sessionOnly` keeps it app-only.
   minRole: "guest",
   sessionOnly: true,
 });

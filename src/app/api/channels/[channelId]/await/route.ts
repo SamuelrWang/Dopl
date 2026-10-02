@@ -18,26 +18,19 @@ import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { OwnSessionsReport } from "@/features/channels/server/session-state-service";
 
 /**
- * Long-poll for new messages. Validates access up front, then holds on `seq > since` (~1.5s
- * ticks, capped by `timeoutMs` <= 50s); on nothing it answers `{ messages: [], timedOut: true }`
- * so the caller re-polls with the same cursor. Hold loop + existence-check tick + access-recheck
- * cadence live in `service-await.ts › awaitNewMessages`.
- * ⚠ A mid-hold soft-delete or membership revocation ends the hold with a 404 and NEVER returns
- * messages.
- *
- * ⚠ THE RESPONSE CARRIES A THIRD KEY SINCE 2026-08-22: `sessions`, the caller's OWN agent
- * sessions. ADDITIVE — an older client reads `{messages, timedOut}` and ignores it.
+ * Long-poll for `seq > since` (≤50s); on nothing, `{ messages: [], timedOut: true }`.
+ * Hold loop lives in `service-await.ts › awaitNewMessages`.
+ * ⚠ A mid-hold soft-delete or revocation ends the hold with a 404, never messages.
+ * ⚠ `sessions` (the caller's own) is an additive key; older clients ignore it.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * One line per hold so queries-per-hold is measurable in production. `DOPL_AWAIT_DIAG=0` silences.
- * ⚠ Must run from a `finally`, not inside the `try`: a hold ended by a mid-hold revocation or
- * soft-delete (`ChannelNotFoundError` → 404) would emit nothing, leaving the metric covering only
- * clean finishes — the wrong half of the population during an egress incident. The counts come
- * from an object the loop mutates so they survive the throw.
+ * One line per hold (queries-per-hold metric); `DOPL_AWAIT_DIAG=0` silences.
+ * ⚠ Runs from `finally` so 404-ended holds are counted too; counters are a mutated
+ * object so they survive the throw.
  */
 function logHold(
   channelId: string,
@@ -54,29 +47,13 @@ function logHold(
 }
 
 /**
- * THE CALLER'S OWN SESSIONS, READ **AT RETURN TIME AND NOWHERE ELSE**.
- *
- * ⚠ **NEVER MOVE THIS INSIDE `awaitNewMessages`.** That loop is the feature's one structurally
- * growing egress consumer — the teaching tells every agent with an open exchange to keep an await
- * armed continuously — and its whole design is that a held tick costs ONE existence probe on ONE
- * column. A session read per tick would multiply the hottest query path in the tree by the number
- * of armed listeners, to answer a question nobody asked until the hold ended. One read per
- * RETURNED hold is one read per ~3.5 minutes per listener at worst, and zero extra reads during
- * the wait.
- *
- * ⚠ WHY IT IS WORTH ONE READ AT ALL: an orchestrator's loop was `await` → `read_sessions` →
- * decide, two round trips per cycle. This makes it one. That is the entire justification, and it
- * evaporates if the read moves anywhere it can fire more than once per hold.
- *
- * ⚠ FAIL-SOFT, AND `undefined` IS THE HONEST ANSWER. A messages payload has already been earned
- * by the time this runs; throwing here would turn a successful hold into a 500 and make the
- * caller re-arm for messages it had. So a failure OMITS the key, which the client contract reads
- * as "not reported" — distinct from `[]`, which is a claim that the machine reports nothing.
- * ⚠ NOT swallowed silently: one line, same lane as the hold diagnostic.
- *
- * ⚠ WORKSPACE-WIDE, not narrowed to this channel. The caller is orchestrating agents, and an
- * agent it launched into a sibling channel is exactly what it needs to see without a second call.
- * The read is own-scoped either way (`ctx.userId`), which is what licenses the telemetry.
+ * The caller's own sessions, read at return time only — saves orchestrators a
+ * `read_sessions` round trip per cycle.
+ * ⚠ Never move this inside `awaitNewMessages`: a held tick must stay one existence
+ * probe; a per-tick read multiplies the hottest query path by armed listeners.
+ * ⚠ Fail-soft: a failure omits the key ("not reported", distinct from `[]`) rather
+ * than 500ing a hold that already earned its messages; logged, not swallowed.
+ * ⚠ Workspace-wide on purpose (sibling-channel agents); own-scoped on `ctx.userId`.
  */
 async function ownSessionsAtReturn(
   ctx: ChannelContext
@@ -103,8 +80,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
       AwaitQuerySchema,
       ["since", "timeoutMs", "excludeAuthor"]
     );
-    // ⚠ Deadline struck BEFORE the ref resolves: the hold must stay bounded under `maxDuration`
-    // including that lookup.
+    // ⚠ Deadline set before the ref resolves so the lookup counts toward `maxDuration`.
     const deadline = Date.now() + (timeoutMs ?? DEFAULT_AWAIT_TIMEOUT_MS);
 
     const ctx = buildChannelContext(auth);
@@ -123,12 +99,8 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     return NextResponse.json({
       messages: result.messages,
       timedOut: result.messages.length === 0,
-      // ⚠ The keys are OMITTED rather than sent as `null` when the read failed:
-      // `undefined` serializes away, and "absent" is the shape the client
-      // contract defines as "not reported".
-      // ⚠ BOTH KEYS COME FROM THE SAME READ AND GO OR STAY TOGETHER (F-294).
-      // Sending `operatorOnline: false` from a FAILED read would tell an
-      // orchestrator its machine is gone on the strength of our own outage.
+      // ⚠ Omitted (not `null`) on a failed read — "absent" = "not reported". Both
+      // keys go or stay together (F-294): a failed read must not claim offline.
       ...(report === undefined
         ? {}
         : { sessions: report.sessions, operatorOnline: report.operatorOnline }),

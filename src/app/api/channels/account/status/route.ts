@@ -9,48 +9,27 @@ import { readRuntimeHeader } from "@/shared/auth/runtime-header";
 import { AccountStatusQuerySchema } from "@/features/channels/schema";
 
 /**
- * **THE ACCOUNT-WIDE CHANNEL STATUS** — every channel the caller is in, across
- * every workspace AND every home-channel container, in ONE read (T20/T22).
+ * Account-wide channel status: every channel the caller is in, across workspaces
+ * and home-channel containers, in one read (T20/T22).
  *
- * ⚠ **`withUserAuth`, AND IT COULD NOT BE `withWorkspaceAuth`.** That wrapper
- * resolves exactly one workspace and answers 400 `WORKSPACE_REQUIRED` to a
- * caller with 2+ standard memberships (INVARIANTS §4) — which is precisely the
- * caller this endpoint exists for. It also filters `kind='link'` containers out
- * of auto-targeting (§4A), so a home channel would be unreachable through it
- * even for a single-workspace caller. The fence is therefore the USER, exactly
- * as it is for `GET /api/channels?scope=account`: every read below enters through
- * `channel_members.user_id = <caller>`, so a channel the caller does not belong
- * to is never NAMED by any query behind this route.
+ * ⚠ `withUserAuth`, not `withWorkspaceAuth` — that wrapper 400s a 2+-membership
+ * caller (INVARIANTS §4) and hides `kind='link'` containers (§4A). The fence is the
+ * USER: every read enters through `channel_members.user_id = <caller>`.
  *
- * ⚠ **NO `?workspaceId=` AND NO `X-Workspace-Id`.** A scoping parameter here
- * would be a second, narrower answer to the question the endpoint exists to
- * answer whole — the mistake `GET /api/home/overview` had to have surgically
- * removed (§4A, 2026-09-01). To scope to one workspace, use the per-workspace
- * reads that already exist.
+ * ⚠ No `?workspaceId=` / `X-Workspace-Id`: a narrower second answer is the mistake
+ * removed from `GET /api/home/overview` (§4A). Use the per-workspace reads.
  *
- * 🔒 **THE CONTAINER LOCK (B3) IS NOT APPLIED HERE.** A lock is a property of one
- * MCP CONNECTION, not of the credential, so — as for the account scope — the
- * narrowing lives in the MCP layer (`packages/mcp-server/src/workspace-directory.ts
- * › narrowToLock`). A future non-MCP caller that skips it has rebuilt the
- * enumeration oracle B3 denies.
+ * 🔒 The container lock (B3) is per MCP connection, so it is applied in
+ * `packages/mcp-server/src/workspace-directory.ts › narrowToLock`; a non-MCP caller
+ * that skips it rebuilds the enumeration oracle B3 denies.
  *
- * 🔒 **BUT B1 — `ctx.apiKeyWorkspaceId` — IS APPLIED HERE, AND HAS TO BE (R3,
- * 2026-09-02).** That one IS a property of the credential
- * (`mcp_tokens.workspace_id`), and `withWorkspaceAuth` 403s on it on every other
- * route. This route does not use that wrapper — the paragraph above says why —
- * so nothing upstream enforces it, and until R3 a container-locked credential
- * read channel names, session telemetry and message previews out of every
- * workspace its operator belonged to. It is passed to the service, which narrows
- * the membership PROOF; there is still no caller-supplied scoping parameter, so
- * the lock is the only thing that can narrow this answer.
+ * 🔒 B1 (`apiKeyWorkspaceId`, a credential property) MUST be applied here (R3) — no
+ * wrapper upstream enforces it; it narrows the membership proof in the service.
  *
- * ⚠ **THE SESSION HALF CARRIES OPERATOR-ONLY TELEMETRY**, which is safe only
- * because the session read is fenced on `user_id` (`repository-account.ts ›
- * listAccountSessionStates`). A peer's session never reaches this payload and no
- * argument here could ask for one.
+ * ⚠ The session half carries operator-only telemetry; safe only because the
+ * session read is fenced on `user_id` (`repository-account.ts › listAccountSessionStates`).
  *
- * ⚠ NOT `sessionOnly` and NOT write-scoped: it is a READ, and an agent token is
- * the caller it is built for.
+ * Not `sessionOnly`: a read built for agent tokens.
  */
 async function handleGet(
   request: NextRequest,
@@ -61,8 +40,7 @@ async function handleGet(
   }: {
     userId: string;
     apiKeyWorkspaceId?: string | null;
-    /** ⚠ Present for a `dopl_at_*` credential — see `with-auth.ts`. It is the
-     *  CREDENTIAL half of the outside-session question below. */
+    /** Present for a `dopl_at_*` credential (`with-auth.ts`). */
     agentTokenId?: string;
   }
 ): Promise<Response> {
@@ -75,19 +53,12 @@ async function handleGet(
     const status = await getAccountStatus(userId, {
       since,
       view,
-      // 🔒 B1's CEILING (R3). `withUserAuth` is the only wrapper here — nothing
-      // upstream applies the lock — so a container-locked credential would
-      // otherwise read every workspace its operator belongs to.
+      // 🔒 B1's ceiling (R3): nothing upstream applies the lock.
       lockedWorkspaceId: apiKeyWorkspaceId ?? null,
-      // **THE `@desktop` LANES ARE FOR AN OUTSIDE SESSION AND NOBODY ELSE**
-      // (2026-09-18). Both halves come from things a request cannot ask for: the
-      // CREDENTIAL (`agentTokenId`) and the runtime HEADER, read through the one
-      // predicate so this cannot drift from the write path's.
-      //
-      // 🔒 **THE EXCLUSION THAT MATTERS IS THE DESKTOP-RUN AGENT.** It posts and
-      // reads on the operator's own account, so a lane keyed on the user id
-      // alone would hand it every ask aimed at the operator's laptop — work it
-      // would then adopt, which is the confusion `@desktop` was created to end.
+      // `@desktop` lanes are for an outside session only (2026-09-18), decided from
+      // the credential + runtime header via the write path's predicate.
+      // 🔒 This excludes the desktop-run agent, which shares the operator's user id
+      // and would otherwise adopt asks aimed at the operator's laptop.
       outsideSession: isOutsideSessionCaller(
         agentTokenId ? "agent" : "user",
         readRuntimeHeader(request) ?? null

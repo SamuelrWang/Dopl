@@ -18,33 +18,22 @@ const SOURCE = "api/home/overview";
  * agent lists, everything blocked on the caller, and the scan denominator the
  * breakdowns are measured over.
  *
- * ⚠ NOT WORKSPACE-SCOPED, so `withUserAuth` and no `X-Workspace-Id`, exactly
- * like `GET /api/channels?scope=account`. **The fence is the caller's own
- * membership rows**: the service builds the container id list from
- * `repository-containers.ts › listLinkContainers` and hands it to the
- * repository as the entire fence (every read below is service-role and bypasses
- * RLS, so that list is the only thing standing between a reader and a count).
+ * ⚠ Not workspace-scoped (`withUserAuth`, like `/api/channels?scope=account`).
+ * 🔒 The fence is the caller's own membership rows
+ * (`repository-containers.ts › listLinkContainers`); every read is service-role,
+ * so that list is the only fence.
  *
- * 🔒 **`workspaceId` IS GONE (Samuel, 2026-09-01) AND ITS REMOVAL IS A BUG FIX.**
- * The param used to narrow this payload to one container so the page could
- * render a channel-scoped panel BELOW the account-wide one — built from the same
- * components, so an operator with a single home channel saw every section drawn
- * twice from two payloads that were identical by construction. The face is
- * cross-channel now and there is exactly one payload. ⚠ **Do not reintroduce
- * the param**: it is not a harmless option, it is the second half of a duplicate
- * render.
+ * 🔒 No `workspaceId` (Samuel, 2026-09-01) — it caused a duplicate render of
+ * the same payload; do not reintroduce it.
  *
- * ⚠ **AN UNRECOGNISED `range` IS A 400, NEVER A DEFAULT WINDOW** (§9) — a page
- * that answers for the last 30 days under a "24h" heading is worse than an
- * error. The page itself only ever asks for `month`.
+ * ⚠ Unrecognised `range` → 400, never a default window (§9).
  */
 export const GET = withUserAuth(
   async (request: NextRequest, { userId }: Ctx) => {
     try {
       const range = parseRange(request.nextUrl.searchParams.get("range"));
       const overview = await getHomeOverview(userId, range);
-      // ⚠ Per-caller data — the fence is this caller's containers — so never
-      // CDN-cacheable by URL alone.
+      // ⚠ Per-caller data — never CDN-cacheable by URL.
       return NextResponse.json(overview, {
         headers: { "Cache-Control": "private, no-store" },
       });

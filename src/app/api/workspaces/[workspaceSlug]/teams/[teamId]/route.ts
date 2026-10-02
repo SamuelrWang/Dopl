@@ -60,8 +60,7 @@ export const DELETE = withUserAuth(
       return toErrorResponse(err);
     }
   },
-  // sessionOnly: an access-control action. ⚠ Deletes are PERMANENT and an agent token has no
-  // dialog to gate one — the invariant the MCP delete block holds on its own surface.
+  // sessionOnly: access-control action. ⚠ Deletes are PERMANENT; an agent has no dialog to gate one.
   { sessionOnly: true }
 );
 
