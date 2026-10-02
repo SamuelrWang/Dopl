@@ -286,7 +286,7 @@ async function revokeDeviceToken() {
     }
     if (!res.ok) {
       diag('mcp-config: device-token revoke failed', res.status,
-        '— token stays valid server-side until it expires; revoke it from web Settings > Connected apps');
+        '— token stays valid server-side until it expires; revoke it from web Settings > Devices');
       return 'failed';
     }
     // ⚠ Inlined on purpose: `revokeDeviceToken` is source-sliced by the tests, so a helper
@@ -301,7 +301,7 @@ async function revokeDeviceToken() {
     if (count === 0) {
       diag('mcp-config: device-token revoke matched NO token for label', label,
         '— nothing was revoked; if this machine ever minted one it is STILL VALID,',
-        'revoke it from web Settings > Connected apps');
+        'revoke it from web Settings > Devices');
       return 'no-match';
     }
     diag('mcp-config: device token revoked server-side',
@@ -309,7 +309,7 @@ async function revokeDeviceToken() {
     return 'revoked';
   } catch (err) {
     diag('mcp-config: device-token revoke error', (err && err.message) || String(err),
-      '— token stays valid server-side until it expires; revoke it from web Settings > Connected apps');
+      '— token stays valid server-side until it expires; revoke it from web Settings > Devices');
     return 'failed';
   }
 }

@@ -354,10 +354,10 @@ async function signOut() {
     revoked === 'revoked'
       ? '+ revoked server-side'
       : revoked === 'no-match'
-        ? '+ NOT revoked (the server matched no token for this machine\'s label — any token it minted is STILL VALID; revoke it in web Settings > Connected apps)'
+        ? '+ NOT revoked (the server matched no token for this machine\'s label — any token it minted is STILL VALID; revoke it in web Settings > Devices)'
         : revoked === 'none'
-          ? '+ no local token to revoke (nothing was revoked server-side — if this machine ever minted one, revoke it in web Settings > Connected apps)'
-          : '+ NOT revoked server-side (still valid until it expires — revoke it in web Settings > Connected apps)';
+          ? '+ no local token to revoke (nothing was revoked server-side — if this machine ever minted one, revoke it in web Settings > Devices)'
+          : '+ NOT revoked server-side (still valid until it expires — revoke it in web Settings > Devices)';
   diag('auth: signed out — blob cleared, cookies', cleared ? 'cleared' : 'CLEAR FAILED',
     '— MCP device token', device ? 'cleared' : 'CLEAR FAILED', revokeNote,
     '— agent-runtime sign-ins', runtimeCreds

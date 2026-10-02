@@ -31,14 +31,14 @@ export function AgentDefaultsSettings() {
   // this record into a new channel's.
   const state = useLaunchSelection({ kind: "defaults" });
 
-  if (!state.bridge) return <SectionShell title="Agents">{null}</SectionShell>;
+  if (!state.bridge) return <SectionShell title="Configuration">{null}</SectionShell>;
 
   const chain: DefaultChainValue = state.agentChain
     ? DEFAULT_CHAIN_ON
     : DEFAULT_CHAIN_OFF;
 
   return (
-    <SectionShell title="Agents" subtitle="What a new channel's agents start on.">
+    <SectionShell title="Configuration" subtitle="What a new channel's agents start on.">
       <div className="flex flex-col gap-1">
         {/* No `onChangeMessages`: no roster, so no posture warning — Messaging writes straight to
             the record. */}

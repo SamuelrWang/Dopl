@@ -41,7 +41,7 @@ describe("AgentDefaultsSettings copy", () => {
 
   it("renders its title and no explainer without the bridge", () => {
     const { container } = render(<AgentDefaultsSettings />);
-    expect(screen.getByText("Agents")).toBeTruthy();
+    expect(screen.getByText("Configuration")).toBeTruthy();
     expect(container.querySelector("p")).toBeNull();
   });
 });

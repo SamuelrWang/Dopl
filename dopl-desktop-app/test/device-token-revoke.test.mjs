@@ -187,7 +187,7 @@ test("a rejected request (offline) is a clean 'failed', never a throw", async ()
   const { fn, calls } = loadRevoke({ fetch: async () => { throw new Error("ENOTFOUND"); } });
   assert.equal(await fn(), "failed");
   assert.match(calls.logged.join("\n"), /revoke error/);
-  assert.match(calls.logged.join("\n"), /Connected apps/, "…and how to finish the job by hand");
+  assert.match(calls.logged.join("\n"), /Settings > Devices/, "…and how to finish the job by hand");
 });
 
 // ── signOut wires it in the only order that can work ────────────────────────
@@ -272,7 +272,7 @@ test("FIX M4: 'none' gets its OWN line — it never reads as a completed revoke"
   const line = logged.join("\n");
   assert.match(line, /no local token to revoke/);
   assert.match(line, /nothing was revoked server-side/, "stated plainly, not implied");
-  assert.match(line, /Connected apps/, "…with the way to finish the job by hand");
+  assert.match(line, /Settings > Devices/, "…with the way to finish the job by hand");
   assert.ok(!/\+ revoked server-side/.test(line), "the old bug: success claimed for a no-op");
 });
 

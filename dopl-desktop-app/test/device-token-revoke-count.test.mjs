@@ -88,7 +88,7 @@ test("revoked: 0 is NOT a revocation — it reports 'no-match'", async () => {
   const line = logged.join("\n");
   assert.match(line, /matched NO token/i, "the log says what actually happened");
   assert.match(line, /STILL VALID/i, "…and what is left behind");
-  assert.match(line, /Connected apps/, "…and how to finish the job by hand");
+  assert.match(line, /Settings > Devices/, "…and how to finish the job by hand");
   assert.ok(!/revoked server-side/.test(line), "never the success wording");
 });
 
@@ -182,7 +182,7 @@ test("signOut gives 'no-match' its OWN words — it must not read as a completed
   assert.match(line, /NOT revoked/, "stated plainly");
   assert.match(line, /matched no token for this machine's label/i, "…with the reason");
   assert.match(line, /STILL VALID/i);
-  assert.match(line, /Connected apps/);
+  assert.match(line, /Settings > Devices/);
   assert.ok(!/\+ revoked server-side/.test(line), "the old bug: success claimed for a no-op");
 });
 
