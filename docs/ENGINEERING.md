@@ -1417,7 +1417,7 @@ Never `any`. Never `@ts-ignore`. If you truly need an escape hatch: `unknown` + 
 ### Rules
 
 - Tests live next to code: `mentions.ts` → `mentions.test.ts` in the same folder. No separate `__tests__/` tree.
-- No mocking Supabase — run against a local Supabase instance, reset per test.
+- ~~No mocking Supabase — run against a local Supabase instance, reset per test.~~ (Superseded, measured 2026-10-04: the unit suites mock the Supabase clients routinely — `grep -rlE "vi\.mock\([\"'][^\"']*supabase" src` lists ~100 test files, mostly `@/shared/supabase/admin` and `@supabase/ssr`. Only the RLS redteam suites run against a real local Postgres, in CI's `rls-redteam` job — INVARIANTS §14, gate 11.)
 - No mocking the Anthropic SDK beyond a typed fake at the service boundary.
 - A bug fix PR must include a test that would have caught it.
 
