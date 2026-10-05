@@ -158,6 +158,9 @@ const appVersion = () => require('../../app-version').appVersion();
 // Cached by `<path>@<version>`; a failed read is not (retry: `model-catalog.js › FAILURE_TTL_MS`), and
 // `resolve-bin.js` caches only a hit, so an install made with Dopl open is picked up.
 async function models() {
+  // A downloaded binary that cannot answer `--version` at the floor is rejected inside the probe, which then
+  // answers for what launches run instead. Only the probe: `model/list` can fail on the network or the
+  // account, which says nothing of the build.
   const gate = await client.probe();
   const key = cacheKey(gate);
   if (cached && cached.key === key) return cached.roster;

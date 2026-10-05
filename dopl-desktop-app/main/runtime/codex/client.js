@@ -13,23 +13,21 @@ const BIN = resolveBin.BIN_NAME;
 // Bounded: `available()` awaits the probe on the spawn path, and a hung `codex` must read as absent.
 const PROBE_TIMEOUT_MS = 5000;
 
-/** Is there a usable `codex`? `{ ok, reason, version, path, source }`; `reason` is for the operator. */
-function probe() {
+// A downloaded build's first exec may wait out macOS's first-exec scan, so a failed probe on one is retried
+// once with this budget before the build is rejected (`../updates/index.js › reject`).
+const DOWNLOAD_RETRY_TIMEOUT_MS = 60000;
+
+/** One `--version` run of the resolved `found` → the probe's answer. Never rejects. */
+function probeAt(found, timeoutMs) {
   return new Promise((resolve) => {
-    // The resolver's reason (missing vs untrusted) is readable; an `execFile` errno is not.
-    const found = resolveBin.resolveCodexBin();
-    if (!found.ok) {
-      resolve({ ok: false, reason: found.reason, version: null, path: null, source: null });
-      return;
-    }
     const finish = (value) => resolve(Object.assign({ path: found.path, source: found.source }, value));
     try {
-      execFile(found.path, ['--version'], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
+      execFile(found.path, ['--version'], { timeout: timeoutMs }, (err, stdout) => {
         if (err) {
           finish({
             ok: false,
             reason: err.killed
-              ? `\`${found.path}\` did not answer \`${BIN} --version\` within ${PROBE_TIMEOUT_MS}ms — Dopl cannot start a Codex session on this Mac.`
+              ? `\`${found.path}\` did not answer \`${BIN} --version\` within ${timeoutMs}ms — Dopl cannot start a Codex session on this Mac.`
               : `\`${found.path}\` could not answer \`${BIN} --version\`: ${(err && err.message) || err}`,
             version: null,
           });
@@ -44,6 +42,27 @@ function probe() {
       finish({ ok: false, reason: `\`${found.path}\` could not be started: ${(err && err.message) || err}`, version: null });
     }
   });
+}
+
+/**
+ * Is there a usable `codex`? `{ ok, reason, version, path, source }`; `reason` is for the operator.
+ * ⚠ A DOWNLOAD THAT FAILS IS RETRIED ONCE, LONGER, THEN REJECTED, AND THE ANSWER IS WHAT LAUNCHES RUN AFTER
+ * THAT (the last good build or the bundle), never "no Codex" on account of an update. `o` is for tests.
+ */
+async function probe(o) {
+  const timeoutMs = (o && o.timeoutMs) || PROBE_TIMEOUT_MS;
+  const retryMs = (o && o.retryTimeoutMs) || DOWNLOAD_RETRY_TIMEOUT_MS;
+  // The resolver's reason (missing vs untrusted) is readable; an `execFile` errno is not.
+  const found = resolveBin.resolveCodexBin();
+  if (!found.ok) return { ok: false, reason: found.reason, version: null, path: null, source: null };
+  const gate = await probeAt(found, timeoutMs);
+  if (gate.ok || found.source !== 'downloaded') return gate;
+  const again = await probeAt(found, retryMs);
+  if (again.ok) return again;
+  // `reject` repoints the updater and its `onSwitch` drops resolve-bin's cached hit, so the next resolve is
+  // a different binary; each rejection retires one download, so this ends at the bundle.
+  if (!require('../updates').reject(require('./update-source'), found.path)) return again;
+  return probe(o);
 }
 
 // ── FRAMING ──────────────────────────────────────────────────────────────────────────────────
@@ -234,7 +253,7 @@ function initializeParams(version) {
 }
 
 module.exports = {
-  probe, connect, initializeParams,
+  probe, connect, initializeParams, DOWNLOAD_RETRY_TIMEOUT_MS,
   makeLineReader, // the framing fixtures
   REQUIRED_METHODS: protocol.REQUIRED_METHODS,
   SUPPORTED_CLI: protocol.SUPPORTED_CLI,

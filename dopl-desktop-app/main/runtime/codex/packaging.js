@@ -1,4 +1,5 @@
-// How the Codex binary reaches an operator: bundled (`@openai/codex*`, Apache-2.0), re-signed with the app.
+// How the Codex binary reaches an operator: bundled (`@openai/codex*`, Apache-2.0), re-signed with the app;
+// a newer vendor-signed build may replace it for new launches (`update-source.js`).
 // `resolve-bin.js` still falls back to PATH when the optional platform package is absent. Size cost: F-192.
 
 const packaging = {

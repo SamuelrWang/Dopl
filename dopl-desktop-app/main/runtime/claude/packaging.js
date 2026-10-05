@@ -17,7 +17,8 @@
 // ⚠ `versionPin` IS THE PROTOCOL THIS ADAPTER WAS BUILT AGAINST, and it is a CLAIM about what was
 // measured — the tool tables, the deferral behaviour, the per-server timeout clamp and the
 // permission-mode semantics in `loader.js` and `tools.js` were all read off this build. A skew is
-// not automatically a break, but it is the first thing to check when one appears.
+// not automatically a break, but it is the first thing to check when one appears. It pins the
+// BUNDLE; a download is a newer patch of the same line (`update-source.js › compatible`).
 
 const packaging = {
   delivery: 'bundled',
@@ -30,8 +31,9 @@ const packaging = {
     '**/@anthropic-ai/claude-agent-sdk-*/**',
     '**/@anthropic-ai/claude-agent-sdk/**',
   ],
-  // ⚠ The vendor binary is signed and notarised as part of the app, under the app's own identity
-  // and entitlements. Nothing separate is signed and nothing is fetched at runtime.
+  // ⚠ The BUNDLED binary is signed and notarised as part of the app, under the app's own identity
+  // and entitlements. A newer build the updater fetches (`update-source.js`) runs under the vendor's
+  // own signature instead, checked against the vendor's team before anything launches on it.
   signing: 'inherits-app-identity',
   // Measured 2026-10-01 off `dopl-desktop-app/package.json`.
   versionPin: '@anthropic-ai/claude-agent-sdk@0.3.287',

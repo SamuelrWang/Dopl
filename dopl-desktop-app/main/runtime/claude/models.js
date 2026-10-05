@@ -66,13 +66,15 @@ function defaultDeps() {
     credentialSource: () => {
       try { return String(require('./credential').credentialState().source || 'none'); } catch (_) { return 'none'; }
     },
-    // The platform binary's package: the SDK's `exports` map does not export its `package.json`.
+    // The ACTIVE binary's version (a verified download or the bundle), so a switch moves the key.
     sdkVersion: () => {
-      try {
-        return String(require(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`).version || '?');
-      } catch (_) { return '?'; }
+      try { return String((require('./loader').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
     },
     probe: roster.probe,
+    // The updater's active download, or null when launches run the bundle.
+    downloadedBin: () => (require('../updates').activeFor(require('./update-source')) || {}).path || null,
+    // A failed handshake on a downloaded binary sends new launches back to the last good one.
+    rejectBinary: (bin) => require('../updates').reject(require('./update-source'), bin),
   };
 }
 let deps = defaultDeps();
@@ -80,22 +82,47 @@ let deps = defaultDeps();
 let held = null; // { key, roster } — the last LIVE answer, never a fallback
 let inflight = null; // { key, promise }
 
-/** `<binary>@<sdk version>#<credential source>`: synchronous so `model-catalog.js` notices a move on a
- *  look; the credential source is in it because the roster is per account (signed out omits Fable). */
+/** `<binary>@<binary version>#<credential source>`: synchronous so `model-catalog.js` notices a move on a
+ *  look (a runtime update moves both halves); the credential source is in it because the roster is per
+ *  account (signed out omits Fable). */
 function rosterKey() {
   let bin = '?';
   try { bin = String(deps.bin() || '?'); } catch (_) { bin = '?'; }
   return `${bin}@${deps.sdkVersion()}#${deps.credentialSource()}`;
 }
 
-async function readLive(key) {
-  const sdk = await deps.loadSdk();
+// A downloaded build's first handshake may wait out macOS's first-exec scan, so a failed probe on one is
+// retried once with this budget before the build is rejected.
+const DOWNLOAD_RETRY_TIMEOUT_MS = 60000;
+
+/** `{ rows, moved }` from the binary new launches run. A download that fails twice is rejected and the rows
+ *  come from what launches run after that (the last good build or the bundle), `moved` — never "no runtime". */
+async function probeRows(sdk) {
   const options = { env: deps.env() };
   const bin = deps.bin();
   if (bin) options.pathToClaudeCodeExecutable = bin;
-  const rows = await deps.probe({ sdk, options });
+  try {
+    return { rows: await deps.probe({ sdk, options }), moved: false };
+  } catch (err) {
+    if (!bin || bin !== deps.downloadedBin()) throw err; // the bundle failing says nothing of a download
+    try {
+      return { rows: await deps.probe({ sdk, options, timeoutMs: DOWNLOAD_RETRY_TIMEOUT_MS }), moved: false };
+    } catch (_) {
+      deps.rejectBinary(bin);
+      const next = deps.bin();
+      if (!next || next === bin) throw err;
+      const rows = await deps.probe({ sdk, options: Object.assign({}, options, { pathToClaudeCodeExecutable: next }) });
+      return { rows, moved: true };
+    }
+  }
+}
+
+async function readLive(key) {
+  const sdk = await deps.loadSdk();
+  const { rows, moved } = await probeRows(sdk);
   return roster.rosterFrom(rows, {
-    key,
+    // A rejection moved the binary, so the roster is filed under the key of what launches run now.
+    key: moved ? rosterKey() : key,
     legacy: legacyAliases(),
     fallbackId: descriptor.launchDefault,
     fallbackAlias: modelTable.aliasForModelId(descriptor.launchDefault),
@@ -113,7 +140,7 @@ async function models() {
   const promise = readLive(key)
     .then((live) => {
       if (!live.models.length) return frozenRoster(live.reason);
-      held = { key, roster: live };
+      held = { key: live.key || key, roster: live };
       return live;
     })
     .catch((err) => frozenRoster(`Dopl could not read Claude Code's model list (${(err && err.message) || 'unknown error'}), so it is showing the list this build shipped with.`))
@@ -181,5 +208,5 @@ const descriptor = {
 
 module.exports = {
   models, rosterKey, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
-  descriptor, PICK_PATTERN,
+  descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };

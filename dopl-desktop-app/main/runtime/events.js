@@ -47,7 +47,7 @@ function toolCallEvents(call, ctx) {
   })];
 }
 
-// ── THE THREE CORE APPLIES BEFORE (OR INSTEAD OF) DISPATCHING ──
+// ── THE FOUR CORE APPLIES BEFORE (OR INSTEAD OF) DISPATCHING ──
 
 /** The conversation handle (core persists it before the reducer sees `launched`), the model really
  *  picked, and the raw MCP connect list (F-692): `null` = told nothing, `[]` = connected none. */
@@ -79,7 +79,11 @@ const context = (tokens, model, window) => ({
  *  session for sign-in). `text` is the platform's sentence, for the log only. */
 const authHold = (text) => ({ type: 'auth_hold', text: String(text == null ? '' : text) });
 
+/** The runtime is older than the model it was asked for (the platform said so in its own error): core
+ *  fetches the newest build for the next launch and replaces the platform's sentence with Dopl's. */
+const runtimeOutdated = () => ({ type: 'runtime_outdated' });
+
 module.exports = {
   assistant, thinking, toolUse, toolResult, toolCallEvents,
-  launched, result, context, authHold, ERROR_FRAME,
+  launched, result, context, authHold, runtimeOutdated, ERROR_FRAME,
 };

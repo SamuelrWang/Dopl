@@ -267,6 +267,10 @@ if (!gotLock) {
       getLiveSessions: () => sessionEngine.listLiveSessions(),
     });
 
+    // The agent runtimes' own CLIs track their vendors' newest builds in the background, so a new
+    // model never waits on a Dopl release (`runtime/updates/index.js`). Never awaited.
+    require('./runtime').startUpdates();
+
     // The Phase-4 minimum-version gate. `GET /api/version` carries the floor; a
     // build below it swaps the app window for the blocking update screen and back
     // again through the one shell factory. Every failure to get an answer

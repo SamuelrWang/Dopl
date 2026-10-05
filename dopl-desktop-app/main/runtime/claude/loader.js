@@ -5,7 +5,8 @@
 // ⚠ The SINGLE module that touches the ESM-only SDK, so CJS->ESM interop and packaged-binary
 // path math live in exactly one place (contract §D).
 //   getSdk()                   cached dynamic import() of the ESM SDK
-//   resolveClaudeExecutable()  asar-unpacked path for options.pathToClaudeCodeExecutable
+//   resolveClaudeExecutable()  the binary a new launch runs (a verified download, else the asar-unpacked
+//                              bundle) for options.pathToClaudeCodeExecutable
 //   buildMcpServers(cfg, wsId) in-memory mcpServers object (dopl bearer from safeStorage +
 //                              the session's X-Workspace-Id pin)
 //   withToolProfileStamp()     this session's containment PROFILE onto that entry (X-Dopl-Tool-Profile)
@@ -29,6 +30,8 @@ const { diag } = require('../../diag');
 const { normalizeProfile } = require('../../tool-profiles');
 // F-692: the CLI's ONE connect-timeout knob, and its measured default. Pure module, no electron.
 const mcpConnect = require('../../mcp-connect');
+const updates = require('../updates');
+const updateSource = require('./update-source');
 
 const SDK_PKG = '@anthropic-ai/claude-agent-sdk';
 
@@ -49,19 +52,32 @@ function peekSdk() {
   return _sdk;
 }
 
-// Absolute path to the bundled `claude` executable, or null (engine falls back to headless).
-// The platform binary ships as `@anthropic-ai/claude-agent-sdk-<platform>-<arch>` (an
-// optionalDependency, host-arch only) with a `claude` file at its package root.
-function resolveClaudeExecutable() {
+// The bundled `claude` executable, `{ path, version }`, or null. The platform binary ships as
+// `@anthropic-ai/claude-agent-sdk-<platform>-<arch>` (an optionalDependency, host-arch only) with a
+// `claude` file at its package root; `version` is that package's (the SDK's `exports` map hides its own).
+function bundledClaude() {
   const platformPkg = `${SDK_PKG}-${process.platform}-${process.arch}`;
   try {
     const pkgJson = require.resolve(`${platformPkg}/package.json`);
     const bin = path.join(path.dirname(pkgJson), 'claude');
-    return cliSpawn.rewriteAsarUnpacked(bin);
+    return { path: cliSpawn.rewriteAsarUnpacked(bin), version: String(require(pkgJson).version || '?') };
   } catch (err) {
     diag('sdk-loader: platform binary unresolved', platformPkg, err && err.message);
     return null;
   }
+}
+
+// The binary a NEW launch runs, `{ path, version }`, or null (engine falls back to headless): a verified
+// download newer than the bundle (`../updates/index.js`), else the bundle. A running session keeps the
+// binary it was spawned from.
+function claudeRuntime() {
+  return updates.activeFor(updateSource) || bundledClaude();
+}
+
+// Absolute path for options.pathToClaudeCodeExecutable, or null.
+function resolveClaudeExecutable() {
+  const runtime = claudeRuntime();
+  return runtime ? runtime.path : null;
 }
 
 // ⚠ THE DEVICE TOKEN STAYS OFF DISK, FULL STOP. `Read` is PRE-APPROVED on all three session
@@ -364,6 +380,8 @@ function buildScrubbedEnv() {
 module.exports = {
   getSdk,
   peekSdk, // sync read of the cached namespace — null pre-await, by contract (agent-self-ops)
+  bundledClaude,
+  claudeRuntime,
   resolveClaudeExecutable,
   buildMcpServers,
   withSessionStamp, // F2: this run's slot key, onto the entry above

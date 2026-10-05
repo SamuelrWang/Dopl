@@ -13,6 +13,18 @@ const detect = require('../../session-auth-detect');
 // core never decides which errors mean "no credential".
 const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
+// The API's refusal of a model this CLI build predates, as the CLI relays it ("API Error: 400 Claude Code
+// 2.1.220 does not support this model; version 2.1.251 or newer is required. Run 'claude update', …").
+// ⚠ Read only off a message the CLI itself flagged as an API error (`msg.error`): assistant text is content
+// a peer can influence, and a reply quoting the sentence must not trigger anything.
+const OUTDATED_RE = /does not support this model; version \S+ or newer is required/i;
+
+function isOutdatedRefusal(msg) {
+  if (!msg.error) return false;
+  const blocks = (msg.message && msg.message.content) || [];
+  return blocks.some((b) => b && b.type === 'text' && OUTDATED_RE.test(String(b.text || '')));
+}
+
 // Only assistant (text, thinking, tool calls) and user (tool_result) messages render; `ctx` carries
 // the channel and peer that classify an own-channel post (`events.toolCallEvents`).
 function renderEvents(msg, ctx) {
@@ -75,6 +87,9 @@ function normalize(msg, ctx) {
     // shape is this platform's, the decision core's (`mcp-connect.js`, F-692).
     return [events.launched(msg.session_id, msg.model, msg.mcp_servers)];
   }
+
+  // Its sentence tells the operator to run `claude update`, which a Dopl user has no way to do.
+  if (msg.type === 'assistant' && isOutdatedRefusal(msg)) return [events.runtimeOutdated()];
 
   if (msg.type === 'assistant' || msg.type === 'user') {
     const out = renderEvents(msg, context);

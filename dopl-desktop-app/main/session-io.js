@@ -10,6 +10,7 @@ const { isOutboundPost } = outboundTag;
 const seed = require('./session-seed');
 const mcpConnect = require('./mcp-connect');
 const runtimeRegistry = require('./runtime');
+const runtimeEvents = require('./runtime/events');
 const runtimeTruth = require('./session-runtime-truth');
 const operatorTools = require('./operator-tools');
 
@@ -178,6 +179,16 @@ function applyCoreEvents(s, list, dispatch, store) {
   for (const ev of list || []) {
     if (!ev || !ev.type) continue;
     if (ev.type === 'auth_hold') return ev;
+    if (ev.type === 'runtime_outdated') {
+      // The newest build is fetched for the NEXT launch (this child keeps its own), and the platform's
+      // sentence, which names an update command a Dopl user cannot run, is replaced by Dopl's. The line is
+      // chosen off the LAST finished check, read before this one starts.
+      const descriptor = runtimeRegistry.descriptorFor(s.runtimeId);
+      const last = runtimeRegistry.lastUpdateOutcome(descriptor.id);
+      runtimeRegistry.checkForUpdate(descriptor.id);
+      dispatch(s, runtimeEvents.assistant(runtimeRegistry.copy.runtimeOutdated(descriptor, last)));
+      continue;
+    }
     if (ev.type === 'context') {
       // The meter's last reading, remembered (never dispatched). A turn that measured nothing keeps the last one.
       if (ev.tokens > 0) s.promptTokens = ev.tokens;

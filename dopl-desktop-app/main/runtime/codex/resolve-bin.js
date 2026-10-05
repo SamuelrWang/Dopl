@@ -1,6 +1,7 @@
 // Which `codex` file every caller runs; resolves only, never spawns. Order is policy: `DOPL_CODEX_BIN` >
-// bundled (so `packaging.versionPin` is what runs) > PATH > well-known prefixes (a Finder-launched app gets
-// launchd's bare PATH). Every candidate, the bundle included, must pass `inspectCandidate`.
+// a verified download newer than the bundle (`update-source.js`) > bundled > PATH > well-known prefixes (a
+// Finder-launched app gets launchd's bare PATH). Every candidate, the bundle included, must pass
+// `inspectCandidate`.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -23,7 +24,7 @@ const WELL_KNOWN = [
 ];
 
 // The `@openai/codex` launcher's triple map, so Dopl runs the vendor binary, not a Node launcher. Darwin
-// only. Its `CODEX_MANAGED_PACKAGE_ROOT` is deliberately not set: the bundle updates with Dopl releases.
+// only. Its `CODEX_MANAGED_PACKAGE_ROOT` is deliberately not set: Dopl's own updater moves the build.
 const VENDOR_TRIPLE = {
   'darwin-arm64': 'aarch64-apple-darwin',
   'darwin-x64': 'x86_64-apple-darwin',
@@ -144,10 +145,11 @@ function launcherVendor(resolved, { platform, arch, resolvePackage }) {
 
 /**
  * The search, pure over `env` and `io` (`{ realpathSync, statSync, accessSync }`) for tests.
- * @returns {{ ok, path, source, reason, rejected }} `source` override|bundled|path|well-known; `rejected`
+ * `downloaded` is the updater's active binary path, or null.
+ * @returns {{ ok, path, source, reason, rejected }} `source` override|downloaded|bundled|path|well-known; `rejected`
  *   = candidates that exist but were refused, so "no Codex" and "a Codex Dopl won't run" read differently.
  */
-function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePackage }) {
+function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePackage, downloaded }) {
   const rejected = [];
   const consider = (file, source) => {
     const verdict = inspectCandidate(file, io, uid);
@@ -175,7 +177,11 @@ function resolveWith({ env, home, io, uid, execPath, platform, arch, resolvePack
     };
   }
 
-  // A refused bundle lands in `rejected` and the search continues to PATH.
+  // A refused download or bundle lands in `rejected` and the search continues.
+  if (downloaded) {
+    const hit = consider(downloaded, 'downloaded');
+    if (hit) return hit;
+  }
   const bundled = bundledCandidate({ platform, arch, resolvePackage });
   if (bundled) {
     const hit = consider(bundled, 'bundled');
@@ -226,6 +232,8 @@ function resolveCodexBin() {
     arch: process.arch,
     // This module's own `require.resolve`: it shares the vendored binary's package tree, dev or packaged.
     resolvePackage: require.resolve,
+    // Lazy: `update-source.js` requires this module.
+    downloaded: (require('../updates').activeFor(require('./update-source')) || {}).path || null,
   });
   if (found.ok) cached = found;
   return found;

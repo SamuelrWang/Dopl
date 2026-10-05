@@ -97,6 +97,17 @@ function liveModelSwitchRefusal(descriptor) {
     : `${name} cannot change a running agent's model. Start a new agent on the model you want.`;
 }
 
+// The update-check outcomes after which a relaunch cannot help: no build Dopl can take exists (a newer minor
+// waits for a Dopl release, the platform has no updater, the build was refused).
+const NEEDS_DOPL_UPDATE = new Set(['incompatible', 'unsupported', 'rejected']);
+
+/** The runtime is too old for the model it was asked for. One line, and the one control that helps: a relaunch
+ *  (a newer build is fetched for the next launch), or a Dopl update when the last check found none it can take. */
+function runtimeOutdated(descriptor, lastOutcome) {
+  const action = NEEDS_DOPL_UPDATE.has(lastOutcome) ? 'Update Dopl.' : 'Relaunch the agent.';
+  return `${runtimeLabel(descriptor)} is out of date for this model. ${action}`;
+}
+
 /** "This machine cannot run an agent at all", in the selected runtime's words. One short line. */
 function noRuntimeCopy(descriptor) {
   const name = named(descriptor);
@@ -113,5 +124,6 @@ module.exports = {
   heldToolDenial,
   resumeNudge,
   liveModelSwitchRefusal,
+  runtimeOutdated,
   noRuntimeCopy,
 };

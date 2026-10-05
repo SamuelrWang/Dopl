@@ -25,6 +25,20 @@ register(require('./cursor'));
 
 const DEFAULT_ID = REGISTRY.keys().next().value;
 
+// The runtimes whose bundled CLI also tracks its vendor's newest build (`updates/index.js`). The updater is
+// required lazily: it logs through `diag`, which pulls electron, and this registry must not.
+const UPDATE_SOURCES = [require('./claude/update-source'), require('./codex/update-source')];
+const updates = () => require('./updates');
+
+/** Start the background update checks (app start; never awaited by a launch). */
+const startUpdates = () => updates().start(UPDATE_SOURCES);
+
+/** Check one runtime for a newer build now; a runtime without an update source answers nothing. */
+const checkForUpdate = (runtimeId) => updates().checkNow(runtimeId);
+
+/** The last finished update check's outcome word for one runtime, or null. */
+const lastUpdateOutcome = (runtimeId) => updates().lastOutcome(runtimeId);
+
 /**
  * The adapter driving this session. An unknown id falls back to the default: refusing would strand
  * a session a newer build wrote, and nothing is granted by it (every gate decision is re-derived).
@@ -91,6 +105,7 @@ function describePermission(runtimeId, tools, native) {
 
 module.exports = {
   resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds, expireConnectivity, describePermission,
+  startUpdates, checkForUpdate, lastUpdateOutcome,
   DEFAULT_ID,
   capability, // one require answers a capability question
   selectionContext,
