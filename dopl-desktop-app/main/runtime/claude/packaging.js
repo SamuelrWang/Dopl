@@ -33,8 +33,8 @@ const packaging = {
   // ⚠ The vendor binary is signed and notarised as part of the app, under the app's own identity
   // and entitlements. Nothing separate is signed and nothing is fetched at runtime.
   signing: 'inherits-app-identity',
-  // Measured 2026-08-31 off `dopl-desktop-app/package.json`.
-  versionPin: '@anthropic-ai/claude-agent-sdk@0.3.220',
+  // Measured 2026-10-01 off `dopl-desktop-app/package.json`.
+  versionPin: '@anthropic-ai/claude-agent-sdk@0.3.287',
 };
 
 module.exports = { packaging };

@@ -59,7 +59,8 @@ test("the SDK still declares `mcp_servers: {name, status}[]` on the init message
   assert.ok(decl.startsWith("export declare type SDKSystemMessage"), "SDKSystemMessage is gone");
   const body = decl.slice(0, decl.indexOf("\n};"));
   assert.match(body, /subtype: 'init'/, "the init discriminator moved");
-  assert.match(body, /mcp_servers: \{\s*name: string;\s*status: string;\s*\}\[\]/,
+  // Later members are additive (0.3.287 added an optional `source`); only these two are read.
+  assert.match(body, /mcp_servers: \{\s*name: string;\s*status: string;[^}]*\}\[\]/,
     "the init message's mcp_servers shape changed — re-measure mcp-connect.js › doplStatus");
 });
 
