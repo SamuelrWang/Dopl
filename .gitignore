@@ -46,3 +46,6 @@ next-env.d.ts
 
 # local animation sandbox, not for prod
 /src/app/receipt-test/
+
+# Supabase CLI local cache
+supabase/.temp/
