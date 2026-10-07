@@ -931,6 +931,11 @@ spawn while fixing them.
 
 ##### CXP-3A — Make Dopl MCP discovery runtime-aware for spawned Codex sessions
 
+> 🟢 **LIVE RETEST PASSED 2026-09-23.** Active agent `@agent-lefdtboa` (`gpt-6-astra`)
+> successfully called its Dopl channel tool and posted
+> `DOPL_CODEX_OVERHAUL_OK_20260923` as channel message `#2222`. Keep the regression tests below;
+> the previously reproduced failure is no longer present on the live surface.
+
 **Objective:** ensure a Dopl-launched Codex agent can discover and call the per-session Dopl MCP
 mount without exposing unrelated deferred tools or weakening the selected tool posture.
 
@@ -966,6 +971,11 @@ passes through the existing approval/audit path. Removing the contradiction from
 is insufficient without the live call.
 
 ##### CXP-3B — Settle asynchronous direct-agent directions after Codex completion
+
+> 🟢 **LIVE RETEST PASSED 2026-09-23.** Direction
+> `61689a12-e8c5-4623-8e8f-0777e7a5c79c` first returned `pending/claimed`, then settled
+> `delivered` with the agent's final reply after its channel post. The historical reproduction
+> row now reads `expired`; retain the ordering regression test so that failure does not return.
 
 **Objective:** make an MCP `manage direct` request converge from `pending/claimed` to `delivered`
 when the Codex turn has already produced final text.
