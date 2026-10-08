@@ -1,4 +1,5 @@
 import "server-only";
+import { fitColorShared, isMissingColorShared, noteColorSharedMissing, selectTolerant } from "./color-shared-compat";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
 // ⚠ WHAT COUNTS AS THE SAME ROW lives beside this file, not in it — split at the
@@ -9,6 +10,7 @@ import type { SessionStateRow, SessionStateUpsert } from "./collab-dto";
 // every time the desktop reports a new field. See that module's header.
 import {
   SESSION_DIFF_COLUMNS,
+  SESSION_DIFF_COLUMNS_LEGACY,
   sessionRowMatches,
 } from "./repository-sessions-columns";
 // ⚠ THE COLOUR RULE LIVES ENTIRELY OUTSIDE THIS FILE (2026-09-13) — the per-channel
@@ -417,12 +419,10 @@ export async function replaceSessionStates(
   reported: SessionStateUpsert[]
 ): Promise<{ stored: number; changed: number; removed: number }> {
   const db = supabaseAdmin();
-  const { data, error: readError } = await db
-    .from("channel_sessions")
-    .select(SESSION_DIFF_COLUMNS)
-    .eq("user_id", userId)
-    .eq("workspace_id", workspaceId)
-    .limit(SESSION_ROWS_LIMIT);
+  // Tolerates a database without `color_shared` (`color-shared-compat.ts`).
+  const { data, error: readError } = await selectTolerant(SESSION_DIFF_COLUMNS, SESSION_DIFF_COLUMNS_LEGACY, (cols) =>
+    db.from("channel_sessions").select(cols).eq("user_id", userId).eq("workspace_id", workspaceId).limit(SESSION_ROWS_LIMIT)
+  );
   if (readError) throw readError;
   const stored = new Map<string, SessionStateUpsert>();
   // ⚠ THROUGH `unknown`, and the reason is worth a line rather than a `@ts-expect-error`:
@@ -446,11 +446,7 @@ export async function replaceSessionStates(
     return !current || !sessionRowMatches(current, r);
   });
   if (changed.length > 0) {
-    const rows = changed.map((r) => ({
-      ...r,
-      user_id: userId,
-      workspace_id: workspaceId,
-    }));
+    const rows = fitColorShared(changed.map((r) => ({ ...r, user_id: userId, workspace_id: workspaceId })));
     const { error } = await db
       .from("channel_sessions")
       .upsert(rows, { onConflict: "user_id,session_key" });
@@ -459,10 +455,8 @@ export async function replaceSessionStates(
       // FAILED** — each inspects the error and returns the rows UNCHANGED when it is
       // not the one it knows. See {@link healDeadThreadRefs} and
       // {@link withoutClaimedColors}.
-      const healed = withoutClaimedColors(
-        await healDeadThreadRefs(rows, error),
-        error
-      );
+      if (isMissingColorShared(error)) noteColorSharedMissing();
+      const healed = fitColorShared(withoutClaimedColors(await healDeadThreadRefs(rows, error), error));
       const retry = await db
         .from("channel_sessions")
         .upsert(healed, { onConflict: "user_id,session_key" });

@@ -18,6 +18,10 @@ export const SESSION_DIFF_COLUMNS =
   // `color_shared` with it: a shared incumbent keeps its key (2026-10-08).
   "color, color_shared";
 
+/** The same list without `color_shared`, for a database the 2026-10-08 migration has not reached
+ *  (`color-shared-compat.ts`). */
+export const SESSION_DIFF_COLUMNS_LEGACY = SESSION_DIFF_COLUMNS.replace(", color_shared", "");
+
 /**
  * Field by field, never `JSON.stringify` (key order differs by source). Numeric columns go through
  * `sameCount`: PostgREST may return a BIGINT as a string, and a stored NULL must never equal 0.

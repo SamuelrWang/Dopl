@@ -15,9 +15,9 @@
 -- ⚠ SAME INDEX NAME, REDEFINED: the degrade narrows on that name, so a rename would silently
 -- turn a colour clash into a 500.
 --
--- ⚠ DEPLOY ORDER: apply THIS BEFORE the web build that reads `color_shared`
--- (`repository-sessions-columns.ts › SESSION_DIFF_COLUMNS`), or every session push errors on the
--- unknown column. Additive, so applying it early is harmless to the old build.
+-- DEPLOY ORDER: no longer load-bearing. The web build tolerates the column being absent
+-- (`src/features/channels/server/color-shared-compat.ts`): before this is applied a full room just
+-- does not share, and the session push keeps working. Additive, so applying it early is harmless.
 --
 -- Rollback:
 --   DROP INDEX IF EXISTS public.channel_sessions_channel_color_live_idx;

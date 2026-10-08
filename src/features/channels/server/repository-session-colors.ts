@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { LAUNCH_DIRECTIVES_TABLE } from "./repository-launch";
+import { selectTolerant } from "./color-shared-compat";
 import { isMissingRelation } from "./repository-sessions";
 import { liveColorClaim, resolveReportedColors } from "./session-colors";
 import type { ChannelColorClaims, ForeignColorsByChannel } from "./session-colors";
@@ -75,18 +76,25 @@ export async function foreignLiveColorsByChannel(
   // reporting that it now runs nothing).
   if (unique.length === 0) return new Map();
 
-  let query = supabaseAdmin()
-    .from("channel_sessions")
-    .select("channel_id, color, state, color_shared")
-    .eq("workspace_id", workspaceId)
-    .in("channel_id", unique)
-    // ⚠ THE NULLS ARE FILTERED IN SQL, not in JS: an uncoloured session is the
-    // ordinary row and there may be hundreds of them, none of which can take a key.
-    .not("color", "is", null)
-    .limit(COLOR_ROWS_LIMIT);
-  if (exceptUserId !== null) query = query.neq("user_id", exceptUserId);
-
-  const { data, error } = await query;
+  // Tolerates a database without `color_shared` (`color-shared-compat.ts`): every row then reads
+  // as exclusive, which is exactly what that database holds.
+  const { data, error } = await selectTolerant(
+    "channel_id, color, state, color_shared",
+    "channel_id, color, state",
+    (columns) => {
+      let query = supabaseAdmin()
+        .from("channel_sessions")
+        .select(columns)
+        .eq("workspace_id", workspaceId)
+        .in("channel_id", unique)
+        // ⚠ THE NULLS ARE FILTERED IN SQL, not in JS: an uncoloured session is the
+        // ordinary row and there may be hundreds of them, none of which can take a key.
+        .not("color", "is", null)
+        .limit(COLOR_ROWS_LIMIT);
+      if (exceptUserId !== null) query = query.neq("user_id", exceptUserId);
+      return query;
+    }
+  );
   if (error) {
     if (isMissingRelation(error)) return new Map();
     throw error;
