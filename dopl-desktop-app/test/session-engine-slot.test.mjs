@@ -118,8 +118,7 @@ function harness(cfg = {}) {
   const api = new Function(
     "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
     "ontologyReach", "roomRoster", "refuseUnknownModel", "launchDefault", "credentials", // faked; own suites drive the real ones
-    "operatorTools", // faked: `operator-tools.test.mjs` drives the real scope
-    "refuseUnreadableProtocol", // faked: `sdk-shape.test.mjs` drives the real verdict
+    "operatorTools", "refuseUnreadableProtocol", // faked: operator-tools / sdk-shape suites drive the real ones
     `${LAUNCH_SRC}\n${asyncFnOf(ENGINE, "credentialMissing")}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
       ` return { launch, hasLiveSession, isAuthHeldSession };`
   )(
@@ -156,8 +155,7 @@ function harness(cfg = {}) {
     { fetchRoomRoster: async () => { if (cfg.rosterThrows) throw new Error("roster exploded"); return cfg.roster || { agents: [], agentsMore: 0, people: [], peopleMore: 0, read: 'skipped' };
     } }, async () => cfg.modelRefusal || null, { withRuntimeDefault: async (_rt, model) => model },
     { needSignIn: (id) => calls.signIn.push(id) }, { launchScope: () => cfg.operatorScope || '' },
-    async () => cfg.shapeRefusal || null,
-  );
+    async () => cfg.shapeRefusal || null);
   return { ...api, sessions, calls };
 }
 
