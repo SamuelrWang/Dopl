@@ -295,14 +295,14 @@ describe("the identity name on an own-agent card", () => {
   it("renders NOTHING for a blank agent, and nothing on a main that omits the field", () => {
     card({ identityName: null, model: "claude-opus-5" });
     expect(screen.getByText("UI-kit design").parentElement!.textContent).toBe(
-      "UI-kit design· Opus"
+      "UI-kit design· Claude Opus 5"
     );
     cleanup();
     // ⚠ Absent and `null` are the same answer — an older main has no field, and
     // "Default" would be this build claiming to know (INVARIANTS §11).
     card({ model: "claude-opus-5" });
     expect(screen.getByText("UI-kit design").parentElement!.textContent).toBe(
-      "UI-kit design· Opus"
+      "UI-kit design· Claude Opus 5"
     );
   });
 });

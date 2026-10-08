@@ -156,14 +156,15 @@ describe("menu service", () => {
     expect(convo.before).toBe(1);
   });
 
-  it("offers launch runtimes from history plus Claude, each with a Default model", async () => {
+  it("offers launch runtimes from history plus Claude: Default + models this person launched, never a typed lineup", async () => {
     const t = setup();
     const d = await device(t);
     const { runtimes } = await launchOptions({ gateway: t.gateway, linker: t.linker, devices: t.devices }, d, OPS);
     expect(runtimes.map((r) => r.id)).toEqual(["codex", "claude"]);
-    expect(runtimes[0].models).toEqual([{ id: "", label: "Default" }, { id: "gpt-6", label: "gpt-6" }]);
-    expect(runtimes[1].models[0]).toEqual({ id: "", label: "Default" });
-    expect(runtimes[1].models.some((m) => m.label === "Opus 5.5")).toBe(true);
+    // The history id, rendered by the one generic prettifier (no vendor knowledge).
+    expect(runtimes[0].models).toEqual([{ id: "", label: "Default" }, { id: "gpt-6", label: "Gpt 6" }]);
+    // No Claude launch in history: only the runtime's own default. No model id is typed into this tree.
+    expect(runtimes[1].models).toEqual([{ id: "", label: "Default" }]);
   });
 });
 

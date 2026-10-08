@@ -9,7 +9,6 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import {
   AGENT_MODEL_DEFAULT,
-  AGENT_MODELS,
   agentModelLabel,
   agentModelShortLabel,
   normalizeAgentModel,
@@ -47,7 +46,12 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
 const CLAUDE_CATALOGS: ModelCatalogs = {
   claude: catalog(
     "claude",
-    AGENT_MODELS.map(({ id, label }) => ({ id, label, isDefault: id === "claude-sonnet-5-5" }))
+    // What a live roster answers; the web tree types no lineup of its own (agent-models.ts).
+    [
+      { id: "claude-opus-5-5", label: "Opus 5.5", short: "Opus" },
+      { id: "claude-sonnet-5-5", label: "Sonnet 5.5", short: "Sonnet", isDefault: true },
+      { id: "claude-haiku-5-5", label: "Haiku 5.5", short: "Haiku" },
+    ]
   ),
 };
 
@@ -75,18 +79,22 @@ describe("the model vocabulary — one map, four surfaces", () => {
     expect(normalizeAgentModel(null)).toBeNull();
   });
 
-  it("gives each id its full label for a surface where you are CHOOSING", () => {
-    expect(agentModelLabel("claude-fable-5")).toBe("Fable 5");
-    expect(agentModelLabel("claude-opus-5")).toBe("Opus 5");
-    expect(agentModelLabel("claude-sonnet-5")).toBe("Sonnet 5");
-    expect(agentModelLabel("claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
+  it("gives each id the CATALOG's label where you are choosing; with none, the id prettified, nothing guessed", () => {
+    const catalogs = CLAUDE_CATALOGS;
+    expect(agentModelLabel("claude-opus-5-5", catalogs)).toBe("Opus 5.5");
+    expect(agentModelLabel("claude-sonnet-5-5", catalogs)).toBe("Sonnet 5.5");
+    // Offline: one generic rule, no vendor knowledge — the id reformatted, never a remembered name.
+    expect(agentModelLabel("claude-opus-5")).toBe("Claude Opus 5");
+    expect(agentModelLabel("claude-haiku-4-5-20251001")).toBe("Claude Haiku 4.5 20251001");
+    expect(agentModelLabel("claude-opus-5-5[1m]")).toBe("Claude Opus 5.5 [1m]");
+    expect(agentModelLabel("gpt-5.6-sol")).toBe("Gpt 5.6 Sol");
     expect(agentModelLabel(null)).toBe("Default");
   });
 
   // The two disagree on absence on purpose: a picker offers Default; a card states what is running.
   it("renders a glance surface's absence as NOTHING, not as Default", () => {
-    expect(agentModelShortLabel("claude-opus-5")).toBe("Opus");
-    expect(agentModelShortLabel("claude-fable-5")).toBe("Fable");
+    expect(agentModelShortLabel("claude-opus-5-5", CLAUDE_CATALOGS)).toBe("Opus");
+    expect(agentModelShortLabel("claude-opus-5")).toBe("Claude Opus 5");
     expect(agentModelShortLabel(null)).toBeNull();
     expect(agentModelShortLabel(undefined)).toBeNull();
     expect(agentModelLabel(null)).toBe("Default");
@@ -94,8 +102,9 @@ describe("the model vocabulary — one map, four surfaces", () => {
 
   // The roster moves without this tree shipping; an id this build predates is still a real model.
   it("renders an UNKNOWN id as itself rather than dropping it", () => {
-    expect(agentModelLabel("claude-something-9")).toBe("claude-something-9");
-    expect(agentModelShortLabel("claude-something-9")).toBe("claude-something-9");
+    expect(agentModelLabel("claude-something-9")).toBe("Claude Something 9");
+    expect(agentModelShortLabel("claude-something-9")).toBe("Claude Something 9");
+    expect(agentModelLabel("-")).toBe("-");
     expect(normalizeAgentModel("claude-something-9")).toBe("claude-something-9");
   });
 });

@@ -83,7 +83,8 @@ describe("the Model row is the identity runtime's roster", () => {
     desktop.present = false;
     await open({ identity: identity({ runtime: "codex", model: "gpt-6-sol" }) });
     expect(tabLabels("Runtime")).toEqual(["Any", "codex"]);
-    expect(tabLabels("Model")).toEqual(["Default", "gpt-6-sol"]);
+    // No catalog: the stored id, prettified by the one generic rule (agent-models.ts › prettifyModelId).
+    expect(tabLabels("Model")).toEqual(["Default", "Gpt 6 Sol"]);
   });
 
   it("with no desktop and no stored runtime, renders no Runtime row", async () => {

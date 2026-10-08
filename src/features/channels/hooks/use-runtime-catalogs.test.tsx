@@ -10,7 +10,6 @@ import {
   type ChannelLaunchPostureState,
 } from "./use-channel-launch-posture";
 import { CATALOG_VERSION, selectableModels, type ModelCatalog } from "../lib/model-catalog";
-import { AGENT_MODELS } from "../lib/agent-models";
 import { REAL_DEFAULT_RUNTIME, REAL_DESCRIPTORS } from "../lib/runtime-descriptors-harness";
 import { wireCatalog } from "./launch-selection-harness";
 import { MAIN_ROSTER_SETTLE_MS, MAX_RELOADS, RELOAD_DELAY_MS } from "./use-runtime-catalogs";
@@ -22,7 +21,8 @@ afterEach(() => {
 
 const CH = "44444444-4444-4444-8444-444444444444";
 
-const CLAUDE_IDS = AGENT_MODELS.map((m) => m.id);
+// Fixture ids: what a live Claude roster might answer. The web tree types no lineup of its own.
+const CLAUDE_IDS = ["claude-fixture-a", "claude-fixture-b", "claude-fixture-c"];
 
 const codexCatalog = (over: Partial<ModelCatalog> = {}) =>
   wireCatalog(
@@ -33,7 +33,7 @@ const codexCatalog = (over: Partial<ModelCatalog> = {}) =>
 
 const claudeCatalog = wireCatalog(
   "claude",
-  CLAUDE_IDS.map((id) => ({ id, isDefault: id === "claude-sonnet-5" }))
+  CLAUDE_IDS.map((id) => ({ id, isDefault: id === "claude-fixture-b" }))
 );
 
 /** Install a bridge whose posture read answers `reply`. A function is called per read. */

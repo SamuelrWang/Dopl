@@ -116,9 +116,9 @@ describe("what the popover offers", () => {
       identity({ id: "b", name: "No model", model: null }),
     ];
     mount();
-    // The chip is the short label; an unset model renders nothing (a row states what an identity
-    // carries).
-    expect(screen.getByText("Opus")).toBeTruthy();
+    // The chip is the short label (no catalog here: the id prettified, never a remembered name); an
+    // unset model renders nothing (a row states what an identity carries).
+    expect(screen.getByText("Claude Opus 5")).toBeTruthy();
     expect(screen.queryByText("Default")).toBeNull();
   });
 

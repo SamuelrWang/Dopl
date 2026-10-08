@@ -12,10 +12,10 @@ import {
   normalizeCatalogs,
   selectableModels,
 } from "./model-catalog";
-import { AGENT_MODELS } from "./agent-models";
 import { wireCatalog } from "../hooks/launch-selection-harness";
 
-const CLAUDE_IDS = AGENT_MODELS.map((m) => m.id);
+// No Claude lineup exists in the web tree any more (agent-models.ts); a miss must still name no Claude id.
+const isClaudeId = (id: string) => /^claude-/.test(id);
 
 const wire = (over: Record<string, unknown> = {}) => ({
   ...wireCatalog("codex", [
@@ -39,7 +39,7 @@ const codex = (over: Record<string, unknown> = {}) =>
   catalogFor(catalogs(over), "codex");
 
 const noClaude = (ids: ReadonlyArray<string>) => {
-  for (const id of ids) expect(CLAUDE_IDS).not.toContain(id);
+  for (const id of ids) expect(isClaudeId(id)).toBe(false);
 };
 
 describe("the wire, narrowed", () => {

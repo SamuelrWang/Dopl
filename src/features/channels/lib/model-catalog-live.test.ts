@@ -59,12 +59,12 @@ describe("the live Claude roster, on the web", () => {
 
   it("glance labels (cards, chips) use the runtime's own name from the catalogs they are handed", () => {
     // No module-level label cache: the same call with and without the catalogs.
-    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("claude-opus-5[1m]");
+    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("Claude Opus 5 [1m]");
     const catalogs = normalizeCatalogs(WIRE);
     expect(agentModelShortLabel("claude-opus-5[1m]", catalogs)).toBe("Opus");
     expect(agentModelLabel("claude-opus-5[1m]", catalogs)).toBe("Opus (1M context)");
-    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("claude-opus-5[1m]"); // nothing remembered
-    expect(agentModelShortLabel("claude-opus-6[1m]", catalogs)).toBe("claude-opus-6[1m]"); // unnamed → raw id
-    expect(agentModelShortLabel("gpt-6-luna", catalogs)).toBe("gpt-6-luna"); // no catalog lists it → itself
+    expect(agentModelShortLabel("claude-opus-5[1m]")).toBe("Claude Opus 5 [1m]"); // nothing remembered: prettified id
+    expect(agentModelShortLabel("claude-opus-6[1m]", catalogs)).toBe("Claude Opus 6 [1m]"); // unnamed → prettified id
+    expect(agentModelShortLabel("gpt-6-luna", catalogs)).toBe("Gpt 6 Luna"); // no catalog lists it → prettified id
   });
 });

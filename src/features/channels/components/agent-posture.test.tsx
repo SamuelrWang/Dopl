@@ -9,7 +9,6 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { POSTURE_REFUSED, PostureControls } from "./agent-posture";
 import { CHANNEL_ID } from "./test-fixtures";
-import { AGENT_MODELS } from "../lib/agent-models";
 import { catalog, channelRecordBridge } from "../hooks/launch-selection-harness";
 import { installSpaBridge } from "@/shared/testing/spa-bridge";
 
@@ -321,8 +320,9 @@ describe("a running agent on a runtime other than the channel's", () => {
     expect(offered).toHaveLength(2);
     expect(offered[0]).toMatch(/^Composer 2/);
     expect(offered[1]).toMatch(/^GPT-6 Sol/);
-    for (const m of AGENT_MODELS) {
-      expect(offered.join(" ")).not.toContain(m.label);
+    // The Claude rows THIS test's catalogs hold (no lineup is typed into the web tree any more).
+    for (const m of CATALOGS.claude.models) {
+      expect(offered.join(" ")).not.toContain(m.label ?? m.id);
       expect(offered.join(" ")).not.toContain(m.id);
     }
   });
