@@ -51,6 +51,7 @@ export const loadCatalog = (store) =>
   evalFile(join(MAIN, "runtime", "model-catalog.js"), (id) => {
     if (id === "./selection-vocabulary") return requireMain(join(MAIN, "runtime", "selection-vocabulary.js")); // pure
     if (id === "./live-store") return store || memoryLiveStore();
+    if (id === "./roster-key") return requireMain(join(MAIN, "runtime", "roster-key.js")); // pure
     throw new Error(`unexpected require: ${id}`);
   });
 

@@ -119,7 +119,7 @@ const runtime = {
   axisAAllows(mode, toolName) { return tools.toolModeAllows(mode, toolName); },
 
   models() { return models.models(); },
-  rosterKey() { return models.rosterKey(); },
+  buildIdentity() { return models.buildIdentity(); },
   modelArg(value) { return models.resolveLaunchModel(value); },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },

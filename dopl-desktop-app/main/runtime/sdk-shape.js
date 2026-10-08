@@ -10,10 +10,10 @@
 //      List ONLY what Dopl actually reads. An over-strict list bricks launches on harmless upstream
 //      changes, which is its own outage.
 //   2. `settleShape` / `launchShapeRefusal` — the live probe (`runtime.shape()`), cached per
-//      `runtime.rosterKey()`, retried with backoff on failure. A probe that FAILS is not a probe that
+//      build key (`roster-key.js`), retried with backoff on failure. A probe that FAILS is not a probe that
 //      found a gap: it is `shape-unknown`, and a launch refuses with a sentence naming the cause
 //      (fail CLOSED — an unchecked build could ignore Dopl's restrictions) while the next look
-//      retries. The last-good shape persisted for the SAME rosterKey stands in for a failed probe.
+//      retries. The last-good shape persisted for the SAME build key stands in for a failed probe.
 //   3. `recordDrift` / `driftReport` — the one "unrecognised SDK shape" ledger. Normalizers emit
 //      `events.shapeDrift(where, detail)` when a frame does not read; core records it here.
 //
@@ -24,6 +24,7 @@
 // there, or `{ paths: [flat strings] }` (see `flatten`).
 
 const liveStore = require('./live-store');
+const { rosterKeyOf } = require('./roster-key');
 
 const TIERS = Object.freeze(['safety', 'core', 'cosmetic']);
 const REFUSING = Object.freeze(['safety', 'core']);
@@ -107,15 +108,11 @@ function refusalSentence(label, verdict) {
     + `(missing: ${preview(gaps)}), so Dopl will not start it. An update to Dopl is needed for this build.`;
 }
 
-// ── LIVE PROBE, CACHED PER rosterKey ──────────────────────────────────────────────────────────
+// ── LIVE PROBE, CACHED PER BUILD KEY ──────────────────────────────────────────────────────────
 
 const states = new Map(); // runtimeId → { key, status, observed, reason, persisted, at, attempts, inflight }
 
-function keyOf(adapter) {
-  const fn = adapter && adapter.runtime && adapter.runtime.rosterKey;
-  if (typeof fn !== 'function') return null;
-  try { return str(fn.call(adapter.runtime)) || null; } catch (_) { return null; }
-}
+const keyOf = (adapter) => rosterKeyOf(adapter);
 
 function backoffMs(attempts) {
   return Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));

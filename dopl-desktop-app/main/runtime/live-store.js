@@ -1,7 +1,7 @@
 // THE LAST-LIVE STORE — what a runtime's LIVE sources last answered (model roster, protocol shape),
 // persisted per runtime so a cold boot has an answer before the first live read lands.
 //
-// ⚠ A CACHE, NEVER A SOURCE. Every value is keyed by the runtime's `rosterKey()` at write time and
+// ⚠ A CACHE, NEVER A SOURCE. Every value is keyed by the runtime's build key (`roster-key.js`) at write time and
 // is only ever used when that key still matches (same binary, same account): a different key means
 // a different build, and its last answer proves nothing about this one.
 // ⚠ IT CAN NEVER BREAK A BOOT. The file is schema-versioned; a missing, unreadable, partial, corrupt

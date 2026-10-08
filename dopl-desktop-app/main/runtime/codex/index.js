@@ -143,7 +143,9 @@ const runtime = {
 
   models() { return models.models(); },
   // No synchronous roster key: a READY catalog is kept for the process.
-  rosterKey() { return null; },
+  // Not known yet at this layer: nothing is persisted and a READY roster is kept for the process.
+  // (Codex item: path + version from the resolved binary.)
+  buildIdentity() { return null; },
   // Picks pass as given (the funnel already refused an unknown one on the live catalog).
   modelArg(value) {
     const v = pickOf(value);

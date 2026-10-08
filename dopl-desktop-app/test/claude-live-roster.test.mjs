@@ -52,7 +52,7 @@ function fakeCli(rows, over = {}) {
   });
   return { calls, signIn: (next) => { credential = next; } };
 }
-const adapter = () => ({ descriptor: DESCRIPTOR, runtime: { models: () => models.models(), rosterKey: () => models.rosterKey() } });
+const adapter = () => ({ descriptor: DESCRIPTOR, runtime: { models: () => models.models(), buildIdentity: () => models.buildIdentity() } });
 
 // ── 1 + 2. THE MEASURED ROWS, AND A MODEL NOBODY HARDCODED ───────────────────────────────────
 

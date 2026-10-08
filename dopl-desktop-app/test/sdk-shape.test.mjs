@@ -138,7 +138,7 @@ function adapter({ shape, key = "bin@1", required = REQUIRED, label = "Runtime X
   const a = {
     descriptor: { id: "rx", label, requiredShape: required },
     runtime: {
-      rosterKey: () => (typeof key === "function" ? key() : key),
+      buildIdentity: () => { const k = typeof key === "function" ? key() : key; return k ? { path: "/bin/x", version: k } : null; },
       shape: async () => { calls.shape += 1; return shape(calls.shape); },
     },
   };
@@ -152,7 +152,7 @@ test("no declaration: no probe, no refusal", async () => {
   assert.equal(calls.shape, 0);
 });
 
-test("a live answer is kept for the build; a new rosterKey re-probes", async () => {
+test("a live answer is kept for the build; a new build re-probes", async () => {
   let key = "bin@1";
   const { a, calls } = adapter({ shape: () => FULL, key: () => key });
   assert.equal(await sdkShape.launchShapeRefusal(a), null);
@@ -187,7 +187,7 @@ test("probe FAILURE is shape-unknown — fails CLOSED with the cause, distinct f
   assert.equal(sdkShape._backoffMs(30), sdkShape.BACKOFF_MAX_MS, "capped");
 });
 
-test("the last-good shape stands in for a failed probe ONLY on the same rosterKey", async () => {
+test("the last-good shape stands in for a failed probe ONLY on the same build key", async () => {
   let key = "bin@1";
   let fail = false;
   const { a } = adapter({ key: () => key, shape: () => { if (fail) throw new Error("crashed"); return FULL; } });
@@ -206,10 +206,10 @@ test("the last-good shape stands in for a failed probe ONLY on the same rosterKe
   assert.equal((await sdkShape.settleShape(a)).status, "shape-unknown");
 });
 
-test("a probe that never answers is bounded (shape-unknown), and a throwing rosterKey is no key", async () => {
+test("a probe that never answers is bounded (shape-unknown), and a throwing buildIdentity is no key", async () => {
   const a = {
     descriptor: { id: "rz", label: "Z", requiredShape: REQUIRED },
-    runtime: { rosterKey: () => { throw new Error("x"); }, shape: async () => { throw new Error("boom"); } },
+    runtime: { buildIdentity: () => { throw new Error("x"); }, shape: async () => { throw new Error("boom"); } },
   };
   const st = await sdkShape.settleShape(a);
   assert.equal(st.status, "shape-unknown");
@@ -220,7 +220,7 @@ test("a probe that never answers is bounded (shape-unknown), and a throwing rost
 
 const rosterAdapter = (models, key = "bin@1") => ({
   descriptor: { id: "rx", label: "Runtime X", models: { source: "live", dimensions: [] } },
-  runtime: { rosterKey: () => key, models: models },
+  runtime: { buildIdentity: () => (key ? { path: "/bin/x", version: key } : null), models: models },
 });
 
 test("catalog: a restart on the SAME build answers its last live roster as READY at once, then reads live", async () => {
@@ -281,4 +281,43 @@ test("session-io: shape_drift is recorded every time and told to the session ONC
   assert.match(sent[0].payload.text, /unknown, not zero/);
   const report = sdkShape.driftReport("codex");
   assert.deepEqual(report.map((r) => [r.where, r.count]), [["usage", 2], ["item", 1]]);
+});
+
+// ── the build key (`roster-key.js`) ───────────────────────────────────────────────────────
+
+test("build key: a different binary path OR version is a different key; a missing half is no key", () => {
+  const { rosterKeyFor, rosterKeyOf } = require(join(MAIN, "runtime", "roster-key.js"));
+  const k = (path, version, account) => rosterKeyFor({ path, version, account });
+  assert.equal(k("/a/codex", "0.155.1"), "/a/codex@0.155.1");
+  assert.notEqual(k("/a/codex", "0.155.1"), k("/a/codex", "0.159.3"), "version moves the key");
+  assert.notEqual(k("/a/codex", "0.155.1"), k("/b/codex", "0.155.1"), "path moves the key");
+  assert.notEqual(k("/a/c", "1", "oauth"), k("/a/c", "1", "apikey"), "account moves the key");
+  for (const [p, v] of [["", "1"], ["/a", ""], [null, "1"], ["/a", undefined]]) assert.equal(k(p, v), null);
+  // Opt-out is by DECLARATION only.
+  const ad = (persist, identity) => ({ descriptor: { id: "q", models: { persist } }, runtime: { buildIdentity: () => identity } });
+  assert.equal(rosterKeyOf(ad(undefined, { path: "/a", version: "1" })), "/a@1");
+  assert.equal(rosterKeyOf(ad(false, { path: "/a", version: "1" })), null, "declared no persistence");
+});
+
+test("build key: the catalog files a roster under CORE's key, so an upgrade never reads its predecessor's list", async () => {
+  const disk = memoryLiveStore();
+  let version = "1";
+  const ad = (models) => ({
+    descriptor: { id: "rx", label: "X", models: { source: "live", dimensions: [] } },
+    runtime: { buildIdentity: () => ({ path: "/bin/x", version }), models },
+  });
+  const settled = await loadCatalog(disk).settle(ad(async () => ({ key: "adapter-spelling", models: [{ id: "old" }] })));
+  assert.equal(settled.key, "/bin/x@1", "the adapter's own key spelling is ignored");
+  version = "2"; // the updater switched builds
+  assert.equal(loadCatalog(disk).snapshot(ad(() => new Promise(() => {}))).status, "loading");
+});
+
+test("every SHIPPED adapter either keys by a build identity or declares no persistence", () => {
+  const { persists } = require(join(MAIN, "runtime", "roster-key.js"));
+  for (const id of ["claude", "codex", "cursor"]) {
+    const a = require(join(MAIN, "runtime", id, "index.js"));
+    assert.equal(typeof a.runtime.buildIdentity, "function", id);
+    assert.equal(typeof a.runtime.rosterKey, "undefined", `${id}: no free-form key left`);
+    if (!persists(a.descriptor)) assert.equal(a.runtime.buildIdentity(), null, `${id} opted out`);
+  }
 });

@@ -94,6 +94,8 @@ function forget() { cached = null; }
 // Descriptor half.
 const descriptor = {
   source: 'live',
+  // No build identity to key a last-live answer by (an unpinned, unbundled SDK): nothing persisted.
+  persist: false,
   // null: effort variants are separate model ids here, not a dimension.
   dimensions: null,
   // A shape gate only (the value becomes a platform argument); the live roster decides the rest.

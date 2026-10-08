@@ -27,8 +27,10 @@ const RUNTIME_METHODS = {
   toolConfigFor: 1,
   axisAAllows: 2,
   models: 0,
-  // The roster's cache key (`model-catalog.js` re-reads when it moves), or null for none.
-  rosterKey: 0,
+  // `{ path, version, account? }` of the build new launches run, or null when not known yet. Core turns
+  // it into THE key (`roster-key.js`) — an adapter never writes a key, so a new build cannot reuse an
+  // old build's roster or protocol verdict.
+  buildIdentity: 0,
   // A model pick → `{ ok, arg, id, reason }` on this runtime's own roster (the launch argument).
   modelArg: 1,
   registerMcp: 1,

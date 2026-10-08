@@ -122,7 +122,8 @@ const runtime = {
 
   models() { return models.models(); },
   // No synchronous roster key: a READY catalog is kept for the process.
-  rosterKey() { return null; },
+  // `models.persist: false` (descriptor): Cursor keeps no last-live answers.
+  buildIdentity() { return null; },
   // Picks pass as given (the funnel already refused an unknown one on the live catalog).
   modelArg(value) {
     const v = pickOf(value);

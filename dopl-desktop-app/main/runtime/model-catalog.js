@@ -10,6 +10,7 @@
 
 const { pickOf } = require('./selection-vocabulary');
 const liveStore = require('./live-store');
+const { rosterKeyOf } = require('./roster-key');
 
 const CATALOG_VERSION = 1;
 
@@ -200,7 +201,7 @@ function due(entry, now, adapter) {
   if (entry.inflight) return false;
   if (entry.due === true) return true; // invalidated while holding models (RC-02)
   if (entry.catalog.persisted === true) return true; // a stand-in from disk: read live behind it
-  // READY is cached for the process unless `runtime.rosterKey()` moved (a sign-in, an upgrade).
+  // READY is cached for the process unless the build key moved (a sign-in, an upgrade; `roster-key.js`).
   if (entry.catalog.status === STATUS.READY) return keyMoved(entry, adapter);
   // `stale` and `unavailable` share the floor; `invalidate` stamps `at: 0` (due at the next look).
   return now - entry.at >= FAILURE_TTL_MS;
@@ -213,15 +214,8 @@ function keyMoved(entry, adapter) {
   return !!now && now !== entry.catalog.key;
 }
 
-/** `runtime.rosterKey()` now, or null (none declared, a throw, an empty answer). */
-function rosterKeyOf(adapter) {
-  const fn = adapter && adapter.runtime && adapter.runtime.rosterKey;
-  if (typeof fn !== 'function') return null;
-  try { return str(fn.call(adapter.runtime)) || null; } catch (_) { return null; }
-}
-
 // ── THE LAST-LIVE ROSTER (`live-store.js`) ── the ONE persisted copy; adapters keep no roster cache.
-// Keyed by `rosterKey()`: a cold boot on the SAME build and account answers its last live read as READY
+// Keyed by the build key: a cold boot on the SAME build and account answers its last live read as READY
 // (it is that build's own list) while a live read runs behind it; any other key, or a runtime with no key,
 // answers nothing persisted. A stored value is re-normalized on read, so a partial one is dropped, not used.
 
@@ -242,7 +236,8 @@ function persistedCatalog(adapter) {
 }
 
 function persist(adapter, catalog) {
-  const key = rosterKeyOf(adapter);
+  // Filed under the key the READ ran on: a build switched mid-read must not file its list under the new key.
+  const key = catalog.key;
   if (!key || catalog.status !== STATUS.READY || catalog.persisted) return;
   liveStore.save('roster', adapter.descriptor.id, key, {
     models: catalog.models,
@@ -265,6 +260,8 @@ function refresh(adapter, now) {
   const id = adapter.descriptor.id;
   const declared = adapter.descriptor.models || {};
   const prior = snapshots.get(id) || seedFromDisk(adapter);
+  // The key is CORE's, stamped at read time — never the adapter's own spelling of one (`roster-key.js`).
+  const readKey = rosterKeyOf(adapter);
   const holds = !!(prior && prior.catalog && prior.catalog.models.length);
   const entry = {
     catalog: holds ? prior.catalog : loadingCatalog(id, declared),
@@ -274,7 +271,7 @@ function refresh(adapter, now) {
   };
   entry.inflight = Promise.resolve()
     .then(() => adapter.runtime.models())
-    .then((roster) => catalogFromRoster(id, adapter.descriptor, roster))
+    .then((roster) => Object.assign(catalogFromRoster(id, adapter.descriptor, roster), { key: readKey }))
     .catch((err) => makeCatalog(id, declared.source, STATUS.UNAVAILABLE, {
       dimensions: Array.isArray(declared.dimensions) ? declared.dimensions.slice() : [],
       reason: (err && err.message) || 'the model roster could not be read',

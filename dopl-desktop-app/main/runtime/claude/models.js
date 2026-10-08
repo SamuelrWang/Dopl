@@ -85,6 +85,17 @@ let inflight = null; // { key, promise }
 /** `<binary>@<binary version>#<credential source>`: synchronous so `model-catalog.js` notices a move on a
  *  look (a runtime update moves both halves); the credential source is in it because the roster is per
  *  account (signed out omits Fable). */
+/** The build new launches run, for core's key (`roster-key.js`): binary, SDK version, credential source. */
+function buildIdentity() {
+  let bin = null;
+  try { bin = deps.bin() || null; } catch (_) { bin = null; }
+  let version = null;
+  try { version = deps.sdkVersion() || null; } catch (_) { version = null; }
+  let account = null;
+  try { account = deps.credentialSource() || null; } catch (_) { account = null; }
+  return { path: bin, version, account };
+}
+
 function rosterKey() {
   let bin = '?';
   try { bin = String(deps.bin() || '?'); } catch (_) { bin = '?'; }
@@ -207,6 +218,6 @@ const descriptor = {
 };
 
 module.exports = {
-  models, rosterKey, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
+  models, rosterKey, buildIdentity, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
   descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };
