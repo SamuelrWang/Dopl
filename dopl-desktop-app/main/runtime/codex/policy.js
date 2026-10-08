@@ -113,7 +113,9 @@ function refuse(what) {
 // The sandbox fields Dopl knows how to read as "not wider" (0.155.1 / 0.160.1 `SandboxPolicy`). The two
 // `exclude*` flags only NARROW what is writable, so any boolean is fine there.
 const NARROWING_FLAGS = ['excludeSlashTmp', 'excludeTmpdirEnvVar'];
-const isEmptyish = (v) => v === undefined || v === null || v === false
+// ⚠ NOT `false` (reviewer re-check): for an UNKNOWN field Dopl cannot tell whether `false` means "off" or
+// "restriction off" (`restrictReads: false`), so only absent / null / [] / {} pass.
+const isEmptyish = (v) => v === undefined || v === null
   || (Array.isArray(v) && v.length === 0) || (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
 
 /** Why this restricted sandbox echo is (or may be) wider than Dopl asked, or null. Pure, type-strict:
@@ -165,7 +167,9 @@ function assertThreadTook(sent, response, sameDir) {
   }
   // The MODEL (Codex self-audit M3): `ThreadStartResponse.model` is required. A requested model must be the
   // one running — a build that accepts the field and ignores it would run another model (with the chosen
-  // effort) silently. With none requested, Codex must still say which model it chose.
+  // effort) silently. With none requested, Codex must still say which model it chose. `sent.model` is the
+  // roster row's own LAUNCH value (`model/list › model`, `launch-spec.js › launchModelOf`), which is what the
+  // echo names — never assumed equal to the row's `id`.
   const askedModel = sent && typeof sent.model === 'string' ? sent.model.trim() : '';
   const gotModel = typeof r.model === 'string' && r.model.trim() ? r.model.trim()
     : (r.thread && typeof r.thread.model === 'string' ? r.thread.model.trim() : '');

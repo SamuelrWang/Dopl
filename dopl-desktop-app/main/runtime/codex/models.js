@@ -41,7 +41,10 @@ function entryFrom(row) {
       default: supported.options.some((o) => o.value === supported.fallback) ? supported.fallback : null,
     };
   }
-  return { id, label, short: label, isDefault, hidden, dimensions };
+  // The value Codex RUNS for this row (`model/list › model`), which the thread echo names; kept apart from
+  // the row's `id` (measured equal on 0.160.1/0.161.0, never assumed). Absent → the id is sent.
+  const launch = str(row.model) || null;
+  return { id, label, short: label, isDefault, hidden, launch, dimensions };
 }
 
 /** `supportedReasoningEfforts` → `{ options: [{value,label,description}], fallback }`. */

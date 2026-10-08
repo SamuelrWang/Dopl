@@ -62,6 +62,18 @@ function nativePair(s, cfg) {
   return pair;
 }
 
+/** The value Codex runs for a pick: its live roster row's `launch` (`model/list › model`), else the row's id,
+ *  else the pick as given (no catalog held: the funnel already refused an unknown pick on a READY one). */
+function launchModelOf(pick) {
+  if (!pick) return '';
+  try {
+    const catalogs = require('../model-catalog');
+    const row = catalogs.findModel(catalogs.peek('codex'), pick);
+    if (row) return row.launch || row.id;
+  } catch (_) { /* no catalog: the pick as given */ }
+  return pick;
+}
+
 // ── EFFORT: THE BUILD DECIDES WHAT MAY BE SENT (orchestrator on audit LOW4) ──────────────────────
 // The send-safety alphabet is sourced LIVE, never typed: the build's own schema's closed list for
 // `turn/start effort` when it declares one (`shape.js › values`, per build key via `sdk-shape.js`), else what
@@ -120,7 +132,8 @@ function buildLaunchSpec(request) {
   if (wired.usable) threadStart.config.mcp_servers = { [mcp.SERVER_KEY]: server };
   // An OBJECT policy rides `config.approval_policy` (the typed field needs the experimental API).
   policy.placePolicy(threadStart, pair.approval_policy);
-  const model = typeof s.model === 'string' ? s.model.trim() : '';
+  // The pick's roster row's own LAUNCH value (`model/list › model`), which the echo is verified against.
+  const model = launchModelOf(typeof s.model === 'string' ? s.model.trim() : '');
   // No model, no field: the platform picks.
   if (model) threadStart.model = model;
   // The launcher's per-model pick (`s.dimensions`, coerced at spawn against the runtime's alphabet and the

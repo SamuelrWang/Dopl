@@ -115,3 +115,40 @@ test("LOW: unknown notifications are drift only when THIS build's own schema doe
 test("LOW: Codex no longer claims `fork` (no thread/fork path)", () => {
   assert.equal(require(join(MAIN, "runtime", "codex", "index.js")).descriptor.session.fork, false);
 });
+
+// ── Reviewer re-check (7854b400) ──
+test("M2 residual: an UNKNOWN sandbox field set to false refuses (Dopl cannot tell 'off' from 'restriction off')", () => {
+  const same = (a, b) => realpathSync(a) === realpathSync(b);
+  const sent = { cwd: HERE, sandbox: "workspace-write", approvalPolicy: "on-request" };
+  assert.throws(() => policy.assertThreadTook(sent, { ...threadEcho(sent), sandbox: { type: "workspaceWrite", restrictReads: false } }, same),
+    /does not recognise \(restrictReads\)/);
+  policy.assertThreadTook(sent, { ...threadEcho(sent), sandbox: { type: "workspaceWrite", futureList: [], futureMap: {}, futureNull: null } }, same);
+});
+
+test("M3: a roster row whose id ≠ model launches — the row's MODEL is sent and is what the echo must name", async () => {
+  const catalogs = require(join(MAIN, "runtime", "model-catalog.js"));
+  const codexModels = require(join(MAIN, "runtime", "codex", "models.js"));
+  const launchSpec = require(join(MAIN, "runtime", "codex", "launch-spec.js"));
+  catalogs.forget();
+  const row = { id: "sol-latest", model: "gpt-6.1-sol-2026-10", displayName: "Sol", isDefault: true };
+  assert.equal(codexModels.entryFrom(row).launch, "gpt-6.1-sol-2026-10", "the catalog keeps the row's own model");
+  await catalogs.settle({
+    descriptor: { id: "codex", label: "Codex", models: { source: "live", dimensions: [] } },
+    runtime: { buildIdentity: () => null, models: async () => ({ models: [codexModels.entryFrom(row)] }) },
+  });
+  try {
+    const ts = launchSpec.buildLaunchSpec({
+      session: { profile: "full", channelId: "11111111-1111-4111-8111-111111111111", state: { toolMode: "on-request" },
+        workspaceId: "ws", model: "sol-latest", containerToken: { token: "t" } },
+      dispatch: () => {},
+    }).threadStart;
+    assert.equal(ts.model, "gpt-6.1-sol-2026-10", "the pick (row id) launches as the row's model");
+    const same = (a, b) => realpathSync(a) === realpathSync(b);
+    const sent = { ...ts, cwd: HERE };
+    policy.assertThreadTook(sent, { ...threadEcho(sent), model: "gpt-6.1-sol-2026-10" }, same);
+    assert.throws(() => policy.assertThreadTook(sent, { ...threadEcho(sent), model: "sol-latest" }, same), /on model `sol-latest`/,
+      "the echo is compared to what was SENT");
+  } finally {
+    catalogs.forget();
+  }
+});
