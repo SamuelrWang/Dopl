@@ -299,3 +299,43 @@ test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messag
   assert.equal(messages, 0, "no user message, so no turn");
   console.log("LIVE supportedModels:", JSON.stringify(rows.map((x) => [x.value, x.resolvedModel, x.displayName])));
 });
+
+// ── CROSS-REVIEW M2 (1fa7f06d rebase): the roster key names WHOSE list it is, never the credential source ──
+test("buildIdentity's account is the per-sign-in fingerprint, never 'dopl-token'; two accounts never share a key", () => {
+  const credential = require("../main/runtime/claude/credential.js");
+  const ids = [];
+  for (const account of ["fp-account-a", "fp-account-b", null]) {
+    models.inject({ bin: () => "/fake/claude", sdkVersion: () => "0.3.293", credentialSource: () => "dopl-token", account: () => account });
+    ids.push(models.buildIdentity().account);
+  }
+  models.inject();
+  assert.deepEqual(ids, ["fp-account-a", "fp-account-b", null], "the source word never stands in for an account");
+  assert.equal(typeof credential.accountFingerprint, "function");
+});
+
+test("accountFingerprint: one-way, 16 hex, differs per token, null with no token", () => {
+  const Module = require("node:module");
+  const path = require.resolve("../main/runtime/claude/credential.js");
+  const tokenPath = require.resolve("../main/claude-token.js");
+  const orig = Module._load;
+  let token = "sk-ant-oat01-AAAA";
+  Module._load = function (req, parent, ...rest) {
+    if (parent && parent.filename === path && req === "../../claude-token") return { getStoredOAuthToken: () => token };
+    return orig.call(this, req, parent, ...rest);
+  };
+  delete require.cache[path];
+  try {
+    const c = require(path);
+    const a = c.accountFingerprint();
+    assert.match(a, /^[0-9a-f]{16}$/);
+    assert.ok(!a.includes("AAAA") && !token.includes(a));
+    token = "sk-ant-oat01-BBBB";
+    assert.notEqual(c.accountFingerprint(), a, "another sign-in, another key");
+    token = "";
+    assert.equal(c.accountFingerprint(), null);
+  } finally {
+    Module._load = orig;
+    delete require.cache[path];
+    void tokenPath;
+  }
+});

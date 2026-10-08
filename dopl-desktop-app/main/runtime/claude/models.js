@@ -24,6 +24,8 @@ function defaultDeps() {
     credentialSource: () => {
       try { return String(require('./credential').credentialState().source || 'none'); } catch (_) { return 'none'; }
     },
+    // Whose roster this is (cross-review M2): a one-way per-sign-in fingerprint, never the token or its source.
+    account: () => require('./credential').accountFingerprint(),
     // The ACTIVE binary's version (a verified download or the bundle), so a switch moves the key.
     sdkVersion: () => {
       try { return String((require('./loader').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
@@ -53,8 +55,10 @@ function buildIdentity() {
   try { bin = deps.bin() || null; } catch (_) { bin = null; }
   let version = null;
   try { version = deps.sdkVersion() || null; } catch (_) { version = null; }
+  // ⚠ NOT `credentialSource()` (a word like "dopl-token", the same for every account): with no fingerprint the
+  // persisted roster is a labels-only stand-in (`model-catalog.js › persistedCatalog`).
   let account = null;
-  try { account = deps.credentialSource() || null; } catch (_) { account = null; }
+  try { account = deps.account() || null; } catch (_) { account = null; }
   return { path: bin, version, account };
 }
 

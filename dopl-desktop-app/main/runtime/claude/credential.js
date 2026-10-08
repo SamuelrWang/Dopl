@@ -17,6 +17,19 @@ function credentialState() {
   return { usable, source: usable ? 'dopl-token' : null };
 }
 
+/**
+ * A per-account fingerprint for the roster key (`roster-key.js`, cross-review M2), or null with no token:
+ * sha256 over a fixed label + the stored token, first 16 hex. ONE-WAY and never the token. Dopl stores no
+ * account id for Claude, so this is per SIGN-IN: a re-sign-in of the same account moves the key and costs one
+ * live read; two accounts can never share a key, which is the property that matters (no other account's list
+ * answers READY). The roster probe runs on exactly this token (`withCredential`).
+ */
+function accountFingerprint() {
+  const token = storedToken();
+  if (!token) return null;
+  return require('crypto').createHash('sha256').update('dopl-claude-roster-account\0').update(String(token)).digest('hex').slice(0, 16);
+}
+
 /** `env` (already scrubbed of inherited credentials) plus Dopl's token, when one is stored. */
 function withCredential(env) {
   const token = storedToken();
@@ -69,6 +82,6 @@ const descriptor = {
 };
 
 module.exports = {
-  credentialState, withCredential, withFullLogin, hasFullLogin, signIn, signInFull, cancelSignIn, signOut, descriptor,
+  credentialState, accountFingerprint, withCredential, withFullLogin, hasFullLogin, signIn, signInFull, cancelSignIn, signOut, descriptor,
   TOKEN_ENV, SECURE_STORE_ENV,
 };
