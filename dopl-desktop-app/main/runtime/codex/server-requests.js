@@ -16,7 +16,8 @@ const MCP_ELICITATION = 'mcpServer/elicitation/request';
 const USER_INPUT = 'item/tool/requestUserInput';
 
 // The gate's name for each approval method: Codex's own item and category words, which the Axis-A
-// lists and the restricted deny lists use. A method not here is answered -32601, never guessed.
+// lists and the restricted deny lists use. A method not here is ASKED under `UNKNOWN_PREFIX` and SHOWN
+// (`hooks.onUnknown`); its reply is built only from the build's own schema (`hooks.replyFor`), never guessed.
 const REQUEST_NAMES = Object.freeze({
   [COMMAND_APPROVAL]: tools.COMMAND_ITEM,
   [FILE_APPROVAL]: tools.FILE_ITEM,
@@ -24,6 +25,9 @@ const REQUEST_NAMES = Object.freeze({
 });
 
 const MCP_TOOL_CALL_KIND = 'mcp_tool_call';
+
+// The gate's name for a request Dopl does not recognise: one Axis-A row, never a Dopl or operator tool name.
+const UNKNOWN_PREFIX = 'codex_request:';
 
 // The request's only per-tool identity: Codex copies the called tool's `title` here
 // (codex-rs `core/src/mcp_tool_call.rs › mcp_tool_metadata` → `build_mcp_tool_approval_elicitation_meta`),
@@ -124,8 +128,37 @@ async function elicitationAnswer(params, decide, log, operatorServers) {
   return { action: verdict === 'allow' ? 'accept' : 'decline' };
 }
 
-/** `operatorServers`: the Set of the operator's own mounted server names ("Use my tools"), or absent. */
-async function answer(message, decide, log, operatorServers) {
+/** A summary of an unknown request's params for the operator's card: top-level scalars only, bounded. */
+function unknownInput(params) {
+  const out = {};
+  for (const [k, v] of Object.entries(params || {}).slice(0, 12)) {
+    if (v == null || typeof v === 'object') continue;
+    out[k] = String(v).slice(0, 300);
+  }
+  return out;
+}
+
+/**
+ * A request Dopl does not recognise (2026-10-08): never a silent deny. It is SHOWN (`onUnknown` → a drift
+ * note in the session lane), ASKED through the gate like any approval, and answered only in a shape the
+ * build's own schema states (`replyFor(method, 'accept'|'decline')`). With no schema answer the request
+ * gets an error naming why — the turn moves on, and the lane already says what happened.
+ */
+async function unknownAnswer(method, params, gate, log, hooks) {
+  const h = hooks || {};
+  try { if (typeof h.onUnknown === 'function') h.onUnknown(method); } catch (_) { /* showing never fails */ }
+  log(`codex: unrecognised server request ${method} — asked, not guessed`);
+  const verdict = await ask(gate, `${UNKNOWN_PREFIX}${method}`, unknownInput(params));
+  const replyFor = typeof h.replyFor === 'function' ? h.replyFor : () => null;
+  let reply = null;
+  try { reply = replyFor(method, verdict === 'allow' ? 'accept' : 'decline'); } catch (_) { reply = null; }
+  if (reply && typeof reply === 'object') return reply;
+  throw rpcError(-32601, `Dopl does not know how to answer Codex's ${method} request in this version`);
+}
+
+/** `operatorServers`: the Set of the operator's own mounted server names ("Use my tools"), or absent.
+ *  `hooks`: `{ onUnknown(method), replyFor(method, decision) }` for requests Dopl does not recognise. */
+async function answer(message, decide, log, operatorServers, hooks) {
   const msg = message && typeof message === 'object' ? message : {};
   const method = String(msg.method || '');
   const params = msg.params && typeof msg.params === 'object' ? msg.params : {};
@@ -145,7 +178,8 @@ async function answer(message, decide, log, operatorServers) {
   // Dopl has no surface for a free-form question; this is the protocol-valid empty answer.
   if (method === USER_INPUT) return { answers: {} };
 
-  throw rpcError(-32601, `Unsupported Codex server request: ${method || '(missing method)'}`);
+  if (!method) throw rpcError(-32600, 'Codex sent a server request with no method');
+  return unknownAnswer(method, params, gate, typeof log === 'function' ? log : () => {}, hooks);
 }
 
 // Descriptor half — Axis A's answer shape.
@@ -159,5 +193,5 @@ const descriptor = {
 
 module.exports = {
   answer, decisionReply, doplElicitation, operatorElicitation, descriptor,
-  approvalInput, rpcError,
+  approvalInput, rpcError, UNKNOWN_PREFIX,
 };

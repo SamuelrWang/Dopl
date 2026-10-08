@@ -9,6 +9,9 @@ const io = require('../../session-io');
 // `launch-spec.js` mints THREAD_STARTED (Dopl's own, `dopl/`-namespaced: handle + model into core) and
 // the turn-failure and MCP-startup error frames; core mints the rejection one.
 const THREAD_STARTED = 'dopl/threadStarted';
+// Dopl's own: a server request Dopl did not recognise (`server-requests.js › unknownAnswer`) — told to the
+// session through the shared drift ledger, once.
+const UNKNOWN_REQUEST = 'dopl/unknownRequest';
 const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────────────────────
@@ -178,6 +181,9 @@ function normalize(msg, ctx) {
   if (!method) return [];
   const params = msg.params && typeof msg.params === 'object' ? msg.params : {};
 
+  if (method === UNKNOWN_REQUEST) {
+    return [events.shapeDrift('server-request', `Codex asked for "${String(params.method || '')}", which this Dopl does not recognise`)];
+  }
   if (method === THREAD_STARTED) {
     return [events.launched(params.threadId || null, params.model || null)];
   }
@@ -206,5 +212,5 @@ function normalize(msg, ctx) {
 module.exports = {
   normalize,
   tokensFrom, usageOf, isAuthShaped,
-  THREAD_STARTED, ERROR_MESSAGE_TYPE,
+  THREAD_STARTED, UNKNOWN_REQUEST, ERROR_MESSAGE_TYPE,
 };

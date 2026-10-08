@@ -11,6 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { threadEcho } from "./helpers/codex-echo.mjs";
 
 const require = createRequire(import.meta.url);
 const CODEX = join(import.meta.dirname, "..", "main", "runtime", "codex");
@@ -55,7 +56,7 @@ function run(o = {}) {
     async request(method, params) {
       calls.push({ method, params });
       if (method === "thread/start" || method === "thread/resume") {
-        return o.thread !== undefined ? o.thread : { thread: { id: "th-1" }, model: "gpt-x" };
+        return o.thread !== undefined ? o.thread : { ...threadEcho(params), thread: { id: "th-1" }, model: "gpt-x" };
       }
       if (method === "turn/start") return { turn: { id: `tu-${++turnSeq}` } };
       if (method === "turn/steer") return { turnId: `tu-${turnSeq}` };
@@ -211,7 +212,8 @@ test("CX-14: a fresh thread/start with no id fails the stream instead of running
 });
 
 test("CX-14: a resume keeps its known thread id when the answer omits one", async () => {
-  const h = run({ thread: {}, resumeThreadId: "th-old" });
+  // The echo is all there (the schema requires it); only the thread id is missing.
+  const h = run({ thread: { ...threadEcho({ cwd: import.meta.dirname }), model: undefined }, resumeThreadId: "th-old" });
   try {
     const first = await h.handle.next();
     assert.deepEqual(first.value.params, { threadId: "th-old", model: null });

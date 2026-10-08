@@ -253,14 +253,37 @@ test("a Dopl elicitation reaches AXIS B with the call's own op — the blocker, 
   }), "gate");
 });
 
-test("an approval method this build does not know is refused -32601 and never reaches the gate", async () => {
-  // A reply in the wrong shape hangs the turn, so an unknown method gets the method-agnostic error.
+test("an approval method this build does not know is SHOWN and ASKED — never a silent deny, never a guessed reply", async () => {
+  // 2026-10-08 (Samuel: "unknown approval → ask, never silent deny"). A reply in the wrong shape hangs
+  // the turn, so the reply comes only from the build's own schema (`replyFor`); without one the request
+  // gets a named error AFTER the operator was asked and the lane was told.
   const asked = [];
+  const shown = [];
   await assert.rejects(
-    serverRequests.answer({ method: "item/networkAccess/requestApproval", params: {} }, async (n) => { asked.push(n); return "allow"; }),
-    (err) => err.rpcCode === -32601,
+    serverRequests.answer({ method: "item/networkAccess/requestApproval", params: { host: "x.com", nested: { a: 1 } } },
+      async (n, input) => { asked.push([n, input]); return "allow"; }, () => {}, null,
+      { onUnknown: (m) => shown.push(m) }),
+    (err) => err.rpcCode === -32601 && /does not know how to answer/.test(err.message),
   );
-  assert.deepEqual(asked, []);
+  assert.deepEqual(shown, ["item/networkAccess/requestApproval"], "the lane is told");
+  assert.deepEqual(asked, [[`${serverRequests.UNKNOWN_PREFIX}item/networkAccess/requestApproval`, { host: "x.com" }]],
+    "the operator is asked, with the request's scalar params only");
+  // With the build's schema answering the shape, the operator's verdict IS the reply.
+  const replyFor = (method, decision) => ({ decision, method });
+  assert.deepEqual(
+    await serverRequests.answer({ method: "item/new/requestApproval", params: {} }, async () => "allow", () => {}, null, { replyFor }),
+    { decision: "accept", method: "item/new/requestApproval" },
+  );
+  assert.deepEqual(
+    await serverRequests.answer({ method: "item/new/requestApproval", params: {} }, async () => "deny", () => {}, null, { replyFor }),
+    { decision: "decline", method: "item/new/requestApproval" },
+  );
+  // A gate that throws is a deny, and a request with no method is a protocol error, not a question.
+  assert.deepEqual(
+    await serverRequests.answer({ method: "item/new/requestApproval" }, async () => { throw new Error("x"); }, () => {}, null, { replyFor }),
+    { decision: "decline", method: "item/new/requestApproval" },
+  );
+  await assert.rejects(serverRequests.answer({ params: {} }, async () => "allow"), (err) => err.rpcCode === -32600);
 });
 
 test("Axis B declares a real enforcement point and a MEASURED op scope", () => {

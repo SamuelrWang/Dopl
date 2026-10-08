@@ -73,12 +73,17 @@ function granularKey(policy) {
 }
 
 // `thread/start` ignores an unrecognised field and answers its default (a silent widening), so the echo
-// is compared, per granular key. An absent/null echo is unknown, not a mismatch.
+// is compared, per granular key. ⚠ FAIL CLOSED (2026-10-08): `approvalPolicy` is a REQUIRED field of the
+// response (`ThreadStartResponse`, 0.155.1 schema), so an absent echo is a protocol Dopl cannot read —
+// refused, never assumed to have taken.
 function assertPolicyTook(sent, response) {
   const asked = sentPolicy(sent);
   if (asked === undefined || asked === null || asked === '') return;
   const got = response && response.approvalPolicy;
-  if (got === undefined || got === null || got === '') return;
+  if (got === undefined || got === null || got === '') {
+    throw new Error('Codex started the thread without saying which approval policy it applied — refusing a '
+      + 'session whose restrictions Dopl cannot confirm.');
+  }
   const askedKey = typeof asked === 'string' ? asked : granularKey(asked);
   const gotKey = typeof got === 'string' ? got : granularKey(got);
   if (askedKey && askedKey === gotKey) return;
@@ -89,7 +94,54 @@ function assertPolicyTook(sent, response) {
   );
 }
 
+// The sandbox Dopl sends (`sandbox_mode` words) → the `SandboxPolicy.type` the response echoes.
+const SANDBOX_ECHO = Object.freeze({
+  'read-only': 'readOnly',
+  'workspace-write': 'workspaceWrite',
+  'danger-full-access': 'dangerFullAccess',
+});
+
+// The reviewer word Codex echoes for what Dopl sent (it accepts the legacy `guardian_subagent` and
+// answers `auto_review`); no reviewer sent = approvals go to a person (`user`).
+const REVIEWER_ECHO = Object.freeze({ guardian_subagent: 'auto_review', auto_review: 'auto_review' });
+
+function refuse(what) {
+  return new Error(`Codex started the thread with ${what} — refusing a session that would not run under `
+    + 'the restrictions the operator chose.');
+}
+
+/** Every safety setting Dopl sent, read back off the `thread/start|resume` answer. Throws (fail CLOSED) on
+ *  a mismatch AND on an echo Dopl cannot read: the run is refused rather than started unconfirmed. */
+function assertThreadTook(sent, response, sameDir) {
+  const r = response && typeof response === 'object' ? response : null;
+  if (!r) throw refuse('no answer Dopl could read');
+  assertPolicyTook(sent, r);
+  if (sent && sent.sandbox != null) {
+    const want = SANDBOX_ECHO[sent.sandbox];
+    const box = r.sandbox && typeof r.sandbox === 'object' ? r.sandbox : null;
+    const got = box && typeof box.type === 'string' ? box.type : '';
+    if (!want || !got) throw refuse(`a sandbox Dopl cannot read (asked \`${sent.sandbox}\`)`);
+    if (got !== want) throw refuse(`sandbox \`${got}\` after Dopl asked for \`${sent.sandbox}\``);
+    // Wider than asked inside the same mode: network on, or extra writable roots Dopl never sent.
+    if (got !== 'dangerFullAccess' && box.networkAccess === true) throw refuse('network access on');
+    if (Array.isArray(box.writableRoots) && box.writableRoots.length) {
+      throw refuse(`extra writable folders (${box.writableRoots.length})`);
+    }
+  }
+  const askedRev = (sent && sent.approvalsReviewer) || null;
+  const gotRev = typeof r.approvalsReviewer === 'string' ? r.approvalsReviewer : '';
+  if (!gotRev) throw refuse('no reviewer Dopl could read');
+  const wantRev = askedRev ? REVIEWER_ECHO[askedRev] : 'user';
+  if ((REVIEWER_ECHO[gotRev] || gotRev) !== wantRev) {
+    throw refuse(`approvals routed to \`${gotRev}\` after Dopl asked for \`${askedRev || 'user'}\``);
+  }
+  if (sent && sent.cwd) {
+    if (typeof r.cwd !== 'string' || !r.cwd) throw refuse('no working folder Dopl could read');
+    if (!sameDir(r.cwd, sent.cwd)) throw refuse('a different working folder than the one Dopl sandboxed');
+  }
+}
+
 module.exports = {
-  nativeApprovalPolicy, placePolicy, assertPolicyTook,
+  nativeApprovalPolicy, placePolicy, assertPolicyTook, assertThreadTook, SANDBOX_ECHO,
   NEVER_NATIVE, GRANULAR_KEYS, APPROVALS_REVIEWER,
 };

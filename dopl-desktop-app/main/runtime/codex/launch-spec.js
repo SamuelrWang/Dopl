@@ -1,6 +1,8 @@
 // The one assembly point for every Codex spawn (fresh, parked resume, recreated shell, post-sign-in),
 // so the deny list, channel-tool pin, isolated CODEX_HOME, native fences and env scrub hold on all.
 
+const fs = require('fs');
+const path = require('path');
 const client = require('./client');
 const tools = require('./tools');
 const axisB = require('./axis-b');
@@ -8,6 +10,7 @@ const serverRequests = require('./server-requests');
 const configHome = require('./config-home');
 const policy = require('./policy');
 const catalog = require('./catalog');
+const fenceVerify = require('./fence-verify');
 const skillsFence = require('./skills-fence');
 const operatorTools = require('./operator-tools');
 const resolveBin = require('./resolve-bin');
@@ -150,7 +153,13 @@ function makeFrameQueue() {
 
 // Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
 // translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
-function makeApprovalHandler(s, dispatch, operatorServers) {
+/** Do two absolute paths name the same folder? (`/var` vs `/private/var` on macOS.) */
+function sameDir(a, b) {
+  const real = (p) => { try { return fs.realpathSync(p); } catch (_) { return path.resolve(p); } };
+  return real(a) === real(b);
+}
+
+function makeApprovalHandler(s, dispatch, operatorServers, onUnknown) {
   const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
     const params = msg && msg.params ? msg.params : {};
@@ -160,7 +169,7 @@ function makeApprovalHandler(s, dispatch, operatorServers) {
         toolUseID: params.itemId || null,
       });
       return verdict && verdict.behavior === 'allow' ? 'allow' : 'deny';
-    }, diag, operatorServers);
+    }, diag, operatorServers, { onUnknown });
   };
 }
 
@@ -269,6 +278,9 @@ function start(spec) {
     const fenced = spec.natives ? null : await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
       bin: codexBin(), env, model: (spec.threadStart && spec.threadStart.model) || '',
     });
+    // The thread's feature fence, verified against THIS build's own feature list before anything spawns:
+    // a renamed or removed feature would otherwise leave Dopl setting a dead key (`fence-verify.js`).
+    await fenceVerify.verifyFeatureFence(codexBin(), env, config.features);
     if (link.closed) return;
     const conn = client.connect({
       args: (spec.args || []).concat(fenced ? catalog.catalogArgs(fenced) : []),
@@ -276,7 +288,9 @@ function start(spec) {
       cwd: spec.cwd,
       log,
       onNotification,
-      onServerRequest: makeApprovalHandler(s, spec.dispatch, operatorTools.approvalServers(mine, spec.natives)),
+      onServerRequest: makeApprovalHandler(s, spec.dispatch, operatorTools.approvalServers(mine, spec.natives),
+        // A request Dopl does not know is SHOWN (drift note in the lane), never answered in silence.
+        (method) => frames.push({ method: normalizer.UNKNOWN_REQUEST, params: { method } })),
       // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
       onExit: (code, signal, spawnError) => frames.fail(
         spawnError || new Error(`Codex app-server exited (code ${code}, signal ${signal})`)
@@ -296,7 +310,8 @@ function start(spec) {
     if (!startedId && !spec.resumeThreadId) throw new Error(`Codex ${method} returned no thread id`);
     threadId = startedId || spec.resumeThreadId;
     selectedModel = (thread && thread.model) || handle.model || null;
-    assertPolicyTook(params, thread);
+    // Every safety setting read back off the answer; anything Dopl cannot confirm refuses the run.
+    policy.assertThreadTook(params, thread, sameDir);
     // Dopl's own synthetic frame: carries the thread handle + selected model into core (`launched`).
     frames.push({ method: normalizer.THREAD_STARTED, params: { threadId, model: selectedModel } });
     // A second `turn/start` would open a concurrent turn, so a push during one steers it.

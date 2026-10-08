@@ -38,9 +38,19 @@ function readDebug(bin, env, bundled) {
   });
 }
 
+// Every catalog key that switches native delegation on, matched by NAME FAMILY, not one spelling: the
+// fence nulls whatever this build calls it (`multi_agent_version` on 0.155.1; a renamed `subagent_*`
+// tomorrow), so a rename cannot leave delegation on. Nulling a harmless sibling
+// (`multi_agent_reasoning_effort`) costs nothing; a key Codex cannot take as null fails its start LOUDLY.
+const DELEGATION_KEY = /(multi_?agent|sub_?agent|delegat)/i;
+
 /** Codex's catalog with native delegation removed from every model. */
 function delegationFree(models) {
-  return models.map((m) => Object.assign({}, m, { multi_agent_version: null }));
+  return models.map((m) => {
+    const out = Object.assign({}, m, { multi_agent_version: null });
+    for (const k of Object.keys(out)) if (DELEGATION_KEY.test(k)) out[k] = null;
+    return out;
+  });
 }
 
 async function pickModels(home, o) {
@@ -86,4 +96,4 @@ function catalogArgs(file) {
   return ['-c', `model_catalog_json=${JSON.stringify(file)}`];
 }
 
-module.exports = { writeDelegationFreeCatalog, catalogArgs, readCache, CATALOG_FILE, CACHE_FILE };
+module.exports = { writeDelegationFreeCatalog, catalogArgs, readCache, delegationFree, CATALOG_FILE, CACHE_FILE };

@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { threadEcho } from "./helpers/codex-echo.mjs";
 
 const require = createRequire(import.meta.url);
 const CODEX = join(import.meta.dirname, "..", "main", "runtime", "codex");
@@ -60,7 +61,7 @@ function run(o = {}) {
       calls.push({ method, params });
       if (method === "thread/start") {
         if (o.duringThreadStart) o.duringThreadStart(notify);
-        return { thread: { id: "th-1" }, model: "gpt-x" };
+        return { ...threadEcho(params), thread: { id: "th-1" }, model: "gpt-x" };
       }
       if (method === "mcpServerStatus/list") return o.list ? o.list(params) : new Promise(() => {});
       if (method === "turn/start") return { turn: { id: `tu-${++turnSeq}` } };

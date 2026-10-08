@@ -18,6 +18,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { liveGate, announceGate, skipLive, skipTurn, appEnv, LIVE_THREAD, LIVE_TURN, LIVE_MODEL } from "./_codex-app-server.mjs";
+import { threadEcho } from "./helpers/codex-echo.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -63,7 +64,7 @@ test("start drives the measured v2 thread/turn state machine", async () => {
       calls.push({ method, params });
       if (method === "initialize") return {};
       if (method === "thread/start") {
-        return { thread: { id: "thread-1" }, model: "gpt-6-astra" };
+        return { ...threadEcho(params), thread: { id: "thread-1" }, model: "gpt-6-astra" };
       }
       if (method === "turn/start") return { turn: { id: "turn-1" } };
       if (method === "turn/steer") return { turnId: "turn-1" };
@@ -167,11 +168,11 @@ test("a thread that started at a WIDER policy than Dopl asked for is refused", (
   );
   // The agreeing case is silent.
   launchSpec.assertPolicyTook({ approvalPolicy: "never" }, { approvalPolicy: "never" });
-  // 🔒 UNKNOWN IS NOT A MISMATCH. A response that says nothing about the policy has told us
-  // nothing, and a `granular` ask is an OBJECT whose echo is the server's normalised form — an
-  // inequality there would be a false alarm, not a caught downgrade.
-  launchSpec.assertPolicyTook({ approvalPolicy: "never" }, {});
-  launchSpec.assertPolicyTook({ approvalPolicy: "never" }, { approvalPolicy: null });
+  // 🔒 UNKNOWN IS REFUSED (2026-10-08, fail CLOSED). `approvalPolicy` is REQUIRED by the response
+  // schema, so an answer without it is a protocol Dopl cannot read — never assumed to have taken.
+  assert.throws(() => launchSpec.assertPolicyTook({ approvalPolicy: "never" }, {}), /without saying which approval policy/);
+  assert.throws(() => launchSpec.assertPolicyTook({ approvalPolicy: "never" }, { approvalPolicy: null }), /cannot confirm/);
+  // Nothing asked, nothing to confirm.
   launchSpec.assertPolicyTook({}, { approvalPolicy: "on-request" });
   // 🔒 SINCE 2026-09-22 THE OBJECT FORM IS COMPARED: the operator's `never` travels as `granular`
   // (on `config.approval_policy`), and a server that fell back to a string would be a silent widen.
