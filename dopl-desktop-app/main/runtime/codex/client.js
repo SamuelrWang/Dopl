@@ -105,7 +105,9 @@ function connect(opts) {
   const o = opts || {};
   const log = typeof o.log === 'function' ? o.log : function () {};
   // Throws now rather than hand `spawn` a bare name that fails later with an unreadable ENOENT.
-  const resolved = resolveBin.resolveCodexBin();
+  // A caller that already checked a binary (`launch-spec.js › start`: fence + readback) passes THAT path, so
+  // the child spawned is the one that was verified — never a re-resolve that an updater switch could move.
+  const resolved = o.bin ? { ok: true, path: o.bin } : resolveBin.resolveCodexBin();
   if (!resolved.ok) throw new Error(resolved.reason);
   const child = spawn(resolved.path, ['app-server'].concat(AUTH_STORE_ARGS, o.args || []), {
     cwd: o.cwd || undefined,

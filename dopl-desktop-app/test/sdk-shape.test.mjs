@@ -220,7 +220,7 @@ test("a probe that never answers is bounded (shape-unknown), and a throwing buil
 
 const rosterAdapter = (models, key = "bin@1") => ({
   descriptor: { id: "rx", label: "Runtime X", models: { source: "live", dimensions: [] } },
-  runtime: { buildIdentity: () => (key ? { path: "/bin/x", version: key } : null), models: models },
+  runtime: { buildIdentity: () => (key ? { path: "/bin/x", version: key, account: "acct-fp" } : null), models: models },
 });
 
 test("catalog: a restart on the SAME build answers its last live roster as READY at once, then reads live", async () => {

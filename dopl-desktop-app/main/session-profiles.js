@@ -34,6 +34,12 @@ const {
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
 const { operatorToolVerdict, isOperatorTool } = require('./operator-tools');
 
+// A server request no adapter recognises (`runtime/sdk-shape.js › UNRECOGNISED_REQUEST_PREFIX`); outside the
+// extracted block, so the suites inject them REAL like every other helper.
+const UNRESTRICTED_PROFILE_NAME = require('./runtime/contract').UNRESTRICTED_PROFILE;
+const { UNRECOGNISED_REQUEST_PREFIX } = require('./runtime/sdk-shape');
+const isUnrecognisedRequest = (n) => typeof n === 'string' && n.startsWith(UNRECOGNISED_REQUEST_PREFIX);
+
 // ─── BEGIN SESSION-PROFILE TABLE (extracted by session-profiles/sdk-grant tests) ───
 
 // Match by SHORT NAME under any server prefix (the client's, not ours): a miss drops a message op into Axis A.
@@ -154,6 +160,14 @@ function grantDecision(args) {
     // An own-channel READ follows the IN half: it sends nothing.
     if (autoInboundMode(a.messageMode) && isOwnChannelRead(a.input, a.channelId)) return 'allow';
     return 'gate';
+  }
+  // 2.5 A server request no adapter recognises (`sdk-shape.js › UNRECOGNISED_REQUEST_PREFIX`): a restricted
+  // profile DENIES it (containment has no row for what it cannot name); on `full` it is decided per request —
+  // Axis A or the gate, NEVER a standing task grant (one click must not pre-approve a request type Dopl
+  // cannot describe). Ahead of every grant lookup below.
+  if (isUnrecognisedRequest(a.toolName)) {
+    if (a.profile !== UNRESTRICTED_PROFILE_NAME) return 'deny';
+    return rt.axisAAllows(a.toolMode, name) ? 'allow' : 'gate';
   }
   if (cfg.preApproved.indexOf(name) !== -1) return 'preapproved';
   // 3. A scoped standing grant, keyed on the shape the operator saw.

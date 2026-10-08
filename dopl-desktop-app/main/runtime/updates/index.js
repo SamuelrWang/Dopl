@@ -10,7 +10,8 @@
 // ⚠ SHAPE, NOT VERSION, IS THE COMPATIBILITY GATE (2026-10-08). A version range is a guess about the
 //   protocol; the candidate's own schema is the protocol. A runtime whose source cannot describe a build
 //   (`probeShape` absent) is never auto-updated — it runs its bundle, the one build its adapter shipped with.
-//   A build missing a required item is added to `rejected` (deterministic per version: never re-downloaded).
+//   A build missing a required item is added to `rejected` as `<version>#shape:<requirement hash>`: never
+//   re-downloaded by a Dopl with the same requirement, checked afresh by one whose requirement changed.
 //   A probe that FAILS (timeout, crash) is not a verdict: the check fails, the staging is discarded, and the
 //   next check tries again.
 // Any failure discards the staging directory and keeps what launches run now.
@@ -144,8 +145,19 @@ async function install(source, meta, version) {
   }
 }
 
-/** A refused candidate: its version is never downloaded again (the verdict is a property of the build). */
+/** A candidate refused by the SHAPE gate. The verdict is a property of the build AND of what this Dopl
+ *  requires (cross-review M4), so it is recorded as `<version>#shape:<hash of requiredShape>`: the same Dopl
+ *  never downloads it again, and a Dopl whose requirement changed checks it afresh. */
 class ShapeRefused extends Error {}
+
+/** A stable short hash of a runtime's `requiredShape` (key order normalized), or '' when none. */
+function requirementHash(required) {
+  if (!required) return '';
+  const norm = (v) => (Array.isArray(v) ? v.map(norm)
+    : v && typeof v === 'object' ? Object.keys(v).sort().reduce((o, k) => { o[k] = norm(v[k]); return o; }, {}) : v);
+  return require('crypto').createHash('sha256').update(JSON.stringify(norm(required))).digest('hex').slice(0, 12);
+}
+const shapeRejection = (version, required) => `${version}#shape:${requirementHash(required)}`;
 
 /** Throw unless the candidate's own protocol description covers the adapter's safety + core tiers. A probe
  *  error propagates as an ordinary failure (retried next check) — it is not evidence of a gap. */
@@ -176,7 +188,10 @@ async function check(source) {
     const record = s.read(source.id);
     const downloaded = (activeFor(source) || {}).version || null;
     if (!newer(version, downloaded || source.bundledVersion())) return 'current';
-    if (record.rejected.includes(version)) return 'rejected';
+    // A handshake rejection is the build's alone; a shape refusal counts only against THIS requirement.
+    if (record.rejected.includes(version) || record.rejected.includes(shapeRejection(version, deps.requiredShape(source.id)))) {
+      return 'rejected';
+    }
     await install(source, meta, version);
     s.write(source.id, { version, previous: downloaded, rejected: record.rejected });
     switched(source);
@@ -186,7 +201,9 @@ async function check(source) {
     if (err instanceof ShapeRefused && version) {
       const s = diskStore();
       const record = s.read(source.id);
-      s.write(source.id, Object.assign({}, record, { rejected: record.rejected.concat(version) }));
+      s.write(source.id, Object.assign({}, record, {
+        rejected: record.rejected.concat(shapeRejection(version, deps.requiredShape(source.id))),
+      }));
       diag(`runtime-updates: ${source.id} ${version} refused by the protocol check`, err.message);
       return 'incompatible-shape';
     }

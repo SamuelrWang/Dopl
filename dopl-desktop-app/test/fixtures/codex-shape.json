@@ -2,7 +2,7 @@
  "status": "MEASURED",
  "measured": true,
  "version": "codex-cli 0.155.1",
- "capturedAt": "2026-10-08T08:50:32.999Z",
+ "capturedAt": "2026-10-08T09:21:15.085Z",
  "generatedBy": "dopl-desktop-app/scripts/codex-app-server-schema.js",
  "regenerate": "cd dopl-desktop-app && npm run codex:schema",
  "shape": {
@@ -2734,5 +2734,63 @@
    "result windowsSandbox/setupStart",
    "result windowsSandbox/setupStart started"
   ]
+ },
+ "replies": {
+  "account/chatgptAuthTokens/refresh": {
+   "accept": null,
+   "decline": null
+  },
+  "applyPatchApproval": {
+   "accept": {
+    "decision": "approved"
+   },
+   "decline": null
+  },
+  "attestation/generate": {
+   "accept": null,
+   "decline": null
+  },
+  "execCommandApproval": {
+   "accept": {
+    "decision": "approved"
+   },
+   "decline": null
+  },
+  "item/commandExecution/requestApproval": {
+   "accept": {
+    "decision": "accept"
+   },
+   "decline": {
+    "decision": "decline"
+   }
+  },
+  "item/fileChange/requestApproval": {
+   "accept": {
+    "decision": "accept"
+   },
+   "decline": {
+    "decision": "decline"
+   }
+  },
+  "item/permissions/requestApproval": {
+   "accept": null,
+   "decline": null
+  },
+  "item/tool/call": {
+   "accept": null,
+   "decline": null
+  },
+  "item/tool/requestUserInput": {
+   "accept": null,
+   "decline": null
+  },
+  "mcpServer/elicitation/request": {
+   "accept": {
+    "action": "accept"
+   },
+   "decline": {
+    "action": "decline"
+   }
+  }
  }
 }

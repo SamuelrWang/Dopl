@@ -255,6 +255,13 @@ async function main() {
     generatedBy: 'dopl-desktop-app/scripts/codex-app-server-schema.js',
     regenerate: 'cd dopl-desktop-app && npm run codex:schema',
     shape: { paths: Array.from(sdkShape.flatten(described.shape)).sort() },
+    // What `shape.js › replyFromSchema` builds for every server request from THIS build's response schemas
+    // (null where it would have to guess) — pinned against the hand-written replies by the contract suite.
+    replies: Object.keys(described.replies).sort().reduce((o, m) => {
+      const shapeLib = require('../main/runtime/codex/shape.js');
+      o[m] = { accept: shapeLib.replyFromSchema(described.replies[m], 'accept'), decline: shapeLib.replyFromSchema(described.replies[m], 'decline') };
+      return o;
+    }, {}),
   };
   if (print) {
     process.stdout.write(`${JSON.stringify(fixture, null, 2)}\n`);

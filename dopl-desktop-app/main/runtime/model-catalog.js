@@ -10,7 +10,7 @@
 
 const { pickOf } = require('./selection-vocabulary');
 const liveStore = require('./live-store');
-const { rosterKeyOf } = require('./roster-key');
+const { rosterKeyOf, rosterIdentityOf } = require('./roster-key');
 
 // The operator's preferred family, or null — never throws into a catalog read.
 function preferenceOf(runtimeId, models) {
@@ -227,7 +227,7 @@ function keyMoved(entry, adapter) {
 // answers nothing persisted. A stored value is re-normalized on read, so a partial one is dropped, not used.
 
 function persistedCatalog(adapter) {
-  const key = rosterKeyOf(adapter);
+  const { key, accountScoped } = rosterIdentityOf(adapter);
   if (!key) return null;
   const id = adapter.descriptor.id;
   const stored = liveStore.read('roster', id, key);
@@ -239,7 +239,10 @@ function persistedCatalog(adapter) {
     reason: stored.reason,
     key,
   });
-  return catalog.status === STATUS.READY ? Object.assign(catalog, { persisted: true }) : null;
+  if (catalog.status !== STATUS.READY) return null;
+  // ⚠ PER ACCOUNT (cross-review M2): a key with no account fingerprint proves the BUILD, not whose list
+  // this is, so the stand-in only LABELS (`stale`: it cannot refuse or offer a pick) until the live read.
+  return Object.assign(catalog, accountScoped ? { persisted: true } : { persisted: true, status: STATUS.STALE });
 }
 
 function persist(adapter, catalog) {

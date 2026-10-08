@@ -60,15 +60,30 @@ function newer(a, b) {
   return false;
 }
 
-/** PURE: the newest offered (non-hidden) model whose id carries `family` as a token, or null. Ties keep
- *  the roster's own order. */
+// Tokens AFTER the family (`gpt-6-sol-mini` → 1): the plainer member of a tie is the family's own model,
+// not a variant of it.
+const tailOf = (id, family) => { const t = tokens(id); return t.length - t.indexOf(family) - 1; };
+
+/** Is `m` a better family pick than `best`? Newest version, then (cross-review M3: no roster-order ties)
+ *  the server's own default, then the fewest tokens after the family, then the shorter id. */
+function better(m, best, f) {
+  const a = versionOf(m.id, f);
+  const b = versionOf(best.id, f);
+  if (newer(a, b)) return true;
+  if (newer(b, a)) return false;
+  if (!!m.isDefault !== !!best.isDefault) return !!m.isDefault;
+  if (tailOf(m.id, f) !== tailOf(best.id, f)) return tailOf(m.id, f) < tailOf(best.id, f);
+  return String(m.id).length < String(best.id).length;
+}
+
+/** PURE: the best offered (non-hidden) model whose id carries `family` as a token, or null. */
 function pickFamily(models, family) {
   const f = str(family);
   if (!f) return null;
   let best = null;
   for (const m of Array.isArray(models) ? models : []) {
     if (!m || m.hidden || tokens(m.id).indexOf(f) === -1) continue;
-    if (!best || newer(versionOf(m.id, f), versionOf(best.id, f))) best = m;
+    if (!best || better(m, best, f)) best = m;
   }
   return best;
 }

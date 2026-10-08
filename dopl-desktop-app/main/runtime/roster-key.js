@@ -30,6 +30,16 @@ function persists(descriptor) {
 
 const warned = new Set();
 
+/** `{ key, accountScoped }` now: `accountScoped` = the identity named an account (a per-account
+ *  fingerprint), so a persisted roster is THIS account's list, not merely this build's. Never throws. */
+function rosterIdentityOf(adapter) {
+  const key = rosterKeyOf(adapter);
+  if (!key) return { key: null, accountScoped: false };
+  let identity = null;
+  try { identity = adapter.runtime.buildIdentity(); } catch (_) { identity = null; }
+  return { key, accountScoped: !!(identity && str(identity.account)) };
+}
+
 /** The adapter's build key now, or null (opted out, no identity yet, a throw). Never throws. */
 function rosterKeyOf(adapter) {
   const d = adapter && adapter.descriptor;
@@ -47,4 +57,4 @@ function rosterKeyOf(adapter) {
   return key;
 }
 
-module.exports = { rosterKeyFor, rosterKeyOf, persists };
+module.exports = { rosterKeyFor, rosterKeyOf, rosterIdentityOf, persists };

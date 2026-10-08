@@ -270,9 +270,12 @@ function start(spec) {
   }
 
   (async () => {
+    // ONE binary for the whole launch (cross-review LOW): the catalog fence, the feature check, the spawn and
+    // the schema replies all name the file resolved here, so an updater switch mid-launch cannot split them.
+    const bin = codexBin();
     // "Use my tools": the operator's servers, read against THEIR config home (the scrubbed env without
     // Dopl's private CODEX_HOME). Dopl's own entry wins a name clash.
-    const mine = s.operatorTools ? await operatorTools.operatorServers(codexBin(), buildScrubbedEnv(), log) : {};
+    const mine = s.operatorTools ? await operatorTools.operatorServers(bin, buildScrubbedEnv(), log) : {};
     const config = (spec.threadStart && spec.threadStart.config) || {};
     // Dopl's restrictions ride argv and are READ BACK before any thread starts (`proc-config.js`); only the
     // operator's own servers stay on the thread (their headers are the operator's, not for argv).
@@ -288,13 +291,14 @@ function start(spec) {
     // the same key in `thread/start.config` is ignored. No catalog fails the launch. Lifted with the
     // other native fences in a private channel.
     const fenced = spec.natives ? null : await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
-      bin: codexBin(), env, model: (spec.threadStart && spec.threadStart.model) || '',
+      bin, env, model: (spec.threadStart && spec.threadStart.model) || '',
     });
     // The thread's feature fence, verified against THIS build's own feature list before anything spawns:
     // a renamed or removed feature would otherwise leave Dopl setting a dead key (`fence-verify.js`).
-    await fenceVerify.verifyFeatureFence(codexBin(), env, proc.features);
+    await fenceVerify.verifyFeatureFence(bin, env, proc.features);
     if (link.closed) return;
     const conn = client.connect({
+      bin,
       args: (spec.args || []).concat(fenced ? catalog.catalogArgs(fenced) : [], procArgs),
       env,
       cwd: spec.cwd,
@@ -304,7 +308,7 @@ function start(spec) {
         // A request Dopl does not know is SHOWN (drift note in the lane), never answered in silence; its
         // reply comes only from THIS build's own schema (`shape.js › replyFor`).
         (method) => frames.push({ method: normalizer.UNKNOWN_REQUEST, params: { method } }),
-        (method, decision) => require('./shape').replyFor(codexBin(), method, decision)),
+        (method, decision) => require('./shape').replyFor(bin, method, decision)),
       // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
       onExit: (code, signal, spawnError) => frames.fail(
         spawnError || new Error(`Codex app-server exited (code ${code}, signal ${signal})`)

@@ -26,8 +26,9 @@ const REQUEST_NAMES = Object.freeze({
 
 const MCP_TOOL_CALL_KIND = 'mcp_tool_call';
 
-// The gate's name for a request Dopl does not recognise: one Axis-A row, never a Dopl or operator tool name.
-const UNKNOWN_PREFIX = 'codex_request:';
+// The gate's name for a request Dopl does not recognise — the SHARED prefix (`../sdk-shape.js`), so the gate's
+// one rule applies: no standing task grant, denied on a restricted profile.
+const UNKNOWN_PREFIX = require('../sdk-shape').UNRECOGNISED_REQUEST_PREFIX;
 
 // The request's only per-tool identity: Codex copies the called tool's `title` here
 // (codex-rs `core/src/mcp_tool_call.rs › mcp_tool_metadata` → `build_mcp_tool_approval_elicitation_meta`),

@@ -54,10 +54,14 @@ test("SHAPE, not version, is the gate: a candidate missing a safety/core item is
   const src = source({ probeShape: async () => ({ methods: ["thread/start"] }) }); // core notification gone
   assert.equal(await updates.check(src), "incompatible-shape");
   assert.equal(updates.activeFor(src), null, "launches keep the bundle");
-  assert.deepEqual(record().rejected, ["0.4.0"], "the verdict is the build's: recorded");
-  assert.equal(await updates.check(src), "rejected", "and never downloaded again");
+  assert.equal(record().rejected.length, 1);
+  assert.match(record().rejected[0], /^0\.4\.0#shape:[0-9a-f]{12}$/, "recorded against THIS requirement");
+  assert.equal(await updates.check(src), "rejected", "and never downloaded again by this Dopl");
   assert.equal(reg.calls.tarball, 1);
   assert.deepEqual(h.invalidated, []);
+  // A Dopl whose requirement CHANGED (relaxed) checks the same build afresh (cross-review M4).
+  setup(reg, runner(), { requiredShape: () => ({ safety: { methods: ["thread/start"] } }) });
+  assert.equal(await updates.check(src), "updated");
 });
 
 test("a cosmetic-only gap does not refuse a build", async () => {

@@ -27,6 +27,11 @@ const liveStore = require('./live-store');
 const { rosterKeyOf } = require('./roster-key');
 
 const TIERS = Object.freeze(['safety', 'core', 'cosmetic']);
+
+// The gate's name for a server request no adapter recognises (`<prefix><method>`). Runtime-agnostic, so the
+// gate can hold one rule for all of them (`session-profiles.js › grantDecision`): never a standing task
+// grant, and DENIED outright on any restricted profile.
+const UNRECOGNISED_REQUEST_PREFIX = 'unrecognised_request:';
 const REFUSING = Object.freeze(['safety', 'core']);
 const STATUS = Object.freeze({ NONE: 'none', KNOWN: 'known', UNKNOWN: 'shape-unknown' });
 
@@ -183,7 +188,7 @@ async function launchShapeRefusal(adapter) {
   const label = adapter.descriptor.label;
   if (st.status === STATUS.UNKNOWN) {
     return `Dopl could not check that ${label} on this Mac speaks the protocol it needs (${st.reason}), `
-      + 'so it will not start it: an unchecked build could ignore Dopl\'s safety settings. Dopl checks again on the next launch.';
+      + 'so it will not start it: an unchecked build could ignore Dopl\'s safety settings. Try again in a minute; Dopl keeps checking.';
   }
   const verdict = checkShape(adapter.descriptor.requiredShape, st.observed);
   if (verdict.refuse) return refusalSentence(label, verdict);
@@ -251,6 +256,7 @@ function readCount(obj, ...pathParts) {
 
 module.exports = {
   TIERS,
+  UNRECOGNISED_REQUEST_PREFIX,
   STATUS,
   BACKOFF_BASE_MS,
   BACKOFF_MAX_MS,

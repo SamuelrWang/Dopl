@@ -114,6 +114,8 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   "containerOnlyDenies", "isDoplToolName", "runtimeFor", "editToolsFor",
   // 2026-09-25: the "Use my tools" step (gate 1.6), injected REAL.
   "operatorToolVerdict",
+  // 2026-10-08: the unrecognised-request rule (gate 2.5), injected REAL.
+  "isUnrecognisedRequest", "UNRESTRICTED_PROFILE_NAME",
   `${BLOCK}
    return { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
             isChannelTool };`
@@ -128,7 +130,9 @@ const { grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost,
   require(join(HERE, "..", "main", "channel-op-key.js")).channelOpKey,
   AUDIENCE.containerOnlyDenies, NAMES.isDoplToolName, RUNTIME.runtimeFor,
   (id) => RUNTIME.capability.editScopedTools(RUNTIME.descriptorFor(id)),
-  require(join(HERE, "..", "main", "operator-tools.js")).operatorToolVerdict);
+  require(join(HERE, "..", "main", "operator-tools.js")).operatorToolVerdict,
+  (n) => typeof n === "string" && n.startsWith(require(join(HERE, "..", "main", "runtime", "sdk-shape.js")).UNRECOGNISED_REQUEST_PREFIX),
+  require(join(HERE, "..", "main", "runtime", "contract.js")).UNRESTRICTED_PROFILE);
 const { isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND } = OUT;
 
 const CHANNEL_SHORT = "dopl_channel";
