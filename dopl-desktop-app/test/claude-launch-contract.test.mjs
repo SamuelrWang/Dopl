@@ -36,10 +36,14 @@ test("🔒 every profile's MEASURED init passes: nothing refuses on today's CLI"
   }
 });
 
-test("full offers TaskStop, which no Dopl list names: DRIFT (the gate holds it), never a refusal", () => {
-  const v = lc.verifyInit({ permissionMode: "default", tools: MEASURED.full }, lc.contractOf(launchOptions("full")));
+test("a built-in offered outside the bound is DRIFT (the gate holds it), never a refusal", () => {
+  // MEASURED 2026-10-08: `full` offered `TaskStop` unclassified; it is now in the shell class, so the
+  // measured list is clean, and a future rename is the drift this pins.
+  const clean = lc.verifyInit({ permissionMode: "default", tools: MEASURED.full }, lc.contractOf(launchOptions("full")));
+  assert.deepEqual(clean, { refuse: [], drift: [] });
+  const v = lc.verifyInit({ permissionMode: "default", tools: MEASURED.full.concat(["ShellKill2"]) }, lc.contractOf(launchOptions("full")));
   assert.deepEqual(v.refuse, []);
-  assert.match(v.drift.join(" "), /TaskStop/);
+  assert.match(v.drift.join(" "), /ShellKill2/);
 });
 
 test("REFUSES: a permission mode that skips Dopl's gate, or none reported", () => {
@@ -71,10 +75,10 @@ test("an unconfigured server's tools are drift on a plain launch, and ignored wi
 });
 
 test("the normalizer: init → launched, then the refusal (and drift) when a contract is recorded", () => {
-  const init = { type: "system", subtype: "init", session_id: "sid", model: "m", mcp_servers: [], permissionMode: "plan", tools: MEASURED.full };
+  const init = { type: "system", subtype: "init", session_id: "sid", model: "m", mcp_servers: [], permissionMode: "plan", tools: MEASURED.full.concat(["ShellKill2"]) };
   const evs = normalizer.normalize(init, { launchContract: lc.contractOf(launchOptions("full")) });
   assert.equal(evs[0].type, "launched");
-  assert.ok(evs.some((e) => e.type === "shape_drift" && /TaskStop/.test(e.detail)));
+  assert.ok(evs.some((e) => e.type === "shape_drift" && /ShellKill2/.test(e.detail)));
   const stop = evs.find((e) => e.type === "safety_mismatch");
   assert.match(stop.detail, /^Dopl ended this session before it could act: the runtime is in permission mode "plan"/);
   // No contract (a harness) → not checked.

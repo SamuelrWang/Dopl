@@ -53,7 +53,8 @@ const WIRE = [
   // the edit set (contract A2) + MultiEdit, which `auto` allows and `accept_edits` does not
   "Write", "Edit", "NotebookEdit", "MultiEdit",
   // escalation: the shell and the network, gated below `bypass`
-  "Bash", "BashOutput", "KillShell", "WebFetch", "WebSearch",
+  // `TaskStop` (2026-10-08): the CLI's successor to `KillShell`, offered with no class (claude 2.1.293)
+  "Bash", "BashOutput", "KillShell", "TaskStop", "WebFetch", "WebSearch",
   // the three named read-only additions to `bypass`
   "NotebookRead", "ListMcpResources", "ReadMcpResource",
 ];
@@ -63,7 +64,7 @@ const WIRE = [
 const REMOVED = [
   "Workflow", "DesignSync", "Artifact", "RemoteTrigger",
   "CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "Monitor", "PushNotification",
-  "Task", "TaskCreate", "TaskUpdate", "TaskStop", "TaskGet", "TaskList", "TaskOutput",
+  "Task", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "TaskOutput",
   "EnterWorktree", "ExitWorktree", "ReportFindings", "SendMessage", "SendUserMessage",
   "ToolSearch", "AskUserQuestion", "ExitPlanMode", "EnterPlanMode", "RefreshMcpTools",
   "Agent", "Skill",
@@ -71,9 +72,10 @@ const REMOVED = [
 
 // ── 1. THE LIST ──────────────────────────────────────────────────────────────────────────────
 
-test("A5: `full` offers EXACTLY these seventeen built-ins, by name", () => {
+test("A5: `full` offers EXACTLY these eighteen built-ins, by name", () => {
   assert.deepEqual(TOOLS.buildSessionToolConfig("full").builtinTools, WIRE);
-  assert.equal(WIRE.length, 17, "the count moved — say so in the commit, not by editing this number");
+  // 17 → 18 (2026-10-08): `TaskStop` joined the shell class (its CLI offered it unclassified).
+  assert.equal(WIRE.length, 18, "the count moved — say so in the commit, not by editing this number");
 });
 
 test("A5: `[]` MEANS NO BOUND, so an empty list is the one answer that is never the fix", () => {

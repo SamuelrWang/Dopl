@@ -45,7 +45,7 @@ const REGISTRY = M("runtime", "index.js");
 const parkOnClaim = M("session-park-on-claim.js");
 const WIN = M("targeting-window.js");
 
-const SHELL = ["Bash", "BashOutput", "KillShell"];
+const SHELL = ["Bash", "BashOutput", "KillShell", "TaskStop"];
 /** Set difference as a sorted array — what one config offers/denies and the other does not. */
 const minus = (a, b) => a.filter((n) => b.indexOf(n) === -1).sort();
 

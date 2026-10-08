@@ -53,7 +53,9 @@ const READ_BUILTINS = ['Read', 'Grep', 'Glob', 'LS', 'TodoWrite'];
 const WEB_TOOLS = ['WebFetch', 'WebSearch'];
 
 // The shell, spelled once (`BashOutput`/`KillShell` reach the same child); every reader derives from it.
-const SHELL_BUILTINS = ['Bash', 'BashOutput', 'KillShell'];
+// ⚠ `TaskStop` (2026-10-08): the CLI's successor to `KillShell` — `full` OFFERED it with no Dopl class
+// (measured on claude 2.1.293 by `runtime/claude/launch-contract.js`). Same class as the tool it replaced.
+const SHELL_BUILTINS = ['Bash', 'BashOutput', 'KillShell', 'TaskStop'];
 
 // The runtime's own sub-agents and skills: off on every profile, re-offered only by "Use my tools"
 // (`operator-tools.js`), which the gate then judges per turn.
@@ -63,7 +65,7 @@ const NATIVE_BUILTINS = ['Agent', 'Skill'];
 const DENIED_BUILTINS = [
   ...SHELL_BUILTINS,
   'Write', 'Edit', 'MultiEdit', 'NotebookEdit',
-  'Task', 'Agent', 'TaskCreate', 'TaskUpdate', 'TaskStop',
+  'Task', 'Agent', 'TaskCreate', 'TaskUpdate', // `TaskStop` arrives with SHELL_BUILTINS
   'TaskGet', 'TaskList', 'TaskOutput',
   'Artifact', 'SendMessage', 'SendUserMessage',
   'PushNotification', 'RemoteTrigger', 'ReportFindings', 'DesignSync',
