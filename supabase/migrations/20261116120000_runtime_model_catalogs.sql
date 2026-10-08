@@ -8,12 +8,18 @@
 -- (`dopl-desktop-app/main/catalog-publish.js` → `POST /api/devices/model-catalog`), and
 -- `glasses/core/menu/service.ts › launchOptions` reads it.
 --
--- ONE ROW PER (user, runtime): the last desktop to publish wins. What is stored is LABELS and
+-- ONE ROW PER (user, runtime, computer): two Macs never overwrite each other, and the menu reads
+-- the union with staleness judged PER COMPUTER, so a quiet Mac never marks a busy one's list stale.
+-- `device_id` is the publishing `desktop_devices` row (resolved server-side from the request's
+-- `X-Dopl-Device` header, never from the body); removing a computer removes its catalogs. What is
+-- stored is LABELS and
 -- DIMENSIONS only (id, label, short, isDefault, per-model dimension options) — no credentials,
 -- account ids or paths; the route's schema (`features/model-catalogs/contract.ts`) refuses
 -- anything else.
 --
 -- ADDITIVE ONLY. Service role writes; RLS on with an owner-only SELECT.
+--
+-- DEPENDS ON `20261105120000_desktop_devices.sql` (the FK).
 --
 -- DEPLOY ORDER: not load-bearing. Before this is applied the publish route answers
 -- `{ stored: false }` and the glasses menu falls back to launch history
@@ -24,12 +30,13 @@
 
 CREATE TABLE IF NOT EXISTS public.runtime_model_catalogs (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  device_id uuid NOT NULL REFERENCES public.desktop_devices(id) ON DELETE CASCADE,
   runtime text NOT NULL CHECK (runtime ~ '^[a-z][a-z0-9_-]{0,31}$'),
   models jsonb NOT NULL CHECK (jsonb_typeof(models) = 'array'),
   default_id text NULL CHECK (default_id IS NULL OR char_length(default_id) <= 100),
   app_version text NULL CHECK (app_version IS NULL OR char_length(app_version) <= 32),
   published_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, runtime)
+  PRIMARY KEY (user_id, runtime, device_id)
 );
 
 ALTER TABLE public.runtime_model_catalogs ENABLE ROW LEVEL SECURITY;

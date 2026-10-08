@@ -7,6 +7,9 @@
 // few hours so the server can tell a running desktop's list from an abandoned one
 // (`src/features/model-catalogs/contract.ts › catalogIsStale`).
 //
+// ⚠ ONE ROW PER COMPUTER on the server: `apiFetch` already sends this install's `X-Dopl-Device`,
+// which the route resolves to the caller's registered computer. Nothing here names a device.
+//
 // ⚠ LABELS AND DIMENSIONS ONLY cross: id, label, short, isDefault, per-model dimension options.
 // Never aliases, the launch spelling, the roster key (it is fingerprinted from the sign-in) or
 // anything about the machine. Hidden models are not offered and so not sent.
@@ -22,6 +25,7 @@ const { diag } = require('./diag');
 
 const ENDPOINT = '/api/devices/model-catalog';
 const HTTP_TIMEOUT_MS = 10000;
+const RETRY_SOON_MS = 2 * 60 * 1000;
 
 // ─── BEGIN CATALOG-PUBLISH-PURE (unit-tested via source extraction) ──────────
 // No electron/require refs below.
@@ -102,7 +106,13 @@ async function send(runtimeId) {
       h.sentSig = sig;
       h.sentAt = Date.now();
     } else {
-      diag('catalog publish:', runtimeId, 'not stored (server table absent?) — retried next tick');
+      // Table not applied yet, or this computer not registered yet (the heartbeat registers it
+      // shortly after launch): try once more soon, then the hourly tick carries on.
+      diag('catalog publish:', runtimeId, 'not stored —', (out && out.reason) || 'server table absent?');
+      if (!h.retrySoon) {
+        h.retrySoon = setTimeout(() => { h.retrySoon = null; void send(runtimeId); }, RETRY_SOON_MS);
+        if (typeof h.retrySoon.unref === 'function') h.retrySoon.unref();
+      }
     }
   } catch (err) {
     diag('catalog publish:', runtimeId, 'failed —', (err && err.message) || String(err));

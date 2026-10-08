@@ -48,6 +48,7 @@ const db = (): CatalogDb => supabaseAdmin() as unknown as CatalogDb;
 
 export async function upsertCatalog(
   userId: string,
+  deviceId: string,
   input: PublishCatalogInput,
   client: CatalogDb = db()
 ): Promise<{ stored: boolean }> {
@@ -56,13 +57,14 @@ export async function upsertCatalog(
   const { error } = await client.from(TABLE).upsert(
     {
       user_id: userId,
+      device_id: deviceId,
       runtime: input.runtime,
       models: input.models,
       default_id: defaultId,
       app_version: input.appVersion ?? null,
       published_at: new Date(now()).toISOString(),
     },
-    { onConflict: "user_id,runtime" }
+    { onConflict: "user_id,runtime,device_id" }
   );
   if (!error) return { stored: true };
   if (isMissingCatalogTable(error)) {
@@ -76,7 +78,7 @@ export async function catalogsForUser(userId: string, client: CatalogDb = db()):
   if (knownMissing()) return [];
   const { data, error } = await client
     .from(TABLE)
-    .select("runtime, models, default_id, published_at")
+    .select("runtime, device_id, models, default_id, published_at")
     .eq("user_id", userId);
   if (error) {
     if (isMissingCatalogTable(error)) {
@@ -95,9 +97,16 @@ export async function catalogsForUser(userId: string, client: CatalogDb = db()):
           return parsed.success ? [parsed.data] : [];
         })
       : [];
-    if (typeof raw.runtime !== "string" || typeof raw.published_at !== "string") continue;
+    if (
+      typeof raw.runtime !== "string" ||
+      typeof raw.device_id !== "string" ||
+      typeof raw.published_at !== "string"
+    ) {
+      continue;
+    }
     rows.push({
       runtime: raw.runtime,
+      deviceId: raw.device_id,
       models,
       defaultId: typeof raw.default_id === "string" ? raw.default_id : null,
       publishedAt: raw.published_at,

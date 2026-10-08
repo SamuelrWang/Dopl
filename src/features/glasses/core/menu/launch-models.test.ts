@@ -4,8 +4,9 @@ import { REFRESH_NOTE, launchModels } from "./launch-models";
 
 const NOW = Date.parse("2026-10-08T12:00:00Z");
 const at = (ms: number) => new Date(ms).toISOString();
-const cat = (runtime: string, publishedMs: number, ids = ["m-1", "m-2"]): StoredCatalog => ({
+const cat = (runtime: string, publishedMs: number, ids = ["m-1", "m-2"], deviceId = "mac-a"): StoredCatalog => ({
   runtime,
+  deviceId,
   models: ids.map((id, i) => ({ id, label: `Model ${i + 1}`, isDefault: i === 0 })),
   defaultId: ids[0] ?? null,
   publishedAt: at(publishedMs),
@@ -53,4 +54,44 @@ describe("launch models", () => {
     const r = launchModels("claude", [cat("claude", NOW)], [], NOW, (_id, raw) => raw.toUpperCase());
     expect(r.models[1].label).toBe("MODEL 1");
   });
+
+  describe("two computers", () => {
+    it("🔒 a QUIET Mac never marks a busy Mac's list stale (staleness is per computer)", () => {
+      // mac-b published codex long ago and nothing since; mac-a is busy. mac-a's claude is fresh.
+      const rows = [cat("claude", NOW - 1000, ["a-1"], "mac-a"), cat("codex", NOW - CATALOG_LAGGING_MS * 3, ["c-1"], "mac-b")];
+      expect(launchModels("claude", rows, [], NOW).stale).toBe(false);
+      // …and mac-b's codex is NOT lagging behind mac-a: only its own publishes count.
+      expect(launchModels("codex", rows, [], NOW).stale).toBe(false);
+    });
+
+    it("unions the fresh computers' models, newest first, no duplicates", () => {
+      const rows = [cat("claude", NOW - 5000, ["shared", "b-only"], "mac-b"), cat("claude", NOW - 1000, ["a-only", "shared"], "mac-a")];
+      expect(launchModels("claude", rows, [], NOW).models.map((m) => m.id)).toEqual(["", "a-only", "shared", "b-only"]);
+    });
+
+    it("one fresh computer is enough: a stale one's extra models are not offered", () => {
+      const rows = [cat("claude", NOW - 1000, ["a-1"], "mac-a"), cat("claude", NOW - CATALOG_STALE_AFTER_MS - 1, ["gone-1"], "mac-b")];
+      const r = launchModels("claude", rows, ["hist-1"], NOW);
+      expect(r.models.map((m) => m.id)).toEqual(["", "a-1"]);
+      expect(r.stale).toBe(false);
+    });
+
+    it("all computers stale: everything known + history, with the note", () => {
+      const old = NOW - CATALOG_STALE_AFTER_MS - 1;
+      const rows = [cat("claude", old, ["a-1"], "mac-a"), cat("claude", old - 10, ["b-1"], "mac-b")];
+      const r = launchModels("claude", rows, ["h-1"], NOW);
+      expect(r.models.map((m) => m.id)).toEqual(["", "a-1", "b-1", "h-1"]);
+      expect(r.note).toBe(REFRESH_NOTE);
+    });
+
+    it("a runtime one computer stopped publishing (while it kept publishing others) is stale THERE only", () => {
+      const rows = [
+        cat("codex", NOW - CATALOG_LAGGING_MS - 60_000, ["c-a"], "mac-a"),
+        cat("claude", NOW - 1000, ["x"], "mac-a"),
+        cat("codex", NOW - 2000, ["c-b"], "mac-b"),
+      ];
+      expect(launchModels("codex", rows, [], NOW).models.map((m) => m.id)).toEqual(["", "c-b"]);
+    });
+  });
 });
+

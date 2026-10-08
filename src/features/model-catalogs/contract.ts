@@ -38,6 +38,8 @@ export type PublishCatalogInput = z.infer<typeof PublishCatalogSchema>;
 
 export interface StoredCatalog {
   runtime: string;
+  /** The publishing computer (`desktop_devices.id`). One row per (user, runtime, computer). */
+  deviceId: string;
   models: PublishedModel[];
   defaultId: string | null;
   publishedAt: string;
@@ -45,12 +47,14 @@ export interface StoredCatalog {
 
 /** A catalog older than this is shown, but marked stale. The desktop republishes every 6h. */
 export const CATALOG_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
-/** A runtime the desktop stopped publishing while it kept publishing others is gone there. */
+/** A runtime a computer stopped publishing while it kept publishing others is gone there. */
 export const CATALOG_LAGGING_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Is this runtime's catalog still the desktop's word? Stale when it is old, or when the desktop has
- * published OTHER runtimes well after it (the runtime is no longer ready on that machine).
+ * Is this runtime's catalog still its computer's word? Stale when it is old, or when THE SAME
+ * computer has published OTHER runtimes well after it (the runtime is no longer ready there).
+ * ⚠ `newestPublishMs` is that computer's newest publish, never the user's: a quiet second Mac
+ * must not mark a busy one's list stale, nor the other way round.
  */
 export function catalogIsStale(row: StoredCatalog, newestPublishMs: number, nowMs: number): boolean {
   const at = Date.parse(row.publishedAt);

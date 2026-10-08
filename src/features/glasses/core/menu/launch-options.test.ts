@@ -40,6 +40,7 @@ describe("launch options from published catalogs", () => {
       modelCatalogs: async () => [
         {
           runtime: "claude",
+          deviceId: "mac-a",
           models: [
             { id: "claude-x-1", label: "Claude X 1", short: "X 1", isDefault: true },
             { id: "claude-y-2", label: "Claude Y 2" },

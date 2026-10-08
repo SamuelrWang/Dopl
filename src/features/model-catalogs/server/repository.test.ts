@@ -43,8 +43,8 @@ beforeEach(() => {
 describe("runtime_model_catalogs, tolerant of the table not existing yet (INVARIANTS §12)", () => {
   it("writes labels-only rows with the default id and a server timestamp", async () => {
     const { db, calls } = fakeDb();
-    expect(await upsertCatalog("u1", INPUT, db)).toEqual({ stored: true });
-    expect(calls.upserts[0]).toMatchObject({ user_id: "u1", runtime: "claude", default_id: "m-1" });
+    expect(await upsertCatalog("u1", "dev-1", INPUT, db)).toEqual({ stored: true });
+    expect(calls.upserts[0]).toMatchObject({ user_id: "u1", device_id: "dev-1", runtime: "claude", default_id: "m-1" });
     expect(calls.upserts[0].published_at).toBe("2026-10-08T12:00:00.000Z");
   });
 
@@ -57,7 +57,7 @@ describe("runtime_model_catalogs, tolerant of the table not existing yet (INVARI
 
   it("🔒 missing table: publish answers stored:false and the read answers [] (glasses fall back)", async () => {
     const { db } = fakeDb({ error: MISSING_REST });
-    expect(await upsertCatalog("u1", INPUT, db)).toEqual({ stored: false });
+    expect(await upsertCatalog("u1", "dev-1", INPUT, db)).toEqual({ stored: false });
     expect(await catalogsForUser("u1", db)).toEqual([]);
   });
 
@@ -74,7 +74,7 @@ describe("runtime_model_catalogs, tolerant of the table not existing yet (INVARI
 
   it("any OTHER error is still an error", async () => {
     const { db } = fakeDb({ error: { code: "XX000", message: "boom" } });
-    await expect(upsertCatalog("u1", INPUT, db)).rejects.toThrow(/boom/);
+    await expect(upsertCatalog("u1", "dev-1", INPUT, db)).rejects.toThrow(/boom/);
     await expect(catalogsForUser("u1", db)).rejects.toThrow(/boom/);
   });
 
@@ -83,6 +83,7 @@ describe("runtime_model_catalogs, tolerant of the table not existing yet (INVARI
       rows: [
         {
           runtime: "claude",
+          device_id: "dev-1",
           models: [{ id: "ok-1", label: "Ok" }, { id: "has space" }, { nope: true }],
           default_id: null,
           published_at: "2026-10-08T11:00:00Z",
@@ -91,5 +92,27 @@ describe("runtime_model_catalogs, tolerant of the table not existing yet (INVARI
     });
     const rows = await catalogsForUser("u1", db);
     expect(rows[0].models.map((m) => m.id)).toEqual(["ok-1"]);
+    expect(rows[0].deviceId).toBe("dev-1");
+  });
+
+  it("two computers keep separate rows: the conflict key includes the device", async () => {
+    const onConflicts: string[] = [];
+    const db: CatalogDb = {
+      from: () => ({
+        upsert: (_row, opts) => {
+          onConflicts.push(opts.onConflict);
+          return Promise.resolve({ error: null });
+        },
+        select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }),
+      }),
+    };
+    await upsertCatalog("u1", "mac-a", INPUT, db);
+    expect(onConflicts).toEqual(["user_id,runtime,device_id"]);
+  });
+
+  it("🔒 a row with no device is dropped, never shown as anyone's", async () => {
+    const { db } = fakeDb({ rows: [{ runtime: "claude", models: [{ id: "m" }], published_at: "2026-10-08T11:00:00Z" }] });
+    expect(await catalogsForUser("u1", db)).toEqual([]);
   });
 });
+
