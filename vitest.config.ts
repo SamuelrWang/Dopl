@@ -11,5 +11,8 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     setupFiles: ["./vitest.setup.ts"],
+    // Local runs are capped: every agent runs vitest, and the default (one fork per core) swamped the machine.
+    // CI keeps the default.
+    maxWorkers: process.env.CI ? undefined : 2,
   },
 });
