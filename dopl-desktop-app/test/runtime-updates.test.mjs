@@ -275,7 +275,9 @@ const assistantMsg = (text, error) => ({
 });
 
 test("the CLI's outdated-model refusal becomes one runtime_outdated event, and only when the CLI flagged it", () => {
-  const { normalize } = require(join(MAIN, "runtime", "claude", "normalize.js"));
+  // A verified session (2026-10-08: nothing renders before the launch contract checks out).
+  const claude = require(join(MAIN, "runtime", "claude", "normalize.js"));
+  const normalize = (msg) => claude.normalize(msg, { launchContract: false });
   assert.deepEqual(normalize(assistantMsg(OUTDATED_TEXT, "invalid_request")), [{ type: "runtime_outdated" }]);
   // A reply that merely QUOTES the sentence is content, and renders as content.
   const quoted = normalize(assistantMsg(OUTDATED_TEXT));

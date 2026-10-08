@@ -95,7 +95,9 @@ Object.assign(registry.resolve("claude").runtime, {
   available: async () => ({ ok: true, reason: "" }),
   credentialState: async () => { if (rt.credential instanceof Error) throw rt.credential; return rt.credential; },
   models: async () => { throw new Error("no roster in tests"); },
-  buildLaunchSpec: (req) => ({ session: req.session, prompt: req.session.pushIterator }),
+  // The harness spawns no real CLI, so it records no launch contract: it opts OUT explicitly (`false`), the
+  // one value the Claude normalizer accepts as "not checked" (2026-10-08, cross-review M3).
+  buildLaunchSpec: (req) => { req.session.launchContract = false; return { session: req.session, prompt: req.session.pushIterator }; },
   start: (spec) => fakeHandle(spec, "start"),
   resume: (spec) => fakeHandle(spec, "resume"),
 });

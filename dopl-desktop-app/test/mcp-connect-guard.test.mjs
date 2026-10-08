@@ -70,7 +70,7 @@ test("CONNECTED: the dopl entry's status rides the `launched` event and reads co
   const [ev] = normalize.normalize(initMsg([
     { name: "dopl_agents", status: "connected" },
     { name: "dopl", status: "connected" },
-  ]), {});
+  ]), { launchContract: false });
   assert.equal(ev.type, "launched");
   assert.equal(ev.sessionId, "sdk-1", "the conversation handle must still ride this event");
   assert.deepEqual(mcpConnect.doplStatus(ev.mcpServers), "connected");
@@ -83,16 +83,16 @@ test("FAILED: a dopl entry that did not connect is not connected, whatever the w
   // carries `alwaysLoad: true` — which BLOCKS the launch until the server connects — so a
   // `connecting` at init is a server that ran out the connect timeout, not one still in flight.
   for (const status of ["failed", "needs-auth", "connecting", "pending", "disabled"]) {
-    const [ev] = normalize.normalize(initMsg([{ name: "dopl", status }]), {});
+    const [ev] = normalize.normalize(initMsg([{ name: "dopl", status }]), { launchContract: false });
     assert.equal(mcpConnect.doplStatus(ev.mcpServers), status);
     assert.equal(mcpConnect.isConnected(status), false, `${status} must not read as connected`);
   }
 });
 
 test("MISSING: the CLI dropped the whole entry — the 2026-08-08 shape — reads `missing`", () => {
-  const [dropped] = normalize.normalize(initMsg([]), {});
+  const [dropped] = normalize.normalize(initMsg([]), { launchContract: false });
   assert.equal(mcpConnect.doplStatus(dropped.mcpServers), mcpConnect.STATUS_MISSING);
-  const [others] = normalize.normalize(initMsg([{ name: "dopl_agents", status: "connected" }]), {});
+  const [others] = normalize.normalize(initMsg([{ name: "dopl_agents", status: "connected" }]), { launchContract: false });
   assert.equal(mcpConnect.doplStatus(others.mcpServers), mcpConnect.STATUS_MISSING,
     "another server's health is NOT ours — the in-process one connecting is exactly what hid F-692");
   // ⚠ NAME MATCH IS EXACT: a prefix match would accept `dopl_agents` as the dopl server.
@@ -104,7 +104,7 @@ test("UNREPORTED: a runtime that publishes no list is not evidence of an outage"
   // ⚠ THE ONE CASE THAT MUST NOT FAIL A LAUNCH. A second adapter that emits no `mcp_servers` has
   // not told us the server is down, and refusing every launch on its silence would make this
   // guard a claim about a runtime it cannot see.
-  const [ev] = normalize.normalize(initMsg(undefined), {});
+  const [ev] = normalize.normalize(initMsg(undefined), { launchContract: false });
   assert.equal(ev.mcpServers, null, "an absent list is null on the event, never []");
   assert.equal(mcpConnect.doplStatus(ev.mcpServers), mcpConnect.STATUS_UNREPORTED);
   assert.equal(mcpConnect.mcpConnectVerdict({ status: mcpConnect.STATUS_UNREPORTED, attempt: 0 }), "ok");

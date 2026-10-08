@@ -11,6 +11,24 @@ const path = require('path');
 
 const PKG = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
 
+/** The bundled SDK and a credentialed, scrubbed env for driving a CANDIDATE binary (lazy: electron-free at load). */
+async function driverFor(candidateBin) {
+  const loader = require('./loader');
+  const sdk = await loader.getSdk();
+  const env = require('./credential').withCredential(loader.buildScrubbedEnv());
+  return { sdk, options: { env, pathToClaudeCodeExecutable: candidateBin } };
+}
+
+/** The candidate CLI as it describes itself, driven by the bundled SDK, turn-free (`roster.js › observeShape`). */
+async function probeShape(candidateBin) {
+  return require('./roster').observeShape(await driverFor(candidateBin));
+}
+
+/** The candidate's safety SEMANTICS, live (`semantics.js`: four short turns; runs only on a new build). */
+async function verifySemantics(candidateBin) {
+  return require('./semantics').verifySemantics(await driverFor(candidateBin));
+}
+
 module.exports = {
   id: 'claude',
   pkg: process.platform === 'darwin' ? PKG : null,
@@ -23,18 +41,6 @@ module.exports = {
   binary: (root) => path.join(root, 'claude'),
   // Anthropic PBC's Developer ID team (`codesign -dv` on the vendor's own build).
   teamId: 'Q6L2SF6YDW',
-  /** The candidate CLI as it describes itself, driven by the bundled SDK (lazy: electron-free at load). */
-  probeShape: async (bin) => {
-    const loader = require('./loader');
-    const sdk = await loader.getSdk();
-    const env = require('./credential').withCredential(loader.buildScrubbedEnv());
-    return require('./roster').observeShape({ sdk, options: { env, pathToClaudeCodeExecutable: bin } });
-  },
-  /** The candidate's safety SEMANTICS, live (`semantics.js`: two short turns; runs only on a new build). */
-  verifySemantics: async (bin) => {
-    const loader = require('./loader');
-    const sdk = await loader.getSdk();
-    const env = require('./credential').withCredential(loader.buildScrubbedEnv());
-    return require('./semantics').verifySemantics({ sdk, options: { env, pathToClaudeCodeExecutable: bin } });
-  },
+  probeShape,
+  verifySemantics,
 };

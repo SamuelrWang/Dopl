@@ -45,29 +45,35 @@ const { initialSessionState, sessionReducer } = loadReducer();
 const claudeNormalize = require("../main/runtime/claude/normalize.js");
 const usageWith = (id, win) => ({ [id]: { inputTokens: 1, cacheReadInputTokens: 0, contextWindow: win } });
 
+// Harness context: no launch contract (explicit opt-out), and THIS stream's own window map (M1).
+const harness = () => ({ launchContract: false, windows: new Map() });
+
 test("a result teaches the window of every model it reports; nothing is known before", () => {
-  claudeNormalize.forgetWindows();
-  assert.equal(claudeNormalize.windowFor("claude-opus-6"), null, "a model never reported has no window");
-  claudeNormalize.normalize({ type: "result", modelUsage: usageWith("claude-opus-6", 1000000) }, {});
-  assert.equal(claudeNormalize.windowFor("claude-opus-6"), 1000000, "a model newer than this build meters on its first result");
+  const ctx = harness();
+  assert.equal(claudeNormalize.windowFor(ctx.windows, "claude-opus-6"), null, "a model never reported has no window");
+  claudeNormalize.normalize({ type: "result", modelUsage: usageWith("claude-opus-6", 1000000) }, ctx);
+  assert.equal(claudeNormalize.windowFor(ctx.windows, "claude-opus-6"), 1000000, "a model newer than this build meters on its first result");
 });
 
-test("a `[1m]` usage key also answers the plain id the assistant message names", () => {
-  claudeNormalize.forgetWindows();
-  claudeNormalize.normalize({ type: "result", modelUsage: usageWith("claude-sonnet-4-6[1m]", 1000000) }, {});
-  assert.equal(claudeNormalize.windowFor("claude-sonnet-4-6"), 1000000);
+test("M1: windows are the SESSION's and EXACT: a [1m] key never sets the plain id, and sessions never share", () => {
+  const a = harness();
+  const b = harness();
+  claudeNormalize.normalize({ type: "result", modelUsage: usageWith("claude-sonnet-4-6[1m]", 1000000) }, a);
+  assert.equal(claudeNormalize.windowFor(a.windows, "claude-sonnet-4-6[1m]"), 1000000);
+  assert.equal(claudeNormalize.windowFor(a.windows, "claude-sonnet-4-6"), null, "no spelling is mapped onto another");
+  assert.equal(claudeNormalize.windowFor(b.windows, "claude-sonnet-4-6[1m]"), null, "another session learned nothing");
 });
 
 test("a junk or zero window is never learned: absent is never a denominator", () => {
-  claudeNormalize.forgetWindows();
+  const ctx = harness();
   for (const junk of [0, -1, "1000000", null, NaN]) {
-    claudeNormalize.normalize({ type: "result", modelUsage: usageWith("m-junk", junk) }, {});
-    assert.equal(claudeNormalize.windowFor("m-junk"), null, String(junk));
+    claudeNormalize.normalize({ type: "result", modelUsage: usageWith("m-junk", junk) }, ctx);
+    assert.equal(claudeNormalize.windowFor(ctx.windows, "m-junk"), null, String(junk));
   }
 });
 
 test("usage with models but no window field is DRIFT, reported once to the shared ledger", () => {
-  const evs = claudeNormalize.normalize({ type: "result", modelUsage: { "claude-opus-5": { inputTokens: 5 } } }, {});
+  const evs = claudeNormalize.normalize({ type: "result", modelUsage: { "claude-opus-5": { inputTokens: 5 } } }, harness());
   assert.ok(evs.some((e) => e.type === "shape_drift" && e.where === "result.modelUsage.contextWindow"));
 });
 
@@ -110,12 +116,12 @@ function gaugeAt(s, samples) {
 }
 
 function stream(session, messages) {
-  claudeNormalize.forgetWindows();
+  const ctx = harness();
   const samples = [];
   const s = session;
   if (!s.state) s.state = { phase: "running", turns: 0 };
   for (const msg of messages) {
-    io.applyCoreEvents(s, normalize(msg, {}), gaugeAt(s, samples), NO_STORE);
+    io.applyCoreEvents(s, normalize(msg, ctx), gaugeAt(s, samples), NO_STORE);
   }
   return samples;
 }
@@ -188,7 +194,7 @@ test("a throwing RESULT dispatch still escapes to the consume loop", () => {
   assert.throws(
     () => {
       for (const msg of [init("claude-opus-5"), assistant(120000), result()]) {
-        io.applyCoreEvents(s, normalize(msg, {}), hostile, NO_STORE);
+        io.applyCoreEvents(s, normalize(msg, harness()), hostile, NO_STORE);
       }
     },
     /boom/,
@@ -405,22 +411,22 @@ test("RC-06: a turn's result names the model that read the most prompt, not the 
       "claude-haiku-4-5-20251001": { inputTokens: 900, cacheReadInputTokens: 0 },
       "claude-opus-5": { inputTokens: 1200, cacheReadInputTokens: 40000 },
     },
-  }), {}).find((e) => e.type === "result");
+  }), harness()).find((e) => e.type === "result");
   assert.equal(ev.model, "claude-opus-5");
-  assert.equal(normalize(result(), {}).find((e) => e.type === "result").model, null, "no usage, no model");
+  assert.equal(normalize(result(), harness()).find((e) => e.type === "result").model, null, "no usage, no model");
 });
 
 test("the window BEFORE the first result: the CLI's turn-free getContextUsage answer is learned", async () => {
   // MEASURED 2026-10-08 on claude 2.1.293: `{ model, maxTokens, rawMaxTokens, totalTokens, percentage }`.
-  claudeNormalize.forgetWindows();
-  claudeNormalize.learnWindow("claude-sonnet-5-5", 1000000);
-  assert.equal(claudeNormalize.windowFor("claude-sonnet-5-5"), 1000000);
+  const windows = new Map();
+  claudeNormalize.learnWindow(windows, "claude-sonnet-5-5", 1000000);
+  assert.equal(claudeNormalize.windowFor(windows, "claude-sonnet-5-5"), 1000000);
   for (const junk of [0, -5, "1000000", null]) {
-    claudeNormalize.learnWindow("m-x", junk);
-    assert.equal(claudeNormalize.windowFor("m-x"), null, String(junk));
+    claudeNormalize.learnWindow(windows, "m-x", junk);
+    assert.equal(claudeNormalize.windowFor(windows, "m-x"), null, String(junk));
   }
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("../main/runtime/claude/launch-spec.js", import.meta.url), "utf8");
   assert.match(src, /readCount\(u, 'rawMaxTokens'\) \|\| readCount\(u, 'maxTokens'\)/, "the raw window, read as a count, never a guess");
-  assert.match(src, /learnWindowNow\(q\);/, "asked on every start (fresh, resume, relaunch)");
+  assert.match(src, /learnWindowNow\(q, spec\.session\);/, "asked on every start (fresh, resume, relaunch), into that session's map");
 });

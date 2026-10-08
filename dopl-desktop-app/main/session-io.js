@@ -202,6 +202,11 @@ function applyCoreEvents(s, list, dispatch, store) {
       }
       continue;
     }
+    if (ev.type === 'launch_verified') {
+      // The adapter checked the runtime's own launch report; the gate may now answer (`untilVerified`).
+      s.launchVerified = true;
+      continue;
+    }
     if (ev.type === 'safety_mismatch') {
       // Ends the session in `session-query.js › consume`, before the first turn can call anything. It outranks
       // the MCP status read off the same init: a launch that is unsafe is not retried for connectivity.

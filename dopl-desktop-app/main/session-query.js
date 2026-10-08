@@ -70,8 +70,13 @@ function normalizeCtx(s) {
     peerName: s.counterpartyName,
     peerId: s.counterpartyId,
     willGatePost: (input, toolName) => io.postWillGate(s, input, toolName),
-    // What this launch asked the runtime to enforce (opaque here; the adapter wrote and reads it).
-    launchContract: s.launchContract || null,
+    // What this launch asked the runtime to enforce, and whether its report checked out (opaque here; the
+    // adapter wrote and reads both). Null = none recorded, which the adapter REFUSES.
+    // `false` is a harness's explicit opt-out and passes through as itself; anything else absent is null.
+    launchContract: s.launchContract === false ? false : (s.launchContract || null),
+    launchVerified: s.launchVerified === true,
+    // This session's own learned windows (the adapter fills it; never shared across sessions).
+    windows: s.learnedWindows || (s.learnedWindows = new Map()),
   };
 }
 

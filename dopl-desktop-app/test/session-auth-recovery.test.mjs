@@ -225,8 +225,8 @@ test("MID-SESSION: the CLI's own login bubble is CONSUMED, never rendered", () =
   // The Claude normalizer turns the bubble into `auth_hold` ALONE (no render event beside it).
   const normalize = requireMain("runtime/claude/normalize.js").normalize;
   const bubble = { type: "assistant", message: { content: [{ type: "text", text: "Not logged in · Please run /login" }] } };
-  assert.deepEqual(normalize(bubble, {}).map((e) => e.type), ["auth_hold"], "the dead-end bubble is replaced by the action");
-  const plain = normalize({ type: "assistant", message: { content: [{ type: "text", text: "on it" }] } }, {});
+  assert.deepEqual(normalize(bubble, { launchContract: false }).map((e) => e.type), ["auth_hold"], "the dead-end bubble is replaced by the action");
+  const plain = normalize({ type: "assistant", message: { content: [{ type: "text", text: "on it" }] } }, { launchContract: false });
   assert.ok(!plain.some((e) => e.type === "auth_hold"), "a normal assistant message is never consumed");
 });
 

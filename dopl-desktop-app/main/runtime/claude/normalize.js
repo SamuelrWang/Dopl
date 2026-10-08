@@ -70,42 +70,34 @@ function mainModelOf(modelUsage) {
 }
 
 // ── THE CONTEXT WINDOW, LEARNED FROM THE CLI (2026-10-08, SDK resilience #1 of the audit) ────────────
-// The CLI reports every model's window on each `result` (`modelUsage[id].contextWindow`). It is learned
-// here, per model id, and used as the denominator from then on — so a model released after this build
-// meters correctly on its first finished turn, and no window is ever typed into Dopl. Before a model's
-// first `result` its window is unknown (null, an empty bar), never guessed.
-const learnedWindows = new Map();
-const plainId = (id) => String(id || '').replace(/\[[^\]]*\]$/, '');
+// The CLI reports every model's window on each `result` (`modelUsage[id].contextWindow`) and, turn-free,
+// at start (`getContextUsage()`, `launch-spec.js › learnWindowNow`). Learned into the SESSION's own map
+// (`context.windows`, cross-review M1: never shared between sessions), keyed by the EXACT id the CLI
+// used — no spelling is mapped onto another, so a `[1m]` session never sets a plain one's denominator.
+// Before a model is reported its window is unknown (null, an empty bar), never guessed.
 
-function learnWindows(modelUsage) {
+function learnWindows(windows, modelUsage) {
   let reported = 0;
   for (const [id, u] of Object.entries(modelUsage && typeof modelUsage === 'object' ? modelUsage : {})) {
     const w = readCount(u, 'contextWindow');
     if (!w) continue;
     reported += 1;
-    learnedWindows.set(id, w);
-    // An assistant message names the model without a `[1m]`-style suffix the usage key may carry.
-    if (plainId(id) !== id && !learnedWindows.has(plainId(id))) learnedWindows.set(plainId(id), w);
+    windows.set(id, w);
   }
   return reported;
 }
 
-/** The learned window for a model id, or null. */
-function windowFor(model) {
-  if (!model) return null;
-  return learnedWindows.get(model) || learnedWindows.get(plainId(model)) || null;
+/** The window `windows` holds for exactly `model`, or null. */
+function windowFor(windows, model) {
+  return model && windows && windows.has(model) ? windows.get(model) : null;
 }
 
-/** One window the CLI stated outside a result (its `getContextUsage()` answer, `launch-spec.js`). */
-function learnWindow(model, window) {
+/** One window the CLI stated outside a result (its `getContextUsage()` answer) into a session's map. */
+function learnWindow(windows, model, window) {
   const w = typeof window === 'number' && Number.isFinite(window) && window > 0 ? window : 0;
-  if (!model || !w) return;
-  learnedWindows.set(String(model), w);
-  if (plainId(model) !== model) learnedWindows.set(plainId(model), w);
+  if (!windows || !model || !w) return;
+  windows.set(String(model), w);
 }
-
-/** Tests only: forget every learned window. */
-function forgetWindows() { learnedWindows.clear(); }
 
 /** One raw SDK message → the CoreEvents it means. The auth sentinel is checked FIRST and returns
  *  alone: it short-circuits the consume loop, and a render event beside it would paint the dead end. */
@@ -126,13 +118,18 @@ function normalize(msg, ctx) {
     // The conversation handle, the model really running, and the raw MCP connect list — the
     // shape is this platform's, the decision core's (`mcp-connect.js`, F-692).
     const out = [events.launched(msg.session_id, msg.model, msg.mcp_servers)];
-    // The CLI's own report vs what this launch asked it to enforce (`launch-contract.js`). A launch with no
-    // recorded contract (a harness) is not checked; every real spawn records one in `launch-spec.js`.
-    if (context.launchContract) {
-      const { refuse, drift } = launchContract.verifyInit(msg, context.launchContract);
-      for (const d of drift) out.push(events.shapeDrift('init.tools', d));
-      if (refuse.length) out.push(events.safetyMismatch(launchContract.mismatchSentence(msg, context.launchContract)));
+    // The CLI's own report vs what this launch asked it to enforce (`launch-contract.js`). ⚠ FAIL CLOSED
+    // (cross-review M3): NO recorded contract refuses — every real spawn records one in `launch-spec.js`;
+    // only a harness opts out, explicitly, with `launchContract: false`.
+    if (context.launchContract === false) return out;
+    if (!context.launchContract) {
+      out.push(events.safetyMismatch('Dopl ended this session before it could act: no record of what it was asked to enforce.'));
+      return out;
     }
+    const { refuse, drift } = launchContract.verifyInit(msg, context.launchContract);
+    for (const d of drift) out.push(events.shapeDrift('init.tools', d));
+    if (refuse.length) out.push(events.safetyMismatch(launchContract.mismatchSentence(msg, context.launchContract)));
+    else out.push(events.launchVerified());
     return out;
   }
 
@@ -140,14 +137,19 @@ function normalize(msg, ctx) {
   if (msg.type === 'assistant' && isOutdatedRefusal(msg)) return [events.runtimeOutdated()];
 
   if (msg.type === 'assistant' || msg.type === 'user') {
+    // ⚠ NOTHING ACTS BEFORE THE INIT IS VERIFIED (cross-review H1): a turn the CLI emits before reporting
+    // what it enforces (or after a refused report) ends the session; it is never rendered or metered.
+    if (context.launchContract !== false && !context.launchVerified) {
+      return [events.safetyMismatch('Dopl ended this session before it could act: the runtime acted before reporting what it enforces.')];
+    }
     const out = renderEvents(msg, context);
     // A subagent's messages render but never meter: a delegated run has its own window.
     if (msg.type === 'assistant' && msg.parent_tool_use_id == null) {
       const m = msg.message || {};
       const tokens = modelTable.promptTokens(m.usage);
       const model = typeof m.model === 'string' && m.model ? m.model : null; // mid-session switch
-      // The window is the one the CLI reported for this model on a `result` (null until it has).
-      if (tokens > 0 || model) out.push(events.context(tokens, model, windowFor(model)));
+      // The window is the one the CLI reported for this model (null until it has).
+      if (tokens > 0 || model) out.push(events.context(tokens, model, windowFor(context.windows, model)));
     }
     return out;
   }
@@ -155,11 +157,12 @@ function normalize(msg, ctx) {
   if (msg.type === 'result') {
     const out = [];
     const usage = msg.modelUsage && typeof msg.modelUsage === 'object' ? msg.modelUsage : null;
-    const reported = learnWindows(usage);
+    const windows = context.windows || new Map();
+    const reported = learnWindows(windows, usage);
     const main = mainModelOf(usage);
     // The window, BEFORE the result: the turn's reading is sampled when the result lands. `model: null`
     // so a usage key spelled differently from the message's model never reads as a model switch.
-    const window = windowFor(main);
+    const window = windowFor(windows, main);
     if (window) out.push(events.context(0, null, window));
     // A usage block with models but no window field: the CLI changed what it reports (the shared ledger).
     if (usage && Object.keys(usage).length && !reported) {
@@ -173,4 +176,4 @@ function normalize(msg, ctx) {
   return []; // unknown types ignored
 }
 
-module.exports = { normalize, renderEvents, windowFor, learnWindow, forgetWindows, ERROR_MESSAGE_TYPE };
+module.exports = { normalize, renderEvents, windowFor, learnWindow, ERROR_MESSAGE_TYPE };

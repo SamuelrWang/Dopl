@@ -48,7 +48,7 @@ const metrics = new Function(
   `${fnOf(METRICS, "metricOrNull")}\n${fnOf(METRICS, "reportedWindow")}\n${fnOf(METRICS, "metrics")}\n return metrics;`
 )({ health: () => ({}) });
 
-const CTX = { channelId: "chan-1", peerName: "Ada", peerId: "peer-1" };
+const CTX = { channelId: "chan-1", peerName: "Ada", peerId: "peer-1", launchContract: false, windows: new Map() };
 const first = (list, type) => (list || []).find((e) => e && e.type === type) || null;
 
 // ── 1. THE DENOMINATOR — DOES THE RUNTIME REALLY REPORT ITS OWN? ────────────────────────────
@@ -94,7 +94,7 @@ test("the runtimes that report NOTHING say so, and get `null` — never a zero d
   assert.ok(ev, "the Claude lane still meters per assistant message");
   // 2026-10-08: no table. Before the CLI has reported this model's window on a result, it is UNKNOWN;
   // after one result, every reading carries the window the CLI reported.
-  claudeNormalize.forgetWindows();
+  CTX.windows.clear();
   assert.equal(first(claudeNormalize.normalize({ type: "assistant", message: { usage: { input_tokens: 5 }, model: "claude-sonnet-5" } }, CTX), "context").window, null);
   claudeNormalize.normalize({ type: "result", modelUsage: { "claude-sonnet-5": { inputTokens: 5, contextWindow: 1000000 } } }, CTX);
   assert.equal(first(claudeNormalize.normalize({ type: "assistant", message: { usage: { input_tokens: 5 }, model: "claude-sonnet-5" } }, CTX), "context").window, 1000000,
@@ -210,9 +210,9 @@ test("core holds no model table: only the window the runtime put on its reading 
 test("no runtime guesses a window from a model's NAME: Claude's comes only from what the CLI reported", () => {
   // 2026-10-08: the Claude table (and its `[1m]` / dated-id / family rules) is DELETED. A name is never a
   // denominator, for any vendor; the adapter answers only windows its CLI reported on a result.
-  claudeNormalize.forgetWindows();
+  const fresh = new Map();
   for (const id of ["claude-sonnet-4-6[1m]", "claude-opus-6", "gpt-5-codex", "borg-3-turbo", ""]) {
-    assert.equal(claudeNormalize.windowFor(id), null, id);
+    assert.equal(claudeNormalize.windowFor(fresh, id), null, id);
   }
   assert.equal(modelTable.contextWindowFor, undefined, "the table export is gone");
 });

@@ -5,9 +5,9 @@
 // built-in bound (`tools`), the deny list (`disallowedTools`), and the MCP servers it may reach. A CLI
 // build that renamed, dropped or reinterpreted one of them would run with that restriction silently off.
 // So the CLI's own `system/init` report — the permission mode it is in, every tool it OFFERS the model —
-// is compared with what this launch asked for, BEFORE the first turn can call anything. A mismatch that
-// gets past Dopl's gate ENDS the session (fail closed); one the gate still holds is recorded as drift
-// (`verifyInit`). An init that does not report what is checked refuses: unverifiable is not safe.
+// is compared with what this launch asked for, BEFORE the first turn can call anything. Any mismatch ENDS
+// the session (fail closed), an init that does not report what is checked refuses, and until a report
+// checks out the gate denies every call (`launch-spec.js › untilVerified`).
 //
 // Measured 2026-10-08 on runtime 0.3.293 (claude 2.1.293), Dopl's options and scrubbed env: `init`
 // reports `permissionMode: "default"`, `tools` = exactly the `tools` bound (deny-listed names absent),
@@ -39,15 +39,14 @@ function contractOf(options, opts) {
 }
 
 /**
- * `{ refuse: [reason], drift: [reason] }` for one init. REFUSE only what gets PAST Dopl's gate:
- *   - the permission mode is not the one that makes the CLI call the gate (or is not reported);
- *   - a deny-listed tool is offered (the deny list is the hard layer the gate does not repeat);
- *   - the tool list is not reported (nothing above can be checked).
- * DRIFT (recorded, never refused) is what the gate still holds: a built-in offered outside the bound,
- * or a tool from a server Dopl did not configure. In permission mode "default" the CLI asks Dopl's
- * gate for any tool that is not pre-approved, and an unclassified name gates in every mode.
- * ⚠ MEASURED WHY (2026-10-08, 0.3.293): `full` offers `TaskStop`, which no Dopl list names (the
- * CLI's successor to `KillShell`). Refusing it would have stopped every full-profile launch.
+ * `{ refuse: [reason], drift: [reason] }` for one init. REFUSE (2026-10-08, cross-review H2) anything
+ * that is not what this launch asked for: a permission mode other than the one that makes the CLI call
+ * Dopl's gate (or none reported), a deny-listed tool offered, a built-in outside the bound, a tool from a
+ * server the launch did not configure, or no tool list. The gate is NOT a safe backstop for them: the CLI
+ * auto-allows some calls without asking it (measured, `semantics.js`). `drift` is kept for reporting-only
+ * signals and is empty today.
+ * ⚠ MEASURED (2026-10-08, claude 2.1.293): `full` offered `TaskStop` with no Dopl class; it is now in the
+ * shell class (a8ebdf04), so every profile's measured init is clean under this rule.
  */
 function verifyInit(init, contract) {
   const c = contract || {};
@@ -75,8 +74,11 @@ function verifyInit(init, contract) {
     } else if (bound && !bound.has(t)) unbound.push(t);
   }
   if (deniedOffered.length) refuse.push(`the runtime offers tools this launch denied (${shown(deniedOffered)})`);
-  if (unbound.length) drift.push(`built-ins offered outside the launch bound: ${shown(unbound)}`);
-  if (foreign.length) drift.push(`tools from servers this launch did not configure: ${shown(foreign)}`);
+  // ⚠ REFUSED, NOT DRIFT (cross-review H2): the bound is a fence Dopl set, and the CLI auto-allows some
+  // calls without asking the gate (measured: cwd read-only shell), so an offered tool outside it is not
+  // safely "held by the gate". Measured clean on every profile (TaskStop classified, a8ebdf04).
+  if (unbound.length) refuse.push(`the runtime offers built-in tools outside this launch's bound (${shown(unbound)})`);
+  if (foreign.length) refuse.push(`the runtime offers tools from servers this launch did not configure (${shown(foreign)})`);
   return { refuse, drift };
 }
 

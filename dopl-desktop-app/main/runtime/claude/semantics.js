@@ -56,7 +56,7 @@ async function turn(sdk, options, prompt, timeoutMs) {
       settingSources: [],
       permissionMode: 'default',
       mcpServers: {},
-      maxTurns: 3,
+      // No `maxTurns` (`launch-spec.js` is its ONE producer): the turn timeout and the first `result` bound it.
       canUseTool: async (name) => {
         seen.gateCalls.push(str(name));
         return { behavior: 'deny', message: 'Dopl semantic probe: denied.' };

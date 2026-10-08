@@ -92,7 +92,7 @@ test("the launch record carries taskTitle / channelName / from", () => {
   // driven here, exactly as the consume loop drives them; the payload asserted below is unchanged.
   io.applyCoreEvents(
     s,
-    normalize({ type: "system", subtype: "init", session_id: "sdk-2", model: "claude" }, {}),
+    normalize({ type: "system", subtype: "init", session_id: "sdk-2", model: "claude" }, { launchContract: false }),
     (_s, ev) => events.push(ev),
     store
   );

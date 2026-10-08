@@ -36,14 +36,13 @@ test("🔒 every profile's MEASURED init passes: nothing refuses on today's CLI"
   }
 });
 
-test("a built-in offered outside the bound is DRIFT (the gate holds it), never a refusal", () => {
+test("H2: a built-in offered outside the bound REFUSES (the gate is no backstop: the CLI auto-allows some calls)", () => {
   // MEASURED 2026-10-08: `full` offered `TaskStop` unclassified; it is now in the shell class, so the
-  // measured list is clean, and a future rename is the drift this pins.
+  // measured list is clean under the strict rule, and a future addition refuses.
   const clean = lc.verifyInit({ permissionMode: "default", tools: MEASURED.full }, lc.contractOf(launchOptions("full")));
   assert.deepEqual(clean, { refuse: [], drift: [] });
   const v = lc.verifyInit({ permissionMode: "default", tools: MEASURED.full.concat(["ShellKill2"]) }, lc.contractOf(launchOptions("full")));
-  assert.deepEqual(v.refuse, []);
-  assert.match(v.drift.join(" "), /ShellKill2/);
+  assert.match(v.refuse.join(" "), /outside this launch's bound \(ShellKill2\)/);
 });
 
 test("REFUSES: a permission mode that skips Dopl's gate, or none reported", () => {
@@ -68,21 +67,49 @@ test("a narrowing rule is not a removal: `Read(~/.ssh/**)` never makes `Read` a 
   assert.ok(!lc.contractOf(launchOptions("read_only")).denied.includes("Read"));
 });
 
-test("an unconfigured server's tools are drift on a plain launch, and ignored with the operator's own tools", () => {
+test("H2: an unconfigured server's tools REFUSE on a plain launch; the operator's own tools are theirs", () => {
   const offered = MEASURED.read_only.concat(["mcp__claude_ai_Gmail__send_message"]);
-  assert.match(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions("read_only"))).drift.join(), /Gmail/);
-  assert.deepEqual(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions("read_only"), { operatorTools: true })).drift, []);
+  assert.match(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions("read_only"))).refuse.join(), /servers this launch did not configure \(mcp__claude_ai_Gmail__send_message\)/);
+  assert.deepEqual(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions("read_only"), { operatorTools: true })), { refuse: [], drift: [] });
 });
 
-test("the normalizer: init → launched, then the refusal (and drift) when a contract is recorded", () => {
+test("the normalizer: init → launched, then the refusal; a clean init → launch_verified", () => {
   const init = { type: "system", subtype: "init", session_id: "sid", model: "m", mcp_servers: [], permissionMode: "plan", tools: MEASURED.full.concat(["ShellKill2"]) };
   const evs = normalizer.normalize(init, { launchContract: lc.contractOf(launchOptions("full")) });
   assert.equal(evs[0].type, "launched");
-  assert.ok(evs.some((e) => e.type === "shape_drift" && /ShellKill2/.test(e.detail)));
   const stop = evs.find((e) => e.type === "safety_mismatch");
   assert.match(stop.detail, /^Dopl ended this session before it could act: the runtime is in permission mode "plan"/);
-  // No contract (a harness) → not checked.
-  assert.deepEqual(normalizer.normalize(init, {}).map((e) => e.type), ["launched"]);
+  assert.ok(!evs.some((e) => e.type === "launch_verified"));
+  const ok = normalizer.normalize({ ...init, permissionMode: "default", tools: MEASURED.full }, { launchContract: lc.contractOf(launchOptions("full")) });
+  assert.deepEqual(ok.map((e) => e.type), ["launched", "launch_verified"]);
+});
+
+test("M3: NO recorded contract REFUSES; only an explicit `launchContract: false` (a harness) skips the check", () => {
+  const init = { type: "system", subtype: "init", session_id: "sid", model: "m", mcp_servers: [], permissionMode: "default", tools: ["Read"] };
+  for (const ctx of [{}, { launchContract: null }, { launchContract: undefined }]) {
+    const evs = normalizer.normalize(init, ctx);
+    assert.match(evs.find((e) => e.type === "safety_mismatch").detail, /no record of what it was asked to enforce/, JSON.stringify(ctx));
+  }
+  assert.deepEqual(normalizer.normalize(init, { launchContract: false }).map((e) => e.type), ["launched"]);
+});
+
+test("H1: a turn the runtime emits BEFORE a verified init ends the session, unrendered", () => {
+  const contract = lc.contractOf(launchOptions("read_only"));
+  const turn = { type: "assistant", message: { content: [{ type: "tool_use", id: "t", name: "Read", input: {} }] } };
+  assert.deepEqual(normalizer.normalize(turn, { launchContract: contract, launchVerified: false }).map((e) => e.type), ["safety_mismatch"]);
+  assert.ok(normalizer.normalize(turn, { launchContract: contract, launchVerified: true }).every((e) => e.type !== "safety_mismatch"));
+});
+
+test("H1: the gate is CLOSED until the init is verified — a call before it is denied, the real gate never asked", async () => {
+  const spec = require("../main/runtime/claude/launch-spec.js");
+  let asked = 0;
+  const s = { launchVerified: false };
+  const gate = spec.untilVerified(s, async () => { asked += 1; return { behavior: "allow" }; });
+  assert.equal((await gate("Bash", {})).behavior, "deny");
+  assert.equal(asked, 0);
+  s.launchVerified = true;
+  assert.equal((await gate("Bash", {})).behavior, "allow");
+  assert.equal(asked, 1);
 });
 
 test("core turns the refusal into the stop signal, outranking the init's MCP status", () => {
@@ -96,6 +123,26 @@ test("the end code is in the closed set, with an operator sentence", () => {
   const c = copy.errorCopy({ id: "claude", label: "Claude Code" }, "runtime-unsafe", "detail");
   assert.equal(c.code, "runtime-unsafe");
   assert.match(c.body, /ended the agent before it could act/);
+});
+
+test("H1: a tool_use BEFORE any init stops the session; the gate is never called", async () => {
+  const sq = require("../main/session-query.js");
+  const dispatched = [];
+  sq.bind({ dispatch: (_s, ev) => dispatched.push(ev.type) });
+  let gateCalls = 0;
+  let aborted = false;
+  async function* stream() { yield { type: "assistant", message: { content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] } }; yield { type: "result" }; }
+  const q = stream();
+  const s = { key: "k", runtimeId: "claude", state: { phase: "launching" }, channelId: "c", taskId: "t", query: q,
+    abortController: { abort: () => { aborted = true; } }, pushIterator: { close() {} },
+    launchContract: lc.contractOf(launchOptions("full")), launchVerified: false };
+  const gate = require("../main/runtime/claude/launch-spec.js").untilVerified(s, async () => { gateCalls += 1; return { behavior: "allow" }; });
+  await sq.consume(s, q, { normalize: normalizer.normalize });
+  assert.equal(s.endCode, "runtime-unsafe");
+  assert.match(s.mcpDiag, /acted before reporting what it enforces/);
+  assert.ok(aborted && dispatched.includes("crash"));
+  assert.equal((await gate("Bash", {})).behavior, "deny", "still unverified");
+  assert.equal(gateCalls, 0, "the real gate was never asked");
 });
 
 test("consume ENDS on the stop: handles torn down, end code stamped, crash dispatched — no further message read", async () => {

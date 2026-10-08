@@ -97,7 +97,10 @@ const shapeDrift = (where, detail) => ({
  *  `detail` is the sentence the operator reads. */
 const safetyMismatch = (detail) => ({ type: 'safety_mismatch', detail: String(detail == null ? '' : detail) });
 
+/** The runtime's own launch report matched what Dopl asked it to enforce: core opens the gate. */
+const launchVerified = () => ({ type: 'launch_verified' });
+
 module.exports = {
   assistant, thinking, toolUse, toolResult, toolCallEvents,
-  launched, result, context, authHold, runtimeOutdated, shapeDrift, safetyMismatch, ERROR_FRAME,
+  launched, result, context, authHold, runtimeOutdated, shapeDrift, safetyMismatch, launchVerified, ERROR_FRAME,
 };

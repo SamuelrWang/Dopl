@@ -74,6 +74,16 @@ function buildOptions(s, dispatch) {
   return options;
 }
 
+/** The gate, closed until this spawn's init has been verified (fail closed: no verified init, no tool). */
+function untilVerified(s, gate) {
+  return async (...args) => {
+    if (!s.launchVerified) {
+      return { behavior: 'deny', message: 'Dopl has not verified what this session enforces yet, so no tool may run.' };
+    }
+    return gate(...args);
+  };
+}
+
 /** The opaque launch payload core hands back to `start` / `resume`; the prompt (a push iterable on
  *  this runtime) is part of it. */
 function buildLaunchSpec(request) {
@@ -83,6 +93,10 @@ function buildLaunchSpec(request) {
   // What this launch asked the CLI to enforce, checked against its own `init` report (`launch-contract.js`).
   // Recorded HERE, the one hand-off for every spawn shape (fresh, resume, relaunch), from the final options.
   s.launchContract = launchContract.contractOf(options, { operatorTools: !!s.operatorTools });
+  // ⚠ UNVERIFIED UNTIL THE INIT CHECKS OUT (cross-review H1): every spawn starts unverified, and the gate
+  // denies every call until `normalize.js` has checked the CLI's own report (`launch_verified`).
+  s.launchVerified = false;
+  options.canUseTool = untilVerified(s, options.canUseTool);
   return { prompt: s.pushIterator, options, session: s };
 }
 
@@ -93,7 +107,7 @@ function start(spec) {
   // A push the CLI folds into the running turn joins that turn (`fold.js`, P4-05).
   const watch = fold.makeFoldWatch((text) => sessionDirected.steerJoined(spec.session, text));
   const q = sdk.query({ prompt: watch.stamp(spec.prompt), options: spec.options });
-  learnWindowNow(q);
+  learnWindowNow(q, spec.session);
   return fold.observeQuery(q, watch.observe);
 }
 
@@ -103,13 +117,15 @@ function start(spec) {
  * has a denominator. Best effort and never awaited: a CLI without it leaves the window unknown until
  * the first `result` reports one (`normalize.js › learnWindows`), never a guess.
  */
-function learnWindowNow(q) {
-  if (!q || typeof q.getContextUsage !== 'function') return;
+function learnWindowNow(q, s) {
+  if (!q || !s || typeof q.getContextUsage !== 'function') return;
   Promise.resolve()
     .then(() => q.getContextUsage())
     .then((u) => {
       const w = readCount(u, 'rawMaxTokens') || readCount(u, 'maxTokens');
-      if (u && w) require('./normalize').learnWindow(u.model, w);
+      // Into THIS session's own map (the one `session-query.js › normalizeCtx` hands the normalizer).
+      if (!s.learnedWindows) s.learnedWindows = new Map();
+      if (u && w) require('./normalize').learnWindow(s.learnedWindows, u.model, w);
     })
     .catch(() => { /* an unanswered probe leaves the window unknown */ });
 }
@@ -119,4 +135,4 @@ function resume(spec, _priorHandle) {
   return start(spec);
 }
 
-module.exports = { buildLaunchSpec, buildOptions, start, resume, SESSION_MAX_TURNS };
+module.exports = { buildLaunchSpec, buildOptions, untilVerified, start, resume, SESSION_MAX_TURNS };
