@@ -83,7 +83,16 @@ const authHold = (text) => ({ type: 'auth_hold', text: String(text == null ? '' 
  *  fetches the newest build for the next launch and replaces the platform's sentence with Dopl's. */
 const runtimeOutdated = () => ({ type: 'runtime_outdated' });
 
+/** A frame the normalizer could not read as the protocol it knows (a renamed field, an unknown event
+ *  name). Core records it in the one drift ledger (`sdk-shape.js`) and tells the session once; the
+ *  normalizer still emits whatever it could read, with unread numbers as NULL, never 0. */
+const shapeDrift = (where, detail) => ({
+  type: 'shape_drift',
+  where: String(where == null ? '' : where),
+  detail: String(detail == null ? '' : detail),
+});
+
 module.exports = {
   assistant, thinking, toolUse, toolResult, toolCallEvents,
-  launched, result, context, authHold, runtimeOutdated, ERROR_FRAME,
+  launched, result, context, authHold, runtimeOutdated, shapeDrift, ERROR_FRAME,
 };

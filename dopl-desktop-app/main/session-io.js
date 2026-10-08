@@ -11,6 +11,7 @@ const seed = require('./session-seed');
 const mcpConnect = require('./mcp-connect');
 const runtimeRegistry = require('./runtime');
 const runtimeEvents = require('./runtime/events');
+const sdkShape = require('./runtime/sdk-shape');
 const runtimeTruth = require('./session-runtime-truth');
 const operatorTools = require('./operator-tools');
 
@@ -187,6 +188,16 @@ function applyCoreEvents(s, list, dispatch, store) {
       const last = runtimeRegistry.lastUpdateOutcome(descriptor.id);
       runtimeRegistry.checkForUpdate(descriptor.id);
       dispatch(s, runtimeEvents.assistant(runtimeRegistry.copy.runtimeOutdated(descriptor, last)));
+      continue;
+    }
+    if (ev.type === 'shape_drift') {
+      // One ledger for every runtime (`sdk-shape.js`); the session hears it ONCE, so a drifting stream does
+      // not bury the lane. What could not be read already arrived as null, never 0 (`events.result/context`).
+      sdkShape.recordDrift(s.runtimeId, ev.where, ev.detail);
+      if (!s.shapeDrift) {
+        s.shapeDrift = { where: ev.where, detail: ev.detail };
+        dispatch(s, runtimeEvents.assistant(runtimeRegistry.copy.shapeDriftNote(runtimeRegistry.descriptorFor(s.runtimeId))));
+      }
       continue;
     }
     if (ev.type === 'context') {

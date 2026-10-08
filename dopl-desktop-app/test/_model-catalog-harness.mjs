@@ -28,10 +28,29 @@ const requireMain = createRequire(import.meta.url);
 
 const evalFile = (path, stub) => evalModule(readFileSync(path, "utf8"), stub);
 
+/** An in-memory `live-store.js` stand-in: same read/save contract, nothing on disk. Pass one to share
+ *  "the disk" between two catalog loads (a restart). */
+export function memoryLiveStore() {
+  const entries = new Map();
+  return {
+    entries,
+    read: (kind, id, key) => {
+      const e = entries.get(`${kind}:${id}`);
+      return key && e && e.key === key ? JSON.parse(JSON.stringify(e.value)) : null;
+    },
+    save: (kind, id, key, value) => {
+      if (!key || value == null) return false;
+      entries.set(`${kind}:${id}`, { key, value: JSON.parse(JSON.stringify(value)) });
+      return true;
+    },
+  };
+}
+
 /** A fresh `model-catalog.js` — the snapshot cache is module-level, so each case gets its own. */
-export const loadCatalog = () =>
+export const loadCatalog = (store) =>
   evalFile(join(MAIN, "runtime", "model-catalog.js"), (id) => {
     if (id === "./selection-vocabulary") return requireMain(join(MAIN, "runtime", "selection-vocabulary.js")); // pure
+    if (id === "./live-store") return store || memoryLiveStore();
     throw new Error(`unexpected require: ${id}`);
   });
 

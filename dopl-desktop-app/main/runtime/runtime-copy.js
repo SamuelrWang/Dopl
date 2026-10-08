@@ -99,13 +99,20 @@ function liveModelSwitchRefusal(descriptor) {
 
 // The update-check outcomes after which a relaunch cannot help: no build Dopl can take exists (a newer minor
 // waits for a Dopl release, the platform has no updater, the build was refused).
-const NEEDS_DOPL_UPDATE = new Set(['incompatible', 'unsupported', 'rejected']);
+const NEEDS_DOPL_UPDATE = new Set(['incompatible-shape', 'unsupported', 'rejected']);
 
 /** The runtime is too old for the model it was asked for. One line, and the one control that helps: a relaunch
  *  (a newer build is fetched for the next launch), or a Dopl update when the last check found none it can take. */
 function runtimeOutdated(descriptor, lastOutcome) {
   const action = NEEDS_DOPL_UPDATE.has(lastOutcome) ? 'Update Dopl.' : 'Relaunch the agent.';
   return `${runtimeLabel(descriptor)} is out of date for this model. ${action}`;
+}
+
+/** One short line, once per session: the runtime sent something Dopl could not read. What could not be
+ *  read shows as unknown, never as zero — the line says so, so a blank meter is not mistaken for none. */
+function shapeDriftNote(descriptor) {
+  return `${runtimeLabel(descriptor)} sent something this version of Dopl does not recognise. `
+    + 'Anything Dopl could not read shows as unknown, not zero. Updating Dopl fixes this.';
 }
 
 /** "This machine cannot run an agent at all", in the selected runtime's words. One short line. */
@@ -125,5 +132,6 @@ module.exports = {
   resumeNudge,
   liveModelSwitchRefusal,
   runtimeOutdated,
+  shapeDriftNote,
   noRuntimeCopy,
 };

@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { accessSync, chmodSync, mkdirSync, mkdtempSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import {
-  require, MAIN, updates, verify, TEAM, MACHO, registry, runner, source, h, setup, record, entries,
+  require, MAIN, updates, verify, TEAM, MACHO, registry, runner, source, h, setup, record, entries, REQUIRED,
 } from "./_runtime-updates-harness.mjs";
 
 beforeEach(() => updates.inject());
@@ -47,15 +47,47 @@ test("versions compare numerically, and an equal or older build is left alone", 
   }
 });
 
-test("a build outside the source's compatible range is never downloaded", async () => {
+test("SHAPE, not version, is the gate: a candidate missing a safety/core item is refused for good", async () => {
   const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
   const reg = registry(dir, "0.4.0");
   setup(reg, runner());
-  const claude = require(join(MAIN, "runtime", "claude", "update-source.js"));
-  assert.equal(await updates.check(source({ compatible: claude.compatible })), "incompatible");
-  assert.equal(reg.calls.tarball, 0);
-  assert.equal(claude.compatible("0.3.300", "0.3.287"), true, "a newer patch of the SDK's line");
-  assert.equal(claude.compatible("0.4.0", "0.3.287"), false, "a minor bump waits for a Dopl release");
+  const src = source({ probeShape: async () => ({ methods: ["thread/start"] }) }); // core notification gone
+  assert.equal(await updates.check(src), "incompatible-shape");
+  assert.equal(updates.activeFor(src), null, "launches keep the bundle");
+  assert.deepEqual(record().rejected, ["0.4.0"], "the verdict is the build's: recorded");
+  assert.equal(await updates.check(src), "rejected", "and never downloaded again");
+  assert.equal(reg.calls.tarball, 1);
+  assert.deepEqual(h.invalidated, []);
+});
+
+test("a cosmetic-only gap does not refuse a build", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
+  setup(registry(dir, "0.3.10"), runner());
+  // The default probe covers safety + core and lacks the cosmetic result field.
+  assert.equal(await updates.check(source()), "updated");
+});
+
+test("a probe that FAILS is not a verdict: the check fails, nothing is rejected, the next check retries", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
+  const reg = registry(dir, "0.3.10");
+  setup(reg, runner());
+  let calls = 0;
+  const src = source({ probeShape: async () => { calls += 1; throw new Error("schema command timed out"); } });
+  assert.equal(await updates.check(src), "failed");
+  assert.equal(updates.activeFor(src), null);
+  assert.deepEqual(entries(), [], "staging discarded, nothing recorded");
+  assert.equal(await updates.check(src), "failed", "retried, not remembered as rejected");
+  assert.equal(calls, 2);
+});
+
+test("a source that cannot describe a build, or an adapter that declares nothing, is never auto-updated", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
+  const reg = registry(dir, "0.3.10");
+  setup(reg, runner());
+  assert.equal(await updates.check(source({ probeShape: undefined })), "unsupported");
+  setup(reg, runner(), { requiredShape: () => null });
+  assert.equal(await updates.check(source()), "unsupported");
+  assert.equal(reg.calls.meta + reg.calls.tarball, 0, "not even asked");
 });
 
 test("an integrity mismatch keeps what launches run and leaves nothing behind", async () => {
@@ -85,7 +117,7 @@ test("the last good build is kept, older ones are pruned at start, and a rejecte
   setup(registry(dir, "0.3.10"), run);
   const src = source();
   assert.equal(await updates.check(src), "updated");
-  updates.inject({ baseDir: () => join(h.base, "runtimes"), fetchImpl: registry(dir, "0.3.11").fetchImpl, run: run.run, invalidate: (id) => h.invalidated.push(id), runningExecutables: async () => [] });
+  updates.inject({ baseDir: () => join(h.base, "runtimes"), fetchImpl: registry(dir, "0.3.11").fetchImpl, run: run.run, invalidate: (id) => h.invalidated.push(id), runningExecutables: async () => [], requiredShape: () => REQUIRED });
   assert.equal(await updates.check(src), "updated");
   assert.deepEqual(record(), { version: "0.3.11", previous: "0.3.10", rejected: [] });
 
@@ -103,7 +135,7 @@ test("the last good build is kept, older ones are pruned at start, and a rejecte
   assert.deepEqual(record().rejected, ["0.3.11"]);
   // …and the rejected build is never fetched again.
   const again = registry(dir, "0.3.11");
-  updates.inject({ baseDir: () => join(h.base, "runtimes"), fetchImpl: again.fetchImpl, run: run.run, invalidate: () => {}, runningExecutables: async () => [] });
+  updates.inject({ baseDir: () => join(h.base, "runtimes"), fetchImpl: again.fetchImpl, run: run.run, invalidate: () => {}, runningExecutables: async () => [], requiredShape: () => REQUIRED });
   assert.equal(await updates.check(src), "rejected");
   assert.equal(again.calls.tarball, 0);
 
@@ -187,8 +219,7 @@ test("codex: a verified download outranks the bundle, and a refused one falls ba
 test("the codex source strips the platform suffix the vendor versions its builds with", () => {
   const codex = require(join(MAIN, "runtime", "codex", "update-source.js"));
   assert.equal(codex.versionOf(`0.159.3-${process.platform}-${process.arch}`), "0.159.3");
-  assert.equal(codex.compatible("0.1.0"), false, "below the protocol floor");
-  assert.equal(codex.compatible("99.0.0"), true);
+  assert.equal(codex.compatible, undefined, "no version range: the shape gate decides");
 });
 
 test("verify finds every Mach-O and refuses a symlink in the package", () => {

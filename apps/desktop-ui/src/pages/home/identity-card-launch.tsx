@@ -103,9 +103,9 @@ export function useCardLaunch(channel: Channel | null): CardLaunch {
           setError({
             identityId: identity.id,
             message:
-              res.reason === "no-model" && res.detail
-                ? res.detail
-                : launchRefusalText(res.reason, descriptor),
+              // Main's own sentence wins whenever it sent one (a refused model, a build that failed its
+              // protocol check); the generic copy is for refusals that carry none.
+              res.detail ? res.detail : launchRefusalText(res.reason, descriptor),
           });
           return;
         }

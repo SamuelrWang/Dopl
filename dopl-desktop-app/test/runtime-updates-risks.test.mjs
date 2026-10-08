@@ -24,16 +24,15 @@ test("the outdated line names the one control that helps: relaunch, or Update Do
   for (const outcome of [null, "updated", "current", "failed"]) {
     assert.equal(copy.runtimeOutdated(d, outcome), "Runtime X is out of date for this model. Relaunch the agent.", String(outcome));
   }
-  for (const outcome of ["incompatible", "unsupported", "rejected"]) {
+  for (const outcome of ["incompatible-shape", "unsupported", "rejected"]) {
     assert.equal(copy.runtimeOutdated(d, outcome), "Runtime X is out of date for this model. Update Dopl.", outcome);
   }
-  // End to end: the line is chosen off the LAST finished check (here: a newer minor no patch can reach).
+  // End to end: the line is chosen off the LAST finished check (here: a build missing a core item).
   const io = require(join(MAIN, "session-io.js"));
   const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
   setup(registry(dir, "0.4.0"), runner());
-  const claude = require(join(MAIN, "runtime", "claude", "update-source.js"));
-  await updates.start([source({ id: "claude", compatible: claude.compatible })]);
-  assert.equal(await updates.checkNow("claude"), "incompatible");
+  await updates.start([source({ id: "claude", probeShape: async () => ({ methods: ["thread/start"] }) })]);
+  assert.equal(await updates.checkNow("claude"), "incompatible-shape");
   const sent = [];
   io.applyCoreEvents({ runtimeId: "claude" }, [{ type: "runtime_outdated" }], (_s, ev) => sent.push(ev), {});
   assert.match(sent[0].payload.text, / is out of date for this model\. Update Dopl\.$/);

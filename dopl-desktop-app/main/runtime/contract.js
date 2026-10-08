@@ -237,7 +237,9 @@ function sealAdapter(adapter) {
   const a = adapter || {};
   const problems = descriptorProblems(a.descriptor)
     .concat(runtimeProblems(a.runtime, a.descriptor && a.descriptor.id))
-    .concat(mirrorProblems(a.descriptor, a.runtime));
+    .concat(mirrorProblems(a.descriptor, a.runtime))
+    // Lazy: the shape layer reads the live store, which a pure descriptor check must not wait on.
+    .concat(a.descriptor ? require('./sdk-shape').requiredShapeProblems(a.descriptor, a.runtime) : []);
   if (problems.length) {
     throw new Error(`runtime adapter refused:\n  - ${problems.join('\n  - ')}`);
   }

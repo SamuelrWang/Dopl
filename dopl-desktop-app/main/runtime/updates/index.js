@@ -3,9 +3,16 @@
 // required"), so each runtime that declares an update source (`<adapter>/update-source.js`) also tracks
 // its vendor's newest published build:
 //   at start, and every CHECK_INTERVAL_MS after (unref'd, never awaited by anything on the launch path)
-//   → registry metadata → newer than what launches run, not rejected, `source.compatible` → download
-//   (sha512) → unpack into staging → every Mach-O signed by the vendor's team → `--version` answers →
-//   rename into `<userData>/runtimes/<id>/<version>/` → repoint `active.json` (last good kept).
+//   → registry metadata → newer than what launches run, not rejected → download (sha512) → unpack into
+//   staging → every Mach-O signed by the vendor's team → `--version` answers → THE BUILD'S OWN PROTOCOL
+//   DESCRIPTION covers the adapter's `requiredShape` (safety + core tiers, `sdk-shape.js`) → rename into
+//   `<userData>/runtimes/<id>/<version>/` → repoint `active.json` (last good kept).
+// ⚠ SHAPE, NOT VERSION, IS THE COMPATIBILITY GATE (2026-10-08). A version range is a guess about the
+//   protocol; the candidate's own schema is the protocol. A runtime whose source cannot describe a build
+//   (`probeShape` absent) is never auto-updated — it runs its bundle, the one build its adapter shipped with.
+//   A build missing a required item is added to `rejected` (deterministic per version: never re-downloaded).
+//   A probe that FAILS (timeout, crash) is not a verdict: the check fails, the staging is discarded, and the
+//   next check tries again.
 // Any failure discards the staging directory and keeps what launches run now.
 //
 // ⚠ BUNDLED IS THE FLOOR, NOT A PEER. `activeFor` answers a download only when it is STRICTLY newer than
@@ -16,8 +23,8 @@
 //   a running process on this Mac executes from (`ps`): a child that outlived a crashed Dopl, or another
 //   Dopl on the same userData. When `ps` cannot answer, nothing is pruned.
 // ⚠ NOTHING DOWNLOADED IS LOADED INTO THIS PROCESS. Only the executable is exec'd, always driven by the
-//   bundled adapter code; whether that pairing holds is each source's `compatible`, and a build that
-//   then fails its first handshake is `reject`ed back to the last good one (or the bundle).
+//   bundled adapter code; whether that pairing holds is the shape gate above, and a build that then
+//   fails its first handshake is `reject`ed back to the last good one (or the bundle).
 // ⚠ macOS ONLY: the proof is `codesign`. A source answering no `pkg` (any other platform) is never
 //   checked and always runs its bundle.
 
@@ -57,7 +64,15 @@ function defaultDeps() {
       return r.code === 0 ? r.stdout.split('\n').map((l) => l.trim()).filter(Boolean) : null;
     },
     // A switch re-reads the roster; lazy, `model-catalog` reaches the registry that requires this file.
-    invalidate: (id) => require('../model-catalog').invalidate(id, 'runtime-updated'),
+    invalidate: (id) => {
+      require('../model-catalog').invalidate(id, 'runtime-updated');
+      require('../sdk-shape').forgetShape(id);
+    },
+    // The adapter's own declaration, read live (one source); lazy, the registry requires this file.
+    requiredShape: (id) => {
+      const d = require('../index').descriptorFor(id);
+      return (d && d.requiredShape) || null;
+    },
   };
 }
 let deps = defaultDeps();
@@ -122,30 +137,59 @@ async function install(source, meta, version) {
     const bin = source.binary(root);
     await verify.signatures(root, bin, source.teamId, deps.run);
     await verify.answersVersion(bin, deps.run);
+    await shapeGate(source, bin);
     s.commit(source.id, version, root);
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
   }
 }
 
+/** A refused candidate: its version is never downloaded again (the verdict is a property of the build). */
+class ShapeRefused extends Error {}
+
+/** Throw unless the candidate's own protocol description covers the adapter's safety + core tiers. A probe
+ *  error propagates as an ordinary failure (retried next check) — it is not evidence of a gap. */
+async function shapeGate(source, bin) {
+  const sdkShape = require('../sdk-shape');
+  const required = deps.requiredShape(source.id);
+  if (!required) throw new Error('the adapter no longer declares a required protocol');
+  const observed = await source.probeShape(bin, deps.run);
+  const verdict = sdkShape.checkShape(required, observed);
+  if (verdict.refuse) {
+    throw new ShapeRefused(`missing ${verdict.missing.safety.concat(verdict.missing.core).join(', ')}`);
+  }
+  if (verdict.missing.cosmetic.length) {
+    diag(`runtime-updates: ${source.id} candidate lacks cosmetic items`, verdict.missing.cosmetic.join(', '));
+  }
+}
+
 /** One check for one runtime → the outcome word (also the diag line). Never rejects. */
 async function check(source) {
   if (!source.pkg) return 'unsupported';
+  // No way to read a candidate's protocol = no way to vouch for it: the bundle stays.
+  if (typeof source.probeShape !== 'function' || !deps.requiredShape(source.id)) return 'unsupported';
+  let version = null;
   try {
     const meta = await registry.latest(source.pkg, source.tag, deps.fetchImpl);
-    const version = source.versionOf(meta.version);
+    version = source.versionOf(meta.version);
     const s = diskStore();
     const record = s.read(source.id);
     const downloaded = (activeFor(source) || {}).version || null;
     if (!newer(version, downloaded || source.bundledVersion())) return 'current';
     if (record.rejected.includes(version)) return 'rejected';
-    if (!source.compatible(version, source.bundledVersion())) return 'incompatible';
     await install(source, meta, version);
     s.write(source.id, { version, previous: downloaded, rejected: record.rejected });
     switched(source);
     diag(`runtime-updates: ${source.id} now ${version}`);
     return 'updated';
   } catch (err) {
+    if (err instanceof ShapeRefused && version) {
+      const s = diskStore();
+      const record = s.read(source.id);
+      s.write(source.id, Object.assign({}, record, { rejected: record.rejected.concat(version) }));
+      diag(`runtime-updates: ${source.id} ${version} refused by the protocol check`, err.message);
+      return 'incompatible-shape';
+    }
     diag(`runtime-updates: ${source.id} check failed`, err && err.message);
     return 'failed';
   }

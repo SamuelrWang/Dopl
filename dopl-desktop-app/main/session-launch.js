@@ -70,6 +70,14 @@ async function launch(a) {
     diag('session-launch: model refused —', modelRefusal);
     return { skipped: 'no-model', detail: modelRefusal };
   }
+  // A build that no longer speaks the protocol Dopl reads — or one Dopl could not check — is REFUSED, never run
+  // unchecked: a renamed safety field would otherwise be silently ignored by the vendor (`runtime/sdk-shape.js`).
+  // `no-sdk` is the closed set's "this runtime cannot run here"; `detail` carries the sentence.
+  const shapeRefusal = await refuseUnreadableProtocol(a.runtime);
+  if (shapeRefusal) {
+    diag('session-launch: protocol refused —', shapeRefusal);
+    return { skipped: 'no-sdk', detail: shapeRefusal };
+  }
   // No pick -> the runtime's own default, here and only here (and only a model its catalog just proved).
   const model = await launchDefault.withRuntimeDefault(rt, a.model);
   // A runtime with no orderable windowless tool floor would deny every read: refused before registration.
@@ -158,6 +166,20 @@ async function refuseUnknownModel(runtimeId, model) {
   } catch (err) {
     diag('session-launch: model roster unreadable, launch goes ahead —', err && err.message);
     return null;
+  }
+}
+
+/** The sentence refusing a launch on `runtimeId` for its protocol, or null. Fails CLOSED: a check that could not
+ *  run refuses (with its cause) — the opposite of the model roster, because what is at stake is Dopl's restrictions. */
+async function refuseUnreadableProtocol(runtimeId) {
+  let adapter;
+  try { adapter = require('./runtime').resolve(runtimeId); } catch (err) {
+    return `Dopl could not load this runtime to check it (${(err && err.message) || 'unknown runtime'}).`;
+  }
+  try {
+    return await require('./runtime/sdk-shape').launchShapeRefusal(adapter);
+  } catch (err) {
+    return `Dopl could not check this runtime's protocol (${(err && err.message) || 'unknown error'}), so it will not start it.`;
   }
 }
 

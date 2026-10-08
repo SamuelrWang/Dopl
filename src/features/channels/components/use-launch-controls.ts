@@ -140,9 +140,9 @@ export function useLaunchControls(
       if (!res.ok && res.reason !== LAUNCH_APPROVAL_REASON) {
         const descriptor = runtime ? posture.descriptorOf(runtime) : posture.descriptor;
         setLaunchError(
-          res.reason === "no-model" && res.detail
-            ? res.detail
-            : launchRefusalText(res.reason, descriptor)
+          // Main's own sentence wins whenever it sent one (a refused model, a build that failed its
+          // protocol check); the generic copy is for refusals that carry none.
+          res.detail ? res.detail : launchRefusalText(res.reason, descriptor)
         );
       }
       const outcome = { ok: res.ok, reason: res.reason, identity: res.identity, agentId: res.agentId };

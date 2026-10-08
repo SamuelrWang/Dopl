@@ -73,10 +73,18 @@ export function source(over = {}) {
     bundledVersion: () => "0.3.9",
     binary: (root) => join(root, "fake"),
     teamId: TEAM,
-    compatible: () => true,
+    // The candidate's own protocol description (`sdk-shape.js` Shape); covers `REQUIRED` below by default.
+    probeShape: async () => ({ methods: ["thread/start"], notifications: { "turn/completed": ["params.turn.id"] } }),
     ...over,
   };
 }
+
+/** What the adapter under test declares it reads (`descriptor.requiredShape`). */
+export const REQUIRED = Object.freeze({
+  safety: { methods: ["thread/start"] },
+  core: { notifications: { "turn/completed": ["params.turn.id"] } },
+  cosmetic: { results: { "model/list": ["data.displayName"] } },
+});
 
 export const h = { base: null, invalidated: [] };
 export function setup(reg, run, over = {}) {
@@ -88,6 +96,7 @@ export function setup(reg, run, over = {}) {
     run: run.run,
     invalidate: (id) => h.invalidated.push(id),
     runningExecutables: async () => [],
+    requiredShape: () => REQUIRED,
     ...over,
   });
 }

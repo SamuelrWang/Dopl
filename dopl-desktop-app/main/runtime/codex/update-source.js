@@ -2,12 +2,12 @@
 // publishes each platform build of `@openai/codex` as its own version (`0.159.3-darwin-arm64`) under a
 // dist-tag named for the platform. Electron-free at load.
 //
-// ⚠ COMPATIBILITY = THE PROTOCOL FLOOR, the policy this adapter already applies to any `codex` it runs
-// (`protocol.js › SUPPORTED_CLI`: "a newer CLI is not refused"). A build that then fails its first
-// handshake (`models.js`, `initialize` + `model/list`) is rejected back to the last good build.
+// ⚠ COMPATIBILITY = THE CANDIDATE'S OWN PROTOCOL DESCRIPTION against this adapter's `requiredShape`,
+// checked by the shared updater (`updates/index.js › shapeGate`) — never a version range. Without
+// `probeShape` this runtime is not auto-updated at all. A build that then fails its first handshake is
+// rejected back to the last good build.
 
 const path = require('path');
-const protocol = require('./protocol');
 const resolveBin = require('./resolve-bin');
 
 const PLATFORM = `${process.platform}-${process.arch}`;
@@ -32,7 +32,6 @@ module.exports = {
   binary: (root) => path.join(root, 'vendor', TRIPLE, 'bin', resolveBin.BIN_NAME),
   // OpenAI OpCo's Developer ID team (`codesign -dv` on the vendor's own build).
   teamId: '2DC432GLL2',
-  compatible: (candidate) => protocol.versionGate(candidate).ok,
   // `resolve-bin.js` caches its hit for the process; a switch must re-resolve.
   onSwitch: () => resolveBin.forget(),
 };

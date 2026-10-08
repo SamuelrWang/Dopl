@@ -9,6 +9,7 @@
 // holds a model id. `snapshot` never blocks on a child process; `settle` is the only awaited read.
 
 const { pickOf } = require('./selection-vocabulary');
+const liveStore = require('./live-store');
 
 const CATALOG_VERSION = 1;
 
@@ -198,6 +199,7 @@ function due(entry, now, adapter) {
   if (!entry) return true;
   if (entry.inflight) return false;
   if (entry.due === true) return true; // invalidated while holding models (RC-02)
+  if (entry.catalog.persisted === true) return true; // a stand-in from disk: read live behind it
   // READY is cached for the process unless `runtime.rosterKey()` moved (a sign-in, an upgrade).
   if (entry.catalog.status === STATUS.READY) return keyMoved(entry, adapter);
   // `stale` and `unavailable` share the floor; `invalidate` stamps `at: 0` (due at the next look).
@@ -206,12 +208,48 @@ function due(entry, now, adapter) {
 
 // A runtime answering no key (null) keeps its READY roster for the process.
 function keyMoved(entry, adapter) {
+  if (!entry.catalog.key) return false;
+  const now = rosterKeyOf(adapter);
+  return !!now && now !== entry.catalog.key;
+}
+
+/** `runtime.rosterKey()` now, or null (none declared, a throw, an empty answer). */
+function rosterKeyOf(adapter) {
   const fn = adapter && adapter.runtime && adapter.runtime.rosterKey;
-  if (typeof fn !== 'function' || !entry.catalog.key) return false;
-  try {
-    const now = str(fn.call(adapter.runtime));
-    return !!now && now !== entry.catalog.key;
-  } catch (_) { return false; }
+  if (typeof fn !== 'function') return null;
+  try { return str(fn.call(adapter.runtime)) || null; } catch (_) { return null; }
+}
+
+// ── THE LAST-LIVE ROSTER (`live-store.js`) ── the ONE persisted copy; adapters keep no roster cache.
+// Keyed by `rosterKey()`: a cold boot on the SAME build and account answers its last live read as READY
+// (it is that build's own list) while a live read runs behind it; any other key, or a runtime with no key,
+// answers nothing persisted. A stored value is re-normalized on read, so a partial one is dropped, not used.
+
+function persistedCatalog(adapter) {
+  const key = rosterKeyOf(adapter);
+  if (!key) return null;
+  const id = adapter.descriptor.id;
+  const stored = liveStore.read('roster', id, key);
+  if (!stored || typeof stored !== 'object' || !Array.isArray(stored.models)) return null;
+  const catalog = catalogFromRoster(id, adapter.descriptor, {
+    models: stored.models,
+    defaultId: stored.defaultId,
+    truncated: stored.truncated === true,
+    reason: stored.reason,
+    key,
+  });
+  return catalog.status === STATUS.READY ? Object.assign(catalog, { persisted: true }) : null;
+}
+
+function persist(adapter, catalog) {
+  const key = rosterKeyOf(adapter);
+  if (!key || catalog.status !== STATUS.READY || catalog.persisted) return;
+  liveStore.save('roster', adapter.descriptor.id, key, {
+    models: catalog.models,
+    defaultId: catalog.defaultId,
+    truncated: catalog.truncated,
+    reason: catalog.reason,
+  });
 }
 
 const loadingCatalog = (id, declared) => makeCatalog(id, (declared && str(declared.source)) || null, STATUS.LOADING, {
@@ -226,7 +264,7 @@ const loadingCatalog = (id, declared) => makeCatalog(id, (declared && str(declar
 function refresh(adapter, now) {
   const id = adapter.descriptor.id;
   const declared = adapter.descriptor.models || {};
-  const prior = snapshots.get(id) || null;
+  const prior = snapshots.get(id) || seedFromDisk(adapter);
   const holds = !!(prior && prior.catalog && prior.catalog.models.length);
   const entry = {
     catalog: holds ? prior.catalog : loadingCatalog(id, declared),
@@ -246,16 +284,29 @@ function refresh(adapter, now) {
       const kept = held && held.catalog && held.catalog.models.length ? held.catalog : null;
       // A failed refresh over held models is `stale` (they still label), not `unavailable`.
       const settled = next.status === STATUS.UNAVAILABLE && kept
-        ? Object.assign({}, kept, { status: STATUS.STALE, reason: next.reason })
+        // `persisted` is dropped: a stand-in that failed its live read is held on the failure floor like
+        // any stale roster, not re-read on every look.
+        ? Object.assign({}, kept, { status: STATUS.STALE, reason: next.reason, persisted: false })
         : next;
       // Invalidated while in flight: the read may predate the repair, so a failure is due at once.
       const dirty = !!(held && held.dirty);
       snapshots.set(id, { catalog: settled, at: dirty && settled.status !== STATUS.READY ? 0 : Date.now(), inflight: null, dirty: false });
+      persist(adapter, settled);
       noteSettled(id, settled.status);
       return settled;
     });
   snapshots.set(id, entry);
   return entry.inflight;
+}
+
+/** A cold runtime's entry from its last live read on this same build, or null. Never throws. */
+function seedFromDisk(adapter) {
+  let catalog = null;
+  try { catalog = persistedCatalog(adapter); } catch (_) { catalog = null; }
+  if (!catalog) return null;
+  const entry = { catalog, at: 0, inflight: null, dirty: false };
+  snapshots.set(adapter.descriptor.id, entry);
+  return entry;
 }
 
 /** This runtime's catalog now, never blocking: answers from cache and kicks a background read (the
@@ -266,7 +317,7 @@ function snapshot(adapter) {
   const id = descriptor.id;
   const declared = descriptor.models || {};
   const now = Date.now();
-  const entry = snapshots.get(id) || null;
+  const entry = snapshots.get(id) || seedFromDisk(adapter);
   if (due(entry, now, adapter)) refresh(adapter, now);
   const held = snapshots.get(id);
   return (held && held.catalog) || loadingCatalog(id, declared);
