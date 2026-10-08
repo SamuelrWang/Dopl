@@ -224,35 +224,30 @@ test("ADDRESSED TO SOMEONE ELSE: named, and a stand-down that keeps the message 
   assert.match(out, /do not act on it and do not answer it/);
   assert.match(out, /Read it as context/);
   assert.match(out, /stand down and say so in one short line, or say nothing/);
-  // It must NOT be handed the tie-break: it is not an addressee, so there is nothing to win.
-  assert.ok(!/WHO ACTS IS DECIDED BY ORDER/.test(out), out);
+  // It must NOT be told it acts: it is not an addressee.
+  assert.ok(!/EVERY AGENT IT NAMES ACTS/.test(out), out);
 });
 
-// ⚠ THE TIE-BREAK IS A RULE, NOT A SUGGESTION, and it survives the narrowing because a BODY may
-// name two live agents even though `to=` may name only one. `session-dispatch.js › planFor`
-// preserves the order the server (or the body parse) resolved and hands the SAME array to every
-// reader. So "the first id named in
-// this list" is applicable alone, from the list the agent is looking at, with no round trip.
-test("MULTI-ADDRESSEE: the co-addressees are named and the FIRST id in the list acts", () => {
+// 🔒 EVERY NAMED AGENT ACTS (Samuel, 2026-10-08) — it replaced "the FIRST id acts, the others
+// stand down". A co-addressee takes its own part and splits a shared job in the channel; it is
+// never benched by order. The dispatch already wakes every named session, so this text decides.
+test("MULTI-ADDRESSEE: every named agent acts; a shared job is split in the channel, never dropped", () => {
   const ordered = [SIB1, ME, SIB2];
-  const lines = seed.addressingLines({ me: true, ids: ordered });
-  const out = flat(lines);
+  const out = flat(seed.addressingLines({ me: true, ids: ordered }));
   assert.ok(out.startsWith("This message is addressed to YOU,"), out);
   assert.ok(out.includes(`names more than one agent: ${SIB1}, ${ME}, ${SIB2}`),
     `the co-addressees, in the order they arrived: ${out}`);
-  assert.match(out, /WHO ACTS IS DECIDED BY ORDER/, "the rule is stated as a rule");
-  assert.match(out, /the FIRST id in that list acts, and the others stand down/);
-  assert.match(out, /That is the rule, not a suggestion/, "…and it refuses to read as advice");
-  // The rule is APPLICABLE: the winner is named outright, both ways round.
-  assert.ok(out.includes(`If ${SIB1} is your agent id, you are the one who acts`), out);
-  assert.ok(out.includes(`Take it over only if ${SIB1} has plainly not acted`), out);
-  assert.ok(out.includes(`picking it up because ${SIB1} did not`), out);
-  // A different arrival order names a different winner — the order is READ, not hardcoded.
-  const other = flat(seed.addressingLines({ me: true, ids: [ME, SIB1] }));
-  assert.ok(other.includes(`If ${ME} is your agent id`), other);
-  assert.ok(!other.includes(`If ${SIB1} is your agent id`), other);
-  // Two addressees is already "more than one": the single-addressee copy must not fire.
-  assert.ok(!/It is addressed to you: act on it/.test(other), other);
+  assert.match(out, /EVERY AGENT IT NAMES ACTS, you included/);
+  assert.match(out, /Never stand down because another agent was named/);
+  assert.match(out, /Do the part of it meant for you/);
+  assert.match(out, /split it before you start: post one short line in the channel/);
+  // The order no longer picks anyone: no reading of the list benches this agent.
+  for (const order of [[SIB1, ME], [ME, SIB1]]) {
+    const o = flat(seed.addressingLines({ me: true, ids: order }));
+    assert.ok(!/WHO ACTS IS DECIDED BY ORDER|the others stand down|do not start/.test(o), o);
+    assert.ok(!o.includes("is your agent id"), o);
+    assert.ok(!/It is addressed to you: act on it/.test(o), o);
+  }
 });
 
 test("HOUSE: every addressing branch is fence-safe, newline-free and em-dash-free", () => {
@@ -282,7 +277,7 @@ const preambleOf = (out) => out.split("\n").slice(0, out.split("\n").indexOf(`BE
 test("frameContinuation puts EVERY branch above the fence, and none of it inside", () => {
   const cases = [
     ["to me", { me: true, ids: [ME] }, /This message is addressed to YOU\. Act on it\./],
-    ["multi", { me: true, ids: [SIB1, ME] }, /WHO ACTS IS DECIDED BY ORDER/],
+    ["multi", { me: true, ids: [SIB1, ME] }, /EVERY AGENT IT NAMES ACTS/],
     ["to another", { me: false, ids: [SIB1] }, /It is NOT addressed to you/],
   ];
   for (const [label, verdict, phrase] of cases) {

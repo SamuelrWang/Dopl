@@ -49,8 +49,11 @@ function replyFor(s, to) {
   return framing.replyCall({ channelId: s.channelId, workspaceId: s.workspaceId, taskId: s.taskId, toolSet: s.doplToolSet }, to);
 }
 
-// The addressing verdict above the fence (ids are closed-charset and filtered to live sessions). Two named
-// agents get a DETERMINISTIC winner — the first id in the list, the same on every machine — not a negotiation.
+// The addressing verdict above the fence (ids are closed-charset and filtered to live sessions).
+// 🔒 EVERY NAMED AGENT ACTS (Samuel, 2026-10-08; replaces the "first id acts, others stand down"
+// tie-break). Each takes the part meant for it; the SAME job named to several is split in the
+// channel before anyone starts. A silent stand-down is the failure this replaces: the dispatch
+// already wakes every named session (`session-dispatch.js`), so only this text was benching them.
 // `null` (named nobody) and `undefined` (no verdict supplied) both answer [].
 function addressingLines(addressing) {
   const list = (addressing && Array.isArray(addressing.ids)) ? addressing.ids : [];
@@ -60,15 +63,13 @@ function addressingLines(addressing) {
     if (list.length === 1) {
       return [`This message is addressed to YOU. Act on it.`];
     }
-    const first = list[0];
     return [
       `This message is addressed to YOU, and it names more than one agent: ${ids}.`,
-      `WHO ACTS IS DECIDED BY ORDER, not by judgement and not by whoever is quickest: the FIRST`,
-      `id in that list acts, and the others stand down. That is the rule, not a suggestion.`,
-      `- If ${first} is your agent id, you are the one who acts. Do the work.`,
-      `- If it is not, do not answer and do not start. Take it over only if ${first} has plainly`,
-      `  not acted (nothing from it on this thread, no claim and no reply), and then say in one`,
-      `  short line that you are picking it up because ${first} did not.`,
+      `EVERY AGENT IT NAMES ACTS, you included. Never stand down because another agent was named.`,
+      `- Do the part of it meant for you. If it hands out work by name, take yours.`,
+      `- If it gives the SAME job to several of you, split it before you start: post one short`,
+      `  line in the channel saying which part you are taking, read what the others have claimed,`,
+      `  and take what is left. Do not all do the same work.`,
     ];
   }
   return [
