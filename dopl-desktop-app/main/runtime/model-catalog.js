@@ -229,12 +229,19 @@ function keyMoved(entry, adapter) {
 // (it is that build's own list) while a live read runs behind it; any other key, or a runtime with no key,
 // answers nothing persisted. A stored value is re-normalized on read, so a partial one is dropped, not used.
 
+// ⚠ THE ENTRY SHAPE A STORED ROSTER WAS WRITTEN IN (2026-10-08, cross-review L3): every field
+// `normalizeEntry` answers, DERIVED from it, never typed. A roster stored before a field existed (one with
+// no `launch`, so a launch would send the full id where the runtime's own alias belongs) is dropped and
+// read live, and the next field anyone adds invalidates old stores with nothing to remember to bump.
+const ENTRY_SHAPE = Object.keys(normalizeEntry({ id: 'x' })).sort().join(',');
+
 function persistedCatalog(adapter) {
   const { key, accountScoped } = rosterIdentityOf(adapter);
   if (!key) return null;
   const id = adapter.descriptor.id;
   const stored = liveStore.read('roster', id, key);
   if (!stored || typeof stored !== 'object' || !Array.isArray(stored.models)) return null;
+  if (stored.entryShape !== ENTRY_SHAPE) return null;
   const catalog = catalogFromRoster(id, adapter.descriptor, {
     models: stored.models,
     defaultId: stored.defaultId,
@@ -253,6 +260,7 @@ function persist(adapter, catalog) {
   const key = catalog.key;
   if (!key || catalog.status !== STATUS.READY || catalog.persisted) return;
   liveStore.save('roster', adapter.descriptor.id, key, {
+    entryShape: ENTRY_SHAPE,
     models: catalog.models,
     defaultId: catalog.defaultId,
     truncated: catalog.truncated,

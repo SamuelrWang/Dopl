@@ -252,6 +252,21 @@ test("catalog: another build's persisted roster, a partial one, or no key answer
   assert.equal(loadCatalog(disk).snapshot(rosterAdapter(never, null)).status, "loading");
 });
 
+test("catalog: a roster stored in an older entry shape (before `launch` existed) is dropped, not used (L3)", async () => {
+  const disk = memoryLiveStore();
+  await loadCatalog(disk).settle(rosterAdapter(async () => ({ models: [{ id: "m1", launch: "one" }] })));
+  const never = () => new Promise(() => {});
+  assert.equal(loadCatalog(disk).snapshot(rosterAdapter(never)).models[0].launch, "one", "same shape: used");
+  const e = disk.entries.get("roster:rx");
+  const old = JSON.parse(JSON.stringify(e.value));
+  delete old.entryShape;
+  for (const m of old.models) delete m.launch;
+  disk.entries.set("roster:rx", { key: e.key, value: old });
+  assert.equal(loadCatalog(disk).snapshot(rosterAdapter(never)).status, "loading", "pre-launch store: read live");
+  disk.entries.set("roster:rx", { key: e.key, value: Object.assign({}, e.value, { entryShape: "id,label" }) });
+  assert.equal(loadCatalog(disk).snapshot(rosterAdapter(never)).status, "loading", "any other shape: read live");
+});
+
 test("catalog: a stand-in whose live read FAILS turns stale (labels only) and sits on the failure floor", async () => {
   const disk = memoryLiveStore();
   await loadCatalog(disk).settle(rosterAdapter(async () => ({ models: [{ id: "m1" }] })));
