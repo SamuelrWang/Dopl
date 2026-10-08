@@ -100,22 +100,23 @@ test("efforts are PER MODEL — a model that supports fewer gets fewer, and one 
   assert.equal(by["gpt-none"].dimensions.reasoningEffort, undefined);
 });
 
-test("an effort this build cannot STORE is dropped, not offered", async () => {
-  // The descriptor's `dimensionOptions.reasoningEffort` is the closed set main can persist; a
-  // server naming something outside it would render a control that writes nowhere.
+test("efforts are the MODEL's own: a level Dopl never heard of is offered; only an unsendable value is dropped", async () => {
+  // 2026-10-08: no effort list in Dopl. What a model offers is what `model/list` says; storage gates the
+  // ALPHABET (it becomes `turn/start.effort`), the live catalog gates membership at launch.
   const codex = loadCodexModels(fakeClient([
     {
       data: [row("gpt-a", {
         isDefault: true,
         supportedReasoningEfforts: [
-          { reasoningEffort: "low" }, { reasoningEffort: "telepathic" },
+          { reasoningEffort: "low" }, { reasoningEffort: "telepathic" }, { reasoningEffort: "Bad Value!" },
         ],
       })],
       nextCursor: null,
     },
   ]));
   const catalog = loadCatalog().catalogFromRoster("codex", CODEX_DESCRIPTOR, await codex.models());
-  assert.deepEqual(catalog.models[0].dimensions.reasoningEffort.options.map((o) => o.value), ["low"]);
+  assert.deepEqual(catalog.models[0].dimensions.reasoningEffort.options.map((o) => o.value), ["low", "telepathic"]);
+  assert.equal(codex.descriptor.dimensionOptions.reasoningEffort.live, true, "the shipped declaration is live");
 });
 
 test("a cursor is FOLLOWED, and a server that never advances it does not loop forever", async () => {
@@ -181,14 +182,11 @@ test("a roster that cannot be READ is `unavailable` WITH THE BINARY'S REASON —
 
 // ── 4. THE CACHE KEY IS THE RESOLVED BINARY AND ITS VERSION ──────────────────────────────────
 
-test("the roster is cached by BINARY AND VERSION, and a change re-reads", async () => {
-  let version = "codex-cli 1.0.0";
-  let path = "/opt/homebrew/bin/codex";
+test("the adapter keeps NO roster cache: every read is live (the shared catalog is the one cache)", async () => {
   let calls = 0;
   const client = {
-    probe: async () => ({ ok: true, reason: "", version, path, source: "path" }),
+    probe: async () => ({ ok: true, reason: "", version: "codex-cli 1.0.0", path: "/opt/homebrew/bin/codex", source: "path" }),
     initializeParams: () => ({}),
-    catalogGate: () => ({ ok: true, reason: "" }),
     connect: () => ({
       close: () => {},
       notify: () => {},
@@ -200,14 +198,9 @@ test("the roster is cached by BINARY AND VERSION, and a change re-reads", async 
     }),
   };
   const codex = loadCodexModels(client);
-  assert.equal((await codex.models()).key, "/opt/homebrew/bin/codex@codex-cli 1.0.0");
-  await codex.models();
-  assert.equal(calls, 1, "the same binary at the same version is read once");
-
-  version = "codex-cli 2.0.0";
-  assert.deepEqual((await codex.models()).ids, ["gpt-2"], "an upgrade re-reads");
-  path = "/usr/local/bin/codex";
-  assert.deepEqual((await codex.models()).ids, ["gpt-3"], "a different binary re-reads");
+  assert.deepEqual((await codex.models()).ids, ["gpt-1"]);
+  assert.deepEqual((await codex.models()).ids, ["gpt-2"], "read again: caching is `model-catalog.js`'s, keyed by the build");
+  assert.equal(codex.forget, undefined, "no adapter cache to forget");
 });
 
 test("a FAILED read is NOT cached — an operator who fixes their install with Dopl open recovers", async () => {

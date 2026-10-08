@@ -160,7 +160,7 @@ function sameDir(a, b) {
   return real(a) === real(b);
 }
 
-function makeApprovalHandler(s, dispatch, operatorServers, onUnknown) {
+function makeApprovalHandler(s, dispatch, operatorServers, onUnknown, replyFor) {
   const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
     const params = msg && msg.params ? msg.params : {};
@@ -170,7 +170,7 @@ function makeApprovalHandler(s, dispatch, operatorServers, onUnknown) {
         toolUseID: params.itemId || null,
       });
       return verdict && verdict.behavior === 'allow' ? 'allow' : 'deny';
-    }, diag, operatorServers, { onUnknown });
+    }, diag, operatorServers, { onUnknown, replyFor });
   };
 }
 
@@ -299,8 +299,10 @@ function start(spec) {
       log,
       onNotification,
       onServerRequest: makeApprovalHandler(s, spec.dispatch, operatorTools.approvalServers(mine, spec.natives),
-        // A request Dopl does not know is SHOWN (drift note in the lane), never answered in silence.
-        (method) => frames.push({ method: normalizer.UNKNOWN_REQUEST, params: { method } })),
+        // A request Dopl does not know is SHOWN (drift note in the lane), never answered in silence; its
+        // reply comes only from THIS build's own schema (`shape.js › replyFor`).
+        (method) => frames.push({ method: normalizer.UNKNOWN_REQUEST, params: { method } }),
+        (method, decision) => require('./shape').replyFor(codexBin(), method, decision)),
       // An exit is never a clean end-of-stream for a live session; the spawn error is the cause.
       onExit: (code, signal, spawnError) => frames.fail(
         spawnError || new Error(`Codex app-server exited (code ${code}, signal ${signal})`)

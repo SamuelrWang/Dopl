@@ -32,6 +32,8 @@ module.exports = {
   binary: (root) => path.join(root, 'vendor', TRIPLE, 'bin', resolveBin.BIN_NAME),
   // OpenAI OpCo's Developer ID team (`codesign -dv` on the vendor's own build).
   teamId: '2DC432GLL2',
+  // The candidate describes its own protocol; the shared updater checks it against `requiredShape`.
+  probeShape: async (bin, run) => (await require('./shape').describeBuild(bin, run)).shape,
   // `resolve-bin.js` caches its hit for the process; a switch must re-resolve.
   onSwitch: () => resolveBin.forget(),
 };

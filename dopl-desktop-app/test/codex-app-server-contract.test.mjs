@@ -74,12 +74,13 @@ describe('the fixture cannot lie about where it came from', () => {
 });
 
 describe('the version gate', () => {
-  test('a version below the pinned floor is refused as too old; the floor itself passes', () => {
-    assert.ok(client.SUPPORTED_CLI.min, 'the floor is pinned to a measured CLI');
-    const old = client.versionGate('codex-cli 0.31.0');
-    assert.equal(old.ok, false);
-    assert.equal(old.verdict, 'too-old');
-    assert.equal(client.versionGate(`codex-cli ${client.SUPPORTED_CLI.min}`).verdict, 'supported');
+  test('NO version floor: any readable version passes — the build\'s own schema decides (shape gate)', () => {
+    // 2026-10-08: a version range is a guess about the protocol; `required-shape.js` checked against
+    // the build's `generate-json-schema` is the protocol. `measuredFrom` stays as a packaging record.
+    assert.equal(client.SUPPORTED_CLI.min, undefined, 'no floor');
+    assert.ok(client.SUPPORTED_CLI.measuredFrom, 'the measurement record stays');
+    assert.equal(client.versionGate('codex-cli 0.31.0').ok, true);
+    assert.equal(client.versionGate('codex-cli 0.31.0').verdict, 'readable');
   });
 
   test('an unreadable version is refused, never waved through', () => {

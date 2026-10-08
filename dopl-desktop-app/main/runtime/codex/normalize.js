@@ -107,19 +107,19 @@ function windowFrom(params) {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null; // null, never a 0 window
 }
 
-function count(usage, key) {
-  const v = usage[key];
-  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0;
-}
+const { readCount } = require('../sdk-shape');
 
-// `{ prompt, session }` — window occupancy and the turn's token total; 0 says nothing.
-// `cachedInputTokens` is a subset of `inputTokens` (measured: total = input + output), so never added.
+// `{ prompt, session }` — window occupancy and the turn's token total. NULL, never 0, for what could not
+// be read (2026-10-08): a renamed field must read as UNKNOWN, or core resets the baseline to zero and
+// bills the next total twice. `cachedInputTokens` is a subset of `inputTokens` (measured: total = input
+// + output), so never added.
 function tokensFrom(usage) {
-  if (!usage || typeof usage !== 'object') return { prompt: 0, session: 0 };
-  const input = count(usage, 'inputTokens');
-  const output = count(usage, 'outputTokens');
-  const total = count(usage, 'totalTokens');
-  return { prompt: input, session: total || (input + output) };
+  if (!usage || typeof usage !== 'object') return { prompt: null, session: null };
+  const input = readCount(usage, 'inputTokens');
+  const output = readCount(usage, 'outputTokens');
+  const total = readCount(usage, 'totalTokens');
+  const sum = input !== null && output !== null ? input + output : null;
+  return { prompt: input, session: total !== null ? total : sum };
 }
 
 // ── RENDER ───────────────────────────────────────────────────────────────────────────────────
@@ -195,14 +195,18 @@ function normalize(msg, ctx) {
     const usage = usageOf(params);
     const t = tokensFrom(usage);
     const prompt = tokensFrom(promptUsageOf(params));
+    // A usage object Dopl cannot read is said, once, in the lane (the shared drift ledger); its numbers
+    // stay unknown rather than becoming a confident zero.
+    const unread = usage && t.session === null;
     const model = params.model || null;
     const out = [];
     // No context event without a measurement (an interrupted turn gets none): the reducer writes
     // `contextTokens` unconditionally, so a zero would empty a live gauge. `result` carries the model.
-    if (prompt.prompt > 0) out.push(events.context(prompt.prompt, model, windowFrom(params)));
+    if (prompt.prompt !== null && prompt.prompt > 0) out.push(events.context(prompt.prompt, model, windowFrom(params)));
     // `total` is cumulative per thread (`last` is the turn), delta'd in core; no usage is no
     // measurement (`null`), which core skips rather than reading as zero (CX-02 / P4-04).
-    out.push(events.result(usage ? t.session : null, model));
+    out.push(events.result(t.session, model));
+    if (unread) out.push(events.shapeDrift('usage', 'a turn reported token usage in a shape this Dopl cannot read'));
     return out;
   }
 

@@ -73,24 +73,27 @@ function usageOf(ev) {
   return null;
 }
 
+/** The first readable count among `keys`, or NULL — never 0 for "not there". */
 function pick(usage, keys) {
   for (const k of keys) {
     const v = usage[k];
     if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
   }
-  return 0;
+  return null;
 }
 
-/** `{ prompt, session }` — the window occupancy, and the turn's whole token total. 0 says nothing. */
+/** `{ prompt, session }` — the window occupancy, and the turn's whole token total. NULL for what could
+ *  not be read (2026-10-08): never a confident 0 that resets core's baseline. */
 function tokensFrom(usage) {
-  if (!usage || typeof usage !== 'object') return { prompt: 0, session: 0 };
+  if (!usage || typeof usage !== 'object') return { prompt: null, session: null };
   const input = pick(usage, IN_KEYS);
-  const cached = pick(usage, CACHE_KEYS);
+  const cached = pick(usage, CACHE_KEYS) || 0; // absent cache reads are none, not unknown
   const output = pick(usage, OUT_KEYS);
   const total = pick(usage, TOTAL_KEYS);
-  return { prompt: input + cached, session: total || (input + cached + output) };
+  const prompt = input !== null ? input + cached : null;
+  const sum = input !== null && output !== null ? input + cached + output : null;
+  return { prompt, session: total !== null ? total : sum };
 }
-
 
 // A call that cannot be classified still renders a plain tool card; only a call with no id is dropped.
 const RUNNING = ['running', 'started', 'in_progress', 'pending'];
@@ -130,13 +133,16 @@ function normalize(msg, ctx) {
   }
 
   if (type === TURN_COMPLETED) {
-    const t = tokensFrom(usageOf(msg));
+    const usage = usageOf(msg);
+    const t = tokensFrom(usage);
     const model = msg.model || null;
     const out = [];
-    // Per turn: the context reading rides the turn's end.
-    if (t.prompt > 0 || model) out.push(events.context(t.prompt, model));
-    // Cumulative; core takes the delta. Unmeasured across a resume, so resume is refused.
+    // Per turn: the context reading rides the turn's end — only a real measurement.
+    if (t.prompt !== null && t.prompt > 0) out.push(events.context(t.prompt, model));
+    // Cumulative; core takes the delta. NULL (no usage, or none readable) is skipped by core — never a
+    // zero that re-bills the running total. Unmeasured across a resume, so resume is refused.
     out.push(events.result(t.session, model));
+    if (usage && t.session === null) out.push(events.shapeDrift('usage', 'a turn reported token usage in a shape this Dopl cannot read'));
     return out;
   }
 

@@ -4,7 +4,7 @@
   "statusNote": "Captured from a real Codex CLI by scripts/codex-app-server-schema.js. Shapes are key names and value types; no prompt, token or transcript content is stored.",
   "regenerate": "cd dopl-desktop-app && npm run codex:schema",
   "generatedBy": "dopl-desktop-app/scripts/codex-app-server-schema.js",
-  "capturedAt": "2026-10-08T08:44:15.164Z",
+  "capturedAt": "2026-10-08T08:50:32.999Z",
   "cli": {
     "version": "codex-cli 0.155.1",
     "versionCommand": "/Users/samuelwang/Downloads/setup-intelligence-engine/dopl-desktop-app/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex --version",

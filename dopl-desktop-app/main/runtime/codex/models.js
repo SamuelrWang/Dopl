@@ -11,12 +11,13 @@ const LIST_TIMEOUT_MS = 8000;
 // Bounds the cursor loop; hitting it reports `truncated` rather than a complete list.
 const MAX_PAGES = 10;
 
-// Codex's own `model_reasoning_effort` values: what Dopl can STORE; `model/list` says what each model offers.
-const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+// NO EFFORT LIST (2026-10-08): `model/list` says what each model offers, and that is what is offered —
+// a new level upstream appears with no Dopl change. What makes a value STORABLE is its alphabet (it
+// becomes `turn/start.effort`), and whether it is OFFERED is the live catalog's question at launch.
+const EFFORT_PATTERN = '^[a-z][a-z0-9_-]{0,31}$';
+const EFFORT_RE = new RegExp(EFFORT_PATTERN);
 
 const DIMENSION = 'reasoningEffort';
-
-let cached = null; // { key, roster }
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
@@ -50,8 +51,9 @@ function effortsFrom(row) {
   const options = [];
   for (const item of Array.isArray(raw) ? raw : []) {
     const value = str(item && item.reasoningEffort);
-    // Only storable efforts are offered: an unstorable option is a control that writes nowhere (F-390).
-    if (!value || REASONING_EFFORTS.indexOf(value) === -1) continue;
+    // A value outside the storable alphabet is not offered (it could not be sent); anything else the
+    // server lists is, so a new level needs no Dopl release.
+    if (!value || !EFFORT_RE.test(value)) continue;
     if (options.some((o) => o.value === value)) continue;
     options.push({
       value,
@@ -155,30 +157,23 @@ function rosterFrom(key, rows, truncated) {
 
 const appVersion = () => require('../../app-version').appVersion();
 
-// Cached by `<path>@<version>`; a failed read is not (retry: `model-catalog.js › FAILURE_TTL_MS`), and
-// `resolve-bin.js` caches only a hit, so an install made with Dopl open is picked up.
+// ALWAYS LIVE: the one roster cache is the shared catalog's (`../model-catalog.js`, keyed by the build key
+// and persisted there). `resolve-bin.js` caches only a hit, so an install made with Dopl open is picked up.
 async function models() {
   // A downloaded binary that cannot answer `--version` at the floor is rejected inside the probe, which then
   // answers for what launches run instead. Only the probe: `model/list` can fail on the network or the
   // account, which says nothing of the build.
-  const gate = await client.probe();
-  const key = cacheKey(gate);
-  if (cached && cached.key === key) return cached.roster;
-  const roster = await fetchRoster(gate);
-  // `models.length`, not `reason`: a complete roster can still carry a sentence (odd default, truncated).
-  if (roster.models.length) cached = { key: roster.key || key, roster };
-  return roster;
+  return fetchRoster(await client.probe());
 }
-
-/** Drop the cache (tests; an explicit re-probe). */
-function forget() { cached = null; }
 
 const descriptor = {
   source: 'live',
   // Declaring it is what renders the effort control; never `[]` (an empty control instead of none).
   dimensions: [DIMENSION],
-  // A no-pick launch's model, spent only when a READY live catalog offers it, else no model is sent
-  // (`runtime/launch-default.js`). A preference, never a refusal.
+  // Samuel's product choice ("I think we should do Sol"), not an SDK fact: a no-pick launch's model,
+  // spent only when a READY live catalog offers it, else no model is sent and Codex runs the default its
+  // own `model/list` marks (`runtime/launch-default.js`). A preference, never a refusal — when Sol leaves
+  // the roster it degrades to the server's default, visibly in the picker. (Open: family preference.)
   launchDefault: 'gpt-6-sol',
   // Shape check only: storage cannot call the live roster; the live catalog narrows NEW picks
   // (`lib/model-catalog.ts › selectableModels`). Still a gate: the value becomes `thread/start.model`.
@@ -186,13 +181,14 @@ const descriptor = {
     absent: '', // no `model` field at all: the platform's own pick
     pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',
   },
-  // What makes the effort storable (`contract.js › descriptorProblems`). `fallback: 'absent'` drops an
-  // unrecognised effort (no field, the platform picks): not containment, so nothing to floor to.
+  // `live`: the options are each model's own (`model/list`), so storage checks the ALPHABET and a launch
+  // checks the live catalog (`contract.js › selectionProblems`). `fallback: 'absent'` drops a value the
+  // model does not offer (no field, the platform picks): not containment, so nothing to floor to.
   dimensionOptions: {
-    reasoningEffort: { options: REASONING_EFFORTS.slice(), default: null, fallback: 'absent' },
+    reasoningEffort: { live: true, pattern: EFFORT_PATTERN, default: null, fallback: 'absent' },
   },
 };
 
 module.exports = {
-  models, forget, descriptor, entryFrom, rosterFrom, DIMENSION, LIST_TIMEOUT_MS, MAX_PAGES,
+  models, descriptor, entryFrom, rosterFrom, DIMENSION, EFFORT_PATTERN, LIST_TIMEOUT_MS, MAX_PAGES,
 };

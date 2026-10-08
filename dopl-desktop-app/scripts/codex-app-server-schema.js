@@ -15,6 +15,9 @@ const resolveBin = require('../main/runtime/codex/resolve-bin.js');
 const configHome = require('../main/runtime/codex/config-home.js');
 
 const FIXTURE = path.join(__dirname, '..', 'test', 'fixtures', 'codex-app-server.json');
+// The build's whole protocol as the shared Shape (`main/runtime/codex/shape.js`) — what the shape contract
+// suite's tier 1 checks `required-shape.js` against. Paths only: no values, prompts or tokens.
+const SHAPE_FIXTURE = path.join(__dirname, '..', 'test', 'fixtures', 'codex-shape.json');
 const HANDSHAKE_TIMEOUT_MS = 20000;
 const HELP_TIMEOUT_MS = 10000;
 const SCHEMA_TIMEOUT_MS = 60000;
@@ -242,11 +245,23 @@ function advise(fixture, modelDefaults) {
 async function main() {
   const print = process.argv.includes('--print');
   const { fixture, modelDefaults } = await capture();
+  const described = await require('../main/runtime/codex/shape.js').describeBuild(fixture.cli.path);
+  const sdkShape = require('../main/runtime/sdk-shape.js');
+  const shapeFixture = {
+    status: 'MEASURED',
+    measured: true,
+    version: fixture.cli.version,
+    capturedAt: fixture.capturedAt,
+    generatedBy: 'dopl-desktop-app/scripts/codex-app-server-schema.js',
+    regenerate: 'cd dopl-desktop-app && npm run codex:schema',
+    shape: { paths: Array.from(sdkShape.flatten(described.shape)).sort() },
+  };
   if (print) {
     process.stdout.write(`${JSON.stringify(fixture, null, 2)}\n`);
   } else {
     fs.writeFileSync(FIXTURE, `${JSON.stringify(fixture, null, 2)}\n`);
-    process.stdout.write(`codex:schema — wrote ${path.relative(process.cwd(), FIXTURE)}\n`);
+    fs.writeFileSync(SHAPE_FIXTURE, `${JSON.stringify(shapeFixture, null, 1)}\n`);
+    process.stdout.write(`codex:schema — wrote ${path.relative(process.cwd(), FIXTURE)} and ${path.relative(process.cwd(), SHAPE_FIXTURE)}\n`);
   }
   process.stdout.write(advise(fixture, modelDefaults));
 }

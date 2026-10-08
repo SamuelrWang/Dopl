@@ -2,16 +2,18 @@
 
 // Every method the adapter sends (`launch-spec.js`, `models.js`). A method added there belongs here
 // in the same change; `scripts/codex-app-server-schema.js` mirrors it into the fixture and the
-// contract suite checks the installed CLI declares every one.
+// contract suite checks the installed CLI declares every one. (The LIVE check is `required-shape.js`.)
 const REQUIRED_METHODS = Object.freeze([
   'initialize', 'thread/start', 'thread/resume',
   'turn/start', 'turn/steer', 'turn/interrupt', 'model/list', 'mcpServerStatus/list',
   'account/login/start', 'account/login/cancel', 'config/read',
 ]);
 
-// Measured from `codex-cli 0.155.1` (`npm run codex:schema`); re-measure, never edit by hand. A floor
-// only: a newer CLI is not refused, because the method check catches a genuinely incompatible one.
-const SUPPORTED_CLI = Object.freeze({ min: '0.155.1', measuredFrom: '0.155.1' });
+// The CLI this adapter was built and measured against (`npm run codex:schema`); re-measure, never edit by
+// hand. A RECORD, NOT A GATE (2026-10-08): it pins packaging (`packaging.js › versionPin`), and nothing
+// refuses a build for its version — the shape gate (`shape.js`, `required-shape.js`) does, from the build's
+// own protocol description.
+const SUPPORTED_CLI = Object.freeze({ measuredFrom: '0.155.1' });
 
 /** `"codex-cli 0.31.0"` → `[0, 31, 0]`. Returns `null` when no dotted number is present. */
 function parseVersion(text) {
@@ -20,27 +22,13 @@ function parseVersion(text) {
   return [Number(m[1]), Number(m[2]), Number(m[3] || 0)];
 }
 
-function compareVersion(a, b) {
-  for (let i = 0; i < 3; i += 1) {
-    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) < (b[i] || 0) ? -1 : 1;
-  }
-  return 0;
-}
-
-/** Is this `codex --version` output at or above the floor? `{ ok, verdict, reason }`. */
+/** Can Dopl read a version out of this `codex --version` output? `{ ok, verdict, reason }`. A version Dopl
+ *  cannot read is no build identity (nothing is keyed or reused for it), so it is refused here. */
 function versionGate(version) {
-  const detected = parseVersion(version);
-  if (!detected) {
+  if (!parseVersion(version)) {
     return { ok: false, verdict: 'unreadable', reason: `Dopl could not read a Codex version out of \`${version}\`.` };
   }
-  if (compareVersion(detected, parseVersion(SUPPORTED_CLI.min)) < 0) {
-    return {
-      ok: false,
-      verdict: 'too-old',
-      reason: `Codex ${version} is older than the ${SUPPORTED_CLI.min} this Dopl build supports. Upgrade the Codex CLI.`,
-    };
-  }
-  return { ok: true, verdict: 'supported', reason: '' };
+  return { ok: true, verdict: 'readable', reason: '' };
 }
 
 module.exports = { REQUIRED_METHODS, SUPPORTED_CLI, parseVersion, versionGate };

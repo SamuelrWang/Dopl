@@ -13,6 +13,8 @@ const mcp = require('./mcp');
 const credential = require('./credential');
 const { packaging } = require('./packaging');
 const { pickOf } = require('../selection-vocabulary');
+const identity = require('./identity');
+const requiredShape = require('./required-shape');
 const { profileEntryFrom } = require('../contract');
 
 const platform = () => require('./client');
@@ -26,6 +28,10 @@ const profileEntry = (profile) => profileEntryFrom(tools.buildSessionToolConfig(
 const descriptor = {
   id: 'codex',
   label: 'Codex',
+
+  // What Dopl reads from Codex, tiered; checked against each build's own schema (`shape.js`) at launch
+  // and before the updater adopts a build (`../sdk-shape.js`).
+  requiredShape,
 
   session: {
     resume: true, // `thread/resume`
@@ -142,10 +148,14 @@ const runtime = {
   axisAAllows(mode, toolName) { return tools.axisAAllows(mode, toolName); },
 
   models() { return models.models(); },
-  // No synchronous roster key: a READY catalog is kept for the process.
-  // Not known yet at this layer: nothing is persisted and a READY roster is kept for the process.
-  // (Codex item: path + version from the resolved binary.)
-  buildIdentity() { return null; },
+  // The resolved binary + its version (`identity.js`) → core's build key (`../roster-key.js`).
+  buildIdentity() { return identity.buildIdentity(); },
+  // The build describes its own protocol (`codex app-server generate-json-schema`, `shape.js`).
+  async shape() {
+    const found = require('./resolve-bin').resolveCodexBin();
+    if (!found.ok) throw new Error(found.reason || 'no Codex build on this Mac');
+    return require('./shape').describe(found.path);
+  },
   // Picks pass as given (the funnel already refused an unknown one on the live catalog).
   modelArg(value) {
     const v = pickOf(value);

@@ -34,9 +34,12 @@ function probeAt(found, timeoutMs) {
           return;
         }
         const version = String(stdout || '').trim() || null;
-        // The measured floor: an older CLI would die at clap or the protocol with an unreadable error.
-        const floor = protocol.versionGate(version);
-        finish({ ok: floor.ok, reason: floor.reason, version });
+        // Only readability is checked here: whether this build speaks the protocol Dopl reads is the shape
+        // gate's question (`shape.js` + `../sdk-shape.js`), answered from the build's own schema — never a
+        // version range. The answer is recorded for the build key (`identity.js`).
+        const read = protocol.versionGate(version);
+        if (read.ok) require('./identity').noteVersion(found.path, version);
+        finish({ ok: read.ok, reason: read.reason, version });
       });
     } catch (err) {
       finish({ ok: false, reason: `\`${found.path}\` could not be started: ${(err && err.message) || err}`, version: null });

@@ -135,7 +135,13 @@ test("a finished turn meters TOKENS, and a `cost` key on the frame is now inert"
 
   const empty = run({ type: normalize.TURN_COMPLETED });
   assert.deepEqual(types(empty), ["result"], "no usage at all paints no context row");
-  assert.equal(empty[0].sessionTokens, 0);
+  // 🔒 2026-10-08: NULL, not 0 — a 0 reset core's baseline and re-billed the whole running total on the
+  // next turn. Core skips a null measurement (`session-io.js`, P4-04).
+  assert.equal(empty[0].sessionTokens, null);
+  // A usage object Dopl cannot read is unknown AND said once in the lane (shared drift ledger).
+  const renamed = run({ type: normalize.TURN_COMPLETED, usage: { tokensIn: 5, tokensOut: 6 } });
+  assert.deepEqual(types(renamed), ["result", "shape_drift"]);
+  assert.equal(renamed[0].sessionTokens, null);
 });
 
 test("a bare `usage` event meters the window without ending a turn", () => {
