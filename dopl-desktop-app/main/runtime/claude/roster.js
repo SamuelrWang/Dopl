@@ -133,9 +133,12 @@ function rosterFrom(rows, opts) {
   };
 }
 
-/** Start the CLI, read its model list, stop it — never a turn. `o.sdk` is the loaded namespace,
- *  `o.options` the spawn env/binary. Resolves to the raw rows or rejects with a readable reason. */
-async function probe(o) {
+/**
+ * Start the CLI with a prompt that never yields (only the `initialize` handshake runs: zero API
+ * requests, no model turn), run `fn(q, sdk)` against the open query, stop it. `o.sdk` is the loaded
+ * namespace, `o.options` the spawn env/binary (the pins below are applied last, so no caller lifts one).
+ */
+async function withIdleQuery(o, what, fn) {
   const sdk = o && o.sdk;
   if (!sdk || typeof sdk.query !== 'function') throw new Error('the Claude Agent SDK could not be loaded');
   let release = () => {};
@@ -143,14 +146,13 @@ async function probe(o) {
   async function* prompt() { await idle; } // yields nothing: no user message, so no model turn
   const q = sdk.query({
     prompt: prompt(),
-    // The caller's options (env, binary) first and the pins last, so no caller can lift a pin.
     options: Object.assign({}, (o && o.options) || {}, {
       settingSources: [],
       permissionMode: 'default',
       mcpServers: {},
       tools: [],
       // No `maxTurns`: no turn can start, and `launch-spec.js` is its one producer.
-      canUseTool: async () => ({ behavior: 'deny', message: 'model roster probe' }),
+      canUseTool: async () => ({ behavior: 'deny', message: 'turn-free probe' }),
     }),
   });
   // Drained in the background so an early exit rejects here rather than going unhandled.
@@ -159,9 +161,9 @@ async function probe(o) {
   let timer = null;
   try {
     return await Promise.race([
-      q.supportedModels(),
+      Promise.resolve().then(() => fn(q, sdk)),
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Claude Code did not list its models within ${timeoutMs}ms`)), timeoutMs);
+        timer = setTimeout(() => reject(new Error(`Claude Code did not ${what} within ${timeoutMs}ms`)), timeoutMs);
       }),
     ]);
   } finally {
@@ -173,4 +175,42 @@ async function probe(o) {
   }
 }
 
-module.exports = { probe, rosterFrom, match, matchExact, baseId, isPinned };
+/** The raw `supportedModels()` rows, or a rejection with a readable reason. Never a turn. */
+function probe(o) {
+  return withIdleQuery(o, 'list its models', (q) => q.supportedModels());
+}
+
+/** Every function name a live Query answers to (own and inherited), constructor excluded. */
+function methodsOf(q) {
+  const out = new Set();
+  for (let p = q; p && p !== Object.prototype; p = Object.getPrototypeOf(p)) {
+    for (const k of Object.getOwnPropertyNames(p)) {
+      if (k === 'constructor') continue;
+      try { if (typeof q[k] === 'function') out.add(k); } catch (_) { /* a getter that throws is not a method */ }
+    }
+  }
+  return Array.from(out);
+}
+
+/**
+ * THE PAIRING'S OWN DESCRIPTION OF ITSELF (`sdk-shape.js` Shape), read live and turn-free: the SDK
+ * namespace's exports, the methods its Query answers to, and the fields the CLI's `supportedModels`
+ * rows carry. This is what `descriptor.requiredShape` is checked against, at launch and on an update.
+ */
+function observeShape(o) {
+  return withIdleQuery(o, 'describe itself', async (q, sdk) => {
+    const rows = await q.supportedModels();
+    const fields = new Set();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      if (!row || typeof row !== 'object') continue;
+      for (const [k, v] of Object.entries(row)) if (v !== undefined && v !== null) fields.add(k);
+    }
+    return {
+      exports: Object.keys(sdk).filter((k) => typeof sdk[k] === 'function'),
+      methods: methodsOf(q),
+      results: { supportedModels: Array.from(fields) },
+    };
+  });
+}
+
+module.exports = { probe, observeShape, rosterFrom, match, matchExact, baseId, isPinned };

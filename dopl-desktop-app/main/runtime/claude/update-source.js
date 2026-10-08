@@ -1,18 +1,15 @@
 // How the shared runtime updater (`../updates/index.js`) keeps this runtime's CLI current: the platform
 // binary package the SDK itself depends on, published per release under `latest`. Electron-free at load.
 //
-// ⚠ COMPATIBILITY = THE SAME `major.minor` AS THE BUNDLE. The SDK JS that drives the binary is always the
-// bundled one, and the vendor ships SDK and CLI in lockstep as one `0.<minor>.<patch>` line: patches are
-// the CLI's own releases (new models among them) behind the same stream-json control protocol, and a
-// minor bump is where a 0.x package may break it. So a newer patch is adopted; a newer minor waits for a
-// Dopl release that bumps the SDK. A patch that still fails its first handshake (`models.js › probeRows`,
-// a turn-free `initialize`) is rejected back to the last good build.
+// ⚠ COMPATIBILITY = THE CANDIDATE'S OWN DESCRIPTION OF ITSELF (2026-10-08), never a version range. The
+// shared updater (`updates/index.js › shapeGate`) runs `probeShape` on the downloaded binary — the bundled
+// SDK JS driving the CANDIDATE CLI, turn-free (`roster.js › observeShape`) — and checks it against this
+// adapter's `requiredShape`. A build that then fails its first handshake is rejected back to the last good one.
+// The `major.minor` lockstep rule this replaced (`compatible`) is deleted: it guessed at the protocol.
 
 const path = require('path');
 
 const PKG = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
-
-const minorLine = (v) => String(v || '').split('.').slice(0, 2).join('.');
 
 module.exports = {
   id: 'claude',
@@ -26,5 +23,11 @@ module.exports = {
   binary: (root) => path.join(root, 'claude'),
   // Anthropic PBC's Developer ID team (`codesign -dv` on the vendor's own build).
   teamId: 'Q6L2SF6YDW',
-  compatible: (candidate, bundled) => !!bundled && minorLine(candidate) === minorLine(bundled),
+  /** The candidate CLI as it describes itself, driven by the bundled SDK (lazy: electron-free at load). */
+  probeShape: async (bin) => {
+    const loader = require('./loader');
+    const sdk = await loader.getSdk();
+    const env = require('./credential').withCredential(loader.buildScrubbedEnv());
+    return require('./roster').observeShape({ sdk, options: { env, pathToClaudeCodeExecutable: bin } });
+  },
 };

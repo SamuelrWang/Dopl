@@ -71,6 +71,7 @@ function defaultDeps() {
       try { return String((require('./loader').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
     },
     probe: roster.probe,
+    observeShape: roster.observeShape,
     // The updater's active download, or null when launches run the bundle.
     downloadedBin: () => (require('../updates').activeFor(require('./update-source')) || {}).path || null,
     // A failed handshake on a downloaded binary sends new launches back to the last good one.
@@ -198,6 +199,16 @@ function launchArg(value) {
   return PICK_RE.test(v) ? v : resolveLaunchModel('').arg;
 }
 
+/** The pairing new launches run (bundled SDK + the ACTIVE CLI), as it describes itself — turn-free
+ *  (`roster.js › observeShape`). `runtime.shape()`; checked against `descriptor.requiredShape`. */
+async function shape() {
+  const sdk = await deps.loadSdk();
+  const options = { env: deps.env() };
+  const bin = deps.bin();
+  if (bin) options.pathToClaudeCodeExecutable = bin;
+  return deps.observeShape({ sdk, options });
+}
+
 /** Drop the live cache (tests, an explicit re-probe); `inject` swaps the dependencies. */
 function forget() { held = null; inflight = null; }
 function inject(overrides) { deps = Object.assign(defaultDeps(), overrides || {}); forget(); }
@@ -218,6 +229,6 @@ const descriptor = {
 };
 
 module.exports = {
-  models, rosterKey, buildIdentity, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
+  models, shape, rosterKey, buildIdentity, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
   descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };

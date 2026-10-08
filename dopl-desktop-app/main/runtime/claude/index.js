@@ -80,6 +80,18 @@ const descriptor = {
   },
 
   models: models.descriptor,
+
+  // ⚠ ONLY WHAT DOPL READS from the pairing (bundled SDK JS + the active CLI), tiered by what a gap costs
+  // (`sdk-shape.js`), and observable turn-free (`roster.js › observeShape`). Per-message fields (init's
+  // permission mode and tools) are checked on every launch instead (`launch-contract.js`).
+  requiredShape: {
+    // No `query` = nothing runs; no `interrupt` = the Stop control cannot stop an agent.
+    safety: { exports: ['query'], methods: ['interrupt'] },
+    // The picker's roster and a live model switch (`session.liveModelSwitch: true`).
+    core: { methods: ['supportedModels', 'setModel'], results: { supportedModels: ['value', 'displayName'] } },
+    // Labels and the in-process agent-ops server (`axis-b.js` mounts nothing without them).
+    cosmetic: { exports: ['createSdkMcpServer', 'tool'], results: { supportedModels: ['resolvedModel'] } },
+  },
   mcp: mcp.descriptor,
   credential: credential.descriptor,
 
@@ -120,6 +132,7 @@ const runtime = {
 
   models() { return models.models(); },
   buildIdentity() { return models.buildIdentity(); },
+  shape() { return models.shape(); },
   modelArg(value) { return models.resolveLaunchModel(value); },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },
