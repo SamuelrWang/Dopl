@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import { buildChannelContext } from "@/features/channels/server/service";
 import { DisplaySaveSchema, saveDisplayTemplate } from "@/features/display/server/answer";
 
@@ -21,4 +21,4 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost);
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: channelWorkspace });

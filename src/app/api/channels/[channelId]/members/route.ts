@@ -4,7 +4,7 @@ import {
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
   addMember,
   buildChannelContext,
@@ -69,9 +69,9 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
 
 // ⚠ GET at guest (INVARIANTS §4A, §2B; channel fence is the true gate).
 // POST/DELETE (roster management) stay member+.
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
-export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: channelWorkspace, minRole: "member" });
+export const DELETE = withWorkspaceAuth(handleDelete, { workspaceFromParams: channelWorkspace, minRole: "member" });
 /**
  * ⚠ `agentToolProfile` is a CONTAINMENT CONTROL, so this PATCH is `sessionOnly` (§9).
  * 🔒 Closes: a spawned agent (90-day device token, Bash under a `full` profile) steered by an
@@ -85,4 +85,4 @@ export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
  * POST/DELETE stay ungated by session — invites are a separate, unmade decision.
  * Session callers (cookies, Supabase JWT) never take the `dopl_at_*` branch.
  */
-export const PATCH = withWorkspaceAuth(handlePatch, { sessionOnly: true });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: channelWorkspace, sessionOnly: true });

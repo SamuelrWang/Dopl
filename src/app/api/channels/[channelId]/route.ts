@@ -5,7 +5,7 @@ import {
 } from "@/shared/auth/with-workspace-auth";
 import { HttpError } from "@/shared/lib/http-error";
 import { parseJson } from "@/shared/api/parse-json";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
   deleteChannel,
@@ -76,6 +76,6 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
 
 // ⚠ GET at guest (INVARIANTS §4A, §2B); `loadVisibleChannel` is the true gate.
 // PATCH/DELETE stay member+.
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
-export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: channelWorkspace, minRole: "member" });
+export const DELETE = withWorkspaceAuth(handleDelete, { workspaceFromParams: channelWorkspace, minRole: "member" });

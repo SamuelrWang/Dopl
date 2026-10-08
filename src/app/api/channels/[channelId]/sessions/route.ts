@@ -3,7 +3,7 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import { buildChannelContext } from "@/features/channels/server/service";
 import { listChannelSessions } from "@/features/channels/server/session-state-service";
 
@@ -28,4 +28,4 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
  * Launching stays blocked elsewhere (UI `selfManagement:false`; launch-directives
  * at viewer floor).
  */
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });

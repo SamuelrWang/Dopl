@@ -105,6 +105,15 @@ interface Options {
   /** Forwarded verbatim into the inner `withUserAuth` — see `UserAuthOptions`. */
   writeScopeExempt?: boolean;
   sessionOnly?: boolean;
+  /**
+   * **AN ID-ADDRESSED RESOURCE NAMES ITS OWN CONTAINER** (2026-10-08). For a route addressed by one
+   * resource's id (a channel), the container that resource lives in, when the caller is a member of
+   * it, or `null`. Consulted ONLY when nothing was requested and no key lock applies — never over an
+   * explicit header — so a client that forgot `X-Workspace-Id` reaches the resource it named instead
+   * of silently landing in its home space ("Channel not found" on every decision card outside it).
+   * Deterministic from the id: not the derivation ruling B10 retired, which guessed from membership.
+   */
+  workspaceFromParams?: (params: Record<string, string> | undefined, userId: string) => Promise<string | null>;
 }
 
 /**
@@ -167,6 +176,10 @@ export function withWorkspaceAuth(
     }
 
     try {
+      // Rung 2b: nothing named, no lock → the addressed resource's own container (see the option).
+      if (effectiveWorkspaceId === null && options.workspaceFromParams) {
+        effectiveWorkspaceId = await options.workspaceFromParams(ctx.params, ctx.userId);
+      }
       const { workspace, membership } = await resolveActiveWorkspace(
         ctx.userId,
         effectiveWorkspaceId

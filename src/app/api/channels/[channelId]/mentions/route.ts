@@ -4,7 +4,7 @@ import {
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
   listMyChannelMentions,
@@ -52,5 +52,5 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
 // read-watermark on own rows. @-mentioning itself is parsed from message text
 // (`service-writes-metadata-mentions.ts`), not this route (Samuel's Q2 ruling
 // is delivered by `POST …/messages`).
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
-export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: channelWorkspace, minRole: "guest" });

@@ -338,3 +338,24 @@ export {
   isActiveWorkspaceMember,
   fetchProfiles,
 } from "./repository-workspace";
+
+/**
+ * The container a channel lives in, IF `userId` is a member of that channel, else `null` — so a
+ * caller learns nothing about a channel it cannot see. Used only to resolve a request that named no
+ * workspace (`shared/api/channel-route.ts › withChannelWorkspaceAuth`); every gate still runs after.
+ */
+export async function findChannelWorkspaceForMember(
+  channelId: string,
+  userId: string
+): Promise<string | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channels")
+    .select("workspace_id, channel_members!inner(user_id)")
+    .eq("id", channelId)
+    .eq("channel_members.user_id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { workspace_id?: string } | null)?.workspace_id ?? null;
+}

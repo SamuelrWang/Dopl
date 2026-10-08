@@ -1,6 +1,7 @@
 import { HttpError } from "@/shared/lib/http-error";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { toChannelErrorResponse } from "@/features/channels/server/http-mapping";
+import { findChannelWorkspaceForMember } from "@/features/channels/server/repository";
 
 /** Route-layer helpers for the channels API: the feature error mapper (one
  *  import site for handlers) and the dynamic-param extractors. */
@@ -63,3 +64,19 @@ export function requireTaskId(
 // ⚠ There is deliberately NO `requireAgentId`: the `[agentId]` route it guarded
 // is deleted, and the surviving `GET .../agents` (historical attribution roster)
 // takes no agent id.
+
+/**
+ * **THE CHANNEL NAMES ITS OWN CONTAINER** (2026-10-08) — `workspaceFromParams` for every
+ * `/api/channels/[channelId]/…` route. A request that omits `X-Workspace-Id` resolves to the
+ * channel's container (when the caller is a channel member) instead of the caller's home space,
+ * where the channel is "not found" (every decision card outside the home space failed that way).
+ * An explicit header or key lock still wins; a slug, a non-member or an unknown id derive nothing.
+ * ⚠ `channel-route-workspace.test.ts` pins every channel route on it.
+ */
+export async function channelWorkspace(
+  params: Record<string, string> | undefined,
+  userId: string
+): Promise<string | null> {
+  const id = params?.channelId;
+  return id && isUuid(id) ? findChannelWorkspaceForMember(id, userId) : null;
+}

@@ -3,7 +3,7 @@ import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
   listAgents,
@@ -26,4 +26,4 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace });

@@ -8,6 +8,7 @@ import {
   requireChannelId,
   requireTaskId,
   toChannelErrorResponse,
+  channelWorkspace,
 } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
@@ -68,12 +69,13 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 // ⚠ GET at guest (INVARIANTS §4A, §2B; channel fence is the true gate).
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: channelWorkspace, minRole: "member" });
 // ⚠ `sessionOnly` (pinned by `write-gate-coverage.test.ts`): permanently deletes a
 // shared transcript, and "no destructive ops over MCP" is standing. No
 // `dopl_channel` op may reach this.
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: channelWorkspace,
   minRole: "member",
   sessionOnly: true,
 });

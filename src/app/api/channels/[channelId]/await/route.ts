@@ -4,7 +4,7 @@ import {
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
 import { parseQuery } from "@/shared/api/parse-json";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
   awaitNewMessages,
   buildChannelContext,
@@ -114,4 +114,4 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
 
 // ⚠ `minRole: "guest"` — a guest long-polls its own channel for new activity
 // (INVARIANTS §4A, §2B); the channel-membership fence is the true gate.
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });

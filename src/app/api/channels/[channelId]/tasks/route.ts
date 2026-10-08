@@ -4,7 +4,7 @@ import {
   type WorkspaceAuthContext,
 } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
-import { requireChannelId, toChannelErrorResponse } from "@/shared/api/channel-route";
+import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
   createTask,
@@ -73,5 +73,5 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
 
 // ⚠ Both at guest (INVARIANTS §4A, §2B; Samuel's Q1 ruling: guests may create
 // threads). The service's membership check (`ChannelForbiddenError`) is the gate.
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
-export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: channelWorkspace, minRole: "guest" });
