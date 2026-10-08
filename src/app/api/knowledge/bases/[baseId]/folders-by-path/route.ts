@@ -11,6 +11,7 @@ import {
   deleteByPath,
   listDirByPath,
 } from "@/features/knowledge/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * Path-based folder ops: POST `{path}` → mkdir -p (idempotent); GET `?path=` → immediate
@@ -68,8 +69,8 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.knowledgeBase, minRole: "member" });
 // 🔒 `sessionOnly` (2026-09-02). `dopl_kb` advertises this deletion as
 // APP-ONLY — "there is no MCP path to it, for any role or token" — and
 // `packages/mcp-server/src/gating.ts › opRefusal` was the ONLY thing enforcing
@@ -83,6 +84,7 @@ export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
 // redirects an agent to instead.
 // Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: deriveWorkspace.knowledgeBase,
   minRole: "member",
   sessionOnly: true,
 });

@@ -8,6 +8,10 @@ import {
   writeBody,
 } from "@/features/skills/server/service";
 import { SkillFileWriteSchema } from "@/features/skills/schema";
+import { noDerivation } from "@/shared/api/workspace-derivation";
+
+// A skill SLUG is unique per workspace only, so it names no single container: the header decides.
+const SKILL_SLUG_DERIVATION = noDerivation("skill slug is unique per workspace only");
 
 /**
  * Read / write the skill's single SKILL.md body. GET returns the row (body + `updatedAt` version
@@ -43,5 +47,5 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const PUT = withWorkspaceAuth(handlePut, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: SKILL_SLUG_DERIVATION });
+export const PUT = withWorkspaceAuth(handlePut, { workspaceFromParams: SKILL_SLUG_DERIVATION, minRole: "member" });

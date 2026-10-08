@@ -9,6 +9,7 @@ import {
   listFolders,
 } from "@/features/knowledge/server/service";
 import { KnowledgeFolderCreateSchema } from "@/features/knowledge/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 // ⚠ URL provides the parent base, so the body must NOT carry it — omitting the field at parse
 // time prevents a silent override of a mismatched `knowledgeBaseId`.
@@ -44,5 +45,5 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.knowledgeBase, minRole: "member" });

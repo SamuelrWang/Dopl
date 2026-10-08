@@ -9,6 +9,7 @@ import {
   deleteObject,
   updateObject,
 } from "@/features/ontology/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 function objectIdOf(auth: WorkspaceAuthContext): string {
   const objectId = auth.params?.objectId;
@@ -46,13 +47,14 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
 // ⚠ The floor is not the gate: `service-gates.ts › requireObject` demands
 // `edit` on EVERY ontology the object belongs to (Q9); no share → 404. Shares,
 // ontology create/delete and `agentsMayEdit` deliberately stay above guest.
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "guest" });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: deriveWorkspace.ontologyObject, minRole: "guest" });
 // 🔒 `sessionOnly` (2026-09-02): deletion is APP-ONLY — a `full`-profile
 // session's own bearer must not reach it over loopback (a prompt is not a
 // fence). ⚠ This gate is now the WHOLE fence; removing it removes the rule.
 // Per-METHOD — PATCH stays ungated (it's what `delete-policy.ts › deleteRefusal`
 // redirects agents to). Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: deriveWorkspace.ontologyObject,
   // 🔒 `guest` since 2026-09-09 (see PATCH); `sessionOnly` keeps it app-only.
   minRole: "guest",
   sessionOnly: true,

@@ -9,6 +9,7 @@ import {
   deleteOntology,
   updateOntology,
 } from "@/features/ontology/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 function ontologyIdOf(auth: WorkspaceAuthContext): string {
   const ontologyId = auth.params?.ontologyId;
@@ -35,13 +36,14 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: deriveWorkspace.ontology, minRole: "member" });
 // 🔒 `sessionOnly` (2026-09-02): deletion is APP-ONLY — a `full`-profile
 // session's own bearer must not reach it over loopback (a prompt is not a
 // fence). ⚠ This gate is now the WHOLE fence; removing it removes the rule.
 // Per-METHOD — PATCH stays ungated (it's what `delete-policy.ts › deleteRefusal`
 // redirects agents to). Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: deriveWorkspace.ontology,
   minRole: "member",
   sessionOnly: true,
 });

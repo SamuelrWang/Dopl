@@ -10,6 +10,7 @@ import {
 } from "@/features/revisions/schema";
 import { buildOntologyContext } from "@/features/ontology/server/service";
 import { listObjectRevisions } from "@/features/ontology/server/service-revisions-read";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `GET /api/ontology/objects/{objectId}/revisions` — ONE object's per-FIELD
@@ -37,4 +38,4 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.ontologyObject, minRole: "guest" });

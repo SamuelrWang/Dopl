@@ -7,6 +7,7 @@ import {
   starBase,
   unstarBase,
 } from "@/features/knowledge/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `PUT|DELETE /api/knowledge/bases/{baseId}/star` — the caller's OWN star. A favourite, not a
@@ -53,5 +54,5 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const PUT = withWorkspaceAuth(handlePut);
-export const DELETE = withWorkspaceAuth(handleDelete);
+export const PUT = withWorkspaceAuth(handlePut, { workspaceFromParams: deriveWorkspace.knowledgeBase });
+export const DELETE = withWorkspaceAuth(handleDelete, { workspaceFromParams: deriveWorkspace.knowledgeBase });

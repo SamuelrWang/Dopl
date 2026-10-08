@@ -7,6 +7,7 @@ import {
 } from "@/shared/api/knowledge-route";
 import { buildKnowledgeContext } from "@/features/knowledge/server/service";
 import { buildBaseArchive } from "@/features/knowledge/server/export";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 // ⚠ A plain download link cannot send X-Workspace-Id, so `workspaceIdFromQuery` lets the wrapper
 // resolve `?workspaceId=` at the header's priority (membership-checked).
@@ -22,4 +23,4 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet, { workspaceIdFromQuery: true });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase, workspaceIdFromQuery: true });

@@ -8,6 +8,7 @@ import {
   buildChannelContext,
   getAgentDirection,
 } from "@/features/channels/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * POLL ONE DIRECTION — what the MCP op's bounded hold reads, and where the
@@ -32,4 +33,4 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.agentDirection });

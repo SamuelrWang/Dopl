@@ -5,6 +5,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { mapRevisionError } from "@/features/revisions/server/http-mapping";
 import { buildOntologyContext, getSnapshot } from "@/features/ontology/server/service";
 import { restoreObjectRevision } from "@/features/ontology/server/service-revisions-read";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `POST /api/ontology/objects/{objectId}/revisions/{revisionId}/restore` — write
@@ -38,4 +39,4 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { minRole: "guest" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.ontologyObject, minRole: "guest" });

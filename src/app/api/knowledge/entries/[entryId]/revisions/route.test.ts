@@ -109,7 +109,9 @@ describe("GET /api/knowledge/entries/{entryId}/revisions", () => {
 
   it("stays at the VIEWER default — a history read is a read", async () => {
     await GET_ENTRY(req("/api/knowledge/entries/e-1/revisions"), CTX_ARG);
-    expect(wrapperOptions[0]).toBeUndefined();
+    // `workspaceFromParams` (2026-10-08) is the id-family workspace derivation, pinned by
+    // `workspace-derivation-coverage.test.ts`; the gate options are everything else.
+    expect(Object.keys(wrapperOptions[0] ?? {})).toEqual(["workspaceFromParams"]);
   });
 });
 
@@ -118,7 +120,9 @@ describe("GET /api/knowledge/bases/{baseId}/revisions", () => {
     const res = await GET_BASE(req("/api/knowledge/bases/kb-1/revisions"), CTX_ARG);
     expect(res.status).toBe(200);
     expect(vi.mocked(listBaseRevisions).mock.calls[0][1]).toBe("kb-1");
-    expect(wrapperOptions[0]).toBeUndefined();
+    // `workspaceFromParams` (2026-10-08) is the id-family workspace derivation, pinned by
+    // `workspace-derivation-coverage.test.ts`; the gate options are everything else.
+    expect(Object.keys(wrapperOptions[0] ?? {})).toEqual(["workspaceFromParams"]);
   });
 });
 

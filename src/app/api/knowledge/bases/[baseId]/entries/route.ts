@@ -11,6 +11,7 @@ import {
   type ListEntriesOpts,
 } from "@/features/knowledge/server/service";
 import { KnowledgeEntryCreateSchema } from "@/features/knowledge/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 // URL provides the parent base — drop the body's redundant field.
 const EntryCreateBodySchema = KnowledgeEntryCreateSchema.omit({
@@ -75,5 +76,5 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.knowledgeBase, minRole: "member" });

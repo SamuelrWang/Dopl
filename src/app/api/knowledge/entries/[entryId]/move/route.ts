@@ -8,6 +8,7 @@ import {
   moveEntry,
 } from "@/features/knowledge/server/service";
 import { KnowledgeEntryMoveSchema } from "@/features/knowledge/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -22,4 +23,4 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.knowledgeEntry, minRole: "member" });

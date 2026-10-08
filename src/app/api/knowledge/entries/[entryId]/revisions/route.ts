@@ -11,6 +11,7 @@ import {
   REVISION_QUERY_KEYS,
   RevisionQuerySchema,
 } from "@/features/revisions/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `GET /api/knowledge/entries/{entryId}/revisions` — ONE entry's changelog,
@@ -42,4 +43,4 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeEntry });

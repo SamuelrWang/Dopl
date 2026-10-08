@@ -10,6 +10,7 @@ import {
   buildChatContext,
 } from "@/features/chats/server/service";
 import { ChatAppendSchema } from "@/features/chats/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -22,4 +23,4 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.chat, minRole: "member" });

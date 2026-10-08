@@ -107,7 +107,9 @@ beforeEach(() => {
 describe("the per-method gate", () => {
   it("DELETE is sessionOnly; GET and PATCH are not", () => {
     expect(DELETE_OPTS).toMatchObject({ minRole: "member", sessionOnly: true });
-    expect(GET_OPTS).toBeUndefined();
+    // `workspaceFromParams` (2026-10-08) is the id-family workspace derivation, pinned by
+    // `workspace-derivation-coverage.test.ts`; the gate options are everything else.
+    expect(Object.keys(GET_OPTS ?? {})).toEqual(["workspaceFromParams"]);
     expect(PATCH_OPTS).toMatchObject({ minRole: "member" });
     expect(PATCH_OPTS).not.toHaveProperty("sessionOnly");
   });

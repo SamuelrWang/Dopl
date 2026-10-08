@@ -11,6 +11,7 @@ import {
   getConsentRequest,
 } from "@/features/channels/server/service";
 import { ConsentDecisionSchema } from "@/features/channels/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 // Single consent request: GET is the desktop's status poll, PATCH records the operator's
 // decision. Both operator-only (the service 404s a foreign/missing id rather than leaking it).
@@ -41,7 +42,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.consent });
 /**
  * ⚠ `sessionOnly`: answering a consent request IS the human-in-the-loop gate, so it must come
  * from an interactive session and never an agent token.
@@ -55,4 +56,4 @@ export const GET = withWorkspaceAuth(handleGet);
  *
  * GET stays open: polling a status decides nothing.
  */
-export const PATCH = withWorkspaceAuth(handlePatch, { sessionOnly: true });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: deriveWorkspace.consent, sessionOnly: true });

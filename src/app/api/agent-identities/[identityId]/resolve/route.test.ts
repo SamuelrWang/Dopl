@@ -163,7 +163,9 @@ describe("the launch payload", () => {
 describe("gating", () => {
   it("reads at VIEWER and is NOT sessionOnly — the desktop presents a device token", async () => {
     await GET(req(), { params: Promise.resolve({}) });
-    expect(wrapperOptions[0]).toBeUndefined();
+    // `workspaceFromParams` (2026-10-08) is the id-family workspace derivation, pinned by
+    // `workspace-derivation-coverage.test.ts`; the gate options are everything else.
+    expect(Object.keys(wrapperOptions[0] ?? {})).toEqual(["workspaceFromParams"]);
   });
 
   it("resolves for an AGENT-credential caller (source 'agent')", async () => {

@@ -3,6 +3,7 @@ import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import { HttpError } from "@/shared/lib/http-error";
 import { buildOntologyContext, claimAnchor } from "@/features/ontology/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 async function handlePost(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -15,4 +16,4 @@ async function handlePost(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.ontologyObject, minRole: "member" });

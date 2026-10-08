@@ -10,6 +10,7 @@ import {
   updateBase,
 } from "@/features/knowledge/server/service";
 import { KnowledgeBaseUpdateSchema } from "@/features/knowledge/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 function requireBaseId(auth: WorkspaceAuthContext): string {
   const id = auth.params?.baseId;
@@ -53,12 +54,13 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: deriveWorkspace.knowledgeBase, minRole: "member" });
 // `sessionOnly` is the whole fence making this delete app-only: an agent with its own `dopl_at_*`
 // bearer could otherwise call this route directly (census: `app-only-delete-gate.test.ts`).
 // Per-method: GET and PATCH stay open to agents.
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: deriveWorkspace.knowledgeBase,
   minRole: "member",
   sessionOnly: true,
 });

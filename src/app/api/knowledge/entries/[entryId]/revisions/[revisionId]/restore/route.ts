@@ -7,6 +7,7 @@ import {
   readEntry,
   restoreEntryRevision,
 } from "@/features/knowledge/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `POST /api/knowledge/entries/{entryId}/revisions/{revisionId}/restore` —
@@ -44,4 +45,4 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: deriveWorkspace.knowledgeEntry, minRole: "member" });

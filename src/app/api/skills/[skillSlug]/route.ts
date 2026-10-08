@@ -11,6 +11,10 @@ import {
 import {
   SkillUpdateSchema,
 } from "@/features/skills/schema";
+import { noDerivation } from "@/shared/api/workspace-derivation";
+
+// A skill SLUG is unique per workspace only, so it names no single container: the header decides.
+const SKILL_SLUG_DERIVATION = noDerivation("skill slug is unique per workspace only");
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -50,8 +54,8 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: SKILL_SLUG_DERIVATION });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: SKILL_SLUG_DERIVATION, minRole: "member" });
 // 🔒 `sessionOnly` (2026-09-02). `dopl_skill` advertises this deletion as
 // APP-ONLY — "there is no MCP path to it, for any role or token" — and
 // `packages/mcp-server/src/gating.ts › opRefusal` was the ONLY thing enforcing
@@ -65,6 +69,7 @@ export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
 // redirects an agent to instead.
 // Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: SKILL_SLUG_DERIVATION,
   minRole: "member",
   sessionOnly: true,
 });

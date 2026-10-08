@@ -10,6 +10,7 @@ import {
 } from "@/features/revisions/schema";
 import { buildOntologyContext } from "@/features/ontology/server/service";
 import { listOntologyRevisions } from "@/features/ontology/server/service-revisions-read";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `GET /api/ontology/ontologies/{ontologyId}/revisions` — THE ONTOLOGY ROLL-UP:
@@ -38,4 +39,4 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet, { minRole: "guest" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.ontology, minRole: "guest" });

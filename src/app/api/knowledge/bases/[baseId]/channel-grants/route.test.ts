@@ -321,7 +321,7 @@ describe("the gate options, read off the SOURCE", () => {
     expect(src).toMatch(
       /export const PUT = withWorkspaceAuth\(handlePut, \{[\s\S]*?sessionOnly: true,[\s\S]*?\}\)/
     );
-    expect(src).toMatch(/export const GET = withWorkspaceAuth\(handleGet\);/);
+    expect(src).toMatch(/export const GET = withWorkspaceAuth\(handleGet, \{ workspaceFromParams: deriveWorkspace\.knowledgeBase \}\);/);
   });
 
   it("floors the write at member+", () => {

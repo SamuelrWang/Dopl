@@ -11,6 +11,7 @@ import {
   buildAgentIdentityContext,
   resolveIdentityForLaunch,
 } from "@/features/agent-identities/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `GET /api/agent-identities/{identityId}/resolve` — the launch contract the desktop fetches at spawn
@@ -32,4 +33,4 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.agentIdentity });

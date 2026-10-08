@@ -14,6 +14,7 @@ import {
 import { ChatOutsideRetentionError } from "@/features/chats/server/errors";
 import { chatRetentionDeniedBody } from "@/features/chats/server/retention";
 import { ChatUpdateSchema } from "@/features/chats/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
@@ -53,8 +54,8 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.chat });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: deriveWorkspace.chat, minRole: "member" });
 // 🔒 `sessionOnly` (2026-09-02). `dopl_chats` advertises this deletion as
 // APP-ONLY — "there is no MCP path to it, for any role or token" — and
 // `packages/mcp-server/src/gating.ts › opRefusal` was the ONLY thing enforcing
@@ -68,6 +69,7 @@ export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
 // redirects an agent to instead.
 // Full reasoning: `src/shared/auth/write-gate-coverage.test.ts`.
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: deriveWorkspace.chat,
   minRole: "member",
   sessionOnly: true,
 });

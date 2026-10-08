@@ -26,6 +26,7 @@ import type {
   ChannelGrantChannelRef,
   ChannelResourceGrant,
 } from "@/features/knowledge/types";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `GET|PUT /api/knowledge/bases/{baseId}/channel-grants` — WHICH CHANNELS THIS
@@ -178,9 +179,10 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase });
 // 🔒 `sessionOnly` — see the docblock. Per-METHOD: the GET above is ungated.
 export const PUT = withWorkspaceAuth(handlePut, {
+  workspaceFromParams: deriveWorkspace.knowledgeBase,
   minRole: "member",
   sessionOnly: true,
 });

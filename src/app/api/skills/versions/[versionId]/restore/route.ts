@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { requireVersionId, toSkillErrorResponse } from "@/shared/api/skill-route";
 import { buildSkillContext, restoreFileVersion } from "@/features/skills/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /** POST — roll the skill body back to this snapshot. ⚠ Non-destructive: the old body is written
  *  as a NEW save (that row is the audit record); history is never rewritten. Optional
@@ -15,4 +16,4 @@ export const POST = withWorkspaceAuth(async (request, auth) => {
   } catch (err) {
     return toSkillErrorResponse(err);
   }
-}, { minRole: "member" });
+}, { workspaceFromParams: deriveWorkspace.skillVersion, minRole: "member" });

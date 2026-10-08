@@ -3,6 +3,10 @@ import { zipSync, strToU8 } from "fflate";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { requireSkillSlug, toSkillErrorResponse } from "@/shared/api/skill-route";
 import { buildSkillContext, getSkillBySlug, listFiles } from "@/features/skills/server/service";
+import { noDerivation } from "@/shared/api/workspace-derivation";
+
+// A skill SLUG is unique per workspace only, so it names no single container: the header decides.
+const SKILL_SLUG_DERIVATION = noDerivation("skill slug is unique per workspace only");
 
 /**
  * GET — the skill as a zip in the standard agent-skills layout (`<slug>/SKILL.md` +
@@ -32,4 +36,4 @@ export const GET = withWorkspaceAuth(async (_request, auth) => {
   } catch (err) {
     return toSkillErrorResponse(err);
   }
-}, { workspaceIdFromQuery: true });
+}, { workspaceFromParams: SKILL_SLUG_DERIVATION, workspaceIdFromQuery: true });

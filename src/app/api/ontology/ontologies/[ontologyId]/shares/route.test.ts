@@ -91,12 +91,12 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("wrapper options — the floor and the caller-type gate", () => {
   it("the GET is member-floored and NOT session-gated", () => {
-    expect(optionsOf(GET)).toEqual({ minRole: "member" });
+    expect(optionsOf(GET)).toEqual({ minRole: "member", workspaceFromParams: expect.any(Function) });
   });
 
   it("🔒 the PUT and the DELETE are member-floored AND `sessionOnly`", () => {
-    expect(optionsOf(PUT)).toEqual({ minRole: "member", sessionOnly: true });
-    expect(optionsOf(DELETE)).toEqual({ minRole: "member", sessionOnly: true });
+    expect(optionsOf(PUT)).toEqual({ minRole: "member", sessionOnly: true, workspaceFromParams: expect.any(Function) });
+    expect(optionsOf(DELETE)).toEqual({ minRole: "member", sessionOnly: true, workspaceFromParams: expect.any(Function) });
   });
 
   it("no method is floored to `guest` — `guest-route-floor.test.ts` reads route SOURCE", () => {

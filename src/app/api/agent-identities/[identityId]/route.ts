@@ -15,6 +15,7 @@ import {
   updateIdentity,
 } from "@/features/agent-identities/server/service";
 import { AgentIdentityUpdateSchema } from "@/features/agent-identities/schema";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `GET | PATCH | DELETE /api/agent-identities/{identityId}` — all three follow the id to its own
@@ -58,9 +59,10 @@ async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.agentIdentity });
+export const PATCH = withWorkspaceAuth(handlePatch, { workspaceFromParams: deriveWorkspace.agentIdentity, minRole: "member" });
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: deriveWorkspace.agentIdentity,
   minRole: "member",
   sessionOnly: true,
 });

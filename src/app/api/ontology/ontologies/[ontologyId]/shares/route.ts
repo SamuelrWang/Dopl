@@ -13,6 +13,7 @@ import {
   setOntologyShare,
   unshareOntology,
 } from "@/features/ontology/server/service-shares";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /**
  * `GET|PUT|DELETE /api/ontology/ontologies/{ontologyId}/shares` — WHICH HOME
@@ -88,13 +89,15 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.ontology, minRole: "member" });
 // 🔒 `sessionOnly` — see the docblock. Per-METHOD: the GET above is ungated.
 export const PUT = withWorkspaceAuth(handlePut, {
+  workspaceFromParams: deriveWorkspace.ontology,
   minRole: "member",
   sessionOnly: true,
 });
 export const DELETE = withWorkspaceAuth(handleDelete, {
+  workspaceFromParams: deriveWorkspace.ontology,
   minRole: "member",
   sessionOnly: true,
 });

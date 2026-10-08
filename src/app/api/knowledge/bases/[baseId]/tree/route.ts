@@ -6,6 +6,7 @@ import {
   buildKnowledgeContext,
   getBaseTree,
 } from "@/features/knowledge/server/service";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 const MAX_ENTRY_LIMIT = 1000;
 
@@ -45,4 +46,4 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase });

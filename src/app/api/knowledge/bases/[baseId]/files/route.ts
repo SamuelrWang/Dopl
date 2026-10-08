@@ -15,6 +15,7 @@ import {
   outlinePayload,
   projectFile,
 } from "@/features/knowledge/server/service-sections";
+import { deriveWorkspace } from "@/shared/api/workspace-derivation";
 
 /** Path-based file CRUD for `kb_read_file` / `kb_write_file` + the CLI.
  *  ID-based equivalents live under `/api/knowledge/entries/...`. */
@@ -116,5 +117,5 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
-export const PUT = withWorkspaceAuth(handlePut, { minRole: "member" });
+export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: deriveWorkspace.knowledgeBase });
+export const PUT = withWorkspaceAuth(handlePut, { workspaceFromParams: deriveWorkspace.knowledgeBase, minRole: "member" });
