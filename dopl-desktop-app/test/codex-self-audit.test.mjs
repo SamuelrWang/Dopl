@@ -65,7 +65,10 @@ test("M2: network/roots/unknown fields in any shape Dopl cannot read as 'off' re
   // What 0.155.1 / 0.160.1 actually echo still passes; narrowing flags and empty unknowns are fine.
   took({ type: "workspaceWrite", networkAccess: false, writableRoots: [], excludeSlashTmp: true, excludeTmpdirEnvVar: false })();
   took({ type: "workspaceWrite" })();
-  took({ type: "workspaceWrite", futureList: [], futureFlag: null })();
+  took({ type: "workspaceWrite", futureFlag: null })();
+  // An unknown EMPTY list/map may be an empty deny list (nothing denied): refused (reviewer re-check).
+  assert.throws(took({ type: "workspaceWrite", deniedPaths: [] }), /does not recognise \(deniedPaths\)/);
+  assert.throws(took({ type: "workspaceWrite", futureMap: {} }), /does not recognise \(futureMap\)/);
 });
 
 // ── M3: the model the thread runs is the one requested ──
@@ -122,7 +125,7 @@ test("M2 residual: an UNKNOWN sandbox field set to false refuses (Dopl cannot te
   const sent = { cwd: HERE, sandbox: "workspace-write", approvalPolicy: "on-request" };
   assert.throws(() => policy.assertThreadTook(sent, { ...threadEcho(sent), sandbox: { type: "workspaceWrite", restrictReads: false } }, same),
     /does not recognise \(restrictReads\)/);
-  policy.assertThreadTook(sent, { ...threadEcho(sent), sandbox: { type: "workspaceWrite", futureList: [], futureMap: {}, futureNull: null } }, same);
+  policy.assertThreadTook(sent, { ...threadEcho(sent), sandbox: { type: "workspaceWrite", futureNull: null } }, same);
 });
 
 test("M3: a roster row whose id ≠ model launches — the row's MODEL is sent and is what the echo must name", async () => {

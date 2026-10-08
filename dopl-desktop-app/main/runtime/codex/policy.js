@@ -115,10 +115,10 @@ function refuse(what) {
 // writable, so any boolean is fine there.
 const KNOWN_SANDBOX_FIELDS = require('./required-shape').safety.closed['result thread/start sandbox'];
 const NARROWING_FLAGS = ['excludeSlashTmp', 'excludeTmpdirEnvVar'];
-// ⚠ NOT `false` (reviewer re-check): for an UNKNOWN field Dopl cannot tell whether `false` means "off" or
-// "restriction off" (`restrictReads: false`), so only absent / null / [] / {} pass.
-const isEmptyish = (v) => v === undefined || v === null
-  || (Array.isArray(v) && v.length === 0) || (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+// ⚠ ABSENT OR NULL ONLY (reviewer re-checks): for an UNKNOWN field Dopl cannot tell what any value means —
+// `false` may be "restriction off" (`restrictReads: false`), and `[]` / `{}` may be an EMPTY DENY LIST
+// (`deniedPaths: []` = nothing denied). Only no value at all passes.
+const isEmptyish = (v) => v === undefined || v === null;
 
 /** Why this restricted sandbox echo is (or may be) wider than Dopl asked, or null. Pure, type-strict:
  *  `networkAccess` must be absent or `false`; `writableRoots` absent or `[]`; an unknown field must be empty. */
