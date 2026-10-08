@@ -1,33 +1,8 @@
-// Claude Code's frozen model table: the picker's fallback when the live roster (`roster.js`) cannot
-// be read, the id -> argv alias map an old record may still carry, the context windows, and the
-// usage readers. Transcribed from the bundled CLI's alias table and model registry, never from
-// memory; do not add a row for a model the live roster already offers. Requires nothing.
+// Claude Code's context windows and usage readers. ⚠ The frozen model table, its id -> alias map and the
+// launch-default id are DELETED (2026-10-08): the roster is live only and the default is the CLI's alias.
+// Requires nothing.
 
 // ─── BEGIN CLAUDE-MODEL-TABLE (pure; unit-tested via source extraction) ───────────
-
-// Full ids the fallback picker offers. The alias is what reaches `--model` (version-stable); the
-// dated haiku id resolving to the `haiku` alias is deliberate.
-// Refreshed 2026-10-08 from runtime 0.3.293's `supportedModels()` alias rows (fable/opus/sonnet/haiku).
-const MODEL_IDS = [
-  'claude-fable-5-1',
-  'claude-opus-5-5',
-  'claude-sonnet-5-5',
-  'claude-haiku-5-5',
-];
-const ID_TO_ALIAS = {
-  'claude-fable-5-1': 'fable',
-  'claude-opus-5-5': 'opus',
-  'claude-sonnet-5-5': 'sonnet',
-  'claude-haiku-5-5': 'haiku',
-};
-
-/** The argv alias for a listed id, or `'default'` (no pick) for anything else. */
-function aliasForModelId(value) {
-  return Object.prototype.hasOwnProperty.call(ID_TO_ALIAS, value) ? ID_TO_ALIAS[value] : 'default';
-}
-
-// The product's default model for a launch with no pick (Samuel's back-fill ruling: the current Sonnet).
-const LAUNCH_MODEL_FALLBACK = 'claude-sonnet-5-5';
 
 const WINDOW_200K = 200000;
 const WINDOW_1M = 1000000;
@@ -107,9 +82,6 @@ function sessionTokens(usage) {
 // ─── END CLAUDE-MODEL-TABLE ───────────────────────────────────────────────────────
 
 module.exports = {
-  MODEL_IDS,
-  aliasForModelId,
-  LAUNCH_MODEL_FALLBACK,
   contextWindowFor,
   promptTokens,
   sessionTokens,

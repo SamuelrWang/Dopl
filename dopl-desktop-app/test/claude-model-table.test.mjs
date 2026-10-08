@@ -39,40 +39,23 @@ const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "Opus", "opus ", "so
 
 // ── 0. the frozen table stands alone ─────────────────────────────────────────
 
-test("the frozen table evaluates standalone, with nothing in scope but itself", () => {
+test("the window/usage table evaluates standalone, with nothing in scope but itself", () => {
   const SRC = M("runtime/claude/model-table.js");
   assert.ok(!/require\(|electron|process\./.test(SRC), "the module reaches nothing");
   const pure = new Function(`${sentinelBlock(SRC, "CLAUDE-MODEL-TABLE")}
-    return { MODEL_IDS, aliasForModelId, contextWindowFor, promptTokens };`)();
-  assert.deepEqual(pure.MODEL_IDS, model.MODEL_IDS);
-  assert.equal(pure.aliasForModelId("rm -rf /"), "default");
-  assert.equal(pure.contextWindowFor("claude-opus-5"), 1000000);
+    return { contextWindowFor, promptTokens };`)();
+  assert.equal(pure.promptTokens({ input_tokens: 1, cache_read_input_tokens: 2 }), 3);
 });
 
-// ── 1b. THE SECOND VOCABULARY: FULL IDS (2026-08-22, Samuel's model-selection ruling) ────────
-// The UI and the durable per-channel posture speak FULL IDS; argv speaks ALIASES. Two frozen
-// lists and one map between them, because each is right about a different thing: an id is what
-// an operator picked and must round-trip through the bridge unchanged, an alias is
-// version-stable and is what may become `--model`.
+// ── 1b. NO MODEL TABLE (2026-10-08, SDK resilience #2) ───────────────────────────────────────
+// The frozen id list, its id -> alias map and the launch-fallback id are DELETED: the roster is live
+// only (`claude/models.js`), and the default is the CLI's own `sonnet` alias.
 
-test("the id list is frozen, and the four members are the ruling's four", () => {
-  assert.deepEqual(model.MODEL_IDS,
-    ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
-});
-
-test("aliasForModelId is the seam, and it fails closed to 'default'", () => {
-  assert.equal(model.aliasForModelId("claude-fable-5-1"), "fable");
-  assert.equal(model.aliasForModelId("claude-opus-5-5"), "opus");
-  assert.equal(model.aliasForModelId("claude-sonnet-5-5"), "sonnet");
-  assert.equal(model.aliasForModelId("claude-haiku-5-5"), "haiku");
-  for (const junk of JUNK) assert.equal(model.aliasForModelId(junk), "default", JSON.stringify(junk));
-});
-
-test("the launch fallback is a model this build can actually spend", () => {
-  // `aliasForModelId` fails closed to `'default'`, so membership, not spelling, is the guard.
-  assert.ok(model.MODEL_IDS.includes(model.LAUNCH_MODEL_FALLBACK), "the fallback is a member of MODEL_IDS");
-  assert.notEqual(model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK), "default",
-    "…so it resolves to a real alias rather than the fail-closed one");
+test("the shipped table names no model list, alias map or default id any more", () => {
+  for (const gone of ["MODEL_IDS", "aliasForModelId", "LAUNCH_MODEL_FALLBACK"]) {
+    assert.equal(model[gone], undefined, gone);
+  }
+  assert.equal(CLAUDE_MODELS.descriptor.launchDefault, "sonnet");
 });
 
 // ── ⚠ 2. THE FOUR-COPY PIN ENDED HERE — 2026-08-20, F-228 ────────────────────
@@ -177,10 +160,10 @@ test("the launch spec carries it on a RESUME too — one assembly point, so park
 
 // ⚠ REWRITTEN 2026-09-07. This pinned "'default' sets NO model field at all, so the CLI keeps
 // its own pick". Samuel removed the "Default" option and ruled that an unpicked channel launches
-// the PRODUCT fallback (`LAUNCH_MODEL_FALLBACK`), so an absent pick now assembles a real model
+// the PRODUCT fallback (the `sonnet` alias since 2026-10-08), so an absent pick now assembles a real model
 // — which is the whole point of the back-fill: the row and the launch state the same fact.
 test("'default' / absent assembles the PRODUCT fallback, not an unset option", () => {
-  const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
+  const fallback = "sonnet";
   for (const s of [session({ model: "default" }), session({ model: null }), session({ model: "" }), session({})]) {
     assert.equal(assembled(s).model, fallback);
   }
@@ -192,7 +175,7 @@ test("'default' / absent assembles the PRODUCT fallback, not an unset option", (
 const PICK_RE = new RegExp(CLAUDE_MODELS.PICK_PATTERN);
 const HOSTILE = JUNK.filter((v) => typeof v !== "string" || !v.trim() || !PICK_RE.test(v.trim()));
 test("the launch spec re-coerces: a hostile s.model can never reach argv", () => {
-  const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
+  const fallback = "sonnet";
   for (const bad of ["sonnet;rm -rf /", "opus --print", "--dangerously-skip-permissions"]) assert.ok(HOSTILE.includes(bad), bad);
   for (const junk of HOSTILE) assert.equal(assembled(session({ model: junk })).model, fallback, JSON.stringify(junk));
   assert.equal(assembled(session({ model: "claude-opus-4-5" })).model, "claude-opus-4-5", "well-formed: as itself");
@@ -241,7 +224,7 @@ test("a HOSTILE stored value is dropped to '' (no pick) on the way out of the pr
 test("a record written BEFORE this field existed reopens on the product fallback, not on undefined", () => {
   const old = durable({ key: "c1:t1", channelId: "c1", phase: "parked" });
   assert.equal(old.model, "");
-  assert.equal(CLAUDE_MODELS.launchArg(old.model), model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK));
+  assert.equal(CLAUDE_MODELS.launchArg(old.model), "sonnet");
 });
 
 test("the record-driven resume hands the stored pick back to startSession", () => {

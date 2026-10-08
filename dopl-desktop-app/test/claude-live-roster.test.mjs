@@ -29,7 +29,6 @@ const MAIN = join(HERE, "..", "main");
 const require = createRequire(import.meta.url);
 const roster = require("../main/runtime/claude/roster.js");
 const models = require("../main/runtime/claude/models.js");
-const table = require("../main/runtime/claude/model-table.js");
 
 // ⚠ MEASURED 2026-09-22 on this Mac (SDK 0.3.220, signed in, Max) — `roster.js`'s header.
 const MEASURED = [
@@ -45,10 +44,14 @@ const DESCRIPTOR = { id: "claude", label: "Claude Code", models: { source: "live
 function fakeCli(rows, over = {}) {
   const calls = { probes: 0 };
   let credential = over.credential || "dopl-token";
+  // 2026-10-08: the adapter keeps no roster; the CATALOG holds the last live read. Here that is the last
+  // rows a probe answered, so launch resolution sees what a real catalog would.
+  let last = null;
   models.inject({
     loadSdk: async () => ({}), bin: () => "/fake/claude", env: () => ({}),
     credentialSource: () => credential, sdkVersion: () => "0.3.220",
-    probe: async () => { calls.probes += 1; if (over.fail) throw new Error(over.fail); return typeof rows === "function" ? rows() : rows; },
+    probe: async () => { calls.probes += 1; if (over.fail) throw new Error(over.fail); last = typeof rows === "function" ? rows() : rows; return last; },
+    catalogModels: () => (last ? roster.rosterFrom(last, { fallbackAlias: "sonnet" }).models : []),
   });
   return { calls, signIn: (next) => { credential = next; } };
 }
@@ -96,7 +99,7 @@ const MEASURED_293 = [
 ].map(([value, resolvedModel, displayName]) => ({ value, resolvedModel, displayName }));
 
 test("🔒 the CLI's OLDER models are hidden, not dropped: the picker offers the current lineup only", async () => {
-  const r = roster.rosterFrom(MEASURED_293, { legacy: {}, fallbackId: table.LAUNCH_MODEL_FALLBACK, fallbackAlias: "sonnet" });
+  const r = roster.rosterFrom(MEASURED_293, { fallbackAlias: "sonnet" });
   assert.deepEqual(r.models.filter((m) => !m.hidden).map((m) => m.label), ["Opus 5.5", "Fable 5.1", "Sonnet 5.5", "Haiku 5.5"]);
   assert.equal(r.models.filter((m) => m.hidden).length, 8, "every pinned older row is kept, hidden");
   assert.equal(r.defaultId, "claude-sonnet-5-5", "the default is the current Sonnet, never a hidden row");
@@ -117,33 +120,31 @@ test("a pinned row is offered when no alias supersedes it (an older CLI's only F
   assert.equal(r.models.some((m) => m.hidden), false);
 });
 
-// ── 3. THE FALLBACK ONLY WHEN THE READ FAILS, AND IT SAYS SO ─────────────────────────────────
+// ── 3. A FAILED READ IS A REJECTION WITH ITS CAUSE — NEVER A SHIPPED TABLE ─────────────────────
 
-test("a FAILED read answers the build's table, marked `stale` with the reason — never an empty picker", async () => {
+test("a FAILED read rejects with the cause; the catalog renders it, and no table answers", async () => {
   fakeCli([], { fail: "spawn ENOENT" });
   try {
-    const r = await models.models();
-    assert.equal(r.stale, true);
-    assert.match(r.reason, /could not read Claude Code's model list \(spawn ENOENT\)/);
-    assert.deepEqual(r.ids, table.MODEL_IDS, "the fallback is the frozen table, and only then");
-    const c = loadCatalog().catalogFromRoster("claude", DESCRIPTOR, r);
-    assert.equal(c.status, "stale", "labels, but not newly selectable — the web's `selectableModels` offers nothing");
-    assert.ok(c.reason.length > 0);
+    await assert.rejects(models.models(), /could not read Claude Code's model list \(spawn ENOENT\)/);
+    const catalog = loadCatalog();
+    catalog.snapshot(adapter()); await settle(); await settle();
+    const c = catalog.snapshot(adapter());
+    assert.equal(c.status, "unavailable", "no models it could not read, and it says why");
+    assert.match(c.reason, /spawn ENOENT/);
   } finally { models.inject(); }
 });
 
-// ── 4. THE CACHE KEY ─────────────────────────────────────────────────────────────────────────
+// ── 4. NO ADAPTER CACHE: THE CATALOG IS THE ONE ──────────────────────────────────────────────
 
-test("signed out, nothing is probed (the operator's own login would answer); a sign-in reads it once", async () => {
+test("signed out, nothing is probed (the operator's own login would answer); signed in, every read is live", async () => {
   const cli = fakeCli(MEASURED.slice(3), { credential: "none" });
   try {
-    const out = await models.models();
+    await assert.rejects(models.models(), /not signed in to Dopl/);
     assert.equal(cli.calls.probes, 0, "no probe without Dopl's token");
-    assert.equal(out.stale, true, "the build's table answers");
     cli.signIn("dopl-token");
     assert.equal((await models.models()).models.length, 2);
     await models.models();
-    assert.equal(cli.calls.probes, 1, "one probe per key");
+    assert.equal(cli.calls.probes, 2, "the adapter keeps nothing; `model-catalog.js` decides when to read");
   } finally { models.inject(); }
 });
 
@@ -186,22 +187,16 @@ test("resolution: ids, legacy ids, aliases and undated spellings all find their 
   } finally { models.inject(); }
 });
 
-test("RC-01: a long-context pick resumes as ITSELF before any roster read — never the short row", async () => {
-  // A parked session on `claude-opus-5[1m]` is resumed after a restart, before anything read the
-  // live roster: the frozen table answers, and its base-id match stripped `[1m]` → `--model opus`
-  // (200k) under a 1M conversation. Launch resolution is exact id / alias only.
+test("RC-01: before any roster read, a pick launches as ITSELF — never a short row, never a table", async () => {
+  // A parked session on `claude-opus-5[1m]` resumed after a restart, before anything read the live
+  // roster. 2026-10-08: no table answers in the meantime, so the pick is sent as itself (an unread
+  // roster is not evidence it is gone, RC-03) and no base-id step can strip `[1m]`.
   fakeCli([], { fail: "not read yet" });
-  models.forget();
   try {
     assert.equal(models.launchArg("claude-opus-5[1m]"), "claude-opus-5[1m]");
-    assert.equal(models.launchArg("claude-fable-5[1m]"), "claude-fable-5[1m]");
-    // A live switch on the frozen table refuses with a sentence rather than moving to the short row.
-    assert.equal(models.resolveLaunchModel("claude-opus-5[1m]").ok, false);
-    assert.equal(models.launchArg("claude-opus-5-5"), "opus", "an exact frozen id still finds its row");
-    assert.equal(models.launchArg("claude-opus-5"), "claude-opus-5", "an id the table no longer lists resumes as itself");
+    assert.equal(models.resolveLaunchModel("claude-opus-5[1m]").ok, true, "unread is not refused");
+    assert.equal(models.launchArg(""), "sonnet", "no pick: the CLI's own alias");
     assert.equal(models.launchArg("opus --print"), "sonnet", "what could not BE an id never reaches argv");
-    // Labelling keeps the base-id step: `[1m]` still names the Opus row for a card.
-    assert.equal(roster.match(models.frozenRoster().models, "claude-opus-5-5[1m]").id, "claude-opus-5-5");
   } finally { models.inject(); }
 });
 
@@ -225,15 +220,6 @@ test("🔒 no runtime borrows another's roster: each catalog refuses the other's
   assert.equal(catalog.modelRefusal(codex, "", "Codex"), null, "no pick is never refused");
   assert.equal(catalog.modelRefusal(catalog.makeCatalog("codex", "live", "unavailable"), "x", "Codex"), null,
     "a roster Dopl could not read is not evidence a model does not exist");
-});
-
-test("RC-03: the build's fallback table LABELS only — a pick it lacks is not refused", () => {
-  // The probe failed, so Dopl could not read the roster; that is not evidence the model is absent.
-  const catalog = loadCatalog();
-  const fallback = catalog.catalogFromRoster("claude", DESCRIPTOR, models.frozenRoster("the probe timed out"));
-  assert.equal(fallback.status, "stale");
-  assert.equal(catalog.modelRefusal(fallback, "claude-opus-5[1m]", "Claude Code"), null);
-  assert.equal(catalog.vouches(fallback), false);
 });
 
 // ── 6. THE FUNNEL ────────────────────────────────────────────────────────────────────────────
@@ -284,7 +270,7 @@ test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messag
   const rows = await roster.probe({ sdk: counting, options: { pathToClaudeCodeExecutable: bin, env: { ...process.env } } });
   assert.ok(Array.isArray(rows) && rows.length > 0, "the CLI answered");
   for (const row of rows) assert.ok(row.value && row.displayName, JSON.stringify(row));
-  const r = roster.rosterFrom(rows, { fallbackId: table.LAUNCH_MODEL_FALLBACK, fallbackAlias: "sonnet" });
+  const r = roster.rosterFrom(rows, { fallbackAlias: "sonnet" });
   assert.ok(r.models.length > 0);
   assert.equal(messages, 0, "no user message, so no turn");
   console.log("LIVE supportedModels:", JSON.stringify(rows.map((x) => [x.value, x.resolvedModel, x.displayName])));

@@ -54,6 +54,9 @@ function normalizeEntry(row) {
     hidden: row.hidden === true,
     // Other spellings of this model (legacy id, launch alias): matched by `findModel`, never offered.
     aliases: aliasesOf(row.aliases, id),
+    // The runtime's own launch argument for this row (a CLI alias, `opus[1m]`), or null = the id itself.
+    // Kept so an adapter resolves a launch off this cache alone (2026-10-08: adapters keep no roster).
+    launch: str(row.launch) || null,
     dimensions: normalizeDimensions(row.dimensions),
   };
 }

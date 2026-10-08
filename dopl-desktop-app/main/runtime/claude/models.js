@@ -1,61 +1,23 @@
-// THE CLAUDE MODEL ROSTER — live (`roster.js` reads `supportedModels()` off a turn-free CLI
-// handshake), with this build's table as the fallback when that read fails: the fallback roster is
-// marked `stale`, so it labels but proves nothing (`model-catalog.js › vouches`).
+// THE CLAUDE MODEL ROSTER — always LIVE (`roster.js` reads `supportedModels()` off a turn-free CLI
+// handshake). ⚠ NO CACHE AND NO SHIPPED TABLE HERE (2026-10-08, SDK resilience #2): the shared catalog
+// (`model-catalog.js`) is the one cache, persisted per build key (`roster-key.js`), and a read that fails
+// is a rejection the catalog renders (`stale` over held models, else `unavailable`). A model id typed into
+// this build could only go stale; the CLI's own aliases (`sonnet`) are the stable vocabulary.
 // Electron-free at load: the loader and the credential probe are reached lazily (`defaultDeps`),
 // because `session-profiles.js` reaches this adapter through the registry and is evaluated standalone.
 
-const modelTable = require('./model-table');
 const roster = require('./roster');
 const { pickOf } = require('../selection-vocabulary');
 const { notOfferedSentence } = require('../model-catalog');
-
-// The fallback's display names; pinned against web `agent-models.ts › AGENT_MODELS` by
-// `test/runtime-model-catalog.test.mjs`. A live roster carries the CLI's own names.
-const LABELS = {
-  'claude-fable-5-1': { label: 'Fable 5.1', short: 'Fable' },
-  'claude-opus-5-5': { label: 'Opus 5.5', short: 'Opus' },
-  'claude-sonnet-5-5': { label: 'Sonnet 5.5', short: 'Sonnet' },
-  'claude-haiku-5-5': { label: 'Haiku 5.5', short: 'Haiku' },
-};
 
 // The pick grammar: a SHAPE gate for `--model <value>` on argv, not a roster check (the live roster
 // decides). An id or alias, a `[1m]`-style suffix at the end only; bounded by the 120-char column.
 const PICK_PATTERN = '^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,109}(\\[[A-Za-z0-9]{1,8}\\])?$';
 const PICK_RE = new RegExp(PICK_PATTERN);
 
-const legacyAliases = () => modelTable.MODEL_IDS.reduce((m, id) => {
-  m[id] = modelTable.aliasForModelId(id);
-  return m;
-}, {});
-
-/** The table this build shipped with, in the live roster's own shape. */
-function frozenRoster(reason) {
-  const fallback = descriptor.launchDefault;
-  const models = modelTable.MODEL_IDS.map((id) => {
-    const alias = modelTable.aliasForModelId(id);
-    return {
-      id,
-      value: alias,
-      label: (LABELS[id] && LABELS[id].label) || id,
-      short: (LABELS[id] && LABELS[id].short) || null,
-      isDefault: id === fallback,
-      hidden: false,
-      aliases: [alias, roster.baseId(id)].filter((v, i, a) => v && v !== id && a.indexOf(v) === i),
-      dimensions: {},
-    };
-  });
-  return {
-    source: 'live',
-    key: 'frozen',
-    ids: models.map((m) => m.id),
-    models,
-    defaultId: fallback,
-    // This build's memory, not the CLI's answer.
-    stale: true,
-    reason: reason || 'Dopl could not read Claude Code\'s model list, so it is showing the list this build shipped with.',
-    truncated: false,
-  };
-}
+// The product default (Samuel's back-fill ruling: "the Sonnet") as the CLI's own ALIAS, which follows
+// every new Sonnet — never a model id this build would have to be re-released to move.
+const LAUNCH_DEFAULT_ALIAS = 'sonnet';
 
 // Injectable for the suite.
 function defaultDeps() {
@@ -72,6 +34,15 @@ function defaultDeps() {
     },
     probe: roster.probe,
     observeShape: roster.observeShape,
+    // The catalog's models now (the one cache), for SYNCHRONOUS launch resolution. Lazy: the registry
+    // requires this module. Never throws; [] before any read.
+    catalogModels: () => {
+      try {
+        const adapter = require('../index').resolve('claude');
+        const c = require('../model-catalog').snapshot(adapter);
+        return c && Array.isArray(c.models) ? c.models : [];
+      } catch (_) { return []; }
+    },
     // The updater's active download, or null when launches run the bundle.
     downloadedBin: () => (require('../updates').activeFor(require('./update-source')) || {}).path || null,
     // A failed handshake on a downloaded binary sends new launches back to the last good one.
@@ -80,12 +51,6 @@ function defaultDeps() {
 }
 let deps = defaultDeps();
 
-let held = null; // { key, roster } — the last LIVE answer, never a fallback
-let inflight = null; // { key, promise }
-
-/** `<binary>@<binary version>#<credential source>`: synchronous so `model-catalog.js` notices a move on a
- *  look (a runtime update moves both halves); the credential source is in it because the roster is per
- *  account (signed out omits Fable). */
 /** The build new launches run, for core's key (`roster-key.js`): binary, SDK version, credential source. */
 function buildIdentity() {
   let bin = null;
@@ -95,12 +60,6 @@ function buildIdentity() {
   let account = null;
   try { account = deps.credentialSource() || null; } catch (_) { account = null; }
   return { path: bin, version, account };
-}
-
-function rosterKey() {
-  let bin = '?';
-  try { bin = String(deps.bin() || '?'); } catch (_) { bin = '?'; }
-  return `${bin}@${deps.sdkVersion()}#${deps.credentialSource()}`;
 }
 
 // A downloaded build's first handshake may wait out macOS's first-exec scan, so a failed probe on one is
@@ -129,62 +88,50 @@ async function probeRows(sdk) {
   }
 }
 
-async function readLive(key) {
+async function readLive() {
   const sdk = await deps.loadSdk();
-  const { rows, moved } = await probeRows(sdk);
-  return roster.rosterFrom(rows, {
-    // A rejection moved the binary, so the roster is filed under the key of what launches run now.
-    key: moved ? rosterKey() : key,
-    legacy: legacyAliases(),
-    fallbackId: descriptor.launchDefault,
-    fallbackAlias: modelTable.aliasForModelId(descriptor.launchDefault),
-  });
+  const { rows } = await probeRows(sdk);
+  return roster.rosterFrom(rows, { fallbackAlias: LAUNCH_DEFAULT_ALIAS });
 }
 
-/** The offerable roster. Never throws: a failed read answers the fallback table (`stale`, with the
- *  reason), never an empty list or another runtime's. */
+/** The offerable roster, read LIVE every call (the catalog decides when to call). Rejects with a
+ *  readable reason; never answers a table. */
 async function models() {
-  // Without Dopl's token the probe would run on the operator's own login, so the table answers.
-  if (deps.credentialSource() === 'none') return frozenRoster();
-  const key = rosterKey();
-  if (held && held.key === key) return held.roster;
-  if (inflight && inflight.key === key) return inflight.promise;
-  const promise = readLive(key)
-    .then((live) => {
-      if (!live.models.length) return frozenRoster(live.reason);
-      held = { key: live.key || key, roster: live };
-      return live;
-    })
-    .catch((err) => frozenRoster(`Dopl could not read Claude Code's model list (${(err && err.message) || 'unknown error'}), so it is showing the list this build shipped with.`))
-    .finally(() => { if (inflight && inflight.promise === promise) inflight = null; });
-  inflight = { key, promise };
-  return promise;
-}
-
-/** The roster a SYNCHRONOUS caller resolves against: the live one when held, else the table. */
-function current() {
-  return (held && held.roster) || frozenRoster();
+  // Without Dopl's token the probe would run on the operator's own login.
+  if (deps.credentialSource() === 'none') {
+    throw new Error('Claude Code is not signed in to Dopl on this Mac, so its model list cannot be read.');
+  }
+  let live;
+  try {
+    live = await readLive();
+  } catch (err) {
+    throw new Error(`Dopl could not read Claude Code's model list (${(err && err.message) || 'unknown error'}).`);
+  }
+  if (!live.models.length) throw new Error(live.reason || 'Claude Code answered with no models Dopl could read.');
+  return live;
 }
 
 /**
- * The `--model` argument for a pick — `{ ok, arg, id, reason }`, synchronous: the matched row's own
- * `value`. No pick is `launchDefault` on the same roster; `ok: false` is a refusal, never a swap.
+ * The `--model` argument for a pick — `{ ok, arg, id, reason }`, synchronous, against the catalog's
+ * models: the matched row's own launch value. No pick is the product default (the `sonnet` alias row,
+ * else the alias itself, which the CLI resolves). With NO roster read yet, a grammatical pick is sent as
+ * itself: an unreadable roster is not evidence a model is absent (RC-03). A read roster that lacks the
+ * pick refuses, never swaps.
  */
 function resolveLaunchModel(value) {
-  const r = current();
+  const models = deps.catalogModels();
   const v = pickOf(value);
   if (!v) {
-    const fallback = descriptor.launchDefault;
-    const alias = modelTable.aliasForModelId(fallback);
-    const fb = roster.match(r.models, fallback) || roster.match(r.models, alias);
+    const fb = roster.match(models, LAUNCH_DEFAULT_ALIAS);
     return fb
-      ? { ok: true, arg: fb.value, id: fb.id, reason: '' }
-      : { ok: true, arg: alias, id: fallback, reason: '' };
+      ? { ok: true, arg: fb.launch || fb.id, id: fb.id, reason: '' }
+      : { ok: true, arg: LAUNCH_DEFAULT_ALIAS, id: LAUNCH_DEFAULT_ALIAS, reason: '' };
   }
   // Exact id or alias only: a base-id match would resume a `[1m]` pick on the short row (RC-01).
-  const row = roster.matchExact(r.models, v);
-  if (row) return { ok: true, arg: row.value, id: row.id, reason: '' };
-  return { ok: false, arg: '', id: '', reason: notOfferedSentence(require('./index').descriptor.label, v, r.models) };
+  const row = roster.matchExact(models, v);
+  if (row) return { ok: true, arg: row.launch || row.id, id: row.id, reason: '' };
+  if (!models.length && PICK_RE.test(v)) return { ok: true, arg: v, id: v, reason: '' };
+  return { ok: false, arg: '', id: '', reason: notOfferedSentence(require('./index').descriptor.label, v, models) };
 }
 
 /**
@@ -209,17 +156,17 @@ async function shape() {
   return deps.observeShape({ sdk, options });
 }
 
-/** Drop the live cache (tests, an explicit re-probe); `inject` swaps the dependencies. */
-function forget() { held = null; inflight = null; }
-function inject(overrides) { deps = Object.assign(defaultDeps(), overrides || {}); forget(); }
+/** `inject` swaps the dependencies (tests); there is no cache to drop. */
+function inject(overrides) { deps = Object.assign(defaultDeps(), overrides || {}); }
 
 // Descriptor half.
 const descriptor = {
   source: 'live',
   // null, not []: no second dimension (the CLI's effort levels are not wired).
   dimensions: null,
-  // The model a no-pick launch runs on; this adapter spends it itself (`resolveLaunchModel('')`).
-  launchDefault: modelTable.LAUNCH_MODEL_FALLBACK,
+  // The model a no-pick launch runs on, as the CLI's alias: the catalog marks the row carrying it
+  // (`model-catalog.js › catalogFromRoster`), and this adapter spends it itself (`resolveLaunchModel('')`).
+  launchDefault: LAUNCH_DEFAULT_ALIAS,
   // Storage shape-checks only; the live roster decides what may be selected and launched.
   pick: {
     absent: '',
@@ -229,6 +176,6 @@ const descriptor = {
 };
 
 module.exports = {
-  models, shape, rosterKey, buildIdentity, resolveLaunchModel, launchArg, frozenRoster, forget, inject,
+  models, shape, buildIdentity, resolveLaunchModel, launchArg, inject,
   descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };

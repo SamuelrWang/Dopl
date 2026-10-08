@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { legacyPreset } from "./_channel-prefs-block.mjs";
 import { between, codeOf, fnOf, orderOf } from "./helpers/source-probe.mjs";
+import { claudeTable } from "./_model-catalog-harness.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -34,9 +35,11 @@ const model = require(join(MAIN, "runtime", "claude", "model-table.js"));
 // U10 (2026-09-21): `setModelByTask`'s new free vars. REAL, never stubbed — `main/runtime/index.js`
 // is electron-free by contract, so the live-switch refusal is asked of the SHIPPED descriptors.
 const RUNTIME_REGISTRY = require(join(MAIN, "runtime/index.js"));
+// 2026-10-08: the Claude adapter keeps no roster; launch resolution reads the catalog. Here the catalog
+// holds the MEASURED 0.3.293 roster (`_model-catalog-harness.mjs`).
+const CLAUDE_MODELS = require(join(MAIN, "runtime", "claude", "models.js"));
+CLAUDE_MODELS.inject({ catalogModels: () => claudeTable().models });
 
-const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "opus", "claude-opus-4-5",
-  "claude-opus-5 ", "--dangerously-skip-permissions", "claude-opus-5\n--model=x"];
 
 /** Source with comments blanked, so a tombstone naming a deleted symbol does not count. */
 const code = codeOf;
@@ -112,16 +115,15 @@ test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing 
     "the funnel owns the unknown-model refusal and the runtime default");
 });
 
-test("LAUNCH: an unknown stored model degrades to the PRODUCT FALLBACK, never to argv", () => {
-  // Driven rather than asserted from source: the whole chain, id -> alias -> argv.
-  const CLAUDE_MODELS = require(join(MAIN, "runtime", "claude", "models.js"));
-  const fallback = model.aliasForModelId(model.LAUNCH_MODEL_FALLBACK);
-  for (const junk of JUNK) {
-    assert.equal(CLAUDE_MODELS.launchArg(model.aliasForModelId(junk)), fallback, JSON.stringify(junk));
+test("LAUNCH: what could not BE a model id degrades to the product default; a row launches as its own value", () => {
+  // Driven rather than asserted from source: pick -> catalog row -> argv. 2026-10-08: no table, the
+  // default is the CLI's `sonnet` alias row.
+  for (const junk of ["", " ", null, undefined, 0, true, {}, [], "--dangerously-skip-permissions", "claude-opus-5\n--model=x", "opus --print"]) {
+    assert.equal(CLAUDE_MODELS.launchArg(junk), "sonnet", JSON.stringify(junk));
   }
-  for (const id of model.MODEL_IDS) {
-    assert.match(CLAUDE_MODELS.launchArg(model.aliasForModelId(id)), /^[a-z]+$/, id);
-  }
+  assert.equal(CLAUDE_MODELS.launchArg("claude-opus-5-5"), "opus");
+  assert.equal(CLAUDE_MODELS.launchArg("claude-opus-4-8"), "claude-opus-4-8", "a hidden older row still launches");
+  assert.equal(CLAUDE_MODELS.launchArg("claude-opus-4-5"), "claude-opus-4-5", "a resumed session's own id is sent as itself");
 });
 
 // ── 4. THE LIVE SWITCH ───────────────────────────────────────────────────────────────────────

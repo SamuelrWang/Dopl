@@ -69,17 +69,28 @@ export function loadCodexModels(client) {
 
 export const claudeModels = requireMain(join(MAIN, "runtime", "claude", "models.js"));
 
-/**
- * THE CLAUDE ADAPTER'S BUILD-TIME TABLE, AS A PLAIN SYNCHRONOUS ROSTER (2026-09-22). The adapter is
- * `live` now (`claude/models.js`), and this table is its FALLBACK — which it marks `stale`. These
- * suites use it as "a runtime with a fixed table" to drive the CONTRACT (inline reads, isolation,
- * labels), so the stale flag is dropped here and the live adapter has its own suite
- * (`claude-live-roster.test.mjs`).
- */
-export const claudeTable = () => Object.assign({}, claudeModels.frozenRoster(), { stale: false, source: "frozen" });
+const claudeRoster = requireMain(join(MAIN, "runtime", "claude", "roster.js"));
 
-/** The four ids that must never appear on another runtime's surface. */
-export const CLAUDE_IDS = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
+/**
+ * ⚠ MEASURED 2026-10-08 on runtime 0.3.293 (signed in): Claude Code's own `supportedModels()` rows —
+ * its current aliases plus its "older models" pinned by id. The adapter keeps no table (2026-10-08,
+ * SDK resilience #2), so the suites drive the catalog CONTRACT off this real answer instead.
+ */
+export const MEASURED_293 = [
+  ["default", "claude-opus-5-5", "Default (recommended)"], ["opus", "claude-opus-5-5", "Opus 5.5"],
+  ["fable", "claude-fable-5-1", "Fable 5.1"], ["sonnet", "claude-sonnet-5-5", "Sonnet 5.5"],
+  ["haiku", "claude-haiku-5-5", "Haiku 5.5"], ["claude-haiku-4-5-20251001", "claude-haiku-4-5-20251001", "Haiku 4.5"],
+  ["claude-sonnet-5", "claude-sonnet-5", "Sonnet 5"], ["claude-opus-5", "claude-opus-5", "Opus 5"],
+  ["claude-fable-5", "claude-fable-5", "Fable 5"], ["claude-opus-4-8", "claude-opus-4-8", "Opus 4.8"],
+  ["claude-opus-4-7", "claude-opus-4-7", "Opus 4.7"], ["claude-opus-4-6", "claude-opus-4-6", "Opus 4.6"],
+  ["claude-sonnet-4-6", "claude-sonnet-4-6", "Sonnet 4.6"],
+].map(([value, resolvedModel, displayName]) => ({ value, resolvedModel, displayName }));
+
+/** The measured answer as the adapter's roster (a plain synchronous roster for the contract suites). */
+export const claudeTable = () => claudeRoster.rosterFrom(MEASURED_293, { fallbackAlias: "sonnet" });
+
+/** Every Claude id in that roster: none may ever appear on another runtime's surface. */
+export const CLAUDE_IDS = claudeTable().ids;
 
 export const noClaude = (catalog, which) => {
   for (const id of catalog.models.map((m) => m.id)) {

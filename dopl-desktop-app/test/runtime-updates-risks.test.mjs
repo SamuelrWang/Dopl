@@ -168,11 +168,13 @@ test("claude roster: a download that fails twice is rejected and the roster come
     assert.notEqual(r.stale, true, "a live roster, read from the bundle");
     assert.deepEqual(seen, [planted.bin, planted.bin, planted.bundled.path]);
     assert.equal(planted.loader.resolveClaudeExecutable(), planted.bundled.path, "new launches run the bundle");
-    assert.ok(r.key.startsWith(`${planted.bundled.path}@`), "filed under what launches run now");
-    // The bundle failing is NOT a reason to reject anything, and is not retried.
+    // 2026-10-08: core files the roster under the build key (`roster-key.js`); the adapter names the build.
+    assert.equal(models.buildIdentity().path, planted.bundled.path, "keyed by what launches run now");
+    // The bundle failing is NOT a reason to reject anything, and is not retried: it is a rejection the
+    // catalog renders (no shipped table answers any more).
     seen.length = 0;
     models.inject({ loadSdk: async () => ({}), env: () => ({}), credentialSource: () => "dopl-token", probe: async (o) => { seen.push(o.timeoutMs || null); throw new Error("down"); } });
-    assert.equal((await models.models()).stale, true);
+    await assert.rejects(models.models(), /down/);
     assert.deepEqual(seen, [null]);
   } finally {
     models.inject();

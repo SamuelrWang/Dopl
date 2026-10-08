@@ -65,7 +65,9 @@ function entryFrom(row, legacy) {
     add(oldId);
     add(legacy[oldId]);
   }
-  return { id, value, label, short: shortOf(label), isDefault: false, hidden: false, aliases, dimensions: {} };
+  // `launch` is the runtime's own argv value for the row (`model-catalog.js` keeps it, so a launch resolves
+  // off the one cache); `value` stays for this module's readers.
+  return { id, value, launch: value, label, short: shortOf(label), isDefault: false, hidden: false, aliases, dimensions: {} };
 }
 
 /** The row a pick names EXACTLY — its id, then any alias. What a LAUNCH resolves by (RC-01). */

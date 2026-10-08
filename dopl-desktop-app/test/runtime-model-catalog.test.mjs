@@ -154,42 +154,34 @@ test("a model that DISAPPEARS after an upgrade leaves the catalog, and its raw i
 
 // ── 5. REGRESSION — THE DEFAULT RUNTIME, THROUGH THE SAME CONTRACT, UNCHANGED ────────────────
 
-test("the frozen roster delivers the SAME normalized contract, with its labels and one default", () => {
+test("the LIVE roster (measured 0.3.293) delivers the normalized contract: labels, launch values, one default", () => {
   const catalog = loadCatalog().catalogFromRoster(
     "claude",
-    { id: "claude", label: "Claude Code", models: { source: "frozen", dimensions: null } },
+    { id: "claude", label: "Claude Code", models: { source: "live", dimensions: null } },
     claudeTable()
   );
   assert.equal(catalog.status, "ready");
-  assert.equal(catalog.source, "frozen");
-  assert.deepEqual(catalog.models.map((m) => m.id), CLAUDE_IDS, "the roster order is unchanged");
-  // ⚠ 2026-09-22: and the adapter's OWN fallback marks the same table `stale` — see
-  // `claude-live-roster.test.mjs` for the live roster it stands in for.
-  const fallback = loadCatalog().catalogFromRoster("claude",
-    { id: "claude", label: "Claude Code", models: { source: "live", dimensions: null } }, claudeModels.frozenRoster());
-  assert.equal(fallback.status, "stale", "a fallback table is never presented as a live answer");
-  assert.ok(fallback.reason.length > 0, "and it says why");
-  assert.deepEqual(catalog.models.map((m) => m.label),
-    ["Fable 5.1", "Opus 5.5", "Sonnet 5.5", "Haiku 5.5"], "the labels are the current lineup");
-  assert.equal(catalog.defaultId, "claude-sonnet-5-5", "the product's back-fill is the default marker");
+  assert.deepEqual(catalog.models.map((m) => m.id), CLAUDE_IDS, "the CLI's order is kept");
+  assert.deepEqual(catalog.models.filter((m) => !m.hidden).map((m) => m.label),
+    ["Opus 5.5", "Fable 5.1", "Sonnet 5.5", "Haiku 5.5"], "the CLI's own names, older models hidden");
+  // 2026-10-08: the runtime's launch argument survives the cache (adapters keep no roster).
+  assert.equal(catalog.models.find((m) => m.id === "claude-sonnet-5-5").launch, "sonnet");
+  assert.equal(catalog.models.find((m) => m.id === "claude-opus-4-8").launch, "claude-opus-4-8");
+  assert.equal(catalog.defaultId, "claude-sonnet-5-5", "the `sonnet` alias row is the default marker");
   assert.equal(catalog.models.filter((m) => m.isDefault).length, 1);
   // ⚠ NO MODEL-SCOPED DIMENSION on this runtime — absent, never an empty control.
   assert.deepEqual(catalog.dimensions, []);
   for (const m of catalog.models) assert.deepEqual(m.dimensions, {});
 });
 
-test("🔒 the desktop's label table AGREES WITH THE WEB'S, because the two trees cannot import each other", () => {
-  // The pin `session-model.js › LAUNCH_MODEL_FALLBACK` already had, applied to the labels U6 moved
-  // into `claude/models.js`. A change to one side that misses the other fails HERE rather than
-  // shipping an operator "Opus" on a card and "Sonnet" in Settings for one agent.
-  const web = readFileSync(join(WEB, "agent-models.ts"), "utf8");
-  const block = /export const AGENT_MODELS:[\s\S]*?\n\];/.exec(web);
-  assert.ok(block, "agent-models.ts › AGENT_MODELS was not found — the pin cannot be read");
-  const rows = [...block[0].matchAll(/id:\s*"([^"]+)",\s*label:\s*"([^"]+)",\s*short:\s*"([^"]+)"/g)]
-    .map(([, id, label, short]) => ({ id, label, short }));
-  assert.equal(rows.length, 4, "the web table moved — re-derive this pin");
-  const desktop = claudeTable().models;
-  assert.deepEqual(desktop.map((m) => ({ id: m.id, label: m.label, short: m.short })), rows);
+test("🔒 the Claude adapter ships NO model table: no model id literal in its roster or model files", () => {
+  // 2026-10-08 (Samuel: SDK integrations pull live data; never recode per model). A model id typed into
+  // this build is a promise to re-release it; the only vocabulary allowed is the CLI's own aliases.
+  for (const file of ["models.js", "roster.js"]) {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "main", "runtime", "claude", file), "utf8")
+      .split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+    assert.equal(/['"`]claude-(opus|sonnet|haiku|fable|mythos)-\d/.test(src), false, `${file} names a model id`);
+  }
 });
 
 // ── 6. THE MAP ITSELF ────────────────────────────────────────────────────────────────────────
