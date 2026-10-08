@@ -91,10 +91,13 @@ describe("the label the operator reads", () => {
     // ⚠ THE WHOLE POINT OF F-692's UI half: the resolved profile must have a label, or the
     // row falls back to the stored one's and over-promises what the desktop will run.
     expect(AGENT_TOOL_PROFILE_LABELS.channel_agent).toBe("Full access, no shell");
-    // ⚠ The desktop denies the GROUP (Bash + BashOutput + KillShell), so naming one verb
-    // would read as a fence with the door beside it open.
-    expect(PROFILES_SRC).toMatch(
-      /const SHELL_BUILTINS = \['Bash', 'BashOutput', 'KillShell'\];/
-    );
+    // ⚠ The desktop denies the GROUP (Bash + BashOutput + KillShell + TaskStop, the CLI's successor
+    // to KillShell, 2026-10-08), so naming one verb would read as a fence with the door beside it open.
+    // Membership, not the literal: a new shell verb joins the group without breaking this pin.
+    const group = /const SHELL_BUILTINS = \[([^\]]*)\];/.exec(PROFILES_SRC);
+    expect(group).not.toBeNull();
+    for (const verb of ["Bash", "BashOutput", "KillShell", "TaskStop"]) {
+      expect(group?.[1]).toContain(`'${verb}'`);
+    }
   });
 });
