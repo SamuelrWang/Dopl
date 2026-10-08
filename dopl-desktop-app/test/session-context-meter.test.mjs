@@ -82,6 +82,15 @@ test("a DATED id resolves to its undated row", () => {
   assert.equal(model.contextWindowFor("claude-haiku-4-5-20251001"), 200000);
 });
 
+test("a Claude model NEWER than the table reads 1M by family from generation 5; older unknowns stay null", () => {
+  for (const id of ["claude-opus-6", "claude-sonnet-5-7", "claude-fable-6-2", "claude-haiku-7", "claude-mythos-6-1", "claude-opus-6-20270101"]) {
+    assert.equal(model.contextWindowFor(id), 1000000, id);
+  }
+  for (const id of ["claude-opus-4-9", "claude-sonnet-4-7", "claude-haiku-3", "claude-opus-6-x", "claude-opus", "claude-poet-6"]) {
+    assert.equal(model.contextWindowFor(id), null, id);
+  }
+});
+
 test("an UNKNOWN model has NO denominator — never a guessed one", () => {
   for (const junk of ["", " ", null, undefined, 0, {}, [], "claude-something-9", "gpt-5", "default"]) {
     assert.equal(model.contextWindowFor(junk), null, JSON.stringify(junk));

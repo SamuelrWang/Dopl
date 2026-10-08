@@ -61,7 +61,13 @@ const CONTEXT_WINDOWS = {
   'claude-mythos-5': WINDOW_1M,
 };
 
-/** The window for a model id or alias, or `null` when this table cannot say (never a guess). */
+// A model newer than this table (2026-10-08, Samuel): every Claude family from generation 5 on ships
+// a 1M window, so `claude-<family>-<N>…` with N >= 5 reads 1M rather than an empty meter. Older
+// generations varied (200k vs 1M), so an unlisted pre-5 id stays unknown.
+const FAMILY_1M_RE = /^claude-(?:opus|sonnet|fable|haiku|mythos)-(\d+)(?:-\d+)*$/;
+const FAMILY_1M_FROM = 5;
+
+/** The window for a model id or alias: the table, else the generation-5+ family rule, else `null`. */
 function contextWindowFor(model) {
   const id = typeof model === 'string' ? model.trim() : '';
   if (!id) return null;
@@ -72,6 +78,8 @@ function contextWindowFor(model) {
   if (undated !== id && Object.prototype.hasOwnProperty.call(CONTEXT_WINDOWS, undated)) {
     return CONTEXT_WINDOWS[undated];
   }
+  const family = FAMILY_1M_RE.exec(undated);
+  if (family && Number(family[1]) >= FAMILY_1M_FROM) return WINDOW_1M;
   return null;
 }
 
