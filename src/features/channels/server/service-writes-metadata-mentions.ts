@@ -1,10 +1,13 @@
 import "server-only";
 import {
+  buildMentionIndex,
+  insertableHandle,
   memberHandlesOf,
   mentionTokensOf,
   resolveMentions,
   type MentionCandidate,
 } from "../lib/mentions";
+import { ChannelAddresseeUntaggedError } from "./errors-recipient";
 import type { ChannelMemberRow } from "./dto";
 import { profilesById } from "./service-shared";
 
@@ -164,4 +167,55 @@ export function mentionStampOf(
 ): string[] {
   const fromAddress = (addressed ?? []).filter((id) => authorIsAgent || id !== authorUserId);
   return [...new Set([...bodyUserIds, ...fromAddress])];
+}
+
+/**
+ * **AN AGENT'S ADDRESSED MESSAGE MUST NAME EVERY PERSON IT IS FOR** (Samuel, 2026-10-08). No pill
+ * renders `to=` any more, so if the body skips a recipient no reader can tell who it was for —
+ * and an agent forgetting is exactly what prompt text cannot rule out. So the server checks the
+ * DATA: every member in `required` must be among the body's resolved tags (`bodyUserIds`, the
+ * same parse that stamps the inbox, so every handle form the resolver accepts counts). Missing ⇒
+ * refuse before insert, naming the exact handles to add. The body is never edited.
+ * ⚠ A member with no unambiguous insertable handle cannot be satisfied by any body, so they are
+ * not required: a refusal the caller cannot fix would just be a lost message.
+ */
+export async function assertAddresseesTagged(
+  required: readonly string[],
+  body: string,
+  bodyUserIds: readonly string[],
+  roster: () => Promise<ChannelMemberRow[]>
+): Promise<void> {
+  // Fast path off the stamp's own parse; it may have dropped the AUTHOR (a cookie-lane agent
+  // tagging its own operator), so a miss is re-checked below against the unfiltered parse.
+  const fast = new Set(bodyUserIds);
+  if (required.every((id) => fast.has(id))) return;
+  const members = await roster();
+  const profiles = await profilesById(members.map((m) => m.user_id));
+  const candidates: MentionCandidate[] = members.map((member) => ({
+    userId: member.user_id,
+    displayName: profiles.get(member.user_id)?.display_name ?? null,
+    email: profiles.get(member.user_id)?.email ?? null,
+  }));
+  const tagged = new Set(resolveMentions(body, candidates));
+  const missing = [...new Set(required)].filter((id) => !tagged.has(id));
+  if (missing.length === 0) return;
+  const index = buildMentionIndex(candidates);
+  const handles = missing
+    .map((id) => candidates.find((c) => c.userId === id))
+    .map((c) => (c ? insertableHandle(c, index) : null))
+    .filter((h): h is string => h !== null);
+  if (handles.length > 0) throw new ChannelAddresseeUntaggedError(handles);
+}
+
+/** Both 2026-10-08 rules in the order the fold needs them: refuse an agent message that skips a
+ *  required tag, else stamp body tags ∪ addressees. */
+export async function addressedMentionStamp(
+  body: string,
+  bodyUserIds: readonly string[],
+  opts: { addressedUserIds?: readonly string[]; mustTagUserIds?: readonly string[] },
+  author: { userId: string; source?: string | null },
+  roster: () => Promise<ChannelMemberRow[]>
+): Promise<string[]> {
+  await assertAddresseesTagged(opts.mustTagUserIds ?? [], body, bodyUserIds, roster);
+  return mentionStampOf(bodyUserIds, opts.addressedUserIds, author.userId, author.source === "agent");
 }

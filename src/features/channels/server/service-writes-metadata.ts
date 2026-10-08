@@ -10,7 +10,7 @@ import {
   isThreadParticipant,
 } from "./service-writes-metadata-thread";
 import { takeCalmFlags } from "./service-writes-metadata-markers";
-import { mentionStampOf, resolveBodyMentions } from "./service-writes-metadata-mentions";
+import { addressedMentionStamp, resolveBodyMentions } from "./service-writes-metadata-mentions";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
 // ⚠ The outside-session vocabulary, stated once — the reserved key names (`via`: the client).
 import { DESKTOP_TO_METADATA_KEY, EXTERNAL_SESSION_METADATA_KEY } from "../lib/desktop-handle";
@@ -155,8 +155,9 @@ interface PostMetadataOptions {
    * could splice its own thread into somebody else's request.
    */
   fanoutGroupId?: string;
-  /** `postMessage`'s checked `addressees`, stamped as mentions (`mentionStampOf`, 2026-10-08). */
+  /** Checked addressees stamped as mentions, and those the body must @-tag (2026-10-08). */
   addressedUserIds?: readonly string[];
+  mustTagUserIds?: readonly string[];
 }
 
 /**
@@ -449,7 +450,7 @@ export async function resolvePostMetadata(
     roster,
     ctx.source === "agent"
   );
-  const mentioned = mentionStampOf(mentions.userIds, opts.addressedUserIds, ctx.userId, ctx.source === "agent");
+  const mentioned = await addressedMentionStamp(input.body, mentions.userIds, opts, ctx, roster);
   if (mentioned.length > 0) {
     metadata[MENTIONS_METADATA_KEY] = mentioned;
   }

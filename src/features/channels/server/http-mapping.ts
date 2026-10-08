@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChannelAddresseeNotMemberError,
+  ChannelAddresseeUntaggedError,
   ChannelAgentHandleAmbiguousError,
   ChannelChatAddressedError,
   ChannelDecisionRequiredError,
@@ -67,6 +68,9 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   // Same code: to the caller both mean nothing was written and the address needs fixing.
   if (err instanceof ChannelAgentHandleAmbiguousError) {
+    return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
+  }
+  if (err instanceof ChannelAddresseeUntaggedError) {
     return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
   }
   if (err instanceof ChannelTaskNotInChannelError) {

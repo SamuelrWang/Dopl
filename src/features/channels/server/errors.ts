@@ -43,6 +43,7 @@ export class ChannelAddresseeNotMemberError extends ChannelError {
 
 // Re-exported: `errors.ts` is the one import path for every channel error.
 export {
+  ChannelAddresseeUntaggedError,
   ChannelAgentHandleAmbiguousError,
   ChannelRecipientUnresolvedError,
 } from "./errors-recipient";

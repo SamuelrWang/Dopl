@@ -360,8 +360,8 @@ describe("postMessage — the mention stamp (wiring plan Phase 6)", () => {
 // 🔒 SAMUEL, 2026-10-08 — the recipient pill is gone, so ADDRESSING a member must reach their
 // Tags inbox on its own: explicit `to=` members are unioned into the stamp, deduped with body tags.
 describe("postMessage — an ADDRESSED member is a mention (2026-10-08)", () => {
-  it("stamps a `to=` member even when the body tags nobody", async () => {
-    await postMessage(agentCtx, "room", { body: "ready for review", to: PEER });
+  it("stamps a `to=` member even when the body tags nobody (a person's post)", async () => {
+    await postMessage(ctx, "room", { body: "ready for review", to: PEER });
     expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
   });
 
@@ -371,7 +371,7 @@ describe("postMessage — an ADDRESSED member is a mention (2026-10-08)", () => 
   });
 
   it("an AGENT addressing its own operator notifies them; a HUMAN addressing themselves does not", async () => {
-    await postMessage(agentCtx, "room", { body: "blocked on access", to: USER });
+    await postMessage(agentCtx, "room", { body: "@sam blocked on access", to: USER });
     expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([USER]);
     vi.mocked(repoMessages.insertMessage).mockClear();
     await postMessage(ctx, "room", { body: "note to self", to: USER });
@@ -386,5 +386,63 @@ describe("postMessage — an ADDRESSED member is a mention (2026-10-08)", () => 
   it("an UNADDRESSED post (an in-thread reply passes no addressee) stays body-only", async () => {
     await postMessage(agentCtx, "room", { body: "done, see diff" });
     expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+  });
+});
+
+// 🔒 SAMUEL, 2026-10-08 (option A) — with no pill, an AGENT's addressed message must name every
+// PERSON it is for in its body, or nothing is written. Data-checked, never left to the prompt.
+describe("postMessage — an agent must @-tag every person in `to=`", () => {
+  const refused = async (input: Parameters<typeof postMessage>[2], c = agentCtx) => {
+    const error = await postMessage(c, "room", input).then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(repoMessages.insertMessage).not.toHaveBeenCalled();
+    return error as Error | null;
+  };
+
+  it("refuses an addressed message whose body tags nobody, naming the handle to add", async () => {
+    const error = await refused({ body: "ready for review", to: PEER });
+    expect(error?.constructor.name).toBe("ChannelAddresseeUntaggedError");
+    expect(error?.message).toContain("@diana-taylor");
+    expect(error?.message).toContain("Nothing was sent");
+  });
+
+  it("refuses a PARTIAL set across three people and names only the missing ones", async () => {
+    const error = await refused({ body: "@diana ready", to: `${PEER}, ${THIRD}, ${USER}` });
+    expect(error?.message).toContain("@daniel-anderson");
+    expect(error?.message).toContain("@sam-wang");
+    expect(error?.message).not.toContain("@diana-taylor");
+  });
+
+  it("accepts all three tagged, in any handle form the resolver accepts", async () => {
+    await postMessage(agentCtx, "room", {
+      body: "@dianataylor and @dan, ready — @sam FYI",
+      to: `${PEER}, ${THIRD}, ${USER}`,
+    });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER, THIRD, USER]);
+  });
+
+  it("accepts the canonical handles inline", async () => {
+    await postMessage(agentCtx, "room", { body: "Done, @diana-taylor.", to: PEER });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
+  });
+
+  it("holds on the cookie lane too (a desktop agent tagging its own operator passes)", async () => {
+    await postMessage(ctx, "room", { body: "@sam blocked", to: USER, authorKind: "agent" });
+    expect(repoMessages.insertMessage).toHaveBeenCalled();
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    const error = await refused({ body: "blocked", to: USER, authorKind: "agent" }, ctx);
+    expect(error?.message).toContain("@sam-wang");
+  });
+
+  it("a PERSON's own addressed post is never refused", async () => {
+    await postMessage(ctx, "room", { body: "ready", to: PEER });
+    expect(repoMessages.insertMessage).toHaveBeenCalled();
+  });
+
+  it("an unaddressed agent post (a record, a thread reply) is never refused", async () => {
+    await postMessage(agentCtx, "room", { body: "for the log" });
+    expect(repoMessages.insertMessage).toHaveBeenCalled();
   });
 });

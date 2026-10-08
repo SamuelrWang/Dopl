@@ -243,6 +243,13 @@ export async function postMessage(
       // shape (`to=`, the composer's / thread opener's `toUserId`) notifies, and a future shape
       // cannot address without stamping. Never resilience-repaired recipients.
       addressedUserIds: addressees,
+      // An AGENT's ordinary message names every PERSON in its `to=` in the body, or is refused
+      // (2026-10-08). Agent recipients, records, milestones and thread replies (no `to=`) exempt.
+      mustTagUserIds:
+        (ctx.source === "agent" || input.authorKind === "agent") &&
+        (input.kind ?? "message") === "message"
+          ? toUserIds
+          : [],
     }
   );
 
