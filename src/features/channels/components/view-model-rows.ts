@@ -64,6 +64,10 @@ export interface MessageRow {
   recipientAgentIds: string[];
   /** The people half of `recipientAgentIds` — same source and gate, never merged with it. */
   recipientUserIds: string[];
+  /** Server-stamped `metadata.mentionedUserIds`, in stamp order — the people half of the tag row. */
+  tagUserIds: string[];
+  /** Agents the post names (`to=` / body tags), server-resolved; never a server-picked responder. */
+  tagAgentIds: string[];
   /** The message's channel — the display card's write address. Optional: hand-built rows omit it. */
   channelId?: string;
   /** Person rows only: the device it was posted from (`lib/message-device.ts`); absent draws no
@@ -234,6 +238,14 @@ function toMessageRow(
       message.authorKind === "agent" ? [...(message.recipientAgentIds ?? [])] : [],
     recipientUserIds:
       message.authorKind === "agent" ? [...(message.recipientUserIds ?? [])] : [],
+    // THE TAG ROW (Samuel 2026-10-08, every row human or agent): who the post NAMES, as the server
+    // resolved it. People = the stamped mention set; agents = `to=` / body-tagged agents, but never
+    // an agent the SERVER picked for an unaddressed post (`wake_reason`): the post did not name it.
+    tagUserIds: mentionedUserIdsOf(message.metadata),
+    tagAgentIds:
+      typeof message.metadata?.wake_reason === "string"
+        ? []
+        : [...(message.recipientAgentIds ?? [])],
     channelId: message.channelId,
     // Server-written, reserved keys (stripped from caller input); a person's device, never an agent's.
     source: message.authorKind === "agent" ? null : messageSourceOf(message.metadata),

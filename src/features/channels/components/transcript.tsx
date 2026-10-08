@@ -16,6 +16,7 @@ import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
 import { MessageMarkdown } from "./message-markdown";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
+import { messageTags } from "../lib/recipient-tags";
 import type { AuthorIndex } from "./view-model";
 import type { MessageRow, ReceiptRow, TranscriptRow } from "./view-model-rows";
 
@@ -182,6 +183,8 @@ function Message({
   const agentName = row.agentId
     ? (index.agents.get(row.agentId)?.displayName ?? null)
     : null;
+  // The tag row: everyone the message names, from the server's resolution (`messageTags`).
+  const recipients = messageTags(row, index.agents, index.byId);
   // The same predicate `transcript-filter.tsx` uses for "People", so filter and paint agree.
   const box = agentBoxOf(row, index);
   // A display (every decision too) replaces the markdown body; the body is its plain-text fallback
@@ -218,6 +221,7 @@ function Message({
       via={row.via}
       agentId={row.agentId}
       agentName={agentName}
+      recipients={recipients}
       continuation={row.continuation}
       flash={flash}
       accent={box && agentPostAccent(box)}

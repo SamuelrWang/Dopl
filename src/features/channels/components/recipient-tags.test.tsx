@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 /**
- * 🔒 **NO RECIPIENT PILL** (Samuel, 2026-10-08 — reverses decision #2200 of 2026-09-22).
- *
- * The pill that faced an agent post's `to=` set beside its attribution pill is gone. A person
- * an agent writes to is @-tagged inline in the body (the agent prompt and MCP doctrine say so),
- * and the server counts explicit `to=` members as mentions so the post reaches their Tags inbox
- * (`server/service-writes-metadata.ts`). What stays: a run still breaks when the address changes
- * (`view-model-rows.ts › isContinuation` over `lib/recipient-tags.ts › addressKey`).
+ * 🔒 **THE TAG ROW IS DERIVED FROM WHAT THE MESSAGE NAMES** (Samuel, 2026-10-08, reversing the
+ * same day's pill removal). Every message, human or agent, shows a row of everyone it names:
+ * people from the server-stamped `mentionedUserIds`, agents from the server-resolved
+ * `recipient_agent_ids`. Never a client re-parse, so a typed `@word` that resolved to nobody is
+ * never pilled. Ordered by where each name first appears in the body.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -72,12 +70,65 @@ function byAgent(
 const rowAt = (seq: number) =>
   document.querySelector(`[data-message-id="m-${seq}"]`) as HTMLElement;
 
-describe("no chrome for the address", () => {
-  it("🔒 an addressed agent post draws no recipient tag; the body is the only face", () => {
-    renderWith(byAgent({ body: "@diana-taylor ship it", agentIds: [A], userIds: [PEER] }));
-    expect(document.querySelectorAll("[data-recipient-tag]")).toHaveLength(0);
-    expect(rowAt(1).textContent).toContain("ship it");
+const MENTIONS = "mentionedUserIds";
+
+/** ⚠ ASKED BY HOOK: the same face also appears in the BODY as a typed mention. */
+const tagsAt = (seq: number): string[] =>
+  [...rowAt(seq).querySelectorAll("[data-recipient-tag]")].map((el) => el.textContent ?? "");
+
+/** A post by a PERSON (the viewer), with the server's stamps as given. */
+function byPerson(over: { body: string; seq?: number; tagged?: string[]; agentIds?: string[] }) {
+  const seq = over.seq ?? 1;
+  return message({
+    id: `m-${seq}`,
+    seq,
+    body: over.body,
+    authorUserId: ME,
+    metadata: over.tagged ? { [MENTIONS]: over.tagged } : {},
+    recipientAgentIds: over.agentIds ?? [],
+  });
+}
+
+describe("the tag row names what the server resolved", () => {
+  it("tags the people the BODY tags, on a person's own post (one rule for everyone)", () => {
+    renderWith(byPerson({ body: "@diana-taylor can you look", tagged: [PEER] }));
+    expect(tagsAt(1)).toEqual(["@diana-taylor"]);
+  });
+
+  it("tags a `to=`-only AGENT the body never names", () => {
+    renderWith(byAgent({ body: "ship it", agentIds: [A] }));
+    expect(tagsAt(1)).toEqual(["@dopl-worker"]);
+  });
+
+  it("draws each name ONCE however often the body repeats it", () => {
+    renderWith(
+      byPerson({ body: "@diana-taylor hi, @diana-taylor again", tagged: [PEER, PEER], agentIds: [A, A] })
+    );
+    expect(tagsAt(1)).toEqual(["@diana-taylor", "@dopl-worker"]);
+  });
+
+  it("never pills a typed @word the server resolved to nobody", () => {
+    renderWith(byPerson({ body: "cc @nobody and @ghost" }));
+    expect(tagsAt(1)).toEqual([]);
+    expect(rowAt(1).textContent).toContain("@nobody");
+  });
+
+  it("orders by the BODY, not by the server's stamp order", () => {
+    renderWith(
+      byPerson({ body: "@dopl-worker first, then @diana-taylor", tagged: [PEER], agentIds: [A] })
+    );
+    expect(tagsAt(1)).toEqual(["@dopl-worker", "@diana-taylor"]);
+  });
+
+  it("faces an unnamed agent by its shared face, never its id", () => {
+    renderWith(byAgent({ body: "go", agentIds: [B] }));
+    expect(tagsAt(1)).toEqual(["New Agent"]);
     expect(screen.queryByText(/h1anog51/)).toBeNull();
+  });
+
+  it("draws nothing for a message that names nobody", () => {
+    renderWith(byPerson({ body: "just a note" }));
+    expect(tagsAt(1)).toEqual([]);
   });
 });
 

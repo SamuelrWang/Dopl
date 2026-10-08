@@ -2,9 +2,14 @@
 
 import { cn } from "@/shared/lib/utils";
 import { AttributionPill } from "./attribution-pill";
+import { RecipientTags } from "./recipient-tags";
 import type { MessageRow } from "./view-model-rows";
+import type { RecipientTag } from "../lib/recipient-tags";
 import type { MessageVia } from "../lib/message-via";
 import type { AgentColorKey } from "../types";
+
+/** Frozen default so every row does not get a fresh array identity per render. */
+const NO_RECIPIENTS: readonly RecipientTag[] = [];
 
 /** An agent's colour, resolved by `agent-box-rule.ts › agentPostAccent`. No accent (a person, a
  *  channel-less post) draws no frame or bar; `key: null` is an ended agent's neutral face. */
@@ -45,7 +50,7 @@ const GUTTER_PULL = { me: "-mr-2", peer: "-ml-2" } as const;
 /** Jump-to-message flash: the elevation grey, not `--link` blue (blue means "addressed"). */
 export const FLASH_TINT = "bg-surface-raised-3";
 
-/** The shell every authored row shares: pill header over the body, aligned by `side`
+/** The shell every authored row shares: pill (+ recipients) header over the body, aligned by `side`
  *  (INVARIANTS §5). A continuation drops the header; an accented one keeps its bar. */
 export function AuthoredRow({
   id,
@@ -58,6 +63,7 @@ export function AuthoredRow({
   via = null,
   agentId = null,
   agentName = null,
+  recipients = NO_RECIPIENTS,
   continuation,
   flash,
   accent = null,
@@ -78,6 +84,8 @@ export function AuthoredRow({
   agentId?: string | null;
   /** Its current name, resolved by the caller from `AuthorIndex.agents`; never a row field. */
   agentName?: string | null;
+  /** Everyone the message names (`lib/recipient-tags.ts › messageTags`); empty draws nothing. */
+  recipients?: readonly RecipientTag[];
   continuation: boolean;
   flash: boolean;
   /** Caller decides via `agent-box-rule.ts › agentBoxOf` (shared with the transcript filter). */
@@ -105,6 +113,21 @@ export function AuthoredRow({
       onOpenAgent={onOpenAgent}
     />
   );
+  // No recipients ⇒ the bare pill (DOM unchanged); reversed on own side so the pill stays first.
+  const header = (node: React.ReactNode) =>
+    recipients.length === 0 ? (
+      node
+    ) : (
+      <div
+        className={cn(
+          "flex min-w-0 max-w-full flex-wrap items-center gap-1.5",
+          mine && "flex-row-reverse"
+        )}
+      >
+        {node}
+        <RecipientTags tags={recipients} />
+      </div>
+    );
   /* `w-full` so the column is the row's full width whatever the article's
      align-items says — the pill hugs its content, the bodies must not. */
   const body = (
@@ -124,7 +147,7 @@ export function AuthoredRow({
           flash && `${FLASH_TINT} duration-150`
         )}
       >
-        {pill}
+        {pill && header(pill)}
         {body}
       </article>
     );
@@ -151,21 +174,22 @@ export function AuthoredRow({
           GUTTER[edge]
         )}
       >
-        {pill && (
-          <span
-            className={cn(
-              ACCENT_FRAME,
-              ACCENT_RADIUS[edge],
-              ACCENT_FRAME_EDGE[edge],
-              GUTTER_PULL[edge]
-            )}
-            /* Inline: the palette key is data, so the JIT cannot see `var(--agent-color-NN)`.
-               `lib/agent-colors.ts › agentColorVar` is the only place the token is spelled. */
-            style={{ borderColor: accent.paint }}
-          >
-            {pill}
-          </span>
-        )}
+        {pill &&
+          header(
+            <span
+              className={cn(
+                ACCENT_FRAME,
+                ACCENT_RADIUS[edge],
+                ACCENT_FRAME_EDGE[edge],
+                GUTTER_PULL[edge]
+              )}
+              /* Inline: the palette key is data, so the JIT cannot see `var(--agent-color-NN)`.
+                 `lib/agent-colors.ts › agentColorVar` is the only place the token is spelled. */
+              style={{ borderColor: accent.paint }}
+            >
+              {pill}
+            </span>
+          )}
         {body}
       </div>
     </article>
