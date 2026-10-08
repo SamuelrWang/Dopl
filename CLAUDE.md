@@ -83,6 +83,21 @@ or the schema is NOT done until it has:
 
 Do this before reporting the work complete, not as a follow-up.
 
+## When to run what
+
+**Per task: targeted. Before a push or release: the full Definition of green below, once.** (Samuel, 2026-10-08;
+extends the 2026-09-27 small-change rule — the full set after every task, multiplied by every live agent,
+drove the machine to load 270 with swap full.)
+
+- **After each task / before reporting it complete:** the typecheck that covers the files you touched
+  (`npm run typecheck`, or `npm run typecheck -w @dopl/desktop-ui` for the SPA) plus `vitest run <the changed
+  files and their direct tests>`. Never a bare `npm test`, never a multi-directory run, never `test:all`.
+- **Full Definition of green** (everything below): only before a push to master, before a release or pack, or
+  when Samuel asks — and by one agent at a time, not each worker. CI still runs all of it and red CI is still
+  a P0; this rule moves WHO pays for the full run, not WHETHER it is green.
+- **Serialize the heavy runs:** `lockf /tmp/dopl-gate.lock <cmd>` (macOS has no `flock`). Local vitest is
+  capped at 2 workers by `vitest.config.ts`. Do not spawn sub-agents to run gates.
+
 ## Definition of green
 
 **Five suites, TWO lints, TWO typechecks, and TWELVE non-suite gates.** Full table: docs/INVARIANTS.md §14.
