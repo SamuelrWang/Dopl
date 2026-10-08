@@ -282,12 +282,12 @@ describe("the /home shapes are /home's own geometry", () => {
   it("ghosts one selector pill per face, without offering anything to press", () => {
     const { container } = render(<HomePageSkeleton />);
     expect(container.querySelector(".seg-track")).toBeNull();
-    // ⚠ SCOPED TO THE HEADER STRIP (`.pr-5`, which only it wears) SINCE
+    // ⚠ SCOPED TO THE HEADER STRIP (`.py-3.pr-3`, which only it wears) SINCE
     // 2026-09-13. The bare `.gap-1\.5` query counted the whole page, and the
     // channel-row ghost's second line is a `gap-1.5` row of peer faces now — so an
     // unscoped count reads 19 and says nothing about the selector.
     expect(
-      container.querySelectorAll(".pr-5 .gap-1\\.5 > [data-slot=\"skeleton\"]")
+      container.querySelectorAll(".py-3.pr-3 .gap-1\\.5 > [data-slot=\"skeleton\"]")
     ).toHaveLength(HOME_TABS.length);
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.querySelectorAll("a")).toHaveLength(0);

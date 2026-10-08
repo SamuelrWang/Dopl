@@ -131,7 +131,7 @@ function KbCardsGhost() {
  */
 function HomeHeaderGhost() {
   return (
-    <div className="flex items-center justify-between gap-3 py-3 pr-5">
+    <div className="flex items-center justify-between gap-3 py-3 pr-3">
       <div className="flex min-w-0 items-center">
         <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
           {/* The "New channel" pill: hug-width and left-aligned, as the real `PAGE_ACTION_BTN`. */}

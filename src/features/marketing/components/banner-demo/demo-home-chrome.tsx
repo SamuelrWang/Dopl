@@ -110,7 +110,8 @@ const DEMO_WORKSPACES = [
 export function DemoHomeHeader() {
   return (
     // Symmetric padding: the controls are one 36px row, centred in the strip.
-    <div className="flex items-center justify-between gap-3 py-3 pr-5">
+    // `pr-3` = `.lp-demo-record`'s 12px right margin, as on /home's header.
+    <div className="flex items-center justify-between gap-3 py-3 pr-3">
       <div className="flex min-w-0 items-center">
         <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
           <span className={PAGE_ACTION_BTN}>New channel</span>

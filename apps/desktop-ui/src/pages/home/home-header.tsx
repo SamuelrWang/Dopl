@@ -38,7 +38,10 @@ export function HomeHeader({
   return (
     // ⚠ SYMMETRIC PADDING. The controls are one 36px row and they sit CENTRED
     // in the strip.
-    <div className="flex items-center justify-between gap-3 py-3 pr-5">
+    // ⚠ `pr-3` IS THE RECORD PANE'S `mr-3` (`index.tsx`), so Profile's right
+    // edge lands on the pane's right edge, mirroring the selector on its left.
+    // It was `pr-5`, which left Profile and search 8px inboard of the pane.
+    <div className="flex items-center justify-between gap-3 py-3 pr-3">
       {/* ⚠ THE LEFT PAD IS THE LIST COLUMN'S WIDTH, NOT A SPACER, AND IT BECAME
           A REAL CELL ON 2026-08-30. It puts the selector's left edge on the
           record pane's (Samuel, 2026-08-24) — same var the column is sized from
