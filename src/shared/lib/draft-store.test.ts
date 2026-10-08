@@ -13,7 +13,9 @@ import {
   clearDraftsForTarget,
   draftKey,
   flushDrafts,
+  orphanedSends,
   readDraft,
+  resolveOrphanedSend,
   settlePendingSend,
   stashPendingSend,
   subscribeDraft,
@@ -117,10 +119,41 @@ describe("sending", () => {
     expect(readDraft(k)?.text).toBe("first\n\nsecond");
   });
 
-  it("text in flight is on disk, so a crash mid-send loses nothing", () => {
+  it("a send a RELOAD cut off is an orphan the next page must settle", () => {
+    stashPendingSend(key("channel:c1"), "msg-1", { text: "in flight" });
+    // Same page: it is this page's own send, not an orphan.
+    expect(orphanedSends(key("channel:c1"))).toEqual([]);
+    reload();
+    expect(readDraft(key("channel:c1"))).toBeNull();
+    expect(orphanedSends(key("channel:c1"))).toEqual([{ id: "msg-1", value: { text: "in flight" } }]);
+  });
+
+  it("orphan LANDED ⇒ dropped silently, and never asked about again", () => {
     stashPendingSend(key("channel:c1"), "msg-1", { text: "in flight" });
     reload();
-    expect(readDraft(key("channel:c1"))?.text).toBe("in flight");
+    resolveOrphanedSend(key("channel:c1"), "msg-1", true);
+    expect(readDraft(key("channel:c1"))).toBeNull();
+    reload();
+    expect(orphanedSends(key("channel:c1"))).toEqual([]);
+  });
+
+  it("orphan NOT landed ⇒ the words come back, before anything typed since", () => {
+    stashPendingSend(key("channel:c1"), "msg-1", { text: "in flight" });
+    reload();
+    writeDraft(key("channel:c1"), { text: "typed after reload" });
+    resolveOrphanedSend(key("channel:c1"), "msg-1", false);
+    expect(readDraft(key("channel:c1"))?.text).toBe("in flight\n\ntyped after reload");
+    reload();
+    expect(orphanedSends(key("channel:c1"))).toEqual([]);
+  });
+
+  it("typing a new draft while a send is out does not erase the record of what was sent", () => {
+    stashPendingSend(key("channel:c1"), "msg-1", { text: "sent words" });
+    writeDraft(key("channel:c1"), { text: "new words" });
+    flushDrafts();
+    reload();
+    expect(readDraft(key("channel:c1"))?.text).toBe("new words");
+    expect(orphanedSends(key("channel:c1"))[0]?.value.text).toBe("sent words");
   });
 
   it("success does not wipe a NEW draft typed while the send was in flight", () => {

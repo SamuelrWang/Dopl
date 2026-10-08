@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 /** The one draft hook: navigate away and back, two composers on one page, no-user memory only. */
-import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
-import { __resetDraftStoreForTests, flushDrafts } from "../lib/draft-store";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  __resetDraftStoreForTests,
+  draftKey,
+  flushDrafts,
+  orphanedSends,
+  stashPendingSend,
+} from "../lib/draft-store";
 import { usePersistentDraft } from "./use-persistent-draft";
 
 const scope = { userId: "u-me", workspaceId: "ws-1" };
@@ -66,5 +72,45 @@ describe("usePersistentDraft", () => {
     act(() => result.current.setText("x"));
     act(() => result.current.clear());
     expect(result.current.text).toBe("");
+  });
+});
+
+// 🔒 A send a reload cut off is settled by ASKING the server (2026-10-08): landed ⇒ dropped,
+// not landed ⇒ restored, could not ask ⇒ restored (words twice beat words lost).
+describe("a send interrupted by a reload", () => {
+  const interrupted = () => {
+    stashPendingSend(draftKey(scope, "channel:c1"), "msg-1", { text: "in flight" });
+    __resetDraftStoreForTests(); // the reload: memory gone, storage kept
+  };
+
+  it("LANDED: the words stay gone", async () => {
+    interrupted();
+    const verify = vi.fn(async () => true);
+    const { result } = renderHook(() => usePersistentDraft(scope, "channel:c1", verify));
+    await waitFor(() => expect(verify).toHaveBeenCalledWith("msg-1"));
+    await waitFor(() => expect(orphanedSends(draftKey(scope, "channel:c1"))).toEqual([]));
+    expect(result.current.text).toBe("");
+  });
+
+  it("NOT LANDED: the words come back", async () => {
+    interrupted();
+    const { result } = renderHook(() => usePersistentDraft(scope, "channel:c1", async () => false));
+    await waitFor(() => expect(result.current.text).toBe("in flight"));
+  });
+
+  it("the CHECK FAILED: the words come back", async () => {
+    interrupted();
+    const { result } = renderHook(() =>
+      usePersistentDraft(scope, "channel:c1", async () => {
+        throw new Error("offline");
+      })
+    );
+    await waitFor(() => expect(result.current.text).toBe("in flight"));
+  });
+
+  it("no way to ask (no verifier): the words come back", async () => {
+    interrupted();
+    const { result } = renderHook(() => usePersistentDraft(scope, "channel:c1"));
+    await waitFor(() => expect(result.current.text).toBe("in flight"));
   });
 });

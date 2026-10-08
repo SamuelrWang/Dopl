@@ -142,6 +142,9 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   [`${CHANNELS_REL}/[channelId]/route.ts`, "GET"], // read one channel
   [`${CHANNELS_REL}/[channelId]/messages/route.ts`, "GET"], // read transcript
   [`${CHANNELS_REL}/[channelId]/messages/route.ts`, "POST"], // post a message (and this is where an @-mention is PARSED — Q2)
+  // A guest posts, so a guest's composer settles a send a reload cut off (2026-10-08, drafts):
+  // author-scoped, behind the same read fence as the transcript GET.
+  [`${CHANNELS_REL}/[channelId]/messages/landed/route.ts`, "GET"],
   [`${CHANNELS_REL}/[channelId]/await/route.ts`, "GET"], // long-poll one channel
   [`${CHANNELS_REL}/await/route.ts`, "GET"], // long-poll workspace-wide
   [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "GET"], // list threads
@@ -241,17 +244,18 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 26 entries (pins the size against a silent add/drop)", () => {
+  it("has 27 entries (pins the size against a silent add/drop)", () => {
     // 19 until 2026-09-06 (artifacts ×2), 24 while the three personal-arming
     // verbs existed, 21 once they were deleted with the route (2026-09-07), 27
     // with the ontology lane (2026-09-09, F-685), 30 with that lane's CHANGELOG
     // (the same day, F-686 part 2); 15 until Home Knowledge Panels M2, and **26
-    // since R-18 took the four knowledge-lane entries out (2026-09-17)**.
+    // since R-18 took the four knowledge-lane entries out (2026-09-17)**, 27 with the composer's
+    // own-send `messages/landed` check (2026-10-08).
     // ⚠ ENTRIES, NOT FILES, which is why B2
     // counts occurrences. The number blesses nothing; set B proves the tree.
     // Re-derive both, never quote:
     //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
-    expect(ALLOWED_KEYS.size).toBe(26);
+    expect(ALLOWED_KEYS.size).toBe(27);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {

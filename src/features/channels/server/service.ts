@@ -60,6 +60,7 @@ export {
   // and is DELETED (2026-09-06) — a barrel row was its only reference.
   readTranscript,
   resolveReadableChannelId,
+  ownMessageLanded,
 } from "./service-reads";
 // THE ARTIFACT WRITES + the single-card read (design #1220 §5). ⚠ On the barrel
 // because the artifact ROUTE and the MCP surface are outside this directory;

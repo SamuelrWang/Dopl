@@ -10,8 +10,10 @@
  * - Above it, what only drafts need: a MEMORY copy every mounted composer on a key shares
  *   (`subscribeDraft`), writes DEBOUNCED and flushed when the page hides, a TTL and a cap, and the
  *   text HELD while a send is in flight.
- * - A send CLEARS the visible draft immediately but keeps the text until the server answers
- *   ({@link stashPendingSend}); a failed send puts it back ({@link settlePendingSend}).
+ * - A send CLEARS the visible draft immediately but records the text until the server answers
+ *   ({@link stashPendingSend}); a failed send puts it back ({@link settlePendingSend}). If a reload
+ *   cuts the answer off, the next mount asks the server whether that send landed
+ *   ({@link orphanedSends} / {@link resolveOrphanedSend}).
  * - A draft for a target that no longer exists is never shown (nothing mounts for it); deleting or
  *   leaving a channel drops its drafts at once ({@link clearDraftsForTarget}), and the TTL / cap
  *   sweep anything else.
@@ -57,6 +59,39 @@ const disk = definePersistedState<Stored | null>({
     const extra =
       r.extra && typeof r.extra === "object" && !Array.isArray(r.extra) ? r.extra : undefined;
     return extra ? { text: r.text, extra, at: r.at } : { text: r.text, at: r.at };
+  },
+});
+
+/** A send that left this composer and has not been answered — on disk, so a reload can ask. */
+interface PendingSend {
+  id: string;
+  text: string;
+  extra?: Readonly<Record<string, unknown>>;
+  at: number;
+}
+
+/**
+ * Sends in flight per target, kept APART from the draft text: typing a new draft while a send is
+ * out must not overwrite the record of what was sent. A reload finds any entry this page did not
+ * start as an ORPHAN, and the composer asks the server whether it landed
+ * ({@link resolveOrphanedSend}).
+ */
+const pendingDisk = definePersistedState<PendingSend[]>({
+  name: "draft-pending",
+  version: 1,
+  fallback: [],
+  requireUser: true,
+  isEmpty: (list) => list.length === 0,
+  decode: (raw, fromVersion) => {
+    if (fromVersion !== 1 || !Array.isArray(raw)) return null;
+    return raw.filter(
+      (p): p is PendingSend =>
+        p !== null &&
+        typeof p === "object" &&
+        isStoredId((p as PendingSend).id) &&
+        typeof (p as PendingSend).text === "string" &&
+        typeof (p as PendingSend).at === "number"
+    );
   },
 });
 
@@ -209,12 +244,26 @@ export function subscribeDraft(key: string | null, fn: () => void): () => void {
 export function stashPendingSend(key: string | null, sendId: string, value: DraftValue): void {
   if (!key) return;
   pending.set(sendId, { key, value });
-  const t = timers.get(key);
-  if (t) clearTimeout(t);
-  memory.set(key, value);
-  persist(key);
-  memory.set(key, null);
-  notify(key);
+  const scope = scopes.get(key);
+  if (scope) {
+    const record: PendingSend = { id: sendId, text: value.text, at: now(), ...(value.extra ? { extra: value.extra } : {}) };
+    pendingDisk.update(scope, (list) => [...list.filter((p) => p.id !== sendId), record]);
+  }
+  clearDraft(key);
+}
+
+function dropPendingRecord(key: string, sendId: string): void {
+  const scope = scopes.get(key);
+  if (scope) pendingDisk.update(scope, (list) => list.filter((p) => p.id !== sendId));
+}
+
+/** Puts unsent words back: before anything typed since, so neither is lost. */
+function restoreInto(key: string, held: DraftValue): void {
+  const current = readDraft(key);
+  const text =
+    current && current.text.trim() !== "" ? `${held.text}\n\n${current.text}` : held.text;
+  writeDraft(key, { ...held, ...current, text });
+  flushDrafts();
 }
 
 /**
@@ -225,15 +274,37 @@ export function settlePendingSend(sendId: string, ok: boolean): void {
   const held = pending.get(sendId);
   if (!held) return;
   pending.delete(sendId);
-  if (ok) {
-    if (isEmpty(readDraft(held.key))) clearDraft(held.key);
-    return;
-  }
-  const current = readDraft(held.key);
-  const text =
-    current && current.text.trim() !== "" ? `${held.value.text}\n\n${current.text}` : held.value.text;
-  writeDraft(held.key, { ...held.value, ...current, text });
-  flushDrafts();
+  dropPendingRecord(held.key, sendId);
+  if (!ok) restoreInto(held.key, held.value);
+}
+
+/**
+ * Sends recorded on disk for `key` that this page never started — a reload or quit interrupted
+ * them, so nobody here knows whether they landed. Expired records are dropped, not returned.
+ */
+export function orphanedSends(key: string | null): Array<{ id: string; value: DraftValue }> {
+  if (!key) return [];
+  const scope = scopes.get(key);
+  if (!scope) return [];
+  const list = pendingDisk.read(scope);
+  const live = list.filter((p) => now() - p.at <= DRAFT_TTL_MS);
+  if (live.length !== list.length) pendingDisk.write(scope, live);
+  return live
+    .filter((p) => !pending.has(p.id))
+    .map((p) => ({ id: p.id, value: p.extra ? { text: p.text, extra: p.extra } : { text: p.text } }));
+}
+
+/**
+ * The server's answer for an orphaned send: LANDED ⇒ the words are in the channel, drop them;
+ * NOT LANDED ⇒ put them back. A caller that could not ask passes `false`: words shown twice can
+ * be deleted, words lost cannot be typed back.
+ */
+export function resolveOrphanedSend(key: string | null, sendId: string, landed: boolean): void {
+  if (!key) return;
+  const orphan = orphanedSends(key).find((o) => o.id === sendId);
+  if (!orphan) return;
+  dropPendingRecord(key, sendId);
+  if (!landed) restoreInto(key, orphan.value);
 }
 
 /** Test seam: reset module state and pin the clock. */

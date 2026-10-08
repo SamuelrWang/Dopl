@@ -211,6 +211,21 @@ export async function resolveReadableChannelId(
 }
 
 /**
+ * **DID MY SEND LAND?** — `true` iff the CALLER's own message with this `client_msg_id` is stored
+ * in this channel. The composer asks after a reload interrupted a send (`lib/draft-store.ts`):
+ * landed ⇒ drop the held draft, not landed ⇒ give it back. Author-scoped, after the full read
+ * check, so it answers nothing about anyone else's messages.
+ */
+export async function ownMessageLanded(
+  ctx: ChannelContext,
+  ref: string,
+  clientMsgId: string
+): Promise<boolean> {
+  const channelId = await resolveReadableChannelId(ctx, ref);
+  return (await repoMessages.findOwnMessageByClientId(channelId, ctx.userId, clientMsgId)) !== null;
+}
+
+/**
  * Access recheck for the await long-poll. Channel must still exist (soft-delete
  * stamps `deleted_at`, which the lookup filters) and, for a PRIVATE channel, the
  * caller must still be a member. Either loss throws `ChannelNotFoundError` so

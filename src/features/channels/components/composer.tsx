@@ -25,6 +25,7 @@ import { useAutoGrow } from "./use-auto-grow";
 import { useDictation } from "./use-dictation";
 import { useThreadWrites } from "../hooks/use-thread-writes";
 import { newClientMsgId } from "../lib/optimistic-cache";
+import { messageLanded } from "../client/api";
 import { usePersistentDraft } from "@/shared/hooks/use-persistent-draft";
 import { stashPendingSend } from "@/shared/lib/draft-store";
 import type { ChannelMember } from "../types";
@@ -75,7 +76,12 @@ export function ChannelsComposer({
 }) {
   // The unsent text survives navigation, reload and restart (`lib/draft-store.ts`), per member,
   // workspace and channel. Human posts land in the main room, so the channel is the target.
-  const persisted = usePersistentDraft({ userId: currentUserId, workspaceId }, `channel:${channelId}`);
+  const persisted = usePersistentDraft(
+    { userId: currentUserId, workspaceId },
+    `channel:${channelId}`,
+    // A send a reload cut off: asked of the server by its idempotency key before the words return.
+    (clientMsgId) => messageLanded(channelId, clientMsgId, workspaceId)
+  );
   const draft = persisted.text;
   const setDraft = persisted.setText;
   const draftRef = useRef<HTMLTextAreaElement>(null);

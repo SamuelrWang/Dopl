@@ -162,3 +162,20 @@ export async function removeChannelMember(
 
 // NO `addTrustRule` / `removeTrustRule` WRAPPERS — same: `hooks/use-channel-preference-writes.ts`
 // adds or removes the rule ROW in the cache, so it builds the request beside the patch.
+
+/**
+ * Whether MY message with this idempotency key is stored in the channel — the composer's check on
+ * a send a reload interrupted (`src/shared/lib/draft-store.ts`). Throws on any failure; the caller
+ * treats a failed check as "not landed" and gives the words back.
+ */
+export async function messageLanded(
+  channelId: string,
+  clientMsgId: string,
+  workspaceId: string
+): Promise<boolean> {
+  const res = await request<{ landed: boolean }>(channelPath(channelId, "/messages/landed"), {
+    workspaceId,
+    query: { clientMsgId },
+  });
+  return res.landed === true;
+}
