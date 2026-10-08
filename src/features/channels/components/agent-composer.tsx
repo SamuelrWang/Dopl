@@ -14,6 +14,7 @@ import { canMessageAgent, messageAgent } from "./agents-controls";
 import { RuntimeSignInButton } from "./runtime-signin-button";
 import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import { agentAuthHeldCopy } from "../lib/runtime-copy";
+import { usePersistentDraft } from "@/shared/hooks/use-persistent-draft";
 
 /** What a refused 1:1 message says. */
 export const MESSAGE_REFUSED =
@@ -37,6 +38,7 @@ export function AgentComposer({
   name,
   ended = false,
   className,
+  currentUserId,
 }: {
   channelId: string;
   taskId: string;
@@ -51,8 +53,9 @@ export function AgentComposer({
   ended?: boolean;
   /** Host padding only; the recipe stays here. */
   className?: string;
+  /** Owns the persisted draft (`lib/draft-store.ts`); absent keeps it in memory for this mount. */
+  currentUserId?: string | null;
 }) {
-  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const canSend = useCanMessageAgent();
@@ -63,10 +66,11 @@ export function AgentComposer({
   // One instance serves every agent, so its state is keyed by the addressee; an older main (no
   // `agentId`) addresses `(channel, thread)`.
   const agentKey = agentId ?? `${channelId} ${taskId}`;
-  // State, not refs: a ref must not be read or written during render.
-  const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(
-    () => new Map()
-  );
+  // The draft per addressee, kept across navigation, reload and restart (`lib/draft-store.ts`).
+  // The channel id is a UUID, so it already pins the workspace.
+  const draft = usePersistentDraft({ userId: currentUserId }, `agent:${channelId}:${agentKey}`);
+  const text = draft.text;
+  const setText = draft.setText;
   const [shownFor, setShownFor] = useState(agentKey);
   // Mirror for async callbacks only: written in an effect, never read during render.
   const shownForLatest = useRef(agentKey);
@@ -76,26 +80,17 @@ export function AgentComposer({
 
   // Keyed swap during render (adjust-state-on-prop-change): a remount would drop an in-flight
   // verdict; an effect would paint the wrong draft for a frame.
+  // The draft follows the key on its own; only this box's transient state resets on a switch.
   if (shownFor !== agentKey) {
-    setDrafts((prev) => new Map(prev).set(shownFor, text));
     setShownFor(agentKey);
-    setText(drafts.get(agentKey) ?? "");
     setNotice(null);
     setBusy(false);
   }
 
-  // An ended agent's draft goes, both the stash and the live text.
-  if (ended) {
-    // Guarded on presence: an unconditional render-phase update would loop.
-    if (drafts.has(agentKey)) {
-      setDrafts((prev) => {
-        const next = new Map(prev);
-        next.delete(agentKey);
-        return next;
-      });
-    }
-    if (text !== "") setText("");
-  }
+  // An ended agent can never be messaged again: its draft goes (the target is gone).
+  useEffect(() => {
+    if (ended && text !== "") draft.clear();
+  }, [ended, text, draft]);
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   useAutoGrow(inputRef, text);
@@ -120,13 +115,14 @@ export function AgentComposer({
     setNotice(null);
     // The verdict belongs to the agent it was sent to: dropped if the operator switched meanwhile.
     const sentTo = agentKey;
+    // Bound to the SENT agent's key, so a delivery after a switch still clears the right draft.
+    const clearSent = draft.clear;
     void messageAgent({ channelId, taskId, agentId, text: body })
       .then((res) => {
+        // Cleared only on a delivered message; a refusal keeps every word for a retry.
+        if (res.ok) clearSent();
         if (shownForLatest.current !== sentTo) return;
-        if (res.ok) {
-          setText("");
-          return;
-        }
+        if (res.ok) return;
         setNotice(res.reason === "auth-hold" ? authHeldNotice : MESSAGE_REFUSED);
       })
       // Same fence: a late `finally` must not unlock another agent's box.

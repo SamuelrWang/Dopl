@@ -1,5 +1,6 @@
 "use client";
 
+import { settlePendingSend } from "@/shared/lib/draft-store";
 import {
   coldKeys,
   patchCache,
@@ -198,6 +199,12 @@ export function fanOutThreadsConfig(
       ...coldKeys(deps.client, [threadsKey(draft.channelId)]),
     ],
     settleWith: deps.gate,
-    onError: (err) => failed(err, "Couldn't send the request"),
+    // The new-thread form's held draft (`lib/draft-store.ts › stashPendingSend`): dropped on
+    // success, put back on failure, even if the dialog has unmounted.
+    onSuccess: (_data, draft) => settlePendingSend(draft.clientMsgId, true),
+    onError: (err, draft) => {
+      settlePendingSend(draft.clientMsgId, false);
+      failed(err, "Couldn't send the request");
+    },
   };
 }

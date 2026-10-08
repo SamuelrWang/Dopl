@@ -19,3 +19,17 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
+
+// Unsent composer drafts are REMEMBERED by design (`src/shared/lib/draft-store.ts`), in module
+// memory and `localStorage` — so one test's typing would otherwise reappear in the next test's
+// composer. Reset both between tests.
+import { afterEach as afterEachDraft } from "vitest";
+import { __resetDraftStoreForTests } from "./src/shared/lib/draft-store";
+afterEachDraft(() => {
+  __resetDraftStoreForTests();
+  if (typeof localStorage === "undefined") return;
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key?.startsWith("dopl.draft:")) localStorage.removeItem(key);
+  }
+});

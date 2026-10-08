@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
+import { __resetDraftStoreForTests } from "@/shared/lib/draft-store";
 
 afterEach(cleanup);
 
@@ -9,6 +10,8 @@ afterEach(cleanup);
 // for the whole file. Without this one case's tab or pick decides what the next
 // case opens. A case testing the memory seeds its own keys.
 afterEach(() => {
+  // Drafts also keep a module-memory copy above localStorage; reset it with the storage.
+  __resetDraftStoreForTests();
   try {
     window.localStorage.clear();
   } catch {

@@ -385,6 +385,7 @@ export function ChannelsAgentPanel({
             runtimeId={agent.runtimeId}
             name={agentDisplayName(agent)}
             ended={agent.state === "ended"}
+            currentUserId={currentUserId}
             className="px-3.5"
           />
         </>

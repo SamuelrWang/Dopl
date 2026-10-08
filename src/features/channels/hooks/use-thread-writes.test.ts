@@ -23,6 +23,12 @@
  */
 
 import { describe, expect, it } from "vitest";
+import {
+  __resetDraftStoreForTests,
+  draftKey,
+  readDraft,
+  stashPendingSend,
+} from "@/shared/lib/draft-store";
 import { MutationObserver, QueryClient, type QueryKey } from "@tanstack/react-query";
 import { apiQueryKey } from "@/shared/api/query-keys";
 import {
@@ -301,5 +307,34 @@ describe("send — the transcript key is invalidated on settle (H1)", () => {
     expect(entry?.state.isInvalidated).toBe(true);
     // ⚠ A write that THREW still released the gate.
     expect(h.gate.ended).toBe(1);
+  });
+});
+
+// 🔒 SAMUEL 2026-10-08 — the composer empties at send but the words are held until the server
+// answers: dropped on success, put back on failure, by `clientMsgId` (`lib/draft-store.ts`).
+describe("send — the composer's held draft", () => {
+  const key = () => draftKey({ userId: "u-me", workspaceId: WORKSPACE }, `channel:${CHANNEL}`);
+
+  it("a FAILED send puts the words back in the composer", async () => {
+    __resetDraftStoreForTests();
+    const h = harness();
+    stashPendingSend(key(), CLIENT_MSG_ID, { text: "hello" });
+    expect(readDraft(key())).toBeNull();
+    const { inFlight, fail } = run(h, sendConfig(h.deps), DRAFT);
+    await flush();
+    fail(new Error("network"));
+    await inFlight;
+    expect(readDraft(key())?.text).toBe("hello");
+  });
+
+  it("a SUCCESSFUL send leaves the composer empty", async () => {
+    __resetDraftStoreForTests();
+    const h = harness();
+    stashPendingSend(key(), CLIENT_MSG_ID, { text: "hello" });
+    const { inFlight, settle } = run(h, sendConfig(h.deps), DRAFT);
+    await flush();
+    settle({ message: saved() });
+    await inFlight;
+    expect(readDraft(key())).toBeNull();
   });
 });

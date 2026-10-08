@@ -42,6 +42,8 @@
  */
 
 import { useMemo, useState } from "react";
+import { usePersistentDraft } from "@/shared/hooks/use-persistent-draft";
+import { stashPendingSend, writeDraft } from "@/shared/lib/draft-store";
 import { FormDialog, FormSection, UnderlineField } from "@/shared/ui/form-dialog";
 import type { FanOutThreadsDraft } from "../hooks/use-thread-writes";
 import { newClientMsgId } from "../lib/optimistic-cache";
@@ -79,9 +81,31 @@ export function NewThreadDialog({
   onCreate: (draft: FanOutThreadsDraft) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [removed, setRemoved] = useState<ReadonlySet<string>>(() => new Set());
+  // Title, description and the addressees taken off are ONE draft (`lib/draft-store.ts`), kept
+  // across navigation, reload and restart until the thread is created or the form discarded.
+  const draft = usePersistentDraft({ userId: currentUserId }, `new-thread:${channelId}`);
+  const draftStoreKey = draft.key;
+  const title = typeof draft.value.extra?.title === "string" ? draft.value.extra.title : "";
+  const description = draft.text;
+  const removed = useMemo<ReadonlySet<string>>(() => {
+    const ids = draft.value.extra?.removed;
+    return new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : []);
+  }, [draft.value.extra?.removed]);
+  const save = (next: { title?: string; description?: string; removed?: ReadonlySet<string> }) => {
+    const nextTitle = next.title ?? title;
+    const nextRemoved = [...(next.removed ?? removed)];
+    writeDraft(draftStoreKey, {
+      text: next.description ?? description,
+      extra: {
+        ...(nextTitle ? { title: nextTitle } : {}),
+        ...(nextRemoved.length ? { removed: nextRemoved } : {}),
+      },
+    });
+  };
+  const setTitle = (value: string) => save({ title: value });
+  const setDescription = (value: string) => save({ description: value });
+  const setRemoved = (update: (prev: ReadonlySet<string>) => ReadonlySet<string>) =>
+    save({ removed: update(removed) });
 
   // Derived from the REAL roster, so the pills and the Info tab's members list cannot disagree.
   // ⚠ EVERY OTHER MEMBER — you do not address your own agent.
@@ -98,10 +122,8 @@ export function NewThreadDialog({
   const [seen, setSeen] = useState(signal);
   if (signal !== seen) {
     setSeen(signal);
-    if (!open) {
-      setOpen(true);
-      setRemoved(new Set());
-    }
+    // A kept draft keeps its addressee choices; a fresh form starts with everyone addressed.
+    if (!open) setOpen(true);
   }
 
   const addressed = targets.filter((t) => !removed.has(t.id));
@@ -112,13 +134,12 @@ export function NewThreadDialog({
   // operator dismissed would be remembering a decision they undid — the New agent popup's rule.
   const discard = () => {
     setOpen(false);
-    setTitle("");
-    setDescription("");
+    draft.clear();
   };
 
   const create = () => {
     if (!ready) return;
-    const draft: FanOutThreadsDraft = {
+    const request: FanOutThreadsDraft = {
       channelId,
       clientMsgId: newClientMsgId(),
       title: title.trim(),
@@ -127,8 +148,11 @@ export function NewThreadDialog({
       body: description.trim(),
       toUserIds: addressed.map((t) => t.id),
     };
-    discard();
-    onCreate(draft);
+    // The form closes and empties now; the text is held until the server answers and returns on
+    // failure (`use-thread-writes.ts › fanOutThreadsConfig` settles it by `clientMsgId`).
+    setOpen(false);
+    stashPendingSend(draftStoreKey, request.clientMsgId, draft.value);
+    onCreate(request);
   };
 
   return (

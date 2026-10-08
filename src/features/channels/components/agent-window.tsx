@@ -316,6 +316,7 @@ export function ChannelsAgentWindow({
         runtimeId={agent?.runtimeId}
         name={agent ? agentDisplayName(agent) : null}
         ended={ended}
+        currentUserId={currentUserId}
         className="px-4"
       />
     </div>

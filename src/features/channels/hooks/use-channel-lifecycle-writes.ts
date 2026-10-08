@@ -1,5 +1,6 @@
 "use client";
 
+import { clearDraftsForTarget } from "@/shared/lib/draft-store";
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -99,6 +100,8 @@ export interface LifecycleWriteDeps {
   onDeselect: () => void;
   /** Drop a hard-deleted channel's per-channel caches. Never called for a DM. */
   evictChannel: (channelId: string) => void;
+  /** Whose unsent drafts a delete / leave drops (`lib/draft-store.ts`). */
+  currentUserId?: string;
 }
 
 /** Drop one channel row from a list cache, whichever variant it is. */
@@ -182,6 +185,8 @@ export function deleteConfig(
     // failed delete unrecoverable.
     onSuccess: (_data, draft) => {
       if (!draft.isDirect) deps.evictChannel(draft.channelId);
+      // The target is gone: its unsent drafts go with it, silently.
+      clearDraftsForTarget(deps.currentUserId, draft.channelId);
       deps.onDeselect();
     },
     invalidate: () => [channelKeys.list().all],
@@ -243,7 +248,11 @@ export function leaveConfig(
               myAgentToolProfile: null,
             })
       ),
-    onSuccess: () => deps.onDeselect(),
+    onSuccess: (_data, draft) => {
+      // No longer a member: nothing here can be sent, so its drafts go.
+      clearDraftsForTarget(deps.currentUserId, draft.channelId);
+      deps.onDeselect();
+    },
     invalidate: (draft) => [
       channelKeys.list().all,
       channelKeys.members(draft.channelId).all,
@@ -275,6 +284,7 @@ export function useChannelLifecycleWrites({
   // through a ref, so these closures are always the current render's.
   const deps: LifecycleWriteDeps = {
     workspaceId,
+    currentUserId,
     gate,
     onDeselect,
     evictChannel: (channelId) => {

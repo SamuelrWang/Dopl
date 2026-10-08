@@ -25,6 +25,8 @@ import { useAutoGrow } from "./use-auto-grow";
 import { useDictation } from "./use-dictation";
 import { useThreadWrites } from "../hooks/use-thread-writes";
 import { newClientMsgId } from "../lib/optimistic-cache";
+import { usePersistentDraft } from "@/shared/hooks/use-persistent-draft";
+import { stashPendingSend } from "@/shared/lib/draft-store";
 import type { ChannelMember } from "../types";
 
 /** Stable empties: a fresh array per render re-derives the @-picker shortlist. */
@@ -71,7 +73,11 @@ export function ChannelsComposer({
   /** A thread's other party (RR1); `null` in the main room. */
   threadOtherParty?: ChannelMember | null;
 }) {
-  const [draft, setDraft] = useState("");
+  // The unsent text survives navigation, reload and restart (`lib/draft-store.ts`), per member,
+  // workspace and channel. Human posts land in the main room, so the channel is the target.
+  const persisted = usePersistentDraft({ userId: currentUserId, workspaceId }, `channel:${channelId}`);
+  const draft = persisted.text;
+  const setDraft = persisted.setText;
   const draftRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(draftRef, draft);
   // Only the launch form's state lives here; `launch-agent-dialog.tsx` draws it.
@@ -87,8 +93,9 @@ export function ChannelsComposer({
   });
 
   // Escape declined the auto-address for this draft only — not the standing
-  // `unaddressed_responder` setting; cleared on send.
-  const [addressOff, setAddressOff] = useState(false);
+  // `unaddressed_responder` setting; cleared on send. Kept WITH the draft, so it survives too.
+  const addressOff = persisted.value.extra?.addressOff === true;
+  const setAddressOff = (off: boolean) => persisted.setExtra(off ? { addressOff: true } : undefined);
 
   const mentions = useComposerMentions({ draft, setDraft, members, sessions: liveAgents, currentUserId });
 
@@ -111,7 +118,7 @@ export function ChannelsComposer({
   const hint = canSend ? "Send" : pending ? "Sending…" : "Write a message first";
 
   const clear = () => {
-    setDraft("");
+    persisted.clear();
     launch.reset();
   };
 
@@ -142,8 +149,10 @@ export function ChannelsComposer({
       // Only ever `false`, only after Escape; absent is the wire default.
       ...(addressOff ? { autoAddress: false as const } : {}),
     };
-    clear();
-    setAddressOff(false);
+    // The box empties now; the text is held until the server answers and comes back on failure
+    // (`use-thread-writes.ts › sendConfig` settles it by `clientMsgId`).
+    stashPendingSend(persisted.key, message.clientMsgId, persisted.value);
+    launch.reset();
     send.mutate(message);
   };
 

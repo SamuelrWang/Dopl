@@ -1,5 +1,6 @@
 "use client";
 
+import { settlePendingSend } from "@/shared/lib/draft-store";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   coldKeys,
@@ -153,7 +154,11 @@ export function sendConfig(
     // out after the row was written leaves the message STORED while the local
     // cache says it never happened. Rare path, so the cost argument does not
     // apply.
+    // The composer's held draft (`lib/draft-store.ts › stashPendingSend`): dropped on success,
+    // put back on failure. Mutation-level, so it runs even if the composer has unmounted.
+    onSuccess: (_data, draft) => settlePendingSend(draft.clientMsgId, true),
     onError: (err, draft) => {
+      settlePendingSend(draft.clientMsgId, false);
       void deps.client.invalidateQueries({
         queryKey: messagesKey(draft.channelId),
       });
