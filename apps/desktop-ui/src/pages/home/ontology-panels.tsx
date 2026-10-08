@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { History, Share2, Trash2 } from "lucide-react";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
@@ -9,6 +9,8 @@ import { OntologyChangelog } from "@/features/ontology/components/ontology-chang
 import { createOntology, setAgentsMayEdit } from "@/features/ontology/client/api";
 import { NEW_ONTOLOGY_NAME } from "@/features/ontology/optimistic-create";
 import { ontologySnapshotKey } from "@/features/ontology/hooks/use-ontology";
+import { useRememberOntology } from "@/features/ontology/hooks/use-last-opened";
+import { readMemory, writeFace } from "@/features/ontology/last-opened";
 import {
   useOntologies,
   type OntologyListRow,
@@ -64,6 +66,7 @@ import {
 export function HomeOntologyPanels({
   homeWorkspaceId,
   homeWorkspaceSegment,
+  currentUserId,
 }: {
   /** ⚠ `POST /api/boot`'s `workspace` — the HOME space these rows live
    *  in, NULL until the caller is onboarded. Unavailable, not empty. */
@@ -71,10 +74,20 @@ export function HomeOntologyPanels({
   /** Same payload's `segment`; the board takes it for its own URL writes, which
    *  pinned mode never makes. */
   homeWorkspaceSegment: string | null;
+  /** Scopes this device's last-opened memory (`features/ontology/last-opened.ts`). */
+  currentUserId?: string;
 }) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [changelogOpen, setChangelogOpen] = useState(false);
+  // This device's last place on this face (ontology + board/changelog), read
+  // once per (reader, home space). `features/ontology/last-opened.ts`.
+  const memory = useMemo(
+    () => (homeWorkspaceId ? readMemory(currentUserId, homeWorkspaceId) : null),
+    [currentUserId, homeWorkspaceId]
+  );
+  const [changelogOpen, setChangelogOpen] = useState(
+    () => memory?.face === "changelog"
+  );
   const [sharing, setSharing] = useState<ShareTarget | null>(null);
   const [deleting, setDeleting] = useState<ShareTarget | null>(null);
   const [creating, setCreating] = useState(false);
@@ -105,8 +118,30 @@ export function HomeOntologyPanels({
   // ⚠ SELECTION PERSISTS, BUT NEVER DANGLES: a deleted or not-yet-chosen id
   // falls to the first row, so the pin always names an ontology the graph has —
   // the board's own rule is that a pin naming nothing renders "no longer here".
+  // Precedence: a pick this mount › this device's memory › the first row.
   const active =
-    rows.find((row) => row.id === selectedId) ?? rows[0] ?? null;
+    rows.find((row) => row.id === selectedId) ??
+    rows.find((row) => row.id === memory?.ontologyId) ??
+    rows[0] ??
+    null;
+
+  // Write back what is open, and sweep a remembered id that no longer resolves
+  // (deleted, or unshared). Waits for the list to resolve, never on an empty one.
+  useRememberOntology({
+    enabled: homeWorkspaceId !== null,
+    currentUserId,
+    workspaceId: homeWorkspaceId ?? "",
+    ontologies: rows,
+    status: resolved && !error ? "ready" : "loading",
+    openId: active?.id ?? null,
+    rememberedId: memory?.ontologyId ?? null,
+  });
+  // The face rides with it: reopening lands on the changelog if that was up.
+  const face = changelogOpen ? "changelog" : "board";
+  const faceReady = homeWorkspaceId !== null && resolved && active !== null;
+  useEffect(() => {
+    if (faceReady && homeWorkspaceId) writeFace(currentUserId, homeWorkspaceId, face);
+  }, [faceReady, face, currentUserId, homeWorkspaceId]);
 
   async function create() {
     if (homeWorkspaceId === null) return;
@@ -201,6 +236,8 @@ export function HomeOntologyPanels({
         workspaceId={homeWorkspaceId}
         workspaceSegment={homeWorkspaceSegment ?? ""}
         pinnedOntologyId={active.id}
+        // The pin is this host's; the open object panel is remembered by the view.
+        currentUserId={currentUserId}
         onSelectOntology={setSelectedId}
         // ⚠ THE CREATE IS A ROW IN THE NAME DROPDOWN NOW, not a black button in
         // the header (Samuel, 2026-09-10) — so /home passes the ACT and the

@@ -10,6 +10,11 @@ import { pendingRow } from "@/shared/ui/pending";
 // `src` (/home's `panel-buttons.tsx › PAGE_ACTION_BTN` is the desktop-ui twin).
 import { TAB_ACTION } from "@/features/channels/components/bits";
 import { useOntology } from "../hooks/use-ontology";
+import {
+  useRememberOntology,
+  useRememberedObject,
+  useRememberedOntologyId,
+} from "../hooks/use-last-opened";
 import { useObjectDraft } from "../hooks/use-object-draft";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { BoardSettingsMenu, DescriptionField, NameField } from "./board-header-bits";
@@ -24,8 +29,20 @@ import { OntologyBoardSkeleton } from "./ontology-skeleton";
 interface Props {
   workspaceId: string;
   workspaceSegment: string;
-  /** Deep-linked ontology (`/[ws]/ontology/[ontologySlug]`); first ontology when omitted. */
+  /**
+   * Deep-linked ontology (`/[ws]/ontology/[ontologySlug]`). When omitted: this
+   * device's last-opened ontology, else the first. A slug here OUTRANKS the
+   * remembered one — an explicit address is a choice, not a default.
+   */
   initialOntologySlug?: string;
+  /**
+   * Whose device memory to read (`../last-opened.ts`). One machine holds more
+   * than one account, so the remembered ontology is scoped to the reader as well
+   * as the workspace. Omitted ⇒ an `"anon"` bucket, which is correct for a host
+   * that has no identity to hand over. Pinned hosts pass it too: the pin owns
+   * the ontology, but the open object panel is still remembered here.
+   */
+  currentUserId?: string;
   /**
    * Single-ontology mode: pin the board to one ontology (2026-09-09, the /home
    * Ontology face; `docs/specs/home-ontology.md` §5). A selection, never a
@@ -86,6 +103,7 @@ export function OntologyView({
   workspaceId,
   workspaceSegment,
   initialOntologySlug,
+  currentUserId,
   pinnedOntologyId,
   onSelectOntology,
   onCreateOntology,
@@ -105,7 +123,10 @@ export function OntologyView({
     if (isCapped) void refresh();
   }, [isCapped, refresh]);
   const [ontologyId, setOntologyId] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // `undefined` = nothing chosen on THIS ontology since it opened, so the panel
+  // shows this device's remembered object for it (`useRememberedObject`); `null`
+  // = the operator closed it. Read through `selectedId` below, never directly.
+  const [chosenObjectId, setSelectedId] = useState<string | null | undefined>(undefined);
   // Create renders rows under PROVISIONAL ids, swapped when the POST answers;
   // selection is local state and must move with them, else board + panel blank
   // out exactly when the create succeeds.
@@ -144,13 +165,31 @@ export function OntologyView({
   // component can own the flag without reaching across the header.
   const [renaming, setRenaming] = useState(false);
 
-  // The pin outranks all three fallbacks and has none of its own.
+  // This device's last-opened ontology (`../hooks/use-last-opened.ts`).
+  const rememberedId = useRememberedOntologyId(
+    !pinnedOntologyId,
+    currentUserId,
+    workspaceId
+  );
+
+  // The pin outranks all four fallbacks and has none of its own. Order below is
+  // the precedence: a click beats the address bar, the address bar beats memory,
+  // memory beats "whatever came back first".
   const ontology = pinnedOntologyId
     ? (graph.ontologies.find((c) => c.id === pinnedOntologyId) ?? null)
     : (graph.ontologies.find((c) => c.id === ontologyId) ??
       graph.ontologies.find((c) => c.slug === initialOntologySlug) ??
+      graph.ontologies.find((c) => c.id === rememberedId) ??
       graph.ontologies[0] ??
       null);
+  const selectedId = useRememberedObject({
+    currentUserId,
+    workspaceId,
+    graph,
+    status,
+    ontology,
+    chosen: chosenObjectId,
+  });
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
   const ontologyPending = ontology ? pendingIds.has(ontology.id) : false;
   // One list for both picker faces, walked once per graph (`ontology-switcher.tsx`).
@@ -158,7 +197,8 @@ export function OntologyView({
 
   const selectOntology = (id: string) => {
     setOntologyId(id);
-    setSelectedId(null);
+    // Not null: the next ontology reopens ITS remembered panel, if any.
+    setSelectedId(undefined);
     setConfirmDeleteOntology(false);
     // A half-typed name belongs to the ontology that was open, not the next one.
     setRenaming(false);
@@ -175,6 +215,18 @@ export function OntologyView({
   useEffect(() => {
     if (activeSlug) replaceUrl(`/${workspaceSegment}/ontology/${activeSlug}`);
   }, [activeSlug, workspaceSegment, replaceUrl]);
+
+  // Remember what ends up open, and forget a remembered id that no longer
+  // resolves. Both halves wait for `status === "ready"` — see the hook.
+  useRememberOntology({
+    enabled: !pinnedOntologyId,
+    currentUserId,
+    workspaceId,
+    ontologies: graph.ontologies,
+    status,
+    openId: ontology?.id ?? null,
+    rememberedId,
+  });
 
   // Permanent cascading delete. Selection moves to the adjacent tab (next, else
   // previous), never index 0: the `?? ontologies[0]` display fallback would land on

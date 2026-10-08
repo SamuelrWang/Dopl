@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import {
@@ -9,7 +9,14 @@ import {
 } from "#/test-utils/bridge";
 import OntologyPage from "./index";
 import OntologyDetailPage from "./detail";
-import { ONTOLOGY_ID, SEGMENT, WORKSPACE_ID, ontologyBridge } from "./test-fixtures";
+import {
+  CARD_ID,
+  ONTOLOGY_ID,
+  SEGMENT,
+  USER_ID,
+  WORKSPACE_ID,
+  ontologyBridge,
+} from "./test-fixtures";
 
 /**
  * Ontology smoke test: REAL `OntologyView` (name dropdown → kanban lanes → object
@@ -69,6 +76,11 @@ function renderOntology(entry = `/${SEGMENT}/ontology`) {
 
 describe("ontology page", () => {
   beforeEach(() => {
+    // ⚠ The board REMEMBERS its last-opened ontology per device
+    // (`features/ontology/last-opened.ts`), so a case that opens Delivery would
+    // otherwise decide what the NEXT case opens. Every case starts with no memory;
+    // the cases that test the memory write their own key.
+    window.localStorage.clear();
     // ⚠ `vi.hoisted` mocks sit outside vitest's `restoreMocks` sweep, so the
     // call log accumulates across tests and makes every count wrong.
     apiRequest.mockReset();
@@ -297,5 +309,105 @@ describe("ontology page", () => {
           c.opts.method === "PATCH"
       )
     ).toBe(false);
+  });
+});
+
+/**
+ * THE LAST-OPENED MEMORY, end to end: leave the page (unmount — the same as a
+ * reload or an app restart, since a fresh render builds a fresh query client)
+ * and come back to `/ontology` with no slug. `features/ontology/last-opened.ts`.
+ */
+describe("ontology page — last-opened memory", () => {
+  const KEY = `dopl.ontology.lastOpened:${USER_ID}:${WORKSPACE_ID}`;
+  const stored = () => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    apiRequest.mockReset();
+    apiRequest.mockImplementation((path: string, opts?: BridgeRequestOpts) =>
+      ontologyBridge(path, opts)
+    );
+    installBridge({ apiRequest });
+  });
+
+  it("reopens the ontology last switched to, not the first", async () => {
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+    switchTo(/Delivery/);
+    await waitFor(() => expect(stored()?.ontologyId).toBe("ontology-2"));
+
+    cleanup();
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+    expect(openOntologyName()).toBe("Delivery");
+  });
+
+  it("lets a deep-linked slug outrank the memory, and remembers the link", async () => {
+    window.localStorage.setItem(KEY, JSON.stringify({ ontologyId: "ontology-2" }));
+    renderOntology(`/${SEGMENT}/ontology/revenue`);
+    await screen.findByTitle("Switch ontology");
+    expect(openOntologyName()).toBe("Revenue");
+    await waitFor(() => expect(stored()?.ontologyId).toBe(ONTOLOGY_ID));
+  });
+
+  it("falls back to the first ontology when the remembered one is gone, and forgets it", async () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ ontologyId: "ontology-deleted", objects: { "ontology-deleted": "x" } })
+    );
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+    expect(openOntologyName()).toBe("Revenue");
+    await waitFor(() => {
+      expect(stored()?.ontologyId).toBe(ONTOLOGY_ID);
+      expect(stored()?.objects?.["ontology-deleted"]).toBeUndefined();
+    });
+  });
+
+  it("restores a value the first build wrote (a bare ontology id)", async () => {
+    window.localStorage.setItem(KEY, "ontology-2");
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+    expect(openOntologyName()).toBe("Delivery");
+  });
+
+  it("never reads another account's memory on the same machine", async () => {
+    window.localStorage.setItem(
+      `dopl.ontology.lastOpened:someone-else:${WORKSPACE_ID}`,
+      JSON.stringify({ ontologyId: "ontology-2" })
+    );
+    renderOntology();
+    await screen.findByTitle("Switch ontology");
+    expect(openOntologyName()).toBe("Revenue");
+  });
+
+  it("reopens the object panel that was open, and remembers a close", async () => {
+    renderOntology();
+    fireEvent.click(await screen.findByText("Acme Corp"));
+    await screen.findByDisplayValue("Enterprise");
+    await waitFor(() => expect(stored()?.objects?.[ONTOLOGY_ID]).toBe(CARD_ID));
+
+    cleanup();
+    renderOntology();
+    expect(await screen.findByDisplayValue("Enterprise")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(stored()?.objects?.[ONTOLOGY_ID]).toBeUndefined());
+
+    cleanup();
+    renderOntology();
+    await screen.findByText("Acme Corp");
+    expect(screen.queryByDisplayValue("Enterprise")).not.toBeInTheDocument();
+  });
+
+  it("does not reopen a remembered object that is no longer on the board", async () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ ontologyId: ONTOLOGY_ID, objects: { [ONTOLOGY_ID]: "obj-deleted" } })
+    );
+    renderOntology();
+    await screen.findByText("Acme Corp");
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    await waitFor(() => expect(stored()?.objects?.[ONTOLOGY_ID]).toBeUndefined());
   });
 });

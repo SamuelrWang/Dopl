@@ -5,7 +5,7 @@ import { ok, noContent, workspaceRoutes } from "#/test-utils/bridge";
 // Workspace half (resolve + me) + canonical fixtures live in
 // `#/test-utils/bridge`; only ontology-specific payloads are here.
 export { ok } from "#/test-utils/bridge";
-export { SEGMENT, WORKSPACE_ID } from "#/test-utils/bridge";
+export { SEGMENT, USER_ID, WORKSPACE_ID } from "#/test-utils/bridge";
 
 /**
  * The one ontology bridge stub. Lives here, not in a test file, so suites

@@ -73,6 +73,8 @@ export function HomePane({
       <HomeOntologyPanels
         homeWorkspaceId={identity.workspace?.id ?? null}
         homeWorkspaceSegment={identity.segment}
+        // Scopes the pane's last-opened memory to the reader (`last-opened.ts`).
+        currentUserId={identity.userId}
       />
     );
   }

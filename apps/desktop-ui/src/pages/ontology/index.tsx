@@ -25,6 +25,10 @@ import { useWorkspaceAccess } from "#/hooks/use-workspace-access";
  *
  * Deliberately NOT added: back-button restore of the ontology (no `popstate`,
  * no `pushState` here).
+ *
+ * Leaving for another page and returning arrives with NO slug, which used to open
+ * `ontologies[0]`. The view now restores this device's last-opened ontology for
+ * (reader, workspace) — `features/ontology/last-opened.ts`. A slug still wins.
  */
 export default function OntologyPage() {
   const { ontologySlug } = useParams();
@@ -46,6 +50,8 @@ export default function OntologyPage() {
       workspaceId={access.workspaceId}
       workspaceSegment={access.workspaceSlug}
       initialOntologySlug={ontologySlug}
+      // Scopes this device's last-opened memory to the reader (`last-opened.ts`).
+      currentUserId={access.currentUserId}
       canManageBilling={access.isAdmin}
       canEdit={meetsMinRole(access.role, "member")}
       replaceUrl={replaceUrl}

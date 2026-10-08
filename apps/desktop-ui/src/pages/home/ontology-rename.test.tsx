@@ -35,6 +35,10 @@ vi.mock(
 );
 
 beforeEach(() => {
+  // ⚠ The pane REMEMBERS its ontology, face and open object per device
+  // (`features/ontology/last-opened.ts`); without this one case's pick decides
+  // what the next case opens.
+  window.localStorage.clear();
   resetOntologyRoutes();
   apiRequest.mockReset();
   apiRequest.mockImplementation(
