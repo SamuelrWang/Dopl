@@ -173,6 +173,13 @@ async function shapeGate(source, bin) {
   if (verdict.refuse) {
     throw new ShapeRefused(`missing ${verdict.missing.safety.concat(verdict.missing.core).join(', ')}`);
   }
+  // A candidate declaring a field Dopl does not know under a CLOSED safety/core prefix (a new sandbox field)
+  // is not adopted: what that field means cannot be read. The installed build keeps running meanwhile.
+  if (verdict.refuseUpdate) {
+    const fresh = verdict.unexpected.safety.concat(verdict.unexpected.core);
+    try { sdkShape.recordDrift(source.id, 'candidate-fields', `update refused: fields Dopl does not know: ${fresh.join(', ')}`); } catch (_) { /* best effort */ }
+    throw new ShapeRefused(`declares fields Dopl does not know: ${fresh.join(', ')}`);
+  }
   if (verdict.missing.cosmetic.length) {
     diag(`runtime-updates: ${source.id} candidate lacks cosmetic items`, verdict.missing.cosmetic.join(', '));
   }

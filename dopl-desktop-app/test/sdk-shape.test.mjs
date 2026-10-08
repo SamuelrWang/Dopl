@@ -90,7 +90,10 @@ const FULL = {
 };
 
 test("checkShape: tiers — safety/core gaps refuse, a cosmetic gap only reports", () => {
-  assert.deepEqual(sdkShape.checkShape(REQUIRED, FULL), { ok: true, refuse: false, missing: { safety: [], core: [], cosmetic: [] } });
+  assert.deepEqual(sdkShape.checkShape(REQUIRED, FULL), {
+    ok: true, refuse: false, refuseUpdate: false,
+    missing: { safety: [], core: [], cosmetic: [] }, unexpected: { safety: [], core: [], cosmetic: [] },
+  });
   const noSandbox = { ...FULL, results: { "thread/start": ["approvalPolicy"], "model/list": ["data.displayName"] } };
   const v1 = sdkShape.checkShape(REQUIRED, noSandbox);
   assert.equal(v1.refuse, true);

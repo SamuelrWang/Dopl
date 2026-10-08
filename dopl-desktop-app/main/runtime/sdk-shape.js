@@ -71,16 +71,37 @@ function flatten(shape) {
   return out;
 }
 
-/** `{ ok, refuse, missing: { safety, core, cosmetic } }` — `ok` iff nothing is missing at any tier,
- *  `refuse` iff a safety or core item is missing. */
+/**
+ * `{ ok, refuse, missing, unexpected, refuseUpdate }`.
+ *   missing     items the tier REQUIRES that the build lacks (`refuse` iff a safety/core one).
+ *   unexpected  children the build declares under a CLOSED prefix that the tier does not know: a tier's
+ *               `closed: { '<kind> <name> <field>': [known children] }` (e.g. the sandbox echo's fields). A new
+ *               field there may carry a meaning Dopl cannot read (a restriction switched off), so a CANDIDATE
+ *               build with one is refused by the updater (`refuseUpdate`); an installed build only drifts — the
+ *               per-launch strict echo is the backstop — so nothing already working is bricked.
+ */
 function checkShape(required, observed) {
   const have = flatten(observed);
   const missing = { safety: [], core: [], cosmetic: [] };
+  const unexpected = { safety: [], core: [], cosmetic: [] };
   for (const tier of TIERS) {
     for (const p of flatten(required && required[tier])) if (!have.has(p)) missing[tier].push(p);
+    const closed = required && required[tier] && required[tier].closed;
+    if (!closed || typeof closed !== 'object') continue;
+    for (const prefix of Object.keys(closed)) {
+      const known = new Set(list(closed[prefix]));
+      const lead = `${str(prefix)}.`;
+      const seen = new Set();
+      for (const p of have) {
+        if (!p.startsWith(lead)) continue;
+        const child = p.slice(lead.length).split('.')[0];
+        if (child && !known.has(child) && !seen.has(child)) { seen.add(child); unexpected[tier].push(`${lead}${child}`); }
+      }
+    }
   }
   const refuse = REFUSING.some((t) => missing[t].length > 0);
-  return { ok: !refuse && missing.cosmetic.length === 0, refuse, missing };
+  const refuseUpdate = refuse || REFUSING.some((t) => unexpected[t].length > 0);
+  return { ok: !refuseUpdate && missing.cosmetic.length === 0, refuse, refuseUpdate, missing, unexpected };
 }
 
 /** Does this descriptor declare anything to check? */
@@ -239,6 +260,10 @@ async function launchShapeRefusal(adapter) {
   }
   const verdict = checkShape(adapter.descriptor.requiredShape, st.observed);
   if (verdict.refuse) return refusalSentence(label, verdict);
+  // An installed build that declares fields Dopl does not know under a closed prefix keeps working (the
+  // updater would not adopt such a build; the per-launch strict echo is the backstop). Named, once.
+  const fresh = REFUSING.flatMap((t) => verdict.unexpected[t]);
+  if (fresh.length) recordDrift(adapter.descriptor.id, 'protocol-fields', `fields Dopl does not know: ${preview(fresh)}`);
   if (verdict.missing.cosmetic.length) {
     recordDrift(adapter.descriptor.id, 'protocol', `cosmetic gaps: ${preview(verdict.missing.cosmetic)}`);
   }

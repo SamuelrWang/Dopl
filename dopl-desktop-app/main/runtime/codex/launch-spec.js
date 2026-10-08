@@ -74,6 +74,17 @@ function launchModelOf(pick) {
   return pick;
 }
 
+/** `launchModelOf` after the roster has settled (a launch may wait on it; a read failure keeps `fallback`). */
+async function settledLaunchModel(pick, fallback) {
+  const v = typeof pick === 'string' ? pick.trim() : '';
+  if (!v) return fallback;
+  try {
+    const catalogs = require('../model-catalog');
+    if (!catalogs.vouches(catalogs.peek('codex'))) await catalogs.settle(require('../index').resolve('codex'));
+  } catch (_) { return fallback; }
+  return launchModelOf(v) || fallback;
+}
+
 // ── EFFORT: THE BUILD DECIDES WHAT MAY BE SENT (orchestrator on audit LOW4) ──────────────────────
 // The send-safety alphabet is sourced LIVE, never typed: the build's own schema's closed list for
 // `turn/start effort` when it declares one (`shape.js › values`, per build key via `sdk-shape.js`), else what
@@ -324,6 +335,10 @@ function start(spec) {
     if (Object.keys(mine).length) threadConfig.mcp_servers = Object.assign(mine, threadConfig.mcp_servers);
     // A copy: the spec is the caller's (and `doplConfigured` read it); never rewritten under them.
     const threadStart = Object.assign({}, spec.threadStart || {});
+    // The model, re-resolved against a SETTLED roster (follow-up A): a resume right after a restart reaches
+    // here before any roster read, so `buildLaunchSpec`'s sync resolve may have sent the raw pick. Waiting
+    // here (already async, before any thread exists) makes the launch value the row's own `model`.
+    if (threadStart.model) threadStart.model = await settledLaunchModel(spec.session && spec.session.model, threadStart.model);
     if (Object.keys(threadConfig).length) threadStart.config = threadConfig;
     else delete threadStart.config;
     const procArgs = procConfig.argsFor(proc);

@@ -110,8 +110,10 @@ function refuse(what) {
     + 'the restrictions the operator chose.');
 }
 
-// The sandbox fields Dopl knows how to read as "not wider" (0.155.1 / 0.160.1 `SandboxPolicy`). The two
-// `exclude*` flags only NARROW what is writable, so any boolean is fine there.
+// The sandbox fields Dopl knows — ONE list, the closed set in `required-shape.js` (the updater refuses a
+// build declaring any other; this is the per-launch backstop). The two `exclude*` flags only NARROW what is
+// writable, so any boolean is fine there.
+const KNOWN_SANDBOX_FIELDS = require('./required-shape').safety.closed['result thread/start sandbox'];
 const NARROWING_FLAGS = ['excludeSlashTmp', 'excludeTmpdirEnvVar'];
 // ⚠ NOT `false` (reviewer re-check): for an UNKNOWN field Dopl cannot tell whether `false` means "off" or
 // "restriction off" (`restrictReads: false`), so only absent / null / [] / {} pass.
@@ -133,7 +135,7 @@ function sandboxWidening(box) {
     if (k in box && box[k] !== undefined && typeof box[k] !== 'boolean') return `a sandbox setting Dopl cannot read (${k})`;
   }
   for (const k of Object.keys(box)) {
-    if (k === 'type' || k === 'networkAccess' || k === 'writableRoots' || NARROWING_FLAGS.indexOf(k) !== -1) continue;
+    if (KNOWN_SANDBOX_FIELDS.indexOf(k) !== -1) continue;
     if (!isEmptyish(box[k])) return `a sandbox setting Dopl does not recognise (${k})`;
   }
   return null;

@@ -8,11 +8,21 @@
 // Paths are relative to the params/result object; arrays are transparent (`data.id` = each row's id).
 
 const SANDBOX_ECHO = ['sandbox.type', 'sandbox.networkAccess', 'sandbox.writableRoots'];
+
+// EVERY field Dopl knows how to read on the sandbox echo (`SandboxPolicy`, measured 0.155.1 / 0.160.1 /
+// 0.161.0). A CLOSED set: a build that declares any other field is refused by the updater (a new field may
+// switch a restriction off in a way Dopl cannot read); `policy.js` reads its strict per-launch backstop
+// from this same list. One place to add a field, with its meaning, when Codex adds one.
+const SANDBOX_FIELDS = Object.freeze(['type', 'networkAccess', 'writableRoots', 'excludeSlashTmp', 'excludeTmpdirEnvVar']);
 const POLICY_ECHO = ['approvalPolicy', 'approvalsReviewer', 'cwd'];
 
 module.exports = Object.freeze({
   // A gap here could start a session with a Dopl restriction silently off.
   safety: {
+    closed: {
+      'result thread/start sandbox': SANDBOX_FIELDS,
+      'result thread/resume sandbox': SANDBOX_FIELDS,
+    },
     methods: ['initialize', 'thread/start', 'thread/resume', 'config/read'],
     results: {
       // `policy.js › assertThreadTook` reads every one of these back before a session runs.
