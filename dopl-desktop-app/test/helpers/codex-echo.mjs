@@ -21,3 +21,19 @@ export function threadEcho(params) {
     sandbox: { type: policy.SANDBOX_ECHO[p.sandbox] || "workspaceWrite", networkAccess: false, writableRoots: [] },
   };
 }
+
+/** What `config/read` answers for a child spawned with Dopl's `-c key=<toml>` argv: those values, as the
+ *  real server reports its `sessionFlags` layer (measured 0.155.1). Parses only the TOML subset
+ *  `proc-config.js › toml` writes. */
+export function configEcho(args) {
+  const config = {};
+  const a = Array.isArray(args) ? args : [];
+  for (let i = 0; i < a.length - 1; i += 1) {
+    if (a[i] !== "-c") continue;
+    const at = a[i + 1].indexOf("=");
+    const key = a[i + 1].slice(0, at);
+    const text = a[i + 1].slice(at + 1);
+    try { config[key] = JSON.parse(text.replace(/" = /g, '": ')); } catch (_) { /* not one of Dopl's restriction flags */ }
+  }
+  return { config, origins: {} };
+}

@@ -18,7 +18,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 import { liveGate, announceGate, skipLive, skipTurn, appEnv, LIVE_THREAD, LIVE_TURN, LIVE_MODEL } from "./_codex-app-server.mjs";
-import { threadEcho } from "./helpers/codex-echo.mjs";
+import { threadEcho, configEcho } from "./helpers/codex-echo.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -61,6 +61,7 @@ test("start drives the measured v2 thread/turn state machine", async () => {
   let hooks = null;
   const fake = {
     async request(method, params) {
+      if (method === "config/read") return configEcho(hooks && hooks.args);
       calls.push({ method, params });
       if (method === "initialize") return {};
       if (method === "thread/start") {

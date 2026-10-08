@@ -19,7 +19,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { sentinelBlock } from "./helpers/source-probe.mjs";
 import { evalModule } from "./helpers/module-sandbox.mjs";
-import { threadEcho } from "./helpers/codex-echo.mjs";
+import { threadEcho, configEcho } from "./helpers/codex-echo.mjs";
 
 const require_ = createRequire(import.meta.url);
 const MAIN = join(import.meta.dirname, "..", "main");
@@ -146,6 +146,7 @@ function codexSession(serverOpts = {}) {
   };
   const fake = {
     async request(method, params) {
+      if (method === "config/read") return configEcho(hooks && hooks.args);
       if (method === "initialize") return {};
       if (method === "thread/start") return { ...threadEcho(params), thread: { id: "thread-1" }, model: "gpt-x" };
       if (method === "turn/start") {

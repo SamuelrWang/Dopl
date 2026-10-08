@@ -11,6 +11,7 @@ const configHome = require('./config-home');
 const policy = require('./policy');
 const catalog = require('./catalog');
 const fenceVerify = require('./fence-verify');
+const procConfig = require('./proc-config');
 const skillsFence = require('./skills-fence');
 const operatorTools = require('./operator-tools');
 const resolveBin = require('./resolve-bin');
@@ -271,7 +272,16 @@ function start(spec) {
     // Dopl's private CODEX_HOME). Dopl's own entry wins a name clash.
     const mine = s.operatorTools ? await operatorTools.operatorServers(codexBin(), buildScrubbedEnv(), log) : {};
     const config = (spec.threadStart && spec.threadStart.config) || {};
-    if (Object.keys(mine).length) config.mcp_servers = Object.assign(mine, config.mcp_servers);
+    // Dopl's restrictions ride argv and are READ BACK before any thread starts (`proc-config.js`); only the
+    // operator's own servers stay on the thread (their headers are the operator's, not for argv).
+    const { proc, thread: threadConfig } = procConfig.split(config);
+    if (Object.keys(mine).length) threadConfig.mcp_servers = Object.assign(mine, threadConfig.mcp_servers);
+    // A copy: the spec is the caller's (and `doplConfigured` read it); never rewritten under them.
+    const threadStart = Object.assign({}, spec.threadStart || {});
+    if (Object.keys(threadConfig).length) threadStart.config = threadConfig;
+    else delete threadStart.config;
+    const procArgs = procConfig.argsFor(proc);
+    procConfig.assertNoSecret(procArgs, env[mcp.BEARER_ENV]);
     // Delegation fence (`catalog.js`): `model_catalog_json` works only as process config (`-c` argv);
     // the same key in `thread/start.config` is ignored. No catalog fails the launch. Lifted with the
     // other native fences in a private channel.
@@ -280,10 +290,10 @@ function start(spec) {
     });
     // The thread's feature fence, verified against THIS build's own feature list before anything spawns:
     // a renamed or removed feature would otherwise leave Dopl setting a dead key (`fence-verify.js`).
-    await fenceVerify.verifyFeatureFence(codexBin(), env, config.features);
+    await fenceVerify.verifyFeatureFence(codexBin(), env, proc.features);
     if (link.closed) return;
     const conn = client.connect({
-      args: (spec.args || []).concat(fenced ? catalog.catalogArgs(fenced) : []),
+      args: (spec.args || []).concat(fenced ? catalog.catalogArgs(fenced) : [], procArgs),
       env,
       cwd: spec.cwd,
       log,
@@ -299,10 +309,12 @@ function start(spec) {
     link.conn = conn;
     await conn.request('initialize', client.initializeParams(appVersion()));
     conn.notify('initialized');
+    // Every restriction, read back off the running child; anything not in effect refuses the session.
+    await procConfig.assertRestrictionsTook(conn, proc, spec.cwd);
     const method = spec.resumeThreadId ? 'thread/resume' : 'thread/start';
     const params = spec.resumeThreadId
-      ? Object.assign({ threadId: spec.resumeThreadId, cwd: spec.cwd }, spec.threadStart || {})
-      : Object.assign({ cwd: spec.cwd }, spec.threadStart || {});
+      ? Object.assign({ threadId: spec.resumeThreadId, cwd: spec.cwd }, threadStart)
+      : Object.assign({ cwd: spec.cwd }, threadStart);
     const thread = await conn.request(method, params);
     const handle = (thread && thread.thread && typeof thread.thread === 'object') ? thread.thread : {};
     const startedId = handle.id ? String(handle.id) : '';

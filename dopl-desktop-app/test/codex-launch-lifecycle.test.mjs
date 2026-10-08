@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { threadEcho } from "./helpers/codex-echo.mjs";
+import { threadEcho, configEcho } from "./helpers/codex-echo.mjs";
 
 const require = createRequire(import.meta.url);
 const CODEX = join(import.meta.dirname, "..", "main", "runtime", "codex");
@@ -54,6 +54,7 @@ function run(o = {}) {
   let turnSeq = 0;
   const fake = {
     async request(method, params) {
+      if (method === "config/read") return configEcho(hooks && hooks.args);
       calls.push({ method, params });
       if (method === "thread/start" || method === "thread/resume") {
         return o.thread !== undefined ? o.thread : { ...threadEcho(params), thread: { id: "th-1" }, model: "gpt-x" };
