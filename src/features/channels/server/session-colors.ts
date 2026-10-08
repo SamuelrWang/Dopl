@@ -41,10 +41,11 @@ import type { SessionStateUpsert } from "./collab-dto";
  *  3. **MOST DISTINCT FREE** otherwise — the key the caller asked for is taken, or they
  *     asked for none. `lib/agent-color-pick.ts › pickAgentColor` decides, against the
  *     claims accumulated so far (so a batch spreads too).
- *  4. **`null`** when the bank is empty. ⚠ **NEVER A REFUSAL.** A seventeenth live
- *     agent in one room runs UNCOLOURED and its posts wear the neutral box; dropping
- *     a machine's whole projection over a decoration is not a trade anyone would
- *     make.
+ *  4. **SHARE** when every key is held (Samuel, 2026-10-08, "it can circle back"): the
+ *     picker hands back the best key to reuse and the row is stamped `color_shared`, which
+ *     takes it out of the unique index. A shared incumbent keeps its key on every later push.
+ *     ⚠ The index still guards every FREE assignment, so two concurrent launches into a room
+ *     with keys left can never both get one key; only reuse is exempt.
  *
  * ⚠ **THE WITHIN-BATCH CLAIM IS AS REAL AS THE FOREIGN ONE.** One push may carry
  * several of the operator's own agents in one channel, and two of them wanting
@@ -59,17 +60,23 @@ import type { SessionStateUpsert } from "./collab-dto";
  * stays the thing that is actually true.
  */
 
-/** Every colour held in one channel by a session that is NOT one of the rows this
- *  push is replacing — keyed by channel id. ⚠ EXCLUDES THE CALLER'S OWN ROWS ON
- *  PURPOSE: those are about to be rewritten, so counting them would make a session's
- *  own colour look taken and move it on every push. */
-export type ForeignColorsByChannel = ReadonlyMap<string, ReadonlySet<string>>;
+/** What is live in one channel, from sessions NOT among the rows this push replaces: holders per
+ *  key, and which keys an EXCLUSIVE (non-shared) holder has — the ones the unique index guards.
+ *  ⚠ EXCLUDES THE CALLER'S OWN ROWS ON PURPOSE: those are about to be rewritten, so counting them
+ *  would make a session's own colour look taken and move it on every push. */
+export interface ChannelColorClaims {
+  holders: Map<string, number>;
+  exclusive: Set<string>;
+}
+export type ForeignColorsByChannel = ReadonlyMap<string, ChannelColorClaims>;
 
-/**
- * Rule 1's input: what each `session_key` held BEFORE this push.
- * ⚠ Read out of the reconcile's own SELECT, so it costs no extra query.
- */
-type StoredColorsByKey = ReadonlyMap<string, string | null>;
+/** Rule 1's input: what each `session_key` held BEFORE this push, and whether as a shared key. */
+type StoredColorsByKey = ReadonlyMap<string, { color: string | null; shared: boolean }>;
+
+function claim(claims: ChannelColorClaims, key: string, shared: boolean): void {
+  claims.holders.set(key, (claims.holders.get(key) ?? 0) + 1);
+  if (!shared) claims.exclusive.add(key);
+}
 
 export function resolveReportedColors({
   reported,
@@ -80,45 +87,64 @@ export function resolveReportedColors({
   storedColors: StoredColorsByKey;
   foreignColors: ForeignColorsByChannel;
 }): SessionStateUpsert[] {
-  /** Per channel: every key that is spoken for, growing as this walk assigns. */
-  const claimed = new Map<string, Set<string>>();
-  const claimsFor = (channelId: string): Set<string> => {
+  /** Per channel: every claim, growing as this walk assigns. */
+  const claimed = new Map<string, ChannelColorClaims>();
+  const claimsFor = (channelId: string): ChannelColorClaims => {
     const existing = claimed.get(channelId);
     if (existing) return existing;
-    const fresh = new Set<string>(foreignColors.get(channelId) ?? []);
+    const foreign = foreignColors.get(channelId);
+    const fresh: ChannelColorClaims = {
+      holders: new Map(foreign?.holders ?? []),
+      exclusive: new Set(foreign?.exclusive ?? []),
+    };
     claimed.set(channelId, fresh);
     return fresh;
   };
 
-  // ⚠ **TWO PASSES, AND THE ORDER IS RULE 1's ENFORCEMENT.** A single pass would let
-  // a LATER row's request take the key an EARLIER-listed session already holds,
-  // because the holder had not been walked yet — which is rule 1 losing to rule 2 on
-  // array order alone. So every incumbent claim is registered first, and only then is
-  // anything granted or picked.
-  const keptByIndex = new Map<number, AgentColorKey>();
+  // ⚠ **TWO PASSES, AND THE ORDER IS RULE 1's ENFORCEMENT.** Every incumbent claim is registered
+  // before anything is granted or picked, so a later row's request cannot take a key an
+  // earlier-listed session already holds.
+  const keptByIndex = new Map<number, { color: AgentColorKey; shared: boolean }>();
   reported.forEach((row, index) => {
-    const held = agentColorOrNull(storedColors.get(row.session_key));
+    const stored = storedColors.get(row.session_key);
+    const held = agentColorOrNull(stored?.color);
     if (!held) return;
+    const shared = stored?.shared === true;
     const claims = claimsFor(row.channel_id);
-    // ⚠ A FOREIGN CLAIM BEATS AN INCUMBENT, AND IT HAS TO: the index is already
-    // satisfied by the other member's row, so insisting here would 23505 the push.
-    // This is the one case where a live agent's colour moves, and it is unreachable
-    // unless two machines raced past each other's taken set.
-    if (claims.has(held)) return;
-    claims.add(held);
-    keptByIndex.set(index, held);
+    // ⚠ AN EXCLUSIVE FOREIGN CLAIM BEATS AN EXCLUSIVE INCUMBENT, AND IT HAS TO: the index is
+    // already satisfied by the other row, so insisting here would 23505 the push. A SHARED
+    // incumbent is outside the index and keeps its key — a colour must not move under a
+    // running agent just because the room is full.
+    if (!shared && claims.exclusive.has(held)) return;
+    claim(claims, held, shared);
+    keptByIndex.set(index, { color: held, shared });
   });
 
   return reported.map((row, index) => {
     const kept = keptByIndex.get(index);
-    if (kept) return { ...row, color: kept };
+    if (kept) return { ...row, color: kept.color, color_shared: kept.shared };
     const claims = claimsFor(row.channel_id);
     const wanted = agentColorOrNull(row.color);
+    // 2. GRANT the request when nobody holds it. 3. Otherwise PICK (`pickAgentColor`): a free key
+    //    while one exists, else the best key to share. Shared ⇔ somebody already holds it.
     const color =
-      wanted && !claims.has(wanted) ? wanted : pickAgentColor(claims);
-    if (color) claims.add(color);
-    return { ...row, color };
+      wanted && !claims.holders.has(wanted) ? wanted : pickAgentColor(claims.holders);
+    if (!color) return { ...row, color: null, color_shared: false };
+    const shared = (claims.holders.get(color) ?? 0) > 0;
+    claim(claims, color, shared);
+    return { ...row, color, color_shared: shared };
   });
+}
+
+/** One live row's claim on the channel's colours, or `null` (ended, uncoloured, junk key). */
+export function liveColorClaim(row: {
+  color: string | null;
+  state: string;
+  color_shared?: boolean | null;
+}): { key: AgentColorKey; shared: boolean } | null {
+  if (row.state === "ended") return null;
+  const key = agentColorOrNull(row.color);
+  return key ? { key, shared: row.color_shared === true } : null;
 }
 
 /**

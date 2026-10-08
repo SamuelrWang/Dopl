@@ -6,10 +6,9 @@
  * (red → red-orange → orange), so two or three sibling agents came out indistinguishable.
  * This picks by MEASURED colour instead of by position:
  *
- *  1. Only FREE keys are candidates. Two live agents in one channel never share a key — the
- *     partial unique index `channel_sessions_channel_color_live_key` says so, and this policy
- *     only exists to stay clear of it. So "every key taken" is still `null` (the agent runs
- *     uncoloured, never refused); reusing a held key is not an option this table allows.
+ *  1. FREE keys first. While one is free, two live agents in a channel never share a key (the
+ *     partial unique index `channel_sessions_channel_color_live_key` holds it). Only when every
+ *     key is held is one REUSED, marked `color_shared` so the index lets it through (2026-10-08).
  *  2. Empty room ⇒ the first key in bank order, so the first agent's colour is predictable.
  *  3. Otherwise each free key scores its DISTANCE to the NEAREST live colour, as ΔE in OKLab
  *     (Euclidean over L, a = C·cos h, b = C·sin h — the space the tokens are written in), and
@@ -56,27 +55,31 @@ const DEFAULT_PALETTE: AgentColorPalette = {
   values: AGENT_COLOR_VALUES,
 };
 
-/**
- * Every FREE key, best first. The head is what {@link pickAgentColor} returns, so a 409 that
- * hands this list back advises exactly the key the server would itself assign.
- * ⚠ Junk in `taken` (a text column, a peer's newer key) is ignored, never allowed to consume a
- * key or to anchor a distance.
- */
-export function rankFreeAgentColors(taken: ReadonlySet<string>): AgentColorKey[];
-export function rankFreeAgentColors<K extends string>(
-  taken: ReadonlySet<string>,
-  palette: AgentColorPalette<K>
-): K[];
-export function rankFreeAgentColors(
-  taken: ReadonlySet<string>,
-  palette: AgentColorPalette<string> = DEFAULT_PALETTE
+/** What is live in the channel: a set (one holder each) or a count of holders per key. */
+export type TakenColors = ReadonlySet<string> | ReadonlyMap<string, number>;
+
+/** Holders per key, junk keys (not in the palette) dropped so they can neither consume a key nor
+ *  anchor a distance. */
+function holdersOf(taken: TakenColors, keys: readonly string[]): Map<string, number> {
+  const known = new Set(keys);
+  const out = new Map<string, number>();
+  if (taken instanceof Map) {
+    for (const [key, n] of taken) if (known.has(key) && n > 0) out.set(key, n);
+  } else {
+    for (const key of taken as ReadonlySet<string>) if (known.has(key)) out.set(key, 1);
+  }
+  return out;
+}
+
+/** `candidates` ranked by distance from `anchors` (nearest-first score, then total, then order). */
+function rankAway(
+  candidates: readonly string[],
+  anchors: readonly string[],
+  values: Readonly<Record<string, Oklch>>
 ): string[] {
-  const { keys, values } = palette;
-  const free = keys.filter((k) => !taken.has(k));
-  const anchors = keys.filter((k) => taken.has(k)).map((k) => values[k]);
-  if (anchors.length === 0) return free;
-  const scored = free.map((key, order) => {
-    const distances = anchors.map((a) => oklabDistance(values[key], a));
+  if (anchors.length === 0) return [...candidates];
+  const scored = candidates.map((key, order) => {
+    const distances = anchors.map((a) => oklabDistance(values[key], values[a]));
     return {
       key,
       order,
@@ -92,15 +95,50 @@ export function rankFreeAgentColors(
   return scored.map((s) => s.key);
 }
 
-/** The assignment: the free key most distinct from every live one; `null` when none is free. */
-export function pickAgentColor(taken: ReadonlySet<string>): AgentColorKey | null;
+/**
+ * Every FREE key, best first. The head is what {@link pickAgentColor} returns while one is free,
+ * so a 409 that hands this list back advises exactly the key the server would itself assign.
+ */
+export function rankFreeAgentColors(taken: TakenColors): AgentColorKey[];
+export function rankFreeAgentColors<K extends string>(
+  taken: TakenColors,
+  palette: AgentColorPalette<K>
+): K[];
+export function rankFreeAgentColors(
+  taken: TakenColors,
+  palette: AgentColorPalette<string> = DEFAULT_PALETTE
+): string[] {
+  const { keys, values } = palette;
+  const holders = holdersOf(taken, keys);
+  return rankAway(
+    keys.filter((k) => !holders.has(k)),
+    keys.filter((k) => holders.has(k)),
+    values
+  );
+}
+
+/**
+ * **THE ASSIGNMENT.** A free key while one exists: the one most distinct from every live colour.
+ * When every key is held (Samuel, 2026-10-08: "it can circle back"), a key is REUSED rather than
+ * the agent running uncoloured: among the keys with the FEWEST live holders, the one farthest
+ * from the keys held more often, then bank order. Fewest holders comes first because with every
+ * key live, distance to "the live colours" is zero for all of them; spreading the reuse across
+ * keys is what keeps neighbours apart. `null` only for an empty palette.
+ */
+export function pickAgentColor(taken: TakenColors): AgentColorKey | null;
 export function pickAgentColor<K extends string>(
-  taken: ReadonlySet<string>,
+  taken: TakenColors,
   palette: AgentColorPalette<K>
 ): K | null;
 export function pickAgentColor(
-  taken: ReadonlySet<string>,
+  taken: TakenColors,
   palette: AgentColorPalette<string> = DEFAULT_PALETTE
 ): string | null {
-  return rankFreeAgentColors(taken, palette)[0] ?? null;
+  const { keys, values } = palette;
+  if (keys.length === 0) return null;
+  const holders = holdersOf(taken, keys);
+  const fewest = Math.min(...keys.map((k) => holders.get(k) ?? 0));
+  const candidates = keys.filter((k) => (holders.get(k) ?? 0) === fewest);
+  const busier = keys.filter((k) => (holders.get(k) ?? 0) > fewest);
+  return rankAway(candidates, busier, values)[0] ?? null;
 }

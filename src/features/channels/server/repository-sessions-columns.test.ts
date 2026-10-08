@@ -22,6 +22,7 @@ const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   identity_name: true,
   display_name: true,
   color: true,
+  color_shared: true,
   turns: true,
   tokens_delta: true,
   stale: true,

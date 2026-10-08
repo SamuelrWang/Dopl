@@ -15,7 +15,8 @@ export const SESSION_DIFF_COLUMNS =
   "turns, tokens_delta, stale, denied_calls, last_denied_tool, " +
   "last_wake_seq, last_wake_at, " +
   // Also the incumbent key for `session-colors.ts` rule 1 — missing, every push would reassign it.
-  "color";
+  // `color_shared` with it: a shared incumbent keeps its key (2026-10-08).
+  "color, color_shared";
 
 /**
  * Field by field, never `JSON.stringify` (key order differs by source). Numeric columns go through
@@ -51,6 +52,7 @@ export function sessionRowMatches(
     stored.identity_name === reported.identity_name &&
     stored.display_name === reported.display_name &&
     stored.color === reported.color &&
+    (stored.color_shared === true) === (reported.color_shared === true) &&
     sameCount(stored.turns, reported.turns) &&
     sameCount(stored.tokens_delta, reported.tokens_delta) &&
     // `===`, not truthiness: `false` and `null` (nothing evaluated it) are different reports.

@@ -40,7 +40,7 @@ export function colorTaken(wanted: string, free: string[]): ToolResponse {
   const named = wanted ? `\`${wanted}\`` : "that colour";
   if (free.length === 0) {
     return err(
-      `No agent was requested — ${named} is already held by a live agent in this channel, and **nothing was filed**. Every one of the sixteen colours is currently out, so there is none to move to: re-issue WITHOUT \`color\` and the agent runs uncoloured (its posts still read as an agent's), or wait for an agent to end and free one.`,
+      `No agent was requested — ${named} is already held by a live agent in this channel, and **nothing was filed**. Every one of the sixteen colours is currently out, so there is none to move to: re-issue WITHOUT \`color\` and the agent shares the colour least like its neighbours (a full room circles back), or wait for an agent to end and free one.`,
     );
   }
   return err(

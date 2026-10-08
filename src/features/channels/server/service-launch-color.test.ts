@@ -59,8 +59,10 @@ function directive(color: string, msFromNow = 120_000) {
 }
 
 function liveColors(...keys: string[]) {
+  const holders = new Map<string, number>();
+  for (const k of keys) holders.set(k, (holders.get(k) ?? 0) + 1);
   vi.mocked(foreignLiveColorsByChannel).mockResolvedValue(
-    new Map([[CHAN, new Set(keys)]])
+    new Map([[CHAN, { holders, exclusive: new Set(keys) }]])
   );
 }
 function pending(...rows: ReturnType<typeof directive>[]) {
@@ -131,11 +133,19 @@ describe("the taken set is live sessions UNION spoken-for launches", () => {
     expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(FIRST);
   });
 
-  /** ⚠ `null` WHEN THE BANK IS EMPTY, AND A LAUNCH IS NEVER REFUSED FOR IT — the seventeenth
-   *  agent in a room runs UNCOLOURED (`lib/agent-color-pick.ts › pickAgentColor`). */
-  it("answers null rather than refusing when all sixteen are out", async () => {
+  /** 🔒 SAMUEL 2026-10-08 — "it can circle back": with all sixteen out, the seventeenth agent
+   *  REUSES the best key rather than running uncoloured, and is never refused. */
+  it("circles back to a held key when all sixteen are out, never refusing", async () => {
     liveColors(...AGENT_COLOR_KEYS);
-    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBeNull();
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(
+      pickAgentColor(new Map(AGENT_COLOR_KEYS.map((k) => [k, 1])))
+    );
+  });
+
+  it("a pending directive's reuse counts too, so the next full-bank launch spreads", async () => {
+    liveColors(...AGENT_COLOR_KEYS);
+    pending(directive("agent-01"));
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe("agent-09");
   });
 });
 

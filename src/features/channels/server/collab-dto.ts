@@ -157,6 +157,12 @@ export type SessionStateUpsert = {
   identity_name: string | null;
   /** The one field the server may overrule (`session-colors.ts › resolveReportedColors`). */
   color: AgentColorKey | null;
+  /**
+   * SERVER-SET, never reported: this session REUSES a key another live session in the channel
+   * holds, because every key was taken (2026-10-08). Exempts the row from the per-channel unique
+   * index. Absent on a report; the reconcile stamps it.
+   */
+  color_shared?: boolean;
 };
 
 /**

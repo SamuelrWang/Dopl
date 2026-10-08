@@ -118,7 +118,7 @@ export function LaunchAgentDialog({
 
   const { taken, takenBy } = useMemo(() => agentColorsTaken(liveSessions), [liveSessions]);
   // Display only: `panel.color` stays `null` until a circle is clicked, so the server assigns the
-  // most distinct free key. `null` when every key is taken — the launch is still allowed.
+  // most distinct free key, or with every key taken the best one to share (it circles back).
   const effectiveColor = useMemo<AgentColorKey | null>(
     () => panel.color ?? pickAgentColor(taken),
     [panel.color, taken]

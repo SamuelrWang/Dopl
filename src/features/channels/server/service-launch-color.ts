@@ -25,15 +25,16 @@ export async function resolveDirectiveColor(
     foreignLiveColorsByChannel(ctx.workspaceId, [channelId], null),
     pendingDirectiveColors(ctx.workspaceId, channelId),
   ]);
-  // Live sessions ∪ unexpired pending directives. Expiry is lazy, so it is cut here; an unparseable
-  // stamp counts as live (a 409 is cheaper than two agents sharing a colour).
-  const taken = new Set<string>(byChannel.get(channelId) ?? []);
+  // Holders per key: live sessions + unexpired pending directives. Expiry is lazy, so it is cut
+  // here; an unparseable stamp counts as live (better a spread than two agents on one free key).
+  const taken = new Map<string, number>(byChannel.get(channelId)?.holders ?? []);
   for (const row of directives) {
     const at = Date.parse(row.expires_at);
     if (Number.isFinite(at) && at <= now) continue;
     const key = agentColorOrNull(row.color);
-    if (key) taken.add(key);
+    if (key) taken.set(key, (taken.get(key) ?? 0) + 1);
   }
+  // Omitted: a free key, or with every key held the best one to share (`pickAgentColor`).
   if (!wanted) return pickAgentColor(taken);
   if (taken.has(wanted)) {
     // Best first, so the refusal's first suggestion is the key the server would itself pick.

@@ -128,3 +128,30 @@ describe("the set, in the two trees that cannot import `src/`", () => {
     }
   });
 });
+
+// 🔒 SAMUEL 2026-10-08 — "it can circle back". The unique index now guards EXCLUSIVE holders only;
+// a row the reconcile stamps `color_shared` reuses a key when the bank is full.
+describe("the full-bank reuse migration", () => {
+  const SHARED = stripSqlLineComments(
+    readSource(repoFile("supabase/migrations/20261115120000_agent_color_shared.sql"))
+  ).replace(/\s+/g, " ");
+
+  it("adds `color_shared`, NOT NULL, default false (every existing row stays exclusive)", () => {
+    expect(SHARED).toContain(
+      "ADD COLUMN IF NOT EXISTS color_shared BOOLEAN NOT NULL DEFAULT false"
+    );
+  });
+
+  it("keeps the SAME index name (the push degrade narrows on it) and stays UNIQUE, cross-member", () => {
+    expect(SHARED).toContain("DROP INDEX IF EXISTS public.channel_sessions_channel_color_live_key");
+    expect(SHARED).toContain(
+      "CREATE UNIQUE INDEX channel_sessions_channel_color_live_key ON public.channel_sessions (channel_id, color) WHERE color IS NOT NULL AND state <> 'ended' AND NOT color_shared"
+    );
+  });
+
+  it("serves the taken-set read, shared rows included, with a non-unique twin", () => {
+    expect(SHARED).toContain(
+      "CREATE INDEX IF NOT EXISTS channel_sessions_channel_color_live_idx ON public.channel_sessions (channel_id, color) WHERE color IS NOT NULL AND state <> 'ended'"
+    );
+  });
+});

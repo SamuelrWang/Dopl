@@ -2,8 +2,8 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { LAUNCH_DIRECTIVES_TABLE } from "./repository-launch";
 import { isMissingRelation } from "./repository-sessions";
-import { resolveReportedColors, takenColorsFromRows } from "./session-colors";
-import type { ForeignColorsByChannel } from "./session-colors";
+import { liveColorClaim, resolveReportedColors } from "./session-colors";
+import type { ChannelColorClaims, ForeignColorsByChannel } from "./session-colors";
 import type { SessionStateUpsert } from "./collab-dto";
 
 /**
@@ -25,7 +25,12 @@ import type { SessionStateUpsert } from "./collab-dto";
  * colour keys says nothing about anybody's machine — which is why it may be
  * channel-wide with no mapper behind it.
  */
-type ColorRow = { channel_id: string; color: string | null; state: string };
+type ColorRow = {
+  channel_id: string;
+  color: string | null;
+  state: string;
+  color_shared: boolean | null;
+};
 
 /** ⚠ The same bound `repository-sessions.ts › SESSION_ROWS_LIMIT` states and for the
  *  same reason: PostgREST truncates an unlimited select SILENTLY, and a truncated
@@ -72,7 +77,7 @@ export async function foreignLiveColorsByChannel(
 
   let query = supabaseAdmin()
     .from("channel_sessions")
-    .select("channel_id, color, state")
+    .select("channel_id, color, state, color_shared")
     .eq("workspace_id", workspaceId)
     .in("channel_id", unique)
     // ⚠ THE NULLS ARE FILTERED IN SQL, not in JS: an uncoloured session is the
@@ -87,17 +92,16 @@ export async function foreignLiveColorsByChannel(
     throw error;
   }
 
-  const byChannel = new Map<string, Set<string>>();
+  const byChannel = new Map<string, ChannelColorClaims>();
   for (const row of (data ?? []) as unknown as ColorRow[]) {
-    const existing = byChannel.get(row.channel_id);
-    // ⚠ `takenColorsFromRows` PER ROW rather than a local `state !== 'ended'` test:
-    // "live" is stated once, in `session-colors.ts`, and it is the index predicate's
-    // own wording. A second spelling here is how the read starts predicting a
-    // constraint it no longer matches.
-    const keys = takenColorsFromRows([row]);
-    if (keys.size === 0) continue;
-    if (existing) for (const key of keys) existing.add(key);
-    else byChannel.set(row.channel_id, keys);
+    // ⚠ `liveColorClaim` rather than a local `state !== 'ended'` test: "live" is stated once,
+    // in `session-colors.ts`, in the index predicate's own wording.
+    const claim = liveColorClaim(row);
+    if (!claim) continue;
+    const claims = byChannel.get(row.channel_id) ?? { holders: new Map(), exclusive: new Set() };
+    claims.holders.set(claim.key, (claims.holders.get(claim.key) ?? 0) + 1);
+    if (!claim.shared) claims.exclusive.add(claim.key);
+    byChannel.set(row.channel_id, claims);
   }
   return byChannel;
 }
@@ -179,7 +183,10 @@ export async function resolveColorsForPush(
   return resolveReportedColors({
     reported,
     storedColors: new Map(
-      [...stored].map(([key, row]) => [key, row.color ?? null])
+      [...stored].map(([key, row]) => [
+        key,
+        { color: row.color ?? null, shared: row.color_shared === true },
+      ])
     ),
     foreignColors,
   });
@@ -209,7 +216,7 @@ const PG_UNIQUE_VIOLATION = "23505";
  * which the transcript draws as the neutral box, and the NEXT push (a state change
  * seconds away) re-reads the taken set and assigns properly.
  */
-export function withoutClaimedColors<T extends { color?: unknown }>(
+export function withoutClaimedColors<T extends { color?: unknown; color_shared?: unknown }>(
   rows: T[],
   error: unknown
 ): T[] {
@@ -222,5 +229,5 @@ export function withoutClaimedColors<T extends { color?: unknown }>(
   if (!String(e.message ?? "").includes("channel_sessions_channel_color_live_key")) {
     return rows;
   }
-  return rows.map((row) => ({ ...row, color: null }));
+  return rows.map((row) => ({ ...row, color: null, color_shared: false }));
 }
