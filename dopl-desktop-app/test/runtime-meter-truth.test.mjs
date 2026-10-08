@@ -92,7 +92,13 @@ test("the runtimes that report NOTHING say so, and get `null` — never a zero d
     message: { usage: { input_tokens: 1200, output_tokens: 7, cache_read_input_tokens: 300, cache_creation_input_tokens: 0 }, model: "claude-sonnet-5" },
   }, CTX), "context");
   assert.ok(ev, "the Claude lane still meters per assistant message");
-  assert.equal(ev.window, 1000000, "the adapter puts its own frozen table's window on the reading");
+  // 2026-10-08: no table. Before the CLI has reported this model's window on a result, it is UNKNOWN;
+  // after one result, every reading carries the window the CLI reported.
+  claudeNormalize.forgetWindows();
+  assert.equal(first(claudeNormalize.normalize({ type: "assistant", message: { usage: { input_tokens: 5 }, model: "claude-sonnet-5" } }, CTX), "context").window, null);
+  claudeNormalize.normalize({ type: "result", modelUsage: { "claude-sonnet-5": { inputTokens: 5, contextWindow: 1000000 } } }, CTX);
+  assert.equal(first(claudeNormalize.normalize({ type: "assistant", message: { usage: { input_tokens: 5 }, model: "claude-sonnet-5" } }, CTX), "context").window, 1000000,
+    "the window the CLI reported, learned");
   const unknown = first(claudeNormalize.normalize({
     type: "assistant", message: { usage: { input_tokens: 10 }, model: "claude-experimental-9" },
   }, CTX), "context");
@@ -177,8 +183,7 @@ test("a FOURTH runtime gets a percentage by REPORTING a window, never by being n
 });
 
 test("…and a FOURTH runtime that reports NO window gets `null`, not a made-up one and not 0", () => {
-  // ⚠ INVARIANTS: UNKNOWN STAYS DISTINCT FROM EMPTY. `contextWindowFor` answers null for a model
-  // off every table, and the renderer draws raw tokens with no percentage. A `0` here is the lie —
+  // ⚠ INVARIANTS: UNKNOWN STAYS DISTINCT FROM EMPTY. A window nobody reported is null, and the renderer draws raw tokens with no percentage. A `0` here is the lie —
   // a full meter on an empty session, or "0 tokens available" on a live one.
   const m = metrics({ promptTokens: 4096, liveModel: "borg-3-turbo", runtimeId: "borg" });
   assert.equal(m.contextWindow, null, "⚠ null — a zero denominator is a division nobody may do");
@@ -199,14 +204,15 @@ test("…and a FOURTH runtime that reports NO window gets `null`, not a made-up 
 test("core holds no model table: only the window the runtime put on its reading is a denominator", () => {
   assert.equal(metrics({ promptTokens: 10, promptWindow: 12345, liveModel: "claude-sonnet-5" }).contextWindow, 12345);
   assert.equal(metrics({ promptTokens: 10, liveModel: "claude-haiku-4-5" }).contextWindow, null,
-    "a model name alone is not a window in core; the Claude adapter supplies its table's");
+    "a model name alone is not a window in core; the Claude adapter supplies the one its CLI reported");
 });
 
-test("the Claude-shaped model rules are never applied to another runtime's id", () => {
-  // ⚠ `[1m]` AND THE DATED-ID RULE ARE ONE VENDOR'S SPELLING. They may answer for that vendor's
-  // ids and must answer `null` — never a guessed window — for anybody else's.
-  assert.equal(modelTable.contextWindowFor("claude-sonnet-4-6[1m]"), 1000000);
-  for (const id of ["gpt-5-codex", "gpt-5", "o4-mini", "borg-3-turbo", "gpt-5-codex[1m]-x", ""]) {
-    assert.equal(modelTable.contextWindowFor(id), null, id);
+test("no runtime guesses a window from a model's NAME: Claude's comes only from what the CLI reported", () => {
+  // 2026-10-08: the Claude table (and its `[1m]` / dated-id / family rules) is DELETED. A name is never a
+  // denominator, for any vendor; the adapter answers only windows its CLI reported on a result.
+  claudeNormalize.forgetWindows();
+  for (const id of ["claude-sonnet-4-6[1m]", "claude-opus-6", "gpt-5-codex", "borg-3-turbo", ""]) {
+    assert.equal(claudeNormalize.windowFor(id), null, id);
   }
+  assert.equal(modelTable.contextWindowFor, undefined, "the table export is gone");
 });

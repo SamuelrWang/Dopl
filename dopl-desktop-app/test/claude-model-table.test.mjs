@@ -43,7 +43,7 @@ test("the window/usage table evaluates standalone, with nothing in scope but its
   const SRC = M("runtime/claude/model-table.js");
   assert.ok(!/require\(|electron|process\./.test(SRC), "the module reaches nothing");
   const pure = new Function(`${sentinelBlock(SRC, "CLAUDE-MODEL-TABLE")}
-    return { contextWindowFor, promptTokens };`)();
+    return { promptTokens };`)();
   assert.equal(pure.promptTokens({ input_tokens: 1, cache_read_input_tokens: 2 }), 3);
 });
 

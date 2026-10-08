@@ -72,7 +72,7 @@ test("BUCKET: the context bucket is 5% of the session's OWN window", () => {
   assert.equal(t.contextBucket(1_000_000), 50_000);
 });
 
-// The unknown model is the COMMON case, not the edge: `contextWindowFor` answers null for every
+// The unknown model is the COMMON case, not the edge: no window is known until the CLI reports one, for every
 // model this build has never heard of, and it must never guess a denominator.
 test("BUCKET: no denominator falls back to the absolute bucket, never to a guessed window", () => {
   for (const noWindow of [null, undefined, 0, -1, NaN, "200000", {}]) {

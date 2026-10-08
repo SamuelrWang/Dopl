@@ -5,6 +5,7 @@
 const events = require('../events');
 const io = require('../../session-io');
 const modelTable = require('./model-table');
+const { readCount } = require('../sdk-shape');
 const launchContract = require('./launch-contract');
 
 // The auth-sentinel matchers live in `session-auth-detect.js`.
@@ -68,6 +69,36 @@ function mainModelOf(modelUsage) {
   return best;
 }
 
+// ── THE CONTEXT WINDOW, LEARNED FROM THE CLI (2026-10-08, SDK resilience #1 of the audit) ────────────
+// The CLI reports every model's window on each `result` (`modelUsage[id].contextWindow`). It is learned
+// here, per model id, and used as the denominator from then on — so a model released after this build
+// meters correctly on its first finished turn, and no window is ever typed into Dopl. Before a model's
+// first `result` its window is unknown (null, an empty bar), never guessed.
+const learnedWindows = new Map();
+const plainId = (id) => String(id || '').replace(/\[[^\]]*\]$/, '');
+
+function learnWindows(modelUsage) {
+  let reported = 0;
+  for (const [id, u] of Object.entries(modelUsage && typeof modelUsage === 'object' ? modelUsage : {})) {
+    const w = readCount(u, 'contextWindow');
+    if (!w) continue;
+    reported += 1;
+    learnedWindows.set(id, w);
+    // An assistant message names the model without a `[1m]`-style suffix the usage key may carry.
+    if (plainId(id) !== id && !learnedWindows.has(plainId(id))) learnedWindows.set(plainId(id), w);
+  }
+  return reported;
+}
+
+/** The learned window for a model id, or null. */
+function windowFor(model) {
+  if (!model) return null;
+  return learnedWindows.get(model) || learnedWindows.get(plainId(model)) || null;
+}
+
+/** Tests only: forget every learned window. */
+function forgetWindows() { learnedWindows.clear(); }
+
 /** One raw SDK message → the CoreEvents it means. The auth sentinel is checked FIRST and returns
  *  alone: it short-circuits the consume loop, and a render event beside it would paint the dead end. */
 function normalize(msg, ctx) {
@@ -107,18 +138,31 @@ function normalize(msg, ctx) {
       const m = msg.message || {};
       const tokens = modelTable.promptTokens(m.usage);
       const model = typeof m.model === 'string' && m.model ? m.model : null; // mid-session switch
-      // The window comes from this adapter's table: the CLI reports none (null when unknown).
-      if (tokens > 0 || model) out.push(events.context(tokens, model, modelTable.contextWindowFor(model)));
+      // The window is the one the CLI reported for this model on a `result` (null until it has).
+      if (tokens > 0 || model) out.push(events.context(tokens, model, windowFor(model)));
     }
     return out;
   }
 
   if (msg.type === 'result') {
+    const out = [];
+    const usage = msg.modelUsage && typeof msg.modelUsage === 'object' ? msg.modelUsage : null;
+    const reported = learnWindows(usage);
+    const main = mainModelOf(usage);
+    // The window, BEFORE the result: the turn's reading is sampled when the result lands. `model: null`
+    // so a usage key spelled differently from the message's model never reads as a model switch.
+    const window = windowFor(main);
+    if (window) out.push(events.context(0, null, window));
+    // A usage block with models but no window field: the CLI changed what it reports (the shared ledger).
+    if (usage && Object.keys(usage).length && !reported) {
+      out.push(events.shapeDrift('result.modelUsage.contextWindow', 'a result reported model usage without a context window'));
+    }
     // Cumulative for this QUERY (a resumed query restarts it); core takes the delta. No cost is read.
-    return [events.result(modelTable.sessionTokens(msg.usage), mainModelOf(msg.modelUsage))];
+    out.push(events.result(modelTable.sessionTokens(msg.usage), main));
+    return out;
   }
 
   return []; // unknown types ignored
 }
 
-module.exports = { normalize, renderEvents, ERROR_MESSAGE_TYPE };
+module.exports = { normalize, renderEvents, windowFor, forgetWindows, ERROR_MESSAGE_TYPE };

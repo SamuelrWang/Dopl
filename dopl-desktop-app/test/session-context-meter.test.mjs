@@ -38,63 +38,37 @@ const require = createRequire(import.meta.url);
 const model = require("../main/runtime/claude/model-table.js");
 const { initialSessionState, sessionReducer } = loadReducer();
 
-// ── 1. the denominator table, read off the bundled CLI ───────────────────────
+// ── 1. the denominator is LEARNED from the CLI's own reports (2026-10-08) ───
+// ⚠ The window table and its family guess are DELETED: the CLI reports every model's window on each
+// `result` (`modelUsage[id].contextWindow`), the adapter learns it per id, and nothing is typed in.
 
-test("the window map answers for the four aliases the picker offers", () => {
-  assert.equal(model.contextWindowFor("opus"), 1000000);
-  assert.equal(model.contextWindowFor("sonnet"), 1000000);
-  assert.equal(model.contextWindowFor("fable"), 1000000);
-  assert.equal(model.contextWindowFor("haiku"), 1000000, "the alias is Haiku 5.5");
+const claudeNormalize = require("../main/runtime/claude/normalize.js");
+const usageWith = (id, win) => ({ [id]: { inputTokens: 1, cacheReadInputTokens: 0, contextWindow: win } });
+
+test("a result teaches the window of every model it reports; nothing is known before", () => {
+  claudeNormalize.forgetWindows();
+  assert.equal(claudeNormalize.windowFor("claude-opus-6"), null, "a model never reported has no window");
+  claudeNormalize.normalize({ type: "result", modelUsage: usageWith("claude-opus-6", 1000000) }, {});
+  assert.equal(claudeNormalize.windowFor("claude-opus-6"), 1000000, "a model newer than this build meters on its first result");
 });
 
-test("the window map answers for the ids the SDK actually reports back", () => {
-  for (const [id, win] of Object.entries({
-    "claude-opus-5-5": 1000000,
-    "claude-sonnet-5-5": 1000000,
-    "claude-haiku-5-5": 1000000,
-    "claude-fable-5-1": 1000000,
-    "claude-opus-5": 1000000,
-    "claude-opus-4-8": 1000000,
-    "claude-opus-4-7": 1000000,
-    "claude-opus-4-6": 200000,
-    "claude-opus-4-5": 200000,
-    "claude-sonnet-5": 1000000,
-    "claude-sonnet-4-6": 200000,
-    "claude-sonnet-4-5": 200000,
-    "claude-haiku-4-5": 200000,
-    "claude-fable-5": 1000000,
-  })) {
-    assert.equal(model.contextWindowFor(id), win, id);
+test("a `[1m]` usage key also answers the plain id the assistant message names", () => {
+  claudeNormalize.forgetWindows();
+  claudeNormalize.normalize({ type: "result", modelUsage: usageWith("claude-sonnet-4-6[1m]", 1000000) }, {});
+  assert.equal(claudeNormalize.windowFor("claude-sonnet-4-6"), 1000000);
+});
+
+test("a junk or zero window is never learned: absent is never a denominator", () => {
+  claudeNormalize.forgetWindows();
+  for (const junk of [0, -1, "1000000", null, NaN]) {
+    claudeNormalize.normalize({ type: "result", modelUsage: usageWith("m-junk", junk) }, {});
+    assert.equal(claudeNormalize.windowFor("m-junk"), null, String(junk));
   }
 });
 
-test("the [1m] SUFFIX is the window, and it beats the base row that says 200k", () => {
-  // `claude-sonnet-4-6` is a 200k model; `claude-sonnet-4-6[1m]` is the same model asked for
-  // its long window. Reading the table first would have under-reported by 5x.
-  assert.equal(model.contextWindowFor("claude-sonnet-4-6"), 200000);
-  assert.equal(model.contextWindowFor("claude-sonnet-4-6[1m]"), 1000000);
-  assert.equal(model.contextWindowFor("claude-opus-5[1m]"), 1000000);
-  assert.equal(model.contextWindowFor("claude-sonnet-4-5-20250929[1m]"), 1000000);
-});
-
-test("a DATED id resolves to its undated row", () => {
-  assert.equal(model.contextWindowFor("claude-opus-4-5-20251101"), 200000);
-  assert.equal(model.contextWindowFor("claude-haiku-4-5-20251001"), 200000);
-});
-
-test("a Claude model NEWER than the table reads 1M by family from generation 5; older unknowns stay null", () => {
-  for (const id of ["claude-opus-6", "claude-sonnet-5-7", "claude-fable-6-2", "claude-haiku-7", "claude-mythos-6-1", "claude-opus-6-20270101"]) {
-    assert.equal(model.contextWindowFor(id), 1000000, id);
-  }
-  for (const id of ["claude-opus-4-9", "claude-sonnet-4-7", "claude-haiku-3", "claude-opus-6-x", "claude-opus", "claude-poet-6"]) {
-    assert.equal(model.contextWindowFor(id), null, id);
-  }
-});
-
-test("an UNKNOWN model has NO denominator — never a guessed one", () => {
-  for (const junk of ["", " ", null, undefined, 0, {}, [], "claude-something-9", "gpt-5", "default"]) {
-    assert.equal(model.contextWindowFor(junk), null, JSON.stringify(junk));
-  }
+test("usage with models but no window field is DRIFT, reported once to the shared ledger", () => {
+  const evs = claudeNormalize.normalize({ type: "result", modelUsage: { "claude-opus-5": { inputTokens: 5 } } }, {});
+  assert.ok(evs.some((e) => e.type === "shape_drift" && e.where === "result.modelUsage.contextWindow"));
 });
 
 // ── 2. the token math ────────────────────────────────────────────────────────
@@ -136,6 +110,7 @@ function gaugeAt(s, samples) {
 }
 
 function stream(session, messages) {
+  claudeNormalize.forgetWindows();
   const samples = [];
   const s = session;
   if (!s.state) s.state = { phase: "running", turns: 0 };
@@ -153,15 +128,18 @@ const assistant = (tokens, m = "claude-opus-5", over = {}) => ({
   ...over,
 });
 // The shape the CLI really emits, and the shape this must NOT be read from (see the header).
+// `modelUsage` carries each model's window, which is where the meter's denominator comes from.
 const result = (over = {}) => ({
   type: "result", subtype: "success", total_cost_usd: 0.4,
   usage: { input_tokens: 9999999, cache_read_input_tokens: 9999999, cache_creation_input_tokens: 0, output_tokens: 1 },
   modelUsage: {}, ...over,
 });
+/** A turn end that reports `m`'s window, as the CLI does. */
+const turnEnd = (m = "claude-opus-5", win = 1000000) => result({ modelUsage: usageWith(m, win) });
 
 test("a finished turn dispatches ONE context event: this turn's prompt, and its window", () => {
   const s = {};
-  const evs = stream(s, [init("claude-opus-5"), assistant(120000), result()]);
+  const evs = stream(s, [init("claude-opus-5"), assistant(120000), turnEnd()]);
   assert.deepEqual(evs, [{ type: "context", tokens: 120000, window: 1000000, model: "claude-opus-5" }]);
 });
 
@@ -177,7 +155,7 @@ test("the meter does NOT come from result.usage, which is the SESSION TOTAL", ()
   // The regression guard for the whole design. result.usage above is ~20M; if anything ever
   // reads it, this number moves and the meter starts claiming 2000% of a 1M window.
   const s = {};
-  const evs = stream(s, [init("claude-opus-5"), assistant(120000), result()]);
+  const evs = stream(s, [init("claude-opus-5"), assistant(120000), turnEnd()]);
   assert.equal(evs[0].tokens, 120000);
   assert.ok(evs[0].tokens < evs[0].window, "and it stays inside the window it is measured against");
 });
@@ -223,8 +201,8 @@ test("a MID-SESSION model switch moves the denominator without waiting for a fre
   // is the only signal, and it is what keeps the meter honest across a switch.
   const s = {};
   const evs = stream(s, [
-    init("claude-opus-5"), assistant(300000), result(),
-    assistant(150000, "claude-haiku-4-5"), result(),
+    init("claude-opus-5"), assistant(300000), turnEnd("claude-opus-5", 1000000),
+    assistant(150000, "claude-haiku-4-5"), turnEnd("claude-haiku-4-5", 200000),
   ]);
   assert.deepEqual(evs, [
     { type: "context", tokens: 300000, window: 1000000, model: "claude-opus-5" },
@@ -273,8 +251,6 @@ test("the SERVER's window is the denominator — the table is not even consulted
   assert.deepEqual(context, [
     { type: "context", tokens: 23586, window: 258400, model: "gpt-5.6-terra" },
   ]);
-  // And the model it names has no row at all, which is exactly the case the table cannot serve.
-  assert.equal(model.contextWindowFor("gpt-5.6-terra"), null);
 });
 
 test("core holds no model table: a reading with NO window has no denominator", () => {
