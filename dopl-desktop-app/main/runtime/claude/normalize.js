@@ -96,6 +96,14 @@ function windowFor(model) {
   return learnedWindows.get(model) || learnedWindows.get(plainId(model)) || null;
 }
 
+/** One window the CLI stated outside a result (its `getContextUsage()` answer, `launch-spec.js`). */
+function learnWindow(model, window) {
+  const w = typeof window === 'number' && Number.isFinite(window) && window > 0 ? window : 0;
+  if (!model || !w) return;
+  learnedWindows.set(String(model), w);
+  if (plainId(model) !== model) learnedWindows.set(plainId(model), w);
+}
+
 /** Tests only: forget every learned window. */
 function forgetWindows() { learnedWindows.clear(); }
 
@@ -165,4 +173,4 @@ function normalize(msg, ctx) {
   return []; // unknown types ignored
 }
 
-module.exports = { normalize, renderEvents, windowFor, forgetWindows, ERROR_MESSAGE_TYPE };
+module.exports = { normalize, renderEvents, windowFor, learnWindow, forgetWindows, ERROR_MESSAGE_TYPE };

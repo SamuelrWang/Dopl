@@ -122,7 +122,12 @@ function rosterFrom(rows, opts) {
   }
   hideSuperseded(models);
   const visible = (m) => (m && !m.hidden ? m : null);
-  const def = visible(match(models, o.fallbackId)) || visible(match(models, o.fallbackAlias));
+  // The CLI's OWN default (its `default` row names the model it runs with no pick) marks the default;
+  // the caller's fallbacks only apply to a CLI that sends no such row.
+  const defRow = (Array.isArray(rows) ? rows : []).find((r) => r && str(r.value) === 'default');
+  const cliDefault = defRow ? str(defRow.resolvedModel) : '';
+  const def = (cliDefault && visible(match(models, cliDefault)))
+    || visible(match(models, o.fallbackId)) || visible(match(models, o.fallbackAlias));
   if (def) def.isDefault = true;
   return {
     source: 'live',

@@ -87,7 +87,7 @@ export const MEASURED_293 = [
 ].map(([value, resolvedModel, displayName]) => ({ value, resolvedModel, displayName }));
 
 /** The measured answer as the adapter's roster (a plain synchronous roster for the contract suites). */
-export const claudeTable = () => claudeRoster.rosterFrom(MEASURED_293, { fallbackAlias: "sonnet" });
+export const claudeTable = () => claudeRoster.rosterFrom(MEASURED_293, {});
 
 /** Every Claude id in that roster: none may ever appear on another runtime's surface. */
 export const CLAUDE_IDS = claudeTable().ids;

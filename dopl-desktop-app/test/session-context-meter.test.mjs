@@ -409,3 +409,18 @@ test("RC-06: a turn's result names the model that read the most prompt, not the 
   assert.equal(ev.model, "claude-opus-5");
   assert.equal(normalize(result(), {}).find((e) => e.type === "result").model, null, "no usage, no model");
 });
+
+test("the window BEFORE the first result: the CLI's turn-free getContextUsage answer is learned", async () => {
+  // MEASURED 2026-10-08 on claude 2.1.293: `{ model, maxTokens, rawMaxTokens, totalTokens, percentage }`.
+  claudeNormalize.forgetWindows();
+  claudeNormalize.learnWindow("claude-sonnet-5-5", 1000000);
+  assert.equal(claudeNormalize.windowFor("claude-sonnet-5-5"), 1000000);
+  for (const junk of [0, -5, "1000000", null]) {
+    claudeNormalize.learnWindow("m-x", junk);
+    assert.equal(claudeNormalize.windowFor("m-x"), null, String(junk));
+  }
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../main/runtime/claude/launch-spec.js", import.meta.url), "utf8");
+  assert.match(src, /readCount\(u, 'rawMaxTokens'\) \|\| readCount\(u, 'maxTokens'\)/, "the raw window, read as a count, never a guess");
+  assert.match(src, /learnWindowNow\(q\);/, "asked on every start (fresh, resume, relaunch)");
+});

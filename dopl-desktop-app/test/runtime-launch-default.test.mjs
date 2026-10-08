@@ -37,10 +37,11 @@ const catalog = (status, ids) => ({
 const catalogs = (c) => ({ catalogs: { settle: async () => c } });
 const adapterOf = (descriptor) => ({ descriptor, runtime: REGISTRY.runtimeFor(descriptor.id) });
 
-test("Codex's default is a FAMILY preference held as data (sol); Claude declares the CLI's alias", () => {
+test("Codex's default is a FAMILY preference held as data (sol); Claude declares NONE (its CLI runs its own default)", () => {
   assert.equal(LD.preferredDefault(CODEX), "", "no model id in Codex's adapter code");
   assert.equal(LD.preferredFamily(CODEX), "sol", "seeded preference");
-  assert.equal(LD.preferredDefault(CLAUDE), "sonnet", "the CLI's alias, never an id this build must re-release");
+  // 2026-10-08: no model name for Claude at all; a no-pick launch sends no `--model`.
+  assert.equal(LD.preferredDefault(CLAUDE), "", "one mechanism for both runtimes (RC-05)");
 });
 
 test("THE NEXT RELEASE: gpt-7-sol appears → it is picked, with no Dopl change; the family is a whole token", () => {

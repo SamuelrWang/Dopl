@@ -51,7 +51,7 @@ function fakeCli(rows, over = {}) {
     loadSdk: async () => ({}), bin: () => "/fake/claude", env: () => ({}),
     credentialSource: () => credential, sdkVersion: () => "0.3.220",
     probe: async () => { calls.probes += 1; if (over.fail) throw new Error(over.fail); last = typeof rows === "function" ? rows() : rows; return last; },
-    catalogModels: () => (last ? roster.rosterFrom(last, { fallbackAlias: "sonnet" }).models : []),
+    catalogModels: () => (last ? roster.rosterFrom(last, {}).models : []),
   });
   return { calls, signIn: (next) => { credential = next; } };
 }
@@ -66,7 +66,7 @@ test("the measured supportedModels() rows become the catalog: full ids, the CLI'
   assert.deepEqual(r.models.map((m) => [m.label, m.short]),
     [["Opus (1M context)", "Opus"], ["Fable", "Fable"], ["Sonnet", "Sonnet"], ["Haiku", "Haiku"]]);
   assert.deepEqual(r.models.map((m) => m.value), ["opus[1m]", "claude-fable-5[1m]", "sonnet", "haiku"], "the launch value is the row's own");
-  assert.equal(r.defaultId, "claude-sonnet-5", "the PRODUCT fallback marks the default");
+  assert.equal(r.defaultId, "claude-opus-5[1m]", "the CLI's OWN `default` row marks the default");
   assert.ok(r.models[0].aliases.includes("claude-opus-5") && r.models[0].aliases.includes("opus"), "legacy spellings find the row");
 });
 
@@ -99,17 +99,17 @@ const MEASURED_293 = [
 ].map(([value, resolvedModel, displayName]) => ({ value, resolvedModel, displayName }));
 
 test("🔒 the CLI's OLDER models are hidden, not dropped: the picker offers the current lineup only", async () => {
-  const r = roster.rosterFrom(MEASURED_293, { fallbackAlias: "sonnet" });
+  const r = roster.rosterFrom(MEASURED_293, {});
   assert.deepEqual(r.models.filter((m) => !m.hidden).map((m) => m.label), ["Opus 5.5", "Fable 5.1", "Sonnet 5.5", "Haiku 5.5"]);
   assert.equal(r.models.filter((m) => m.hidden).length, 8, "every pinned older row is kept, hidden");
-  assert.equal(r.defaultId, "claude-sonnet-5-5", "the default is the current Sonnet, never a hidden row");
+  assert.equal(r.defaultId, "claude-opus-5-5", "the CLI's own default row marks it, never a hidden row");
   assert.ok(!r.models.find((m) => m.id === "claude-sonnet-5").aliases.includes("sonnet"), "a pinned row never claims the alias");
   fakeCli(MEASURED_293);
   try {
     await models.models();
     assert.equal(models.resolveLaunchModel("claude-opus-4-8").arg, "claude-opus-4-8", "a stored older pick still launches as itself");
     assert.equal(models.resolveLaunchModel("sonnet").id, "claude-sonnet-5-5");
-    assert.equal(models.resolveLaunchModel("").arg, "sonnet");
+    assert.deepEqual(models.resolveLaunchModel(""), { ok: true, arg: "", id: "claude-opus-5-5", reason: "" }, "no pick: no model sent, the CLI's default labelled");
     const c = loadCatalog().catalogFromRoster("claude", DESCRIPTOR, await models.models());
     assert.equal(c.models.find((m) => m.id === "claude-opus-4-7").label, "Opus 4.7", "a hidden row still labels a card");
   } finally { models.inject(); }
@@ -177,13 +177,13 @@ test("resolution: ids, legacy ids, aliases and undated spellings all find their 
     assert.equal(arg("claude-opus-5"), "opus[1m]", "a channel stored before the live roster");
     assert.equal(arg("opus"), "opus[1m]", "a parked session's legacy alias");
     assert.equal(arg("claude-haiku-4-5"), "haiku", "undated");
-    assert.equal(arg(""), "sonnet", "absent is the product fallback");
-    assert.equal(arg("default"), "sonnet", "…and so is the legacy word");
+    assert.equal(arg(""), "", "absent sends no model: the CLI's own default");
+    assert.equal(arg("default"), "", "…and so does the legacy word");
     const bad = models.resolveLaunchModel("claude-fable-5-1");
     assert.equal(bad.ok, false, "the gotcha: an unknown id used to launch the fallback and echo the ask");
     assert.match(bad.reason, /does not offer the model "claude-fable-5-1".*Opus \(1M context\), Fable, Sonnet, Haiku/);
     assert.equal(models.launchArg("claude-opus-4-5"), "claude-opus-4-5", "a resumed session's own id is sent as itself");
-    assert.equal(models.launchArg("opus --print"), "sonnet", "what could not BE an id never reaches argv");
+    assert.equal(models.launchArg("opus --print"), "", "what could not BE an id never reaches argv");
   } finally { models.inject(); }
 });
 
@@ -195,18 +195,25 @@ test("RC-01: before any roster read, a pick launches as ITSELF — never a short
   try {
     assert.equal(models.launchArg("claude-opus-5[1m]"), "claude-opus-5[1m]");
     assert.equal(models.resolveLaunchModel("claude-opus-5[1m]").ok, true, "unread is not refused");
-    assert.equal(models.launchArg(""), "sonnet", "no pick: the CLI's own alias");
-    assert.equal(models.launchArg("opus --print"), "sonnet", "what could not BE an id never reaches argv");
+    assert.equal(models.launchArg(""), "", "no pick: no model sent, the CLI runs its own default");
+    assert.equal(models.launchArg("opus --print"), "", "what could not BE an id never reaches argv");
   } finally { models.inject(); }
 });
 
-test("the day a newer Sonnet ships, an unpicked channel still gets `the Sonnet` — the alias row", async () => {
-  fakeCli([{ value: "sonnet", resolvedModel: "claude-sonnet-6", displayName: "Sonnet" }]);
+test("🔒 the CLI renames EVERY alias: a no-pick launch still launches, on the CLI's own default", async () => {
+  // Orchestrator 2026-10-08: no alias literal may decide the default. The CLI's `default` row names it.
+  fakeCli([
+    { value: "default", resolvedModel: "claude-zeta-7", displayName: "Default (recommended)" },
+    { value: "big", resolvedModel: "claude-zeta-7", displayName: "Zeta 7" },
+    { value: "fast", resolvedModel: "claude-mu-7", displayName: "Mu 7" },
+  ]);
   try {
     const r = await models.models();
-    assert.equal(r.defaultId, "claude-sonnet-6", "the default marker follows the fallback's alias");
-    assert.equal(models.resolveLaunchModel("").arg, "sonnet");
-    assert.equal(models.resolveLaunchModel("claude-sonnet-5").ok, false, "a pinned retired id is refused, not swapped");
+    assert.equal(r.defaultId, "claude-zeta-7", "the CLI's own default row marks the default");
+    assert.deepEqual(models.resolveLaunchModel(""), { ok: true, arg: "", id: "claude-zeta-7", reason: "" });
+    assert.equal(models.launchArg(""), "", "no `--model`: the CLI picks");
+    assert.equal(models.launchArg("claude-mu-7"), "fast", "a pick launches as its row's own value");
+    assert.equal(models.resolveLaunchModel("claude-sonnet-5").ok, false, "a pick the read roster lacks is refused, not swapped");
   } finally { models.inject(); }
 });
 
@@ -270,7 +277,7 @@ test("LIVE: the bundled CLI lists its models with NO model turn (zero SDK messag
   const rows = await roster.probe({ sdk: counting, options: { pathToClaudeCodeExecutable: bin, env: { ...process.env } } });
   assert.ok(Array.isArray(rows) && rows.length > 0, "the CLI answered");
   for (const row of rows) assert.ok(row.value && row.displayName, JSON.stringify(row));
-  const r = roster.rosterFrom(rows, { fallbackAlias: "sonnet" });
+  const r = roster.rosterFrom(rows, {});
   assert.ok(r.models.length > 0);
   assert.equal(messages, 0, "no user message, so no turn");
   console.log("LIVE supportedModels:", JSON.stringify(rows.map((x) => [x.value, x.resolvedModel, x.displayName])));

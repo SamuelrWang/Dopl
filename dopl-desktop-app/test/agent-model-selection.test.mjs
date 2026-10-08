@@ -115,11 +115,11 @@ test("LAUNCH: every lane's chain is launcher pick > identity model, and nothing 
     "the funnel owns the unknown-model refusal and the runtime default");
 });
 
-test("LAUNCH: what could not BE a model id degrades to the product default; a row launches as its own value", () => {
-  // Driven rather than asserted from source: pick -> catalog row -> argv. 2026-10-08: no table, the
-  // default is the CLI's `sonnet` alias row.
+test("LAUNCH: what could not BE a model id sends no model (the CLI's default); a row launches as its own value", () => {
+  // Driven rather than asserted from source: pick -> catalog row -> argv. 2026-10-08: no table and no
+  // default name: an absent or unusable pick sends no `--model`.
   for (const junk of ["", " ", null, undefined, 0, true, {}, [], "--dangerously-skip-permissions", "claude-opus-5\n--model=x", "opus --print"]) {
-    assert.equal(CLAUDE_MODELS.launchArg(junk), "sonnet", JSON.stringify(junk));
+    assert.equal(CLAUDE_MODELS.launchArg(junk), "", JSON.stringify(junk));
   }
   assert.equal(CLAUDE_MODELS.launchArg("claude-opus-5-5"), "opus");
   assert.equal(CLAUDE_MODELS.launchArg("claude-opus-4-8"), "claude-opus-4-8", "a hidden older row still launches");

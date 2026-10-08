@@ -19,6 +19,7 @@ const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const fold = require('./fold');
 const launchContract = require('./launch-contract');
+const { readCount } = require('../sdk-shape');
 const operatorTools = require('./operator-tools');
 const { diag } = require('../../diag');
 
@@ -91,7 +92,26 @@ function start(spec) {
   const sdk = loader.peekSdk();
   // A push the CLI folds into the running turn joins that turn (`fold.js`, P4-05).
   const watch = fold.makeFoldWatch((text) => sessionDirected.steerJoined(spec.session, text));
-  return fold.observeQuery(sdk.query({ prompt: watch.stamp(spec.prompt), options: spec.options }), watch.observe);
+  const q = sdk.query({ prompt: watch.stamp(spec.prompt), options: spec.options });
+  learnWindowNow(q);
+  return fold.observeQuery(q, watch.observe);
+}
+
+/**
+ * THE WINDOW BEFORE THE FIRST RESULT (2026-10-08): the CLI answers `getContextUsage()` turn-free with
+ * the model it is running and its raw window (measured on claude 2.1.293), so the first turn's meter
+ * has a denominator. Best effort and never awaited: a CLI without it leaves the window unknown until
+ * the first `result` reports one (`normalize.js › learnWindows`), never a guess.
+ */
+function learnWindowNow(q) {
+  if (!q || typeof q.getContextUsage !== 'function') return;
+  Promise.resolve()
+    .then(() => q.getContextUsage())
+    .then((u) => {
+      const w = readCount(u, 'rawMaxTokens') || readCount(u, 'maxTokens');
+      if (u && w) require('./normalize').learnWindow(u.model, w);
+    })
+    .catch(() => { /* an unanswered probe leaves the window unknown */ });
 }
 
 /** Resume a parked conversation: a new child with `options.resume` set, so `priorHandle` is unused. */

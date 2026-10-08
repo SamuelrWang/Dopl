@@ -55,7 +55,8 @@ test("the shipped table names no model list, alias map or default id any more", 
   for (const gone of ["MODEL_IDS", "aliasForModelId", "LAUNCH_MODEL_FALLBACK"]) {
     assert.equal(model[gone], undefined, gone);
   }
-  assert.equal(CLAUDE_MODELS.descriptor.launchDefault, "sonnet");
+  // No default name either (2026-10-08): with no pick the CLI runs its OWN default.
+  assert.equal(CLAUDE_MODELS.descriptor.launchDefault, null);
 });
 
 // ── ⚠ 2. THE FOUR-COPY PIN ENDED HERE — 2026-08-20, F-228 ────────────────────
@@ -162,10 +163,11 @@ test("the launch spec carries it on a RESUME too — one assembly point, so park
 // its own pick". Samuel removed the "Default" option and ruled that an unpicked channel launches
 // the PRODUCT fallback (the `sonnet` alias since 2026-10-08), so an absent pick now assembles a real model
 // — which is the whole point of the back-fill: the row and the launch state the same fact.
-test("'default' / absent assembles the PRODUCT fallback, not an unset option", () => {
-  const fallback = "sonnet";
+test("'default' / absent sends NO model: the CLI runs its own default (2026-10-08)", () => {
+  // Reversed again, on purpose: a back-filled model NAME is a name this build must re-release to move.
+  // The CLI's own default is what its `default` roster row names, and the catalog labels that row.
   for (const s of [session({ model: "default" }), session({ model: null }), session({ model: "" }), session({})]) {
-    assert.equal(assembled(s).model, fallback);
+    assert.equal(assembled(s).model, undefined);
   }
 });
 
@@ -175,9 +177,8 @@ test("'default' / absent assembles the PRODUCT fallback, not an unset option", (
 const PICK_RE = new RegExp(CLAUDE_MODELS.PICK_PATTERN);
 const HOSTILE = JUNK.filter((v) => typeof v !== "string" || !v.trim() || !PICK_RE.test(v.trim()));
 test("the launch spec re-coerces: a hostile s.model can never reach argv", () => {
-  const fallback = "sonnet";
   for (const bad of ["sonnet;rm -rf /", "opus --print", "--dangerously-skip-permissions"]) assert.ok(HOSTILE.includes(bad), bad);
-  for (const junk of HOSTILE) assert.equal(assembled(session({ model: junk })).model, fallback, JSON.stringify(junk));
+  for (const junk of HOSTILE) assert.equal(assembled(session({ model: junk })).model, undefined, JSON.stringify(junk));
   assert.equal(assembled(session({ model: "claude-opus-4-5" })).model, "claude-opus-4-5", "well-formed: as itself");
 });
 
@@ -224,7 +225,7 @@ test("a HOSTILE stored value is dropped to '' (no pick) on the way out of the pr
 test("a record written BEFORE this field existed reopens on the product fallback, not on undefined", () => {
   const old = durable({ key: "c1:t1", channelId: "c1", phase: "parked" });
   assert.equal(old.model, "");
-  assert.equal(CLAUDE_MODELS.launchArg(old.model), "sonnet");
+  assert.equal(CLAUDE_MODELS.launchArg(old.model), "", "no model sent: the CLI's own default");
 });
 
 test("the record-driven resume hands the stored pick back to startSession", () => {

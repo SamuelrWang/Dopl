@@ -149,7 +149,9 @@ test("the Claude adapter's start() stamps the prompt and watches the stream", ()
   const src = readFileSync(join(MAIN, "runtime", "claude", "launch-spec.js"), "utf8");
   const start = fnOf(src, "start");
   assert.match(start, /fold\.makeFoldWatch\(\(text\) => sessionDirected\.steerJoined\(spec\.session, text\)\)/);
-  assert.match(start, /fold\.observeQuery\(sdk\.query\(\{ prompt: watch\.stamp\(spec\.prompt\), options: spec\.options \}\), watch\.observe\)/);
+  // 2026-10-08: the query is bound first so its window can be asked for turn-free (`learnWindowNow`).
+  assert.match(start, /const q = sdk\.query\(\{ prompt: watch\.stamp\(spec\.prompt\), options: spec\.options \}\);/);
+  assert.match(start, /return fold\.observeQuery\(q, watch\.observe\);/);
   // 2026-10-08: the options are bound first so the launch contract is read off them (`launch-contract.js`).
   assert.match(src, /const options = buildOptions\(s, req\.dispatch\);[\s\S]*return \{ prompt: s\.pushIterator, options, session: s \};/);
 });

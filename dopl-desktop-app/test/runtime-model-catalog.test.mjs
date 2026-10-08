@@ -167,7 +167,7 @@ test("the LIVE roster (measured 0.3.293) delivers the normalized contract: label
   // 2026-10-08: the runtime's launch argument survives the cache (adapters keep no roster).
   assert.equal(catalog.models.find((m) => m.id === "claude-sonnet-5-5").launch, "sonnet");
   assert.equal(catalog.models.find((m) => m.id === "claude-opus-4-8").launch, "claude-opus-4-8");
-  assert.equal(catalog.defaultId, "claude-sonnet-5-5", "the `sonnet` alias row is the default marker");
+  assert.equal(catalog.defaultId, "claude-opus-5-5", "the CLI's own `default` row is the default marker");
   assert.equal(catalog.models.filter((m) => m.isDefault).length, 1);
   // ⚠ NO MODEL-SCOPED DIMENSION on this runtime — absent, never an empty control.
   assert.deepEqual(catalog.dimensions, []);

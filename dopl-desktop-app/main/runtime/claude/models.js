@@ -2,7 +2,7 @@
 // handshake). ⚠ NO CACHE AND NO SHIPPED TABLE HERE (2026-10-08, SDK resilience #2): the shared catalog
 // (`model-catalog.js`) is the one cache, persisted per build key (`roster-key.js`), and a read that fails
 // is a rejection the catalog renders (`stale` over held models, else `unavailable`). A model id typed into
-// this build could only go stale; the CLI's own aliases (`sonnet`) are the stable vocabulary.
+// this build could only go stale; with no pick the CLI runs its OWN default (no `--model` is sent).
 // Electron-free at load: the loader and the credential probe are reached lazily (`defaultDeps`),
 // because `session-profiles.js` reaches this adapter through the registry and is evaluated standalone.
 
@@ -14,10 +14,6 @@ const { notOfferedSentence } = require('../model-catalog');
 // decides). An id or alias, a `[1m]`-style suffix at the end only; bounded by the 120-char column.
 const PICK_PATTERN = '^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,109}(\\[[A-Za-z0-9]{1,8}\\])?$';
 const PICK_RE = new RegExp(PICK_PATTERN);
-
-// The product default (Samuel's back-fill ruling: "the Sonnet") as the CLI's own ALIAS, which follows
-// every new Sonnet — never a model id this build would have to be re-released to move.
-const LAUNCH_DEFAULT_ALIAS = 'sonnet';
 
 // Injectable for the suite.
 function defaultDeps() {
@@ -91,7 +87,7 @@ async function probeRows(sdk) {
 async function readLive() {
   const sdk = await deps.loadSdk();
   const { rows } = await probeRows(sdk);
-  return roster.rosterFrom(rows, { fallbackAlias: LAUNCH_DEFAULT_ALIAS });
+  return roster.rosterFrom(rows, {});
 }
 
 /** The offerable roster, read LIVE every call (the catalog decides when to call). Rejects with a
@@ -113,19 +109,17 @@ async function models() {
 
 /**
  * The `--model` argument for a pick — `{ ok, arg, id, reason }`, synchronous, against the catalog's
- * models: the matched row's own launch value. No pick is the product default (the `sonnet` alias row,
- * else the alias itself, which the CLI resolves). With NO roster read yet, a grammatical pick is sent as
- * itself: an unreadable roster is not evidence a model is absent (RC-03). A read roster that lacks the
- * pick refuses, never swaps.
+ * models: the matched row's own launch value. ⚠ NO PICK SENDS NO MODEL (2026-10-08): the CLI runs its
+ * own default, so no model name is typed into Dopl; `id` is the row the CLI's `default` marks (for the
+ * label), else ''. With NO roster read yet, a grammatical pick is sent as itself: an unreadable roster
+ * is not evidence a model is absent (RC-03). A read roster that lacks the pick refuses, never swaps.
  */
 function resolveLaunchModel(value) {
   const models = deps.catalogModels();
   const v = pickOf(value);
   if (!v) {
-    const fb = roster.match(models, LAUNCH_DEFAULT_ALIAS);
-    return fb
-      ? { ok: true, arg: fb.launch || fb.id, id: fb.id, reason: '' }
-      : { ok: true, arg: LAUNCH_DEFAULT_ALIAS, id: LAUNCH_DEFAULT_ALIAS, reason: '' };
+    const def = models.find((m) => m && m.isDefault);
+    return { ok: true, arg: '', id: def ? def.id : '', reason: '' };
   }
   // Exact id or alias only: a base-id match would resume a `[1m]` pick on the short row (RC-01).
   const row = roster.matchExact(models, v);
@@ -164,9 +158,9 @@ const descriptor = {
   source: 'live',
   // null, not []: no second dimension (the CLI's effort levels are not wired).
   dimensions: null,
-  // The model a no-pick launch runs on, as the CLI's alias: the catalog marks the row carrying it
-  // (`model-catalog.js › catalogFromRoster`), and this adapter spends it itself (`resolveLaunchModel('')`).
-  launchDefault: LAUNCH_DEFAULT_ALIAS,
+  // None: a no-pick launch sends no `--model` and the CLI runs its own default, which its `default`
+  // roster row names and the catalog marks (`roster.js › rosterFrom`). No model name lives here.
+  launchDefault: null,
   // Storage shape-checks only; the live roster decides what may be selected and launched.
   pick: {
     absent: '',
