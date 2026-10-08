@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  boundRecord,
+  definePersistedState,
+  isStoredId,
+  omitKey,
+} from "@/shared/lib/persisted-ui-state";
+
 /**
  * Where this device last was on the ontology surface, per user and per workspace:
  * which ontology, which face of it (board or changelog), and which object's panel
@@ -16,8 +23,6 @@
  * (the view's precedence chain). Memory is only the default for an address that
  * names no ontology.
  */
-
-const LAST_OPENED_KEY = "dopl.ontology.lastOpened";
 
 /** The two faces an ontology has. Board is the default for anything unknown. */
 export type OntologyFace = "board" | "changelog";
@@ -39,76 +44,52 @@ export const MAX_REMEMBERED_OBJECTS = 50;
 const EMPTY: OntologyMemory = { ontologyId: null, face: "board", objects: {} };
 
 /**
- * Per user AND per workspace. Per user because one machine holds more than one
- * account (`search/use-search.ts › storageKey`, same reason); per workspace
- * because one account holds several, and an id from the wrong one names nothing.
+ * Tolerant decode of today's shape. Exported for tests; storage goes through
+ * `persisted-ui-state.ts`, which hands pre-envelope values in at version 0:
+ * the 2026-10-05 bare ontology id, or 61163020's un-enveloped object.
  */
-function storageKey(userId: string | undefined, workspaceId: string): string {
-  return `${LAST_OPENED_KEY}:${userId ?? "anon"}:${workspaceId}`;
-}
-
-const isId = (v: unknown): v is string => typeof v === "string" && v.length > 0;
-
-/**
- * Tolerant decode. Accepts the 2026-10-05 shape (a bare ontology id) so a value
- * written by that build is not lost; anything malformed reads as no memory.
- */
-export function parseMemory(raw: string | null): OntologyMemory {
-  if (!raw) return EMPTY;
-  if (!raw.startsWith("{")) return { ...EMPTY, ontologyId: raw };
-  try {
-    const v = JSON.parse(raw) as Record<string, unknown>;
-    const objects: Record<string, string> = {};
-    if (v.objects && typeof v.objects === "object") {
-      for (const [k, id] of Object.entries(v.objects as Record<string, unknown>)) {
-        if (isId(k) && isId(id)) objects[k] = id;
-      }
+export function parseMemory(raw: unknown): OntologyMemory {
+  if (isStoredId(raw)) return { ...EMPTY, ontologyId: raw };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return EMPTY;
+  const v = raw as Record<string, unknown>;
+  const objects: Record<string, string> = {};
+  if (v.objects && typeof v.objects === "object") {
+    for (const [k, id] of Object.entries(v.objects as Record<string, unknown>)) {
+      if (isStoredId(k) && isStoredId(id)) objects[k] = id;
     }
-    return {
-      ontologyId: isId(v.ontologyId) ? v.ontologyId : null,
-      face: v.face === "changelog" ? "changelog" : "board",
-      objects,
-    };
-  } catch {
-    return EMPTY;
   }
+  return {
+    ontologyId: isStoredId(v.ontologyId) ? v.ontologyId : null,
+    face: v.face === "changelog" ? "changelog" : "board",
+    objects: boundRecord(objects, MAX_REMEMBERED_OBJECTS),
+  };
 }
 
 /**
- * This device's memory for the pair; EMPTY when none. Every `localStorage` touch
- * is guarded: it throws in a private window and with site data blocked, and is
- * absent in the SSR pass.
+ * ⚠ The name keeps the key 61163020 shipped (`dopl.ontology.lastOpened:<u>:<ws>`),
+ * so memory written by that build is read, not orphaned.
  */
-export function readMemory(
-  userId: string | undefined,
-  workspaceId: string
-): OntologyMemory {
-  if (typeof window === "undefined") return EMPTY;
-  try {
-    return parseMemory(window.localStorage.getItem(storageKey(userId, workspaceId)));
-  } catch {
-    return EMPTY;
-  }
+const store = definePersistedState<OntologyMemory>({
+  name: "ontology.lastOpened",
+  version: 1,
+  fallback: EMPTY,
+  decode: (raw) => parseMemory(raw),
+  isEmpty: (m) => m.ontologyId === null && m.face === "board" && !Object.keys(m.objects).length,
+});
+
+const scope = (userId: string | undefined, workspaceId: string) => ({ userId, workspaceId });
+
+/** This device's memory for the pair; EMPTY when none or unreadable. */
+export function readMemory(userId: string | undefined, workspaceId: string): OntologyMemory {
+  return store.read(scope(userId, workspaceId));
 }
 
-/** Read-modify-write. Swallows every storage failure: remembering is a convenience. */
 function update(
   userId: string | undefined,
   workspaceId: string,
   change: (m: OntologyMemory) => OntologyMemory
 ): void {
-  if (typeof window === "undefined") return;
-  try {
-    const key = storageKey(userId, workspaceId);
-    const next = change(parseMemory(window.localStorage.getItem(key)));
-    if (next.ontologyId === null && next.face === "board" && !Object.keys(next.objects).length) {
-      window.localStorage.removeItem(key);
-      return;
-    }
-    window.localStorage.setItem(key, JSON.stringify(next));
-  } catch {
-    // failing to remember is not an error state
-  }
+  store.update(scope(userId, workspaceId), change);
 }
 
 /** This device's last-opened ontology id for the pair, or null. */
@@ -137,7 +118,7 @@ export function forgetOntology(
     return {
       ...m,
       ontologyId: m.ontologyId === ontologyId ? null : m.ontologyId,
-      objects: without(m.objects, ontologyId),
+      objects: omitKey(m.objects, ontologyId),
     };
   });
 }
@@ -163,27 +144,16 @@ export function writeSelectedObject(
 ): void {
   update(userId, workspaceId, (m) => {
     if ((m.objects[ontologyId] ?? null) === objectId) return m;
-    const rest = without(m.objects, ontologyId);
+    const rest = omitKey(m.objects, ontologyId);
     if (objectId === null) return { ...m, objects: rest };
-    const entries = Object.entries(rest);
-    const kept = entries.slice(Math.max(0, entries.length - (MAX_REMEMBERED_OBJECTS - 1)));
-    return { ...m, objects: { ...Object.fromEntries(kept), [ontologyId]: objectId } };
+    return {
+      ...m,
+      objects: boundRecord({ ...rest, [ontologyId]: objectId }, MAX_REMEMBERED_OBJECTS),
+    };
   });
-}
-
-function without(
-  objects: Readonly<Record<string, string>>,
-  key: string
-): Record<string, string> {
-  return Object.fromEntries(Object.entries(objects).filter(([k]) => k !== key));
 }
 
 /** Forget the whole pair. */
 export function clearLastOpened(userId: string | undefined, workspaceId: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(storageKey(userId, workspaceId));
-  } catch {
-    // Already unreachable; the caller's fallback does the rest.
-  }
+  store.clear(scope(userId, workspaceId));
 }

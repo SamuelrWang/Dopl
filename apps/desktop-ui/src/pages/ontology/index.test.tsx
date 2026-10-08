@@ -319,7 +319,8 @@ describe("ontology page", () => {
  */
 describe("ontology page — last-opened memory", () => {
   const KEY = `dopl.ontology.lastOpened:${USER_ID}:${WORKSPACE_ID}`;
-  const stored = () => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
+  // Enveloped by `shared/lib/persisted-ui-state.ts` as `{ v, d }`.
+  const stored = () => JSON.parse(window.localStorage.getItem(KEY) ?? "null")?.d;
 
   beforeEach(() => {
     window.localStorage.clear();

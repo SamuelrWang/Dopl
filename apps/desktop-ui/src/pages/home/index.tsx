@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/shared/lib/utils";
@@ -26,6 +26,7 @@ import { useHomeUnreadClear } from "./use-home-unread-clear";
 import { channelRowId, homeRows } from "./home-rows";
 import type { SearchItem } from "@/features/search/contracts";
 import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
+import { homeMemory, homeScope } from "./home-memory";
 
 /**
  * /home — the account surface: personal, cross-org channels, outside `/:workspaceSegment` (there
@@ -37,9 +38,11 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // `undefined` = not chosen since /home mounted, so this device's memory
+  // (`./home-memory.ts`) decides; read through `selectedId` / `tab` below.
+  const [chosenRowId, setSelectedId] = useState<string | null | undefined>(undefined);
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<HomeTab>(HOME_DEFAULT_TAB);
+  const [chosenTab, setTab] = useState<HomeTab | undefined>(undefined);
   // A home channel has no route, so a jump is a selection plus a raised face.
   const jump = useActivityJump({
     onSelect: setSelectedId,
@@ -74,6 +77,18 @@ export default function HomePage() {
     queryFn: ({ signal }) => fetchBoot(null, signal),
   });
 
+  // Read once per signed-in user, never per render: a write after the restore
+  // must not feed back into it. Boot is the skeleton until it answers, so the
+  // first painted face is already the remembered one.
+  const userId = identity.data?.userId;
+  const remembered = useMemo(
+    () => (userId ? homeMemory.read(homeScope(userId)) : null),
+    [userId]
+  );
+  const tab: HomeTab = chosenTab ?? remembered?.tab ?? HOME_DEFAULT_TAB;
+  const selectedId =
+    chosenRowId !== undefined ? chosenRowId : (remembered?.rowId ?? null);
+
   const rows = useMemo(
     () => (channelsQuery.data ? homeRows(channelsQuery.data) : []),
     [channelsQuery.data]
@@ -89,6 +104,16 @@ export default function HomePage() {
   const error = channelsQuery.error ?? workspacesQuery.error ?? identity.error;
   const pending =
     channelsQuery.isPending || workspacesQuery.isPending || identity.isPending;
+
+  // Write back where the operator is. Waits for the rows: on an empty loading
+  // list every remembered row would read as gone. A row that IS gone (deleted,
+  // left) is stored as null, which is the sweep.
+  const ready = !pending && !error && Boolean(userId);
+  const rowToStore = rows.some((row) => row.id === selectedId) ? selectedId : null;
+  useEffect(() => {
+    if (!ready) return;
+    homeMemory.write(homeScope(userId), { tab, rowId: rowToStore });
+  }, [ready, userId, tab, rowToStore]);
 
   if (pending) return <HomePageSkeleton />;
   if (isUnauthorized(error)) return <SignedOutScreen />;

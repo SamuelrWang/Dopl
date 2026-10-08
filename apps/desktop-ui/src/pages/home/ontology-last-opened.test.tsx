@@ -45,7 +45,7 @@ describe("last-opened memory", () => {
       Object.keys(window.localStorage)
         .filter((k) => k.startsWith("dopl.ontology.lastOpened:"))
         .map((k) => window.localStorage.getItem(k))[0] ?? "null"
-    );
+    )?.d; // enveloped `{ v, d }` by `shared/lib/persisted-ui-state.ts`
 
   it("reopens the ontology last picked, not the first", async () => {
     renderHome();
@@ -98,3 +98,28 @@ describe("last-opened memory", () => {
   });
 });
 
+
+/** /home's own face memory (`../home-memory.ts`): the tab survives a remount. */
+describe("/home face memory", () => {
+  it("reopens on the Ontology face after leaving /home on it", async () => {
+    renderHome();
+    await openOntologyFace();
+    await waitFor(() =>
+      expect(
+        Object.keys(window.localStorage).some((k) => k.startsWith("dopl.home.lastFace:"))
+      ).toBe(true)
+    );
+
+    cleanup();
+    renderHome();
+    // No tab click: the board is up because /home remembered the face.
+    expect(await screen.findByTitle("Switch ontology")).toBeInTheDocument();
+    expect(ontologyName()).toBe("Pipeline");
+  });
+
+  it("starts on the default face with no memory", async () => {
+    renderHome();
+    await screen.findByRole("tab", { name: "Overview" });
+    expect(screen.queryByTitle("Switch ontology")).toBeNull();
+  });
+});

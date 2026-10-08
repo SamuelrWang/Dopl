@@ -156,15 +156,39 @@ describe("the last-opened store — face and object panel", () => {
     expect(objects[`ont-${MAX_REMEMBERED_OBJECTS + 4}`]).toBe(`obj-${MAX_REMEMBERED_OBJECTS + 4}`);
   });
 
+  const KEY = `dopl.ontology.lastOpened:${USER}:${WS}`;
+
   it("reads the first build's bare-id value as the ontology", () => {
-    expect(parseMemory("ont-a")).toEqual({ ontologyId: "ont-a", face: "board", objects: {} });
+    window.localStorage.setItem(KEY, "ont-a");
+    expect(readMemory(USER, WS)).toEqual({ ontologyId: "ont-a", face: "board", objects: {} });
+  });
+
+  it("reads 61163020's un-enveloped object, and writes it back enveloped", () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ ontologyId: "ont-a", face: "changelog", objects: { "ont-a": "o1" } })
+    );
+    expect(readMemory(USER, WS)).toEqual({
+      ontologyId: "ont-a",
+      face: "changelog",
+      objects: { "ont-a": "o1" },
+    });
+    writeLastOpened(USER, WS, "ont-b");
+    expect(JSON.parse(window.localStorage.getItem(KEY)!)).toMatchObject({
+      v: 1,
+      d: { ontologyId: "ont-b", face: "changelog" },
+    });
   });
 
   it("🔒 reads malformed JSON and wrong-typed fields as no memory, never throws", () => {
-    expect(parseMemory("{not json")).toEqual({ ontologyId: null, face: "board", objects: {} });
+    window.localStorage.setItem(KEY, "{not json");
+    // Not JSON ⇒ a bare string at version 0; a stray brace is not an id worth
+    // trusting, but it also cannot resolve against the graph, so it is harmless.
+    expect(() => readMemory(USER, WS)).not.toThrow();
     expect(
-      parseMemory(JSON.stringify({ ontologyId: 7, face: "graph", objects: { a: 1, b: "x" } }))
+      parseMemory({ ontologyId: 7, face: "graph", objects: { a: 1, b: "x" } })
     ).toEqual({ ontologyId: null, face: "board", objects: { b: "x" } });
+    expect(parseMemory([1, 2])).toEqual({ ontologyId: null, face: "board", objects: {} });
   });
 
   it("removes the key once nothing is left to remember", () => {
