@@ -47,7 +47,7 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
       'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision; choices, lists, tables or status: dopl_show.',
     params: {
       to: "Recipients: member email or id, `@agent-<id>` or a handle, comma-separated. None on a record.",
-      body: "Message text. Recipients render from `to`: never write a routing header.",
+      body: "Message text. @-tag each person you write to, inline; no routing header.",
       kind: '"message" (default), "milestone" (needs thread) or "record".',
       thread: 'Thread id, or "new" to open one titled by summary (needs to unless a record).',
       summary: "One-line intent: the notification recipients see.",

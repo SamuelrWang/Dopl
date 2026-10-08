@@ -456,13 +456,13 @@ test("the vocabulary grants the sparse channel post and the @-tag, on both sides
     const flat = buildFencedTurn({ side, message: "x", nonce: "p11", context: ids() }).replace(/\s+/g, " ");
     assert.ok(/You MAY post to the CHANNEL itself/.test(flat), `${side}: the capability is granted`);
     assert.ok(/needs a reason a human would name out loud/.test(flat), `${side}: with an applicable bar`);
-    assert.ok(/@-TAG A PERSON when you need one/.test(flat), `${side}: tagging is taught`);
-    // 🔒 SAMUEL, 2026-09-22 — the recipient is set ONLY by `to=` and the app renders them from
-    // it, so the tag is for somebody the post is NOT already addressed to, and the body carries
-    // no envelope. Both halves are pinned because the unscoped sentence read, to an agent
-    // filling in `to=`, as licence to repeat the recipient in the body — and nothing corrects
-    // that: a body with a header in it posts perfectly.
-    assert.ok(/a person you did NOT address/.test(flat), `${side}: …scoped to who it is for`);
+    assert.ok(/@-TAG A PERSON when you write to one/.test(flat), `${side}: tagging is taught`);
+    // 🔒 SAMUEL, 2026-10-08 — REVERSES his 2026-09-22 rule. The recipient pill that rendered
+    // `to=` is gone, so the PERSON addressed in `to=` is @-tagged inline in the body like a human
+    // post; the body still carries no envelope. Both halves pinned: the old "a person you did
+    // NOT address" scoping must not come back, and a routing header still must not appear.
+    assert.ok(/the person you address in `to=` AND anyone else/.test(flat), `${side}: …the addressee is tagged too`);
+    assert.ok(!/a person you did NOT address/.test(flat), `${side}: …the 2026-09-22 scoping is gone`);
     assert.ok(/never opens with a routing header/.test(flat), `${side}: …and no envelope in the body`);
     assert.ok(/The match is exact/.test(flat), `${side}: …with the resolver's real rule`);
     assert.ok(/Tags inbox/.test(flat), `${side}: what a tag DOES`);

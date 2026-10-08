@@ -179,7 +179,8 @@ describe("postMessage — the DEFAULT intent is unchanged", () => {
       toUserId: PEER,
     });
 
-    expect(capturedMetadata()).toEqual({ to_user_id: PEER });
+    // 2026-10-08: an addressed member is also a mention (their Tags inbox) — the one new key.
+    expect(capturedMetadata()).toEqual({ to_user_id: PEER, mentionedUserIds: [PEER] });
   });
 
   it("stamps NOTHING for an unaddressed DM post (auto-address RETIRED)", async () => {
@@ -215,6 +216,7 @@ describe("postMessage — the DEFAULT intent is unchanged", () => {
     expect(capturedMetadata()).toEqual({
       to_user_id: PEER,
       intent: "request",
+      mentionedUserIds: [PEER],
     });
   });
 });

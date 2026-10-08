@@ -145,3 +145,23 @@ export async function resolveBodyMentions(
     memberHandles: memberHandlesOf(candidates),
   };
 }
+
+/**
+ * THE STAMPED MENTION SET: the body's tags, then every member the post ADDRESSES, deduped in that
+ * order (Samuel, 2026-10-08 — the recipient pill is gone, so addressing a person must reach their
+ * Tags inbox on its own). `addressed` is `postMessage`'s membership-checked `addressees` (`to=`
+ * members, else `toUserId`): derived from the address DATA, so it holds whatever an agent's prose
+ * does, and a new addressing shape cannot deliver without passing through it.
+ * ⚠ Same author rule as the body parse: an agent addressing its own operator notifies them, a
+ * human addressing themselves does not. ⚠ Never resilience-repaired recipients, never inherited
+ * thread `to_user_id` (an in-thread reply passes no addressee), never agent ids.
+ */
+export function mentionStampOf(
+  bodyUserIds: readonly string[],
+  addressed: readonly string[] | undefined,
+  authorUserId: string,
+  authorIsAgent: boolean
+): string[] {
+  const fromAddress = (addressed ?? []).filter((id) => authorIsAgent || id !== authorUserId);
+  return [...new Set([...bodyUserIds, ...fromAddress])];
+}

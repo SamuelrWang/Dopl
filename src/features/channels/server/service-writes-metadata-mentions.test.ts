@@ -356,3 +356,35 @@ describe("postMessage — the mention stamp (wiring plan Phase 6)", () => {
     expect(vi.mocked(repo.listMembers)).toHaveBeenCalledTimes(1);
   });
 });
+
+// 🔒 SAMUEL, 2026-10-08 — the recipient pill is gone, so ADDRESSING a member must reach their
+// Tags inbox on its own: explicit `to=` members are unioned into the stamp, deduped with body tags.
+describe("postMessage — an ADDRESSED member is a mention (2026-10-08)", () => {
+  it("stamps a `to=` member even when the body tags nobody", async () => {
+    await postMessage(agentCtx, "room", { body: "ready for review", to: PEER });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
+  });
+
+  it("dedups a `to=` member the body also tags, body order first", async () => {
+    await postMessage(agentCtx, "room", { body: "@dan and @diana, ready", to: PEER });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([THIRD, PEER]);
+  });
+
+  it("an AGENT addressing its own operator notifies them; a HUMAN addressing themselves does not", async () => {
+    await postMessage(agentCtx, "room", { body: "blocked on access", to: USER });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([USER]);
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    await postMessage(ctx, "room", { body: "note to self", to: USER });
+    expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+  });
+
+  it("a `toUserId` addressee (web composer, thread opener) is stamped the same way", async () => {
+    await postMessage(ctx, "room", { body: "hello", toUserId: PEER });
+    expect(capturedMetadata()[MENTIONS_METADATA_KEY]).toEqual([PEER]);
+  });
+
+  it("an UNADDRESSED post (an in-thread reply passes no addressee) stays body-only", async () => {
+    await postMessage(agentCtx, "room", { body: "done, see diff" });
+    expect(has(capturedMetadata(), MENTIONS_METADATA_KEY)).toBe(false);
+  });
+});

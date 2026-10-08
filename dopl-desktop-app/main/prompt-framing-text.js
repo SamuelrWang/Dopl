@@ -33,11 +33,13 @@ const VOCAB_CHANNEL_POSTS = [
 ];
 const VOCAB_TAGS = [
   // The canonical handle is the display name slugged (`mentionSlug`, F-708); the older forms resolve
-  // but are named as fallbacks. Tags are for someone NOT already addressed by `to=` (Samuel,
-  // 2026-09-22) — same wording as `channel-doctrine.ts`, so both surfaces teach one rule.
-  '- @-TAG A PERSON when you need one: a person you did NOT address. Who a post is FOR is',
-  '  `to=`, and the app renders them from it, so a body never opens with a routing header',
-  '  (`FROM→TO | KIND |`), your own name, or the recipient\'s handle written out again.',
+  // but are named as fallbacks. ⚠ REVERSED 2026-10-08 (Samuel): the 2026-09-22 rule said never
+  // @-tag the person already in `to=` because the app rendered a recipient pill; the pill is gone,
+  // so the PERSON you address is @-tagged inline like a human post. Same wording as
+  // `channel-doctrine.ts`, so both surfaces teach one rule.
+  '- @-TAG A PERSON when you write to one: the person you address in `to=` AND anyone else you',
+  '  need. Name them inline where they belong in the sentence, the way a person would write',
+  '  it. A body never opens with a routing header (`FROM→TO | KIND |`) or your own name.',
   '  Write `@` and then their handle, in the BODY of the',
   '  post: their display name, lowercased, with spaces as dashes, so "Samuel Wang" is',
   '  `@samuel-wang`. That is the handle the app itself inserts and tints, so it is the one to',
@@ -140,8 +142,8 @@ const ADDRESSING = [
   `  already your address.`,
   `- AN @HANDLE IN YOUR BODY REACHES NO AGENT. Writing "@builder please take this" into a`,
   `  message tells a human reader and starts nothing; to= is the only way to reach an agent.`,
-  `  @-tagging a PERSON YOU DID NOT ADDRESS still works and still puts it in their Tags inbox,`,
-  `  but never the recipient you just named in to=, whom the app already renders.`,
+  `  @-tag every PERSON you write to in the body, inline, including the one you named in to=:`,
+  `  readers see the address only through that tag.`,
 ];
 
 module.exports = { THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };

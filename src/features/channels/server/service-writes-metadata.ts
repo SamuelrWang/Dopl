@@ -10,7 +10,7 @@ import {
   isThreadParticipant,
 } from "./service-writes-metadata-thread";
 import { takeCalmFlags } from "./service-writes-metadata-markers";
-import { resolveBodyMentions } from "./service-writes-metadata-mentions";
+import { mentionStampOf, resolveBodyMentions } from "./service-writes-metadata-mentions";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
 // ⚠ The outside-session vocabulary, stated once — the reserved key names (`via`: the client).
 import { DESKTOP_TO_METADATA_KEY, EXTERNAL_SESSION_METADATA_KEY } from "../lib/desktop-handle";
@@ -155,6 +155,8 @@ interface PostMetadataOptions {
    * could splice its own thread into somebody else's request.
    */
   fanoutGroupId?: string;
+  /** `postMessage`'s checked `addressees`, stamped as mentions (`mentionStampOf`, 2026-10-08). */
+  addressedUserIds?: readonly string[];
 }
 
 /**
@@ -447,8 +449,9 @@ export async function resolvePostMetadata(
     roster,
     ctx.source === "agent"
   );
-  if (mentions.userIds.length > 0) {
-    metadata[MENTIONS_METADATA_KEY] = mentions.userIds;
+  const mentioned = mentionStampOf(mentions.userIds, opts.addressedUserIds, ctx.userId, ctx.source === "agent");
+  if (mentioned.length > 0) {
+    metadata[MENTIONS_METADATA_KEY] = mentioned;
   }
 
   // ESCALATION (10) and its ANSWER (11). ⚠ The answer runs LAST because it is

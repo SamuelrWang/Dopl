@@ -65,7 +65,7 @@ export const CHANNEL_INPUT_SHAPE = {
     .describe(
       // `<=2000` is the launch cap (`schema-launch.ts › LaunchCreateSchema.goal`), unpublishable here as
       // this field serves three routes. The recipient clause is pushed on purpose; nothing validates it.
-      'op="send" (required): the message text. ⚠ The recipient is `to=` and is rendered from it — never write a routing header or a name into the body. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction (launch: <=2000), or the private message.',
+      'op="send" (required): the message text. ⚠ Delivery is `to=`; @-tag each person you write to inline, addressee too. No routing header. op="manage" (required on "launch" and "direct"): the agent\'s opening instruction (launch: <=2000), or the private message.',
     ),
 
   // `decision` must store as a `message` row or `targeting.js › classify` drops the card; `record`

@@ -101,17 +101,19 @@ describe("THE LAW is stated, in full, in the doctrine", () => {
   it("names the @-tag as how a HUMAN is reached, and denies that it addresses", () => {
     // Both halves: a tag reaches a human, and it never addresses (`mentionedUserIds` is not
     // `to_user_id`, INVARIANTS §5).
-    expect(channelLaw()).toContain("@-TAG A HUMAN YOU DID NOT ADDRESS");
+    // Samuel 2026-10-08: the addressee is tagged too (reverses 2026-09-22).
+    expect(channelLaw()).toContain("@-TAG EVERY HUMAN YOU WRITE TO");
+    expect(channelLaw()).not.toContain("YOU DID NOT ADDRESS");
     expect(channelLaw()).toContain("Tags inbox");
     expect(channelLaw()).toContain("Tagging is not addressing and starts no agent");
   });
 
   it("puts the recipient in `to=` and keeps the envelope OUT of the body", () => {
-    // The recipient lives only in `to=` and the room renders it; nothing validates a body's first line,
-    // so prose is the only fence against a typed header.
-    expect(channelLaw()).toContain("that IS the address and the room RENDERS it");
+    // Delivery is `to=`; a person written to is @-tagged inline (2026-10-08). Nothing validates a
+    // body's first line, so prose is the only fence against a typed header.
+    expect(channelLaw()).toContain("that IS the address");
     expect(channelDoctrine()).toContain(
-      "WHERE THE RECIPIENT IS WRITTEN: in `to=`, never in the body",
+      "WHERE THE RECIPIENT IS WRITTEN: in `to=` for delivery",
     );
     expect(channelDoctrine()).toContain("FROM→TO | KIND |");
   });
