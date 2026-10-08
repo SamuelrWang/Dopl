@@ -59,9 +59,11 @@ test("the probe model is the cheapest VISIBLE catalog row's launch value; hidden
 test("semantics runs on the model it is handed, and on the CLI's default when none", async () => {
   const sem = require("../main/runtime/claude/semantics.js");
   const seen = [];
-  const sdk = { query: ({ options }) => { seen.push(options.model); return (async function* () { yield { type: "result" }; })(); } };
+  // The model answers (no tool): every probe completes, so all four run (an answer-less turn would stop at one).
+  const sdk = { query: ({ options }) => { seen.push(options.model); return (async function* () { yield { type: "assistant", message: { content: [{ type: "text", text: "no" }] } }; yield { type: "result", subtype: "success" }; })(); } };
   await sem.verifySemantics({ sdk, options: {}, model: "y", timeoutMs: 2000 });
   await sem.verifySemantics({ sdk, options: {}, timeoutMs: 2000 });
+  assert.equal(seen.length, 8);
   assert.ok(seen.slice(0, 4).every((m) => m === "y"));
   assert.ok(seen.slice(4).every((m) => m === undefined));
 });

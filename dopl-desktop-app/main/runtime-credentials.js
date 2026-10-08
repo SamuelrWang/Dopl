@@ -46,11 +46,19 @@ function fullOf(id, f) {
   return { full: on ? 'on' : 'off' };
 }
 
-/** `[{ runtimeId, label, state, prompt, full? }]` in registration order; `state` is what the next session would meet. */
+/** `{ notice }` when the updater's live safety probe spent turns on this account (final review M3), else `{}`. */
+function noticeOf(id) {
+  try {
+    const notice = runtimeRegistry.copy.probeNotice(runtimeRegistry.descriptorFor(id), runtimeRegistry.lastSafetyProbe(id));
+    return notice ? { notice } : {};
+  } catch (_) { return {}; }
+}
+
+/** `[{ runtimeId, label, state, prompt, full?, notice? }]` in registration order; `state` is what the next session would meet. */
 function list() {
   return Promise.all(signInIds().map(async (id) => {
     const f = flagsFor(id);
-    return { runtimeId: id, label: runtimeRegistry.descriptorFor(id).label, state: await stateOf(id, f), prompt: f.prompt, ...fullOf(id, f) };
+    return { runtimeId: id, label: runtimeRegistry.descriptorFor(id).label, state: await stateOf(id, f), prompt: f.prompt, ...fullOf(id, f), ...noticeOf(id) };
   }));
 }
 
@@ -187,4 +195,7 @@ async function signOutAll() {
   return cleared;
 }
 
-module.exports = { start, list, needSignIn, noteRejected, dismissPrompt, signIn, signInFull, cancelSignIn, signOutAll, STATUS_EVENT };
+/** Re-send the rows now (a field outside this module changed, e.g. a safety probe's notice). */
+function refresh() { return push(); }
+
+module.exports = { start, refresh, list, needSignIn, noteRejected, dismissPrompt, signIn, signInFull, cancelSignIn, signOutAll, STATUS_EVENT };

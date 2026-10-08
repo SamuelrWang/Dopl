@@ -51,7 +51,10 @@ export function RuntimeCredentialBars({
               rows ? "py-2.5" : "rounded-lg border border-border-default bg-bg-elevated px-3 py-2"
             )}
           >
-            <span className="text-body font-medium text-text-primary">{r.label}</span>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-body font-medium text-text-primary">{r.label}</span>
+              {r.notice && <span className="text-caption text-text-secondary">{r.notice}</span>}
+            </span>
             <span className="flex items-center gap-3">
               {status && <span className={cn("text-caption", status.tone)}>{status.text}</span>}
               {r.state !== "connected" && (

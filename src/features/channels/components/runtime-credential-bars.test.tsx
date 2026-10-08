@@ -142,3 +142,14 @@ describe("Enable Chrome & connectors: the optional full login, on a connected ru
     expect(bar("Codex").textContent).toBe("CodexConnected");
   });
 });
+
+// FINAL REVIEW M3 (2026-10-08): the updater's live safety check spends the operator's own turns; main's
+// sentence is shown under the runtime, and nothing appears when nothing was spent.
+it("shows main's safety-check spend notice under its runtime, and nothing when there is none", async () => {
+  const notice = "Safety check of Claude Code 2.1.300 used 4 short model turns on this account. Dopl uses it now.";
+  bridge([{ ...row("claude", "Claude Code", "connected"), notice }, row("codex", "Codex", "connected")]);
+  render(<RuntimeCredentialBars variant="rows" />);
+  expect(await screen.findByText(notice)).toBeTruthy();
+  expect(bar("Claude Code").textContent).toContain(notice);
+  expect(bar("Codex").textContent).toBe("CodexConnected");
+});

@@ -78,10 +78,10 @@ test("A5: `full` offers EXACTLY these eighteen built-ins, by name", () => {
   assert.equal(WIRE.length, 18, "the count moved — say so in the commit, not by editing this number");
 });
 
-test("A5: `[]` MEANS NO BOUND, so an empty list is the one answer that is never the fix", () => {
-  // ⚠ THE TRAP THIS FILE EXISTS INSIDE. `launch-spec.js` sets `options.tools` only when the list
-  // is non-empty, so a bound that empties itself does not narrow to nothing — it silently
-  // restores the 87,402-char offer. A derivation is exactly the kind of code that can empty.
+test("A5: `full` keeps a non-empty bound (since final review L1, `[]` is sent as NO built-ins, not no bound)", () => {
+  // The trap this file grew up inside — `launch-spec.js` once set `options.tools` only when non-empty, so an
+  // emptied bound silently restored every built-in — is closed there now (always sent; measured `[]` → none).
+  // An empty `full` would therefore be a session with no tools at all: still wrong, now loudly.
   assert.ok(TOOLS.buildSessionToolConfig("full").builtinTools.length > 0);
 });
 

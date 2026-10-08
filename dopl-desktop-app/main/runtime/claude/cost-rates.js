@@ -41,6 +41,8 @@ function learn(modelUsage) {
     rates.set(id, { usd: prior.usd + usd, tokens: prior.tokens + tokens });
     changed = true;
   }
+  // Not a disk write per turn (final review L6): `live-store.save` keeps it in memory and coalesces the file
+  // write (FLUSH_MS, flushed at exit) for every caller, so nothing here needs its own debounce.
   if (changed) {
     try { store().save('rates', 'claude', KEY, Object.fromEntries(rates)); } catch (_) { /* best effort */ }
   }

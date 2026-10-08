@@ -61,7 +61,7 @@ const DOPL_READ_TOOLS = doplTools.DOPL_READ_TOOLS;
 const { GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTools;
 
 // SESSION grant config for a profile. `preApproved` -> SDK allowedTools (shadowed, no button).
-// `builtinTools` -> SDK tools (POSITIVE bound; [] = no bound). `disallowedTools` -> SDK
+// `builtinTools` -> SDK tools (POSITIVE bound, ALWAYS sent; [] = no built-ins at all, `launch-spec.js`). `disallowedTools` -> SDK
 // disallowedTools (hard-denied, never offered). `doplToolsPolicy` -> dopl MCP server's
 // per-server `tools` allowlist (null => all dopl tools reachable).
 //

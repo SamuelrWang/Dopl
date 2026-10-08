@@ -61,8 +61,11 @@ function buildOptions(s, dispatch) {
   // The in-process rename/end server, beside the dopl entry; null mounts nothing (never breaks a spawn).
   const agentOpsServer = axisB.makeAgentOpsServer(s);
   if (agentOpsServer) options.mcpServers[agentOps.SERVER_KEY] = agentOpsServer;
-  // Omitted when empty: what `[]` means to the SDK is disputed (F-427).
-  if (cfg.builtinTools.length) options.tools = cfg.builtinTools;
+  // ⚠ ALWAYS AN EXPLICIT BOUND (final review L1, HIGH; settles F-427). MEASURED 2026-10-08 (claude 2.1.293, init
+  // `tools`, no credential, no turn): `tools: []` → 0 built-ins offered (the SDK sends `--tools ""`); `["Read"]`
+  // → exactly Read; OMITTED → all 22 built-ins. So an omitted bound was the widest launch there is, and left
+  // `launch-contract.js` nothing to check. A missing or malformed list fails closed to none.
+  options.tools = Array.isArray(cfg.builtinTools) ? cfg.builtinTools.slice() : [];
   // "Use my tools" (`main/operator-tools.js › launchScope`): loaded at spawn, judged per turn by the gate.
   if (s.operatorTools) operatorTools.withOperatorTools(options);
   const bin = loader.resolveClaudeExecutable();

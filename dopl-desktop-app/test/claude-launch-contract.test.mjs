@@ -40,7 +40,7 @@ test("H2: a built-in offered outside the bound REFUSES (the gate is no backstop:
   // MEASURED 2026-10-08: `full` offered `TaskStop` unclassified; it is now in the shell class, so the
   // measured list is clean under the strict rule, and a future addition refuses.
   const clean = lc.verifyInit({ permissionMode: "default", tools: MEASURED.full }, lc.contractOf(launchOptions("full")));
-  assert.deepEqual(clean, { refuse: [], drift: [] });
+  assert.deepEqual(clean, { refuse: [] });
   const v = lc.verifyInit({ permissionMode: "default", tools: MEASURED.full.concat(["ShellKill2"]) }, lc.contractOf(launchOptions("full")));
   assert.match(v.refuse.join(" "), /outside this launch's bound \(ShellKill2\)/);
 });
@@ -70,7 +70,7 @@ test("a narrowing rule is not a removal: `Read(~/.ssh/**)` never makes `Read` a 
 test("H2: an unconfigured server's tools REFUSE on a plain launch; the operator's own tools are theirs", () => {
   const offered = MEASURED.read_only.concat(["mcp__claude_ai_Gmail__send_message"]);
   assert.match(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions("read_only"))).refuse.join(), /servers this launch did not configure \(mcp__claude_ai_Gmail__send_message\)/);
-  assert.deepEqual(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions("read_only"), { operatorTools: true })), { refuse: [], drift: [] });
+  assert.deepEqual(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions("read_only"), { operatorTools: true })), { refuse: [] });
 });
 
 test("the normalizer: init → launched, then the refusal; a clean init → launch_verified", () => {

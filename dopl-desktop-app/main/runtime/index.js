@@ -38,6 +38,7 @@ const checkForUpdate = (runtimeId) => updates().checkNow(runtimeId);
 
 /** The last finished update check's outcome word for one runtime, or null. */
 const lastUpdateOutcome = (runtimeId) => updates().lastOutcome(runtimeId);
+const lastSafetyProbe = (runtimeId) => updates().lastProbe(runtimeId);
 
 /**
  * The adapter driving this session. An unknown id falls back to the default: refusing would strand
@@ -105,7 +106,7 @@ function describePermission(runtimeId, tools, native) {
 
 module.exports = {
   resolve, descriptorFor, runtimeFor, acquire, ids, all, connectedIds, expireConnectivity, describePermission,
-  startUpdates, checkForUpdate, lastUpdateOutcome,
+  startUpdates, checkForUpdate, lastUpdateOutcome, lastSafetyProbe,
   DEFAULT_ID,
   capability, // one require answers a capability question
   selectionContext,

@@ -39,6 +39,9 @@ export interface RuntimeCredentialStatus {
   prompt: boolean;
   /** "Enable Chrome & connectors": the optional full login; absent where the runtime offers none. */
   full?: "on" | "off" | "signing-in";
+  /** What the updater's live safety check of a new build spent on this account, in main's own words; absent
+   *  when nothing was spent (`runtime-copy.js › probeNotice`). Shown, never decided on here. */
+  notice?: string;
 }
 
 export interface SpaBridgeSurface {

@@ -127,8 +127,7 @@ function normalize(msg, ctx) {
       out.push(events.safetyMismatch('Dopl ended this session before it could act: no record of what it was asked to enforce.'));
       return out;
     }
-    const { refuse, drift } = launchContract.verifyInit(msg, context.launchContract);
-    for (const d of drift) out.push(events.shapeDrift('init.tools', d));
+    const { refuse } = launchContract.verifyInit(msg, context.launchContract);
     if (refuse.length) out.push(events.safetyMismatch(launchContract.mismatchSentence(msg, context.launchContract)));
     else out.push(events.launchVerified());
     return out;

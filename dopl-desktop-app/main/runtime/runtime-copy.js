@@ -124,7 +124,25 @@ function noRuntimeCopy(descriptor) {
   return name ? `No ${name} runtime on this Mac` : 'No agent runtime on this Mac';
 }
 
+// What the updater's live safety probe spent, for Settings (final review M3: the operator's own account pays, so it
+// is said, not hidden). `probe` = `updates › lastProbe`. Null when nothing was spent.
+const PROBE_OUTCOME = {
+  passed: 'Dopl uses it now.',
+  refused: 'Dopl will not use this version.',
+  inconclusive: 'Dopl will check it again later.',
+  'not-run': 'Dopl will check it again later.',
+};
+
+function probeNotice(descriptor, probe) {
+  const p = probe || {};
+  if (!Number.isInteger(p.turns) || p.turns <= 0 || !p.version) return null;
+  const turns = p.turns === 1 ? '1 short model turn' : `${p.turns} short model turns`;
+  return `Safety check of ${runtimeLabel(descriptor)} ${p.version} used ${turns} on this account. `
+    + (PROBE_OUTCOME[p.verdict] || PROBE_OUTCOME.inconclusive);
+}
+
 module.exports = {
+  probeNotice,
   runtimeLabel,
   canSignIn,
   canSignInFull,

@@ -33,6 +33,10 @@ function createStore(base) {
         // A candidate whose live safety probe was inconclusive: `{ version, attempts }` (2026-10-08).
         attention: raw.attention && strOrNull(raw.attention.version) && Number.isInteger(raw.attention.attempts)
           ? { version: raw.attention.version, attempts: raw.attention.attempts } : null,
+        // The last live safety probe's spend, for the operator (final review M3): `{ version, turns, verdict, at }`.
+        probe: raw.probe && strOrNull(raw.probe.version) && Number.isInteger(raw.probe.turns) && raw.probe.turns >= 0
+          ? { version: raw.probe.version, turns: raw.probe.turns, verdict: strOrNull(raw.probe.verdict) || 'unknown', at: Number(raw.probe.at) || 0 }
+          : null,
       };
     } catch (_) {
       return { ...EMPTY, rejected: [] };

@@ -141,7 +141,7 @@ async function install(source, meta, version) {
     await verify.signatures(root, bin, source.teamId, deps.run);
     await verify.answersVersion(bin, deps.run);
     await shapeGate(source, bin);
-    await semanticGate(source, bin);
+    await semanticGate(source, bin, version);
     s.commit(source.id, version, root);
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
@@ -185,13 +185,38 @@ async function shapeGate(source, bin) {
  * `active.json` moves. A refusal is a property of the build (never downloaded again); an inconclusive
  * probe proves nothing, so the build is not admitted and the next check tries again.
  */
-async function semanticGate(source, bin) {
+async function semanticGate(source, bin, version) {
   if (typeof source.verifySemantics !== 'function') return;
   const r = (await source.verifySemantics(bin, deps.run)) || {};
   const refuse = Array.isArray(r.refuse) ? r.refuse : [];
   const inconclusive = Array.isArray(r.inconclusive) ? r.inconclusive : [];
+  const unrun = Array.isArray(r.unrun) ? r.unrun : [];
+  const verdict = refuse.length ? 'refused' : unrun.length ? 'not-run' : inconclusive.length ? 'inconclusive' : 'passed';
+  noteProbeSpend(source, version, Number.isInteger(r.turns) && r.turns > 0 ? r.turns : 0, verdict);
   if (refuse.length) throw new SemanticRefused(`safety semantics broken: ${refuse.join('; ')}`);
+  // Before inconclusive: a probe that could not run judged nothing, whatever an earlier probe said.
+  if (unrun.length) throw new SemanticUnrun(`safety probe could not run: ${unrun.join('; ')}`);
   if (inconclusive.length) throw new SemanticInconclusive(`safety semantics not proven: ${inconclusive.join('; ')}`);
+}
+
+/** Every probe's spend, recorded and logged — never silent (final review M3). Shown in Settings › Agent
+ *  sign-ins (`runtime-credentials.js`, `runtime-copy.js › probeNotice`). Never throws. */
+function noteProbeSpend(source, version, turns, verdict) {
+  try {
+    const s = diskStore();
+    const record = s.read(source.id);
+    s.write(source.id, Object.assign({}, record, { probe: { version, turns, verdict, at: Date.now() } }));
+  } catch (_) { /* the log line below still says it */ }
+  // Lazy and best-effort: Settings re-reads its rows, so the notice appears without a restart.
+  try { require('../../runtime-credentials').refresh(); } catch (_) { /* no window layer (tests) */ }
+  deps.log(`runtime-updates: ${source.id} ${version} safety probe used ${turns} model turn${turns === 1 ? '' : 's'} on this account (${verdict})`);
+}
+
+/** The last live safety probe for `runtimeId` — `{ version, turns, verdict, at }` — or null. */
+function lastProbe(runtimeId) {
+  const source = sources.get(runtimeId);
+  if (!source) return null;
+  try { return diskStore().read(source.id).probe; } catch (_) { return null; }
 }
 
 /** The probe proved nothing (the model never tried the tool). Counted per version (cross-review M2). */
@@ -199,6 +224,8 @@ class SemanticInconclusive extends Error {}
 /** A build that BROKE a restriction under the live probe. Unlike a shape gap, this is the build's own behaviour,
  *  whatever this Dopl requires: rejected by plain version, permanently (cross-review, 1fa7f06d rebase). */
 class SemanticRefused extends Error {}
+/** No probe turn could run (offline, signed out, rate-limited): nothing judged, NOT counted (final review M2). */
+class SemanticUnrun extends Error {}
 
 // A candidate gets this many live safety probes; then it NEEDS ATTENTION and is not probed again (each
 // probe is real model turns on the operator's account). A newer version starts over.
@@ -224,12 +251,23 @@ async function check(source) {
     if (record.attention && record.attention.version === version && record.attention.attempts >= MAX_SEMANTIC_ATTEMPTS) {
       return 'needs-attention';
     }
+    // A probe that cannot run now (signed out) would judge nothing: skip the download too, uncounted (M2).
+    if (typeof source.verifySemantics === 'function' && typeof source.probeReady === 'function' && !source.probeReady()) {
+      deps.log(`runtime-updates: ${source.id} ${version} waits — its safety probe cannot run (not signed in); not counted`);
+      return 'failed';
+    }
     await install(source, meta, version);
-    s.write(source.id, { version, previous: downloaded, rejected: record.rejected });
+    // `probe` is kept: the spend notice outlives the switch it paid for.
+    const probe = s.read(source.id).probe;
+    s.write(source.id, Object.assign({ version, previous: downloaded, rejected: record.rejected }, probe ? { probe } : {}));
     switched(source);
     diag(`runtime-updates: ${source.id} now ${version}`);
     return 'updated';
   } catch (err) {
+    if (err instanceof SemanticUnrun && version) {
+      deps.log(`runtime-updates: ${source.id} ${version} not judged — ${err.message}; tried again next check, not counted`);
+      return 'failed';
+    }
     if (err instanceof SemanticInconclusive && version) {
       const s = diskStore();
       const record = s.read(source.id);
@@ -364,4 +402,4 @@ function inject(overrides) {
   timer = null;
 }
 
-module.exports = { activeFor, check, checkNow, lastOutcome, reject, start, inject };
+module.exports = { activeFor, check, checkNow, lastOutcome, lastProbe, reject, start, inject };
