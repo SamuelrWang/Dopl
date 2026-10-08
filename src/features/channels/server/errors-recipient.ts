@@ -24,8 +24,8 @@ export class ChannelRecipientUnresolvedError extends ChannelError {
 /**
  * An AGENT's message names people in `to=` but its body does not @-tag every one of them
  * (Samuel, 2026-10-08: no pill renders `to=`, so the tag is the only way a reader sees who it
- * is for). Refused before anything is written; the body is never edited for the caller. Answers
- * on `CHANNEL_RECIPIENT_UNRESOLVED`'s code: the remedy is the same, fix the message and resend.
+ * is for). Refused before anything is written; the body is never edited for the caller. Its own
+ * code, `CHANNEL_ADDRESSEE_UNTAGGED`: the address resolved, the BODY is what needs fixing.
  */
 export class ChannelAddresseeUntaggedError extends ChannelError {
   constructor(public readonly handles: readonly string[]) {

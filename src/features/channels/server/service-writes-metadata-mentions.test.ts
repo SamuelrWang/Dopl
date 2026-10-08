@@ -446,3 +446,13 @@ describe("postMessage — an agent must @-tag every person in `to=`", () => {
     expect(repoMessages.insertMessage).toHaveBeenCalled();
   });
 });
+
+describe("the untagged refusal's wire code", () => {
+  it("maps to CHANNEL_ADDRESSEE_UNTAGGED, a 400", async () => {
+    const { toChannelErrorResponse } = await import("./http-mapping");
+    const { ChannelAddresseeUntaggedError } = await import("./errors");
+    const res = toChannelErrorResponse(new ChannelAddresseeUntaggedError(["diana-taylor"]));
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain("CHANNEL_ADDRESSEE_UNTAGGED");
+  });
+});

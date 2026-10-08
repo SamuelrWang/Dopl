@@ -218,6 +218,9 @@ async function opPost(client, channelRef, body, opts = {}) {
                     return (0, respond_1.err)(`Nothing was sent to **${chName}**: this asks a person to choose, so it goes on a decision card they answer in one press. Resend it with ${(0, call_ref_js_1.toolName)("channel.send", { kind: '"decision"' })} on the same channel (and thread, if any): summary = the question, options = each choice with what it means, recommendation = your pick, body = context with an @-tag for the person.` +
                         (args ? ` Draft parsed from your post (fix the wording, add recommendation): ${args}` : ""));
                 }
+                // ⚠ NOTHING WAS WRITTEN (2026-10-08): the address resolved, the body skips a person's tag.
+                case "addressee_untagged":
+                    return (0, respond_1.err)(`Nothing was sent to **${chName}**: every person you address must be @-tagged inline in the message, since that tag is how readers see who it is for.${(0, channel_errors_1.serverDetail)(e)} Add the tags and send again with the same \`client_msg_id\`.`);
                 // ⚠ NOTHING WAS WRITTEN, and the server's own message lists the live
                 // handles and the roster — which is the whole remedy, so this arm adds
                 // the one fact that message cannot carry: no row exists to retract.

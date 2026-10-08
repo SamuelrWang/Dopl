@@ -41,7 +41,7 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `unknown`               — a 400 with no recognized code (or none at all,
  *     e.g. an edge/proxy error page). ⚠ Say so; never invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "decision_required" | "recipient_unresolved" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "decision_required" | "addressee_untagged" | "recipient_unresolved" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * What a 403 from a channels route MEANS. Same doctrine as

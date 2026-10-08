@@ -306,6 +306,11 @@ export async function opPost(
               (args ? ` Draft parsed from your post (fix the wording, add recommendation): ${args}` : ""),
           );
         }
+        // ⚠ NOTHING WAS WRITTEN (2026-10-08): the address resolved, the body skips a person's tag.
+        case "addressee_untagged":
+          return err(
+            `Nothing was sent to **${chName}**: every person you address must be @-tagged inline in the message, since that tag is how readers see who it is for.${serverDetail(e)} Add the tags and send again with the same \`client_msg_id\`.`,
+          );
         // ⚠ NOTHING WAS WRITTEN, and the server's own message lists the live
         // handles and the roster — which is the whole remedy, so this arm adds
         // the one fact that message cannot carry: no row exists to retract.

@@ -39,6 +39,10 @@ function classifyBadRequest(e) {
         // A plain post asking a PERSON to pick between options (2026-10-08): `details.draft` is the card.
         case "CHANNEL_DECISION_REQUIRED":
             return "decision_required";
+        // An agent's message to people that does not @-tag each of them (2026-10-08): the server's
+        // message names the exact handles to add.
+        case "CHANNEL_ADDRESSEE_UNTAGGED":
+            return "addressee_untagged";
         // ⚠ **THE UNION RESOLVER'S OWN REFUSAL** (2026-09-02, B4/B8). `to` names one
         // party in either namespace, and a name that resolves to NOBODY is a 400
         // rather than a silent `delivery=none` — the server's own message lists the

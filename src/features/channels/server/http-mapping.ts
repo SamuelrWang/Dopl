@@ -70,8 +70,9 @@ function mapChannelError(err: unknown): HttpError | null {
   if (err instanceof ChannelAgentHandleAmbiguousError) {
     return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
   }
+  // Its own code: the address resolved fine, the BODY is what needs fixing.
   if (err instanceof ChannelAddresseeUntaggedError) {
-    return new HttpError(400, "CHANNEL_RECIPIENT_UNRESOLVED", err.message);
+    return new HttpError(400, "CHANNEL_ADDRESSEE_UNTAGGED", err.message);
   }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
