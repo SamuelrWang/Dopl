@@ -5,6 +5,7 @@
 const events = require('../events');
 const io = require('../../session-io');
 const modelTable = require('./model-table');
+const launchContract = require('./launch-contract');
 
 // The auth-sentinel matchers live in `session-auth-detect.js`.
 const detect = require('../../session-auth-detect');
@@ -85,7 +86,15 @@ function normalize(msg, ctx) {
   if (msg.type === 'system' && msg.subtype === 'init') {
     // The conversation handle, the model really running, and the raw MCP connect list — the
     // shape is this platform's, the decision core's (`mcp-connect.js`, F-692).
-    return [events.launched(msg.session_id, msg.model, msg.mcp_servers)];
+    const out = [events.launched(msg.session_id, msg.model, msg.mcp_servers)];
+    // The CLI's own report vs what this launch asked it to enforce (`launch-contract.js`). A launch with no
+    // recorded contract (a harness) is not checked; every real spawn records one in `launch-spec.js`.
+    if (context.launchContract) {
+      const { refuse, drift } = launchContract.verifyInit(msg, context.launchContract);
+      for (const d of drift) out.push(events.shapeDrift('init.tools', d));
+      if (refuse.length) out.push(events.safetyMismatch(launchContract.mismatchSentence(msg, context.launchContract)));
+    }
+    return out;
   }
 
   // Its sentence tells the operator to run `claude update`, which a Dopl user has no way to do.

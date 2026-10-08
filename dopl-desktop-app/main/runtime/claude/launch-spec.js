@@ -18,6 +18,7 @@ const credential = require('./credential');
 const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const fold = require('./fold');
+const launchContract = require('./launch-contract');
 const operatorTools = require('./operator-tools');
 const { diag } = require('../../diag');
 
@@ -77,7 +78,11 @@ function buildOptions(s, dispatch) {
 function buildLaunchSpec(request) {
   const req = request || {};
   const s = req.session;
-  return { prompt: s.pushIterator, options: buildOptions(s, req.dispatch), session: s };
+  const options = buildOptions(s, req.dispatch);
+  // What this launch asked the CLI to enforce, checked against its own `init` report (`launch-contract.js`).
+  // Recorded HERE, the one hand-off for every spawn shape (fresh, resume, relaunch), from the final options.
+  s.launchContract = launchContract.contractOf(options, { operatorTools: !!s.operatorTools });
+  return { prompt: s.pushIterator, options, session: s };
 }
 
 /** Start a run. SYNCHRONOUS by contract: core assigns the handle at once, and an await between "the

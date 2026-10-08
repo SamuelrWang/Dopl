@@ -70,6 +70,8 @@ function normalizeCtx(s) {
     peerName: s.counterpartyName,
     peerId: s.counterpartyId,
     willGatePost: (input, toolName) => io.postWillGate(s, input, toolName),
+    // What this launch asked the runtime to enforce (opaque here; the adapter wrote and reads it).
+    launchContract: s.launchContract || null,
   };
 }
 
@@ -80,6 +82,10 @@ async function consume(s, q, rt) {
     for await (const msg of q) {
       if (s.query !== q) return;
       const signal = io.applyCoreEvents(s, rt.normalize(msg, normalizeCtx(s)), deps.dispatch, store);
+      if (signal && signal.type === 'safety_stop') {
+        stopUnsafe(s, signal.detail);
+        return;
+      }
       if (signal && signal.type === 'mcp_status') {
         if (mcpGuard.handleMcpStatus(s, signal.status)) return;
         continue;
@@ -101,6 +107,21 @@ async function consume(s, q, rt) {
       if (!s.settled) deps.dispatch(s, { type: 'crash' });
     }
   }
+}
+
+/**
+ * FAIL CLOSED: the runtime said at launch it is not applying a Dopl restriction (`launch-contract.js`).
+ * The child is torn down FIRST — the init precedes the first API call, so nothing has run — then the
+ * session ends visibly with the sentence, like an unreachable MCP server (`mcp-connect-guard.js`).
+ */
+function stopUnsafe(s, detail) {
+  teardownHandles(s);
+  const text = String(detail || 'The runtime reported it was not applying one of Dopl\'s restrictions.');
+  diag('session-engine: launch refused by the runtime\'s own report —', text);
+  s.mcpDiag = text;
+  s.endCode = 'runtime-unsafe';
+  try { store.setRecordPhase(s.key, 'ended'); } catch (_) { /* the visible end matters more than the record */ }
+  try { if (!s.settled) deps.dispatch(s, { type: 'crash' }); } catch (err) { diag('session-engine: crash dispatch failed', err && err.message); }
 }
 
 /**

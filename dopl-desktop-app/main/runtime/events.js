@@ -92,7 +92,12 @@ const shapeDrift = (where, detail) => ({
   detail: String(detail == null ? '' : detail),
 });
 
+/** The runtime reported, at launch, that it is NOT applying a restriction Dopl relies on (a permission mode
+ *  that skips Dopl's gate, a denied tool offered). Core ends the session before it can act (fail closed);
+ *  `detail` is the sentence the operator reads. */
+const safetyMismatch = (detail) => ({ type: 'safety_mismatch', detail: String(detail == null ? '' : detail) });
+
 module.exports = {
   assistant, thinking, toolUse, toolResult, toolCallEvents,
-  launched, result, context, authHold, runtimeOutdated, shapeDrift, ERROR_FRAME,
+  launched, result, context, authHold, runtimeOutdated, shapeDrift, safetyMismatch, ERROR_FRAME,
 };

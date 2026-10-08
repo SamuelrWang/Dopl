@@ -202,6 +202,12 @@ function applyCoreEvents(s, list, dispatch, store) {
       }
       continue;
     }
+    if (ev.type === 'safety_mismatch') {
+      // Ends the session in `session-query.js › consume`, before the first turn can call anything. It outranks
+      // the MCP status read off the same init: a launch that is unsafe is not retried for connectivity.
+      mcpSignal = { type: 'safety_stop', detail: ev.detail };
+      continue;
+    }
     if (ev.type === 'context') {
       // The meter's last reading, remembered (never dispatched). A turn that measured nothing keeps the last one.
       if (ev.tokens > 0) s.promptTokens = ev.tokens;

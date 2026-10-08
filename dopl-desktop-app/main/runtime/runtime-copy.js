@@ -37,6 +37,7 @@ const RUNTIME_ERROR_CODES = [
   'runtime-crashed',      // it started and then the stream ended with an error
   'runtime-interrupted',  // Dopl stopped it (quit, restart, operator End)
   'mcp-unreachable',      // the Dopl MCP server did not connect for this session
+  'runtime-unsafe',       // at launch the runtime reported it was not applying a Dopl restriction
   'resume-refused',       // a capability refusal — the conversation cannot be continued
 ];
 
@@ -49,6 +50,7 @@ const ERROR_BODIES = {
   'runtime-interrupted': (n) => `Dopl stopped this ${n} agent.`,
   'mcp-unreachable': (n) => `${n} could not reach Dopl's own tools, so the agent ended rather than running without them.`,
   'resume-refused': (n) => `Dopl will not continue this ${n} conversation.`,
+  'runtime-unsafe': (n) => `${n} reported at launch that it was not applying one of Dopl's restrictions, so Dopl ended the agent before it could act.`,
 };
 
 const isRuntimeErrorCode = (code) => RUNTIME_ERROR_CODES.indexOf(code) !== -1;
