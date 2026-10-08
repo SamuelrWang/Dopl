@@ -30,4 +30,11 @@ module.exports = {
     const env = require('./credential').withCredential(loader.buildScrubbedEnv());
     return require('./roster').observeShape({ sdk, options: { env, pathToClaudeCodeExecutable: bin } });
   },
+  /** The candidate's safety SEMANTICS, live (`semantics.js`: two short turns; runs only on a new build). */
+  verifySemantics: async (bin) => {
+    const loader = require('./loader');
+    const sdk = await loader.getSdk();
+    const env = require('./credential').withCredential(loader.buildScrubbedEnv());
+    return require('./semantics').verifySemantics({ sdk, options: { env, pathToClaudeCodeExecutable: bin } });
+  },
 };

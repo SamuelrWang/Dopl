@@ -84,6 +84,34 @@ test("a probe that FAILS is not a verdict: the check fails, nothing is rejected,
   assert.equal(calls, 2);
 });
 
+test("SEMANTICS: a candidate that breaks a safety restriction is refused for good (2026-10-08)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
+  const reg = registry(dir, "0.4.0");
+  setup(reg, runner());
+  const src = source({ verifySemantics: async () => ({ refuse: ["a write ran without asking Dopl's gate"], inconclusive: [] }) });
+  assert.equal(await updates.check(src), "incompatible-shape");
+  assert.equal(updates.activeFor(src), null, "launches keep what they run");
+  assert.deepEqual(record().rejected, ["0.4.0"], "the verdict is the build's: recorded");
+  assert.equal(await updates.check(src), "rejected", "and never downloaded again");
+});
+
+test("SEMANTICS: an inconclusive probe proves nothing — not admitted, not rejected, retried", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
+  setup(registry(dir, "0.3.10"), runner());
+  let calls = 0;
+  const src = source({ verifySemantics: async () => { calls += 1; return { refuse: [], inconclusive: ["the model did not try the Bash tool"] }; } });
+  assert.equal(await updates.check(src), "failed");
+  assert.equal(updates.activeFor(src), null);
+  assert.equal(await updates.check(src), "failed", "retried, not remembered as rejected");
+  assert.equal(calls, 2);
+});
+
+test("SEMANTICS: a clean probe admits the build", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
+  setup(registry(dir, "0.3.10"), runner());
+  assert.equal(await updates.check(source({ verifySemantics: async () => ({ refuse: [], inconclusive: [] }) })), "updated");
+});
+
 test("a source that cannot describe a build, or an adapter that declares nothing, is never auto-updated", async () => {
   const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
   const reg = registry(dir, "0.3.10");

@@ -139,6 +139,7 @@ async function install(source, meta, version) {
     await verify.signatures(root, bin, source.teamId, deps.run);
     await verify.answersVersion(bin, deps.run);
     await shapeGate(source, bin);
+    await semanticGate(source, bin);
     s.commit(source.id, version, root);
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
@@ -173,6 +174,22 @@ async function shapeGate(source, bin) {
   if (verdict.missing.cosmetic.length) {
     diag(`runtime-updates: ${source.id} candidate lacks cosmetic items`, verdict.missing.cosmetic.join(', '));
   }
+}
+
+/**
+ * WHAT A SHAPE CANNOT SHOW (2026-10-08): a source that can run a live probe of its candidate's SAFETY
+ * SEMANTICS (`verifySemantics(bin) → { refuse: [why], inconclusive: [why] }` — e.g. Claude's: a write in
+ * the default permission mode is asked of the gate, a deny-listed path is blocked) runs it here, before
+ * `active.json` moves. A refusal is a property of the build (never downloaded again); an inconclusive
+ * probe proves nothing, so the build is not admitted and the next check tries again.
+ */
+async function semanticGate(source, bin) {
+  if (typeof source.verifySemantics !== 'function') return;
+  const r = (await source.verifySemantics(bin, deps.run)) || {};
+  const refuse = Array.isArray(r.refuse) ? r.refuse : [];
+  const inconclusive = Array.isArray(r.inconclusive) ? r.inconclusive : [];
+  if (refuse.length) throw new ShapeRefused(`safety semantics broken: ${refuse.join('; ')}`);
+  if (inconclusive.length) throw new Error(`safety semantics not proven: ${inconclusive.join('; ')}`);
 }
 
 /** One check for one runtime → the outcome word (also the diag line). Never rejects. */
