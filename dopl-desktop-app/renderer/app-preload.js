@@ -311,6 +311,28 @@ contextBridge.exposeInMainWorld('dopl', {
     return () => ipcRenderer.removeListener('dopl:sync-event', listener);
   },
 
+  // The composer's on-device dictation (`main/dictation.js`). Codes cross, never copy; the web
+  // tree's `dictation/faults.ts` owns the words. Events are coerced here like every other push.
+  dictation: {
+    probe: (locale) => ipcRenderer.invoke('dictation:probe', asStr(locale)),
+    start: (locale) => ipcRenderer.invoke('dictation:start', asStr(locale)),
+    stop: (id) => ipcRenderer.invoke('dictation:stop', asStr(id)),
+    onEvent: (callback) => {
+      if (typeof callback !== 'function') return () => {};
+      const listener = (_event, payload) => {
+        const p = payload && typeof payload === 'object' ? payload : {};
+        callback({
+          id: asStr(p.id),
+          type: asStr(p.type),
+          text: typeof p.text === 'string' ? p.text : '',
+          code: typeof p.code === 'string' ? p.code : '',
+        });
+      };
+      ipcRenderer.on('dictation:event', listener);
+      return () => ipcRenderer.removeListener('dictation:event', listener);
+    },
+  },
+
   // This window's own chrome (the frameless agent pop-out). No arguments: each op acts on the
   // sender's window. Feature-detected by the header.
   appWindow: {

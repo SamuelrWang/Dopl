@@ -26,6 +26,7 @@ const { diag } = require('./diag');
 const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
 const mediaPermission = require('./media-permission'); // 2026-09-08: the session permission fence
+const dictation = require('./dictation'); // 2026-10-08: on-device speech helper
 // Phase 10: the registry of APP-OWNED windows — the shell plus any pop-out thread window.
 // It is what every renderer-reachable ipcMain.handle is bound to, and registration happens
 // only at window creation, in main. See main/app-windows.js's header.
@@ -248,6 +249,8 @@ if (!gotLock) {
     // (`BrowserWindow.fromWebContents`), so there is no id to forge — but an unbound surface must
     // still be a dead one rather than an open one.
     windowChrome.register({ getSenderIds: () => appWindows.senderIds() });
+    // The composer's on-device dictation (`main/dictation.js`); same sender fence as above.
+    dictation.register({ getSenderIds: () => appWindows.senderIds() });
 
     // Auto-update (electron-updater ↔ GitHub Releases). Silent download with
     // progress on the tray; the tray gains an "Update ready — restart to

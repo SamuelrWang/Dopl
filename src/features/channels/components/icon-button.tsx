@@ -41,6 +41,7 @@ import { cn } from "@/shared/lib/utils";
 export function IconButton({
   icon: Icon,
   label,
+  title,
   size = 15,
   active,
   filled,
@@ -51,6 +52,9 @@ export function IconButton({
 }: {
   icon: LucideIcon;
   label: string;
+  /** Tooltip, when it should say MORE than the accessible name (the mic's fix line). Defaults to
+   *  `label`. */
+  title?: string;
   size?: number;
   /** Omit for a plain button; pass a boolean to make it a toggle. */
   active?: boolean;
@@ -90,7 +94,7 @@ export function IconButton({
     <button
       type="button"
       aria-label={label}
-      title={label}
+      title={title ?? label}
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}

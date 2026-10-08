@@ -15,3 +15,6 @@ dist/
 # working tree via `files: ["renderer/**/*"]`, so it must EXIST before a
 # packaging run. See WIRING.md.
 renderer/app/
+
+# The on-device speech helper (scripts/build-dictation-helper.js, electron-builder beforePack).
+native/build/

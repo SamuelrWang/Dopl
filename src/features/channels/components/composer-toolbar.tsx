@@ -87,12 +87,26 @@ export function ComposerToolbar({
           Discard
         </button>
       )}
-      {/* Absent where the browser has no engine. Red = capturing (from `onstart`) or a fault, whose text
-          rides `label` (tooltip and accessible name). */}
+      {/* The phrase being spoken, before it is final: a preview only, never draft text. */}
+      {dictation.listening && dictation.partial && (
+        <span
+          aria-live="polite"
+          className="min-w-0 max-w-[40%] truncate text-small text-text-secondary"
+          title={dictation.partial}
+        >
+          {dictation.partial}
+        </span>
+      )}
+      {/* Absent where a browser has no engine; always present on the desktop, where an unavailable
+          engine still says why. Red = capturing or a fault: the reason is the accessible name, the
+          tooltip adds what to do about it (`dictation/faults.ts`). */}
       {dictation.supported && (
         <IconButton
           icon={Mic}
           label={dictation.error ?? (dictation.listening ? "Stop dictation" : "Dictate")}
+          title={
+            dictation.error && dictation.hint ? `${dictation.error}. ${dictation.hint}` : undefined
+          }
           size={TOOLBAR_GLYPH}
           active={dictation.listening}
           onClick={dictation.toggle}

@@ -64,10 +64,12 @@
               "dopl"
             ]
           }
-        ]
+        ],
+        "NSSpeechRecognitionUsageDescription": "Dopl turns your speech into text on this Mac when you dictate a message. Audio never leaves the device."
       }
     },
     "afterSign": "./scripts/notarize.js",
+    "beforePack": "./scripts/build-dictation-helper.js",
     "publish": [
       {
         "provider": "github",
@@ -93,6 +95,12 @@
     "files": [
       "main/**/*",
       "renderer/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "native/build/dopl-dictation",
+        "to": "dictation/dopl-dictation"
+      }
     ],
     "asarUnpack": [
       "**/@anthropic-ai/claude-agent-sdk-*/**",

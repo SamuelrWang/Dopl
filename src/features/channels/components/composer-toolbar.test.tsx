@@ -237,7 +237,8 @@ describe("a failed dictation SAYS SO instead of blinking", () => {
     engineError("network");
     // ⚠ THE STATE PERSISTS PAST THE STOP. A reason cleared on the way out IS the blink.
     const failed = btn("Dictation unavailable");
-    expect(failed.title).toBe("Dictation unavailable");
+    // The tooltip adds WHAT TO DO (`dictation/faults.ts`); the name stays the short reason.
+    expect(failed.title).toMatch(/^Dictation unavailable\. /);
     expect(screen.queryByRole("button", { name: "Dictate" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Stop dictation" })).toBeNull();
   });

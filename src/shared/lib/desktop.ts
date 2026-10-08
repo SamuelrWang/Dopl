@@ -86,6 +86,7 @@ interface DoplDesktopBridge {
   versions?: { electron?: string; chrome?: string };
   channels?: DoplChannelsBridge;
   threads?: DoplThreadWindowsBridge;
+  dictation?: Partial<DoplDictationBridge>;
 }
 
 /**
@@ -118,3 +119,41 @@ export function getDesktopThreadWindows(): DoplThreadWindowsBridge | null {
   const threads = doplBridge()?.threads;
   return threads && typeof threads.openWindow === "function" ? threads : null;
 }
+
+/**
+ * THE DESKTOP'S ON-DEVICE DICTATION ENGINE (`window.dopl.dictation`, 2026-10-08).
+ * Main runs Apple's on-device recognizer through a signed helper
+ * (`dopl-desktop-app/main/dictation.js`). Everything crossing is a CODE, never
+ * copy: the words live in `features/channels/components/dictation/faults.ts`.
+ */
+export type DesktopDictationProbe =
+  | { state: "ready"; locale?: string }
+  | { state: "unavailable"; code: string };
+
+export interface DesktopDictationEvent {
+  id: string;
+  type: "start" | "partial" | "final" | "error" | "end" | string;
+  text: string;
+  code: string;
+}
+
+export interface DoplDictationBridge {
+  probe: (locale: string) => Promise<DesktopDictationProbe | null>;
+  start: (locale: string) => Promise<{ ok: true; id: string } | { ok: false; code: string } | null>;
+  stop: (id: string) => Promise<{ ok: boolean } | null>;
+  onEvent: (cb: (event: DesktopDictationEvent) => void) => () => void;
+}
+
+/** The desktop dictation bridge, else null. Feature-detected on every op, so a
+ *  plain browser and an older desktop build both yield null. */
+export function getDesktopDictation(): DoplDictationBridge | null {
+  const d = doplBridge()?.dictation;
+  return d &&
+    typeof d.probe === "function" &&
+    typeof d.start === "function" &&
+    typeof d.stop === "function" &&
+    typeof d.onEvent === "function"
+    ? (d as DoplDictationBridge)
+    : null;
+}
+

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Embedded into the helper binary (__TEXT,__info_plist; scripts/build-dictation-helper.js).
+     A bare command-line tool has no bundle, so without this the Speech framework finds no usage
+     string in its OWN main bundle and the privacy check can terminate it. The app's Info.plist
+     (package.json › build.mac.extendInfo) carries the same two strings for the prompt itself,
+     which macOS attributes to Dopl.app as the responsible process. Keep the texts in step. -->
+<plist version="1.0">
+  <dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.dopl.connect.dictation</string>
+    <key>CFBundleName</key>
+    <string>Dopl Dictation</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Dopl turns your speech into text on this Mac when you dictate a message. Audio never leaves the device.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Dopl uses the microphone to dictate messages into the composer.</string>
+  </dict>
+</plist>

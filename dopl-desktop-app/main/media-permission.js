@@ -14,6 +14,9 @@
 // `webkitSpeechRecognition` posts to Google's speech endpoint with the Chromium build's API key
 // and Electron ships none. That is a property of the runtime, not of this fence; it is recorded
 // here so nobody reads this file as the fix and stops looking.
+// ⚠ 2026-10-08: THE FIX LANDED ELSEWHERE. The desktop no longer uses `webkitSpeechRecognition` at
+// all; dictation runs Apple's on-device recognizer in a helper (`main/dictation.js`), which asks
+// for the microphone itself. `media` stays allowed for the page's own audio capture.
 //
 // THE SHAPE: an explicit allowlist, checked against the app's OWN document, and `false` for
 // everything else — including for our own document. A permission is added here WITH the feature

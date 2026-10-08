@@ -62,6 +62,14 @@ export const APP_OPS = [
   // `channels.setAutoSend` left 2026-09-06 — the removal review is on `channels.getAutoSend` above.
   "channels.setLaunchPosture",
   "channels.setUseMyTools", // 2026-09-25 — the review is on `channels.getUseMyTools` above
+  // 2026-10-08: `dictation.probe/start/stop/onEvent` — the composer's ON-DEVICE speech engine
+  // (`main/dictation.js`, helper `native/dictation/main.swift`). All three handlers are
+  // appWindowOnly; the locale is argv-sanitised in main (`cleanLocale`) and `stop` only stops the
+  // CALLER's own session. Nothing here reads files or reaches the network; audio stays on the Mac.
+  "dictation.onEvent",
+  "dictation.probe",
+  "dictation.start",
+  "dictation.stop",
   "getAuthState",
   "onAuthState",
   "onNavigate",
