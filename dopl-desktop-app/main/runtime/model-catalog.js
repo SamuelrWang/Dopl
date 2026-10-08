@@ -347,6 +347,22 @@ function findModel(catalog, pick) {
     || null;
 }
 
+/** PURE: the dimension `picks` the launched `model` offers on this catalog (`{}` when none). A catalog that
+ *  cannot vouch passes `picks` through (the platform answers an unknown value with its own default); a
+ *  model with no entry is read as the catalog's default model. */
+function offeredDimensions(catalog, model, picks) {
+  const asked = picks && typeof picks === 'object' ? picks : {};
+  if (!Object.keys(asked).length) return {};
+  if (!vouches(catalog)) return Object.assign({}, asked);
+  const entry = findModel(catalog, model) || catalog.models.find((m) => m.id === catalog.defaultId) || null;
+  const out = {};
+  for (const key of Object.keys(asked)) {
+    const dim = entry && entry.dimensions && entry.dimensions[key];
+    if (dim && dim.options.some((o) => o.value === asked[key])) out[key] = asked[key];
+  }
+  return out;
+}
+
 /** Can this catalog vouch for a model's presence OR absence? Only a READY read can (RC-03). */
 function vouches(catalog) {
   return !!catalog && catalog.status === STATUS.READY && Array.isArray(catalog.models) && catalog.models.length > 0;
@@ -429,6 +445,7 @@ module.exports = {
   snapshot,
   settle,
   findModel,
+  offeredDimensions,
   vouches,
   offers,
   modelRefusal,

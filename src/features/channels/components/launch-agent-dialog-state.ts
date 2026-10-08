@@ -147,6 +147,57 @@ function modelRowFor(input: ModelRowInput): ModelRow {
   };
 }
 
+/** One per-model control (effort today): rendered only when the SHOWN model's catalog entry offers it. */
+export interface DimensionRow {
+  key: string;
+  label: string;
+  /** `''` = the model's own default (no value sent). */
+  value: string;
+  options: ReadonlyArray<{ key: string; label: string }>;
+}
+
+/** `reasoningEffort` → `Reasoning effort`: the catalog's own key, worded — no per-runtime label table. */
+function dimensionLabel(key: string): string {
+  const words = key.replace(/[_-]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim().toLowerCase();
+  return words ? words[0].toUpperCase() + words.slice(1) : key;
+}
+
+/**
+ * The per-model rows for the model the dialog SHOWS (`''` = the catalog's default model), read entirely
+ * off the live catalog: a dimension appears only when that model offers options for it, and the
+ * operator's pick survives only while that model still offers it. Pure.
+ */
+export function dimensionRowsFor(
+  catalog: ModelCatalog | null,
+  shownModel: string,
+  picks: Readonly<Record<string, string>> | undefined
+): DimensionRow[] {
+  if (!catalog || !catalogReady(catalog)) return [];
+  const id = shownModel || catalog.defaultId || "";
+  const entry = catalog.models.find((m) => m.id === id);
+  if (!entry) return [];
+  const rows: DimensionRow[] = [];
+  for (const key of catalog.dimensions) {
+    const dim = entry.dimensions[key];
+    if (!dim || !dim.options.length) continue;
+    const pick = picks?.[key] ?? "";
+    const offered = dim.options.some((o) => o.value === pick);
+    const defaultWord = dim.default
+      ? dim.options.find((o) => o.value === dim.default)?.label ?? dim.default
+      : null;
+    rows.push({
+      key,
+      label: dimensionLabel(key),
+      value: offered ? pick : "",
+      options: [
+        { key: "", label: defaultWord ? `Default (${defaultWord})` : "Default" },
+        ...dim.options.map((o) => ({ key: o.value, label: o.label })),
+      ],
+    });
+  }
+  return rows;
+}
+
 /**
  * False only for a pick the selected catalog or another READY catalog positively rejects/owns;
  * genuinely unknown ids survive in the renderer (main may still refuse them `no-model`).
@@ -180,6 +231,8 @@ interface LaunchDialogRuntime {
   launchRuntime: RuntimeDescriptor | null;
   runtimeOptions: Array<{ key: string; label: string; hint?: string }>;
   modelRow: ModelRow;
+  /** Per-model controls for the shown model (effort), off the live catalog; `[]` when it offers none. */
+  dimensionRows: DimensionRow[];
   /** The level this runtime will launch at, in its own name; a report, never a control. */
   permissionLine: string;
   /** The selected runtime's own sign-in sentence (never Claude's), or `null`. */
@@ -243,6 +296,11 @@ export function useLaunchDialogRuntime(
     ]
   );
 
+  const dimensionRows = useMemo(
+    () => dimensionRowsFor(catalog, modelRow.shown, panel.dimensions),
+    [catalog, modelRow.shown, panel.dimensions]
+  );
+
   const permissionLine = useMemo(() => permissionLineFor(settingFor(scopeId)), [settingFor, scopeId]);
 
   const connectionNote =
@@ -282,6 +340,7 @@ export function useLaunchDialogRuntime(
     launchRuntime: effectiveRuntime ?? null,
     runtimeOptions,
     modelRow,
+    dimensionRows,
     permissionLine,
     connectionNote,
     // The one exception to minimal copy (INVARIANTS §5): the descriptor's own sentence, pre-launch.

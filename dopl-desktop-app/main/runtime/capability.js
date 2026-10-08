@@ -133,4 +133,5 @@ module.exports = {
   // The model-pick vocabulary (`selection-vocabulary.js`), re-exported for one require.
   pickRule: selection.pickRule,
   launchModelPick: selection.launchModelPick,
+  launchDimensionPicks: selection.launchDimensionPicks,
 };

@@ -193,13 +193,25 @@ function isSafeLabel(value) {
  * @returns {{model: string, instructions: string, fields: null | Array<{key: string, value: string}>}}
  *   `''` = "the chain continues".
  */
+// Per-model dimension picks off the wire (`{ reasoningEffort: 'high' }`): bounded key/value strings only;
+// the runtime's vocabulary and the live catalog decide what survives (`session-launch.js`).
+function dimensionsOf(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const k of Object.keys(raw).slice(0, 8)) {
+    const v = raw[k];
+    if (/^[A-Za-z][A-Za-z0-9_]{0,31}$/.test(k) && typeof v === 'string' && v.trim() && v.length <= 64) out[k] = v.trim();
+  }
+  return out;
+}
+
 function narrowOverrides(overrides) {
   const o = overrides && typeof overrides === 'object' ? overrides : {};
   const asked = typeof o.model === 'string' ? o.model.slice(0, MAX_MODEL) : '';
   const instructions = typeof o.instructions === 'string'
     ? o.instructions.slice(0, MAX_INSTRUCTIONS).trim()
     : '';
-  const out = { model: require('./runtime/selection-vocabulary').pickOf(asked), instructions, fields: null };
+  const out = { model: require('./runtime/selection-vocabulary').pickOf(asked), instructions, fields: null, dimensions: dimensionsOf(o.dimensions) };
   if (!Array.isArray(o.fields)) return out;
   const kept = [];
   const seen = new Set();

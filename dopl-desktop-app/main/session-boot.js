@@ -91,6 +91,10 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     model: runtimeCapability.launchModelPick(
       runtimeRegistry.descriptorFor(rec.runtimeId || null), rec.model
     ),
+    // Per-model picks (effort), re-coerced in the stored runtime's own vocabulary like the model.
+    dimensions: runtimeCapability.launchDimensionPicks(
+      runtimeRegistry.descriptorFor(rec.runtimeId || null), rec.dimensions
+    ),
     usageBaseline: recordedBaseline,
     state: state,
     context: sessionPark.contextFromRecord(rec),

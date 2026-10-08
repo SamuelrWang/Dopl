@@ -191,6 +191,10 @@ async function startSession(spec, rt) {
     model: runtimeRegistry.capability.launchModelPick(
       runtimeRegistry.descriptorFor((rt && rt.id) || null), spec.model
     ),
+    // Per-model picks (effort), coerced against this runtime's vocabulary; the adapter reads them at argv.
+    dimensions: runtimeRegistry.capability.launchDimensionPicks(
+      runtimeRegistry.descriptorFor((rt && rt.id) || null), spec.dimensions
+    ),
     // The colour this spawn ASKED for; the server resolves it (unique per channel across members).
     color: spec.color || null,
     state,

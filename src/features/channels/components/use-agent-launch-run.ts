@@ -33,12 +33,16 @@ function launchOverridesOf(
 ): IdentityLaunchOverrides | undefined {
   const overrides: IdentityLaunchOverrides = {};
   if (panel.model !== AGENT_MODEL_DEFAULT) overrides.model = panel.model;
+  // Only the per-model picks the operator made; none ⇒ the model's own default.
+  const dims = panel.dimensions ?? {};
+  if (Object.keys(dims).length) overrides.dimensions = { ...dims };
   const typed = (panel.instructions ?? "").trim();
   if (typed !== (panel.instructionsBaseline ?? "").trim()) {
     // Bounded at the column's limit to keep a pathological paste off the IPC wire; main re-bounds.
     overrides.instructions = typed.slice(0, MAX_OVERRIDE_INSTRUCTIONS_CHARS);
   }
-  return overrides.model === undefined && overrides.instructions === undefined
+  return overrides.model === undefined && overrides.instructions === undefined &&
+    overrides.dimensions === undefined
     ? undefined
     : overrides;
 }

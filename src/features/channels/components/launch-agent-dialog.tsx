@@ -87,6 +87,7 @@ export function LaunchAgentDialog({
     launchRuntime,
     runtimeOptions,
     modelRow,
+    dimensionRows,
     permissionLine,
     connectionNote,
     stopWarning,
@@ -197,6 +198,19 @@ export function LaunchAgentDialog({
             className="flex-wrap"
           />
         )}
+        {/* Per-model controls (effort): only what the shown model's live catalog entry offers. */}
+        {modelRow.selectable &&
+          dimensionRows.map((row) => (
+            <PillChoice
+              key={row.key}
+              label={row.label}
+              options={row.options}
+              value={row.value}
+              onChange={(next) => panel.setDimension?.(row.key, next)}
+              ariaLabel={row.label}
+              className="flex-wrap"
+            />
+          ))}
         {modelRow.reason && (
           <p role="note" className="text-caption text-text-secondary">
             {modelRow.reason}

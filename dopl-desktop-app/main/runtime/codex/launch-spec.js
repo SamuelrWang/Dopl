@@ -11,6 +11,7 @@ const configHome = require('./config-home');
 const policy = require('./policy');
 const catalog = require('./catalog');
 const fenceVerify = require('./fence-verify');
+const models = require('./models');
 const procConfig = require('./proc-config');
 const skillsFence = require('./skills-fence');
 const operatorTools = require('./operator-tools');
@@ -96,8 +97,9 @@ function buildLaunchSpec(request) {
   const model = typeof s.model === 'string' ? s.model.trim() : '';
   // No model, no field: the platform picks.
   if (model) threadStart.model = model;
-  // Validated upstream (`models.js › REASONING_EFFORTS`); an unrecognised one was dropped: platform picks.
-  const effort = (s.state && s.state.native && s.state.native.reasoningEffort) || '';
+  // The launcher's per-model pick (`s.dimensions`, coerced at spawn against the runtime's alphabet and the
+  // live catalog's offer for this model, `session-launch.js › offeredDimensions`); none → the platform picks.
+  const effort = (s.dimensions && s.dimensions[models.DIMENSION]) || '';
   const turnStart = effort ? { effort } : {};
 
   return {

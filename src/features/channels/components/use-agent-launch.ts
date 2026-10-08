@@ -70,6 +70,9 @@ export interface AgentLaunchPanel {
   setDescription: (next: string) => void;
   setIdentityId: (next: string | null) => void;
   setModel: (next: string) => void;
+  /** Per-model picks the operator made (`{ reasoningEffort: "high" }`); cleared when the model changes. */
+  dimensions?: Readonly<Record<string, string>>;
+  setDimension?: (key: string, value: string) => void;
   setRuntime: (next: string) => void;
   /** Select + prefill Name/Description/Instructions; `null` (None) prefills nothing. */
   applyIdentity?: (identity: AgentIdentityPrefill | null) => void;
@@ -88,7 +91,21 @@ export function useAgentLaunch(): AgentLaunchPanel {
   const [instructions, setInstructionsState] = useState("");
   const [instructionsBaseline, setInstructionsBaseline] = useState("");
   const [identityId, setIdentityId] = useState<string | null>(null);
-  const [model, setModel] = useState<string>(AGENT_MODEL_DEFAULT);
+  const [model, setModelState] = useState<string>(AGENT_MODEL_DEFAULT);
+  const [dimensions, setDimensions] = useState<Readonly<Record<string, string>>>({});
+  // Another model offers other values, so a model change drops the per-model picks.
+  const setModel = useCallback((next: string) => {
+    setModelState(next);
+    setDimensions({});
+  }, []);
+  const setDimension = useCallback((key: string, value: string) => {
+    setDimensions((prev) => {
+      const out = { ...prev };
+      if (value) out[key] = value;
+      else delete out[key];
+      return out;
+    });
+  }, []);
   const [runtime, setRuntime] = useState<string>("");
   const [color, setColor] = useState<AgentColorKey | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
@@ -122,7 +139,7 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setRuntime("");
     setColor(null);
     setIdentityError(null);
-  }, []);
+  }, [setModel]);
 
   // The mint must not run inside a `setState` updater (StrictMode double-invokes → two ids).
   const openPanel = useCallback(() => {
@@ -183,6 +200,8 @@ export function useAgentLaunch(): AgentLaunchPanel {
     setInstructions,
     setIdentityId,
     setModel,
+    dimensions,
+    setDimension,
     setRuntime,
     applyIdentity,
     openWithIdentity,

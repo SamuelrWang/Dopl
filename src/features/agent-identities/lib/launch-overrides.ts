@@ -17,4 +17,7 @@ export interface IdentityLaunchOverrides {
   instructions?: string;
   /** Replaces the identity's fields for this spawn — never merged. No renderer producer today. */
   fields?: IdentityField[];
+  /** Per-model picks keyed by the catalog's dimension (`reasoningEffort`); only keys the operator
+   *  changed. Main keeps a value only if the runtime's vocabulary AND the launched model offer it. */
+  dimensions?: Record<string, string>;
 }

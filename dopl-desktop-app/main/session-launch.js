@@ -80,6 +80,8 @@ async function launch(a) {
   }
   // No pick -> the runtime's own default, here and only here (and only a model its catalog just proved).
   const model = await launchDefault.withRuntimeDefault(rt, a.model);
+  // Per-model picks (effort): the runtime's vocabulary, then what THIS model offers on the live catalog.
+  const dimensions = await offeredDimensions(a.runtime, model, a.dimensions);
   // A runtime with no orderable windowless tool floor would deny every read: refused before registration.
   // `disabled`, not a new wire word — the refusal set is closed (schema, service, copy map, migration CHECK).
   const floorRefusal = profiles.windowlessFloorRefusal(a.runtime);
@@ -128,6 +130,7 @@ async function launch(a) {
     // The posture a HUMAN chose for this launch — the only way one reaches a spawn (H2).
     startModes: a.startModes,
     model,
+    dimensions,
     // A colour grants nothing; the server may overrule it (unique per channel). It must be on this literal or it
     // is dropped silently (the bind() trap, F-510).
     color: a.color,
@@ -180,6 +183,27 @@ async function refuseUnreadableProtocol(runtimeId) {
     return await require('./runtime/sdk-shape').launchShapeRefusal(adapter);
   } catch (err) {
     return `Dopl could not check this runtime's protocol (${(err && err.message) || 'unknown error'}), so it will not start it.`;
+  }
+}
+
+/** `a.dimensions` narrowed to what the runtime declares AND the launched model offers on a READY catalog.
+ *  A value the catalog cannot vouch for (loading, stale, no model named) passes on the runtime's alphabet:
+ *  the platform answers an unknown value with its own default, never a widening. Never throws. */
+async function offeredDimensions(runtimeId, model, raw) {
+  try {
+    const registry = require('./runtime');
+    const adapter = registry.resolve(runtimeId);
+    const picks = registry.capability.launchDimensionPicks(adapter.descriptor, raw);
+    if (!Object.keys(picks).length) return {};
+    const catalogs = require('./runtime/model-catalog');
+    const out = catalogs.offeredDimensions(await catalogs.settle(adapter), model, picks);
+    for (const key of Object.keys(picks)) {
+      if (!(key in out)) diag(`session-launch: ${key}=${picks[key]} is not offered by this model — dropped (the platform picks)`);
+    }
+    return out;
+  } catch (err) {
+    diag('session-launch: dimension picks unreadable — none sent', err && err.message);
+    return {};
   }
 }
 

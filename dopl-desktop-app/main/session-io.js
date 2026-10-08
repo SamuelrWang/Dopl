@@ -167,6 +167,8 @@ function baseRecord(s) {
     turns: s.state.turns,
     ownPostSeq: s.ownPostSeq,
     model: s.model || null,
+    // Per-model picks (effort) survive a park/reopen the same way the model does.
+    dimensions: s.dimensions && Object.keys(s.dimensions).length ? s.dimensions : null,
     runtimeId: s.runtimeId || null,
     // The usage-baseline word, the record's own once it has one (session-runtime-truth.js).
     ...runtimeTruth.runtimeTruthFields(runtimeRegistry.descriptorFor(s.runtimeId), s),

@@ -112,6 +112,8 @@ async function launchFromButton(payload) {
     // A runtime may come off the payload (registered adapters enforce every profile); a tool profile never may.
     runtime: runtimeId,
     model,
+    // Per-model picks (effort), validated in the funnel against the runtime and the live catalog.
+    dimensions: overrides.dimensions,
     // Normalized here (main is the only validator); no precedence chain — a colour is unique per channel.
     color: colorKey(p.color),
     idle: true,

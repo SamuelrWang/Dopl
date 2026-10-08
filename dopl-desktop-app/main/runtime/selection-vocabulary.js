@@ -34,6 +34,34 @@ function pickOf(v) {
   return s === 'default' ? '' : s;
 }
 
+const DIMENSION_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+
+/**
+ * A launcher's per-model dimension picks (`{ reasoningEffort: 'high' }`) coerced against this runtime's
+ * declared vocabulary: only declared dimensions, and only values its `dimensionOptions` accept — a fixed
+ * list's member, or a LIVE dimension's alphabet (`pattern`). Anything else is DROPPED (the declared
+ * `fallback: 'absent'`: no field, the platform picks). Whether the chosen MODEL offers the value is the
+ * live catalog's question (`session-launch.js`). Pure; `{}` for none.
+ */
+function launchDimensionPicks(descriptor, raw) {
+  const models = (descriptor && descriptor.models) || {};
+  const dims = Array.isArray(models.dimensions) ? models.dimensions : [];
+  const opts = models.dimensionOptions || {};
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const key of dims) {
+    if (!DIMENSION_KEY.test(key)) continue;
+    const v = typeof raw[key] === 'string' ? raw[key].trim() : '';
+    const rule = opts[key];
+    if (!v || !rule) continue;
+    const ok = rule.live === true
+      ? typeof rule.pattern === 'string' && new RegExp(rule.pattern).test(v)
+      : Array.isArray(rule.options) && rule.options.some((o) => (typeof o === 'string' ? o : o && o.value) === v);
+    if (ok) out[key] = v;
+  }
+  return out;
+}
+
 module.exports = {
-  pickRule, launchModelPick, pickOf,
+  pickRule, launchModelPick, launchDimensionPicks, pickOf,
 };

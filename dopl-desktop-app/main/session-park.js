@@ -190,6 +190,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     // Rehydrated (with slack in startSession) so a resume never re-mints a client_msg_id the server holds.
     ownPostSeq: rec.ownPostSeq,
     model: rec.model,
+    dimensions: rec.dimensions || undefined,
   }, rt);
   return !!s;
 }
