@@ -163,7 +163,7 @@ describe("menu service", () => {
     expect(runtimes.map((r) => r.id)).toEqual(["codex", "claude"]);
     expect(runtimes[0].models).toEqual([{ id: "", label: "Default" }, { id: "gpt-6", label: "gpt-6" }]);
     expect(runtimes[1].models[0]).toEqual({ id: "", label: "Default" });
-    expect(runtimes[1].models.some((m) => m.label === "Opus 5")).toBe(true);
+    expect(runtimes[1].models.some((m) => m.label === "Opus 5.5")).toBe(true);
   });
 });
 

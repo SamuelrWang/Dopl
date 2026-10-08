@@ -47,7 +47,7 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
 const CLAUDE_CATALOGS: ModelCatalogs = {
   claude: catalog(
     "claude",
-    AGENT_MODELS.map(({ id, label }) => ({ id, label, isDefault: id === "claude-sonnet-5" }))
+    AGENT_MODELS.map(({ id, label }) => ({ id, label, isDefault: id === "claude-sonnet-5-5" }))
   ),
 };
 
@@ -148,9 +148,9 @@ describe("the LIVE model selector on a running agent", () => {
     await renderLive(summary({ agentId: "k3v7d2mq" }));
     fireEvent.click(screen.getByLabelText("Model for this agent"));
     act(() => {
-      fireEvent.click(screen.getByRole("menuitem", { name: /^Opus 5/ }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /^Opus 5\.5/ }));
     });
-    expect(setModel).toHaveBeenCalledWith(CHANNEL_ID, "t-1", "claude-opus-5", "k3v7d2mq");
+    expect(setModel).toHaveBeenCalledWith(CHANNEL_ID, "t-1", "claude-opus-5-5", "k3v7d2mq");
   });
 
   it("renders nothing at all for an ended agent", async () => {
@@ -170,12 +170,12 @@ describe("the LIVE model selector on a running agent", () => {
 
   it("shows the model main reports, and the runtime's own default when it reports none", async () => {
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
-    await renderLive({ ...summary(), model: "claude-haiku-4-5-20251001" });
-    expect(screen.getByLabelText("Model for this agent").textContent).toContain("Haiku 4.5");
+    await renderLive({ ...summary(), model: "claude-haiku-5-5" });
+    expect(screen.getByLabelText("Model for this agent").textContent).toContain("Haiku 5.5");
     cleanup();
     stubBridge({ setModel: vi.fn(async () => ({ ok: true })) });
     await renderLive(summary());
-    expect(screen.getByLabelText("Model for this agent").textContent).toContain("Sonnet 5");
+    expect(screen.getByLabelText("Model for this agent").textContent).toContain("Sonnet 5.5");
   });
 
   // Never a frozen Claude list in the catalog's place.

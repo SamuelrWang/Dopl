@@ -170,8 +170,8 @@ test("the frozen roster delivers the SAME normalized contract, with its labels a
   assert.equal(fallback.status, "stale", "a fallback table is never presented as a live answer");
   assert.ok(fallback.reason.length > 0, "and it says why");
   assert.deepEqual(catalog.models.map((m) => m.label),
-    ["Fable 5", "Opus 5", "Sonnet 5", "Haiku 4.5"], "the labels are unchanged");
-  assert.equal(catalog.defaultId, "claude-sonnet-5", "the product's back-fill is the default marker");
+    ["Fable 5.1", "Opus 5.5", "Sonnet 5.5", "Haiku 5.5"], "the labels are the current lineup");
+  assert.equal(catalog.defaultId, "claude-sonnet-5-5", "the product's back-fill is the default marker");
   assert.equal(catalog.models.filter((m) => m.isDefault).length, 1);
   // ⚠ NO MODEL-SCOPED DIMENSION on this runtime — absent, never an empty control.
   assert.deepEqual(catalog.dimensions, []);

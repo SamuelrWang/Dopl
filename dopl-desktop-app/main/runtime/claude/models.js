@@ -12,10 +12,10 @@ const { notOfferedSentence } = require('../model-catalog');
 // The fallback's display names; pinned against web `agent-models.ts › AGENT_MODELS` by
 // `test/runtime-model-catalog.test.mjs`. A live roster carries the CLI's own names.
 const LABELS = {
-  'claude-fable-5': { label: 'Fable 5', short: 'Fable' },
-  'claude-opus-5': { label: 'Opus 5', short: 'Opus' },
-  'claude-sonnet-5': { label: 'Sonnet 5', short: 'Sonnet' },
-  'claude-haiku-4-5-20251001': { label: 'Haiku 4.5', short: 'Haiku' },
+  'claude-fable-5-1': { label: 'Fable 5.1', short: 'Fable' },
+  'claude-opus-5-5': { label: 'Opus 5.5', short: 'Opus' },
+  'claude-sonnet-5-5': { label: 'Sonnet 5.5', short: 'Sonnet' },
+  'claude-haiku-5-5': { label: 'Haiku 5.5', short: 'Haiku' },
 };
 
 // The pick grammar: a SHAPE gate for `--model <value>` on argv, not a roster check (the live roster

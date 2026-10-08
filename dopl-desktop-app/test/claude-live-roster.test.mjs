@@ -83,6 +83,40 @@ test("🔒 a model this build has never heard of APPEARS as an option — labell
   } finally { models.inject(); }
 });
 
+// ⚠ MEASURED 2026-10-08 on runtime 0.3.293 (signed in): the CLI lists its current aliases AND its
+// "older models" as pinned ids. Samuel: the picker shows only the current lineup.
+const MEASURED_293 = [
+  ["default", "claude-opus-5-5", "Default (recommended)"], ["opus", "claude-opus-5-5", "Opus 5.5"],
+  ["fable", "claude-fable-5-1", "Fable 5.1"], ["sonnet", "claude-sonnet-5-5", "Sonnet 5.5"],
+  ["haiku", "claude-haiku-5-5", "Haiku 5.5"], ["claude-haiku-4-5-20251001", "claude-haiku-4-5-20251001", "Haiku 4.5"],
+  ["claude-sonnet-5", "claude-sonnet-5", "Sonnet 5"], ["claude-opus-5", "claude-opus-5", "Opus 5"],
+  ["claude-fable-5", "claude-fable-5", "Fable 5"], ["claude-opus-4-8", "claude-opus-4-8", "Opus 4.8"],
+  ["claude-opus-4-7", "claude-opus-4-7", "Opus 4.7"], ["claude-opus-4-6", "claude-opus-4-6", "Opus 4.6"],
+  ["claude-sonnet-4-6", "claude-sonnet-4-6", "Sonnet 4.6"],
+].map(([value, resolvedModel, displayName]) => ({ value, resolvedModel, displayName }));
+
+test("🔒 the CLI's OLDER models are hidden, not dropped: the picker offers the current lineup only", async () => {
+  const r = roster.rosterFrom(MEASURED_293, { legacy: {}, fallbackId: table.LAUNCH_MODEL_FALLBACK, fallbackAlias: "sonnet" });
+  assert.deepEqual(r.models.filter((m) => !m.hidden).map((m) => m.label), ["Opus 5.5", "Fable 5.1", "Sonnet 5.5", "Haiku 5.5"]);
+  assert.equal(r.models.filter((m) => m.hidden).length, 8, "every pinned older row is kept, hidden");
+  assert.equal(r.defaultId, "claude-sonnet-5-5", "the default is the current Sonnet, never a hidden row");
+  assert.ok(!r.models.find((m) => m.id === "claude-sonnet-5").aliases.includes("sonnet"), "a pinned row never claims the alias");
+  fakeCli(MEASURED_293);
+  try {
+    await models.models();
+    assert.equal(models.resolveLaunchModel("claude-opus-4-8").arg, "claude-opus-4-8", "a stored older pick still launches as itself");
+    assert.equal(models.resolveLaunchModel("sonnet").id, "claude-sonnet-5-5");
+    assert.equal(models.resolveLaunchModel("").arg, "sonnet");
+    const c = loadCatalog().catalogFromRoster("claude", DESCRIPTOR, await models.models());
+    assert.equal(c.models.find((m) => m.id === "claude-opus-4-7").label, "Opus 4.7", "a hidden row still labels a card");
+  } finally { models.inject(); }
+});
+
+test("a pinned row is offered when no alias supersedes it (an older CLI's only Fable, a newer Opus)", () => {
+  const r = roster.rosterFrom([...MEASURED, { value: "claude-opus-6", resolvedModel: "claude-opus-6", displayName: "Opus 6" }], {});
+  assert.equal(r.models.some((m) => m.hidden), false);
+});
+
 // ── 3. THE FALLBACK ONLY WHEN THE READ FAILS, AND IT SAYS SO ─────────────────────────────────
 
 test("a FAILED read answers the build's table, marked `stale` with the reason — never an empty picker", async () => {
@@ -163,10 +197,11 @@ test("RC-01: a long-context pick resumes as ITSELF before any roster read — ne
     assert.equal(models.launchArg("claude-fable-5[1m]"), "claude-fable-5[1m]");
     // A live switch on the frozen table refuses with a sentence rather than moving to the short row.
     assert.equal(models.resolveLaunchModel("claude-opus-5[1m]").ok, false);
-    assert.equal(models.launchArg("claude-opus-5"), "opus", "an exact frozen id still finds its row");
+    assert.equal(models.launchArg("claude-opus-5-5"), "opus", "an exact frozen id still finds its row");
+    assert.equal(models.launchArg("claude-opus-5"), "claude-opus-5", "an id the table no longer lists resumes as itself");
     assert.equal(models.launchArg("opus --print"), "sonnet", "what could not BE an id never reaches argv");
     // Labelling keeps the base-id step: `[1m]` still names the Opus row for a card.
-    assert.equal(roster.match(models.frozenRoster().models, "claude-opus-5[1m]").id, "claude-opus-5");
+    assert.equal(roster.match(models.frozenRoster().models, "claude-opus-5-5[1m]").id, "claude-opus-5-5");
   } finally { models.inject(); }
 });
 

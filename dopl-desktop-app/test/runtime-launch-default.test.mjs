@@ -33,9 +33,9 @@ const catalog = (status, ids) => ({
 const catalogs = (c) => ({ catalogs: { settle: async () => c } });
 const adapterOf = (descriptor) => ({ descriptor, runtime: REGISTRY.runtimeFor(descriptor.id) });
 
-test("both SHIPPED descriptors declare their default: Codex gpt-6-sol, Claude claude-sonnet-5", () => {
+test("both SHIPPED descriptors declare their default: Codex gpt-6-sol, Claude claude-sonnet-5-5", () => {
   assert.equal(LD.preferredDefault(CODEX), "gpt-6-sol");
-  assert.equal(LD.preferredDefault(CLAUDE), "claude-sonnet-5", "one mechanism for both runtimes (RC-05)");
+  assert.equal(LD.preferredDefault(CLAUDE), "claude-sonnet-5-5", "one mechanism for both runtimes (RC-05)");
 });
 
 test("PRESENT: a ready catalog carrying Sol → the launch names Sol", async () => {

@@ -57,14 +57,14 @@ test("the frozen table evaluates standalone, with nothing in scope but itself", 
 
 test("the id list is frozen, and the four members are the ruling's four", () => {
   assert.deepEqual(model.MODEL_IDS,
-    ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"]);
+    ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
 });
 
 test("aliasForModelId is the seam, and it fails closed to 'default'", () => {
-  assert.equal(model.aliasForModelId("claude-fable-5"), "fable");
-  assert.equal(model.aliasForModelId("claude-opus-5"), "opus");
-  assert.equal(model.aliasForModelId("claude-sonnet-5"), "sonnet");
-  assert.equal(model.aliasForModelId("claude-haiku-4-5-20251001"), "haiku");
+  assert.equal(model.aliasForModelId("claude-fable-5-1"), "fable");
+  assert.equal(model.aliasForModelId("claude-opus-5-5"), "opus");
+  assert.equal(model.aliasForModelId("claude-sonnet-5-5"), "sonnet");
+  assert.equal(model.aliasForModelId("claude-haiku-5-5"), "haiku");
   for (const junk of JUNK) assert.equal(model.aliasForModelId(junk), "default", JSON.stringify(junk));
 });
 

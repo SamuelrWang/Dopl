@@ -161,10 +161,10 @@ test("LIVE: the SDK is told, and the pick is RECORDED for the next assembly", ()
   // ⚠ 2026-09-22: resolved on the SESSION'S OWN RUNTIME'S roster (`runtime.modelArg`). With nothing
   // read live here that is the adapter's fallback table, so the id reaches the SDK as that row's
   // launch value (`opus`) and the session records the row's id.
-  return h.fn({ ...address, model: "claude-opus-5" }).then((res) => {
-    assert.deepEqual(res, { ok: true, model: "claude-opus-5" });
+  return h.fn({ ...address, model: "claude-opus-5-5" }).then((res) => {
+    assert.deepEqual(res, { ok: true, model: "claude-opus-5-5" });
     assert.deepEqual(seen, ["opus"], "the row's own launch value reaches the SDK");
-    assert.equal(h.s.model, "claude-opus-5", "…and the pick is recorded on the session object");
+    assert.equal(h.s.model, "claude-opus-5-5", "…and the pick is recorded on the session object");
   });
 });
 
@@ -185,7 +185,7 @@ test("LIVE: an unknown value is REFUSED with a sentence — it used to RESET the
 
 test("LIVE: a THROWING switch records NOTHING — a pick nothing applied is a lie", () => {
   const h = live({ query: { setModel: async () => { throw new Error("query is gone"); } } });
-  return h.fn({ ...address, model: "claude-fable-5" }).then((res) => {
+  return h.fn({ ...address, model: "claude-fable-5-1" }).then((res) => {
     assert.deepEqual(res, { ok: false, reason: "switch-failed" });
     assert.equal(h.s.model, "", "the previous pick survives an attempt that did not land");
   });
@@ -193,10 +193,10 @@ test("LIVE: a THROWING switch records NOTHING — a pick nothing applied is a li
 
 test("LIVE: a settled or unknown session refuses, and never touches a query", () => {
   const settled = live({ query: { setModel: async () => {} }, settled: true });
-  return settled.fn({ ...address, model: "claude-opus-5" }).then((res) => {
+  return settled.fn({ ...address, model: "claude-opus-5-5" }).then((res) => {
     assert.deepEqual(res, { ok: false, reason: "no-session" });
     const wrong = live({ query: { setModel: async () => {} } });
-    return wrong.fn({ ...address, agentId: "z9y8x7w6", model: "claude-opus-5" }).then((r2) => {
+    return wrong.fn({ ...address, agentId: "z9y8x7w6", model: "claude-opus-5-5" }).then((r2) => {
       assert.deepEqual(r2, { ok: false, reason: "no-session" },
         "a wrong agent id resolves NOTHING — switching a different agent's model is worse than refusing");
     });
@@ -207,9 +207,9 @@ test("LIVE: a session with no query yet is still recorded, so its first launch u
   // A SPAWN-IDLE agent has no `claude` child at all. There is nothing to tell, and the record is
   // the whole of the switch — `buildSdkOptions` reads it when the wake starts the query.
   const h = live({ query: null });
-  return h.fn({ ...address, model: "claude-sonnet-5" }).then((res) => {
-    assert.deepEqual(res, { ok: true, model: "claude-sonnet-5" });
-    assert.equal(h.s.model, "claude-sonnet-5");
+  return h.fn({ ...address, model: "claude-sonnet-5-5" }).then((res) => {
+    assert.deepEqual(res, { ok: true, model: "claude-sonnet-5-5" });
+    assert.equal(h.s.model, "claude-sonnet-5-5");
   });
 });
 
@@ -284,7 +284,7 @@ test("REPORT: the bridge declares the field and the op, in BOTH trees", () => {
 test("U10: a runtime whose live model switch is UNVERIFIED refuses, with a reason", async () => {
   const seen = [];
   const h = live({ runtimeId: "codex", query: { setModel: async (m) => { seen.push(m); } } });
-  const res = await h.fn({ ...address, model: "claude-opus-5" });
+  const res = await h.fn({ ...address, model: "claude-opus-5-5" });
   assert.equal(res.ok, false);
   assert.equal(res.reason, "unsupported");
   assert.match(res.detail, /Codex/, res.detail);
@@ -298,7 +298,7 @@ test("U10: a handle with no model verb refuses instead of recording a switch it 
   // `liveModelSwitch: true`; a query object with no `setModel` is the promise not being kept, and
   // recording over either one is the same lie.
   const h = live({ runtimeId: "cursor", query: { __noModelVerb: true } });
-  const res = await h.fn({ ...address, model: "claude-opus-5" });
+  const res = await h.fn({ ...address, model: "claude-opus-5-5" });
   assert.equal(res.ok, false);
   assert.equal(res.reason, "unsupported");
   assert.match(res.detail, /Cursor/, res.detail);
@@ -309,6 +309,6 @@ test("U10: Claude is untouched — the refusal is per runtime, not a new blanket
   const seen = [];
   const h = live({ runtimeId: "claude", query: { setModel: async (m) => { seen.push(m); } } });
   // 2026-09-22: the RECORD is the roster row's id; what the SDK is told is that row's launch value.
-  assert.deepEqual(await h.fn({ ...address, model: "claude-opus-5" }), { ok: true, model: "claude-opus-5" });
+  assert.deepEqual(await h.fn({ ...address, model: "claude-opus-5-5" }), { ok: true, model: "claude-opus-5-5" });
   assert.deepEqual(seen, ["opus"]);
 });

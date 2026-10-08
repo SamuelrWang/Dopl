@@ -7,17 +7,18 @@
 
 // Full ids the fallback picker offers. The alias is what reaches `--model` (version-stable); the
 // dated haiku id resolving to the `haiku` alias is deliberate.
+// Refreshed 2026-10-08 from runtime 0.3.293's `supportedModels()` alias rows (fable/opus/sonnet/haiku).
 const MODEL_IDS = [
-  'claude-fable-5',
-  'claude-opus-5',
-  'claude-sonnet-5',
-  'claude-haiku-4-5-20251001',
+  'claude-fable-5-1',
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
 ];
 const ID_TO_ALIAS = {
-  'claude-fable-5': 'fable',
-  'claude-opus-5': 'opus',
-  'claude-sonnet-5': 'sonnet',
-  'claude-haiku-4-5-20251001': 'haiku',
+  'claude-fable-5-1': 'fable',
+  'claude-opus-5-5': 'opus',
+  'claude-sonnet-5-5': 'sonnet',
+  'claude-haiku-5-5': 'haiku',
 };
 
 /** The argv alias for a listed id, or `'default'` (no pick) for anything else. */
@@ -25,8 +26,8 @@ function aliasForModelId(value) {
   return Object.prototype.hasOwnProperty.call(ID_TO_ALIAS, value) ? ID_TO_ALIAS[value] : 'default';
 }
 
-// The product's default model for a launch with no pick (Samuel's back-fill ruling).
-const LAUNCH_MODEL_FALLBACK = 'claude-sonnet-5';
+// The product's default model for a launch with no pick (Samuel's back-fill ruling: the current Sonnet).
+const LAUNCH_MODEL_FALLBACK = 'claude-sonnet-5-5';
 
 const WINDOW_200K = 200000;
 const WINDOW_1M = 1000000;
@@ -35,8 +36,9 @@ const WINDOW_1M = 1000000;
 const CONTEXT_WINDOWS = {
   opus: WINDOW_1M,
   sonnet: WINDOW_1M,
-  haiku: WINDOW_200K,
+  haiku: WINDOW_1M, // the alias is Haiku 5.5 since runtime 0.3.293
   fable: WINDOW_1M,
+  'claude-opus-5-5': WINDOW_1M,
   'claude-opus-5': WINDOW_1M,
   'claude-opus-4-8': WINDOW_1M,
   'claude-opus-4-7': WINDOW_1M,
@@ -45,13 +47,17 @@ const CONTEXT_WINDOWS = {
   'claude-opus-4-1': WINDOW_200K,
   'claude-opus-4': WINDOW_200K,
   'claude-opus-4-0': WINDOW_200K,
+  'claude-sonnet-5-5': WINDOW_1M,
   'claude-sonnet-5': WINDOW_1M,
   'claude-sonnet-4-6': WINDOW_200K,
   'claude-sonnet-4-5': WINDOW_200K,
   'claude-sonnet-4': WINDOW_200K,
   'claude-sonnet-4-0': WINDOW_200K,
+  'claude-haiku-5-5': WINDOW_1M,
   'claude-haiku-4-5': WINDOW_200K,
+  'claude-fable-5-1': WINDOW_1M,
   'claude-fable-5': WINDOW_1M,
+  'claude-mythos-5-1': WINDOW_1M,
   'claude-mythos-5': WINDOW_1M,
 };
 

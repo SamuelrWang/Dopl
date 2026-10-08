@@ -20,10 +20,31 @@ function shortOf(label) {
   return label.replace(/\s*\([^)]*\)\s*$/, '') || label;
 }
 
+/** A row the CLI lists under a full model id (`claude-opus-4-8`) rather than an alias (`opus`). */
+function isPinned(value) {
+  return /^claude-/.test(str(value));
+}
+
+/** `claude-<family>-<n>[-<n>…]` → `{ family, version: [n…] }`, or `null` for any other shape. */
+function familyOf(id) {
+  const m = /^claude-([a-z]+)((?:-\d+)+)$/.exec(baseId(id));
+  return m ? { family: m[1], version: m[2].slice(1).split('-').map(Number) } : null;
+}
+
+function olderThan(a, b) {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const x = a[i] || 0;
+    const y = b[i] || 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
 /**
  * One `ModelInfo` row → one catalog entry, or `null`. The catalog id is `resolvedModel` and the launch
  * argument is `value`; the CLI's `'default'` row is dropped (Samuel removed Default). `legacy` (the
- * build's id→alias table) only adds aliases, so older stored picks still find their row.
+ * build's id→alias table) only adds aliases to ALIAS rows, so older stored picks find the current row
+ * and a pinned older model never claims `opus`/`sonnet`.
  */
 function entryFrom(row, legacy) {
   if (!row || typeof row !== 'object') return null;
@@ -35,9 +56,11 @@ function entryFrom(row, legacy) {
   const aliases = [];
   const add = (v) => { const s = str(v); if (s && s !== id && aliases.indexOf(s) === -1) aliases.push(s); };
   add(value);
+  // An alias row also answers to its bare word (`opus[1m]` → `opus`), so a parked `opus` pick finds it.
+  if (!isPinned(value)) add(value.replace(/\[[^\]]*\]$/, ''));
   add(resolved);
   add(baseId(id));
-  for (const oldId of Object.keys(legacy || {})) {
+  for (const oldId of Object.keys(isPinned(value) ? {} : (legacy || {}))) {
     if (baseId(oldId) !== baseId(id)) continue;
     add(oldId);
     add(legacy[oldId]);
@@ -60,8 +83,29 @@ function match(models, pick) {
 }
 
 /**
+ * Hide the CLI's "older models" (2026-10-08, Samuel): a PINNED row whose family also has an ALIAS row
+ * of a newer version (`claude-opus-4-8` beside `opus` → `claude-opus-5-5`). Hidden, not dropped, so a
+ * stored or resumed pick still resolves and labels. A pinned row with no alias in its family, or newer
+ * than the alias, stays offered.
+ */
+function hideSuperseded(models) {
+  const current = {};
+  for (const m of models) {
+    if (isPinned(m.value)) continue;
+    const f = familyOf(m.id);
+    if (f && (!current[f.family] || olderThan(current[f.family], f.version))) current[f.family] = f.version;
+  }
+  for (const m of models) {
+    if (!isPinned(m.value)) continue;
+    const f = familyOf(m.id);
+    if (f && current[f.family] && olderThan(f.version, current[f.family])) m.hidden = true;
+  }
+}
+
+/**
  * `supportedModels()` rows → the adapter's roster, in the CLI's order. The default marker lands on
- * the row that is `fallbackId`, else the row now carrying its alias (a newer Sonnet keeps `sonnet`).
+ * the row that is `fallbackId`, else the row now carrying its alias (a newer Sonnet keeps `sonnet`);
+ * never on a hidden row.
  */
 function rosterFrom(rows, opts) {
   const o = opts || {};
@@ -74,7 +118,9 @@ function rosterFrom(rows, opts) {
     return { source: 'live', key: o.key || null, ids: [], models: [], defaultId: null,
       reason: 'Claude Code answered with no models Dopl could read.', truncated: false };
   }
-  const def = match(models, o.fallbackId) || match(models, o.fallbackAlias);
+  hideSuperseded(models);
+  const visible = (m) => (m && !m.hidden ? m : null);
+  const def = visible(match(models, o.fallbackId)) || visible(match(models, o.fallbackAlias));
   if (def) def.isDefault = true;
   return {
     source: 'live',
@@ -127,4 +173,4 @@ async function probe(o) {
   }
 }
 
-module.exports = { probe, rosterFrom, match, matchExact, baseId };
+module.exports = { probe, rosterFrom, match, matchExact, baseId, isPinned };

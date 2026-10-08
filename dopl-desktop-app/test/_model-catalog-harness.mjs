@@ -58,7 +58,7 @@ export const claudeModels = requireMain(join(MAIN, "runtime", "claude", "models.
 export const claudeTable = () => Object.assign({}, claudeModels.frozenRoster(), { stale: false, source: "frozen" });
 
 /** The four ids that must never appear on another runtime's surface. */
-export const CLAUDE_IDS = ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"];
+export const CLAUDE_IDS = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 
 export const noClaude = (catalog, which) => {
   for (const id of catalog.models.map((m) => m.id)) {

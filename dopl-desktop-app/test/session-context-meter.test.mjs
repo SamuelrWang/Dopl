@@ -44,11 +44,15 @@ test("the window map answers for the four aliases the picker offers", () => {
   assert.equal(model.contextWindowFor("opus"), 1000000);
   assert.equal(model.contextWindowFor("sonnet"), 1000000);
   assert.equal(model.contextWindowFor("fable"), 1000000);
-  assert.equal(model.contextWindowFor("haiku"), 200000);
+  assert.equal(model.contextWindowFor("haiku"), 1000000, "the alias is Haiku 5.5");
 });
 
 test("the window map answers for the ids the SDK actually reports back", () => {
   for (const [id, win] of Object.entries({
+    "claude-opus-5-5": 1000000,
+    "claude-sonnet-5-5": 1000000,
+    "claude-haiku-5-5": 1000000,
+    "claude-fable-5-1": 1000000,
     "claude-opus-5": 1000000,
     "claude-opus-4-8": 1000000,
     "claude-opus-4-7": 1000000,

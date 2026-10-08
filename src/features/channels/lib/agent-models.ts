@@ -28,11 +28,25 @@ export const AGENT_MODELS: ReadonlyArray<{
   label: string;
   short: string;
 }> = [
+  { id: "claude-fable-5-1", label: "Fable 5.1", short: "Fable" },
+  { id: "claude-opus-5-5", label: "Opus 5.5", short: "Opus" },
+  { id: "claude-sonnet-5-5", label: "Sonnet 5.5", short: "Sonnet" },
+  { id: "claude-haiku-5-5", label: "Haiku 5.5", short: "Haiku" },
+];
+
+/**
+ * Names for the lineup AGENT_MODELS replaced (2026-10-08), so a card for an agent already on one
+ * still reads "Opus" with no live catalog. Labels only: never offered, never pinned by the desktop.
+ */
+const PREVIOUS_AGENT_MODELS: ReadonlyArray<{ id: string; label: string; short: string }> = [
   { id: "claude-fable-5", label: "Fable 5", short: "Fable" },
   { id: "claude-opus-5", label: "Opus 5", short: "Opus" },
   { id: "claude-sonnet-5", label: "Sonnet 5", short: "Sonnet" },
   { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", short: "Haiku" },
 ];
+
+const knownModel = (id: string) =>
+  AGENT_MODELS.find((m) => m.id === id) ?? PREVIOUS_AGENT_MODELS.find((m) => m.id === id);
 
 /** The full label for a picker surface. Unset reads "Default"; an unknown id reads as itself. */
 export function agentModelLabel(
@@ -43,7 +57,7 @@ export function agentModelLabel(
   if (!trimmed) return "Default";
   return (
     liveEntry(catalogs, trimmed)?.label ||
-    (AGENT_MODELS.find((m) => m.id === trimmed)?.label ?? trimmed)
+    (knownModel(trimmed)?.label ?? trimmed)
   );
 }
 
@@ -58,7 +72,7 @@ export function agentModelShortLabel(
   const trimmed = typeof id === "string" ? id.trim() : "";
   if (!trimmed) return null;
   const live = liveEntry(catalogs, trimmed);
-  return live?.short || live?.label || (AGENT_MODELS.find((m) => m.id === trimmed)?.short ?? trimmed);
+  return live?.short || live?.label || (knownModel(trimmed)?.short ?? trimmed);
 }
 
 /** A bridge reply's model as an id, or `null` for unset. Unknown ids are kept (the roster moves). */
