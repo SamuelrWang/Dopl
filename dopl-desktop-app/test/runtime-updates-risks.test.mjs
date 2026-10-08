@@ -24,7 +24,7 @@ test("the outdated line names the one control that helps: relaunch, or Update Do
   for (const outcome of [null, "updated", "current", "failed"]) {
     assert.equal(copy.runtimeOutdated(d, outcome), "Runtime X is out of date for this model. Relaunch the agent.", String(outcome));
   }
-  for (const outcome of ["incompatible-shape", "unsupported", "rejected"]) {
+  for (const outcome of ["incompatible-shape", "unsupported", "rejected", "needs-attention"]) {
     assert.equal(copy.runtimeOutdated(d, outcome), "Runtime X is out of date for this model. Update Dopl.", outcome);
   }
   // End to end: the line is chosen off the LAST finished check (here: a build missing a core item).

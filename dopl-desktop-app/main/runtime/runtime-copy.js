@@ -100,8 +100,9 @@ function liveModelSwitchRefusal(descriptor) {
 }
 
 // The update-check outcomes after which a relaunch cannot help: no build Dopl can take exists (a newer minor
-// waits for a Dopl release, the platform has no updater, the build was refused).
-const NEEDS_DOPL_UPDATE = new Set(['incompatible-shape', 'unsupported', 'rejected']);
+// waits for a Dopl release, the platform has no updater, the build was refused, or its live safety probe stayed
+// inconclusive until it was parked as needing attention — `updates/index.js › MAX_SEMANTIC_ATTEMPTS`).
+const NEEDS_DOPL_UPDATE = new Set(['incompatible-shape', 'unsupported', 'rejected', 'needs-attention']);
 
 /** The runtime is too old for the model it was asked for. One line, and the one control that helps: a relaunch
  *  (a newer build is fetched for the next launch), or a Dopl update when the last check found none it can take. */

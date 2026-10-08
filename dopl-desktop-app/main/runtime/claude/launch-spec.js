@@ -74,7 +74,12 @@ function buildOptions(s, dispatch) {
   return options;
 }
 
-/** The gate, closed until this spawn's init has been verified (fail closed: no verified init, no tool). */
+/** The gate, closed until this spawn's init has been verified (fail closed: no verified init, no tool).
+ *  ⚠ RESIDUAL (cross-review H1 re-check): calls the CLI auto-allows never reach `canUseTool` (read-only
+ *  shell in the cwd, pre-approved Read), so this does not hold them. What does: the normalizer ends the
+ *  session on any assistant message before a verified init (`normalize.js`), though the CLI may already be
+ *  running that call concurrently; such calls are read-only and deny-listed paths stay fenced by the CLI
+ *  itself (`semantics.js` probes both on every new build). LOW, named rather than hidden. */
 function untilVerified(s, gate) {
   return async (...args) => {
     if (!s.launchVerified) {
