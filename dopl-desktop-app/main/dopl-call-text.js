@@ -59,4 +59,22 @@ function doplOp(set, key, args) {
   return set === GRANULAR ? doplCall(set, key, args) : doplArgs(set, key, args);
 }
 
-module.exports = { doplTool, doplCall, doplArgs, doplOp, GRANULAR };
+/**
+ * **EVERY WAY TO POST, OFF THE TABLE** (2026-10-08): the preset tools bound to the same job as
+ * `channel.send` (`dopl_request_decision` kind "decision", `dopl_show` kind "display"), as
+ * `[{ kind, call }]` in `set`. Derived, so a preset the manifest adds is named in every prompt with
+ * no edit here; a granular session names the preset tool, a legacy one the send with its `kind`.
+ */
+function sendLanes(set) {
+  const send = TARGETS.get('channel.send');
+  const bind = send && jobsOf(granularRow(send.name)).find(([job]) => job === send.job);
+  const key = bind ? bind[1] : 'dopl_channel:send';
+  return GRANULAR_NAMES.map(granularRow)
+    .filter((row) => row.preset && typeof row.preset.kind === 'string' && jobsOf(row).some(([, k]) => k === key))
+    .map((row) => ({
+      kind: row.preset.kind,
+      call: set === GRANULAR ? PREFIX + row.name : doplCall(set, 'channel.send', `kind "${row.preset.kind}"`),
+    }));
+}
+
+module.exports = { doplTool, doplCall, doplArgs, doplOp, sendLanes, GRANULAR };

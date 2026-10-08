@@ -5,7 +5,7 @@
 // (`prompt-profile-drift.test.mjs`), and tools are named fully qualified (`mcp__dopl__dopl_channel`)
 // because a bare name sends an agent searching.
 
-const { THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
+const { LANE_USE, THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
 
 // `sanitizeName` is re-exported below: `session-seed.js` reaches it as `framing.sanitizeName`.
 const { sanitizeName, idToken, stripFence } = require('./prompt-sanitize');
@@ -14,7 +14,7 @@ const { ontologyReachLines } = require('./prompt-framing-ontology');
 const { identityRoleFraming } = require('./prompt-framing-agent-identity');
 const { grantLines } = require('./prompt-framing-discovery');
 // Every Dopl call below is spelled for the session's negotiated tool set (`ctx.toolSet`, DMP-013).
-const { doplTool, doplCall, doplArgs, doplOp } = require('./dopl-call-text');
+const { doplTool, doplCall, doplArgs, doplOp, sendLanes } = require('./dopl-call-text');
 
 // Who the counterparty is (another member, NOT this agent's operator), and that a blocker on this
 // machine is the operator's to fix — never an ask to the peer.
@@ -124,6 +124,22 @@ function replyCall(ctx, to) {
   return doplCall(ctx.toolSet, 'channel.send', args);
 }
 
+/** The other ways to post under the same grant, derived from the tool table (2026-10-08). */
+function laneLines(set) {
+  const lanes = sendLanes(set);
+  if (!lanes.length) return [];
+  return [
+    `- The same grant covers the other ways to post, on the same channel and address:`,
+    ...lanes.map((l) => `  - ${l.call}: ${LANE_USE[l.kind] || `a "${l.kind}" post.`}`),
+  ];
+}
+
+/** The decision call in `set`, or null (the per-turn footer names it beside the reply call). */
+function decisionCall(set) {
+  const lane = sendLanes(set).find((l) => l.kind === 'decision');
+  return lane ? lane.call : null;
+}
+
 /**
  * What a session must DO first, as imperatives at the top of the turn. Never order a `ToolSearch`
  * lookup: restricted profiles deny it and `full` gates it (the Dopl entry is `alwaysLoad` on Claude;
@@ -140,6 +156,7 @@ function firstActions(side, ctx) {
     ...grantLines(disc, set),
     `  Just make the call in the delivery section below; if a call is genuinely refused, your`,
     `  operator sees the refusal on this window and it is theirs to fix, not the counterparty's.`,
+    ...laneLines(set),
     ...(ctx && ctx.operatorTools ? OPERATOR_TOOLS_LANE : LANE_EXCLUSIVITY),
   ];
   // `channel_agent` has no shell (B7); told nothing, it plans with one.
@@ -311,5 +328,4 @@ module.exports = {
   VOCABULARY, // the kinds are not an interchangeable list (prompt-framing-text.js)
   CONCISION,
   HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY,
-  ontologyReachLines,
-};
+  ontologyReachLines, decisionCall };

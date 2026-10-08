@@ -80,7 +80,8 @@ const mainMsg = (over) => verdictMsg("agent", { taskId: "", recipientAgentIds: [
 
 test("a PERSON's main-room ask carries their user id and the ready call, as the turn's last line (granular)", () => {
   const turn = deliver(mainMsg({ authorUserId: SAM }), { toolSet: "granular" });
-  const line = `Answer IN THE CHANNEL, never in your final text: mcp__dopl__dopl_send_message channel "${CH}", container "${WS}", to "${SAM}".`;
+  // 2026-10-08: the decision card is named on the same line, the last thing the agent reads.
+  const line = `Answer IN THE CHANNEL, never in your final text: mcp__dopl__dopl_send_message channel "${CH}", container "${WS}", to "${SAM}". A choice only a person can make goes on a decision card: mcp__dopl__dopl_request_decision.`;
   // Below the fence, where an agent that reads tools first still finds it (measured 2026-09-25).
   assert.ok(turn.endsWith(`END-REQUEST-n1\n${line}`), "the call closes the turn, right after the message");
   assert.ok(!/replied in the channel|Continue the thread/.test(turn), "the thread-only wording is gone");

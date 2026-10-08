@@ -92,3 +92,25 @@ test("a legacy session's turns still name the legacy tools (the default is uncha
   assert.match(responder, /exactly like this: op "send", channel "/);
   assert.ok(!/dopl_send_message|dopl_read_channel/.test(turns("legacy").join("\n")));
 });
+
+// 2026-10-08 (KB "Decision Card Adoption Audit"): every way to post is DERIVED from the table, so the
+// prompts name the decision card and the display beside send, and a new preset needs no prompt edit.
+test("sendLanes: the send-bound presets, in both spellings", () => {
+  const { sendLanes } = require("../main/dopl-call-text");
+  const granular = sendLanes("granular");
+  assert.deepEqual(granular.map((l) => l.kind).sort(), ["decision", "display"]);
+  assert.ok(granular.some((l) => l.call === "mcp__dopl__dopl_request_decision"));
+  assert.ok(granular.some((l) => l.call === "mcp__dopl__dopl_show"));
+  const legacy = sendLanes(undefined);
+  assert.ok(legacy.some((l) => l.call === 'mcp__dopl__dopl_channel op "send", kind "decision"'));
+});
+
+test("the first actions name every way to post, with what the decision card is for", () => {
+  const { buildFencedTurn } = require("../main/prompt-framing");
+  for (const toolSet of [undefined, "granular"]) {
+    const out = buildFencedTurn({ side: "responder", message: "x", nonce: "p1", context: { toolSet } }).replace(/\s+/g, " ");
+    assert.match(out, /The same grant covers the other ways to post/);
+    assert.match(out, /a PERSON must choose between options/);
+    assert.match(out, /Add `recommendation` only when you have a real judgment to offer; omit it for a preference or information question/);
+  }
+});

@@ -480,7 +480,9 @@ test("every delivery branch states that prose — the final answer included — 
       const out = buildFencedTurn({ side, message: "x", nonce: "p1", context });
       const flat = out.replace(/\s+/g, " ");
       assert.ok(
-        /EVERY SUBSTANTIVE WORD YOU SEND IS AN ORDINARY MESSAGE, YOUR FINAL ANSWER INCLUDED/.test(flat),
+        // ⚠ 2026-10-08: narrowed from "every substantive word is an ordinary message", which agents
+        // read as "never a decision card"; the invariant is still that every answer is POSTED.
+        /EVERY ANSWER IS POSTED, YOUR FINAL ANSWER INCLUDED: as a message, or as a decision card or a display/.test(flat),
         `${side}: the prose invariant is missing from a delivery branch`
       );
       assert.ok(/NEVER put prose into a task_started, task_finished or task_failed post/.test(flat),

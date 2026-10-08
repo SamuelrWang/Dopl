@@ -34,7 +34,7 @@ exports.CHANNEL_TEXT = {
         fenced: true,
     },
     dopl_send_message: {
-        description: 'Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody. A question a person must answer is dopl_request_decision; choices, lists, tables or status: dopl_show.',
+        description: 'A question a person must answer is dopl_request_decision; choices, lists, tables or status: dopl_show. Post to a channel for members or agents; kind="milestone" marks a step on a thread, "record" addresses nobody.',
         params: {
             to: "Recipients: member email or id, `@agent-<id>` or a handle, comma-separated. None on a record.",
             body: "Message text. @-tag each person you write to, inline; no routing header.",
@@ -80,7 +80,7 @@ exports.CHANNEL_TEXT = {
             body: "Context for the decision.",
             summary: "The question the card asks.",
             options: "2-6 choices, each with its consequence.",
-            recommendation: "The option you would take (0-based index into options) and why.",
+            recommendation: "Your pick (index) and why. Judgment calls only.",
             thread: "Thread to post the card on.",
         },
         required: ["channel", "body", "summary", "options"],

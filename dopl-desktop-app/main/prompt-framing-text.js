@@ -57,9 +57,12 @@ const MAIN_ROOM_VOCABULARY = [...VOCAB_TERMS, ...VOCAB_TAGS];
 
 // The failure mode, not a style rule: `kind` defaults to message, and a lifecycle kind's body is not
 // rendered on the peer's card. Stated on every delivery branch (the section an agent re-reads).
+// ⚠ NARROWED 2026-10-08: it read "every substantive word is an ordinary message", which agents
+// took as "never a decision card" (KB "Decision Card Adoption Audit"). Its target is lifecycle kinds.
 const PROSE_RULE = [
-  `EVERY SUBSTANTIVE WORD YOU SEND IS AN ORDINARY MESSAGE, YOUR FINAL ANSWER INCLUDED. The`,
-  `delivery call above sets no kind, and that is correct: leave it that way. NEVER put prose`,
+  `EVERY ANSWER IS POSTED, YOUR FINAL ANSWER INCLUDED: as a message, or as a decision card or a`,
+  `display when that is what it is (the ways to post are listed above). A message sets no kind,`,
+  `and that is correct: leave it that way. NEVER put prose`,
   `into a task_started, task_finished or task_failed post. Those are lifecycle markers, the`,
   `server refuses them from you, and their body is not shown on the other member's thread`,
   `card at all, so an answer written into one is delivered nowhere. If it is meant to be`,
@@ -146,4 +149,11 @@ const ADDRESSING = [
   `  readers see the address only through that tag.`,
 ];
 
-module.exports = { THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
+// What each preset post is FOR, by its `kind` (`dopl-call-text.js › sendLanes` names the call).
+// A kind with no line here is still listed, by its call, so a new preset is never hidden.
+const LANE_USE = {
+  decision: 'a PERSON must choose between options: a card they answer in one press. `summary` the question, `options` each choice with what it means. Add `recommendation` only when you have a real judgment to offer; omit it for a preference or information question ("which do you mean").',
+  display: 'structure: status, a list, a table, or a choice that is not a decision.',
+};
+
+module.exports = { LANE_USE, THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
