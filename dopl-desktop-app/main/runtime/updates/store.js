@@ -30,6 +30,9 @@ function createStore(base) {
         version: strOrNull(raw.version),
         previous: strOrNull(raw.previous),
         rejected: Array.isArray(raw.rejected) ? raw.rejected.filter((v) => typeof v === 'string') : [],
+        // A candidate whose live safety probe was inconclusive: `{ version, attempts }` (2026-10-08).
+        attention: raw.attention && strOrNull(raw.attention.version) && Number.isInteger(raw.attention.attempts)
+          ? { version: raw.attention.version, attempts: raw.attention.attempts } : null,
       };
     } catch (_) {
       return { ...EMPTY, rejected: [] };

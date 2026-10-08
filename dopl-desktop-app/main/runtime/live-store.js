@@ -16,7 +16,8 @@ const path = require('node:path');
 const FILE_SCHEMA = 1;
 const FILE_NAME = 'runtime-live.json';
 
-const KINDS = Object.freeze(['roster', 'shape']);
+// `rates` (2026-10-08): learned per-model cost rates (`claude/cost-rates.js`), filed under one constant key.
+const KINDS = Object.freeze(['roster', 'shape', 'rates']);
 
 let deps = null;
 let memo = null; // { schema, entries: { "<kind>:<runtimeId>": { key, value, savedAt } } }

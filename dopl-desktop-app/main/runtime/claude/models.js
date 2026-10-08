@@ -171,7 +171,10 @@ const descriptor = {
   dimensionOptions: null,
 };
 
+/** The catalog's models now (the one cache); [] before any read. */
+function catalogModels() { return deps.catalogModels(); }
+
 module.exports = {
-  models, shape, buildIdentity, resolveLaunchModel, launchArg, inject,
+  models, shape, buildIdentity, resolveLaunchModel, launchArg, catalogModels, inject,
   descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };

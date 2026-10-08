@@ -6,6 +6,7 @@ const events = require('../events');
 const io = require('../../session-io');
 const modelTable = require('./model-table');
 const { readCount } = require('../sdk-shape');
+const costRates = require('./cost-rates');
 const launchContract = require('./launch-contract');
 
 // The auth-sentinel matchers live in `session-auth-detect.js`.
@@ -159,6 +160,8 @@ function normalize(msg, ctx) {
     const usage = msg.modelUsage && typeof msg.modelUsage === 'object' ? msg.modelUsage : null;
     const windows = context.windows || new Map();
     const reported = learnWindows(windows, usage);
+    // What each model actually cost (the CLI's own pricing), for picking the cheapest one live.
+    costRates.learn(usage);
     const main = mainModelOf(usage);
     // The window, BEFORE the result: the turn's reading is sampled when the result lands. `model: null`
     // so a usage key spelled differently from the message's model never reads as a model switch.

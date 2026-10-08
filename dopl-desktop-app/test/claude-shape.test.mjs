@@ -48,7 +48,9 @@ test("REFUSES when a safety or core item is gone; a cosmetic gap only drifts", a
   const noInterrupt = fakeSdk([MEASURED_ROW]);
   const obs = await roster.observeShape({ sdk: noInterrupt.sdk, options: {} });
   obs.methods = obs.methods.filter((m) => m !== "interrupt");
-  assert.deepEqual(shapeLib.checkShape(claude.descriptor.requiredShape, obs).missing.safety, ["method interrupt"]);
+  const v0 = shapeLib.checkShape(claude.descriptor.requiredShape, obs);
+  assert.deepEqual(v0.missing.core, ["method interrupt"], "core since 2026-10-08 (bundled-SDK facts)");
+  assert.equal(v0.refuse, true);
   const renamed = fakeSdk([{ value: "sonnet", label: "Sonnet" }]);
   const v = shapeLib.checkShape(claude.descriptor.requiredShape, await roster.observeShape({ sdk: renamed.sdk, options: {} }));
   assert.equal(v.refuse, true, "displayName renamed → the picker cannot label: core");

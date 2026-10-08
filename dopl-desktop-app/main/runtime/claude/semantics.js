@@ -162,7 +162,9 @@ async function probeShellDeny(o) {
  */
 async function verifySemantics(o) {
   const cwd = fs.mkdtempSync(path.join((o && o.tmpRoot) || os.tmpdir(), 'dopl-semantic-cwd-'));
-  const base = { sdk: o.sdk, options: o.options || {}, timeoutMs: (o && o.timeoutMs) || TURN_TIMEOUT_MS, tmpRoot: o && o.tmpRoot, cwd };
+  // `o.model`: the model to probe on (the updater passes the cheapest one learned); absent = the CLI's default.
+  const options = Object.assign({}, o.options || {}, o.model ? { model: o.model } : {});
+  const base = { sdk: o.sdk, options, timeoutMs: (o && o.timeoutMs) || TURN_TIMEOUT_MS, tmpRoot: o && o.tmpRoot, cwd };
   try {
     const out = { refuse: [], inconclusive: [] };
     for (const probe of [probeGate, probeDeny, probeShellOutside, probeShellDeny]) {

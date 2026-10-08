@@ -24,9 +24,23 @@ async function probeShape(candidateBin) {
   return require('./roster').observeShape(await driverFor(candidateBin));
 }
 
-/** The candidate's safety SEMANTICS, live (`semantics.js`: four short turns; runs only on a new build). */
+/** The candidate's safety SEMANTICS, live (`semantics.js`: four short turns; runs only on a new build), on the
+ *  CHEAPEST model this Mac has seen cost (learned, `cost-rates.js`); none learned → the CLI's own default. */
 async function verifySemantics(candidateBin) {
-  return require('./semantics').verifySemantics(await driverFor(candidateBin));
+  const driver = await driverFor(candidateBin);
+  const model = cheapestOffered();
+  if (model) driver.model = model;
+  return require('./semantics').verifySemantics(driver);
+}
+
+/** The launch value of the cheapest VISIBLE catalog model with a learned cost rate, or null. Never throws. */
+function cheapestOffered() {
+  try {
+    const rows = require('./models').catalogModels().filter((m) => m && !m.hidden);
+    const id = require('./cost-rates').cheapest(rows.map((m) => m.id));
+    const row = id ? rows.find((m) => m.id === id) : null;
+    return row ? (row.launch || row.id) : null;
+  } catch (_) { return null; }
 }
 
 module.exports = {
@@ -43,4 +57,5 @@ module.exports = {
   teamId: 'Q6L2SF6YDW',
   probeShape,
   verifySemantics,
+  cheapestOffered,
 };

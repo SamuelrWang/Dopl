@@ -86,11 +86,13 @@ export const REQUIRED = Object.freeze({
   cosmetic: { results: { "model/list": ["data.displayName"] } },
 });
 
-export const h = { base: null, invalidated: [] };
+export const h = { base: null, invalidated: [], diags: [] };
 export function setup(reg, run, over = {}) {
   h.base = mkdtempSync(join(tmpdir(), "dopl-runtime-updates-"));
   h.invalidated = [];
+  h.diags = [];
   updates.inject({
+    log: (...args) => h.diags.push(args.join(" ")),
     baseDir: () => join(h.base, "runtimes"),
     fetchImpl: reg.fetchImpl,
     run: run.run,

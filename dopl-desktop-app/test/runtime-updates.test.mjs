@@ -106,6 +106,26 @@ test("SEMANTICS: an inconclusive probe proves nothing — not admitted, not reje
   assert.equal(calls, 2);
 });
 
+test("SEMANTICS: inconclusive is capped per version — 3 attempts, a diag line each, then NEEDS ATTENTION, never probed again", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
+  const reg = registry(dir, "0.3.10");
+  setup(reg, runner());
+  let probes = 0;
+  const src = source({ verifySemantics: async () => { probes += 1; return { refuse: [], inconclusive: ["the model did not try the Bash tool"] }; } });
+  assert.equal(await updates.check(src), "failed");
+  assert.equal(await updates.check(src), "failed");
+  assert.equal(await updates.check(src), "needs-attention");
+  const downloads = reg.calls.tarball;
+  assert.equal(await updates.check(src), "needs-attention", "stays there");
+  assert.equal(probes, 3, "no fourth probe (each one is real model turns)");
+  assert.equal(reg.calls.tarball, downloads, "and no fourth download");
+  assert.equal(updates.activeFor(src), null, "never adopted");
+  assert.deepEqual(record().attention, { version: "0.3.10", attempts: 3 });
+  assert.deepEqual(record().rejected, [], "not a verdict about the build");
+  const lines = h.diags.filter((l) => /safety probe inconclusive \(attempt \d\/3\)/.test(l));
+  assert.equal(lines.length, 3, "one visible line per attempt");
+});
+
 test("SEMANTICS: a clean probe admits the build", async () => {
   const dir = mkdtempSync(join(tmpdir(), "dopl-reg-"));
   setup(registry(dir, "0.3.10"), runner());

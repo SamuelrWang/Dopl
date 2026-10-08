@@ -54,6 +54,8 @@ function runFile(file, args, opts) {
 
 function defaultDeps() {
   return {
+    // The probe-attempt lines (cross-review M2), injectable so a suite can count them.
+    log: (...args) => diag(...args),
     // Lazy: the registry is required by electron-free harnesses that never resolve a path.
     baseDir: () => path.join(require('electron').app.getPath('userData'), 'runtimes'),
     fetchImpl: (...args) => fetch(...args),
@@ -188,9 +190,19 @@ async function semanticGate(source, bin) {
   const r = (await source.verifySemantics(bin, deps.run)) || {};
   const refuse = Array.isArray(r.refuse) ? r.refuse : [];
   const inconclusive = Array.isArray(r.inconclusive) ? r.inconclusive : [];
-  if (refuse.length) throw new ShapeRefused(`safety semantics broken: ${refuse.join('; ')}`);
-  if (inconclusive.length) throw new Error(`safety semantics not proven: ${inconclusive.join('; ')}`);
+  if (refuse.length) throw new SemanticRefused(`safety semantics broken: ${refuse.join('; ')}`);
+  if (inconclusive.length) throw new SemanticInconclusive(`safety semantics not proven: ${inconclusive.join('; ')}`);
 }
+
+/** The probe proved nothing (the model never tried the tool). Counted per version (cross-review M2). */
+class SemanticInconclusive extends Error {}
+/** A build that BROKE a restriction under the live probe. Unlike a shape gap, this is the build's own behaviour,
+ *  whatever this Dopl requires: rejected by plain version, permanently (cross-review, 1fa7f06d rebase). */
+class SemanticRefused extends Error {}
+
+// A candidate gets this many live safety probes; then it NEEDS ATTENTION and is not probed again (each
+// probe is real model turns on the operator's account). A newer version starts over.
+const MAX_SEMANTIC_ATTEMPTS = 3;
 
 /** One check for one runtime → the outcome word (also the diag line). Never rejects. */
 async function check(source) {
@@ -209,12 +221,35 @@ async function check(source) {
     if (record.rejected.includes(version) || record.rejected.includes(shapeRejection(version, deps.requiredShape(source.id)))) {
       return 'rejected';
     }
+    if (record.attention && record.attention.version === version && record.attention.attempts >= MAX_SEMANTIC_ATTEMPTS) {
+      return 'needs-attention';
+    }
     await install(source, meta, version);
     s.write(source.id, { version, previous: downloaded, rejected: record.rejected });
     switched(source);
     diag(`runtime-updates: ${source.id} now ${version}`);
     return 'updated';
   } catch (err) {
+    if (err instanceof SemanticInconclusive && version) {
+      const s = diskStore();
+      const record = s.read(source.id);
+      const attempts = (record.attention && record.attention.version === version ? record.attention.attempts : 0) + 1;
+      s.write(source.id, Object.assign({}, record, { attention: { version, attempts } }));
+      // One line per attempt, so what the probe spends is visible (cross-review M2).
+      deps.log(`runtime-updates: ${source.id} ${version} safety probe inconclusive (attempt ${attempts}/${MAX_SEMANTIC_ATTEMPTS})`, err.message);
+      if (attempts >= MAX_SEMANTIC_ATTEMPTS) {
+        deps.log(`runtime-updates: ${source.id} ${version} NEEDS ATTENTION — not adopted, not probed again; a newer version starts over`);
+        return 'needs-attention';
+      }
+      return 'failed';
+    }
+    if (err instanceof SemanticRefused && version) {
+      const s = diskStore();
+      const record = s.read(source.id);
+      s.write(source.id, Object.assign({}, record, { rejected: record.rejected.concat(version) }));
+      diag(`runtime-updates: ${source.id} ${version} refused by the safety probe`, err.message);
+      return 'incompatible-shape';
+    }
     if (err instanceof ShapeRefused && version) {
       const s = diskStore();
       const record = s.read(source.id);
