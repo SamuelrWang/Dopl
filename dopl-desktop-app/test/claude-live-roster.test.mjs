@@ -51,7 +51,7 @@ function fakeCli(rows, over = {}) {
     loadSdk: async () => ({}), bin: () => "/fake/claude", env: () => ({}),
     credentialSource: () => credential, sdkVersion: () => "0.3.220",
     probe: async () => { calls.probes += 1; if (over.fail) throw new Error(over.fail); last = typeof rows === "function" ? rows() : rows; return last; },
-    catalogModels: () => (last ? roster.rosterFrom(last, {}).models : []),
+    catalogModels: () => (last ? (Array.isArray(last) ? roster.rosterFrom(last, {}) : roster.rosterFrom(last.rows, { liveDefault: last.liveModel })).models : []),
   });
   return { calls, signIn: (next) => { credential = next; } };
 }
@@ -60,7 +60,7 @@ const adapter = () => ({ descriptor: DESCRIPTOR, runtime: { models: () => models
 // ── 1 + 2. THE MEASURED ROWS, AND A MODEL NOBODY HARDCODED ───────────────────────────────────
 
 test("the measured supportedModels() rows become the catalog: full ids, the CLI's own names, one default", () => {
-  const r = roster.rosterFrom(MEASURED, { legacy: { "claude-opus-5": "opus" }, fallbackId: "claude-sonnet-5", fallbackAlias: "sonnet" });
+  const r = roster.rosterFrom(MEASURED, { legacy: { "claude-opus-5": "opus" }, liveDefault: "claude-opus-5[1m]" });
   assert.deepEqual(r.ids, ["claude-opus-5[1m]", "claude-fable-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"],
     "`default` is the CLI's pointer at another row, not a model — dropped, and the CLI's ORDER kept");
   assert.deepEqual(r.models.map((m) => [m.label, m.short]),
@@ -99,12 +99,12 @@ const MEASURED_293 = [
 ].map(([value, resolvedModel, displayName]) => ({ value, resolvedModel, displayName }));
 
 test("🔒 the CLI's OLDER models are hidden, not dropped: the picker offers the current lineup only", async () => {
-  const r = roster.rosterFrom(MEASURED_293, {});
+  const r = roster.rosterFrom(MEASURED_293, { liveDefault: "claude-opus-5-5" });
   assert.deepEqual(r.models.filter((m) => !m.hidden).map((m) => m.label), ["Opus 5.5", "Fable 5.1", "Sonnet 5.5", "Haiku 5.5"]);
   assert.equal(r.models.filter((m) => m.hidden).length, 8, "every pinned older row is kept, hidden");
   assert.equal(r.defaultId, "claude-opus-5-5", "the CLI's own default row marks it, never a hidden row");
   assert.ok(!r.models.find((m) => m.id === "claude-sonnet-5").aliases.includes("sonnet"), "a pinned row never claims the alias");
-  fakeCli(MEASURED_293);
+  fakeCli(() => ({ rows: MEASURED_293, liveModel: "claude-opus-5-5" }));
   try {
     await models.models();
     assert.equal(models.resolveLaunchModel("claude-opus-4-8").arg, "claude-opus-4-8", "a stored older pick still launches as itself");
@@ -200,13 +200,30 @@ test("RC-01: before any roster read, a pick launches as ITSELF — never a short
   } finally { models.inject(); }
 });
 
+test("🔒 NEVER CLAIM A MODEL THE LAUNCH WILL NOT RUN: the `default` row and the live no-pick model disagree → neutral", async () => {
+  // MEASURED 2026-10-08: the `default` row named one model while a no-pick launch ran another.
+  const rows = [
+    { value: "default", resolvedModel: "claude-opus-5-5", displayName: "Default (recommended)" },
+    { value: "opus", resolvedModel: "claude-opus-5-5", displayName: "Opus 5.5" },
+    { value: "sonnet", resolvedModel: "claude-sonnet-5-5", displayName: "Sonnet 5.5" },
+  ];
+  assert.equal(roster.rosterFrom(rows, { liveDefault: "claude-sonnet-5-5" }).defaultId, null, "disagree → no marker");
+  assert.equal(roster.rosterFrom(rows, {}).defaultId, null, "live unknown → no marker");
+  assert.equal(roster.rosterFrom(rows, { liveDefault: "claude-opus-5-5" }).defaultId, "claude-opus-5-5", "agree → marked");
+  fakeCli(() => ({ rows, liveModel: "claude-sonnet-5-5" }));
+  try {
+    await models.models();
+    assert.deepEqual(models.resolveLaunchModel(""), { ok: true, arg: "", id: "", reason: "" }, "no pick claims no model");
+  } finally { models.inject(); }
+});
+
 test("🔒 the CLI renames EVERY alias: a no-pick launch still launches, on the CLI's own default", async () => {
   // Orchestrator 2026-10-08: no alias literal may decide the default. The CLI's `default` row names it.
-  fakeCli([
+  fakeCli(() => ({ rows: [
     { value: "default", resolvedModel: "claude-zeta-7", displayName: "Default (recommended)" },
     { value: "big", resolvedModel: "claude-zeta-7", displayName: "Zeta 7" },
     { value: "fast", resolvedModel: "claude-mu-7", displayName: "Mu 7" },
-  ]);
+  ], liveModel: "claude-zeta-7" }));
   try {
     const r = await models.models();
     assert.equal(r.defaultId, "claude-zeta-7", "the CLI's own default row marks the default");

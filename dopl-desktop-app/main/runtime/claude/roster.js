@@ -126,7 +126,11 @@ function rosterFrom(rows, opts) {
   // the caller's fallbacks only apply to a CLI that sends no such row.
   const defRow = (Array.isArray(rows) ? rows : []).find((r) => r && str(r.value) === 'default');
   const cliDefault = defRow ? str(defRow.resolvedModel) : '';
-  const def = (cliDefault && visible(match(models, cliDefault)))
+  // ⚠ NEVER CLAIM A MODEL A NO-PICK LAUNCH WILL NOT RUN (2026-10-08). The `default` row marks the default
+  // only when the CLI's live no-pick model (`o.liveDefault`) is the same model; when they disagree, or the
+  // live model is unknown, nothing is marked and the picker reads a neutral "Default".
+  const agrees = !!cliDefault && !!str(o.liveDefault) && baseId(cliDefault) === baseId(o.liveDefault);
+  const def = (agrees && visible(match(models, cliDefault)))
     || visible(match(models, o.fallbackId)) || visible(match(models, o.fallbackAlias));
   if (def) def.isDefault = true;
   return {
@@ -182,9 +186,23 @@ async function withIdleQuery(o, what, fn) {
   }
 }
 
-/** The raw `supportedModels()` rows, or a rejection with a readable reason. Never a turn. */
+/**
+ * `{ rows, liveModel }`, or a rejection with a readable reason. Never a turn. `rows` are the raw
+ * `supportedModels()` rows; `liveModel` is the model this CLI ACTUALLY runs with no pick, from its own
+ * `getContextUsage()` answer on the same handshake (null when it does not answer). The two can disagree
+ * (measured 2026-10-08: the `default` row named one model while a no-pick launch ran another), and only
+ * the second is true of a launch.
+ */
 function probe(o) {
-  return withIdleQuery(o, 'list its models', (q) => q.supportedModels());
+  return withIdleQuery(o, 'list its models', async (q) => {
+    const rows = await q.supportedModels();
+    let liveModel = null;
+    try {
+      const u = typeof q.getContextUsage === 'function' ? await q.getContextUsage() : null;
+      liveModel = u && typeof u.model === 'string' && u.model.trim() ? u.model.trim() : null;
+    } catch (_) { liveModel = null; }
+    return { rows, liveModel };
+  });
 }
 
 /** Every function name a live Query answers to (own and inherited), constructor excluded. */

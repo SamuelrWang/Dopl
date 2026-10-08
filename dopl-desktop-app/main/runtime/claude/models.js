@@ -87,7 +87,9 @@ async function probeRows(sdk) {
 async function readLive() {
   const sdk = await deps.loadSdk();
   const { rows } = await probeRows(sdk);
-  return roster.rosterFrom(rows, {});
+  // A probe answers `{ rows, liveModel }` (`roster.js › probe`); a bare array is rows with no live model.
+  const answer = Array.isArray(rows) ? { rows, liveModel: null } : (rows || {});
+  return roster.rosterFrom(answer.rows, { liveDefault: answer.liveModel });
 }
 
 /** The offerable roster, read LIVE every call (the catalog decides when to call). Rejects with a
