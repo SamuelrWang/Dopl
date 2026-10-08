@@ -12,6 +12,11 @@ const { pickOf } = require('./selection-vocabulary');
 const liveStore = require('./live-store');
 const { rosterKeyOf } = require('./roster-key');
 
+// The operator's preferred family, or null — never throws into a catalog read.
+function preferenceOf(runtimeId, models) {
+  try { return require('./model-preferences').preferredModel(runtimeId, models); } catch (_) { return null; }
+}
+
 const CATALOG_VERSION = 1;
 
 const STATUS = Object.freeze({
@@ -138,9 +143,11 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
     defaultId = asked;
     for (const m of models) m.isDefault = m.id === asked;
   }
-  // The declared launch default outranks the server's marker (non-stale rosters only), so the
-  // picker names what a no-pick launch spends (`launch-default.js`).
-  const preferred = roster.stale === true ? null : findModel({ models }, declared.launchDefault);
+  // The declared launch default — else the operator's preferred FAMILY's newest member (a setting,
+  // `model-preferences.js`) — outranks the server's marker (non-stale rosters only), so the picker names
+  // what a no-pick launch spends (`launch-default.js`).
+  const preferred = roster.stale === true ? null
+    : (findModel({ models }, declared.launchDefault) || preferenceOf(runtimeId, models));
   if (preferred) {
     defaultId = preferred.id;
     for (const m of models) m.isDefault = m === preferred;

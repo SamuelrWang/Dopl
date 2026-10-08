@@ -170,11 +170,9 @@ const descriptor = {
   source: 'live',
   // Declaring it is what renders the effort control; never `[]` (an empty control instead of none).
   dimensions: [DIMENSION],
-  // Samuel's product choice ("I think we should do Sol"), not an SDK fact: a no-pick launch's model,
-  // spent only when a READY live catalog offers it, else no model is sent and Codex runs the default its
-  // own `model/list` marks (`runtime/launch-default.js`). A preference, never a refusal — when Sol leaves
-  // the roster it degrades to the server's default, visibly in the picker. (Open: family preference.)
-  launchDefault: 'gpt-6-sol',
+  // NO launchDefault here: the operator's preferred FAMILY ("sol", Samuel 2026-10-08) is a SETTING
+  // (`../model-preferences.js`, seeded by `model-preferences.seed.json`) resolved against the live roster —
+  // the newest family member runs, a new release needs no Dopl change, and no member means Codex's own default.
   // Shape check only: storage cannot call the live roster; the live catalog narrows NEW picks
   // (`lib/model-catalog.ts › selectableModels`). Still a gate: the value becomes `thread/start.model`.
   pick: {

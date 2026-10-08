@@ -15,10 +15,20 @@ function preferredDefault(descriptor) {
   return str(descriptor && descriptor.models && descriptor.models.launchDefault);
 }
 
-/** PURE: the id a no-pick launch should name on this runtime, or `''` for "name none". */
+/** The operator's preferred family on this runtime (`model-preferences.js`), or `''`. */
+function preferredFamily(descriptor) {
+  try { return require('./model-preferences').familyFor(descriptor && descriptor.id); } catch (_) { return ''; }
+}
+
+/** PURE over its reads: the id a no-pick launch should name on this runtime, or `''` for "name none". The
+ *  declared default if the catalog offers it, else the preferred family's newest member a READY catalog
+ *  offers, else none (the platform's own default). */
 function launchDefaultFrom(descriptor, catalog) {
   const preferred = preferredDefault(descriptor);
-  return modelCatalog.offers(catalog, preferred) ? preferred : '';
+  if (preferred) return modelCatalog.offers(catalog, preferred) ? preferred : '';
+  if (!modelCatalog.vouches(catalog)) return '';
+  const m = require('./model-preferences').pickFamily(catalog.models, preferredFamily(descriptor));
+  return m ? m.id : '';
 }
 
 // An adapter whose own resolver already turns "no pick" into a model (Claude) spends its default
@@ -40,7 +50,7 @@ function resolvesOwnDefault(adapter) {
 async function withRuntimeDefault(adapter, model, deps) {
   if (pickOf(model)) return model;
   const descriptor = adapter && adapter.descriptor;
-  if (!preferredDefault(descriptor) || resolvesOwnDefault(adapter)) return model;
+  if ((!preferredDefault(descriptor) && !preferredFamily(descriptor)) || resolvesOwnDefault(adapter)) return model;
   try {
     const catalog = await ((deps && deps.catalogs) || modelCatalog).settle(adapter);
     return launchDefaultFrom(descriptor, catalog) || model;
@@ -118,5 +128,6 @@ async function resolveLaunchRuntime(args, deps) {
 }
 
 module.exports = {
+  preferredFamily,
   preferredDefault, launchDefaultFrom, withRuntimeDefault, identityModelFor, resolveLaunchRuntime,
 };

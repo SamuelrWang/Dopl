@@ -5,9 +5,13 @@
 // Codex: "I think we should do Sol." So every launch resolves launcher pick > identity model >
 // THIS FILE, and the channel/profile model setting is gone.
 //
-// THE PROPERTY THIS FILE EXISTS FOR: **a default is never a refusal.** Codex names `gpt-6-sol`
-// only when this account's LIVE catalog is `ready` and carries it; in every other state the launch
-// names NO model and Codex picks its own. No real model turn is needed for any case below.
+// THE PROPERTY THIS FILE EXISTS FOR: **a default is never a refusal.** Codex names a Sol model only
+// when this account's LIVE catalog is `ready` and carries one; in every other state the launch names NO
+// model and Codex picks its own. No real model turn is needed for any case below.
+//
+// ⚠ 2026-10-08: "Sol" is a PREFERRED FAMILY held as DATA (`runtime/model-preferences.js`, seeded
+// `model-preferences.seed.json`), not a model id in adapter code: the NEWEST `*-sol` the roster offers
+// runs, so `gpt-7-sol` is picked the day it ships.
 //
 // Run: `node --test dopl-desktop-app/test/runtime-launch-default.test.mjs`
 
@@ -33,9 +37,33 @@ const catalog = (status, ids) => ({
 const catalogs = (c) => ({ catalogs: { settle: async () => c } });
 const adapterOf = (descriptor) => ({ descriptor, runtime: REGISTRY.runtimeFor(descriptor.id) });
 
-test("both SHIPPED descriptors declare their default: Codex gpt-6-sol, Claude claude-sonnet-5-5", () => {
-  assert.equal(LD.preferredDefault(CODEX), "gpt-6-sol");
-  assert.equal(LD.preferredDefault(CLAUDE), "claude-sonnet-5-5", "one mechanism for both runtimes (RC-05)");
+test("Codex's default is a FAMILY preference held as data (sol); Claude still declares its id", () => {
+  assert.equal(LD.preferredDefault(CODEX), "", "no model id in Codex's adapter code");
+  assert.equal(LD.preferredFamily(CODEX), "sol", "seeded preference");
+  assert.equal(LD.preferredDefault(CLAUDE), "claude-sonnet-5-5");
+});
+
+test("THE NEXT RELEASE: gpt-7-sol appears → it is picked, with no Dopl change; the family is a whole token", () => {
+  assert.equal(LD.launchDefaultFrom(CODEX, catalog("ready", ["gpt-5.6-sol", "gpt-6-sol", "gpt-7-sol", "gpt-7-luna"])), "gpt-7-sol");
+  assert.equal(LD.launchDefaultFrom(CODEX, catalog("ready", ["gpt-6-sol", "gpt-5.6-sol"])), "gpt-6-sol", "6 > 5.6");
+  assert.equal(LD.launchDefaultFrom(CODEX, catalog("ready", ["gpt-6-solar", "gpt-6-luna"])), "", "solar is not sol");
+  const prefs = require(join(MAIN, "runtime", "model-preferences.js"));
+  assert.equal(prefs.pickFamily([{ id: "gpt-8-sol", hidden: true }, { id: "gpt-6-sol" }], "sol").id, "gpt-6-sol", "a hidden model is never the default");
+});
+
+test("the preference is a SETTING: stored null = none (server default), stored family overrides the seed", () => {
+  const prefs = require(join(MAIN, "runtime", "model-preferences.js"));
+  let map = {};
+  prefs.inject({ get: () => map, set: (_k, v) => { map = v; } });
+  try {
+    assert.equal(prefs.setFamily("codex", null), true);
+    assert.equal(LD.launchDefaultFrom(CODEX, catalog("ready", ["gpt-6-sol"])), "", "no preference: Codex's own default");
+    assert.equal(prefs.setFamily("codex", "luna"), true);
+    assert.equal(LD.launchDefaultFrom(CODEX, catalog("ready", ["gpt-6-sol", "gpt-6-luna"])), "gpt-6-luna");
+    assert.equal(prefs.setFamily("codex", "Bad Family!"), false, "the alphabet gates a stored value");
+  } finally {
+    prefs.inject(null);
+  }
 });
 
 test("PRESENT: a ready catalog carrying Sol → the launch names Sol", async () => {
