@@ -86,14 +86,17 @@ function read(kind, runtimeId, key) {
   return e && e.key === key ? e.value : null;
 }
 
-/** Remember `value` for `(kind, runtimeId)` under `key`. Never throws; false when not persisted. */
-function save(kind, runtimeId, key, value) {
-  checkKind(kind);
-  if (typeof key !== 'string' || !key || value == null) return false;
-  const state = load();
-  state.entries[slot(kind, runtimeId)] = { key, value, savedAt: Date.now() };
+// Writes are BATCHED (final review L6): a frequent saver (per-turn rates) must not rewrite the whole file on
+// the main thread every time. The in-memory copy is current at once; the file follows within FLUSH_MS, and is
+// flushed synchronously at process exit so nothing remembered is lost on quit.
+const FLUSH_MS = 2000;
+let pending = null;
+
+function flush() {
+  if (pending) { clearTimeout(pending); pending = null; }
+  if (!memo) return true;
   try {
-    d().writeFile(d().file(), JSON.stringify(state));
+    d().writeFile(d().file(), JSON.stringify(memo));
     return true;
   } catch (err) {
     d().diag('live-store: save failed, kept in memory only —', err && err.message);
@@ -101,10 +104,31 @@ function save(kind, runtimeId, key, value) {
   }
 }
 
+let exitHooked = false;
+function scheduleFlush() {
+  if (!exitHooked) { exitHooked = true; process.once('exit', flush); }
+  if (pending) return;
+  pending = setTimeout(flush, FLUSH_MS);
+  if (pending && typeof pending.unref === 'function') pending.unref();
+}
+
+/** Remember `value` for `(kind, runtimeId)` under `key`. Never throws; false when not kept. The file is
+ *  written within FLUSH_MS (or at exit); `opts.now` writes it at once and answers whether that worked. */
+function save(kind, runtimeId, key, value, opts) {
+  checkKind(kind);
+  if (typeof key !== 'string' || !key || value == null) return false;
+  const state = load();
+  state.entries[slot(kind, runtimeId)] = { key, value, savedAt: Date.now() };
+  if (opts && opts.now) return flush();
+  scheduleFlush();
+  return true;
+}
+
 /** Tests only: swap the fs/path seams and drop the in-memory copy. */
 function inject(next) {
+  if (pending) { clearTimeout(pending); pending = null; }
   deps = next ? Object.assign(defaultDeps(), next) : null;
   memo = null;
 }
 
-module.exports = { FILE_SCHEMA, FILE_NAME, KINDS, read, save, inject, _parse: parse };
+module.exports = { FILE_SCHEMA, FILE_NAME, KINDS, FLUSH_MS, read, save, flush, inject, _parse: parse };

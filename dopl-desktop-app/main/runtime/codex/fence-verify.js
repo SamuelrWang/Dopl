@@ -14,7 +14,10 @@
 const fs = require('fs');
 const { execFile } = require('child_process');
 
-const LIST_TIMEOUT_MS = 15000;
+// Generous on purpose (final review L7): the check runs once per binary FILE (path + mtime), and the first
+// run of a fresh build can wait out macOS's first-exec scan. A success is cached; a timeout refuses this
+// launch only and the next one retries.
+const LIST_TIMEOUT_MS = 60000;
 // `<name> <stage words…> <true|false>` — the stage may be one word or two ("under development").
 const ROW = /^([a-z0-9_]+)\s+(.+?)\s+(true|false)\s*$/;
 

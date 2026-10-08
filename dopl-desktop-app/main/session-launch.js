@@ -187,8 +187,8 @@ async function refuseUnreadableProtocol(runtimeId) {
 }
 
 /** `a.dimensions` narrowed to what the runtime declares AND the launched model offers on a READY catalog.
- *  A value the catalog cannot vouch for (loading, stale, no model named) passes on the runtime's alphabet:
- *  the platform answers an unknown value with its own default, never a widening. Never throws. */
+ *  A catalog that cannot vouch (loading, stale) drops them: the platform picks its own default rather than be
+ *  sent a value no read proved this model offers. Never throws. */
 async function offeredDimensions(runtimeId, model, raw) {
   try {
     const registry = require('./runtime');

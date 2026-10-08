@@ -383,12 +383,13 @@ function findModel(catalog, pick) {
 }
 
 /** PURE: the dimension `picks` the launched `model` offers on this catalog (`{}` when none). A catalog that
- *  cannot vouch passes `picks` through (the platform answers an unknown value with its own default); a
- *  model with no entry is read as the catalog's default model. */
+ *  cannot vouch DROPS them (final review L5): a value no read proved this model offers could fail the turn
+ *  on a platform that rejects it, so the platform picks its own default instead. A model with no entry is
+ *  read as the catalog's default model. */
 function offeredDimensions(catalog, model, picks) {
   const asked = picks && typeof picks === 'object' ? picks : {};
   if (!Object.keys(asked).length) return {};
-  if (!vouches(catalog)) return Object.assign({}, asked);
+  if (!vouches(catalog)) return {};
   const entry = findModel(catalog, model) || catalog.models.find((m) => m.id === catalog.defaultId) || null;
   const out = {};
   for (const key of Object.keys(asked)) {

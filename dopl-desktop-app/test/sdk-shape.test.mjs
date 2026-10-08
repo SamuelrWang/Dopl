@@ -34,6 +34,7 @@ beforeEach(() => {
 
 test("live-store: a value is read back only under the key it was saved with", () => {
   assert.equal(liveStore.save("roster", "x", "bin@1", { models: ["a"] }), true);
+  liveStore.flush(); // what a quit (process exit) does
   liveStore.inject({ file: () => file }); // a restart: memory dropped, disk kept
   assert.deepEqual(liveStore.read("roster", "x", "bin@1"), { models: ["a"] });
   assert.equal(liveStore.read("roster", "x", "bin@2"), null, "another build proves nothing");
@@ -46,7 +47,7 @@ test("live-store: corrupt, partial, other-schema and unreadable files are ignore
     writeFileSync(file, text);
     liveStore.inject({ file: () => file, diag: () => {} });
     assert.equal(liveStore.read("roster", "x", "k"), null, text);
-    assert.equal(liveStore.save("roster", "x", "k", { ok: 1 }), true, text);
+    assert.equal(liveStore.save("roster", "x", "k", { ok: 1 }, { now: true }), true, text);
     assert.equal(JSON.parse(readFileSync(file, "utf8")).schema, liveStore.FILE_SCHEMA, "rewritten whole");
   }
   // A PARTIAL entry is dropped alone; its neighbours survive.
@@ -62,15 +63,15 @@ test("live-store: corrupt, partial, other-schema and unreadable files are ignore
   // No path at all (a harness without electron) and a failing write both degrade, never throw.
   liveStore.inject({ file: () => { throw new Error("no userData"); }, diag: () => {} });
   assert.equal(liveStore.read("roster", "a", "k"), null);
-  assert.equal(liveStore.save("roster", "a", "k", {}), false);
+  assert.equal(liveStore.save("roster", "a", "k", {}, { now: true }), false);
   liveStore.inject({ file: () => file, writeFile: () => { throw new Error("disk full"); }, diag: () => {} });
-  assert.equal(liveStore.save("roster", "a", "k", { v: 1 }), false);
+  assert.equal(liveStore.save("roster", "a", "k", { v: 1 }, { now: true }), false);
   assert.deepEqual(liveStore.read("roster", "a", "k"), { v: 1 }, "kept in memory for this process");
 });
 
 test("live-store: writes are atomic (tmp + rename) — no tmp file is left behind", () => {
   liveStore.inject({ file: () => file });
-  liveStore.save("shape", "x", "k", { paths: ["method a"] });
+  liveStore.save("shape", "x", "k", { paths: ["method a"] }, { now: true });
   assert.equal(existsSync(`${file}.${process.pid}.tmp`), false);
   assert.throws(() => liveStore.read("nope", "x", "k"), /unknown kind/);
 });
@@ -192,8 +193,9 @@ test("the last-good shape stands in for a failed probe ONLY on the same build ke
   let fail = false;
   const { a } = adapter({ key: () => key, shape: () => { if (fail) throw new Error("crashed"); return FULL; } });
   assert.equal((await sdkShape.settleShape(a)).status, "known");
-  // A restart: memory gone, disk kept; the probe now fails.
+  // A restart: memory gone, disk kept (flushed at exit); the probe now fails.
   sdkShape.forgetShape();
+  liveStore.flush();
   liveStore.inject({ file: () => file });
   fail = true;
   const same = await sdkShape.settleShape(a);
@@ -335,4 +337,84 @@ test("every SHIPPED adapter either keys by a build identity or declares no persi
     assert.equal(typeof a.runtime.rosterKey, "undefined", `${id}: no free-form key left`);
     if (!persists(a.descriptor)) assert.equal(a.runtime.buildIdentity(), null, `${id} opted out`);
   }
+});
+
+// ── final review H2 / M1 / L6 (repro tests) ──────────────────────────────────────────────────
+
+test("H2: a transient probe failure does NOT refuse every launch through backoff — a launch re-probes past a 2s floor", async () => {
+  let now = 1_000_000;
+  sdkShape.injectClock(() => now);
+  try {
+    const { a, calls } = adapter({ shape: (n) => { if (n === 1) throw new Error("cold start timed out"); return FULL; } });
+    assert.match(await sdkShape.launchShapeRefusal(a), /could not check/, "the failing probe itself refuses (this adapter declares safety)");
+    now += 500;
+    assert.match(await sdkShape.launchShapeRefusal(a), /could not check/, "inside the floor: no hammering");
+    assert.equal(calls.shape, 1);
+    now += sdkShape.LAUNCH_FLOOR_MS; // well inside the 5s+ background backoff
+    assert.equal(await sdkShape.launchShapeRefusal(a), null, "a launch re-probes and the healthy build launches");
+    assert.equal(calls.shape, 2);
+  } finally {
+    sdkShape.injectClock(null);
+  }
+});
+
+test("H2: shape-unknown refuses ONLY an adapter that declares a safety tier; otherwise drift + launch", async () => {
+  const noSafety = { core: REQUIRED.core, cosmetic: REQUIRED.cosmetic };
+  const { a } = adapter({ required: noSafety, shape: () => { throw new Error("signed out"); } });
+  assert.equal(sdkShape.declaresSafety(a.descriptor), false);
+  assert.equal(await sdkShape.launchShapeRefusal(a), null, "its safety is enforced per launch elsewhere (Claude's init contract)");
+  assert.match(sdkShape.driftReport("rx").map((d) => d.detail).join(" "), /could not check this build \(signed out\)/);
+  const claude = require(join(MAIN, "runtime", "claude", "index.js")).descriptor;
+  assert.equal(sdkShape.declaresSafety(claude), false, "Claude: per-launch init contract carries safety");
+  const codex = require(join(MAIN, "runtime", "codex", "index.js")).descriptor;
+  assert.equal(sdkShape.declaresSafety(codex), true, "Codex: an unchecked build still refuses");
+});
+
+test("M1: a probe for the OLD build never answers for the new one, and is filed under neither key", async () => {
+  let key = "1.0.0";
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const shapes = [];
+  const a = {
+    descriptor: { id: "rx", label: "Runtime X", requiredShape: REQUIRED },
+    runtime: {
+      buildIdentity: () => ({ path: "/bin/x", version: key, account: "acct" }),
+      shape: async () => { const which = key; await gate; shapes.push(which); return which === "1.0.0" ? FULL : { methods: [] }; },
+    },
+  };
+  const first = sdkShape.settleShape(a, { launch: true }); // probe for 1.0.0, in flight
+  key = "2.0.0"; // the updater switches builds mid-probe
+  const second = sdkShape.settleShape(a, { launch: true }); // must NOT reuse 1.0.0's in-flight probe
+  release();
+  const [r1, r2] = await Promise.all([first, second]);
+  assert.equal(r1.moved, true, "1.0.0's answer is discarded: the build moved under it");
+  assert.equal(r2.status, "known");
+  assert.equal(r2.key, "/bin/x@2.0.0#acct");
+  assert.equal(liveStore.read("shape", "rx", "/bin/x@1.0.0#acct"), null, "nothing filed under the old key");
+  assert.match(await sdkShape.launchShapeRefusal(a), /no longer matches/, "2.0.0 is judged on its OWN shape");
+});
+
+test("M1: forgetShape retires an in-flight probe — its late answer cannot overwrite the state", async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { a } = adapter({ shape: async () => { await gate; return FULL; } });
+  const late = sdkShape.settleShape(a);
+  sdkShape.forgetShape("rx");
+  release();
+  assert.equal((await late).moved, true);
+  const { a: b, calls } = adapter({ shape: () => ({ methods: [] }) });
+  assert.match(await sdkShape.launchShapeRefusal(b), /no longer matches/, "a fresh probe ran; the retired one did not land");
+  assert.equal(calls.shape, 1);
+});
+
+test("L6: saves are batched — memory is current at once, the file follows on flush (and at exit)", () => {
+  let writes = 0;
+  liveStore.inject({ file: () => file, writeFile: (f, t) => { writes += 1; writeFileSync(f, t); } });
+  for (let i = 0; i < 50; i += 1) liveStore.save("roster", "x", "k", { n: i });
+  assert.equal(writes, 0, "fifty saves, no write yet");
+  assert.deepEqual(liveStore.read("roster", "x", "k"), { n: 49 });
+  liveStore.flush();
+  assert.equal(writes, 1);
+  liveStore.inject({ file: () => file });
+  assert.deepEqual(liveStore.read("roster", "x", "k"), { n: 49 }, "the flushed file holds the last value");
 });

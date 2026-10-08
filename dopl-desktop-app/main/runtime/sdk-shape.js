@@ -136,59 +136,100 @@ function publicState(st) {
   return { status: st.status, key: st.key, observed: st.observed, reason: st.reason, persisted: !!st.persisted };
 }
 
-async function probe(adapter, key, prior) {
-  const id = adapter.descriptor.id;
+// A LAUNCH re-checks past this floor instead of waiting out the background backoff (final review H2): one
+// transient failure (a slow cold start, a busy Mac) must not refuse every launch for minutes.
+const LAUNCH_FLOOR_MS = 2000;
+let clock = () => Date.now();
+
+/** Ask the build to describe itself → `{ observed }` or `{ reason }`. Persists NOTHING (the caller does,
+ *  only once it has confirmed the build key did not move while the probe ran — final review M1). */
+async function probe(adapter) {
   try {
     const raw = await withTimeout(Promise.resolve().then(() => adapter.runtime.shape()), PROBE_TIMEOUT_MS);
     if (!raw || typeof raw !== 'object') throw new Error('the build described no protocol');
-    const observed = { paths: Array.from(flatten(raw)) };
-    if (key) liveStore.save('shape', id, key, observed);
-    return { key, status: STATUS.KNOWN, observed, reason: '', persisted: false, at: Date.now(), attempts: 0 };
+    return { observed: { paths: Array.from(flatten(raw)) } };
   } catch (err) {
-    const reason = (err && err.message) || 'the protocol check failed';
-    const attempts = ((prior && prior.key === key && prior.attempts) || 0) + 1;
-    // The same build answered before: its last-good description stands in (keyed, never cross-build).
-    const persisted = key ? liveStore.read('shape', id, key) : null;
-    if (persisted) {
-      return { key, status: STATUS.KNOWN, observed: persisted, reason, persisted: true, at: Date.now(), attempts };
-    }
-    return { key, status: STATUS.UNKNOWN, observed: null, reason, persisted: false, at: Date.now(), attempts };
+    return { reason: (err && err.message) || 'the protocol check failed' };
   }
 }
 
-/** This runtime's protocol verdict once a probe has settled: `{ status, key, observed, reason, persisted }`.
- *  `none` when the adapter declares no `requiredShape`. Never rejects. */
-async function settleShape(adapter) {
+/** The settled state for a probe that ran on build `key` (persisting a live answer under that key). */
+function settledFrom(id, key, prior, out) {
+  if (out.observed) {
+    if (key) liveStore.save('shape', id, key, out.observed);
+    return { key, status: STATUS.KNOWN, observed: out.observed, reason: '', persisted: false, at: clock(), attempts: 0 };
+  }
+  const attempts = ((prior && prior.key === key && prior.attempts) || 0) + 1;
+  // The same build answered before: its last-good description stands in (keyed, never cross-build).
+  const persisted = key ? liveStore.read('shape', id, key) : null;
+  if (persisted) {
+    return { key, status: STATUS.KNOWN, observed: persisted, reason: out.reason, persisted: true, at: clock(), attempts };
+  }
+  return { key, status: STATUS.UNKNOWN, observed: null, reason: out.reason, persisted: false, at: clock(), attempts };
+}
+
+let generation = 0;
+
+/** This runtime's protocol verdict once a probe has settled: `{ status, key, observed, reason, persisted,
+ *  moved }`. `none` when the adapter declares no `requiredShape`. Never rejects.
+ *  `opts.launch`: a launch is waiting — past `LAUNCH_FLOOR_MS` it re-probes instead of honouring backoff.
+ *  `moved: true` = the build changed while it was checked; the answer is discarded, never filed. */
+async function settleShape(adapter, opts) {
   if (!adapter || !adapter.descriptor || !declares(adapter.descriptor)) {
     return { status: STATUS.NONE, key: null, observed: null, reason: '', persisted: false };
   }
   const id = adapter.descriptor.id;
   const key = keyOf(adapter);
   const st = states.get(id);
-  if (st && st.inflight) return st.inflight;
-  if (st && st.key === key) {
-    // A live answer is kept for the build; a persisted stand-in and a failure are retried on backoff.
+  // An in-flight probe answers only for the build it is checking (final review M1).
+  if (st && st.inflight && st.key === key) return st.inflight;
+  if (st && !st.inflight && st.key === key) {
+    // A live answer is kept for the build; a persisted stand-in and a failure are retried.
     if (st.status === STATUS.KNOWN && !st.persisted) return publicState(st);
-    if (Date.now() - st.at < backoffMs(st.attempts)) return publicState(st);
+    const floor = opts && opts.launch ? LAUNCH_FLOOR_MS : backoffMs(st.attempts);
+    if (clock() - st.at < floor) return publicState(st);
   }
-  const prior = st || null;
-  const inflight = probe(adapter, key, prior).then((next) => {
+  const prior = st && st.key === key ? st : null;
+  const gen = ++generation;
+  const inflight = probe(adapter).then((out) => {
+    const current = states.get(id);
+    // Forgotten (`forgetShape`) or superseded by a newer probe while this one ran: its answer is not stored.
+    if (!current || current.gen !== gen) return Object.assign(publicState(settledFrom(id, null, null, { reason: 'superseded' })), { moved: true });
+    if (keyOf(adapter) !== key) {
+      // The build switched mid-probe: what was observed may be either build's, so it is filed under NEITHER.
+      states.delete(id);
+      return { status: STATUS.UNKNOWN, key, observed: null, reason: 'the build changed while Dopl was checking it', persisted: false, moved: true };
+    }
+    const next = settledFrom(id, key, prior, out);
     states.set(id, next);
     return publicState(next);
   });
-  states.set(id, Object.assign({}, prior || { key, status: STATUS.UNKNOWN, observed: null, reason: '', at: 0, attempts: 0 }, { inflight }));
+  states.set(id, Object.assign({}, prior || { key, status: STATUS.UNKNOWN, observed: null, reason: '', at: 0, attempts: 0 }, { key, inflight, gen }));
   return inflight;
 }
 
-/** Why a launch on this runtime is refused for its protocol, or null. Fails CLOSED on `shape-unknown`;
- *  a cosmetic-only gap is recorded as drift and never refuses. */
+/** Does this adapter declare anything in its SAFETY tier? Only then is an unchecked build refused. */
+function declaresSafety(descriptor) {
+  const r = descriptor && descriptor.requiredShape;
+  return !!r && flatten(r.safety).size > 0;
+}
+
+/** Why a launch on this runtime is refused for its protocol, or null. `shape-unknown` refuses only an adapter
+ *  that declares a SAFETY tier (final review H2b): without one, its safety is enforced per launch elsewhere
+ *  (Claude's init contract), so an unreadable description is drift, not a reason to block work. A cosmetic-only
+ *  gap is drift and never refuses. A build that switched mid-check is checked again once. */
 async function launchShapeRefusal(adapter) {
-  const st = await settleShape(adapter);
+  let st = await settleShape(adapter, { launch: true });
+  if (st.moved) st = await settleShape(adapter, { launch: true });
   if (st.status === STATUS.NONE) return null;
   const label = adapter.descriptor.label;
   if (st.status === STATUS.UNKNOWN) {
+    if (!declaresSafety(adapter.descriptor)) {
+      recordDrift(adapter.descriptor.id, 'protocol', `could not check this build (${st.reason}); launching on the per-launch checks`);
+      return null;
+    }
     return `Dopl could not check that ${label} on this Mac speaks the protocol it needs (${st.reason}), `
-      + 'so it will not start it: an unchecked build could ignore Dopl\'s safety settings. Try again in a minute; Dopl keeps checking.';
+      + 'so it will not start it: an unchecked build could ignore Dopl\'s safety settings. Try again; Dopl checks again on every launch.';
   }
   const verdict = checkShape(adapter.descriptor.requiredShape, st.observed);
   if (verdict.refuse) return refusalSentence(label, verdict);
@@ -200,9 +241,13 @@ async function launchShapeRefusal(adapter) {
 
 /** Drop the probe state (tests; an explicit re-probe; a binary switch). */
 function forgetShape(runtimeId) {
+  // Deleting the state retires any in-flight probe: its `gen` no longer matches, so it cannot write back.
   if (runtimeId === undefined) states.clear();
   else states.delete(str(runtimeId));
 }
+
+/** Tests only: a fake clock. */
+function injectClock(fn) { clock = typeof fn === 'function' ? fn : () => Date.now(); }
 
 // ── DRIFT LEDGER ──────────────────────────────────────────────────────────────────────────────
 
@@ -267,6 +312,9 @@ module.exports = {
   refusalSentence,
   settleShape,
   launchShapeRefusal,
+  declaresSafety,
+  LAUNCH_FLOOR_MS,
+  injectClock,
   forgetShape,
   recordDrift,
   driftReport,

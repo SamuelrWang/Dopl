@@ -27,7 +27,7 @@ test("vocabulary: only DECLARED dimensions, only values the declaration accepts 
   assert.deepEqual(vocab.launchDimensionPicks(fixed, { speed: "warp" }), {});
 });
 
-test("the live catalog: a value the launched model does not offer is dropped; an unvouched catalog passes it", () => {
+test("the live catalog: a value the launched model does not offer is dropped; an unvouched catalog drops it too", () => {
   const cat = loadCatalog();
   const ready = cat.catalogFromRoster("codex", { models: { source: "live", dimensions: ["reasoningEffort"] } }, {
     models: [
@@ -38,7 +38,8 @@ test("the live catalog: a value the launched model does not offer is dropped; an
   assert.deepEqual(cat.offeredDimensions(ready, "m1", { reasoningEffort: "high" }), { reasoningEffort: "high" });
   assert.deepEqual(cat.offeredDimensions(ready, "m2", { reasoningEffort: "high" }), {}, "m2 does not offer high");
   assert.deepEqual(cat.offeredDimensions(ready, "", { reasoningEffort: "high" }), { reasoningEffort: "high" }, "no pick = the default model's offer");
-  assert.deepEqual(cat.offeredDimensions({ status: "loading", models: [] }, "m2", { reasoningEffort: "high" }), { reasoningEffort: "high" });
+  assert.deepEqual(cat.offeredDimensions({ status: "loading", models: [] }, "m2", { reasoningEffort: "high" }), {},
+    "an unvouched catalog DROPS picks: the platform picks, never an unproven value (final review L5)");
   assert.deepEqual(cat.offeredDimensions(ready, "m1", {}), {});
 });
 
