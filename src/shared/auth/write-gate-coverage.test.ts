@@ -292,6 +292,9 @@ describe("H-3 write-gate coverage", () => {
         "devices/route.ts",
         "devices/[deviceId]/route.ts",
         "devices/heartbeat/route.ts",
+        // 2026-10-08: the desktop publishes its live model roster here and the glasses menu offers
+        // what it says. An agent rewriting it would choose what its operator's lens offers.
+        "devices/model-catalog/route.ts",
         "oauth/apps/route.ts",
         "oauth/apps/[key]/route.ts",
         "user/delete/route.ts",

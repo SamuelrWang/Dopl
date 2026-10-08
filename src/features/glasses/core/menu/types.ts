@@ -1,3 +1,4 @@
+import type { StoredCatalog } from "@/features/model-catalogs/contract";
 import type { MessageSourceStamp } from "@/features/channels/server/message-source-stamp";
 import type { ChannelLink } from "../devices/service";
 import type { Display, DisplayAnswerStamp } from "@/features/display/core/types";
@@ -104,6 +105,9 @@ export interface MenuGateway {
   recentLaunchNames(userId: string): Promise<string[]>;
   /** Runtimes / models this user has launched before, most recent first. */
   launchHistory(userId: string): Promise<{ runtime: string; model: string | null }[]>;
+  /** The model catalogs this user's desktop published (`features/model-catalogs`), [] when none
+   *  or the table is not there yet. */
+  modelCatalogs(userId: string): Promise<StoredCatalog[]>;
   /** A channel the caller already proved membership of (`link`). */
   openChannel(userId: string, link: ChannelLink): Promise<MenuChannelHandle>;
 }

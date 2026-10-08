@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { HttpError } from "@/shared/lib/http-error";
-import { agentModelLabel } from "@/features/channels/lib/agent-models";
 import { glassesMessageSource } from "@/features/channels/server/message-source-stamp";
 import { glassesPlatform } from "../../platforms/registry";
 import type { GlassesPlatform } from "../../platforms/types";
@@ -11,6 +10,7 @@ import type { DeviceStore, GlassesDevice } from "../devices/types";
 import { cleanName, type Sanitize } from "../validation";
 import { AGENT_ID_RE } from "../voice/target";
 import { activityVersion, channelActivity } from "./activity";
+import { launchModels } from "./launch-models";
 import { lensDisplay, type LensDisplay } from "./lens-display";
 import type {
   AgentStatus,
@@ -267,26 +267,31 @@ export async function pollChannel(
 }
 
 export async function launchOptions(deps: MenuDeps, device: Device, channelId: string) {
-  const [, history] = await Promise.all([
+  const [, history, catalogs] = await Promise.all([
     assertReadable(deps, device, channelId),
     deps.gateway.launchHistory(device.user_id),
+    // ⚠ A catalog read failure is never a menu failure: the lens falls back to history.
+    deps.gateway.modelCatalogs(device.user_id).catch(() => []),
   ]);
   const sanitize = sanitizerOf(device);
-  const order = [...new Set([...history.map((h) => h.runtime), "claude"])].filter((r) => RUNTIME_RE.test(r));
+  const order = [
+    ...new Set([...catalogs.map((c) => c.runtime), ...history.map((h) => h.runtime), "claude"]),
+  ].filter((r) => RUNTIME_RE.test(r));
+  const now = nowOf(deps);
   return {
     runtimes: order.map((runtime) => {
-      // ⚠ NO TYPED LINEUP (2026-10-08, SDK resilience #3): the live roster is the desktop's and is never
-      // stored server-side, so the lens offers "Default" (the runtime's OWN default, which the desktop
-      // resolves at launch) plus models this person already launched; a pick the roster no longer has is
-      // refused by the desktop as "no-model", never swapped. Labels: the id, prettified (`agentModelLabel`).
+      // The desktop's published roster where it has one (`launch-models.ts`); a pick the roster no
+      // longer has is refused by the desktop as "no-model", never swapped.
       const ids = [...new Set(history.filter((h) => h.runtime === runtime && h.model).map((h) => h.model as string))];
+      const { models, stale, note } = launchModels(runtime, catalogs, ids, now, (id, raw) =>
+        cleanName(sanitize, raw, id)
+      );
       return {
         id: runtime,
         label: runtimeLabel(runtime),
-        models: [
-          { id: "", label: "Default" },
-          ...ids.map((id) => ({ id, label: cleanName(sanitize, agentModelLabel(id), id) })),
-        ],
+        models,
+        stale,
+        ...(note ? { note: cleanName(sanitize, note, note) } : {}),
       };
     }),
   };

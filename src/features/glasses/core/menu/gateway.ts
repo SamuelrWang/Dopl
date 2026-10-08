@@ -11,6 +11,7 @@ import { answerDisplay } from "@/features/display/server/answer";
 import { displayOf } from "@/features/display/core/adapt";
 import { ESCALATION_ANSWER_METADATA_KEY, parseEscalationAnswer } from "@/features/channels/escalation";
 import { AGENT_ID_RE } from "../voice/target";
+import { catalogsForUser } from "@/features/model-catalogs/server/repository";
 import type { LaunchState, MenuChannelHandle, MenuGateway, MenuMessage, MenuSession } from "./types";
 
 /**
@@ -203,6 +204,10 @@ export const menuGateway: MenuGateway = {
       runtime: r.applied_runtime,
       model: r.applied_model,
     }));
+  },
+
+  modelCatalogs(userId) {
+    return catalogsForUser(userId);
   },
 
   async openChannel(userId, link): Promise<MenuChannelHandle> {

@@ -78,6 +78,7 @@ function buildGateway(over: GatewayOverrides, sessions: MenuSession[], launches:
     listSessions: async (ids, limit) => sessions.filter((s) => ids.includes(s.channelId)).slice(0, limit),
     runtimesFor: async () => new Map([["abcdefgh", "claude"]]),
     launchHistory: async () => [{ runtime: "codex", model: "gpt-6" }],
+    modelCatalogs: async () => [],
     recentLaunchNames: async () => ["New agent", "new agent 2"],
     openChannel: async () => ({
       readMessages: over.readMessages ?? channel.readMessages,

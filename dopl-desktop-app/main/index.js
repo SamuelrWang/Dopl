@@ -27,6 +27,7 @@ const sessionEngine = require('./session-engine');
 const spaWindow = require('./spa-window');
 const mediaPermission = require('./media-permission'); // 2026-09-08: the session permission fence
 const dictation = require('./dictation'); // 2026-10-08: on-device speech helper
+const catalogPublish = require('./catalog-publish'); // 2026-10-08: glasses model menu
 // Phase 10: the registry of APP-OWNED windows — the shell plus any pop-out thread window.
 // It is what every renderer-reachable ipcMain.handle is bound to, and registration happens
 // only at window creation, in main. See main/app-windows.js's header.
@@ -251,6 +252,8 @@ if (!gotLock) {
     windowChrome.register({ getSenderIds: () => appWindows.senderIds() });
     // The composer's on-device dictation (`main/dictation.js`); same sender fence as above.
     dictation.register({ getSenderIds: () => appWindows.senderIds() });
+    // Publish each runtime's live model roster so the server-side glasses menu can offer it.
+    catalogPublish.start();
 
     // Auto-update (electron-updater ↔ GitHub Releases). Silent download with
     // progress on the tray; the tray gains an "Update ready — restart to

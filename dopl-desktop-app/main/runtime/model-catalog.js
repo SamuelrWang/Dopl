@@ -197,6 +197,26 @@ function onSettled(fn) {
   };
 }
 
+// `onLiveReady`: every LIVE read that settles READY (never a persisted stand-in), transition or not.
+const readyListeners = [];
+
+/** Call `fn(runtimeId, catalog)` after each live READY read (`catalog-publish.js` subscribes). */
+function onLiveReady(fn) {
+  if (typeof fn !== 'function') return () => {};
+  readyListeners.push(fn);
+  return () => {
+    const at = readyListeners.indexOf(fn);
+    if (at !== -1) readyListeners.splice(at, 1);
+  };
+}
+
+function noteLiveReady(id, catalog) {
+  if (!catalog || catalog.status !== STATUS.READY || catalog.persisted) return;
+  for (const fn of readyListeners.slice()) {
+    try { fn(id, catalog); } catch (_) { /* a hook never fails a read */ }
+  }
+}
+
 function noteSettled(id, status) {
   const from = settledStatus.has(id) ? settledStatus.get(id) : null;
   settledStatus.set(id, status);
@@ -311,6 +331,7 @@ function refresh(adapter, now) {
       snapshots.set(id, { catalog: settled, at: dirty && settled.status !== STATUS.READY ? 0 : Date.now(), inflight: null, dirty: false });
       persist(adapter, settled);
       noteSettled(id, settled.status);
+      noteLiveReady(id, settled);
       return settled;
     });
   snapshots.set(id, entry);
@@ -467,5 +488,6 @@ module.exports = {
   catalogs,
   invalidate,
   onSettled,
+  onLiveReady,
   forget,
 };
