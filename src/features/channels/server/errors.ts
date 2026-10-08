@@ -103,6 +103,18 @@ export class TaskSelfTargetError extends ChannelError {
   }
 }
 
+/** An agent's plain post asking a PERSON to choose between enumerated options: 400 with a draft
+ *  decision card, so the agent resends it with `dopl_request_decision` in one call
+ *  (`display/server/decision-gate.ts`). Nothing was written. */
+export class ChannelDecisionRequiredError extends ChannelError {
+  constructor(public readonly draft: { summary: string; options: Array<{ label: string; consequence: string }> }) {
+    super(
+      "This is a decision for a person, so it goes on a decision card they answer in one press, not in a plain post. " +
+        "Nothing was sent. Resend it with dopl_request_decision: summary = the question, options = each choice with what it means, recommendation = your pick, body = any context. The draft below is parsed from your post; fix the wording and send."
+    );
+  }
+}
+
 /** `intent:"chat"` with a human `toUserId`: 400, refused rather than reconciled — the caller chooses.
  *  The message must never recommend a param `schema-removed-params.ts › removedParam` declares
  *  `z.never()`. */

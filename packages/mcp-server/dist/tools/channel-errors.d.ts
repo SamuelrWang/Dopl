@@ -41,7 +41,7 @@ export declare function isForbidden(e: unknown): boolean;
  *   - `unknown`               — a 400 with no recognized code (or none at all,
  *     e.g. an edge/proxy error page). ⚠ Say so; never invent a cause.
  */
-export type BadRequestKind = "addressee_not_member" | "recipient_unresolved" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
+export type BadRequestKind = "addressee_not_member" | "decision_required" | "recipient_unresolved" | "thread_not_in_channel" | "self_target" | "invalid_request" | "workspace" | "unknown";
 export declare function classifyBadRequest(e: unknown): BadRequestKind;
 /**
  * What a 403 from a channels route MEANS. Same doctrine as
@@ -95,3 +95,9 @@ export declare function serverDetail(e: unknown): string;
  * `main/agent-names.js › MAX_NAME` at the far end).
  */
 export declare const fieldCapsNote: () => string;
+/**
+ * The decision card a `CHANNEL_DECISION_REQUIRED` 400 parsed out of the refused post, as the JSON
+ * arguments to resend it with, or "" when the details are missing or malformed. The text is the
+ * CALLER'S OWN refused body, re-shaped; it is still JSON-encoded, never spliced raw.
+ */
+export declare function decisionDraftArgs(e: unknown): string;

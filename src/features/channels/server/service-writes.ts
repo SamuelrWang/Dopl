@@ -4,6 +4,7 @@ import type { ChannelMessageCreateInput } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
   ChannelChatAddressedError,
+  ChannelDecisionRequiredError,
   EscalationAlreadyAnsweredError,
 } from "./errors";
 // ⚠ The one key the insert may DROP and retry without — fold 11b's guess, never
@@ -35,6 +36,7 @@ import { deviceStamps } from "./service-writes-device";
 // structured-looking plain send.
 import { onAnswerInserted } from "@/features/display/server/answer-stamp";
 import { displayNudge } from "@/features/display/server/nudge";
+import { decisionGate } from "@/features/display/server/decision-gate";
 import {
   requireMemberChannel,
   stripNulDeep,
@@ -187,6 +189,23 @@ export async function postMessage(
     ) {
       throw new ChannelAddresseeNotMemberError(addressee);
     }
+  }
+
+  // ⚠ **A DECISION FOR A PERSON IS A CARD, NOT A PLAIN POST** (2026-10-08). An agent's plain
+  // message to at least one PERSON that asks them to pick between enumerated options is refused
+  // with a draft card (`decision-gate.ts`). People, agent-to-agent posts, records, displays and
+  // escalation answers are untouched. Before the idempotency short-circuit, like every refusal
+  // above: a retry must be refused too, never answered from storage.
+  const authorIsAgent = ctx.source === "agent" || input.authorKind === "agent";
+  if (
+    authorIsAgent &&
+    addressees.length > 0 &&
+    (input.kind ?? "message") === "message" &&
+    !input.display &&
+    !input.escalation
+  ) {
+    const draft = decisionGate({ body: input.body, channelId: channel.id, sessionId: ctx.sessionId ?? null });
+    if (draft) throw new ChannelDecisionRequiredError(draft);
   }
 
   // Re-sent client_msg_id returns the stored message and writes nothing.
@@ -416,7 +435,7 @@ export async function postMessage(
     input.intent !== "chat" &&
     !input.display &&
     !input.escalation
-      ? displayNudge({ body: input.body, channelId: channel.id, sessionId: ctx.sessionId ?? null, userId: ctx.userId })
+      ? displayNudge({ body: input.body, channelId: channel.id, sessionId: ctx.sessionId ?? null, userId: ctx.userId, personAddressed: addressees.length > 0 })
       : null;
   return hint ? { ...posted, displayHint: hint } : posted;
 }

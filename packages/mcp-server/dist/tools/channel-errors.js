@@ -20,6 +20,7 @@ exports.isForbidden = isForbidden;
 exports.classifyBadRequest = classifyBadRequest;
 exports.classifyForbidden = classifyForbidden;
 exports.serverDetail = serverDetail;
+exports.decisionDraftArgs = decisionDraftArgs;
 const call_ref_js_1 = require("../call-ref.js");
 const channel_shared_1 = require("./channel-shared");
 const respond_1 = require("./respond");
@@ -35,6 +36,9 @@ function classifyBadRequest(e) {
     switch ((0, respond_1.apiErrorCode)(e)) {
         case "CHANNEL_ADDRESSEE_NOT_MEMBER":
             return "addressee_not_member";
+        // A plain post asking a PERSON to pick between options (2026-10-08): `details.draft` is the card.
+        case "CHANNEL_DECISION_REQUIRED":
+            return "decision_required";
         // ⚠ **THE UNION RESOLVER'S OWN REFUSAL** (2026-09-02, B4/B8). `to` names one
         // party in either namespace, and a name that resolves to NOBODY is a 400
         // rather than a silent `delivery=none` — the server's own message lists the
@@ -121,3 +125,26 @@ function firstIssue(details) {
  */
 const fieldCapsNote = () => `Field caps: summary <=200 characters, body <=16000 on ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })} but <=4000 as a direction and <=2000 as a launch goal, name <=60, client_msg_id <=200.`;
 exports.fieldCapsNote = fieldCapsNote;
+/**
+ * The decision card a `CHANNEL_DECISION_REQUIRED` 400 parsed out of the refused post, as the JSON
+ * arguments to resend it with, or "" when the details are missing or malformed. The text is the
+ * CALLER'S OWN refused body, re-shaped; it is still JSON-encoded, never spliced raw.
+ */
+function decisionDraftArgs(e) {
+    if (typeof e !== "object" || e === null)
+        return "";
+    const details = e.details;
+    const draft = details && typeof details === "object" ? details.draft : null;
+    if (!draft || typeof draft !== "object")
+        return "";
+    const { summary, options } = draft;
+    if (typeof summary !== "string" || !Array.isArray(options))
+        return "";
+    const clean = options
+        .filter((o) => !!o && typeof o === "object" && typeof o.label === "string" &&
+        typeof o.consequence === "string")
+        .map((o) => ({ label: o.label, consequence: o.consequence }));
+    if (clean.length < 2)
+        return "";
+    return JSON.stringify({ summary, options: clean });
+}

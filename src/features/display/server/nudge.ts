@@ -59,6 +59,10 @@ export interface NudgeSubject {
   channelId: string;
   sessionId: string | null;
   userId: string;
+  /** Whether a PERSON was addressed. Absent = unknown (treated as true). A `choice` tip on an
+   *  agent-to-agent post (a numbered ASK to another agent) is noise that trains agents to ignore it,
+   *  so it is counted but not returned (2026-10-08). */
+  personAddressed?: boolean;
 }
 
 /** The hint to hand back (and log), or null. Throttled per agent session for `structure`. */
@@ -67,9 +71,10 @@ export function displayNudge(s: NudgeSubject, now = Date.now()): DisplayHint | n
   if (!hint) return null;
   // The METRIC counts every structured post; the throttle only mutes the tip (§6.3).
   const throttled = hint === "structure" && !structureThrottle.tryAcquire(s.sessionId ?? `user:${s.userId}`, now);
+  const agentOnlyChoice = hint === "choice" && s.personAddressed === false;
   console.info(
     "[display-nudge] " +
-      JSON.stringify({ evt: "structured_without_display", hint, signals, throttled, channel_id: s.channelId, session_id: s.sessionId, chars: s.body.length })
+      JSON.stringify({ evt: "structured_without_display", hint, signals, throttled, refused: false, person_addressed: s.personAddressed ?? null, channel_id: s.channelId, session_id: s.sessionId, chars: s.body.length })
   );
-  return throttled ? null : hint;
+  return throttled || agentOnlyChoice ? null : hint;
 }

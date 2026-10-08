@@ -5,6 +5,7 @@ import {
   ChannelAddresseeNotMemberError,
   ChannelAgentHandleAmbiguousError,
   ChannelChatAddressedError,
+  ChannelDecisionRequiredError,
   ChannelRecipientUnresolvedError,
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
@@ -128,6 +129,10 @@ function mapChannelError(err: unknown): HttpError | null {
     return new HttpError(409, "AGENT_COLOR_TAKEN", err.message, {
       free: err.free,
     });
+  }
+  // 400 with `details.draft`: the refusal is actionable only with the parsed card (MCP renders it).
+  if (err instanceof ChannelDecisionRequiredError) {
+    return new HttpError(400, "CHANNEL_DECISION_REQUIRED", err.message, { draft: err.draft });
   }
   if (err instanceof ChannelChatAddressedError) {
     return new HttpError(400, "CHANNEL_CHAT_ADDRESSED", err.message);

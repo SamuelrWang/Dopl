@@ -44,6 +44,7 @@ import { holdFact } from "./channel-wake-guidance";
 import {
   fieldCapsNote,
   classifyBadRequest,
+  decisionDraftArgs,
   classifyForbidden,
   isBadRequest,
   isForbidden,
@@ -297,6 +298,14 @@ export async function opPost(
           return err(
             `Couldn't address the message — that member isn't in **${chName}**. Add them with ${callRef("channel.rooms.invite")}, or send without \`to\`.`,
           );
+        // ⚠ A DECISION FOR A PERSON (2026-10-08): nothing was written; the draft card is the remedy.
+        case "decision_required": {
+          const args = decisionDraftArgs(e);
+          return err(
+            `Nothing was sent to **${chName}**: this asks a person to choose, so it goes on a decision card they answer in one press. Resend it with ${toolName("channel.send", { kind: '"decision"' })} on the same channel (and thread, if any): summary = the question, options = each choice with what it means, recommendation = your pick, body = context with an @-tag for the person.` +
+              (args ? ` Draft parsed from your post (fix the wording, add recommendation): ${args}` : ""),
+          );
+        }
         // ⚠ NOTHING WAS WRITTEN, and the server's own message lists the live
         // handles and the roster — which is the whole remedy, so this arm adds
         // the one fact that message cannot carry: no row exists to retract.

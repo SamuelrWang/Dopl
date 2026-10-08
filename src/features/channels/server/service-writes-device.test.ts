@@ -120,9 +120,11 @@ describe("metadata.display (unified display, v2)", () => {
 });
 
 describe("display nudge", () => {
-  it("hints choice on an agent's plain send that lists options with a question, and never on a record", async () => {
+  it("no choice hint when no PERSON is addressed (agent-to-agent asks), never on a record", async () => {
+    // ⚠ 2026-10-08: a choice ADDRESSED TO A PERSON is refused outright (`service-writes-decision-gate.test.ts`);
+    // one addressed to nobody human drew a tip agents learned to ignore, so it is counted, not returned.
     const res = await post(agent, { body: "Which should I do?\n1. Ship now\n2. Wait for review" });
-    expect(res.displayHint).toBe("choice");
+    expect(res.displayHint).toBeUndefined();
     const record = await post(agent, { body: "Which should I do?\n1. Ship now\n2. Wait for review", intent: "chat" });
     expect(record.displayHint).toBeUndefined();
     const byMember = await post(member, { body: "Which should I do?\n1. Ship now\n2. Wait for review" });

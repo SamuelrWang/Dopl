@@ -58,6 +58,7 @@ export function isForbidden(e: unknown): boolean {
  */
 export type BadRequestKind =
   | "addressee_not_member"
+  | "decision_required"
   | "recipient_unresolved"
   | "thread_not_in_channel"
   | "self_target"
@@ -69,6 +70,9 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
   switch (apiErrorCode(e)) {
     case "CHANNEL_ADDRESSEE_NOT_MEMBER":
       return "addressee_not_member";
+    // A plain post asking a PERSON to pick between options (2026-10-08): `details.draft` is the card.
+    case "CHANNEL_DECISION_REQUIRED":
+      return "decision_required";
     // ⚠ **THE UNION RESOLVER'S OWN REFUSAL** (2026-09-02, B4/B8). `to` names one
     // party in either namespace, and a name that resolves to NOBODY is a 400
     // rather than a silent `delivery=none` — the server's own message lists the
@@ -183,3 +187,24 @@ function firstIssue(details: unknown): string {
  */
 export const fieldCapsNote = () =>
   `Field caps: summary <=200 characters, body <=16000 on ${callRef("channel.send", {}, { form: "op" })} but <=4000 as a direction and <=2000 as a launch goal, name <=60, client_msg_id <=200.`;
+
+/**
+ * The decision card a `CHANNEL_DECISION_REQUIRED` 400 parsed out of the refused post, as the JSON
+ * arguments to resend it with, or "" when the details are missing or malformed. The text is the
+ * CALLER'S OWN refused body, re-shaped; it is still JSON-encoded, never spliced raw.
+ */
+export function decisionDraftArgs(e: unknown): string {
+  if (typeof e !== "object" || e === null) return "";
+  const details = (e as { details?: unknown }).details;
+  const draft = details && typeof details === "object" ? (details as { draft?: unknown }).draft : null;
+  if (!draft || typeof draft !== "object") return "";
+  const { summary, options } = draft as { summary?: unknown; options?: unknown };
+  if (typeof summary !== "string" || !Array.isArray(options)) return "";
+  const clean = options
+    .filter((o): o is { label: string; consequence: string } =>
+      !!o && typeof o === "object" && typeof (o as { label?: unknown }).label === "string" &&
+      typeof (o as { consequence?: unknown }).consequence === "string")
+    .map((o) => ({ label: o.label, consequence: o.consequence }));
+  if (clean.length < 2) return "";
+  return JSON.stringify({ summary, options: clean });
+}
