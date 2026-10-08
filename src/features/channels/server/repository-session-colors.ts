@@ -139,7 +139,7 @@ export async function pendingDirectiveColors(
     .eq("channel_id", channelId)
     .in("status", ["pending", "claimed"])
     // ⚠ NULLS FILTERED IN SQL: a directive that named none is the ordinary row and can hold
-    // nothing. (It is never "no colour" — the create resolves first-free before the insert.)
+    // nothing. (It is never "no colour" — the create resolves the pick before the insert.)
     .not("color", "is", null)
     .limit(COLOR_ROWS_LIMIT);
   if (error) {

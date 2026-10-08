@@ -90,7 +90,7 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     last_wake_seq: entry.lastWakeSeq ?? null,
     last_wake_at: entry.lastWakeAt ?? null,
     display_name: entry.displayName ?? null,
-    // A request, resolved in the reconcile (`session-colors.ts › resolveReportedColors`); `null` = first free key.
+    // A request, resolved in the reconcile (`session-colors.ts › resolveReportedColors`); `null` = most distinct free key.
     color: entry.color ?? null,
   };
 }

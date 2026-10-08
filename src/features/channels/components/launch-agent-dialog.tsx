@@ -9,7 +9,7 @@ import { IdentityApprovalDialog } from "@/features/agent-identities/components/i
 import { FormDialog, PillChoice, UnderlineField } from "@/shared/ui/form-dialog";
 import { useLaunchDialogRuntime } from "./launch-agent-dialog-state";
 import { AgentColorCircles, agentColorsTaken } from "./agent-color-circles";
-import { firstFreeAgentColor } from "../lib/agent-colors";
+import { pickAgentColor } from "../lib/agent-color-pick";
 import type { AgentColorKey } from "../types";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import type { AgentLaunchPanel } from "./use-agent-launch";
@@ -118,9 +118,9 @@ export function LaunchAgentDialog({
 
   const { taken, takenBy } = useMemo(() => agentColorsTaken(liveSessions), [liveSessions]);
   // Display only: `panel.color` stays `null` until a circle is clicked, so the server assigns the
-  // first free key. `null` when every key is taken — the launch is still allowed.
+  // most distinct free key. `null` when every key is taken — the launch is still allowed.
   const effectiveColor = useMemo<AgentColorKey | null>(
-    () => panel.color ?? firstFreeAgentColor(taken),
+    () => panel.color ?? pickAgentColor(taken),
     [panel.color, taken]
   );
 

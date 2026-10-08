@@ -67,7 +67,7 @@ export async function launchWithIdentity(
     launchOverridesOf(panel),
     panel.agentId ?? undefined,
     runtime || undefined,
-    // `undefined` when no circle was touched: the server assigns the first free key.
+    // `undefined` when no circle was touched: the server assigns the most distinct free key.
     panel.color ?? undefined
   );
   if (!outcome.ok) {

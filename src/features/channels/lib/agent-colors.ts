@@ -1,6 +1,7 @@
 /**
- * **THE AGENT COLOUR BANK** — the sixteen keys, the token each one names, and the
- * FIRST-FREE pick (Samuel, 2026-09-13; docs/specs/agent-colors.md).
+ * **THE AGENT COLOUR BANK** — the sixteen keys and the token each one names (Samuel,
+ * 2026-09-13; docs/specs/agent-colors.md). Which free key a new agent gets is
+ * `agent-color-pick.ts` (most distinct from the live ones, 2026-10-08).
  *
  * ⚠ **NO COLOUR VALUE APPEARS IN THIS FILE OR IN ANY COMPONENT.** A key maps to a
  * CSS custom property NAME and nothing else; the sixteen `oklch()` values live once
@@ -12,12 +13,10 @@
  * reference crosses as `var(--agent-color-NN)` and the paint stays in the token
  * layer.
  *
- * ⚠ **`AGENT_COLOR_KEYS` IS ORDER-SIGNIFICANT AND THAT IS THE WHOLE OF "FIRST
- * FREE".** The server walks this array and takes the first key nobody live in the
- * channel holds, so the array's order IS the assignment policy — the second agent in
- * a room is always `agent-02` unless something took it. Shuffling it would make a
- * launch's colour unpredictable for no gain, and sorting it by hue is what it
- * already is.
+ * ⚠ **`AGENT_COLOR_KEYS`'s ORDER IS NO LONGER THE ASSIGNMENT POLICY** (2026-10-08). It
+ * decides only the empty room's first key, the picker's last tie-break and the order the
+ * New-agent popup draws its circles in. The pick itself measures colour distance
+ * (`agent-color-pick.ts`), because neighbouring keys are neighbouring hues.
  *
  * ⚠ **IT IS A PLAIN MODULE, NOT `@dopl/contracts`.** That package is TYPE-ONLY by
  * rule (its index carries the argument: one runtime export makes it a build input
@@ -28,7 +27,7 @@
 import type { AgentColorKey } from "@dopl/contracts";
 
 /**
- * The bank, in assignment order. ⚠ SIXTEEN, which is Samuel's *"a good amount of
+ * The bank, in display order. ⚠ SIXTEEN, which is Samuel's *"a good amount of
  * colors because it might usually have a lot of agents"* measured against the agent
  * cap (15 per workspace, 2026-09-01) — one more than the most agents that can be
  * live at once, so a full room still has a spare rather than an uncoloured agent.
@@ -96,32 +95,9 @@ export function agentColorVar(key: AgentColorKey): string {
   return `var(--agent-color-${key.slice("agent-".length)})`;
 }
 
-/**
- * **THE ASSIGNMENT: THE FIRST KEY NOBODY IN THIS CHANNEL HOLDS.**
- *
- * ⚠ **`null` WHEN THE BANK IS EMPTY, AND A LAUNCH IS NEVER REFUSED FOR IT.** A
- * seventeenth live agent in one room runs UNCOLOURED (the neutral box), because
- * refusing to start an agent over a decoration would be the tail wagging the dog.
- * The column is nullable for exactly this case.
- *
- * ⚠ **PURE, AND TAKES THE TAKEN SET RATHER THAN READING IT.** The read is the
- * repository's (`server/repository-session-colors.ts`); this is the policy, and it
- * is unit-testable without a database — which is what lets the uniqueness
- * MUTATION-VERIFY case be written against the index and this together.
- */
-export function firstFreeAgentColor(
-  taken: ReadonlySet<string>
-): AgentColorKey | null {
-  for (const key of AGENT_COLOR_KEYS) {
-    if (!taken.has(key)) return key;
-  }
-  return null;
-}
-
-/** Every key nobody holds, in bank order — what a 409 hands back so the caller can
- *  pick again without a second round trip, and what the New-agent popup renders as
- *  selectable. ⚠ ORDER IS {@link AGENT_COLOR_KEYS}'s, so "the first one in this
- *  list" is the same key {@link firstFreeAgentColor} would have chosen. */
+/** Every key nobody holds, in BANK order — what the New-agent popup renders as selectable and
+ *  its arrow keys walk. ⚠ NOT the assignment order: the pick, and the list a 409 hands back,
+ *  are `agent-color-pick.ts › rankFreeAgentColors` (best first). */
 export function freeAgentColors(
   taken: ReadonlySet<string>
 ): readonly AgentColorKey[] {

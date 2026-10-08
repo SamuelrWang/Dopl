@@ -240,7 +240,7 @@ test("CONTRACT: a directive in the DTO's spelling survives `handle`'s owner chec
     // ⚠ THE COLOUR (2026-09-13, agent colours). Same argument as the pair above: `toDirective`
     // emits it on EVERY row, and the `dtoKeys()` belt below is what says so — a fixture without
     // it would be testing a shape the server does not send. ⚠ `null` IS THE ORDINARY LAUNCH:
-    // the caller named no colour and the server assigns the first free key.
+    // the caller named no colour and the server assigns the most distinct free key.
     color: null,
     // ⚠ THE EIGHT POSTURE KEYS (2026-09-01, T24 + `set_agent_mode` + the echo). Same argument as
     // the agent-management pair above: `toDirective` emits all eight on EVERY row, so a launch

@@ -1,9 +1,6 @@
 import "server-only";
-import {
-  agentColorOrNull,
-  firstFreeAgentColor,
-  freeAgentColors,
-} from "../lib/agent-colors";
+import { agentColorOrNull } from "../lib/agent-colors";
+import { pickAgentColor, rankFreeAgentColors } from "../lib/agent-color-pick";
 import { AgentColorTakenError } from "./errors";
 import {
   foreignLiveColorsByChannel,
@@ -37,9 +34,10 @@ export async function resolveDirectiveColor(
     const key = agentColorOrNull(row.color);
     if (key) taken.add(key);
   }
-  if (!wanted) return firstFreeAgentColor(taken);
+  if (!wanted) return pickAgentColor(taken);
   if (taken.has(wanted)) {
-    throw new AgentColorTakenError(wanted, freeAgentColors(taken));
+    // Best first, so the refusal's first suggestion is the key the server would itself pick.
+    throw new AgentColorTakenError(wanted, rankFreeAgentColors(taken));
   }
   return wanted;
 }

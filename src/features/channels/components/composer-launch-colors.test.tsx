@@ -30,6 +30,7 @@
  * ONE row, not about the write layer or the read.
  */
 
+import { pickAgentColor } from "../lib/agent-color-pick";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
@@ -57,7 +58,7 @@ import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, CHANNEL_ID, ME } from "./test-fixtures";
 
 /** ⚠ READ OFF THE BANK, NEVER TYPED — `AGENT_COLOR_KEYS`'s ORDER is the assignment policy. */
-const [FIRST, SECOND] = AGENT_COLOR_KEYS;
+const [FIRST] = AGENT_COLOR_KEYS;
 
 const MEMBERS = [member({ userId: ME, displayName: "Sam Wang" })];
 const MINTED = "k3v7d2mq";
@@ -130,11 +131,11 @@ describe("the composer's colour row", () => {
     expect(circle(FIRST).getAttribute("title")).toBe("In use by Scout");
   });
 
-  it("preselects the first FREE key, not the first key", async () => {
+  it("preselects the PICKED free key, never a held one", async () => {
     // 🔒 THE HALF THAT INVERTS ON THE OLD WIRING. With `liveSessions` absent the row would offer
     // `FIRST` and preselect it — a colour the operator can see on another agent in the transcript.
     await openPopup([{ name: "ab12cd34", displayName: "Scout", color: FIRST }]);
-    expect(checkedKey()).toBe(SECOND);
+    expect(checkedKey()).toBe(pickAgentColor(new Set([FIRST])));
   });
 
   it("offers every key when the room holds none — empty is not full", async () => {

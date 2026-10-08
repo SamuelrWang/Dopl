@@ -137,8 +137,8 @@ export async function launchAgentOnThread(payload: {
    * (`launch-default.js › resolveLaunchRuntime`). Widens nothing: no tool profile on a payload.
    */
   runtime?: string;
-  /** Top-level, not `overrides` (unique per channel). Absent = the server picks the first free
-   *  key. Main re-narrows it (`session-launch-op.js › colorKey`). */
+  /** Top-level, not `overrides` (unique per channel). Absent = the server picks the most distinct
+   *  free key. Main re-narrows it (`session-launch-op.js › colorKey`). */
   color?: AgentColorKey;
 }): Promise<{
   ok: boolean;

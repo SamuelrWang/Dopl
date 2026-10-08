@@ -8,7 +8,8 @@ import { err, type ToolResponse } from "./respond";
  */
 
 /**
- * The sixteen keys in the server's pick order (the refusal's first free key is the one it would pick).
+ * The sixteen keys in bank order. The server picks the free key most distinct from the live ones and
+ * lists `details.free` best first, so the refusal's first key is the one it would pick.
  * Hand mirror of `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`, held to the union by
  * `satisfies` and pinned by `channel-ops-launch-color.test.ts`. An enum: a published `pattern` is forbidden (`tool-style.test.ts`).
  */
@@ -19,7 +20,7 @@ export const AGENT_COLOR_KEYS = [
   "agent-13", "agent-14", "agent-15", "agent-16",
 ] as const satisfies readonly AgentColorKey[];
 
-/** Narrows (never casts) the dispatch arg; absent and unrecognized both mean the server picks the first free key. */
+/** Narrows (never casts) the dispatch arg; absent and unrecognized both mean the server picks the most distinct free key. */
 export function asAgentColorKey(value: string | undefined): AgentColorKey | undefined {
   return value && (AGENT_COLOR_KEYS as readonly string[]).includes(value)
     ? (value as AgentColorKey)
@@ -47,7 +48,7 @@ export function colorTaken(wanted: string, free: string[]): ToolResponse {
       `No agent was requested — ${named} is already held by a live agent in this channel, and **nothing was filed**. Colours are unique per channel across ALL members, so another member's agent may be wearing the one you asked for.`,
       `Re-issue with one of these, keeping the SAME \`client_msg_id\` so a retry cannot file twice:`,
       free.map((c) => `\`${c}\``).join(", "),
-      `⚠ Or omit \`color\` entirely and the first free one is assigned — which is what you want unless the operator asked for a specific colour. A colour is only ever a marker, never a status.`,
+      `⚠ Or omit \`color\` entirely and the free one most distinct from the live agents is assigned — which is what you want unless the operator asked for a specific colour. A colour is only ever a marker, never a status.`,
     ].join("\n"),
   );
 }
@@ -57,5 +58,5 @@ export const AGENT_COLOR_FIELD = z
   .enum(AGENT_COLOR_KEYS)
   .optional()
   .describe(
-    'op="manage" action="launch" (optional): the agent\'s COLOUR — a marker, never a status. Omit for the first free key; a taken one is a 409.',
+    'op="manage" action="launch" (optional): the agent\'s COLOUR — a marker, never a status. Omit for the farthest free key; taken is a 409.',
   );

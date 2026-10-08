@@ -57,7 +57,7 @@ describe("asAgentColorKey — a narrowing, never a cast", () => {
     // ⚠ THE MUTATION THIS FILE EXISTS FOR: a bare cast returns each of these
     // verbatim, and the SDK then puts a key the server has never heard of on the
     // directive row. Absent and unrecognized are the same answer on purpose —
-    // both mean "the server picks the first free one".
+    // both mean "the server picks the most distinct free one".
     expect(asAgentColorKey(undefined)).toBeUndefined();
     expect(asAgentColorKey("")).toBeUndefined();
     expect(asAgentColorKey("agent-17")).toBeUndefined();

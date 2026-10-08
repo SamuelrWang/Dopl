@@ -1,5 +1,6 @@
 import "server-only";
-import { agentColorOrNull, firstFreeAgentColor } from "../lib/agent-colors";
+import { agentColorOrNull } from "../lib/agent-colors";
+import { pickAgentColor } from "../lib/agent-color-pick";
 import type { AgentColorKey } from "../types";
 import type { SessionStateUpsert } from "./collab-dto";
 
@@ -37,8 +38,9 @@ import type { SessionStateUpsert } from "./collab-dto";
  *     colour that wobbled would touch `updated_at` on every push and destroy the
  *     read's ordering.
  *  2. **GRANT THE REQUEST** if the machine named a key nothing else holds.
- *  3. **FIRST FREE** otherwise — the key the caller asked for is taken, or they
- *     asked for none. `lib/agent-colors.ts › firstFreeAgentColor` is the order.
+ *  3. **MOST DISTINCT FREE** otherwise — the key the caller asked for is taken, or they
+ *     asked for none. `lib/agent-color-pick.ts › pickAgentColor` decides, against the
+ *     claims accumulated so far (so a batch spreads too).
  *  4. **`null`** when the bank is empty. ⚠ **NEVER A REFUSAL.** A seventeenth live
  *     agent in one room runs UNCOLOURED and its posts wear the neutral box; dropping
  *     a machine's whole projection over a decoration is not a trade anyone would
@@ -113,7 +115,7 @@ export function resolveReportedColors({
     const claims = claimsFor(row.channel_id);
     const wanted = agentColorOrNull(row.color);
     const color =
-      wanted && !claims.has(wanted) ? wanted : firstFreeAgentColor(claims);
+      wanted && !claims.has(wanted) ? wanted : pickAgentColor(claims);
     if (color) claims.add(color);
     return { ...row, color };
   });

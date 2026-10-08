@@ -109,7 +109,7 @@ export interface LaunchDirectiveCreateInput {
   /** Idempotency key, 1-200 chars, scoped to (channel, this operator): re-sending it returns the
    *  first request's directive (`existing`) instead of queuing a second agent. */
   clientMsgId?: string;
-  /** Omitted = the first free key. A taken key is a 409 `AGENT_COLOR_TAKEN` with `details.free`,
+  /** Omitted = the most distinct free key. A taken key is a 409 `AGENT_COLOR_TAKEN` with `details.free`,
    *  never a silent substitution — retry with the same `clientMsgId`. */
   color?: AgentColorKey;
   /** Required: an agent that launches an agent names it (1-60 visible chars, one line). Display, but

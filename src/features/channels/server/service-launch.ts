@@ -45,7 +45,7 @@ type CreateLaunchInput = {
   chain?: boolean;
   /** Idempotency key: a resend returns the stored directive (`existing: true`), never a second agent. */
   clientMsgId?: string;
-  /** Omitted = first free colour, never "no colour"; a taken key is a 409 with the free set. */
+  /** Omitted = most distinct free colour, never "no colour"; a taken key is a 409 with the free set. */
   color?: AgentColorKey;
   agentName?: string; // required by `LaunchCreateSchema`; a nameless row is named `New Agent` by the claiming machine
 };

@@ -38,6 +38,7 @@
  * owns.
  */
 
+import { pickAgentColor } from "../lib/agent-color-pick";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -83,7 +84,7 @@ const MEMBERS = [
 
 /** ⚠ READ OFF THE BANK, NEVER TYPED. `AGENT_COLOR_KEYS`'s ORDER is the assignment policy
  *  (that file's own docblock), so a literal `"agent-02"` here would be this suite deciding
- *  what "the first free key" means instead of asserting it. */
+ *  what "the picked key" means instead of asserting it. */
 const FIRST = AGENT_COLOR_KEYS[0];
 const SECOND = AGENT_COLOR_KEYS[1];
 const THIRD = AGENT_COLOR_KEYS[2];
@@ -184,7 +185,7 @@ describe("a colour another agent holds", () => {
 
   /**
    * 🔒 **A FULL BANK IS STILL REACHABLE BY KEYBOARD (2026-09-14).** Sixteen live agents in one
-   * room leaves `freeAgentColors` empty and `firstFreeAgentColor` `null`, so the roving
+   * room leaves `freeAgentColors` empty and `pickAgentColor` `null`, so the roving
    * `tabIndex` had NO stop to give: every circle carried `-1` and the row could not be focused
    * at all — which also means its `title`, the only sentence saying why nothing is selectable,
    * could never be read without a pointer. The launch is still allowed in that room (a
@@ -301,16 +302,18 @@ async function openPopup(liveSessions?: React.ComponentProps<typeof Harness>["li
 }
 
 describe("the popup's colour row", () => {
-  it("renders with NO runtime reported, and preselects the FIRST FREE key", async () => {
+  it("renders with NO runtime reported, and preselects the PICKED free key", async () => {
+    // The key the picker chooses around FIRST alone. An ENDED agent wears it: if ended rows
+    // counted as taken, the default would move off it — one case pinning both the liveness rule
+    // and the default (`agent-color-pick.ts`, Samuel 2026-10-08).
+    const picked = pickAgentColor(new Set([FIRST]));
     await openPopup([
       { state: "idle", color: FIRST, displayName: "Scout" },
-      // ⚠ ENDED, so `SECOND` is free again and IS the first free key — one case pinning
-      // both the liveness rule and the default.
-      { state: "ended", color: SECOND, displayName: "Gone" },
+      { state: "ended", color: picked, displayName: "Gone" },
     ]);
     expect(screen.queryByRole("tablist", { name: "Agent runtime" })).toBeNull();
     expect(screen.getByRole("radiogroup", { name: "Agent colour" })).toBeTruthy();
-    expect(checkedKey()).toBe(SECOND);
+    expect(checkedKey()).toBe(picked);
     expect(circle(FIRST).getAttribute("title")).toBe("In use by Scout");
   });
 

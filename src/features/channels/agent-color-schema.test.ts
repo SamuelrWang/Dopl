@@ -1,6 +1,6 @@
 /**
  * The agent-colour rule, read out of its migration. "No two live agents in one channel share a colour"
- * is enforced only by a partial unique index; `firstFreeAgentColor` merely avoids hitting it. The
+ * is enforced only by a partial unique index; `pickAgentColor` merely avoids hitting it. The
  * sixteen-key set is restated in trees that cannot import each other: the migration's CHECKs (they
  * win), `AGENT_COLOR_KEYS` (held to `@dopl/contracts › AgentColorKey` by `satisfies`), and — source
  * read, outside this module graph — the MCP package and three desktop boundary files.
@@ -108,7 +108,7 @@ describe("the UNIQUE INDEX — the only statement of the rule that both machines
 
 describe("the set, in the two trees that cannot import `src/`", () => {
   it("the MCP package publishes the same sixteen, in the same order", () => {
-    // Order matters: the refusal's first free key must be the one the server would itself pick.
+    // Same order, so the published enum reads like the bank (the pick itself is distance-based).
     const src = readCode(repoFile("packages/mcp-server/src/tools/channel-ops-launch-color.ts"));
     const listed = [...src.matchAll(/"(agent-\d\d)"/g)].map((m) => m[1]);
     expect(listed).toEqual([...AGENT_COLOR_KEYS]);

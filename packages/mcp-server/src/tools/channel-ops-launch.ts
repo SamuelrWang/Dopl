@@ -56,7 +56,7 @@ export async function opLaunchAgent(
     chain?: boolean;
     /** Idempotency key: a repeat on `(channel, operator)` returns the stored directive. */
     clientMsgId?: string;
-    /** Refused, never substituted, when taken; omitted means first free. */
+    /** Refused, never substituted, when taken; omitted means the most distinct free key. */
     color?: AgentColorKey;
     /** Required; optional in the type because it arrives as unvalidated JSON and `launchName` refuses it. */
     name?: string;

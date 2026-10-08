@@ -57,7 +57,7 @@ export const LaunchCreateSchema = z.object({
   chain: z.boolean().optional(),
   /** Idempotency key, unique per `(channel_id, operator_user_id)`. */
   clientMsgId: z.string().min(1).max(200).optional(),
-  /** Omitted = the server picks the first free key. A named key that is taken is a 409 with the
+  /** Omitted = the server picks the most distinct free key. A named key that is taken is a 409 with the
    *  free set (`server/errors.ts › AgentColorTakenError`), never substituted. */
   color: closedEnum<AgentColorKey>()(AGENT_COLOR_KEYS).optional(),
   /** Required because the caller is an agent (a human launch defaults to `New Agent`). 60 and the

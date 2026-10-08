@@ -45,7 +45,7 @@
   equivalent live predicate the table has), so two members cannot launch the
   same colour, and ending frees it. The launch path (desktop launch, MCP
   `manage launch`, the New agent popup) sends a chosen key or omits it; the
-  server assigns the FIRST FREE key when omitted, and answers 409 with the free
+  server assigns the MOST DISTINCT free key when omitted (2026-10-08, `agent-color-pick.ts`), and answers 409 with the free
   set when the chosen one is taken.
 - **Ended agents**: their past posts lose the colour (the key is back in the
   bank) and render with a neutral `--border-strong` frame + bar
@@ -99,7 +99,7 @@
   "Colour" of 16 circles (20px, the token fill, 2px ring when selected); taken
   colours (any member's LIVE agent in this channel) are rendered at 35% opacity,
   `aria-disabled`, unselectable, with a title "In use by <agent name>"; default
-  selection = first free. The taken set comes from the channel's live sessions
+  selection = the most distinct free key (`agent-color-pick.ts`). The taken set comes from the channel's live sessions
   projection (peer + own), refreshed by the same push the @-picker uses.
 - **Wells / rail / badge**: the Agents-tab card and the pop-out rail row show a
   small colour dot before the name for live agents.
@@ -113,7 +113,7 @@
    drift script `check-session-health-drift.ts` if it covers this block
    (measure); SDK `dist` rebuilt.
 3. Launch: desktop `session-launch.js` → the create call sends `color`; MCP
-   `dopl_channel manage launch` gains optional `color`; server assigns first free
+   `dopl_channel manage launch` gains optional `color`; server assigns the most distinct free key
    / 409 on taken; end frees by the index predicate (no code). Peer projection
    (`channel_sessions` push) carries `color`.
 4. Rendering: `channels/components/transcript.tsx` + `authored-row.tsx ›

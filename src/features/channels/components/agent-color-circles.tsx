@@ -52,7 +52,7 @@ export function AgentColorCircles({
   taken = EMPTY_TAKEN,
   takenBy = EMPTY_HOLDERS,
 }: {
-  /** Pick or dialog's first-free default (`launch-agent-dialog.tsx › effectiveColor`). */
+  /** Pick or dialog's picked default (`launch-agent-dialog.tsx › effectiveColor`). */
   value: AgentColorKey | null;
   onChange: (next: AgentColorKey) => void;
   /** Keys held by live agents. Advisory: the server's unique index is the authority (409 with the

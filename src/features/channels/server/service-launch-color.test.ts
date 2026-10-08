@@ -19,6 +19,7 @@
  * What is under test is the union, the expiry cut, first-free and the refusal.
  */
 
+import { pickAgentColor } from "../lib/agent-color-pick";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository-session-colors", () => ({
@@ -78,7 +79,7 @@ describe("the taken set is live sessions UNION spoken-for launches", () => {
 
   it("skips a key a LIVE session wears", async () => {
     liveColors(FIRST);
-    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(SECOND);
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(pickAgentColor(new Set([FIRST])));
   });
 
   /**
@@ -91,13 +92,15 @@ describe("the taken set is live sessions UNION spoken-for launches", () => {
    */
   it("skips a key a PENDING directive has already spoken for", async () => {
     pending(directive(FIRST));
-    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(SECOND);
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(pickAgentColor(new Set([FIRST])));
   });
 
   it("skips BOTH halves at once", async () => {
     liveColors(SECOND);
     pending(directive(FIRST));
-    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(THIRD);
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(
+      pickAgentColor(new Set([FIRST, SECOND]))
+    );
   });
 
   /**
@@ -106,7 +109,7 @@ describe("the taken set is live sessions UNION spoken-for launches", () => {
    * before its TTL ran out has released its key. Without the cut, one abandoned launch would
    * narrow the bank for the whole TTL.
    *
-   * 🔒 MUTATION-PROOF: delete the `at <= now` `continue` and this answers `SECOND`.
+   * 🔒 MUTATION-PROOF: delete the `at <= now` `continue` and this answers the pick around `FIRST`, not `FIRST`.
    */
   it("returns an EXPIRED directive's key to the bank", async () => {
     pending(directive(FIRST, -1));
@@ -117,7 +120,7 @@ describe("the taken set is live sessions UNION spoken-for launches", () => {
    *  offering a key that comes back 409 is cheap, two agents in one colour is not. */
   it("treats an unreadable expiry as still spoken for", async () => {
     pending({ color: FIRST, expires_at: "not a date" });
-    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(SECOND);
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBe(pickAgentColor(new Set([FIRST])));
   });
 
   /** ⚠ A DIRECTIVE THAT NAMED A KEY THIS BUILD DOES NOT KNOW TAKES NOTHING OUT OF THE BANK —
@@ -129,7 +132,7 @@ describe("the taken set is live sessions UNION spoken-for launches", () => {
   });
 
   /** ⚠ `null` WHEN THE BANK IS EMPTY, AND A LAUNCH IS NEVER REFUSED FOR IT — the seventeenth
-   *  agent in a room runs UNCOLOURED (`lib/agent-colors.ts › firstFreeAgentColor`). */
+   *  agent in a room runs UNCOLOURED (`lib/agent-color-pick.ts › pickAgentColor`). */
   it("answers null rather than refusing when all sixteen are out", async () => {
     liveColors(...AGENT_COLOR_KEYS);
     expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBeNull();
@@ -161,7 +164,8 @@ describe("a NAMED key that is taken is refused, never substituted", () => {
     expect((err as AgentColorTakenError).color).toBe(FIRST);
     // ⚠ THE FREE SET IS THE CALLER'S NEXT PICK, so it must not offer the key just refused.
     expect((err as AgentColorTakenError).free).not.toContain(FIRST);
-    expect((err as AgentColorTakenError).free[0]).toBe(SECOND);
+    // Best first: the refusal's first suggestion is the key the server would itself assign.
+    expect((err as AgentColorTakenError).free[0]).toBe(pickAgentColor(new Set([FIRST])));
   });
 
   /** ⚠ THE READ IS CHANNEL-SCOPED AND MEMBER-BLIND: uniqueness is cross-member by ruling, so

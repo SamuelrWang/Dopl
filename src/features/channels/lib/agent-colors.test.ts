@@ -3,8 +3,8 @@
  * docs/specs/agent-colors.md).
  *
  * ⚠ **WHAT THIS SUITE EXISTS FOR IS THE PAIRING BETWEEN A PURE FUNCTION AND A DATABASE
- * INDEX.** `firstFreeAgentColor` is the whole of "first free", and the thing that makes it
- * TRUE is `channel_sessions_channel_color_live_key` — a partial unique index this file cannot
+ * INDEX.** The pick (`agent-color-pick.ts`, its own suite) only ever hands out a FREE key, and the
+ * thing that makes "free" TRUE is `channel_sessions_channel_color_live_key` — a partial unique index this file cannot
  * execute. So the split is deliberate and so is the coverage: the POLICY is proved here
  * exhaustively and without a database, and the CONSTRAINT is proved by
  * `server/agent-color-schema.test.ts` reading the migration. A suite that mocked a taken set
@@ -21,7 +21,6 @@ import {
   AGENT_COLOR_KEYS,
   agentColorOrNull,
   agentColorVar,
-  firstFreeAgentColor,
   freeAgentColors,
   isAgentColorKey,
 } from "./agent-colors";
@@ -98,48 +97,13 @@ describe("the token reference — the only place a key becomes paint", () => {
   });
 });
 
-describe("first free — the assignment, which is the array's order", () => {
-  it("hands out `agent-01` in an empty room", () => {
-    expect(firstFreeAgentColor(new Set())).toBe("agent-01");
-  });
-
-  it("skips what is held and takes the next in BANK order, not the next unheld number", () => {
-    // ⚠ THE SET IS OUT OF ORDER ON PURPOSE. The policy is "walk the bank", not "walk the
-    // taken set", so an implementation that sorted or scanned its input would answer
-    // `agent-02` here for the wrong reason and pass a tidier fixture.
-    expect(firstFreeAgentColor(new Set(["agent-03", "agent-01"]))).toBe("agent-02");
-  });
-
-  it("walks past a contiguous run", () => {
-    const taken = new Set(AGENT_COLOR_KEYS.slice(0, 9));
-    expect(firstFreeAgentColor(taken)).toBe("agent-10");
-  });
-
-  it("answers `null` when all sixteen are out — and that is NEVER a refusal", () => {
-    // ⚠ THE PROPERTY IS "A LAUNCH IS NOT REFUSED OVER A DECORATION" (Samuel's ruling read
-    // through: a colour is identity, not entitlement). A seventeenth live agent in one room
-    // runs UNCOLOURED and its posts wear the neutral box; `null` is what says so, and the
-    // column is nullable for exactly this case.
-    expect(firstFreeAgentColor(new Set(AGENT_COLOR_KEYS))).toBeNull();
-  });
-
-  it("ignores a taken value that is not a key at all", () => {
-    // ⚠ THE TAKEN SET IS BUILT FROM A TEXT COLUMN (`repository-session-colors.ts`), so junk
-    // in it is possible — and junk must not be able to consume a key. `agent-01` is still
-    // first free here.
-    expect(firstFreeAgentColor(new Set(["red", "agent-99"]))).toBe("agent-01");
-  });
-});
-
-describe("the free set — what a 409 hands back and what the popup renders", () => {
+describe("the free set — what the popup renders and its arrow keys walk", () => {
   it("is the bank minus the taken, in BANK order", () => {
-    // ⚠ ORDER MATTERS BECAUSE THE TWO ANSWERS MUST AGREE: the caller is told "pick from
-    // this list", and the first entry has to be the key `firstFreeAgentColor` would itself
-    // have chosen, or the advice and the assignment disagree on a retry.
+    // ⚠ BANK order, because the circles are drawn in it and the roving focus walks it; the
+    // ASSIGNMENT order (and the 409's list) is `agent-color-pick.ts › rankFreeAgentColors`.
     const taken = new Set(["agent-02", "agent-05"]);
     const free = freeAgentColors(taken);
     expect(free).toHaveLength(14);
-    expect(free[0]).toBe(firstFreeAgentColor(taken));
     expect(free).not.toContain("agent-02");
     expect(free).not.toContain("agent-05");
     expect([...free]).toEqual(
@@ -147,9 +111,7 @@ describe("the free set — what a 409 hands back and what the popup renders", ()
     );
   });
 
-  it("is empty exactly when `firstFreeAgentColor` is null", () => {
-    const full = new Set(AGENT_COLOR_KEYS);
-    expect(freeAgentColors(full)).toHaveLength(0);
-    expect(firstFreeAgentColor(full)).toBeNull();
+  it("is empty when every key is taken", () => {
+    expect(freeAgentColors(new Set(AGENT_COLOR_KEYS))).toHaveLength(0);
   });
 });

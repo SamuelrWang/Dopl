@@ -13,6 +13,7 @@
  * is the POP-OUT's wiring of it, which is the half that had no home.
  */
 
+import { pickAgentColor } from "../lib/agent-color-pick";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
@@ -33,7 +34,7 @@ import { useAgentLaunch } from "./use-agent-launch";
 import { summary } from "./agent-window-harness";
 import { CHANNEL_ID, ME } from "./test-fixtures";
 // ⚠ READ OFF THE BANK, NEVER TYPED — `AGENT_COLOR_KEYS`'s ORDER *is* the assignment policy, so a
-// literal "agent-02" would be this suite deciding what "the first free key" means.
+// literal "agent-02" would be this suite deciding what "the picked key" means.
 import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
 
 const [FIRST, SECOND, THIRD] = AGENT_COLOR_KEYS;
@@ -277,13 +278,13 @@ describe("the popup's colour row, in the pop-out", () => {
     expect(screen.getByRole("radio", { name: FIRST }).getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByRole("radio", { name: SECOND }).getAttribute("aria-disabled")).not.toBe("true");
     expect(screen.getByRole("radio", { name: THIRD }).getAttribute("aria-disabled")).not.toBe("true");
-    // The preselect is the first FREE key, so it skips the one this room holds.
+    // The preselect is the picker's answer for THIS room only (another room's THIRD would move it).
     expect(
       screen
         .getAllByRole("radio")
         .find((el) => el.getAttribute("aria-checked") === "true")
         ?.getAttribute("data-agent-color")
-    ).toBe(SECOND);
+    ).toBe(pickAgentColor(new Set([FIRST])));
   });
 
   /**
@@ -308,7 +309,7 @@ describe("the popup's colour row, in the pop-out", () => {
     expect((launch.mock.calls[0]![0] as Record<string, unknown>).color).toBe(THIRD);
   });
 
-  /** ⚠ AND AN UNTOUCHED ROW SENDS NOTHING — absent is "the server picks the first free key",
+  /** ⚠ AND AN UNTOUCHED ROW SENDS NOTHING — absent is "the server picks the most distinct free key",
    *  never "no colour", so the one-click payload is byte-identical to what it always was. */
   it("sends no colour when no circle was touched", async () => {
     render(<Harness />);

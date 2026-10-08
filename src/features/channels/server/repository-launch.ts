@@ -70,7 +70,7 @@ type LaunchDirectiveInsert = {
   /** Server-resolved under the caller's visibility, never raw caller input. */
   identity_id: string | null;
   identity_name: string | null;
-  /** The server's resolution (the named key or the first free one), never raw caller input. */
+  /** The server's resolution (the named key or the most distinct free one), never raw caller input. */
   color?: string | null;
   agent_name?: string | null;
   /** Validated as a shape here and as membership on the machine (`no-sdk`); grants nothing. */

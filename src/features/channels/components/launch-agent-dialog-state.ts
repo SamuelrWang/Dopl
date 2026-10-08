@@ -221,7 +221,7 @@ export function useLaunchDialogRuntime(
 
   // Display ≠ submission: `panel.model` stays `''` until the operator touches the row, so main's
   // order launcher > identity > runtime default stays the one authority (as `panel.color`:
-  // `null` ⇒ the server assigns the first free key).
+  // `null` ⇒ the server assigns the most distinct free key).
   const modelRow = useMemo(
     () =>
       modelRowFor({

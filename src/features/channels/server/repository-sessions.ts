@@ -12,7 +12,7 @@ import {
   sessionRowMatches,
 } from "./repository-sessions-columns";
 // ⚠ THE COLOUR RULE LIVES ENTIRELY OUTSIDE THIS FILE (2026-09-13) — the per-channel
-// taken-set read, the pure first-free policy and the unique-violation degrade. This
+// taken-set read, the pure colour-pick policy and the unique-violation degrade. This
 // file calls two functions and decides nothing about colours; `session-colors.ts`'s
 // header is why the server overrules a machine on this one field.
 import {

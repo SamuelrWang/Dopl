@@ -121,7 +121,7 @@ exports.CHANNEL_TEXT = {
             model: "Model id; omitted, the identity's, else the default.",
             runtime: "Runtime, e.g. claude or codex; omitted, the channel's. Refused, never swapped, if unavailable.",
             identity: "Identity id, or a name in this channel's container; omitted, a blank agent.",
-            color: "Colour marker; omitted, the first free one.",
+            color: "Colour marker; omitted, the most distinct.",
             posture: "Freedom to ask for; omit an axis to run at the operator's setting.",
         },
         required: ["channel", "name"],
