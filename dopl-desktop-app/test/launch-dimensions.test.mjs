@@ -20,7 +20,10 @@ test("vocabulary: only DECLARED dimensions, only values the declaration accepts 
   assert.deepEqual(vocab.launchDimensionPicks(codex, { reasoningEffort: "xhigh", other: "x" }), { reasoningEffort: "xhigh" });
   assert.deepEqual(vocab.launchDimensionPicks(codex, { reasoningEffort: "telepathic" }), { reasoningEffort: "telepathic" },
     "a level Dopl never heard of passes the alphabet — the catalog decides if the model offers it");
-  assert.deepEqual(vocab.launchDimensionPicks(codex, { reasoningEffort: "Bad Value!" }), {});
+  assert.deepEqual(vocab.launchDimensionPicks(codex, { reasoningEffort: "Bad Value!" }), { reasoningEffort: "Bad Value!" },
+    "storage keeps a bounded printable string; the BUILD decides what is sent (codex-effort-live)");
+  assert.deepEqual(vocab.launchDimensionPicks(codex, { reasoningEffort: "bad\u0000" }), {}, "control characters never stored");
+  assert.deepEqual(vocab.launchDimensionPicks(codex, { reasoningEffort: "x".repeat(65) }), {}, "bounded");
   assert.deepEqual(vocab.launchDimensionPicks(codex, null), {});
   const fixed = { models: { dimensions: ["speed"], dimensionOptions: { speed: { options: ["fast", { value: "slow" }] } } } };
   assert.deepEqual(vocab.launchDimensionPicks(fixed, { speed: "slow" }), { speed: "slow" });
@@ -50,15 +53,25 @@ test("the wire: narrowOverrides keeps bounded string picks only", () => {
   assert.deepEqual(fn(["high"]), {});
 });
 
-test("codex: the session's pick becomes turn/start.effort, and no pick sends none", () => {
+test("codex: the session's pick becomes turn/start.effort when the live catalog offers it; no pick sends none", async () => {
   const launchSpec = require(join(MAIN, "runtime", "codex", "launch-spec.js"));
+  const catalogs = require(join(MAIN, "runtime", "model-catalog.js"));
+  catalogs.forget();
+  await catalogs.settle({
+    descriptor: { id: "codex", label: "Codex", models: { source: "live", dimensions: ["reasoningEffort"] } },
+    runtime: { buildIdentity: () => null, models: async () => ({ models: [{ id: "m1", isDefault: true, dimensions: { reasoningEffort: { options: ["high"] } } }] }) },
+  });
   const spec = (dimensions) => launchSpec.buildLaunchSpec({
     session: { profile: "full", channelId: "11111111-1111-4111-8111-111111111111", state: { toolMode: "on-request" },
       workspaceId: "ws", model: "", containerToken: { token: "t" }, dimensions },
     dispatch: () => {},
   });
-  assert.deepEqual(spec({ reasoningEffort: "high" }).turnStart, { effort: "high" });
-  assert.deepEqual(spec(undefined).turnStart, {});
+  try {
+    assert.deepEqual(spec({ reasoningEffort: "high" }).turnStart, { effort: "high" });
+    assert.deepEqual(spec(undefined).turnStart, {});
+  } finally {
+    catalogs.forget();
+  }
 });
 
 test("the pick is PERSISTED with the model and re-coerced on resume (park/reopen keeps the effort)", () => {

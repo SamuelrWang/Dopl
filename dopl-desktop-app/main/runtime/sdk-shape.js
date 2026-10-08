@@ -52,6 +52,12 @@ function flatten(shape) {
   for (const m of list(shape.methods)) out.add(`method ${m}`);
   for (const c of list(shape.config)) out.add(`config ${c}`);
   for (const e of list(shape.exports)) out.add(`export ${e}`);
+  // `values: { '<method> <field>': [allowed…] }` — a field's closed vocabulary as the BUILD declares it.
+  if (shape.values && typeof shape.values === 'object' && !Array.isArray(shape.values)) {
+    for (const scope of Object.keys(shape.values)) {
+      for (const v of list(shape.values[scope])) out.add(`value ${str(scope)}=${v}`);
+    }
+  }
   for (const [kind, key] of [['notification', 'notifications'], ['request', 'requests'], ['result', 'results']]) {
     const group = shape[key];
     if (!group || typeof group !== 'object' || Array.isArray(group)) continue;
@@ -255,6 +261,16 @@ function knows(runtimeId, flatPath) {
   return st.pathSet.has(str(flatPath));
 }
 
+/** The closed vocabulary the build last described for `runtimeId` declares for `scope` (`'turn/start effort'`):
+ *  an array of allowed values; `[]` when the build was described but declares NO closed list for it; `null`
+ *  when no description is known yet. The send-safety alphabet, sourced from the build, never typed. */
+function valuesFor(runtimeId, scope) {
+  const st = states.get(str(runtimeId));
+  if (!st || st.status !== STATUS.KNOWN || !st.observed || !Array.isArray(st.observed.paths)) return null;
+  const prefix = `value ${str(scope)}=`;
+  return st.observed.paths.filter((p) => p.startsWith(prefix)).map((p) => p.slice(prefix.length));
+}
+
 /** Tests only: a fake clock. */
 function injectClock(fn) { clock = typeof fn === 'function' ? fn : () => Date.now(); }
 
@@ -323,6 +339,7 @@ module.exports = {
   launchShapeRefusal,
   declaresSafety,
   knows,
+  valuesFor,
   LAUNCH_FLOOR_MS,
   injectClock,
   forgetShape,

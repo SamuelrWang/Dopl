@@ -48,6 +48,35 @@ function fieldPaths(schema, defs, prefix, out, seen, depth) {
   return acc;
 }
 
+/** The closed vocabulary of one schema (resolving refs; `anyOf`/`oneOf` members unioned, `null` ignored):
+ *  every string `enum` member and `const`, or [] when the type is open (e.g. "any non-empty string"). */
+function enumOf(schema, defs, depth) {
+  const d = depth || 0;
+  if (!schema || typeof schema !== 'object' || d > MAX_DEPTH) return [];
+  const name = refName(schema.$ref);
+  if (name) return defs[name] ? enumOf(defs[name], defs, d + 1) : [];
+  const out = [];
+  if (Array.isArray(schema.enum)) for (const v of schema.enum) if (typeof v === 'string') out.push(v);
+  if (typeof schema.const === 'string') out.push(schema.const);
+  for (const key of ['oneOf', 'anyOf']) {
+    if (Array.isArray(schema[key])) for (const s of schema[key]) out.push(...enumOf(s, defs, d + 1));
+  }
+  return Array.from(new Set(out));
+}
+
+/** `{ '<method> <field>': [values] }` for every top-level param field with a closed vocabulary. */
+function paramValues(method, paramsSchema, defs) {
+  const out = {};
+  const name = refName(paramsSchema && paramsSchema.$ref);
+  const schema = name ? defs[name] : paramsSchema;
+  const props = schema && schema.properties && typeof schema.properties === 'object' ? schema.properties : {};
+  for (const field of Object.keys(props)) {
+    const vals = enumOf(props[field], defs);
+    if (vals.length) out[`${method} ${field}`] = vals;
+  }
+  return out;
+}
+
 /** `[{ name, params }]` from a `oneOf` of `{ method: {enum:[name]}, params: <schema> }` variants. */
 function variants(file) {
   const out = [];
@@ -81,9 +110,10 @@ function shapeFromDir(dir) {
   const top = path.join(dir, 'codex_app_server_protocol.schemas.json');
   if (fs.existsSync(top)) bundles.push({ defs: readJson(top).definitions || {} });
 
-  const shape = { methods: [], results: {}, notifications: {}, requests: {} };
+  const shape = { methods: [], results: {}, notifications: {}, requests: {}, values: {} };
   for (const { name, params } of variants(client)) {
     shape.methods.push(name);
+    Object.assign(shape.values, paramValues(name, params, client.definitions || {}));
     const res = responseFor(params, bundles);
     shape.results[name] = res ? Array.from(fieldPaths(res.schema, res.defs)) : [];
   }

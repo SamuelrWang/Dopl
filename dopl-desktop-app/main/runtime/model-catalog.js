@@ -372,6 +372,12 @@ function snapshot(adapter) {
   return (held && held.catalog) || loadingCatalog(id, declared);
 }
 
+/** The catalog held for `runtimeId` right now, or null — no read is kicked, nothing waits. */
+function peek(runtimeId) {
+  const held = snapshots.get(str(runtimeId));
+  return (held && held.catalog) || null;
+}
+
 /** This runtime's catalog once a read has settled — only a launch may wait on it (`session-launch.js`). */
 async function settle(adapter) {
   const descriptor = adapter && adapter.descriptor;
@@ -448,6 +454,7 @@ module.exports = {
   catalogFromRoster,
   makeCatalog,
   snapshot,
+  peek,
   settle,
   findModel,
   offeredDimensions,

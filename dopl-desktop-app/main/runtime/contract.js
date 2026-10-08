@@ -164,11 +164,12 @@ function selectionProblems(d) {
     for (const key of dims) {
       const entry = declared[key];
       // A LIVE dimension's options are each model's own (the catalog); storage gates the alphabet instead.
-      const live = !!entry && entry.live === true && typeof entry.pattern === 'string' && !!entry.pattern;
+      // A LIVE dimension's values come from the runtime itself (catalog + build schema); no local list needed.
+      const live = !!entry && entry.live === true;
       if (!live && (!entry || !Array.isArray(entry.options) || !entry.options.length)) {
         problems.push(`${id}: models.dimensions names "${key}" but models.dimensionOptions declares `
           + 'no options for it — that is a control that writes nowhere (F-390\'s shape). Declare '
-          + 'its values (or `live: true` with a `pattern`), or drop the dimension: an unbackable capability must be ABSENT.');
+          + 'its values (or `live: true`), or drop the dimension: an unbackable capability must be ABSENT.');
       }
     }
   }

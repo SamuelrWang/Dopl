@@ -62,6 +62,32 @@ function nativePair(s, cfg) {
   return pair;
 }
 
+// ── EFFORT: THE BUILD DECIDES WHAT MAY BE SENT (orchestrator on audit LOW4) ──────────────────────
+// The send-safety alphabet is sourced LIVE, never typed: the build's own schema's closed list for
+// `turn/start effort` when it declares one (`shape.js › values`, per build key via `sdk-shape.js`), else what
+// the launched model offers on a vouching live catalog. Neither → the value is dropped (the platform picks)
+// and the drop is recorded as drift. A new level the build or model adds is sent with no Dopl change.
+function effortFor(s) {
+  const asked = s && s.dimensions && typeof s.dimensions[models.DIMENSION] === 'string'
+    ? s.dimensions[models.DIMENSION].trim() : '';
+  if (!asked) return '';
+  const sdkShape = require('../sdk-shape');
+  const declared = sdkShape.valuesFor('codex', 'turn/start effort');
+  if (Array.isArray(declared) && declared.length) {
+    if (declared.indexOf(asked) !== -1) return asked;
+    sdkShape.recordDrift('codex', 'effort', `"${asked}" is outside this build's own list (${declared.join(', ')}); not sent`);
+    return '';
+  }
+  let offered = {};
+  try {
+    const catalogs = require('../model-catalog');
+    offered = catalogs.offeredDimensions(catalogs.peek('codex'), s.model || '', { [models.DIMENSION]: asked });
+  } catch (_) { offered = {}; }
+  if (offered[models.DIMENSION] === asked) return asked;
+  sdkShape.recordDrift('codex', 'effort', `"${asked}" could not be confirmed against this build or model; not sent`);
+  return '';
+}
+
 // ── SPEC ─────────────────────────────────────────────────────────────────────────────────────
 
 /** `{ session, dispatch }` → the opaque payload core hands back to `start` / `resume` unread. */
@@ -99,7 +125,7 @@ function buildLaunchSpec(request) {
   if (model) threadStart.model = model;
   // The launcher's per-model pick (`s.dimensions`, coerced at spawn against the runtime's alphabet and the
   // live catalog's offer for this model, `session-launch.js › offeredDimensions`); none → the platform picks.
-  const effort = (s.dimensions && s.dimensions[models.DIMENSION]) || '';
+  const effort = effortFor(s);
   const turnStart = effort ? { effort } : {};
 
   return {

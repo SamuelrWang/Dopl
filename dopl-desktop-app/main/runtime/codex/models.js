@@ -11,12 +11,11 @@ const LIST_TIMEOUT_MS = 8000;
 // Bounds the cursor loop; hitting it reports `truncated` rather than a complete list.
 const MAX_PAGES = 10;
 
-// NO EFFORT LIST (2026-10-08): `model/list` says what each model offers, and that is what is offered —
-// a new level upstream appears with no Dopl change. What makes a value STORABLE is its alphabet (it
-// becomes `turn/start.effort`), and whether it is OFFERED is the live catalog's question at launch.
-const EFFORT_PATTERN = '^[a-z][a-z0-9_-]{0,31}$';
-const EFFORT_RE = new RegExp(EFFORT_PATTERN);
-
+// NO EFFORT LIST AND NO LOCAL ALPHABET (2026-10-08, orchestrator on audit LOW4): `model/list` says what each
+// model offers, and that is what is offered. Whether a value may be SENT is decided at launch from the BUILD:
+// its own schema's closed list for `turn/start effort` when it declares one (`shape.js` › values), else the
+// launched model's live offer (`launch-spec.js › effortFor`). No value Dopl typed can hide a new level.
+const MAX_EFFORT = 64;
 const DIMENSION = 'reasoningEffort';
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -51,9 +50,9 @@ function effortsFrom(row) {
   const options = [];
   for (const item of Array.isArray(raw) ? raw : []) {
     const value = str(item && item.reasoningEffort);
-    // A value outside the storable alphabet is not offered (it could not be sent); anything else the
-    // server lists is, so a new level needs no Dopl release.
-    if (!value || !EFFORT_RE.test(value)) continue;
+    // Every non-empty value the server lists is offered (bounded only so a garbage row cannot bloat the
+    // catalog), so a new level needs no Dopl release; the build decides what may be sent, at launch.
+    if (!value || value.length > MAX_EFFORT) continue;
     if (options.some((o) => o.value === value)) continue;
     options.push({
       value,
@@ -180,14 +179,14 @@ const descriptor = {
     absent: '', // no `model` field at all: the platform's own pick
     pattern: '^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$',
   },
-  // `live`: the options are each model's own (`model/list`), so storage checks the ALPHABET and a launch
-  // checks the live catalog (`contract.js › selectionProblems`). `fallback: 'absent'` drops a value the
-  // model does not offer (no field, the platform picks): not containment, so nothing to floor to.
+  // `live`: the options are each model's own (`model/list`); storage keeps any bounded string and the launch
+  // decides against the live catalog AND the build's own schema (`contract.js › selectionProblems`).
+  // `fallback: 'absent'` drops a value neither allows (no field, the platform picks).
   dimensionOptions: {
-    reasoningEffort: { live: true, pattern: EFFORT_PATTERN, default: null, fallback: 'absent' },
+    reasoningEffort: { live: true, default: null, fallback: 'absent' },
   },
 };
 
 module.exports = {
-  models, descriptor, entryFrom, rosterFrom, DIMENSION, EFFORT_PATTERN, LIST_TIMEOUT_MS, MAX_PAGES,
+  models, descriptor, entryFrom, rosterFrom, DIMENSION, LIST_TIMEOUT_MS, MAX_PAGES,
 };

@@ -54,8 +54,10 @@ function launchDimensionPicks(descriptor, raw) {
     const v = typeof raw[key] === 'string' ? raw[key].trim() : '';
     const rule = opts[key];
     if (!v || !rule) continue;
+    // LIVE: storage keeps a bounded printable string; whether it may be SENT is decided at launch from the
+    // runtime's own catalog and build schema. A declared `pattern` still narrows here when one is given.
     const ok = rule.live === true
-      ? typeof rule.pattern === 'string' && new RegExp(rule.pattern).test(v)
+      ? v.length <= 64 && !/[\u0000-\u001f\u007f]/.test(v) && (typeof rule.pattern !== 'string' || new RegExp(rule.pattern).test(v))
       : Array.isArray(rule.options) && rule.options.some((o) => (typeof o === 'string' ? o : o && o.value) === v);
     if (ok) out[key] = v;
   }

@@ -100,7 +100,7 @@ test("efforts are PER MODEL — a model that supports fewer gets fewer, and one 
   assert.equal(by["gpt-none"].dimensions.reasoningEffort, undefined);
 });
 
-test("efforts are the MODEL's own: a level Dopl never heard of is offered; only an unsendable value is dropped", async () => {
+test("efforts are the MODEL's own: every value the server lists is offered — no local alphabet hides one", async () => {
   // 2026-10-08: no effort list in Dopl. What a model offers is what `model/list` says; storage gates the
   // ALPHABET (it becomes `turn/start.effort`), the live catalog gates membership at launch.
   const codex = loadCodexModels(fakeClient([
@@ -115,7 +115,8 @@ test("efforts are the MODEL's own: a level Dopl never heard of is offered; only 
     },
   ]));
   const catalog = loadCatalog().catalogFromRoster("codex", CODEX_DESCRIPTOR, await codex.models());
-  assert.deepEqual(catalog.models[0].dimensions.reasoningEffort.options.map((o) => o.value), ["low", "telepathic"]);
+  assert.deepEqual(catalog.models[0].dimensions.reasoningEffort.options.map((o) => o.value), ["low", "telepathic", "Bad Value!"],
+    "what may be SENT is the build's decision at launch (`launch-spec.js › effortFor`)");
   assert.equal(codex.descriptor.dimensionOptions.reasoningEffort.live, true, "the shipped declaration is live");
 });
 
