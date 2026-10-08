@@ -100,7 +100,12 @@ const safetyMismatch = (detail) => ({ type: 'safety_mismatch', detail: String(de
 /** The runtime's own launch report matched what Dopl asked it to enforce: core opens the gate. */
 const launchVerified = () => ({ type: 'launch_verified' });
 
+/** The runtime's own report that Dopl's MCP server did NOT connect for this launch (`status` = its word, never
+ *  `connected`). Core hands it to the one MCP guard every runtime shares (`mcp-connect-guard.js`): one retry,
+ *  then a visible end — never a mute agent running turns it cannot post from. */
+const mcpStatus = (status) => ({ type: 'mcp_status_report', status: String(status == null ? '' : status) || 'failed' });
+
 module.exports = {
   assistant, thinking, toolUse, toolResult, toolCallEvents,
-  launched, result, context, authHold, runtimeOutdated, shapeDrift, safetyMismatch, launchVerified, ERROR_FRAME,
+  launched, result, context, authHold, runtimeOutdated, shapeDrift, safetyMismatch, launchVerified, mcpStatus, ERROR_FRAME,
 };

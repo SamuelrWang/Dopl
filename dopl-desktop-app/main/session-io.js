@@ -207,6 +207,12 @@ function applyCoreEvents(s, list, dispatch, store) {
       s.launchVerified = true;
       continue;
     }
+    if (ev.type === 'mcp_status_report') {
+      // A runtime that reports Dopl's MCP server down for this launch: the shared guard decides (retry once, then
+      // end visibly). Never outranks a safety stop already raised by the same batch.
+      if (!mcpSignal || mcpSignal.type !== 'safety_stop') mcpSignal = { type: 'mcp_status', status: ev.status };
+      continue;
+    }
     if (ev.type === 'safety_mismatch') {
       // Ends the session in `session-query.js › consume`, before the first turn can call anything. It outranks
       // the MCP status read off the same init: a launch that is unsafe is not retried for connectivity.

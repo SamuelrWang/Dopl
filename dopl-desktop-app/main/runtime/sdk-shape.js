@@ -246,6 +246,15 @@ function forgetShape(runtimeId) {
   else states.delete(str(runtimeId));
 }
 
+/** Does the build last described for `runtimeId` declare `flatPath` (`notification item/started`)? `true` /
+ *  `false` from a live or persisted description, `null` when none is known yet (no verdict either way). */
+function knows(runtimeId, flatPath) {
+  const st = states.get(str(runtimeId));
+  if (!st || st.status !== STATUS.KNOWN || !st.observed || !Array.isArray(st.observed.paths)) return null;
+  if (!st.pathSet) st.pathSet = new Set(st.observed.paths);
+  return st.pathSet.has(str(flatPath));
+}
+
 /** Tests only: a fake clock. */
 function injectClock(fn) { clock = typeof fn === 'function' ? fn : () => Date.now(); }
 
@@ -313,6 +322,7 @@ module.exports = {
   settleShape,
   launchShapeRefusal,
   declaresSafety,
+  knows,
   LAUNCH_FLOOR_MS,
   injectClock,
   forgetShape,

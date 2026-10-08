@@ -152,41 +152,48 @@ test("the list answer settles the wait when no notification comes", async () => 
   } finally { h.handle.close(); h.restore(); }
 });
 
-test("`failed`: the turn still starts, and ONE line says Dopl's tools did not connect", async () => {
+// ⚠ 2026-10-08 (Codex self-audit LOW): a failed Dopl server NO LONGER starts a tool-free turn — the agent could
+// not post. The lane says so and the shared MCP guard (`mcp-connect-guard.js`) gets the report: one retry, then a
+// visible end, exactly as on Claude.
+const NO_TURN = (why) => `Dopl's tools did not connect (${why}), so the agent will not run without them.`;
+const settleBriefly = () => new Promise((r) => setTimeout(r, 50));
+
+test("`failed`: NO turn starts; one line, and the shared guard gets the report", async () => {
   const h = run();
   try {
     h.prompts.push(say("go"));
     await until(() => h.named("mcpServerStatus/list").length === 1, "no status was asked for");
     h.notify(mcpReady.STARTUP_METHOD, status("failed", { error: "MCP client for `dopl` failed to start:\nhandshake" }));
-    await until(() => h.named("turn/start").length === 1, "a failed server must not block the turn");
-    h.notify("turn/completed", { turn: { id: "tu-1", status: "completed" } });
-    const evs = await eventsUntil(h, (f) => f && f.method === "turn/completed");
-    assert.deepEqual(laneLines(evs), ["Dopl's tools did not connect (the connection failed), so this turn runs without them."]);
+    const evs = await eventsUntil(h, (f) => f && f.type === "error");
+    await settleBriefly();
+    assert.equal(h.named("turn/start").length, 0, "no tool-free turn");
+    assert.deepEqual(laneLines(evs), [NO_TURN("the connection failed")]);
+    assert.deepEqual(evs.filter((e) => e.type === "mcp_status_report").map((e) => e.status), ["failed"]);
     assert.equal(evs.filter((e) => e.type === "auth_hold").length, 0);
     assert.match(h.lines[0], /failed \(notification\) first turn waited \d+ms error=MCP client for `dopl` failed to start: handshake$/);
   } finally { h.handle.close(); h.restore(); }
 });
 
-test("`cancelled` and a failed list row are the same line", async () => {
+test("`cancelled` and a failed list row are the same line, and no turn", async () => {
   const h = run({ list: async () => ({ data: [{ name: mcp.SERVER_KEY, runtimeStatus: "cancelled" }] }) });
   try {
     h.prompts.push(say("go"));
-    await until(() => h.named("turn/start").length === 1, "the turn never started");
     const evs = await eventsUntil(h, (f) => f && f.type === "error");
-    assert.deepEqual(laneLines(evs), ["Dopl's tools did not connect (the connection was cancelled), so this turn runs without them."]);
+    await settleBriefly();
+    assert.equal(h.named("turn/start").length, 0);
+    assert.deepEqual(laneLines(evs), [NO_TURN("the connection was cancelled")]);
   } finally { h.handle.close(); h.restore(); }
 });
 
-test("`reauthenticationRequired` is Dopl's bearer, not the Codex sign-in: a line, never an auth hold", async () => {
+test("`reauthenticationRequired` is Dopl's bearer, not the Codex sign-in: a line + guard report, never an auth hold", async () => {
   const h = run();
   try {
     h.prompts.push(say("go"));
     await until(() => h.named("mcpServerStatus/list").length === 1, "no status was asked for");
     h.notify(mcpReady.STARTUP_METHOD, status("failed", { failureReason: "reauthenticationRequired", error: "401 Unauthorized" }));
-    await until(() => h.named("turn/start").length === 1, "the turn never started");
     const evs = await eventsUntil(h, (f) => f && f.type === "error");
-    assert.deepEqual(evs.map((e) => e.type).filter((t) => t !== "launched"), ["assistant"]);
-    assert.deepEqual(laneLines(evs), ["Dopl's tools did not connect (sign-in required), so this turn runs without them."]);
+    assert.deepEqual(evs.map((e) => e.type).filter((t) => t !== "launched"), ["assistant", "mcp_status_report"]);
+    assert.deepEqual(laneLines(evs), [NO_TURN("sign-in required")]);
     assert.match(h.lines[0], /reason=reauthenticationRequired/);
   } finally { h.handle.close(); h.restore(); }
 });
@@ -282,8 +289,7 @@ test("a server that never reports: the bound ends the wait as `timeout`, and tha
     assert.ok(out.waitedMs >= 25);
     assert.equal(mcpReady.missedTools(out), true);
     assert.equal(ready.isWaiting(), false);
-    assert.deepEqual(laneLines(normalize({ type: "error", text: "", mcpStartup: "timeout" }, {})),
-      ["Dopl's tools did not connect (no answer in time), so this turn runs without them."]);
+    assert.deepEqual(laneLines(normalize({ type: "error", text: "", mcpStartup: "timeout" }, {})), [NO_TURN("no answer in time")]);
   } finally { clearTimeout(keepAlive); }
 });
 

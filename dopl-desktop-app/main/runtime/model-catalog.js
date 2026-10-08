@@ -8,7 +8,6 @@
 // A `ready` catalog with zero models is coerced to `unavailable`. Nothing here names a vendor or
 // holds a model id. `snapshot` never blocks on a child process; `settle` is the only awaited read.
 
-const { pickOf } = require('./selection-vocabulary');
 const liveStore = require('./live-store');
 const { rosterKeyOf, rosterIdentityOf } = require('./roster-key');
 
@@ -19,12 +18,9 @@ function preferenceOf(runtimeId, models) {
 
 const CATALOG_VERSION = 1;
 
-const STATUS = Object.freeze({
-  READY: 'ready',
-  LOADING: 'loading',
-  UNAVAILABLE: 'unavailable',
-  STALE: 'stale',
-});
+const { STATUS } = require('./catalog-status');
+// The pure readers (what a pick names, what a model offers, whether a catalog vouches), re-exported below.
+const { findModel, offeredDimensions, vouches, offers, modelRefusal, notOfferedSentence } = require('./catalog-readers');
 
 // A failed read is retried at the next LOOK past this floor (never on a timer); a good one is kept.
 const FAILURE_TTL_MS = 5000;
@@ -178,6 +174,7 @@ function catalogFromRoster(runtimeId, descriptor, roster) {
 // ── THE SNAPSHOT CACHE ── keyed by runtime id; one refresh in flight per runtime (never two app-servers).
 
 const snapshots = new Map();
+let readGeneration = 0;
 
 // Settled verdicts for `onSettled`; `loading` is never recorded (a retry in flight is no transition).
 const settledStatus = new Map();
@@ -304,11 +301,16 @@ function refresh(adapter, now) {
   // The key is CORE's, stamped at read time — never the adapter's own spelling of one (`roster-key.js`).
   const readKey = rosterKeyOf(adapter);
   const holds = !!(prior && prior.catalog && prior.catalog.models.length);
+  const gen = ++readGeneration;
   const entry = {
     catalog: holds ? prior.catalog : loadingCatalog(id, declared),
     at: now,
     inflight: null,
     dirty: false,
+    // The build the read is FOR, and which read this is (Codex self-audit M1): a read answers only for its
+    // own key, and a superseded read never files its answer.
+    key: readKey,
+    gen,
   };
   entry.inflight = Promise.resolve()
     .then(() => adapter.runtime.models())
@@ -319,6 +321,14 @@ function refresh(adapter, now) {
     }))
     .then((next) => {
       const held = snapshots.get(id);
+      // Superseded (a newer read for another key started) or forgotten: this answer is not filed anywhere.
+      if (!held || held.gen !== gen) return Object.assign({}, next, { moved: true });
+      // The build or account moved while the list was read: it may be either one's, so it is filed under
+      // NEITHER — not persisted, not published — and the entry is due a fresh read at the next look.
+      if (rosterKeyOf(adapter) !== readKey) {
+        snapshots.set(id, { catalog: entry.catalog, at: 0, inflight: null, dirty: false, due: true, key: null });
+        return Object.assign({}, next, { moved: true });
+      }
       const kept = held && held.catalog && held.catalog.models.length ? held.catalog : null;
       // A failed refresh over held models is `stale` (they still label), not `unavailable`.
       const settled = next.status === STATUS.UNAVAILABLE && kept
@@ -366,66 +376,25 @@ function snapshot(adapter) {
 async function settle(adapter) {
   const descriptor = adapter && adapter.descriptor;
   if (!descriptor) return null;
-  const held = snapshots.get(descriptor.id) || null;
-  if (held && held.inflight) return held.inflight;
-  if (due(held, Date.now(), adapter)) return refresh(adapter, Date.now());
-  return held.catalog;
-}
-
-/** The catalog entry a pick names — its `id`, else one of its `aliases`. `null` when none does. */
-function findModel(catalog, pick) {
-  const v = str(pick);
-  const models = (catalog && Array.isArray(catalog.models)) ? catalog.models : [];
-  if (!v) return null;
-  return models.find((m) => m.id === v)
-    || models.find((m) => Array.isArray(m.aliases) && m.aliases.indexOf(v) !== -1)
-    || null;
-}
-
-/** PURE: the dimension `picks` the launched `model` offers on this catalog (`{}` when none). A catalog that
- *  cannot vouch DROPS them (final review L5): a value no read proved this model offers could fail the turn
- *  on a platform that rejects it, so the platform picks its own default instead. A model with no entry is
- *  read as the catalog's default model. */
-function offeredDimensions(catalog, model, picks) {
-  const asked = picks && typeof picks === 'object' ? picks : {};
-  if (!Object.keys(asked).length) return {};
-  if (!vouches(catalog)) return {};
-  const entry = findModel(catalog, model) || catalog.models.find((m) => m.id === catalog.defaultId) || null;
-  const out = {};
-  for (const key of Object.keys(asked)) {
-    const dim = entry && entry.dimensions && entry.dimensions[key];
-    if (dim && dim.options.some((o) => o.value === asked[key])) out[key] = asked[key];
+  const key = rosterKeyOf(adapter);
+  let held = snapshots.get(descriptor.id) || null;
+  // An in-flight read answers only for the build it is reading (Codex self-audit M1).
+  let out;
+  if (held && held.inflight && held.key === key) out = await held.inflight;
+  else if (held && held.inflight) out = await refresh(adapter, Date.now());
+  else if (due(held, Date.now(), adapter)) out = await refresh(adapter, Date.now());
+  else return held.catalog;
+  // The build switched mid-read: one fresh read for the build this launch will actually run.
+  if (out && out.moved) {
+    held = snapshots.get(descriptor.id) || null;
+    out = held && held.inflight && held.key === rosterKeyOf(adapter) ? await held.inflight : await refresh(adapter, Date.now());
+  }
+  if (out && out.moved) {
+    return makeCatalog(descriptor.id, (descriptor.models && descriptor.models.source) || null, STATUS.UNAVAILABLE, {
+      reason: 'the runtime changed builds while Dopl was reading its model list',
+    });
   }
   return out;
-}
-
-/** Can this catalog vouch for a model's presence OR absence? Only a READY read can (RC-03). */
-function vouches(catalog) {
-  return !!catalog && catalog.status === STATUS.READY && Array.isArray(catalog.models) && catalog.models.length > 0;
-}
-
-/** Does this catalog prove `id` is offered? */
-function offers(catalog, id) {
-  return vouches(catalog) && !!findModel(catalog, id);
-}
-
-/**
- * Why a launch naming `pick` is refused, or `null`. An unknown model is refused with a sentence,
- * never swapped. Only a catalog that vouches can refuse ("could not read the list" is not "that
- * model does not exist"); no pick (absent / `'default'`) is never refused.
- */
-function modelRefusal(catalog, pick, label) {
-  const v = pickOf(pick);
-  if (!v || !vouches(catalog)) return null;
-  if (findModel(catalog, v)) return null;
-  return notOfferedSentence(label, v, catalog.models);
-}
-
-/** The refusal sentence for a pick `models` lacks, listing what is offered (hidden rows omitted). */
-function notOfferedSentence(label, pick, models) {
-  const offered = (models || []).filter((m) => !m.hidden).map((m) => m.label || m.id).join(', ');
-  return `${label || 'This runtime'} does not offer the model "${pick}" on this machine`
-    + (offered ? ` — it offers: ${offered}` : '') + '.';
 }
 
 /** Every runtime's catalog, keyed by id (what a settings read sends). One adapter's throw takes

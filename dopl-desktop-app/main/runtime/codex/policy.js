@@ -110,6 +110,33 @@ function refuse(what) {
     + 'the restrictions the operator chose.');
 }
 
+// The sandbox fields Dopl knows how to read as "not wider" (0.155.1 / 0.160.1 `SandboxPolicy`). The two
+// `exclude*` flags only NARROW what is writable, so any boolean is fine there.
+const NARROWING_FLAGS = ['excludeSlashTmp', 'excludeTmpdirEnvVar'];
+const isEmptyish = (v) => v === undefined || v === null || v === false
+  || (Array.isArray(v) && v.length === 0) || (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+
+/** Why this restricted sandbox echo is (or may be) wider than Dopl asked, or null. Pure, type-strict:
+ *  `networkAccess` must be absent or `false`; `writableRoots` absent or `[]`; an unknown field must be empty. */
+function sandboxWidening(box) {
+  if ('networkAccess' in box && box.networkAccess !== undefined && box.networkAccess !== false) {
+    return box.networkAccess === true ? 'network access on'
+      : `a network setting Dopl cannot read (${JSON.stringify(box.networkAccess)})`;
+  }
+  if ('writableRoots' in box && box.writableRoots !== undefined) {
+    if (!Array.isArray(box.writableRoots)) return `writable folders Dopl cannot read (${JSON.stringify(box.writableRoots)})`;
+    if (box.writableRoots.length) return `extra writable folders (${box.writableRoots.length})`;
+  }
+  for (const k of NARROWING_FLAGS) {
+    if (k in box && box[k] !== undefined && typeof box[k] !== 'boolean') return `a sandbox setting Dopl cannot read (${k})`;
+  }
+  for (const k of Object.keys(box)) {
+    if (k === 'type' || k === 'networkAccess' || k === 'writableRoots' || NARROWING_FLAGS.indexOf(k) !== -1) continue;
+    if (!isEmptyish(box[k])) return `a sandbox setting Dopl does not recognise (${k})`;
+  }
+  return null;
+}
+
 /** Every safety setting Dopl sent, read back off the `thread/start|resume` answer. Throws (fail CLOSED) on
  *  a mismatch AND on an echo Dopl cannot read: the run is refused rather than started unconfirmed. */
 function assertThreadTook(sent, response, sameDir) {
@@ -122,10 +149,11 @@ function assertThreadTook(sent, response, sameDir) {
     const got = box && typeof box.type === 'string' ? box.type : '';
     if (!want || !got) throw refuse(`a sandbox Dopl cannot read (asked \`${sent.sandbox}\`)`);
     if (got !== want) throw refuse(`sandbox \`${got}\` after Dopl asked for \`${sent.sandbox}\``);
-    // Wider than asked inside the same mode: network on, or extra writable roots Dopl never sent.
-    if (got !== 'dangerFullAccess' && box.networkAccess === true) throw refuse('network access on');
-    if (Array.isArray(box.writableRoots) && box.writableRoots.length) {
-      throw refuse(`extra writable folders (${box.writableRoots.length})`);
+    // Wider than asked inside the same mode — read STRICTLY by type (Codex self-audit M2): a field Dopl
+    // cannot read as "off" refuses, so a future representation ("enabled", an object of roots) never passes.
+    if (got !== 'dangerFullAccess') {
+      const problem = sandboxWidening(box);
+      if (problem) throw refuse(problem);
     }
   }
   const askedRev = (sent && sent.approvalsReviewer) || null;
@@ -135,6 +163,17 @@ function assertThreadTook(sent, response, sameDir) {
   if ((REVIEWER_ECHO[gotRev] || gotRev) !== wantRev) {
     throw refuse(`approvals routed to \`${gotRev}\` after Dopl asked for \`${askedRev || 'user'}\``);
   }
+  // The MODEL (Codex self-audit M3): `ThreadStartResponse.model` is required. A requested model must be the
+  // one running — a build that accepts the field and ignores it would run another model (with the chosen
+  // effort) silently. With none requested, Codex must still say which model it chose.
+  const askedModel = sent && typeof sent.model === 'string' ? sent.model.trim() : '';
+  const gotModel = typeof r.model === 'string' && r.model.trim() ? r.model.trim()
+    : (r.thread && typeof r.thread.model === 'string' ? r.thread.model.trim() : '');
+  if (!gotModel) throw refuse('no model Dopl could read');
+  if (askedModel && gotModel !== askedModel) {
+    throw new Error(`Codex started the thread on model \`${gotModel}\` after Dopl asked for \`${askedModel}\` — `
+      + 'refusing a session that would run a model the operator did not choose.');
+  }
   if (sent && sent.cwd) {
     if (typeof r.cwd !== 'string' || !r.cwd) throw refuse('no working folder Dopl could read');
     if (!sameDir(r.cwd, sent.cwd)) throw refuse('a different working folder than the one Dopl sandboxed');
@@ -142,6 +181,6 @@ function assertThreadTook(sent, response, sameDir) {
 }
 
 module.exports = {
-  nativeApprovalPolicy, placePolicy, assertPolicyTook, assertThreadTook, SANDBOX_ECHO,
+  nativeApprovalPolicy, placePolicy, assertPolicyTook, assertThreadTook, sandboxWidening, SANDBOX_ECHO,
   NEVER_NATIVE, GRANULAR_KEYS, APPROVALS_REVIEWER,
 };

@@ -111,7 +111,8 @@ async function fetchRoster(gate) {
       `\`${str(gate.path) || 'codex'} app-server\` did not answer \`model/list\` within ${LIST_TIMEOUT_MS}ms.`)),
     LIST_TIMEOUT_MS);
     try {
-      conn = client.connect({ args: [], env: configHome.isolatedEnv(cliSpawn.scrubbedEnv(process.env)) });
+      // PINNED to the binary the probe checked (Codex self-audit M1): never a re-resolve an update could move.
+      conn = client.connect({ bin: gate.path, args: [], env: configHome.isolatedEnv(cliSpawn.scrubbedEnv(process.env)) });
       conn.request('initialize', client.initializeParams(appVersion()))
         .then(() => { conn.notify('initialized'); return listPages(conn); })
         .then(({ rows, truncated }) => {

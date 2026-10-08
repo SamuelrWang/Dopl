@@ -214,9 +214,10 @@ test("CX-14: a fresh thread/start with no id fails the stream instead of running
 
 test("CX-14: a resume keeps its known thread id when the answer omits one", async () => {
   // The echo is all there (the schema requires it); only the thread id is missing.
-  const h = run({ thread: { ...threadEcho({ cwd: import.meta.dirname }), model: undefined }, resumeThreadId: "th-old" });
+  // `model` is REQUIRED in the answer (echo-verified since the Codex self-audit M3); only the thread id is missing.
+  const h = run({ thread: { ...threadEcho({ cwd: import.meta.dirname }) }, resumeThreadId: "th-old" });
   try {
     const first = await h.handle.next();
-    assert.deepEqual(first.value.params, { threadId: "th-old", model: null });
+    assert.deepEqual(first.value.params, { threadId: "th-old", model: "gpt-x" });
   } finally { h.handle.close(); h.restore(); }
 });

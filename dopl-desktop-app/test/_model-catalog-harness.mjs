@@ -52,6 +52,8 @@ export const loadCatalog = (store) =>
     if (id === "./selection-vocabulary") return requireMain(join(MAIN, "runtime", "selection-vocabulary.js")); // pure
     if (id === "./live-store") return store || memoryLiveStore();
     if (id === "./roster-key") return requireMain(join(MAIN, "runtime", "roster-key.js")); // pure
+    if (id === "./catalog-status") return requireMain(join(MAIN, "runtime", "catalog-status.js")); // pure
+    if (id === "./catalog-readers") return requireMain(join(MAIN, "runtime", "catalog-readers.js")); // pure
     if (id === "./model-preferences") return requireMain(join(MAIN, "runtime", "model-preferences.js")); // seed + lazy store
     throw new Error(`unexpected require: ${id}`);
   });

@@ -222,8 +222,10 @@ function start(spec) {
     // Codex's own startup error (never the bearer, which rides the env), one line and bounded.
     if (outcome.error) line.push(`error=${String(outcome.error).replace(/\s+/g, ' ').slice(0, 200)}`);
     log(...line);
-    if (link.closed || !mcpReady.missedTools(outcome)) return;
+    if (link.closed || !mcpReady.missedTools(outcome)) return true;
     frames.push({ type: normalizer.ERROR_MESSAGE_TYPE, text: '', mcpStartup: outcome.failureReason || outcome.status });
+    // NO TURN without Dopl's tools: the shared MCP guard retries once or ends the session visibly.
+    return false;
   };
 
   // Usage arrives on `thread/tokenUsage/updated`; it is attached to the `turn/completed` frame.
@@ -343,8 +345,8 @@ function start(spec) {
       if (!activeTurnId) {
         if (firstTurn) {
           firstTurn = false;
-          await firstTurnReady(conn);
-          if (link.closed) return;
+          const ready = await firstTurnReady(conn);
+          if (link.closed || ready === false) return;
         }
         const turn = await conn.request('turn/start', Object.assign(
           { threadId, input }, spec.turnStart || {}

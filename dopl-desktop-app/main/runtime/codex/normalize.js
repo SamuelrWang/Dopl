@@ -42,7 +42,7 @@ const MCP_STARTUP_WHY = Object.freeze({
 });
 const mcpStartupLine = (key) => {
   const why = Object.prototype.hasOwnProperty.call(MCP_STARTUP_WHY, key) ? MCP_STARTUP_WHY[key] : MCP_STARTUP_WHY.failed;
-  return `Dopl's tools did not connect (${why}), so this turn runs without them.`;
+  return `Dopl's tools did not connect (${why}), so the agent will not run without them.`;
 };
 
 function itemOf(params) {
@@ -170,7 +170,11 @@ function normalize(msg, ctx) {
   // Core's rejection frame and launch-spec's failed-turn frame: platform text, so classified here.
   if (msg.type === ERROR_MESSAGE_TYPE) {
     // Dopl's own bearer, not the Codex sign-in, so never a hold.
-    if (msg.mcpStartup) return [events.assistant(mcpStartupLine(String(msg.mcpStartup)))];
+    // Dopl's tools did not connect: the lane says so AND the shared guard ends (or retries) the session — the
+    // first turn is never started without them (Codex self-audit LOW: a mute agent cannot post).
+    if (msg.mcpStartup) {
+      return [events.assistant(mcpStartupLine(String(msg.mcpStartup))), events.mcpStatus(String(msg.mcpStartup))];
+    }
     const text = String(msg.text == null ? '' : msg.text);
     if (isAuthShaped(text) || unauthorizedInfo(msg.codexErrorInfo)) return [events.authHold(text)];
     // A failed TURN (not a rejected stream, which core's crash path reports) is shown in the lane.
@@ -210,6 +214,12 @@ function normalize(msg, ctx) {
     return out;
   }
 
+  // A notification Dopl does not handle: routine when THIS build's own schema declares it (deltas, plan
+  // updates); drift — counted once per name in the shared ledger and told to the session — when the build
+  // never declared it (Codex self-audit LOW). No description yet = no verdict, nothing said.
+  if (require('../sdk-shape').knows('codex', `notification ${method}`) === false) {
+    return [events.shapeDrift(`notification:${method}`, `Codex sent "${method}", which its own protocol description does not list`)];
+  }
   return [];
 }
 
