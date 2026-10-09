@@ -12,6 +12,12 @@
 // Measured 2026-10-08 on runtime 0.3.293 (claude 2.1.293), Dopl's options and scrubbed env: `init`
 // reports `permissionMode: "default"`, `tools` = exactly the `tools` bound (deny-listed names absent),
 // and no MCP server Dopl did not configure. Pure.
+// ⚠ RE-MEASURED 2026-10-09 (claude 2.1.287 / 2.1.295 / 2.1.296, identical): the 10-08 run had NO credential,
+// so no Dopl server was configured (`loader.js › buildMcpServers` returns {}) and the gap below never showed.
+// `init` reports some bound names under ANOTHER SPELLING (`REPORTED_AS`): it canonicalizes legacy names, and
+// still reports `Agent` as `Task`. The resource pair is offered only while a CONNECTED server publishes
+// resources — Dopl's own always does (`packages/mcp-server/src/resources.ts`) — so every signed-in `full` /
+// `channel_agent` launch refused (2026-10-09, listener.log); `Task` only with "Use my tools" (`Agent`).
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 const names = (v) => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
@@ -19,6 +25,18 @@ const names = (v) => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
 // `mcp__<server>__<tool>`: the CLI spells a server key with every character outside [A-Za-z0-9_-] as `_`.
 const serverToken = (key) => str(key).replace(/[^A-Za-z0-9_-]/g, '_');
 const MCP_PREFIX = 'mcp__';
+
+// A bound name → the name(s) `init` reports it as (MEASURED 2026-10-09, see the header; the CLI's alias table
+// holds more, but only these were seen). Each widens only a bound that already holds its key: `Task` is
+// accepted only where `Agent` was asked for ("Use my tools"), the resource pair only where `full` /
+// `channel_agent` bound `ListMcpResources` / `ReadMcpResource` (`tools.js › BYPASS_READS`). The deny list is
+// read through the same table and checked FIRST, so a denied name stays refused under either spelling.
+const REPORTED_AS = {
+  Agent: ['Task'],
+  ListMcpResources: ['ListMcpResourcesTool'],
+  ReadMcpResource: ['ReadMcpResourceTool'],
+};
+const withReported = (list) => list.concat(...list.map((n) => (Object.hasOwn(REPORTED_AS, n) ? REPORTED_AS[n] : [])));
 
 /**
  * What this launch asked for, read off the options `launch-spec.js` hands the SDK (after every
@@ -30,9 +48,9 @@ function contractOf(options, opts) {
   return {
     permissionMode: str(o.permissionMode) || null,
     // `null` = no positive bound was set (none is today; every profile bounds — `tools.js`).
-    tools: Array.isArray(o.tools) ? names(o.tools) : null,
+    tools: Array.isArray(o.tools) ? withReported(names(o.tools)) : null,
     // Bare names only: a `Read(~/.ssh/**)` rule narrows a tool, it does not remove it.
-    denied: names(o.disallowedTools).filter((n) => n.indexOf('(') === -1),
+    denied: withReported(names(o.disallowedTools).filter((n) => n.indexOf('(') === -1)),
     servers: Object.keys(o.mcpServers || {}).map(serverToken).filter(Boolean),
     strictServers: !(opts && opts.operatorTools),
   };
@@ -47,6 +65,7 @@ function contractOf(options, opts) {
  * removed: final review L3.)
  * ⚠ MEASURED (2026-10-08, claude 2.1.293): `full` offered `TaskStop` with no Dopl class; it is now in the
  * shell class (a8ebdf04), so every profile's measured init is clean under this rule.
+ * ⚠ MEASURED (2026-10-09, signed in): the bound is matched under the names `init` reports (`REPORTED_AS`).
  */
 function verifyInit(init, contract) {
   const c = contract || {};
@@ -114,4 +133,4 @@ function mismatchSentence(init, contract) {
     + 'Running it would have left one of Dopl\'s restrictions off.';
 }
 
-module.exports = { contractOf, verifyInit, mismatchSentence, serverToken, configuredServer };
+module.exports = { contractOf, verifyInit, mismatchSentence, serverToken, configuredServer, REPORTED_AS };

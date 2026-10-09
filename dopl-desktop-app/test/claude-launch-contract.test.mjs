@@ -45,6 +45,52 @@ test("H2: a built-in offered outside the bound REFUSES (the gate is no backstop:
   assert.match(v.refuse.join(" "), /outside this launch's bound \(ShellKill2\)/);
 });
 
+// RE-MEASURED 2026-10-09 (claude 2.1.287 / 2.1.295 / 2.1.296), with a CONNECTED server that publishes resources
+// (Dopl's own always does) — the shape every signed-in launch reports; 10-08's run had no Dopl server at all.
+const RESOURCE_PAIR = ["ListMcpResourcesTool", "ReadMcpResourceTool"];
+const SIGNED_IN = {
+  read_only: MEASURED.read_only,
+  dopl_only: MEASURED.dopl_only,
+  channel_agent: MEASURED.channel_agent.concat(RESOURCE_PAIR),
+  full: MEASURED.full.concat(RESOURCE_PAIR),
+};
+// …and with "Use my tools" (`Agent` + `Skill` appended to the bound): `Agent` is reported as `Task`.
+const OPERATOR = ["Task", "Skill"];
+const { NATIVE_BUILTINS } = require("../main/tool-profiles.js");
+const withOperator = (profile) => { const o = launchOptions(profile); o.tools = o.tools.concat(NATIVE_BUILTINS); return o; };
+
+test("🔒 2026-10-09: every profile's SIGNED-IN init passes (the resource pair is the bound's own, renamed)", () => {
+  for (const [profile, offered] of Object.entries(SIGNED_IN)) {
+    assert.deepEqual(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(launchOptions(profile))), { refuse: [] }, profile);
+  }
+});
+
+test("🔒 2026-10-09: \"Use my tools\" on full / channel_agent passes with `Task` (its `Agent`), Skill and the resource pair", () => {
+  for (const profile of ["full", "channel_agent"]) {
+    const offered = SIGNED_IN[profile].concat(OPERATOR, ["mcp__supabase__execute_sql"]);
+    assert.deepEqual(lc.verifyInit({ permissionMode: "default", tools: offered }, lc.contractOf(withOperator(profile), { operatorTools: true })), { refuse: [] }, profile);
+  }
+});
+
+test("2026-10-09: the widening holds only where its bound name was asked for", () => {
+  // `Task` without "Use my tools" (no `Agent` in the bound) is the bug's sentence, still refused.
+  const v = lc.verifyInit({ permissionMode: "default", tools: SIGNED_IN.full.concat(["Task"]) }, lc.contractOf(launchOptions("full")));
+  assert.match(v.refuse.join(), /outside this launch's bound \(Task\)/);
+  // A restricted bound never names the resource pair: offered there, it refuses.
+  const r = lc.verifyInit({ permissionMode: "default", tools: MEASURED.dopl_only.concat(RESOURCE_PAIR) }, lc.contractOf(launchOptions("dopl_only")));
+  assert.match(r.refuse.join(), /outside this launch's bound \(ListMcpResourcesTool, ReadMcpResourceTool\)/);
+});
+
+test("2026-10-09: a restricted profile's deny list holds under either spelling (`Task` / `Agent` stay refused)", () => {
+  for (const profile of ["read_only", "dopl_only"]) {
+    const c = lc.contractOf(launchOptions(profile));
+    assert.ok(c.denied.includes("Task") && c.denied.includes("Agent"), profile);
+    assert.ok(!c.tools.includes("Task") && !c.tools.includes("ListMcpResourcesTool"), profile);
+    const v = lc.verifyInit({ permissionMode: "default", tools: MEASURED[profile].concat(["Task"]) }, c);
+    assert.match(v.refuse.join(), /denied \(Task\)/, profile);
+  }
+});
+
 test("REFUSES: a permission mode that skips Dopl's gate, or none reported", () => {
   const c = lc.contractOf(launchOptions("read_only"));
   for (const mode of ["bypassPermissions", "acceptEdits", "plan", "auto", "dontAsk"]) {
