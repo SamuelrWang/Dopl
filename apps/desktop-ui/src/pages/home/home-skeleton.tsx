@@ -1,5 +1,10 @@
 import { cn } from "@/shared/lib/utils";
-import { Skeleton, SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
+import {
+  GHOST_FLAT_FACE,
+  Skeleton,
+  SkeletonBar,
+  SkeletonLine,
+} from "@/shared/ui/skeleton";
 import { PANEL_ROWS, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { NAKED_ICON } from "@/shared/ui/naked-icon-button";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
@@ -19,13 +24,6 @@ import home from "./home.module.css";
  * classes by reference (`--home-list-w`, `home.kbCards`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
  * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
-
-/**
- * The one face every /home loading ghost wears: the radius and the border box, nothing visible
- * (skeletons are flat — shimmer blocks only). `border-transparent`, never a dropped border: the
- * background paints under the border box and dropping it would move every block in by a pixel.
- */
-const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent";
 
 /** The whole /home frame while the page reads are in flight: rail, header, list, record pane. */
 export function HomePageSkeleton({ label = "Opening home" }: { label?: string }) {

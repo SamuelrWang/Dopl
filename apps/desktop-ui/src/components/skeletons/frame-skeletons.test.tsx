@@ -364,7 +364,7 @@ describe("the /home shapes are /home's own geometry", () => {
     // 🔒 THE FACE IS THE PAGE'S ALONE (Samuel, 2026-09-21: the skeletons are
     // FLAT — *"we basically just shouldn't have elevated components"*). The two
     // Usage cards keep `.bento` on the PAGE and the ghost wears
-    // `home-skeleton.tsx › GHOST_FLAT_FACE`, so this pins the split in BOTH
+    // `shared/ui/skeleton.tsx › GHOST_FLAT_FACE`, so this pins the split in BOTH
     // directions: parity here would re-elevate the loading state, and a bare
     // `rounded-[14px]` on the ghost would drop the 1px border box and pull every
     // block inside in by a pixel.
@@ -372,10 +372,12 @@ describe("the /home shapes are /home's own geometry", () => {
       expect(panels).toContain(face);
       expect(HOME_SKELETON).not.toContain(face);
     }
-    // The face is spelled ONCE; every ghost on the page reads it.
-    expect(HOME_SKELETON).toContain(
-      'const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
+    // The face is spelled ONCE, in the shared skeleton kit (the /home channel
+    // record ghost wears it too); every ghost on the page reads it.
+    expect(file("../../../../../src/shared/ui/skeleton.tsx")).toContain(
+      'export const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
     );
+    expect(HOME_SKELETON).toContain("GHOST_FLAT_FACE,");
     // The plot height is IMPORTED, the way the Overview page's ghost takes it.
     expect(HOME_SKELETON).toContain(
       'import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series"'
