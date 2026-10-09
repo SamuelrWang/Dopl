@@ -116,7 +116,7 @@ test("LOW: unknown notifications are drift only when THIS build's own schema doe
 
 // ── LOW: no capability claimed that the adapter does not drive ──
 test("LOW: Codex no longer claims `fork` (no thread/fork path)", () => {
-  assert.equal(require(join(MAIN, "runtime", "codex", "index.js")).descriptor.session.fork, false);
+  assert.ok(!("fork" in require(join(MAIN, "runtime", "codex", "index.js")).descriptor.session));
 });
 
 // ── Reviewer re-check (7854b400) ──

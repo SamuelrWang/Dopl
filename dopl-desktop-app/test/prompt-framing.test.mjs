@@ -66,8 +66,7 @@ test("name-injection safety: a display name with fence markers cannot forge or l
   const text = lines.join("\n");
   assert.ok(!text.includes("BEGIN-REQUEST"), "no BEGIN-REQUEST token may survive into the framing");
   assert.ok(!text.includes("END-REQUEST"), "no END-REQUEST token may survive into the framing");
-  // No single framing line may contain an embedded newline (a name cannot split a
-  // line and thereby forge a fence line of its own).
+  // No framing line may embed a newline (a name cannot split a line to forge a fence line).
   for (const line of lines) assert.ok(!line.includes("\n"), "no framing line may carry a raw newline");
   // sanitizeName is the guard; it strips the fence tokens (the surrounding text,
   // e.g. the "-1"/"-2" suffixes, is harmless once the token is gone) and collapses
@@ -480,8 +479,7 @@ test("every delivery branch states that prose — the final answer included — 
       const out = buildFencedTurn({ side, message: "x", nonce: "p1", context });
       const flat = out.replace(/\s+/g, " ");
       assert.ok(
-        // ⚠ 2026-10-08: narrowed from "every substantive word is an ordinary message", which agents
-        // read as "never a decision card"; the invariant is still that every answer is POSTED.
+        // ⚠ 2026-10-08: narrowed from "every substantive word…" (read as "never a decision card").
         /EVERY ANSWER IS POSTED, YOUR FINAL ANSWER INCLUDED: as a message, or as a decision card or a display/.test(flat),
         `${side}: the prose invariant is missing from a delivery branch`
       );

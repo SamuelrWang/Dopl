@@ -247,7 +247,7 @@ Resolve budget: **`IDENTITY_RESOLVE_TIMEOUT_MS = 5000`**, not `launch-directives
 | F-2 | template **invisible** to the operator (§3e cross-credential case) → `404` | **REFUSE**, same word | The endpoint deliberately cannot distinguish deleted from invisible (404-never-403). The desktop must not try to. |
 | F-3 | resolve **timeout / network** (`status === 0`) | **REFUSE** with the existing word **`busy`** | `busy` renders as *"Busy right now — try again"* (`use-launch-controls.ts › LAUNCH_REFUSALS`) — exactly right for a momentary inability. No new word needed. |
 | F-4 | resolve **5xx** | **REFUSE** with `busy` | same class |
-| F-5 | template's `model` unknown to the frozen model list (`main/runtime/claude/model-table.js › MODEL_IDS` since 2026-09-23) | **DEGRADE, and say so** | See below. |
+| F-5 | template's `model` unknown to the live roster (`main/runtime/claude/models.js › models`, read from `supportedModels()`; no frozen list since 2026-10-08) | **DEGRADE, and say so** | See below. |
 | F-6 | resolve returns `200` with `instructions: null`, `fields: []`, `knowledgeBases: []` | **LAUNCH.** A name-only template is legal — the role block emits the identity line and nothing else | An empty template is a real configuration, not an error |
 
 **The refusal wire word.** `no-identity` is a **seventh** member of a closed six-word vocabulary

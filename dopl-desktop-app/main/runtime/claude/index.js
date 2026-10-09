@@ -26,7 +26,6 @@ const descriptor = {
 
   session: {
     resume: true,
-    fork: false,
     steer: true,
     // The only actuator of the reducer's `interrupt` / `abandon_timeout` effects; without it the
     // Stop control is disabled rather than a button that does nothing.

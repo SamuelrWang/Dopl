@@ -243,6 +243,9 @@ describe("the published surface says whose each kind is", () => {
     expect(channelDoctrine()).not.toContain("they are REFUSED from you");
     expect(channelDoctrine()).not.toMatch(/REFUSED FROM YOU|this tool REFUSES them/i);
     // ⚠ RE-POINTED: `op="post"` is `op="send"`, so the doctrine's noun moved with it.
-    expect(channelDoctrine()).toContain("EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY SEND");
+    // ⚠ RE-POINTED 2026-10-08: "every substantive thing is an ordinary send" read as "never a
+    // decision card"; narrowed to "every answer is posted" (5ce9e803).
+    expect(channelDoctrine()).toContain("EVERY ANSWER IS POSTED, YOUR FINAL ANSWER INCLUDED.");
+    expect(channelDoctrine()).not.toContain("EVERY SUBSTANTIVE THING YOU SAY IS AN ORDINARY SEND");
   });
 });

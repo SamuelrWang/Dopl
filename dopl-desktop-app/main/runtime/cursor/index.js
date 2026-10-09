@@ -29,7 +29,6 @@ const descriptor = {
 
   session: {
     resume: true,
-    fork: false,
     steer: 'unverified',
     // The ship gate (§5 X0): with no interrupt the Stop control is refused.
     interrupt: 'unverified',

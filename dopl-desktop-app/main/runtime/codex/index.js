@@ -35,8 +35,7 @@ const descriptor = {
 
   session: {
     resume: true, // `thread/resume`
-    // Codex HAS `thread/fork`, but this adapter sends it nowhere — a capability is claimed only where Dopl drives it.
-    fork: false,
+    // No `fork`: Codex HAS `thread/fork`, but this adapter sends it nowhere — a capability is claimed only where Dopl drives it.
     steer: true, // `turn/steer` appends input mid-turn
     interrupt: true, // `turn/interrupt`
     // `TurnStartParams.model` exists, but this runtime is measured to accept fields and ignore them,

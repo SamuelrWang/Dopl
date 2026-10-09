@@ -38,13 +38,12 @@ const ARMED = ADAPTERS.length >= 2;
 // ADAPTER (repaired 2026-08-31, when the Codex adapter armed it). The second case below asserts
 // that every field is "declared absent somewhere", whose whole purpose is to catch a HIDE-ON-ABSENT
 // branch no runtime exercises. But most fields here HAVE no hide-on-absent branch:
-// `axisB.enforcementPoint` REFUSES REGISTRATION when null, `session.fork` and `approval.heldCallback` are booleans, and
+// `axisB.enforcementPoint` REFUSES REGISTRATION when null, `approval.heldCallback` is a boolean, and
 // `toolMode.options` is a list a runtime cannot lack. Requiring a `null` from one of those is
 // requiring an adapter that could never register. So the case now runs over the NULLABLE subset —
 // the fields §3.2's hide-on-absent table actually lists — and the variance case still runs over
 // all of them.
 const VARIES = [
-  ["session.fork", (d) => d.session.fork, false],
   ["session.liveModelSwitch", (d) => d.session.liveModelSwitch, false],
   ["axisB.enforcementPoint", (d) => d.axisB.enforcementPoint, false],
   ["axisB.inputRewrite", (d) => d.axisB.inputRewrite, false],

@@ -869,7 +869,7 @@ COMMIT;
   - **(b) `task_finished` leaves the requester strip unchanged.** `main/session-dispatch.js:269` — `REQUEST_MILESTONES = { task_started: 'accepted', task_failed: 'declined' }`. The comment above it states the reasoning: a `task_failed` with no `declined` flag is a real error, not a decline, and v1 has no word for it, so the strip holds rather than say the wrong thing. `task_finished` is absent entirely.
   - **(c) is the same fact as F-112 and is tracked there** — four `kind === 'message'` gates in `session-dispatch.js`, now the whole rule rather than a lane-priority question.
   - **(e) `BYPASS_READS`' MCP read tools reach ANY configured server under `full`.** `main/session-profiles.js:342-346` (`ListMcpResources` / `ReadMcpResource`), folded into `BYPASS_TOOLS` at `:348`; under `full` `doplToolsPolicy` is `null` (`:167`), so there is no per-server bound. Reads only.
-  - **(f) The model context-window table does not cover every id the CLI can report.** `main/runtime/claude/model-table.js › contextWindowFor` (the table's home since 2026-09-23, when the session-model module was deleted) handles the `[1m]` suffix, an exact table hit and a dated `-\d{8}$` strip; anything else — `-fast`, `-v1` — returns `null`, so the Claude normalizer's `context` reading carries tokens with no window and `session-metrics.js › metrics` reports none. Fail-safe: **tokens only, never a made-up percentage.**
+  - **(f) The model context-window table does not cover every id the CLI can report.** `contextWindowFor` (deleted 2026-10, 071f52a7 — windows are now learned from the CLI's `result` reports; the table's home since 2026-09-23, when the session-model module was deleted) handles the `[1m]` suffix, an exact table hit and a dated `-\d{8}$` strip; anything else — `-fast`, `-v1` — returns `null`, so the Claude normalizer's `context` reading carries tokens with no window and `session-metrics.js › metrics` reports none. Fail-safe: **tokens only, never a made-up percentage.**
   - **(g) Each typed request opens a real window.** `session-dispatch.js:170-177` → `launchRequesterSession` (`main/session-engine.js:419-421`); `getWindowMode()` defaults ON (`main/settings.js:34-37`). Self-inflicted, evictable, N requests = N windows.
 - **The blocker this wave's review caught is worth restating, because it is a trap the codebase can re-enter:** the consent arm was keyed to the `(channel, thread)` SLOT and consumed unconditionally by EVERY spawn shape, so a peer-driven parked-shell wake racing a pending armed card started at bypass/auto_both while the real Accept spawned manual/ask. Fixed with `adoptsConsent`, threaded from `launch()`'s own adopt test and pinned as a SINGLE SETTER. Do not add a second setter.
 - Status: open (residuals)
@@ -2416,13 +2416,13 @@ table held against the presence table.
 ## F-293 — a long-context model id split into two bare names, one of them shaped exactly like a relative time (2026-08-23)
 
 - Location: `packages/mcp-server/src/tools/channel-session-render.ts › shortModelLabel`, against
-  `packages/mcp-server/src/tools/narration.ts › neutralizeInline` and `dopl-desktop-app/main/runtime/claude/model-table.js › contextWindowFor`.
+  `packages/mcp-server/src/tools/narration.ts › neutralizeInline` and `contextWindowFor` (deleted 2026-10, 071f52a7).
 - Found during: live use. Two test agents independently read a session line whose model segment said `opus-5 1m`
   where another call had said `opus-5`. The session had **no template**, which is what made it dangerous.
 - Severity: moderate. Nothing crashes; a surface that promises "two bare names = template, then model" printed one
   value as two, one clause away from `started 12m ago` and `stale, 10m ago`.
 - **The mechanism, in three hops.** The bundled CLI marks its 200k models `supports_1m_suffix` and ships ids like
-  `claude-opus-5[1m]`; `runtime/claude/model-table.js › contextWindowFor` reads that exact suffix as the window, and
+  `claude-opus-5[1m]`; `contextWindowFor` (deleted 2026-10, 071f52a7) read that exact suffix as the window, and
   `session-telemetry.js › telemetryFields` puts `s.liveModel` — the SDK's OWN reported id — on the wire. Then
   `shortModelLabel` strips the vendor prefix (`opus-5[1m]`), and `neutralizeInline` turns `[` and `]` into SPACES
   because they are markdown structure. `` `opus-5 1m` ``. **`1m` is byte-for-byte what `coarseAge` emits between 30s
