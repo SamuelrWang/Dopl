@@ -156,8 +156,8 @@ function HomeHeaderGhost() {
 }
 
 /**
- * The record pane on the face the page opens on (`HOME_DEFAULT_TAB`, Overview): Usage and the
- * channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage cards
+ * The record pane on the face the page opens on (`HOME_DEFAULT_TAB`, Overview): Usage (the
+ * credit card, then the histogram card with its control row) and the channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage cards
  * wear `GHOST_FLAT_FACE`, not the page's `.bento` (skeletons are flat).
  */
 function OverviewFaceGhost() {
@@ -167,12 +167,33 @@ function OverviewFaceGhost() {
         {/* USAGE — one well holding the capacity bar, then the plot. */}
         <SectionPanelGhost headingWidth={HEADING_W}>
           <div className="flex flex-col gap-3">
+            {/* "Credit spend": the card's own `h3` (`mb-2`), then the bar at `CreditsBar`'s 54px. */}
             <div className={cn(GHOST_FLAT_FACE, "p-3.5")}>
-              <Skeleton className="h-[46px] w-full rounded-[10px]" />
+              <div className="mb-2 flex h-5 items-center">
+                <SkeletonLine w={92} h={12} />
+              </div>
+              <Skeleton className="h-[54px] w-full rounded-lg" />
             </div>
+            {/* The histogram: `overview-sections.tsx › UsageChart`'s control row (scope menu left;
+                month stepper and total right), then the plot at `mt-3`. */}
             <div className={cn(GHOST_FLAT_FACE, "flex flex-col p-3.5")}>
+              <div className="flex items-center justify-between gap-3">
+                <SkeletonLine w={108} h={12} />
+                <div className="flex min-w-0 shrink-0 items-center gap-2">
+                  <div className="flex items-center gap-0.5">
+                    <span className="flex items-center justify-center p-2">
+                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
+                    </span>
+                    <SkeletonLine w={84} h={12} />
+                    <span className="flex items-center justify-center p-2">
+                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
+                    </span>
+                  </div>
+                  <SkeletonLine w={36} h={9} />
+                </div>
+              </div>
               <Skeleton
-                className={cn(PLOT_HEIGHT_CLASS, "w-full rounded-[10px]")}
+                className={cn(PLOT_HEIGHT_CLASS, "mt-3 w-full rounded-[10px]")}
               />
             </div>
           </div>
@@ -190,6 +211,10 @@ function OverviewFaceGhost() {
     </div>
   );
 }
+
+/** `overview-usage-filter.tsx › MONTH_ARROW_ICON` (file-private there): the stepper's 16px glyph in
+ *  `NAKED_ICON_BUTTON`'s `p-2` box. */
+const MONTH_ARROW = 16;
 
 /* ── The channel column: the gray wells and the rows inside them ── */
 
