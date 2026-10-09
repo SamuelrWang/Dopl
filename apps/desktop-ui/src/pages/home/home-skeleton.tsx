@@ -7,6 +7,7 @@ import {
 } from "@/shared/ui/skeleton";
 import { PANEL_ROWS, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { NAKED_ICON } from "@/shared/ui/naked-icon-button";
+import { PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import {
   IdentityCardsGhost,
@@ -60,7 +61,8 @@ export function HomePageSkeleton({ label = "Opening home" }: { label?: string })
   );
 }
 
-/** /home → Knowledge while the base list is in flight: two flat sections over the card grid. */
+/** /home → Knowledge while the base list is in flight: two flat sections over the card grid. No
+ *  caption under either heading — the real panels print label + control only (2026-09-09). */
 export function HomeKnowledgePanelsSkeleton({
   label = "Loading knowledge",
 }: {
@@ -71,10 +73,10 @@ export function HomeKnowledgePanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={122} />}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
         <KbCardsGhost />
       </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={140} />} caption>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
         <KbCardsGhost />
       </SectionPanelGhost>
     </SkeletonSurface>
@@ -93,10 +95,10 @@ export function HomeIdentityPanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={132} />}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
         <IdentityCardsGhost count={4} />
       </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={92} />} caption>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
         <IdentityCardsGhost count={4} />
       </SectionPanelGhost>
     </SkeletonSurface>
@@ -106,9 +108,19 @@ export function HomeIdentityPanelsSkeleton({
 /** Every /home section heading ghost is one width. */
 const HEADING_W = 148;
 
-/** A section header's create-button ghost. */
-function CreateGhost({ w }: { w: number }) {
-  return <SkeletonBar h={28} w={w} className="rounded-lg" />;
+/**
+ * A section header's create-button ghost: `panel-buttons.tsx › CreateButton` is `PAGE_ACTION_BTN`
+ * (`h-9 rounded-full px-[15px]`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
+ * sized from the label the real button prints, and two sections with one label ghost one width.
+ */
+function CreateGhost({ label }: { label: string }) {
+  return (
+    <SkeletonBar
+      h={36}
+      w={`calc(${label.length}ch + ${15 * 2 + PAGE_ACTION_ICON + 6}px)`}
+      className="rounded-full"
+    />
+  );
 }
 
 function KbCardsGhost() {
