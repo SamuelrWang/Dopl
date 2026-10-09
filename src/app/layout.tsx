@@ -71,6 +71,13 @@ export const metadata: Metadata = {
     ],
     apple: "/favicons/apple-touch-icon.png",
   },
+  // Home-screen install (iOS "Add to Home Screen", Android install): opens standalone, no browser chrome.
+  manifest: "/favicons/site.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Dopl",
+    statusBarStyle: "default",
+  },
   openGraph: {
     type: "website",
     siteName: "Dopl",
