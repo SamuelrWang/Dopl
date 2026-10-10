@@ -4,7 +4,9 @@
 // (`session-windowless.js › bridgeOutbound`). `handleTrigger` returns a REASON STRING only when
 // nothing could act, so `listener-messages.drainPage` holds the cursor on that seq (C-3).
 
-const { Notification } = require('electron');
+// ⚠ `electron` is no longer required here: `sendFyi` routes through `notification-route` and
+// `notifyAsk` builds its actionable banner in `notify-action.js`. This module raises nothing
+// itself.
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const spawner = require('./session-spawner');
@@ -12,12 +14,16 @@ const sessionEngine = require('./session-engine');
 const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
 const { buildActionNotification } = require('./notify-action');
+// The shared passive-mention copy. ⚠ No cycle: task-notify requires targeting + the route, never
+// this module.
+const { mentionNotice } = require('./task-notify');
 const { postCourtesy } = require('./channel-post');
 const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
 const outcomes = require('./trigger-outcomes');
 const { AUTH_HELD_REPLY, RESEND, CANNOT_RUN } = outcomes; // the peer-facing courtesy replies
 const { diag } = require('./diag');
 const notificationPrefs = require('./notification-prefs'); // the operator's banner switches
+const notificationRoute = require('./notification-route'); // which surface a passive notice takes
 
 // Deterministic per (channel, seq) so a replay groups with its first delivery; a first-class id wins.
 function taskIdFor(entry, m) {
@@ -35,25 +41,28 @@ function sendFyi(entry, m) {
     diag('mention notify muted', entry.channel.id.slice(0, 8), 'seq', m.seq, notificationPrefs.eventForMessage(m, entry));
     return;
   }
-  const author = io.displayNameFor(m.authorUserId);
-  const detail = targeting.metaStr(m, 'summary') || targeting.truncate(m.body, 120);
-  // Where: the thread's title when the post carries one, else the channel.
-  const where = targeting.metaStr(m, 'taskTitle') || entry.channel.name;
-  try {
-    if (Notification.isSupported()) {
-      const n = new Notification({
-        title: where,
-        body: `${author} mentioned you: ${detail}`,
-        silent: true,
-      });
-      n.on('click', () => targeting.openChannelForEntry(entry, {
-        threadId: targeting.metaStr(m, 'taskId') || null,
-        seq: m.seq,
-      }));
-      n.show();
-    }
-  } catch (_) { /* best-effort */ }
-  diag('mention notify', entry.channel.id.slice(0, 8), 'seq', m.seq, targeting.metaStr(m, 'taskTitle') ? 'titled' : 'channel');
+  // ⚠ ONE BUILDER, TWO CALL SITES. A tag inside a thread reaches `task-notify.js` instead of
+  // here (classify ranks 'task-reply' above 'fyi'), and both must read the same, so the copy
+  // lives in `task-notify.js › mentionNotice` — pure, and tested without electron.
+  const notice = mentionNotice(m, entry.channel.name, io.displayNameFor(m.authorUserId));
+  // ⚠ ROUTED, NOT RAISED DIRECTLY (Samuel's spec, 2026-10-09). `mention` and `decision` are both
+  // "Mac + popup", which resolves to ONE surface at raise time — the toast while Dopl is in
+  // front, the OS banner while it is away (`notification-route.js`). This call site no longer
+  // knows or cares which: it names the EVENT and hands over the copy.
+  // ⚠ The event id comes from `eventForMessage`, the same server-stamped facts the gate reads, so
+  // a decision card routes as `decision` and everything else as `mention` — one classifier, not
+  // two. `raise` checks the switch again; the early return above is kept because it also avoids
+  // building this copy for a muted event, and it is what the gate's own test pins.
+  const went = notificationRoute.raise(notificationPrefs.eventForMessage(m, entry), {
+    title: notice.title,
+    body: notice.body,
+    onClick: () => targeting.openChannelForEntry(entry, {
+      threadId: targeting.metaStr(m, 'taskId') || null,
+      seq: m.seq,
+    }),
+  });
+  diag('mention notify', entry.channel.id.slice(0, 8), 'seq', m.seq,
+    targeting.metaStr(m, 'taskTitle') ? 'titled' : 'channel', '→', went);
 }
 
 /**

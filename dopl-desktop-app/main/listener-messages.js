@@ -86,12 +86,16 @@ async function dispatchMessage(entry, m, myUserId) {
   // What the tag gates is the NOTICE. A thread reply is agent-into-thread activity, which is
   // precisely what the policy silences, and unlike 'trigger' nothing is waiting on the
   // operator here — there is no consent row and no launch, so no flow depends on the banner.
-  // ⚠ ONE PREDICATE, TWO READERS: `targeting.mentionsMe` is the same function classify's 'fyi'
-  // verdict is conjoined with, on the isChatIntent precedent above.
-  // ⚠ A HUMAN-typed reply notifies untagged (2026-08-20 review): the widened
-  // suppression removed its consent card, and a person's addressed words must
-  // not become invisible. Agent replies stay mention-gated (the Phase 7 rule).
-  else if (verdict === 'task-reply' && (m.authorKind === 'user' || targeting.mentionsMe(m, myUserId))) taskNotify.notifyTaskReply(entry, m);
+  // ⚠ THE CONDITION MOVED INSIDE (2026-10-09, Samuel's spec). It used to read
+  // `m.authorKind === 'user' || targeting.mentionsMe(...)` here, because a HUMAN-typed reply
+  // notified even untagged (2026-08-20 review) while agent replies stayed mention-gated. The
+  // spec turns the REPLY notice off for both authors, so author kind no longer decides anything
+  // and the only question left is "was I tagged", which `notifyTaskReply` now asks — see its
+  // header for why that path must survive at all (a tag inside my own thread never reaches
+  // `sendFyi`). The arm still fires on every task-reply so the verdict stays observable.
+  // ⚠ ONE PREDICATE, TWO READERS still holds: `targeting.mentionsMe` is the same function
+  // classify's 'fyi' verdict is conjoined with — it is just read one frame deeper now.
+  else if (verdict === 'task-reply') taskNotify.notifyTaskReply(entry, m, myUserId);
 }
 
 // ─── BEGIN DISPATCH-DEFERRAL (pure; unit-tested via source extraction) ───────

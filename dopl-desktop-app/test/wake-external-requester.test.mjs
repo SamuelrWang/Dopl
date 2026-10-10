@@ -111,25 +111,37 @@ test("the post-classify branch is plain: trigger, fyi, task-reply, and no route 
 });
 
 test("a 'task-reply' verdict reaches the passive notifier, with no consent or spawn", () => {
-  // ⚠ AND ONLY WHEN IT @-TAGS ME (2026-08-18, wiring plan Phase 7) — OR A HUMAN TYPED IT
-  // (2026-08-20 review: the widened suppression removed its consent card, and a person's
-  // addressed words must not become invisible; agent replies stay mention-gated). The
-  // conjunct is asserted IN this pin rather than beside it, because the wiring and its gate
-  // are one statement: a future edit that drops the gate would otherwise satisfy a pin
-  // written before it existed.
+  // ⚠ THE CONJUNCT MOVED INSIDE (2026-10-09, Samuel's spec). It used to read
+  // `m.authorKind === 'user' || targeting.mentionsMe(...)` HERE, and the old pin asserted it in
+  // place because wiring and gate were one statement. The spec turns the REPLY notice off for
+  // both authors, so author kind decides nothing now and the only question is "was I tagged",
+  // which `notifyTaskReply` asks — it must still be asked SOMEWHERE, because a tag inside my own
+  // thread classifies 'task-reply' and never reaches `sendFyi`. So the pin is now TWO parts: the
+  // verdict still reaches the notifier unconditionally, and the notifier still reads the tag.
   assert.match(
     LISTENER,
-    /else if \(verdict === 'task-reply' && \(m\.authorKind === 'user' \|\| targeting\.mentionsMe\(m, myUserId\)\)\) taskNotify\.notifyTaskReply\(entry, m\);/
+    /else if \(verdict === 'task-reply'\) taskNotify\.notifyTaskReply\(entry, m, myUserId\);/
+  );
+  assert.match(
+    M("task-notify.js"),
+    /if \(!targeting\.mentionsMe\(m, myUserId\)\)/,
+    "an untagged reply raises nothing, and a tagged one is still gated on the tag"
   );
   // The passive path is exactly that: no consent row, no watcher record, no spawn. The
   // strongest available pin is the module's DEPENDENCY set — it cannot reach the consent,
   // spawner or engine machinery because it does not require any of it.
   const NOTIFY = M("task-notify.js");
   const deps = [...NOTIFY.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
-  // 2026-10-09: `./notification-prefs` joins it — a STORE-ONLY module (electron-store, no
-  // route, no consent, no spawn) whose one effect here is muting this notice.
-  assert.deepEqual(deps, ["./diag", "./listener-io", "./notification-prefs", "./targeting", "electron"],
+  // 2026-10-09 (Samuel's spec): `electron` and `./notification-prefs` LEFT and
+  // `./notification-route` joined. This module raises nothing and gates nothing itself now — the
+  // route does both — so the dependency set got NARROWER, which is the direction this pin exists
+  // to protect. The route is itself passive: prefs + diag + electron, no consent, no spawner.
+  assert.deepEqual(deps, ["./diag", "./listener-io", "./notification-route", "./targeting"],
     "task-notify reaches nothing that could spawn, gate or record a consent");
+  const ROUTE = M("notification-route.js");
+  const routeDeps = [...ROUTE.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
+  assert.deepEqual([...new Set(routeDeps)], ["./diag", "./notification-prefs", "electron"],
+    "and the route it now leans on reaches nothing either");
   // D2 added a SECOND passive verdict on the same module, 'agent-escalation', with the agent
   // handle resolved by the CALLER and passed in precisely so the dependency set above could
   // not grow. It is gone with named agents (channels rollback §1); the DEPENDENCY PIN is what

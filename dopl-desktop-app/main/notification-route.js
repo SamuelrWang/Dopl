@@ -43,14 +43,28 @@ function isAppFocused() {
 }
 
 /**
+ * Every renderer window, or an empty list when there is no window layer to ask.
+ * ⚠ NO INJECTED HOST. This module is called from passive notice sites (`trigger.js › sendFyi`,
+ * the listener's own arms) that are handed no app host, and threading one through every one of
+ * them would be a dependency for nothing: the window list is a property of the process, not of
+ * a caller.
+ */
+function allWindows() {
+  try {
+    const { BrowserWindow } = require('electron');
+    return BrowserWindow.getAllWindows() || [];
+  } catch (_err) {
+    return [];
+  }
+}
+
+/**
  * Sends a toast to every renderer. Best-effort per window: one dead webContents must not stop
  * the others, and a failure here is never allowed to propagate into a caller's decision path.
- * @param {{getWindows: () => Array}} host
  */
-function pushToast(host, payload) {
+function pushToast(payload) {
   let delivered = 0;
-  const windows = (host && typeof host.getWindows === 'function' && host.getWindows()) || [];
-  for (const win of windows) {
+  for (const win of allWindows()) {
     try {
       win.webContents.send(TOAST_EVENT, payload);
       delivered += 1;
@@ -65,7 +79,7 @@ function pushToast(host, payload) {
  * Raises an OS banner. Click reveals the app, because every event in the spec is something the
  * operator acts on INSIDE Dopl.
  */
-function macBanner(host, spec) {
+function macBanner(spec) {
   try {
     const { Notification } = require('electron');
     if (!Notification.isSupported()) return false;
@@ -73,7 +87,11 @@ function macBanner(host, spec) {
     n.on('click', () => {
       try {
         if (typeof spec.onClick === 'function') spec.onClick();
-        else if (host && typeof host.showWindow === 'function') host.showWindow();
+        else {
+          // No handler given: the least surprising thing a click can do is bring Dopl forward.
+          const win = allWindows()[0];
+          if (win && typeof win.show === 'function') win.show();
+        }
       } catch (err) {
         diag('notification route: click handler failed —', (err && err.message) || 'error');
       }
@@ -90,12 +108,11 @@ function macBanner(host, spec) {
  * THE ONE ENTRY POINT. Raises `eventId` on the surface the spec gives it, after the operator's
  * preference, and on EXACTLY ONE surface.
  *
- * @param {{getWindows?: () => Array, showWindow?: () => void}} host
  * @param {string} eventId a registry id (`notification-prefs.js › EVENT_IDS`)
  * @param {{title: string, body?: string, onClick?: () => void}} spec
  * @returns {'mac'|'popup'|'none'} where it actually went. 'none' = muted, unknown, or no surface.
  */
-function raise(host, eventId, spec) {
+function raise(eventId, spec) {
   try {
     const surface = prefs.SURFACE[eventId];
     // An id this build cannot name has no surface to pick. ⚠ Note this is the OPPOSITE default
@@ -108,14 +125,14 @@ function raise(host, eventId, spec) {
 
     const target = surface === 'both' ? (isAppFocused() ? 'popup' : 'mac') : surface;
     if (target === 'popup') {
-      const sent = pushToast(host, { eventId: eventId, title: spec.title, kind: 'incoming' });
+      const sent = pushToast({ eventId: eventId, title: spec.title, kind: 'incoming' });
       // ⚠ A toast with no window to land in is a DROPPED notification. Fall back to the banner
       // rather than lose the fact: this is the "popup only" case with the app closed, which the
       // spec did not contemplate because it was written about a running app.
-      if (sent === 0) return macBanner(host, spec) ? 'mac' : 'none';
+      if (sent === 0) return macBanner(spec) ? 'mac' : 'none';
       return 'popup';
     }
-    return macBanner(host, spec) ? 'mac' : 'none';
+    return macBanner(spec) ? 'mac' : 'none';
   } catch (err) {
     diag('notification route: raise failed —', (err && err.message) || 'error');
     return 'none';

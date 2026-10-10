@@ -231,7 +231,7 @@ test("PREDICATE: a non-message kind, a null identity and an author-less post fai
 // made `handleTrigger` ANSWER whether the listener's cursor may advance, so the call site
 // became `return trigger.handleTrigger(entry, m)` and the assertion went red over a passing
 // product. F-108 is the standing finding about this class of desktop test.
-test("SEAM: the passive task-reply notice is MENTION-GATED, and the verdict behind it is not", async () => {
+test("SEAM: every task-reply reaches the passive notifier, and nothing else claims it", async () => {
   // The requester-side shape classify answers 'task-reply' for: the peer's AGENT replying in
   // an interactive thread I created, addressed back to me.
   const reply = (metadata = {}) => ({
@@ -242,26 +242,31 @@ test("SEAM: the passive task-reply notice is MENTION-GATED, and the verdict behi
     },
   });
 
-  const quiet = harness();
-  await quiet.dispatch(dm(), reply());
-  assert.deepEqual(quiet.calls.taskNotify, [], "untagged thread traffic raises no banner");
-  // ⚠ AND NOTHING ELSE CLAIMED IT INSTEAD. Without this, "no banner" would also be true of a
-  // dispatcher that had started spawning against its own reply — the failure the 'task-reply'
-  // verdict exists to prevent, wearing the same green.
-  assert.deepEqual([quiet.calls.trigger, quiet.calls.fyi, quiet.calls.feed], [[], [], []]);
-
-  const tagged = harness();
-  await tagged.dispatch(dm(), reply({ mentionedUserIds: [ME] }));
-  assert.deepEqual(tagged.calls.taskNotify, [77], "a reply that @-tags me still escalates");
-  assert.deepEqual([tagged.calls.trigger, tagged.calls.fyi], [[], []], "and still never triggers");
-
-  // ⚠ THE 2026-08-20 COUNTER-RULE, in the same test because it is the same gate: a HUMAN-typed
-  // reply notifies UNTAGGED. The widened suppression removed its consent card, and a person's
-  // addressed words must not become invisible; agent replies stay mention-gated.
-  const human = harness();
-  await human.dispatch(dm(), { ...reply(), authorKind: "user" });
-  assert.deepEqual(human.calls.taskNotify, [77], "a person's untagged reply still banners");
-  assert.deepEqual([human.calls.trigger, human.calls.fyi], [[], []]);
+  // ⚠ THIS TEST USED TO ASSERT THE MENTION GATE HERE, and it no longer lives here (2026-10-09,
+  // Samuel's spec). The dispatcher's conjunct — `authorKind === 'user' || mentionsMe(...)` — is
+  // gone: the reply BANNER is off for both authors, so author kind decides nothing, and the only
+  // surviving question ("was I tagged, so this is a MENTION") is asked inside
+  // `task-notify.js › notifyTaskReply`, which is where it has to be, because a tag inside my own
+  // thread classifies 'task-reply' and never reaches `sendFyi`. That gate is pinned in
+  // test/wake-external-requester.test.mjs and test/notification-prefs.test.mjs.
+  //
+  // What THIS seam still owns, and the reason it is worth keeping: the verdict reaches the
+  // passive notifier and NOTHING ELSE — no trigger, no fyi, no feed, no spawn — whoever wrote
+  // the reply and whether or not it tagged me.
+  for (const [label, m] of [
+    ["an agent's untagged reply", reply()],
+    ["an agent's reply that @-tags me", reply({ mentionedUserIds: [ME] })],
+    ["a person's untagged reply", { ...reply(), authorKind: "user" }],
+    ["a person's reply that @-tags me", { ...reply({ mentionedUserIds: [ME] }), authorKind: "user" }],
+  ]) {
+    const h = harness();
+    await h.dispatch(dm(), m);
+    assert.deepEqual(h.calls.taskNotify, [77], `${label} reaches the passive notifier`);
+    // ⚠ AND NOTHING ELSE CLAIMED IT INSTEAD. Without this, a dispatcher that had started
+    // spawning against its own reply — the failure the 'task-reply' verdict exists to prevent —
+    // would wear the same green.
+    assert.deepEqual([h.calls.trigger, h.calls.fyi, h.calls.feed], [[], [], []], `${label}: nothing else`);
+  }
 });
 
 // ⚠ SEVEN TESTS STOOD IN THIS FILE AND ARE GONE (2026-08-20, F-228). Every one of them drove

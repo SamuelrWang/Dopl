@@ -17,49 +17,72 @@
 // verbatim without loading Electron. Keep it free of braces inside its
 // strings/comments/regex or the test's brace-balancing extractor breaks.
 
-const { Notification } = require('electron');
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const { metaStr, truncate } = targeting;
 const { diag } = require('./diag');
-// Store-only: the operator's banner switches. It can mute this notice, never route a message.
-const notificationPrefs = require('./notification-prefs');
+// Which surface a passive notice takes, and the operator's switch for it. ⚠ `electron` and
+// `notification-prefs` are NO LONGER required here: this module raises nothing itself and runs no
+// gate of its own — `notificationRoute.raise` does both, so there is exactly one place that can.
+const notificationRoute = require('./notification-route');
 
-// Pure: build the passive { title, body } for a thread reply from the message +
-// pre-resolved channel/responder names. Prefers the server-stamped thread title for
-// the headline (falling back to the channel name), and the server-stamped summary
-// for the body (falling back to a truncated body excerpt).
-// The `taskTitle` metadata key is the wire spelling (wire name `task` == domain name
-// `thread`); the words the operator READS carry no "task" at all.
-function taskReplyNotice(m, channelName, responderName) {
-  const taskTitle = metaStr(m, 'taskTitle');
-  const where = taskTitle || channelName || 'a channel';
+// `taskReplyNotice` built the REPLY copy — "Reply in <thread>", "<Ada>: <summary>" — and is gone
+// with the reply banner it wrote (Samuel's spec, 2026-10-09).
+//
+// What replaces it is `mentionNotice`, below, and the difference is the point: a tag inside my
+// own thread is a MENTION, so it must read like one. It is the SAME builder `trigger.js › sendFyi`
+// uses, so a tag looks identical whether it landed in a thread or in the room — one copy shape,
+// one test, instead of two that drift.
+//
+// Pure: { title, body } from the message plus pre-resolved channel and author names. Prefers the
+// server-stamped thread title for the headline (then the channel, then a name-free fallback) and
+// the server-stamped summary for the body (then a truncated excerpt).
+// ⚠ STAYS A PLAIN `function` DECLARATION WITH NO ELECTRON IN REACH: test/task-notify.test.mjs
+// reads this source and evaluates this builder alone, which is why the copy is testable at all.
+// The `taskTitle` metadata key is the wire spelling (wire name `task` == domain name `thread`);
+// the words the operator READS carry no "task" at all.
+function mentionNotice(m, channelName, authorName) {
+  const where = metaStr(m, 'taskTitle') || channelName || 'a channel';
   const detail = metaStr(m, 'summary') || truncate(m && m.body, 120);
-  const title = 'Reply in ' + where;
-  const body = responderName ? responderName + ': ' + detail : detail;
-  return { title: title, body: body };
+  return {
+    title: where,
+    body: authorName ? authorName + ' mentioned you: ' + detail : detail,
+  };
 }
 
-// Fire the silent notice. Silent because this is news, not a decision prompt; the
-// requester chose interactive mode and will read the reply when they open the
-// channel. Best-effort — a missing Notification API or a torn-down window is fine.
-function notifyTaskReply(entry, m) {
-  if (!notificationPrefs.allowsMessage(m, entry)) {
-    diag('task-reply notify muted', notificationPrefs.eventForMessage(m, entry));
+/**
+ * A REPLY IN MY THREAD. Samuel's spec (2026-10-09) turns this off: neither a human's nor an
+ * agent's reply raises anything for being a reply.
+ *
+ * ⚠ BUT A MENTION STILL DOES, AND THAT IS WHY THIS FUNCTION STILL EXISTS. `classify` returns
+ * 'task-reply' for a post inside a thread I opened (`targeting.js:182`, `:190`) BEFORE it can
+ * reach the mention arm (`:217`), so an @-mention made inside my own thread arrives HERE and not
+ * at `sendFyi`. Deleting this path outright would have silenced a mention while the
+ * Notifications tab still showed Mentions ON — silently unraisable, the twin of the silently
+ * unmutable bug that opened this audit. `targeting.js:331` names the same overlap.
+ *
+ * So: tagged → raise it as the `mention` it is. Untagged → nothing at all, which is the ruling.
+ * The thread still holds every reply either way, and the Tags inbox still holds the mention.
+ */
+function notifyTaskReply(entry, m, myUserId) {
+  const cid = entry && entry.channel && entry.channel.id ? entry.channel.id.slice(0, 8) : '?';
+  if (!targeting.mentionsMe(m, myUserId)) {
+    diag('task-reply', cid, 'seq', m && m.seq, '— no banner (spec 2026-10-09), thread holds it');
     return;
   }
-  const channelName = entry && entry.channel && entry.channel.name;
-  const responderName = io.displayNameFor(m && m.authorUserId);
-  const notice = taskReplyNotice(m, channelName, responderName);
-  try {
-    if (Notification.isSupported()) {
-      const n = new Notification({ title: notice.title, body: notice.body, silent: true });
-      n.on('click', () => targeting.openChannelForEntry(entry));
-      n.show();
-    }
-  } catch (_) { /* best-effort */ }
-  const cid = entry && entry.channel && entry.channel.id ? entry.channel.id.slice(0, 8) : '?';
-  diag('task-reply notify', cid, 'seq', m && m.seq, metaStr(m, 'taskTitle') ? 'titled' : 'channel');
+  // ⚠ Routed as `mention`, the same event id and the same builder `sendFyi` uses, so a tag reads
+  // identically whether it landed in a thread or in the room. `raise` runs the operator's switch,
+  // so Mentions governs this too.
+  const notice = mentionNotice(m, entry && entry.channel && entry.channel.name, io.displayNameFor(m && m.authorUserId));
+  const went = notificationRoute.raise('mention', {
+    title: notice.title,
+    body: notice.body,
+    onClick: () => targeting.openChannelForEntry(entry, {
+      threadId: metaStr(m, 'taskId') || null,
+      seq: m && m.seq,
+    }),
+  });
+  diag('task-reply mention', cid, 'seq', m && m.seq, '→', went);
 }
 
 // TWO PASSIVE AGENT NOTICES lived here and are gone with named agents (channels rollback §1):
@@ -79,5 +102,5 @@ function notifyTaskReply(entry, m) {
 
 module.exports = {
   notifyTaskReply,
-  taskReplyNotice,
+  mentionNotice,
 };

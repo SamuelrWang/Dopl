@@ -75,6 +75,11 @@ export interface NotificationEvent {
 
 export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // ── Wired today ────────────────────────────────────────────────────────────────────────────
+  // ⚠ BOTH ROUTE THROUGH `notification-route.js` as of 2026-10-09, so each resolves to ONE
+  // surface: the toast while Dopl is in front, the OS banner while it is away. `mention` has TWO
+  // call sites — `trigger.js › sendFyi` for a tag in the room, and `task-notify.js ›
+  // notifyTaskReply` for a tag inside a thread I opened, which classify ranks 'task-reply' so it
+  // never reaches sendFyi. They share one copy builder so a tag reads the same either way.
   { id: "mention", label: "Mentions and replies", surface: "both", wired: true },
   { id: "decision", label: "Decisions for you", surface: "both", wired: true },
   // ⚠ RULED OFF, BUT KEPT AS A SWITCH (Samuel #2773: "we're not going to do direct message";

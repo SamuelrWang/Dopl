@@ -28,12 +28,15 @@ function load(o = {}) {
   const banners = [];
   const logs = [];
 
+  let shown = 0;
   const sent = [];
   for (let i = 0; i < windows; i++) {
-    sent.push({ webContents: { send: (channel, payload) => toasts.push({ channel, payload }) } });
+    sent.push({
+      webContents: { send: (channel, payload) => toasts.push({ channel, payload }) },
+      // The route reveals Dopl by showing the first window when a spec gives no onClick.
+      show: () => { shown += 1; },
+    });
   }
-  let shown = 0;
-  const host = { getWindows: () => sent, showWindow: () => { shown += 1; } };
 
   class FakeNotification {
     constructor(opts) { this.opts = opts; this.handlers = {}; }
@@ -43,7 +46,10 @@ function load(o = {}) {
   }
 
   const electron = {
-    BrowserWindow: { getFocusedWindow: () => (focused ? sent[0] || {} : null) },
+    BrowserWindow: {
+      getFocusedWindow: () => (focused ? sent[0] || {} : null),
+      getAllWindows: () => sent,
+    },
     Notification: FakeNotification,
   };
 
@@ -72,15 +78,15 @@ function load(o = {}) {
     throw new Error(`unexpected require: ${id}`);
   });
 
-  return { mod, prefs, host, toasts, banners, logs, clicked: () => shown };
+  return { mod, prefs, windows: sent, toasts, banners, logs, revealed: () => shown };
 }
 
 const SPEC = { title: "A peer's agent asked you something" };
 
 test("a 'both' event raises the toast when Dopl is in front, and ONLY the toast", async () => {
-  const { mod, prefs, host, toasts, banners } = load({ focused: true });
+  const { mod, prefs, toasts, banners } = load({ focused: true });
   await prefs.refresh(true);
-  assert.equal(mod.raise(host, "mention", SPEC), "popup");
+  assert.equal(mod.raise("mention", SPEC), "popup");
   assert.equal(toasts.length, 1);
   assert.equal(banners.length, 0, "a banner over the window he is reading is noise");
   assert.equal(toasts[0].channel, "notifications:toast");
@@ -88,9 +94,9 @@ test("a 'both' event raises the toast when Dopl is in front, and ONLY the toast"
 });
 
 test("a 'both' event raises the banner when Dopl is away, and ONLY the banner", async () => {
-  const { mod, prefs, host, toasts, banners } = load({ focused: false });
+  const { mod, prefs, toasts, banners } = load({ focused: false });
   await prefs.refresh(true);
-  assert.equal(mod.raise(host, "mention", SPEC), "mac");
+  assert.equal(mod.raise("mention", SPEC), "mac");
   assert.equal(banners.length, 1);
   assert.equal(toasts.length, 0, "a toast on a window nobody is reading is a dropped alert");
   assert.equal(banners[0].opts.title, SPEC.title);
@@ -126,7 +132,7 @@ test("unreadable focus routes to the banner, not to silence", async () => {
   await prefs.refresh(true);
 
   assert.equal(mod.isAppFocused(), false, "cannot tell ⇒ treat Dopl as away");
-  assert.equal(mod.raise({ getWindows: () => [] }, "decision", SPEC), "mac");
+  assert.equal(mod.raise("decision", SPEC), "mac");
   assert.equal(banners.length, 1, "an unseen toast would be a silenced notification");
 });
 
@@ -135,37 +141,37 @@ test("a popup-only event never raises a banner, and a mac-only never a toast", a
   for (const focused of focusedCases) {
     const pop = load({ focused });
     await pop.prefs.refresh(true);
-    assert.equal(pop.mod.raise(pop.host, "tool_blocked", SPEC), "popup");
+    assert.equal(pop.mod.raise("tool_blocked", SPEC), "popup");
     assert.equal(pop.banners.length, 0);
 
     const mac = load({ focused });
     await mac.prefs.refresh(true);
-    assert.equal(mac.mod.raise(mac.host, "direct_message", { title: "x" }), "none",
+    assert.equal(mac.mod.raise("direct_message", { title: "x" }), "none",
       "direct_message is muted by default, so it raises nothing at all");
   }
 });
 
 test("the operator's switch is obeyed: a muted event raises nothing, on either surface", async () => {
   for (const focused of [true, false]) {
-    const { mod, prefs, host, toasts, banners } = load({ focused, off: ["mention"] });
+    const { mod, prefs, toasts, banners } = load({ focused, off: ["mention"] });
     await prefs.refresh(true);
-    assert.equal(mod.raise(host, "mention", SPEC), "none");
+    assert.equal(mod.raise("mention", SPEC), "none");
     assert.equal(toasts.length, 0);
     assert.equal(banners.length, 0);
   }
 });
 
 test("a locked event cannot be muted through this path either", async () => {
-  const { mod, prefs, host } = load({ focused: false, off: ["approval", "signed_out"] });
+  const { mod, prefs } = load({ focused: false, off: ["approval", "signed_out"] });
   await prefs.refresh(true);
-  assert.equal(mod.raise(host, "approval", SPEC), "mac");
-  assert.equal(mod.raise(host, "signed_out", SPEC), "mac");
+  assert.equal(mod.raise("approval", SPEC), "mac");
+  assert.equal(mod.raise("signed_out", SPEC), "mac");
 });
 
 test("an unknown event raises NOTHING rather than inventing a surface", async () => {
-  const { mod, prefs, host, toasts, banners } = load({ focused: true });
+  const { mod, prefs, toasts, banners } = load({ focused: true });
   await prefs.refresh(true);
-  assert.equal(mod.raise(host, "some_future_event", SPEC), "none");
+  assert.equal(mod.raise("some_future_event", SPEC), "none");
   assert.equal(toasts.length + banners.length, 0);
   // ⚠ Deliberately the OPPOSITE default from `allowsIn`, which fails ON. Both refuse to guess:
   // that one must never silently ignore a mute, this one must never invent an alert.
@@ -173,44 +179,44 @@ test("an unknown event raises NOTHING rather than inventing a surface", async ()
 });
 
 test("a titleless spec raises nothing", async () => {
-  const { mod, prefs, host } = load({ focused: false });
+  const { mod, prefs } = load({ focused: false });
   await prefs.refresh(true);
-  assert.equal(mod.raise(host, "mention", { title: "" }), "none");
-  assert.equal(mod.raise(host, "mention", undefined), "none");
+  assert.equal(mod.raise("mention", { title: "" }), "none");
+  assert.equal(mod.raise("mention", undefined), "none");
 });
 
 test("with no window to toast into, a popup event falls back to the banner", async () => {
-  const { mod, prefs, host, banners } = load({ focused: true, windows: 0 });
+  const { mod, prefs, banners } = load({ focused: true, windows: 0 });
   await prefs.refresh(true);
-  assert.equal(mod.raise(host, "tool_blocked", SPEC), "mac");
+  assert.equal(mod.raise("tool_blocked", SPEC), "mac");
   assert.equal(banners.length, 1, "a toast with nowhere to land would be a lost notification");
 });
 
 test("every window gets the toast, and one dead window does not stop the rest", async () => {
-  const { mod, prefs, host, toasts } = load({ focused: true, windows: 3 });
+  const { mod, prefs, windows, toasts } = load({ focused: true, windows: 3 });
   await prefs.refresh(true);
-  host.getWindows()[1].webContents.send = () => { throw new Error("destroyed"); };
-  assert.equal(mod.raise(host, "mention", SPEC), "popup");
+  windows[1].webContents.send = () => { throw new Error("destroyed"); };
+  assert.equal(mod.raise("mention", SPEC), "popup");
   assert.equal(toasts.length, 2);
 });
 
 test("a banner click reveals the app", async () => {
-  const { mod, prefs, host, banners, clicked } = load({ focused: false });
+  const { mod, prefs, banners, revealed } = load({ focused: false });
   await prefs.refresh(true);
-  mod.raise(host, "mention", SPEC);
+  mod.raise("mention", SPEC);
   banners[0].handlers.click();
-  assert.equal(clicked(), 1);
+  assert.equal(revealed(), 1, "a click with no handler brings Dopl forward");
 });
 
 test("banners are silent: the sound is a per-site decision, not the router's", async () => {
-  const { mod, prefs, host, banners } = load({ focused: false });
+  const { mod, prefs, banners } = load({ focused: false });
   await prefs.refresh(true);
-  mod.raise(host, "mention", SPEC);
+  mod.raise("mention", SPEC);
   assert.equal(banners[0].opts.silent, true);
 });
 
 test("an OS that cannot show banners is reported, not crashed through", async () => {
-  const { mod, prefs, host } = load({ focused: false, noNotification: true });
+  const { mod, prefs } = load({ focused: false, noNotification: true });
   await prefs.refresh(true);
-  assert.equal(mod.raise(host, "mention", SPEC), "none");
+  assert.equal(mod.raise("mention", SPEC), "none");
 });
