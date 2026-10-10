@@ -22,9 +22,21 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { HttpError } from "@/shared/lib/http-error";
 
+/**
+ * ⚠ **`sumCreditUsageBins` IS STUBBED TO "ABSENT" ON PURPOSE (Samuel #2935), AND
+ * THAT IS WHAT KEEPS THE CASES BELOW MEANINGFUL.** The histogram's primary read
+ * is now the `home_credit_usage_bins` aggregate — the migration is written, not
+ * applied — and answering `null` is how the repository says so, which puts this
+ * file's cases on the DEGRADE path: the same `scanCreditEvents` narrowing they
+ * were written for, still live until that migration lands.
+ * ⚠ **THE AGGREGATE'S OWN narrowing IS PINNED NEXT DOOR**, in
+ * `credit-histogram-bins.test.ts` (`p_channel_scope` / `p_since` / `p_until`) —
+ * the two files cover the two paths, and neither covers both.
+ */
 const repo = vi.hoisted(() => ({
   listOwnedHomeSpaceIds: vi.fn(),
   scanCreditEvents: vi.fn(),
+  sumCreditUsageBins: vi.fn(),
 }));
 
 vi.mock("./repository-overview", async () => {
@@ -179,6 +191,10 @@ describe("getHomeOverviewSeries — the narrowed credits arm", () => {
     vi.clearAllMocks();
     repo.listOwnedHomeSpaceIds.mockResolvedValue(OWNED_IDS);
     repo.scanCreditEvents.mockResolvedValue({ rows: [], truncated: false });
+    // ⚠ "The aggregate is not there" — see the hoisted block's note. Without this
+    // the service takes the RPC path and these cases assert nothing about the
+    // scan they exist to pin.
+    repo.sumCreditUsageBins.mockResolvedValue(null);
   });
 
   /** The unnarrowed read passes NO `channel`, and it bounds the haul at both ends

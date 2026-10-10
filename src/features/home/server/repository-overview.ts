@@ -40,6 +40,25 @@ const EXCLUDE_AWAIT_POLLING = "tool.neq.channel,op.not.like.await*";
  */
 const HOME_SCAN_LIMIT = 20_000;
 
+/**
+ * 🔒 **THE CEILING POSTGREST APPLIES WHETHER OR NOT WE ASK FOR ONE** —
+ * `supabase/config.toml › max_rows`. A `.limit(n)` above it is NOT the bound; the
+ * server clips to this and raises NOTHING.
+ *
+ * ⚠ **IT EXISTS BECAUSE `truncated` LIED (Samuel #2935, 2026-10-10).** `clipped()`
+ * compared against the ASKED limit, so a credit haul asking 20,000 and receiving
+ * the server's 1,000 computed `1000 >= 20000` = false and reported a COMPLETE
+ * read. The /home histogram drew ~1,000 credits — all of them the newest day —
+ * beside a spend card reading the month's true 4,288, with no clip banner on the
+ * one read that was actually a floor.
+ * ⚠ **A CONSTANT IS THE WEAKER HALF OF THE FIX AND IS NOT A LICENCE TO HAUL.**
+ * The histogram now sums in SQL ({@link sumCreditUsageBins}); this bound only
+ * makes the REMAINING hauling reads honest about their ceiling.
+ * ⚠ Pinned against `supabase/config.toml` by `home-credit-bins-schema.test.ts`,
+ * so raising the server setting cannot leave this number behind.
+ */
+export const POSTGREST_MAX_ROWS = 1_000;
+
 /** `[startIso, endIso)`. */
 export interface HomeWindow {
   startIso: string;
@@ -52,8 +71,14 @@ export interface Scan<T> {
   truncated: boolean;
 }
 
+/**
+ * ⚠ **THE EFFECTIVE CEILING IS THE SMALLER OF THE TWO**, never the asked one —
+ * see {@link POSTGREST_MAX_ROWS}. Comparing against `limit` alone makes every
+ * read that asks for more than the server will give report itself as complete.
+ */
 function clipped<T>(rows: T[], limit: number): Scan<T> {
-  return { rows, truncated: rows.length >= limit };
+  const ceiling = Math.min(limit, POSTGREST_MAX_ROWS);
+  return { rows, truncated: rows.length >= ceiling };
 }
 
 /* ------------------------------- counts -------------------------------- */
@@ -315,6 +340,100 @@ export async function scanCreditEvents(
     return { rows: [], truncated: false };
   }
   return clipped((data ?? []) as CreditEventScanRow[], limit);
+}
+
+/** Postgres/PostgREST codes for "that function is not there" — the migration
+ *  below has not been applied yet. ⚠ Distinct from the ledger-missing codes: a
+ *  missing RPC still has readable rows, so the caller DEGRADES rather than
+ *  zeroing (`service-overview.ts › scanUsageHistogramBurns`). */
+const RPC_MISSING_CODES = new Set(["PGRST202", "42883"]);
+
+/** Codes for "the ledger itself is not there" — `credit_usage_events` or one of
+ *  its v2 columns ships unapplied. ⚠ The same migration-lag degrade
+ *  {@link scanCreditEvents} documents: an empty ledger is a truthful state. */
+const LEDGER_MISSING_CODES = new Set(["42P01", "42703"]);
+
+/**
+ * CREDITS SUMMED PER BIN, BY POSTGRES — the /home histogram's read since
+ * Samuel #2935.
+ *
+ * 🔒 **IT REPLACES A HAUL THAT POSTGREST SILENTLY CLIPPED.**
+ * {@link scanCreditEvents} asked for {@link HOME_SCAN_LIMIT} raw rows newest
+ * first and the service binned them in memory; `max_rows`
+ * ({@link POSTGREST_MAX_ROWS}) cut that to the newest 1,000, which on 2026-10-10
+ * was Oct 10 alone — 2,175 of the month's 4,288 credits sat in one day, so the
+ * graph showed ~1,000 credits all dated today under a card reading the month.
+ * One row per bin puts the cap two orders of magnitude from the data: 31 rows for
+ * a month, 24 for `24h`.
+ *
+ * ⚠ **THE WALLET FENCE AND THE TWO ARMS LIVE IN THE SQL NOW**
+ * (`20261118120000_home_credit_usage_bins_rpc.sql`), which is the one place this
+ * read differs in KIND from the scan it replaces: an aggregate returns sums, so
+ * there are no rows left for `overview-tally.ts › isPersonalWalletBurn` to
+ * re-filter. **The "filtered twice on purpose" belt does not reach this path** —
+ * the schema test pins both arms in the function body instead.
+ *
+ * ⚠ **KEYED BY THE BIN'S START, NORMALISED THROUGH `Date`.** PostgREST renders
+ * `timestamptz` as `+00:00` and `overviewWindows` builds `…Z`; comparing the two
+ * as strings silently matches nothing and zero-fills the whole month.
+ *
+ * ⚠ **RETURNS `null` WHEN THE FUNCTION IS ABSENT, AND THAT IS NOT AN ERROR.**
+ * The migration is written, not applied (this directory's gate), so until it
+ * lands every histogram read must still answer — the caller degrades to the old
+ * scan and reports `truncated` honestly rather than drawing a blank graph.
+ * ⚠ An absent LEDGER is the other case and answers an EMPTY map, matching
+ * {@link scanCreditEvents}'s degrade: nothing yet is a truthful month.
+ */
+export async function sumCreditUsageBins(
+  userId: string,
+  ownedContainerIds: string[],
+  win: HomeWindow,
+  bucket: "hour" | "day",
+  channel?: CreditChannelScope
+): Promise<Map<string, number> | null> {
+  const { data, error } = await supabaseAdmin().rpc("home_credit_usage_bins", {
+    p_payer_user_id: userId,
+    p_owned_container_ids: ownedContainerIds,
+    p_since: win.startIso,
+    p_until: win.endIso,
+    p_bucket: bucket,
+    // ⚠ The tri-state the SQL partitions on: no narrowing, the Desktop-agent
+    // bucket (`channel_id IS NULL`), or one channel. See rule B (2026-09-13).
+    p_channel_scope: !channel
+      ? "all"
+      : channel === "unattributed"
+        ? "unattributed"
+        : "channel",
+    p_channel_id:
+      channel && channel !== "unattributed" ? channel.channelId : null,
+  });
+  if (error) {
+    if (RPC_MISSING_CODES.has(error.code ?? "")) {
+      console.warn(
+        `[home/overview] home_credit_usage_bins absent, degrading to the capped scan: ${error.message}`
+      );
+      return null;
+    }
+    if (LEDGER_MISSING_CODES.has(error.code ?? "")) {
+      console.warn(
+        `[home/overview] credit ledger unreadable, degrading to empty: ${error.message}`
+      );
+      return new Map();
+    }
+    throw error;
+  }
+  const bins = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{
+    bin_start: string;
+    credits: number | string;
+  }>) {
+    const at = Date.parse(row.bin_start);
+    if (Number.isNaN(at)) continue;
+    // ⚠ `bigint` crosses the wire as a STRING; `sum()` of an empty group never
+    // reaches here, so there is no null arm.
+    bins.set(new Date(at).toISOString(), Number(row.credits));
+  }
+  return bins;
 }
 
 /**
