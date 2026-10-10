@@ -49,7 +49,10 @@ const { Notification } = require('electron');
 // ⚠ DESTRUCTURED AT MODULE SCOPE ON PURPOSE: both names stay FREE VARS inside the functions
 // below, which is what keeps `test/consent-decision-signal.test.mjs`'s source-extraction harness
 // able to inject fakes for them.
-const { requestAttention, buildActionNotification } = require('./notify-action');
+const { requestAttention } = require('./notify-action');
+// Which surface an actionable notice takes. ⚠ `buildActionNotification` is no longer called from
+// here: the route owns that choice now, and still builds the same banner underneath.
+const notificationRoute = require('./notification-route');
 const { apiFetch } = require('./api');
 const { discardBody } = require('./api-repair');
 const { diag } = require('./diag');
@@ -264,8 +267,13 @@ async function pollStatus(workspaceId, rowId) {
 // Reviving an Allow here would be reviving a decision with nothing to decide.
 
 // Outbound: the drafted reply preview with a Send action.
+// ⚠ ROUTED (2026-10-09, Samuel's spec): `draft_reply` is "Mac + popup", which resolves to the
+// banner when Dopl is away and, when it is in front, a toast whose button only OPENS the thread —
+// where the send box already answers this, bound to the same consent row. The decision never
+// moves into a toast that auto-dismisses. The row is created before this call and is the durable
+// surface either way, so this return stays unchecked by its caller.
 function notifyOutbound({ channelName, proposedReply, onSend, onOpen }) {
-  return buildActionNotification({
+  return notificationRoute.raiseActionable('draft_reply', {
     title: channelName,
     body: `Your agent drafted a reply: ${truncate(proposedReply, 120)}`,
     actionText: 'Send',
@@ -281,8 +289,15 @@ function notifyOutbound({ channelName, proposedReply, onSend, onOpen }) {
 // this one, deliberately: a tool grant is a fact about THIS machine, and must not be writable
 // by anything holding the operator's Dopl credential. `tool` and `channelName` arrive
 // sanitized and bounded by the caller.
+// ⚠ `bannerAlways` — THE BANNER EVEN WHEN DOPL IS IN FRONT (2026-10-09, Samuel's ruling). Two
+// reasons, and both are in this file's neighbourhood: there is NO in-app tool-gate surface, so
+// this banner is the only place the question is ever asked; and `session-windowless.js:293` reads
+// a falsy return as "no surface exists" and DENIES the held tool at once, so a focused path that
+// answered with a toast — which auto-dismisses, and whose dismissal decides nothing — would turn
+// "the operator was looking at Dopl" into "the tool was refused".
 function notifyToolGate({ channelName, tool, onAllow, onOpen }) {
-  return buildActionNotification({
+  return notificationRoute.raiseActionable('approval', {
+    bannerAlways: true,
     title: `${tool} — your agent is waiting`,
     body: `Your agent in "${channelName}" wants to use ${tool}. Allow it, or ignore to refuse when the prompt expires.`,
     actionText: 'Allow',

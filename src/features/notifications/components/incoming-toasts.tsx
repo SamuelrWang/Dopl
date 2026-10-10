@@ -34,6 +34,27 @@ export function IncomingToasts() {
         // A push with no title is nothing to show; main already refuses to send one, so this is
         // belt-and-braces against a future shape change.
         if (!t.title) return;
+        // An ACTIONABLE event raised while Dopl is in front: one button, and it only NAVIGATES to
+        // the surface that answers the thing (the thread's send box, the launch control). The
+        // affirmative — "Launch agent" / "Send" / "Allow" — stays on the OS banner, because a
+        // toast auto-dismisses and a dismissal decides nothing.
+        if (t.openId && t.actionLabel) {
+          const openId = t.openId;
+          toast({
+            title: t.title,
+            description: t.body || undefined,
+            action: {
+              label: t.actionLabel,
+              onClick: () => {
+                void getSpaBridge()?.notifications?.openFromToast?.(openId)?.catch(() => {});
+              },
+            },
+            // Longer than the default: this one is worth reaching, and it still decides nothing
+            // if it is missed.
+            durationMs: 15000,
+          });
+          return;
+        }
         toast({ title: t.title, variant: "invert" });
       });
     } catch {

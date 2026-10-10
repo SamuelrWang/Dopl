@@ -170,6 +170,18 @@ function register(opts = {}) {
     return { ok: true };
   }));
 
+  // 2026-10-09 (Samuel's spec): the "Open" button on a focused toast for `peer_ask` /
+  // `draft_reply`. ⚠ IT NAVIGATES AND NOTHING ELSE — it runs the `onOpen` that toast was raised
+  // with, which can open a channel the operator already has. It CANNOT launch an agent, send a
+  // draft or allow a tool: no `onAffirm` ever crosses to a renderer, by construction in
+  // `notification-route.js › raiseActionable`. One-shot, and an unknown id is simply false.
+  // So, like `refreshPrefs`, a forged call buys nothing and it needs no shape gate beyond the id.
+  ipcMain.handle('notifications:openFromToast', appWindowOnly('openNotificationFromToast', { ok: false }, (_event, payload) => {
+    const id = payload && typeof payload.openId === 'string' ? payload.openId : '';
+    if (!id) return { ok: false };
+    return { ok: require('./notification-route').openFromToast(id) };
+  }));
+
   // The two MACHINE-WIDE orchestrator consents (launch over MCP; direct a running agent). This pair
   // is the ONLY way either value moves — never add a route, MCP op or column for them: a spawned
   // session holds the operator's credential and could arm the fleet (§6). Answers are main's own

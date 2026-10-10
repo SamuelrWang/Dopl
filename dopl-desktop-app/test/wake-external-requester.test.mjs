@@ -140,7 +140,10 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
     "task-notify reaches nothing that could spawn, gate or record a consent");
   const ROUTE = M("notification-route.js");
   const routeDeps = [...ROUTE.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
-  assert.deepEqual([...new Set(routeDeps)], ["./diag", "./notification-prefs", "electron"],
+  // `./notify-action` joined 2026-10-09: the route builds the ACTIONABLE banner through it for
+  // peer_ask / draft_reply / approval. Still nothing that could spawn, gate or record a consent —
+  // notify-action only shapes a Notification.
+  assert.deepEqual([...new Set(routeDeps)], ["./diag", "./notification-prefs", "./notify-action", "electron"],
     "and the route it now leans on reaches nothing either");
   // D2 added a SECOND passive verdict on the same module, 'agent-escalation', with the agent
   // handle resolved by the CALLER and passed in precisely so the dependency set above could

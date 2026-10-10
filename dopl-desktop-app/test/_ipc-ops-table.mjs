@@ -54,6 +54,11 @@ export const OPS = [
   // The payload is ignored, so like `channels:getAgentDefaults` it is exempt from the
   // bad-payload loop below. The sender binding is the whole guard; a refusal is `{ ok: false }`.
   ["notifications:refreshPrefs", undefined, { ok: false }],
+  // 2026-10-09: the "Open" button on a focused toast for an actionable event. It reads one id and
+  // runs that toast's own NAVIGATION — it cannot launch, send or allow anything, because no
+  // affirmative closure ever crosses to a renderer. An unknown id answers `{ ok: false }`, which
+  // is byte-identical to both its bad-payload rejection and its sender refusal.
+  ["notifications:openFromToast", { openId: 'open-1' }, { ok: false }, { openId: 123 }],
   // 2026-08-20: the DURABLE launch posture, same binding and UUID gate, and now the most privileged
   // write in the file. A refused `get` must not disclose the posture and a refused `set` must not
   // write one; both are asserted by the shared loops below, from all five surfaces.

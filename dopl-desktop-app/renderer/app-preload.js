@@ -182,6 +182,12 @@ contextBridge.exposeInMainWorld('dopl', {
         callback({
           eventId: typeof p.eventId === 'string' ? p.eventId : '',
           title: typeof p.title === 'string' ? p.title : '',
+          body: typeof p.body === 'string' ? p.body : '',
+          // An actionable event raised while Dopl is in front carries an OPEN handle: the button
+          // runs main's own `onOpen` and NAVIGATES. No decision ever crosses this bridge —
+          // "Launch agent", "Send" and "Allow" live on the banner only.
+          openId: typeof p.openId === 'string' ? p.openId : '',
+          actionLabel: typeof p.actionLabel === 'string' ? p.actionLabel : '',
           // Every toast main pushes is one the operator did not click for; the field is explicit
           // so the receiver never has to infer it.
           kind: 'incoming',
@@ -190,6 +196,10 @@ contextBridge.exposeInMainWorld('dopl', {
       ipcRenderer.on('notifications:toast', listener);
       return () => ipcRenderer.removeListener('notifications:toast', listener);
     },
+    // The "Open" button on such a toast: asks main to run that toast's own navigation. Carries
+    // the handle and nothing else, and can only ever open a surface.
+    openFromToast: (openId) =>
+      ipcRenderer.invoke('notifications:openFromToast', { openId: String(openId || '') }),
   },
 
   // The two orchestrator consents: `orchestratorLaunch` (may another agent make this machine SPAWN a

@@ -82,6 +82,10 @@ export const APP_OPS = [
   // while Dopl is in front — the "Mac + popup" events announce themselves exactly once.
   // Subscription, not an op: it carries an event id and a title inward only.
   "notifications.onToast",
+  // 2026-10-09: the "Open" button on such a toast. ⚠ NAVIGATION ONLY — "Launch agent", "Send"
+  // and "Allow" live on the OS banner and never cross this bridge, because a toast auto-dismisses
+  // and a dismissal decides nothing.
+  "notifications.openFromToast",
   "notifications.refresh",
   "onAuthState",
   "onNavigate",

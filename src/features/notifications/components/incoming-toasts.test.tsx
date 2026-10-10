@@ -17,24 +17,45 @@ afterEach(() => {
   else (globalThis as { dopl?: unknown }).dopl = original;
 });
 
+/** Exactly what main pushes over `onToast`. */
+type ToastPush = {
+  eventId: string;
+  title: string;
+  body?: string;
+  openId?: string;
+  actionLabel?: string;
+  kind: "incoming";
+};
+
 /** Installs a bridge whose `onToast` this test drives, and hands back the push. */
 function installBridge(opts: { onToast?: unknown } = {}) {
-  let fire: ((t: { eventId: string; title: string; kind: "incoming" }) => void) | null = null;
+  let fire: ((t: ToastPush) => void) | null = null;
   const off = vi.fn();
   const onToast =
     "onToast" in opts
       ? opts.onToast
-      : (cb: (t: { eventId: string; title: string; kind: "incoming" }) => void) => {
+      : (cb: (t: ToastPush) => void) => {
           fire = cb;
           return off;
         };
+  const openFromToast = vi.fn(() => Promise.resolve({ ok: true }));
   (globalThis as { dopl?: unknown }).dopl = {
     apiRequest: vi.fn(),
-    notifications: { refresh: vi.fn(), onToast },
+    notifications: { refresh: vi.fn(), onToast, openFromToast },
   };
-  return { push: (t: Partial<{ eventId: string; title: string }>) =>
-      fire?.({ eventId: t.eventId ?? "mention", title: t.title ?? "", kind: "incoming" }),
-    off };
+  return {
+    push: (t: Partial<Omit<ToastPush, "kind">>) =>
+      fire?.({
+        eventId: t.eventId ?? "mention",
+        title: t.title ?? "",
+        body: t.body,
+        openId: t.openId,
+        actionLabel: t.actionLabel,
+        kind: "incoming",
+      }),
+    off,
+    openFromToast,
+  };
 }
 
 describe("IncomingToasts", () => {
@@ -89,5 +110,50 @@ describe("IncomingToasts", () => {
       },
     });
     expect(() => render(<IncomingToasts />).unmount()).not.toThrow();
+  });
+});
+
+describe("IncomingToasts > an actionable event raised while Dopl is in front", () => {
+  it("renders ONE button that only navigates, and never a decision", async () => {
+    const { push, openFromToast } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({
+      eventId: "peer_ask",
+      title: "Design",
+      body: "Ada's agent asks: ship it",
+      openId: "open-1",
+      actionLabel: "Open",
+    });
+
+    expect(await screen.findByText("Design")).toBeTruthy();
+    expect(await screen.findByText("Ada's agent asks: ship it")).toBeTruthy();
+    // ⚠ The affirmative lives on the OS banner only. A toast auto-dismisses and a dismissal
+    // decides nothing, so "Launch agent" / "Send" / "Allow" must never appear here.
+    for (const decisive of ["Launch agent", "Send", "Allow"]) {
+      expect(screen.queryByRole("button", { name: decisive })).toBeNull();
+    }
+    const open = screen.getByRole("button", { name: "Open" });
+    open.click();
+    await waitFor(() => expect(openFromToast).toHaveBeenCalledWith("open-1"));
+  });
+
+  it("stays silent when the bridge cannot open, rather than claiming it did", async () => {
+    const { push } = installBridge();
+    (globalThis as { dopl?: { notifications?: { openFromToast?: unknown } } }).dopl!.notifications!
+      .openFromToast = () => Promise.reject(new Error("ipc down"));
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({ eventId: "draft_reply", title: "Design", openId: "open-2", actionLabel: "Open" });
+    const open = await screen.findByRole("button", { name: "Open" });
+    expect(() => open.click()).not.toThrow();
   });
 });

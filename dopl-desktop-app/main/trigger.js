@@ -13,7 +13,8 @@ const spawner = require('./session-spawner');
 const sessionEngine = require('./session-engine');
 const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
-const { buildActionNotification } = require('./notify-action');
+// ⚠ `notify-action` is no longer required here: the route decides the surface and builds the
+// same banner underneath (`notification-route.js › raiseActionable`).
 // The shared passive-mention copy. ⚠ No cycle: task-notify requires targeting + the route, never
 // this module.
 const { mentionNotice } = require('./task-notify');
@@ -77,7 +78,12 @@ function notifyAsk({ channelName, requesterName, summary, bodyPreview, runsIn, t
   const where = runsIn || 'the sandbox folder';
   const hint = capabilityHint ? `\n${capabilityHint}` : '';
   const body = `${ask}\nRuns in ${where} with ${toolLabel} tools${hint}`;
-  return buildActionNotification({
+  // ⚠ ROUTED (2026-10-09, Samuel's spec). `peer_ask` is "Mac + popup": the banner with its
+  // "Launch agent" button when Dopl is away, and when it is in front a toast that only OPENS the
+  // channel — where the launch control already lives. A spawn is never moved into a toast that
+  // auto-dismisses, and this keeps `notify-action.js`'s rule intact: the click navigates, the
+  // button decides, and only the banner has the button.
+  return notificationRoute.raiseActionable('peer_ask', {
     title: channelName, body, actionText: 'Launch agent', onAffirm: onLaunch, onOpen,
   });
 }

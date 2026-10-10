@@ -87,17 +87,24 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // for THIS row an unreadable record reads OFF — which is the state he asked for, not a silent
   // mute. Re-adding a removed id later would touch both lists and that regex, so it stays.
   { id: "direct_message", label: "Direct messages", surface: "mac", defaultOn: false, wired: true },
+  // ⚠ ALWAYS THE BANNER, never focus-gated (Samuel, 2026-10-09). There is no in-app tool-gate
+  // surface, so that banner is the only place the question is asked, and
+  // `session-windowless.js:293` denies the held tool on a falsy notification — a focused path
+  // that answered with an auto-dismissing toast would turn "he was looking at Dopl" into
+  // "the tool was refused". ⚠ AND THAT IS WHY `locked` MATTERS HERE BEYOND THE UI: unlock it and
+  // muting it would start auto-denying held tools.
   { id: "approval", label: "Approvals", surface: "both", locked: true, wired: true },
 
-  // ── Named, NOT raised yet (wired: false ⇒ no row in the panel) ──────────────────────────────
   // Samuel KEPT this one when asked (2026-10-09): a peer's agent is blocked on a launch and this
-  // is the only thing that says so. It raises today at `trigger.js:97` (notifyAsk) and is left
-  // running untouched until step 3 gates it; default ON and NOT locked.
-  { id: "peer_ask", label: "A peer's agent asks you", surface: "both" },
-  { id: "draft_reply", label: "Replies your agent drafted", surface: "both" },
+  // is the only thing that says so. Banner with "Launch agent" when away; focused, a toast whose
+  // button only OPENS the channel. Default ON, NOT locked.
+  { id: "peer_ask", label: "A peer's agent asks you", surface: "both", wired: true },
+  { id: "draft_reply", label: "Replies your agent drafted", surface: "both", wired: true },
   // Own-machine spawns only, including one agent launching another; a fan-out burst coalesces
   // into ONE banner (@orchestrator, 2026-10-09). No trigger exists: `task_started` is dropped at
   // `targeting.js:133`, so this needs a new emit.
+
+  // ── Named, NOT raised yet (wired: false ⇒ no row in the panel) ──────────────────────────────
   { id: "agent_started", label: "An agent starts", surface: "both" },
   { id: "signed_out", label: "You get signed out", surface: "both", locked: true },
   // ⚠ NOTHING EMITS THIS FACT. The consume RPC returns nothing at `20260811130000:143` — no row,

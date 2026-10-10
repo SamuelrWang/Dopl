@@ -138,8 +138,26 @@ export interface SpaBridgeSurface {
      * whether to yield — main does not get to assume it won.
      */
     onToast?(
-      callback: (t: { eventId: string; title: string; kind: "incoming" }) => void
+      callback: (t: {
+        eventId: string;
+        title: string;
+        /** Second line, when the event has one. */
+        body?: string;
+        /**
+         * Present only for an ACTIONABLE event raised while Dopl is in front (`peer_ask`,
+         * `draft_reply`). Pass it to {@link openFromToast} to run that toast's navigation.
+         * ⚠ IT OPENS A SURFACE AND NOTHING ELSE. "Launch agent", "Send" and "Allow" exist on the
+         * OS banner only and never cross this bridge — a toast auto-dismisses, and dismissing
+         * decides nothing, so a decision may not live in one.
+         */
+        openId?: string;
+        /** The button's label when `openId` is set (today always "Open"). */
+        actionLabel?: string;
+        kind: "incoming";
+      }) => void
     ): () => void;
+    /** Runs the `onOpen` the toast carrying `openId` was raised with. Navigation only, one-shot. */
+    openFromToast?(openId: string): Promise<{ ok: boolean }>;
   };
   /**
    * DOPL'S OWN RUNTIME CREDENTIALS (`main/runtime-credentials.js`). `signIn` runs one runtime's in-app
