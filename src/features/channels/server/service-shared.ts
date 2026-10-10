@@ -151,8 +151,29 @@ export async function loadVisibleChannel(
   ctx: ChannelContext,
   ref: string
 ): Promise<{ channel: ChannelRow; membership: ChannelMemberRow | null }> {
+  /**
+   * ⚠ **ONE WAVE WHEN THE REF IS AN ID, TWO WHEN IT IS A SLUG (2026-10-10,
+   * option H).** The membership read needs a channel id, and when `ref` IS one
+   * there is nothing to wait for: the row resolved below is the row with that
+   * id, so `channel.id === ref` by construction. Every web and desktop read
+   * arrives that way (`requireChannelId` in the route), which is where the saved
+   * round trip lands — it was 2 of the 6 serial waves a switch-in paid. A SLUG
+   * has to be resolved before anything can be read about it, so that arm is
+   * unchanged.
+   *
+   * ⚠ **IT CHANGES NO GATE.** The visibility test below is unmoved and still
+   * decides on both rows; overlapping the reads only stops the second waiting on
+   * the first. A ref that does not resolve still throws not-found, having wasted
+   * one membership read on an id with no rows — which answers null, so there is
+   * nothing to leak and nothing is returned.
+   */
+  const early = isUuid(ref) ? repo.findMembership(ref, ctx.userId) : null;
+  // ⚠ A HANDLER SO A REJECTION IS NEVER UNHANDLED. When `resolveChannelRef`
+  // throws we never await this one; the `await` below still sees the rejection,
+  // because it awaits the promise itself and not this attachment.
+  early?.catch(() => {});
   const channel = await resolveChannelRef(ctx, ref);
-  const membership = await repo.findMembership(channel.id, ctx.userId);
+  const membership = await (early ?? repo.findMembership(channel.id, ctx.userId));
   const viaPublic = channel.visibility === "public" && mayReadPublicChannels(ctx);
   if (!viaPublic && membership === null) {
     // Not-found, never forbidden, so the refusal cannot enumerate the container.

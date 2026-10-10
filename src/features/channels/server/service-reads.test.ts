@@ -238,6 +238,23 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
     );
   });
 
+  it("🔒 ANSWERS THE READ WHEN THE WATERMARK WRITE FAILS", async () => {
+    // **OPTION H, 2026-10-10: the bump is off the response path.** It is a
+    // `channel_members` UPDATE round trip and nothing in the answer derives from
+    // it, so it must neither delay the read nor be able to fail it. The docblock
+    // called it best-effort while the read `await`ed it inside a try/catch; now
+    // the read does not wait, and a rejection has nowhere to surface.
+    vi.mocked(repo.updateLastRead).mockRejectedValue(new Error("write failed"));
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([
+      messageRow(1, "2026-07-27T10:00:00.000Z"),
+    ]);
+
+    const messages = await readMessages(ctx, "general", { limit: 50 });
+
+    expect(messages).toHaveLength(1);
+    expect(repo.updateLastRead).toHaveBeenCalledTimes(1);
+  });
+
   // A thread-scoped read shows a SUBSET, so its newest row can be newer than
   // unrelated messages the member has never seen. The watermark is monotonic,
   // so advancing it here would mark those read. Reading one exchange is not

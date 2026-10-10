@@ -55,7 +55,7 @@ export type {
   MemberPresence,
   ProfileRef,
 } from "./dto-rows";
-export { CHANNEL_TASK_ACTIVITY_COLS } from "./dto-rows";
+export { CHANNEL_MESSAGE_COLS, CHANNEL_TASK_ACTIVITY_COLS } from "./dto-rows";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
