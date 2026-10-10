@@ -15,6 +15,8 @@ import { Pencil, Settings, Trash2 } from "lucide-react";
 import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import { useBoardDisplay, type BoardDisplay } from "../hooks/use-board-display";
 
 /** The label-less underline field lives in the popup form kit now (2026-09-28); re-exported for
  *  the ontology callers that import it from here. */
@@ -191,5 +193,35 @@ export function BoardSettingsMenu({
         )}
       </Popover>
     </>
+  );
+}
+
+const DISPLAY_OPTIONS: ReadonlyArray<SelectMenuOption<BoardDisplay>> = [
+  { value: "canvas", label: "Canvas", description: "Each object type is a lane of cards." },
+  {
+    value: "rows",
+    label: "Rows",
+    description: "Each object type spans the page, with every object as a row of its details.",
+  },
+];
+
+/**
+ * The board's display picker, left of the gear (Samuel, 2026-10-09). The kit's
+ * `raised` select face is 36px tall, the gear's height, so the two sit level.
+ * Everyone may switch: it is a view preference on this device, not an edit.
+ * Owns the preference itself; the board reads the same store
+ * (`kanban-board.tsx`), so the view threads nothing between them.
+ */
+export function BoardDisplayMenu() {
+  const [value, onChange] = useBoardDisplay();
+  return (
+    <SelectMenu
+      value={value}
+      options={DISPLAY_OPTIONS}
+      onChange={onChange}
+      ariaLabel="Board display"
+      variant="raised"
+      className="shrink-0"
+    />
   );
 }

@@ -17,7 +17,7 @@ import {
 } from "../hooks/use-last-opened";
 import { useObjectDraft } from "../hooks/use-object-draft";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
-import { BoardSettingsMenu, DescriptionField, NameField } from "./board-header-bits";
+import { BoardDisplayMenu, BoardSettingsMenu, DescriptionField, NameField } from "./board-header-bits";
 import { CapNotice } from "./cap-notice";
 import { OntologySwitcher, ontologySwitcherEntries } from "./ontology-switcher";
 import { DeleteOntologyDialog } from "./delete-ontology-dialog";
@@ -386,6 +386,7 @@ export function OntologyView({
               }
             />
           </div>
+          <BoardDisplayMenu />
           {(canEdit || settingsMenu) && (
             <BoardSettingsMenu
               ontologyName={ontology.name}
