@@ -15,7 +15,8 @@
 // left has the real entry/m in hand. The synthesized shape stays because `trigger-outcomes.js ›
 // echoTargets` still builds one from the engine's flat lifecycle info object.
 
-const { Notification } = require('electron');
+// ⚠ `electron` is no longer required here: this module POSTS to the channel and raises nothing
+// (its one local notice left 2026-10-09 — see the note at the foot of the file).
 const io = require('./listener-io');
 const consent = require('./consent');
 const { diag } = require('./diag');
@@ -176,12 +177,13 @@ async function postWithRetry(entry, body) {
   return false;
 }
 
-// Local-only notice. Used for failures the operator must know about but that
-// must never be posted into the shared channel.
-function notifyLocal(title, body) {
-  try {
-    if (Notification.isSupported()) new Notification({ title, body }).show();
-  } catch (_) { /* best-effort */ }
-}
+// `notifyLocal` stood here — a local-only notice for failures the operator must know about but
+// that must never be posted into the shared channel. GONE 2026-10-09 with Samuel's spec, and both
+// its callers went a different way: the unanswered-request notice is off entirely, and the
+// tool-denial notice is POPUP ONLY now and routes as `tool_blocked`
+// (`session-windowless.js › notifyDenied` → `notification-route.js`).
+// ⚠ IT WAS ALSO ONE OF THE FIVE SOUNDING SITES — it built its Notification with no `silent: true`
+// — so removing it closes one of those without a separate edit. A new local notice belongs on the
+// route, where the operator's switch and the surface choice both live.
 
-module.exports = { postTaskEvent, postResult, postCourtesy, notifyLocal };
+module.exports = { postTaskEvent, postResult, postCourtesy };

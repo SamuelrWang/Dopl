@@ -182,8 +182,8 @@ async function patchDecision(workspaceId, rowId, decision) {
 // The notification that carried the Allow/Send button is GONE by the time the PATCH
 // answers (macOS removes it on action), and the pre-consent window has closed on its
 // own decision, so there is no live surface left to show an inline error on. A second
-// notification is the closest existing idiom in the app — channel-post.notifyLocal's
-// `Dopl: <what failed> in "<channel>"` + a recovery sentence, the same shape
+// notification is the closest existing idiom in the app — the shape `channel-post.notifyLocal`
+// carried until 2026-10-09 (`Dopl: <what failed> in "<channel>"` + a recovery sentence), the same
 // trigger.js uses for an approved reply that never posted. Built here rather than
 // required from channel-post so this module keeps its single electron import.
 //

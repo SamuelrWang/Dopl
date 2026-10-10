@@ -49,9 +49,19 @@ function load(consentOver = {}) {
     ...consentOver,
   };
   const stubRequire = (id) => {
+    // 2026-10-09 (Samuel's spec): the denial notice is POPUP ONLY now and goes through the route
+    // as `tool_blocked`, not through `channel-post.notifyLocal`. Captured here in the same
+    // `notices` array, so every assertion below still reads the operator-facing copy.
+    if (id === "./notification-route") {
+      return {
+        raise: (eventId, spec) => {
+          notices.push({ eventId, title: spec && spec.title, body: spec && spec.body });
+          return "popup";
+        },
+      };
+    }
     if (id === "./channel-post") {
       return {
-        notifyLocal: (title, body) => notices.push({ title, body }),
         // T25. The real signature is (entry, m, kind, taskId, extra, bodyText, opts).
         postTaskEvent: async (entry, m, kind, taskId, extra, bodyText, opts) => {
           posts.push({ entry, m, kind, taskId, extra, bodyText, opts });

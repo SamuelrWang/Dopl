@@ -32,7 +32,7 @@
 
 const consent = require('./consent');
 const targeting = require('./targeting');
-const channelPost = require('./channel-post'); // notifyLocal: the denial notice, local-only
+const channelPost = require('./channel-post'); // postTaskEvent: the in-thread record
 // 2026-08-31: which DENIAL COPY a refused gate deserves is stamped HERE now, not by the engine —
 // this file alone knows whether a prompt was shown, timed out, or had no surface at all.
 const sessionPermissions = require('./session-permissions');
@@ -378,10 +378,10 @@ function notifyDenied(s, payload) {
     // and a hostile name cannot mint unbounded distinct keys past the cap above.
     if (!firstDenialOf(s, tool)) return;
     const channelName = (s.context && s.context.channelName) || 'this channel';
-    channelPost.notifyLocal(
-      `Dopl: ${tool} was not allowed`,
-      `Your agent in "${channelName}" asked to use it. Nothing was running to ask on, so it was denied.`
-    );
+    require('./notification-route').raise('tool_blocked', { // POPUP ONLY (`tool_blocked`, 2026-10-09)
+      title: `Dopl: ${tool} was not allowed`,
+      body: `Your agent in "${channelName}" asked to use it. Nothing was running to ask on, so it was denied.`,
+    });
   } catch (_) { /* best-effort — a notice must never break the deny */ }
 }
 
