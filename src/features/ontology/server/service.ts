@@ -96,7 +96,7 @@ export async function createOntology(
   input: OntologyCreateInput
 ): Promise<Ontology> {
   await assertCanCreateOntology(ctx);
-  const slugs = await narrow.listOntologySlugs(ctx.workspaceId);
+  const { rows: slugs } = await narrow.listOntologySlugs(ctx.workspaceId);
   const slug = slugify(input.name, "ontology", slugs);
   const row = await repo.insertOntology({
     workspaceId: ctx.workspaceId,
@@ -385,7 +385,7 @@ async function currentRelationships(
   objectId: string
 ): Promise<OntologyObject["relationships"]> {
   const audience = await resolveOntologyAudience(ctx);
-  const rows = await narrow.listRelationshipsForSource(
+  const { rows } = await narrow.listRelationshipsForSource(
     audience.workspaceIds,
     objectId
   );

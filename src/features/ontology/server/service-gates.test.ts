@@ -36,9 +36,9 @@ vi.mock("./repository-shares", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listOntologySlugs: vi.fn(async () => []),
-  listMembershipParents: vi.fn(async () => []),
-  listRelationshipsForSource: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMembershipParents: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSource: vi.fn(async () => ({ rows: [], truncated: false })),
 }));
 
 vi.mock("./repository-anchor", () => ({
@@ -133,7 +133,7 @@ const OBJECT_ROW: OntologyObjectRow = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockRepo.countMembershipSiblings.mockResolvedValue(0);
-  mockNarrow.listMembershipParents.mockResolvedValue([]);
+  mockNarrow.listMembershipParents.mockResolvedValue({ rows: [], truncated: false });
 });
 
 const homeCtx = ontologyContextFactory({ workspaceId: LINK });
@@ -159,30 +159,36 @@ function primeHome(shares: ReturnType<typeof share>[]) {
 describe("home container — reads are FILTERED to the admitted ontologies", () => {
   it("drops an ontology with no share row, and never reads its objects", async () => {
     primeHome([share({ ontology: ONTOLOGY_ID, members: "view" })]);
-    mockRepo.listOntologies.mockResolvedValue([
-      ONTOLOGY_ROW,
-      { ...ONTOLOGY_ROW, id: PEER_ONTOLOGY, created_by: "somebody-else" },
-    ]);
-    mockRepo.listMemberships.mockResolvedValue([
-      {
-        id: "m-1",
-        workspace_id: WS,
-        ontology_id: ONTOLOGY_ID,
-        parent_object_id: null,
-        child_object_id: "obj-1",
-        position: 0,
-      },
-      {
-        id: "m-2",
-        workspace_id: WS,
-        ontology_id: PEER_ONTOLOGY,
-        parent_object_id: null,
-        child_object_id: "obj-secret",
-        position: 0,
-      },
-    ]);
-    mockRepo.listObjectsByIds.mockResolvedValue([OBJECT_ROW]);
-    mockRepo.listRelationshipsForSources.mockResolvedValue([]);
+    mockRepo.listOntologies.mockResolvedValue({
+      rows: [
+        ONTOLOGY_ROW,
+        { ...ONTOLOGY_ROW, id: PEER_ONTOLOGY, created_by: "somebody-else" },
+      ],
+      truncated: false,
+    });
+    mockRepo.listMemberships.mockResolvedValue({
+      rows: [
+        {
+          id: "m-1",
+          workspace_id: WS,
+          ontology_id: ONTOLOGY_ID,
+          parent_object_id: null,
+          child_object_id: "obj-1",
+          position: 0,
+        },
+        {
+          id: "m-2",
+          workspace_id: WS,
+          ontology_id: PEER_ONTOLOGY,
+          parent_object_id: null,
+          child_object_id: "obj-secret",
+          position: 0,
+        },
+      ],
+      truncated: false,
+    });
+    mockRepo.listObjectsByIds.mockResolvedValue({ rows: [OBJECT_ROW], truncated: false });
+    mockRepo.listRelationshipsForSources.mockResolvedValue({ rows: [], truncated: false });
 
     const snapshot = await getSnapshot(homeCtx({ userId: "user-1" }));
 
@@ -248,11 +254,14 @@ describe("home container — Q9, an object in TWO ontologies", () => {
       ...OBJECT_ROW,
       id: OBJECT_ID,
     });
-    mockRepo.listOntologies.mockResolvedValue(bothOntologies);
-    mockNarrow.listMembershipParents.mockResolvedValue([
-      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-      { ontology_id: PEER_ONTOLOGY, parent_object_id: null, child_object_id: OBJECT_ID },
-    ]);
+    mockRepo.listOntologies.mockResolvedValue({ rows: bothOntologies, truncated: false });
+    mockNarrow.listMembershipParents.mockResolvedValue({
+      rows: [
+        { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+        { ontology_id: PEER_ONTOLOGY, parent_object_id: null, child_object_id: OBJECT_ID },
+      ],
+      truncated: false,
+    });
     mockRepo.updateObject.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
   }
 
@@ -293,13 +302,19 @@ describe("home container — Q9, an object in TWO ontologies", () => {
     // an `every` over the visible ones alone would admit the write.
     primeHome([share({ ontology: ONTOLOGY_ID, members: "edit" })]);
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listOntologies.mockResolvedValue([
-      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
-    ]);
-    mockNarrow.listMembershipParents.mockResolvedValue([
-      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-      { ontology_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
-    ]);
+    mockRepo.listOntologies.mockResolvedValue({
+      rows: [
+        { ...ONTOLOGY_ROW, created_by: "somebody-else" },
+      ],
+      truncated: false,
+    });
+    mockNarrow.listMembershipParents.mockResolvedValue({
+      rows: [
+        { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+        { ontology_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
+      ],
+      truncated: false,
+    });
 
     await expect(
       updateObject(homeCtx(), OBJECT_ID, { name: "Renamed" })
@@ -311,13 +326,19 @@ describe("home container — Q9, an object in TWO ontologies", () => {
     primeHome([share({ ontology: ONTOLOGY_ID, members: "view" })]);
     mockAnchor.findAnchorObject.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listOntologies.mockResolvedValue([
-      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
-    ]);
-    mockNarrow.listMembershipParents.mockResolvedValue([
-      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-      { ontology_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
-    ]);
+    mockRepo.listOntologies.mockResolvedValue({
+      rows: [
+        { ...ONTOLOGY_ROW, created_by: "somebody-else" },
+      ],
+      truncated: false,
+    });
+    mockNarrow.listMembershipParents.mockResolvedValue({
+      rows: [
+        { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+        { ontology_id: "c-invisible", parent_object_id: null, child_object_id: OBJECT_ID },
+      ],
+      truncated: false,
+    });
 
     // The asymmetry is the ruling: the same pair of ontologies that refuses the
     // write two cases up admits the read.
@@ -326,7 +347,7 @@ describe("home container — Q9, an object in TWO ontologies", () => {
 
   it("an object reachable from NO ontology is refused — `every` over nothing must not admit", async () => {
     primeObjectInBoth("edit");
-    mockNarrow.listMembershipParents.mockResolvedValue([]);
+    mockNarrow.listMembershipParents.mockResolvedValue({ rows: [], truncated: false });
     await expect(
       updateObject(homeCtx(), OBJECT_ID, { name: "Renamed" })
     ).rejects.toMatchObject({ status: 404 });
@@ -348,11 +369,14 @@ describe("Q8 on a WRITE — an edge target outside the shared ontology is droppe
   beforeEach(() => {
     primeHome([share({ ontology: ONTOLOGY_ID, members: "edit" })]);
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listOntologies.mockResolvedValue([
-      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
-      // The LENDER's other, unshared ontology — in the scope, not in the answer.
-      { ...ONTOLOGY_ROW, id: PEER_ONTOLOGY, created_by: "somebody-else" },
-    ]);
+    mockRepo.listOntologies.mockResolvedValue({
+      rows: [
+        { ...ONTOLOGY_ROW, created_by: "somebody-else" },
+        // The LENDER's other, unshared ontology — in the scope, not in the answer.
+        { ...ONTOLOGY_ROW, id: PEER_ONTOLOGY, created_by: "somebody-else" },
+      ],
+      truncated: false,
+    });
     // Both rows are LIVE and in the read scope: the old filter admitted both.
     mockRepo.filterObjectIds.mockResolvedValue(new Set([OBJECT_ID, FOREIGN]));
     mockRepo.updateObject.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
@@ -377,7 +401,7 @@ describe("Q8 on a WRITE — an edge target outside the shared ontology is droppe
           child_object_id: FOREIGN,
         });
       }
-      return rows;
+      return { rows, truncated: false };
     });
   });
 
@@ -395,16 +419,19 @@ describe("Q8 on a WRITE — an edge target outside the shared ontology is droppe
   });
 
   it("an edge already written to a foreign target is not READ BACK either", async () => {
-    mockNarrow.listRelationshipsForSource.mockResolvedValue([
-      {
-        id: "r-1",
-        workspace_id: WS,
-        source_object_id: OBJECT_ID,
-        target_object_id: FOREIGN,
-        label: "reports to",
-        position: 0,
-      },
-    ]);
+    mockNarrow.listRelationshipsForSource.mockResolvedValue({
+      rows: [
+        {
+          id: "r-1",
+          workspace_id: WS,
+          source_object_id: OBJECT_ID,
+          target_object_id: FOREIGN,
+          label: "reports to",
+          position: 0,
+        },
+      ],
+      truncated: false,
+    });
     const object = await updateObject(homeCtx(), OBJECT_ID, { name: "Renamed" });
     expect(object.relationships).toEqual([]);
   });
@@ -414,12 +441,18 @@ describe("attribution — Q3/Q6, an edit survives the unshare", () => {
   it("stamps last_edited_by and last_edited_source on an object update", async () => {
     primeHome([share({ ontology: ONTOLOGY_ID, members: "edit" })]);
     mockRepo.findObjectById.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
-    mockRepo.listOntologies.mockResolvedValue([
-      { ...ONTOLOGY_ROW, created_by: "somebody-else" },
-    ]);
-    mockNarrow.listMembershipParents.mockResolvedValue([
-      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-    ]);
+    mockRepo.listOntologies.mockResolvedValue({
+      rows: [
+        { ...ONTOLOGY_ROW, created_by: "somebody-else" },
+      ],
+      truncated: false,
+    });
+    mockNarrow.listMembershipParents.mockResolvedValue({
+      rows: [
+        { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+      ],
+      truncated: false,
+    });
     mockRepo.updateObject.mockResolvedValue({ ...OBJECT_ROW, id: OBJECT_ID });
 
     await updateObject(homeCtx({ source: "agent" }), OBJECT_ID, { name: "Renamed" });

@@ -39,9 +39,9 @@ vi.mock("./repository-shares", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listOntologySlugs: vi.fn(async () => []),
-  listMembershipParents: vi.fn(async () => []),
-  listRelationshipsForSource: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMembershipParents: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSource: vi.fn(async () => ({ rows: [], truncated: false })),
 }));
 
 vi.mock("@/shared/tenancy/home-space-reach", () => ({

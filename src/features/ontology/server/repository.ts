@@ -1,7 +1,9 @@
 import "server-only";
 import { mergeStoredLayout, type GraphLayout } from "@/shared/graph";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import type { Clipped } from "@/shared/supabase/max-rows";
 import type { OntologyObject, OntologyWriteSource } from "../types";
+import { emptyWalk, walkedRead } from "./repository-paging";
 import {
   ONTOLOGY_COLS,
   ONTOLOGY_MEMBERSHIP_COLS,
@@ -26,6 +28,21 @@ import {
  * and object reads take ids from the membership walk over ALREADY-ADMITTED
  * ontologies (Q8). Same shape, same reason, as
  * `shared/tenancy/home-space.ts › resolveShelfScope`.
+ *
+ * 🔒 **EVERY LIST READ BELOW IS A RANGE WALK, NOT A `.limit()`** (Samuel #2935,
+ * 2026-10-10). `supabase/config.toml › max_rows` clips any PostgREST select at
+ * 1,000 rows and raises nothing, so `.limit(ONTOLOGY_READ_LIMITS.objects)` was
+ * never the bound — it was a request the server silently declined, and the graph
+ * got assembled from the first 1,000 rows of each table. That does not merely
+ * under-report: it renders a SMALLER GRAPH whose edges point at objects that
+ * appear not to exist. `./repository-paging.ts › walkedRead` is the mechanism
+ * and carries the rest of the argument; `ONTOLOGY_READ_LIMITS` is now its
+ * `hardCap`, the return is `Clipped<Row>` so no caller re-derives the clip from
+ * `rows.length`, and `./row-cap-paging.test.ts` is the suite.
+ *
+ * ⚠ **EVERY WALKED READ ORDERS BY `id` LAST.** `position` and `created_at` are
+ * both non-unique (and `position` is per-container, over a workspace SET), so
+ * the `id` tie-break is what makes a paged order TOTAL.
  */
 
 /**
@@ -50,19 +67,22 @@ export function stripNullBytes<T>(value: T): T {
 
 export async function listOntologies(
   workspaceIds: readonly string[]
-): Promise<OntologyRow[]> {
-  if (workspaceIds.length === 0) return [];
+): Promise<Clipped<OntologyRow>> {
+  if (workspaceIds.length === 0) return emptyWalk();
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("ontologies")
-    .select(ONTOLOGY_COLS)
-    .in("workspace_id", workspaceIds)
-    .is("deleted_at", null)
-    .order("position")
-    .order("created_at")
-    .limit(ONTOLOGY_READ_LIMITS.ontologies);
-  if (error) throw error;
-  return (data ?? []) as OntologyRow[];
+  return walkedRead<OntologyRow>(
+    (from, to) =>
+      db
+        .from("ontologies")
+        .select(ONTOLOGY_COLS)
+        .in("workspace_id", workspaceIds)
+        .is("deleted_at", null)
+        .order("position")
+        .order("created_at")
+        .order("id")
+        .range(from, to),
+    ONTOLOGY_READ_LIMITS.ontologies
+  );
 }
 
 export async function findOntologyById(
@@ -216,18 +236,23 @@ export async function cascadeHardDeleteOntology(
 export async function listObjectsByIds(
   workspaceIds: readonly string[],
   ids: readonly string[]
-): Promise<OntologyObjectRow[]> {
-  if (workspaceIds.length === 0 || ids.length === 0) return [];
+): Promise<Clipped<OntologyObjectRow>> {
+  if (workspaceIds.length === 0 || ids.length === 0) return emptyWalk();
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("ontology_objects")
-    .select(ONTOLOGY_OBJECT_COLS)
-    .in("workspace_id", workspaceIds)
-    .in("id", ids)
-    .is("deleted_at", null)
-    .limit(ONTOLOGY_READ_LIMITS.objects);
-  if (error) throw error;
-  return (data ?? []) as OntologyObjectRow[];
+  // ⚠ `.order("id")` is NEW and not cosmetic: this read had NO order, and an
+  // unordered page loop may answer any permutation per page.
+  return walkedRead<OntologyObjectRow>(
+    (from, to) =>
+      db
+        .from("ontology_objects")
+        .select(ONTOLOGY_OBJECT_COLS)
+        .in("workspace_id", workspaceIds)
+        .in("id", ids)
+        .is("deleted_at", null)
+        .order("id")
+        .range(from, to),
+    ONTOLOGY_READ_LIMITS.objects
+  );
 }
 
 export async function findObjectById(
@@ -343,18 +368,24 @@ export async function hardDeleteObject(workspaceId: string, id: string): Promise
 
 export async function listMemberships(
   workspaceIds: readonly string[]
-): Promise<OntologyMembershipRow[]> {
-  if (workspaceIds.length === 0) return [];
+): Promise<Clipped<OntologyMembershipRow>> {
+  if (workspaceIds.length === 0) return emptyWalk();
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("ontology_memberships")
-    .select(ONTOLOGY_MEMBERSHIP_COLS)
-    .in("workspace_id", workspaceIds)
-    .order("position")
-    .order("created_at")
-    .limit(ONTOLOGY_READ_LIMITS.memberships);
-  if (error) throw error;
-  return (data ?? []) as OntologyMembershipRow[];
+  // ⚠ The read this bug hurt most: clip the membership set and
+  // `walkAdmittedOntologies` never reaches the subtree below row 1,000, so whole
+  // columns vanish off the board.
+  return walkedRead<OntologyMembershipRow>(
+    (from, to) =>
+      db
+        .from("ontology_memberships")
+        .select(ONTOLOGY_MEMBERSHIP_COLS)
+        .in("workspace_id", workspaceIds)
+        .order("position")
+        .order("created_at")
+        .order("id")
+        .range(from, to),
+    ONTOLOGY_READ_LIMITS.memberships
+  );
 }
 
 export async function insertMembership(input: {
@@ -405,19 +436,22 @@ export async function countMembershipSiblings(
 export async function listRelationshipsForSources(
   workspaceIds: readonly string[],
   sourceObjectIds: readonly string[]
-): Promise<OntologyRelationshipRow[]> {
-  if (workspaceIds.length === 0 || sourceObjectIds.length === 0) return [];
+): Promise<Clipped<OntologyRelationshipRow>> {
+  if (workspaceIds.length === 0 || sourceObjectIds.length === 0) return emptyWalk();
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("ontology_relationships")
-    .select(ONTOLOGY_RELATIONSHIP_COLS)
-    .in("workspace_id", workspaceIds)
-    .in("source_object_id", sourceObjectIds)
-    .order("position")
-    .order("created_at")
-    .limit(ONTOLOGY_READ_LIMITS.relationships);
-  if (error) throw error;
-  return (data ?? []) as OntologyRelationshipRow[];
+  return walkedRead<OntologyRelationshipRow>(
+    (from, to) =>
+      db
+        .from("ontology_relationships")
+        .select(ONTOLOGY_RELATIONSHIP_COLS)
+        .in("workspace_id", workspaceIds)
+        .in("source_object_id", sourceObjectIds)
+        .order("position")
+        .order("created_at")
+        .order("id")
+        .range(from, to),
+    ONTOLOGY_READ_LIMITS.relationships
+  );
 }
 
 /** Ids from the input that resolve to live objects in this workspace. */

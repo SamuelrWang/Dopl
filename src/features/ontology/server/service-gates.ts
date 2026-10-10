@@ -68,7 +68,7 @@ export async function ontologiesOfObjects(
     objectIds.map((id) => [id, new Set([id])])
   );
   for (let depth = 0; depth < ONTOLOGY_WALK_DEPTH && frontier.size > 0; depth++) {
-    const rows = await listMembershipParents(audience.workspaceIds, [
+    const { rows } = await listMembershipParents(audience.workspaceIds, [
       ...frontier.keys(),
     ]);
     const next = new Map<string, Set<string>>();
@@ -113,7 +113,7 @@ export async function admittedObjectIds(
   if (unique.length === 0) return new Set();
   if (audience.kind === "unrestricted") return new Set(unique);
   const byObject = await ontologiesOfObjects(audience, unique);
-  const ontologies = await repo.listOntologies(audience.workspaceIds);
+  const { rows: ontologies } = await repo.listOntologies(audience.workspaceIds);
   const admitted = new Set(
     ontologies
       .filter((c) => audienceAdmits(ctx, audience, c, "view"))
@@ -172,7 +172,11 @@ export async function requireObject(
 
   const ontologyIds = await ontologiesOfObject(audience, objectId);
   if (ontologyIds.size === 0) throw objectNotFound();
-  const ontologies = await repo.listOntologies(audience.workspaceIds);
+  // ⚠ Paged (Samuel #2935): when `max_rows` clipped this read, an ontology the
+  // walk named could be missing from it for no reason but row order, and the
+  // `owning.length !== ontologyIds.size` arm below turns that into a 404 on an
+  // object the caller may in fact edit.
+  const { rows: ontologies } = await repo.listOntologies(audience.workspaceIds);
   const owning = ontologies.filter((c) => ontologyIds.has(c.id));
   // An ontology the walk named but the read did not return is invisible to this
   // caller and must still COUNT against a write (Q9): a short list is a refusal,

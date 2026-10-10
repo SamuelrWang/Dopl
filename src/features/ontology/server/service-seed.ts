@@ -64,7 +64,7 @@ export async function seedWorkspace(
   refs: OntologySeedRefs
 ): Promise<SeedOntologyResult> {
   const seed = buildOntologySeed();
-  const existing = await repo.listOntologies([ctx.workspaceId]);
+  const { rows: existing } = await repo.listOntologies([ctx.workspaceId]);
   const slug = slugify(seed.ontologySlug, "ontology", existing.map((c) => c.slug));
 
   const idByKey: Record<string, string> = {};
