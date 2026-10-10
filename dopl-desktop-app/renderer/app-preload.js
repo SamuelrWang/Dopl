@@ -170,6 +170,26 @@ contextBridge.exposeInMainWorld('dopl', {
   // main to re-read the record now, so its banner gate stops answering from a stale cache.
   notifications: {
     refresh: () => ipcRenderer.invoke('notifications:refreshPrefs'),
+    // MAIN RAISING A TOAST IN HERE (`main/notification-route.js`, 2026-10-09). The spec's
+    // "Mac + popup" events resolve to ONE surface at raise time: when Dopl is in front main
+    // sends this instead of an OS banner. Only the two strings cross, and `kind: 'incoming'`
+    // tells the renderer this toast is not the result of the operator's own click — the toast
+    // slot holds one at a time, so the receiver decides whether to yield.
+    onToast: (callback) => {
+      if (typeof callback !== 'function') return () => {};
+      const listener = (_event, payload) => {
+        const p = payload && typeof payload === 'object' ? payload : {};
+        callback({
+          eventId: typeof p.eventId === 'string' ? p.eventId : '',
+          title: typeof p.title === 'string' ? p.title : '',
+          // Every toast main pushes is one the operator did not click for; the field is explicit
+          // so the receiver never has to infer it.
+          kind: 'incoming',
+        });
+      };
+      ipcRenderer.on('notifications:toast', listener);
+      return () => ipcRenderer.removeListener('notifications:toast', listener);
+    },
   },
 
   // The two orchestrator consents: `orchestratorLaunch` (may another agent make this machine SPAWN a

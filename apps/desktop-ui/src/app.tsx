@@ -12,6 +12,7 @@ import { armErrorRecovery } from "#/lib/error-recovery";
 // Reused feature components (ChatsView, SkillsBrowser mutations) fire toast()
 // and need a mounted host.
 import { ToastHost } from "@/shared/ui/toast";
+import { IncomingToasts } from "@/features/notifications/components/incoming-toasts";
 import { RuntimeSignInPrompt } from "#/components/runtime-sign-in-prompt";
 
 /**
@@ -106,6 +107,9 @@ export function App() {
     >
       <RouterProvider router={router} />
       <RuntimeSignInPrompt />
+      {/* Main pushes a toast here instead of an OS banner while Dopl is in front, so the spec's
+          "Mac + popup" events announce themselves exactly once. Renders nothing. */}
+      <IncomingToasts />
       <ToastHost />
     </PersistQueryClientProvider>
   );

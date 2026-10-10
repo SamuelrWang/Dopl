@@ -78,6 +78,10 @@ export const APP_OPS = [
   // this Mac — if a future main stores prefs locally again, that pair is what has to come back.
   // The record can only mute PASSIVE banners (mention / decision / direct message); approvals are
   // forced on and no verdict, route or spawn reads it (`main/notification-prefs.js`).
+  // 2026-10-09 (spec step 2): main pushing a toast in here INSTEAD of raising an OS banner,
+  // while Dopl is in front — the "Mac + popup" events announce themselves exactly once.
+  // Subscription, not an op: it carries an event id and a title inward only.
+  "notifications.onToast",
   "notifications.refresh",
   "onAuthState",
   "onNavigate",

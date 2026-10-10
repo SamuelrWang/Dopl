@@ -48,12 +48,32 @@ const RETRY_FLOOR_MS = 10000;
 // there and missing HERE is worse than a test failure: `allowsIn` below fails toward ON for an id
 // it cannot name, so the operator would see a switch, turn it off, and still get banners.
 const EVENT_IDS = [
-  'mention', 'decision', 'direct_message', 'approval',
+  'mention', 'decision', 'direct_message', 'approval', 'peer_ask',
   'draft_reply', 'agent_started', 'signed_out', 'credits_exhausted',
   'runtime_signin', 'decision_failed', 'tool_blocked', 'session_resume', 'shared_with_me',
 ];
 // `approval` plus the four SAFETY events Samuel kept at #2775 ("always on, like approvals").
 const LOCKED_ON = ['approval', 'signed_out', 'credits_exhausted', 'runtime_signin', 'decision_failed'];
+// WHERE EACH EVENT RAISES, restated from the registry's `surface`. Same fence as EVENT_IDS: the
+// parity test reads registry.ts and checks every id AND its surface against this map.
+// 'both' does NOT mean twice — see notification-route.js, which picks the one surface the
+// operator can actually see.
+const SURFACE = {
+  mention: 'both',
+  decision: 'both',
+  direct_message: 'mac',
+  approval: 'both',
+  peer_ask: 'both',
+  draft_reply: 'both',
+  agent_started: 'both',
+  signed_out: 'both',
+  credits_exhausted: 'both',
+  runtime_signin: 'both',
+  decision_failed: 'both',
+  tool_blocked: 'popup',
+  session_resume: 'popup',
+  shared_with_me: 'popup',
+};
 // ⚠ THE ONE EVENT THAT DEFAULTS OFF, mirroring the registry's `defaultOn: false`. Samuel ruled
 // DMs out entirely (#2773), so silence is the answer he gave, not a record we failed to read.
 // If this drifts from the web list the two surfaces disagree about a default, which is the same
@@ -167,6 +187,8 @@ function allowsMessage(m, entry) {
 
 module.exports = {
   EVENT_IDS,
+  LOCKED_ON,
+  SURFACE,
   defaultPrefs,
   normalizePrefs,
   eventForMessage,

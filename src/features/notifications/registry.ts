@@ -34,6 +34,7 @@ export const NOTIFICATION_EVENT_IDS = [
   "decision",
   "direct_message",
   "approval",
+  "peer_ask",
   "draft_reply",
   "agent_started",
   "signed_out",
@@ -84,6 +85,10 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   { id: "approval", label: "Approvals", surface: "both", locked: true, wired: true },
 
   // ── Named, NOT raised yet (wired: false ⇒ no row in the panel) ──────────────────────────────
+  // Samuel KEPT this one when asked (2026-10-09): a peer's agent is blocked on a launch and this
+  // is the only thing that says so. It raises today at `trigger.js:97` (notifyAsk) and is left
+  // running untouched until step 3 gates it; default ON and NOT locked.
+  { id: "peer_ask", label: "A peer's agent asks you", surface: "both" },
   { id: "draft_reply", label: "Replies your agent drafted", surface: "both" },
   // Own-machine spawns only, including one agent launching another; a fan-out burst coalesces
   // into ONE banner (@orchestrator, 2026-10-09). No trigger exists: `task_started` is dropped at

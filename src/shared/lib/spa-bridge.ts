@@ -128,6 +128,18 @@ export interface SpaBridgeSurface {
    */
   notifications?: {
     refresh(): Promise<{ ok: boolean }>;
+    /**
+     * MAIN RAISING A TOAST IN HERE (`main/notification-route.js`, 2026-10-09). Samuel's spec
+     * marks 9 events "Mac + popup"; because a banner lives in main and the toast lives here,
+     * raising both would say the same thing twice at one desk. So main resolves it at raise
+     * time: Dopl in front sends THIS instead of a banner. Returns its own unsubscribe.
+     * ⚠ `kind: "incoming"` means the operator did not click for this one. The toast slot holds
+     * a single toast, so a receiver that is showing the result of his own action decides
+     * whether to yield — main does not get to assume it won.
+     */
+    onToast?(
+      callback: (t: { eventId: string; title: string; kind: "incoming" }) => void
+    ): () => void;
   };
   /**
    * DOPL'S OWN RUNTIME CREDENTIALS (`main/runtime-credentials.js`). `signIn` runs one runtime's in-app

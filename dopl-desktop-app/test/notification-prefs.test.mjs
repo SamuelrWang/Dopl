@@ -49,10 +49,37 @@ const msg = (metadata) => ({ seq: 1, kind: "message", metadata });
 const room = { channel: { id: "c", isDirect: false } };
 const dm = { channel: { id: "c", isDirect: true } };
 
+const WEB_REGISTRY = join(MAIN, "..", "..", "src", "features", "notifications", "registry.ts");
+
 test("registry ids match the web registry", () => {
-  const web = readFileSync(join(MAIN, "..", "..", "src", "features", "notifications", "registry.ts"), "utf8");
+  const web = readFileSync(WEB_REGISTRY, "utf8");
   const ids = [...web.match(/NOTIFICATION_EVENT_IDS = \[([^\]]*)\]/)[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]);
   assert.deepEqual(load().mod.EVENT_IDS, ids);
+});
+
+/**
+ * ⚠ THE SURFACE MAP IS THE SECOND RESTATEMENT and drifts the same way the id list does: an event
+ * the web registry calls "both" and this module calls "popup" would never raise a Mac banner,
+ * silently. Same technique as the id fence — read the web registry as TEXT.
+ */
+test("every event's surface matches the web registry", () => {
+  const web = readFileSync(WEB_REGISTRY, "utf8");
+  const { mod } = load();
+  const surfaces = {};
+  for (const m of web.matchAll(/\{ id: "([a-z_]+)",[^}]*?surface: "(mac|popup|both)"/g)) {
+    surfaces[m[1]] = m[2];
+  }
+  // The extractor must have found every event, or this test would pass by reading nothing.
+  assert.deepEqual(Object.keys(surfaces).sort(), [...mod.EVENT_IDS].sort());
+  assert.deepEqual(mod.SURFACE, surfaces);
+});
+
+test("every id has a surface, and locked ids are a subset of the ids", () => {
+  const { mod } = load();
+  assert.deepEqual(Object.keys(mod.SURFACE).sort(), [...mod.EVENT_IDS].sort());
+  for (const id of mod.LOCKED_ON) {
+    assert.ok(mod.EVENT_IDS.includes(id), `${id} is locked but not a registered id`);
+  }
 });
 
 /**
