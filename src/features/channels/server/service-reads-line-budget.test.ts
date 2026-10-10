@@ -132,7 +132,9 @@ beforeEach(() => {
 
 describe("readTranscript — the page is sized in LINES", () => {
   it("asks the repository for the ROW CAP, in ONE keyset query", async () => {
-    vi.mocked(repoMessages.listMessages).mockResolvedValue(block(200, 200, 2));
+    vi.mocked(repoMessages.listMessages).mockResolvedValue(
+      block(200, CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS, 2)
+    );
 
     await readTranscript(ctx, "general", { ...uiQuery, before: 500 });
 
@@ -145,16 +147,21 @@ describe("readTranscript — the page is sized in LINES", () => {
     });
   });
 
-  it("returns ~150 two-line messages and says there is more", async () => {
-    // 300 / 2 = 150. The cap (200) does not bite; the BUDGET does.
-    vi.mocked(repoMessages.listMessages).mockResolvedValue(block(200, 200, 2));
+  it("ends the page on the BUDGET, not on the row cap, and says there is more", async () => {
+    // 300 / 10 = 30 rows kept out of the 60 the cap let the query return.
+    // ⚠ **THE BLOCK IS SIZED BY THE CAP (option B, 2026-10-10), NOT BY 200.** The
+    // real repository honours `limit`, so a mock handing back more rows than the
+    // service asked for tests a page that can no longer happen.
+    vi.mocked(repoMessages.listMessages).mockResolvedValue(
+      block(200, CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS, 10)
+    );
 
     const { messages, hasMore } = await readTranscript(ctx, "general", uiQuery);
 
-    expect(messages).toHaveLength(150);
-    // ⚠ THE NEWEST 150, not the oldest — the page a reader is looking at.
+    expect(messages).toHaveLength(30);
+    // ⚠ THE NEWEST 30, not the oldest — the page a reader is looking at.
     expect(messages[messages.length - 1].seq).toBe(200);
-    expect(messages[0].seq).toBe(51);
+    expect(messages[0].seq).toBe(171);
     expect(hasMore).toBe(true);
   });
 

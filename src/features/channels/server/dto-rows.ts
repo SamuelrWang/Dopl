@@ -175,6 +175,34 @@ export type ChannelMessageRow = {
 };
 
 /**
+ * The columns a PAGE of `channel_messages` is read with
+ * (`repository-messages.ts › listMessages`). Must stay in step with
+ * {@link ChannelMessageRow}, which is every column of the table BUT ONE.
+ *
+ * ⚠ **THE ONE IT DROPS IS WHY THIS EXISTS (2026-10-10, option H).**
+ * `search_tsv` is a STORED generated `tsvector` (`20261007120000`), roughly
+ * body-sized, and `select=*` returns stored generated columns — so every
+ * transcript read was carrying one per row from Postgres into Next and
+ * JSON-parsing it for `mapMessageRow` to never look at.
+ *
+ * ⚠ **IT NAMES THE OPTIONAL COLUMNS TOO, AND THAT CHANGES A FAILURE MODE.**
+ * `wake_verdict`, the four `recipient_*`/`delivery*` columns and `artifact_id`
+ * are optional on the row type so a database that has not run
+ * `20260912120000` / `20260926120000` still type-checks. Under `select=*` such
+ * a database silently returned rows without them; named explicitly, PostgREST
+ * answers 42703 and the read FAILS. Deliberate: those migrations are long
+ * landed, and a page read that silently drops the delivery keystone is worse
+ * than one that says so. Behind on migrations is a `supabase db push`, not a
+ * code change.
+ *
+ * ⚠ **THE SINGLE-ROW READERS BESIDE IT KEEP `*`** (`findMessageById`,
+ * `findMessageBySeq`, `findOwnMessageByClientId`): one row's tsvector is not a
+ * page's, and each of them documents the trade it makes.
+ */
+export const CHANNEL_MESSAGE_COLS =
+  "id,seq,channel_id,workspace_id,author_user_id,author_kind,kind,body,metadata,client_msg_id,created_at,wake_verdict,recipient_user_ids,recipient_agent_ids,delivery,delivery_at,artifact_id";
+
+/**
  * A `channel_artifacts` row — the card, never its members. Membership lives on
  * `channel_messages.artifact_id` and is read separately
  * (`repository-artifacts.ts`), because a list on the artifact is the shape the

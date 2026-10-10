@@ -89,16 +89,25 @@ function toggleTranscriptAgent(
 
 /**
  * The transcript cross-fade's key (`fade-swap.tsx`): names the selection only, never the rows,
- * so a realtime push does not fade. Agent ids are sorted so one set has one spelling; the
- * channel id is part of the key because filters are stored per channel.
+ * so a realtime push does not fade. Agent ids are sorted so one set has one spelling.
+ *
+ * ⚠ **THE CHANNEL ID IS DELIBERATELY NOT IN IT (2026-10-10, option I of KB
+ * `dopl-development › Channel Switch Latency 2026-10-10`).** It was, on the argument that
+ * filters are stored per channel — but `FadeSwap` uses this string as a React `key`, so every
+ * channel switch was a full TEARDOWN AND REBUILD of the whole transcript subtree (up to a
+ * page of rows) plus a 140ms fade-in, and that 140ms was a floor on how fast a switch could
+ * feel. A switch with the same filter on both sides is now a DIFF.
+ *
+ * ⚠ **IT COSTS THE SWITCH NOTHING ELSE.** Rows are keyed by message id, so the new channel's
+ * rows mount and the old ones unmount either way; the reading position is
+ * `use-stick-to-bottom.ts`, whose own view key still carries the channel and the thread, so a
+ * switch still lands at the bottom.
+ *
+ * Two channels whose filters DIFFER still cross-fade, which is right: that is a genuine
+ * change of what is on screen.
  */
-export function transcriptFilterViewKey(
-  channelId: string,
-  filter: TranscriptFilter
-): string {
-  return `${channelId}:${filter.people ? "p" : "-"}:${[...filter.agentIds]
-    .sort()
-    .join(",")}`;
+export function transcriptFilterViewKey(filter: TranscriptFilter): string {
+  return `${filter.people ? "p" : "-"}:${[...filter.agentIds].sort().join(",")}`;
 }
 
 /** The agent whose box this row wears, or null (People — every non-message row too). An ended

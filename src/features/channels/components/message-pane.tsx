@@ -292,9 +292,11 @@ export function ChannelsMessagePane({
             Loading transcript
           </p>
         ) : (
-          /* Fades on filter change only (`transcriptFilterViewKey`); wraps the transcript, not the
-             scroller, so paging and the pin are untouched. */
-          <FadeSwap viewKey={transcriptFilterViewKey(channelId, filter)}>
+          /* Fades on filter change only (`transcriptFilterViewKey`) — ⚠ NOT on a channel switch,
+             which would remount the whole subtree and floor the switch at the fade's 140ms
+             (option I, 2026-10-10). Wraps the transcript, not the scroller, so paging and the
+             pin are untouched. */
+          <FadeSwap viewKey={transcriptFilterViewKey(filter)}>
           <Transcript
             rows={visibleRows}
             index={index}

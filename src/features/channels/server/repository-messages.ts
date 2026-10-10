@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { ChannelMessageRow } from "./dto";
+import { CHANNEL_MESSAGE_COLS, type ChannelMessageRow } from "./dto";
 // ⚠ SPLIT ON THE 500-LINE CAP (2026-09-05): the two bounded recent-activity reads.
 export {
   listRecentRoomAgentPosts,
@@ -103,7 +103,10 @@ export async function listMessages(
   const db = supabaseAdmin();
   let query = db
     .from("channel_messages")
-    .select("*")
+    // ⚠ NAMED, NEVER `*` — `dto-rows.ts › CHANNEL_MESSAGE_COLS` carries the
+    // argument: `*` shipped a stored generated `search_tsv` per row that no
+    // mapper reads, on every page of every transcript.
+    .select(CHANNEL_MESSAGE_COLS)
     .eq("channel_id", channelId);
   if (opts.since !== undefined) query = query.gt("seq", opts.since);
   if (opts.before !== undefined) query = query.lt("seq", opts.before);

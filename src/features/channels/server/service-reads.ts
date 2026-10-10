@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import type {
   ChannelAgent,
   ChannelMember,
@@ -98,6 +99,41 @@ export async function readMessages(
 }
 
 /**
+ * **RUN BEST-EFFORT WORK OFF THE RESPONSE PATH** (2026-10-10, option H).
+ *
+ * ⚠ **`after` RATHER THAN A BARE `void`, AND THE DIFFERENCE IS NOT STYLE.** On a
+ * serverless deployment the invocation can be frozen the moment the response is
+ * sent, so a floating promise is work that MIGHT run; `after` keeps the
+ * invocation alive for it. Next 15+ exports it from `next/server`.
+ *
+ * ⚠ **AND IT THROWS OUTSIDE A REQUEST SCOPE**, which is every non-route caller
+ * of these services — the await-hold, a script, a vitest run. That arm runs the
+ * work immediately, detached, which is what those callers want anyway.
+ *
+ * ⚠ **A FAILURE IS SWALLOWED ON BOTH ARMS, DELIBERATELY.** Only pass work whose
+ * failure must not fail, or be seen by, the request. A SYNCHRONOUS throw and a
+ * rejected promise are both swallowed, and so is work that returns no promise at
+ * all — a repository mocked with a bare `vi.fn()` returns `undefined`, and a
+ * helper that assumed otherwise would fail every suite rather than the thing
+ * under test.
+ */
+function detach(work: () => Promise<unknown> | unknown): void {
+  const run = () => {
+    try {
+      void Promise.resolve(work()).catch(() => {});
+    } catch {
+      // Swallowed, as above.
+    }
+  };
+  try {
+    after(run);
+  } catch {
+    // No request scope (the await-hold, a script, a test run): run it here.
+    run();
+  }
+}
+
+/**
  * THE READ, WITH THE CHANNEL ID IT RESOLVED — the one body behind both
  * {@link readMessages} and {@link readTranscript}.
  *
@@ -140,11 +176,19 @@ async function readMessagePage(
     );
     const current = membership.last_read_at;
     if (current === null || Date.parse(newest) > Date.parse(current)) {
-      try {
-        await repo.updateLastRead(channel.id, ctx.userId, newest);
-      } catch {
-        // ⚠ Best-effort — a failed watermark bump must not fail the read.
-      }
+      /**
+       * ⚠ **NOT AWAITED (2026-10-10, option H) — IT NEVER SHOULD HAVE BEEN.**
+       * The docblock below has called this best-effort since it was written, and
+       * it sat on the critical path anyway: a `channel_members` UPDATE round trip
+       * inside the request the reader is watching a blank transcript for.
+       * Nothing in the response is derived from it.
+       *
+       * ⚠ **F-072 UNCHANGED: THIS IS THE SAME ONE WRITE, NOT A NEW ONE.** It is
+       * still content-derived and still only fires when the watermark ADVANCES,
+       * which is what keeps it out of the refetch loop the comment above
+       * describes; detaching it moves when it is sent, never whether.
+       */
+      detach(() => repo.updateLastRead(channel.id, ctx.userId, newest));
     }
   }
   return { channelId: channel.id, messages, hasMore };

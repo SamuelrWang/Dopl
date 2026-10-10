@@ -189,18 +189,26 @@ type SessionQuery = ReturnType<
  * argument that extracted this function in the first place. **A fourth caller
  * passes a fence and nothing else — never a widened one.**
  */
-export async function sessionRowsWhere(
-  fence: (query: SessionQuery) => SessionQuery
-): Promise<SessionStateRow[]> {
+export async function sessionRowsWhere<Row = SessionStateRow>(
+  fence: (query: SessionQuery) => SessionQuery,
+  /**
+   * ⚠ **THE PROJECTION, AND A NARROWING CALLER OWES THE MATCHING `Row` TYPE**
+   * (2026-10-10, option H) — passed together at the call site so the two cannot
+   * drift, the bargain `dto-rows.ts › CHANNEL_MESSAGE_COLS` makes. Full rows
+   * stay the default: three of the four callers render one. ⚠ `updated_at` need
+   * not be in the projection to be ordered by.
+   */
+  columns: string = "*"
+): Promise<Row[]> {
   const db = supabaseAdmin();
-  const { data, error } = await fence(db.from("channel_sessions").select("*"))
+  const { data, error } = await fence(db.from("channel_sessions").select(columns))
     .order("updated_at", { ascending: false })
     .limit(SESSION_ROWS_LIMIT);
   if (error) {
     if (isMissingRelation(error)) return [];
     throw error;
   }
-  return (data ?? []) as SessionStateRow[];
+  return (data ?? []) as Row[];
 }
 
 /**
@@ -218,6 +226,11 @@ export async function listChannelSessionStates(
     q.eq("workspace_id", workspaceId).eq("channel_id", channelId)
   );
 }
+
+/** The projection {@link agentDisplayNames} reads, and the type that goes with it.
+ *  ⚠ Keep the two in step; the pair travels to `sessionRowsWhere` together. */
+const AGENT_NAME_COLS = "name,display_name";
+type AgentNameRow = Pick<SessionStateRow, "name" | "display_name">;
 
 /**
  * **THE OPERATOR-GIVEN NAME BEHIND AN AGENT ID** — `channel_sessions
@@ -251,8 +264,12 @@ export async function agentDisplayNames(
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (workspaceIds.length === 0 || agentIds.length === 0) return out;
-  const rows = await sessionRowsWhere((q) =>
-    q.in("workspace_id", [...workspaceIds]).in("name", [...agentIds])
+  // ⚠ **TWO COLUMNS, AS THE DOCBLOCK ABOVE HAS ALWAYS CLAIMED (2026-10-10,
+  // option H).** It selected `*` — up to 500 whole session rows, each rewritten
+  // on every projection move — to read a name off each one.
+  const rows = await sessionRowsWhere<AgentNameRow>(
+    (q) => q.in("workspace_id", [...workspaceIds]).in("name", [...agentIds]),
+    AGENT_NAME_COLS
   );
   for (const row of rows) {
     const name = row.display_name?.trim() ?? "";

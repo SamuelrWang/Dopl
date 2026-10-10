@@ -180,8 +180,45 @@ describe("listMessages — thread scope", () => {
 
     // Unfiltered read: one `eq` on the channel, nothing touching metadata.
     expect(eqFilters(calls)).toEqual({ channel_id: CHANNEL });
-    expect(calls.some((c) => String(c.args[0]).includes("metadata"))).toBe(false);
+    // ⚠ **THE PROJECTION IS EXCLUDED FROM THE SCAN (2026-10-10, option H).** It
+    // names `metadata` as a COLUMN now that the read is explicit rather than
+    // `*`; what this case is about is a FILTER on `metadata->>taskId`.
+    expect(
+      calls
+        .filter((c) => c.op !== "from" && c.op !== "select")
+        .some((c) => String(c.args[0]).includes("metadata"))
+    ).toBe(false);
     expect(rows).toHaveLength(2);
+  });
+
+  it("reads NAMED COLUMNS, never `*`, and never the tsvector", async () => {
+    // 🔒 **OPTION H, 2026-10-10.** `channel_messages.search_tsv` is a STORED
+    // generated tsvector, roughly body-sized, which PostgREST returns for
+    // `select=*` and `mapMessageRow` never reads — a page's worth of it crossed
+    // Postgres → Next and was JSON-parsed on every transcript read.
+    const calls = makeAdmin([messageRow(1)]);
+
+    await listMessages(CHANNEL, { limit: 50 });
+
+    const projection = String(
+      calls.find((c) => c.op === "select")?.args[0] ?? ""
+    );
+    expect(projection).not.toBe("*");
+    expect(projection).not.toContain("search_tsv");
+    // Every column the mapper and the delivery keystone read.
+    for (const column of [
+      "id",
+      "seq",
+      "body",
+      "metadata",
+      "client_msg_id",
+      "created_at",
+      "wake_verdict",
+      "delivery",
+      "artifact_id",
+    ]) {
+      expect(projection.split(",")).toContain(column);
+    }
   });
 
   it("survives BOTH cursor modes (the two reads share one filter chain)", async () => {

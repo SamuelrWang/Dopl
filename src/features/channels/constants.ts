@@ -262,13 +262,28 @@ export const CHANNEL_TRANSCRIPT_LINE_BUDGET = 300;
 /**
  * HARD ROW CAP ON ONE TRANSCRIPT PAGE — the bound that survives when
  * {@link CHANNEL_TRANSCRIPT_LINE_BUDGET} cannot bite (INVARIANTS §9: every read is
- * bounded, in rows, always). ⚠ **IT IS {@link MAX_MESSAGE_LIMIT}, THE SCHEMA'S OWN
- * CEILING, AND NOT THE 50 THE OLD PAGE SIZE USED** — 50 was never a cap, just what
- * the hook requested, so naming the real one makes the request sent and the maximum
- * honoured one number by construction. It bites only below ~1.5 estimated lines per
- * message.
+ * bounded, in rows, always).
+ *
+ * ⚠ **60, AND IT IS NO LONGER {@link MAX_MESSAGE_LIMIT} (2026-10-10, option B of
+ * KB `dopl-development › Channel Switch Latency 2026-10-10`).** It WAS the schema
+ * ceiling, 200, on the argument that the LINE BUDGET would be what bites — and it
+ * does bite, but **in JS, after the rows are already out of Postgres and across the
+ * wire** (`lib/transcript-line-budget.ts › takeLineBudget` trims a block the query
+ * already materialized). At the budget's real yield of ~43 rows that was ~157 rows
+ * per read fetched only to be discarded, on EVERY transcript read in the app.
+ *
+ * ⚠ **IT IS A CAP, NOT A PAGE SIZE, AND THE BUDGET STILL OWNS THE PAGE.** 60 is a
+ * small multiple of that yield: headroom for a channel of short posts, while the
+ * budget keeps deciding where a page of long ones ends. It must stay `<=`
+ * {@link MAX_MESSAGE_LIMIT} (the route's contract) and comfortably ABOVE the
+ * yield — too low and the cap, not the reader's lines, sizes every page.
+ *
+ * ⚠ **A CHANNEL OF ONE-LINERS NOW PAGES SOONER, AND THAT IS THE TRADE.** 60 rows
+ * of one line is 60 lines, well under the 300-line budget, so `hasMore` is true and
+ * the first scroll-up fetches again — one extra keyset read on the thinnest
+ * possible page, against 3-4x fewer rows read on every page of real prose.
  */
-export const CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS = MAX_MESSAGE_LIMIT;
+export const CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS = 60;
 
 /** Await long-poll: hard cap on the client-requested timeout (ms). */
 export const MAX_AWAIT_TIMEOUT_MS = 50_000;

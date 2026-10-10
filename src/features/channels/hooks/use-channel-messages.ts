@@ -1,9 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
+import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
+import { CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS } from "../constants";
 import type { ChannelMessage, ChannelReadEntry } from "../types";
+import { mergeDeltaPage, newestCachedSeq } from "../lib/transcript-delta";
 import {
   appendOlderPage,
   dropThreadFromWindow,
@@ -96,6 +100,13 @@ const IDLE: WindowState = {
  * cache entry the optimistic writes patch; `keepPreviousData` holds the prior
  * channel's messages through a switch to avoid a blank flash.
  *
+ * **A SWITCH-IN IS A DELTA, NOT A PAGE** (2026-10-10, option A) — {@link catchUp}
+ * reads `since` the newest row the cache already holds and merges the 0-3 rows
+ * that are new into the same entry. ⚠ **IT DOES NOT REPLACE THE REALTIME
+ * REFETCH, AND MUST NOT.** A forward read can only ADD rows: it never sees an
+ * older row edited or deleted while the reader was away, which is exactly what
+ * the doorbell's full refetch is for.
+ *
  * **The older pages** are fetched by {@link loadOlder} with a `before` keyset
  * cursor and held HERE rather than in the query cache — `lib/message-window.ts`
  * carries that argument. ⚠ **APPENDING AT THE BOTTOM IS UNTOUCHED BY ANY OF
@@ -116,14 +127,117 @@ export function useChannelMessages(
       query: channelMessagesParams(),
       select: selectPage,
       keepPreviousData: true,
-      // EXPLICIT, and a correctness requirement rather than a preference
-      // (F-163). Realtime refetches only the SELECTED channel, so on the app's
-      // 30s default, switching back to a channel opened 20s ago would render a
-      // stale entry with nothing scheduled to correct it. The cache is still
-      // served instantly; `0` only says the paint must be revalidated.
-      staleTime: 0,
+      /**
+       * ⚠ **`Infinity` BECAUSE THIS HOOK OWNS REVALIDATION NOW (2026-10-10,
+       * option A), AND IT IS NOT A RELAXATION.** It WAS an explicit `0` — a
+       * stated correctness requirement (F-163), because realtime refetches only
+       * the SELECTED channel and a channel opened 20s ago would otherwise render
+       * stale on switch-back with nothing scheduled to correct it. {@link
+       * catchUp} is now what corrects it, on every switch-in and on focus,
+       * unconditionally rather than only when 30s happened to have passed.
+       *
+       * ⚠ **AND `0` WOULD NOW COST A DOUBLE READ.** An always-stale entry makes
+       * TanStack fire a FULL newest-page read the moment the switch mounts, in
+       * parallel with the delta — the 200-row read option A exists to avoid,
+       * plus the delta. The two triggers have to be one.
+       *
+       * ⚠ **A PENDING ENTRY STILL FETCHES**: `staleTime` governs data that
+       * EXISTS, so a first visit is the ordinary full read and needs no delta.
+       */
+      staleTime: Number.POSITIVE_INFINITY,
     }
   );
+  const queryClient = useQueryClient();
+  const refetch = query.refetch;
+
+  /**
+   * **CATCH THE CACHED TRANSCRIPT UP WITH ONE FORWARD READ** (2026-10-10, option
+   * A of KB `dopl-development › Channel Switch Latency 2026-10-10`).
+   *
+   * Switching back to a channel used to repaint the cached rows instantly and
+   * then wait on a FULL newest-page read — the whole delivery path for everything
+   * that landed while the reader was away. The server has had the forward arm
+   * since 2026-09-08 (`repository-messages.ts › listMessages`, `gt("seq", since)`)
+   * and no client ever sent it. This sends it: `since` the newest row the cache
+   * holds, so the switch-in payload is the 0-3 rows that are new.
+   *
+   * ⚠ **IMPERATIVE, AND IT MUST NOT BECOME A SECOND QUERY KEY.**
+   * `client/query-keys.ts › channelMessagesParams` records the hazard: a second
+   * entry under the prefix the optimistic writes patch makes every send append
+   * its pending row into it. This fetches with `apiRequest` and merges into THE
+   * SAME entry, the shape {@link loadOlder} already uses.
+   *
+   * ⚠ **NO `lineBudget` BESIDE `since` — the server REFUSES the pair**
+   * (`schema-reads.ts`), because the budget keeps the newest suffix and would
+   * leave a hole at the FRONT of an ascending page. `limit` alone is already
+   * supported, so there is no server change here.
+   *
+   * ⚠ **THREE CASES FALL BACK TO THE FULL READ, AND ALL THREE HAVE TO.**
+   *   1. The delta came back AT its ceiling — more arrived than one page holds,
+   *      so the rows are the OLDEST of the gap and the newest are still missing.
+   *      Merging them would show a transcript that is wrong in the middle.
+   *   2. The cache entry exists but holds no server row to read forward from.
+   *   3. The fetch failed. Nothing else is scheduled to correct the paint, so a
+   *      silent failure here is a transcript that stays in the past.
+   *
+   * ⚠ **NO CACHE ENTRY AT ALL IS NOT ONE OF THEM**: the query itself is pending
+   * and its own read is the full page. Calling `refetch` here would double it.
+   */
+  const catchUp = useCallback(() => {
+    if (!channelId) return;
+    const path = channelMessagesPath(channelId);
+    const key = [path, workspaceId, channelMessagesParams()] as const;
+    const cached = queryClient.getQueryData<TranscriptBody>(key);
+    if (cached === undefined) return;
+    const since = newestCachedSeq(cached.messages);
+    if (since === null) {
+      void refetch();
+      return;
+    }
+    void apiRequest<TranscriptBody>(path, {
+      workspaceId,
+      query: { limit: CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS, since },
+    })
+      .then((body) => {
+        // ⚠ `?? true` FAILS TOWARD THE FULL READ, for the same reason
+        // `selectPage` fails toward "maybe more": an older build omitting the key
+        // costs one honest read, the other way paints a gap.
+        if (body.hasMore ?? true) {
+          void refetch();
+          return;
+        }
+        queryClient.setQueryData<TranscriptBody>(key, (prev) =>
+          prev === undefined ? prev : mergeDeltaPage(prev, body)
+        );
+      })
+      .catch(() => void refetch());
+  }, [channelId, workspaceId, queryClient, refetch]);
+
+  /**
+   * THE SWITCH-IN TRIGGER — once per channel the hook lands on.
+   *
+   * ⚠ **A REF, NOT A DEPENDENCY LIST.** `catchUp` is rebuilt whenever TanStack
+   * hands back a new `refetch`, and an effect keyed on it alone would re-read the
+   * channel the reader is already sitting in. A→B→A still catches up: the ref
+   * holds B by then.
+   */
+  const caughtUp = useRef<string | null>(null);
+  useEffect(() => {
+    if (channelId === null) {
+      caughtUp.current = null;
+      return;
+    }
+    if (caughtUp.current === channelId) return;
+    caughtUp.current = channelId;
+    catchUp();
+  }, [channelId, catchUp]);
+
+  /**
+   * AND ON FOCUS, which is the hole `staleTime: 0` used to cover: a machine that
+   * slept with this channel open comes back to a socket that may have missed the
+   * doorbell. ⚠ A DELTA, where the old behaviour was a full 200-row page.
+   */
+  useRefetchOnFocus(catchUp);
   const data = query.data ?? NO_PAGE;
   const page = data.messages;
   // ⚠ MEMOISED ON THE ENVELOPE: `mergeEntries` below is memoised on this array's
