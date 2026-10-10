@@ -433,4 +433,40 @@ describe("settings modal", () => {
 
     expect(signOut).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * 🔒 NOTIFICATIONS (2026-10-09) — drawn only when main exposes the `notifications` pair, right
+   * after Configuration; its switches write through that bridge, never the API.
+   */
+  it("shows Notifications only with the bridge pair, and writes a switch through it", async () => {
+    const stored = { v: 1, events: { mention: true, decision: true, direct_message: true, approval: true } };
+    const get = vi.fn(() => Promise.resolve(stored));
+    const set = vi.fn((prefs: unknown) => Promise.resolve({ ok: true, prefs }));
+    installBridge({
+      apiRequest,
+      openExternal,
+      appOrigin: "https://www.usedopl.com",
+      notifications: { get, set },
+    });
+    renderShell();
+    await screen.findByText("page body");
+    fireEvent.click(gear());
+
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    const labels = within(dialog).getAllByRole("button").map((b) => b.textContent);
+    expect(labels.indexOf("Notifications")).toBe(labels.indexOf("Configuration") + 1);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Notifications" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Mentions and replies" }));
+    await waitFor(() => expect(set).toHaveBeenCalledTimes(1));
+    expect(set.mock.calls[0][0]).toMatchObject({ events: { mention: false } });
+  });
+
+  it("draws no Notifications row when main lacks the pair", async () => {
+    renderShell();
+    await screen.findByText("page body");
+    fireEvent.click(gear());
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    expect(within(dialog).queryByRole("button", { name: "Notifications" })).not.toBeInTheDocument();
+  });
 });

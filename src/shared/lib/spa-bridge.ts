@@ -118,6 +118,16 @@ export interface SpaBridgeSurface {
     set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
   };
   /**
+   * NOTIFICATION PREFERENCES — THIS MAC'S RECORD (`main/notification-prefs.js`, 2026-10-09). One
+   * on/off per registry event (`@/features/notifications/registry`); the banner gate reads the
+   * same store in process. `set` answers main's own normalized record (`ok: false` = not stored,
+   * so the panel reverts). Feature-detect both members.
+   */
+  notifications?: {
+    get(): Promise<unknown>;
+    set(prefs: unknown): Promise<{ ok: boolean; prefs?: unknown }>;
+  };
+  /**
    * DOPL'S OWN RUNTIME CREDENTIALS (`main/runtime-credentials.js`). `signIn` runs one runtime's in-app
    * sign-in (`''` = the default) and, on `ok`, main has already released that runtime's held agents;
    * `status` / `onStatus` read and follow every in-app-sign-in runtime's row; `dismissPrompt` closes

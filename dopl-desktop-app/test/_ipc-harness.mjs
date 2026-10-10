@@ -148,6 +148,14 @@ export function bootIpc({ blocked = false } = {}) {
         seedChannel: (channelId) => { writes.push({ channelId, seeded: true }); return { ok: true, seeded: true }; },
       };
     }
+    // 2026-10-09 — NOTIFICATION PREFERENCES. Same ledger and same always-succeeds rule as the
+    // defaults fake above: the refusal under test is `appWindowOnly`'s and the handler's shape gate.
+    if (id === "./notification-prefs") {
+      return {
+        getPrefs: () => ({ v: 1, events: { mention: false, decision: true, direct_message: true, approval: true } }),
+        setPrefs: (prefs) => { writes.push({ notificationPrefs: prefs }); return { ok: true, prefs }; },
+      };
+    }
     // `connectedIds` joined 2026-09-08: which registered adapters this Mac could start right now.
     // It rides the SAME read and NARROWS NOTHING — `all()` is still the roster the popup renders.
     if (id === "./runtime") return { all: () => [], DEFAULT_ID: "claude", connectedIds: async () => [] };

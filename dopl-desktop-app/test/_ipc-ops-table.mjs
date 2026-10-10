@@ -46,6 +46,11 @@ export const OPS = [
   // bad-payload arm and asserted the refusal shape of a write that really landed.
   ["channels:setAgentDefaults", { defaults: PRESET }, { ok: false }, { defaults: "not-an-object" }],
   ["channels:applyAgentDefaults", { channelId: CH }, { ok: false, seeded: false }],
+  // 2026-10-09 (Notifications tab): this Mac's banner switches. No channel id, so the sender
+  // binding is the only guard, like the defaults pair above; the fourth slot is the shape gate's
+  // own rejection. A refused `get` answers null and discloses nothing.
+  ["notifications:getPrefs", undefined, null],
+  ["notifications:setPrefs", { prefs: { v: 1, events: { mention: false } } }, { ok: false }, { prefs: "not-an-object" }],
   // 2026-08-20: the DURABLE launch posture, same binding and UUID gate, and now the most privileged
   // write in the file. A refused `get` must not disclose the posture and a refused `set` must not
   // write one; both are asserted by the shared loops below, from all five surfaces.
@@ -161,6 +166,8 @@ export const NO_BAD_PAYLOAD = new Set([
   // ⚠ `channels:setAgentDefaults` is NOT exempt and must not become so: it reads `defaults`, and a
   // garbage payload must still come back `{ ok: false }` with nothing stored.
   "channels:getAgentDefaults",
+  // 2026-10-09: `notifications:getPrefs` likewise reads no payload. `setPrefs` is NOT exempt.
+  "notifications:getPrefs",
   // 2026-09-07: the turn-cap pair was exempted here too. Deleted with the caps.
   // `sessions:mintAgentId` reads no payload at all (2026-08-27), so there is no bad one to build:
   // a "corrupted" call to it SUCCEEDS, which would have asserted the refusal shape of a call that

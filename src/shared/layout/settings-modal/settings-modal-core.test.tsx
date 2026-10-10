@@ -3,6 +3,7 @@
  * 🔒 THE RAIL'S ROWS (Samuel, 2026-10-02): Workspaces · Agents · Devices · Configuration · Account
  * · Plans & Billing, one list filtered by `has`. Configuration is drawn only when a binding passes
  * `configurationPane` (the desktop); the web passes none and draws five rows. No Connect row.
+ * Notifications (2026-10-09) follows the same rule: drawn only when `notificationsPane` is passed.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,7 +12,11 @@ import { SettingsModalCore, type SettingsSection } from "./settings-modal-core";
 
 afterEach(cleanup);
 
-function renderCore(withConfiguration: boolean, section: SettingsSection = "agents") {
+function renderCore(
+  withConfiguration: boolean,
+  section: SettingsSection = "agents",
+  withNotifications = false
+) {
   render(
     <SettingsModalCore
       open
@@ -22,6 +27,7 @@ function renderCore(withConfiguration: boolean, section: SettingsSection = "agen
       agentsPane={<p>agents pane</p>}
       devicesPane={<p>devices pane</p>}
       configurationPane={withConfiguration ? <p>configuration pane</p> : undefined}
+      notificationsPane={withNotifications ? <p>notifications pane</p> : undefined}
       accountPane={<p>account pane</p>}
       billingPane={<p>billing pane</p>}
     />
@@ -58,6 +64,26 @@ describe("settings modal core rail", () => {
       "Account",
       "Plans & Billing",
     ]);
+  });
+
+  it("draws Notifications after Configuration when its pane is passed", async () => {
+    renderCore(true, "notifications", true);
+    expect(await railLabels()).toEqual([
+      "Workspaces",
+      "Agents",
+      "Devices",
+      "Configuration",
+      "Notifications",
+      "Account",
+      "Plans & Billing",
+    ]);
+    expect(screen.getByText("notifications pane")).toBeTruthy();
+  });
+
+  it("renders no notifications pane under a section with no pane", async () => {
+    renderCore(true, "notifications", false);
+    await screen.findByRole("dialog", { name: "Settings" });
+    expect(screen.queryByText("notifications pane")).toBeNull();
   });
 
   it("renders each section's own pane", async () => {

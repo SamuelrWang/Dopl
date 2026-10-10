@@ -1,5 +1,5 @@
 // IPC for the per-channel settings the SPA can reach (working folder, launch posture, agent
-// chaining, agent defaults) and the machine-wide orchestrator toggles; `renderer/app-preload.js`
+// chaining, agent defaults), notification preferences and the machine-wide orchestrator toggles; `renderer/app-preload.js`
 // exposes them as `window.dopl.channels.*` / `.orchestrator.*`. Session/window ops are
 // `session-ipc-ops.js`, registered from here so index.js has one entry point.
 // Every handler is sender-bound (H3): `appWindowOnly` admits only an app-owned window's TOP frame
@@ -15,6 +15,8 @@ const channelPrefs = require('./channel-prefs');
 const channelRuntime = require('./channel-runtime');
 const channelRuntimeReply = require('./channel-runtime-reply');
 const agentDefaults = require('./agent-defaults');
+// Lazy, on the `launch-directives` precedent below: resolved only when its two handlers run.
+const notificationPrefs = () => require('./notification-prefs');
 const selectionShape = require('./launch-selection');
 const sessionIpcOps = require('./session-ipc-ops');
 const { diag } = require('./diag');
@@ -155,6 +157,16 @@ function register(opts = {}) {
     const p = payload || {};
     if (!isUuid(p.channelId)) return { ok: false, seeded: false };
     return agentDefaults.seedChannel(p.channelId);
+  }));
+
+  // Notification preferences (`notification-prefs.js`, 2026-10-09): machine-user scoped, no id. A
+  // forged `set` can only mute or unmute this Mac's PASSIVE banners; approvals are forced on and no
+  // verdict, route or spawn reads the record. The shape gate stands in for the UUID gate.
+  ipcMain.handle('notifications:getPrefs', appWindowOnly('getNotificationPrefs', null, () => notificationPrefs().getPrefs()));
+  ipcMain.handle('notifications:setPrefs', appWindowOnly('setNotificationPrefs', { ok: false }, (_event, payload) => {
+    const p = payload || {};
+    if (!p.prefs || typeof p.prefs !== 'object' || Array.isArray(p.prefs)) return { ok: false };
+    return notificationPrefs().setPrefs(p.prefs);
   }));
 
   // The two MACHINE-WIDE orchestrator consents (launch over MCP; direct a running agent). This pair
