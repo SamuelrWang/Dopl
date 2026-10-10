@@ -19,6 +19,7 @@ import { apiQueryKey } from "@/shared/api/query-keys";
 import {
   CHANNEL_TRANSCRIPT_LINE_BUDGET,
   CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS,
+  MAX_MESSAGE_LIMIT,
 } from "../constants";
 import {
   CHANNEL_CONSENT_PATH,
@@ -88,6 +89,21 @@ describe("channel paths", () => {
       limit: CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS,
       lineBudget: CHANNEL_TRANSCRIPT_LINE_BUDGET,
     });
+  });
+
+  it("asks for a page BOUNDED TO THE BUDGET, never the schema ceiling", () => {
+    // 🔒 **OPTION B, 2026-10-10.** The cap was `MAX_MESSAGE_LIMIT` (200) while the
+    // budget's real yield is ~43 rows, so every transcript read in the app pulled
+    // ~157 rows out of Postgres and across the wire for `takeLineBudget` to throw
+    // away in JS. The cap must stay inside the route's contract AND stay a small
+    // multiple of the yield — not the ceiling again, and not so low that the cap
+    // rather than the reader's lines sizes every page.
+    expect(CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS).toBeLessThan(MAX_MESSAGE_LIMIT);
+    // Above the budget's ~43-row yield (300 lines / ~7 estimated lines a message),
+    // so a page of ordinary prose is still ended by the BUDGET.
+    expect(CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS).toBeGreaterThan(
+      CHANNEL_TRANSCRIPT_LINE_BUDGET / 7
+    );
   });
 });
 
