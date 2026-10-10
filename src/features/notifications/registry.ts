@@ -111,14 +111,16 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   { id: "agent_started", label: "An agent starts", surface: "both", wired: true },
 
   // ── Named, NOT raised yet (wired: false ⇒ no row in the panel) ──────────────────────────────
-  { id: "signed_out", label: "You get signed out", surface: "both", locked: true },
+  { id: "signed_out", label: "You get signed out", surface: "both", locked: true, wired: true },
   // ⚠ NOTHING EMITS THIS FACT. The consume RPC returns nothing at `20260811130000:143` — no row,
   // no log, no realtime — so the emit is server work, OUT of this wave by decision. The id is
   // registered and stays unwired until that lands.
   { id: "credits_exhausted", label: "Credits run out", surface: "both", locked: true },
   { id: "runtime_signin", label: "Agent app needs sign-in", surface: "both", locked: true },
-  { id: "decision_failed", label: "A decision didn't save", surface: "both", locked: true },
-  { id: "tool_blocked", label: "A tool was blocked", surface: "popup" },
+  // ⚠ THE ONE EVENT THAT DELIBERATELY SOUNDS, and bounces the dock: the operator believes they
+  // answered and they did not. Not to be confused with the accidental sounds being removed.
+  { id: "decision_failed", label: "A decision didn't save", surface: "both", locked: true, wired: true },
+  { id: "tool_blocked", label: "A tool was blocked", surface: "popup", wired: true },
   { id: "session_resume", label: "Resume an interrupted session", surface: "popup" },
   { id: "shared_with_me", label: "Something shared with you", surface: "popup" },
 ];

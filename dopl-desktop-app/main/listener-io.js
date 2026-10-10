@@ -2,7 +2,7 @@
 // enumeration. It owns the two HTTP-status flags those helpers set and never imports channel-listener.js back;
 // `listener-people.js` reaches `apiFetch`/`normalizeList` back lazily. Auth is forwarded Supabase cookies.
 
-const { Notification } = require('electron');
+// ⚠ `electron` is no longer required here: the stale-session notice routes (see `notifyStale`).
 const Store = require('electron-store');
 const auth = require('./auth');
 const appVersion = require('./app-version');
@@ -99,17 +99,19 @@ function shouldSeed(channelId) {
   return seedModeFor(isSeeded(channelId));
 }
 
+// ⚠ `signed_out` — ONE OF SAMUEL'S FOUR SAFETY EVENTS (2026-10-09, KB dopl-development
+// "Notification Spec Samuel 2026-10-09"), so it is LOCKED ON in the registry and cannot be
+// switched off: channel listening is DEAD until the operator signs in, and the map ranks this the
+// highest-value interrupt in the app. Routed, so it takes the toast while Dopl is in front and
+// the banner while it is away. It carries no button — signing in is not a one-press act — and no
+// sound, because the latch below means it is said once and the copy says what to do.
 function notifyStale() {
   if (staleNotified) return;
   staleNotified = true;
-  try {
-    if (Notification.isSupported()) {
-      new Notification({
-        title: 'Dopl',
-        body: 'Your session expired. Open Dopl and sign in to resume channel listening.',
-      }).show();
-    }
-  } catch (_) { /* best-effort */ }
+  require('./notification-route').raise('signed_out', {
+    title: 'Dopl',
+    body: 'Your session expired. Open Dopl and sign in to resume channel listening.',
+  });
 }
 // The listen loop resets this after a successful await, so a later expiry notifies again.
 function resetStale() {

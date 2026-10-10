@@ -43,13 +43,13 @@
 // there is no approve-out without a row. Tokens are never logged; the message body is truncated,
 // never a token.
 
-const { Notification } = require('electron');
+// ⚠ `electron` is no longer required here: every notice this module raises goes through the
+// route, which owns the surface choice and builds the banner (`notification-route.js`).
 // §2 SPLIT (2026-08-22): the banner SHAPE — one action button, a navigating body click, and a
 // Dismiss that decides nothing — is shared with `trigger.js`, whose banner is not about a row.
 // ⚠ DESTRUCTURED AT MODULE SCOPE ON PURPOSE: both names stay FREE VARS inside the functions
 // below, which is what keeps `test/consent-decision-signal.test.mjs`'s source-extraction harness
 // able to inject fakes for them.
-const { requestAttention } = require('./notify-action');
 // Which surface an actionable notice takes. ⚠ `buildActionNotification` is no longer called from
 // here: the route owns that choice now, and still builds the same banner underneath.
 const notificationRoute = require('./notification-route');
@@ -199,21 +199,26 @@ function decisionFailedCopy(channelName, decision) {
   };
 }
 
+// ⚠ `decision_failed` — ONE OF SAMUEL'S FOUR SAFETY EVENTS (2026-10-09), LOCKED ON in the
+// registry: the operator believes they answered and they did not, which the surface map calls the
+// worst thing in the list to miss. Routed, so it takes the toast while Dopl is in front and the
+// banner while it is away.
+// ⚠ AND IT STAYS LOUD. `silent: false` plus the dock bounce are DELIBERATE here and are the one
+// place the route makes a sound — not to be confused with the sounds step 5 removes, which nobody
+// chose. The click only ever navigates (`notify-action.js`'s rule); there is no button, because
+// the decision is made again on the surface this opens.
 function notifyDecisionFailed({ channelName, decision, onOpen }) {
   const { title, body } = decisionFailedCopy(channelName, decision);
-  if (!Notification.isSupported()) return null;
-  let notif;
-  try {
-    notif = new Notification({ title, body, silent: false });
-  } catch (_) {
-    return null; // notifications are best-effort
-  }
-  notif.on('click', () => { try { if (onOpen) onOpen(); } catch (_) { /* window gone */ } });
-  try {
-    notif.show();
-    requestAttention();
-  } catch (_) { /* best-effort */ }
-  return notif;
+  const went = notificationRoute.raise('decision_failed', {
+    title,
+    body,
+    silent: false,
+    attention: true,
+    onClick: onOpen,
+  });
+  // The old return was the Notification itself; nothing reads it (`submitDecision` calls this
+  // fire-and-forget), so it now answers only whether a surface took it.
+  return went === 'none' ? null : went;
 }
 
 // Fire-and-forget safe: it NEVER rejects, so the notification-action callbacks can

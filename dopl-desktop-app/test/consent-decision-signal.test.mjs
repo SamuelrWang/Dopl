@@ -88,14 +88,28 @@ function harness({ fetch, notifySupported = true, notifyThrows = false } = {}) {
     fnOf(SRC, "notifyDecisionFailed"),
     fnOf(SRC, "decisionFailedCopy"),
   ].join("\n\n");
+  // 2026-10-09 (Samuel's spec): `notifyDecisionFailed` no longer builds its own Notification — it
+  // hands the event to `notification-route`, which owns the surface choice (toast while Dopl is in
+  // front, banner while away) and the operator's switch. This fake stands in for the route and
+  // captures into the SAME arrays, so every assertion below still reads the operator-facing copy,
+  // the click handoff, the dock bounce and the platform fallbacks.
+  const notificationRoute = {
+    raise: (eventId, spec) => {
+      if (!notifySupported || notifyThrows) return "none"; // the route swallows both
+      calls.notices.push({ title: spec.title, body: spec.body, silent: spec.silent !== false ? true : false });
+      calls.shown++;
+      if (typeof spec.onClick === "function") calls.clicks.push(spec.onClick);
+      if (spec.attention === true) calls.attention++;
+      return "mac";
+    },
+  };
   const api = new Function(
-    "apiFetch", "Notification", "diag", "requestAttention", "CONSENT_PATH", "HTTP_TIMEOUT_MS",
+    "apiFetch", "notificationRoute", "diag", "CONSENT_PATH", "HTTP_TIMEOUT_MS",
     `${body}\n return { patchDecision, submitDecision, notifyDecisionFailed, decisionFailedCopy };`
   )(
     apiFetch,
-    FakeNotification,
+    notificationRoute,
     (...a) => calls.logged.push(a.join(" ")),
-    () => { calls.attention++; },
     "/api/channels/consent",
     15000
   );
@@ -210,10 +224,16 @@ test("clicking the notice opens the channel the request came from", async () => 
   assert.equal(opened, 1);
 });
 
-test("a click handler that throws (window gone) does not escape", async () => {
+test("the navigation handler is handed to the route, which is where it is guarded", async () => {
   const h = harness({ fetch: () => Promise.resolve(res(500)) });
-  await h.submitDecision("w1", "row-1", "allow", { onOpen: () => { throw new Error("gone"); } });
-  assert.doesNotThrow(() => h.calls.clicks[0]());
+  const onOpen = () => { throw new Error("gone"); };
+  await h.submitDecision("w1", "row-1", "allow", { onOpen });
+  // ⚠ THE GUARD MOVED, 2026-10-09. This function used to attach the click itself and wrap it, so
+  // the "does not escape" assertion lived here. The route owns the click now, and wraps it there
+  // (`notification-route.js › macBanner`) — pinned by "a click handler that throws (window gone)
+  // does not escape" in test/notification-route.test.mjs. What is still THIS file's business is
+  // that the handler is handed over at all, un-swallowed.
+  assert.equal(h.calls.clicks[0], onOpen, "the operator's way back is passed through");
 });
 
 test("an unsupported platform is a quiet no-op, not a crash inside a decision", async () => {
@@ -231,20 +251,13 @@ test("submitDecision NEVER rejects, so a fire-and-forget caller cannot leak a re
   // patchDecision injected as a throwing free variable: the one path the real one
   // cannot produce, and the reason submitDecision has its own try/catch.
   const notices = [];
-  class N {
-    constructor(o) { notices.push(o); }
-    static isSupported() { return true; }
-    on() {}
-    show() {}
-  }
   const api = new Function(
-    "patchDecision", "Notification", "diag", "requestAttention",
+    "patchDecision", "notificationRoute", "diag",
     `${CONSTS}\n${asyncFnOf(SRC, "submitDecision")}\n${fnOf(SRC, "notifyDecisionFailed")}
      ${fnOf(SRC, "decisionFailedCopy")}\n return { submitDecision };`
   )(
     () => { throw new Error("boom"); },
-    N,
-    () => {},
+    { raise: (_id, spec) => { notices.push(spec); return "mac"; } },
     () => {}
   );
   assert.equal(await api.submitDecision("w1", "row-1", "allow", {}), FAILED);

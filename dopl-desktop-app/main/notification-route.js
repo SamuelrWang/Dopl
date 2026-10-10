@@ -83,7 +83,13 @@ function macBanner(spec) {
   try {
     const { Notification } = require('electron');
     if (!Notification.isSupported()) return false;
-    const n = new Notification({ title: spec.title, body: spec.body || undefined, silent: true });
+    // ⚠ SILENT BY DEFAULT, and a sound is the SITE's decision, never the router's. Only a site
+    // that passes `silent: false` makes one — today just `decision_failed`, where the sound and
+    // the dock bounce are deliberate ("you believe you answered and you did not"). That is the
+    // difference between the sound step 5 removes, which nobody chose, and this one, which
+    // somebody did.
+    const loud = spec.silent === false;
+    const n = new Notification({ title: spec.title, body: spec.body || undefined, silent: !loud });
     n.on('click', () => {
       try {
         if (typeof spec.onClick === 'function') spec.onClick();
@@ -97,6 +103,11 @@ function macBanner(spec) {
       }
     });
     n.show();
+    // A notice is easy to miss when Dopl runs hidden in the tray; `attention` bounces the dock
+    // for the few events that must not be missed. Best-effort, macOS only, never throws.
+    if (spec.attention === true) {
+      try { require('./notify-action').requestAttention(); } catch (_) { /* best-effort */ }
+    }
     return true;
   } catch (err) {
     diag('notification route: banner failed —', (err && err.message) || 'error');

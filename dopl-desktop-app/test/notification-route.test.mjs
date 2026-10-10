@@ -210,11 +210,34 @@ test("a banner click reveals the app", async () => {
   assert.equal(revealed(), 1, "a click with no handler brings Dopl forward");
 });
 
-test("banners are silent: the sound is a per-site decision, not the router's", async () => {
+test("banners are SILENT BY DEFAULT: the sound is a per-site decision, not the router's", async () => {
   const { mod, prefs, banners } = load({ focused: false });
   await prefs.refresh(true);
   mod.raise("mention", SPEC);
   assert.equal(banners[0].opts.silent, true);
+});
+
+test("a site that asks for sound gets it, and only then", async () => {
+  // ⚠ `decision_failed` is the ONE event that chooses to sound and bounce the dock: the operator
+  // believes they answered and they did not. That is a DELIBERATE sound, not one of the
+  // accidental ones being removed, and the distinction lives at the call site.
+  const { mod, prefs, banners } = load({ focused: false });
+  await prefs.refresh(true);
+  mod.raise("decision_failed", { ...SPEC, silent: false, attention: true });
+  assert.equal(banners[0].opts.silent, false, "loud, because consent.js asked");
+  mod.raise("signed_out", SPEC);
+  assert.equal(banners[1].opts.silent, true, "its neighbour did not ask, so it is quiet");
+});
+
+test("the safety pair cannot be muted, on either surface", async () => {
+  for (const focused of [true, false]) {
+    const { mod, prefs, banners, toasts } = load({ focused, off: ["signed_out", "decision_failed"] });
+    await prefs.refresh(true);
+    for (const id of ["signed_out", "decision_failed"]) {
+      assert.notEqual(mod.raise(id, SPEC), "none", `${id} is locked on`);
+    }
+    assert.equal(banners.length + toasts.length, 2, "both still said, whatever the record holds");
+  }
 });
 
 test("an OS that cannot show banners is reported, not crashed through", async () => {
@@ -420,4 +443,16 @@ test("SOURCE PIN: the launch funnel raises agent_started, and only after it has 
   assert.ok(skipDisabled > 0 && skipAuth > 0 && emit > 0, "all three landmarks found");
   assert.ok(emit > skipDisabled && emit > skipAuth,
     "a refused launch must never claim an agent started");
+});
+
+test("a click handler that throws (window gone) does not escape", async () => {
+  // ⚠ THIS GUARANTEE MOVED HERE on 2026-10-09 from `consent.js › notifyDecisionFailed`, which
+  // used to attach and wrap its own click. The route owns every passive banner's click now, so
+  // it owns the wrapping: a handler that throws because the window is gone must not escape into
+  // whatever is running when the operator presses a banner.
+  const { mod, prefs, banners, logs } = load({ focused: false });
+  await prefs.refresh(true);
+  mod.raise("mention", { ...SPEC, onClick: () => { throw new Error("window gone"); } });
+  assert.doesNotThrow(() => banners[0].handlers.click());
+  assert.ok(logs.some((l) => /click handler failed/.test(l)), "and it is reported, not swallowed silently");
 });
