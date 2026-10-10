@@ -188,6 +188,8 @@ contextBridge.exposeInMainWorld('dopl', {
           // "Launch agent", "Send" and "Allow" live on the banner only.
           openId: typeof p.openId === 'string' ? p.openId : '',
           actionLabel: typeof p.actionLabel === 'string' ? p.actionLabel : '',
+          // The resume offer waits until answered; everything else expires on its own.
+          sticky: p.sticky === true,
           // Every toast main pushes is one the operator did not click for; the field is explicit
           // so the receiver never has to infer it.
           kind: 'incoming',

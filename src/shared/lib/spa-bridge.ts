@@ -151,8 +151,14 @@ export interface SpaBridgeSurface {
          * decides nothing, so a decision may not live in one.
          */
         openId?: string;
-        /** The button's label when `openId` is set (today always "Open"). */
+        /** The button's label when `openId` is set ("Open", or "Resume" for the resume offer). */
         actionLabel?: string;
+        /**
+         * True for a toast that must WAIT until it is answered or dismissed rather than expire —
+         * today only `session_resume`, which is raised once at startup, so a four-second one
+         * would lose the offer.
+         */
+        sticky?: boolean;
         kind: "incoming";
       }) => void
     ): () => void;

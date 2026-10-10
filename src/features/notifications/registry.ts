@@ -121,7 +121,10 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // answered and they did not. Not to be confused with the accidental sounds being removed.
   { id: "decision_failed", label: "A decision didn't save", surface: "both", locked: true, wired: true },
   { id: "tool_blocked", label: "A tool was blocked", surface: "popup", wired: true },
-  { id: "session_resume", label: "Resume an interrupted session", surface: "popup" },
+  // ⚠ THE ONE TOAST WHOSE BUTTON ACTS. It resumes the operator's OWN parked session, like the
+  // New Agent button — no consent row is answered and ignoring it leaves the session parked,
+  // which is today's behaviour. STICKY, because it is offered once at startup.
+  { id: "session_resume", label: "Resume an interrupted session", surface: "popup", wired: true },
   { id: "shared_with_me", label: "Something shared with you", surface: "popup" },
 ];
 

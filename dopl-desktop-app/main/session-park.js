@@ -8,7 +8,10 @@ const privateTurn = require('./session-private');
 // Module scope, not inside the block: the PURE block may not reference `require(`.
 const directedTurn = require('./session-directed');
 const sessionWindowless = require('./session-windowless');
-const { Notification } = require('electron');
+// ⚠ TOP-LEVEL ON PURPOSE: the SESSION-PARK-PURE block below is extracted and driven with its
+// free variables injected, so it may not contain a `require(` of its own. `electron` left with
+// the resume banner (2026-10-09) — the route raises it now and owns the surface choice.
+const notificationRoute = require('./notification-route');
 const { newAgentId, isAgentId } = require('./agent-id');
 const { diag } = require('./diag');
 const sessionCredential = require('./session-credential');
@@ -128,17 +131,20 @@ async function startResumedConsumer(s) {
 }
 
 // An opt-in resume from the startup interrupted-notice; never auto-reopens.
+// ⚠ POPUP ONLY (Samuel's spec, 2026-10-09 — `session_resume`): it fires at app launch, when the
+// operator is already looking at Dopl, so it belongs in the app rather than on the lock screen.
+// Its button RESUMES, which is allowed here and nowhere else in a toast — see
+// `notification-route.js › pendingOpens`: this starts the operator's OWN agent, like the New Agent
+// button, and ignoring it leaves the session parked, which is exactly today's behaviour.
+// ⚠ The toast is STICKY because this offer is raised ONCE; a four-second one would lose it.
 function offerResume(rec, sdkSessionId) {
-  try {
-    if (!Notification || (Notification.isSupported && !Notification.isSupported())) return;
-    const n = new Notification({ title: 'Resume session', body: 'A Dopl session was interrupted. Click to resume it.' });
-    n.on('click', () => {
+  notificationRoute.raiseResumeOffer({
+    title: 'Resume session',
+    body: 'A Dopl session was interrupted.',
+    onResume: () => {
       resume(rec, sdkSessionId).catch((err) => diag('session-park: resume failed', err && err.message));
-    });
-    n.show();
-  } catch (err) {
-    diag('session-park: offerResume failed', err && err.message);
-  }
+    },
+  });
 }
 
 /** Rebuild a settled session from its record and resume its conversation. Answers a boolean. */

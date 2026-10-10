@@ -174,7 +174,22 @@ function raise(eventId, spec) {
 //                           which is also `notify-action.js`'s own rule: the body click
 //                           navigates, it never decides.
 
-/** Pending `onOpen` closures a focused toast can ask main to run. Navigation only. */
+/**
+ * Pending closures a focused toast can ask main to run, keyed by an opaque handle.
+ *
+ * ⚠ TWO KINDS, AND THE DISTINCTION IS THE WHOLE SAFETY ARGUMENT.
+ *   'open'   — NAVIGATION. Opens a surface the operator already has. A stale or forged handle is
+ *              harmless by construction, which is why `peer_ask` and `draft_reply` may use it
+ *              while their decisions ("Launch agent", "Send") stay on the banner.
+ *   'resume' — RESUMES THE OPERATOR'S OWN PARKED SESSION (`session_resume`). This one DOES act,
+ *              and it is allowed to because it is not a consent decision: it starts the
+ *              operator's own agent, exactly as the New Agent button does, there is no
+ *              auto-deny contract behind it, and ignoring it leaves the session parked — which
+ *              is precisely today's behaviour, so a missed toast decides nothing.
+ *              It is NOT a precedent for putting "Send" or "Allow" in a toast: those answer
+ *              somebody else's pending request, and a 4-second window to answer one is the
+ *              thing the spec refused.
+ */
 const pendingOpens = new Map();
 let nextOpenId = 1;
 // A toast the operator never pressed is not a leak worth keeping: drop the closure after this.
@@ -313,11 +328,52 @@ function raiseCoalesced(eventId, build, windowMs) {
   return 'opened';
 }
 
+/**
+ * Raises `session_resume`: the startup offer to resume a session that was interrupted.
+ *
+ * Popup-only per Samuel's spec, with a button that RESUMES — see the `pendingOpens` header for
+ * why this one may act when "Send" and "Allow" may not. ⚠ LONG-LIVED: the toast must sit until
+ * it is pressed or dismissed, not expire in four seconds, because it is raised ONCE at startup
+ * and a missed one loses the offer until the next launch. Falls back to the banner when there is
+ * no window to toast into (app starting hidden in the tray), which is the route's usual rule.
+ *
+ * @param {{title: string, body?: string, onResume: () => void}} spec
+ * @returns {'popup'|'mac'|'none'}
+ */
+function raiseResumeOffer(spec) {
+  try {
+    if (!spec || !spec.title || typeof spec.onResume !== 'function') return 'none';
+    if (!prefs.allowsIn(prefs.getPrefs(), 'session_resume')) return 'none';
+    const id = 'resume-' + String(nextOpenId++);
+    sweepOpens(Date.now());
+    pendingOpens.set(id, { fn: spec.onResume, at: Date.now() });
+    const sent = pushToast({
+      eventId: 'session_resume',
+      title: spec.title,
+      body: spec.body,
+      openId: id,
+      actionLabel: 'Resume',
+      // The renderer keeps this one on screen until it is answered or dismissed.
+      sticky: true,
+      kind: 'incoming',
+    });
+    if (sent === 0) {
+      pendingOpens.delete(id);
+      return macBanner({ title: spec.title, body: spec.body, onClick: spec.onResume }) ? 'mac' : 'none';
+    }
+    return 'popup';
+  } catch (err) {
+    diag('notification route: resume offer failed —', (err && err.message) || 'error');
+    return 'none';
+  }
+}
+
 module.exports = {
   TOAST_EVENT,
   TOAST_RAISED,
   COALESCE_MS,
   raiseCoalesced,
+  raiseResumeOffer,
   isAppFocused,
   pushToast,
   raise,

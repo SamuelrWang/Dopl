@@ -14,7 +14,7 @@
 // whose SDK query was torn down at park, plus startResume's check-then-act guard.
 //
 // SOURCE EXTRACTION with INJECTION: the BEGIN/END SESSION-PARK-PURE block references its leaf
-// deps (io / store / crypto / Notification / diag) as free vars (required at the module top,
+// deps (io / store / crypto / notificationRoute / diag) as free vars (required at the module top,
 // like session-dispatch.js) plus a bind()-set `deps` for the engine handles. We slice the block,
 // prove it is electron/require-free, inject fakes, and pin the ONE property the lane exists for:
 // resumeParked rebuilds the query THROUGH buildLaunchSpec (the v1.9 security path) with
@@ -98,7 +98,9 @@ function harness(over = {}) {
     slotKey: fakeSlotKey,
   };
   const crypto = { randomBytes: () => ({ toString: () => "deadbeef" }) };
-  const Notification = null; // offerResume is exercised elsewhere; not under test here
+  // `offerResume` is exercised in test/notification-route.test.mjs (the surface choice is the
+  // route's now); here it only has to be injectable without raising anything.
+  const notificationRoute = { raiseResumeOffer: () => 'none' };
   // ⚠ CAPTURED, NOT DISCARDED (2026-08-31, port wave D). One line this module emits is
   // load-bearing enough to assert: a resume refused on capability grounds has to say WHY in a
   // sentence an operator can read, because a refusal they cannot read is one they work around.
@@ -148,7 +150,7 @@ function harness(over = {}) {
     liveCount: (map) => { let n = 0; for (const s of map.values()) if (!s.settled) n += 1; return n; },
   };
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
+    "io", "store", "crypto", "newAgentId", "isAgentId", "notificationRoute", "privateTurn",
     // ⚠ `directedTurn` JOINED THE INJECTED SET ON 2026-08-31 (the private direct lane).
     // `resumeParked` drops a DIRECTED capture for the same reason it zeroes the private
     // depth: a rebuilt query owes no results, so a capture carried across a resume would
@@ -157,7 +159,7 @@ function harness(over = {}) {
     "directedTurn",
     "sessionWindowless", "diag", "sessionCredential", "runtimeRegistry", "runtimeCapability",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
-  )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
+  )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, notificationRoute,
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-directed.js")),
     sessionWindowless, diag,

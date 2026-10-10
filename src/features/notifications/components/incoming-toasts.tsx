@@ -24,6 +24,14 @@ import { toast } from "@/shared/ui/toast";
  * ⚠ `variant: "invert"` is the incoming face (the small black toast), which renders the title
  * only. That matches the single string main sends.
  */
+/**
+ * "Until it is answered", expressed as a duration because that is what the toast host takes.
+ * ⚠ NOT `Infinity` AND NOT A HUGE NUMBER: `setTimeout` clamps above 2^31-1 ms and fires
+ * IMMEDIATELY on overflow, which would make a sticky toast the most fleeting one of all. A day is
+ * far longer than any session the operator is deciding about, and safely inside the limit.
+ */
+const STICKY_MS = 24 * 60 * 60 * 1000;
+
 export function IncomingToasts() {
   useEffect(() => {
     const bridge = getSpaBridge()?.notifications;
@@ -49,9 +57,10 @@ export function IncomingToasts() {
                 void getSpaBridge()?.notifications?.openFromToast?.(openId)?.catch(() => {});
               },
             },
-            // Longer than the default: this one is worth reaching, and it still decides nothing
-            // if it is missed.
-            durationMs: 15000,
+            // Longer than the default: these are worth reaching, and they still decide nothing if
+            // missed. A STICKY one waits indefinitely — the resume offer is raised once, at
+            // startup, so a four-second window would simply lose it.
+            durationMs: t.sticky ? STICKY_MS : 15000,
           });
           return;
         }
