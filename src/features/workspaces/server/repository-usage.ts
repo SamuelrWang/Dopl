@@ -1,5 +1,10 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import {
+  clippedAt,
+  readAllPages,
+  type Clipped,
+} from "@/shared/supabase/max-rows";
 import { MCP_CALL_ROWS } from "@/features/analytics/server/mcp-tool-calls";
 import type { Role } from "../types";
 
@@ -30,18 +35,36 @@ import type { Role } from "../types";
  * ⚠ **HALF `HOME_SCAN_LIMIT` (20,000) ON PURPOSE.** /home's scan spans every
  * container one person belongs to; this one spans one container's whole
  * membership, and the page gates on it.
+ *
+ * 🔒 **AND IT IS NOT THE BOUND THAT APPLIES — `supabase/config.toml › max_rows`
+ * IS (Samuel #2935).** PostgREST clips every select at 1,000 server-side and
+ * raises nothing, so each scan below returns the newest 1,000 rows of whatever
+ * window it asked for. The reads that exist to be SUMMED or GROUPED now ask
+ * Postgres for the groups ({@link sumWorkspaceCreditBins},
+ * {@link tallyWorkspaceCredits}, {@link tallyWorkspaceMcpTools},
+ * {@link tallyWorkspaceChannelMessages}) and keep these scans only as the
+ * DEGRADE path for an un-applied migration.
  */
 const WORKSPACE_SCAN_LIMIT = 10_000;
 
 /** A scan that came back AT its ceiling is a FLOOR, and says so. */
-export interface UsageScan<T> {
-  rows: T[];
-  truncated: boolean;
-}
+export type UsageScan<T> = Clipped<T>;
 
-function clipped<T>(rows: T[], limit: number): UsageScan<T> {
-  return { rows, truncated: rows.length >= limit };
-}
+/**
+ * ⚠ **THE EFFECTIVE CEILING IS THE SMALLER OF THE ASKED LIMIT AND THE SERVER'S**,
+ * and the local helper this replaces compared against the ASKED one — so
+ * `1000 >= 10000` was false and every clipped scan here reported itself COMPLETE.
+ * `shared/supabase/max-rows.ts` carries the finding and the test that pins the
+ * number against `supabase/config.toml`.
+ */
+const clipped = clippedAt;
+
+
+/** Codes for "that TABLE is not in this database" — `workspace_token_spend`
+ *  (`20260927120000`) ships unapplied, and its page walk reports a missing
+ *  relation as `PGRST205` through PostgREST or `42P01` straight from Postgres.
+ *  ⚠ The AGGREGATES' own codes live with them in `repository-usage-tally.ts`. */
+const LEDGER_ABSENT_CODES = new Set(["42P01", "PGRST205", "PGRST202"]);
 
 /**
  * De Morgan of `NOT (tool = 'channel' AND op LIKE 'await%')`.
@@ -139,6 +162,7 @@ export async function scanWorkspaceCreditEvents(
   return clipped((data ?? []) as WorkspaceCreditEventRow[], limit);
 }
 
+
 export interface WorkspaceToolCallRow {
   tool: string;
   op: string;
@@ -165,6 +189,7 @@ export async function scanWorkspaceMcpCalls(
   return clipped((data ?? []) as WorkspaceToolCallRow[], limit);
 }
 
+
 /** Which channel each message in the window landed in. ⚠ ONE COLUMN, same rule
  *  as {@link scanWorkspaceMcpCalls}. */
 export async function scanWorkspaceMessageChannels(
@@ -183,6 +208,7 @@ export async function scanWorkspaceMessageChannels(
   if (error) throw error;
   return clipped((data ?? []) as Array<{ channel_id: string }>, limit);
 }
+
 
 /** Every channel id in the container — the credit scan's rule-B arm. ⚠ IDS
  *  ONLY: it fences a read, it never reaches a render, so a NAME here would be
@@ -265,7 +291,9 @@ export async function listWorkspaceRoles(
   return out;
 }
 
-/** How many runs the token-spend read carries. */
+/** How many runs the token-spend read carries. ⚠ A HARD CAP ON A PAGE WALK now,
+ *  not a `.limit()`: it is above `max_rows`, so as a single-statement limit it
+ *  silently became 1,000 and the strip lost every run before that (#2935). */
 const TOKEN_SPEND_LIMIT = 2_000;
 
 /**
@@ -277,28 +305,57 @@ const TOKEN_SPEND_LIMIT = 2_000;
  *
  * ⚠ A MISSING LEDGER DEGRADES TO AN EMPTY LIST: absent and empty both mean "no
  * spend is recorded for you here".
+ *
+ * 🔒 **PAGED, BECAUSE THE ANSWER IS THE LIST ITSELF (#2935).** Every row is a
+ * MARK on the strip — nothing is summed, so no aggregate can help — and a
+ * `.limit(2_000)` was declined down to `max_rows` = 1,000 with no error, which on
+ * a busy month silently deleted the oldest runs from a 31-day strip. The walk
+ * fetches pages the server will actually return and keeps
+ * {@link TOKEN_SPEND_LIMIT} as its reported hard cap.
+ *
+ * ⚠ **THE ORDER IS TOTAL, WHICH IS WHAT MAKES PAGING SOUND.** `started_at` alone
+ * is not unique (two runs can start in the same millisecond), and paging a
+ * non-unique ORDER BY lets Postgres return one row twice and skip another.
+ * `session_key` is the tie-break: `(workspace_id, user_id, session_key,
+ * started_at)` is this table's PRIMARY KEY and the first two are pinned by the
+ * `eq`s above, so `(started_at, session_key)` is unique within the result.
  */
 export async function listWorkspaceTokenSpend(
   workspaceId: string,
   userId: string,
   sinceIso: string
 ): Promise<UsageScan<{ started_at: string; tokens: number }>> {
-  const { data, error } = await supabaseAdmin()
-    .from("workspace_token_spend")
-    .select("started_at, tokens")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .gte("started_at", sinceIso)
-    .order("started_at", { ascending: false })
-    .limit(TOKEN_SPEND_LIMIT);
-  if (error) {
+  try {
+    return await readAllPages<{ started_at: string; tokens: number }>(
+      // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+      // re-awaiting one re-sends the first range and the walk spins on page 0.
+      (from, toInclusive) =>
+        supabaseAdmin()
+          .from("workspace_token_spend")
+          .select("started_at, tokens")
+          .eq("workspace_id", workspaceId)
+          .eq("user_id", userId)
+          .gte("started_at", sinceIso)
+          .order("started_at", { ascending: false })
+          .order("session_key", { ascending: true })
+          .range(from, toInclusive),
+      { hardCap: TOKEN_SPEND_LIMIT }
+    );
+  } catch (error) {
+    // ⚠ **NARROWED TO "THE LEDGER IS NOT THERE", AND THAT IS NARROWER THAN THE
+    // LINE IT REPLACES.** The old `if (error)` degraded on ANY error while its own
+    // comment said "a MISSING ledger"; the walk THROWS what a page answered, and a
+    // `catch` is exactly where a narrow rule gets widened by accident. A
+    // permission error means UNKNOWN, never NONE — swallowing 42501 draws an empty
+    // strip for an operator whose spend is merely unreadable. Same three codes,
+    // same ruling, as `channels/server/repository-token-spend.ts`.
+    const code = (error as { code?: string } | null)?.code ?? "";
+    if (!LEDGER_ABSENT_CODES.has(code)) throw error;
     console.warn(
-      `[workspaces/overview] token ledger unreadable, degrading to empty: ${error.message}`
+      `[workspaces/overview] token ledger unreadable, degrading to empty: ${
+        (error as { message?: string } | null)?.message ?? String(error)
+      }`
     );
     return { rows: [], truncated: false };
   }
-  return clipped(
-    (data ?? []) as Array<{ started_at: string; tokens: number }>,
-    TOKEN_SPEND_LIMIT
-  );
 }

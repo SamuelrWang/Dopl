@@ -15,6 +15,7 @@ import {
   WORKSPACE_SERIES_RANGES,
 } from "../types";
 import {
+  overviewBucketFor,
   overviewWindows,
   type OverviewWindow,
 } from "@/features/overview-series/windows";
@@ -36,7 +37,9 @@ import {
   listRecentTasksOpened,
   listRecentUserMessageAuthors,
   listVisibleChannelRefs,
+  tallyUserMessageAuthors,
   type DayWindow,
+  type MessageAuthorTallyRow,
   type OverviewMessageRow,
   type OverviewTaskRow,
   type VisibleChannelRef,
@@ -66,8 +69,16 @@ const ACTIVITY_LIMIT = 8;
 const MEMBER_LOAD_ROWS = 6;
 /** Window the member-load card describes. */
 const MEMBER_LOAD_DAYS = 30;
-/** See `repository-overview.ts › listRecentUserMessageAuthors` for why a clip
- *  here is honest and a clip in the series would not be. */
+/**
+ * Ceiling on the member-load card's DEGRADE read.
+ *
+ * ⚠ **THE SUPERSEDED NOTE HERE POINTED AT AN ARGUMENT THAT NO LONGER HOLDS** —
+ * "see `repository-overview.ts › listRecentUserMessageAuthors` for why a clip
+ * here is honest". It was honest only while the DENOMINATOR was: `max_rows`
+ * clipped this 10,000-row ask to 1,000 silently, and the card published that as
+ * `totalMessages` over a 30-day label (Samuel #2935). The card is counted by
+ * Postgres now (`tallyUserMessageAuthors`); this number bounds the fallback.
+ */
 const MEMBER_LOAD_SCAN_LIMIT = 10_000;
 /** Points in a series: today plus the 30 UTC days before it. */
 export const OVERVIEW_SERIES_DAYS = 31;
@@ -227,7 +238,13 @@ export async function getWorkspaceOverviewSeries(
     const { counts, truncated } = await readWorkspaceCreditBins(
       workspaceId,
       bins,
-      channelId
+      channelId,
+      // ⚠ **THE BUCKET TRAVELS WITH THE WINDOWS**, from the one shared calendar:
+      // Postgres groups by it now, and a grouping that disagrees with the bins
+      // puts a whole range on one bar. Every workspace range is `day` today
+      // (`types.ts › WorkspaceSeriesRange` has no `24h`), so this is the
+      // invariant made explicit rather than assumed.
+      overviewBucketFor(range)
     );
     return {
       metric,
@@ -314,16 +331,28 @@ export function mergeActivity(input: ActivityInput): OverviewActivityRow[] {
     .slice(0, ACTIVITY_LIMIT);
 }
 
-/** Top authors by share of the scanned window, descending. */
+/**
+ * Top authors by share of the window, descending.
+ *
+ * ⚠ **IT TAKES COUNTS, NOT A ROW PER MESSAGE (#2935).** The counting is Postgres'
+ * (`tallyUserMessageAuthors`); the degrade path folds its capped haul into the
+ * same shape. `totalMessages` is the sum of the counts, so the denominator the
+ * card prints is the one the shares were computed from either way.
+ * ⚠ **TIES BREAK ON THE USER ID**, so the bars are TOTALLY ordered: the two
+ * sources iterate in different orders (Postgres' grouping order vs. first-seen),
+ * and without this an equal-count pair would swap places between them.
+ */
 export function tallyMemberLoad(
-  authorIds: string[],
+  authors: readonly MessageAuthorTallyRow[],
   names: Map<string, string | null>
 ): { totalMessages: number; rows: OverviewMemberLoadRow[] } {
   const byUser = new Map<string, number>();
-  for (const id of authorIds) byUser.set(id, (byUser.get(id) ?? 0) + 1);
-  const total = authorIds.length;
+  for (const author of authors) {
+    byUser.set(author.userId, (byUser.get(author.userId) ?? 0) + author.messages);
+  }
+  const total = [...byUser.values()].reduce((sum, count) => sum + count, 0);
   const rows = [...byUser.entries()]
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, MEMBER_LOAD_ROWS)
     .map(([userId, count]) => ({
       userId,
@@ -331,6 +360,40 @@ export function tallyMemberLoad(
       percent: total === 0 ? 0 : Math.round((count / total) * 100),
     }));
   return { totalMessages: total, rows };
+}
+
+/**
+ * THE MEMBER-LOAD CARD'S READ — counted by Postgres, or folded from the capped
+ * haul while the aggregate is unapplied.
+ *
+ * ⚠ **THE CLIP IS LOGGED BECAUSE THE PAYLOAD HAS NOWHERE TO PUT IT.**
+ * `types.ts › WorkspaceOverview.memberLoad` carries `totalMessages` and `rows`
+ * and no `truncated` flag; the honest fix for the figure is the aggregate, so
+ * rather than widen a persisted contract the degrade says so in the log where the
+ * old code said nothing at all.
+ */
+async function readMemberLoad(
+  workspaceId: string,
+  sinceIso: string
+): Promise<MessageAuthorTallyRow[]> {
+  const tally = await tallyUserMessageAuthors(workspaceId, sinceIso);
+  if (tally) return tally;
+  const scan = await listRecentUserMessageAuthors(
+    workspaceId,
+    sinceIso,
+    MEMBER_LOAD_SCAN_LIMIT
+  );
+  if (scan.truncated) {
+    console.warn(
+      `[workspaces/overview] member load is a FLOOR: the author scan came back at the PostgREST ceiling, so totalMessages under-reports the ${MEMBER_LOAD_DAYS}-day window`
+    );
+  }
+  const byUser = new Map<string, number>();
+  for (const id of scan.rows) byUser.set(id, (byUser.get(id) ?? 0) + 1);
+  return [...byUser.entries()].map(([userId, messages]) => ({
+    userId,
+    messages,
+  }));
 }
 
 async function resolveNames(
@@ -365,18 +428,14 @@ export async function getWorkspaceOverview(
   const memberLoadSince = addDays(utcDayStart(now), -MEMBER_LOAD_DAYS + 1)
     .toISOString();
 
-  const [messagesToday, agentsRunning, members, channels, visible, authorIds] =
+  const [messagesToday, agentsRunning, members, channels, visible, authors] =
     await Promise.all([
       countMessagesSince(workspaceId, midnightUtc),
       countRunningSessions(workspaceId),
       countActiveMembers(workspaceId),
       countOpenChannels(workspaceId),
       listVisibleChannelRefs(workspaceId, userId),
-      listRecentUserMessageAuthors(
-        workspaceId,
-        memberLoadSince,
-        MEMBER_LOAD_SCAN_LIMIT
-      ),
+      readMemberLoad(workspaceId, memberLoadSince),
     ]);
 
   const channelIds = visible.map((c) => c.id);
@@ -394,7 +453,7 @@ export async function getWorkspaceOverview(
   // parameters the reader switches (§9).
   const [names, usage, agents] = await Promise.all([
     resolveNames([
-      ...authorIds,
+      ...authors.map((a) => a.userId),
       ...messages.flatMap((m) => (m.author_user_id ? [m.author_user_id] : [])),
       ...opened.map((t) => t.created_by),
     ]),
@@ -411,7 +470,7 @@ export async function getWorkspaceOverview(
       channelNames: channelNameMap(visible),
       names,
     }),
-    memberLoad: tallyMemberLoad(authorIds, names),
+    memberLoad: tallyMemberLoad(authors, names),
     usage,
     agents,
   };
