@@ -37,6 +37,44 @@ function feedInboundEffects(state, event) {
   return effects;
 }
 
+/**
+ * DOES A STREAMED FRAME OF LIVE WORK CORRECT THIS SESSION'S LABEL? The patch, or `null` for a label that
+ * is already right — or that must not move (2026-10-10, Samuel's "waiting while it is clearly working").
+ *
+ * ⚠ THE DEFECT IT CLOSES. Nothing in the live stream touched state: `tool_use`, `assistant` and `thinking`
+ * had no arm at all and fell through to the tail's no-op, and `tool_result` only ever un-counted a denied
+ * post. So `result`'s end-of-turn word (`idle`, or `awaiting_peer` for a turn that posted) stood for the
+ * whole NEXT turn. A push that lands MID-TURN queues on the prompt iterator rather than being consumed
+ * (`session-io.js › makePushIterator.push`); its own dispatch marks `working`, the in-flight turn's
+ * `result` then overwrites that, and the turn the push started runs to completion reported between turns.
+ * `session-pill.js` maps both words to the `idle` pill, so the window read "Waiting" and
+ * `channel_sessions.state` said `idle` while `toolLabel` and `lastActivityAt` were seconds old.
+ *
+ * ⚠ IT ONLY EVER CORRECTS THE TWO BETWEEN-TURNS WORDS, and the narrowness is the safety:
+ *   `working`              already right; nothing to say.
+ *   `awaiting_permission`  OUTRANKS it — a held gate is the finer truth and `gateActivity` is the one
+ *                          place that is decided. A tool frame must not talk over a card.
+ *   `parked`               stays parked. A torn-down query's drained tail is FIX #5's exact case and
+ *                          must never read as a live turn; `parked` is checked rather than `phase`,
+ *                          like every other park read here.
+ *
+ * ⚠ IT SAYS NOTHING ABOUT THE TIMER. The re-arm is emitted by the ARMS below for every live frame,
+ * including the ones this returns `null` for — a session already reading `working` is exactly the one whose
+ * TTL has to be held open. See {@link sessionReducer}'s live-frame arm.
+ */
+/** The TTL re-arm a LIVE FRAME asks for: an ordinary `scheduleIdle` that the engine additionally clamps to
+ *  what is left of the continuous-work cap. ⚠ One builder, so the word cannot be spelled two ways across
+ *  the four arms that emit it. */
+function workIdle() {
+  return { type: 'scheduleIdle', from: 'work' };
+}
+
+function workingPatch(state) {
+  if (state.parked === true) return null;
+  if (state.activity !== 'idle' && state.activity !== 'awaiting_peer') return null;
+  return { activity: gateActivity(state, 'working') };
+}
+
 function sessionReducer(state, event) {
   // Terminal: a settled session ignores every later event.
   if (state.phase === 'ended') return { state: state, effects: [] };
@@ -59,15 +97,39 @@ function sessionReducer(state, event) {
     };
   }
 
+  // A FRAME OF LIVE WORK: the runtime called a tool, or the agent spoke or reasoned. Proof a turn is in
+  // flight, so it corrects a stale between-turns label ({@link workingPatch}) AND HOLDS THE IDLE TTL OPEN.
+  //
+  // ⚠ NEVER PARK MID-WORK (2026-10-10, Samuel's ruling). The TTL used to be re-armed only by a turn END and
+  // by the two pushes, so `DEFAULT_IDLE_MS` was doing two jobs with one number and did the second by
+  // accident: an agent fifteen minutes into ONE long task was indistinguishable from an agent that had gone
+  // quiet, and was parked mid-tool-call with its query torn down.
+  // ⚠ THE RE-ARM IS EMITTED EVEN WHEN NOTHING MOVES. A session already reading `working` is precisely the
+  // one whose timer has to be pushed out, so the effect does not ride on `workingPatch` being non-null.
+  // ⚠ `from: 'work'` IS WHAT BOUNDS IT. The engine clamps a work re-arm to what is left of
+  // `session-work-cap.js › WORK_CAP_MS` (two hours of unbroken work), so a runaway loop still parks — as
+  // today, by the ordinary `idle_timeout`, resumable. Without that word this arm would make a tool loop
+  // unparkable, which is the one thing re-arming must not buy.
+  // ⚠ A PARKED SESSION GETS NOTHING: its drained tail must neither read as live (FIX #5) nor push out the
+  // ABANDONMENT bound, which is the timer `scheduleIdle` would re-arm there.
+  if (type === 'tool_use' || type === 'assistant' || type === 'thinking') {
+    if (state.parked === true) return { state: state, effects: [] };
+    const live = workingPatch(state);
+    return { state: live ? clone(state, live) : state, effects: [workIdle()] };
+  }
+
   if (type === 'tool_result') {
     const p = event.payload || {};
     const id = p.toolUseId;
+    // A result is live work too: same correction, same re-arm. (A parked session never reaches here — the
+    // inert guard above returns first.)
+    const live = workingPatch(state);
     // FIX F3: a DENIED own-channel post was counted before the decision; its failing result un-counts it.
     if (p.ok === false && id && state.postedToolUseIds.indexOf(id) !== -1) {
       const remaining = without(state.postedToolUseIds, id);
-      return { state: clone(state, { postedToolUseIds: remaining, postedThisTurn: remaining.length > 0 }), effects: [] };
+      return { state: clone(state, { ...(live || {}), postedToolUseIds: remaining, postedThisTurn: remaining.length > 0 }), effects: [workIdle()] };
     }
-    return { state: state, effects: [] };
+    return { state: live ? clone(state, live) : state, effects: [workIdle()] };
   }
 
   // The agent posted to its own channel: recorded so the turn ends awaiting the peer. A held gate outranks "working".

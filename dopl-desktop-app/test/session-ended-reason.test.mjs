@@ -112,8 +112,13 @@ test("it is NOT inside `emit`, which returns early on the sessions that most nee
   // precisely the sessions nobody was watching, so losing the reason there loses it where it is
   // the only remaining explanation.
   const engine = M("session-engine.js");
-  const emitFn = engine.slice(engine.indexOf("function emit(s, payload)"), engine.indexOf("function scheduleIdle("));
+  // ⚠ THE SLICE ENDS AT `emit`'s OWN CLOSING BRACE, not at whatever function follows it (2026-10-10). It
+  // used to run to `function scheduleIdle(`, so the moment that function grew a docblock the slice swept it
+  // in and a length fence meant to say "emit is small" started measuring the neighbour.
+  const emitAt = engine.indexOf("function emit(s, payload)");
+  const emitFn = engine.slice(emitAt, engine.indexOf("\n}", emitAt) + 2);
   assert.ok(emitFn.length > 0 && emitFn.length < 400, "the slice is the emit function alone");
+  assert.ok(emitFn.trim().endsWith("}"), "…and it is a whole function");
   assert.ok(!/noteEnded/.test(emitFn), "the line must not depend on a live window");
 });
 

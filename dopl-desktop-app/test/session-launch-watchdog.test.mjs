@@ -70,7 +70,13 @@ test("there is ONE timer, so the watchdog cannot leak beside the idle one", () =
   // scheduleIdle is one clearTimeout + one setTimeout over it. A second timer would be a
   // second thing to clear on settle.
   assert.equal((ENGINE.match(/setTimeout\(/g) || []).length, 1, "one arming site in the engine");
-  assert.match(ENGINE, /s\.idleTimer = setTimeout\(\(\) => \{ if \(!s\.settled\) dispatch\(s, \{ type: t\.type \}\); \}, t\.ms\);/);
+  // ⚠ THE EVENT IS STILL `t.type`, WHICH IS THE WHOLE FENCE. 2026-10-10 made the DURATION negotiable — a
+  // work re-arm is clamped to what is left of the continuous-work cap (`session-work-cap.js`) so a long
+  // task is not parked mid-tool-call — but the clamp may only ever SHORTEN an `idle_timeout`. If it could
+  // also choose the event, a cap could fire the launch watchdog and end a launch the transport can still
+  // recover, which is exactly what this file exists to prevent.
+  assert.match(ENGINE, /s\.idleTimer = setTimeout\(\(\) => \{ if \(!s\.settled\) dispatch\(s, \{ type: t\.type \}\); \}, ms\);/);
+  assert.match(ENGINE, /t\.type === 'idle_timeout'/, "the clamp is gated on the ORDINARY park, never the watchdog");
 });
 
 // ── 2. THE NUMBER IS EVIDENCE ────────────────────────────────────────────────────────

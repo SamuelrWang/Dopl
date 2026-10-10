@@ -36,6 +36,35 @@
 import { cn } from "@/shared/lib/utils";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { agentDisplayName, ownAgentsFor } from "./agents-model";
+import { AGENT_PILL_FACE } from "./agent-bits";
+
+/**
+ * **THE CYCLING ELLIPSIS — "." → ".." → "..." → "" — INSIDE THE PILL, RIGHT AFTER
+ * THE NAME WITH NO SPACE** (Samuel, 2026-10-10).
+ *
+ * ⚠ **THREE SPANS, AND EVERY ONE OF THEM STAYS IN LAYOUT ALL CYCLE.** The frames
+ * are `opacity` (`globals.css › .working-dots`, mirrored in `kit.css`), so the box
+ * is always three dots wide and the pill cannot resize as the count grows — the
+ * jitter a `content` or `width` animation would cost. There is no width here to
+ * keep in step with the font.
+ * ⚠ **NOT `agent-stream-working.tsx`'S THREE DOTS, AND THE TWO MUST NOT BE MERGED.**
+ * That row staggers ONE `animate-pulse` across three dots — a travelling wave, all
+ * three always visible. This counts up and resets to blank. Same glyphs, different
+ * fact, and stock Tailwind cannot express a cumulative cycle at all, which is the
+ * whole reason a custom keyframe lands in both stylesheets here.
+ * ⚠ **`aria-hidden`: THE PILL ALREADY CARRIES `role="status"` AND THE NAME.** Three
+ * periods read aloud are noise, and the live region should announce an agent, not
+ * its animation.
+ */
+function WorkingDots() {
+  return (
+    <span aria-hidden className="working-dots shrink-0">
+      <span>.</span>
+      <span>.</span>
+      <span>.</span>
+    </span>
+  );
+}
 
 /**
  * MY agents mid-turn on the surface as it is currently scoped. Pure and exported
@@ -79,8 +108,9 @@ export function ownAgentsWorking(
  * *"right now it says, [agent name] is working… remove the is working… just have
  * it be the flashing dot and the name of the agent"*).
  *
- * ⚠ **THE DOT ALREADY SAID IT, AND SAYING IT TWICE IS WHAT COST THE ROOM.** The
- * pulse is the "working" signal; the words repeated it once per agent, which is
+ * ⚠ **THE MARK ALREADY SAID IT, AND SAYING IT TWICE IS WHAT COST THE ROOM.** The
+ * animation is the "working" signal — the pulsing dot then, {@link WorkingDots}'s
+ * cycling ellipsis since 2026-10-10; the words repeated it once per agent, which is
  * the same one-fact-twice rule `AgentEndedPill` follows against a dot beside a
  * pill reading "Ended". With the strip now inline at the end of the recipient
  * line, three agents' worth of *"… is working…"* is also the difference between
@@ -103,15 +133,24 @@ export function agentActivityText(agent: DesktopSessionSummary): string {
  * colour of that agent … if it runs off the page, just have it do `…`, no
  * scrolling necessary … for a new agent working, have it at the front"*.
  *
- * ⚠ **THE DOT CARRIES THE IDENTITY NOW, NOT THE STATE, AND ONLY HERE.** Green
- * said "working" beside text that also said "working"; the agent's own
- * `agent-01…16` key says WHICH agent, which is the fact a reader cannot get any
- * other way once the words are gone. **The Agents tab's dot stays `bg-success`**
- * — that surface lists idle, working and ended together, so there the dot is the
- * only thing carrying state. Two dots, two jobs, stated here because they now
- * differ on purpose.
- * ⚠ **THE PULSE STAYS.** It is what separates an identity mark from a live one,
- * and it is the half of the green dot that was never redundant.
+ * 🔒 **THE DOT IS GONE AND THE NAME WEARS THE COLOUR — ONE PILL PER AGENT**
+ * (Samuel, 2026-10-10: *"no dot. Agent name inside a pill; pill background = the
+ * agent's dot color"*). The colour source did not move an inch: it is the same
+ * `agent-01…16` key off the same live set, resolved by the same host into the same
+ * `var()`. What changed is WHERE it lands — a 6px mark beside a name became the
+ * name's own ground, which is one object to read instead of two.
+ *
+ * ⚠ **THE COLOUR IS STILL IDENTITY, NEVER STATE, AND ONLY HERE.** The `agent-01…16`
+ * key says WHICH agent — the fact a reader cannot get any other way once the words
+ * are gone. **The Agents tab's dot stays `bg-success`**: that surface lists idle,
+ * working and ended together, so there the dot is the only thing carrying state.
+ * Two marks, two jobs, stated here because they differ on purpose.
+ * ⚠ **THE PULSE MOVED INTO THE WORDS, IT WAS NOT DROPPED.** {@link WorkingDots}'s
+ * cycling ellipsis is now the live signal — the half of the green dot that was
+ * never redundant — and a pill that could not move would read as a label rather
+ * than an agent mid-turn. A pill does not pulse: the fill is the identity, and
+ * flashing the ground under a name is both the harder thing to read and the thing
+ * that makes the hue hard to name.
  *
  * ⚠ **NEWEST FIRST IS A REVERSE, AND THE FEED'S ORDER IS WHY THAT IS EXACT.**
  * `main/session-summary.js › reportList` walks `deps.sessions.values()` — a `Map`,
@@ -130,13 +169,18 @@ export function AgentActivityRows({
   /** Already scoped by {@link ownAgentsWorking} — this component does not decide. */
   agents: readonly DesktopSessionSummary[];
   /**
-   * **EACH AGENT'S PAINT, ALREADY RESOLVED** — `agentId` → a `var()` reference.
+   * **EACH AGENT'S PAINT, ALREADY RESOLVED** — `agentId` → a `var()` reference,
+   * worn as the pill's FILL since 2026-10-10.
    *
    * ⚠ **RESOLVED BY THE CALLER, exactly as `authored-row.tsx › AuthoredRowAccent`
    * is.** `lib/agent-colors.ts › agentColorVar` stays the one place the token name
-   * is spelled and no colour appears in this component. A missing entry — an agent
-   * the live set has not published a colour for — falls back to the neutral mark
-   * rather than painting nothing at all.
+   * is spelled and no colour appears in this component. **That contract is why this
+   * file wears `agent-bits.tsx › AGENT_PILL_FACE` rather than calling `AgentPill`**,
+   * whose `color` prop is a KEY — flipping the host to hand down keys would trade a
+   * ruled contract for a shorter import.
+   * ⚠ A missing entry — an agent the live set has not published a colour for — gets
+   * the face's own `bg-surface-cta`, i.e. the black pill every other uncoloured agent
+   * in the app already wears. No inline style at all, rather than a chosen fallback.
    */
   colors?: ReadonlyMap<string, string> | null;
 }) {
@@ -155,22 +199,34 @@ export function AgentActivityRows({
             // operator can run several agents whose ids collide across threads.
             key={`${agent.channelId}:${agent.taskId}:${agent.agentId ?? agent.sessionId}`}
             role="status"
-            className="flex min-w-0 shrink items-center gap-1.5"
+            // ⚠ **ONE ELEMENT NOW, NOT A ROW WRAPPING A DOT AND A NAME**: the pill IS
+            // the row, so `role="status"` rides the thing a reader sees.
+            // ⚠ `shrink` OVERRIDES THE FACE'S `shrink-0` (`cn` is tailwind-merge, later
+            // wins) — three pills on the recipient line must ELIDE, and a pill that
+            // refuses to shrink gets clipped by the parent's `truncate` with no `…`.
+            className={cn(AGENT_PILL_FACE, "flex min-w-0 shrink items-center")}
+            // ⚠ **THE AGENT'S COLOUR IS THE PILL'S FILL NOW, NOT A DOT BESIDE IT**
+            // (Samuel, 2026-10-10). The dot said WHICH agent in 6px of hue next to
+            // text that then had to be read separately; the pill says it with the
+            // name sitting on it, which is one object instead of two.
+            // ⚠ **THE INK DOES NOT MOVE, AND THAT IS MEASURED, NOT ASSUMED.** All
+            // sixteen keys are one lightness (`agent-color-values.ts`: L 0.44, C 0.11,
+            // hue only), so white (`--text-on-cta`) clears WCAG AA on every one of
+            // them with half again the margin — 6.99:1 at the worst hue (H=200),
+            // 8.26:1 at the best, i.e. AAA to within a rounding error — and the palette is
+            // declared once in `:root` with no light/dark split, so there is no second
+            // theme to check and no conditional ink to keep in step.
+            // `agent-color-contrast.test.ts` pins both halves of that.
+            style={paint ? { backgroundColor: paint } : undefined}
           >
-            <span
-              aria-hidden
-              className={cn(
-                "h-1.5 w-1.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none",
-                // ⚠ THE FALLBACK IS THE TRANSCRIPT'S OWN NEUTRAL, not green: an
-                // uncoloured agent here is the same fact as an uncoloured agent
-                // on a row (`agent-box-rule.ts › AGENT_ACCENT_NEUTRAL`).
-                paint === null && "bg-border-strong"
-              )}
-              style={paint ? { backgroundColor: paint } : undefined}
-            />
-            <span className="min-w-0 truncate text-caption text-text-secondary">
-              {agentActivityText(agent)}
-            </span>
+            {/* ⚠ **THE UNCOLOURED FACE IS THE PILL'S OWN `bg-surface-cta`, AND THE OLD
+                `bg-border-strong` COULD NOT COME WITH IT.** That was a DOT's neutral —
+                a 12%-black hairline tint — and as a pill FILL it puts white text on
+                near-white. {@link AgentPill} already rules this exact case for a live
+                agent in a room whose sixteen keys are out: *"both are ordinary, both
+                get the CTA face"*. So no `paint` means no inline style at all. */}
+            <span className="min-w-0 truncate">{agentActivityText(agent)}</span>
+            <WorkingDots />
           </span>
         );
       })}

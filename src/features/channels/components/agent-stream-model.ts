@@ -43,6 +43,21 @@ import type { ChannelConsentRequest, ChannelMessage } from "../types";
 export { frameLane, type StreamLane } from "./agent-stream-lanes";
 import { frameLane, type StreamLane } from "./agent-stream-lanes";
 
+/**
+ * ⚠ THE TOOL-RUN GROUPING LIVES IN `agent-stream-groups.ts` SINCE 2026-10-10 (§2, the
+ * 500-line cap), and this file stays its import path of record — {@link StreamGroup},
+ * {@link groupStreamItems}, `toolUses` and {@link shortToolName} are re-exported here, so
+ * no importer changed. The seam: that file moves when the RUN COUNT's arithmetic moves
+ * (what main stamped vs what this side received past the ring's bounds), this one when the
+ * stream's assembly does — the echo dedupe, the held-draft join, the TTL.
+ */
+export {
+  groupStreamItems,
+  toolUses,
+  shortToolName,
+  type StreamGroup,
+} from "./agent-stream-groups";
+
 /** One row of the rendered stream. */
 export interface StreamItem {
   key: string;
@@ -54,6 +69,13 @@ export interface StreamItem {
   tool?: string;
   /** `tool` rows only — `false` on a result that failed. */
   ok?: boolean;
+  /**
+   * `tool` rows only — the run's tool-use ordinal as MAIN counted it
+   * (`spa-bridge-narration.ts › DesktopNarrationEntry.runCount`), so the group's
+   * number survives the ring evicting the head of a long run. Absent on an older
+   * main, and {@link StreamGroup.tools} falls back to counting rows.
+   */
+  runCount?: number;
   /**
    * `sent` rows only — WHERE IT WENT, for the box's banner (Samuel, 2026-09-16:
    * *"I want it to say the name of the channel, or the thread, that it is posted to"*).
@@ -360,6 +382,13 @@ export function buildAgentStream({
       text,
       tool: entry.tool,
       ok: entry.ok,
+      // ⚠ Same absent-means-ordinary discipline as `truncated` and `senderAgentId`:
+      // it rides through only when main actually stamped a run ordinal.
+      ...(typeof entry.runCount === "number" &&
+      Number.isFinite(entry.runCount) &&
+      entry.runCount > 0
+        ? { runCount: entry.runCount }
+        : {}),
       to: lane === "sent" ? destination : undefined,
       // ⚠ Read like `framePending`: only an explicit `true` counts, and the field
       // rides through so every face can confess the cut (INVARIANTS §9).
@@ -426,60 +455,3 @@ function dropSettledGateNotes(
   );
 }
 
-/**
- * ONE RUN OF CONSECUTIVE TOOL ACTIVITY, AS ONE ROW (Samuel, 2026-08-27 — the
- * Claude-Code-desktop pattern).
- *
- * ⚠ IT IS A GROUPING, NOT A FILTER. Every frame that went in comes out inside a
- * group; nothing is dropped, and the detail the operator can open is the same
- * rows this stream rendered before. The stream's job is unchanged (a log that
- * loses lines is worse than a plain one) — what changes is that a dozen raw JSON
- * payloads no longer push the POST the operator opened the panel to read off the
- * screen.
- *
- * ⚠ THE BREAK IS ANY NON-TOOL LANE. A thinking line between two tool calls ends
- * the run, because the agent said something there and the summary must not
- * swallow it into "Used 4 tools".
- *
- * ⚠ THE COUNT IS TOOL USES, NOT ROWS. A call and its result are two frames about
- * ONE use (`LANE_BY_KIND` maps `tool` and `result` alike), so the number comes
- * from the frames that carry a tool NAME; a run of nameless frames falls back to
- * its row count rather than reporting zero.
- */
-export interface StreamGroup {
-  key: string;
-  /** `null` for a single non-tool row; otherwise the run's tool-use count. */
-  tools: number | null;
-  items: StreamItem[];
-}
-
-export function groupStreamItems(items: readonly StreamItem[]): StreamGroup[] {
-  const out: StreamGroup[] = [];
-  for (const item of items) {
-    if (item.lane !== "tool") {
-      out.push({ key: item.key, tools: null, items: [item] });
-      continue;
-    }
-    const last = out[out.length - 1];
-    if (last && last.tools !== null) {
-      last.items.push(item);
-      last.tools = toolUses(last.items);
-      continue;
-    }
-    out.push({ key: item.key, tools: toolUses([item]), items: [item] });
-  }
-  return out;
-}
-
-function toolUses(items: readonly StreamItem[]): number {
-  const named = items.filter((item) => !!item.tool).length;
-  return named || items.length;
-}
-
-/** `mcp__dopl__dopl_channel` → `dopl_channel`. ⚠ The segment after the LAST `__`,
- *  which is the rule `main/mcp-tool-names.js › mcpShortName` states: the server
- *  segment is the CLIENT's to choose and has never been ours to assume (F-139). */
-export function shortToolName(name: string | undefined): string {
-  if (!name) return "runs";
-  return name.replace(/^mcp__.*__/i, "") || "runs";
-}

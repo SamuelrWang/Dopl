@@ -1357,3 +1357,43 @@ body.landing-active::after {
 @media (prefers-reduced-motion: reduce) {
   .fade-swap-in { animation: none; }
 }
+
+/* ── The working strip's cycling ellipsis ─────────────────────────────────────
+   Mirrored in kit.css (F-074: edit both). `channels/components/agent-activity.tsx`
+   mounts it INSIDE the agent pill, immediately after the name with no gap.
+
+   FOUR FRAMES, CUMULATIVE, THEN BLANK: "." → ".." → "..." → "" (Samuel, 2026-10-10).
+   That is why there are three keyframes and not one on a stagger: the duty cycles
+   differ (75% / 50% / 25% lit), so `animation-delay` over a shared keyframe would
+   give a travelling WAVE — the shape `agent-stream-working.tsx` wears — and never a
+   count that grows and resets.
+
+   ⚠ THE WIDTH IS RESERVED BY `opacity`, NOT BY A `width` OR A `ch` BOX. All three
+   dots stay in layout for the whole cycle, so the pill cannot jitter and there is no
+   measurement to keep in step with the font. (`visibility` would do it too; opacity
+   is what the rest of this file animates.)
+   ⚠ PAIRED STOPS (`74.99%` then `75%`) ARE THE HARD EDGE. A dot blinks rather than
+   fades, with no `steps()` to reason about and no timing function to inherit.
+   ⚠ REDUCED MOTION KEEPS ALL THREE, STATIC — the movement goes, the fact stays
+   (`agent-stream-working.test.tsx`: *"Reduced motion removes the movement, not the
+   fact"*), which is also the one frame that reserves its own width. */
+@keyframes doplWorkingDot1 {
+  0%, 74.99% { opacity: 1; }
+  75%, 100% { opacity: 0; }
+}
+@keyframes doplWorkingDot2 {
+  0%, 24.99% { opacity: 0; }
+  25%, 74.99% { opacity: 1; }
+  75%, 100% { opacity: 0; }
+}
+@keyframes doplWorkingDot3 {
+  0%, 49.99% { opacity: 0; }
+  50%, 74.99% { opacity: 1; }
+  75%, 100% { opacity: 0; }
+}
+.working-dots > span:nth-child(1) { animation: doplWorkingDot1 1.6s linear infinite both; }
+.working-dots > span:nth-child(2) { animation: doplWorkingDot2 1.6s linear infinite both; }
+.working-dots > span:nth-child(3) { animation: doplWorkingDot3 1.6s linear infinite both; }
+@media (prefers-reduced-motion: reduce) {
+  .working-dots > span { animation: none; }
+}
