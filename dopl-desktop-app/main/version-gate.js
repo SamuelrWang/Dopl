@@ -32,8 +32,9 @@
 // sub-second flash of the boot screen and buys an app that cannot strand
 // anybody on a plane.
 
-// ⚠ `electron` is no longer required here: the version-floor banner left 2026-10-09; the tray
-// line (`onWarn`) is the surface.
+// ⚠ ONE banner lives here: the FLEET-OUTAGE RELEASE (`surfaceWarning`). The version-FLOOR
+// warning's banner left 2026-10-09 and its tray line (`onWarn`) is the surface.
+const { Notification } = require('electron');
 const { API_BASE, VERSION_GATE } = require('./config');
 const appVersion = require('./app-version');
 const minVersion = require('./min-version');
@@ -42,6 +43,7 @@ const { diag } = require('./diag');
 
 const UNKNOWN_UPDATER = { supported: false, checked: false, available: false, ready: false };
 
+let warnedFloor = null; // one release banner per floor, per process
 let handlers = {}; // { onBlock, onRelease, onWarn } — injected by index.js
 let floor = ''; // the newest well-formed floor the server has given us
 let verdict = null; // the last decision (min-version.gateVerdict shape)
@@ -183,12 +185,31 @@ function call(name, arg) {
 // operator has run into a misconfiguration on OUR side, so it explains itself
 // and gets out of the way rather than demanding an action they cannot take.
 function surfaceWarning(v) {
-  // ⚠ NO BANNER (Samuel's spec, 2026-10-09): "version warnings" are on his OFF list. `onWarn`
-  // above is the surface that remains and always was the better one — its own copy says "Keep
-  // working, Dopl installs it by itself", so there was never anything to do away from the desk.
-  // The per-floor latch went with it: it existed only to raise that banner once.
   const notice = minVersion.floorNotice(v);
   call('onWarn', notice);
+
+  // ⚠ ONE OF THE TWO WARN REASONS KEEPS ITS BANNER, AND ONLY ONE (Samuel, 2026-10-09 — he was
+  // asked directly). `minVersion.decide` produces exactly two:
+  //   'no-updater'          the FLOOR WARNING. Banner OFF: "version warnings" are on his OFF
+  //                         list, and its own copy says "Nothing is blocked in the meantime", so
+  //                         there is nothing to do away from the desk. The tray line carries it.
+  //   'no-update-published' THE FLEET-OUTAGE RELEASE. Banner ON. The operator was BLOCKED — the
+  //                         app was unusable because the floor sat above the newest build that
+  //                         exists — and this says they are not any more. A state change that
+  //                         gives the app back is worth an interrupt, and the tray line alone
+  //                         would let someone sit blocked-then-unblocked without noticing.
+  // Both notices come out of the same `floorNotice`, which is why turning "version warnings" off
+  // took this one with it on 2026-10-09; the reason is the seam that separates them.
+  if (v.reason !== 'no-update-published') return;
+  // Once per floor, per process: a re-decide must not re-announce the same release.
+  if (warnedFloor === v.floor) return;
+  warnedFloor = v.floor;
+  try {
+    if (Notification.isSupported()) {
+      // Quiet: it reports a state change, it does not ask for anything.
+      new Notification({ title: notice.title, body: notice.body, silent: true }).show();
+    }
+  } catch (_) { /* best-effort */ }
 }
 
 // ── The surface the blocking window talks to ─────────────────────────────────

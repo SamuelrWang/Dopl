@@ -244,16 +244,21 @@ test("THE FLEET-OUTAGE GUARD: a completed check with nothing newer RELEASES the 
   h.setUpdater({ checked: true, available: false, ready: false });
   assert.equal(h.gate.isBlocked(), false);
   assert.equal(h.seen.releases.length, 1, "the app window comes back");
-  // …and the operator is told by the TRAY LINE. ⚠ The banner that also said this left 2026-10-09
-  // (Samuel's spec: version warnings are on his OFF list) — `surfaceWarning` carried BOTH the
-  // floor warning and this release message, so both lost their banner together. The tray keeps
-  // it, which is asserted here rather than left implied.
-  assert.equal(h.seen.notifications.length, 0, "no banner for a version matter");
-  assert.match(h.seen.warns.filter(Boolean).pop().body, /no newer build is published/i);
+  // …and the operator is told, once, quietly — BY A BANNER. ⚠ Samuel was asked directly on
+  // 2026-10-09 and KEPT this one when the other version warnings went off: being released from
+  // a block is the app becoming usable again, and the tray line alone would let someone sit
+  // blocked-then-unblocked without noticing. Its sibling reason keeps no banner — the next test
+  // is the other half of that split, and the two must be read together.
+  assert.equal(h.seen.notifications.length, 1);
+  assert.equal(h.seen.notifications[0].silent, true, "a state change, not a request");
+  assert.match(h.seen.notifications[0].body, /no newer build is published/i);
   assert.match(h.seen.warns.filter(Boolean).pop().tray, /1\.9\.0/);
+  // NOT A NAG: the per-floor latch means a re-decide re-states the tray line and nothing else.
+  for (let i = 0; i < 10; i++) h.gate.onUpdaterState();
+  assert.equal(h.seen.notifications.length, 1, "once per floor, not once per re-decide");
 });
 
-test("no updater at all means a warning, never a block, and ONE banner per floor", async () => {
+test("no updater at all means a TRAY warning, never a block and never a banner", async () => {
   // Dev, an unpackaged run, or a build whose electron-updater failed to load.
   // Blocking there is a dead end: no button on that screen could ever end it.
   const h = harness({ version: "1.8.2", updater: { supported: false }, answers: floorAt("1.9.0") });
@@ -261,10 +266,11 @@ test("no updater at all means a warning, never a block, and ONE banner per floor
   assert.equal(h.gate.isBlocked(), false);
   assert.match(h.seen.warns.filter(Boolean).pop().body, /cannot update itself/i);
   for (let i = 0; i < 10; i++) h.gate.onUpdaterState();
-  // ⚠ The per-floor latch went with the banner it deduped (2026-10-09). `onWarn` was ALWAYS
-  // called on every re-decide — the latch only ever guarded the banner — so nothing regressed
-  // here: the tray line is idempotent and simply gets re-set.
-  assert.equal(h.seen.notifications.length, 0, "no banner at all now");
+  // ⚠ THE OTHER HALF OF THE SPLIT, and the reason this test's name still says "ONE banner per
+  // floor" would be wrong: reason 'no-updater' keeps NO banner (2026-10-09 — "version warnings"
+  // are on Samuel's OFF list, and this one's own copy says nothing is blocked meanwhile). The
+  // fleet-outage RELEASE above does keep one. Same `floorNotice`, different reason.
+  assert.equal(h.seen.notifications.length, 0, "the floor warning is tray-only");
   assert.match(h.seen.warns.filter(Boolean).pop().body, /cannot update itself/i);
 });
 
