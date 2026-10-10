@@ -13,8 +13,14 @@ import {
 
 /**
  * GET / PUT /api/user/notification-preferences — the caller's own record, global switches.
+ *
+ * ⚠ THIS IS NOW THE ONLY HOME OF THE RECORD (2026-10-09): the Notifications tab
+ * (`stores/api-store.ts`) and the desktop's banner gate both read it here.
  * ⚠ The table (migration 20261117120000) is WRITTEN, NOT APPLIED: until it is, both verbs answer
- * 503 `NOT_AVAILABLE` and no UI binding calls this route (`stores/api-store.ts`).
+ * 503 `NOT_AVAILABLE`, which every caller reads as "no record to honor" = every banner ON.
+ *
+ * `event_type` has no CHECK in the table by design; the registry is the domain, enforced by the
+ * zod schema below (derived from it) and again in `server/repository.ts`.
  */
 
 const EventsSchema = z.object(

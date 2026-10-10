@@ -2,17 +2,29 @@
 -- dopl-development "Notifications Audit 2026-10-08" › Design: "per-user prefs event×channel
 -- server-side").
 --
--- ⚠ WRITTEN, NOT APPLIED. Applying this to prod is Samuel's call (asked 2026-10-09). Until it
--- lands the desktop keeps the record in its own store (`dopl-desktop-app/main/notification-prefs.js`)
--- and nothing reads this table. `src/app/api/user/notification-preferences/route.ts` answers 503
--- `NOT_AVAILABLE` while the table is missing, and no binding mounts the API-backed store yet.
+-- ⚠ WRITTEN, NOT APPLIED. Applying this to prod is Samuel's call (asked 2026-10-09).
+--
+-- ⚠ AND THE UI IS ALREADY MOUNTED ON IT (2026-10-09): the Notifications tab reads and writes
+-- this table through `/api/user/notification-preferences`, and the desktop's banner gate reads
+-- the same route. Until the table lands, that route answers 503 `NOT_AVAILABLE` and every
+-- surface fails toward ON — the tab says it cannot load, no banner is silenced, nothing breaks
+-- and nothing is stored. There is no local fallback copy anywhere.
 --
 -- ── SHAPE ──
 -- A row is an OVERRIDE of the default, which is ON. No row = notify. `channel_id IS NULL` is the
 -- user's global switch for that event; a non-null `channel_id` is a per-channel override (v1 UI
 -- writes global rows only; the column is here so per-channel lands without a second migration).
--- `event_type` is CHECKed against the code registry (`src/features/notifications/registry.ts`);
--- a new event is a new CHECK value and a new registry row, on one clock.
+-- ⚠ `event_type` CARRIES NO CHECK CONSTRAINT, ON PURPOSE (2026-10-09). An enumerated CHECK here
+-- would be a CEILING: the registry names 4 events today and the surface map
+-- (KB dopl-development "Notification Surface Map 2026-10-09") counts 39 banner-raising events
+-- still to name, so every one of them would need a migration to add a value — and a row whose
+-- event is not yet in the constraint fails the INSERT rather than being ignored. The list that
+-- decides what is valid is CODE (`src/features/notifications/registry.ts` ›
+-- `isNotificationEventId`), enforced at the only writer (`server/repository.ts`), which is also
+-- the list the UI and the desktop gate read. One list, not two.
+-- Nothing here depends on the column's domain: an unknown value can only sit in a row that no
+-- reader maps to a switch (the read path drops it), so the blast radius of a bad value is a
+-- dead row, never a wrong verdict — and the default stays ON.
 --
 -- ── WRITE POSTURE: SERVICE ROLE ONLY ── (the `knowledge_base_stars` precedent, 20260812130000)
 -- Every read and write goes through the route on `supabaseAdmin()`, scoped to the caller's id.
@@ -28,7 +40,9 @@
 CREATE TABLE IF NOT EXISTS public.notification_preferences (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  event_type  TEXT NOT NULL CHECK (event_type IN ('mention', 'decision', 'direct_message', 'approval')),
+  -- No enumerated CHECK: the registry in code is the list (see the header). NOT NULL and
+  -- non-empty is the whole domain, so a new event never needs a migration.
+  event_type  TEXT NOT NULL CHECK (length(event_type) > 0 AND length(event_type) <= 64),
   channel_id  UUID NULL REFERENCES public.channels(id) ON DELETE CASCADE,
   enabled     BOOLEAN NOT NULL,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()

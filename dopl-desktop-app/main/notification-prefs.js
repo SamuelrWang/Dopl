@@ -1,32 +1,47 @@
-// NOTIFICATION PREFERENCES — THIS MAC'S RECORD, AND THE BANNER GATE THAT READS IT (2026-10-09,
-// KB dopl-development "Notifications Audit 2026-10-08"). The profile popup's Notifications tab
-// writes it over `notifications:get/setPrefs` (channel-dir-ipc.js); the passive banners
-// (`trigger.js › sendFyi`, `task-notify.js › notifyTaskReply`) ask `allowsMessage` before
-// showing anything.
+// NOTIFICATION PREFERENCES — THE OPERATOR'S ACCOUNT RECORD, AND THE BANNER GATE THAT READS IT
+// (2026-10-09, KB dopl-development "Notifications Audit 2026-10-08"). The profile popup's
+// Notifications tab writes it over `/api/user/notification-preferences`; the passive banners
+// (`trigger.js › sendFyi`, `task-notify.js › notifyTaskReply`) ask `allowsMessage` before showing
+// anything.
 //
-// ⚠ LOCAL ELECTRON-STORE, NOT SERVER STATE, FOR NOW. The spec wants one server record per user
-// (migration 20261117120000_notification_preferences.sql is written, not applied: Samuel's
-// call). Until then the record lives here, which is also where every banner it governs is
-// raised. When the server table lands this module's READ moves to the API; the gate's callers
-// do not change.
+// ⚠ THE RECORD IS THE ACCOUNT'S, NOT THIS MAC'S (Samuel, 2026-10-09). One setting per user,
+// honored by every computer they sign in on, served by the route above
+// (`src/features/notifications/server/repository.ts`, table `notification_preferences`).
+//
+// ⚠ AND THERE IS NO LOCAL COPY — NOTHING WAS MIGRATED AND NOTHING FALLS BACK. This module used
+// an electron-store key (`notificationPrefs`) for one afternoon, in a build that never shipped
+// (the tab landed after v1.39.0; v1.40.0 is untagged and unpushed), so no installed app ever
+// wrote one. A second copy on disk could only disagree with the account, so there is none.
+//
+// ⚠ THE GATE IS SYNCHRONOUS AND NEVER AWAITS. Both call sites are plain sync functions on the
+// listener's drain path, where a round trip would stall the loop that is reading messages. So the
+// account record is CACHED in memory and refreshed in the BACKGROUND: `allowsMessage` reads the
+// cache and nothing else. A switch flipped on THIS machine pokes `refresh(true)` through
+// `notifications:refreshPrefs` (channel-dir-ipc.js), so it lands on the next banner; one flipped
+// on another computer lands within `TTL_MS`.
+//
+// ⚠ DEFAULT ON, AND EVERY FAILURE READS ON — no record yet, signed out, a 503 while the table is
+// unapplied, a dead network. The cache simply stays empty and the gate answers the defaults. An
+// unreadable record must not quietly mute the operator: a banner nobody asked to silence is
+// recoverable, a silenced one is not noticed.
 //
 // ⚠ IT CAN ONLY SILENCE A BANNER, NEVER RAISE ONE, AND NEVER CHANGE A VERDICT. A banner it
 // suppresses still has its durable record (the Tags inbox, the thread itself); no route, consent
-// row or spawn reads this file.
-//
-// ⚠ DEFAULT ON, AND EVERY FAILURE READS ON. An unreadable store must not quietly mute the
-// operator: a banner nobody asked to silence is recoverable, a silenced one is not noticed.
+// row or spawn reads this module.
 //
 // ⚠ `approval` IS ALWAYS ON. Every approval banner carries the ONE button that answers it
-// (`notify-action.js`), so those call sites are not gated at all; the key is forced on here so
-// the tab and the record can never disagree about it.
+// (`notify-action.js`), so those call sites are not gated at all; the key is forced on at every
+// read here so the tab, the server and the gate can never disagree about it.
 
-const Store = require('electron-store');
+const PREFS_PATH = '/api/user/notification-preferences';
+// Bounds the BACKGROUND read only — no banner waits on it.
+const REFRESH_TIMEOUT_MS = 5000;
+// How stale the cache may get: a switch flipped on another computer lands within this.
+const TTL_MS = 60000;
+// One read per this window at most, so a signed-out or offline app does not fetch per banner.
+const RETRY_FLOOR_MS = 10000;
 
-const store = new Store();
-const KEY = 'notificationPrefs';
-
-// ─── BEGIN NOTIFICATION-PREFS PURE (no store, no electron; sliced by the tests) ───
+// ─── BEGIN NOTIFICATION-PREFS PURE (no network, no electron; sliced by the tests) ───
 // Restated from src/features/notifications/registry.ts › NOTIFICATION_EVENT_IDS. Keep in sync.
 const EVENT_IDS = ['mention', 'decision', 'direct_message', 'approval'];
 const LOCKED_ON = ['approval'];
@@ -71,23 +86,60 @@ function allowsIn(prefs, eventId) {
 }
 // ─── END NOTIFICATION-PREFS PURE ───
 
-function getPrefs() {
-  try {
-    return normalizePrefs(store.get(KEY));
-  } catch (_err) {
-    return defaultPrefs();
-  }
+// The account record as last read, and when. `null` = never read successfully, which the gate
+// answers as the defaults (ON).
+let cached = null;
+let cachedAt = 0;
+let nextTryAt = 0;
+let inFlight = null;
+
+async function fetchPrefs() {
+  const res = await require('./api').apiFetch(PREFS_PATH, {
+    method: 'GET',
+    timeoutMs: REFRESH_TIMEOUT_MS,
+    noStore: true,
+  });
+  // A 404 (older deployment) and a 503 (`NOT_AVAILABLE`, table not applied) are not errors worth
+  // distinguishing here: both mean "no record to honor", which is every banner on.
+  if (!res || !res.ok) throw new Error(res ? `HTTP ${res.status}` : 'no response');
+  const body = await res.json();
+  return normalizePrefs(body && body.prefs);
 }
 
-/** Writes the normalized record; answers `{ ok, prefs }` with what the store now holds. */
-function setPrefs(raw) {
-  const next = normalizePrefs(raw);
-  try {
-    store.set(KEY, next);
-  } catch (_err) {
-    return { ok: false, prefs: getPrefs() };
-  }
-  return { ok: true, prefs: getPrefs() };
+/**
+ * Reads the account record into the cache. Fire-and-forget, deduped, NEVER throws and never
+ * clears a good cache on failure.
+ * @param {boolean} [force] ignore the retry floor (the operator just changed a switch here).
+ * @returns {Promise<Object|null>} the record, or null when this attempt did not produce one.
+ */
+function refresh(force) {
+  if (inFlight) return inFlight;
+  const now = Date.now();
+  if (!force && now < nextTryAt) return Promise.resolve(null);
+  nextTryAt = now + RETRY_FLOOR_MS;
+  const run = fetchPrefs()
+    .then((prefs) => {
+      cached = prefs;
+      cachedAt = Date.now();
+      return prefs;
+    })
+    .catch((err) => {
+      try {
+        require('./diag').diag('notification prefs: not read —', (err && err.message) || 'error',
+          '— every banner stays on');
+      } catch (_) { /* best-effort */ }
+      return null;
+    });
+  inFlight = run;
+  // `run` already swallowed its own failure, so this only clears the de-dupe latch.
+  void run.finally(() => { if (inFlight === run) inFlight = null; });
+  return run;
+}
+
+/** The cached account record, or the defaults. Kicks a background read when stale. */
+function getPrefs() {
+  if (!cached || Date.now() - cachedAt > TTL_MS) void refresh();
+  return cached || defaultPrefs();
 }
 
 /** The gate: may a passive banner about this message show? Never throws, fails toward ON. */
@@ -106,6 +158,6 @@ module.exports = {
   eventForMessage,
   allowsIn,
   getPrefs,
-  setPrefs,
+  refresh,
   allowsMessage,
 };

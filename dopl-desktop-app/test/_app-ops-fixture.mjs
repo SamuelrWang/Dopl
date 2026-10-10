@@ -71,11 +71,14 @@ export const APP_OPS = [
   "dictation.start",
   "dictation.stop",
   "getAuthState",
-  // 2026-10-09 (Notifications tab): `notifications.get/set` — appWindowOnly, no id, shape-gated.
-  // The record can only mute this Mac's PASSIVE banners (mention / decision / direct message);
-  // approvals are forced on and no verdict, route or spawn reads it (`main/notification-prefs.js`).
-  "notifications.get",
-  "notifications.set",
+  // 2026-10-09 (Notifications tab): `notifications.refresh` — appWindowOnly, no id, and NO VALUE
+  // CROSSES IT. The switches are the operator's ACCOUNT record (written straight to
+  // `/api/user/notification-preferences`); this only tells main to re-read its banner-gate cache
+  // now instead of after its TTL. ⚠ The `get`/`set` pair was REMOVED the same day the record left
+  // this Mac — if a future main stores prefs locally again, that pair is what has to come back.
+  // The record can only mute PASSIVE banners (mention / decision / direct message); approvals are
+  // forced on and no verdict, route or spawn reads it (`main/notification-prefs.js`).
+  "notifications.refresh",
   "onAuthState",
   "onNavigate",
   "onSyncEvent",

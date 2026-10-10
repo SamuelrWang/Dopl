@@ -159,14 +159,15 @@ function register(opts = {}) {
     return agentDefaults.seedChannel(p.channelId);
   }));
 
-  // Notification preferences (`notification-prefs.js`, 2026-10-09): machine-user scoped, no id. A
-  // forged `set` can only mute or unmute this Mac's PASSIVE banners; approvals are forced on and no
-  // verdict, route or spawn reads the record. The shape gate stands in for the UUID gate.
-  ipcMain.handle('notifications:getPrefs', appWindowOnly('getNotificationPrefs', null, () => notificationPrefs().getPrefs()));
-  ipcMain.handle('notifications:setPrefs', appWindowOnly('setNotificationPrefs', { ok: false }, (_event, payload) => {
-    const p = payload || {};
-    if (!p.prefs || typeof p.prefs !== 'object' || Array.isArray(p.prefs)) return { ok: false };
-    return notificationPrefs().setPrefs(p.prefs);
+  // Notification preferences (`notification-prefs.js`, 2026-10-09): the record is the ACCOUNT's and
+  // the panel writes it straight to `/api/user/notification-preferences`. Main keeps a read cache
+  // for its banner gate, and this op is the panel saying "I just changed it, re-read now" instead
+  // of leaving the gate on a stale copy until the TTL.
+  // ⚠ IT CARRIES NO VALUES AND NEEDS NO SHAPE GATE: the one thing a forged call can do is make
+  // main re-read the operator's OWN record over their own credential. The payload is ignored.
+  ipcMain.handle('notifications:refreshPrefs', appWindowOnly('refreshNotificationPrefs', { ok: false }, async () => {
+    await notificationPrefs().refresh(true);
+    return { ok: true };
   }));
 
   // The two MACHINE-WIDE orchestrator consents (launch over MCP; direct a running agent). This pair

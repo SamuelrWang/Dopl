@@ -44,10 +44,11 @@ export function normalizeNotificationPrefs(raw: unknown): NotificationPrefs {
 }
 
 /**
- * WHERE THE RECORD LIVES — the seam the tab is built behind. Two backends exist:
- * `./stores/desktop-store.ts` (this Mac's local store, over the desktop bridge) and
- * `./stores/api-store.ts` (the server table, per user, every device). Which one a surface
- * mounts is the binding's decision; the panel only ever sees this interface.
+ * WHERE THE RECORD LIVES — the seam the tab is built behind. One backend:
+ * `./stores/api-store.ts` (the server table, one record per user, honored on every device),
+ * mounted by `settings-modal/sections/notifications-section-core.tsx`. The local desktop store
+ * was deleted when the record moved to the account (2026-10-09); the panel only ever sees this
+ * interface, which is why that swap moved no reader.
  */
 export interface NotificationPrefsStore {
   /** The stored record, or the defaults. Rejects only when the backend is unreachable. */

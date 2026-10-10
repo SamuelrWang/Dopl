@@ -376,6 +376,13 @@ if (!gotLock) {
       openChannel: navigateToChannels,
     });
 
+    // The operator's banner switches are on their ACCOUNT now (`main/notification-prefs.js`), and
+    // the gate that reads them is synchronous, so it answers from a cache. Warm it HERE, right
+    // after the thing that raises the banners starts: without this the first mention of a session
+    // is judged on the defaults (every banner ON), which is the safe direction but not the
+    // operator's answer. Fire-and-forget — `refresh` never throws and never blocks a banner.
+    void require('./notification-prefs').refresh(true);
+
     // ── THE ORCHESTRATOR LAUNCH LANE (2026-08-22, Samuel's launch-over-MCP ruling) ─────────
     //
     // ⚠ ARMED AFTER `listener.start`, AND THE ORDER IS LOAD-BEARING IN ONE DIRECTION. It binds

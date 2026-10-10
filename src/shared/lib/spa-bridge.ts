@@ -118,14 +118,16 @@ export interface SpaBridgeSurface {
     set(enabled: boolean): Promise<{ ok: boolean; reason?: string; enabled?: boolean }>;
   };
   /**
-   * NOTIFICATION PREFERENCES — THIS MAC'S RECORD (`main/notification-prefs.js`, 2026-10-09). One
-   * on/off per registry event (`@/features/notifications/registry`); the banner gate reads the
-   * same store in process. `set` answers main's own normalized record (`ok: false` = not stored,
-   * so the panel reverts). Feature-detect both members.
+   * NOTIFICATION PREFERENCES — THE ACCOUNT'S RECORD, so NO VALUE CROSSES HERE (2026-10-09). The
+   * panel reads and writes `/api/user/notification-preferences` directly
+   * (`@/features/notifications/stores/api-store`); the desktop's banner gate
+   * (`main/notification-prefs.js`) reads that same record through a short cache, because the gate
+   * is synchronous. `refresh` is the panel telling main to re-read it NOW, so a switch flipped
+   * here lands on the next banner rather than after the TTL. Best-effort: feature-detect it, and
+   * a refusal costs nothing (the gate catches up on its own).
    */
   notifications?: {
-    get(): Promise<unknown>;
-    set(prefs: unknown): Promise<{ ok: boolean; prefs?: unknown }>;
+    refresh(): Promise<{ ok: boolean }>;
   };
   /**
    * DOPL'S OWN RUNTIME CREDENTIALS (`main/runtime-credentials.js`). `signIn` runs one runtime's in-app

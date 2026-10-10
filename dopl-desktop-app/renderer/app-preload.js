@@ -165,16 +165,11 @@ contextBridge.exposeInMainWorld('dopl', {
     applyAgentDefaults: (channelId) => ipcRenderer.invoke('channels:applyAgentDefaults', { channelId: asId(channelId) }),
   },
 
-  // Notification preferences (`main/notification-prefs.js`): this Mac's banner switches, one
-  // boolean per registry event. Only the `events` booleans cross; main re-normalizes the record.
+  // Notification preferences (`main/notification-prefs.js`): the banner switches are the ACCOUNT's
+  // and the panel writes them over the API, so NO VALUE crosses this bridge. `refresh` only tells
+  // main to re-read the record now, so its banner gate stops answering from a stale cache.
   notifications: {
-    get: () => ipcRenderer.invoke('notifications:getPrefs'),
-    set: (prefs) => {
-      const events = {};
-      const src = prefs && typeof prefs === 'object' && prefs.events && typeof prefs.events === 'object' ? prefs.events : {};
-      for (const k of Object.keys(src)) if (typeof src[k] === 'boolean') events[String(k)] = src[k];
-      return ipcRenderer.invoke('notifications:setPrefs', { prefs: { v: 1, events: events } });
-    },
+    refresh: () => ipcRenderer.invoke('notifications:refreshPrefs'),
   },
 
   // The two orchestrator consents: `orchestratorLaunch` (may another agent make this machine SPAWN a

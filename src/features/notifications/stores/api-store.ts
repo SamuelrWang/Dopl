@@ -10,10 +10,13 @@ import {
 export const NOTIFICATION_PREFS_PATH = "/api/user/notification-preferences";
 
 /**
- * THE SERVER BACKEND — one record per user, every device. ⚠ NOT MOUNTED BY ANY BINDING YET:
- * its table is migration 20261117120000_notification_preferences.sql, written but not applied
- * (pending Samuel's call, 2026-10-09). Swapping a binding to this store is the whole change once
- * it is applied; the desktop banner gate would then read the same route.
+ * THE SERVER BACKEND, AND THE ONLY ONE — one record per user, honored on every device. MOUNTED
+ * by `settings-modal/sections/notifications-section-core.tsx`; the desktop's banner gate reads
+ * this same route through a short cache (`dopl-desktop-app/main/notification-prefs.js`).
+ *
+ * ⚠ ITS TABLE IS NOT APPLIED YET (migration 20261117120000, Samuel's call). Until it is, the
+ * route answers 503 and `load` rejects, which the panel shows as "could not load" — and every
+ * banner keeps showing, because the gate defaults ON. Nothing is stored and nothing is silenced.
  */
 export function apiNotificationPrefsStore(): NotificationPrefsStore {
   return {
