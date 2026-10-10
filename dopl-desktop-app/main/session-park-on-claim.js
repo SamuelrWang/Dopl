@@ -87,22 +87,11 @@ function sessionsToStop(liveSessions, newlyShared) {
   );
 }
 
-/**
- * What the operator is told. ONE notice per container per arrival, naming the count rather than
- * the person — the peer's display name is not on the workspace row this ran off, and inventing a
- * second read to fetch it would put a name in a banner the operator can already see in the
- * channel.
- */
-function claimNotice(count) {
-  const n = Number(count) || 0;
-  return {
-    title: 'Someone joined this channel',
-    body:
-      n === 1
-        ? 'A person just joined a channel your agent was working in, so that session was ended. Start a new one and it will only reach knowledge you have shared into the channel.'
-        : `A person just joined a channel ${n} of your agent sessions were working in, so those sessions were ended. Start new ones and they will only reach knowledge you have shared into the channel.`,
-  };
-}
+// `claimNotice` wrote the banner's copy and is GONE with it (Samuel's spec, 2026-10-09): the
+// count, and the line telling the operator a new session only reaches knowledge shared into the
+// channel. Nothing else called it. ⚠ THAT SCOPE WARNING NOW HAS NO NOTIFICATION CARRYING IT —
+// the Agents tab shows the sessions ended, not why a new one sees less. If that turns out to
+// matter it belongs in the Agents tab, not in a re-added banner.
 
 // ─── END PARK-ON-CLAIM-PURE ────────────────────────────────────────────────
 
@@ -146,29 +135,17 @@ function noteWorkspaces(workspaces, diag) {
       }
     }
     log('park-on-claim: container(s) gained a peer —', newly.length, 'container(s),', ended, 'session(s) ended');
-    if (ended > 0) notifyOperator(ended, log);
+    // ⚠ NO BANNER (Samuel's spec, 2026-10-09 — KB dopl-development "Notification Spec Samuel
+    // 2026-10-09"). "My sessions ended because a peer joined" is not on his list. The fact keeps
+    // the durable surface it always had — the ended pills in the Agents tab — plus this log line.
   } catch (err) {
     log('park-on-claim: pass failed —', (err && err.message) || err);
   }
   return ended;
 }
 
-/**
- * ⚠ A BANNER IS NEVER LOAD-BEARING (`notify-action.js`'s standing rule), and this one has no
- * durable surface behind it beyond the ended pills the Agents tab already shows. It carries NO
- * action button — there is nothing for the operator to decide, the sessions are already gone —
- * so it is the passive shape (`task-notify.js`'s), not the actionable one.
- */
-function notifyOperator(count, log) {
-  try {
-    const { Notification } = require('electron');
-    if (!Notification || !Notification.isSupported()) return;
-    const { title, body } = claimNotice(count);
-    new Notification({ title: title, body: body, silent: true }).show();
-  } catch (err) {
-    log('park-on-claim: notification failed —', err && err.message);
-  }
-}
+// `notifyOperator` raised the banner and is GONE (Samuel's spec, 2026-10-09). This module now
+// ends sessions and logs; it raises nothing, and `electron` is no longer required anywhere in it.
 
 /** Test seam: drop the memo so a suite can replay a cold start. */
 function resetForTests() {
@@ -178,7 +155,6 @@ function resetForTests() {
 module.exports = {
   newlySharedContainers,
   sessionsToStop,
-  claimNotice,
   noteWorkspaces,
   resetForTests,
 };

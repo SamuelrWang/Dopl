@@ -68,9 +68,10 @@ const AUTH_HELD_REPLY =
 // Claude Code on this machine). ⚠ It says the request was NOT answered and it does NOT invite a
 // resend, which is what separates it from RESEND above: `busy` frees itself as soon as a session
 // ends, and these do not — a resend into a spent cap or a missing runtime fails identically.
-// ⚠ NO LOCAL DETAIL. Which of the two it was, and what the operator should do about it, is the
-// LOCAL notification's job (`trigger.js › skippedHint`); the peer is told the outcome and
-// nothing about this machine.
+// ⚠ NO LOCAL DETAIL, AND NOW THERE IS NO LOCAL COPY AT ALL. Which of the two it was used to be
+// the operator's own banner (`trigger.js › skippedHint`), removed 2026-10-09 with the rest of the
+// unanswered-request notice per Samuel's spec. THIS line is now the only thing anyone is told,
+// which is the right way round: the peer is the one waiting. It still names no machine state.
 const CANNOT_RUN =
   "I couldn't pick this up — my agent isn't able to run it right now. Try me again later, or reach me another way.";
 

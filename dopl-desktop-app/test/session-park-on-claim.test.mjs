@@ -97,15 +97,17 @@ test("nothing newly shared selects nothing, and a session with no channel is ski
 });
 
 // ── what the operator is told ───────────────────────────────────────────────
+//
+// NOTHING, as of 2026-10-09. "My sessions ended because a peer joined" is not on Samuel's
+// notification list (KB dopl-development "Notification Spec Samuel 2026-10-09"), so the banner
+// and its copy builder (`claimNotice`) are both gone, and the test that pinned that copy with
+// them. The sessions still END — that is asserted above and below — and the Agents tab still
+// shows them ended. This module no longer raises anything, which the next test pins.
 
-test("the notice says what happened and what to do, and names NO person", () => {
-  const one = P.claimNotice(1);
-  assert.match(one.body, /joined/);
-  assert.match(one.body, /ended/);
-  // ⚠ The peer's name is not on the workspace row this ran off, and a second read to fetch one
-  // would put a name in a banner the operator can already see in the channel itself.
-  assert.doesNotMatch(one.body + one.title, /@|\bname\b/i);
-  assert.match(P.claimNotice(3).body, /3 of your agent sessions/);
+test("the module raises no notification at all", () => {
+  const src = readFileSync(M("session-park-on-claim.js"), "utf8").replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(src, /new Notification/, "ending a session is not an alert any more");
+  assert.doesNotMatch(src, /require\(['"]electron['"]\)/, "and it needs no window layer to do it");
 });
 
 // ── the wiring ──────────────────────────────────────────────────────────────

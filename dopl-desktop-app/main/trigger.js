@@ -12,7 +12,7 @@ const sessionEngine = require('./session-engine');
 const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
 const { buildActionNotification } = require('./notify-action');
-const { postCourtesy, notifyLocal } = require('./channel-post');
+const { postCourtesy } = require('./channel-post');
 const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
 const outcomes = require('./trigger-outcomes');
 const { AUTH_HELD_REPLY, RESEND, CANNOT_RUN } = outcomes; // the peer-facing courtesy replies
@@ -165,20 +165,19 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
   }
   const skipped = (res && res.skipped) || 'unknown';
   diag('responder session skipped:', skipped, '— answering the peer');
-  notifyLocal(
-    skipped === 'cap' ? 'Dopl: session limit reached' : 'Dopl: cannot run this request',
-    `"${entry.channel.name}" was not answered. ${skippedHint(skipped)}`
-  );
+  // ⚠ NO LOCAL BANNER HERE ANY MORE (Samuel's spec, 2026-10-09 — KB dopl-development
+  // "Notification Spec Samuel 2026-10-09"). "A request to me went unanswered" is not on his list,
+  // so it raises nothing. The FACT IS NOT LOST: `postCourtesy` below tells the peer in the
+  // channel, which is the surface that matters — they are the one waiting — and `diag` above
+  // keeps it for a log read. Do not re-add a notification here without a ruling.
   await postCourtesy(entry, m, CANNOT_RUN); // P1-5: a no-op must not trigger the peer
   return true;
 }
 
-// The LOCAL half of the notice (may name this machine's state); the peer's copy may not. Vendor-free:
-// it has only a skip code, no runtime to name.
-function skippedHint(skipped) {
-  if (skipped === 'cap') return 'Too many agents are already running here — end one and ask them to resend.';
-  if (skipped === 'no-sdk') return 'No agent runtime is available on this machine.';
-  return 'The agent could not be started.';
-}
+// `skippedHint` lived here and is GONE with the local banner it wrote (Samuel's spec,
+// 2026-10-09): it was the operator-facing half of the unanswered-request notice — which of `cap`
+// / `no-sdk` it was and what to do about it. Nothing else called it. The PEER's half is
+// untouched and still vendor-free (`trigger-outcomes.js › CANNOT_RUN`), and the skip code is
+// still in `diag` above. Re-adding the hint means re-adding a notification, which needs a ruling.
 
 module.exports = { handleTrigger, sendFyi, notifyAsk, launchResponderSession };

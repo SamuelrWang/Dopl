@@ -234,15 +234,16 @@ test("nothing restarts on its own: no dialog answer, no install", async () => {
   assert.equal(h.seen.installs, 0, "only an explicit click may kill a live agent turn");
 });
 
-test("with a session LIVE the modal is not thrown over it, and the copy names it", async () => {
+test("with a session LIVE nothing is thrown over it, and the tray is the only announcement", async () => {
   const h = harness({ sessions: [{ channelName: "Design", status: "running" }] });
   h.autoUpdater.emit("update-downloaded", { version: "1.7.19" });
   await flush();
   assert.equal(h.seen.dialogs.length, 0, "a modal on top of a running turn is the interruption");
   assert.equal(h.seen.installs, 0);
-  const banner = h.seen.notifications[0].opts;
-  assert.equal(banner.title, "Dopl update ready");
-  assert.match(banner.body, /1 session is running right now \(Design\)/);
+  // ⚠ AND NO BANNER EITHER, since 2026-10-09 (Samuel's spec). With the modal suppressed AND the
+  // banner gone, the tray item is the whole announcement on a machine running agents — the one
+  // real cost of that ruling, pinned here so it is not rediscovered as a bug.
+  assert.equal(h.seen.notifications.length, 0);
   // The operator can still get there in one click, and THAT prompt warns.
   h.updater.requestRestart();
   await flush();
@@ -273,8 +274,8 @@ test("the auto prompt fires at most once, and two clicks cannot stack two dialog
   h.autoUpdater.emit("update-downloaded", { version: "1.7.19" });
   h.autoUpdater.emit("update-downloaded", { version: "1.7.20" });
   await flush();
-  assert.equal(h.seen.dialogs.length, 1, "one banner, one prompt per run");
-  assert.equal(h.seen.notifications.length, 1);
+  assert.equal(h.seen.dialogs.length, 1, "one prompt per run, however many builds land");
+  assert.equal(h.seen.notifications.length, 0, "and no banner at all (spec, 2026-10-09)");
   // Single-flight: promptRestart while one is open is a no-op, not a second modal.
   const first = h.updater.promptRestart();
   h.updater.promptRestart();
@@ -282,20 +283,19 @@ test("the auto prompt fires at most once, and two clicks cannot stack two dialog
   await first;
 });
 
-test("the banner offers a restart action AND opens the prompt when clicked", async () => {
-  // macOS only RENDERS notification action buttons in alert style (a per-user
-  // System Settings choice), so the action is a bonus and the body click is the
-  // path that always works. Both come back through the same guarded restart.
+/**
+ * This test used to drive the banner's two restart paths — its "Restart now" action button and a
+ * click on its body, both of which came back through the same guarded restart. The banner is GONE
+ * (Samuel's spec, 2026-10-09), so what is left to pin is that the update NEVER raises one and
+ * that the remaining route is still guarded. The guard itself is covered by "the tray click
+ * restarts straight away" and "requestRestart with nothing staged" above.
+ */
+test("a downloaded update raises no notification, and restarts nothing on its own", async () => {
   const h = harness({ sessions: [{ channelName: "Design" }] });
   h.autoUpdater.emit("update-downloaded", { version: "1.7.19" });
-  const n = h.seen.notifications[0];
-  assert.deepEqual(n.opts.actions, [{ type: "button", text: "Restart now" }]);
-  assert.equal(n.opts.silent, true);
-  assert.equal(n.shown, true);
-  n.handlers.click();
   await flush();
-  assert.equal(h.seen.dialogs.length, 1, "clicking the banner opens the prompt");
-  assert.equal(h.seen.installs, 0);
+  assert.equal(h.seen.notifications.length, 0, "no banner, on any path");
+  assert.equal(h.seen.installs, 0, "and nothing restarts without an explicit click");
 });
 
 test("a manual check with an update already staged goes straight to the prompt", async () => {

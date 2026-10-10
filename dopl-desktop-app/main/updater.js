@@ -48,7 +48,6 @@ let onReadyCb = null;
 let onNoteCb = null; // tray.setUpdateNote — the "what is the updater doing" line
 let onStateCb = null; // min-version gate — see updateState() below
 let getLiveSessions = null; // injected: sessionEngine.listLiveSessions
-let notified = false;
 let downloading = false;
 let manualPending = false; // a manual check is in flight -> failures ARE surfaced
 let promptOpen = false; // single-flight: never two restart dialogs
@@ -233,10 +232,10 @@ function init(opts) {
       try { onReadyCb(readyVersion); } catch (_) { /* tray may be gone */ }
     }
     const sessions = liveSessions();
-    if (!notified) {
-      notified = true;
-      showDownloadedNotification(readyVersion, sessions);
-    }
+    // ⚠ NO BANNER (Samuel's spec, 2026-10-09 — KB dopl-development "Notification Spec Samuel
+    // 2026-10-09"). "App update ready" is not on his list. The announcement is NOT lost: the
+    // TRAY ITEM carries it on every path (`onReadyCb` just above), and with no live session the
+    // restart dialog below still opens. What is gone is only the OS banner.
     // ITEM 1: the restart is one click away the moment the bits are on disk.
     // With a live session we do NOT throw a modal over a running agent turn:
     // the notification and the tray item carry it, and both routes come back
@@ -304,29 +303,20 @@ function checkOnFocus() {
   return true;
 }
 
-// The notification carries the announcement when the dialog is suppressed, and
-// survives being missed (a dialog behind another Space does not).
+// `showDownloadedNotification` raised the update-ready banner (with a "Restart now" action on
+// alert-style delivery) and is GONE (Samuel's spec, 2026-10-09 — "App update ready" is not on
+// his list). Its two restart paths, `requestRestart` and `promptRestart`, are untouched and are
+// still reached from the TRAY ITEM, which carries the announcement on every path.
 //
-// `actions` is accepted on darwin in Electron 43, but macOS only RENDERS the
-// button when the notification is delivered as an alert (a per-user System
-// Settings choice; in banner style it appears on hover at best). So it is a
-// bonus path, never the load-bearing one: the dialog and the tray item are.
-// Clicking the banner body works everywhere and opens the same prompt.
-function showDownloadedNotification(version, sessions) {
-  try {
-    if (!Notification.isSupported()) return;
-    const copy = policy.downloadedNotification({ version, sessions });
-    const n = new Notification({
-      title: copy.title,
-      body: copy.body,
-      silent: true,
-      actions: [{ type: 'button', text: 'Restart now' }],
-    });
-    n.on('action', () => requestRestart());
-    n.on('click', () => promptRestart());
-    n.show();
-  } catch (_) { /* best-effort */ }
-}
+// ⚠ ONE THING THE BANNER DID THAT NOTHING ELSE DOES: it survived being MISSED. A dialog behind
+// another Space does not, and with a live session the dialog is deliberately suppressed
+// (`update-policy.js:235-239`). So on a machine running agents the tray item is now the whole
+// announcement, and a restart waits until the operator happens to look at it. That is the
+// ruling's cost, recorded here rather than discovered later.
+//
+// ⚠ `policy.downloadedNotification` (update-policy.js) wrote this copy and now has no caller.
+// LEFT IN PLACE DELIBERATELY: it is a pure exported helper in another module with its own test
+// suite, so deleting it is a separate decision, not part of turning a banner off.
 
 // ITEM 3: the manual check. Called from the tray, and never a no-op click: every
 // path here ends in a note the operator can read (checking / up to date /

@@ -154,7 +154,11 @@ test("NEVER auto-restarts: the operator decides when a live session may die", ()
   }
   // Everything else in the module — including the event handlers and the
   // interval — must be unable to reach it.
-  const bodies = ["init", "check", "showDownloadedNotification", "checkNow"];
+  // ⚠ `showDownloadedNotification` was in this list until 2026-10-09 and is GONE with the
+  // update-ready banner (Samuel's spec). Removed from the list ON PURPOSE: `fnOf` returns nothing
+  // for a function that does not exist, so the regex would be false and this assertion would
+  // keep PASSING while testing nothing at all.
+  const bodies = ["init", "check", "checkNow"];
   for (const name of bodies) {
     assert.equal(
       /quitAndInstall\(\)/.test(fnOf(UPDATER, name)),
@@ -170,12 +174,20 @@ test("NEVER auto-restarts: the operator decides when a live session may die", ()
   }
 });
 
-test("the notification says what the operator has to DO about it", () => {
+/**
+ * ⚠ THE UPDATE-READY BANNER IS GONE (Samuel's spec, 2026-10-09 — "App update ready" is not on
+ * his list), so the two assertions that pinned the updater's USE of this copy (`silent: true`,
+ * `if (!notified)`) went with it. The copy BUILDER is still here and still correct; it just has
+ * no caller, pending a cleanup decision. What carries the announcement now is the tray item.
+ */
+test("the update-ready copy still says what the operator has to DO about it", () => {
   const { title, body } = POLICY.downloadedNotification({ version: "1.7.19" });
   assert.equal(title, "Dopl update ready");
   assert.match(body, /^Version 1\.7\.19 is downloaded\./);
   assert.match(body, /restart Dopl/i);
   assert.match(body, /keeps running the old build/, "names the consequence of doing nothing");
-  assert.match(UPDATER, /silent: true/, "quiet: news, not a decision prompt");
-  assert.match(UPDATER, /if \(!notified\) \{/, "one banner per run, never a nag");
+});
+
+test("and the updater raises no banner for it", () => {
+  assert.doesNotMatch(UPDATER, /new Notification/, "the announcement is the tray item's job now");
 });
