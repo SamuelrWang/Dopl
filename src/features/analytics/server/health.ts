@@ -1,11 +1,16 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { clippedAt, effectiveCeiling, type Clipped } from "@/shared/supabase/max-rows";
+import { MCP_CALL_ROWS } from "./mcp-tool-calls";
 
 /**
  * Admin health aggregation. All queries run on-demand at /admin/health — no
- * cron, no stored alert state; everything derives from raw system_events and
- * mcp_events. Thresholds live in code.
+ * cron, no stored alert state; everything derives from raw `system_events` and
+ * `mcp_tool_calls`. Thresholds live in code.
+ *
+ * ⚠ **`mcp_events` IS NO LONGER READ HERE** — it has had no writer since
+ * 2026-07-17, so the MCP panel reported zeros for three months. The table is
+ * left in place (its drop is a db-cleanup task); see {@link McpHealth}.
  *
  * 🔒 **ALL THREE READS WERE GROUP-BYs RUN IN JS OVER A SILENTLY CLIPPED SET
  * (Samuel #2935, the `max_rows` sweep).** `shared/supabase/max-rows.ts ›
@@ -40,22 +45,46 @@ export interface AlertGroup {
   last_seen: string;
 }
 
-export interface ExternalApiHealth {
-  name: string;
-  events_24h: number;
+/**
+ * SERVER ERRORS, GROUPED BY ROUTE TEMPLATE — renamed 2026-10-10, because this is
+ * what the data actually is.
+ *
+ * 🔒 **IT WAS `ExternalApiHealth`, KEYED ON A PROVIDER, AND BLANK IN PROD FOR
+ * TWO INDEPENDENT REASONS.** It filtered
+ * `category IN ('external_api','quota','auth','perf')` — **zero rows in 30 days,
+ * measured** — and keyed on a leading dotted segment, documented as
+ * `anthropic.messages`, while the logger writes HTTP routes like
+ * `POST /api/channels/sessions`. ⚠ **NOTHING HERE LOGS A PROVIDER TODAY**; that
+ * instrumentation is separate work, and naming a panel after data that does not
+ * exist is what kept the gap invisible.
+ */
+export interface RouteErrorGroup {
+  /** The route TEMPLATE — ids normalised out. See {@link routeOf}. */
+  route: string;
   errors_24h: number;
   criticals_24h: number;
   last_error_message: string | null;
   last_error_at: string | null;
 }
 
+/**
+ * MCP CALL VOLUME, last 24h. **One number, and that is the honest ceiling of
+ * what any live table can back.**
+ *
+ * 🔒 **IT CARRIED FOUR NUMBERS AND THREE WERE DELETED ON 2026-10-10.**
+ * `errors_24h`, `error_rate` and `p95_latency_ms` came off `mcp_events`
+ * (`response_status`, `latency_ms`), and that table has had **no writer since
+ * 2026-07-17** — 170 rows, nothing in any 24h window since, so this panel
+ * reported zeros for three months. The live table cannot back them:
+ * `mcp_tool_calls` is `(workspace_id, user_id, tool, op, is_write, created_at)`,
+ * no status, no latency, no error, and `system_events` carries no MCP-tagged
+ * error either. So they are DELETED rather than derived from something that does
+ * not measure them (Samuel, 2026-10-10: "don't fake").
+ * ⚠ **NO `truncated`**: a COUNTED read has no row to clip — see
+ * {@link getMcpHealth}.
+ */
 export interface McpHealth {
   calls_24h: number;
-  errors_24h: number;
-  error_rate: number;
-  p95_latency_ms: number | null;
-  /** ⚠ TRUE = every number above is a FLOOR. See {@link Clipped}. */
-  truncated: boolean;
 }
 
 export interface OverallStatus {
@@ -72,8 +101,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  *  comparing against this alone is how a floor reports itself complete. */
 const EVENT_SCAN_LIMIT = 5_000;
 
-/** The ask on the mcp_events haul. Same story — see {@link EVENT_SCAN_LIMIT}. */
-const MCP_SCAN_LIMIT = 10_000;
+/* ⚠ The `mcp_events` haul and its 10,000-row ask are GONE, not fixed: that
+   table has no writer (see {@link McpHealth}). `getMcpHealth` counts instead. */
 
 /** Postgres/PostgREST codes for "that function is not there" — the migration is
  *  not applied yet. ⚠ Expected: the degrade is the live path until it lands. */
@@ -87,8 +116,18 @@ type Severity = keyof typeof SEVERITY_RANK;
 const WARN_AND_ABOVE: Severity[] = ["warn", "error", "critical"];
 const ALL_SEVERITIES: Severity[] = ["info", "warn", "error", "critical"];
 
-/** Categories the external-API roll-up draws from. */
-const EXTERNAL_CATEGORIES = ["external_api", "quota", "auth", "perf"];
+/**
+ * The severities this panel is NAMED after.
+ *
+ * 🔒 **IT FILTERS ON SEVERITY AND DELIBERATELY NOT ON `category`.** The panel it
+ * replaces filtered four categories holding zero rows; today every error the
+ * logger writes lands in `category = 'other'` (426 rows / 30 days, measured).
+ * Pinning to `'other'` would be correct today and blank again the moment someone
+ * categorises properly — **a category filter is the exact fragility that made
+ * the old panel blank, so this read has none.** "Server errors" is a claim about
+ * severity.
+ */
+const ERROR_SEVERITIES: Severity[] = ["error", "critical"];
 
 function iso(msAgo: number): string {
   return new Date(Date.now() - msAgo).toISOString();
@@ -243,208 +282,166 @@ function sortAlertGroups(groups: AlertGroup[]): AlertGroup[] {
   );
 }
 
-/* -------------------------- external API health ------------------------- */
+/* ----------------------- server errors by route ------------------------- */
 
 /**
- * Events/errors/criticals per external API provider, last 24h, plus the newest
- * error's message. ⚠ Sources carry dotted or bracketed prefixes
- * (`anthropic.messages`, `anthropic[0]`) and the provider is the leading
- * segment — see {@link providerOf}; the SQL states both delimiters as a regex.
+ * SERVER ERRORS PER ROUTE TEMPLATE, last 24h, with the newest error's message —
+ * see {@link RouteErrorGroup} for why this replaced a provider panel that could
+ * never draw a row.
  */
-export async function getExternalApiHealth(): Promise<Clipped<ExternalApiHealth>> {
+export async function getServerErrorsByRoute(): Promise<Clipped<RouteErrorGroup>> {
   const since = iso(DAY_MS);
   const db = supabaseAdmin();
 
-  const { data: grouped, error } = await db.rpc("analytics_external_api_health", {
+  const { data: grouped, error } = await db.rpc("analytics_route_error_groups", {
     p_since: since,
-    p_categories: EXTERNAL_CATEGORIES,
+    p_severities: ERROR_SEVERITIES,
   });
 
   if (!error) {
-    const rows = ((grouped ?? []) as ExternalApiRpcRow[]).map((r) => ({
-      name: r.name,
-      events_24h: num(r.events_24h),
+    const rows = ((grouped ?? []) as RouteErrorRpcRow[]).map((r) => ({
+      route: r.route,
       errors_24h: num(r.errors_24h),
       criticals_24h: num(r.criticals_24h),
       last_error_message: r.last_error_message,
       last_error_at: r.last_error_at,
     }));
-    return { rows: sortProviders(rows), truncated: false };
+    return { rows: sortRoutes(rows), truncated: false };
   }
-  degrading("analytics_external_api_health", error);
+  degrading("analytics_route_error_groups", error);
 
   const { data } = await db
     .from("system_events")
-    .select("source, severity, message, created_at, category")
+    .select("source, severity, message, created_at")
     .gte("created_at", since)
-    .in("category", EXTERNAL_CATEGORIES)
+    .in("severity", ERROR_SEVERITIES)
     .order("created_at", { ascending: false })
     .limit(EVENT_SCAN_LIMIT);
 
-  const scan = clippedAt((data ?? []) as ExternalEventRow[], EVENT_SCAN_LIMIT);
-  return { rows: tallyProviders(scan.rows), truncated: scan.truncated };
+  const scan = clippedAt((data ?? []) as RouteEventRow[], EVENT_SCAN_LIMIT);
+  return { rows: tallyRoutes(scan.rows), truncated: scan.truncated };
 }
 
-interface ExternalEventRow {
+interface RouteEventRow {
   source: string | null;
   severity: string;
   message: string;
   created_at: string;
 }
 
-/** ⚠ {@link ExternalApiHealth} on the wire: the counts arrive as STRINGS. */
-type ExternalApiRpcRow = Pick<
-  ExternalApiHealth,
-  "name" | "last_error_message" | "last_error_at"
+/** ⚠ {@link RouteErrorGroup} on the wire: the counts arrive as STRINGS. */
+type RouteErrorRpcRow = Pick<
+  RouteErrorGroup,
+  "route" | "last_error_message" | "last_error_at"
 > &
-  Record<"events_24h" | "errors_24h" | "criticals_24h", number | string>;
+  Record<"errors_24h" | "criticals_24h", number | string>;
+
+/** Any UUID in a path segment. ⚠ The SQL states this pattern CHARACTER FOR
+ *  CHARACTER; the two must agree or the panel groups differently per path. */
+const UUID_IN_PATH =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 /**
- * 🔒 **THE PROVIDER KEY, AND THE SQL MIRRORS IT EXACTLY.** Split on `.` or `[`,
- * leading segment; a null or EMPTY source is `unknown`. ⚠ Two odd inputs are
- * pinned by test: `".foo"` keys as the EMPTY STRING, and `"anthropic[0]"` keys
- * as `anthropic` — the bracket is the delimiter a `split_part(…, '.', 1)`
- * translation silently drops, forking every indexed source into its own row.
+ * 🔒 **THE ROUTE TEMPLATE, AND THE SQL MIRRORS IT EXACTLY.** `source` is an HTTP
+ * route string (`POST /api/channels/<uuid>/await`) and the ids in it are the
+ * noise: measured 2026-10-10, 30 days of errors key as **35 raw sources but only
+ * 15 templates**, because thirteen of the top twenty were the same
+ * `/channels/:id/await` route under different channel ids. Grouping on the raw
+ * string makes a handful of real failures read as thirty-five one-off blips.
+ * ⚠ A null or EMPTY source is `unknown`, as the old key did.
  */
-export function providerOf(source: string | null | undefined): string {
-  return (source || "unknown").split(/[.\[]/)[0];
+export function routeOf(source: string | null | undefined): string {
+  return (source || "unknown").replace(UUID_IN_PATH, ":id");
 }
 
 /** The JS roll-up, kept as the degrade. ⚠ Newest-first in, as {@link groupAlerts}. */
-export function tallyProviders(rows: ExternalEventRow[]): ExternalApiHealth[] {
-  const byProvider = new Map<string, ExternalApiHealth>();
+export function tallyRoutes(rows: RouteEventRow[]): RouteErrorGroup[] {
+  const byRoute = new Map<string, RouteErrorGroup>();
   for (const row of rows) {
-    const provider = providerOf(row.source);
-    let entry = byProvider.get(provider);
+    const route = routeOf(row.source);
+    let entry = byRoute.get(route);
     if (!entry) {
       entry = {
-        name: provider,
-        events_24h: 0,
+        route,
         errors_24h: 0,
         criticals_24h: 0,
         last_error_message: null,
         last_error_at: null,
       };
-      byProvider.set(provider, entry);
+      byRoute.set(route, entry);
     }
-    entry.events_24h += 1;
-    if (row.severity === "error" || row.severity === "critical") {
-      entry.errors_24h += 1;
-      if (row.severity === "critical") entry.criticals_24h += 1;
-      if (!entry.last_error_at || row.created_at > entry.last_error_at) {
-        entry.last_error_at = row.created_at;
-        entry.last_error_message = row.message;
-      }
+    // ⚠ Every row reaching here is already `error` or `critical` — the read
+    // filters on severity, so there is no third arm to count separately. A
+    // `critical` is counted in BOTH columns, as the old roll-up did.
+    entry.errors_24h += 1;
+    if (row.severity === "critical") entry.criticals_24h += 1;
+    if (!entry.last_error_at || row.created_at > entry.last_error_at) {
+      entry.last_error_at = row.created_at;
+      entry.last_error_message = row.message;
     }
   }
-  return sortProviders(Array.from(byProvider.values()));
+  return sortRoutes(Array.from(byRoute.values()));
 }
 
-/** ⚠ `name` is the final tie-break for the same parity reason as {@link sortAlertGroups}. */
-function sortProviders(rows: ExternalApiHealth[]): ExternalApiHealth[] {
+/** ⚠ `route` is the final tie-break for the same parity reason as {@link sortAlertGroups}. */
+function sortRoutes(rows: RouteErrorGroup[]): RouteErrorGroup[] {
   return rows.sort(
     (a, b) =>
+      b.criticals_24h - a.criticals_24h ||
       b.errors_24h - a.errors_24h ||
-      b.events_24h - a.events_24h ||
-      a.name.localeCompare(b.name)
+      a.route.localeCompare(b.route)
   );
 }
 
 /* ------------------------------ MCP health ------------------------------ */
 
-/**
- * 🔒 **THE EXACT p95 INDEX, SHARED BY BOTH PATHS.** 0-based
- * `Math.floor(n * 0.95)` over the ASCENDING list of STRICTLY POSITIVE latencies —
- * `n` counts those, not the calls.
- *
- * ⚠ **`percentile_cont`/`percentile_disc` DO NOT COMPUTE THIS, WHICH IS WHY THE
- * SQL SPELLS OUT AN ARRAY SUBSCRIPT (`… + 1`, 1-based).** For n = 20 this picks
- * 0-based 19, the maximum; `percentile_disc(0.95)` picks 18 and
- * `percentile_cont` interpolates off the list entirely. Either would make the
- * RPC and this degrade disagree about identical data — the one failure a
- * fallback must not have. The migration argues the float parity and asserts it.
- */
-export function p95Index(positiveLatencyCount: number): number {
-  return Math.floor(positiveLatencyCount * 0.95);
-}
+/** De Morgan of `NOT (tool = 'channel' AND op LIKE 'await%')` — `dopl_channel`'s
+ *  await ops POLL, a row per tick. ⚠ A THIRD copy on purpose: the trade
+ *  `home/server/repository-overview.ts › EXCLUDE_AWAIT_POLLING` records, since §2
+ *  forbids importing another feature's repository. */
+const EXCLUDE_AWAIT_POLLING = "tool.neq.channel,op.not.like.await*";
 
 /**
- * MCP call volume, error rate and p95 latency, last 24h.
+ * MCP CALL VOLUME, last 24h — **counted, never hauled.**
  *
- * 🔒 **THIS WAS THE WORST OF THE THREE, BECAUSE THE CLIP WAS UNORDERED.** The
- * old read asked for {@link MCP_SCAN_LIMIT} rows with **no `ORDER BY` at all**,
- * so `max_rows` cut it to 1,000 rows Postgres may return in ANY permutation.
- * `calls_24h` was `data.length` — a hard 1,000 the moment the day held more —
- * and the p95 was a percentile of an arbitrary sample, so it was not even
- * CONSISTENTLY wrong: two refreshes could disagree with each other and neither
- * with the truth, which is why it never became a bug report.
+ * 🔒 **IT WAS THE WORST OF THE THREE AND IS NOW THE SAFEST, BY CHANGING SHAPE
+ * RATHER THAN BY GETTING AN AGGREGATE.** The old read asked `mcp_events` for
+ * 10,000 rows with **no `ORDER BY` at all**, so `max_rows` cut it to 1,000 rows
+ * Postgres could return in ANY permutation and `calls_24h` was `data.length` —
+ * not even CONSISTENTLY wrong, which is why it never became a bug report. And it
+ * was reading a DEAD TABLE throughout (see {@link McpHealth}).
  *
- * ⚠ **THE DEGRADE NOW ORDERS NEWEST-FIRST** — not exact, but a DEFINED floor
- * (the newest 1,000 calls) instead of a lottery.
+ * 🔒 **A COUNT NEEDS NO RPC, AND THAT IS THE POINT.** `max_rows` bounds the
+ * response BODY, never the `Content-Range` total, so `head: true` with
+ * `count: "exact"` is immune to this whole class of bug — the reason
+ * `home/server/repository-overview.ts › countMetricInWindow` is the sanctioned
+ * shape. **So `analytics_mcp_health` was written for the sweep and then deleted
+ * from the migration**: one fewer `SECURITY INVOKER` function to review.
+ *
+ * ⚠ **IT COUNTS THE LOOPBACK POPULATION, AND THE CHOICE IS MEASURED.**
+ * `mcp_tool_calls` holds loopback REQUESTS and the consume route's charged-call
+ * tally ({@link MCP_CALL_ROWS} prefix) — 4,094 and 2,266 in the 24h of
+ * 2026-10-10, so counting both would nearly double the figure by counting many
+ * calls twice. One MCP REQUEST is what `mcp_events` counted, so loopback is the
+ * honest continuation. Await-polling is excluded as every other reader excludes it.
  */
 export async function getMcpHealth(): Promise<McpHealth> {
-  const since = iso(DAY_MS);
-  const db = supabaseAdmin();
+  const { count, error } = await supabaseAdmin()
+    .from("mcp_tool_calls")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", iso(DAY_MS))
+    .or(EXCLUDE_AWAIT_POLLING)
+    .not("tool", "like", MCP_CALL_ROWS);
 
-  const { data: agg, error } = await db.rpc("analytics_mcp_health", {
-    p_since: since,
-  });
-
-  if (!error) {
-    // ⚠ One row, always: bare aggregates over an empty table still answer.
-    const row = ((agg ?? []) as McpHealthRpcRow[])[0];
-    return mcpHealth(
-      num(row?.calls_24h),
-      num(row?.errors_24h),
-      row?.p95_latency_ms ?? null,
-      false
+  // ⚠ A dead count is 0 and SAYS SO IN THE LOG rather than throwing: this panel
+  // sits beside two others and a 500 here would blank the whole page.
+  if (error) {
+    console.warn(
+      `[admin/health] mcp_tool_calls count unreadable, reporting 0: ${error.message}`
     );
+    return { calls_24h: 0 };
   }
-  degrading("analytics_mcp_health", error);
-
-  const { data } = await db
-    .from("mcp_events")
-    .select("response_status, latency_ms")
-    .eq("source", "mcp")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(MCP_SCAN_LIMIT);
-
-  const scan = clippedAt((data ?? []) as McpEventRow[], MCP_SCAN_LIMIT);
-  const errors = scan.rows.filter((r) => (r.response_status ?? 0) >= 400).length;
-  const latencies = scan.rows
-    .map((r) => r.latency_ms)
-    .filter((n): n is number => typeof n === "number" && n > 0)
-    .sort((a, b) => a - b);
-
-  return mcpHealth(
-    scan.rows.length,
-    errors,
-    latencies.length ? latencies[p95Index(latencies.length)] : null,
-    scan.truncated
-  );
-}
-
-type McpEventRow = { response_status: number | null; latency_ms: number | null };
-
-type McpHealthRpcRow = Record<"calls_24h" | "errors_24h", number | string> & {
-  p95_latency_ms: number | null;
-};
-
-/** ⚠ ONE divide, so the two paths cannot disagree about a rate they both derive. */
-function mcpHealth(
-  calls: number,
-  errors: number,
-  p95: number | null,
-  truncated: boolean
-): McpHealth {
-  return {
-    calls_24h: calls,
-    errors_24h: errors,
-    error_rate: calls === 0 ? 0 : errors / calls,
-    p95_latency_ms: p95,
-    truncated,
-  };
+  return { calls_24h: count ?? 0 };
 }
 
 /* ---------------------------- overall status ---------------------------- */
@@ -461,32 +458,35 @@ function mcpHealth(
  */
 export function computeOverallStatus(inputs: {
   alerts: Clipped<AlertGroup>;
-  mcp: McpHealth;
-  external: Clipped<ExternalApiHealth>;
+  routes: Clipped<RouteErrorGroup>;
 }): OverallStatus {
-  const truncated =
-    inputs.alerts.truncated || inputs.external.truncated || inputs.mcp.truncated;
+  const truncated = inputs.alerts.truncated || inputs.routes.truncated;
 
   const hasCritical = inputs.alerts.rows.some((a) => a.severity === "critical");
-  const externalAuthFailed = inputs.external.rows.some((p) => p.criticals_24h > 0);
+  const routeCritical = inputs.routes.rows.some((r) => r.criticals_24h > 0);
 
-  if (hasCritical || externalAuthFailed) {
+  if (hasCritical || routeCritical) {
     return {
       level: "red",
-      reason: hasCritical ? "Critical alert active" : "External API auth failing",
+      reason: hasCritical
+        ? "Critical alert active"
+        : "A server route is failing critically",
       truncated,
     };
   }
 
+  // 🔒 **THE "ELEVATED MCP ERROR RATE" ARM WAS DELETED, NOT DEFAULTED
+  // (2026-10-10).** It read `mcp.error_rate > 0.2`, and nothing live measures an
+  // MCP error (see {@link McpHealth}). Keeping the arm against a rate pinned at
+  // 0 would be a CHECK THAT CAN NEVER FIRE reading as a check that passes —
+  // which is the same defect this sweep deleted from `ontology/server`, where
+  // `length >= 5_000` could never be true against a 1,000-row clip. A banner
+  // arm with no instrument behind it is worse than an absent arm, because only
+  // the absent one is visible.
   const hasErrors = inputs.alerts.rows.some((a) => a.severity === "error");
-  const mcpElevated = inputs.mcp.calls_24h > 10 && inputs.mcp.error_rate > 0.2;
 
-  if (hasErrors || mcpElevated) {
-    return {
-      level: "yellow",
-      reason: hasErrors ? "Errors logged in last 24h" : "Elevated MCP error rate",
-      truncated,
-    };
+  if (hasErrors) {
+    return { level: "yellow", reason: "Errors logged in last 24h", truncated };
   }
 
   return {

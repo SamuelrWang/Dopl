@@ -28,20 +28,18 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 const RANK: Record<string, number> = { info: 0, warn: 1, error: 2, critical: 3 };
 const BY_RANK = ["info", "warn", "error", "critical"];
 
-/** ⚠ The migration's `coalesce(nullif(source,''),'unknown')` + `'\.|\['`, literally. */
-export function sqlProvider(source: unknown): string {
-  const src = String(source ?? "");
-  return (src === "" ? "unknown" : src).split(/\.|\[/)[0];
-}
-
 /**
- * ⚠ **THE 1-BASED SUBSCRIPT, AS POSTGRES EVALUATES IT**:
- * `sorted[floor(array_length * 0.95)::int + 1]`. Written out so a drift between
- * this and `health.ts › p95Index` is what fails, not an arithmetic shortcut
- * shared with the code under test.
+ * ⚠ The migration's `coalesce(nullif(source,''),'unknown')` + its UUID
+ * `regexp_replace(…, ':id', 'g')`, literally — spelled out here rather than
+ * imported from `health.ts › routeOf`, so a drift between the SQL and the TS is
+ * what fails rather than being shared with the code under test.
  */
-export function sqlP95OneBasedIndex(positiveCount: number): number {
-  return Math.floor(positiveCount * 0.95) + 1;
+export function sqlRoute(source: unknown): string {
+  const src = String(source ?? "");
+  return (src === "" ? "unknown" : src).replace(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+    ":id"
+  );
 }
 
 function groupBy<T>(rows: readonly T[], key: (r: T) => string): Map<string, T[]> {
@@ -92,55 +90,37 @@ function sqlAlertGroups(all: readonly Row[], args: Record<string, unknown>) {
   return groups.slice(0, Math.max(Number(args.p_limit), 0));
 }
 
-function sqlExternalApi(all: readonly Row[], args: Record<string, unknown>) {
+/** ⚠ Filters on SEVERITY and not on `category` — the read's own ruling, mirrored. */
+function sqlRouteErrorGroups(all: readonly Row[], args: Record<string, unknown>) {
   const since = String(args.p_since);
-  const categories = args.p_categories as string[];
+  const severities = args.p_severities as string[];
   const kept = all.filter(
-    (r) => String(r.created_at) >= since && categories.includes(String(r.category))
+    (r) => String(r.created_at) >= since && severities.includes(String(r.severity))
   );
-  const rows = [...groupBy(kept, (r) => sqlProvider(r.source))].map(
-    ([name, group]) => {
-      const errs = newestFirst(
-        group.filter((r) => r.severity === "error" || r.severity === "critical")
-      );
+  const rows = [...groupBy(kept, (r) => sqlRoute(r.source))].map(
+    ([route, group]) => {
+      const desc = newestFirst(group);
       return {
-        name,
-        events_24h: String(group.length),
-        errors_24h: String(errs.length),
+        route,
+        errors_24h: String(group.length),
         criticals_24h: String(group.filter((r) => r.severity === "critical").length),
-        last_error_message: errs.length ? String(errs[0].message) : null,
-        last_error_at: errs.length ? String(errs[0].created_at) : null,
+        last_error_message: String(desc[0].message),
+        last_error_at: String(desc[0].created_at),
       };
     }
   );
   rows.sort(
     (a, b) =>
+      Number(b.criticals_24h) - Number(a.criticals_24h) ||
       Number(b.errors_24h) - Number(a.errors_24h) ||
-      Number(b.events_24h) - Number(a.events_24h) ||
-      a.name.localeCompare(b.name)
+      a.route.localeCompare(b.route)
   );
   return rows;
 }
 
-function sqlMcpHealth(all: readonly Row[], args: Record<string, unknown>) {
-  const since = String(args.p_since);
-  const kept = all.filter((r) => r.source === "mcp" && String(r.created_at) >= since);
-  const sorted = kept
-    .map((r) => r.latency_ms)
-    .filter((n): n is number => typeof n === "number" && n > 0)
-    .sort((a, b) => a - b);
-  return [
-    {
-      calls_24h: String(kept.length),
-      errors_24h: String(
-        kept.filter((r) => (Number(r.response_status) || 0) >= 400).length
-      ),
-      p95_latency_ms: sorted.length
-        ? sorted[sqlP95OneBasedIndex(sorted.length) - 1]
-        : null,
-    },
-  ];
-}
+/* ⚠ `sqlMcpHealth` IS GONE, with the RPC it mirrored. MCP volume is a COUNTED
+   read now, and `postgrest-cap.ts` keeps `count` exact the way the real server
+   does — so the fake needs no aggregate for it, which is the point. */
 
 /* ------------------------------- fixtures ------------------------------- */
 
@@ -179,38 +159,55 @@ export function alertRows(n: number): Row[] {
   }));
 }
 
-/** ⚠ Both delimiters, a leading one, an empty source — the keys that separate the
- *  real split from a `split_part(source,'.',1)` rewrite. */
-const EXTERNAL_SOURCES = [
-  "anthropic.messages",
-  "anthropic[0]",
-  "stripe.charges",
-  "plain",
-  ".leading",
+/**
+ * ⚠ **PROD'S OWN SOURCE SHAPES** (measured 2026-10-10): HTTP route strings, two
+ * of them carrying a channel UUID. Those two collapse to ONE route template, so
+ * a fake that forgot the id normalisation reports three routes where there are
+ * two — the 35-vs-15 difference the real table shows.
+ * ⚠ An empty source is kept: it keys as `unknown`, as the old provider key did.
+ */
+const ROUTE_SOURCES = [
+  "POST /api/channels/sessions",
+  "GET /api/channels/4c6456f6-6bd9-4c86-ac65-8b846d5fd682/await",
+  "GET /api/channels/bb0f57db-bb46-4ce6-af96-83eb8e2dbf28/await",
   "",
 ];
-const EXTERNAL_CATEGORIES = ["external_api", "quota", "auth", "perf"];
 
-/** ⚠ stripe's only `critical` is buried past the clip — see {@link BURIED_CRITICAL}. */
-export const BURIED_STRIPE_CRITICAL = 5_996;
+/** ⚠ The ONE `critical` is buried past the clip — see {@link BURIED_CRITICAL}:
+ *  clipping it downgrades the banner from red to yellow. */
+export const BURIED_ROUTE_CRITICAL = 5_996;
 
-export function externalRows(n: number): Row[] {
+/** ⚠ EVERY row is error-or-critical, because the read filters on severity: a
+ *  `warn` here would be filtered out and quietly weaken the count cases. */
+export function routeErrorRows(n: number): Row[] {
   return Array.from({ length: n }, (_, i) => ({
-    source: EXTERNAL_SOURCES[i % 6],
-    severity:
-      i === BURIED_STRIPE_CRITICAL ? "critical" : i % 10 === 0 ? "error" : "warn",
+    source: ROUTE_SOURCES[i % 4],
+    severity: i === BURIED_ROUTE_CRITICAL ? "critical" : "error",
     message: `err-${i}`,
-    category: EXTERNAL_CATEGORIES[i % 4],
+    // ⚠ Deliberately `other`: the read must NOT filter on category, and a
+    // fixture that only carried the old four would hide a re-added filter.
+    category: "other",
     created_at: ago(i),
   }));
 }
 
-/** ⚠ Latency RISES with age, so a newest-first clip biases the p95 DOWNWARD. */
-export function mcpRows(n: number): Row[] {
+/**
+ * `mcp_tool_calls` rows for the VOLUME count — all LOOPBACK rows, so the
+ * expected answer is simply `n`.
+ *
+ * ⚠ **THEY ARE ALL LOOPBACK ON PURPOSE, BECAUSE THE FAKE DOES NOT INTERPRET THE
+ * EXCLUSIONS.** `postgrest-cap.ts` records `.or()` and `.not()` without parsing
+ * them (a fake that parsed a PostgREST filter string would be asserting its own
+ * parser — the discipline `_fake-credit-db.ts` set). So mixing `mcp:`-prefixed
+ * rows in here would NOT be filtered and the count case would simply read the
+ * wrong number for an invisible reason. The two exclusions are pinned as CLAUSE
+ * TEXT by their own case instead, which is the half a fake can actually prove.
+ */
+export function mcpToolCallRows(n: number): Row[] {
   return Array.from({ length: n }, (_, i) => ({
-    source: "mcp",
-    response_status: i % 10 === 0 ? 500 : 200,
-    latency_ms: i + 1,
+    id: `call-${String(i).padStart(6, "0")}`,
+    tool: "dopl_search",
+    op: "search",
     created_at: ago(i),
   }));
 }
@@ -234,11 +231,8 @@ export function mount(tables: Tables, applied: boolean) {
           if (name === "analytics_recent_alert_groups") {
             return { data: sqlAlertGroups(events, args), error: null };
           }
-          if (name === "analytics_external_api_health") {
-            return { data: sqlExternalApi(events, args), error: null };
-          }
-          if (name === "analytics_mcp_health") {
-            return { data: sqlMcpHealth(tables.mcp_events ?? [], args), error: null };
+          if (name === "analytics_route_error_groups") {
+            return { data: sqlRouteErrorGroups(events, args), error: null };
           }
           return undefined;
         }

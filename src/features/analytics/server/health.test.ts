@@ -21,29 +21,30 @@ vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import {
   BURIED_CRITICAL,
+  BURIED_ROUTE_CRITICAL,
   NOW,
   ago,
   alertRows,
-  externalRows,
-  mcpRows,
+  mcpToolCallRows,
   mount,
-  sqlP95OneBasedIndex,
-  sqlProvider,
+  routeErrorRows,
+  sqlRoute,
 } from "./_fake-health-db";
 import {
   computeOverallStatus,
-  getExternalApiHealth,
   getMcpHealth,
   getRecentAlerts,
-  p95Index,
-  providerOf,
+  getServerErrorsByRoute,
+  routeOf,
   type AlertGroup,
-  type ExternalApiHealth,
+  type RouteErrorGroup,
 } from "./health";
 
-function total(rows: Array<{ count: number }> | Array<{ events_24h: number }>): number {
+function total(
+  rows: Array<{ count: number }> | Array<{ errors_24h: number }>
+): number {
   return (rows as Array<Record<string, number>>).reduce(
-    (sum, r) => sum + (r.count ?? r.events_24h),
+    (sum, r) => sum + (r.count ?? r.errors_24h),
     0
   );
 }
@@ -172,209 +173,177 @@ describe("getRecentAlerts — system_events grouped by fingerprint", () => {
   });
 });
 
-/* ---------------------- 2/3 · getExternalApiHealth ---------------------- */
+/* --------------------- 2/3 · getServerErrorsByRoute --------------------- */
 
-describe("getExternalApiHealth — system_events grouped by provider", () => {
-  it("counts EVERY event per provider through the RPC", async () => {
-    mount({ system_events: externalRows(6_000) }, true);
-    const scan = await getExternalApiHealth();
+describe("getServerErrorsByRoute — system_events grouped by route template", () => {
+  it("counts EVERY error per route through the RPC", async () => {
+    mount({ system_events: routeErrorRows(6_000) }, true);
+    const scan = await getServerErrorsByRoute();
     expect(scan.truncated).toBe(false);
     expect(total(scan.rows)).toBe(6_000);
-    expect(scan.rows.find((p) => p.name === "anthropic")?.events_24h).toBe(2_000);
+    // The two await sources differ only by channel id, so they are ONE route.
+    expect(
+      scan.rows.find((r) => r.route === "GET /api/channels/:id/await")?.errors_24h
+    ).toBe(3_000);
   });
 
-  it("degrades to the CLIPPED per-provider count and says truncated", async () => {
-    mount({ system_events: externalRows(6_000) }, false);
-    const scan = await getExternalApiHealth();
+  it("degrades to the CLIPPED per-route count and says truncated", async () => {
+    mount({ system_events: routeErrorRows(6_000) }, false);
+    const scan = await getServerErrorsByRoute();
     expect(total(scan.rows)).toBe(MAX_ROWS);
     expect(scan.truncated).toBe(true);
-    const anthropic = scan.rows.find((p) => p.name === "anthropic")!;
-    expect(anthropic.events_24h).toBe(334);
-    expect(anthropic.events_24h).not.toBe(2_000);
+    const await_ = scan.rows.find((r) => r.route === "GET /api/channels/:id/await")!;
+    expect(await_.errors_24h).toBe(500);
+    expect(await_.errors_24h).not.toBe(3_000);
   });
 
   it("zeroes a buried CRITICAL, which is what downgrades the red banner", async () => {
-    const rows = externalRows(6_000);
+    const rows = routeErrorRows(6_000);
     mount({ system_events: rows }, true);
-    const exact = await getExternalApiHealth();
+    const exact = await getServerErrorsByRoute();
     mount({ system_events: rows }, false);
-    const clipped = await getExternalApiHealth();
+    const clipped = await getServerErrorsByRoute();
 
-    const stripe = (s: { rows: ExternalApiHealth[] }) =>
-      s.rows.find((p) => p.name === "stripe")!;
-    expect(stripe(exact).criticals_24h).toBe(1);
-    expect(stripe(clipped).criticals_24h).toBe(0);
+    const sessions = (s: { rows: RouteErrorGroup[] }) =>
+      s.rows.find((r) => r.route === "POST /api/channels/sessions")!;
+    // ⚠ BURIED_ROUTE_CRITICAL sits on this route, past the 1,000-row clip.
+    expect(BURIED_ROUTE_CRITICAL % 4).toBe(0);
+    expect(sessions(exact).criticals_24h).toBe(1);
+    expect(sessions(clipped).criticals_24h).toBe(0);
   });
 
-  it("splits the provider on BOTH delimiters — `.` and `[`", async () => {
-    mount({ system_events: externalRows(6_000) }, true);
-    const names = (await getExternalApiHealth()).rows.map((p) => p.name).sort();
-    // ⚠ `anthropic.messages` and `anthropic[0]` are ONE provider. A
-    // `split_part(source,'.',1)` translation would list `anthropic[0]` here.
-    expect(names).toEqual(["", "anthropic", "plain", "stripe", "unknown"]);
-    expect(names).not.toContain("anthropic[0]");
+  it("normalises ids out of the path, so one route is one row", async () => {
+    mount({ system_events: routeErrorRows(6_000) }, true);
+    const routes = (await getServerErrorsByRoute()).rows.map((r) => r.route).sort();
+    // 🔒 FOUR raw sources, THREE templates — the 35-vs-15 collapse the real
+    // table shows. Grouping on the raw string would list both await channels.
+    expect(routes).toEqual([
+      "GET /api/channels/:id/await",
+      "POST /api/channels/sessions",
+      "unknown",
+    ]);
+    expect(routes.some((r) => /[0-9a-f]{8}-/.test(r))).toBe(false);
   });
 
   it("keys the odd inputs the same way in TS and in the SQL-shaped regex", () => {
     const cases: Array<[string | null, string]> = [
-      ["anthropic.messages", "anthropic"],
-      ["anthropic[0]", "anthropic"],
-      ["anthropic[0].messages", "anthropic"],
-      [".leading", ""],
-      ["[leading", ""],
-      ["plain", "plain"],
+      [
+        "GET /api/channels/4c6456f6-6bd9-4c86-ac65-8b846d5fd682/await",
+        "GET /api/channels/:id/await",
+      ],
+      // Two ids in one path: BOTH replaced, which needs the global flag.
+      [
+        "POST /api/a/4c6456f6-6bd9-4c86-ac65-8b846d5fd682/b/bb0f57db-bb46-4ce6-af96-83eb8e2dbf28",
+        "POST /api/a/:id/b/:id",
+      ],
+      // Upper case hex is still a uuid.
+      [
+        "GET /x/4C6456F6-6BD9-4C86-AC65-8B846D5FD682",
+        "GET /x/:id",
+      ],
+      ["POST /api/channels/sessions", "POST /api/channels/sessions"],
       ["", "unknown"],
       [null, "unknown"],
     ];
     for (const [input, expected] of cases) {
-      expect(providerOf(input)).toBe(expected);
-      // 🔒 The parity that matters: `[.\[]` and the SQL's `\.|\[` are one set.
-      expect(sqlProvider(input)).toBe(expected);
+      expect(routeOf(input)).toBe(expected);
+      // 🔒 The parity that matters: the TS regex and the SQL's are one pattern.
+      expect(sqlRoute(input)).toBe(expected);
     }
   });
 
-  it("reports the NEWEST error's message, and null where there is none", async () => {
+  it("reports the NEWEST error's message on both paths", async () => {
     const rows: Row[] = [
-      { source: "a.x", severity: "error", message: "old", category: "auth", created_at: ago(9) },
-      { source: "a.y", severity: "error", message: "new", category: "auth", created_at: ago(1) },
-      { source: "b.z", severity: "warn", message: "quiet", category: "auth", created_at: ago(2) },
+      { source: "GET /a", severity: "error", message: "old", category: "other", created_at: ago(9) },
+      { source: "GET /a", severity: "critical", message: "new", category: "other", created_at: ago(1) },
+      { source: "GET /b", severity: "error", message: "only", category: "other", created_at: ago(2) },
     ];
     mount({ system_events: rows }, true);
-    const exact = await getExternalApiHealth();
+    const exact = await getServerErrorsByRoute();
     mount({ system_events: rows }, false);
-    const degraded = await getExternalApiHealth();
+    const degraded = await getServerErrorsByRoute();
     for (const scan of [exact, degraded]) {
-      expect(scan.rows.find((p) => p.name === "a")).toMatchObject({
+      expect(scan.rows.find((r) => r.route === "GET /a")).toMatchObject({
         last_error_message: "new",
         last_error_at: ago(1),
         errors_24h: 2,
+        criticals_24h: 1,
       });
-      expect(scan.rows.find((p) => p.name === "b")).toMatchObject({
-        last_error_message: null,
-        last_error_at: null,
+      expect(scan.rows.find((r) => r.route === "GET /b")).toMatchObject({
+        last_error_message: "only",
+        errors_24h: 1,
+        criticals_24h: 0,
       });
     }
   });
 
+  it("asks for severities and NOT for a category — the old panel's blank filter", async () => {
+    const fake = mount({ system_events: routeErrorRows(10) }, false);
+    await getServerErrorsByRoute();
+    // 🔒 A `category IN (...)` clause here is the regression: the four it used
+    // to name hold zero rows in prod, which is why this panel was blank.
+    const ins = fake.calls.filter((c) => c.op === "in");
+    expect(ins).toHaveLength(1);
+    expect(ins[0].args[0]).toBe("severity");
+    expect(ins[0].args[1]).toEqual(["error", "critical"]);
+  });
+
   it("agrees row-for-row with the RPC below the ceiling", async () => {
-    const rows = externalRows(600);
+    const rows = routeErrorRows(600);
     mount({ system_events: rows }, true);
-    const exact = await getExternalApiHealth();
+    const exact = await getServerErrorsByRoute();
     mount({ system_events: rows }, false);
-    const degraded = await getExternalApiHealth();
+    const degraded = await getServerErrorsByRoute();
     expect(degraded.rows).toEqual(exact.rows);
   });
 });
 
 /* ------------------------- 3/3 · getMcpHealth --------------------------- */
 
-describe("getMcpHealth — the unordered clip", () => {
-  it("counts every call and every error through the RPC", async () => {
-    mount({ mcp_events: mcpRows(2_500) }, true);
-    const mcp = await getMcpHealth();
-    expect(mcp).toMatchObject({ calls_24h: 2_500, errors_24h: 250, truncated: false });
-    expect(mcp.error_rate).toBeCloseTo(0.1);
+describe("getMcpHealth — a COUNT, which max_rows cannot clip", () => {
+  it("returns the TRUE volume far past the ceiling, with no RPC and no truncation", async () => {
+    const fake = mount({ mcp_tool_calls: mcpToolCallRows(6_361) }, false);
+    // ⚠ `applied: false` — there is no aggregate to be missing, which is the
+    // whole point: a counted read has nothing to degrade to.
+    expect(await getMcpHealth()).toEqual({ calls_24h: 6_361 });
+    expect(fake.calls.some((c) => c.op === "rpc")).toBe(false);
   });
 
-  it("degrades to the CLIPPED call count and says truncated", async () => {
-    mount({ mcp_events: mcpRows(2_500) }, false);
-    const mcp = await getMcpHealth();
-    // 🔒 `calls_24h` was `data.length` — pinned at max_rows the moment the day
-    // held more, with no marker anywhere.
-    expect(mcp.calls_24h).toBe(MAX_ROWS);
-    expect(mcp.calls_24h).not.toBe(2_500);
-    expect(mcp.errors_24h).toBe(100);
-    expect(mcp.truncated).toBe(true);
-  });
-
-  it("biases the p95 DOWNWARD under the clip — the number, not just the count", async () => {
-    const rows = mcpRows(2_500);
-    mount({ mcp_events: rows }, true);
-    const exact = await getMcpHealth();
-    mount({ mcp_events: rows }, false);
-    const clipped = await getMcpHealth();
-    // floor(2500*0.95) = 2375 → 0-based 2375 → latency 2376.
-    expect(exact.p95_latency_ms).toBe(2_376);
-    // floor(1000*0.95) = 950 → 0-based 950 → latency 951.
-    expect(clipped.p95_latency_ms).toBe(951);
-    expect(clipped.p95_latency_ms).toBeLessThan(exact.p95_latency_ms!);
-  });
-
-  it("orders the degrade newest-first, so its floor is DEFINED and not a permutation", async () => {
-    const fake = mount({ mcp_events: mcpRows(2_500) }, false);
+  it("asks for a HEAD count, so no row can be clipped", async () => {
+    const fake = mount({ mcp_tool_calls: mcpToolCallRows(2_500) }, false);
     await getMcpHealth();
+    const select = fake.calls.find((c) => c.op === "select")!;
+    expect(select.args[1]).toEqual({ count: "exact", head: true });
+    // 🔒 No `.limit()` anywhere: a limit is what made every other read a floor.
+    expect(fake.calls.some((c) => c.op === "limit")).toBe(false);
+  });
+
+  it("reads mcp_tool_calls and NOT the dead mcp_events table", async () => {
+    const fake = mount({ mcp_tool_calls: mcpToolCallRows(5) }, false);
+    await getMcpHealth();
+    // 🔒 `mcp_events` has had no writer since 2026-07-17, so this panel showed
+    // zeros for three months. Reading it again is the regression.
+    expect(fake.calls.filter((c) => c.op === "from").map((c) => c.args[0])).toEqual([
+      "mcp_tool_calls",
+    ]);
+  });
+
+  it("excludes the charged-call rows and the await polling, as clause text", async () => {
+    const fake = mount({ mcp_tool_calls: mcpToolCallRows(5) }, false);
+    await getMcpHealth();
+    // ⚠ Pinned as TEXT because `postgrest-cap.ts` records these without parsing
+    // them — a fake that parsed a PostgREST filter would assert its own parser.
     expect(fake.calls).toEqual(
       expect.arrayContaining([
-        { op: "order", args: ["created_at", { ascending: false }] },
+        { op: "or", args: ["tool.neq.channel,op.not.like.await*"] },
+        { op: "not", args: ["tool", "like", "mcp:*"] },
       ])
     );
   });
 
-  it("ignores non-mcp sources on both paths", async () => {
-    const rows: Row[] = [
-      ...mcpRows(10),
-      { source: "web", response_status: 500, latency_ms: 9_999, created_at: ago(1) },
-    ];
-    mount({ mcp_events: rows }, true);
-    expect((await getMcpHealth()).calls_24h).toBe(10);
-    mount({ mcp_events: rows }, false);
-    expect((await getMcpHealth()).calls_24h).toBe(10);
-  });
-
-  it("answers zeros and a null p95 for an empty day, both paths", async () => {
-    const empty = {
-      calls_24h: 0,
-      errors_24h: 0,
-      error_rate: 0,
-      p95_latency_ms: null,
-      truncated: false,
-    };
-    mount({ mcp_events: [] }, true);
-    expect(await getMcpHealth()).toEqual(empty);
-    mount({ mcp_events: [] }, false);
-    expect(await getMcpHealth()).toEqual(empty);
-  });
-
-  it("counts a null response_status as a success, and 0/null latencies as untimed", async () => {
-    const rows: Row[] = [
-      { source: "mcp", response_status: null, latency_ms: null, created_at: ago(3) },
-      { source: "mcp", response_status: 200, latency_ms: 0, created_at: ago(2) },
-      { source: "mcp", response_status: 200, latency_ms: 40, created_at: ago(1) },
-    ];
-    mount({ mcp_events: rows }, true);
-    const exact = await getMcpHealth();
-    mount({ mcp_events: rows }, false);
-    const degraded = await getMcpHealth();
-    // Only one STRICTLY POSITIVE latency, so p95 is that one value.
-    expect(exact).toMatchObject({ calls_24h: 3, errors_24h: 0, p95_latency_ms: 40 });
-    expect(degraded).toMatchObject({ calls_24h: 3, errors_24h: 0, p95_latency_ms: 40 });
-  });
-});
-
-describe("the p95 index — SQL and JS must land on the same element", () => {
-  it("is floor(n*0.95), 0-based in TS and +1 in SQL, for every n up to 3,000", () => {
-    for (let n = 1; n <= 3_000; n++) {
-      expect(sqlP95OneBasedIndex(n) - 1).toBe(p95Index(n));
-      // ⚠ Never out of range: floor(0.95n) <= n-1 for all n >= 1.
-      expect(p95Index(n)).toBeLessThanOrEqual(n - 1);
-      expect(p95Index(n)).toBeGreaterThanOrEqual(0);
-    }
-  });
-
-  it("picks the MAXIMUM of 20 values, which is where percentile_disc diverges", () => {
-    const sorted = Array.from({ length: 20 }, (_, i) => i + 1);
-    expect(sorted[p95Index(20)]).toBe(20);
-    // 🔒 `percentile_disc(0.95)` lands on the 19th (0-based 18) and
-    // `percentile_cont(0.95)` interpolates to 19.05 — in the list by no right at
-    // all. Either would make the RPC disagree with its own degrade path.
-    const percentileDisc = sorted[Math.ceil(20 * 0.95) - 1];
-    expect(percentileDisc).toBe(19);
-    expect(percentileDisc).not.toBe(sorted[p95Index(20)]);
-  });
-
-  it("selects the single value when only one call was timed", () => {
-    expect(p95Index(1)).toBe(0);
-    expect(sqlP95OneBasedIndex(1)).toBe(1);
+  it("answers zero for an empty day", async () => {
+    mount({ mcp_tool_calls: [] }, false);
+    expect(await getMcpHealth()).toEqual({ calls_24h: 0 });
   });
 });
 
@@ -383,14 +352,7 @@ describe("the p95 index — SQL and JS must land on the same element", () => {
 describe("computeOverallStatus — a clipped read is not an all-clear", () => {
   const quiet = {
     alerts: { rows: [] as AlertGroup[], truncated: false },
-    external: { rows: [] as ExternalApiHealth[], truncated: false },
-    mcp: {
-      calls_24h: 0,
-      errors_24h: 0,
-      error_rate: 0,
-      p95_latency_ms: null,
-      truncated: false,
-    },
+    routes: { rows: [] as RouteErrorGroup[], truncated: false },
   };
 
   it("still says all clear when nothing was clipped", () => {
@@ -427,10 +389,34 @@ describe("computeOverallStatus — a clipped read is not an all-clear", () => {
 
   it("carries truncated up from whichever read was clipped", () => {
     expect(
-      computeOverallStatus({ ...quiet, mcp: { ...quiet.mcp, truncated: true } }).truncated
+      computeOverallStatus({ ...quiet, routes: { rows: [], truncated: true } }).truncated
     ).toBe(true);
     expect(
-      computeOverallStatus({ ...quiet, external: { rows: [], truncated: true } }).truncated
+      computeOverallStatus({ ...quiet, alerts: { rows: [], truncated: true } }).truncated
     ).toBe(true);
+  });
+
+  it("goes RED on a route failing critically", () => {
+    const status = computeOverallStatus({
+      ...quiet,
+      routes: {
+        rows: [{ route: "POST /x", criticals_24h: 1 } as RouteErrorGroup],
+        truncated: false,
+      },
+    });
+    expect(status).toMatchObject({
+      level: "red",
+      reason: "A server route is failing critically",
+    });
+  });
+
+  it("takes NO mcp input at all — the deleted arm cannot come back by default", () => {
+    // 🔒 The arm read `mcp.error_rate > 0.2`, and nothing live measures an MCP
+    // error. Keeping it against a rate pinned at 0 would be a check that can
+    // never fire reading as a check that passes — the same defect this sweep
+    // deleted from ontology, where `length >= 5_000` could never be true.
+    // The TYPE is the guard: `mcp` is not in the input, so re-adding the arm
+    // cannot compile without re-adding an instrument to measure it.
+    expect(Object.keys(quiet).sort()).toEqual(["alerts", "routes"]);
   });
 });
