@@ -22,6 +22,8 @@ const io = require('./listener-io');
 const targeting = require('./targeting');
 const { metaStr, truncate } = targeting;
 const { diag } = require('./diag');
+// Store-only: the operator's banner switches. It can mute this notice, never route a message.
+const notificationPrefs = require('./notification-prefs');
 
 // Pure: build the passive { title, body } for a thread reply from the message +
 // pre-resolved channel/responder names. Prefers the server-stamped thread title for
@@ -42,6 +44,10 @@ function taskReplyNotice(m, channelName, responderName) {
 // requester chose interactive mode and will read the reply when they open the
 // channel. Best-effort — a missing Notification API or a torn-down window is fine.
 function notifyTaskReply(entry, m) {
+  if (!notificationPrefs.allowsMessage(m, entry)) {
+    diag('task-reply notify muted', notificationPrefs.eventForMessage(m, entry));
+    return;
+  }
   const channelName = entry && entry.channel && entry.channel.name;
   const responderName = io.displayNameFor(m && m.authorUserId);
   const notice = taskReplyNotice(m, channelName, responderName);

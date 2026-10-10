@@ -295,7 +295,10 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
   // ONTOLOGY's container and not the channel's, which is what makes the
   // cross-container lend work — and is exactly why this cascade has to be
   // declared rather than inherited from a tenancy column.
-  it("finds all sixteen child FKs", () => {
+  // ⚠ SEVENTEEN SINCE 2026-10-09: `notification_preferences.channel_id`
+  // (`20261117120000_notification_preferences.sql`, ⚠ WRITTEN, NOT APPLIED). A
+  // per-channel notification override is a statement ABOUT that room, so it CASCADES.
+  it("finds all seventeen child FKs", () => {
     // ⚠ FIFTEEN SINCE 2026-09-13: `credit_usage_events.channel_id`
     // (`20261003120000_credit_events_channel.sql`, F-691, an ALTER TABLE — the
     // first FK into channels added by ADD COLUMN), a RECORD of something that
@@ -303,7 +306,7 @@ describe("every FK into channels is ON DELETE CASCADE (what makes one DELETE com
     // `owningTable` did not read ALTER and pinned this one on the file before.
     // ⚠ SIXTEEN SINCE 2026-09-26: `glasses_device_links.linked_channel_id`
     // (`20261028120000_glasses_device_links_pairings.sql`), SET NULL, named below.
-    expect(refs.length).toBe(16);
+    expect(refs.length).toBe(17);
   });
 
   /**

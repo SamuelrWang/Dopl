@@ -165,6 +165,18 @@ contextBridge.exposeInMainWorld('dopl', {
     applyAgentDefaults: (channelId) => ipcRenderer.invoke('channels:applyAgentDefaults', { channelId: asId(channelId) }),
   },
 
+  // Notification preferences (`main/notification-prefs.js`): this Mac's banner switches, one
+  // boolean per registry event. Only the `events` booleans cross; main re-normalizes the record.
+  notifications: {
+    get: () => ipcRenderer.invoke('notifications:getPrefs'),
+    set: (prefs) => {
+      const events = {};
+      const src = prefs && typeof prefs === 'object' && prefs.events && typeof prefs.events === 'object' ? prefs.events : {};
+      for (const k of Object.keys(src)) if (typeof src[k] === 'boolean') events[String(k)] = src[k];
+      return ipcRenderer.invoke('notifications:setPrefs', { prefs: { v: 1, events: events } });
+    },
+  },
+
   // The two orchestrator consents: `orchestratorLaunch` (may another agent make this machine SPAWN a
   // session?) and `orchestratorDirect` (may one DIRECT a running session?). Two grants, both default
   // FALSE, per machine, feature-probed (absent = OFF). This bridge is the only way either moves — a

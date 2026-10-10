@@ -126,7 +126,9 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
   // spawner or engine machinery because it does not require any of it.
   const NOTIFY = M("task-notify.js");
   const deps = [...NOTIFY.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
-  assert.deepEqual(deps, ["./diag", "./listener-io", "./targeting", "electron"],
+  // 2026-10-09: `./notification-prefs` joins it — a STORE-ONLY module (electron-store, no
+  // route, no consent, no spawn) whose one effect here is muting this notice.
+  assert.deepEqual(deps, ["./diag", "./listener-io", "./notification-prefs", "./targeting", "electron"],
     "task-notify reaches nothing that could spawn, gate or record a consent");
   // D2 added a SECOND passive verdict on the same module, 'agent-escalation', with the agent
   // handle resolved by the CALLER and passed in precisely so the dependency set above could

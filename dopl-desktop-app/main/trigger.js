@@ -17,6 +17,7 @@ const queued = require('./queued-notice'); // the in-thread "queued, not ignored
 const outcomes = require('./trigger-outcomes');
 const { AUTH_HELD_REPLY, RESEND, CANNOT_RUN } = outcomes; // the peer-facing courtesy replies
 const { diag } = require('./diag');
+const notificationPrefs = require('./notification-prefs'); // the operator's banner switches
 
 // Deterministic per (channel, seq) so a replay groups with its first delivery; a first-class id wins.
 function taskIdFor(entry, m) {
@@ -28,6 +29,12 @@ function taskIdFor(entry, m) {
  * lands on the message (thread + seq), which `use-message-jump.ts` scrolls to.
  */
 function sendFyi(entry, m) {
+  // The Notifications tab's switch for this event (mention / decision / direct message). Mutes the
+  // BANNER only: the Tags inbox and the thread still hold the message.
+  if (!notificationPrefs.allowsMessage(m, entry)) {
+    diag('mention notify muted', entry.channel.id.slice(0, 8), 'seq', m.seq, notificationPrefs.eventForMessage(m, entry));
+    return;
+  }
   const author = io.displayNameFor(m.authorUserId);
   const detail = targeting.metaStr(m, 'summary') || targeting.truncate(m.body, 120);
   // Where: the thread's title when the post carries one, else the channel.

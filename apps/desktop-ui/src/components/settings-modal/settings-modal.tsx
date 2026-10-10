@@ -9,6 +9,10 @@ import { AccountSectionCore } from "@/shared/layout/settings-modal/sections/acco
 import { WorkspacesSectionCore } from "@/shared/layout/settings-modal/sections/workspaces-section-core";
 import { AgentsSectionCore } from "@/shared/layout/settings-modal/sections/agents-section-core";
 import { DevicesSectionCore } from "@/shared/layout/settings-modal/sections/devices-section-core";
+import {
+  NotificationsSectionCore,
+  canShowNotificationsSection,
+} from "@/shared/layout/settings-modal/sections/notifications-section-core";
 import { AgentDefaultsSettings } from "@/features/channels/components/agent-defaults-settings";
 import { useApiQuery } from "#/hooks/use-api-query";
 // ⚠ Deep import, not the `#/components/app-shell` barrel: that barrel exports
@@ -117,6 +121,9 @@ export function SettingsModal({
       // ⚠ IT TAKES NO WORKSPACE AND NO CHANNEL. One operator, one Mac, one answer — which is why
       // it is the one pane here that needs nothing from the props above it.
       configurationPane={<AgentDefaultsSettings />}
+      // NOTIFICATIONS (2026-10-09) — which events raise a banner on THIS Mac. Mounted only when
+      // main exposes the notifications pair, so an older main draws no row (INVARIANTS §5).
+      notificationsPane={canShowNotificationsSection() ? <NotificationsSectionCore /> : undefined}
       billingPane={
         <BillingPane
           workspaceSegment={workspaceSegment}

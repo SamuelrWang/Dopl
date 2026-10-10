@@ -71,6 +71,11 @@ export const APP_OPS = [
   "dictation.start",
   "dictation.stop",
   "getAuthState",
+  // 2026-10-09 (Notifications tab): `notifications.get/set` — appWindowOnly, no id, shape-gated.
+  // The record can only mute this Mac's PASSIVE banners (mention / decision / direct message);
+  // approvals are forced on and no verdict, route or spawn reads it (`main/notification-prefs.js`).
+  "notifications.get",
+  "notifications.set",
   "onAuthState",
   "onNavigate",
   "onSyncEvent",

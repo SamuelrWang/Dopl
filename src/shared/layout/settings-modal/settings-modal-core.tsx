@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bell,
   Bot,
   CreditCard,
   LayoutGrid,
@@ -38,15 +39,16 @@ import styles from "./settings-modal.module.css";
  * connect one) and `"devices"` (computers + glasses). The default agent settings
  * that `"agents"` used to hold moved to `"configuration"`.
  *
- * ⚠ **`"configuration"` IS THE ONE OPTIONAL MEMBER** — DEFAULT AGENT SETTINGS,
- * desktop only, drawn only when `configurationPane` is passed (see the prop, and
- * `has` below).
+ * ⚠ **`"configuration"` AND `"notifications"` ARE THE OPTIONAL MEMBERS** — both
+ * desktop only (default agent settings; which events raise a banner), each drawn only
+ * when its pane is passed (see the props, and `has` below).
  */
 export type SettingsSection =
   | "workspaces"
   | "agents"
   | "devices"
   | "configuration"
+  | "notifications"
   | "account"
   | "billing";
 
@@ -64,8 +66,9 @@ interface NavItem {
  * titled are DELETED, not hidden: they were the only thing indenting this rail,
  * and a header over a single row was naming a group of one.
  *
- * ⚠ **"Configuration" is the one row that may be ABSENT** (Samuel, 2026-10-02) —
- * `has` below is what drops it, so the WEB draws five rows and the DESKTOP six.
+ * ⚠ **"Configuration" and "Notifications" are the rows that may be ABSENT** (2026-10-02,
+ * 2026-10-09) — `has` below is what drops them, so the WEB draws five rows and the DESKTOP
+ * seven.
  * It is not reordered by that: the list is the order, filtered, never two lists.
  */
 const NAV: ReadonlyArray<NavItem> = [
@@ -73,6 +76,7 @@ const NAV: ReadonlyArray<NavItem> = [
   { id: "agents", label: "Agents", icon: Bot },
   { id: "devices", label: "Devices", icon: Monitor },
   { id: "configuration", label: "Configuration", icon: SlidersHorizontal },
+  { id: "notifications", label: "Notifications", icon: Bell },
   { id: "account", label: "Account", icon: UserRound },
   { id: "billing", label: "Plans & Billing", icon: CreditCard },
 ];
@@ -103,6 +107,12 @@ export interface SettingsModalCoreProps {
    * persisted nothing would promise new channels inherit settings that cannot exist.
    */
   configurationPane?: React.ReactNode;
+  /**
+   * NOTIFICATIONS (2026-10-09) — which events raise a banner. OPTIONAL on the configuration
+   * pane's terms: v1 stores the record on this Mac (the banners are the desktop's), so the web
+   * passes nothing and draws no row. When the server table lands the web can pass one too.
+   */
+  notificationsPane?: React.ReactNode;
 }
 
 /**
@@ -124,6 +134,7 @@ export function SettingsModalCore({
   agentsPane,
   devicesPane,
   configurationPane,
+  notificationsPane,
   accountPane,
   billingPane,
 }: SettingsModalCoreProps) {
@@ -131,7 +142,8 @@ export function SettingsModalCore({
   // row that selects nothing, and a pane rendered under no entry is unreachable — so which
   // sections EXIST is decided once, here, rather than by two conditions that can disagree.
   const has = (id: SettingsSection) =>
-    id !== "configuration" || configurationPane != null;
+    (id !== "configuration" || configurationPane != null) &&
+    (id !== "notifications" || notificationsPane != null);
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
       <nav className={styles.nav}>
@@ -175,6 +187,7 @@ export function SettingsModalCore({
         {section === "agents" && agentsPane}
         {section === "devices" && devicesPane}
         {section === "configuration" && has("configuration") && configurationPane}
+        {section === "notifications" && has("notifications") && notificationsPane}
         {section === "account" && accountPane}
         {section === "billing" && billingPane}
       </div>

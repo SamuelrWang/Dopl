@@ -142,4 +142,19 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
       { label: "In every channel", text: "your outside sessions may direct agents on this Mac" },
     ],
   },
+  // NOTIFICATIONS TAB (2026-10-09). Rows are keyed by `features/notifications/registry.ts` labels.
+  "Mentions and replies": {
+    body:
+      "A banner when someone tags you, or replies in a thread you started. Off still keeps them in your Tags inbox.",
+  },
+  "Decisions for you": {
+    body: "A banner when a card asks you to pick an option. Off still keeps the card in the thread.",
+  },
+  "Direct messages": {
+    body: "A banner for messages in your direct conversations. Off still keeps them in the conversation.",
+  },
+  Approvals: {
+    body:
+      "A banner when something is waiting on you to allow it. Always on: the banner carries the button that answers it.",
+  },
 };
