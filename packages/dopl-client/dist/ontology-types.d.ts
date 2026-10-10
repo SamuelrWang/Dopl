@@ -6,6 +6,11 @@ export type OntologyAttributeValue = {
     kind: "pill";
     value: string;
 }
+/** Decimal number as a string, or `""` while unset. */
+ | {
+    kind: "number";
+    value: string;
+}
 /** One of the field's `options`, or `""` while unset. */
  | {
     kind: "enum";

@@ -3,6 +3,8 @@
 export type OntologyAttributeValue =
   | { kind: "text"; value: string }
   | { kind: "pill"; value: string }
+  /** Decimal number as a string, or `""` while unset. */
+  | { kind: "number"; value: string }
   /** One of the field's `options`, or `""` while unset. */
   | { kind: "enum"; value: string }
   /** `YYYY-MM-DD`, or `""`. */

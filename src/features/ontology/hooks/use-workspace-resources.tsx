@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
+import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import type { GraphState } from "../graph-state";
 import type { WorkspaceResource } from "../types";
 
@@ -11,10 +12,13 @@ interface WorkspaceResources {
   knowledge: WorkspaceResource[];
   skills: WorkspaceResource[];
   nameOf: (id: string) => string | null;
+  /** The owner's home space: no skills there, so no Skill field type to pick. */
+  homeSpace: boolean;
 }
 
 const EMPTY: WorkspaceResources = {
   workspaceId: "",
+  homeSpace: false,
   knowledge: [],
   skills: [],
   nameOf: () => null,
@@ -77,6 +81,8 @@ export function OntologyResourcesProvider({
     workspaceId,
     select: selectSkills,
   });
+  // Same cached query the board header already holds (`ontology-view.tsx`).
+  const homeSpace = useWorkspaceEntitlements(workspaceId).containerKind === "home";
   const knowledge = basesQuery.data;
   const skills = skillsQuery.data;
 
@@ -126,8 +132,9 @@ export function OntologyResourcesProvider({
       knowledge: k,
       skills: s,
       nameOf: (id) => byId.get(id) ?? entryNames.get(id) ?? null,
+      homeSpace,
     };
-  }, [workspaceId, knowledge, skills, resolvedEntries]);
+  }, [workspaceId, knowledge, skills, resolvedEntries, homeSpace]);
 
   return <ResourcesContext.Provider value={value}>{children}</ResourcesContext.Provider>;
 }

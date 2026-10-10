@@ -9,6 +9,7 @@ import {
   FIELD_KINDS,
   isHttpUrl,
   isIsoDate,
+  isNumeric,
   valueProblem,
 } from "./field-kinds";
 
@@ -26,6 +27,10 @@ const OntologyObjectNameSchema = safeLabel("Object name", 300);
 const attributeValueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), value: z.string().max(4000) }),
   z.object({ kind: z.literal("pill"), value: z.string().max(400) }),
+  z.object({
+    kind: z.literal("number"),
+    value: z.string().refine((v) => v === "" || isNumeric(v), "A number must be digits"),
+  }),
   // ⚠ MEMBERSHIP in the field's `options` is checked one level up
   // (`attributeSchema`), where the options are in scope.
   z.object({ kind: z.literal("enum"), value: z.string().max(ENUM_OPTION_MAX) }),

@@ -5,10 +5,11 @@ import { Pencil } from "lucide-react";
 import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import { ExternalAnchor } from "@/shared/ui/external-anchor";
 import { SelectMenu } from "@/shared/ui/select-menu";
-import { formatIsoDate, isHttpUrl, isIsoDate } from "../field-kinds";
+import { formatIsoDate, isHttpUrl, isIsoDate, isNumeric } from "../field-kinds";
 
 /**
- * The value cells of the three typed kinds (2026-10-01): select, date, link.
+ * The value cells of the typed kinds: select, date, link (2026-10-01), number
+ * (2026-10-09).
  *
  * ⚠ EACH ONE WRITES ONLY A VALUE THE SERVER WILL ACCEPT. The panel's save is a
  * whole-array PATCH of the attribute bag (`hooks/use-ontology.ts`), so a single
@@ -48,6 +49,50 @@ export function EnumValueEditor({
         ariaLabel="Value"
       />
     </span>
+  );
+}
+
+/** What a number field lets the keyboard put in the line: a number, or the
+ *  first half of one (`-`, `3.`). Letters and second dots never land. */
+const NUMBER_TYPING_RE = /^-?\d*(\.\d*)?$/;
+
+/**
+ * Number (2026-10-09). Typing that cannot become a number is refused live, so a
+ * letter never appears in the line. A half-typed number (`-`, `3.`) is held in a
+ * local draft and not written; the store only ever gets `""` or a full number
+ * (`field-kinds.ts › isNumeric`). Blur drops an unfinished draft back to the
+ * stored value.
+ */
+export function NumberValueEditor({
+  value,
+  canEdit,
+  onChange,
+}: {
+  value: string;
+  canEdit: boolean;
+  onChange: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <InlineUnderlineField
+      label="Value"
+      placeholder="0"
+      inputMode="decimal"
+      value={draft ?? value}
+      readOnly={!canEdit}
+      quiet
+      onChange={(next) => {
+        if (!NUMBER_TYPING_RE.test(next)) return;
+        if (next === "" || isNumeric(next)) {
+          setDraft(null);
+          if (next !== value) onChange(next);
+        } else {
+          setDraft(next);
+        }
+      }}
+      onBlur={() => setDraft(null)}
+      className="min-w-[5rem] flex-1"
+    />
   );
 }
 

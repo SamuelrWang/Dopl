@@ -134,7 +134,7 @@ caller = identity_1.UNKNOWN_CALLER) {
             .enum(ontology_fields_1.FIELD_KINDS)
             .optional()
             .describe("set_attribute / set_template_field: value kind (default: the field's)."),
-        value: zod_1.z.string().max(4000).optional().describe("set_attribute (text/pill/enum/date/link): the value."),
+        value: zod_1.z.string().max(4000).optional().describe("set_attribute (text/number/pill/enum/date/link): the value."),
         values: zod_1.z
             .array(zod_1.z.string())
             .max(100)

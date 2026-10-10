@@ -10,9 +10,9 @@
  */
 import type { OntologyObject, OntologySnapshot, OntologyTemplateField } from "@dopl/client";
 import { type ToolResponse } from "./respond";
-export declare const FIELD_KINDS: readonly ["text", "pill", "enum", "date", "link", "ref", "knowledge", "skill"];
+export declare const FIELD_KINDS: readonly ["text", "pill", "number", "enum", "date", "link", "ref", "knowledge", "skill"];
 export type FieldKind = (typeof FIELD_KINDS)[number];
-export type StringKind = "text" | "pill" | "enum" | "date" | "link";
+export type StringKind = "text" | "pill" | "number" | "enum" | "date" | "link";
 export declare function isStringKind(kind: FieldKind): kind is StringKind;
 /** Trimmed, non-empty, first-spelling-wins (case-insensitive). */
 export declare function cleanOptions(options: readonly string[]): string[];

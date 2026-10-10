@@ -158,6 +158,7 @@ export function InlineUnderlineField({
   onKeyDown,
   onBlur,
   type = "text",
+  inputMode,
 }: {
   /** The hint inside the line, and the accessible name. */
   label: string;
@@ -187,6 +188,8 @@ export function InlineUnderlineField({
   onBlur?: () => void;
   /** The input's own type — `date` / `url` for the ontology's typed fields. */
   type?: "text" | "date" | "url";
+  /** Soft-keyboard hint (`decimal` for the ontology's number field). */
+  inputMode?: "decimal";
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -200,6 +203,7 @@ export function InlineUnderlineField({
     >
       <input
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}

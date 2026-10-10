@@ -25,6 +25,7 @@ const respond_1 = require("./respond");
 exports.FIELD_KINDS = [
     "text",
     "pill",
+    "number",
     "enum",
     "date",
     "link",
@@ -37,9 +38,19 @@ const PILL_VALUE_MAX = 400;
 const ENUM_OPTION_MAX = 200;
 const ENUM_OPTIONS_MAX = 50;
 const LINK_VALUE_MAX = 2000;
+const NUMBER_VALUE_MAX = 40;
 const FIELD_DESCRIPTION_MAX = 1000;
 function isStringKind(kind) {
-    return (kind === "text" || kind === "pill" || kind === "enum" || kind === "date" || kind === "link");
+    return (kind === "text" ||
+        kind === "pill" ||
+        kind === "number" ||
+        kind === "enum" ||
+        kind === "date" ||
+        kind === "link");
+}
+/** `-12`, `0`, `3.5`: the web's `field-kinds.ts › isNumeric`, mirrored. */
+function isNumeric(value) {
+    return value.length <= NUMBER_VALUE_MAX && /^-?\d+(\.\d+)?$/.test(value);
 }
 function isIsoDate(value) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -146,6 +157,13 @@ function stringValue(kind, raw, label, options) {
         const list = options.map((o) => (0, narration_1.inlineOr)(o, narration_1.NO_NAME)).join(", ") || "none — pass `options`";
         return { fail: (0, respond_1.err)(`${(0, narration_1.inlineOr)(v, narration_1.NO_NAME)} is not an option of ${name}. Options: ${list}.`) };
     }
+    if (kind === "number") {
+        if (isNumeric(v))
+            return { value: v };
+        return {
+            fail: (0, respond_1.err)(`${name} is a number: send digits, optional minus and decimals, e.g. -12 or 3.5 (got ${(0, narration_1.inlineOr)(v, narration_1.NO_NAME)}).`),
+        };
+    }
     if (kind === "date") {
         // A full ISO timestamp is accepted and kept as its calendar day.
         const day = /^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : v;
@@ -200,7 +218,7 @@ function kindNote(kind, options) {
         const list = (options ?? []).map((o) => (0, narration_1.inlineOr)(o, narration_1.NO_NAME)).join(", ");
         return ` (enum: ${list || "no options"})`;
     }
-    return kind === "date" || kind === "link" ? ` (${kind})` : "";
+    return kind === "date" || kind === "link" || kind === "number" ? ` (${kind})` : "";
 }
 /** A link value inline: a code span with backticks percent-encoded, so `#`,
  *  `_` and `[` survive (the neutralizer would strip them out of the URL). */

@@ -4,6 +4,10 @@ import type { Role } from "@/features/workspaces/types";
 export type AttributeValue =
   | { kind: "text"; value: string }
   | { kind: "pill"; value: string }
+  /** A decimal number as a string (`-12`, `3.5`), or `""` while unset
+   *  (`field-kinds.ts › isNumeric`). A string, like the other one-value kinds,
+   *  so "unset" needs no null branch. */
+  | { kind: "number"; value: string }
   /** One of the field's `options`, or `""` while unset (`field-kinds.ts`). */
   | { kind: "enum"; value: string }
   /** A calendar day, `YYYY-MM-DD`, or `""`. */

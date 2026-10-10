@@ -7,12 +7,17 @@ import { SelectMenu } from "@/shared/ui/select-menu";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphAction, GraphState } from "../graph-state";
-import { emptyValue, isHttpUrl, isIsoDate } from "../field-kinds";
-import type { AttributeValue, ObjectAttribute, OntologyObject, TemplateField } from "../types";
+import { convertValue } from "../field-kinds";
+import type { ObjectAttribute, OntologyObject, TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
 import { FieldDescription, withDescription } from "./field-description";
 import { FieldMenu } from "./field-menu";
-import { DateValueEditor, EnumValueEditor, LinkValueEditor } from "./field-value-editors";
+import {
+  DateValueEditor,
+  EnumValueEditor,
+  LinkValueEditor,
+  NumberValueEditor,
+} from "./field-value-editors";
 import { KnowledgePickMenu } from "./knowledge-pick-menu";
 import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP } from "./ontology-bits";
@@ -24,10 +29,8 @@ import {
   ROW_REMOVE_BUTTON,
   useDraftRows,
 } from "./panel-section";
-import { KIND_OPTIONS } from "./template-editor";
+import { KIND_MENU_CLASS, useKindOptions } from "./template-editor";
 import { PickMenu } from "./pick-menu";
-
-type AttrKind = AttributeValue["kind"];
 
 /** A row's editable half. The persisted attribute carries a `key` beside it; a
  *  draft has none yet, and the two render identically. */
@@ -241,6 +244,7 @@ function AttrRow({
   const options =
     field?.kind === "enum" ? (field.options ?? []) : (row.options ?? []);
   const description = field?.description;
+  const kindOptions = useKindOptions(row.value.kind);
   return (
     <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
       <InlineUnderlineField
@@ -266,10 +270,11 @@ function AttrRow({
       />
       <SelectMenu
         value={row.value.kind}
-        options={KIND_OPTIONS}
+        options={kindOptions}
+        menuClassName={KIND_MENU_CLASS}
         disabled={!canEdit}
         onChange={(kind) => {
-          const value = emptyValueOf(kind, row.value, options);
+          const value = convertValue(kind, row.value, options);
           onChange(kind === "enum" ? { ...row, options, value } : { ...row, value });
         }}
         variant="text"
@@ -299,26 +304,6 @@ function AttrRow({
       <FieldDescription text={description} />
     </div>
   );
-}
-
-/**
- * A fresh value of `kind`. The four one-string kinds keep the string when it is
- * still valid in the new kind (text↔tag always; a select only if it is one of
- * the options, a date only if it is a day, a link only if it parses); every
- * other switch starts empty rather than reinterpreting one sort of id as
- * another — and rather than writing a value the server would refuse.
- */
-function emptyValueOf(
-  kind: AttrKind,
-  from: AttributeValue,
-  options: readonly string[]
-): AttributeValue {
-  const text = typeof from.value === "string" ? from.value : "";
-  if (kind === "text" || kind === "pill") return { kind, value: text };
-  if (kind === "enum") return { kind, value: options.includes(text) ? text : "" };
-  if (kind === "date") return { kind, value: isIsoDate(text) ? text : "" };
-  if (kind === "link") return { kind, value: isHttpUrl(text) ? text : "" };
-  return emptyValue(kind);
 }
 
 function AttrValueEditor({
@@ -357,6 +342,15 @@ function AttrValueEditor({
         value={v.value}
         canEdit={canEdit}
         onChange={(next) => onChange({ ...row, value: { kind: "date", value: next } })}
+      />
+    );
+  }
+  if (v.kind === "number") {
+    return (
+      <NumberValueEditor
+        value={v.value}
+        canEdit={canEdit}
+        onChange={(next) => onChange({ ...row, value: { kind: "number", value: next } })}
       />
     );
   }

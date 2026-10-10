@@ -269,6 +269,7 @@ function renderValue(value, nameOf, handles) {
         // attribute is 4000 chars of the user's prose → stays whole, and the caller
         // ({@link renderObject}) indents it.
         case "pill":
+        case "number":
         case "enum":
         case "date":
             return (0, narration_1.inlineOr)(value.value, "—");

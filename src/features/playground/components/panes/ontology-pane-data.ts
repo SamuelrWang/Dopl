@@ -44,6 +44,7 @@ export interface PaneOntology {
  *  (not imported: that module carries the whole editor component). */
 const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
+  number: "Number",
   pill: "Tag",
   enum: "Select",
   date: "Date",

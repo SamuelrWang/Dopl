@@ -16,6 +16,7 @@ import { err, type ToolResponse } from "./respond";
 export const FIELD_KINDS = [
   "text",
   "pill",
+  "number",
   "enum",
   "date",
   "link",
@@ -24,19 +25,30 @@ export const FIELD_KINDS = [
   "skill",
 ] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
-export type StringKind = "text" | "pill" | "enum" | "date" | "link";
+export type StringKind = "text" | "pill" | "number" | "enum" | "date" | "link";
 
 const TEXT_VALUE_MAX = 4000;
 const PILL_VALUE_MAX = 400;
 const ENUM_OPTION_MAX = 200;
 const ENUM_OPTIONS_MAX = 50;
 const LINK_VALUE_MAX = 2000;
+const NUMBER_VALUE_MAX = 40;
 const FIELD_DESCRIPTION_MAX = 1000;
 
 export function isStringKind(kind: FieldKind): kind is StringKind {
   return (
-    kind === "text" || kind === "pill" || kind === "enum" || kind === "date" || kind === "link"
+    kind === "text" ||
+    kind === "pill" ||
+    kind === "number" ||
+    kind === "enum" ||
+    kind === "date" ||
+    kind === "link"
   );
+}
+
+/** `-12`, `0`, `3.5`: the web's `field-kinds.ts › isNumeric`, mirrored. */
+function isNumeric(value: string): boolean {
+  return value.length <= NUMBER_VALUE_MAX && /^-?\d+(\.\d+)?$/.test(value);
 }
 
 function isIsoDate(value: string): boolean {
@@ -165,6 +177,12 @@ export function stringValue(
     const list = options.map((o) => inlineOr(o, NO_NAME)).join(", ") || "none — pass `options`";
     return { fail: err(`${inlineOr(v, NO_NAME)} is not an option of ${name}. Options: ${list}.`) };
   }
+  if (kind === "number") {
+    if (isNumeric(v)) return { value: v };
+    return {
+      fail: err(`${name} is a number: send digits, optional minus and decimals, e.g. -12 or 3.5 (got ${inlineOr(v, NO_NAME)}).`),
+    };
+  }
   if (kind === "date") {
     // A full ISO timestamp is accepted and kept as its calendar day.
     const day = /^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : v;
@@ -226,7 +244,7 @@ export function kindNote(kind: FieldKind, options?: readonly string[]): string {
     const list = (options ?? []).map((o) => inlineOr(o, NO_NAME)).join(", ");
     return ` (enum: ${list || "no options"})`;
   }
-  return kind === "date" || kind === "link" ? ` (${kind})` : "";
+  return kind === "date" || kind === "link" || kind === "number" ? ` (${kind})` : "";
 }
 
 /** A link value inline: a code span with backticks percent-encoded, so `#`,

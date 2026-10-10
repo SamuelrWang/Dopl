@@ -8,7 +8,7 @@ import { NEW_COLUMN_NAME, type ColumnDraftPatch } from "../optimistic-create";
 import type { TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
 import { FIELD_WELL } from "./ontology-bits";
-import { KIND_LABELS } from "./template-editor";
+import { useKindOptions } from "./template-editor";
 
 /**
  * The "New object" popup (Samuel, 2026-09-11). The lane is already on the board
@@ -36,6 +36,8 @@ export function NewObjectDialog({
   const [name, setName] = useState(NEW_COLUMN_NAME);
   const [description, setDescription] = useState("");
   const [fields, setFields] = useState<FieldRow[]>([]);
+  // A new field holds no retired kind, so "text" stands in for the row.
+  const kindOptions = useKindOptions("text");
 
   /**
    * Both exits clear, on the way out (`new-thread-dialog.tsx`'s rule). Resetting
@@ -128,9 +130,9 @@ export function NewObjectDialog({
                 }
                 className={`${FIELD_WELL} h-7 shrink-0 px-1.5 text-small text-text-secondary`}
               >
-                {Object.entries(KIND_LABELS).map(([kind, label]) => (
-                  <option key={kind} value={kind}>
-                    {label}
+                {kindOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>

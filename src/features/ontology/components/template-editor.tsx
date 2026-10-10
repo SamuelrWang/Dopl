@@ -5,6 +5,7 @@ import type { Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import type { GraphAction } from "../graph-state";
+import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { OntologyObject, TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
 import { FieldDescription, withDescription } from "./field-description";
@@ -22,6 +23,7 @@ import {
  *  renderings of a field's kind must not drift. */
 export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
+  number: "Number",
   pill: "Tag",
   // "Select", not "Enum": the word a person picks from (Samuel, 2026-10-01:
   // *"basically a selector"*). The stored kind and the MCP kind stay `enum`.
@@ -33,14 +35,30 @@ export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   skill: "Skill",
 };
 
-/** One declaration, so the template's kind picker and the attributes' cannot
- *  offer different words for one kind. No `description`: a second line per option
- *  in a 420px panel is the paragraph the minimal-copy ruling refuses. */
-export const KIND_OPTIONS: ReadonlyArray<SelectMenuOption<TemplateField["kind"]>> =
-  Object.entries(KIND_LABELS).map(([value, label]) => ({
-    value: value as TemplateField["kind"],
-    label,
-  }));
+type Kind = TemplateField["kind"];
+
+/**
+ * What a person may pick for a NEW field (Samuel, 2026-10-09): Text, Number,
+ * Select, Date, Link, Knowledge, and Skill outside the home space (skills do not
+ * live there). Tag, Object and home-space Skill are retired from the picker only:
+ * stored fields of those kinds still render and edit, and agents may still write
+ * them over MCP.
+ */
+const PICKABLE: readonly Kind[] = ["text", "number", "enum", "date", "link", "knowledge"];
+
+/** The kind picker's rows for one field. A field already holding a retired kind
+ *  keeps it as an option, else the trigger would misname it as the first row. */
+export function useKindOptions(current: Kind): ReadonlyArray<SelectMenuOption<Kind>> {
+  const { homeSpace } = useWorkspaceResources();
+  const kinds: Kind[] = homeSpace ? [...PICKABLE] : [...PICKABLE, "skill"];
+  if (!kinds.includes(current)) kinds.push(current);
+  // No `description`: a second line per option in a 420px panel is the
+  // paragraph the minimal-copy ruling refuses.
+  return kinds.map((value) => ({ value, label: KIND_LABELS[value] }));
+}
+
+/** One-word options: the menu hugs them instead of the select kit's 280px floor. */
+export const KIND_MENU_CLASS = "min-w-[132px] w-max";
 
 /**
  * The column's object template — default fields (label + kind, no values) every
@@ -161,6 +179,7 @@ function FieldRow({
   /** A persisted field: the ⋯ menu instead of the draft's naked ✕. */
   saved?: boolean;
 }) {
+  const kindOptions = useKindOptions(row.kind);
   return (
     <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
       <InlineUnderlineField
@@ -177,7 +196,8 @@ function FieldRow({
       />
       <SelectMenu
         value={row.kind}
-        options={KIND_OPTIONS}
+        options={kindOptions}
+        menuClassName={KIND_MENU_CLASS}
         disabled={!canEdit}
         onChange={(kind) => onChange({ ...row, kind })}
         variant="text"
