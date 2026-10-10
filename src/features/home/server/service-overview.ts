@@ -20,6 +20,7 @@ import {
   scanCreditEvents,
   scanMcpCalls,
   scanMessageChannels,
+  sumCreditUsageBins,
   type CreditEventScanRow,
   type HomeWindow,
   type Scan,
@@ -228,23 +229,59 @@ function filterWalletBurns(
  * month would return this month's rows and bin the plotted month to zeroes with
  * nothing to report.
  */
-async function scanUsageHistogramBurns(
+async function usageHistogramPoints(
   userId: string,
   scope: string | null,
-  windows: HomeWindow[]
-): Promise<Scan<CreditEventScanRow>> {
+  windows: HomeWindow[],
+  bucket: HomeOverviewBucket
+): Promise<{ points: HomeSeriesPoint[]; truncated: boolean }> {
+  // ⚠ An empty calendar has no span to ask SQL about, and `''` is not a
+  // `timestamptz`. `overviewWindows` never returns one; this is the guard that
+  // keeps that an invariant rather than a 500.
+  if (windows.length === 0) return { points: [], truncated: false };
+  const span: HomeWindow = {
+    startIso: windows[0].startIso,
+    endIso: windows[windows.length - 1].endIso,
+  };
   const ownedIds = await listOwnedHomeSpaceIds(userId);
   const channel = resolveUsageChannel(scope);
-  const scan = await scanCreditEvents(
+
+  const bins = await sumCreditUsageBins(
     userId,
     ownedIds,
-    windows[0]?.startIso ?? "",
-    {
-      untilIso: windows[windows.length - 1]?.endIso,
-      ...(channel ? { channel } : {}),
-    }
+    span,
+    bucket,
+    channel ?? undefined
   );
-  return filterWalletBurns(userId, ownedIds, scan);
+  if (bins) {
+    // 🔒 **ZERO-FILLED FROM THE WINDOW ARRAY, NEVER FROM THE RESULT SET** — the
+    // aggregate returns only bins that HAVE spend, and the axis is the frame
+    // (Samuel, 2026-09-01). ⚠ `truncated` is FALSE and that is a measurement,
+    // not an optimism: at most 31 rows come back, so there is nothing to clip.
+    return {
+      points: windows.map((win) => ({
+        at: win.startIso,
+        count: bins.get(win.startIso) ?? 0,
+      })),
+      truncated: false,
+    };
+  }
+
+  // ⚠ **THE DEGRADE, AND IT IS A FLOOR THAT SAYS SO.** `home_credit_usage_bins`
+  // ships written-not-applied, so until it lands this path is the live one: the
+  // old capped haul, binned in memory, reporting `truncated` through the
+  // now-honest `clipped()` (`repository-overview.ts › POSTGREST_MAX_ROWS`).
+  // Numbers can under-report on a busy month; the graph is never blank and the
+  // surface's clip banner fires, which is the whole difference from the bug.
+  const scan = filterWalletBurns(
+    userId,
+    ownedIds,
+    await scanCreditEvents(userId, ownedIds, span.startIso, {
+      untilIso: span.endIso,
+      ...(channel ? { channel } : {}),
+    })
+  );
+  return { points: binCredits(scan.rows, windows), truncated: scan.truncated };
 }
 
 /**
@@ -296,10 +333,11 @@ export async function getHomeOverviewSeries(
     // fenced on is neither needed nor correct here (see
     // {@link scanPersonalWalletBurns}). The counted arms below still resolve it,
     // because `mcp` and `messages` really are per-channel questions.
-    const scan = await scanUsageHistogramBurns(
+    const histogram = await usageHistogramPoints(
       userId,
       opts.scope ?? null,
-      windows
+      windows,
+      bucket
     );
     // ⚠ **A SCOPE WITH NO ROWS READS AS A ZERO-FILLED MONTH, NOT AS A REFUSAL,
     // AND SINCE 2026-09-13 THAT NEEDS NO BRANCH.** A channel the reader merely
@@ -318,8 +356,8 @@ export async function getHomeOverviewSeries(
       range,
       metric,
       bucket,
-      points: binCredits(scan.rows, windows),
-      truncated: scan.truncated,
+      points: histogram.points,
+      truncated: histogram.truncated,
     };
   }
 
