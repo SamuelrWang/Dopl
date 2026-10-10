@@ -282,6 +282,44 @@ function retagPrivate(entry, isPrivate) {
 }
 
 /**
+ * HOW MANY TOOL USES THIS RUN HAS HAD, STAMPED ON THE FRAME (2026-10-10, Samuel's "the count went down").
+ *
+ * ⚠ **THE RING IS A WINDOW AND A COUNT DERIVED FROM IT IS NOT A COUNT.** The stream groups a run of
+ * consecutive tool frames into one row and prints the run's size, and it computed that size by COUNTING THE
+ * FRAMES IT STILL HAD (`agent-stream-model.ts › toolUses`). Both of this ring's bounds then evict the
+ * OLDEST entries by design — `NARRATION_MAX` is 200 and a call plus its result is two frames, so a run of
+ * more than ~100 uses starts dropping its own head, and `RING_CHAR_BUDGET` gets there sooner. The row
+ * counted up to 105 and then counted DOWN as the head went over the side: a running total that decreases,
+ * which is the one thing a running total cannot do.
+ *
+ * ⚠ **SO THE NUMBER IS STAMPED WHERE NOTHING IS EVICTED — HERE, AT THE APPEND.** The ordinal travels ON the
+ * newest frames, which are the ones a ring never drops, so the reader's `max` is exact however much of the
+ * head is gone. ⚠ It is a per-RUN ordinal and not a session total: the row says what THIS run did, and a
+ * session total under one of several runs would be a different (and wrong) sentence.
+ *
+ * ⚠ **THE RESET MIRRORS THE READER'S RUN BREAK, WHICH IS "ANY NON-TOOL LANE"** — `agent-stream-lanes.ts ›
+ * LANE_BY_KIND` puts `tool` and `result` in the tool lane and everything else elsewhere, so `result`
+ * carries the run's current ordinal WITHOUT advancing it (a call and its result are two frames about ONE
+ * use, the rule `toolUses` already stated) and every other kind ends the run. Two tables, one rule: if that
+ * map gains a tool-lane kind, this reset gains it too.
+ *
+ * ⚠ **ABSENT IS THE HONEST DEGRADATION.** A `result` with no run behind it, and every non-tool frame, carry
+ * nothing rather than a zero — the reader falls back to its own frame count, which is exactly the behaviour
+ * every build before this one had.
+ */
+function stampToolRun(s, entry) {
+  if (!entry || !s) return entry;
+  const run = Number.isFinite(s.toolRun) && s.toolRun > 0 ? s.toolRun : 0;
+  if (entry.kind === 'tool') {
+    s.toolRun = run + 1;
+    return { ...entry, runCount: s.toolRun };
+  }
+  if (entry.kind === 'result') return run > 0 ? { ...entry, runCount: run } : entry;
+  s.toolRun = 0;
+  return entry;
+}
+
+/**
  * THE ANSWER TO A DIRECTION, TAGGED AS ONE (2026-08-31).
  *
  * ⚠ APPLIED AFTER {@link retagPrivate} AND ONLY OVER ITS OUTPUT, so there is exactly one
@@ -329,7 +367,9 @@ function note(s, event) {
     isDirectedTurn(s)
   );
   if (!entry) return;
-  push(s, entry);
+  // The run ordinal is stamped at the APPEND, because the ring evicts and a count derived from what
+  // survived is not a count ({@link stampToolRun}).
+  push(s, stampToolRun(s, entry));
   dirty.set(String(s.key), true);
   schedule();
 }
@@ -356,7 +396,9 @@ function noteEnded(s, payload) {
   if (!s || !s.key || !payload) return;
   const text = sessionEffects.endedStatusText(payload.reason, s.state);
   if (!text) return; // a reason-less end says nothing rather than inventing a cause
-  push(s, { at: Date.now(), kind: 'status', text: text });
+  // Through the same stamp as every other append: a `status` frame ENDS a tool run (it is not in the tool
+  // lane), and the reset belongs at the one place the run counter is touched.
+  push(s, stampToolRun(s, { at: Date.now(), kind: 'status', text: text }));
   dirty.set(String(s.key), true);
   schedule();
 }
@@ -425,6 +467,7 @@ module.exports = {
   entryFor,
   PROSE_CAP,
   retagPrivate, // 2026-08-22: an `assistant` line inside a private turn is the agent's PRIVATE side
+  stampToolRun, // 2026-10-10: the run's tool-use ordinal, stamped where nothing is evicted
   POST_CAP,
   push,
   // the live half

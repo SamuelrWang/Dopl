@@ -43,6 +43,17 @@ export interface DesktopNarrationEntry {
   /** `false` only on a `result` that failed. */
   ok?: boolean;
   /**
+   * `tool` and `result` only: HOW MANY TOOL USES THIS RUN HAD HAD when main appended the frame
+   * (`main/session-narration.js › stampToolRun`), counting from 1.
+   *
+   * ⚠ IT EXISTS BECAUSE THE RING EVICTS AND THIS SIDE CANNOT COUNT WHAT IT NEVER RECEIVED. The run row's
+   * number used to be the frames the reader still held, so a run past the ring's bound counted DOWN as its
+   * head went over the side (Samuel, 2026-10-10: 105 then lower). The ordinal rides the NEWEST frames,
+   * which a ring never drops, so `max` over a group is exact however much of the head is missing.
+   * ⚠ ABSENT IS ORDINARY — an older main stamps nothing and the reader falls back to its own frame count.
+   */
+  runCount?: number;
+  /**
    * Bounded main-side by kind (`main/session-narration.js`): 300 for captions, 1000 for a `post`,
    * 8000 for prose. ⚠ The prose cap equals the UI's expanded ceiling
    * (`agent-stream-log.tsx › EXPANDED_CHARS`): a cap below what the UI shows is a silent cut.

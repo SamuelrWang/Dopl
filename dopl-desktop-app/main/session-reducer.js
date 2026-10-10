@@ -37,6 +37,37 @@ function feedInboundEffects(state, event) {
   return effects;
 }
 
+/**
+ * DOES A STREAMED FRAME OF LIVE WORK CORRECT THIS SESSION'S LABEL? The patch, or `null` for a label that
+ * is already right — or that must not move (2026-10-10, Samuel's "waiting while it is clearly working").
+ *
+ * ⚠ THE DEFECT IT CLOSES. Nothing in the live stream touched state: `tool_use`, `assistant` and `thinking`
+ * had no arm at all and fell through to the tail's no-op, and `tool_result` only ever un-counted a denied
+ * post. So `result`'s end-of-turn word (`idle`, or `awaiting_peer` for a turn that posted) stood for the
+ * whole NEXT turn. A push that lands MID-TURN queues on the prompt iterator rather than being consumed
+ * (`session-io.js › makePushIterator.push`); its own dispatch marks `working`, the in-flight turn's
+ * `result` then overwrites that, and the turn the push started runs to completion reported between turns.
+ * `session-pill.js` maps both words to the `idle` pill, so the window read "Waiting" and
+ * `channel_sessions.state` said `idle` while `toolLabel` and `lastActivityAt` were seconds old.
+ *
+ * ⚠ IT ONLY EVER CORRECTS THE TWO BETWEEN-TURNS WORDS, and the narrowness is the safety:
+ *   `working`              already right; nothing to say.
+ *   `awaiting_permission`  OUTRANKS it — a held gate is the finer truth and `gateActivity` is the one
+ *                          place that is decided. A tool frame must not talk over a card.
+ *   `parked`               stays parked. A torn-down query's drained tail is FIX #5's exact case and
+ *                          must never read as a live turn; `parked` is checked rather than `phase`,
+ *                          like every other park read here.
+ *
+ * ⚠ IT SCHEDULES NO IDLE TIMER, DELIBERATELY. The TTL is armed per TURN and this stream is not a
+ * heartbeat: re-arming on every tool call would make a long tool loop effectively unparkable, which is a
+ * product decision about `DEFAULT_IDLE_MS` and not this fix's to take. Reported separately.
+ */
+function workingPatch(state) {
+  if (state.parked === true) return null;
+  if (state.activity !== 'idle' && state.activity !== 'awaiting_peer') return null;
+  return { activity: gateActivity(state, 'working') };
+}
+
 function sessionReducer(state, event) {
   // Terminal: a settled session ignores every later event.
   if (state.phase === 'ended') return { state: state, effects: [] };
@@ -59,15 +90,24 @@ function sessionReducer(state, event) {
     };
   }
 
+  // A FRAME OF LIVE WORK: the runtime called a tool, or the agent spoke or reasoned. Proof a turn is in
+  // flight, so it corrects a stale between-turns label and nothing else ({@link workingPatch}).
+  if (type === 'tool_use' || type === 'assistant' || type === 'thinking') {
+    const live = workingPatch(state);
+    return { state: live ? clone(state, live) : state, effects: [] };
+  }
+
   if (type === 'tool_result') {
     const p = event.payload || {};
     const id = p.toolUseId;
+    // A result is live work too, so it carries the same correction as the other three.
+    const live = workingPatch(state);
     // FIX F3: a DENIED own-channel post was counted before the decision; its failing result un-counts it.
     if (p.ok === false && id && state.postedToolUseIds.indexOf(id) !== -1) {
       const remaining = without(state.postedToolUseIds, id);
-      return { state: clone(state, { postedToolUseIds: remaining, postedThisTurn: remaining.length > 0 }), effects: [] };
+      return { state: clone(state, { ...(live || {}), postedToolUseIds: remaining, postedThisTurn: remaining.length > 0 }), effects: [] };
     }
-    return { state: state, effects: [] };
+    return { state: live ? clone(state, live) : state, effects: [] };
   }
 
   // The agent posted to its own channel: recorded so the turn ends awaiting the peer. A held gate outranks "working".
