@@ -41,7 +41,9 @@ test("FIX F3: a FAILING tool_result for a streamed post clears postedThisTurn", 
   const r = sessionReducer(posted, resultEv("t1", false));
   assert.equal(r.state.postedThisTurn, false, "nothing left this machine");
   assert.deepEqual(r.state.postedToolUseIds, []);
-  assert.deepEqual(r.effects, []);
+  // 2026-10-10: a result is live work, so it re-arms the TTL as well as un-counting the post. The F3
+  // correction is unchanged; what is added beside it is the "never park mid-work" re-arm.
+  assert.deepEqual(r.effects, [{ type: "scheduleIdle", from: "work" }]);
   // And the turn therefore ends IDLE, never "Waiting for reply".
   const end = sessionReducer(r.state, { type: "result", turnCostUsd: 0 });
   assert.equal(end.state.activity, "idle");

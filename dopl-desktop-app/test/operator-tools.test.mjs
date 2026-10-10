@@ -110,10 +110,17 @@ test("fan-out: the operator's account is operator-originated — their posts and
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 const RED = loadReducer();
 const funnel = new Function(
-  "sessionReducer", "sessionSummary", "sessionNarration", "sessionDirected", "sessionPrivate", "runEffect",
+  "sessionReducer", "sessionSummary", "sessionNarration", "sessionDirected", "sessionPrivate", "workCap", "runEffect",
   `${ENGINE.slice(ENGINE.indexOf("function dispatch(s, event) {"), ENGINE.indexOf("function runEffect(s, eff) {"))}
    return dispatch;`
-)(RED.sessionReducer, { noteActivity() {} }, { note() {} }, { observe() {} }, priv, () => undefined);
+)(
+  RED.sessionReducer, { noteActivity() {} }, { note() {} }, { observe() {} }, priv,
+  // 2026-10-10: the funnel ends the continuous-work stretch on a turn end. The REAL module is injected
+  // rather than a stub — it is pure and require-free, so there is nothing to fake and a stub would be one
+  // more copy of the rule (`session-work-cap.js`; its own suite is session-work-cap.test.mjs).
+  require(M("session-work-cap.js")),
+  () => undefined
+);
 
 function running() {
   const s = { state: RED.initialSessionState({ messageMode: "auto_inbound" }) };

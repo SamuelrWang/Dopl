@@ -78,12 +78,18 @@ test("launched: launching -> running with persist/lifecycle(task_started)/schedu
 
 // ── render events ────────────────────────────────────────────────────────────────
 
-test("assistant/tool_use/tool_result are inert: no state change, no effect", () => {
+// 2026-10-10: a render event is no longer INERT, and the two halves of that moved for different reasons.
+// It still changes no STATE on a session already reading `working` — but it now RE-ARMS THE IDLE TTL,
+// because only a turn END used to and an agent fifteen minutes into one long task was therefore parked
+// mid-tool-call (Samuel: "never park mid-work"). The re-arm is bounded by the continuous-work cap, which
+// is what keeps a runaway loop parkable; `session-live-work.test.mjs` / `session-work-cap.test.mjs` own
+// the label correction and the bound.
+test("assistant/tool_use/tool_result change no state on a working session, but hold the TTL open", () => {
   const s = running();
   for (const type of ["assistant", "tool_use", "tool_result"]) {
     const r = sessionReducer(s, { type, payload: { type, x: 1 } });
     assert.equal(r.state, s, "no state change for a render event");
-    assert.deepEqual(r.effects, []);
+    assert.deepEqual(r.effects, [{ type: "scheduleIdle", from: "work" }]);
   }
 });
 

@@ -14,6 +14,8 @@ const framing = require('./prompt-framing');
 const sessionAuth = require('./session-auth'); const mcpGuard = require('./mcp-connect-guard');
 const { initialSessionState, sessionReducer, idleTimeout } = require('./session-reducer');
 const sessionEffects = require('./session-effects');
+// The continuous-work cap's clock: live frames re-arm the idle TTL, this bounds how long they may.
+const workCap = require('./session-work-cap');
 const { floorWindowlessMessage, toolModesFor } = require('./session-profiles');
 const runtimeRegistry = require('./runtime'); const acquireRuntime = runtimeRegistry.acquire;
 const sessionQuery = require('./session-query'); const { buildLaunchSpec, startQuery, consume } = sessionQuery;
@@ -62,7 +64,12 @@ const baseRecord = io.baseRecord;
 /** The one dispatch funnel. Answers whether an effect resolved a LIVE held-tool promise (FIX F1). */
 function dispatch(s, event) {
   // A turn ended: spend one unit of the private window (a fact about the session object, not reducer state).
-  if (event && event.type === 'result') { sessionPrivate.closePrivateTurn(s); sessionPrivate.closePeerTurn(s); }
+  // A turn ended: spend one unit of the private window, and END THE WORK STRETCH — the continuous-work cap
+  // measures unbroken work, so the next stretch starts from its own first frame rather than inheriting this
+  // one's age (`session-work-cap.js`).
+  if (event && event.type === 'result') {
+    sessionPrivate.closePrivateTurn(s); sessionPrivate.closePeerTurn(s); workCap.noteBoundary(s);
+  }
   if (event && (event.type === 'steer' || event.type === 'inbound_arrived')) s.awaitingDirective = false;
   const wasInFlight = sessionPrivate.turnInFlight(s.state);
   const { state, effects } = sessionReducer(s.state, event);
@@ -93,7 +100,7 @@ function runEffect(s, eff) {
       if (eff.phase === 'parked') store.saveRecord({ ...baseRecord(s), phase: eff.phase });
       else store.setRecordPhase(s.key, eff.phase);
       break;
-    case 'scheduleIdle': scheduleIdle(s); break;
+    case 'scheduleIdle': scheduleIdle(s, eff); break;
     case 'resolvePermission':
       return resolvePerm(s, eff.requestId, eff.decision);
     // Both pushes refresh the sibling roster first: `withSeed` may build a spawn-idle agent's FIRST turn here.
@@ -116,6 +123,10 @@ function runEffect(s, eff) {
       break;
     case 'abortQuery':
       // A torn-down query owes no results: the private window and the directed capture reset with it.
+      // ⚠ AND SO DOES THE WORK STRETCH. Park, crash and end all run this, so it is the one place that
+      // catches every teardown — and a stamp left behind by a stretch that parked hours ago would make the
+      // FIRST frame of the next one read as already past the cap and park it instantly, on a loop.
+      workCap.noteBoundary(s);
       sessionPrivate.resetPrivateTurn(s); sessionPrivate.resetPeerTurn(s);
       sessionDirected.resetDirected(s);
       // The runtime's handle too: a Codex child ends only on `close()` (P4-14).
@@ -138,11 +149,25 @@ function runEffect(s, eff) {
 function emit(s, payload) {
   sessionWindowless.claimGate(s, payload, (rid, d) => dispatch(s, { type: 'permission_decision', requestId: rid, decision: d }));
 }
-function scheduleIdle(s) {
+/**
+ * ONE TIMER PER SESSION; a parked session waits on the abandonment bound.
+ *
+ * ⚠ A WORK RE-ARM IS CLAMPED TO THE CONTINUOUS-WORK CAP (2026-10-10, Samuel's "never park mid-work"). Live
+ * frames re-arm this timer so a long task is not parked mid-tool-call, and `session-work-cap.js` is what
+ * stops that from making a runaway loop unparkable: the stretch is stamped by its first frame, and once two
+ * hours of UNBROKEN work have passed the timer is armed at zero and the ordinary `idle_timeout` parks the
+ * session, resumable, exactly as a quiet one parks today.
+ * ⚠ THE CLAMP ONLY EVER SHORTENS, and only an `idle_timeout`. The LAUNCH WATCHDOG (`inactive`) and the
+ * ABANDONMENT bound are other questions on other clocks and are left exactly as they were — a cap that
+ * could shorten the watchdog would end a launch the transport can still recover.
+ */
+function scheduleIdle(s, eff) {
   if (s.idleTimer) clearTimeout(s.idleTimer);
-  // One timer per session; a parked session waits on the abandonment bound.
   const t = idleTimeout(s.state);
-  s.idleTimer = setTimeout(() => { if (!s.settled) dispatch(s, { type: t.type }); }, t.ms);
+  const ms = eff && eff.from === 'work' && t.type === 'idle_timeout'
+    ? workCap.workIdleMs(s, t.ms, Date.now())
+    : t.ms;
+  s.idleTimer = setTimeout(() => { if (!s.settled) dispatch(s, { type: t.type }); }, ms);
 }
 
 /** Build, register and launch one session (every spawn shape). The nonce is minted here so the first

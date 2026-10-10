@@ -78,10 +78,13 @@ for (const event of [
   test(`${event.type} NEVER wakes a parked session (FIX #5's drained tail)`, () => {
     const parked = sessionReducer(running(), { type: "idle_timeout" }).state;
     assert.equal(parked.parked, true);
-    const after = sessionReducer(parked, event).state;
-    assert.equal(after.activity, "parked");
-    assert.equal(after.phase, "parked");
-    assert.equal(after.parked, true);
+    const r = sessionReducer(parked, event);
+    assert.equal(r.state.activity, "parked");
+    assert.equal(r.state.phase, "parked");
+    assert.equal(r.state.parked, true);
+    // ⚠ AND IT ARMS NOTHING: the timer a parked session holds is the ABANDONMENT bound, and a drained tail
+    // must not push that out — M2's "a parked session nobody comes back to ends" would never fire.
+    assert.deepEqual(r.effects, []);
   });
 
   test(`${event.type} NEVER revives an ended session`, () => {
@@ -91,16 +94,21 @@ for (const event of [
     assert.deepEqual(after.effects, []);
   });
 
-  test(`${event.type} arms no timer — the TTL is per TURN, not a heartbeat`, () => {
+  test(`${event.type} RE-ARMS the idle TTL, as a WORK re-arm`, () => {
+    // 2026-10-10, "never park mid-work": a live frame holds the TTL open, and `from: 'work'` is what lets
+    // the engine bound that against the continuous-work cap. Without the word it would be unparkable.
     const r = sessionReducer({ ...running(), activity: "idle" }, event);
-    assert.deepEqual(r.effects, [], "a tool loop must not become unparkable by accident");
+    assert.deepEqual(r.effects, [{ type: "scheduleIdle", from: "work" }]);
   });
 
-  test(`${event.type} leaves an already-working session untouched`, () => {
+  test(`${event.type} re-arms even when the state does NOT move`, () => {
+    // The session already reads `working` — which is exactly the one whose timer has to be pushed out. The
+    // re-arm must not ride on the label having changed.
     const s = { ...running(), activity: "working" };
     const r = sessionReducer(s, event);
     assert.equal(r.state.activity, "working");
     assert.equal(r.state, s, "no state object is minted when nothing moved");
+    assert.deepEqual(r.effects, [{ type: "scheduleIdle", from: "work" }]);
   });
 }
 
