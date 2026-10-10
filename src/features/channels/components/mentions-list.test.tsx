@@ -92,6 +92,47 @@ function open(props: { truncated?: boolean; rows?: ChannelMention[] } = {}) {
   return { tagsRow, onOpen };
 }
 
+/**
+ * **THE SNIPPET'S @-TAGS WEAR THE TRANSCRIPT'S BLUE** (Samuel, 2026-10-10).
+ *
+ * ⚠ **WHAT IS WORTH A TEST IS THE ASYMMETRY, NOT THE COLOUR.** "Make it blue" would pass
+ * with a `text-link` hardcoded on the whole snippet; what must hold is that the tint
+ * tracks RESOLUTION — a handle the roster answers for is blue, one it does not is prose —
+ * because that is the only thing distinguishing a reused renderer from a repainted row,
+ * and the direction it fails in (blue on a handle that routes nobody) is the one F-266
+ * was paid for twice.
+ */
+describe("the snippet's @-tags", () => {
+  const TAGGED = [
+    mention({
+      messageId: "m-7",
+      seq: 7,
+      snippet: "ping @diana-taylor and @nobody-here about the kit",
+    }),
+  ];
+
+  it("tints a RESOLVED handle, and leaves an unresolved one as prose", () => {
+    open({ rows: TAGGED });
+    // `--link` is the palette's only blue; the class is the transcript's own.
+    expect(screen.getByText("@diana-taylor").className).toContain("text-link");
+    expect(screen.getByText("@nobody-here").className).not.toContain("text-link");
+  });
+
+  it("leaves the surrounding prose on the ROW's ink", () => {
+    open({ rows: TAGGED });
+    // ⚠ Only the tokens change. A snippet that lost its own size/colour would be the
+    // "repainted row" failure wearing the right class.
+    expect(screen.getByText(/about the kit/).className).not.toContain("text-link");
+  });
+
+  it("does NOT add the you-were-tagged wash", () => {
+    open({ rows: TAGGED });
+    // Every row in this inbox tags the viewer by construction, so the wash would paint
+    // all of them and distinguish nothing. Colour only — the composer's rule.
+    expect(screen.getByText("@diana-taylor").className).not.toContain("bg-link");
+  });
+});
+
 describe("channels mentions inbox", () => {
   it("shows the live unread count and every mention behind the disclosure", () => {
     const { tagsRow } = open();

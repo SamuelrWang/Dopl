@@ -33,10 +33,15 @@
 
 import type { AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
+import { useMemo } from "react";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { AgentPill } from "./agent-bits";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { ChannelMention } from "../types";
+import { MentionText } from "./message-markdown-mentions";
+import type { BodyContext } from "./message-markdown-context";
+import { buildMentionIndex } from "../lib/mentions";
+import { addressableAgents, buildAgentMentionIndex } from "../lib/agent-mentions";
 
 /**
  * ⚠ **`MENTIONS_CLIPPED_NOTE` STOOD HERE AND IS DELETED (Samuel, 2026-09-15):
@@ -111,6 +116,48 @@ export function MentionsList({
   // WRITE path is untouched — `use-mention-writes.ts › markRead` still fires on a
   // row's own click, which is how a mention becomes read now.
 
+  /**
+   * **THE SNIPPET'S @-TAGS TINT THE TRANSCRIPT'S BLUE** (Samuel, 2026-10-10: the
+   * handles under Mentions read in plain ink, and they should be the same blue tags
+   * are in the chat).
+   *
+   * ⚠ **BUILT ONCE FOR THE WHOLE PAGE, NOT PER ROW.** `buildMentionIndex` walks every
+   * member and `addressableAgents` every agent; a bounded page of rows would redo both
+   * for each one, on every read-state change.
+   * ⚠ **IT IS `message-markdown.tsx`'S OWN RECIPE, FIELD FOR FIELD** — the same two
+   * builders over the same `index` this list already receives. A hand-rolled handle map
+   * here is the two-readers-one-fact defect, and the fact in question is WHICH @-tokens
+   * resolve to somebody.
+   * ⚠ **`mentionsMe: false`, AND THAT IS NOT A SHORTCUT.** `MentionText`'s extra
+   * `bg-link/10` wash means "this message tags YOU" — a fact that is true of every row
+   * in this inbox by construction, so switching it on would wash every handle in the
+   * list and distinguish nothing. Colour only, which is the composer's rule for the
+   * same reason.
+   * ⚠ **NO `onJumpToSeq` AND NO `newestSeq`**, so a `#1759` in a snippet stays plain
+   * text rather than becoming a citation pill: the row is already one big button whose
+   * press lands the transcript, and a button inside it could not navigate anywhere else.
+   * That is the absent-not-disabled arm `message-markdown-context.ts` documents, used
+   * on purpose.
+   * ⚠ **KNOWN DIVERGENCE, AND IT IS THE NARROW END OF F-266**: a snippet is the body
+   * FLATTENED by `server/service-mentions.ts`, never walked by `marked`, so a handle the
+   * transcript keeps plain for being inside code — `` `@samuel-wang` `` — tints here.
+   * `composer-tint.tsx` fixed the same class of thing with `maskNonTaggingRegions` + an
+   * offset walk, which cannot be reached through `MentionText`'s single `text` argument.
+   * It is cosmetic on an excerpt (this surface asserts nothing about routing) and the
+   * strict fix is a renderer change, so it is left stated rather than half-done.
+   */
+  const bodyCtx = useMemo<BodyContext>(
+    () => ({
+      handles: buildMentionIndex([...index.byId.values()]),
+      agentHandles: buildAgentMentionIndex(addressableAgents(index.agents)),
+      index,
+      mentionsMe: false,
+      block: "",
+      text: "",
+    }),
+    [index]
+  );
+
   if (loading && mentions.length === 0) {
     return (
       <p role="status" aria-busy="true" className="sr-only">
@@ -149,6 +196,7 @@ export function MentionsList({
           mention={mention}
           channelName={channelName}
           index={index}
+          bodyCtx={bodyCtx}
           onOpen={() => onOpenMention(mention)}
         />
       ))}
@@ -193,11 +241,14 @@ function MentionItem({
   mention,
   channelName,
   index,
+  bodyCtx,
   onOpen,
 }: {
   mention: ChannelMention;
   channelName: string;
   index: AuthorIndex;
+  /** Built once by the list — see the comment on its `useMemo`. */
+  bodyCtx: BodyContext;
   onOpen: () => void;
 }) {
   const unread = !mention.read;
@@ -249,8 +300,16 @@ function MentionItem({
         </span>
         <span className="sr-only">{unread ? "unread mention" : "read mention"}</span>
       </span>
+      {/* ⚠ **THE TRANSCRIPT'S OWN LEAF, NOT A SECOND TINT** (2026-10-10). `MentionText`
+          is the component the chat stream calls at every text node, so a handle that is
+          blue in the body is blue here, and one the roster does not resolve is plain in
+          both — by construction rather than by two rules agreeing. The blue itself is
+          `--link`, the palette's only blue, and it is never named in this file.
+          ⚠ **THE ROW'S OWN TYPE SURVIVES**: `text-caption text-text-secondary` stays on
+          the wrapper, so the un-tagged prose keeps the size and colour it had and only
+          the TOKENS change. `MentionText` sets weight and colour on the tokens alone. */}
       <span className="line-clamp-2 text-caption text-text-secondary">
-        {mention.snippet}
+        <MentionText text={mention.snippet} ctx={bodyCtx} />
       </span>
     </button>
   );
