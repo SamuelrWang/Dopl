@@ -55,19 +55,43 @@ test("registry ids match the web registry", () => {
   assert.deepEqual(load().mod.EVENT_IDS, ids);
 });
 
-test("before any read, and on every failure, every event reads ON", async () => {
+/**
+ * The defaults, DERIVED from the module's own lists rather than restated — so growing the
+ * registry does not need this file edited, and a drifting default still fails.
+ * ⚠ `direct_message` is the one id that defaults OFF (Samuel ruled DMs out, 2026-10-09).
+ */
+function expectedDefaults(mod) {
+  const out = {};
+  for (const id of mod.EVENT_IDS) out[id] = id !== "direct_message";
+  return out;
+}
+
+test("before any read, and on every failure, every event reads its default", async () => {
   // Never read: the gate must not wait for the network to answer a banner.
   const fresh = load();
-  assert.deepEqual(fresh.mod.getPrefs().events, { mention: true, decision: true, direct_message: true, approval: true });
-  assert.equal(fresh.mod.allowsMessage(msg({}), room), true);
+  assert.deepEqual(fresh.mod.getPrefs().events, expectedDefaults(fresh.mod));
+  assert.equal(fresh.mod.allowsMessage(msg({}), room), true, "a mention still notifies");
+  assert.equal(fresh.mod.allowsMessage(msg({}), dm), false, "a DM does not, by Samuel's ruling");
 
-  // 503 while the table is unapplied, 404 on an older deploy, and a dead network: all ON.
+  // 503 while the table is unapplied, 404 on an older deploy, and a dead network: all defaults.
   for (const bad of [{ status: 503 }, { status: 404 }, { throws: true }]) {
     const { mod, logs } = load(bad);
     assert.equal(await mod.refresh(true), null, "a failed read produces no record");
-    assert.deepEqual(mod.getPrefs().events, { mention: true, decision: true, direct_message: true, approval: true });
-    assert.equal(mod.allowsMessage(msg({}), dm), true);
+    assert.deepEqual(mod.getPrefs().events, expectedDefaults(mod));
+    assert.equal(mod.allowsMessage(msg({}), room), true, "an unreadable record still notifies");
     assert.equal(logs.length, 1, "the failure is logged once, not per banner");
+  }
+});
+
+test("every safety event is locked on, like approvals", async () => {
+  const off = Object.fromEntries(
+    ["approval", "signed_out", "credits_exhausted", "runtime_signin", "decision_failed"].map((id) => [id, false])
+  );
+  const { mod } = load({ prefs: { v: 1, events: off } });
+  await mod.refresh(true);
+  for (const id of Object.keys(off)) {
+    assert.equal(mod.getPrefs().events[id], true, `${id} must not be mutable`);
+    assert.equal(mod.allowsIn(mod.getPrefs(), id), true);
   }
 });
 
@@ -75,7 +99,7 @@ test("the account record is read into the cache, normalized", async () => {
   const { mod, calls } = load({ prefs: { v: 1, events: { mention: false, approval: false, bogus: false, decision: "no" } } });
   await mod.refresh(true);
   // Unknown keys dropped, non-booleans read as the default, approval FORCED ON.
-  assert.deepEqual(mod.getPrefs().events, { mention: false, decision: true, direct_message: true, approval: true });
+  assert.deepEqual(mod.getPrefs().events, { ...expectedDefaults(mod), mention: false });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].pathname, "/api/user/notification-preferences");
   assert.equal(calls[0].init.method, "GET");

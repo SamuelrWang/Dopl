@@ -11,6 +11,10 @@ import {
  * ⚠ DEFAULT ON. A missing or unreadable record means "notify", because a banner nobody asked
  * to silence is recoverable and a silenced one is not noticed. A locked event is forced on at
  * every read and write, so no backend can hold it off.
+ * ⚠ ONE EXCEPTION, AND IT IS A RULING, NOT A LAPSE: an event carrying `defaultOn: false` in the
+ * registry defaults OFF (today just `direct_message`, which Samuel ruled out entirely on
+ * 2026-10-09). For that row silence IS the state he asked for, so failing to OFF is failing
+ * toward his answer. Every other event keeps the fail-ON guarantee above.
  *
  * ⚠ PER-CHANNEL OVERRIDES ARE NOT IN v1. The server table (migration
  * 20261117120000_notification_preferences.sql) already carries a nullable `channel_id` so
@@ -23,7 +27,7 @@ export interface NotificationPrefs {
 
 export function defaultNotificationPrefs(): NotificationPrefs {
   const events = {} as Record<NotificationEventId, boolean>;
-  for (const e of NOTIFICATION_EVENTS) events[e.id] = true;
+  for (const e of NOTIFICATION_EVENTS) events[e.id] = e.defaultOn !== false;
   return { v: 1, events };
 }
 

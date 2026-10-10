@@ -7,6 +7,11 @@ import {
   type NotificationPrefs,
   type NotificationPrefsStore,
 } from "../prefs";
+import {
+  NOTIFICATION_EVENTS,
+  NOTIFICATION_EVENT_IDS,
+  VISIBLE_NOTIFICATION_EVENTS,
+} from "../registry";
 
 afterEach(cleanup);
 
@@ -17,12 +22,21 @@ function fakeStore(save: NotificationPrefsStore["save"]): NotificationPrefsStore
 const sw = (name: string) => screen.getByRole("switch", { name });
 
 describe("NotificationsPanel", () => {
-  it("draws one switch per registry event, Approvals locked on", async () => {
+  it("draws one switch per WIRED event only, Approvals locked on", async () => {
     render(<NotificationsPanel store={fakeStore(async (p) => p)} />);
     await screen.findByRole("switch", { name: "Mentions and replies" });
-    for (const name of ["Mentions and replies", "Decisions for you", "Direct messages"]) {
-      expect(sw(name).getAttribute("aria-checked")).toBe("true");
-      expect((sw(name) as HTMLButtonElement).disabled).toBe(false);
+
+    // One row per wired event, and NOT one per registered id.
+    expect(screen.getAllByRole("switch")).toHaveLength(VISIBLE_NOTIFICATION_EVENTS.length);
+    for (const e of VISIBLE_NOTIFICATION_EVENTS) {
+      expect(sw(e.label).getAttribute("aria-checked")).toBe(String(e.defaultOn !== false));
+      expect((sw(e.label) as HTMLButtonElement).disabled).toBe(Boolean(e.locked));
+    }
+
+    // ⚠ An event the registry NAMES but nothing raises must draw no control at all: a switch
+    // that does nothing is a lie. These are registered and unwired today.
+    for (const e of NOTIFICATION_EVENTS.filter((x) => !x.wired)) {
+      expect(screen.queryByRole("switch", { name: e.label })).toBeNull();
     }
     expect(sw("Approvals").getAttribute("aria-checked")).toBe("true");
     expect((sw("Approvals") as HTMLButtonElement).disabled).toBe(true);
@@ -31,11 +45,26 @@ describe("NotificationsPanel", () => {
   it("writes the whole record through the store and keeps what it answered", async () => {
     const save = vi.fn(async (p: NotificationPrefs) => p);
     render(<NotificationsPanel store={fakeStore(save)} />);
-    fireEvent.click(await screen.findByRole("switch", { name: "Direct messages" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Mentions and replies" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0][0].events.direct_message).toBe(false);
-    expect(save.mock.calls[0][0].events.mention).toBe(true);
-    await waitFor(() => expect(sw("Direct messages").getAttribute("aria-checked")).toBe("false"));
+    const written = save.mock.calls[0][0];
+    expect(written.events.mention).toBe(false);
+    // The WHOLE record goes over, every registered id, not just the rows on screen.
+    expect(Object.keys(written.events).sort()).toEqual([...NOTIFICATION_EVENT_IDS].sort());
+    await waitFor(() =>
+      expect(sw("Mentions and replies").getAttribute("aria-checked")).toBe("false")
+    );
+  });
+
+  it("shows a ruled-off event as off, and can turn it back on", async () => {
+    const save = vi.fn(async (p: NotificationPrefs) => p);
+    render(<NotificationsPanel store={fakeStore(save)} />);
+    // DMs are ruled off (Samuel, 2026-10-09) but keep a switch, so he can change his mind.
+    const dm = await screen.findByRole("switch", { name: "Direct messages" });
+    expect(dm.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(dm);
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0].events.direct_message).toBe(true);
   });
 
   it("reverts a switch the store refused", async () => {

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Switch } from "@/shared/ui/switch";
 import { toast } from "@/shared/ui/toast";
 import { SettingRow } from "@/features/channels/components/settings-agent-rows";
-import { NOTIFICATION_EVENTS, type NotificationEventId } from "../registry";
+import { VISIBLE_NOTIFICATION_EVENTS, type NotificationEventId } from "../registry";
 import type { NotificationPrefs, NotificationPrefsStore } from "../prefs";
 
 /**
@@ -13,6 +13,9 @@ import type { NotificationPrefs, NotificationPrefsStore } from "../prefs";
  *
  * ⚠ IT KNOWS NO BACKEND. The binding hands it a {@link NotificationPrefsStore}; this file only
  * loads, flips and writes the whole record through it.
+ * ⚠ ONE ROW PER *WIRED* EVENT, not per registered id. The registry names events nothing raises
+ * yet (`wired: false`); drawing a switch for one would be a control that does nothing, so
+ * `VISIBLE_NOTIFICATION_EVENTS` is the list and the record still carries every id.
  * ⚠ OPTIMISTIC WITH REVERT: a switch never claims a state the store did not take (the
  * `use-orchestrator-launch.ts` idiom).
  */
@@ -68,7 +71,7 @@ export function NotificationsPanel({ store }: { store: NotificationPrefsStore })
 
   return (
     <div className="flex flex-col gap-1">
-      {NOTIFICATION_EVENTS.map((event) => (
+      {VISIBLE_NOTIFICATION_EVENTS.map((event) => (
         <SettingRow key={event.id} name={event.label}>
           <Switch
             checked={event.locked ? true : prefs.events[event.id]}

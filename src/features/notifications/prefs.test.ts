@@ -3,10 +3,16 @@ import { defaultNotificationPrefs, normalizeNotificationPrefs } from "./prefs";
 import { NOTIFICATION_EVENTS, NOTIFICATION_EVENT_IDS } from "./registry";
 
 describe("notification prefs", () => {
-  it("defaults every event on", () => {
+  it("carries every registered id, and defaults each to its registry default", () => {
     const p = defaultNotificationPrefs();
+    // The record spans the whole DOMAIN, not just the rows the panel draws.
     expect(Object.keys(p.events).sort()).toEqual([...NOTIFICATION_EVENT_IDS].sort());
-    expect(Object.values(p.events).every(Boolean)).toBe(true);
+    for (const e of NOTIFICATION_EVENTS) {
+      expect(p.events[e.id]).toBe(e.defaultOn !== false);
+    }
+    // Fail-ON is the rule; `defaultOn: false` is the ruled exception (today: DMs only).
+    const off = NOTIFICATION_EVENTS.filter((e) => e.defaultOn === false).map((e) => e.id);
+    expect(off).toEqual(["direct_message"]);
   });
 
   it("reads garbage as the defaults", () => {
@@ -24,9 +30,18 @@ describe("notification prefs", () => {
     expect("bogus" in p.events).toBe(false);
   });
 
-  it("forces a locked event on", () => {
+  it("forces every locked event on, whatever the record says", () => {
     const locked = NOTIFICATION_EVENTS.filter((e) => e.locked).map((e) => e.id);
-    expect(locked).toEqual(["approval"]);
-    expect(normalizeNotificationPrefs({ events: { approval: false } }).events.approval).toBe(true);
+    // Approvals plus the four SAFETY events Samuel kept at #2775.
+    expect(locked).toEqual([
+      "approval",
+      "signed_out",
+      "credits_exhausted",
+      "runtime_signin",
+      "decision_failed",
+    ]);
+    const allOff = Object.fromEntries(locked.map((id) => [id, false]));
+    const p = normalizeNotificationPrefs({ events: allOff });
+    for (const id of locked) expect(p.events[id]).toBe(true);
   });
 });

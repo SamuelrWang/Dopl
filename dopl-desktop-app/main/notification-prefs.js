@@ -43,12 +43,26 @@ const RETRY_FLOOR_MS = 10000;
 
 // ─── BEGIN NOTIFICATION-PREFS PURE (no network, no electron; sliced by the tests) ───
 // Restated from src/features/notifications/registry.ts › NOTIFICATION_EVENT_IDS. Keep in sync.
-const EVENT_IDS = ['mention', 'decision', 'direct_message', 'approval'];
-const LOCKED_ON = ['approval'];
+// ⚠ THE ORDER AND THE MEMBERS MUST MATCH THAT ARRAY EXACTLY — test/notification-prefs.test.mjs
+// ("registry ids match the web registry") reads that file as text and deepEquals this list. An id
+// there and missing HERE is worse than a test failure: `allowsIn` below fails toward ON for an id
+// it cannot name, so the operator would see a switch, turn it off, and still get banners.
+const EVENT_IDS = [
+  'mention', 'decision', 'direct_message', 'approval',
+  'draft_reply', 'agent_started', 'signed_out', 'credits_exhausted',
+  'runtime_signin', 'decision_failed', 'tool_blocked', 'session_resume', 'shared_with_me',
+];
+// `approval` plus the four SAFETY events Samuel kept at #2775 ("always on, like approvals").
+const LOCKED_ON = ['approval', 'signed_out', 'credits_exhausted', 'runtime_signin', 'decision_failed'];
+// ⚠ THE ONE EVENT THAT DEFAULTS OFF, mirroring the registry's `defaultOn: false`. Samuel ruled
+// DMs out entirely (#2773), so silence is the answer he gave, not a record we failed to read.
+// If this drifts from the web list the two surfaces disagree about a default, which is the same
+// class of lie as a missing id.
+const DEFAULT_OFF = ['direct_message'];
 
 function defaultPrefs() {
   const events = {};
-  for (const id of EVENT_IDS) events[id] = true;
+  for (const id of EVENT_IDS) events[id] = DEFAULT_OFF.indexOf(id) === -1;
   return { v: 1, events: events };
 }
 
