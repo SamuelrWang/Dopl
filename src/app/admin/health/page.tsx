@@ -16,6 +16,13 @@ const STATUS_STYLES: Record<string, string> = {
   red: "bg-red-500/15 text-red-300 ring-red-400/30",
 };
 
+/**
+ * ⚠ The tooltip behind every "(at least)" below. One sentence, because the
+ * reader's question is only ever "is this number real?".
+ */
+const FLOOR_HINT =
+  "Computed over a server-clipped read (supabase/config.toml max_rows), so the real figure is this or higher.";
+
 const SEVERITY_STYLES: Record<string, string> = {
   info: "bg-surface-raised-2 text-text-tertiary",
   warn: "bg-amber-500/10 text-amber-300",
@@ -39,13 +46,27 @@ export default async function AdminHealthPage() {
   const user = await getUser();
   if (!isAdmin(user?.id)) notFound();
 
-  const [alerts, external, mcp] = await Promise.all([
+  const [alertScan, externalScan, mcp] = await Promise.all([
     getRecentAlerts({ sinceMs: 24 * 60 * 60 * 1000, limit: 50 }),
     getExternalApiHealth(),
     getMcpHealth(),
   ]);
 
-  const status = computeOverallStatus({ alerts, mcp, external });
+  const status = computeOverallStatus({
+    alerts: alertScan,
+    mcp,
+    external: externalScan,
+  });
+
+  // 🔒 **A FLOOR MUST NOT RENDER AS A FIGURE (Samuel #2935).** Every number on
+  // this page is a group-by, and until the aggregate RPCs are applied they are
+  // computed over at most `max_rows` (1,000) events. The banner below says so
+  // once, and each clipped section marks its own totals — the old page said
+  // nothing anywhere, which is how `×1,000` read as a real count.
+  const alerts = alertScan.rows;
+  const external = externalScan.rows;
+  const floorMark = (clipped: boolean) =>
+    clipped ? <span title={FLOOR_HINT} className="opacity-60"> (at least)</span> : null;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -74,6 +95,28 @@ export default async function AdminHealthPage() {
         </div>
       </div>
 
+      {/* 🔒 THE CLIP, STATED ONCE AND IN FULL. Without this the page cannot be
+          told apart from an accurate one. */}
+      {status.truncated && (
+        <div className="rounded-xl bg-amber-500/10 text-amber-200 ring-1 ring-amber-400/30 px-5 py-3 mb-6 text-xs space-y-1">
+          <div className="font-medium uppercase tracking-wide">
+            These counts are floors, not totals
+          </div>
+          <div className="opacity-90">
+            {FLOOR_HINT} Affected:{" "}
+            {[
+              alertScan.truncated && "alerts",
+              externalScan.truncated && "external APIs",
+              mcp.truncated && "MCP",
+            ]
+              .filter(Boolean)
+              .join(", ")}
+            . The per-group aggregate RPCs remove the ceiling once their
+            migration is applied.
+          </div>
+        </div>
+      )}
+
       {/* Metric tiles */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div className="rounded-xl bg-surface-raised-1 border border-border-default p-4">
@@ -82,19 +125,43 @@ export default async function AdminHealthPage() {
             {mcp.calls_24h === 0 ? "—" : `${((1 - mcp.error_rate) * 100).toFixed(0)}%`}
           </div>
           <div className="text-xs text-text-secondary mt-2 space-y-0.5">
-            <div>{mcp.calls_24h} calls</div>
-            <div className="text-red-300">{mcp.errors_24h} errors</div>
-            {mcp.p95_latency_ms !== null && <div>p95 latency: {mcp.p95_latency_ms}ms</div>}
+            <div>
+              {mcp.calls_24h} calls{floorMark(mcp.truncated)}
+            </div>
+            <div className="text-red-300">
+              {mcp.errors_24h} errors{floorMark(mcp.truncated)}
+            </div>
+            {mcp.p95_latency_ms !== null && (
+              <div>
+                p95 latency: {mcp.p95_latency_ms}ms
+                {/* ⚠ A percentile of a clipped sample is not the same KIND of
+                    wrong as a clipped count — it is not even a floor. */}
+                {mcp.truncated && (
+                  <span className="opacity-60" title={FLOOR_HINT}>
+                    {" "}
+                    (sampled)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="rounded-xl bg-surface-raised-1 border border-border-default p-4">
           <div className="text-xs uppercase tracking-wide text-text-tertiary mb-1">Unacked alerts</div>
-          <div className="text-2xl font-medium text-text-primary">{alerts.length}</div>
+          <div className="text-2xl font-medium text-text-primary">
+            {alerts.length}
+            {alertScan.truncated && (
+              <span className="text-sm opacity-60" title={FLOOR_HINT}>
+                +
+              </span>
+            )}
+          </div>
           <div className="text-xs text-text-secondary mt-2">
             {alerts.filter((a) => a.severity === "critical").length} critical,{" "}
             {alerts.filter((a) => a.severity === "error").length} error,{" "}
             {alerts.filter((a) => a.severity === "warn").length} warn
+            {floorMark(alertScan.truncated)}
           </div>
         </div>
       </div>
@@ -122,12 +189,17 @@ export default async function AdminHealthPage() {
                 {external.map((p) => (
                   <tr key={p.name} className="border-t border-border-subtle">
                     <td className="px-4 py-2 font-mono text-text-primary">{p.name}</td>
-                    <td className="px-4 py-2 text-right text-text-secondary">{p.events_24h}</td>
+                    <td className="px-4 py-2 text-right text-text-secondary">
+                      {p.events_24h}
+                      {floorMark(externalScan.truncated)}
+                    </td>
                     <td className={`px-4 py-2 text-right ${p.errors_24h > 0 ? "text-red-300" : "text-text-tertiary"}`}>
                       {p.errors_24h}
+                      {floorMark(externalScan.truncated)}
                     </td>
                     <td className={`px-4 py-2 text-right ${p.criticals_24h > 0 ? "text-red-200 font-medium" : "text-text-tertiary"}`}>
                       {p.criticals_24h}
+                      {floorMark(externalScan.truncated)}
                     </td>
                     <td className="px-4 py-2 text-text-tertiary text-xs max-w-md truncate">
                       {p.last_error_message ? (
@@ -170,7 +242,9 @@ export default async function AdminHealthPage() {
                   <span className="text-xs text-text-tertiary">·</span>
                   <span className="text-xs text-text-secondary font-mono">{a.source}</span>
                   <span className="text-xs text-text-tertiary ml-auto">
-                    ×{a.count} · last seen {formatRelative(a.last_seen)}
+                    ×{a.count}
+                    {floorMark(alertScan.truncated)} · last seen{" "}
+                    {formatRelative(a.last_seen)}
                   </span>
                 </div>
                 <div className="text-sm text-text-primary break-words">{a.sample_message}</div>
