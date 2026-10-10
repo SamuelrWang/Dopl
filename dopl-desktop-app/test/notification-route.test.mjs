@@ -54,7 +54,9 @@ function load(o = {}) {
   };
 
   // The REAL prefs module over a transport that answers the operator's record.
-  const off = o.off || [];
+  // ⚠ MUTABLE: `record.off` can be changed between refreshes, which is how a test shows the
+  // switch being read when a coalesce window FIRES rather than when it opened.
+  const record = { off: o.off || [] };
   const prefsSrc = readFileSync(join(MAIN, "notification-prefs.js"), "utf8");
   const prefs = evalModule(prefsSrc, (id) => {
     if (id === "./api") {
@@ -62,7 +64,7 @@ function load(o = {}) {
         apiFetch: async () => ({
           ok: true,
           status: 200,
-          json: async () => ({ prefs: { v: 1, events: Object.fromEntries(off.map((k) => [k, false])) } }),
+          json: async () => ({ prefs: { v: 1, events: Object.fromEntries(record.off.map((k) => [k, false])) } }),
         }),
       };
     }
@@ -78,7 +80,7 @@ function load(o = {}) {
     throw new Error(`unexpected require: ${id}`);
   });
 
-  return { mod, prefs, windows: sent, toasts, banners, logs, revealed: () => shown };
+  return { mod, prefs, record, windows: sent, toasts, banners, logs, revealed: () => shown };
 }
 
 const SPEC = { title: "A peer's agent asked you something" };
@@ -240,9 +242,13 @@ function loadActionable(o = {}) {
           getFocusedWindow: () => (o.focused ? {} : null),
           getAllWindows: () => ctx.windows,
         },
+        // ⚠ RECORDS into the same array `load` uses: `raise` builds its banner through electron
+        // directly, so a non-recording stub here made every coalesced notice invisible.
         Notification: class {
+          constructor(opts) { this.opts = opts; this.handlers = {}; }
           static isSupported() { return true; }
-          on() {} show() {}
+          on(ev, fn) { this.handlers[ev] = fn; }
+          show() { ctx.banners.push(this); }
         },
       };
     }
@@ -351,4 +357,67 @@ test("a muted actionable event raises nothing — but approval cannot be muted",
   await prefs.refresh(true);
   assert.equal(mod.raiseActionable("peer_ask", ASK), null);
   assert.equal(built.length + toasts.length, 0);
+});
+
+// ─── COALESCING ───────────────────────────────────────────────────────────────────────────────
+
+test("a burst raises ONE notice, naming the total", async () => {
+  const { mod, prefs, banners } = loadActionable({ focused: false });
+  await prefs.refresh(true);
+  const built = [];
+  assert.equal(mod.raiseCoalesced("agent_started", (n) => { built.push(n); return { title: `${n} agents started` }; }, 5), "opened");
+  for (let i = 0; i < 9; i++) {
+    assert.equal(mod.raiseCoalesced("agent_started", () => ({ title: "x" }), 5), "coalesced");
+  }
+  await new Promise((r) => setTimeout(r, 25));
+  assert.deepEqual(built, [10], "ten launches, one notice, counted");
+  assert.equal(banners.length, 1, "⚠ ten banners for one intention is worse than none");
+  assert.equal(banners[0].opts.title, "10 agents started");
+});
+
+test("a single arrival still raises, and the window reopens after it fires", async () => {
+  const { mod, prefs, banners } = loadActionable({ focused: false });
+  await prefs.refresh(true);
+  mod.raiseCoalesced("agent_started", (n) => ({ title: `${n} started` }), 5);
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(banners.length, 1);
+  // A later burst is a NEW window, not a swallowed one.
+  assert.equal(mod.raiseCoalesced("agent_started", (n) => ({ title: `${n} again` }), 5), "opened");
+  await new Promise((r) => setTimeout(r, 25));
+  assert.equal(banners.length, 2);
+  assert.equal(banners[1].opts.title, "1 again");
+});
+
+test("the switch is read when the window FIRES, not when it opened", async () => {
+  const ctx = loadActionable({ focused: false });
+  await ctx.prefs.refresh(true);
+  ctx.mod.raiseCoalesced("agent_started", (n) => ({ title: `${n} started` }), 20);
+  // The operator mutes it while the burst is still filling: the later answer is the true one.
+  ctx.record.off = ["agent_started"];
+  await ctx.prefs.refresh(true);
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(ctx.banners.length, 0, "muted mid-burst means no notice");
+});
+
+test("a build that throws cannot escape into the launch that triggered it", async () => {
+  const { mod, prefs } = loadActionable({ focused: false });
+  await prefs.refresh(true);
+  mod.raiseCoalesced("agent_started", () => { throw new Error("bad copy"); }, 5);
+  await new Promise((r) => setTimeout(r, 25));
+  // Nothing thrown here, and the window is free again.
+  assert.equal(mod.raiseCoalesced("agent_started", (n) => ({ title: `${n}` }), 5), "opened");
+});
+
+test("SOURCE PIN: the launch funnel raises agent_started, and only after it has a session", () => {
+  const src = readFileSync(join(MAIN, "session-launch.js"), "utf8");
+  // ⚠ The emit is wrapped in try/catch (a notice may never change whether a launch succeeded),
+  // which also means a stubbed-require failure is SWALLOWED in the harnesses. So the wiring is
+  // pinned here, at the source, rather than observed through them.
+  assert.match(src, /raiseCoalesced\('agent_started'/);
+  const skipDisabled = src.indexOf("return { skipped: 'disabled' }");
+  const skipAuth = src.indexOf("return { skipped: 'auth-hold' }");
+  const emit = src.indexOf("raiseCoalesced('agent_started'");
+  assert.ok(skipDisabled > 0 && skipAuth > 0 && emit > 0, "all three landmarks found");
+  assert.ok(emit > skipDisabled && emit > skipAuth,
+    "a refused launch must never claim an agent started");
 });

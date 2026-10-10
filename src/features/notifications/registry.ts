@@ -104,8 +104,13 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // into ONE banner (@orchestrator, 2026-10-09). No trigger exists: `task_started` is dropped at
   // `targeting.js:133`, so this needs a new emit.
 
+  // Raised at the launch funnel (`session-launch.js`), the one path all three lanes pass. ⚠ Its
+  // own emit, not a channel arm: `task_started` is dropped at `targeting.js:133` and always was.
+  // COALESCED — a fan-out that launches several is ONE notice naming the total, because ten
+  // banners for one intention is worse than none.
+  { id: "agent_started", label: "An agent starts", surface: "both", wired: true },
+
   // ── Named, NOT raised yet (wired: false ⇒ no row in the panel) ──────────────────────────────
-  { id: "agent_started", label: "An agent starts", surface: "both" },
   { id: "signed_out", label: "You get signed out", surface: "both", locked: true },
   // ⚠ NOTHING EMITS THIS FACT. The consume RPC returns nothing at `20260811130000:143` — no row,
   // no log, no realtime — so the emit is server work, OUT of this wave by decision. The id is

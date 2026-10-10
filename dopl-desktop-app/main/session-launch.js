@@ -153,6 +153,33 @@ async function launch(a) {
   if (s.authHold === true) return { skipped: 'auth-hold' };
   // The answer is the ADDRESS (and the model and the STORED name, for the directive echo).
   const agentName = (s.context && typeof s.context.agentName === 'string' && s.context.agentName) || null;
+  // ⚠ `agent_started` (Samuel's spec, 2026-10-09 — KB dopl-development "Notification Spec Samuel
+  // 2026-10-09"). HERE, at the one funnel all three lanes pass through (New Agent, responder,
+  // directive), and only once a session really exists — after the two skip returns above, so a
+  // refused launch never claims one started.
+  //
+  // ⚠ WHY NOT THE CHANNEL MESSAGE: `task_started` is dropped at `targeting.js:133` by the
+  // `kind !== 'message'` guard and always was, which is why this needed a new emit rather than a
+  // new arm. It is a LOCAL fact about this machine's spawns, so a local emit is also the honest
+  // place for it.
+  //
+  // ⚠ COALESCED: a fan-out where one agent launches several must be ONE notice, not one each
+  // (Samuel). The route holds a short window and names the total.
+  // ⚠ BEST-EFFORT AND LAST: a notification may never change whether a launch succeeded, so this
+  // sits after everything the answer depends on and cannot throw into it.
+  // ⚠ LAZY REQUIRE, like `refuseUnknownModel`'s `./runtime` below, and for this file's stated
+  // reason: "No electron" at the top. The route reaches electron (lazily itself), and this
+  // module's own dependency set must stay free of it.
+  try {
+    require('./notification-route').raiseCoalesced('agent_started', (count) => ({
+      title: count > 1 ? `${count} agents started` : 'An agent started',
+      body: count > 1
+        ? 'They are running on this computer.'
+        : `${agentName || 'An agent'} is running in "${(a.context && a.context.channelName) || 'a channel'}".`,
+    }));
+  } catch (err) {
+    diag('session-launch: agent_started notice failed —', (err && err.message) || 'error');
+  }
   return { sessionId: s.sessionId, agentId: agentId, model, agentName };
 }
 

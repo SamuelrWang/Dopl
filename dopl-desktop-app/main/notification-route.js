@@ -256,9 +256,57 @@ function raiseActionable(eventId, spec) {
   }
 }
 
+// ─── COALESCING ───────────────────────────────────────────────────────────────────────────────
+//
+// ⚠ FOR EVENTS THAT ARRIVE IN BURSTS. `agent_started` is the one that needs it: a fan-out where
+// one agent launches several would otherwise raise one banner per spawn, and ten banners for one
+// intention is worse than none. Samuel's ruling is "coalesced burst → one notification".
+//
+// It DEBOUNCES rather than throttles: the first arrival opens a short window, every arrival
+// inside it only increments a count, and ONE notice is raised at the end naming the total. The
+// delay is the cost — a second or so before "an agent started" appears — which is the right
+// trade for an informational event and would NOT be for an ask (nothing actionable coalesces).
+
+/** Open burst windows, keyed by event id. */
+const bursts = new Map();
+const COALESCE_MS = 1500;
+
+/**
+ * Raises `eventId` ONCE for a burst.
+ * @param {string} eventId a registry id
+ * @param {(count: number) => {title: string, body?: string, onClick?: () => void}} build called
+ *   at the END of the window with how many arrived, so the copy can say "2 agents started".
+ * @param {number} [windowMs]
+ * @returns {'opened'|'coalesced'} whether this call opened the window or joined one.
+ */
+function raiseCoalesced(eventId, build, windowMs) {
+  const open = bursts.get(eventId);
+  if (open) {
+    open.count += 1;
+    return 'coalesced';
+  }
+  const entry = { count: 1, timer: null };
+  bursts.set(eventId, entry);
+  entry.timer = setTimeout(() => {
+    bursts.delete(eventId);
+    try {
+      // The gate is read HERE, at the end of the window, not when the burst opened: the operator
+      // may have flipped the switch while it was filling, and the later answer is the true one.
+      raise(eventId, build(entry.count));
+    } catch (err) {
+      diag('notification route: coalesced raise failed —', (err && err.message) || 'error');
+    }
+  }, typeof windowMs === 'number' ? windowMs : COALESCE_MS);
+  // ⚠ UNREF'd: a pending burst must never hold the app open on quit, nor a test process.
+  if (entry.timer && typeof entry.timer.unref === 'function') entry.timer.unref();
+  return 'opened';
+}
+
 module.exports = {
   TOAST_EVENT,
   TOAST_RAISED,
+  COALESCE_MS,
+  raiseCoalesced,
   isAppFocused,
   pushToast,
   raise,
