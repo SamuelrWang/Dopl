@@ -1,7 +1,13 @@
 import { cn } from "@/shared/lib/utils";
-import { Skeleton, SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
+import {
+  GHOST_FLAT_FACE,
+  Skeleton,
+  SkeletonBar,
+  SkeletonLine,
+} from "@/shared/ui/skeleton";
 import { PANEL_ROWS, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
 import { NAKED_ICON } from "@/shared/ui/naked-icon-button";
+import { PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import {
   IdentityCardsGhost,
@@ -19,13 +25,6 @@ import home from "./home.module.css";
  * classes by reference (`--home-list-w`, `home.kbCards`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
  * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
-
-/**
- * The one face every /home loading ghost wears: the radius and the border box, nothing visible
- * (skeletons are flat — shimmer blocks only). `border-transparent`, never a dropped border: the
- * background paints under the border box and dropping it would move every block in by a pixel.
- */
-const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent";
 
 /** The whole /home frame while the page reads are in flight: rail, header, list, record pane. */
 export function HomePageSkeleton({ label = "Opening home" }: { label?: string }) {
@@ -62,7 +61,8 @@ export function HomePageSkeleton({ label = "Opening home" }: { label?: string })
   );
 }
 
-/** /home → Knowledge while the base list is in flight: two flat sections over the card grid. */
+/** /home → Knowledge while the base list is in flight: two flat sections over the card grid. No
+ *  caption under either heading — the real panels print label + control only (2026-09-09). */
 export function HomeKnowledgePanelsSkeleton({
   label = "Loading knowledge",
 }: {
@@ -73,10 +73,10 @@ export function HomeKnowledgePanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={122} />}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
         <KbCardsGhost />
       </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={140} />} caption>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
         <KbCardsGhost />
       </SectionPanelGhost>
     </SkeletonSurface>
@@ -95,10 +95,10 @@ export function HomeIdentityPanelsSkeleton({
       label={label}
       className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
     >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={132} />}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
         <IdentityCardsGhost count={4} />
       </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost w={92} />} caption>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
         <IdentityCardsGhost count={4} />
       </SectionPanelGhost>
     </SkeletonSurface>
@@ -108,9 +108,19 @@ export function HomeIdentityPanelsSkeleton({
 /** Every /home section heading ghost is one width. */
 const HEADING_W = 148;
 
-/** A section header's create-button ghost. */
-function CreateGhost({ w }: { w: number }) {
-  return <SkeletonBar h={28} w={w} className="rounded-lg" />;
+/**
+ * A section header's create-button ghost: `panel-buttons.tsx › CreateButton` is `PAGE_ACTION_BTN`
+ * (`h-9 rounded-full px-[15px]`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
+ * sized from the label the real button prints, and two sections with one label ghost one width.
+ */
+function CreateGhost({ label }: { label: string }) {
+  return (
+    <SkeletonBar
+      h={36}
+      w={`calc(${label.length}ch + ${15 * 2 + PAGE_ACTION_ICON + 6}px)`}
+      className="rounded-full"
+    />
+  );
 }
 
 function KbCardsGhost() {
@@ -158,8 +168,8 @@ function HomeHeaderGhost() {
 }
 
 /**
- * The record pane on the face the page opens on (`HOME_DEFAULT_TAB`, Overview): Usage and the
- * channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage cards
+ * The record pane on the face the page opens on (`HOME_DEFAULT_TAB`, Overview): Usage (the
+ * credit card, then the histogram card with its control row) and the channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage cards
  * wear `GHOST_FLAT_FACE`, not the page's `.bento` (skeletons are flat).
  */
 function OverviewFaceGhost() {
@@ -169,12 +179,33 @@ function OverviewFaceGhost() {
         {/* USAGE — one well holding the capacity bar, then the plot. */}
         <SectionPanelGhost headingWidth={HEADING_W}>
           <div className="flex flex-col gap-3">
+            {/* "Credit spend": the card's own `h3` (`mb-2`), then the bar at `CreditsBar`'s 54px. */}
             <div className={cn(GHOST_FLAT_FACE, "p-3.5")}>
-              <Skeleton className="h-[46px] w-full rounded-[10px]" />
+              <div className="mb-2 flex h-5 items-center">
+                <SkeletonLine w={92} h={12} />
+              </div>
+              <Skeleton className="h-[54px] w-full rounded-lg" />
             </div>
+            {/* The histogram: `overview-sections.tsx › UsageChart`'s control row (scope menu left;
+                month stepper and total right), then the plot at `mt-3`. */}
             <div className={cn(GHOST_FLAT_FACE, "flex flex-col p-3.5")}>
+              <div className="flex items-center justify-between gap-3">
+                <SkeletonLine w={108} h={12} />
+                <div className="flex min-w-0 shrink-0 items-center gap-2">
+                  <div className="flex items-center gap-0.5">
+                    <span className="flex items-center justify-center p-2">
+                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
+                    </span>
+                    <SkeletonLine w={84} h={12} />
+                    <span className="flex items-center justify-center p-2">
+                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
+                    </span>
+                  </div>
+                  <SkeletonLine w={36} h={9} />
+                </div>
+              </div>
               <Skeleton
-                className={cn(PLOT_HEIGHT_CLASS, "w-full rounded-[10px]")}
+                className={cn(PLOT_HEIGHT_CLASS, "mt-3 w-full rounded-[10px]")}
               />
             </div>
           </div>
@@ -192,6 +223,10 @@ function OverviewFaceGhost() {
     </div>
   );
 }
+
+/** `overview-usage-filter.tsx › MONTH_ARROW_ICON` (file-private there): the stepper's 16px glyph in
+ *  `NAKED_ICON_BUTTON`'s `p-2` box. */
+const MONTH_ARROW = 16;
 
 /* ── The channel column: the gray wells and the rows inside them ── */
 

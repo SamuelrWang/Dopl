@@ -2,7 +2,14 @@ import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
 
 /**
  * Loading skeleton for the ontology kanban board. Must mirror the loaded shape
- * (`kanban-board.tsx`); slots inside the view's `.page-float` Frame. Composes
+ * (`kanban-board.tsx`); slots inside the view's `.page-float` Frame. Shared by the
+ * workspace /ontology page and the /home Ontology face.
+ *
+ * 🔒 FLAT (Samuel, 2026-09-21: *"we basically just shouldn't have elevated
+ * components"*; 2026-10-09 sweep). The loaded header and object cards are bordered
+ * `bg-bg-elevated` faces; their ghosts are plain shimmer blocks at the same box —
+ * the /home Overview ghost's language (its rails are `h-40 rounded-[14px]` blocks).
+ * Composes
  * `.kanban-substrate` even though nothing scrolls here — one class keeps the two
  * surfaces identical, and the dotted grid is on the loaded board since 2026-09-11.
  */
@@ -37,33 +44,16 @@ function ColumnSkeleton({ cards }: { cards: number }) {
   return (
     // The live lane's gray, by the same token (`kanban-board.tsx › Column`).
     <div className="flex w-72 shrink-0 flex-col gap-2 self-start rounded-[14px] bg-home-panel p-3">
-      {/* Header card, collapsed — shorter than an object card. */}
-      <div className="flex shrink-0 items-center gap-2 rounded-[10px] border border-border-default bg-bg-elevated px-2.5 py-2">
-        <SkeletonLine w="50%" h={12} />
-        <Skeleton className="ml-auto h-4 w-6 rounded-full" />
-      </div>
+      {/* Header card, collapsed (`kanban-column-header.tsx`: `px-1.5 py-1` round the
+          chevron's `p-1` box, plus the 1px border) — one flat block. */}
+      <Skeleton className="h-[33px] w-full shrink-0 rounded-[10px]" />
       <div className="flex flex-col gap-2">
         {Array.from({ length: cards }).map((_, i) => (
-          <CardSkeleton key={i} />
+          // `kanban-card.tsx`'s fixed 216px (18 dot tiles), flat.
+          <Skeleton key={i} className="h-[216px] w-full shrink-0 rounded-[10px]" />
         ))}
+        {/* The lane's "+ Add" (`kanban-board.tsx`: `px-2.5 py-1.5` small text). */}
         <Skeleton className="h-7 w-24 shrink-0 self-start rounded-md" />
-      </div>
-    </div>
-  );
-}
-
-/** The loaded card's fixed 216px and its bottom-pinned meta row. */
-function CardSkeleton() {
-  return (
-    <div className="flex h-[216px] shrink-0 flex-col rounded-[10px] border border-border-default bg-bg-elevated">
-      <div className="flex-1 space-y-2 px-3 pt-3 pb-2">
-        <SkeletonLine w="70%" h={12} />
-        <SkeletonLine w="90%" h={9} />
-        <SkeletonLine w="80%" h={9} />
-        <SkeletonLine w="45%" h={9} />
-      </div>
-      <div className="shrink-0 border-t border-border-subtle px-3 py-2">
-        <SkeletonLine w="60%" h={8} />
       </div>
     </div>
   );

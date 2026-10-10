@@ -128,17 +128,21 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     );
   });
 
-  /** ⚠ THE COMPOSER IS LAST IN THE TRANSCRIPT COLUMN and it is a raised CARD —
-   *  the offset is IMPORTED, for the reason the constant exists (both composers
-   *  sit at one height across the divider). */
+  /** ⚠ THE COMPOSER IS LAST IN THE TRANSCRIPT COLUMN — the offset is IMPORTED,
+   *  for the reason the constant exists (both composers sit at one height across
+   *  the divider). 🔒 The card's radius + padding are the real card's; its raised
+   *  face is NOT (skeletons are flat, 2026-10-09 redo) — the ghost wears
+   *  `GHOST_FLAT_FACE` instead. */
   it("pins the composer card at the bottom of the transcript column", () => {
-    for (const geometry of [
-      'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)',
-      "raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]",
-    ]) {
-      expect(v2("composer.tsx")).toContain(geometry);
-      expect(GHOST).toContain(geometry);
-    }
+    const geometry = 'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)';
+    expect(v2("composer.tsx")).toContain(geometry);
+    expect(GHOST).toContain(geometry);
+    expect(v2("composer.tsx")).toContain(
+      "raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]"
+    );
+    expect(GHOST).toContain(
+      'cn(GHOST_FLAT_FACE, "flex flex-col px-[13px] py-[11px]")'
+    );
     expect(GHOST).toContain("COMPOSER_BOTTOM");
     expect(GHOST_CODE).not.toContain('"pb-4"');
     expect(COMPOSER_BOTTOM).toBe("pb-4");
@@ -147,11 +151,33 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     const column = container.querySelector(
       ".flex-1.flex-col.\\[contain\\:inline-size\\]"
     );
-    const card = container.querySelector(".raised-tab");
+    const card = container.querySelector(".px-\\[13px\\].py-\\[11px\\]");
     expect(card).not.toBeNull();
     // LAST child of the transcript column — a composer above the transcript is
     // a different surface.
     expect(column?.lastElementChild?.contains(card!)).toBe(true);
+  });
+
+  /** 🔒 THE INFO FACE IS `info-tab.tsx`'s FOUR SECTIONS, not one card: Channel
+   *  info, Channel activity, Mentions, Members — each under `PanelHeading`'s own
+   *  box (`pt-6`), the roster rows at `MemberRow`'s height. */
+  it("ghosts the Info face's four sections at the real heading and row boxes", () => {
+    for (const [source, geometry] of [
+      ["bits.tsx", "flex items-center gap-2 px-3.5 pb-1.5 pt-6"],
+      ["bits.tsx", "flex h-9 items-center gap-2 rounded-[8px] px-2"],
+      ["member-roster.tsx", "flex h-[46px] items-center gap-2.5 rounded-[8px] px-2"],
+      ["member-roster.tsx", "flex flex-col gap-px px-2"],
+      ["thread-activity.tsx", "px-3.5 pt-1"],
+    ] as const) {
+      expect(v2(source)).toContain(geometry);
+      expect(GHOST).toContain(geometry);
+    }
+    for (const title of ["Channel info", "Channel activity", "Mentions", "Members"]) {
+      expect(v2("info-tab.tsx")).toContain(`title="${title}"`);
+    }
+    const { container } = render(<ChannelRecordSkeleton />);
+    expect(container.querySelectorAll("aside .pt-6")).toHaveLength(4);
+    expect(container.querySelectorAll("aside .h-\\[46px\\]").length).toBeGreaterThan(0);
   });
 
   /** ⚠ THE DIVIDER OCCUPIES NO WIDTH — a zero-width flex sibling, so the ghost's
@@ -225,9 +251,10 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
       expect(v2(source)).toContain(geometry);
       expect(GHOST).toContain(geometry);
     }
-    // ⚠ THE UNFRAMED FACE, which is the arm this ghost renders: both spell `.bento`.
+    // 🔒 THE PAGE'S PILL IS RAISED (`.bento` on the unframed arm); THE GHOST'S
+    // IS NOT — it keeps the geometry on `GHOST_FLAT_FACE`'s invisible border box.
     expect(v2("attribution-pill.tsx")).toContain('!framed && "bento"');
-    expect(GHOST).toContain("bento inline-flex");
+    expect(GHOST).toContain("GHOST_FLAT_FACE,");
     // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.sm`.
     expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('sm: "w-8 h-8');
     expect(GHOST).toContain("w-8 h-8");
@@ -237,7 +264,28 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
     const rows = container.querySelectorAll(".rounded-\\[10px\\]");
     expect(rows.length).toBeGreaterThanOrEqual(3);
     expect(rows.length).toBeLessThanOrEqual(4);
-    expect(container.querySelectorAll(".bento").length).toBe(rows.length);
+    expect(container.querySelectorAll(".rounded-full.border-transparent").length).toBe(
+      rows.length
+    );
+  });
+
+  /**
+   * 🔒 **THE GHOST IS FLAT — SHIMMER BLOCKS ONLY** (Samuel, 2026-09-21: *"we
+   * basically just shouldn't have elevated components"*; the channel ghost
+   * redone to match the /home Overview ghost 2026-10-09). Bidirectional: the
+   * REAL surface still wears its raised faces — this restyles the LOADING STATE,
+   * not the page — and the ghost wears none. Comment-stripped: the docblock
+   * names what it dropped.
+   */
+  it("paints no raised face, while the real surface still does", () => {
+    expect(v2("composer.tsx")).toContain("raised-tab");
+    expect(v2("attribution-pill.tsx")).toContain('"bento"');
+    for (const face of ["bento", "raised-tab", "shadow", "bg-gradient", "inset", "concave"]) {
+      expect(GHOST_CODE).not.toContain(face);
+    }
+    // The face is the shared kit's one flat face, not a local copy.
+    expect(GHOST_CODE).toContain('from "@/shared/ui/skeleton"');
+    expect(GHOST_CODE).not.toContain("border-transparent");
   });
 
   /** ⚠ THE DIVIDERS ARE THE SAME UTILITY CLASSES THE REAL SURFACE WEARS, which
