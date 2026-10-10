@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
 import { isMissingRelation } from "./repository-sessions";
 
 /**
@@ -38,14 +39,24 @@ type TokenSpendRow = {
 };
 
 /**
- * ⚠ PostgREST truncates an un-limited select SILENTLY, so this exists to make
- * truncation LOUD rather than to protect the database — the caller reports
- * `truncated` and the surface says so, the same contract
- * `/api/home/overview` already renders with `ClippedNote`.
+ * THE WALK'S HARD CAP — how many runs one spend read will ever carry.
  *
  * The number is a month of runs for a heavy operator with room over: one row is
  * one SESSION RUN, not one message and not one tool call, and the window the
  * page reads is 31 days.
+ *
+ * 🔒 **IT USED TO BE A `.limit(2000)`, AND THAT WAS A WRONG ANSWER RATHER THAN A
+ * SLOW ONE (Samuel #2935, the `max_rows` sweep).** `supabase/config.toml ›
+ * max_rows` ({@link POSTGREST_MAX_ROWS}) clips every PostgREST select
+ * server-side and raises NOTHING, so an ask of 2,000 came back as the newest
+ * 1,000 runs — and because `truncated` was `rows.length >= 2000`, `1000 >= 2000`
+ * was FALSE: a read that was a floor reported itself COMPLETE, and the strip drew
+ * a short month as a quiet one with no clip note. ⚠ **BOTH HALVES WERE WRONG,
+ * which is why raising `max_rows` would not have been the fix.**
+ *
+ * ⚠ **IT IS STILL A CEILING AND STILL REPORTED.** {@link readAllPages} returns
+ * `truncated: true` on reaching it; the difference is that the rows beneath it
+ * are now actually fetched instead of being cut at 1,000.
  */
 const SPEND_ROWS_LIMIT = 2000;
 
@@ -130,23 +141,60 @@ function isMissingLedger(error: unknown): boolean {
  * differ: an empty ledger and an absent one both mean "no spend is recorded for
  * you", so the answer is honest either way — the same argument
  * `listSessionStates` makes for its own read degrade, and the same narrowness.
+ *
+ * ── 🔒 PAGED, BECAUSE THE ANSWER IS THE LIST ITSELF ────────────────────────
+ *
+ * 🔒 **IT IS NOT SUMMED IN SQL, AND THAT IS A RULING RATHER THAN AN OVERSIGHT.**
+ * Every other read in the `max_rows` sweep that folded rows became a group-by
+ * aggregate; this one cannot, because **THIS SERVER NAMES NO DAYS** (Samuel,
+ * 2026-09-06 — `service-token-spend.ts › readTokenSpend`). The strip buckets by
+ * the operator's LOCAL day, which only the renderer knows, so the instants
+ * themselves must travel. A `date_trunc` here would answer UTC buckets for a
+ * local-day axis, and taking a UTC offset on the request is worse still: one
+ * offset is wrong for part of any window spanning a DST change. So the fix is
+ * {@link readAllPages} — every row, in pages the server will actually return.
+ *
+ * ⚠ **THE ORDER IS TOTAL, AND IT HAS TO BE.** Paging a non-unique ORDER BY lets
+ * Postgres hand back a row twice and skip another between pages. `started_at` is
+ * the run's identity but NOT unique on its own (two machines can start a run in
+ * the same microsecond), so it is tie-broken down to the primary key:
+ * `PRIMARY KEY (workspace_id, user_id, session_key, started_at)` and `user_id`
+ * is already pinned by the fence, leaving `(started_at, session_key,
+ * workspace_id)` unique within one caller's rows.
+ * ⚠ `started_at DESC` STAYS FIRST — newest run first is the read's contract and
+ * the shape of `workspace_token_spend_user_time_idx`.
+ *
+ * ⚠ **THE DEGRADE IS A `catch` NOW, NOT AN `error` BRANCH**, because the walk
+ * throws what a page answered. Same two codes, same narrowness: everything that
+ * is not "there is no ledger here" still propagates.
  */
 export async function listTokenSpend(
   userId: string,
   since: string
 ): Promise<{ rows: TokenSpendRow[]; truncated: boolean }> {
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workspace_token_spend")
-    .select("started_at, tokens, agent_name, channel_id, workspace_id")
-    .eq("user_id", userId)
-    .gte("started_at", since)
-    .order("started_at", { ascending: false })
-    .limit(SPEND_ROWS_LIMIT);
-  if (error) {
+  try {
+    return await readAllPages<TokenSpendRow>(
+      // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+      // re-awaiting one re-sends the first range and the walk spins on page 0.
+      async (from, toInclusive) => {
+        const { data, error } = await db
+          .from("workspace_token_spend")
+          .select("started_at, tokens, agent_name, channel_id, workspace_id")
+          .eq("user_id", userId)
+          .gte("started_at", since)
+          .order("started_at", { ascending: false })
+          .order("session_key", { ascending: true })
+          .order("workspace_id", { ascending: true })
+          .range(from, toInclusive);
+        return { data: (data ?? []) as unknown as TokenSpendRow[], error };
+      },
+      // ⚠ The page size is the SERVER's ceiling, which is what makes a short
+      // page proof of exhaustion rather than proof of a clip.
+      { hardCap: SPEND_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+    );
+  } catch (error) {
     if (isMissingLedger(error)) return { rows: [], truncated: false };
     throw error;
   }
-  const rows = (data ?? []) as unknown as TokenSpendRow[];
-  return { rows, truncated: rows.length >= SPEND_ROWS_LIMIT };
 }
