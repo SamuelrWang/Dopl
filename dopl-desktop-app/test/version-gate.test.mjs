@@ -244,10 +244,12 @@ test("THE FLEET-OUTAGE GUARD: a completed check with nothing newer RELEASES the 
   h.setUpdater({ checked: true, available: false, ready: false });
   assert.equal(h.gate.isBlocked(), false);
   assert.equal(h.seen.releases.length, 1, "the app window comes back");
-  // …and the operator is told, once, quietly.
-  assert.equal(h.seen.notifications.length, 1);
-  assert.equal(h.seen.notifications[0].silent, true);
-  assert.match(h.seen.notifications[0].body, /no newer build is published/i);
+  // …and the operator is told by the TRAY LINE. ⚠ The banner that also said this left 2026-10-09
+  // (Samuel's spec: version warnings are on his OFF list) — `surfaceWarning` carried BOTH the
+  // floor warning and this release message, so both lost their banner together. The tray keeps
+  // it, which is asserted here rather than left implied.
+  assert.equal(h.seen.notifications.length, 0, "no banner for a version matter");
+  assert.match(h.seen.warns.filter(Boolean).pop().body, /no newer build is published/i);
   assert.match(h.seen.warns.filter(Boolean).pop().tray, /1\.9\.0/);
 });
 
@@ -259,7 +261,11 @@ test("no updater at all means a warning, never a block, and ONE banner per floor
   assert.equal(h.gate.isBlocked(), false);
   assert.match(h.seen.warns.filter(Boolean).pop().body, /cannot update itself/i);
   for (let i = 0; i < 10; i++) h.gate.onUpdaterState();
-  assert.equal(h.seen.notifications.length, 1, "stated once, not on every re-decide");
+  // ⚠ The per-floor latch went with the banner it deduped (2026-10-09). `onWarn` was ALWAYS
+  // called on every re-decide — the latch only ever guarded the banner — so nothing regressed
+  // here: the tray line is idempotent and simply gets re-set.
+  assert.equal(h.seen.notifications.length, 0, "no banner at all now");
+  assert.match(h.seen.warns.filter(Boolean).pop().body, /cannot update itself/i);
 });
 
 test("a FAILED check does not release a block: it is not evidence of anything", async () => {

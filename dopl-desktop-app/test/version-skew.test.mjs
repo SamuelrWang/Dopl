@@ -166,9 +166,11 @@ test("an older peer's message emits ONE diag and ONE quiet surface", () => {
   assert.equal(calls.diag.length, 1);
   assert.match(calls.diag[0], /version skew/);
   assert.match(calls.diag[0], /1\.7\.14/);
-  // Quiet: a SILENT banner, never a dialog. One line, no decision to make.
-  assert.equal(calls.notify.length, 1);
-  assert.equal(calls.notify[0].silent, true);
+  // ⚠ NO BANNER AT ALL since 2026-10-09 (Samuel's spec: "version warnings" are on his OFF list).
+  // The harness still injects a Notification, and this asserts the module never reaches for it —
+  // a fence, not a leftover. The TRAY LINE below is the surface, and always was the better half:
+  // it explains a symptom and asks for no decision, so it need not interrupt.
+  assert.equal(calls.notify.length, 0, "the banner is gone; the tray line carries it");
   assert.equal(calls.skew.length, 1);
   assert.equal(calls.skew[0].who, "Sam");
   assert.equal(calls.skew[0].mine, "1.7.15");
@@ -178,7 +180,7 @@ test("NOT A NAG: the same peer build is reported once, however many messages", (
   const { mod, calls } = build("1.7.15");
   for (let i = 0; i < 25; i++) mod.observe(entry, from("peer-1", "1.7.14"), ME);
   assert.equal(calls.diag.length, 1);
-  assert.equal(calls.notify.length, 1);
+  assert.equal(calls.notify.length, 0, "still no banner, however many messages");
   // A DIFFERENT build from the same peer is news again (they restarted into
   // something still stale), and so is the same build from a different peer.
   mod.observe(entry, from("peer-1", "1.7.13"), ME);

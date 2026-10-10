@@ -121,7 +121,9 @@ test("the stamp is a DIAGNOSTIC: its only reader cannot act on it", () => {
   // cannot spawn, gate, consent, or post, because it does not require any of it.
   const SKEW = M("version-skew.js");
   const deps = [...SKEW.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
-  assert.deepEqual(deps, ["./app-version", "./diag", "./listener-io", "./targeting", "electron"]);
+  // `electron` LEFT 2026-10-09 with the skew banner (Samuel's spec: version warnings are off, the
+  // tray line is the surface). A NARROWING, which is the direction this pin exists to protect.
+  assert.deepEqual(deps, ["./app-version", "./diag", "./listener-io", "./targeting"]);
   // And exactly ONE module reads the stamped key at all.
   const readers = ["channel-listener.js", "listener-messages.js", "targeting.js", "trigger.js",
     "session-dispatch.js", "task-notify.js", "version-skew.js"]

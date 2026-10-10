@@ -32,7 +32,8 @@
 // sub-second flash of the boot screen and buys an app that cannot strand
 // anybody on a plane.
 
-const { Notification } = require('electron');
+// ⚠ `electron` is no longer required here: the version-floor banner left 2026-10-09; the tray
+// line (`onWarn`) is the surface.
 const { API_BASE, VERSION_GATE } = require('./config');
 const appVersion = require('./app-version');
 const minVersion = require('./min-version');
@@ -47,7 +48,6 @@ let verdict = null; // the last decision (min-version.gateVerdict shape)
 let blocked = false;
 let timer = null;
 let fetching = false; // single-flight: wake + interval + a click can coincide
-let warnedFloor = null; // one silent banner per floor, per process
 const listeners = new Set(); // the update-required window, when one is up
 
 // updater.js is required LAZILY (the tray.js idiom) so this module carries no
@@ -183,15 +183,12 @@ function call(name, arg) {
 // operator has run into a misconfiguration on OUR side, so it explains itself
 // and gets out of the way rather than demanding an action they cannot take.
 function surfaceWarning(v) {
+  // ⚠ NO BANNER (Samuel's spec, 2026-10-09): "version warnings" are on his OFF list. `onWarn`
+  // above is the surface that remains and always was the better one — its own copy says "Keep
+  // working, Dopl installs it by itself", so there was never anything to do away from the desk.
+  // The per-floor latch went with it: it existed only to raise that banner once.
   const notice = minVersion.floorNotice(v);
   call('onWarn', notice);
-  if (warnedFloor === v.floor) return;
-  warnedFloor = v.floor;
-  try {
-    if (Notification.isSupported()) {
-      new Notification({ title: notice.title, body: notice.body, silent: true }).show();
-    }
-  } catch (_) { /* best-effort */ }
 }
 
 // ── The surface the blocking window talks to ─────────────────────────────────

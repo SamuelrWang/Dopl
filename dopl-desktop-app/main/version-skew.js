@@ -23,7 +23,8 @@
 // for the life of the process, so a peer who stays stale for a week is mentioned
 // once, not on every message they send.
 
-const { Notification } = require('electron');
+// ⚠ `electron` is no longer required here: the skew banner left 2026-10-09 and the tray line is
+// the surface. The harness still INJECTS a Notification as a fence, and asserts it is unused.
 const appVersion = require('./app-version');
 const io = require('./listener-io');
 const targeting = require('./targeting');
@@ -94,7 +95,7 @@ function skewLine(notice, who) {
 // ─── END VERSION-SKEW-PURE ───────────────────────────────────────────────────
 
 // ─── BEGIN VERSION-SKEW-OBSERVE (injectable; unit-tested via source extraction) ──
-// Free vars: metaStr / appVersion / io / Notification / diag (required above, faked
+// Free vars: metaStr / appVersion / io / diag (required above, faked
 // in test/version-skew.test.mjs), plus the PURE block's helpers.
 
 // One report per (peer, version) for the life of the process. Bounded so a long
@@ -137,17 +138,12 @@ function observe(entry, m, myId) {
   }
 }
 
-// Quiet and non-modal: one silent OS banner plus a standing tray line. No dialog,
-// no click-to-act, nothing the operator has to dismiss — this explains a symptom,
-// it does not ask for a decision.
+// ⚠ THE BANNER LEFT 2026-10-09 (Samuel's spec): "version warnings" are on his OFF list, and the
+// standing TRAY LINE below was always the better half of this pair — it explains a symptom and
+// asks for no decision, so it does not need to interrupt. Non-modal, nothing to dismiss.
 function surface(notice, authorUserId) {
   const who = io.displayNameFor(authorUserId) || '';
   const text = skewLine(notice, who);
-  try {
-    if (Notification.isSupported()) {
-      new Notification({ title: 'Dopl version mismatch', body: text, silent: true }).show();
-    }
-  } catch (_) { /* best-effort */ }
   if (onSkew) {
     try { onSkew({ peer: notice.peer, mine: notice.mine, who: who, text: text }); }
     catch (err) { diag('version skew: tray handler failed', err && err.message); }

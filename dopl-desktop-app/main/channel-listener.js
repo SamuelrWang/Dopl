@@ -5,7 +5,8 @@
 // Auth is forwarded Supabase cookies (auth.js). No renderer IPC. `diag` → userData/listener.log; never
 // log tokens.
 
-const { Notification } = require('electron');
+// ⚠ `electron` is no longer required here: the startup no-runtime banner left 2026-10-09 and
+// this module raises nothing (the stale-session notice is `listener-io.js`, which routes).
 const auth = require('./auth');
 const spawner = require('./session-spawner');
 const claudeRuntime = require('./claude-runtime'); // "can a session run at all" (NOT claudeAvailable)
@@ -24,7 +25,6 @@ const { diag } = require('./diag');
 let running = false;
 let onStatus = null; // tray callback
 let refreshTimer = null;
-let cliWarned = false;
 let myUserId = null; // resolved operator identity (H2); null until known
 let reconciling = null; // in-flight reconcile promise (M1 re-entrancy guard)
 const loops = new Map(); // channelId -> loop entry
@@ -302,15 +302,16 @@ function start(statusCb, h) {
       onHealthChange: onRealtimeHealth,
     });
   }
-  // The startup notice fires only when NOTHING here can run a session (`claude-runtime.js` owns the copy).
+  // ⚠ NO STARTUP BANNER ANY MORE (Samuel's spec, 2026-10-09 — KB dopl-development "Notification
+  // Spec Samuel 2026-10-09"). "No agent runtime at listener start" is not on his list, and his
+  // ruling is that everything unlisted is silent. It was also one of the SOUNDING sites: it built
+  // its Notification with no `silent`, so the default made a noise nobody chose.
+  // The fact is not lost — `log: diag` still records it, and the actionable case (a runtime that
+  // needs signing in) is `runtime_signin`, which has its own in-app prompt and banner.
+  // `notify` is optional in `checkRuntimeAtStart`, so omitting it is the whole removal.
   claudeRuntime.checkRuntimeAtStart({
     externalCli: () => spawner.claudeAvailable(),
     log: diag,
-    notify: (n) => {
-      if (cliWarned) return;
-      cliWarned = true;
-      try { if (Notification.isSupported()) new Notification(n).show(); } catch (_) { /* best-effort */ }
-    },
   }).catch(() => { /* a probe failure must never stop the listener */ });
   reconcile();
   refreshTimer = setInterval(reconcile, LISTENER.CHANNEL_REFRESH_MS);

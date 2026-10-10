@@ -81,7 +81,16 @@ function notifyAway(id) {
   try {
     const { BrowserWindow, Notification } = require('electron');
     if (BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return;
-    const n = new Notification({ title: runtimeRegistry.copy.signInAction(runtimeRegistry.descriptorFor(id)) });
+    // ⚠ `silent: false` IS DELIBERATE, and is written out rather than left to the default
+    // (2026-10-09). `runtime_signin` is one of Samuel's four SAFETY events: a session cannot run
+    // until the operator signs the runtime in, so this belongs with `decision_failed` — work has
+    // stopped and nothing else will say so. It reads as the same choice as the four sounds
+    // REMOVED that day, which were sounds by omission, so the difference is stated here.
+    // ⚠ No behaviour change: an omitted `silent` already sounded. This only makes it a decision.
+    const n = new Notification({
+      title: runtimeRegistry.copy.signInAction(runtimeRegistry.descriptorFor(id)),
+      silent: false,
+    });
     n.on('click', () => host.showWindow());
     n.show();
   } catch (err) {
