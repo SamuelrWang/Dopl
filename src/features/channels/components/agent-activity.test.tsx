@@ -150,3 +150,116 @@ describe("the rows themselves", () => {
     expect(agentActivityText(session())).not.toMatch(/working/);
   });
 });
+
+/**
+ * **THE PILL (Samuel, 2026-10-10: *"No dot. Agent name inside a pill; pill background
+ * = the agent's dot color"*).**
+ *
+ * What fails quietly here, and is therefore what is asserted:
+ *  - **A COLOUR THAT STOPS BEING THE FILL.** The hue is the only thing saying WHICH
+ *    agent; painted on the wrong element it is decoration.
+ *  - **A FALLBACK THAT PUTS WHITE ON NEAR-WHITE.** The old neutral was a DOT's
+ *    hairline tint. As a pill fill it is unreadable and nothing would throw.
+ *  - **A PILL THAT WILL NOT SHRINK.** `AGENT_PILL_FACE` ships `shrink-0`; three
+ *    pills on the recipient line have to elide, and the override is a
+ *    tailwind-merge behaviour, i.e. exactly the kind of thing that breaks on a
+ *    dependency bump with no error.
+ */
+describe("the pill", () => {
+  const PAINT = "var(--agent-color-07)";
+
+  function renderOne(colors?: ReadonlyMap<string, string>) {
+    render(
+      <AgentActivityRows
+        agents={ownAgentsWorking([session({ displayName: "Scout" })], CHANNEL_ID)}
+        colors={colors ?? null}
+      />
+    );
+    return screen.getByRole("status");
+  }
+
+  it("wears the agent's colour as its own BACKGROUND", () => {
+    const pill = renderOne(new Map([["ab12cd34", PAINT]]));
+    // ⚠ The element carrying the name is the element carrying the fill — that is the
+    // whole change from a dot beside it, so it is asserted on ONE node.
+    expect(pill.textContent).toContain("Scout");
+    expect(pill.style.backgroundColor).toBe(PAINT);
+  });
+
+  it("carries NO dot any more", () => {
+    const pill = renderOne(new Map([["ab12cd34", PAINT]]));
+    // `rounded-full` was the dot's shape and nothing else here is round.
+    expect(pill.querySelector(".rounded-full")).toBeNull();
+    // The pulse moved into the ellipsis; no stock `animate-pulse` survives.
+    expect(pill.querySelector(".animate-pulse")).toBeNull();
+  });
+
+  it("falls back to the CTA face — never to the dot's hairline neutral", () => {
+    const pill = renderOne();
+    // ⚠ NO inline style at all, so the face's own `bg-surface-cta` shows through.
+    // `bg-border-strong` here would be white ink on a 12%-black tint.
+    expect(pill.style.backgroundColor).toBe("");
+    expect(pill.className).toContain("bg-surface-cta");
+    expect(pill.className).not.toContain("bg-border-strong");
+  });
+
+  it("keeps the pill SHRINKABLE, so three of them elide", () => {
+    const pill = renderOne(new Map([["ab12cd34", PAINT]]));
+    const classes = pill.className.split(/\s+/);
+    expect(classes).toContain("shrink");
+    // ⚠ The face's `shrink-0` must have been MERGED AWAY, not merely out-ordered.
+    expect(classes).not.toContain("shrink-0");
+  });
+});
+
+/**
+ * **THE CYCLING ELLIPSIS — four frames, "." → ".." → "..." → blank.**
+ *
+ * ⚠ **THE FRAMES THEMSELVES ARE CSS AND jsdom RUNS NO ANIMATION**, so what is testable
+ * here is the STRUCTURE the frames need: three dots that are always in layout (which is
+ * what reserves the width and stops the pill jittering), hidden from the accessibility
+ * tree, and hooked to the stylesheet by class. The frame timing lives in
+ * `globals.css › .working-dots` / `kit.css` and the reduced-motion arm with it — this
+ * pins the contract between them.
+ */
+describe("the working dots", () => {
+  function dots() {
+    render(
+      <AgentActivityRows
+        agents={ownAgentsWorking([session({ displayName: "Scout" })], CHANNEL_ID)}
+      />
+    );
+    return screen.getByRole("status").querySelector(".working-dots");
+  }
+
+  it("renders THREE dots, all present, so the width is reserved", () => {
+    const el = dots();
+    expect(el).not.toBeNull();
+    // ⚠ THREE SPANS ALWAYS IN THE TREE. The cycle is `opacity`, so a frame showing one
+    // dot still occupies three — mount-time absence would mean a resizing pill.
+    expect(el?.querySelectorAll("span")).toHaveLength(3);
+    expect(el?.textContent).toBe("...");
+  });
+
+  it("sits immediately after the name with NO separator", () => {
+    render(
+      <AgentActivityRows
+        agents={ownAgentsWorking([session({ displayName: "Scout" })], CHANNEL_ID)}
+      />
+    );
+    // ⚠ Samuel: *"Right after the name, NO space"*. A flex `gap` on the pill or a text
+    // node between the two would both read as "Scout ..." and both are invisible in a
+    // class assertion, so the rendered TEXT is what is checked.
+    expect(screen.getByRole("status").textContent).toBe("Scout...");
+  });
+
+  it("is hidden from the accessibility tree", () => {
+    // The live region announces the agent; three periods read aloud are noise.
+    expect(dots()?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("does not shrink away when the name is long", () => {
+    // The name truncates; the dots are the fixed half of the pill.
+    expect(dots()?.className).toContain("shrink-0");
+  });
+});

@@ -83,6 +83,25 @@ export function AgentLiveness({
  * redundant pair drifts.
  */
 /**
+ * **THE PILL'S FOUR UTILITIES, AS A STRING** — so a surface that needs the FACE but
+ * cannot hand this component its `color` as a KEY still wears one recipe.
+ *
+ * ⚠ **IT EXISTS FOR THE WORKING STRIP, AND ONLY BECAUSE OF WHO RESOLVES THE PAINT**
+ * (2026-10-10). `agent-activity.tsx` is handed each agent's colour ALREADY RESOLVED
+ * to a `var(--agent-color-NN)` string by its host — `channel-surface.tsx` states that
+ * rule, Samuel-attributed, and *"no colour reaches the component as a key"* — so it
+ * cannot call {@link AgentPill}, whose `color` prop is a key it spells itself. The
+ * alternatives were to flip that host contract or to copy these four utilities into
+ * a second file and let the two drift. This is the third, and it is the same move
+ * {@link AgentPill} itself was extracted by.
+ * ⚠ **`shrink-0` IS PART OF THE FACE AND THE STRIP OVERRIDES IT** (`cn` is
+ * tailwind-merge, so the later `shrink` wins): three pills on the recipient line have
+ * to elide, and a pill that refuses to shrink clips hard instead of eliding.
+ */
+export const AGENT_PILL_FACE =
+  "shrink-0 rounded-[6px] bg-surface-cta px-2 py-px text-micro font-medium text-text-on-cta";
+
+/**
  * THE BLACK PILL'S FACE, and nothing about what it MEANS (extracted 2026-09-15).
  *
  * ⚠ **IT EXISTS BECAUSE A SECOND SURFACE NEEDED THE FACE AND NOT THE WORD.** The
@@ -119,10 +138,7 @@ export function AgentPill({
 }) {
   return (
     <span
-      className={cn(
-        "shrink-0 rounded-[6px] bg-surface-cta px-2 py-px text-micro font-medium text-text-on-cta",
-        className
-      )}
+      className={cn(AGENT_PILL_FACE, className)}
       // ⚠ A CSS VARIABLE, NOT A CLASS: the sixteen keys are runtime data off
       // `channel_sessions.color`, so a Tailwind class per key could not be
       // statically extracted and would ship as sixteen dead rules.

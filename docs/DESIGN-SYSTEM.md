@@ -109,7 +109,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | `bg-home-panel`                               | `#f1f3f5`        | THE PANEL — `.page-float`'s fill, i.e. every full-page card in the app |
 | `border-home-panel-line`                      | `#7a7a7a`        | THE PANEL LINE — `.page-float`'s 2px edge and the /home record pane's. ⚠ The header selector's track is `--seg-fill` now, so the token's `bg-` variant has NO consumer (`grep -rn 'bg-home-panel-line' src apps` is empty); only the `border-` utility is live. ⚠ It was `#e2ecf0` until 2026-09-08, when Samuel ruled the light-blue panel edge to a neutral DARK GRAY; the value is a first guess to be tuned live, and the token's own comment in `globals.css` names the two neighbours (`--raised-light-line`, `--border-active`). |
 | `bg-home-card`                                | `#fbfcfc`        | THE CARD — the /home record pane's fill, one step warmer than the panel |
-| `--agent-color-01 … -16` (no utility) | `oklch(0.62 0.17 H)`, H every 22.5° | **THE AGENT COLOUR BANK** — one hue per LIVE agent in a channel (Samuel, 2026-09-13; docs/specs/agent-colors.md). ⚠ **THEY ARE IDENTITY, NEVER STATUS**: the severity RAMP two rows up (`success` → `danger`) says how an agent is DOING, and `agent-01` being red says nothing about its health. ⚠ **NO `text-*` / `bg-*` UTILITY, AND THAT IS DELIBERATE** — the member is chosen by DATA (a key off a peer's projection), and a Tailwind class cannot be built from a runtime key. `src/features/channels/lib/agent-colors.ts › agentColorVar` is the ONLY place the token name is spelled; consumers pass its `var(--agent-color-NN)` into an inline `style`. ⚠ ONE SATURATION AND ONE LIGHTNESS, HUE ONLY, so no two read as "the same colour, darker" and all sixteen carry equal weight against the transcript's white ground. ⚠ NO `-soft` COMPANION SET: since 2026-09-14 the colour is a STROKE and a 3px BAR with no filled area at all, so a tint would have no consumer (⚠ the stroke was a `ring` until 2026-09-16 and is a 3px `border` now — one drawn shape, see "The AGENT POST ACCENT" below). ⚠ SIXTEEN is one more than the agent cap (15, 2026-09-01), so a full room still has a spare. ⚠ The key set is mirrored in four more places — re-derive with `src/features/channels/agent-color-schema.test.ts`, never by hand. |
+| `--agent-color-01 … -16` (no utility) | `oklch(0.44 0.11 H)`, H every 22.5° | **THE AGENT COLOUR BANK** — one hue per LIVE agent in a channel (Samuel, 2026-09-13; docs/specs/agent-colors.md). ⚠ **THEY ARE IDENTITY, NEVER STATUS**: the severity RAMP two rows up (`success` → `danger`) says how an agent is DOING, and `agent-01` being red says nothing about its health. ⚠ **NO `text-*` / `bg-*` UTILITY, AND THAT IS DELIBERATE** — the member is chosen by DATA (a key off a peer's projection), and a Tailwind class cannot be built from a runtime key. `src/features/channels/lib/agent-colors.ts › agentColorVar` is the ONLY place the token name is spelled; consumers pass its `var(--agent-color-NN)` into an inline `style`. ⚠ ONE SATURATION AND ONE LIGHTNESS, HUE ONLY, so no two read as "the same colour, darker" and all sixteen carry equal weight against the transcript's white ground. ⚠ **THE VALUE ABOVE WAS WRITTEN `oklch(0.62 0.17 H)` HERE UNTIL 2026-10-10 AND BOTH STYLESHEETS SAID `0.44 0.11` THE WHOLE TIME** — a doc-only drift, corrected, and worth naming because the lightness is now LOAD-BEARING: the working strip fills a pill with these and puts white on them (below), so `0.62` would have promised a contrast nothing in the repo actually has. ⚠ **ONE LIGHTNESS IS ALSO WHAT BUYS A SINGLE INK RULE, AND IT IS MEASURED**: white (`--text-on-cta`) clears WCAG AA on every one of the sixteen with half again the margin — 6.99:1 at the worst hue (H=200), 8.26:1 at the best, i.e. AAA to within a rounding error — and `lib/agent-color-contrast.test.ts` fails the day a hue is lightened on its own, which is the one change that would break a filled label while breaking NOTHING ELSE in the repo. ⚠ **AND THERE IS NO SECOND THEME TO CHECK**: the bank is declared once in `:root` with no light/dark split (that same test asserts it), so "readable in both themes" has one answer. ⚠ NO `-soft` COMPANION SET: since 2026-09-14 the colour is a STROKE and a 3px BAR with no filled area at all **except the working strip's pill** (2026-10-10), so a tint would still have no consumer (⚠ the stroke was a `ring` until 2026-09-16 and is a 3px `border` now — one drawn shape, see "The AGENT POST ACCENT" below). ⚠ SIXTEEN is one more than the agent cap (15, 2026-09-01), so a full room still has a spare. ⚠ The key set is mirrored in four more places — re-derive with `src/features/channels/agent-color-schema.test.ts`, never by hand. |
 | `--shadow-card-lift` (no utility) | `0 2px 4px rgba(0,0,0,0.07), 0 12px 28px rgba(0,0,0,0.1)` | THE CARD HOVER LIFT's shadow — read by the kit's `.card-lift:hover` and `knowledge-v2.module.css`'s `.card:hover`, so both cards lift alike. Declared in `globals.css` and mirrored in `tokens.css` (2026-09-23). |
 
 **These are the APP FRAME palette, and the old "/home ONLY" note on them is
@@ -231,6 +231,32 @@ which is why none is given here. Each is still an equality or an absence, and ea
   (`agent-panel.tsx › AgentPanelHeader`) — which is exactly the shape this ruling asks for, so it
   was not touched. ⚠ The stream's live tail (`agent-stream-working.tsx`) stays: Samuel's 2026-09-14
   *"not only in the header's corner"*.
+- 🔒 **THE WORKING STRIP IS PILLS NOW — NO DOT, THE NAME ON THE AGENT'S OWN COLOUR, AND A CYCLING
+  ELLIPSIS INSIDE THE PILL.** Samuel, 2026-10-10: *"No dot. Agent name inside a pill; pill
+  background = the agent's dot color … right after the name, no space, animated dots cycling"*.
+  `channels/components/agent-activity.tsx` now renders ONE element per working agent wearing
+  `agent-bits.tsx › AGENT_PILL_FACE` — the SAME four utilities `AgentPill` and `AgentEndedPill`
+  wear — with the agent's `var(--agent-color-NN)` as its `background-color`. ⚠ **IT WEARS THE FACE
+  AS A CONSTANT RATHER THAN CALLING `AgentPill`, AND THAT IS THE HOST CONTRACT'S DOING**:
+  `channel-surface.tsx` resolves each agent's paint to a `var()` string before it reaches this
+  component (*"no colour reaches the component as a key"*), while `AgentPill`'s `color` prop is a
+  KEY it spells itself — so the choice was one recipe in two call shapes, or a second copy of the
+  utilities. ⚠ **`shrink-0` IS IN THE FACE AND THE STRIP MERGES IT AWAY TO `shrink`** (`cn` is
+  tailwind-merge): three pills on the recipient line have to elide, and a pill that refuses to
+  shrink gets clipped with no `…`. ⚠ **THE UNCOLOURED FACE IS THE PLAIN BLACK PILL** — the dot's
+  old `bg-border-strong` neutral could not come along, because as a FILL it puts white ink on a
+  12%-black tint. ⚠ **THE PULSE MOVED INTO THE WORDS**: the dots are the live signal now
+  (`globals.css › .working-dots`, mirrored in `kit.css`, keyframes `doplWorkingDot1…3`), four
+  cumulative frames `"."→".."→"..."→""`; the fill is identity and a pill that flashed its ground
+  would be both harder to read and harder to name a hue on. ⚠ **THREE KEYFRAMES, NOT ONE ON A
+  STAGGER, AND NOT `agent-stream-working.tsx`'S THREE DOTS** — the duty cycles differ (75/50/25%
+  lit), so a shared keyframe with delays gives a travelling WAVE and never a count that resets;
+  stock Tailwind cannot express a cumulative cycle, which is the whole reason a custom keyframe
+  lands in both stylesheets here. ⚠ **WIDTH IS RESERVED BY `opacity`** — all three dots stay in
+  layout every frame, so the pill cannot jitter and there is no `ch` box to keep in step with the
+  font. ⚠ **REDUCED MOTION KEEPS ALL THREE, STATIC** (`animation: none`), the house rule: the
+  movement goes, the fact stays. Pinned by `agent-activity.test.tsx` and
+  `lib/agent-color-contrast.test.ts`.
 - **The pickers row sits the same distance from the line above it and the meter below it**
   (*"Decrease the amount of padding there so that it is the same as the distance between the
   pickers and the top"*) — `agent-posture.tsx`'s own `py-2.5` above, `mt-2.5` below. ⚠ **The
