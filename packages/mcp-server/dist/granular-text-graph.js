@@ -46,7 +46,7 @@ exports.GRAPH_TEXT = {
             subtitle: "update: the short description agents browse.",
             label: "The attribute, relationship or template-field label.",
             kind: "set_attribute, set_template_field: the value kind (default: the field's).",
-            value: "set_attribute, kind text, number, pill, enum, date or link: the value.",
+            value: "set_attribute, a one-value kind: the value.",
             values: "set_attribute, kind ref, knowledge or skill: ids, slugs or names (knowledge also `<base>/<path>`).",
             options: 'kind="enum": the allowed values.',
             targets: "set_relationship: the target objects.",

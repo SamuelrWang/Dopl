@@ -145,7 +145,7 @@ export function registerOntologyTool(
         .enum(FIELD_KINDS)
         .optional()
         .describe("set_attribute / set_template_field: value kind (default: the field's)."),
-      value: z.string().max(4000).optional().describe("set_attribute (text/number/pill/enum/date/link): the value."),
+      value: z.string().max(4000).optional().describe("set_attribute (one-value kinds): the value."),
       values: z
         .array(z.string())
         .max(100)
