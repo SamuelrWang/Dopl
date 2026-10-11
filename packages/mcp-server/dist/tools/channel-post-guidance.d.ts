@@ -30,13 +30,6 @@
  */
 import type { ChannelMessage } from "@dopl/client";
 import { type FactValue } from "./channel-facts";
-/**
- * How many readers the SERVER resolved out of the body, read back off the
- * STORED message. ⚠ Tolerant in the same direction as `mentionedUserIdsOf`: a
- * missing key, or a value that is not an array of strings, counts as ZERO
- * rather than being trusted.
- */
-export declare function resolvedMentionCount(message: ChannelMessage): number;
 export type MentionKind = "agent" | "handle";
 export type MentionToken = {
     token: string;

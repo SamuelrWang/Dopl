@@ -17,7 +17,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.addressableHandle = addressableHandle;
 /**
  * THE AGENT-INSTANCE ID CHARSET — ⚠ HAND-COPIED from
- * `dopl-desktop-app/main/agent-id.js` and from `schema-launch.ts ›
+ * `dopl-desktop-app/main/agent-id.js` and from `schema-launch-decide.ts ›
  * LaunchDecideSchema.agentId`, which carry the identical anchored pattern. There
  * is no shared source tree between this package and either of those, the same
  * arrangement `channel-addressing.ts › GROUP_CHANNEL_MIN_MEMBERS` lives under.

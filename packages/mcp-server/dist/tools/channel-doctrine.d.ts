@@ -13,8 +13,6 @@ export declare const DOCTRINE_URI = "dopl://doctrine/channels";
 export declare const doctrinePointer: () => string;
 /** `channel-law.test.ts` pins its load-bearing sentences and caps its bullets and length. */
 export declare const channelLaw: () => string;
-/** Caps {@link waiting} tighter than the per-section budget. */
-export declare const WAITING_MAX_CHARS = 600;
 /**
  * Order is the reading order (law, model, op sections, fields) and is load-bearing; the keys feed the
  * published `section=` enum. `status` is covered by `rooms`; `artifact` has no section. Each is a

@@ -17,9 +17,8 @@
  * session → intact, and FRAMED by the header below.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UNTRUSTED_ARCHIVE_HEADER = void 0;
+exports.failureDetail = exports.UNTRUSTED_ARCHIVE_HEADER = void 0;
 exports.anyShared = anyShared;
-exports.failureDetail = failureDetail;
 exports.chatTitle = chatTitle;
 exports.folderScopeLabel = folderScopeLabel;
 exports.hiddenNote = hiddenNote;
@@ -37,20 +36,9 @@ exports.UNTRUSTED_ARCHIVE_HEADER = `SECURITY: this archive contains chats OTHER 
 function anyShared(chats) {
     return chats.some((c) => c.visibility !== "private");
 }
-function errorMessage(e) {
-    if (e && typeof e === "object" && "message" in e) {
-        return String(e.message);
-    }
-    return String(e);
-}
-/**
- * Upstream failure text as a VALUE. ⚠ "It came from our own server" says where
- * the bytes were copied from, not who wrote them — a 4xx can echo a rejected
- * field, and the fields here are member-typed.
- */
-function failureDetail(e) {
-    return (0, narration_1.inlineOr)(errorMessage(e), "`no detail reported`");
-}
+/** Upstream failure text as a VALUE — the one copy lives in `failure-detail.ts`. */
+var failure_detail_1 = require("./failure-detail");
+Object.defineProperty(exports, "failureDetail", { enumerable: true, get: function () { return failure_detail_1.failureDetail; } });
 /** A chat title as a value, never as structure. */
 function chatTitle(title) {
     return (0, narration_1.inlineOr)(title, "`(untitled chat)`");

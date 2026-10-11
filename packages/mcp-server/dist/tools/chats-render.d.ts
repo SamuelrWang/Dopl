@@ -27,12 +27,8 @@ export declare const UNTRUSTED_ARCHIVE_HEADER = "SECURITY: this archive contains
 export declare function anyShared(chats: Array<{
     visibility: string;
 }>): boolean;
-/**
- * Upstream failure text as a VALUE. ⚠ "It came from our own server" says where
- * the bytes were copied from, not who wrote them — a 4xx can echo a rejected
- * field, and the fields here are member-typed.
- */
-export declare function failureDetail(e: unknown): string;
+/** Upstream failure text as a VALUE — the one copy lives in `failure-detail.ts`. */
+export { failureDetail } from "./failure-detail";
 /** A chat title as a value, never as structure. */
 export declare function chatTitle(title: string | null | undefined): string;
 /**

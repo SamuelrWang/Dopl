@@ -83,6 +83,17 @@ export interface Ontology {
     name: string;
     purpose: string;
     columnIds: string[];
+    /** Persisted dragged node positions (id → {x,y}); `{}` = pure auto-layout. Optional here: the
+     *  server always sends it, but nothing in this package reads it. */
+    layout?: Record<string, {
+        x: number;
+        y: number;
+    }>;
+    /** The solo toggle (`ontologies.agents_may_edit`). Absent on a cached older payload. */
+    agentsMayEdit?: boolean;
+    /** Home channels this ontology is lent into. Absent is UNKNOWN, never zero; emitted only for
+     *  ontologies the caller owns. */
+    sharedChannelCount?: number;
 }
 export interface OntologySnapshot {
     ontologies: Ontology[];
@@ -101,6 +112,17 @@ export interface OntologySnapshot {
      * already cleared `levelForOntology`.
      */
     homeSpaceOntologyIds?: string[];
+    /**
+     * 🔒 **THE SERVER'S OWN CLIP MARKER** — the twin of
+     * `src/features/ontology/types.ts › OntologySnapshot.truncated`: `true` when a
+     * page walk behind `GET /api/ontology` stopped at its `hardCap`, so the graph
+     * is SMALLER than the stored one.
+     *
+     * ⚠ **OPTIONAL, AND ABSENT IS "NOT ANSWERED", NEVER "COMPLETE"** — the same
+     * rule as {@link homeSpaceOntologyIds}: payloads cached against an older
+     * server, and snapshots a client builds itself, carry no such key.
+     */
+    truncated?: boolean;
 }
 /**
  * `GET /api/ontology?view=summary` — same graph SHAPE, every JSONB column left

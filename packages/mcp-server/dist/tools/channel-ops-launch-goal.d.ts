@@ -32,14 +32,6 @@
  */
 import { type ToolResponse } from "./respond";
 /**
- * **HAND-MIRRORED FROM `schema-launch.ts › LaunchCreateSchema.goal`'s `.max(2000)`**, the
- * bound that actually rejects the request — the same hand-mirror discipline
- * `channel-schema.ts`'s caps and `channel-errors.ts › fieldCapsNote` follow, and for the
- * same reason: this package cannot import from `src/`. ⚠ **IT IS NOT `body`'s 16000 AND MUST
- * NOT BE "CORRECTED" TO IT.** The two numbers are two different routes' and both are right.
- */
-export declare const LAUNCH_GOAL_MAX_CHARS = 2000;
-/**
  * The goal this launch may file, or the refusal to return instead.
  *
  * ⚠ **IT ANSWERS A UNION RATHER THAN THROWING**, matching every other refusal on this lane:

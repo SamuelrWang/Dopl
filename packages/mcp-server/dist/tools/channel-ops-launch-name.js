@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NAME_NOT_REPORTED = exports.LAUNCH_NAME_MAX_CHARS = void 0;
 exports.launchName = launchName;
 exports.isNameRefusal = isNameRefusal;
 exports.launchedTag = launchedTag;
@@ -35,7 +34,7 @@ const respond_1 = require("./respond");
  * in `name`'s own `.describe()` ("1-60 visible characters") and in `channel-errors.ts ›
  * fieldCapsNote()`; this is the third statement of it, and the only one that can refuse.
  */
-exports.LAUNCH_NAME_MAX_CHARS = 60;
+const LAUNCH_NAME_MAX_CHARS = 60;
 /**
  * The name this launch should file, or the refusal to return instead.
  *
@@ -64,12 +63,12 @@ function launchName(raw) {
     // (S50, 2026-09-18). `agentDisplayName` cannot LENGTHEN a string (its own docblock argues
     // why), so this can never refuse a name the route would have taken — and measuring the raw
     // argument instead would refuse on characters that were about to collapse.
-    if (display.length > exports.LAUNCH_NAME_MAX_CHARS) {
+    if (display.length > LAUNCH_NAME_MAX_CHARS) {
         return (0, respond_1.err)([
             // ⚠ THE SAME TOKEN GRAMMAR THE GOAL CAP USES (`channel-ops-launch-goal.ts`), and the
             // same reason: a caller branches on the line, and two neighbours of one op spelling
             // one verdict two ways is how a caller learns to parse prose instead.
-            `No agent was requested — field=name limit=${exports.LAUNCH_NAME_MAX_CHARS} reason=name_too_long retry=no`,
+            `No agent was requested — field=name limit=${LAUNCH_NAME_MAX_CHARS} reason=name_too_long retry=no`,
             `**Nothing was filed**: that name is ${display.length} characters. A name is a short ROLE a person reads on a card and other agents @-tag ("Research", "Bug reviewer") — what the agent is FOR goes in \`body\`, which is the opening instruction.`,
         ].join("\n"));
     }
@@ -135,7 +134,7 @@ function launchedTag(name) {
  * ALREADY USES** for the same shape of silence on the same result line, so one line no longer
  * carries two vocabularies for one fact.
  */
-exports.NAME_NOT_REPORTED = "(not reported)";
+const NAME_NOT_REPORTED = "(not reported)";
 /**
  * **THE `name=` FIELD ON A LAUNCHED RESULT** — the machine's value, or the one spelling of
  * "the machine did not say" (F-736, resolved 2026-09-18).
@@ -160,6 +159,6 @@ exports.NAME_NOT_REPORTED = "(not reported)";
  */
 function launchedName(applied) {
     return applied === null || applied === undefined
-        ? exports.NAME_NOT_REPORTED
+        ? NAME_NOT_REPORTED
         : launchedTag(applied);
 }

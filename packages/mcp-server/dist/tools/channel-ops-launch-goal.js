@@ -32,7 +32,6 @@
  * removed-vocabulary source scan (`channel-law.test.ts`, `law-scan.test.ts`).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAUNCH_GOAL_MAX_CHARS = void 0;
 exports.launchGoal = launchGoal;
 exports.isGoalRefusal = isGoalRefusal;
 const call_ref_js_1 = require("../call-ref.js");
@@ -44,7 +43,7 @@ const respond_1 = require("./respond");
  * same reason: this package cannot import from `src/`. ⚠ **IT IS NOT `body`'s 16000 AND MUST
  * NOT BE "CORRECTED" TO IT.** The two numbers are two different routes' and both are right.
  */
-exports.LAUNCH_GOAL_MAX_CHARS = 2000;
+const LAUNCH_GOAL_MAX_CHARS = 2000;
 /**
  * The goal this launch may file, or the refusal to return instead.
  *
@@ -65,14 +64,14 @@ function launchGoal(raw) {
     if (typeof raw !== "string")
         return { goal: undefined };
     const measured = raw.trim().length;
-    if (measured > exports.LAUNCH_GOAL_MAX_CHARS) {
+    if (measured > LAUNCH_GOAL_MAX_CHARS) {
         return (0, respond_1.err)([
             // ⚠ THE TOKEN LINE IS THE HALF A CALLER BRANCHES ON, and it names the field the
             // CALLER passed (`body`) rather than the field the wire carries (`goal`) — telling
             // an agent to shorten an argument it never sent is the mis-narration this whole
             // module exists to end.
-            `No agent was requested — field=body limit=${exports.LAUNCH_GOAL_MAX_CHARS} reason=goal_too_long retry=no`,
-            `**Nothing was filed**: your \`body\` is ${measured} characters and a launch goal caps at ${exports.LAUNCH_GOAL_MAX_CHARS}. The 16000 the schema publishes is ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })}'s; this lane is tighter.`,
+            `No agent was requested — field=body limit=${LAUNCH_GOAL_MAX_CHARS} reason=goal_too_long retry=no`,
+            `**Nothing was filed**: your \`body\` is ${measured} characters and a launch goal caps at ${LAUNCH_GOAL_MAX_CHARS}. The 16000 the schema publishes is ${(0, call_ref_js_1.callRef)("channel.send", {}, { form: "op" })}'s; this lane is tighter.`,
             `The goal is the OPENING INSTRUCTION, not the brief. Put the long version where the agent can read it — a knowledge entry, or a post in the channel — and launch with a goal that names it.`,
         ].join("\n"));
     }

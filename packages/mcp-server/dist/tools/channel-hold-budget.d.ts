@@ -67,32 +67,6 @@ export declare const HOLD_CAP_MS = 230000;
  */
 export declare const HOLD_DEFAULT_MS = 215000;
 /**
- * THE CALLER'S OWN MCP CLIENT, MEASURED — Claude Code wraps every non-GET fetch
- * to a `type: "http"` MCP server in an AbortController firing `TimeoutError`
- * after `max(server.timeout ?? MCP_TOOL_TIMEOUT, 60_000)` ms, default 60_000.
- *
- * ⚠ A HAND-MEASURED PROPERTY OF SOMEONE ELSE'S CLIENT, so it is a FLOOR to
- * design under, never a promise: another client may be tighter, and a caller
- * that knows its own is looser passes an explicit `timeout_ms`, which
- * {@link holdMsFor} honours up to {@link HOLD_CAP_MS}.
- *
- * ⚠ It covers TIME-TO-RESPONSE-HEADERS, which is why `/api/mcp` must keep
- * STREAMING (SSE) and must NOT set `enableJsonResponse: true` — that withholds
- * headers until the handler returns, so the bound would cover the whole call and
- * EVERY op (not just `await`) would die at exactly 60.0s. Shortening the hold
- * does not fix that; only streaming does.
- */
-export declare const EXTERNAL_CLIENT_ABORT_MS = 60000;
-/**
- * ⚠ How far under {@link EXTERNAL_CLIENT_ABORT_MS} an unstamped caller's hold
- * must sit. Same class of cost as {@link HOLD_MARGIN_MS} and the same
- * reason — `/api/mcp` authenticates, boots the MCP server and runs a workspace
- * handshake before the op starts, all inside the client's clock — scaled to the
- * smaller budget: a hold sized AT the abort loses that race and hands back the
- * transport error instead of the result.
- */
-export declare const HOLD_EXTERNAL_MARGIN_MS = 15000;
-/**
  * DEFAULT hold when the request carried NO desktop runtime stamp (T03).
  *
  * ⚠ **THIS TRADES THE WAKE PRIMITIVE AWAY, AND THAT IS THE POINT** — under a

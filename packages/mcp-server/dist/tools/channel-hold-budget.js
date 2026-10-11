@@ -30,7 +30,7 @@
  * can observe about which side of layer 6 it is on — the runtime stamp.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DESKTOP_HOLD_REFUSAL = exports.HOLD_SHORT_MS = exports.HOLD_MAX_POLLS = exports.HOLD_MIN_POLL_MS = exports.HOLD_POLL_MS = exports.HOLD_MARGIN_MS = exports.MCP_ROUTE_MAX_DURATION_MS = exports.HOLD_EXTERNAL_DEFAULT_MS = exports.HOLD_EXTERNAL_MARGIN_MS = exports.EXTERNAL_CLIENT_ABORT_MS = exports.HOLD_DEFAULT_MS = exports.HOLD_CAP_MS = void 0;
+exports.DESKTOP_HOLD_REFUSAL = exports.HOLD_SHORT_MS = exports.HOLD_MAX_POLLS = exports.HOLD_MIN_POLL_MS = exports.HOLD_POLL_MS = exports.HOLD_MARGIN_MS = exports.MCP_ROUTE_MAX_DURATION_MS = exports.HOLD_EXTERNAL_DEFAULT_MS = exports.HOLD_DEFAULT_MS = exports.HOLD_CAP_MS = void 0;
 exports.resolveHoldMs = resolveHoldMs;
 exports.resolveHoldCeilingMs = resolveHoldCeilingMs;
 exports.holdMsFor = holdMsFor;
@@ -89,7 +89,7 @@ exports.HOLD_DEFAULT_MS = 215_000;
  * EVERY op (not just `await`) would die at exactly 60.0s. Shortening the hold
  * does not fix that; only streaming does.
  */
-exports.EXTERNAL_CLIENT_ABORT_MS = 60_000;
+const EXTERNAL_CLIENT_ABORT_MS = 60_000;
 /**
  * ⚠ How far under {@link EXTERNAL_CLIENT_ABORT_MS} an unstamped caller's hold
  * must sit. Same class of cost as {@link HOLD_MARGIN_MS} and the same
@@ -98,7 +98,7 @@ exports.EXTERNAL_CLIENT_ABORT_MS = 60_000;
  * smaller budget: a hold sized AT the abort loses that race and hands back the
  * transport error instead of the result.
  */
-exports.HOLD_EXTERNAL_MARGIN_MS = 15_000;
+const HOLD_EXTERNAL_MARGIN_MS = 15_000;
 /**
  * DEFAULT hold when the request carried NO desktop runtime stamp (T03).
  *
@@ -111,7 +111,7 @@ exports.HOLD_EXTERNAL_MARGIN_MS = 15_000;
  * ⚠ An unstamped caller may still BE a desktop session (an older build), which
  * loses nothing but hold length — it is told what its cursor is either way.
  */
-exports.HOLD_EXTERNAL_DEFAULT_MS = exports.EXTERNAL_CLIENT_ABORT_MS - exports.HOLD_EXTERNAL_MARGIN_MS;
+exports.HOLD_EXTERNAL_DEFAULT_MS = EXTERNAL_CLIENT_ABORT_MS - HOLD_EXTERNAL_MARGIN_MS;
 /**
  * ⚠ Floor for the env override. Below ~50s a hold is shorter than ONE inner
  * poll and can never cross the two-minute backgrounding mark — an incident

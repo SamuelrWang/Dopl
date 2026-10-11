@@ -18,17 +18,13 @@
  * by the immutable `authorUserId`, the one half the author does not control.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NO_MEMBER_VIEW = exports.EXTERNAL_SESSION_META_KEY = exports.OUTSIDE_SESSION_HANDLE = void 0;
+exports.NO_MEMBER_VIEW = void 0;
 exports.formatAuthor = formatAuthor;
-exports.isOutsideSession = isOutsideSession;
-exports.agentHandleOf = agentHandleOf;
 exports.sessionIdOf = sessionIdOf;
 exports.addresseeOf = addresseeOf;
 exports.memberRef = memberRef;
 exports.namesFromMessages = namesFromMessages;
 exports.agentNamesFromMessages = agentNamesFromMessages;
-exports.agentRef = agentRef;
-exports.wakeReasonOf = wakeReasonOf;
 exports.addressTag = addressTag;
 exports.sessionTail = sessionTail;
 const channel_shared_1 = require("./channel-shared");
@@ -138,26 +134,13 @@ function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
     return who ? `member ${who}` : "a member";
 }
 /**
- * 🔒 **THE GROUP HANDLE FOR AN OPERATOR'S OUTSIDE SESSIONS** — one built-in
- * handle meaning *the operator's MCP sessions that are not app-spawned agents*
- * (Claude Code, Codex, Cursor, a script).
- *
- * ⚠ **THE SEAM IS CLOSED AND THE MECHANISM ARRIVED** (integration, 2026-09-19).
- * The handle's minting, its reservation against the member/agent namespaces and
- * the author kind on the wire were built on the SIBLING BRANCH that is now
- * merged, so this is an ALIAS of `channel-desktop-tag.ts ›
- * DESKTOP_GROUP_HANDLE` and not a second declaration of the string. Two copies
- * of a handle is exactly how a rename lands in one renderer and not the other.
- */
-exports.OUTSIDE_SESSION_HANDLE = channel_desktop_tag_1.DESKTOP_GROUP_HANDLE;
-/**
  * ⚠ **THE THIRD AUTHOR SHAPE IS NOT A NEW `authorKind`, AND IT IS NOT A DTO
  * FIELD EITHER.** `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded
  * by `scripts/check-message-kind-drift.ts` and the column's own `CHECK`, and both
  * `ChannelMessage` declarations sit at the 500-line cap — so the outside-session
  * marker rides server-owned `metadata.external_session` and is READ THROUGH A
- * FUNCTION on the sibling branch (`authorViewOf(message)` →
- * `MessageAuthorKind | "external"`).
+ * FUNCTION, `channel-desktop-tag.ts › authorViewOf(message)` →
+ * `MessageAuthorKind | "external"` (built on a sibling branch, merged 2026-09-19).
  *
  * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, and since the merge
  * (2026-09-19) it does not ask it itself: the body IS
@@ -172,7 +155,6 @@ exports.OUTSIDE_SESSION_HANDLE = channel_desktop_tag_1.DESKTOP_GROUP_HANDLE;
  * an old row renders exactly the line it always did rather than being reported
  * as an outside session nobody marked.
  */
-exports.EXTERNAL_SESSION_META_KEY = channel_desktop_tag_1.EXTERNAL_SESSION_METADATA_KEY;
 function isOutsideSession(m) {
     return (0, channel_desktop_tag_1.authorViewOf)(m) === "external";
 }

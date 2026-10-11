@@ -29,7 +29,6 @@
  * keep waiting.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.workspaceRearmStopRule = workspaceRearmStopRule;
 exports.opHoldWorkspace = opHoldWorkspace;
 const call_ref_js_1 = require("../call-ref.js");
 const respond_1 = require("./respond");

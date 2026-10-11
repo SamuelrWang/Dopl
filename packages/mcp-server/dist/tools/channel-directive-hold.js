@@ -5,13 +5,13 @@
  * `channel-` filename prefix is required by the parity split-scan (`tool-group-files.ts`).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAUNCH_RETRY_ADVICE = exports.DIRECTIVE_POLL_INTERVAL_MS = exports.DIRECTIVE_WAIT_CAP_MS = exports.DIRECTIVE_WAIT_DEFAULT_MS = void 0;
+exports.LAUNCH_RETRY_ADVICE = exports.RETRY_AFTER_EXPIRY = exports.DIRECTIVE_WAIT_CAP_MS = void 0;
 exports.holdRow = holdRow;
 /** The bounded hold every mailbox op runs: default and cap. */
-exports.DIRECTIVE_WAIT_DEFAULT_MS = 15_000;
+const DIRECTIVE_WAIT_DEFAULT_MS = 15_000;
 exports.DIRECTIVE_WAIT_CAP_MS = 30_000;
 /** Coarse on purpose: the far end is a human-scale toggle plus a spawn or a turn on a machine. */
-exports.DIRECTIVE_POLL_INTERVAL_MS = 1_500;
+const DIRECTIVE_POLL_INTERVAL_MS = 1_500;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /**
  * Poll one mailbox row until it leaves `pending` / `claimed` or the capped wait lapses.
@@ -20,10 +20,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 async function holdRow(row, fetchRow, waitMs) {
     let current = row;
-    const deadline = Date.now() + Math.min(waitMs ?? exports.DIRECTIVE_WAIT_DEFAULT_MS, exports.DIRECTIVE_WAIT_CAP_MS);
+    const deadline = Date.now() + Math.min(waitMs ?? DIRECTIVE_WAIT_DEFAULT_MS, exports.DIRECTIVE_WAIT_CAP_MS);
     while ((current.status === "pending" || current.status === "claimed") &&
         Date.now() < deadline) {
-        await sleep(Math.min(exports.DIRECTIVE_POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
+        await sleep(Math.min(DIRECTIVE_POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
         try {
             current = await fetchRow(current.id);
         }
@@ -33,10 +33,14 @@ async function holdRow(row, fetchRow, waitMs) {
     }
     return current;
 }
+/** One spelling of the unclaimed-hold word, so the result and its test cannot drift apart. */
+exports.RETRY_AFTER_EXPIRY = "after-expiry";
 /**
  * May the caller ask again? One map over the closed refusal vocabulary for every directive kind.
  * `busy` is the only temporary word (`no-model`: re-issue without `model`, per `channel-doctrine.ts › MANAGE`).
  * A `Record` over the enum, so a new word cannot enter without this map accounting for it.
+ * ⚠ `after-expiry` is EXCLUDED on purpose: a refusal is an ANSWER, and the one word that means
+ * "nobody answered yet" may never be reachable from a reason that did.
  */
 exports.LAUNCH_RETRY_ADVICE = {
     cap: "no",

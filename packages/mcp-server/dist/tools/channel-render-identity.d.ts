@@ -56,65 +56,6 @@ import type { ChannelMessage } from "@dopl/client";
  */
 export declare function formatAuthor(m: ChannelMessage, view?: MemberView): string;
 /**
- * 🔒 **THE GROUP HANDLE FOR AN OPERATOR'S OUTSIDE SESSIONS** — one built-in
- * handle meaning *the operator's MCP sessions that are not app-spawned agents*
- * (Claude Code, Codex, Cursor, a script).
- *
- * ⚠ **THE SEAM IS CLOSED AND THE MECHANISM ARRIVED** (integration, 2026-09-19).
- * The handle's minting, its reservation against the member/agent namespaces and
- * the author kind on the wire were built on the SIBLING BRANCH that is now
- * merged, so this is an ALIAS of `channel-desktop-tag.ts ›
- * DESKTOP_GROUP_HANDLE` and not a second declaration of the string. Two copies
- * of a handle is exactly how a rename lands in one renderer and not the other.
- */
-export declare const OUTSIDE_SESSION_HANDLE = "desktop";
-/**
- * ⚠ **THE THIRD AUTHOR SHAPE IS NOT A NEW `authorKind`, AND IT IS NOT A DTO
- * FIELD EITHER.** `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded
- * by `scripts/check-message-kind-drift.ts` and the column's own `CHECK`, and both
- * `ChannelMessage` declarations sit at the 500-line cap — so the outside-session
- * marker rides server-owned `metadata.external_session` and is READ THROUGH A
- * FUNCTION on the sibling branch (`authorViewOf(message)` →
- * `MessageAuthorKind | "external"`).
- *
- * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, and since the merge
- * (2026-09-19) it does not ask it itself: the body IS
- * `authorViewOf(m) === "external"`, and nothing else in this package moved.
- * Reading `metadata.external_session` directly would label a `user` row an
- * outside session; `authorViewOf` is the ONE place the "only an `agent` row can
- * be one" rule lives, and this function is now a named reading of it.
- *
- * ⚠ **THE OLD-PAYLOAD ANSWER IS `false`, AND IT IS `false` ON PURPOSE** (§8's
- * rule for a new payload field): a row written or cached before the marker
- * existed carries no `external_session`, and `undefined === true` is false — so
- * an old row renders exactly the line it always did rather than being reported
- * as an outside session nobody marked.
- */
-export declare const EXTERNAL_SESSION_META_KEY = "external_session";
-export declare function isOutsideSession(m: ChannelMessage): boolean;
-/**
- * **WHICH AGENT — BY THE NAME ITS OPERATOR GAVE IT** (2026-09-04).
- *
- * ⚠ **THE LINE PRINTED `agent for Samuel Wang` AND A BARE ID TAIL, AND NEVER THE
- * NAME.** An operator runs several agents under ONE account, renames them, and
- * then talks about them by those names; a reader of this transcript had the
- * operator's name and an eight-character id and no way to join the two. The
- * server now sends the join as one field, `authorAgentName`.
- *
- * ⚠ **THE ID FORM IS THE FALLBACK AND IT NEVER STOPS WORKING** — a name is
- * absent for an older server, a swept session row, or an agent nobody renamed,
- * and `agent-<id>` is minted once and never recycled. That is the same
- * precedence `lib/agent-mentions.ts › agentMentionHandle` applies in the web
- * tree, stated here because this package cannot import it.
- *
- * ⚠ **NEUTRALIZED, AND IT LANDS IN THE LINE HEAD.** A display name has no
- * charset validation anywhere in the product; the head is OUTSIDE the
- * untrusted-body framing, so this is zone two by this file's security rule.
- * ⚠ **AND IT IS NOT AN ASSERTED IDENTITY ON ITS OWN**: the label still carries
- * `for <operator> (<user id>)`, the half the author does not control.
- */
-export declare function agentHandleOf(m: ChannelMessage): string | null;
-/**
  * WHICH SESSION WROTE THIS LINE — `metadata.session_id`. An agent post is
  * authored by its OWNER'S ACCOUNT and one operator runs many concurrent
  * sessions, so an author label alone cannot name the process; this field is the
@@ -184,13 +125,6 @@ export declare function namesFromMessages(messages: ChannelMessage[]): Map<strin
  * handle that never stops working.
  */
 export declare function agentNamesFromMessages(messages: ChannelMessage[]): Map<string, string>;
-/**
- * ONE AGENT RECIPIENT, RENDERED — its operator's name when this page knows it,
- * else the `agent-<id>` handle. ⚠ Both halves neutralized: the name has no
- * charset rule anywhere in the product, and the id comes off a stored column.
- */
-export declare function agentRef(agentId: string, view: MemberView): string;
-export declare function wakeReasonOf(m: ChannelMessage): string | undefined;
 /**
  * **WHO THIS MESSAGE WAS FOR, OFF THE COLUMNS THAT DECIDED IT** (2026-09-04).
  *

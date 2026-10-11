@@ -30,24 +30,6 @@
 import type { DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
 /**
- * THE ONE THING A WORKSPACE HOLD KNOWS THAT THE DOCTRINE CANNOT — ⚠ a SCOPE
- * fact, and all that is left of what was an 855-character stop rule.
- *
- * ⚠ **THE STOP RULE ITSELF MOVED (2026-09-03).** "Keep re-arming while the
- * member you addressed has spoken in the last ~30 minutes; stop when they have
- * not; no thread ever closes, so that silence is the only signal" is true of
- * both lanes and of every hold, and is now stated once in
- * `channel-doctrine.ts › waiting`, which every result points at.
- *
- * ⚠ **WHAT COULD NOT MOVE IS THE SENTENCE BELOW**, because it is not a rule
- * about waiting — it is a fact about THIS hold's scope, and it inverts how a
- * wake should be read. A per-channel hold that fires is at least about the room
- * you care about; a workspace hold that fires may be about any room you are in,
- * so an orchestrator can re-arm forever on a busy workspace while the one agent
- * it is blocked on died an hour ago.
- */
-export declare function workspaceRearmStopRule(): string;
-/**
  * THE WORKSPACE-WIDE HOLD. One call holds for `holdMsFor(waitMs, runtime)` by
  * re-issuing the ~50s inner long-poll on the same cursor
  * (`channel-hold-loop.ts › runHold`).

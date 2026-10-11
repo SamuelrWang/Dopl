@@ -1,7 +1,12 @@
 /**
  * `dopl_channel` op="manage" action="launch" — asks the operator's own desktop to start an agent.
- * This op asks, it starts nothing: a refusal is a normal answer, and a timeout is not a failure
- * (re-issuing without the same `client_msg_id` queues a second agent).
+ * This op asks, it starts nothing: a refusal is a normal answer, and the HOLD timing out is not the
+ * DIRECTIVE expiring (re-issuing without the same `client_msg_id` queues a second agent).
+ * ⚠ **AND A HOLD THAT TIMED OUT UNCLAIMED IS NOT A NON-EVENT EITHER** — it was reported as one
+ * until 2026-10-11. The hold's cap is 30s and `LAUNCH_DIRECTIVE_TTL_MS` is 120s, so an unclaimed
+ * row is handed back 90s before it dies, expiry is computed at READ time with no cron, and nothing
+ * ever reports it: a caller told `retry=no` over that row waits forever on a request that is
+ * already dead on arrival. The pending branch below says so, and names the instant.
  * A directive is not a message (no `seq`, INVARIANTS §5), so the op holds on the row (`holdRow`).
  * `channel-` filename prefix is required by the parity split-scan (`tool-group-files.ts`).
  */
@@ -9,7 +14,9 @@ import type { AgentColorKey, DoplClient, LaunchMessageMode, LaunchToolMode } fro
 import { type ToolResponse } from "./respond";
 /**
  * Ask for an agent, then hold briefly for the answer.
- * Terminal shapes: offline (nothing filed), launched, refused (reason + `retry=`), pending / expired.
+ * TERMINAL shapes: offline (nothing filed), launched, refused (reason + `retry=`), expired.
+ * NON-TERMINAL, and they are two different answers: `claimed` (a machine has it, a decision is
+ * imminent) and `pending` (nobody has it, and it lapses unannounced at `expires=`).
  */
 export declare function opLaunchAgent(client: DoplClient, ref: string, opts?: {
     thread?: string;
