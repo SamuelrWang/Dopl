@@ -4,11 +4,6 @@
  * in-window redirect can't work in the wrapper, since Supabase PKCE needs the
  * OAuth to run where the code-verifier lives.
  */
-/**
- * Per-channel working-directory bridge (`window.dopl.channels`), present ONLY in
- * the desktop shell. ⚠ Every method resolves to ABBREVIATED display labels
- * ("~/Downloads/repo") — the raw absolute path never crosses into the web page.
- */
 
 /**
  * WHERE THIS CHANNEL'S AGENT ACTUALLY RUNS (2026-09-05, task 15).
@@ -32,6 +27,11 @@ export interface ChannelFolderAnswer {
   custom: boolean;
 }
 
+/**
+ * Per-channel working-directory bridge (`window.dopl.channels`), present ONLY in
+ * the desktop shell. ⚠ Every method resolves to ABBREVIATED display labels
+ * ("~/Downloads/repo") — the raw absolute path never crosses into the web page.
+ */
 export interface DoplChannelsBridge {
   /** The channel's folder answer. ⚠ `null` only when main REFUSED the call (a
    *  non-app-window sender, a bad channel id) — never "no folder". */
@@ -45,26 +45,10 @@ export interface DoplChannelsBridge {
 }
 
 /**
- * ⚠ `DoplSessionsBridge` + `getDesktopSessions` USED TO LIVE HERE — the
- * "reopen session window" slice of `window.dopl.sessions`. DELETED 2026-08-18
- * (wave-2 fix pass): their last caller was `components/session-card.tsx`, which
- * went with the session card in wiring plan Phase 5, and a typed slice nobody
- * reads is a claim about the wire that nothing checks.
- *
- * ⚠ **THE IPC IS NOT GONE — only this tree's description of it.** `main/channel-dir-ipc.js`
- * still registers `sessions:reopen` (plus `sessions:pause` / `sessions:end`) and the
- * preload still exposes them; the SPA describes the slice IT uses in
- * `apps/desktop-ui/src/lib/dopl-bridge.ts`. This module's own rule is that each
- * side types only the slice it uses, and the web side uses none of it.
- */
-
-/**
  * THE POP-OUT THREAD WINDOW (`window.dopl.threads`), desktop shell only — wiring plan
  * Phase 10, 2026-08-18. Asks MAIN to open a second window on the same bundle, landing on
  * its OWN top-level route — `/{segment}/thread-window/{channelId}?thread={threadId}`
  * (`apps/desktop-ui/src/routes.tsx › THREAD_WINDOW_PATH`), outside the app shell.
- * ⚠ It landed on the channels route until 2026-08-19, and this comment said so until
- * 2026-08-20 — a window opened to read ONE exchange arrived carrying the whole app.
  *
  * ⚠ ASKS FOR A WINDOW; IT DOES NOT GET ONE. No handle and no window reference crosses back
  * — `{ ok: false }` covers a rejected id, a blocking version floor and a full window budget

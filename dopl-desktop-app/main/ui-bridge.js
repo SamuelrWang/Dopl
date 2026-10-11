@@ -8,23 +8,10 @@
 //
 // ⚠ SENDER BINDING (§B.3): every handler re-derives its subject from `event.sender` and refuses
 // anything that is not an APP-OWNED window's own TOP FRAME — an iframe SHARES its host's
-// webContents, so identity alone is not enough.
-// ⚠ THE PREDICATE IS SHARED, AND THIS PARAGRAPH USED TO FORBID THAT (corrected 2026-08-20). It
-// read: "main/channel-dir-ipc.js keeps its OWN copy of this predicate because its pure block is
-// sliced by test/channel-ipc-sender.test.mjs; do NOT de-duplicate it out from under that test."
-// The instinct was right and the conclusion was wrong: the two copies had ALREADY drifted once
-// (F-221), with the more privileged surface on the LENIENT side of an absent `senderFrame`. The
-// extraction idiom is satisfiable with ONE source — `main/ipc-guards.js` carries its own
-// BEGIN/END sentinels and BOTH suites slice it. De-duplicating out from under a test is the
-// hazard; de-duplicating INTO the thing the tests slice is the fix.
-//
-// ⚠ WIDENED 2026-08-18 (wiring plan Phase 10, Samuel's ruling — option (a)): the subject was
-// "the MAIN window" and is now "any window in main/app-windows.js's registry" — the shell plus
-// any pop-out thread window. Read that module's header for why the registry cannot be enlarged
-// from a renderer. THE IFRAME CHECK DID NOT MOVE, the fail-closed direction did not move, and
-// the refusal shape did not move; only the identity half is wider.
-//
-// NOT WIRED YET. See dopl-desktop-app/WIRING.md.
+// webContents, so identity alone is not enough. The predicate is ONE shared source,
+// `main/ipc-guards.js › isAppWindowSender` (its header says why it must not be copied).
+// The bound windows are `main/app-windows.js`'s registry (Samuel's Phase 10 ruling, 2026-08-18):
+// the shell plus any pop-out; read that module's header for why a renderer cannot enlarge it.
 
 const { ipcMain, shell } = require('electron');
 const appVersion = require('./app-version');
@@ -43,11 +30,6 @@ const authActions = require('./auth-actions');
 const authPassword = require('./auth-password');
 const auth = require('./auth');
 const avatarPolicy = require('./avatar-policy');
-// ⚠ THE SENDER GUARD IS NO LONGER A COPY (2026-08-20). `isAppWindowSender` stood verbatim in
-// the pure block below AND in `main/channel-dir-ipc.js`; the two had already disagreed once
-// (F-221) with the more privileged surface on the lenient side. It now lives in
-// `main/ipc-guards.js`, which carries its own BEGIN/END sentinels so both suites slice ONE
-// source. It is re-exported below because callers already import it through this module.
 const { isAppWindowSender } = require('./ipc-guards');
 const { diag } = require('./diag');
 const api = require('./api');
@@ -73,14 +55,10 @@ const DESKTOP_UI_RUNTIME = 'desktop-ui';
 // ─── BEGIN UI-BRIDGE-PURE (guards; unit-testable via source extraction) ──────
 // No electron/require refs below.
 
+// A copy of `ipc-guards.js › UUID_RE`, kept so this block stays pure; `uuid-rule-parity.test`
+// pins the copies identical.
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// ⚠ `isAppWindowSender` STOOD HERE AND IS NOW SHARED (2026-08-20). It moved WHOLE and
-// unchanged to `main/ipc-guards.js`, which carries its own BEGIN/END sentinels so this suite
-// and `test/channel-ipc-sender.test.mjs` slice one source instead of two copies. It is
-// required at the top of this file and re-exported, so every caller reads the same name. The
-// rest of this block stays pure: nothing below refers to it.
 
 // The renderer may reach the API and NOTHING else.
 // ⚠ PARSE FIRST, GATE THE RESULT. A character blacklist runs before WHATWG normalization,
@@ -100,12 +78,8 @@ function resolveApiUrl(path, apiBase) {
   return u.href;
 }
 
-// ⚠ WHERE the OS opener may be pointed lives in `main/external-url.js`, NOT here, and the
-// policy is now a SCHEME allowlist rather than a HOST one (#3031, 2026-10-10). The host list
-// this block used to carry (`['stripe.com', 'github.com']` + the app origin) was refusing every
-// ordinary link in the app — read that module's header for which hole it was really closing and
-// what still closes it. The predicate is required, never re-implemented, because
-// `spa-window.js`'s navigation hand-off must answer identically.
+// ⚠ WHERE the OS opener may be pointed is `main/external-url.js` (a SCHEME allowlist, #3031),
+// required, never re-implemented, so `spa-window.js`'s hand-off answers identically.
 
 // ⚠ x-workspace-id is UUID-only server-side (src/shared/auth/with-workspace-auth.ts — blank or
 // non-UUID is a 400). Refuse a malformed id here rather than silently dropping the header and
@@ -386,13 +360,10 @@ function register(opts = {}) {
   // (`dopl:sessions`, armed by session-summary.start), and a push-only surface leaves a freshly
   // opened channel blank until the next state change, which on a quiet machine is never. Read
   // once on mount, then listen.
-  // ⚠ HERE, not beside `sessions:reopen` in `session-ipc-ops.js`, and the ORIGINAL reason is
-  // retired: it was "that file is the surface exposed to the window hosting a REMOTE page,
-  // which renderer/preload.js does not expose". The remote shell and its preload are deleted
-  // (corrected 2026-08-20). What survives is the REAL distinction: this transport's `bound`
+  // ⚠ HERE, not beside `sessions:reopen` in `session-ipc-ops.js`: this transport's `bound`
   // wrapper REJECTS a foreign sender outright, while the ops surface answers a refusal SHAPE
-  // indistinguishable from a bad payload — a difference that matters for a read like this one,
-  // where a refusal and an empty answer must not be confusable.
+  // indistinguishable from a bad payload — and for this read a refusal and an empty answer
+  // must not be confusable.
   // DERIVED, NEVER STORED: a projection over the in-memory registry. Starts no query, opens no
   // window, writes no row, touches no network.
   ipcMain.handle(

@@ -3,29 +3,14 @@
 import type { SpaBridgeSessions } from "./spa-bridge-sessions";
 
 /**
- * THE one detector for the bundled-SPA bridge, shared by every web-tree SPA-mode
- * guard (api-client transport, realtime no-ops, identity hooks, app origin).
- *
- * ⚠ CAPABILITY-KEYED, NEVER TRUTHINESS. `window.dopl` is NOT unique to the
- * bundled SPA: the LEGACY desktop wrapper (every pre-1.8 install, reachable via
- * DOPL_UI=remote) loads this live web app and exposes `window.dopl` with NO
- * apiRequest. A truthiness check bricked the wrapper with `bridge.apiRequest is
- * not a function`. Identify the SPA by the capability about to be used.
- */
-/**
- * ⚠ THE TWO WIRE SHAPES MOVED TO `./spa-bridge-shapes` ON 2026-08-22 (the 500-line cap;
- * `DesktopSessionSummary` and `DesktopNarrationEntry` were 230 lines of FIELD prose in a file
- * about the bridge's OPS). They are RE-EXPORTED here because this is the IMPORT PATH OF RECORD —
- * the web tree and the `apps/desktop-ui` mirror both take them from `@/shared/lib/spa-bridge`, and
- * a second canonical path for one type is how two trees come to disagree.
+ * ⚠ THIS FILE IS THE IMPORT PATH OF RECORD for the bridge's types: the wire shapes and the
+ * `sessions` namespace live in `./spa-bridge-shapes` / `./spa-bridge-sessions` and are
+ * re-exported here, so the web tree and `apps/desktop-ui` take them from ONE path.
  */
 export type {
   DesktopSessionSummary,
   DesktopNarrationEntry,
 } from "./spa-bridge-shapes";
-/** ⚠ SAME RULE, THIRD TYPE (2026-09-17): the `sessions` namespace moved to
- *  `./spa-bridge-sessions` at the 500-line cap and is re-exported here because THIS is the
- *  import path of record. */
 export type { SpaBridgeSessions } from "./spa-bridge-sessions";
 
 
@@ -180,25 +165,23 @@ export interface SpaBridgeSurface {
     onStatus(callback: (payload: { runtimes: RuntimeCredentialStatus[] }) => void): () => void;
     dismissPrompt(runtimeId: string): Promise<{ ok: boolean }>;
   };
-  /** THE OPERATOR'S OWN AGENTS — the whole namespace, declared in `./spa-bridge-sessions`.
-   *  ⚠ A §1 SPLIT (2026-09-17): this file stood at EXACTLY the 500-line cap, which is the
-   *  state its own tree calls "stops being correctable" — and the `sessions` namespace is
-   *  the half that GROWS, because it gains a member every time the agent surface does. The
-   *  seam is reason-to-change, not the line count that forced the question: what stays here
-   *  is the bridge ITSELF (the detector, the transport, the app-wide toggles), which moves
-   *  when the bridge does. ⚠ THE TYPE IS RE-EXPORTED BELOW so `@/shared/lib/spa-bridge`
-   *  remains the ONE import path of record, the rule the two wire shapes already follow. */
+  /** THE OPERATOR'S OWN AGENTS — the whole namespace, declared in `./spa-bridge-sessions`
+   *  (the half of the bridge that grows with the agent surface). */
   sessions?: SpaBridgeSessions;
 }
 
-/** The bundled-SPA bridge, or null — including on the legacy wrapper,
- *  whose partial `window.dopl` must never be mistaken for it. */
+/**
+ * THE one detector for the bundled-SPA bridge, shared by every web-tree SPA-mode
+ * guard (api-client transport, realtime no-ops, identity hooks, app origin), or null.
+ *
+ * ⚠ CAPABILITY-KEYED, NEVER TRUTHINESS: identify the SPA by the capability about to be
+ * used. A truthiness check once bricked the (since deleted) legacy desktop wrapper, whose
+ * partial `window.dopl` had no `apiRequest`. Optional members stay feature-detected at
+ * their call sites.
+ */
 export function getSpaBridge(): SpaBridgeSurface | null {
   if (typeof window === "undefined") return null;
   const b = (window as { dopl?: Partial<SpaBridgeSurface> }).dopl;
-  // ⚠ `apiRequest` alone is the SPA marker — the legacy wrapper's partial
-  // window.dopl never has it. Optional members stay feature-detected at their
-  // call sites.
   if (b && typeof b.apiRequest === "function") {
     return b as SpaBridgeSurface;
   }

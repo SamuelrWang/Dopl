@@ -5,10 +5,8 @@
 // agent pop-out has no close button and no zoom button unless its renderer draws them. Drawing
 // them is the renderer's job; ACTING on them is not — a page cannot close or zoom its own window.
 //
-// ⚠ IT IS ITS OWN MODULE AND THAT IS THE §1 SEAM, NOT A PREFERENCE. `main/session-ipc-ops.js` is
-// the file these would otherwise join and it is at 508 lines — past the cap the desktop takes no
-// exception to (`eslint.config.js`'s own header) — and its subject is SESSIONS, while this one's
-// is a WINDOW. Nothing here knows what a session is.
+// ⚠ ITS OWN MODULE, NOT A PART OF `main/session-ipc-ops.js`: that file's subject is SESSIONS,
+// this one's is a WINDOW. Nothing here knows what a session is.
 //
 // ⚠ EACH OP ACTS ON THE CALLER'S OWN WINDOW AND CANNOT NAME ANOTHER. That is the whole security
 // content of this file, and it is structural: the target is `BrowserWindow.fromWebContents(

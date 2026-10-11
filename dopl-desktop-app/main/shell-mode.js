@@ -33,10 +33,7 @@
 // one edit rather than a grep.
 // Mirrors a row in `apps/desktop-ui/src/routes.tsx › WORKSPACE_PAGES`; the hand
 // copy that the drift test guards is `deep-link-target.js`, not this.
-// ⚠ EXPORTED SINCE 2026-08-18 (Phase 10). `main/popout-window.js` was its one outside
-// reader and IS NO LONGER ONE (2026-08-19): the pop-out lands on its own thread-only route
-// now, and carries that page string itself. The export stays for the tests that slice this
-// file; nothing else in main navigates to the channels page.
+// Exported for the tests only; nothing else in main navigates to the channels page.
 const CHANNELS_PAGE = 'channels';
 
 function makeShellHelpers(deps) {
@@ -47,8 +44,7 @@ function makeShellHelpers(deps) {
     // total, with no new interception anywhere: the dock icon, the tray's "Open
     // Dopl", a clicked notification and a dopl:// deep link all resolve to the
     // update screen for as long as the gate says so, and go back to resolving to
-    // the app the moment it stops. Both shells are covered, because both are
-    // downstream of this line. See main/version-gate.js.
+    // the app the moment it stops. See main/version-gate.js.
     //
     // The window module is required LAZILY (the tray.js idiom) so this file keeps
     // its property of holding no module-scope dependencies at all — its truth
@@ -207,8 +203,7 @@ function wireSpaServices(deps) {
   };
   const startUiSync = () =>
     deps.uiSync.start({ getWindows: appWindows, getAccessToken: deps.authTokens.getAccessToken });
-  // SESSION PILLS (rollback plan §3.3). SPA-only, like the sync feed: the retired remote
-  // shell has no pills bar to feed. Unlike ui-sync it holds no socket and no credential —
+  // SESSION PILLS (rollback plan §3.3). Unlike ui-sync it holds no socket and no credential —
   // it projects in-memory session state — so it is armed once here and never stopped on
   // sign-out: there is nothing running to stop, and the sessions themselves are unaffected
   // by a sign-out (the engine owns their lifetime). `getWindow` is read at SEND time.
@@ -227,9 +222,7 @@ function wireSpaServices(deps) {
   // projection, so `read_sessions` can answer "what is flint doing?" over MCP. It is armed
   // HERE because this is where the pill projection and the operator's identity already meet:
   // it subscribes to session-summary's change event (its trigger) and reads `getAuthState()`
-  // for the operator it may honestly report as (its cross-account guard). SPA-only for the
-  // same reason the pills are — the remote shell is the retired website (§9.3) and does not
-  // grow capabilities, and `authTokens` does not even start there.
+  // for the operator it may honestly report as (its cross-account guard).
   const startSessionStatePush = () => {
     if (!deps.sessionStatePush || !deps.sessionSummary) return; // mid-wave / harness
     deps.sessionStatePush.start({
