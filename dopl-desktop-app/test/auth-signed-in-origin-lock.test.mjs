@@ -113,5 +113,17 @@ test("in-window navigation is locked to the EXACT app origin, not the domain fam
   // in the app dead. Pinned as two facts rather than one line so the hand-off cannot be
   // deleted and cannot be mistaken for a loosening of the gate.
   assert.match(SPA, /if \(isAllowedNavigation\(url, devUrl\(\), indexHref\)\) return;/);
-  assert.match(SPA, /event\.preventDefault\(\);\s*\n\s*handOffExternal\(url, 'navigation'\);/);
+  // ⚠ THE ORDER, NOT THE TWO LINES BEING ADJACENT. This pinned
+  // `event.preventDefault();\s*\n\s*handOffExternal(url, 'navigation');` — literally the two
+  // statements touching, with that exact argument list — and it went red when the gesture gate
+  // gave `handOffExternal` a third argument (the webContents it must check activation on) and
+  // put a comment between them. Neither change loosened anything: the refusal still happens
+  // first and the hand-off still happens second, which is the whole claim. A probe that fails
+  // when a comment is added is measuring layout, not behaviour.
+  const police = codeOf(fnOf(SPA, "policeNavigation"));
+  const refuse = police.indexOf("event.preventDefault();");
+  const handOff = police.indexOf("handOffExternal(url, 'navigation'");
+  assert.ok(refuse > 0, "the navigation refusal is gone from policeNavigation");
+  assert.ok(handOff > 0, "the refused URL is no longer handed to the browser — every link dies again");
+  assert.ok(refuse < handOff, "the URL must be refused in-window BEFORE it is handed off");
 });

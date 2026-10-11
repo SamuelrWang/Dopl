@@ -103,9 +103,15 @@ describe("the inbound lane — the message that woke this agent", () => {
   it("🔒 lets `lane` BEAT `kind` when they disagree — a `post` kind on the inbound lane", () => {
     expect(frameLane({ ...inboundFrame(), kind: "post" } as AgentNarrationEntry)).toBe("inbound");
     // ...and an unknown kind on that lane is still inbound, never `note`.
-    expect(frameLane({ ...inboundFrame(), kind: "whatever" } as AgentNarrationEntry)).toBe(
-      "inbound"
-    );
+    // ⚠ CAST THROUGH `unknown`, DELIBERATELY. `"whatever"` is not in the `kind` union and is
+    // not meant to be: the point is a kind this tree has never heard of, because main and the
+    // renderer ship separately and a new kind CAN land here first. A direct `as` is a type
+    // error for exactly that reason (TS2352 — the types do not overlap), so the double cast is
+    // the honest spelling of "deliberately out of contract" rather than a way around a
+    // complaint. Widening the union to admit it would make the test prove nothing.
+    expect(
+      frameLane({ ...inboundFrame(), kind: "whatever" } as unknown as AgentNarrationEntry)
+    ).toBe("inbound");
   });
 
   it("routes the KIND alone too, for a build that emits no lane", () => {

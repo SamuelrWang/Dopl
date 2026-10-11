@@ -18,7 +18,9 @@ import {
   routeOf,
   type Severity,
   type AlertEventRow,
+  type AlertGroupRpcRow,
   type RouteEventRow,
+  type RouteErrorRpcRow,
 } from "./health-degrade";
 
 // The import path of record for these three stays `health.ts`: `health.test.ts` names them here,
