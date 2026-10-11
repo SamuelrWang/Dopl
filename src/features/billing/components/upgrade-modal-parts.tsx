@@ -223,7 +223,7 @@ export function AskAdminNote({
   );
 }
 
-export function CloseButton({ onClose }: { onClose: () => void }) {
+function CloseButton({ onClose }: { onClose: () => void }) {
   return (
     <button
       type="button"
