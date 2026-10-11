@@ -148,12 +148,41 @@ function attachWalkRows(
   }
 }
 
-/** Whole-ontology graph in the store shape UI and MCP share, bounded by the
- *  caller's audience. Memberships and edges pointing at soft-deleted objects
- *  are dropped here, as they always were. */
-export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapshot> {
-  const { audience, admitted, walk } = await admittedWalk(ctx, (ids) =>
-    repo.listOntologies(ids)
+/**
+ * Whole-ontology graph in the store shape UI and MCP share, bounded by the
+ * caller's audience. Memberships and edges pointing at soft-deleted objects
+ * are dropped here, as they always were.
+ *
+ * 🔒 **IT REPORTS ITS CLIP NOW, AND IT IS THE PROJECTION WHERE A CLIP SHOWS
+ * WORST (Samuel #2935).** All four reads behind it return `Clipped<>` — the
+ * ontologies, the membership walk, the objects and the relationships — and every
+ * one of those markers was DISCARDED here while {@link getSummary}, built on the
+ * same walk, reported its own. A graph stopped at the 5,000-object /
+ * 20,000-membership `hardCap` does not merely under-report: it RENDERS AS A
+ * SMALLER GRAPH, with memberships and edges pointing at objects the payload says
+ * do not exist, and `packages/mcp-server/src/tools/ontology-clipped.ts` names
+ * exactly this asymmetry ("`getSummary` returns `truncated` while `getSnapshot`
+ * carries the identical ceilings silently").
+ *
+ * ⚠ **THE FLAG IS THE READS' OWN ANSWER, NEVER `length >= ONTOLOGY_READ_LIMITS.x`**
+ * — that comparison IS the #2935 bug: 1,000 returned rows against a 5,000 limit
+ * the server never honoured made a clipped graph report itself complete, so the
+ * marker could not fire at all. Only a page loop knows whether it stopped on a
+ * short page or on its cap.
+ *
+ * ⚠ **THE FIELD IS DECLARED ON THE RETURN TYPE AND NOT ON `OntologySnapshot`**,
+ * which is this change's reach rather than its preference: `../types.ts` (and the
+ * `@dopl/client` twin every MCP reader consumes) is where it belongs, so a typed
+ * client can read it off `GET /api/ontology`. The intersection is additive — every
+ * existing `OntologySnapshot` consumer is unchanged — and the key is already on
+ * the wire.
+ */
+export async function getSnapshot(
+  ctx: OntologyContext
+): Promise<OntologySnapshot & { truncated: boolean }> {
+  const { audience, truncated: walkTruncated, admitted, walk } = await admittedWalk(
+    ctx,
+    (ids) => repo.listOntologies(ids)
   );
 
   const [objectRows, relationshipRows, shareCounts] = await Promise.all([
@@ -178,7 +207,15 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
     pushEdge(source.relationships, r.label, r.target_object_id);
   }
 
-  return { ontologies, objects, homeSpaceOntologyIds: homeSpaceOntologyIds(audience, admitted) };
+  return {
+    ontologies,
+    objects,
+    // ⚠ ALL FOUR WALKS, OR-ed: the ontologies and the memberships through
+    // `admittedWalk`, plus the two reads this projection fans out itself. Dropping
+    // any one of them is a clip that renders as a smaller graph.
+    truncated: walkTruncated || objectRows.truncated || relationshipRows.truncated,
+    homeSpaceOntologyIds: homeSpaceOntologyIds(audience, admitted),
+  };
 }
 
 /**

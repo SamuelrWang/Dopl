@@ -53,6 +53,45 @@ type ColorRow = {
 const COLOR_ROWS_LIMIT = 2000;
 
 /**
+ * 🔒 **A TAKEN SET THAT SAYS WHETHER IT IS THE WHOLE TAKEN SET.**
+ *
+ * ⚠ **PAGING MOVED THE CEILING 1,000 → 2,000; IT DID NOT CLOSE THE FAILURE THE
+ * CONSTANT ABOVE DESCRIBES.** At the hard cap the walk still stops, and the cost
+ * is the one already written down: *"a truncated taken set hands out a colour
+ * somebody already holds"* — a 23505 on the push that follows, or two members
+ * wearing one key. Both walks below computed `truncated` and DISCARDED it, so the
+ * one consumer able to act on it could not see it.
+ *
+ * ⚠ **THE MARKER RIDES THE COLLECTION** rather than wrapping it, because
+ * `service-launch-color.ts` and `session-colors.ts › ForeignColorsByChannel` are
+ * outside this change's reach; an optional, NON-ENUMERABLE property leaves every
+ * `.get()`/`.size` caller and every `mockResolvedValue(new Map())` untouched. Same
+ * trade, same reasoning, as `repository-members.ts › MemberCounts`.
+ */
+export type ForeignColorsResult = ForeignColorsByChannel & {
+  truncated?: boolean;
+};
+
+/** {@link pendingDirectiveColors}' rows, with the same clip marker riding them. */
+export type DirectiveColors = Array<{
+  color: string | null;
+  expires_at: string;
+}> & { truncated?: boolean };
+
+/** Attach a walk's `truncated` to the collection it describes, invisibly to
+ *  enumeration — so `Object.keys`, `JSON.stringify` and a `toEqual` deep-compare
+ *  see the Map or the array they always saw. ⚠ Its proper home is
+ *  `shared/supabase/max-rows.ts` beside {@link readAllPages}; local until that
+ *  module is opened. */
+function clipMarker<T extends object>(value: T, truncated: boolean): T {
+  Object.defineProperty(value, "truncated", {
+    value: truncated,
+    enumerable: false,
+  });
+  return value;
+}
+
+/**
  * Every colour held by a LIVE session in these channels, EXCLUDING the rows belonging
  * to `exceptUserId`.
  *
@@ -78,13 +117,16 @@ export async function foreignLiveColorsByChannel(
   workspaceId: string,
   channelIds: readonly string[],
   exceptUserId: string | null
-): Promise<ForeignColorsByChannel> {
+): Promise<ForeignColorsResult> {
   const unique = [...new Set(channelIds.filter(Boolean))];
   // ⚠ NO QUERY FOR NO CHANNELS. `.in("channel_id", [])` is a legal statement that
   // matches nothing, so this is a round trip saved rather than a bug avoided — but
   // the push fires on every state change and an empty set is a real shape (a machine
   // reporting that it now runs nothing).
-  if (unique.length === 0) return new Map();
+  // ⚠ COMPLETE, not merely empty: a machine reporting that it runs nothing has a
+  // whole taken set of nothing, so the marker is `false` and the push lane below
+  // is free to pick.
+  if (unique.length === 0) return clipMarker(new Map(), false);
 
   // ⚠ **PAGED, NOT `.limit(COLOR_ROWS_LIMIT)` (Samuel #2935)** — see the constant. The
   // answer is a per-channel SET of keys, so nothing can be folded in SQL: the rows have
@@ -96,7 +138,7 @@ export async function foreignLiveColorsByChannel(
   // (ORDER BY reaches any column of the relation), so the two-column projection this
   // module's header argues for is untouched.
   try {
-    const { rows } = await readAllPages<ColorRow>(
+    const { rows, truncated } = await readAllPages<ColorRow>(
       // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable; re-awaiting
       // one re-sends the first range and the walk spins on page 0.
       // ⚠ `selectTolerant` runs PER PAGE and that costs nothing: it remembers a missing
@@ -138,13 +180,19 @@ export async function foreignLiveColorsByChannel(
       if (!claim.shared) claims.exclusive.add(claim.key);
       byChannel.set(row.channel_id, claims);
     }
-    return byChannel;
+    // 🔒 **THE WALK'S OWN ANSWER, NOT `rows.length >= COLOR_ROWS_LIMIT`.** Only
+    // the page loop knows whether it stopped on a short page (exhausted) or on the
+    // `hardCap` (clipped), and the discarded flag was the whole gap.
+    return clipMarker(byChannel, truncated);
   } catch (error) {
     // ⚠ **A `catch` NOW, NOT AN `error` BRANCH**, because the walk THROWS what a page
     // answered. Same narrowness: only "there is no such relation" degrades, and every
     // other failure still reaches the caller — an empty taken set conjured out of a
     // network error hands two members the same key.
-    if (isMissingRelation(error)) return new Map();
+    // ⚠ `truncated: false` and that is the HONEST reading, not a convenient one:
+    // the column that would collide does not exist in this database, so "nothing
+    // is holding a colour" is COMPLETE rather than clipped.
+    if (isMissingRelation(error)) return clipMarker(new Map(), false);
     throw error;
   }
 }
@@ -178,7 +226,7 @@ export async function foreignLiveColorsByChannel(
 export async function pendingDirectiveColors(
   workspaceId: string,
   channelId: string
-): Promise<Array<{ color: string | null; expires_at: string }>> {
+): Promise<DirectiveColors> {
   type DirectiveColorRow = { color: string | null; expires_at: string };
   // ⚠ **PAGED, like the live read above and for the same reason (Samuel #2935)**: the ask
   // was `COLOR_ROWS_LIMIT` and `max_rows` answered 1,000, so a clipped spoken-for set
@@ -188,7 +236,7 @@ export async function pendingDirectiveColors(
   // on and never selected, so the two-column projection is unchanged. There was no
   // `ORDER BY` here either, and an unordered page walk may repeat and skip rows.
   try {
-    const { rows } = await readAllPages<DirectiveColorRow>(
+    const { rows, truncated } = await readAllPages<DirectiveColorRow>(
       // ⚠ A FRESH QUERY PER PAGE — one-shot thenable.
       async (from, toInclusive) => {
         const { data, error } = await supabaseAdmin()
@@ -206,13 +254,17 @@ export async function pendingDirectiveColors(
       },
       { hardCap: COLOR_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
     );
-    return rows;
+    // ⚠ REPORTED, for the reason the live read reports it: a clipped spoken-for
+    // set says a key is FREE and the claim lane hands it out twice — the exact gap
+    // this function exists to close. ⚠ The REFUSAL on this lane belongs to
+    // `service-launch-color.ts`, which resolves the pick; see this change's notes.
+    return clipMarker(rows, truncated);
   } catch (error) {
     // ⚠ `[]` ON A MISSING RELATION, on {@link foreignLiveColorsByChannel}'s own argument: before
     // the migration the honest answer is "nothing is spoken for". Every other failure throws —
     // an empty set conjured out of a network error hands two agents one key.
     // ⚠ A `catch` rather than an `error` branch: the walk throws what a page answered.
-    if (isMissingRelation(error)) return [];
+    if (isMissingRelation(error)) return clipMarker([], false);
     throw error;
   }
 }
@@ -226,6 +278,23 @@ export async function pendingDirectiveColors(
  * read of the caller's rows. `stored` is the map that reconcile already built, which
  * is why this takes it rather than fetching: `color` is in `SESSION_DIFF_COLUMNS`
  * precisely so rule 1 has an input.
+ *
+ * 🔒 **AND IT REFUSES THE PICK WHEN THE TAKEN SET IS A FLOOR (Samuel #2935).** At
+ * {@link COLOR_ROWS_LIMIT} the walk stops, so a key held by a clipped-off row reads
+ * as FREE — and granting it is the collision
+ * `channel_sessions_channel_color_live_key` answers with 23505, which is the one
+ * failure this whole lane is built to avoid.
+ *
+ * ⚠ **AN INCUMBENT IS KEPT; ONLY A *NEW* ASSIGNMENT IS REFUSED.** Rule 1 reads the
+ * caller's OWN stored rows, which no clip can hide, and a colour that moves under
+ * a running agent is the churn `session-colors.ts` rule 1 exists to prevent — so
+ * the refusal is scoped to rows the resolver would hand a key it cannot vouch for.
+ *
+ * ⚠ **AND IT NULLS RATHER THAN THROWING OR GUESSING**, on
+ * {@link withoutClaimedColors}' own argument: `null` means "no colour assigned",
+ * the transcript draws the neutral box, and the NEXT push (a state change seconds
+ * away) re-reads the set and assigns properly. Throwing here would 500 the push
+ * route and discard every live session for that machine over a decoration.
  */
 export async function resolveColorsForPush(
   userId: string,
@@ -238,7 +307,7 @@ export async function resolveColorsForPush(
     reported.map((r) => r.channel_id),
     userId
   );
-  return resolveReportedColors({
+  const resolved = resolveReportedColors({
     reported,
     storedColors: new Map(
       [...stored].map(([key, row]) => [
@@ -247,6 +316,15 @@ export async function resolveColorsForPush(
       ])
     ),
     foreignColors,
+  });
+  if (foreignColors.truncated !== true) return resolved;
+  return resolved.map((row) => {
+    // ⚠ The incumbent is compared by VALUE, so a row whose resolver answer equals
+    // what it already held is rule 1's keep and survives; anything else is a pick
+    // made against a set we know to be short.
+    const held = stored.get(row.session_key)?.color ?? null;
+    if (row.color !== null && row.color === held) return row;
+    return { ...row, color: null, color_shared: false };
   });
 }
 

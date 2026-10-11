@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { clippedAt, type Clipped } from "@/shared/supabase/max-rows";
+import { clippedAt, readAllPages, type Clipped } from "@/shared/supabase/max-rows";
 import { MCP_CALL_ROWS } from "@/features/analytics/server/mcp-tool-calls";
 import type { Role } from "@/features/workspaces/types";
 
@@ -439,23 +439,53 @@ export async function sumCreditUsageBins(
  *
  * ⚠ `status = 'active'` (as `listContainerPeers`). Someone who has left keeps
  * their calls in the breakdown with a `null` role rather than being dropped.
+ *
+ * 🔒 **PAGED, BECAUSE THIS MAP *IS* THAT SPLIT (Samuel #2935).** It was an
+ * UNLIMITED select across EVERY container the reader belongs to — the widest fence
+ * here — and `max_rows` answered the first 1,000 role rows with no error. The rows
+ * that fell off went a whole container's roster at a time (they sort together), so
+ * the rail filed real members under no role and the split was decided on a partial
+ * read, silently. {@link HOME_SCAN_LIMIT} bounds the walk: the same product (every
+ * container one person belongs to) every other /home scan is bounded by.
+ *
+ * ⚠ **THE ORDER IS NEW AND TOTAL: `workspace_members.id` IS THE PRIMARY KEY** (a
+ * surrogate `UUID`; `(workspace_id, user_id)` is only UNIQUE). ORDERED ON AND
+ * NEVER SELECTED, so the projection is untouched. This read had no `ORDER BY` —
+ * affordable for one statement folding into a map, worst case for a page walk,
+ * which PostgREST may answer in any permutation per page.
  */
 export async function listContainerRoles(
   workspaceIds: string[]
 ): Promise<Map<string, Role>> {
   const out = new Map<string, Role>();
   if (workspaceIds.length === 0) return out;
-  const { data, error } = await supabaseAdmin()
-    .from("workspace_members")
-    .select("workspace_id, user_id, role")
-    .in("workspace_id", workspaceIds)
-    .eq("status", "active");
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{
+  const { rows } = await readAllPages<{
     workspace_id: string;
     user_id: string;
     role: Role;
-  }>) {
+  }>(
+    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+    // re-awaiting one re-sends the first range and the walk spins on page 0.
+    async (from, toInclusive) => {
+      const { data, error } = await supabaseAdmin()
+        .from("workspace_members")
+        .select("workspace_id, user_id, role")
+        .in("workspace_id", workspaceIds)
+        .eq("status", "active")
+        .order("id", { ascending: true })
+        .range(from, toInclusive);
+      return {
+        data: (data ?? []) as unknown as Array<{
+          workspace_id: string;
+          user_id: string;
+          role: Role;
+        }>,
+        error,
+      };
+    },
+    { hardCap: HOME_SCAN_LIMIT }
+  );
+  for (const row of rows) {
     out.set(roleKey(row.workspace_id, row.user_id), row.role);
   }
   return out;

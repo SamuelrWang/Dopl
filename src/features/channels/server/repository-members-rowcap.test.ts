@@ -168,16 +168,50 @@ describe("memberCounts — past the PostgREST ceiling", () => {
 
   it(`stops at the ${CHANNEL_MEMBER_ROWS_LIMIT} hard cap over ${OVER_CAP} rows and asks for nothing past it`, async () => {
     const fake = mount(members(OVER_CAP));
-    // ⚠ STILL A FLOOR AT THE CAP, and it is reported nowhere because this read
-    // returns a bare `Map<string, number>` — which is the contract the grouped
-    // aggregate will replace. What is observable is that the cap is honoured at
-    // 10,000 now rather than at the server's 1,000.
+    // ⚠ STILL A FLOOR AT THE CAP — the cap is honoured at 10,000 now rather than
+    // at the server's 1,000, and the floor now SAYS SO (see below).
     expect((await memberCounts([CH])).get(CH)).toBe(CHANNEL_MEMBER_ROWS_LIMIT);
     expect(ranges(fake)).toHaveLength(pagesTo(CHANNEL_MEMBER_ROWS_LIMIT));
     expect(ranges(fake).at(-1)).toEqual([
       CHANNEL_MEMBER_ROWS_LIMIT - MAX_ROWS,
       CHANNEL_MEMBER_ROWS_LIMIT - 1,
     ]);
+  });
+
+  /**
+   * 🔒 **THE FLOOR AT THE CAP IS REPORTED NOW (Samuel #2935, the review).** The
+   * paragraph this case replaces said the clip "is reported nowhere because this
+   * read returns a bare `Map<string, number>`" — which is the same defect one
+   * order of magnitude later: the walk computed `truncated` and the function kept
+   * only `rows`, so a count folded out of a capped haul was handed to
+   * `service-list.ts` as exact and rendered on every channel row.
+   *
+   * ⚠ **THE MARKER RIDES THE `Map`, NON-ENUMERABLY** (`MemberCounts`): the clean
+   * shape is `Clipped<Map<…>>` and it would rewrite the caller and five suites
+   * that mock this function. Non-enumerable is what keeps `Object.keys`, a
+   * `JSON.stringify` and a `toEqual` deep-compare seeing the Map they always saw.
+   *
+   * ⚠ **AND IT IS STILL NOT THE END SHAPE.** The exact answer is a grouped SQL
+   * aggregate, which needs a migration this change does not write (§12) — the
+   * marker is what makes the interim HONEST rather than what makes it right.
+   */
+  it(`REPORTS the floor at the hard cap, and reports an exhausted walk as complete`, async () => {
+    mount(members(OVER_CAP));
+    const capped = await memberCounts([CH]);
+    expect(capped.truncated).toBe(true);
+    expect(capped.get(CH)).toBe(CHANNEL_MEMBER_ROWS_LIMIT);
+    // ⚠ The marker is invisible to enumeration, so the Map still deep-compares.
+    expect(Object.keys(capped)).toEqual([]);
+
+    mount(members(1_500));
+    const exhausted = await memberCounts([CH]);
+    expect(exhausted.truncated).toBe(false);
+    expect(exhausted.get(CH)).toBe(1_500);
+  });
+
+  it("an un-queried empty channel set is COMPLETE, not a floor", async () => {
+    mount(members(10));
+    expect((await memberCounts([])).truncated).toBe(false);
   });
 
   it("no channels is no query, and no counts", async () => {
