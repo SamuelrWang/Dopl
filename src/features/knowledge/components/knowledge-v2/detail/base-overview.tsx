@@ -31,8 +31,8 @@ interface Props {
  *
  * Changelog replaced "Contents" on 2026-09-09; the inline folder/entry
  * description editor it carried has no other home today. The loss is filed as
- * F-726 in `docs/REFACTOR-FINDINGS.md`; the unmounted Contents modules were
- * deleted under INVARIANTS §15 (cleanup K02) — read them from git history.
+ * F-687 in `docs/REFACTOR-FINDINGS.md`; the unmounted Contents modules were
+ * deleted under INVARIANTS §15 (cleanup K02, F-726) — read them from git history.
  *
  * No wrapper, on purpose: the stack's gap and padding belong to the scroll body
  * that hosts it (`../knowledge-v2.module.css › .infoBody`), so the sections are
