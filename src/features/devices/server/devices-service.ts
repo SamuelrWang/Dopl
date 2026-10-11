@@ -9,8 +9,10 @@ import type {
 } from "./desktop-devices-types";
 
 /**
- * The computer source of Settings > Devices. A desktop heartbeats every ~60s while signed in, so a
- * row is online while its last beat is inside this window and it has not posted `offline`.
+ * The computer source of Settings > Devices. A desktop sends a beat at most every ~66s while signed
+ * in (30s presence ticks, throttled to one unchanged send per 50s), so a row is online while its
+ * last beat is inside this window and it has not posted `offline`. `heartbeat-window.test.ts`
+ * drives the real desktop registry against this number.
  */
 export const COMPUTER_ONLINE_WINDOW_MS = 150_000;
 
