@@ -97,7 +97,7 @@ export function useChannelsDerivations({
   const treeThreads = useMemo(() => sidebarThreads(threads), [threads]);
 
   // The thread view never folds: the server refuses to fold a read that names messages
-  // (`server/service-artifacts.ts › readNamesMessages`), so a thread page has `entries === null`.
+  // (`server/service-artifacts-fold.ts › readNamesMessages`), so a thread page has `entries === null`.
   const rows = useMemo(
     () =>
       openThread

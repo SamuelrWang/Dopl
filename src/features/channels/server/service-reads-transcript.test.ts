@@ -8,17 +8,17 @@
  * `view-model-artifacts.ts` makes on the client side.
  *
  * ⚠ **WHAT IS ALREADY COVERED ELSEWHERE, AND IS NOT RE-ASSERTED HERE.**
- * `service-artifacts.test.ts` drives `foldEntries` and `readNamesMessages` as
+ * `service-artifacts-fold.test.ts` drives `foldEntries` and `readNamesMessages` as
  * PURE functions, exhaustively. This suite asks the one question those cannot:
  * **does `readTranscript` turn a folded page into `entries` and an ordinary page
  * into `null`** — the `folded ? entries : null` line, which is the whole
  * difference between the wire carrying a card and the wire carrying nothing.
  * A page-level rule proven twice at the same level is not two proofs.
  *
- * Repositories mocked; `service-shared`, `service-reads` and `service-artifacts`
+ * Repositories mocked; `service-shared`, `service-reads` and `service-artifacts-fold`
  * all run FOR REAL, so importing this file is itself a standing check that the
- * `service-reads → service-artifacts → service-shared` arrows still resolve one
- * way (the cycle fix `service-artifacts.ts` documents at both ends).
+ * `service-reads → service-artifacts-fold` and `service-reads → service-shared`
+ * arrows still resolve one way (the cycle fix `service-artifacts.ts` documents).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

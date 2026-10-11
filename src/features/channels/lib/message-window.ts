@@ -233,7 +233,7 @@ function addArtifacts(
  *
  * ⚠ **A MESSAGE IS FOLDED IFF ITS `artifactId` NAMES A CARD WE ACTUALLY HOLD** —
  * never merely because the field is set. The server's own DEGRADE rule
- * (`server/service-artifacts.ts`), restated on the client.
+ * (`server/service-artifacts-fold.ts › foldEntries`), restated on the client.
  *
  * ⚠ **`null` OUT MEANS "NOTHING HERE IS FOLDED" AND IS THE ORDINARY CASE.** It is
  * also the answer when every member of every known card has left `messages` (a

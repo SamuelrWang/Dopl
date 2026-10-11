@@ -24,7 +24,7 @@
 import { describe, it, expect } from "vitest";
 import type { ArtifactSpan } from "./repository-artifacts";
 import type { ChannelArtifact, ChannelMessage } from "../types";
-import { foldEntries, readNamesMessages } from "./service-artifacts";
+import { foldEntries, readNamesMessages } from "./service-artifacts-fold";
 
 const CHANNEL = "44444444-4444-4444-8444-444444444444";
 const WORKSPACE = "22222222-2222-4222-8222-222222222222";

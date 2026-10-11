@@ -219,7 +219,7 @@ export function mapMessageRow(
  * aggregate over `channel_messages` (`repository-artifacts.ts › artifactSpans`),
  * not columns, so a mapper that invented zeroes for them would render a card
  * claiming an artifact was empty. The folded entry is assembled in
- * `service-artifacts.ts`, which has both halves in hand.
+ * `service-artifacts-fold.ts`, which has both halves in hand.
  */
 export function mapArtifactRow(row: ChannelArtifactRow): ChannelArtifact {
   return {

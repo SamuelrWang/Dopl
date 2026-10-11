@@ -27,7 +27,7 @@ import {
 // ⚠ ONE-WAY, AND THE DIRECTION IS THE POINT: this file reads the artifact
 // service; the artifact service must never read this one back. Both take the
 // hydrator from `service-shared.ts`, which is what keeps that true.
-import { foldPage } from "./service-artifacts";
+import { foldPage } from "./service-artifacts-fold";
 import { takeLineBudget } from "../lib/transcript-line-budget";
 
 /**
@@ -71,7 +71,8 @@ export async function listChannelMembers(
 
 /**
  * ⚠ **THE HYDRATOR MOVED DOWN INTO `service-shared.ts`** (2026-09-06, A4 second
- * slice), shared with `service-artifacts.ts`: wiring the fold into the read
+ * slice), shared with `service-artifacts.ts` (the fold now lives in
+ * `service-artifacts-fold.ts`, which needs no hydrator): wiring the fold into the read
  * below would otherwise have made this file import the artifact service that
  * imports it. The arrow was NOT reversed. Its two page-wide joins stay
  * page-wide — `agentNamesFor` costs a purely human page nothing (2026-09-04).
