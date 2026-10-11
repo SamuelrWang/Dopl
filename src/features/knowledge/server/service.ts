@@ -9,6 +9,7 @@ import "server-only";
  *   - `service-base-writes.ts` — base create/update/delete
  *   - `service-folders.ts`  — folder reads + writes + `getBaseTree`
  *   - `service-entries.ts`  — entry reads + writes + `resolveEntryRefs`
+ *   - `service-revisions-read.ts` — entry + base revision history, entry restore
  *   - `service-paths.ts`    — path-addressed entry reads + writes
  *   - `service-paths-tree.ts` — path-addressed folder/tree ops (mkdir -p, move, list)
  *   - `service-storage.ts`  — per-KB storage cap (growth gate + limit)
