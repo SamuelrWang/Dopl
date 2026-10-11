@@ -47,7 +47,7 @@
 // FOUR BRAKES ON "WHO WAKES":
 //   • a non-`message` kind reaches no session at all (the `kind` filter below);
 //   • an AUTHORLESS row reaches nothing — a system row, nobody spoke;
-//   • a session is never fed its OWN post (`wroteIt`, by `client_msg_id`);
+//   • a session is never fed its OWN post (`wroteIt` + `authoredBySession`);
 //   • `mayWake` below (the 2026-08-31 SAME-ACCOUNT CARVE): redundant under a stored verdict,
 //     load-bearing under the fallback. One predicate right in both places beats two spellings.
 // There is no LLM triage tier (deleted, ruling B6): the server's RR3 answers who an unaddressed
@@ -284,13 +284,14 @@ function planFor(m, liveIds, myUserId) {
 //   { me: false, ids: [...] }  somebody else's agent was addressed; read it as context only
 // ⚠ THE THIRD SHAPE IS REACHABLE ONLY ON THE OLD-SERVER FALLBACK NOW. Under a stored verdict a
 // session that was not named is not fed at all, so nobody pays for a line telling them to stand
-// down — which is why `session-seed.js › addressingLines` no longer has an unaddressed branch.
+// down; `session-seed.js › addressingLines` keeps its `me: false` lines for that fallback.
 function addressingFor(myAgentId, addressed) {
   if (!addressed || !addressed.length) return null;
   return { me: addressed.indexOf(String(myAgentId || '')) !== -1, ids: addressed };
 }
 
-// TRUE iff this session is the one that WROTE this message — the only exclusion in the feed.
+// TRUE iff this session is the one that WROTE this message (by `client_msg_id`); the feed also
+// excludes {@link authoredBySession}.
 function wroteIt(s, m) {
   const id = m && m.clientMsgId;
   if (!id || !s || !s.ownPostIds) return false;
