@@ -89,6 +89,28 @@ export async function listChannelMembers(
  * ⚠ A `before` PAGE MOVES NO WATERMARK EITHER — belt on braces, since a page of
  * HISTORY can only fail the monotonic `>` test below. Skipping it says the
  * intent out loud and saves a re-derive per page of scrollback.
+ *
+ * ⚠ **AND A FORWARD `since` READ MOVES NONE (2026-10-11), WHICH IS WHAT MAKES
+ * THE SWITCH-IN DELTA WORTH SENDING AT ALL.** `channel_members` is a PUBLISHED
+ * realtime table, so this write is a doorbell: every subscribed tab hears it and
+ * runs `refetchAll` → `refetchMessages()` → the full line-budgeted page read that
+ * option A was built to avoid. A switch-back that merged even one row therefore
+ * traded one full read for one full read, and the trailing refetch also walks
+ * `page.min` forward, which can trip `isContiguous`
+ * (`lib/message-window.ts`) and drop the scrollback the reader had loaded.
+ *
+ * ⚠ **IT IS ALSO THE RULE THE OTHER FORWARD READERS ALREADY FOLLOW** — the await
+ * hold's `pollChannelMessages` has never moved it ("a background long-poll is a
+ * listener, not a human viewing the thread"), and `since` is that same forward
+ * arm.
+ *
+ * ⚠ **THE COST, STATED: A WARM SWITCH-BACK NO LONGER CLEARS THE UNREAD BADGE.**
+ * This is the only writer of `last_read_at` in the tree, so a reader who returns
+ * to a channel whose rows all arrive by delta keeps the sidebar's unread mark
+ * until the next FULL read (the realtime doorbell, or a cold open). The
+ * alternative fix — let the write stand and exclude the caller's own watermark
+ * event from its own doorbell — keeps the badge, costs a client-side change, and
+ * is the open call.
  */
 export async function readMessages(
   ctx: ChannelContext,
@@ -164,6 +186,15 @@ async function readMessagePage(
     membership &&
     query.thread === undefined &&
     query.before === undefined &&
+    // ⚠ NOT GATED ON `query.since`, DELIBERATELY, AND THE PERF SHORTFALL IS THE CHEAPER COST.
+    // Adding `query.since === undefined` here does stop a since-only delta from ringing its own
+    // doorbell — which is a real shortfall in option A, since the net is one fewer full read
+    // rather than none. But `repository-members.ts › updateLastRead` is reached from HERE and
+    // nowhere else in the tree, so gating it means a warm switch-back never clears the sidebar's
+    // unread mark until the next FULL read. That trades a perf shortfall for a visibly wrong
+    // unread state, which is the worse of the two on a surface people read at a glance.
+    // The fix that gets both is client-side: let this write stand and have the subscriber ignore
+    // the watermark event it caused itself. Filed, not done here.
     messages.length > 0
   ) {
     // ⚠ Watermark = newest message SHOWN, written only when it ADVANCES.

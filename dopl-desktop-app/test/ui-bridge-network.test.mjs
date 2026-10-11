@@ -17,6 +17,7 @@ let lines;
 let resets;
 let senderOk;
 let tokens;
+let opened;
 const realFetch = globalThis.fetch;
 
 function boot() {
@@ -24,6 +25,7 @@ function boot() {
   lines = [];
   resets = [];
   senderOk = true;
+  opened = [];
   tokens = {
     getAccessToken: async () => "tok",
     getAuthState: () => ({ signedIn: true, userId: "u1" }),
@@ -31,8 +33,21 @@ function boot() {
     forceRefresh: async () => null,
     noteSessionRejected() {},
   };
-  const bridge = loadWithStubs("ui-bridge.js", {
-    electron: { ipcMain: { handle: (name, fn) => { handlers[name] = fn; } }, shell: {} },
+  const bridge = loadWithStubs("ui-bridge.js", stubsWith());
+  bridge.register({ getSenderIds: () => new Set([1]) });
+}
+
+/** The stub map; `electronOverrides` replaces parts of the faked `electron` (e.g. `shell`). */
+function stubsWith(electronOverrides = {}) {
+  return {
+    // ⚠ A SHELL SPY, not `{}` (release review 2026-10-11). An empty object made the real-policy
+    // choice below buy nothing: no case called `dopl:open-external`, so a refusal that actually
+    // opened the URL would have been invisible. `opened` is every URL the OS opener received.
+    electron: {
+      ipcMain: { handle: (name, fn) => { handlers[name] = fn; } },
+      shell: { openExternal: async (u) => { opened.push(u); } },
+      ...electronOverrides,
+    },
     "./app-version": { versionHeaders: () => ({}) },
     "./device-identity": { deviceHeaders: () => ({}) },
     "./auth-tokens": new Proxy({}, { get: (_t, k) => tokens[k] }),
@@ -47,13 +62,14 @@ function boot() {
     "./ipc-guards": { isAppWindowSender: () => senderOk },
     // ⚠ THE REAL POLICY, never a stand-in (#3031): a stubbed open-external gate is a second
     // copy of the thing `main/external-url.js` exists to be the only one of. It is pure and
-    // requires no Electron, so the real module loads here unchanged.
+    // requires no Electron, so the real module loads here unchanged. ⚠ AND THE HANDLER IS
+    // ACTUALLY INVOKED, at the bottom of this file — that is what makes this choice matter
+    // rather than just read as though it did.
     "./external-url": real("./external-url"),
     "./diag": { diag: (...parts) => lines.push(parts.join(" ")) },
     "./api": { currentPool: () => "pool-1", resetPool: (opts) => { resets.push(opts); return true; } },
     "./ui-bridge-net": net,
-  });
-  bridge.register({ getSenderIds: () => new Set([1]) });
+  };
 }
 
 const request = (path, opts = { method: "GET" }) => handlers["dopl:api-request"]({}, path, opts);
@@ -186,6 +202,42 @@ test("classification: undici codes, the deadline, and everything else", () => {
   assert.equal(net.shouldRetry("PATCH", { network: true, timeout: false, code: "UND_ERR_SOCKET" }), false);
   assert.equal(net.shouldRetry("DELETE", { network: true, timeout: false, code: "EAI_AGAIN" }), true);
   assert.equal(net.shouldRetry("GET", { network: true, timeout: true, code: "UI_BRIDGE_TIMEOUT" }), false);
+});
+
+// ── dopl:open-external, DRIVEN (not grepped) ────────────────────────────────
+//
+// ⚠ THE REFUSAL PATH WAS PINNED ONLY BY REGEX until 2026-10-11. `external-url.test.mjs` and
+// `ui-bridge-guards.test.mjs` both read the handler's SOURCE for
+// `externalUrl.isOpenableExternalUrl(url)`, which a handler that asked and then opened anyway
+// would satisfy word for word. These two cases call it.
+
+const openExternal = (url) => handlers["dopl:open-external"]({}, url);
+
+test("a local-file target answers {ok:false} and the OS opener is never reached", async () => {
+  assert.deepEqual(await openExternal("file:///etc/passwd"), { ok: false });
+  assert.deepEqual(opened, [], "shell.openExternal must not be called for a refused scheme");
+  assert.match(lines.at(-1), /refused open-external/);
+  // The log names the HOST only — a refused URL's path and query are the payload.
+  assert.ok(!lines.at(-1).includes("/etc/passwd"));
+  // Every other shape the policy refuses behaves the same way through the handler.
+  for (const evil of ["javascript:alert(1)", "data:text/html,x", "  javascript:alert(1)", "not a url", "", null, 42]) {
+    assert.deepEqual(await openExternal(evil), { ok: false }, `admitted: ${String(evil)}`);
+  }
+  assert.deepEqual(opened, [], "and none of them opened either");
+});
+
+test("an ordinary link answers {ok:true} and hands the trimmed URL over verbatim", async () => {
+  assert.deepEqual(await openExternal("  https://example.com/a?b=c  "), { ok: true });
+  assert.deepEqual(opened, ["https://example.com/a?b=c"]);
+});
+
+test("an OS opener that throws is an {ok:false}, never a rejection into the renderer", async () => {
+  const bridge = loadWithStubs("ui-bridge.js", stubsWith({
+    shell: { openExternal: async () => { throw new Error("LSOpenURLs failed"); } },
+  }));
+  bridge.register({ getSenderIds: () => new Set([1]) });
+  assert.deepEqual(await handlers["dopl:open-external"]({}, "https://example.com/"), { ok: false });
+  assert.match(lines.at(-1), /openExternal error/);
 });
 
 // ── main/api.js › resetPool — the pool the retry rides ──────────────────────

@@ -45,8 +45,17 @@ const OPENABLE_SCHEMES = Object.freeze(['http:', 'https:', 'mailto:']);
 // and lower-cases the scheme, so `'  JavaScript:alert(1)'` parses to protocol `javascript:`
 // and is refused — a `startsWith('http')` test on the raw string would have admitted
 // `'\njavascript:…'` and a `'https:'`-prefixed lookalike alike.
-// ⚠ http(s) MUST have a hostname: `http:///etc/passwd` parses with an EMPTY host and a local
-// pathname, which is a `file:`-shaped target wearing a web scheme.
+// ⚠ THE HOSTNAME TEST GUARDS A SHAPE http(s) CANNOT TAKE, AND THAT IS WHY IT IS KEPT (comment
+// corrected 2026-10-11, release review). It used to claim `http:///etc/passwd` "parses with an
+// EMPTY host and a local pathname, which is a `file:`-shaped target wearing a web scheme". It
+// does not, and this module's own test records the truth: WHATWG treats http/https as SPECIAL
+// schemes that REQUIRE an authority, so the parser consumes the first path segment AS the host
+// — `http:///etc/passwd` → host "etc", path "/passwd", an ordinary unresolvable web URL that
+// reads nothing off the disk — and a genuinely hostless `https://` does not construct at all.
+// So the branch is unreachable TODAY. It stays because `OPENABLE_SCHEMES` is a list somebody
+// will one day add to: a NON-special scheme (`web+foo:`, `tel:`) does parse with an empty host
+// and a bare path, and this is the line that stops the first one carrying a local pathname.
+// See `test/external-url.test.mjs › "a file-shaped path under a web scheme is NORMALIZED…"`.
 function isOpenableExternalUrl(url) {
   if (typeof url !== 'string') return false;
   const raw = url.trim();

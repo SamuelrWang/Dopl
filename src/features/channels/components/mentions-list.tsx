@@ -40,7 +40,7 @@ import { shortName, type AuthorIndex } from "./view-model";
 import type { ChannelMention } from "../types";
 import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { BodyContext } from "./message-markdown-context";
-import { bodyContextOf } from "./message-markdown";
+import { TextOnlyLinks, bodyContextOf } from "./message-markdown";
 
 /**
  * ⚠ **`MENTIONS_CLIPPED_NOTE` STOOD HERE AND IS DELETED (Samuel, 2026-09-15):
@@ -305,9 +305,18 @@ function MentionItem({
           exists so the `line-clamp-2` below still clamps (see that file's rule 2).
           ⚠ **THE ROW'S OWN TYPE SURVIVES**: `text-caption text-text-secondary` stays on
           the wrapper, so the un-tagged prose keeps the size and colour it had and only
-          the TOKENS change. The renderer sets weight and colour on the tokens alone. */}
+          the TOKENS change. The renderer sets weight and colour on the tokens alone.
+          🔒 **AND NO LINK IN IT IS AN ANCHOR** ({@link TextOnlyLinks}, 2026-10-11). The
+          inline arm lexes with GFM autolinks on, so a bare URL in a peer's snippet — or
+          an `a@b.com`, which lexes to a `mailto` — became a live `target="_blank"` anchor
+          NESTED INSIDE this row's own `<button>`: invalid HTML, and one press both opened
+          a peer-chosen URL in the user's real browser and fired `onOpen`. A preview is a
+          fragment the reader clicks to GO somewhere this surface chose; the destination
+          inside it is words, not a second press. */}
       <span className="line-clamp-2 text-caption text-text-secondary">
-        <MessageMarkdownInline text={mention.snippet} ctx={bodyCtx} />
+        <TextOnlyLinks>
+          <MessageMarkdownInline text={mention.snippet} ctx={bodyCtx} />
+        </TextOnlyLinks>
       </span>
     </button>
   );

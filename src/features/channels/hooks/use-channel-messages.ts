@@ -148,7 +148,43 @@ export function useChannelMessages(
     }
   );
   const queryClient = useQueryClient();
-  const refetch = query.refetch;
+
+  /**
+   * THE SWITCH-IN TRIGGER'S MEMORY — the channel this hook has already fired a
+   * catch-up for, which is also **WHAT IT IS POINTED AT NOW** (`null` for "nothing
+   * is selected"). ⚠ DECLARED ABOVE {@link catchUp} because the fallback reads it.
+   */
+  const caughtUp = useRef<string | null>(null);
+
+  /**
+   * **THE FULL-PAGE FALLBACK, AIMED AT THE KEY THE DELTA WAS ISSUED FOR.**
+   *
+   * ⚠ **NOT `query.refetch`, AND THE DIFFERENCE IS THE WRONG CHANNEL'S READ
+   * (fixed 2026-10-11).** TanStack binds an observer's `refetch` ONCE and it
+   * fetches that observer's CURRENT query — not the key a delta was issued for. A
+   * delta resolving after the reader had switched to B therefore refetched **B**:
+   * A stayed un-caught-up and the channel just opened paid a full line-budgeted
+   * page read, which is precisely the fast-switch cost this hook exists to remove.
+   *
+   * ⚠ **AND AFTER A DESELECT IT WAS A REQUEST AT A GARBAGE URL.** The observer's
+   * current key is then `[null, …]`, whose `queryFn` calls `apiRequest(null)`.
+   * `use-api-query-core.ts` wraps `refetch` in an `enabled` guard for exactly
+   * that, but the wrapper CLOSES OVER `enabled` — captured `true` while the
+   * channel was selected — so the guard cannot save a call made later.
+   *
+   * ⚠ **A DESELECTED READER GETS NO READ AT ALL, WHICH IS NOT A GAP.** A fallback
+   * corrects a PAINT and there is none on screen; the entry is untouched by every
+   * fallback arm (the ceiling arm deliberately merges nothing), so the next
+   * switch-in re-reads the same delta and falls back then, when a reader is
+   * actually looking at it.
+   */
+  const refetchPage = useCallback(
+    (key: readonly unknown[]) => {
+      if (caughtUp.current === null) return;
+      void queryClient.refetchQueries({ queryKey: key, exact: true });
+    },
+    [queryClient]
+  );
 
   /**
    * **CATCH THE CACHED TRANSCRIPT UP WITH ONE FORWARD READ** (2026-10-10, option
@@ -172,7 +208,10 @@ export function useChannelMessages(
    * leave a hole at the FRONT of an ascending page. `limit` alone is already
    * supported, so there is no server change here.
    *
-   * ⚠ **THREE CASES FALL BACK TO THE FULL READ, AND ALL THREE HAVE TO.**
+   * ⚠ **THREE CASES FALL BACK TO THE FULL READ, AND ALL THREE HAVE TO.** (The
+   * commit message counts FOUR by including the no-entry case below. That one
+   * calls no fallback at all — the query's own read IS the page — so the number
+   * of `refetchPage` arms here is three, and this list is the authority.)
    *   1. The delta came back AT its ceiling — more arrived than one page holds,
    *      so the rows are the OLDEST of the gap and the newest are still missing.
    *      Merging them would show a transcript that is wrong in the middle.
@@ -181,7 +220,11 @@ export function useChannelMessages(
    *      silent failure here is a transcript that stays in the past.
    *
    * ⚠ **NO CACHE ENTRY AT ALL IS NOT ONE OF THEM**: the query itself is pending
-   * and its own read is the full page. Calling `refetch` here would double it.
+   * and its own read is the full page. Falling back here would double it.
+   *
+   * ⚠ **EVERY ARM FALLS BACK THROUGH {@link refetchPage} ON THE CAPTURED `key`**,
+   * never through the observer's `refetch` — that one aims at whatever channel the
+   * reader has since switched to.
    */
   const catchUp = useCallback(() => {
     if (!channelId) return;
@@ -191,7 +234,7 @@ export function useChannelMessages(
     if (cached === undefined) return;
     const since = newestCachedSeq(cached.messages);
     if (since === null) {
-      void refetch();
+      refetchPage(key);
       return;
     }
     void apiRequest<TranscriptBody>(path, {
@@ -203,25 +246,26 @@ export function useChannelMessages(
         // `selectPage` fails toward "maybe more": an older build omitting the key
         // costs one honest read, the other way paints a gap.
         if (body.hasMore ?? true) {
-          void refetch();
+          refetchPage(key);
           return;
         }
         queryClient.setQueryData<TranscriptBody>(key, (prev) =>
           prev === undefined ? prev : mergeDeltaPage(prev, body)
         );
       })
-      .catch(() => void refetch());
-  }, [channelId, workspaceId, queryClient, refetch]);
+      .catch(() => refetchPage(key));
+  }, [channelId, workspaceId, queryClient, refetchPage]);
 
   /**
    * THE SWITCH-IN TRIGGER — once per channel the hook lands on.
    *
-   * ⚠ **A REF, NOT A DEPENDENCY LIST.** `catchUp` is rebuilt whenever TanStack
-   * hands back a new `refetch`, and an effect keyed on it alone would re-read the
-   * channel the reader is already sitting in. A→B→A still catches up: the ref
-   * holds B by then.
+   * ⚠ **A REF, NOT A DEPENDENCY LIST.** An effect keyed on `catchUp` alone would
+   * re-read the channel the reader is already sitting in every time that callback
+   * were rebuilt. A→B→A still catches up: the ref holds B by then.
+   *
+   * ⚠ **AND THE WRITE BELOW IS WHAT {@link refetchPage} READS**, so the two
+   * branches of this effect are also "there is a reader" / "there is not".
    */
-  const caughtUp = useRef<string | null>(null);
   useEffect(() => {
     if (channelId === null) {
       caughtUp.current = null;

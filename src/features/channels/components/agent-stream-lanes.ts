@@ -132,6 +132,11 @@ export function frameLane(entry: AgentNarrationEntry): StreamLane {
   // ⚠ **BEFORE THE `channel` BRANCH, AND THE ORDER IS LOAD-BEARING** (#3081). These two lanes are
   // the halves of one exchange (see {@link StreamLane}) and only this one says the words ARRIVED;
   // reaching the `sent` branch would paint a counterparty's message as this agent's own post.
+  // ⚠ **IT IS ALSO WHAT MAKES `lane` BEAT `kind` HERE, AND ONLY A DISAGREEING FIXTURE PROVES IT**
+  // (release review, 2026-10-11): `LANE_BY_KIND` maps `inbound` → `inbound` as well, so deleting
+  // this line broke nothing while every fixture carried `kind: 'inbound'` beside `lane: 'inbound'`
+  // — the branch was fail-open. `agent-stream-inbound.test.tsx` now drives `{lane:'inbound',
+  // kind:'post'}` through it, which falls to `sent` without this line.
   if (lane === "inbound") return "inbound";
   if (lane === "channel" || lane === "sent") return "sent";
   return LANE_BY_KIND[kind] ?? "note";

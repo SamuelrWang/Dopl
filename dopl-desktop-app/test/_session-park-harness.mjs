@@ -145,10 +145,11 @@ function harness(over = {}) {
   // channel-post and is not sliceable — but the NUMBER is read out of that file's source below,
   // so the stub cannot drift from the ceiling it is standing in for. `liveCount` is the real
   // one-liner (unsettled sessions in the registry), restated.
-  const sessionWindowless = {
-    MAX_CONCURRENT_SESSIONS: cfg.cap === undefined ? REAL_MAX : cfg.cap,
-    liveCount: (map) => { let n = 0; for (const s of map.values()) if (!s.settled) n += 1; return n; },
-  };
+  // ⚠ AND THE BLOCK ASKS ITS OWN `atCap()` SINCE 2026-10-11 — one named helper instead of the literal
+  // comparison written out twice — so the stub it reads is unchanged and still takes its NUMBER from
+  // `session-windowless.js`'s source.
+  const MAX = cfg.cap === undefined ? REAL_MAX : cfg.cap;
+  const liveCount = (map) => { let n = 0; for (const s of map.values()) if (!s.settled) n += 1; return n; };
   const api = new Function(
     "io", "store", "crypto", "newAgentId", "isAgentId", "notificationRoute", "privateTurn",
     // ⚠ `directedTurn` JOINED THE INJECTED SET ON 2026-08-31 (the private direct lane).
@@ -162,7 +163,7 @@ function harness(over = {}) {
   )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, notificationRoute,
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-directed.js")),
-    sessionWindowless, diag,
+    { MAX_CONCURRENT_SESSIONS: MAX, liveCount }, diag,
     // 🔒 THE CONTAINER LOCK (plan §4.4 B1). Stubbed to a no-op mint: this harness is about the
     // RESUME path, and the credential's own behaviour is pinned in
     // `session-audience-ceiling.test.mjs`. What matters here is that the resume still assembles

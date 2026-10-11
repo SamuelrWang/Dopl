@@ -64,6 +64,45 @@ const renderRow = () =>
     <OntologyRow objectId="o1" graph={GRAPH} selected={false} onSelect={vi.fn()} />
   );
 
+/** The same object with one attribute whose `label` is blank — a valid write, since
+ *  `ontology/schema.ts` types it `z.string().max(200)` with no `.min(1)`. */
+const renderRowWithBlankLabel = (label: string) => {
+  const graph = {
+    ...GRAPH,
+    objects: {
+      ...GRAPH.objects,
+      o1: {
+        ...OBJECT,
+        attributes: [{ key: "stage", label, value: { kind: "text", value: "Qualified" } }],
+        relationships: [],
+      },
+    },
+  } as unknown as GraphState;
+  return render(
+    <OntologyRow objectId="o1" graph={graph} selected={false} onSelect={vi.fn()} />
+  );
+};
+
+describe("a blank field name paints nothing, not a nub", () => {
+  // ⚠ `label` is `z.string().max(200)` in `ontology/schema.ts` — no `.min(1)` — so
+  // `label: ""` is a VALID write. As plain text it was invisible; as a filled badge
+  // it became a ~6px dark-gray rectangle of padding around nothing, which reads as
+  // a rendering fault rather than as missing data.
+  it.each(["", "   "])("draws no badge for label %o", (label) => {
+    const { container } = renderRowWithBlankLabel(label);
+    // The value still renders — this is about the NAME, and a row that vanished
+    // entirely would also pass a "no badge" assertion.
+    expect(screen.getByText("Qualified")).toBeTruthy();
+    expect(container.querySelector(".bg-text-secondary")).toBeNull();
+  });
+
+  it("🔒 still draws the badge when the label has content — the control", () => {
+    // Without this, deleting the badge outright would pass the two cases above.
+    const { container } = renderRowWithBlankLabel("Stage");
+    expect(container.querySelector(".bg-text-secondary")).not.toBeNull();
+  });
+});
+
 describe("the field name wears a black pill in Rows", () => {
   it("draws the label on the published gray token, not a hex", () => {
     renderRow();

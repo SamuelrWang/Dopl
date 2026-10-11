@@ -115,9 +115,8 @@ const AGENT_BAR = "flex items-center gap-1.5 px-2.5 py-[5px]";
  * ⚠ **`text-on-cta` IS ALREADY THE PROVEN INK HERE.** The label and the timestamp beside it
  * wear it on both faces (`AgentPill.color`'s note: the ramp is dark enough that one ink
  * serves), so the pill borrows the contrast decision rather than making a new one.
- * ⚠ **IT MAY SHRINK.** `AGENT_PILL_SHAPE` ships `shrink-0` and three addressees on a 380px
- * panel have to elide; `cn` is tailwind-merge, so the later `shrink` wins — the same override
- * `agent-activity.tsx` makes for the same reason.
+ * ⚠ **IT MAY SHRINK**, and three addressees on a 380px panel have to: the override is the one
+ * `agent-bits.tsx › AGENT_PILL_SHAPE` rules, where the whole argument is stated once.
  */
 const BANNER_PILL = cn(
   AGENT_PILL_SHAPE,
@@ -385,10 +384,28 @@ export function SentToChannelBox({
         </span>
         {/* ⚠ AFTER THE LABEL, BEFORE THE STAMP — the banner reads left to right as *what
             happened*, *to whom*, *when*, and the stamp keeps its `ml-auto` trailing slot.
-            ⚠ THE PILLS SHOW ON EVERY FACE, Pending included: *who this is addressed to* is a
-            fact about the draft the operator is deciding on, not a claim that it was
-            delivered — unlike the agent's colour, which `paint` gates on `!pending` for
-            exactly that reason. */}
+            ⚠ **THIS COMPONENT NEVER GATES THE PILLS ON `pending`** — *who this is addressed
+            to* is a fact about the draft the operator is deciding on, not a claim that it was
+            delivered, unlike the agent's colour, which `paint` gates on `!pending` for
+            exactly that reason.
+            🔴 **BUT NO PENDING BOX CAN ACTUALLY SHOW ANY, AND THE NOTE USED TO CLAIM THE
+            OPPOSITE** ("the pills show on every face, Pending included" — corrected in the
+            2026-10-11 release review). The two facts come from different halves of
+            `agent-stream-model.ts › buildAgentStream`: `tags` resolve from
+            `StreamItem.tagUserIds` / `tagAgentIds`, set ONLY on items built from a stored
+            TRANSCRIPT row, while `pending: true` is set ONLY on a frame-backed held draft —
+            and a narration frame carries no addressee at all. So `tags` is empty on every
+            Pending box by construction.
+            ⚠ **IT IS LEFT THAT WAY ON PURPOSE, not postponed for convenience.** The two
+            places a held draft's addressees could come from are both refused: a
+            `ChannelConsentRequest` has no addressee field (`types-consent.ts` — a summary, a
+            preview and the proposed reply, no `metadata`, no `recipient_agent_ids`), and
+            re-parsing the draft BODY for `@handles` is the client re-derivation
+            `lib/recipient-tags.ts` opens by forbidding: those ids are what the SERVER
+            resolved, and a draft has not reached the server yet. Pilling a client's guess
+            at a review gate would tell the operator somebody will be woken when nothing
+            has resolved that. **A pending draft's addressees become visible the moment it
+            posts**, off the row the server wrote. */}
         <BannerTags tags={tags} />
         {stamp && (
           <span className="ml-auto shrink-0 text-micro text-text-on-cta opacity-75">

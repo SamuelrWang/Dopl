@@ -53,10 +53,11 @@ export type NotificationEventId = (typeof NOTIFICATION_EVENT_IDS)[number];
  * WHERE AN EVENT RAISES ITSELF when it is on.
  * - `mac` — an OS banner, raised in Electron main.
  * - `popup` — the in-app toast (`toast.tsx`), a renderer global.
- * - `both` — ⚠ NEEDS THE DEDUPE PRIMITIVE, which does not exist yet: main's only route into the
- *   renderer is `bridge.onNavigate`, so one event cannot raise both without firing twice. The
- *   focus check at `runtime-credentials.js:83` is the pattern; `runtime_signin` is the one event
- *   that already splits correctly today.
+ * - `both` — ⚠ NEVER TWICE. It resolves to the ONE surface the operator can see, AT RAISE TIME,
+ *   in `dopl-desktop-app/main/notification-route.js`: Dopl in front → the toast; Dopl elsewhere,
+ *   or an unreadable focus, or no visible window → the OS banner. The pattern was
+ *   `runtime-credentials.js:83`, which did exactly this for one event before the spec named it;
+ *   the route generalizes it and every `both` row below goes through it.
  */
 export type NotificationSurface = "mac" | "popup" | "both";
 
@@ -101,22 +102,25 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // button only OPENS the channel. Default ON, NOT locked.
   { id: "peer_ask", label: "A peer's agent asks you", surface: "both", wired: true },
   { id: "draft_reply", label: "Replies your agent drafted", surface: "both", wired: true },
-  // Own-machine spawns only, including one agent launching another; a fan-out burst coalesces
-  // into ONE banner (@orchestrator, 2026-10-09). No trigger exists: `task_started` is dropped at
-  // `targeting.js:133`, so this needs a new emit.
-
   // Raised at the launch funnel (`session-launch.js`), the one path all three lanes pass. ⚠ Its
   // own emit, not a channel arm: `task_started` is dropped at `targeting.js:133` and always was.
   // COALESCED — a fan-out that launches several is ONE notice naming the total, because ten
   // banners for one intention is worse than none.
   { id: "agent_started", label: "An agent starts", surface: "both", wired: true },
 
-  // ── Named, NOT raised yet (wired: false ⇒ no row in the panel) ──────────────────────────────
+  // ── The SAFETY four, then the popup-only three ───────────────────────────────────────────────
+  // ⚠ THIS HEADER USED TO READ "Named, NOT raised yet (wired: false)" and four `wired: true` rows
+  // had grown underneath it. The ROW ORDER IS THE PANEL'S ORDER, so the fix is the header, not a
+  // re-sort: `wired` is per row and says, for each one, whether anything raises it today. The
+  // three still unwired are called out individually below.
   { id: "signed_out", label: "You get signed out", surface: "both", locked: true, wired: true },
   // ⚠ NOTHING EMITS THIS FACT. The consume RPC returns nothing at `20260811130000:143` — no row,
   // no log, no realtime — so the emit is server work, OUT of this wave by decision. The id is
   // registered and stays unwired until that lands.
   { id: "credits_exhausted", label: "Credits run out", surface: "both", locked: true },
+  // ⚠ RAISED, BUT NOT THROUGH THE ROUTE, so it is not `wired` for the panel's purposes: it is
+  // `runtime-credentials.js › notifyAway`, which runs its own focus check and no preference gate.
+  // It is locked on, so there is no switch to draw either way; wiring it means routing it.
   { id: "runtime_signin", label: "Agent app needs sign-in", surface: "both", locked: true },
   // ⚠ THE ONE EVENT THAT DELIBERATELY SOUNDS, and bounces the dock: the operator believes they
   // answered and they did not. Not to be confused with the accidental sounds being removed.
@@ -126,6 +130,8 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // New Agent button — no consent row is answered and ignoring it leaves the session parked,
   // which is today's behaviour. STICKY, because it is offered once at startup.
   { id: "session_resume", label: "Resume an interrupted session", surface: "popup", wired: true },
+  // ⚠ NOTHING RAISES THIS YET — no emit anywhere in either tree. Registered so storage,
+  // validation and the parity test know the id; unwired, so the panel draws no switch for it.
   { id: "shared_with_me", label: "Something shared with you", surface: "popup" },
   // ⚠ THE COUNTERPART TO `agent_started`, and the reason it exists is a measured hole, not a
   // symmetry: an agent that stops WITHOUT REPORTING used to be entirely silent. Two shapes, both

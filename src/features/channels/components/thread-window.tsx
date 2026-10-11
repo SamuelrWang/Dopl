@@ -38,6 +38,7 @@ import { useChannelMembers } from "../hooks/use-channel-members";
 import { useChannelThreads } from "../hooks/use-channel-threads";
 import { useChannelAgentSessions } from "../hooks/use-channel-agent-sessions";
 import { liveAgentsFromKey, liveAgentsKey } from "../lib/live-agents";
+import { agentColorVar } from "../lib/agent-colors";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
 import { ChannelsMessagePane } from "./message-pane";
@@ -47,6 +48,7 @@ import { threadRows } from "./view-model-rows";
 import { useInlineConsent } from "./use-inline-consent";
 import { PEER_SESSIONS_POLL_MS } from "./use-agents-panel";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
+import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
 import { useDesktopSessions } from "./use-desktop-sessions";
 
 /** The window's name, as one function so the fallback and the loaded title are one
@@ -160,6 +162,27 @@ export function ChannelsThreadWindow({
     () => liveAgentsFromKey(liveAgentsContentKey),
     [liveAgentsContentKey]
   );
+  /**
+   * **EACH LIVE AGENT'S PAINT, BY ID** — the working strip's fills, MIRRORED FROM
+   * `channel-surface.tsx` (release review, 2026-10-11).
+   *
+   * ⚠ **IT IS THE SAME MEMO OVER THE SAME SET, and that identity is the point.** Both
+   * hosts resolve from `liveAgents`, the peer ∪ own union this window already holds, so
+   * one agent cannot be two hues depending on which window the operator is looking at.
+   * `lib/agent-colors.ts › agentColorVar` stays the one place a key becomes a `var()`.
+   * ⚠ **AN AGENT WITH NO COLOUR IS ABSENT RATHER THAN MAPPED TO A FALLBACK** — the
+   * component owns what "no colour" looks like (`agent-bits.tsx › AGENT_PILL_FACE`'s
+   * black), and two places choosing that face is how one agent comes to wear two greys.
+   * ⚠ MEMOISED ON THE SET'S OWN IDENTITY: `liveAgents` is already derived from a stable
+   * key above, so this rebuilds only when the live set really moves.
+   */
+  const workingColors = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const agent of liveAgents) {
+      if (agent.color) out.set(agent.name, agentColorVar(agent.color));
+    }
+    return out;
+  }, [liveAgents]);
   const index = useMemo(
     () => indexMembers(members, currentUserId),
     [members, currentUserId]
@@ -227,6 +250,30 @@ export function ChannelsThreadWindow({
         // roster this window already loads (`useChannelMembers`), so there is nothing to hand
         // over — and had it stayed a prop, the omission would now OVERSTATE.
         liveAgents={liveAgents}
+        /**
+         * 🔴 **MY OWN AGENTS MID-TURN — THE POP-OUT DREW NONE, AND THE PROP WAS SIMPLY
+         * NEVER THREADED** (release review, 2026-10-11).
+         *
+         * ⚠ **NOT A PROVIDER PROBLEM.** `message-pane.tsx` has taken
+         * `agentActivity?: ReactNode` and fed it to `ComposerRecipients`'s `working=` since
+         * the strip landed, and `channel-surface.tsx` supplied it — this file omitted it, so
+         * the one surface dedicated to ONE exchange was the surface that could not say an
+         * agent was working on it. The window already holds both halves it needs: the
+         * desktop feed (`ownSessions`, a PUSH subscription — no second read) and the colours
+         * resolved above.
+         * ⚠ **SCOPED TO THIS THREAD, NOT THE CHANNEL** — `ownAgentsWorking`'s third argument.
+         * A pop-out is ONE exchange by construction (this file's header), so a channel-wide
+         * strip here would report agents working somewhere the reader cannot see.
+         * ⚠ **`null` SESSIONS RENDER NOTHING**: in a plain browser `useDesktopSessions`
+         * answers "could not ask" and `ownAgentsWorking` returns `[]`, which the component
+         * draws as nothing — never a placeholder (INVARIANTS §11).
+         */
+        agentActivity={
+          <AgentActivityRows
+            agents={ownAgentsWorking(ownSessions, channelId, thread.id)}
+            colors={workingColors}
+          />
+        }
         peerActivity={
           <PeerActivityRow
             peers={peerWorkingOn(peerSessions, currentUserId, thread.id)}

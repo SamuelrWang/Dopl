@@ -231,23 +231,24 @@ function isRestartChoice(response) {
   return response === RESTART_BUTTON_INDEX;
 }
 
-// ── The notification ─────────────────────────────────────────────────────────
-// Kept alongside the dialog because it is the surface that survives: a dialog
-// behind another Space is missed, a notification waits in Notification Center.
-// When a session is live the dialog is deliberately NOT auto-shown (a modal on
-// top of a running agent turn is the interruption we are avoiding), so this
-// banner is the whole announcement and has to carry the state.
-function downloadedNotification(opts) {
-  const o = opts || {};
-  const version = o.version ? String(o.version) : 'A new version';
-  const warning = liveSessionSummary(o.sessions);
-  const body = warning
-    ? `Version ${version} is downloaded. ${warning} Click here to restart when you are ready, `
-      + `or use the menu bar icon. Until then this Mac keeps running the old build.`
-    : `Version ${version} is downloaded. Restart Dopl to install it. `
-      + `Until then this Mac keeps running the old build.`;
-  return { title: 'Dopl update ready', body };
-}
+// ── The notification: DELETED, not retired ───────────────────────────────────
+//
+// ⚠ `downloadedNotification` BUILT THE UPDATE-READY BANNER'S COPY AND IS GONE (2026-10-11,
+// release review). The banner itself went on 2026-10-09 (Samuel's spec — "App update ready" is
+// not on his list), and `updater.js` recorded that the builder was being "LEFT IN PLACE
+// DELIBERATELY ... deleting it is a separate decision". This is that decision, and the reason to
+// take it is that the thing was not merely unused: it was unused WITH SIX PASSING ASSERTIONS
+// across two suites, which is how a dead surface comes to look maintained. Anyone reading the
+// copy tests would have concluded the app still announces an update by banner. It does not.
+//
+// WHAT CARRIES THE ANNOUNCEMENT NOW is the tray item — `tray.js › updateMenuState`, whose label
+// is "Update ready — restart to install v<x>" — and `restartPrompt` below when a dialog is
+// appropriate. `test/tray-update-ready.test.mjs` asserts the tray copy says what to do, and
+// pins that no second announcement builder reappears here.
+//
+// THE COST THE RULING ACCEPTED, repeated from updater.js so it is not rediscovered: a banner
+// survived being MISSED (it waits in Notification Center) and the tray item does not, so on a
+// machine running agents a staged restart now waits until the operator happens to look.
 
 module.exports = {
   DEFAULT_CHECK_INTERVAL_MS,
@@ -263,5 +264,4 @@ module.exports = {
   liveSessionSummary,
   restartPrompt,
   isRestartChoice,
-  downloadedNotification,
 };

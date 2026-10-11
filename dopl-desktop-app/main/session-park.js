@@ -35,6 +35,24 @@ function knownProfile(p) {
   return KNOWN_PROFILES.has(p) ? p : 'read_only';
 }
 
+/**
+ * IS THE MACHINE'S CONCURRENCY CEILING REACHED? (a resume costs a child like a launch).
+ *
+ * ⚠ ONE SPELLING PER MODULE, 2026-10-11. `startResume` asked this question with the literal
+ * `liveCount(...) >= MAX_CONCURRENT_SESSIONS` TWICE — once before the runtime probe and once after it —
+ * and `session-launch.js` held a third copy that had never learned the post-await re-check these two
+ * already did. The duplication is the mechanism of that divergence, so each side now asks a named
+ * helper: `session-launch.js › capReached` there, this one here.
+ * ⚠ AND IT IS NOT THE SHARED HELPER, which it should be. Two test harnesses this agent does not own
+ * slice SESSION-PARK-PURE and hand-build its free-variable list (`test/main-audit-resume-budget.mjs`
+ * injects `sessionWindowless` by name, and `test/session-park.test.mjs` asserts this file still
+ * mentions `sessionWindowless.MAX_CONCURRENT_SESSIONS`), so importing `capReached` here breaks both.
+ * Unifying the two into one export is a three-file change and is FLAGGED rather than taken.
+ */
+function atCap() {
+  return sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS;
+}
+
 // The session CONTEXT rebuilt from a record. channelId/workspaceId ARE prompt input for a shell with nothing to
 // resume; `identity` is a name-only stub (F-288) — nothing after spawn reads its body, so a consumer must not
 // assume `identity.instructions` is there.
@@ -156,7 +174,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   const slot = { channelId: rec.channelId, taskId: rec.taskId, agentId: agentId };
   // The record's own three-part slot, then the concurrency ceiling (a resume costs a child like a launch).
   if (deps.hasLiveSession(slot)) return false;
-  if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) {
+  if (atCap()) {
     diag('session-park: resume refused — cap', `(${sessionWindowless.MAX_CONCURRENT_SESSIONS} live)`);
     return false;
   }
@@ -174,7 +192,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   }
   // Re-check the slot AND the cap after the await: a racing launch may have taken either.
   if (deps.hasLiveSession(slot)) return false;
-  if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) {
+  if (atCap()) {
     diag('session-park: resume refused — cap (taken during the runtime probe)');
     return false;
   }

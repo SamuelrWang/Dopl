@@ -34,12 +34,22 @@ function msg(seq: number, over: Partial<ChannelMessage> = {}): ChannelMessage {
   };
 }
 
-function artifactEntry(id: string): ChannelReadEntry {
+function artifactEntry(id: string, count = 0): ChannelReadEntry {
   const folded = {
     artifact: { id, name: `card ${id}` },
+    count,
     messages: [],
   } as unknown as ChannelFoldedArtifact;
   return { type: "artifact", folded };
+}
+
+/** The rendered member count off one folded card — `count` is a CHANNEL-WIDE fact. */
+function countsOf(entries: ChannelReadEntry[] | null): Array<number | undefined> {
+  return (entries ?? []).flatMap((entry) =>
+    entry.type === "artifact"
+      ? [(entry.folded as unknown as { count?: number }).count]
+      : []
+  );
 }
 
 describe("newestCachedSeq", () => {
@@ -162,6 +172,59 @@ describe("mergeDeltaPage", () => {
     expect(
       merged.entries?.flatMap((e) => (e.type === "artifact" ? [e.folded.artifact.id] : []))
     ).toEqual(["a-1", "a-2"]);
+  });
+
+  it("🔒 KEEPS BOTH AUTHORS when two of them share one `clientMsgId`", () => {
+    // ⚠ A MESSAGE VANISHING, SILENTLY. `client_msg_id` is unique per (channel,
+    // key, AUTHOR) by design, it rides every peer's DTO, and desktop keys are
+    // shaped `agent-<publicAgentId>-<n>` — so a collision across authors is a
+    // shape the product produces. An author-free match REPLACED the older row in
+    // place: no duplicate, no gap, just one fewer message in the transcript.
+    const merged = mergeDeltaPage(
+      { messages: [msg(10, { clientMsgId: "k", authorUserId: "u-A" })] },
+      { messages: [msg(60, { clientMsgId: "k", authorUserId: "u-B" })] }
+    );
+
+    expect(merged.messages.map((m) => m.seq)).toEqual([10, 60]);
+    expect(merged.messages.map((m) => m.authorUserId)).toEqual(["u-A", "u-B"]);
+  });
+
+  it("🔒 THE DELTA'S CARD WINS ON ID — a card that grew while the reader was away", () => {
+    // `count` / `firstSeq` / `lastSeq` are CHANNEL-WIDE facts that move as the
+    // room talks, and `count` is rendered. First-copy-wins is only sound WITHIN
+    // one read (`message-window.ts › addArtifacts`); these two copies are reads
+    // minutes apart, so holding the cached one painted a stale member count after
+    // every switch-back.
+    const merged = mergeDeltaPage(
+      { messages: [msg(1)], entries: [artifactEntry("a-1", 3)] },
+      { messages: [msg(2)], entries: [artifactEntry("a-1", 5)] }
+    );
+
+    expect(countsOf(merged.entries ?? null)).toEqual([5]);
+  });
+
+  it("keeps the fresher card IN ITS SLOT, so the envelope does not reorder", () => {
+    const merged = mergeDeltaPage(
+      { messages: [msg(1)], entries: [artifactEntry("a-1", 3), artifactEntry("a-2", 1)] },
+      { messages: [msg(2)], entries: [artifactEntry("a-1", 9)] }
+    );
+
+    expect(
+      merged.entries?.flatMap((e) => (e.type === "artifact" ? [e.folded.artifact.id] : []))
+    ).toEqual(["a-1", "a-2"]);
+    expect(countsOf(merged.entries ?? null)).toEqual([9, 1]);
+  });
+
+  it("🔒 SURVIVES A CACHE ENTRY WITH NO `messages` KEY (§8)", () => {
+    // The stale-cache rule every sibling on this path defends: an entry written
+    // by a build that had no such key is read by this one after an upgrade. A
+    // throw here happens INSIDE the hook's `.then`, where the trailing `.catch`
+    // turns it into a silent full refetch — the read option A exists to avoid,
+    // paid on every switch and attributed to nothing.
+    const stale = { hasMore: true } as unknown as Parameters<typeof mergeDeltaPage>[0];
+
+    expect(mergeDeltaPage(stale, { messages: [msg(4)] }).messages.map((m) => m.seq)).toEqual([4]);
+    expect(mergeDeltaPage(stale, { messages: [] }).messages).toEqual([]);
   });
 
   it("is null entries when nothing on either side folded", () => {

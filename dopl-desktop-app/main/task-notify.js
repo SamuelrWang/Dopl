@@ -3,8 +3,9 @@
 // When the REQUESTER receives an inbound reply that belongs to an INTERACTIVE
 // task they created, classify() (targeting.js) returns the 'task-reply' verdict.
 // Such a reply is not a new request: it needs NO consent row, NO watcher record,
-// NO spawn. It is simply news — "a reply arrived in your thread". This module fires
-// a single silent OS notification for that and, on click, opens the channel via
+// NO spawn. ⚠ AND SINCE 2026-10-09 IT RAISES NOTHING FOR BEING A REPLY (Samuel's spec): what
+// still raises here is a reply that @-TAGS ME, routed as the `mention` it is — see
+// `notifyTaskReply` below for why that path must exist at all. A click opens the channel via
 // the SAME injected-handler seam trigger.sendFyi uses (targeting.openChannelForEntry,
 // wired from index.js through targeting.setHandlers). No token use, no API write.
 //
@@ -12,10 +13,13 @@
 // session-spawner.js (443/500) sit at the eslint max-lines cap; the passive path
 // must not grow either of them.
 //
-// EXTRACTION NOTE: `taskReplyNotice` is a pure, plain `function` declaration (like
+// EXTRACTION NOTE: `mentionNotice` is a pure, plain `function` declaration (like
 // classify/metaStr) so test/task-notify.test.mjs can slice + evaluate its body
 // verbatim without loading Electron. Keep it free of braces inside its
 // strings/comments/regex or the test's brace-balancing extractor breaks.
+// ⚠ IT NAMED `taskReplyNotice` UNTIL 2026-10-10 — a function deleted eleven lines below this
+// note, in the same wave that replaced it with `mentionNotice`. The rule is about whichever pure
+// builder this module exposes, and that is the one.
 
 const io = require('./listener-io');
 const targeting = require('./targeting');

@@ -28,160 +28,29 @@
 // and it is a COST ceiling as much as a concurrency one (INVARIANTS §11: every per-session bound
 // multiplies against it).
 //
-// METHOD: session-engine.js is electron-bound and has no extractable pure block, so the
-// functions this involves are brace-matched out and evaluated together with fakes for the
-// module bindings they close over. That runs the REAL control flow — including the FIX #7
-// re-check after the acquireRuntime await — and the ceiling is the REAL `liveCount` + the REAL
-// constant, sliced the same way, so the cap case cannot pass against a number this test made up.
+// ⚠ SPLIT AT THE §2 CAP (2026-10-11). This file crossed the hard 500-line `max-lines` cap that
+// `test/**/*.mjs` is linted under, so `npm run lint` was red. Two things moved and NOTHING was
+// dropped:
+//
+//   • THE HARNESS that sat here is now `test/_session-launch-funnel-harness.mjs` — ONE copy, so
+//     the REAL predicates it injects (`windowlessFloorRefusal`, `axisBOpScopedWarning`,
+//     `muteRefusal`, `liveCount`, `MAX_CONCURRENT_SESSIONS`, `liveOnThread`, `slotKey`) cannot
+//     drift into a second, laxer spelling. The METHOD paragraph that used to sit here — how an
+//     electron-bound `launch` is brace-matched out and run over the REAL ceiling — is its header.
+//   • THE CAPABILITY WAVES (D1's launch-blocking windowless tool floor, D3's Axis-B collapse
+//     warning) are `test/session-engine-slot-capability.test.mjs`, in whole. They are about what
+//     an ADAPTER DECLARES rather than about slots, and two of their cases drive
+//     `main/runtime/capability.js` directly without the funnel at all.
+//
+// What is left here is the SLOT ARITHMETIC and its refusals, which is what the header above is
+// about: minting, the three-part key, multiplayer, the auth hold, the cost ceiling, the
+// rollbacks, and the runtime the funnel forwards.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
-import { asyncFnOf, codeOf, fnOf } from "./helpers/source-probe.mjs";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const MAIN = join(HERE, "..", "main");
-// ⚠ `launch` MOVED TO `main/session-launch.js` ON 2026-08-21 — the spawn FUNNEL split out of
-// session-engine.js at the hard 500-line §2 cap when the multiplayer wave pushed that file over.
-// Same function, same control flow, same refusal shapes; only the file changed.
-const ENGINE = readFileSync(join(MAIN, "session-launch.js"), "utf8");
-const REGISTRY_SRC = readFileSync(join(MAIN, "session-registry.js"), "utf8");
-const STORE_SRC = readFileSync(join(MAIN, "session-store.js"), "utf8");
-const WINDOWLESS_SRC = readFileSync(join(MAIN, "session-windowless.js"), "utf8");
-// The Dopl delivery-path pre-flight (2026-10-10). Its REFUSAL half is pure and is sliced in whole,
-// `DETAIL` included — `muteRefusal` closes over it, so a slice without it returns null for every
-// reason and the gate silently disappears. Same shape as CAP_DECL below.
-const DELIVERY_SRC = readFileSync(join(MAIN, "delivery-path.js"), "utf8");
-const DELIVERY_DETAIL = (DELIVERY_SRC.match(/^const DETAIL = \{[\s\S]*?^\};$/m) || [])[0];
-assert.ok(DELIVERY_DETAIL, "the DETAIL table moved or changed shape in delivery-path.js");
-// ⚠ THE REAL `session-profiles.js`, REQUIRED not sliced (2026-09-01, D1). It is the electron-free
-// module, so a plain require works, and the funnel's one launch-blocking question
-// (`windowlessFloorRefusal`) is therefore asked of the SHIPPED descriptors in every case below.
-const REAL_PROFILES = createRequire(import.meta.url)(join(MAIN, "session-profiles.js"));
-
-// The REAL key function, so the slot arithmetic under test is the shipped one.
-const { sessionKey, slotKey, threadKeyPrefix } = new Function(
-  `${fnOf(STORE_SRC, "sessionKey")}\n${fnOf(STORE_SRC, "slotKey")}\n${fnOf(STORE_SRC, "threadKeyPrefix")}\n` +
-    ` return { sessionKey, slotKey, threadKeyPrefix };`
-)();
-
-// ...and the REAL ceiling. `session-windowless.js` requires consent / targeting / channel-post at
-// its top, so it cannot simply be imported into a plain node test; the two members `launch`
-// touches are sliced instead.
-const CAP_DECL = (WINDOWLESS_SRC.match(/^const MAX_CONCURRENT_SESSIONS = \d+;$/m) || [])[0];
-assert.ok(CAP_DECL, "MAX_CONCURRENT_SESSIONS moved or changed shape in session-windowless.js");
-const sessionWindowless = new Function(
-  `${CAP_DECL}\n${fnOf(WINDOWLESS_SRC, "liveCount")}\n return { liveCount, MAX_CONCURRENT_SESSIONS };`
-)();
-
-const LAUNCH_SRC = asyncFnOf(ENGINE, "launch");
-// ⚠ CODE ONLY. `launch`'s comments NAME the branches that were deleted — that is the house rule
-// (nothing is removed silently) — so a negative grep over the raw source would fail on the very
-// annotation that documents the removal. Line comments blanked; `launch` carries no string
-// literal containing `//`.
-const LAUNCH_CODE = codeOf(LAUNCH_SRC);
-
-const CH = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-const AGENT = "a1b2c3d4";
-const TASK = "11111111-2222-3333-4444-555555555555";
-
-function harness(cfg = {}) {
-  const calls = { started: [], diag: [], acquired: [], signIn: [] };
-  const sessions = new Map();
-  // `newAgentId` is injected deterministic (the real one is a CSPRNG); the cases are about launch
-  // minting one and threading it through the key, the spec and the answer.
-  let minted = 0;
-  const store = { sessionKey, slotKey, threadKeyPrefix };
-  // The REAL `liveOnThread` (session-registry.js), sliced not faked: the auth-hold read resolves
-  // through it, and a fake could pass over a scan that does not match the key format.
-  const registry = new Function(
-    "deps", "store",
-    `${fnOf(REGISTRY_SRC, "liveOnThread")}\n${fnOf(REGISTRY_SRC, "sessionOn")}\n return { liveOnThread, sessionOn };`
-  )({ sessions }, store);
-  const deps = {
-    sessions,
-    // Throws where no runtime can load; records WHICH id the funnel forwarded (it never invents one).
-    acquireRuntime: async (runtimeId) => {
-      calls.acquired.push(runtimeId);
-      if (cfg.sdkThrows) throw new Error("no agent runtime on this machine");
-      if (cfg.duringSdk) cfg.duringSdk(sessions);
-      const rt = cfg.rtId ? { id: cfg.rtId } : {};
-      return cfg.signedOut ? { ...rt, credentialState: async () => ({ usable: false, source: null }) } : rt;
-    },
-    startSession: async (spec) => {
-      calls.started.push(spec);
-      if (cfg.startSessionReturns !== undefined) return cfg.startSessionReturns;
-      const s = { ...spec, sessionId: "sess-1", settled: false };
-      sessions.set(spec.key, s); // the real startSession sets the Map before its first await
-      return s;
-    },
-    liveOnThread: registry.liveOnThread,
-    sessionOn: registry.sessionOn,
-  };
-  const api = new Function(
-    "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
-    "ontologyReach", "roomRoster", "refuseUnknownModel", "launchDefault", "credentials", // faked; own suites drive the real ones
-    "operatorTools", "refuseUnreadableProtocol", "offeredDimensions", // faked: operator-tools / sdk-shape / launch-dimensions suites drive the real ones
-    "deliveryPath", // the REAL `muteRefusal` over a configurable reason (see below)
-    `${LAUNCH_SRC}\n${asyncFnOf(ENGINE, "credentialMissing")}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
-      ` return { launch, hasLiveSession, isAuthHeldSession };`
-  )(
-    deps,
-    store,
-    sessionWindowless,
-    (...a) => calls.diag.push(a.join(" ")),
-    () => `mint${String(minted++).padStart(4, "0")}`,
-    (v) => typeof v === "string" && /^[a-z][a-z0-9]{7}$/.test(v),
-    // ⚠ 2026-09-01 (D1): the WINDOWLESS TOOL FLOOR refusal, injected REAL by default so the
-    // happy path is measured against the shipped predicate over the shipped descriptors — a
-    // fake `() => null` here would make every other case in this file green over a check that
-    // does not exist. `cfg.floorRefusal` overrides it for the refusal case, which is the only
-    // way to reach a null floor without editing a shipped adapter.
-    {
-      windowlessFloorRefusal: (id) => (cfg.floorRefusal !== undefined ? cfg.floorRefusal : REAL_PROFILES.windowlessFloorRefusal(id)),
-      // ⚠ 2026-09-01 (D3): Axis B's collapse WARNING, also injected REAL. Codex declares
-      // `opScoped: 'unverified'`, so this really does fire on the shipped tree — which is the
-      // point: the predicate had no consumer at all before this.
-      axisBOpScopedWarning: (id) => (cfg.opScopedWarning !== undefined ? cfg.opScopedWarning : REAL_PROFILES.axisBOpScopedWarning(id)),
-    },
-    // ⚠ 2026-09-09 (F-681): the ontology-reach PRODUCER, faked — an HTTP read behind a device
-    // token this file has neither of. `test/ontology-reach-producer.test.mjs` pins the real
-    // module's promise never to throw.
-    {
-      fetchOntologyReach: async () => {
-        if (cfg.reachThrows) throw new Error("reach exploded");
-        return cfg.ontologies || [];
-      },
-    },
-    // ⚠ 2026-09-18: the ROOM-ROSTER producer, faked like the one above it — the real one reads two
-    // HTTP routes, and `room-roster.test.mjs` pins its own promises (no call in a solo room, one
-    // bounded read otherwise, fail-open). Here the funnel only has to AWAIT it and survive a throw.
-    { fetchRoomRoster: async () => { if (cfg.rosterThrows) throw new Error("roster exploded"); return cfg.roster || { agents: [], agentsMore: 0, people: [], peopleMore: 0, read: 'skipped' };
-    } }, async () => cfg.modelRefusal || null, { withRuntimeDefault: async (_rt, model) => model },
-    { needSignIn: (id) => calls.signIn.push(id) }, { launchScope: () => cfg.operatorScope || '' },
-    async () => cfg.shapeRefusal || null, async (_rt, _model, raw) => cfg.dimensions || raw || {},
-    // ⚠ 2026-10-10 (device-token-fix): the DOPL DELIVERY-PATH pre-flight. `muteRefusal` is the
-    // REAL one — sliced, not faked, for `windowlessFloorRefusal`'s reason: it owns the refusal
-    // WORD, and a `() => null` here would make every case in this file green over a gate that
-    // does not exist. Only the READ is configurable (`cfg.deliveryBlocked`), because the real
-    // one asks electron-store for a credential this file has none of. Default '' = a machine
-    // with a bearer, which is what every other case in this file assumes.
-    {
-      deliveryBlockedReason: async () => cfg.deliveryBlocked || '',
-      muteRefusal: new Function(`${fnOf(DELIVERY_SRC, "muteRefusal")}\n${DELIVERY_DETAIL}\n return muteRefusal;`)(),
-    });
-  return { ...api, sessions, calls };
-}
-
-// A live session occupying a slot, as the registry holds it.
-const live = (key, over = {}) => [key, { key, settled: false, state: {}, ...over }];
-
-// ⚠ EVERY CALL CARRIES `windowless: true`. It is not ceremony: it is the ONLY spawn shape left,
-// and the early return in front of it is pinned on its own in the refusals test at the bottom.
-const call = (a) => ({ windowless: true, ...a });
+import {
+  AGENT, CH, LAUNCH_CODE, TASK, call, harness, live, sessionWindowless, slotKey,
+} from "./_session-launch-funnel-harness.mjs";
 
 test("MINT: launch creates an instance id, keys on it, and hands it back", async () => {
   const h = harness();
@@ -293,9 +162,15 @@ test("a NON-windowless call is refused outright, and constructs nothing", async 
   // `factory: false` (no injected window factory). Both named a window lane that is deleted;
   // the early return is the ONE thing left that answers `disabled`, and it now answers it for
   // every caller that has not been moved onto the windowless shape.
+  // ⚠ `detail` RIDES BESIDE `skipped`, and the sentence is the point: the word alone rendered
+  // as "The agent could not be started", which tells the operator nothing. `detail` is an
+  // existing wire field the renderer already PREFERS over the copy map, so the honest sentence
+  // cost no new plumbing.
   const h = harness();
-  assert.deepEqual(await h.launch({ channelId: CH, taskId: TASK }), { skipped: "disabled" });
-  assert.deepEqual(await h.launch({ channelId: CH, taskId: TASK, windowless: false }), { skipped: "disabled" });
+  assert.deepEqual(await h.launch({ channelId: CH, taskId: TASK }),
+    { skipped: "disabled", detail: "Dopl only starts windowless agents." });
+  assert.deepEqual(await h.launch({ channelId: CH, taskId: TASK, windowless: false }),
+    { skipped: "disabled", detail: "Dopl only starts windowless agents." });
   assert.deepEqual(h.calls.started, [], "nothing is keyed, nothing is registered, no SDK is asked for");
 });
 
@@ -326,8 +201,15 @@ test("the cap is ONE branch: no eviction, no adopt, no second budget in launch",
   // vocabulary is closed and `cap`'s sentence — the machine is full, go look at what is running
   // — is true of both), and it is NOT a window budget, an eviction or a consent adopt, which is
   // what the source read above actually guards. ⚠ A THIRD would need its own argument here.
-  assert.equal((LAUNCH_CODE.match(/skipped: 'cap'/g) || []).length, 2,
-    "the concurrency ceiling and the chained-launch budget — no third");
+  // ⚠ THREE, AND THE THIRD IS NOT A THIRD CEILING — it is the SAME concurrency ceiling asked a
+  // SECOND time, immediately before `startSession`. The first ask is followed by ~8 awaits
+  // (acquireRuntime, the two refusals, the delivery pre-flight's network work, the runtime
+  // default, the dimensions, the reach and the roster) and nothing re-asked it, so two Allow
+  // clicks — `trigger.js` fires `void launchResponderSession(...)` — both passed the gate and
+  // the machine went to MAX+1. `session-park.js › startResume` already re-checked after ITS one
+  // await for exactly this reason. Both asks now go through a named `atCap()` per module.
+  assert.equal((LAUNCH_CODE.match(/skipped: 'cap'/g) || []).length, 3,
+    "the concurrency ceiling asked twice (before the awaits and again before startSession), plus the chained-launch budget");
   assert.match(LAUNCH_CODE, /a\.launchChain === true && !launchBudget\.spend\(a\.channelId\)/,
     "the second cap is CONDITIONED on the chained lane: the operator's own button is never bounded by it");
 });
@@ -344,8 +226,16 @@ test("startSession's two rollbacks are reported, not swallowed", async () => {
   // spawn that held on a missing credential returns `{authHold:true}`. Both must reach the
   // caller as a refusal — a launch that answers with no sessionId and no `skipped` is a caller
   // posting "started" for nothing.
-  const nulled = harness({ startSessionReturns: null });
-  assert.deepEqual(await nulled.launch(call({ channelId: CH, taskId: TASK })), { skipped: "disabled" });
+  // ⚠ THE `null` HALF IS GONE, because production cannot produce it and only this harness could.
+  // `deps.startSession` has one binder (`session-engine.js › startSession`), whose only falsy
+  // return sat behind `if (!sessionWindowless.attachSurface(s, spec))` — and `attachSurface` is
+  // `s.windowless = true; return true;`, unconditional, with no branch in its body at all. So
+  // the arm this asserted was dead code, and asserting a refusal for an input the machine cannot
+  // make was testing the harness. The INVARIANT it depended on is pinned instead, in
+  // `session-launch-refusal-detail.test.mjs` (~:137): `attachSurface` returns true for EVERY
+  // input, and its body contains no `if`, `?`, `&&` or `||` at all. The day that stops being
+  // true, that case fails and names both halves — which is the pin this line was pretending to
+  // be.
   const held = harness({ startSessionReturns: { authHold: true } });
   assert.deepEqual(await held.launch(call({ channelId: CH, taskId: TASK })), { skipped: "auth-hold" });
   // ⚠ SPAWN-IDLE TOO, AND THAT IS THE HALF THAT WAS BROKEN (2026-08-22). "New Agent" is the one
@@ -396,122 +286,4 @@ test("RUNTIME: an unusable runtime is still `no-sdk` — the wire vocabulary did
   const h = harness({ sdkThrows: true });
   assert.deepEqual(await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" })), { skipped: "no-sdk" });
   assert.equal(h.calls.started.length, 0, "nothing is constructed when the runtime is unusable");
-});
-
-// ── ⚠ D1: THE WINDOWLESS TOOL FLOOR IS LAUNCH-BLOCKING (2026-09-01) ──────────────────────────
-//
-// `contract.js › LAUNCH_BLOCKING[3]`. `capability.js › floorWindowlessTool`'s header stated the
-// refusal from the day it was written — "`windowlessFloor: null` REFUSES THE WINDOWLESS LAUNCH
-// rather than picking a mode" — and NOTHING refused it. The predicate returned the session's own
-// stored mode instead, which starts at the NARROWEST member and resets to it on park, on a session
-// with no gate surface: every tool call silently denied, including the reads the prompt orders.
-//
-// ⚠ THE REFUSAL IS PINNED IN TWO HALVES BECAUSE ONE HALF ALONE IS PASSABLE BY THE BUG. "The
-// funnel refuses when handed a reason" would pass over a `windowlessFloorRefusal` that never
-// answers one; "the shipped adapters launch" would pass over a funnel that never asks. Together
-// they pin the wire.
-
-test("D1: a runtime with NO orderable windowless floor is REFUSED before anything is constructed", async () => {
-  const h = harness({ floorRefusal: "Test Runtime declares no windowless tool floor, and a session with no gate surface would silently deny every tool call it makes" });
-  const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
-  // ⚠ `'disabled'`, NOT AN EIGHTH WIRE WORD. `REFUSAL_REASONS` is backed by a deployed column
-  // CHECK, so a new word here would be a refusal the database refuses to record. `'disabled'` is
-  // the existing local-only code for "this build will not run this spawn shape"; the SPECIFIC
-  // reason rides the diag, which is the only surface allowed to name a runtime.
-  assert.deepEqual(res, { skipped: "disabled" });
-  // ⚠ NOTHING IS SPENT. The check sits after acquireRuntime and BEFORE startSession, so there is
-  // no session in the registry, no slot held and no rollback to get wrong.
-  assert.equal(h.calls.started.length, 0, "no session is constructed");
-  assert.equal(h.sessions.size, 0, "and none is registered");
-  assert.deepEqual(h.calls.acquired, ["codex"], "…but the runtime WAS acquired first: the question is about a known runtime");
-  assert.ok(h.calls.diag.some((l) => /windowless launch refused/.test(l)),
-    "the operator-readable sentence lands in the diag, the one surface that may name a runtime");
-});
-
-test("D1: every SHIPPED adapter declares an orderable floor, so none of them is refused", async () => {
-  // The other half. Driven through the REAL predicate over the REAL descriptors — a fake would
-  // make this file green over a check that does not exist.
-  for (const runtime of ["claude", "codex", "cursor", undefined]) {
-    const h = harness();
-    const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime }));
-    assert.equal(res.skipped, undefined, `${runtime || "(default)"} must launch`);
-    assert.equal(h.calls.started.length, 1, `${runtime || "(default)"} constructs its session`);
-  }
-});
-
-test("D1: the predicate itself answers a SENTENCE for a null floor and for an unorderable one", () => {
-  // ⚠ THE MUTATION, RUN HERE RATHER THAN DESCRIBED. `floorWindowlessTool` must answer `null`
-  // (refuse) and NOT the session's own mode, for BOTH causes — an absent floor and a floor that
-  // is not one of the runtime's declared modes. Before the fix both returned a mode, and the
-  // narrowest one at that.
-  const capability = createRequire(import.meta.url)(join(MAIN, "runtime", "capability.js"));
-  const base = {
-    label: "Test Runtime",
-    toolMode: { options: [{ value: "narrow" }, { value: "wide" }], windowlessFloor: "wide" },
-  };
-  assert.equal(capability.windowlessFloorRefusal(base), null, "a declared, orderable floor is fine");
-  assert.equal(capability.floorWindowlessTool(base, "narrow"), "wide", "…and it raises");
-
-  const noFloor = { ...base, toolMode: { ...base.toolMode, windowlessFloor: null } };
-  assert.match(capability.windowlessFloorRefusal(noFloor), /declares no windowless tool floor/);
-  assert.equal(capability.floorWindowlessTool(noFloor, "narrow"), null,
-    "REFUSE, never the session's own mode — which here is the NARROWEST, i.e. deny-everything");
-  assert.equal(capability.floorWindowlessTool(noFloor, "wide"), null, "…and not the wide one either");
-
-  const badFloor = { ...base, toolMode: { ...base.toolMode, windowlessFloor: "nonesuch" } };
-  assert.match(capability.windowlessFloorRefusal(badFloor), /not one of the modes it declares/);
-  assert.equal(capability.floorWindowlessTool(badFloor, "narrow"), null);
-  // ⚠ NAMES THE RUNTIME'S OWN LABEL AND NO VENDOR.
-  assert.match(capability.windowlessFloorRefusal(noFloor), /^Test Runtime /);
-});
-
-// ── ⚠ D3: AXIS B'S COLLAPSE WARNING HAS A CONSUMER (2026-09-01) ──────────────────────────────
-//
-// `capability.js › axisBOpScoped` was declared with a documented severe consequence — "`false`
-// COLLAPSES AXIS B FROM OP-SCOPED TO WHOLE-TOOL — every channel call gates, READS INCLUDED — and a
-// held inbound on a windowless session is held forever" — and grepping `main/` and `src/` for it
-// returned exactly one hit, a COMMENT. So the operator got no warning and the launch was not
-// refused: a declaration that could not do its job.
-//
-// ⚠ WARNING, NOT REFUSAL, AND THIS FILE PINS THAT TOO. The direction of failure is CLOSED
-// (unreadable input -> `postFieldsOk` fails -> `gate` -> a windowless gate DENIES), so the agent
-// is broken and the boundary is not. A refusal here would take a registered adapter off the only
-// spawn shape this tree has, which is a release decision and not this function's.
-
-test("D3: a runtime whose Axis B is not op-scoped LAUNCHES, and says so", async () => {
-  // ⚠ NO SHIPPED ADAPTER IS UNVERIFIED SINCE CXP-3A (2026-09-22), so the REAL sentence is built
-  // from the frozen Codex descriptor with `opScoped` set back to `'unverified'` and injected.
-  const req = createRequire(import.meta.url), D = req(join(MAIN, "runtime", "index.js")).descriptorFor("codex");
-  const h = harness({ opScopedWarning: req(join(MAIN, "runtime", "capability.js")).axisBOpScopedWarning({ ...D, axisB: { ...D.axisB, opScoped: "unverified" } }) });
-  const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
-  assert.equal(res.skipped, undefined, "it is a WARNING — the launch proceeds");
-  assert.equal(h.calls.started.length, 1, "…and the session is really constructed");
-  const warned = h.calls.diag.filter((l) => /Axis B is not op-scoped/.test(l));
-  assert.equal(warned.length, 1, "exactly one line, at the launch");
-  assert.match(warned[0], /READS INCLUDED/, "it names the consequence, not just the field");
-  assert.match(warned[0], /not been measured/, "…and that this one is UNVERIFIED rather than false");
-});
-
-test("D3: an op-scoped runtime says NOTHING — a warning on every launch is a warning nobody reads", async () => {
-  for (const runtime of ["claude", "cursor", "codex"]) {
-    const h = harness();
-    await h.launch(call({ channelId: CH, taskId: TASK, runtime }));
-    assert.deepEqual(h.calls.diag.filter((l) => /Axis B is not op-scoped/.test(l)), [], runtime);
-  }
-});
-
-test("D3: the predicate distinguishes false from unverified, and names no vendor", () => {
-  const capability = createRequire(import.meta.url)(join(MAIN, "runtime", "capability.js"));
-  const at = (opScoped) => ({ label: "Test Runtime", axisB: { opScoped } });
-  assert.equal(capability.axisBOpScopedWarning(at(true)), null, "op-scoped: no warning at all");
-  assert.match(capability.axisBOpScopedWarning(at(false)), /^Test Runtime cannot show the gate/);
-  assert.match(capability.axisBOpScopedWarning(at("unverified")), /^Test Runtime has not been measured/);
-  // ⚠ ABSENT IS NOT `true`. A descriptor that omits the field has not declared op-scoping, and
-  // reading absent as capable is exactly the fail-OPEN this predicate exists to refuse.
-  assert.match(capability.axisBOpScopedWarning(at(undefined)), /cannot show the gate/);
-  assert.match(capability.axisBOpScopedWarning({ label: "Test Runtime" }), /cannot show the gate/);
-  for (const v of [true, false, "unverified", undefined]) {
-    const w = capability.axisBOpScopedWarning(at(v));
-    if (w) assert.ok(!/claude|codex|cursor|anthropic|openai/i.test(w), `names a vendor: ${w}`);
-  }
 });

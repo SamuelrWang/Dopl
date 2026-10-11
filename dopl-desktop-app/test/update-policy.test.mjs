@@ -44,7 +44,6 @@ const {
   liveSessionSummary,
   restartPrompt,
   isRestartChoice,
-  downloadedNotification,
 } = policy;
 
 // ── The interval, and its clamp ─────────────────────────────────────────────
@@ -291,20 +290,20 @@ test("an unknown version still produces a usable prompt", () => {
   assert.equal(p.message, "A Dopl update is ready to install");
 });
 
-// ── The notification ────────────────────────────────────────────────────────
+// ── The notification: GONE, and it must not come back quietly ───────────────
 
-test("the banner names the action, and names the live session when there is one", () => {
-  const plain = downloadedNotification({ version: "1.7.19" });
-  assert.equal(plain.title, "Dopl update ready");
-  assert.equal(
-    plain.body,
-    "Version 1.7.19 is downloaded. Restart Dopl to install it. "
-      + "Until then this Mac keeps running the old build."
+test("this module builds NO announcement copy of its own any more", () => {
+  // ⚠ WHAT THIS CASE REPLACES (2026-10-11, release review). `downloadedNotification` built the
+  // update-ready banner's copy. The banner went on 2026-10-09 (Samuel's spec) and the builder
+  // stayed, unused, behind FIVE passing assertions here plus one in tray-update-ready — so the
+  // suites read as though the app still announced an update by banner. The builder is deleted;
+  // this is the gate that keeps a second announcement surface from reappearing here instead of
+  // in `tray.js`, which is the one place that now carries it.
+  assert.equal(policy.downloadedNotification, undefined, "deleted, not re-exported");
+  assert.ok(
+    !Object.keys(policy).some((k) => /notification|banner/i.test(k)),
+    `an announcement builder is back in update-policy: ${Object.keys(policy).join(", ")}`
   );
-  const busy = downloadedNotification({ version: "1.7.19", sessions: [{ channelName: "Design" }] });
-  assert.match(busy.body, /1 session is running right now \(Design\)/);
-  assert.match(busy.body, /Click here to restart when you are ready/);
-  assert.match(busy.body, /menu bar icon/, "the other way back to it");
 });
 
 test("no em dashes in anything the operator reads (repo copy rule)", () => {
@@ -318,9 +317,6 @@ test("no em dashes in anything the operator reads (repo copy rule)", () => {
     ...Object.values(restartPrompt({ version: "1.7.19", sessions: [{ channelName: "Design" }] }))
       .filter((v) => typeof v === "string"),
     ...restartPrompt({ version: "1.7.19" }).buttons,
-    downloadedNotification({ version: "1.7.19" }).title,
-    downloadedNotification({ version: "1.7.19" }).body,
-    downloadedNotification({ version: "1.7.19", sessions: [{}] }).body,
   ];
   for (const s of strings) {
     assert.equal(s.includes("—"), false, `em dash in: ${s}`);

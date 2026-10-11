@@ -26,8 +26,12 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { AgentStream } from "./agent-stream";
-import { INBOUND_ANON_LABEL, inboundLabel } from "./agent-stream-inbound-box";
+import { AgentStream, SentToChannelBox } from "./agent-stream";
+import {
+  INBOUND_ANON_LABEL,
+  INBOUND_OPERATOR_LABEL,
+  inboundLabel,
+} from "./agent-stream-inbound-box";
 import { buildAgentStream, frameLane } from "./agent-stream-model";
 import { messageTagIds } from "../lib/recipient-tags";
 import { indexMembers } from "./view-model";
@@ -81,6 +85,35 @@ describe("the inbound lane — the message that woke this agent", () => {
     expect(frameLane({ ...inboundFrame(), lane: "channel" } as AgentNarrationEntry)).toBe("sent");
   });
 
+  /**
+   * 🔴 **THE DISAGREEMENT FIXTURE — WITHOUT IT `frameLane`'s `inbound` BRANCH IS FAIL-OPEN**
+   * (release review, 2026-10-11).
+   *
+   * ⚠ **THE CASE ABOVE DOES NOT TEST WHAT ITS COMMENT CLAIMS.** `LANE_BY_KIND` also maps
+   * `inbound` → `inbound`, and every fixture here carries `kind: 'inbound'` BESIDE
+   * `lane: 'inbound'` — so deleting `if (lane === "inbound") return "inbound"` left the
+   * whole suite green, including the case whose comment says the branch ORDER is the
+   * subject. The branch is real and load-bearing: it is what makes `lane` beat `kind`, and
+   * `lane` is the only field that says who can SEE a frame.
+   * ⚠ **`kind: 'post'` IS THE EXACT DISAGREEMENT THAT MATTERS**, not an arbitrary one: it
+   * is the kind `LANE_BY_KIND` sends to `sent`, so a main that labels an arriving message
+   * with a posting kind is the one build where the fall-through paints a counterparty's
+   * words as this agent's own post.
+   */
+  it("🔒 lets `lane` BEAT `kind` when they disagree — a `post` kind on the inbound lane", () => {
+    expect(frameLane({ ...inboundFrame(), kind: "post" } as AgentNarrationEntry)).toBe("inbound");
+    // ...and an unknown kind on that lane is still inbound, never `note`.
+    // ⚠ CAST THROUGH `unknown`, DELIBERATELY. `"whatever"` is not in the `kind` union and is
+    // not meant to be: the point is a kind this tree has never heard of, because main and the
+    // renderer ship separately and a new kind CAN land here first. A direct `as` is a type
+    // error for exactly that reason (TS2352 — the types do not overlap), so the double cast is
+    // the honest spelling of "deliberately out of contract" rather than a way around a
+    // complaint. Widening the union to admit it would make the test prove nothing.
+    expect(
+      frameLane({ ...inboundFrame(), kind: "whatever" } as unknown as AgentNarrationEntry)
+    ).toBe("inbound");
+  });
+
   it("routes the KIND alone too, for a build that emits no lane", () => {
     // The `directed` precedent: main and this tree ship separately, so a kind can land before the
     // lane does. ⚠ It must not fall to `note` — an anonymous log line is the pre-#3081 behaviour.
@@ -125,6 +158,39 @@ describe("the inbound FACE", () => {
     expect(inboundLabel("   ")).toBe(INBOUND_ANON_LABEL);
     expect(INBOUND_ANON_LABEL).not.toMatch(/[—–]/);
     expect(inboundLabel("Diana Taylor")).not.toMatch(/[—–]/);
+  });
+
+  /**
+   * 🔴 **AND IT SAYS "you" FOR THE OPERATOR'S OWN POST — THE FLAG WAS CARRIED AND THEN
+   * DROPPED** (release review, 2026-10-11).
+   *
+   * ⚠ **EVERY LAYER BUT THE LAST ONE WORKED.** Main stamps `fromOperator` *"so the face
+   * can say 'you'"*, `buildAgentStream` carries it onto the item lane-gated (the case in
+   * section 1 pins exactly that) — and `agent-stream.tsx` passed `senderName` and `at` to
+   * the box and not this. So the operator's own channel post read back at them as
+   * **"Message received from <their own display name>"**: their account, captioned as a
+   * counterparty.
+   * ⚠ **IT OUTRANKS THE RESOLVED NAME.** Main's `authorLabel` answers a display name or
+   * *"<person>'s agent"*, and ruling 2 (2026-09-25) folds the operator's OWN agents into
+   * the flag — so `fromOperator` WITH a name attached is still the operator's account
+   * speaking, and naming it would print the viewer's own name at them.
+   */
+  it("says the sender is YOU when the operator's own account sent it", () => {
+    expect(inboundLabel("Sam Wang", true)).toBe(INBOUND_OPERATOR_LABEL);
+    // Only `true` counts, the `truncated` / `pending` discipline.
+    expect(inboundLabel("Sam Wang", false)).toBe("Message received from Sam Wang");
+    expect(inboundLabel("Sam Wang")).toBe("Message received from Sam Wang");
+    // And with no name either, the flag is still the more specific fact.
+    expect(inboundLabel(null, true)).toBe(INBOUND_OPERATOR_LABEL);
+    expect(INBOUND_OPERATOR_LABEL).not.toMatch(/[—–]/);
+  });
+
+  it("🔒 THREADS the flag from the item to the face, which is the half that was missing", () => {
+    // ⚠ THE WIRING IS THE DEFECT, so the assertion goes through the whole stream rather
+    // than through `inboundLabel` alone: the words were already right and nobody read them.
+    renderStream({ entries: [inboundFrame({ senderName: "Sam Wang", fromOperator: true })] });
+    expect(screen.getByText(INBOUND_OPERATOR_LABEL)).toBeTruthy();
+    expect(screen.queryByText("Message received from Sam Wang")).toBeNull();
   });
 
   it("renders the arriving message in its own box, NOT as a posted one", () => {
@@ -249,6 +315,49 @@ describe("the posted box's banner names WHO it was addressed to", () => {
     renderStream({ entries: [post], sent: [], roster: roster() });
     expect(screen.getByText("a local echo")).toBeTruthy();
     expect(document.querySelectorAll("[data-recipient-tag]").length).toBe(0);
+  });
+
+  /**
+   * ⚠ **A PENDING BOX CAN NEVER SHOW A PILL, AND THESE TWO CASES PIN THE PAIR OF FACTS
+   * THAT MAKE THAT TRUE** (release review, 2026-10-11, item 5 — the comment was corrected,
+   * not the behaviour; see `agent-stream-sent-box.tsx`'s banner note for the argument).
+   *
+   * ⚠ **NEITHER IS RED-THEN-GREEN AND THAT IS DELIBERATE** — nothing about the rendering
+   * changed. They exist so the claim the old comment made ("the pills show on every face,
+   * Pending included") cannot be written back without a failing test, and so the day a
+   * held draft's addressees DO become resolvable the first case is already there to flip.
+   */
+  it("does not gate the pills on `pending` — the COMPONENT would draw them if a draft had any", () => {
+    // Hand a pending box tags directly: the box is agnostic, and that is the half of the
+    // old comment that was true. `who this is addressed to` is a fact about the draft, not
+    // a claim that it was delivered — unlike the colour, which `paint` gates on `!pending`.
+    render(
+      <SentToChannelBox
+        text="draft body"
+        to={{ kind: "channel", name: "Dopl" }}
+        at={1_000}
+        tags={[{ kind: "person", id: PEER, face: "@diana-taylor", title: "Diana Taylor" }]}
+        pending
+        requestId={null}
+      />
+    );
+    expect(document.querySelectorAll("[data-recipient-tag]").length).toBe(1);
+  });
+
+  it("but a HELD DRAFT carries no addressee ids at all — a frame has none to read", () => {
+    // 🔒 THE OTHER HALF: `pending: true` is only ever set on a FRAME-backed item, and a
+    // narration frame has no addressee. So `tags` is empty on every Pending box reachable
+    // in the product, and the resolution the comment promised has no source: a
+    // `ChannelConsentRequest` has no addressee field, and re-parsing the draft body is the
+    // client re-derivation `lib/recipient-tags.ts` opens by forbidding.
+    const held = { at: 3_000, kind: "post", lane: "channel", text: "a held draft", pending: true };
+    const [item] = buildAgentStream({
+      entries: [held as unknown as AgentNarrationEntry],
+      sent: [],
+    });
+    expect(item.pending).toBe(true);
+    expect(item.tagUserIds).toBeUndefined();
+    expect(item.tagAgentIds).toBeUndefined();
   });
 
   it("the pills are IN the banner, beside the label and before the stamp", () => {

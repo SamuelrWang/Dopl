@@ -232,7 +232,21 @@ async function submitDecision(workspaceId, rowId, decision, opts = {}) {
   }
   if (outcome === DECISION_FAILED) {
     diag('consent: decision PATCH did not land — notifying the operator', decision);
-    notifyDecisionFailed({ channelName: opts.channelName, decision, onOpen: opts.onOpen });
+    // ⚠ GUARDED, AND THE CONTRACT ABOVE IS WHY. `notifyDecisionFailed` reaches
+    // `notification-route`, and neither the `require` nor the raise is guaranteed not to throw
+    // — `raise()` guards its own internals, but a module-load failure escapes it. Outside a
+    // try/catch that throw rejected `submitDecision`, which is documented as NEVER rejecting
+    // and is called fire-and-forget from the notification-action callbacks: an unhandled
+    // rejection, on the path whose whole job is to tell the operator their decision did not
+    // land. The notice is best-effort; the PATCH outcome is the answer, and it must still be
+    // returned. (This was invisible because the suite's `notifyThrows` case exercised the
+    // HARNESS's own early return rather than this line — it was deleted as fail-open on
+    // 2026-10-11, which is what made the gap visible.)
+    try {
+      notifyDecisionFailed({ channelName: opts.channelName, decision, onOpen: opts.onOpen });
+    } catch (_) {
+      diag('consent: the decision-failed notice could not be raised');
+    }
   }
   return outcome;
 }

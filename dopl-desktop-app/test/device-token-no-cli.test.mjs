@@ -210,6 +210,17 @@ test("the mint is gated on the SIGN-IN and on nothing else", () => {
   const mint = "async " + fnOf(CONFIG, "ensureDeviceTokenInner");
   assert.match(mint, /await auth\.ensureSignedIn\(\)/, "the one gate");
   assert.match(mint, /await obtainDeviceToken\(\)/, "and then the one mint");
+  // ⚠ ORDER, NOT PRESENCE (release review 2026-10-11). Both matches above are satisfied by a
+  // function that mints FIRST and checks the sign-in afterwards — which is the exact defect
+  // 121aa fixed, and which this case called "gated on the sign-in" while passing. A mint above
+  // the gate hands a signed-out machine a bearer and revokes the previous one doing it
+  // (`obtainDeviceToken` is revoke-and-replace), so the ordering is the whole assertion.
+  assert.ok(
+    orderOf(mint, "await auth.ensureSignedIn()", "await obtainDeviceToken()"),
+    "the gate must run BEFORE the mint — swapping the two lines is the defect, not a style change"
+  );
+  // …and the gate's answer must be the thing that RETURNS, not merely something read first.
+  assert.match(mint, /if \(!\(await auth\.ensureSignedIn\(\)\)\) \{/, "a gate that does not return is not a gate");
   assert.ok(!/getClaudeBinPath|claudeAvailable|spawner\./.test(mint),
     "no CLI probe may reach the minting path again — that IS the defect");
 });

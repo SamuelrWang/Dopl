@@ -210,19 +210,57 @@ export async function scanWorkspaceMessageChannels(
 }
 
 
-/** Every channel id in the container — the credit scan's rule-B arm. ⚠ IDS
- *  ONLY: it fences a read, it never reaches a render, so a NAME here would be
- *  content crossing a fence it was not checked against. */
+/** How many channel ids the rule-B fence carries. ⚠ A HARD CAP ON A PAGE WALK,
+ *  never a `.limit()` — see {@link listWorkspaceChannelIds} for why asking for it
+ *  in one statement was the bug rather than the bound. */
+const WORKSPACE_CHANNEL_IDS_LIMIT = 10_000;
+
+/**
+ * Every channel id in the container — the credit scan's rule-B arm. ⚠ IDS
+ * ONLY: it fences a read, it never reaches a render, so a NAME here would be
+ * content crossing a fence it was not checked against.
+ *
+ * 🔒 **PAGED, BECAUSE THIS ARRAY *IS* THE AGGREGATES' FENCE (Samuel #2935).** It
+ * was an UNLIMITED select, so `supabase/config.toml › max_rows` answered the first
+ * 1,000 channels and raised nothing — and this list is the `p_channel_ids`
+ * argument of BOTH new aggregates ({@link sumWorkspaceCreditBins},
+ * {@link tallyWorkspaceCredits} in `repository-usage-tally.ts`) as well as the TS
+ * belt's `new Set(channelIds)` in `service-usage.ts › filterSeatBurns`. Past a
+ * thousand channels the aggregate therefore INHERITED the exact clip it was
+ * written to remove, THROUGH ITS OWN FENCE: every burn in a dropped channel
+ * vanished from the series and from both rails, with no marker anywhere — the
+ * aggregate cannot report a clip on rows its argument never named.
+ *
+ * ⚠ **THE ORDER IS NEW AND TOTAL: `channels.id` IS THE PRIMARY KEY.** This read
+ * had none, which one statement can afford and a page walk cannot — an unordered
+ * page may repeat an id the previous page already carried and skip another, and a
+ * skipped channel id is a silently unfenced burn.
+ * ⚠ ORDERED ON AND NEVER SELECTED is not available here (the projection IS `id`),
+ * so the total order costs nothing at all.
+ */
 export async function listWorkspaceChannelIds(
   workspaceId: string
 ): Promise<string[]> {
-  const { data, error } = await supabaseAdmin()
-    .from("channels")
-    .select("id")
-    .eq("workspace_id", workspaceId)
-    .is("deleted_at", null);
-  if (error) throw error;
-  return ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+  const { rows } = await readAllPages<{ id: string }>(
+    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+    // re-awaiting one re-sends the first range and the walk spins on page 0.
+    async (from, toInclusive) => {
+      const { data, error } = await supabaseAdmin()
+        .from("channels")
+        .select("id")
+        .eq("workspace_id", workspaceId)
+        .is("deleted_at", null)
+        .order("id", { ascending: true })
+        .range(from, toInclusive);
+      return { data: (data ?? []) as unknown as Array<{ id: string }>, error };
+    },
+    // ⚠ No `pageSize`: {@link readAllPages} already clamps its default to the
+    // SERVER's ceiling, which is what makes a short page proof of exhaustion
+    // rather than proof of a clip. Stated the same way as
+    // {@link listWorkspaceTokenSpend} below.
+    { hardCap: WORKSPACE_CHANNEL_IDS_LIMIT }
+  );
+  return rows.map((row) => row.id);
 }
 
 export interface WorkspaceSessionRow {
@@ -268,26 +306,54 @@ export async function listWorkspaceRunningSessions(
   return clipped((data ?? []) as WorkspaceSessionRow[], limit);
 }
 
+/** How many roster rows the by-person rail's fence carries. ⚠ A HARD CAP ON A
+ *  PAGE WALK, on {@link WORKSPACE_CHANNEL_IDS_LIMIT}'s argument. */
+const WORKSPACE_ROSTER_LIMIT = 10_000;
+
 /**
  * `userId → role` for every ACTIVE member — the roster, as the members console
  * reads it (`repository.ts › listMembers`; departure is a row DELETE, never a
  * status flip). 🔒 **The by-person rail's fence as well as its guest marker**:
  * a person absent from this map is absent from that rail.
  * ⚠ `workspace_members` is the ONLY table where `guest` exists.
+ *
+ * 🔒 **PAGED, AND THE SENTENCE ABOVE IS WHY (Samuel #2935).** This was an
+ * UNLIMITED select clipped at 1,000 active members server-side with no error — and
+ * it is simultaneously the rail's FENCE and its guest marker, so past a thousand
+ * members the two failures compounded: a person with real spend was dropped from
+ * the rail *and* from name resolution (`service-usage.ts › resolvePeopleNames`
+ * fetches profiles only for ids the roster carries), and nothing said so.
+ * ⚠ A marker could not have saved this read — the answer IS the map, so there is
+ * nothing to aggregate and {@link readAllPages} is the fix.
+ *
+ * ⚠ **THE ORDER IS NEW AND TOTAL: `workspace_members.id` IS THE PRIMARY KEY** (a
+ * surrogate `UUID`; `(workspace_id, user_id)` is merely UNIQUE). It is ORDERED ON
+ * AND NEVER SELECTED — ORDER BY reaches any column of the relation — so the
+ * two-column projection is untouched, the precedent `repository-token-spend.ts`
+ * set with `session_key`.
  */
 export async function listWorkspaceRoles(
   workspaceId: string
 ): Promise<Map<string, Role>> {
   const out = new Map<string, Role>();
-  const { data, error } = await supabaseAdmin()
-    .from("workspace_members")
-    .select("user_id, role")
-    .eq("workspace_id", workspaceId)
-    .eq("status", "active");
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{ user_id: string; role: Role }>) {
-    out.set(row.user_id, row.role);
-  }
+  const { rows } = await readAllPages<{ user_id: string; role: Role }>(
+    // ⚠ A FRESH QUERY PER PAGE — one-shot thenable.
+    async (from, toInclusive) => {
+      const { data, error } = await supabaseAdmin()
+        .from("workspace_members")
+        .select("user_id, role")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active")
+        .order("id", { ascending: true })
+        .range(from, toInclusive);
+      return {
+        data: (data ?? []) as unknown as Array<{ user_id: string; role: Role }>,
+        error,
+      };
+    },
+    { hardCap: WORKSPACE_ROSTER_LIMIT }
+  );
+  for (const row of rows) out.set(row.user_id, row.role);
   return out;
 }
 

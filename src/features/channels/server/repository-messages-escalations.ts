@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ESCALATION_ANSWER_METADATA_KEY, ESCALATION_METADATA_KEY } from "../escalation";
-import type { ChannelMessageRow } from "./dto";
+import { CHANNEL_MESSAGE_COLS, type ChannelMessageRow } from "./dto";
 
 /**
  * THE TYPED-ANSWER CANDIDATE READS (2026-09-05, task 13b).
@@ -43,10 +43,22 @@ const ESCALATION_SCAN_LIMIT = 25;
  * order monotonic, so "the most recent" is TOTAL — no tie is representable.
  * `created_at` would reintroduce a tie-break to get wrong.
  *
- * ⚠ `select("*")` because the service needs METADATA (the payload and the
- * server-stamped mentions that decide who may answer), the AUTHOR (the fallback
- * answerer) and `client_msg_id` (one of the two doors the derived `agentId`
- * comes from) — the same three columns `findMessageById` names its reason for.
+ * ⚠ **NAMED COLUMNS, NEVER `*` (2026-10-11).** The service needs METADATA (the
+ * payload and the server-stamped mentions that decide who may answer), the AUTHOR
+ * (the fallback answerer), `client_msg_id` (one of the two doors the derived
+ * `agentId` comes from) and `id` — but `select("*")` returns STORED GENERATED
+ * columns, so this read also carried 25 `search_tsv` vectors
+ * (`20261007120000`, roughly body-sized each) out of Postgres and through a JSON
+ * parse on the POST path **that every message pays** — the same waste
+ * `dto-rows.ts › CHANNEL_MESSAGE_COLS` was cut for one block of reads up.
+ *
+ * ⚠ **IT REUSES THAT CONSTANT RATHER THAN NAMING FOUR COLUMNS**, and the reason
+ * is the return type: this read answers {@link ChannelMessageRow}, the shape
+ * `service-writes-metadata-escalation.ts` holds its candidates in, and a
+ * four-column projection cast to that type would be a row claiming fields it
+ * does not have. Narrowing it properly means a narrower row type beside
+ * `CHANNEL_MESSAGE_COLS` and a service signature to match — both outside this
+ * change. The tsvector, which is the whole cost, is gone either way.
  */
 export async function listRecentEscalations(
   channelId: string,
@@ -55,7 +67,7 @@ export async function listRecentEscalations(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("channel_messages")
-    .select("*")
+    .select(CHANNEL_MESSAGE_COLS)
     .eq("channel_id", channelId)
     .not(`metadata->${ESCALATION_METADATA_KEY}`, "is", null)
     .order("seq", { ascending: false })

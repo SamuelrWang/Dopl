@@ -30,8 +30,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+// ⚠ IMPORTED FOR THE BEHAVIOURAL SECTION (2026-10-11). The two bounds this file is about are five and
+// fifteen minutes, so driving them needs a clock over the engine's one timer rather than patience.
+import * as clock from "./_engine-clock.mjs";
+import { engine, rt, frames, settle, registryReads, launchArgs, CHANNEL, ME } from "./_engine-harness.mjs";
 import { loadReducer } from "./_reducer-block.mjs";
 import { codeOf } from "./helpers/source-probe.mjs";
 
@@ -39,10 +44,35 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const QUERY = M("session-query.js");
 const ENGINE = M("session-engine.js");
+const { WORK_CAP_MS } = createRequire(import.meta.url)(join(HERE, "..", "main", "session-work-cap.js"));
 
 const {
   initialSessionState, sessionReducer, idleTimeout, LAUNCHING_MS, DEFAULT_IDLE_MS, ABANDONED_MS,
 } = loadReducer();
+
+engine.setSelfIdentity(ME);
+
+// Raw Claude frames the harness does not carry (`runtime/claude/normalize.js › renderEvents`).
+const toolUse = (id) => ({
+  type: "assistant",
+  parent_tool_use_id: null,
+  message: { content: [{ type: "tool_use", id, name: "Bash", input: { command: "ls" } }] },
+});
+const toolResult = (id) => ({
+  type: "user",
+  message: { content: [{ type: "tool_result", tool_use_id: id, is_error: false, content: "ok" }] },
+});
+
+/** One real windowless session on the real engine, with its runtime handle and registry entry. */
+async function liveSession(agentName) {
+  const before = rt.handles.length;
+  const res = await engine.launchResponderSession(launchArgs({ taskId: "", agentName }));
+  assert.ok(res && res.sessionId, `launched: ${JSON.stringify(res)}`);
+  await settle();
+  const s = registryReads.sessionOn({ channelId: CHANNEL, taskId: "", agentId: res.agentId });
+  assert.ok(s, "registered");
+  return { handle: rt.handles[before], s, agentId: res.agentId };
+}
 
 const launching = (opts) => initialSessionState(opts);
 const running = (opts) =>
@@ -74,9 +104,68 @@ test("there is ONE timer, so the watchdog cannot leak beside the idle one", () =
   // work re-arm is clamped to what is left of the continuous-work cap (`session-work-cap.js`) so a long
   // task is not parked mid-tool-call — but the clamp may only ever SHORTEN an `idle_timeout`. If it could
   // also choose the event, a cap could fire the launch watchdog and end a launch the transport can still
-  // recover, which is exactly what this file exists to prevent.
-  assert.match(ENGINE, /s\.idleTimer = setTimeout\(\(\) => \{ if \(!s\.settled\) dispatch\(s, \{ type: t\.type \}\); \}, ms\);/);
-  assert.match(ENGINE, /t\.type === 'idle_timeout'/, "the clamp is gated on the ORDINARY park, never the watchdog");
+  // recover, which is exactly what this file exists to prevent. The event this file's one arming site
+  // dispatches is `t.type` and nothing else.
+  assert.match(ENGINE, /dispatch\(s, \{ type: t\.type \}\)/, "the ONE event the timer can dispatch");
+  assert.equal(/dispatch\(s, \{ type: '/.test(codeOf(ENGINE).slice(codeOf(ENGINE).indexOf("function scheduleIdle("))), false,
+    "and scheduleIdle never names an event literally — it could only be the wrong one");
+});
+
+// ── 2b. THE CLAMP AND THE WATCHDOG, DRIVEN RATHER THAN GREPPED ───────────────────────
+//
+// ⚠ WHAT THESE REPLACE, AND WHY (2026-10-11, review item 6). This section used to be two regexes over
+// the WHOLE engine source: an exact match on the timer callback's text, and
+// `assert.match(ENGINE, /t\.type === 'idle_timeout'/, "the clamp is gated on the ORDINARY park")`. The
+// second one searched the entire file, so a COMMENT mentioning the expression satisfied it — and
+// nothing anywhere asserted that the engine actually shortens a work re-arm, or that it leaves the
+// watchdog alone. Both of those are now driven through the real engine over a virtual clock.
+
+test("THE ENGINE REALLY SHORTENS A WORK RE-ARM — the clamp, not a comment about the clamp", async () => {
+  const T0 = clock.freeze(Date.now());
+  const h = await liveSession("Clamp");
+  h.handle.feed(frames.init("sdk-clamp"));
+  await settle();
+  assert.equal(clock.armedMs(h.s), DEFAULT_IDLE_MS, "`launched` arms the ordinary TTL in full");
+
+  // Start a work stretch, then carry it to within five minutes of the two-hour cap.
+  h.handle.feed(toolUse("w1"));
+  h.handle.feed(toolResult("w1"));
+  await settle();
+  assert.equal(h.s.workSince, T0);
+  clock.advance(WORK_CAP_MS - 5 * 60 * 1000);
+  h.handle.feed(toolUse("w2"));
+  h.handle.feed(toolResult("w2"));
+  await settle();
+  assert.equal(clock.armedMs(h.s), 5 * 60 * 1000, "shortened to what the cap has left");
+  assert.ok(clock.armedMs(h.s) < DEFAULT_IDLE_MS, "a work re-arm only ever SHORTENS");
+});
+
+test("…and a live frame while LAUNCHING does not touch the watchdog AT ALL", async () => {
+  // THE DEFECT (review item 4). The clamp was gated on `t.type === 'idle_timeout'`; the ARMING was not.
+  // So a runtime that streams before `system/init` — an assistant block, a thinking block, a tool call —
+  // re-armed the five-minute WATCHDOG, at its full length and with no cap on top of it, on every frame.
+  // That is an unboundedly extendable bound on exactly the session this whole file exists to bound, and
+  // `scheduleIdle`'s own doc claimed the watchdog was "left exactly as they were".
+  clock.freeze(Date.now());
+  const h = await liveSession("Pre Init");
+  assert.equal(h.s.state.phase, "launching", "no `system/init` yet");
+  assert.equal(clock.armedMs(h.s), LAUNCHING_MS, "startQuery armed the watchdog");
+  const armed = h.s.idleTimer;
+
+  // Frames arrive BEFORE init. Each one is live work, so each one emits a work re-arm.
+  for (const f of [frames.say("thinking out loud"), toolUse("pre1"), frames.say("still going")]) {
+    h.handle.feed(f);
+    await settle();
+    assert.equal(h.s.idleTimer, armed, "the watchdog's own timer is untouched — not cleared, not re-armed");
+    assert.equal(h.s.state.phase, "launching");
+  }
+  assert.equal(clock.armedMs(h.s), LAUNCHING_MS, "and it still measures the launch, from the launch");
+
+  // …and it still FIRES, which is the property the extension defeated: the slot is freed.
+  clock.advance(LAUNCHING_MS);
+  assert.equal(clock.expire(h.s), true);
+  await settle();
+  assert.equal(h.s.state.phase, "ended", "a launch that never spoke is ended, and its slot freed");
 });
 
 // ── 2. THE NUMBER IS EVIDENCE ────────────────────────────────────────────────────────

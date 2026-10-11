@@ -5,32 +5,112 @@ import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
 import type { ChannelMemberRow } from "./dto";
 import { CHANNEL_MEMBER_ROWS_LIMIT } from "./repository-collab";
 
-/** All channels in the workspace the caller belongs to (ids + role + read). */
+/**
+ * A `Map` of counts THAT SAYS WHETHER IT IS COMPLETE — {@link memberCounts}'s
+ * return, and the honest marker half of the #2935 fix.
+ *
+ * ⚠ **THE MARKER RIDES THE `Map` RATHER THAN WRAPPING IT, AND THAT IS A
+ * COMPATIBILITY CHOICE, NOT A STYLE ONE.** The clean shape is
+ * `Clipped<Map<string, number>>`, and it would rewrite `service-list.ts` and the
+ * five suites that mock this function — a blast radius the surrounding change does
+ * not own. An optional property on the Map leaves every `.get()` caller and every
+ * `mockResolvedValue(new Map(...))` compiling while making the clip REACHABLE,
+ * which is the whole complaint. ⚠ When the grouped SQL aggregate lands (see below)
+ * the count is exact and this type goes with the walk.
+ *
+ * ⚠ **AND IT IS NON-ENUMERABLE** ({@link clipMarker}), so `Object.keys`, a
+ * `JSON.stringify` and a `toEqual` deep-compare see the Map they always saw.
+ */
+export type MemberCounts = Map<string, number> & { truncated?: boolean };
+
+/** Attach a read's `truncated` to the collection it describes, invisibly to
+ *  enumeration. ⚠ Its proper home is `shared/supabase/max-rows.ts` beside
+ *  {@link readAllPages}; it is local until that module is opened. */
+function clipMarker<T extends object>(value: T, truncated: boolean): T {
+  Object.defineProperty(value, "truncated", {
+    value: truncated,
+    enumerable: false,
+  });
+  return value;
+}
+
+/**
+ * All channels in the workspace the caller belongs to (ids + role + read).
+ *
+ * 🔒 **PAGED (Samuel #2935).** It was an UNLIMITED select clipped at 1,000 rows
+ * server-side with no error, and the caller builds the user's WHOLE CHANNEL LIST
+ * from it (`service-list.ts › listChannels`, `service-workspace-departure.ts`) —
+ * so a member of more than a thousand channels simply did not see the rest, and a
+ * departure sweep silently skipped them.
+ *
+ * ⚠ **THE ORDER IS NEW AND TOTAL.** `PRIMARY KEY (channel_id, user_id)` with
+ * `user_id` pinned by the `eq` above leaves `channel_id` unique WITHIN this
+ * result, which is exactly what a page walk needs; an unordered one may list one
+ * membership twice and drop another.
+ */
 export async function listMyMemberships(
   workspaceId: string,
   userId: string
 ): Promise<ChannelMemberRow[]> {
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_members")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId);
-  if (error) throw error;
-  return (data ?? []) as ChannelMemberRow[];
+  const { rows } = await readAllPages<ChannelMemberRow>(
+    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+    // re-awaiting one re-sends the first range and the walk spins on page 0.
+    async (from, toInclusive) => {
+      const { data, error } = await db
+        .from("channel_members")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", userId)
+        .order("channel_id", { ascending: true })
+        .range(from, toInclusive);
+      return { data: (data ?? []) as unknown as ChannelMemberRow[], error };
+    },
+    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  );
+  return rows;
 }
 
+/**
+ * ONE CHANNEL'S WHOLE ROSTER, oldest member first.
+ *
+ * 🔒 **PAGED, AND RECIPIENT RESOLUTION IS WHY (Samuel #2935).** It was an
+ * UNLIMITED `select("*")` clipped at 1,000 rows server-side with no error, and its
+ * consumers include ADDRESSING — `service-writes-metadata-recipient.ts` resolves
+ * an `@`-tag against this list, `service-writes-metadata.ts` fans notifications
+ * over it — so on a channel past a thousand members a real member read as
+ * "no such recipient" rather than as an error.
+ * ⚠ **THE CODEBASE ALREADY SAYS SUCH ROSTERS ARE EXPECTED**: this very change
+ * pages `channel_members` TWICE at a 10,000 ceiling ({@link memberCounts} here and
+ * `repository-collab.ts › channelMemberUserIds`), so a 1,000-row roster read was
+ * the odd one out, not the realistic one.
+ *
+ * ⚠ **`joined_at` IS NOT UNIQUE, SO IT IS TIE-BROKEN BY `user_id`.** Two members
+ * added in one transaction share a `joined_at` default of `now()`, and paging a
+ * non-unique ORDER BY lets Postgres return one row twice and skip another. The
+ * tie-break is appended rather than substituted, so the DISPLAY order the roster
+ * already had is unchanged; `(channel_id, user_id)` is the PRIMARY KEY and
+ * `channel_id` is pinned by the `eq`, so `(joined_at, user_id)` is unique here.
+ */
 export async function listMembers(
   channelId: string
 ): Promise<ChannelMemberRow[]> {
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_members")
-    .select("*")
-    .eq("channel_id", channelId)
-    .order("joined_at", { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as ChannelMemberRow[];
+  const { rows } = await readAllPages<ChannelMemberRow>(
+    // ⚠ A FRESH QUERY PER PAGE — one-shot thenable.
+    async (from, toInclusive) => {
+      const { data, error } = await db
+        .from("channel_members")
+        .select("*")
+        .eq("channel_id", channelId)
+        .order("joined_at", { ascending: true })
+        .order("user_id", { ascending: true })
+        .range(from, toInclusive);
+      return { data: (data ?? []) as unknown as ChannelMemberRow[], error };
+    },
+    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  );
+  return rows;
 }
 
 export async function findMembership(
@@ -137,14 +217,22 @@ export async function hasMembership(
  * cannot: an unordered page may repeat rows the previous page already counted,
  * and a double-counted membership row is an INFLATED member count — the same
  * wrong number from the opposite direction.
+ *
+ * ── 🔒 AND THE WALK'S OWN `truncated` WAS THROWN AWAY ──────────────────────
+ *
+ * 🔒 **AT THE 10,000 HARD CAP EVERY CHANNEL'S COUNT IS WRONG AGAIN**, for the
+ * same reason as before and one order of magnitude later: the walk returns
+ * `{ rows, truncated }` and this function kept only `rows`, so a count folded out
+ * of a capped haul was reported as exact. {@link MemberCounts} carries the marker
+ * now — see its own note for why it rides the `Map` rather than replacing it.
  */
 export async function memberCounts(
   channelIds: string[]
-): Promise<Map<string, number>> {
+): Promise<MemberCounts> {
   const counts = new Map<string, number>();
-  if (channelIds.length === 0) return counts;
+  if (channelIds.length === 0) return clipMarker(counts, false);
   const db = supabaseAdmin();
-  const { rows } = await readAllPages<{ channel_id: string }>(
+  const { rows, truncated } = await readAllPages<{ channel_id: string }>(
     // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
     // re-awaiting one re-sends the first range and the walk spins on page 0.
     async (from, toInclusive) => {
@@ -167,7 +255,7 @@ export async function memberCounts(
   for (const row of rows) {
     counts.set(row.channel_id, (counts.get(row.channel_id) ?? 0) + 1);
   }
-  return counts;
+  return clipMarker(counts, truncated);
 }
 
 type MemberInsert = {
@@ -191,16 +279,36 @@ export async function insertMember(
   return data as ChannelMemberRow;
 }
 
-/** Count of members with role='owner' — backs the last-owner-leave guard. */
+/**
+ * Count of members with role='owner' — backs the last-owner-leave guard.
+ *
+ * 🔒 **COUNTED, NEVER HAULED-AND-FOLDED (Samuel #2935).** It was
+ * `select("user_id") … .length` with NO bound at all, so `max_rows` would have
+ * clipped it at 1,000 silently — and this number gates `service-writes-members.ts
+ * › leaveChannel` (`countOwners(channel.id) <= 1`). An UNDER-count here is the one
+ * direction that matters: it admits the last owner's departure and leaves an
+ * ownerless channel. (A clip could only ever under-count, so the guard failed
+ * OPEN.)
+ *
+ * ⚠ **`head: true` + `count: "exact"` IS IMMUNE TO THIS WHOLE CLASS OF BUG**:
+ * `max_rows` bounds the response BODY and never the `Content-Range` total, so a
+ * counted read carries no row to clip. The sanctioned shape — see
+ * `analytics/server/health.ts › getMcpHealth` and
+ * `home/server/repository-overview.ts › countMetricInWindow`, and
+ * `shared/testing/postgrest-cap.ts`, whose fake deliberately leaves `count` exact
+ * for exactly this reason.
+ * ⚠ A `null` count is 0 rather than a throw-shaped surprise; the `error` arm still
+ * throws, because an UNREADABLE owner list must not read as "no owners".
+ */
 export async function countOwners(channelId: string): Promise<number> {
   const db = supabaseAdmin();
-  const { data, error } = await db
+  const { count, error } = await db
     .from("channel_members")
-    .select("user_id")
+    .select("user_id", { count: "exact", head: true })
     .eq("channel_id", channelId)
     .eq("role", "owner");
   if (error) throw error;
-  return (data ?? []).length;
+  return count ?? 0;
 }
 
 export async function deleteMember(

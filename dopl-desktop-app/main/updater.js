@@ -36,7 +36,11 @@
 // be mid-exchange with a live agent; the prompt names any live session and
 // defaults to "Later".
 
-const { app, Notification, dialog } = require('electron');
+// ⚠ `Notification` IS NOT DESTRUCTURED HERE ANY MORE (2026-10-11, release review). The
+// update-ready banner went on 2026-10-09 (Samuel's spec) and the binding outlived it with no
+// remaining use — only the comments below still mention the surface. An unused import of the
+// one API this module must not reach is the shape a reinstated banner would hide in.
+const { app, dialog } = require('electron');
 const { diag } = require('./diag');
 const { UPDATER } = require('./config');
 const policy = require('./update-policy');

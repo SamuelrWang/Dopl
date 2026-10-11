@@ -192,9 +192,21 @@ export function OntologyRow({
                        inline-block child square instead of ellipsing it.
                        EDGES KEEP THE OLD LOOK: relationships are edges, not
                        fields, and he asked for field names. */
+                    /* ⚠ A BLANK NAME PAINTS NOTHING, which is what it did before
+                       the badge existed. `label` has no `.min(1)` in
+                       `ontology/schema.ts` — `z.string().max(200)` — so an
+                       attribute with `label: ""` is a valid write. As plain
+                       text it was invisible; as a FILLED badge it became a
+                       ~6px dark-gray nub with `px-1.5 py-px` around nothing,
+                       which reads as a rendering fault rather than as missing
+                       data. The `<dd>` beside it has an `Empty` placeholder and
+                       the `<dt>` has none, so the conservative match is to
+                       render no badge rather than to invent copy for it. */
+                    row.label.trim() === "" ? null : (
                     <span className="inline-block max-w-full truncate rounded-[4px] bg-text-secondary px-1.5 py-px text-caption font-semibold text-text-on-invert">
                       {row.label}
                     </span>
+                    )
                   )}
                 </dt>
                 <dd className="min-w-0 flex-1 truncate text-caption text-text-primary">

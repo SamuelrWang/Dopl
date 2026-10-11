@@ -70,21 +70,35 @@ export function AgentLiveness({
 }
 
 /**
- * ENDED — the badge an agent wears beside its ID once it is over (Samuel,
- * 2026-08-22).
+ * **THE PILL'S GEOMETRY WITHOUT ITS FILL** — the shape, the padding and the type, and no
+ * statement about what colour it is (extracted 2026-10-10, #3081).
  *
- * ⚠ IT IS A RECORD, NOT A STATE. An ended agent is DEAD: every wake path refuses
- * and nothing revives it, but what it POSTED stays in the channel forever — which
- * is why the card has to say so. A reader who sees its messages, its card and no
- * marker cannot tell a finished agent from a quiet one.
+ * ⚠ **IT EXISTS BECAUSE ONE SURFACE NEEDS THIS PILL ON A DARK BANNER, WHERE THE BLACK FILL
+ * IS INVISIBLE.** The agent stream's outbound box names the post's addressees as pills in
+ * its own top bar (Samuel: *black pills naming who it was addressed to*), and that bar is
+ * already `--surface-cta` — or the agent's own colour, which is a dark ramp
+ * ({@link AgentPill}'s `color`). {@link AGENT_PILL_FACE} rendered there is a black
+ * pill on a black strip: the shape Samuel asked for, drawn so it cannot be read.
+ * ⚠ **SO THE DARK-BANNER CASE TAKES THE SHAPE AND SUPPLIES ITS OWN INK**
+ * (`agent-stream-sent-box.tsx › BANNER_PILL`), and there is still exactly one place the
+ * geometry is written. Copying four utilities into that file instead is the drift this
+ * module's header is about.
  *
- * ⚠ IT REPLACES THE LIVENESS ELEMENT ON THE ROW RATHER THAN JOINING IT. A pill
- * reading "Ended" beside a dot reading "Ended" is one fact said twice, and a
- * redundant pair drifts.
+ * 🔒 **`shrink-0` IS PART OF THE SHAPE AND A CALLER MAY OVERRIDE IT — STATED HERE, ONCE**
+ * (consolidated in the release review, 2026-10-11). `cn` is `tailwind-merge`, so a LATER
+ * `shrink` in the same `cn(...)` call wins over this `shrink-0`: a pill that refuses to
+ * shrink is CLIPPED by a parent's `truncate` with no `…` instead of eliding, and three
+ * pills on a 380px recipient line or banner have to elide. The argument used to be written
+ * out in full at all three call sites — `agent-activity.tsx`, `agent-stream-sent-box.tsx ›
+ * BANNER_PILL` and here — which is three copies of one fact about THIS constant. They now
+ * point at this note; the override itself is unchanged at every one of them.
  */
+export const AGENT_PILL_SHAPE =
+  "shrink-0 rounded-[6px] px-2 py-px text-micro font-medium";
+
 /**
  * **THE PILL'S FOUR UTILITIES, AS A STRING** — so a surface that needs the FACE but
- * cannot hand this component its `color` as a KEY still wears one recipe.
+ * cannot hand {@link AgentPill} its `color` as a KEY still wears one recipe.
  *
  * ⚠ **IT EXISTS FOR THE WORKING STRIP, AND ONLY BECAUSE OF WHO RESOLVES THE PAINT**
  * (2026-10-10). `agent-activity.tsx` is handed each agent's colour ALREADY RESOLVED
@@ -94,33 +108,13 @@ export function AgentLiveness({
  * alternatives were to flip that host contract or to copy these four utilities into
  * a second file and let the two drift. This is the third, and it is the same move
  * {@link AgentPill} itself was extracted by.
- * ⚠ **`shrink-0` IS PART OF THE FACE AND THE STRIP OVERRIDES IT** (`cn` is
- * tailwind-merge, so the later `shrink` wins): three pills on the recipient line have
- * to elide, and a pill that refuses to shrink clips hard instead of eliding.
+ * ⚠ **IT IS {@link AGENT_PILL_SHAPE} PLUS THE CTA FILL — THE SAME CLASS SET, AND THE
+ * ORDER IS THE ONE THING THAT MOVED** when the shape was split out (the two fill
+ * utilities are now last rather than mid-string). Nothing reads it as a literal, and the
+ * classes do not conflict with each other, so `cn`/tailwind-merge resolves the pair
+ * exactly as before. No caller moved and the ordinary black pill is still the default
+ * everywhere: that was a split, not a widening.
  */
-/**
- * **THE PILL'S GEOMETRY WITHOUT ITS FILL** — the shape, the padding and the type, and no
- * statement about what colour it is (extracted 2026-10-10, #3081).
- *
- * ⚠ **IT EXISTS BECAUSE ONE SURFACE NEEDS THIS PILL ON A DARK BANNER, WHERE THE BLACK FILL
- * IS INVISIBLE.** The agent stream's outbound box names the post's addressees as pills in
- * its own top bar (Samuel: *black pills naming who it was addressed to*), and that bar is
- * already `--surface-cta` — or the agent's own colour, which is a dark ramp
- * (`agent-bits.tsx › AgentPill.color`). {@link AGENT_PILL_FACE} rendered there is a black
- * pill on a black strip: the shape Samuel asked for, drawn so it cannot be read.
- * ⚠ **SO THE DARK-BANNER CASE TAKES THE SHAPE AND SUPPLIES ITS OWN INK**
- * (`agent-stream-sent-box.tsx › BANNER_PILL`), and there is still exactly one place the
- * geometry is written. Copying four utilities into that file instead is the drift this
- * module's header is about.
- * ⚠ **{@link AGENT_PILL_FACE} IS THIS PLUS THE CTA FILL — THE SAME CLASS SET, AND THE
- * ORDER IS THE ONE THING THAT MOVED** (the two fill utilities are now last rather than
- * mid-string). Nothing reads it as a literal, and the classes do not conflict with each
- * other, so `cn`/tailwind-merge resolves the pair exactly as before. No caller moved and
- * the ordinary black pill is still the default everywhere: this is a split, not a widening.
- */
-export const AGENT_PILL_SHAPE =
-  "shrink-0 rounded-[6px] px-2 py-px text-micro font-medium";
-
 export const AGENT_PILL_FACE = `${AGENT_PILL_SHAPE} bg-surface-cta text-text-on-cta`;
 
 /**
@@ -171,6 +165,24 @@ export function AgentPill({
   );
 }
 
+/**
+ * ENDED — the badge an agent wears beside its ID once it is over (Samuel,
+ * 2026-08-22).
+ *
+ * ⚠ IT IS A RECORD, NOT A STATE. An ended agent is DEAD: every wake path refuses
+ * and nothing revives it, but what it POSTED stays in the channel forever — which
+ * is why the card has to say so. A reader who sees its messages, its card and no
+ * marker cannot tell a finished agent from a quiet one.
+ *
+ * ⚠ IT REPLACES THE LIVENESS ELEMENT ON THE ROW RATHER THAN JOINING IT. A pill
+ * reading "Ended" beside a dot reading "Ended" is one fact said twice, and a
+ * redundant pair drifts.
+ *
+ * ⚠ **IT SAT ABOVE {@link AGENT_PILL_SHAPE} UNTIL THE 2026-10-11 RELEASE REVIEW**, three
+ * docblocks deep in a stack where only the last one attached to anything — so the two
+ * pill recipes were documented by each other's notes and this component by none. Moved,
+ * not reworded.
+ */
 export function AgentEndedPill({
   label = "Ended",
   className,

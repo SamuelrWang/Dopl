@@ -2,7 +2,9 @@
 // "Launch agent" button spawns the responder session (the body click opens the thread; dismiss does
 // nothing). No consent row: outbound approval still gates what the agent posts
 // (`session-windowless.js › bridgeOutbound`). `handleTrigger` returns a REASON STRING only when
-// nothing could act, so `listener-messages.drainPage` holds the cursor on that seq (C-3).
+// nothing could act, so `listener-messages.drainPage` holds the cursor on that seq (C-3) — today
+// 'no-agent-runtime' and 'no-ask-surface'. ⚠ A MUTED `peer_ask` is NOT one of them: a mute
+// silences the banner, it does not make the ask unanswerable. See `handleTrigger`.
 
 // ⚠ `electron` is no longer required here: `sendFyi` routes through `notification-route` and
 // `notifyAsk` builds its actionable banner in `notify-action.js`. This module raises nothing
@@ -83,6 +85,7 @@ function notifyAsk({ channelName, requesterName, summary, bodyPreview, runsIn, t
   // channel — where the launch control already lives. A spawn is never moved into a toast that
   // auto-dismisses, and this keeps `notify-action.js`'s rule intact: the click navigates, the
   // button decides, and only the banner has the button.
+  // ⚠ ITS ANSWER IS READ BY `handleTrigger` — `MUTED` is not `null`; see there.
   return notificationRoute.raiseActionable('peer_ask', {
     title: channelName, body, actionText: 'Launch agent', onAffirm: onLaunch, onOpen,
   });
@@ -109,7 +112,7 @@ async function handleTrigger(entry, m) {
   const taskId = taskIdFor(entry, m);
   diag('ask notify:', entry.channel.id.slice(0, 8), 'seq', m.seq, 'profile', toolProfile);
 
-  notifyAsk({
+  const raised = notifyAsk({
     channelName: entry.channel.name,
     requesterName,
     summary,
@@ -124,6 +127,26 @@ async function handleTrigger(entry, m) {
     },
     onOpen: () => targeting.openChannelForEntry(entry, { threadId: inboundTaskId || null }),
   });
+  // ⚠ A MUTE SILENCES THE SURFACE AND NOTHING ELSE (Samuel's spec; @orchestrator, 2026-10-10).
+  // `raiseActionable` runs the operator's switch, so muting `peer_ask` used to answer `null` here
+  // — which this line ignored, so the ask was CONSUMED with no launch and no courtesy reply. The
+  // route now answers the truthy `MUTED` for that case, and it is HANDLED exactly as an un-pressed
+  // banner is: the cursor advances, the thread and the Tags inbox still hold the ask, and the
+  // launch control in the channel still launches it. The launch path is untouched — a mute must
+  // never auto-launch either.
+  if (raised === notificationRoute.MUTED) {
+    diag('ask notify muted —', entry.channel.id.slice(0, 8), 'seq', m.seq,
+      '— no banner; the thread still holds the ask and the channel still launches it');
+    return;
+  }
+  // ⚠ NOTHING COULD BE RAISED AT ALL (not a mute): no banner, no toast, not even the route's
+  // last-resort banner. The operator will never be asked, so the peer waits forever on a message
+  // this machine would otherwise mark read. That is exactly C-3's "I could not do this and the
+  // message must not be lost": answer a reason and let `drainPage` hold the cursor for a retry.
+  if (!raised) {
+    diag('ask notify: NO surface could be raised — holding the cursor rather than consuming it');
+    return 'no-ask-surface';
+  }
 }
 
 /**

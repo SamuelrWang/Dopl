@@ -53,7 +53,7 @@
  */
 
 import { marked, type Token, type Tokens } from "marked";
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 // ⚠ THE LINK POLICY IS ITS OWN FILE since 2026-08-22 (`message-markdown-links.tsx`),
 // split on the SECURITY seam rather than an arbitrary cut: the allow-list changes when
@@ -131,6 +131,50 @@ export function bodyContextOf({
     newestSeq,
     onJumpToSeq,
   };
+}
+
+/**
+ * 🔒 **A PREVIEW LANE RENDERS LINKS AS TEXT — WHICH LANES DRAW AN `<a>` AT ALL**
+ * (release review, 2026-10-11).
+ *
+ * ⚠ **THE DEFECT IT CLOSES IS A ONE-CLICK TWO-ACTION, AND IT ARRIVED WITH THE
+ * PREVIEW ARM.** `message-markdown-inline.tsx` lexes with GFM AUTOLINKS ON, so a
+ * bare `https://…` — and `a@b.com`, which lexes to a `mailto` link — became a
+ * live anchor in lanes that had always been plain text. In `mentions-list.tsx`
+ * the whole row is a `<button onClick={onOpen}>`, so that anchor sat INSIDE an
+ * interactive element: invalid HTML, and one press both opened a peer-chosen URL
+ * in the user's real browser and fired the row. `ExternalAnchor` preempts the
+ * default only on the SPA renderer and never stops propagation, so neither half
+ * could be fixed there without changing the body lanes too.
+ *
+ * ⚠ **IT IS A POLICY ABOUT LANES, NOT ABOUT SCHEMES.** `message-markdown-links.tsx
+ * › safeHref` is unchanged and still the one allow-list; this decides whether the
+ * allowed href becomes an anchor or whether the link's own WORDS render instead —
+ * which is already what an href that fails the allow-list does, so there is one
+ * no-anchor rendering rather than two.
+ *
+ * ⚠ **A CONTEXT RATHER THAN A FIELD ON {@link BodyContext}, AND THE REASON IS
+ * `agent-stream-prose.tsx`.** Two preview lanes (the folded artifact's summary,
+ * the outbound consent card's draft) reach this renderer THROUGH `StreamProse`,
+ * which builds the body context itself and has no business learning what a
+ * preview is. A field would have to be threaded through that adapter and every
+ * future one; a provider is read where the decision is made.
+ * ⚠ **DEFAULT OFF.** A message BODY keeps its anchors — that is the whole of
+ * `ExternalAnchor`'s reason to exist — and a lane opts in by wrapping its own
+ * subtree, which is where the claim "this is a fragment somebody will click" is
+ * actually true.
+ */
+const LinksAsText = createContext(false);
+
+/**
+ * Wrap a PREVIEW lane's subtree: every link inside renders as its own text.
+ *
+ * ⚠ **WRAP THE PREVIEW, NEVER A COLUMN THAT ALSO HOLDS BODIES.** The flag is
+ * inherited, so a provider around a transcript would silently strip the anchors
+ * off every message in it.
+ */
+export function TextOnlyLinks({ children }: { children: ReactNode }) {
+  return <LinksAsText.Provider value={true}>{children}</LinksAsText.Provider>;
 }
 
 export function MessageMarkdown({ text, ...rest }: { text: string } & BodyContextInput) {
@@ -401,23 +445,8 @@ export function Inline({ tokens, ctx }: { tokens?: Token[]; ctx: BodyContext }):
             return <br key={i} />;
           case "link":
             return <MessageLink key={i} token={token as Tokens.Link} ctx={ctx} />;
-          case "image": {
-            // ⚠ NO REMOTE IMAGE IS LOADED FROM A MESSAGE BODY. An `<img>` whose
-            // src an author chooses is a read receipt and an IP disclosure for
-            // every member who scrolls past it, fetched before anybody decided
-            // to look. The link is offered instead, so nothing is hidden and
-            // nothing is fetched until it is clicked.
-            const t = token as Tokens.Image;
-            const href = safeHref(t.href);
-            const label = t.text || t.title || "image";
-            return href ? (
-              <ExternalAnchor key={i} href={href}>
-                {label}
-              </ExternalAnchor>
-            ) : (
-              <span key={i}>{label}</span>
-            );
-          }
+          case "image":
+            return <MessageImage key={i} token={token as Tokens.Image} />;
           // ⚠ RULE 1, AT THE INLINE LEVEL.
           case "html":
             return <span key={i}>{(token as Tokens.HTML).raw}</span>;
@@ -429,10 +458,26 @@ export function Inline({ tokens, ctx }: { tokens?: Token[]; ctx: BodyContext }):
   );
 }
 
-/** A markdown link, or — when its href is not one this surface will follow — the
- *  link's own TEXT, so the words survive even though the destination does not. */
+/**
+ * ⚠ NO REMOTE IMAGE IS LOADED FROM A MESSAGE BODY. An `<img>` whose src an author
+ * chooses is a read receipt and an IP disclosure for every member who scrolls
+ * past it, fetched before anybody decided to look. The link is offered instead,
+ * so nothing is hidden and nothing is fetched until it is clicked.
+ *
+ * ⚠ ITS OWN COMPONENT SINCE 2026-10-11 so {@link TextOnlyLinks} can be READ here —
+ * `Inline` is recursive and must stay a plain mapper.
+ */
+function MessageImage({ token }: { token: Tokens.Image }) {
+  const href = useContext(LinksAsText) ? null : safeHref(token.href);
+  const label = token.text || token.title || "image";
+  return href ? <ExternalAnchor href={href}>{label}</ExternalAnchor> : <span>{label}</span>;
+}
+
+/** A markdown link, or — when this lane draws no anchors ({@link TextOnlyLinks}),
+ *  or its href is not one this surface will follow — the link's own TEXT, so the
+ *  words survive even though the destination does not. */
 function MessageLink({ token, ctx }: { token: Tokens.Link; ctx: BodyContext }) {
-  const href = safeHref(token.href);
+  const href = useContext(LinksAsText) ? null : safeHref(token.href);
   if (!href) return <Inline tokens={token.tokens} ctx={ctx} />;
   return (
     <ExternalAnchor href={href} title={token.title ?? undefined}>

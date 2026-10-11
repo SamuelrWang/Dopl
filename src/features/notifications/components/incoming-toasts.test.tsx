@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { IncomingToasts } from "./incoming-toasts";
 import { ToastHost } from "@/shared/ui/toast";
 
@@ -17,13 +17,18 @@ afterEach(() => {
   else (globalThis as { dopl?: unknown }).dopl = original;
 });
 
-/** Exactly what main pushes over `onToast`. */
+/**
+ * Exactly what main pushes over `onToast`.
+ * ⚠ `sticky` WAS MISSING HERE (2026-10-10), which is why it was unasserted end to end: the push
+ * helper could not even express it, so deleting `t.sticky ?` from the component broke nothing.
+ */
 type ToastPush = {
   eventId: string;
   title: string;
   body?: string;
   openId?: string;
   actionLabel?: string;
+  sticky?: boolean;
   kind: "incoming";
 };
 
@@ -51,6 +56,7 @@ function installBridge(opts: { onToast?: unknown } = {}) {
         body: t.body,
         openId: t.openId,
         actionLabel: t.actionLabel,
+        sticky: t.sticky,
         kind: "incoming",
       }),
     off,
@@ -155,5 +161,127 @@ describe("IncomingToasts > an actionable event raised while Dopl is in front", (
     push({ eventId: "draft_reply", title: "Design", openId: "open-2", actionLabel: "Open" });
     const open = await screen.findByRole("button", { name: "Open" });
     expect(() => open.click()).not.toThrow();
+  });
+});
+
+describe("IncomingToasts > the ack main waits for", () => {
+  it("acks on mount, with main's reserved handle, so a held toast is released", async () => {
+    // ⚠ LOAD-BEARING, NOT TELEMETRY. `webContents.send` does not throw into a window whose
+    // renderer has not mounted this subscriber, so main counted a push into an unmounted window
+    // as DELIVERED — losing the startup resume offer on every cold start. Main now HOLDS a toast
+    // until this ack and raises the OS banner without it.
+    const { openFromToast } = installBridge();
+    render(<IncomingToasts />);
+    await waitFor(() => expect(openFromToast).toHaveBeenCalledWith("toast-ready"));
+  });
+
+  it("does NOT ack when the subscribe throws: main must fall back to the banner", () => {
+    const off = vi.fn();
+    const openFromToast = vi.fn(() => Promise.resolve({ ok: true }));
+    (globalThis as { dopl?: unknown }).dopl = {
+      apiRequest: vi.fn(),
+      notifications: {
+        refresh: vi.fn(),
+        onToast: () => {
+          throw new Error("ipc down");
+        },
+        openFromToast,
+      },
+    };
+    expect(() => render(<IncomingToasts />)).not.toThrow();
+    expect(openFromToast).not.toHaveBeenCalled();
+    expect(off).not.toHaveBeenCalled();
+  });
+});
+
+describe("IncomingToasts > the single slot, and the yield contract", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("⚠ QUEUES: two mentions inside one slot life show as TWO, not as one", async () => {
+    // THE DEFECT. `t.kind` was never read and every push overwrote the single slot
+    // (`toast.tsx › currentToast`), so the second of two mentions arriving within the slot's 4s
+    // life silently replaced the first and the operator saw one notification for two facts.
+    const { push } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({ title: "Ada mentioned you" });
+    push({ title: "Bea mentioned you" });
+
+    expect(await screen.findByText("Ada mentioned you")).toBeTruthy();
+    expect(screen.queryByText("Bea mentioned you")).toBeNull();
+    // Ada's turn ends; Bea takes the slot rather than having been thrown away.
+    expect(await screen.findByText("Bea mentioned you", undefined, { timeout: 6000 })).toBeTruthy();
+  }, 10000);
+
+  it("shows the body as a second line, and only the title when there is none", async () => {
+    // `variant: "invert"` renders the TITLE ONLY, so a push carrying a body has to take the
+    // default card face or that body is unreachable — `tool_blocked`'s only surface is this one.
+    const { push } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({ eventId: "tool_blocked", title: "Bash was blocked", body: "ask again to allow it" });
+    expect(await screen.findByText("Bash was blocked")).toBeTruthy();
+    expect(await screen.findByText("ask again to allow it")).toBeTruthy();
+  });
+
+  it("a sticky toast survives long past every other toast's life", async () => {
+    // ⚠ `sticky` WAS UNASSERTED END TO END. The push type did not declare it and no test sent
+    // one, so deleting `t.sticky ?` from the component broke nothing — and the resume offer is
+    // raised ONCE at startup, so a 15-second life would simply lose it.
+    vi.useFakeTimers();
+    const { push } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    await act(async () => {
+      push({
+        eventId: "session_resume",
+        title: "Resume session",
+        body: "A Dopl session was interrupted.",
+        openId: "resume-1",
+        actionLabel: "Resume",
+        sticky: true,
+      });
+    });
+    expect(screen.getByRole("button", { name: "Resume" })).toBeTruthy();
+
+    // Past the 15s an ordinary actionable toast gets, and past the 4s a plain one gets.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15001);
+    });
+    expect(screen.getByRole("button", { name: "Resume" })).toBeTruthy();
+    expect(screen.getByText("Resume session")).toBeTruthy();
+  });
+
+  it("a NON-sticky actionable toast does expire, which is what makes sticky mean something", async () => {
+    vi.useFakeTimers();
+    const { push } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    await act(async () => {
+      push({ eventId: "peer_ask", title: "Design", openId: "open-9", actionLabel: "Open" });
+    });
+    expect(screen.getByRole("button", { name: "Open" })).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15001);
+    });
+    expect(screen.queryByRole("button", { name: "Open" })).toBeNull();
   });
 });

@@ -238,12 +238,34 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
     );
   });
 
-  it("🔒 ANSWERS THE READ WHEN THE WATERMARK WRITE FAILS", async () => {
+  it("🔒 DOES NOT WAIT FOR THE WATERMARK WRITE", async () => {
     // **OPTION H, 2026-10-10: the bump is off the response path.** It is a
     // `channel_members` UPDATE round trip and nothing in the answer derives from
-    // it, so it must neither delay the read nor be able to fail it. The docblock
-    // called it best-effort while the read `await`ed it inside a try/catch; now
-    // the read does not wait, and a rejection has nowhere to surface.
+    // it, so it must neither DELAY the read nor be able to fail it.
+    //
+    // ⚠ **A WRITE THAT NEVER SETTLES, AND THAT IS THE ONLY MOCK THAT PINS THIS
+    // (2026-10-11).** A REJECTING write proves only that the failure does not
+    // propagate — which the pre-change `await` inside a try/catch satisfied too,
+    // so that assertion passed over the old code and locked nothing. Worse, in
+    // vitest `after()` throws (no request scope) and `detach` runs the work
+    // INLINE, so an `await` here would hang the response: a promise that never
+    // resolves is what tells the two apart. If this test ever times out, the
+    // bump is back on the critical path.
+    vi.mocked(repo.updateLastRead).mockReturnValue(new Promise<void>(() => {}));
+    vi.mocked(repoMessages.listMessages).mockResolvedValue([
+      messageRow(1, "2026-07-27T10:00:00.000Z"),
+    ]);
+
+    const messages = await readMessages(ctx, "general", { limit: 50 });
+
+    expect(messages).toHaveLength(1);
+    expect(repo.updateLastRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("🔒 ANSWERS THE READ WHEN THE WATERMARK WRITE FAILS", async () => {
+    // The other half: a rejection has nowhere to surface. Weaker than the case
+    // above (see its note) and kept because `detach` swallowing the rejection is
+    // what keeps it off the request AND out of the process as an unhandled one.
     vi.mocked(repo.updateLastRead).mockRejectedValue(new Error("write failed"));
     vi.mocked(repoMessages.listMessages).mockResolvedValue([
       messageRow(1, "2026-07-27T10:00:00.000Z"),
