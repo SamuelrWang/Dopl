@@ -14,8 +14,9 @@
  * rail tab and picker row) and `channels/components/attribution-pill.tsx › attributionName`
  * (every transcript row) each carried their own `` `#${agentId}` `` — and the pill was EXEMPTED
  * from the sweep that was supposed to catch exactly that (`agent-id-visibility.test.ts`). A
- * third reader has since appeared on the server (`home/server/overview-tally.ts › mapAgents`,
- * which fell back to `channel_sessions.name`, i.e. the id itself). Three copies, one string.
+ * third reader appeared on the server (home/server/overview-tally.ts's mapAgents, deleted
+ * 2026-09-20 with the Activity panel, which fell back to `channel_sessions.name`, i.e. the id
+ * itself). Three copies, one string.
  *
  * ⚠ **IT IS A FACE, NEVER A STORED NAME, ON EVERY PATH BUT ONE.** `main/agent-names.js` still
  * answers `null` for an agent nobody named, and that ABSENCE is what several modules key on
