@@ -46,6 +46,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { deviceTokenWorld, SPAWN_JSON } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -54,7 +55,6 @@ const AUTH = M("auth.js");
 const COOKIES = M("auth-cookies.js");
 const LISTENER = M("channel-listener.js");
 const PRESENCE = M("presence.js");
-const MCP = M("mcp-config.js");
 
 const { signedInFrom } = new Function(
   `${between(STATE, "// ─── BEGIN SIGNED-IN", "// ─── END SIGNED-IN", "signed-in block")}
@@ -235,7 +235,7 @@ test("the dark-listener gates all consult the shared gate", () => {
   assert.match(LISTENER, /auth\.isSignedIn\(\)/, "tray status line");
 });
 
-test("the two async gates await ensureSignedIn, so a cold cache never skips them", () => {
+test("the two async gates await ensureSignedIn, so a cold cache never skips them", async () => {
   // reconcile and mcp-config both run at boot, BEFORE any probe has warmed the
   // cookie cache. A sync read there would answer 'signed out' from a cold start
   // with a dead blob — the exact skip that wedged want=0 across reboots.
@@ -245,9 +245,13 @@ test("the two async gates await ensureSignedIn, so a cold cache never skips them
   // an EXTERNAL-CLI probe used to sit between this gate and the mint and returned before it, so
   // a Mac with no separately installed `claude` never got a device token at all. The gate itself
   // is unchanged and still async for the reason above — the cold-cache claim is the same claim.
-  assert.match(fnOf(MCP, "ensureDeviceTokenInner"), /await auth\.ensureSignedIn\(\)/);
-  assert.match("async " + fnOf(MCP, "ensureMcpConfigInner"), /await ensureDeviceToken\(\)/,
-    "and the ensure still passes through it, so the gate is not bypassable");
+  // Driven for real (`_device-token-harness.mjs`): the gate answers a PROMISE of false, so an
+  // un-awaited gate reads it as truthy and mints — which is what the fetch fake would record.
+  const world = deviceTokenWorld({ signedIn: false, fetch: () => { throw new Error("minted while signed out"); } });
+  await world.config.ensureMcpConfig();
+  assert.equal(world.calls.signedIn, 1, "mcp-config's ensure passes through the mint's gate, so it is not bypassable");
+  assert.deepEqual(world.calls.fetches, [], "a signed-out answer stops the mint");
+  assert.ok(!world.calls.seq.includes("probe"), "…and everything after it");
 });
 
 test("auth failures reach listener.log, not just an invisible console", () => {
@@ -374,12 +378,20 @@ test("signOut clears the device token as well as the blob and the jar", () => {
 });
 
 test("clearDeviceToken removes BOTH on-disk copies and the in-memory one", () => {
-  const fn = fnOf(MCP, "clearDeviceToken");
-  assert.match(fn, /store\.delete\(DT_KEY\)/, "the safeStorage-encrypted key");
-  assert.match(fn, /store\.delete\(DT_KEY_PLAIN\)/, "…and the plaintext fallback key");
-  assert.match(fn, /fs\.rmSync\(spawnConfigPath\(\)/, "…and mcp-spawn.json, if an older build left one");
-  assert.match(fn, /spawnToken = ''/, "…and the memoized copy buildMcpServers injects");
-  assert.match(codeOf(MCP), /module\.exports = \{[^}]*\bclearDeviceToken,/, "exported for auth-state.signOut");
+  // The real teardown, through mcp-config's export, over a store holding BOTH keys (a keychain
+  // that came and went) and an mcp-spawn.json an older build left behind.
+  const world = deviceTokenWorld({ record: { token: "dopl_at_live", expiresAt: 0 }, spawnFile: "{}" });
+  const { DT_KEY, DT_KEY_PLAIN } = world.storeMod;
+  world.store.set(DT_KEY_PLAIN, JSON.stringify({ token: "dopl_at_plain", expiresAt: 0 }));
+  assert.ok(world.store.get(DT_KEY) && world.store.get(DT_KEY_PLAIN), "control: both keys start populated");
+  assert.equal(world.config.deviceTokenForSpawn(), "dopl_at_live", "control: the memo is warm");
+  assert.equal(typeof world.config.clearDeviceToken, "function", "exported for auth-state.signOut");
+  assert.equal(world.config.clearDeviceToken(), true);
+  assert.equal(world.store.get(DT_KEY), undefined, "the safeStorage-encrypted key");
+  assert.equal(world.store.get(DT_KEY_PLAIN), undefined, "…and the plaintext fallback key");
+  assert.equal(world.files.has(SPAWN_JSON), false, "…and mcp-spawn.json, if an older build left one");
+  assert.deepEqual(world.calls.rms[0].opts, { force: true });
+  assert.equal(world.config.deviceTokenForSpawn(), "", "…and the memoized copy buildMcpServers injects");
 });
 
 // F-085 closed the server half: the endpoint is no longer mint-only, and signOut now calls
@@ -391,7 +403,7 @@ test("signOut revokes server-side FIRST, while the cookie session still authenti
   assert.notEqual(revokeAt, -1, "the server-side revoke must be part of sign-out");
   assert.ok(revokeAt < fn.indexOf("blob.clearSession()"), "before the blob");
   assert.ok(revokeAt < fn.indexOf("cookies.clearSessionCookies()"), "and before the jar it authenticates on");
-  assert.match(codeOf(MCP), /module\.exports = \{[^}]*\brevokeDeviceToken,/, "exported for auth-state.signOut");
+  assert.equal(typeof deviceTokenWorld().config.revokeDeviceToken, "function", "exported for auth-state.signOut");
 });
 
 // ── SMALL: A BROKEN KEYCHAIN MUST NOT DOWNGRADE A CREDENTIAL TO CLEARTEXT ───

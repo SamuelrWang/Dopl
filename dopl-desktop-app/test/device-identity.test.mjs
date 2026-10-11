@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { deviceTokenWorld, minted } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -205,11 +206,11 @@ function fnOf(src, name) {
   throw new Error(`unbalanced ${name}`);
 }
 
+// The REAL accessor, through mcp-config's re-export, over a seeded store (`_device-token-harness.mjs`).
 function linkFn(rec) {
-  return new Function(
-    "loadDeviceToken", "deviceLabel", "isUuid",
-    `${fnOf(M("mcp-config.js"), "deviceTokenLink")}\n return deviceTokenLink;`
-  )(() => rec, () => "Dopl Desktop CLI (recomputed)", require("../main/ipc-guards.js").isUuid);
+  const world = deviceTokenWorld({ record: rec, hostname: "recomputed" });
+  assert.equal(typeof world.config.deviceTokenLink, "function", "deviceTokenLink must be exported by mcp-config");
+  return world.config.deviceTokenLink;
 }
 
 const TID = "3f2c1a9e-8b7d-4c6e-9f1a-2b3c4d5e6f70";
@@ -220,15 +221,31 @@ test("deviceTokenLink: tokenId when persisted, else the minted/recomputed label,
   assert.deepEqual(linkFn({ token: "t", tokenId: "not-a-uuid" })(), { tokenLabel: "Dopl Desktop CLI (recomputed)" });
   assert.equal(linkFn({ label: "orphan" })(), null);
   assert.equal(linkFn(null)(), null);
-  const MCP = M("mcp-config.js");
-  assert.match(MCP, /\n {2}deviceTokenLink,/, "exported");
-  assert.match(MCP, /\n {2}onDeviceTokenMinted,/, "exported");
-  assert.equal(/currentDeviceTokenLabel/.test(MCP), false, "per-beat label read is gone");
+  assert.equal(typeof deviceTokenWorld().config.onDeviceTokenMinted, "function", "exported");
+  for (const f of ["mcp-config.js", "mcp-device-token-lifecycle.js"]) {
+    assert.equal(/currentDeviceTokenLabel/.test(M(f)), false, `${f}: per-beat label read is gone`);
+  }
 });
 
-test("obtainDeviceToken persists tokenId (when the server sends one) and notifies in memory", () => {
-  const body = fnOf(M("mcp-config.js"), "obtainDeviceToken");
-  assert.match(body, /if \(isUuid\(data\.tokenId\)\) rec\.tokenId = data\.tokenId;/);
-  assert.ok(body.indexOf("saveDeviceToken(rec)") < body.indexOf("notifyMinted("), "persist, then notify");
-  assert.match(body, /notifyMinted\(rec\.tokenId \? \{ tokenId: rec\.tokenId \} : \{ tokenLabel: label \}\)/);
+test("obtainDeviceToken persists tokenId (when the server sends one) and notifies in memory", async () => {
+  const mint = async (tokenId) => {
+    const world = deviceTokenWorld({
+      hostname: "mac",
+      fetch: minted({ token: "t-new", expiresAt: Date.now() + 90 * 86400e3, ...(tokenId ? { tokenId } : {}) }),
+    });
+    const heard = [];
+    world.config.onDeviceTokenMinted((link) => heard.push({ link, storedAtNotify: world.stored() }));
+    assert.equal(await world.config.ensureDeviceToken(), "t-new");
+    return { world, heard };
+  };
+  const withId = await mint(TID);
+  assert.equal(withId.world.stored().tokenId, TID, "a UUID tokenId is persisted");
+  assert.deepEqual(withId.heard.map((h) => h.link), [{ tokenId: TID }], "and the heartbeat hears the id");
+  assert.equal(withId.heard[0].storedAtNotify.token, "t-new", "persist, then notify");
+  const noId = await mint(null);
+  assert.equal("tokenId" in noId.world.stored(), false);
+  assert.deepEqual(noId.heard.map((h) => h.link), [{ tokenLabel: "Dopl Desktop CLI (mac)" }], "older server: link by label");
+  const badId = await mint("not-a-uuid");
+  assert.equal("tokenId" in badId.world.stored(), false, "a non-UUID id is never persisted");
+  assert.deepEqual(badId.heard.map((h) => h.link), [{ tokenLabel: "Dopl Desktop CLI (mac)" }]);
 });

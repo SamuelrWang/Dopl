@@ -38,9 +38,9 @@
 // `Authorization: Bearer …` back out, so §3 pins that the parser takes the URL line ONLY and
 // that no diag on this path is handed anything parsed out of that stdout.
 //
-// METHOD is the directory idiom: both modules are electron-bound (app.getPath / safeStorage /
-// electron-store / child_process), so the functions under test are source-extracted and driven
-// with fakes.
+// METHOD (cleanup D04, 2026-10-11): the REAL `mcp-config.js` + `mcp-device-token-lifecycle.js`
+// + `mcp-device-token.js`, each loaded whole over a strict stub map (`_device-token-harness.mjs`),
+// and the REAL `mcp-cli-add.js` over a fake `execFile`. No function body is sliced any more.
 //
 // Run: `node --test dopl-desktop-app/test/mcp-entry-origin.test.mjs`
 
@@ -49,90 +49,49 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { fnOf } from "./helpers/source-probe.mjs";
+import { loadWithStubs } from "./helpers/module-sandbox.mjs";
+import { deviceTokenWorld, freshRecord, minted, MCP_URL } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
-const CONFIG = M("mcp-config.js");
-const CLI_ADD = M("mcp-cli-add.js");
-
-// ⚠ `fnOf` anchors on the `function` keyword, so it drops a leading `async` — and this function
-// is `async` and full of `await`. Re-attached here rather than loosening the shared probe.
-const ENSURE = "async " + fnOf(CONFIG, "ensureMcpConfigInner");
-// ⚠ THE MINT MOVED OUT OF THE ENSURE ON 2026-10-10 (device-token-fix) and the REAL control flow is
-// now split across these two, so both are sliced in rather than faked: the sign-in gate and the
-// "did it mint" branch are the halves this file's §3 pins, and a fake would pin the fake.
-const ENSURE_TOKEN = "async " + fnOf(CONFIG, "ensureDeviceTokenInner");
-const ENSURE_TOKEN_FLIGHT = fnOf(CONFIG, "ensureDeviceToken");
-const PARSE = fnOf(CLI_ADD, "parseEntryUrl");
-
-const OURS = "http://localhost:3001/api/mcp";
+const OURS = MCP_URL; // the origin this boot talks to
 const STALE = "http://localhost:3000/api/mcp";
 const PROD = "https://www.usedopl.com/api/mcp";
 
 // ── the driver ───────────────────────────────────────────────────────────────
-// The REAL `ensureMcpConfigInner`, with every collaborator injected. `lastMintWasFresh` is a
-// module-level `let` the function resets and the mint sets, so it is declared INSIDE the
-// generated body and the fake mint writes it — which is exactly the real control flow.
-function runEnsure(opts) {
-  const calls = [];
-  const diags = [];
-  const body = `
-    const auth = { ensureSignedIn: async () => SIGNED_IN };
-    const spawner = { getClaudeBinPath: async () => BIN };
-    const diag = (...a) => { DIAGS.push(a.map(String).join(" ")); };
-    let lastMintWasFresh = false;
-    const obtainDeviceToken = async () => {
-      CALLS.push(["mint"]);
-      lastMintWasFresh = FRESH;
-      return TOKEN;
-    };
-    const removeSpawnConfig = () => { CALLS.push(["removeSpawnConfig"]); return true; };
-    // ⚠ THE SKILL INSTALL RIDES THIS LANE (2026-09-03) — best-effort, and it sits between the
-    // spawn-config removal and the probe so a machine whose CLI binary is unresolved
-    // still gets the skill. It is in the sequence because a silent reorder that put it AFTER
-    // the CLI gate would strip it from exactly those machines.
-    const ensureDoplSkills = () => { CALLS.push(["skills"]); };
-    const probeMcpEntry = async () => { CALLS.push(["probe"]); return PROBE; };
-    const removeMcpEntry = async () => { CALLS.push(["remove"]); return REMOVE_OK; };
-    const addMcpEntry = async (b, t) => { CALLS.push(["add", t]); return ADD_OK; };
-    let minting = null;
-    ${ENSURE_TOKEN}
-    ${ENSURE_TOKEN_FLIGHT}
-    ${ENSURE}
-    return ensureMcpConfigInner();
-  `;
-  const fn = new Function(
-    "SIGNED_IN", "BIN", "TOKEN", "FRESH", "PROBE", "REMOVE_OK", "ADD_OK", "MCP_URL", "CALLS", "DIAGS",
-    body
-  );
-  return fn(
-    opts.signedIn !== false,
-    opts.bin === undefined ? "/bin/claude" : opts.bin,
-    opts.token === undefined ? "tok-abc" : opts.token,
-    opts.fresh === true,
-    opts.probe,
-    opts.removeOk !== false,
-    opts.addOk !== false,
-    OURS,
-    calls,
-    diags
-  ).then(() => ({ calls, diags, names: calls.map((c) => c[0]) }));
+// The REAL `ensureMcpConfig`. `fresh: true` = no usable cached token, so this boot MINTS
+// (revoke-and-replace server-side); `fresh: false` = a cached token inside the reuse margin,
+// so nothing is minted. `token: ""` = the mint fails with nothing cached. The step names are
+// what the fakes record, in order: signedIn, fetch:POST (a mint), rm (spawn-file shed), skills,
+// bin (external-CLI probe), probe, remove, add:<token>.
+async function runEnsure(opts) {
+  const fresh = opts.fresh === true || opts.token === "";
+  const world = deviceTokenWorld({
+    signedIn: opts.signedIn !== false,
+    record: fresh ? null : freshRecord({ token: "tok-abc" }),
+    fetch: opts.token === "" ? minted({}, 500) : minted({ token: "tok-abc", expiresAt: Date.now() + 90 * 86400e3 }),
+    bin: opts.bin,
+    probe: opts.probe,
+    removeOk: opts.removeOk,
+    addOk: opts.addOk,
+  });
+  await world.config.ensureMcpConfig();
+  return { world, names: world.calls.seq, diags: world.calls.diags };
 }
 
 const present = (url) => ({ state: "present", url });
 const ABSENT = { state: "absent", url: "" };
 const UNKNOWN = { state: "unknown", url: "" };
+const PRE = ["signedIn", "rm", "skills", "bin", "probe"]; // a reuse boot, up to the probe
+const PRE_MINT = ["signedIn", "fetch:POST", "rm", "skills", "bin", "probe"];
 
 // ── 1. THE REGRESSION: ORIGIN DRIFT IS REPAIRED ──────────────────────────────
 
 test("an entry on ANOTHER origin is re-pointed at the current one, with no fresh mint", async () => {
   const r = await runEnsure({ probe: present(STALE), fresh: false });
-  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills", "probe", "remove", "add"],
-    "the drifted entry must be removed and re-added");
-  assert.equal(r.calls.find((c) => c[0] === "add")[1], "tok-abc",
-    "and re-added carrying the token this boot resolved");
+  assert.deepEqual(r.names, [...PRE, "remove", "add:tok-abc"],
+    "the drifted entry must be removed and re-added, carrying the token this boot resolved");
   assert.ok(r.diags.some((d) => /origin drift/.test(d)), "the log must name WHICH repair ran");
   assert.ok(!r.diags.some((d) => /leaving alone/.test(d)), "this is no longer a leave-alone case");
 });
@@ -141,7 +100,7 @@ test("the PROD origin is just as stale when this boot is pointed at localhost", 
   // The dev→prod direction and the prod→dev direction are the same defect; a rule that only
   // repaired one of them would pass the incident above and still strand a developer.
   const r = await runEnsure({ probe: present(PROD), fresh: false });
-  assert.ok(r.names.includes("remove") && r.names.includes("add"));
+  assert.ok(r.names.includes("remove") && r.names.includes("add:tok-abc"));
 });
 
 // ── 2. WHAT MUST NOT CHANGE ──────────────────────────────────────────────────
@@ -151,7 +110,7 @@ test("an entry ALREADY on the current origin is left alone (F-085 still holds)",
   // entry may be one the OPERATOR hand-wrote with their own credential, and from outside we
   // cannot tell. A matching url gives us no reason to touch it, so we do not.
   const r = await runEnsure({ probe: present(OURS), fresh: false });
-  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills", "probe"], "no remove, no add");
+  assert.deepEqual(r.names, PRE, "no remove, no add");
   assert.ok(r.diags.some((d) => /leaving alone/.test(d)));
 });
 
@@ -159,19 +118,43 @@ test("a FRESH MINT still refreshes a matching entry — the pre-existing reason"
   // A fresh mint revoked the bearer the entry carries, so it must be re-written even though the
   // url is right. This branch predates the origin rule and is not replaced by it.
   const r = await runEnsure({ probe: present(OURS), fresh: true });
-  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills", "probe", "remove", "add"]);
+  assert.deepEqual(r.names, [...PRE_MINT, "remove", "add:tok-abc"]);
   assert.ok(r.diags.some((d) => /fresh mint/.test(d)));
+});
+
+test("the fresh-mint flag is read AFTER the mint resolves, never before", async () => {
+  // `mintWasFresh()` moved behind a getter in the D04 split; its read point is the contract.
+  // (a) The launch pre-flight's mint is already in flight when startup's ensure begins: the ensure
+  //     joins that flight and must see ITS answer, which only exists once the flight resolves.
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const world = deviceTokenWorld({
+    probe: present(OURS),
+    fetch: async () => { await gate; return minted({ token: "tok-new", expiresAt: Date.now() + 90 * 86400e3 })(); },
+  });
+  const preflight = world.lifecycle.ensureDeviceToken();
+  const ensure = world.config.ensureMcpConfig();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(world.calls.seq, ["signedIn", "fetch:POST"], "control: ONE mint, still in flight");
+  release();
+  assert.equal(await preflight, "tok-new");
+  await ensure;
+  assert.deepEqual(world.calls.seq, ["signedIn", "fetch:POST", "rm", "skills", "bin", "probe", "remove", "add:tok-new"],
+    "the joined flight minted fresh, so the matching entry is refreshed");
+  // (b) The next boot reuses that token: the flag is reset by the mint gate, not left over.
+  world.calls.seq.length = 0;
+  await world.config.ensureMcpConfig();
+  assert.deepEqual(world.calls.seq, PRE, "a reuse boot after a fresh one leaves the entry alone");
 });
 
 test("a confirmed-ABSENT entry is added, never removed first", async () => {
   const r = await runEnsure({ probe: ABSENT });
-  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills", "probe", "add"]);
+  assert.deepEqual(r.names, [...PRE, "add:tok-abc"]);
 });
 
 test("an UNKNOWN probe touches NOTHING — no add (dupes) and no remove (blind clobber)", async () => {
   const r = await runEnsure({ probe: UNKNOWN, fresh: true });
-  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills", "probe"],
-    "even a fresh mint must not act on an answer the CLI did not give");
+  assert.deepEqual(r.names, PRE_MINT, "even a fresh mint must not act on an answer the CLI did not give");
   assert.ok(r.diags.some((d) => /unknown/.test(d)));
 });
 
@@ -179,14 +162,14 @@ test("a present entry with an UNPARSEABLE url is not treated as drifted", async 
   // '' means "we could not read it", not "it is wrong". Guessing here would remove an entry on
   // the strength of a parser miss — the blind-clobber case again, in a different coat.
   const r = await runEnsure({ probe: present(""), fresh: false });
-  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills", "probe"]);
+  assert.deepEqual(r.names, PRE);
 });
 
 // ── 3. THE EARLIER GATES ARE UNCHANGED ───────────────────────────────────────
 
 test("signed out / no token stop BEFORE the probe", async () => {
-  assert.deepEqual((await runEnsure({ signedIn: false, probe: present(STALE) })).names, []);
-  assert.deepEqual((await runEnsure({ token: "", probe: present(STALE) })).names, ["mint"]);
+  assert.deepEqual((await runEnsure({ signedIn: false, probe: present(STALE) })).names, ["signedIn"]);
+  assert.deepEqual((await runEnsure({ token: "", probe: present(STALE) })).names, ["signedIn", "fetch:POST"]);
 });
 
 test("NO EXTERNAL CLI still mints, still sheds the spawn file, still installs the skill", async () => {
@@ -195,18 +178,27 @@ test("NO EXTERNAL CLI still mints, still sheds the spawn file, still installs th
   // most of the people this app is distributed to — never got a device token from any path
   // (`saveDeviceToken` has one caller), `buildMcpServers` returned {} for every spawn, and every
   // launched session ended `mcp-unreachable` after New Agent had reported success.
-  const r = await runEnsure({ bin: "", probe: present(STALE) });
-  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills"],
+  const r = await runEnsure({ bin: "", probe: present(STALE), fresh: true });
+  assert.deepEqual(r.names, ["signedIn", "fetch:POST", "rm", "skills", "bin"],
     "everything that does not need a binary must run; only the operator's CLI entry is skipped");
-  assert.ok(!r.names.includes("probe"), "there is no CLI to probe");
+  assert.equal(r.world.stored().token, "tok-abc", "the token really was minted and persisted");
   assert.ok(r.diags.some((d) => /no external claude cli/.test(d)), "and the skip says which part was skipped");
 });
 
 // ── 4. THE URL PARSER TAKES THE URL LINE AND NOTHING ELSE ────────────────────
+// The REAL `mcp-cli-add.js`, over a fake `execFile`.
 
-function parseUrl(stdout) {
-  return new Function("stdout", `${PARSE}\n return parseEntryUrl(stdout);`)(stdout);
+function cliAdd(execFile) {
+  const diags = [];
+  const mod = loadWithStubs("mcp-cli-add.js", {
+    child_process: { execFile: execFile || (() => { throw new Error("no execFile expected"); }) },
+    "./session-spawner": { cliEnv: () => ({}) },
+    "./diag": { diag: (...a) => diags.push(a.map(String).join(" ")) },
+    "./config": { MCP_URL: OURS },
+  });
+  return { mod, diags };
 }
+const parseUrl = (stdout) => cliAdd().mod.parseEntryUrl(stdout);
 
 // The real shape, captured from `claude mcp get dopl` on the machine this was found on. The
 // header line is REAL: the CLI prints the bearer back out, which is why the parser is anchored.
@@ -243,53 +235,50 @@ test("no entry / empty output parses to '' (which §2 treats as 'do not act')", 
 
 // ── 5. NOTHING PARSED OUT OF THAT STDOUT REACHES A LOG ───────────────────────
 
-test("⚠ neither the entry's url nor the token is interpolated into a diag on this path", () => {
-  // The repair diag names the REASON ('origin drift' / 'fresh mint') and the outcome. A source
-  // pin because this is a property of what is WRITTEN, not of what a fake returns.
-  // ⚠ The check is for the IDENTIFIER passed as an argument, not for the WORD: "no device token"
-  // is a perfectly good log line, and a grep that cannot tell a message from a value would ban it
-  // while still missing `diag(x, t)`. So: no diag argument may BE one of these bindings.
-  const argsOf = (src) => [...src.matchAll(/\bdiag\(([^;]*?)\);/g)].map((m) => m[1]);
-  const passesValue = (src, name) =>
-    argsOf(src).some((args) =>
-      new RegExp(`(^|,)\\s*${name.replace(".", "\\.")}\\s*(,|$)`).test(args) ||
-      new RegExp(`\\$\\{${name.replace(".", "\\.")}\\}`).test(args)
-    );
-  // ⚠ POSITIVE CONTROL FIRST — the guard must actually FIRE on a leak, or a
-  // vacuous pass reads as a clean bill. (This replaces a bug: the identifier was
-  // passed DOUBLE-escaped, `"probe\\.url"`, so `.replace(".", "\\.")` produced a
-  // regex `probe\\.url` — a LITERAL backslash — which no real diag line has, so
-  // the assertion could never match and tested nothing.) The name here is the
-  // single-escaped identifier `probe.url`; `passesValue` does the regex escaping.
-  assert.ok(
-    passesValue("diag('origin drift', probe.url);", "probe.url"),
-    "control: a bare-argument leak MUST trip the guard"
-  );
-  assert.ok(
-    passesValue("diag(`stale ${probe.url}`);", "probe.url"),
-    "control: an interpolated leak MUST trip the guard"
-  );
-  assert.ok(
-    !passesValue("diag('no device token found');", "token"),
-    "control: the WORD in a message must NOT trip the guard — only the value"
-  );
-
-  assert.ok(!passesValue(ENSURE, "probe.url"), "probe.url must never be logged");
-  assert.ok(!passesValue(ENSURE, "token"), "the token must never be logged");
-  assert.ok(!passesValue(ENSURE, "MCP_URL"), "our own url stays out of it too");
-  // And the whole module: the only place the bearer is allowed to appear is an argv/header build.
-  assert.ok(!/diag\([^)]*Bearer/.test(CONFIG) && !/diag\([^)]*Bearer/.test(CLI_ADD));
+test("⚠ neither the entry's url nor the token is interpolated into a diag on this path", async () => {
+  // Every branch of the real ensure, with distinctive values, and every diag line it wrote. The
+  // repair diag names the REASON ('origin drift' / 'fresh mint') and the outcome, never a value.
+  const runs = [
+    await runEnsure({ probe: present(STALE), fresh: false }),
+    await runEnsure({ probe: present(PROD), fresh: true }),
+    await runEnsure({ probe: present(OURS), fresh: true }),
+    await runEnsure({ probe: present(OURS), fresh: false }),
+    await runEnsure({ probe: ABSENT, fresh: true }),
+    await runEnsure({ probe: UNKNOWN, fresh: true }),
+    await runEnsure({ probe: present(STALE), addOk: false }),
+    await runEnsure({ bin: "", probe: present(STALE), fresh: true }),
+  ];
+  // ⚠ POSITIVE CONTROL FIRST — the values really flowed through these runs, so their absence
+  // from the log below is a finding and not an empty harness.
+  assert.ok(runs.some((r) => r.names.includes("add:tok-abc")), "control: the token reached the CLI seam");
+  assert.ok(runs.every((r) => r.diags.length > 0), "control: every run logged something");
+  const log = runs.flatMap((r) => r.diags).join("\n");
+  for (const value of ["tok-abc", STALE, PROD, OURS, "Bearer"]) {
+    assert.ok(!log.includes(value), `${value} must never be logged`);
+  }
+  // And the modules' own text: the only place the bearer is allowed to appear is an argv build.
+  for (const f of ["mcp-config.js", "mcp-device-token-lifecycle.js", "mcp-cli-add.js"]) {
+    assert.ok(!/diag\([^)]*Bearer/.test(M(f)), `${f}: no diag names a bearer`);
+  }
 });
 
-test("probeMcpEntry returns the three states and nothing else", () => {
-  const src = fnOf(CLI_ADD, "probeMcpEntry");
-  for (const state of ["present", "absent", "unknown"]) {
-    assert.ok(src.includes(`'${state}'`), `${state} branch present`);
-  }
+test("probeMcpEntry returns the three states and nothing else", async () => {
+  const run = async (err, stdout) => {
+    const { mod, diags } = cliAdd((_bin, _args, _opts, cb) => cb(err, stdout));
+    return { answer: await mod.probeMcpEntry("/bin/claude"), diags };
+  };
+  assert.deepEqual((await run(null, REAL_OUTPUT)).answer, { state: "present", url: STALE });
+  const absent = Object.assign(new Error("No MCP server named dopl"), { code: 1 });
+  assert.deepEqual((await run(absent, "")).answer, { state: "absent", url: "" });
+  const hung = Object.assign(new Error("timed out"), { code: "ETIMEDOUT" });
+  const unknown = await run(hung, REAL_OUTPUT);
+  assert.deepEqual(unknown.answer, { state: "unknown", url: "" });
+  assert.ok(!unknown.diags.join("\n").includes("dopl_at_"), "the unknown branch logs no stdout");
   // The boolean it replaced must be gone as CODE — a surviving export or call site would let a
   // caller re-adopt the two-answer probe that could not see drift in the first place. The NAME
   // is still allowed to appear in prose (both files explain what it was and why it went).
+  const CLI_ADD = M("mcp-cli-add.js");
+  assert.deepEqual(Object.keys(cliAdd().mod).sort(), ["addMcpEntry", "parseEntryUrl", "probeMcpEntry", "removeMcpEntry"]);
   assert.ok(!/^\s*function\s+mcpEntryConfirmedAbsent/m.test(CLI_ADD), "the boolean probe is retired");
-  assert.ok(!/module\.exports[\s\S]*mcpEntryConfirmedAbsent/.test(CLI_ADD), "and not exported");
-  assert.ok(!/mcpEntryConfirmedAbsent\s*\(/.test(CONFIG), "and nothing still calls it");
+  assert.ok(!/mcpEntryConfirmedAbsent\s*\(/.test(M("mcp-config.js")), "and nothing still calls it");
 });

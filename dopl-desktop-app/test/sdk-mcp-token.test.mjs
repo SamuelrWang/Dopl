@@ -28,9 +28,9 @@
 // make. What survives from C2 is the property that mattered — nothing off disk steers the url —
 // and it now holds vacuously plus by construction in sdk-loader.
 //
-// Both modules are electron-bound (app.getPath / safeStorage / electron-store), so the
-// functions under test are source-extracted and driven with fakes — the idiom the rest of
-// this directory uses.
+// The loader is still source-extracted (another sector's file). The mcp-config side is the REAL
+// `mcp-config.js` + `mcp-device-token-lifecycle.js` + `mcp-device-token.js`, each loaded whole over
+// a strict stub map (`_device-token-harness.mjs`, cleanup D04 2026-10-11).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -38,11 +38,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { deviceTokenWorld, freshRecord, MCP_URL as CURRENT_MCP_URL, SPAWN_JSON } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => join(HERE, "..", "main", p);
 const LOADER = readFileSync(M(join("runtime", "claude", "loader.js")), "utf8");
 const CONFIG = readFileSync(M("mcp-config.js"), "utf8");
+const LIFECYCLE = readFileSync(M("mcp-device-token-lifecycle.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 // §3 split: the SDK option assembly + the query lifecycle live in session-query.js;
 // session-engine.js still binds them (asserted below), which is what makes the park /
@@ -145,48 +147,29 @@ test("C1: the launch spec really concatenates them onto the profile's hard-deny"
 
 // ── S3: the spawn-config file is REMOVED, and never written ────────────────────────
 
-const REMOVE_BLOCK = fnOf(CONFIG, "removeSpawnConfig");
-const SPAWN_JSON = "/userData/mcp-spawn.json";
-
-// The harness fs records EVERY call, so "no write happened" is an observation and not an
-// assumption: a `writeFileSync` reappearing in the block would land in `calls.writes` and trip
-// the assertions below rather than passing silently.
-function spawnHarness(initial, rmThrows) {
-  const files = {};
-  if (initial != null) files[SPAWN_JSON] = initial;
-  const calls = { writes: [], chmods: [], rms: [], diags: [] };
-  const fs = {
-    // Present so a REAPPEARING writer is caught by the assertions rather than by a
-    // "fs.writeFileSync is not a function" that reads like a broken harness.
-    writeFileSync(p, body, opts) { files[p] = body; calls.writes.push({ p, body, opts }); },
-    chmodSync(p, mode) { calls.chmods.push({ p, mode }); },
-    readFileSync(p) {
-      if (files[p] == null) throw new Error("ENOENT");
-      return files[p];
-    },
-    rmSync(p, opts) {
-      calls.rms.push({ p, opts });
-      if (rmThrows) throw new Error("EPERM");
-      delete files[p];
-    },
-  };
-  const api = new Function(
-    "fs", "spawnConfigPath", "diag",
-    `${REMOVE_BLOCK}\n return { removeSpawnConfig };`
-  )(fs, () => SPAWN_JSON, (...a) => calls.diags.push(a.map(String).join(" ")));
-  return { ...api, files, calls };
+// The REAL ensure, on a signed-in reuse boot whose CLI entry is already correct, so the only
+// disk work it can do is the spawn-file migration. The harness fs records EVERY call, so "no
+// write happened" is an observation and not an assumption.
+async function spawnHarness(initial, rmThrows) {
+  const world = deviceTokenWorld({
+    record: freshRecord(),
+    spawnFile: initial,
+    rmThrows,
+    probe: { state: "present", url: CURRENT_MCP_URL },
+  });
+  await world.config.ensureMcpConfig();
+  return { world, files: world.files, calls: world.calls };
 }
 
-// The value the shipped module defines, read out of the source rather than
-// copied — a harness that hardcoded its own number would keep passing after the
-// constant was edited away.
+// The value the shipped module EXPORTS — a harness that hardcoded its own number would keep
+// passing after the constant was edited away.
 const SHIPPED_TIMEOUT_MS = (() => {
-  const m = /MCP_CLIENT_TIMEOUT_MS = ([\d_]+);/.exec(CONFIG);
-  assert.ok(m, "mcp-config.js must define MCP_CLIENT_TIMEOUT_MS");
-  return Number(m[1].replace(/_/g, ""));
+  const v = deviceTokenWorld().config.MCP_CLIENT_TIMEOUT_MS;
+  assert.equal(typeof v, "number", "mcp-config.js must define MCP_CLIENT_TIMEOUT_MS");
+  return v;
 })();
 
-test("S3: THE MIGRATION — a pre-existing file, bearer and all, is REMOVED", () => {
+test("S3: THE MIGRATION — a pre-existing file, bearer and all, is REMOVED", async () => {
   // The property that makes this a fix rather than a promise. An install that has been running
   // an older build already has the 90-day token on disk; merely ceasing to write it would leave
   // that copy readable for the rest of its life.
@@ -200,64 +183,71 @@ test("S3: THE MIGRATION — a pre-existing file, bearer and all, is REMOVED", ()
       },
     },
   });
-  const h = spawnHarness(stale);
-  assert.ok(h.files[SPAWN_JSON].includes("dopl_at_STALESECRET"), "control: the token starts on disk");
-  assert.equal(h.removeSpawnConfig(), true);
-  assert.equal(h.files[SPAWN_JSON], undefined, "the file — and the bearer in it — is gone");
+  assert.ok(deviceTokenWorld({ spawnFile: stale }).files.get(SPAWN_JSON).includes("dopl_at_STALESECRET"),
+    "control: the token starts on disk");
+  const h = await spawnHarness(stale);
+  assert.equal(h.files.has(SPAWN_JSON), false, "the file — and the bearer in it — is gone");
   assert.deepEqual(h.calls.writes, [], "and nothing was written in its place");
 });
 
-test("S3: the removal is `force`, so a machine with no file is a clean no-op", () => {
+test("S3: the removal is `force`, so a machine with no file is a clean no-op", async () => {
   // Post-migration this runs on every signed-in launch and must never surface an ENOENT as a
   // failure. `force` is the flag that makes the steady state silent.
-  const h = spawnHarness(null);
-  assert.equal(h.removeSpawnConfig(), true);
+  const h = await spawnHarness(null);
   assert.equal(h.calls.rms.length, 1, "the rm is still ISSUED — it is not conditional on a stat");
   assert.equal(h.calls.rms[0].p, SPAWN_JSON);
   assert.deepEqual(h.calls.rms[0].opts, { force: true });
-  assert.deepEqual(h.calls.diags, [], "and it says nothing on the happy path");
+  assert.ok(h.calls.diags.length > 0, "control: the ensure did log its other steps");
+  assert.ok(!h.calls.diags.some((d) => /spawn config/.test(d)), "and it says nothing about the file on the happy path");
 });
 
-test("S3: a removal that throws is REPORTED and never breaks the launch", () => {
+test("S3: a removal that throws is REPORTED and never breaks the launch", async () => {
   // ensureMcpConfigInner runs this before the CLI-entry work; an EPERM must not abort the rest
   // of the ensure, and it must not be swallowed silently either — a machine still carrying the
   // token has to be visible in diag.
-  const h = spawnHarness('{"mcpServers":{}}', true);
-  assert.equal(h.removeSpawnConfig(), false, "the failure is returned, not thrown");
-  assert.equal(h.calls.diags.length, 1, "…and it is named in diag");
-  assert.match(h.calls.diags[0], /spawn config removal failed/);
+  const h = await spawnHarness('{"mcpServers":{}}', true);
+  assert.ok(h.calls.seq.includes("probe"), "the rest of the ensure still ran");
+  const named = h.calls.diags.filter((d) => /spawn config/.test(d));
+  assert.equal(named.length, 1, "…and the failure is named in diag, once");
+  assert.match(named[0], /spawn config removal failed/);
 });
 
-test("S3: ABSENCE PIN — no source in mcp-config writes a bearer to disk", () => {
+test("S3: ABSENCE PIN — no source in mcp-config writes a bearer to disk", async () => {
   // The link-container-guard technique: a fake cannot see a NEW writer being added, and this is
   // the exact regression that would silently restore the defect. Read the module's own source.
-  assert.ok(
-    !/fs\.writeFileSync\(\s*spawnConfigPath\(\)/.test(CONFIG),
-    "nothing may write the spawn-config path again"
-  );
-  assert.ok(!/fs\.writeFileSync/.test(CONFIG), "mcp-config writes NO file at all any more");
+  for (const [name, src] of [["mcp-config.js", CONFIG], ["mcp-device-token-lifecycle.js", LIFECYCLE]]) {
+    assert.ok(!/fs\.writeFileSync\(\s*spawnConfigPath\(\)/.test(src), `${name}: nothing may write the spawn-config path again`);
+    assert.ok(!/fs\.writeFileSync/.test(src), `${name} writes NO file at all any more`);
+  }
   // The body-builder and the writer are gone as CODE — a surviving definition, call site or
   // export would let a caller re-adopt them. Their NAMES stay legal in prose.
-  for (const dead of ["spawnConfigBody", "writeSpawnConfig", "currentSpawnBody"]) {
-    assert.ok(!new RegExp(`^\\s*function\\s+${dead}\\b`, "m").test(CONFIG), `${dead} is not defined`);
-    assert.ok(!new RegExp(`(^|[^\`\\w.])${dead}\\s*\\(`, "m").test(CONFIG.replace(/\n\/\/[^\n]*/g, "")),
-      `${dead} is not called`);
-    assert.ok(!new RegExp(`module\\.exports[\\s\\S]*\\b${dead}\\b`).test(CONFIG), `${dead} is not exported`);
+  for (const src of [CONFIG, LIFECYCLE]) {
+    for (const dead of ["spawnConfigBody", "writeSpawnConfig", "currentSpawnBody"]) {
+      assert.ok(!new RegExp(`^\\s*function\\s+${dead}\\b`, "m").test(src), `${dead} is not defined`);
+      assert.ok(!new RegExp(`(^|[^\`\\w.])${dead}\\s*\\(`, "m").test(src.replace(/\n\/\/[^\n]*/g, "")),
+        `${dead} is not called`);
+    }
+    assert.ok(!/`Bearer \$\{token\}`/.test(src),
+      "the bearer is not serialized in either module (the argv build lives in mcp-cli-add.js)");
   }
-  assert.ok(!/`Bearer \$\{token\}`/.test(CONFIG),
-    "the bearer is not serialized anywhere in this module (the argv build lives in mcp-cli-add.js)");
-  // …and the removal really is wired into the launch path, not just defined. (`fnOf` anchors on
-  // the `function` keyword, so it drops the leading `async` — the body is what matters here.)
-  assert.match(fnOf(CONFIG, "ensureMcpConfigInner"), /removeSpawnConfig\(\)/,
-    "every signed-in launch runs the migration");
+  const exported = Object.keys(deviceTokenWorld().config);
+  for (const dead of ["spawnConfigBody", "writeSpawnConfig", "currentSpawnBody"]) {
+    assert.ok(!exported.includes(dead), `${dead} is not exported`);
+  }
+  // …and the removal really is wired into the launch path, not just defined.
+  const h = await spawnHarness(null);
+  assert.deepEqual(h.calls.rms.map((r) => r.p), [SPAWN_JSON], "every signed-in launch runs the migration");
 });
 
 test("S3: the path itself SURVIVES, because sign-out still tears the file down", () => {
   // auth-signed-in.test.mjs pins the rmSync inside clearDeviceToken; deleting spawnConfigPath as
   // 'dead' would break the belt for a machine that signs out before its next signed-in launch.
-  assert.match(CONFIG, /function spawnConfigPath\(\) \{/);
-  assert.match(fnOf(CONFIG, "clearDeviceToken"), /fs\.rmSync\(spawnConfigPath\(\), \{ force: true \}\)/);
-  assert.match(CONFIG, /\n {2}spawnConfigPath,/, "…and it is still exported");
+  const world = deviceTokenWorld({ record: freshRecord(), spawnFile: "{}" });
+  assert.equal(typeof world.config.spawnConfigPath, "function", "…and it is still exported");
+  assert.equal(world.config.spawnConfigPath(), SPAWN_JSON);
+  world.config.clearDeviceToken();
+  assert.deepEqual(world.calls.rms, [{ p: SPAWN_JSON, opts: { force: true } }], "sign-out removes it");
+  assert.equal(world.files.has(SPAWN_JSON), false);
 });
 
 // ── L8 (Q9): ONE definition of the per-server call timeout ───────────────────────
@@ -269,7 +259,7 @@ test("L8: mcp-config OWNS the number and the loader's entry is the only one that
   // and no numeric literal reappears downstream.
   // ⚠ 2026-08-31: the loader is `main/runtime/claude/loader.js` and reaches the owner through
   // `../../`. The rule is unchanged; only the depth is.
-  assert.match(codeOf(CONFIG), /module\.exports = \{[^}]*\bMCP_CLIENT_TIMEOUT_MS,/, "it is exported for the loader");
+  assert.equal(typeof SHIPPED_TIMEOUT_MS, "number", "it is exported for the loader");
   assert.match(codeOf(LOADER), /timeout: clientTimeoutMs\(\),/, "the loader reads it, never a literal");
   assert.match(
     fnOf(LOADER, "clientTimeoutMs"),
@@ -303,22 +293,23 @@ test("nothing in this app patches the CLI's user-scope config in place", () => {
 
 // ── C1: the token accessor itself ─────────────────────────────────────────────────
 
-const TOKEN_BLOCK = slice(CONFIG, "let spawnToken = '';", "function parseExpiry(", "deviceTokenForSpawn");
-
+// The REAL accessor over the real store; every store read is counted.
 function tokenHarness(rec) {
+  const world = deviceTokenWorld({ record: rec });
   let loads = 0;
-  const api = new Function(
-    "loadDeviceToken",
-    `${TOKEN_BLOCK}\n return { deviceTokenForSpawn };`
-  )(() => { loads += 1; return rec; });
-  return { ...api, loads: () => loads };
+  const get = world.store.get.bind(world.store);
+  world.store.get = (k) => { loads += 1; return get(k); };
+  return { deviceTokenForSpawn: world.config.deviceTokenForSpawn, loads: () => loads };
 }
 
 test("C1: the accessor decrypts once and memoizes; nothing usable reads as ''", () => {
   const h = tokenHarness({ token: "abc" });
   assert.equal(h.deviceTokenForSpawn(), "abc");
   assert.equal(h.deviceTokenForSpawn(), "abc");
-  assert.equal(h.loads(), 1, "decrypted once, held in memory after that");
+  assert.ok(h.loads() >= 1, "control: the first call really read the store");
+  const after = h.loads();
+  for (let i = 0; i < 3; i++) assert.equal(h.deviceTokenForSpawn(), "abc");
+  assert.equal(h.loads(), after, "decrypted once, held in memory after that");
   for (const nothing of [null, {}, { token: "" }]) {
     assert.equal(tokenHarness(nothing).deviceTokenForSpawn(), "", "no token -> empty string, never a throw");
   }
@@ -329,6 +320,6 @@ test("C1: the token is never written to disk in plaintext — by ANY path in thi
   // remaining writer. S3 removed that writer, so the exemption is gone and the claim is total:
   // the only persistence left is the safeStorage-encrypted electron-store, and the only other
   // place the bearer is spelled is an execFile argv (mcp-cli-add.js), which is not a file.
-  assert.match(CONFIG, /deviceTokenForSpawn/, "the accessor exists");
+  assert.equal(typeof deviceTokenWorld().config.deviceTokenForSpawn, "function", "the accessor exists");
   assert.ok(!/spawnToken/.test(LOADER), "sdk-loader keeps no copy of its own");
 });

@@ -21,60 +21,36 @@
 // names the missing count so the ambiguity is visible rather than silent.
 //
 // The complementary contract (ordering, bounding, the label we present) lives in
-// test/device-token-revoke.test.mjs; this file is only about the VERDICT.
+// test/device-token-revoke.test.mjs; this file is only about the VERDICT. The revoke is the REAL
+// module over fakes (`_device-token-harness.mjs`); `auth-state.signOut` is still source-sliced.
 //
 // Run: `node --test dopl-desktop-app/test/device-token-revoke-count.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { fnOf } from "./helpers/source-probe.mjs";
+import { deviceTokenWorld } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-// ⚠ THE REAL BOUND, NOT A STUB (2026-09-15, F-700): `withTimeout` below now delegates to
-// `main/deadline.js`, which is dependency-free and therefore injectable as the shipped module —
-// the same one-program argument `_session-state-push-harness.mjs` makes for `watchPass`.
-const deadline = createRequire(import.meta.url)(join(HERE, "..", "main", "deadline.js"));
-const MCP = M("mcp-config.js");
 const STATE = M("auth-state.js");
-
-const TOKEN_PATH = "/api/auth/mcp-device-token";
-const FAST_TIMEOUT = 20;
 
 function asyncFnOf(src, name) {
   assert.match(src, new RegExp(`async function ${name}\\(`), `${name} must be async`);
   return `async ${fnOf(src, name)}`;
 }
 
+// The REAL revoke (`main/mcp-device-token-lifecycle.js`, via `_device-token-harness.mjs`).
 function loadRevoke(fetch) {
-  const logged = [];
-  const src = [
-    fnOf(MCP, "deviceLabel"),
-    fnOf(MCP, "withTimeout"),
-    asyncFnOf(MCP, "revokeDeviceToken"),
-  ].join("\n");
-  const fn = new Function(
-    "apiFetch", "loadDeviceToken", "diag", "MCP_DEVICE_TOKEN_PATH", "REVOKE_TIMEOUT_MS", "require",
-    "withDeadline", "DEADLINE",
-    `${src}\n return revokeDeviceToken;`
-  )(
+  const world = deviceTokenWorld({
+    record: { token: "dopl_at_x", expiresAt: 0, label: "Dopl Desktop CLI (Minted-Host)" },
     fetch,
-    () => ({ token: "dopl_at_x", expiresAt: 0, label: "Dopl Desktop CLI (Minted-Host)" }),
-    (...a) => logged.push(a.join(" ")),
-    TOKEN_PATH,
-    FAST_TIMEOUT,
-    (id) => {
-      if (id === "os") return { hostname: () => "This-Host" };
-      throw new Error(`unexpected require(${id})`);
-    },
-    deadline.withDeadline,
-    deadline.DEADLINE
-  );
-  return { fn, logged };
+  });
+  assert.equal(typeof world.lifecycle.revokeDeviceToken, "function", "revokeDeviceToken must be exported");
+  return { fn: world.lifecycle.revokeDeviceToken, logged: world.calls.diags };
 }
 
 // The exact shape the route returns (src/app/api/auth/mcp-device-token/route.ts).
@@ -188,6 +164,13 @@ test("signOut gives 'no-match' its OWN words — it must not read as a completed
 
 // ── the count is read from the body, not assumed ────────────────────────────
 
-test("revokeDeviceToken reads the revoked count off the response body", () => {
-  assert.match(codeOf(fnOf(MCP, "revokeDeviceToken")), /data\.revoked === 'number'/, "the count is really read");
+test("revokeDeviceToken reads the revoked count off the response body", async () => {
+  // The verdict must follow the BODY, not the status: the same 200 answers three ways.
+  assert.equal(await loadRevoke(answers(0)).fn(), "no-match", "a numeric 0 is read");
+  const { fn, logged } = loadRevoke(answers(3));
+  assert.equal(await fn(), "revoked");
+  assert.match(logged.join("\n"), /revoked server-side \(3\)/, "the number itself is read, not assumed");
+  const notNumber = loadRevoke(answers("0"));
+  assert.equal(await notNumber.fn(), "revoked", "only a NUMBER counts — a string is a missing count");
+  assert.match(notNumber.logged.join("\n"), /count not reported/);
 });

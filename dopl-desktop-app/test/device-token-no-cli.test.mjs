@@ -33,7 +33,8 @@
 // behaviour with and without a bearer, and that the funnel asks before it registers.
 //
 // METHOD is the directory idiom: `main/` is electron-bound, so modules are source-extracted or
-// loaded over a stub map.
+// loaded over a stub map. §6 drives the REAL mcp-config.js + mcp-device-token-lifecycle.js
+// (`_device-token-harness.mjs`); `session-launch.js` and the loader are still sliced (other sectors).
 //
 // Run: `node --test dopl-desktop-app/test/device-token-no-cli.test.mjs`
 
@@ -44,11 +45,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { fnOf, orderOf } from "./helpers/source-probe.mjs";
 import { loadWithStubs } from "./helpers/module-sandbox.mjs";
+import { deviceTokenWorld, minted } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
-const CONFIG = M("mcp-config.js");
 const LAUNCH = M("session-launch.js");
 const LOADER = M("runtime/claude/loader.js");
 
@@ -191,44 +192,59 @@ test("the pre-flight returns the refusal AS GIVEN — no second opinion in the f
   assert.ok(!/skipped: 'disabled', detail/.test(fn), "the funnel does not restate the shape");
 });
 
-// ── 6. THE MINT'S OWN ORDER, AT THE SOURCE ───────────────────────────────────
+// ── 6. THE MINT'S OWN ORDER, DRIVEN ──────────────────────────────────────────
+// The real modules over fakes; `calls.seq` is every seam in the order it was hit
+// (signedIn, fetch:POST = the mint, rm = spawn-file shed, skills, bin = the external-CLI probe, …).
 
-test("`ensureMcpConfigInner` mints BEFORE it looks for an external CLI", () => {
-  const ensure = "async " + fnOf(CONFIG, "ensureMcpConfigInner");
-  assert.ok(
-    orderOf(ensure, "ensureDeviceToken()", "spawner.getClaudeBinPath()"),
-    "the token may never again wait on a binary"
-  );
+const mintOk = () => minted({ token: "tok-new", expiresAt: Date.now() + 90 * 86400e3 });
+
+test("`ensureMcpConfigInner` mints BEFORE it looks for an external CLI", async () => {
+  const world = deviceTokenWorld({ bin: "", fetch: mintOk() });
+  await world.config.ensureMcpConfig();
+  const seq = world.calls.seq;
+  const at = (step) => {
+    const i = seq.indexOf(step);
+    assert.notEqual(i, -1, `${step} must run (seq: ${seq.join(",")})`);
+    return i;
+  };
+  assert.ok(at("fetch:POST") < at("bin"), "the token may never again wait on a binary");
   // The three things that need no binary all sit above the probe (the skill-install comment has
-  // claimed this since 2026-09-03; until now it was false).
-  for (const call of ["removeSpawnConfig()", "ensureDoplSkills()"]) {
-    assert.ok(orderOf(ensure, call, "spawner.getClaudeBinPath()"), `${call} must not need a CLI`);
+  // claimed this since 2026-09-03; until 2026-10-10 it was false).
+  for (const step of ["rm", "skills"]) {
+    assert.ok(at(step) < at("bin"), `${step} must not need a CLI`);
   }
+  assert.equal(world.config.deviceTokenForSpawn(), "tok-new", "and the session path has its bearer");
 });
 
-test("the mint is gated on the SIGN-IN and on nothing else", () => {
-  const mint = "async " + fnOf(CONFIG, "ensureDeviceTokenInner");
-  assert.match(mint, /await auth\.ensureSignedIn\(\)/, "the one gate");
-  assert.match(mint, /await obtainDeviceToken\(\)/, "and then the one mint");
-  // ⚠ ORDER, NOT PRESENCE (release review 2026-10-11). Both matches above are satisfied by a
-  // function that mints FIRST and checks the sign-in afterwards — which is the exact defect
-  // 121aa fixed, and which this case called "gated on the sign-in" while passing. A mint above
-  // the gate hands a signed-out machine a bearer and revokes the previous one doing it
-  // (`obtainDeviceToken` is revoke-and-replace), so the ordering is the whole assertion.
-  assert.ok(
-    orderOf(mint, "await auth.ensureSignedIn()", "await obtainDeviceToken()"),
-    "the gate must run BEFORE the mint — swapping the two lines is the defect, not a style change"
-  );
-  // …and the gate's answer must be the thing that RETURNS, not merely something read first.
-  assert.match(mint, /if \(!\(await auth\.ensureSignedIn\(\)\)\) \{/, "a gate that does not return is not a gate");
-  assert.ok(!/getClaudeBinPath|claudeAvailable|spawner\./.test(mint),
+test("the mint is gated on the SIGN-IN and on nothing else", async () => {
+  // ⚠ ORDER, NOT PRESENCE (release review 2026-10-11): a mint above the gate hands a signed-out
+  // machine a bearer and revokes the previous one doing it (`obtainDeviceToken` is
+  // revoke-and-replace), so what is asserted is that NO mint request leaves a signed-out machine.
+  const out = deviceTokenWorld({ signedIn: false, fetch: () => { throw new Error("minted while signed out"); } });
+  assert.equal(await out.lifecycle.ensureDeviceToken(), "", "signed out answers ''");
+  assert.deepEqual(out.calls.seq, ["signedIn"], "a gate that does not return is not a gate");
+  const thrown = deviceTokenWorld({ signedIn: () => { throw new Error("jar unreadable"); }, fetch: mintOk() });
+  assert.equal(await thrown.lifecycle.ensureDeviceToken(), "", "an unreadable sign-in never mints");
+  assert.deepEqual(thrown.calls.fetches, []);
+  // Signed in: the gate, then the one mint — and no CLI probe anywhere on this path. The world's
+  // `bin` seam records every getClaudeBinPath call, so a probe sneaking back in is visible.
+  const ok = deviceTokenWorld({ bin: "", fetch: mintOk() });
+  assert.equal(await ok.lifecycle.ensureDeviceToken(), "tok-new");
+  assert.deepEqual(ok.calls.seq, ["signedIn", "fetch:POST"],
     "no CLI probe may reach the minting path again — that IS the defect");
 });
 
-test("the mint is single-flight, so a click and startup cannot mint twice", () => {
+test("the mint is single-flight, so a click and startup cannot mint twice", async () => {
   // Two mints revoke each other server-side (`obtainDeviceToken` is revoke-and-replace), which
   // would leave the operator's CLI entry carrying a dead bearer.
-  const flight = fnOf(CONFIG, "ensureDeviceToken");
-  assert.match(flight, /if \(minting\) return minting;/);
-  assert.match(flight, /\.finally\(/, "and the flight is released");
+  const world = deviceTokenWorld({ fetch: mintOk() });
+  const a = world.lifecycle.ensureDeviceToken();
+  const b = world.config.ensureDeviceToken(); // the pre-flight's name for the same function
+  assert.equal(a, b, "the second caller joins the first flight");
+  assert.deepEqual([await a, await b], ["tok-new", "tok-new"]);
+  assert.equal(world.calls.fetches.length, 1, "ONE mint request");
+  // …and the flight is released: the next call runs its own gate (and reuses the cached token).
+  assert.equal(await world.lifecycle.ensureDeviceToken(), "tok-new");
+  assert.equal(world.calls.signedIn, 2, "a settled flight does not answer forever");
+  assert.equal(world.calls.fetches.length, 1, "inside the reuse margin nothing is re-minted");
 });

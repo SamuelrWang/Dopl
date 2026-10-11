@@ -1,5 +1,6 @@
 // Dopl MCP auto-config for the Claude CLI. On a signed-in startup (and after a fresh sign-in):
-//   1. Mint (or reuse) a long-lived device token from POST /api/auth/mcp-device-token.
+//   1. Mint (or reuse) a long-lived device token from POST /api/auth/mcp-device-token
+//      (`mcp-device-token-lifecycle.js`; its exports are re-exported from here).
 //   2. DELETE userData/mcp-spawn.json if it is there. Nothing writes that file any more and
 //      nothing in this app reads it — see `removeSpawnConfig` below for the whole argument.
 //   3. Ensure a user-scope `dopl` entry exists in the CLI's own config (`claude mcp add …`),
@@ -19,24 +20,21 @@
 // serves the CLI path (manual `claude` runs); there is no headless spawn path left to serve.
 
 const fs = require('fs');
-const path = require('path');
-const { app } = require('electron');
 
-const auth = require('./auth');
 const spawner = require('./session-spawner');
 const { probeMcpEntry, removeMcpEntry, addMcpEntry } = require('./mcp-cli-add');
-const { apiFetch } = require('./api');
 const { diag } = require('./diag');
-const { withDeadline, DEADLINE } = require('./deadline');
 // ⚠ THE CLAUDE ADAPTER'S, not core's — `~/.claude/skills` is one runtime's convention and
 // core may not name one (test/core-vocabulary.test.mjs). This file is already on that scan's
 // deferred census because it drives that runtime's CLI, which is the same lane and the same
 // gate; a second runtime with a skills convention gets its own sibling, never a branch here.
 const { ensureDoplSkills } = require('./runtime/claude/skill-install');
-const { MCP_URL, MCP_DEVICE_TOKEN_PATH } = require('./config');
-const { isUuid } = require('./ipc-guards');
-// ⚠ ONE INSTANCE, read never restated: the store handle, its two keys and the mint-listener Set live in that module.
-const { store, DT_KEY, DT_KEY_PLAIN, REUSE_MARGIN_MS, saveDeviceToken, loadDeviceToken, onDeviceTokenMinted, notifyMinted } = require('./mcp-device-token');
+const { MCP_URL } = require('./config');
+// ⚠ ONE INSTANCE each: the mint-listener Set lives in the store module, the mint and its memo in
+// the lifecycle module. Re-exported below under the names every caller already requires.
+const { onDeviceTokenMinted } = require('./mcp-device-token');
+const lifecycle = require('./mcp-device-token-lifecycle');
+const { ensureDeviceToken, spawnConfigPath } = lifecycle;
 
 // ⚠ THE ONE DEFINITION of the per-server call abort every Dopl MCP entry this app builds must
 // carry. `runtime/claude/loader.js`'s in-memory entry is the only such entry left, and it IMPORTS this constant
@@ -54,42 +52,9 @@ const { store, DT_KEY, DT_KEY_PLAIN, REUSE_MARGIN_MS, saveDeviceToken, loadDevic
 // — it can only RAISE above the 60s floor — and also LOWERS the hard tool-call ceiling from
 // ~1e8 ms to this value. Both effects confined to entries this process owns.
 const MCP_CLIENT_TIMEOUT_MS = 290_000;
-// ⚠ Sign-out is a CLICK: the server revoke is best-effort and must never hold it. Offline,
-// captive-portal and 5xx all fall through to local teardown.
-const REVOKE_TIMEOUT_MS = 3_000;
-
-// The label this machine mints under. The server keys revoke-and-replace on (user, label), so
-// the hostname keeps two Macs from churning each other's tokens. ⚠ ONE definition — mint and
-// revoke must agree, or a drifted label revokes nothing and leaves the live token behind.
-function deviceLabel() {
-  try {
-    return `Dopl Desktop CLI (${require('os').hostname()})`;
-  } catch (_) {
-    return 'Dopl Desktop CLI';
-  }
-}
-
-// Bound a promise that may not settle. apiFetch's AbortController covers the fetch, but
-// getAuthCookie() ahead of it can await a token refresh, so the whole call needs an outer stop.
-// null on timeout; the loser settles on its own (its rejection is handled by the race).
-//
-// ⚠ THE BODY IS NOW `deadline.js`, NOT A SECOND COPY (2026-09-15, F-700). This local race was
-// the only such bound in the tree and it named the hazard correctly — the cookie read AHEAD of
-// the fetch — one call site at a time. F-700 bounds the store itself (`auth-cookies.js ›
-// jarCall`) with the same primitive, so this delegates rather than forking it. The 3s value
-// and the null-on-timeout contract its one caller checks are UNCHANGED; only the sentinel is
-// translated here.
-function withTimeout(promise, ms) {
-  return withDeadline(promise, ms).then((v) => (v === DEADLINE ? null : v));
-}
 
 // ── Spawn-config file: NOT WRITTEN ANY MORE, AND REMOVED ON SIGHT ────────────
-// ⚠ `spawnConfigPath` STAYS even though nothing writes it: `clearDeviceToken` below still rm's
-// it at sign-out (pinned by test/auth-signed-in.test.mjs), which is the belt under the migration
-// for a machine that signs out before it ever launches signed-in again.
-function spawnConfigPath() {
-  return path.join(app.getPath('userData'), 'mcp-spawn.json');
-}
+// `spawnConfigPath` lives with the lifecycle (`clearDeviceToken` still rm's it at sign-out).
 
 // ⚠ THIS APP NO LONGER WRITES A BEARER TO DISK, AND THIS FUNCTION IS THE MIGRATION THAT MAKES
 // THAT TRUE OF MACHINES THAT ALREADY HAVE ONE. Until 2026-08-26, `writeSpawnConfig(token)` wrote
@@ -131,264 +96,6 @@ function removeSpawnConfig() {
   }
 }
 
-// How the device heartbeat links the CURRENT token to this computer: its row id, or (records
-// minted before the server returned one) the label. Read once per arm/sign-in, never per beat.
-function deviceTokenLink() {
-  const rec = loadDeviceToken();
-  if (!rec || !rec.token) return null;
-  if (isUuid(rec.tokenId)) return { tokenId: rec.tokenId };
-  return { tokenLabel: String(rec.label || deviceLabel()) };
-}
-
-// ⚠ THE SDK PATH'S BEARER, never a file read — AND THE ONLY PLACE THE BEARER IS SPELLED, now
-// that no file holds it. Landing a 90-day dopl.read+dopl.write credential in plaintext anywhere
-// under userData is what the removed spawn-config write did: every profile PRE-APPROVES `Read`
-// (so it never reaches the gate) and `Bash` reaches it through a rule layer that cannot express
-// a path at all. This reads the safeStorage cache instead: decrypted on demand, memoized for the
-// process life, never logged. '' when nothing usable (pre-sign-in), which hands the session an
-// empty mcpServers object.
-let spawnToken = '';
-function deviceTokenForSpawn() {
-  if (spawnToken) return spawnToken;
-  const rec = loadDeviceToken();
-  const token = rec && rec.token ? String(rec.token) : '';
-  if (token) spawnToken = token;
-  return token;
-}
-
-// ⚠ SIGN-OUT TEARDOWN FOR THE MCP CREDENTIAL — LOCAL HALF ONLY. Without it, sign-out clears the
-// Supabase blob and the cookie jar and leaves a 90-day dopl.read+dopl.write device token live
-// in electron-store (DT_KEY / DT_KEY_PLAIN) — full API access to the account that just signed
-// out, for anything that can read the app's data dir, the next operator on this machine
-// included. ⚠ The `rmSync` below is now a BELT: nothing writes userData/mcp-spawn.json any more
-// (see `removeSpawnConfig`), and it stays because a machine that signs out before its next
-// signed-in launch would otherwise never run that migration.
-// ⚠ PAIR WITH revokeDeviceToken() below, which kills the token SERVER-side. Deleting our copies
-// does not invalidate the credential: anything that already read it keeps full API access until
-// the token expires. signOut() runs the revoke FIRST, then this.
-// ⚠ NEITHER covers the user-scope `dopl` entry in the CLI's own config: `ensureMcpConfig` adds
-// it only when confirmed absent, so an existing entry may be one the OPERATOR wrote with their
-// own credential and we cannot tell the two apart from outside. Deleting a hand-made entry is
-// worse than leaving a bearer the revoke already killed. Residual tracked in F-085.
-function clearDeviceToken() {
-  spawnToken = ''; // the in-memory copy buildMcpServers injects
-  let ok = true;
-  try {
-    store.delete(DT_KEY);
-    store.delete(DT_KEY_PLAIN);
-  } catch (err) {
-    ok = false;
-    diag('mcp-config: device-token store clear failed', err && err.message);
-  }
-  try {
-    fs.rmSync(spawnConfigPath(), { force: true });
-  } catch (err) {
-    ok = false;
-    diag('mcp-config: spawn config unlink failed', err && err.message);
-  }
-  diag('mcp-config: device token cleared', ok ? '(store + spawn config)' : '(PARTIAL)');
-  return ok;
-}
-
-// THE SERVER HALF OF SIGN-OUT. `DELETE /api/auth/mcp-device-token` stamps revoked_at, and
-// validateAccessToken checks revoked_at before expiry, so the bearer dies on its next use
-// rather than in up to 90 days.
-// ⚠ Called by auth-state.signOut() BEFORE any local teardown — the route is sessionOnly and
-// authenticates on the cookie jar sign-out is about to clear. Best-effort: a failure is
-// diagnosed and sign-out continues.
-// ⚠ Use the label we MINTED under (persisted with the token), never a recomputed one: rename
-// the Mac and a recomputed label revokes a row that never existed while the real token lives.
-//
-// ⚠ THREE OUTCOMES, NOT A BOOLEAN, and `res.ok` is NOT the answer — the route is idempotent by
-// design, so an unknown label is a quiet `200 {ok:true, revoked:0}` indistinguishable from a
-// real kill. `rec.label` is only PERSISTED as of this round, so every already-installed machine
-// carries a label-less record until its next 90-day re-mint and falls back to a RECOMPUTED
-// `os.hostname()` — which drifts on macOS (Bonjour renames, "Foo" vs "Foo.local") and matches
-// nothing. The COUNT is the only discriminator, so it is read and reported.
-//   'revoked'  — the server confirmed it stamped at least one row
-//   'no-match' — 200, matched NOTHING
-//   'none'     — nothing of ours to revoke; nothing was asked of the server. ⚠ NOT "revoked":
-//                the local copies may have been cleared by an earlier failed revoke while the
-//                90-day row stayed live, and we cannot revoke blind because the label lives in
-//                the record we just failed to find.
-//   'failed'   — we asked and it did not land
-// ⚠ A 200 with no readable count is NOT downgraded: the request provably reached the route, and
-// inventing a failure is its own false claim. The log names the missing count.
-async function revokeDeviceToken() {
-  const rec = loadDeviceToken();
-  if (!rec || !rec.token) {
-    diag('mcp-config: no local device token — nothing to revoke, and nothing claimed');
-    return 'none';
-  }
-  const label = rec.label || deviceLabel();
-  try {
-    const res = await withTimeout(
-      apiFetch(MCP_DEVICE_TOKEN_PATH, {
-        method: 'DELETE',
-        timeoutMs: REVOKE_TIMEOUT_MS,
-        noStore: true,
-        body: { label },
-      }),
-      REVOKE_TIMEOUT_MS + 500
-    );
-    if (!res) {
-      diag('mcp-config: device-token revoke TIMED OUT — token stays valid server-side');
-      return 'failed';
-    }
-    if (!res.ok) {
-      diag('mcp-config: device-token revoke failed', res.status,
-        '— token stays valid server-side until it expires; revoke it from web Settings > Devices');
-      return 'failed';
-    }
-    // ⚠ Inlined on purpose: `revokeDeviceToken` is source-sliced by the tests, so a helper
-    // would be an undefined free variable in every harness.
-    let count = null;
-    try {
-      const data = typeof res.json === 'function' ? await res.json() : null;
-      if (data && typeof data.revoked === 'number') count = data.revoked;
-    } catch (_) {
-      /* unreadable body — count stays unknown, handled below */
-    }
-    if (count === 0) {
-      diag('mcp-config: device-token revoke matched NO token for label', label,
-        '— nothing was revoked; if this machine ever minted one it is STILL VALID,',
-        'revoke it from web Settings > Devices');
-      return 'no-match';
-    }
-    diag('mcp-config: device token revoked server-side',
-      count === null ? '(count not reported)' : `(${count})`);
-    return 'revoked';
-  } catch (err) {
-    diag('mcp-config: device-token revoke error', (err && err.message) || String(err),
-      '— token stays valid server-side until it expires; revoke it from web Settings > Devices');
-    return 'failed';
-  }
-}
-
-function parseExpiry(v) {
-  if (typeof v === 'number') return v < 1e12 ? v * 1000 : v; // seconds vs ms
-  if (typeof v === 'string') {
-    const t = Date.parse(v);
-    if (!Number.isNaN(t)) return t;
-  }
-  return Date.now() + 90 * 24 * 60 * 60 * 1000; // assume 90d
-}
-
-// Reuse the cached token while it has margin, else mint. null when neither is available
-// (endpoint 404 / one-off failure and no cached fallback) — the caller retries next launch.
-async function obtainDeviceToken() {
-  const cached = loadDeviceToken();
-  if (cached && cached.token && cached.expiresAt - Date.now() > REUSE_MARGIN_MS) {
-    return cached.token;
-  }
-  let res;
-  // ⚠ Held in a local so the EXACT label we minted under is what gets persisted, and therefore
-  // what revokeDeviceToken later presents.
-  const label = deviceLabel();
-  try {
-    res = await apiFetch(MCP_DEVICE_TOKEN_PATH, {
-      method: 'POST',
-      timeoutMs: 15_000,
-      noStore: true,
-      body: { label },
-    });
-  } catch (err) {
-    diag('mcp-config: token fetch error', err && err.message);
-    return cached ? cached.token : null;
-  }
-  if (res.status === 404) {
-    diag('mcp-config: token endpoint 404 (web not deployed) — skip, retry next launch');
-    return cached ? cached.token : null;
-  }
-  if (!res.ok) {
-    diag('mcp-config: token fetch failed', res.status);
-    return cached ? cached.token : null;
-  }
-  let data;
-  try {
-    data = await res.json();
-  } catch (_) {
-    diag('mcp-config: token response not json');
-    return cached ? cached.token : null;
-  }
-  if (!data || !data.token) {
-    diag('mcp-config: token response missing token');
-    return cached ? cached.token : null;
-  }
-  const rec = { token: data.token, expiresAt: parseExpiry(data.expiresAt), label };
-  // Older servers omit tokenId; the heartbeat then links by label.
-  if (isUuid(data.tokenId)) rec.tokenId = data.tokenId;
-  // A fresh mint is live for the NEXT session spawn without a restart — the in-memory copy is what
-  // buildMcpServers injects. Ahead of the write, as it was when the memo sat inside
-  // `saveDeviceToken`; this is that function's only caller, so there is no second site to keep up.
-  spawnToken = String(rec.token);
-  saveDeviceToken(rec);
-  lastMintWasFresh = true;
-  notifyMinted(rec.tokenId ? { tokenId: rec.tokenId } : { tokenLabel: label });
-  diag('mcp-config: minted device token, expires', new Date(rec.expiresAt).toISOString());
-  return rec.token;
-}
-
-// ⚠ Set whenever obtainDeviceToken minted: server-side revoke-and-replace just invalidated any
-// prior token, so the global CLI entry must be refreshed too or manual `claude` runs keep a
-// revoked bearer until the next mint.
-let lastMintWasFresh = false;
-
-// ── THE DEVICE TOKEN ─────────────────────────────────────────────────────────
-// MINTING DEPENDS ON THE DOPL SIGN-IN AND NOTHING ELSE (2026-10-10, launch-critical).
-//
-// THE DEFECT. `ensureMcpConfigInner` asked `spawner.getClaudeBinPath()` BEFORE it minted, and
-// returned `skip (claude cli unresolved)` when that answered null. That probe is EXTERNAL-ONLY
-// (`claude-resolve.js › probeStaticPath` over common install dirs + a login-shell `command -v`,
-// and its `claudeBinPath` override has no writer anywhere in main/), so the asar-unpacked binary
-// a SESSION actually runs cannot satisfy it. `saveDeviceToken` has exactly one caller —
-// `obtainDeviceToken`, below — so there is no second minting path: a Mac with no separately
-// installed Claude Code CLI never got a token at all. `loader.js › buildMcpServers` then returns
-// `{}` with no bearer, the init message reports no `dopl` server, and `mcp-connect-guard.js`
-// ends every launched session `mcp-unreachable` — AFTER New Agent already answered `{ ok: true }`.
-// Most users we distribute to have no external CLI.
-//
-// ⚠ THIS IS THE SAME SPLIT `claude-runtime.js:15-33` ALREADY MADE, and that header says it
-// outright: `claudeAvailable()` answers "is there an EXTERNAL cli for `claude mcp …` /
-// `claude setup-token`", NOT "can this machine do the thing". Minting needs neither a binary nor
-// a CLI — only the session this app is signed in with. So the order is now: SIGN IN → MINT, and
-// the external probe gates ONLY the operator's own user-scope CLI entry, which genuinely needs a
-// binary to write. Pinned by test/device-token-no-cli.test.mjs.
-// ⚠ SINGLE-FLIGHT for `ensureMcpConfig`'s reason, and over the same mint: the launch pre-flight
-// (`delivery-path.js`) calls this on a click while startup's ensure may still be in flight, and
-// two mints would revoke each other's token.
-let minting = null;
-function ensureDeviceToken() {
-  if (minting) return minting;
-  minting = ensureDeviceTokenInner().finally(() => {
-    minting = null;
-  });
-  return minting;
-}
-
-/** '' when signed out or the mint failed; the bearer otherwise. Never throws. */
-async function ensureDeviceTokenInner() {
-  try {
-    // ⚠ ASYNC gate: this runs at startup BEFORE the first reconcile warms the cookie-identity
-    // cache, so it must re-read the jar itself. A sync blob-only check silently stops
-    // refreshing the CLI's Dopl MCP entry whenever the blob is dead but the web UI is signed in.
-    if (!(await auth.ensureSignedIn())) {
-      diag('mcp-config: skip (signed out)');
-      return '';
-    }
-    lastMintWasFresh = false;
-    const token = await obtainDeviceToken();
-    if (!token) {
-      diag('mcp-config: NO DEVICE TOKEN (mint failed) — a session launched now would have no Dopl tools');
-      return '';
-    }
-    return token;
-  } catch (err) {
-    diag('mcp-config: device-token ensure error', err && err.message);
-    return '';
-  }
-}
-
 // ── CLI entry ensure ─────────────────────────────────────────────────────────
 // The three `claude mcp …` child processes live in mcp-cli-add.js. Best-effort; never throws.
 // ⚠ SINGLE-FLIGHT: startup and post-sign-in both call this, and overlapping calls must coalesce
@@ -404,7 +111,7 @@ function ensureMcpConfig() {
 
 async function ensureMcpConfigInner() {
   try {
-    // THE TOKEN FIRST, and on the sign-in alone — see the header above this function's block.
+    // THE TOKEN FIRST, and on the sign-in alone — see `mcp-device-token-lifecycle.js › THE MINT`.
     const token = await ensureDeviceToken();
     if (!token) return; // the minting path logged WHICH of the two it was
     // ⚠ A REMOVAL, not a write. This is where an already-installed machine sheds the plaintext
@@ -465,7 +172,7 @@ async function ensureMcpConfigInner() {
       // a broken entry preserved out of politeness is worse than a working one they can re-point
       // by relaunching against the origin they meant.
       const drifted = probe.url && probe.url !== MCP_URL;
-      if (lastMintWasFresh || drifted) {
+      if (lifecycle.mintWasFresh() || drifted) {
         // A fresh mint revoked the token the global entry carries — refresh it so manual
         // `claude` runs do not 401 until the next mint cycle. A drifted url is the same repair.
         const removed = await removeMcpEntry(bin);
@@ -489,12 +196,12 @@ async function ensureMcpConfigInner() {
 
 module.exports = {
   ensureMcpConfig,
-  ensureDeviceToken, // the ONE mint, on the Dopl sign-in alone — `delivery-path.js`'s pre-flight
+  ensureDeviceToken: lifecycle.ensureDeviceToken, // the ONE mint, on the Dopl sign-in alone — `delivery-path.js`'s pre-flight
   spawnConfigPath,
-  deviceTokenForSpawn, // the SDK path's bearer, from safeStorage — never off disk
-  deviceTokenLink, // device-registry.js › arm (once per sign-in)
+  deviceTokenForSpawn: lifecycle.deviceTokenForSpawn, // the SDK path's bearer, from safeStorage — never off disk
+  deviceTokenLink: lifecycle.deviceTokenLink, // device-registry.js › arm (once per sign-in)
   onDeviceTokenMinted, // device-registry.js: re-mint → link on the next beat
-  clearDeviceToken, // S2: sign-out teardown, LOCAL (auth-state.signOut)
-  revokeDeviceToken, // F-085: sign-out teardown, SERVER-side (auth-state.signOut)
+  clearDeviceToken: lifecycle.clearDeviceToken, // S2: sign-out teardown, LOCAL (auth-state.signOut)
+  revokeDeviceToken: lifecycle.revokeDeviceToken, // F-085: sign-out teardown, SERVER-side (auth-state.signOut)
   MCP_CLIENT_TIMEOUT_MS, // Q9: ONE definition — runtime/claude/loader.js reads it from here
 };

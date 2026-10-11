@@ -5067,11 +5067,11 @@ abort-churn path rather than by file order. All through the same shared helper; 
 | `main/listener-people.js › resolveOperatorUserId` / `refreshNameCache` | 401 / `!res.ok` | per workspace per reconcile |
 | `main/launch-directives.js › pollWorkspace` / `› post` | `if (!res \|\| !res.ok) return` — and the 404 self-disable does NOT fire for 401 | per workspace per 60s |
 | `main/session-credential.js › findWorkspace` / `ensureContainerCredential` / `releaseContainerCredential` | `!res.ok` | ~3 per session launch + teardown, cumulative for the process lifetime |
-| `main/mcp-config.js › obtainDeviceToken` / `› revokeDeviceToken` | 404 / `!res.ok` / non-JSON / missing-token | per launch, per sign-out |
+| `main/mcp-device-token-lifecycle.js › obtainDeviceToken` / `› revokeDeviceToken` | 404 / `!res.ok` / non-JSON / missing-token | per launch, per sign-out |
 | `main/identity-resolve.js › resolveAgentIdentity` | 404 → `no-identity`, `!res.ok` → `busy` | per agent launch with a template identity |
 | `main/avatar-cache.js › fetchDataUri`, `main/channel-dirs.js`, `main/channel-prefs.js`, `main/channel-dir-ipc.js`, `main/auth.js` | assorted `!res.ok` | low |
 
-**⚠ AND ONE THAT IS NOT AN ERROR-BRANCH MISS AT ALL — `main/mcp-config.js › withTimeout`.** On
+**⚠ AND ONE THAT IS NOT AN ERROR-BRANCH MISS AT ALL — `main/mcp-device-token-lifecycle.js › withTimeout`.** On
 timeout it resolves `null` and ABANDONS the losing `apiFetch` promise entirely, so when that
 request eventually settles nobody holds the `Response` and the body can never be consumed or
 cancelled **by anyone**. It is the only place in `main/` where a `Response` is unreachable by
@@ -5288,7 +5288,7 @@ reject promise per in-flight request, for up to the 30s timeout. It is filed rat
 because the FIX is one line and the QUESTION is which file should own it: the two transports should
 share the raced-abort helper the way `discardBody` is shared, not both spell it.
 
-### F-362 — `main/mcp-config.js › withTimeout` abandons a `Response` by construction (2026-08-30)
+### F-362 — `main/mcp-device-token-lifecycle.js › withTimeout` abandons a `Response` by construction (2026-08-30)
 
 Split out of F-353 because it is a different defect. Every other row in that table is a BRANCH that
 could call `discardBody(res)` today; this one resolves `null` on timeout and drops the losing
@@ -9244,7 +9244,7 @@ their AbortController timer starts, and that bottoms out in
 **Chromium's network service owns the cookie store**, so when it crashes and restarts, an
 in-flight `cookies.get` promise can be dropped and never settle — and a timer that has not armed
 yet cannot abort anything, which is why the wedged beat logged no abort error.
-`dopl-desktop-app/main/mcp-config.js › withTimeout` had already named this hazard in its own
+`dopl-desktop-app/main/mcp-device-token-lifecycle.js › withTimeout` had already named this hazard in its own
 header ("getAuthCookie() ahead of it can await a token refresh, so the whole call needs an outer
 stop") and fenced exactly one call site with a local copy of the primitive.
 
@@ -9264,7 +9264,7 @@ stop") and fenced exactly one call site with a local copy of the primitive.
    function per process, so a boot with a dead network service cannot log on every 30s beat.
    Pinned by `dopl-desktop-app/test/auth-cookie-store-deadline.test.mjs`, which also fails on any
    bare `await session.defaultSession.cookies.*` reintroduced into the file.
-3. `dopl-desktop-app/main/mcp-config.js › withTimeout` now DELEGATES to the helper instead of
+3. `dopl-desktop-app/main/mcp-device-token-lifecycle.js › withTimeout` now DELEGATES to the helper instead of
    forking it; its 3s value and null-on-timeout contract are unchanged.
 
 ⚠ **A main-process change: it takes effect on the next Electron restart, not on the running

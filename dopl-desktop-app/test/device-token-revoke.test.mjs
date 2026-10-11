@@ -16,32 +16,24 @@
 //      the very cookie jar sign-out is about to clear — and then tears down locally REGARDLESS
 //      of the result. A sign-out a bad network can block would be worse than a residual token.
 //
-// WHY SOURCE EXTRACTION: both modules are electron-bound (app.getPath / safeStorage /
-// electron-store), so they cannot be imported under `node --test`. The functions are sliced
-// verbatim and driven with fakes — including `require`, which is just another free variable —
-// so the test stays honest to what ships.
+// METHOD. The revoke half drives the REAL `main/mcp-device-token-lifecycle.js` (re-exported by
+// mcp-config.js) through `_device-token-harness.mjs`: the whole module over a strict stub map.
+// `auth-state.signOut` is still sliced from source and driven with fakes — that file is another
+// cleanup sector's, and `require` is just another free variable to it.
 //
 // Run: `node --test dopl-desktop-app/test/device-token-revoke.test.mjs`
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { deviceTokenWorld, minted, TOKEN_PATH } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-// ⚠ THE REAL BOUND, NOT A STUB (2026-09-15, F-700): `withTimeout` below now delegates to
-// `main/deadline.js`, which is dependency-free and therefore injectable as the shipped module —
-// the same one-program argument `_session-state-push-harness.mjs` makes for `watchPass`.
-const deadline = createRequire(import.meta.url)(join(HERE, "..", "main", "deadline.js"));
-const MCP = M("mcp-config.js");
 const STATE = M("auth-state.js");
-
-const TOKEN_PATH = "/api/auth/mcp-device-token";
-const FAST_TIMEOUT = 20; // ms — the shipped constant, injected small so the bound is testable
 
 // fnOf slices from the `function` keyword, so an `async function` loses its modifier and the
 // extracted body no longer parses. Re-attach it — and assert the shipped function really is
@@ -51,57 +43,17 @@ function asyncFnOf(src, name) {
   return `async ${fnOf(src, name)}`;
 }
 
-// ⚠ A HAND-DRIVEN CLOCK, NOT THE WALL CLOCK (2026-09-16). `withDeadline` arms its timer with
-// `unref()` — correct in production, where a pending deadline must never hold the process open on
-// the quit path — but under Node 22's `node --test` an unref'd timer lets the event loop drain, so
-// the hung-request case below was `cancelledByParent` before its deadline could fire, taking every
-// later case in the file with it (Node 24 keeps the loop alive differently, which is why this was
-// green locally and red in CI). The REAL shipped `withDeadline` still runs; only the `timers` seam
-// it already exposes is injected, so the bound fires when the case says so, on both runtimes.
-function fakeTimers() {
-  const armed = [];
-  return {
-    setTimeout: (fn, ms) => {
-      const t = { fn, ms, cleared: false, unreffed: false, unref() { this.unreffed = true; } };
-      armed.push(t);
-      return t;
-    },
-    clearTimeout: (t) => { if (t) t.cleared = true; },
-    armed,
-    fire: () => { for (const t of armed) if (!t.cleared) { t.cleared = true; t.fn(); } },
-  };
-}
-
 // ── the revoke call itself ──────────────────────────────────────────────────
+// The REAL revoke (`_device-token-harness.mjs`), with a seeded record in the real store.
 
 function loadRevoke({ token = "dopl_at_x", label = "Dopl Desktop CLI (Minted-Host)", fetch }) {
-  const calls = { fetches: [], logged: [] };
-  const timers = fakeTimers();
-  const apiFetch = (path, opts) => {
-    calls.fetches.push({ path, opts });
-    return fetch(path, opts);
-  };
-  const loadDeviceToken = () => (token ? { token, expiresAt: 0, ...(label ? { label } : {}) } : null);
-  const diag = (...a) => calls.logged.push(a.join(" "));
-  const src = [
-    fnOf(MCP, "deviceLabel"),
-    fnOf(MCP, "withTimeout"),
-    asyncFnOf(MCP, "revokeDeviceToken"),
-  ].join("\n");
-  const fn = new Function(
-    "apiFetch", "loadDeviceToken", "diag", "MCP_DEVICE_TOKEN_PATH", "REVOKE_TIMEOUT_MS", "require",
-    "withDeadline", "DEADLINE",
-    `${src}\n return revokeDeviceToken;`
-  )(apiFetch, loadDeviceToken, diag, TOKEN_PATH, FAST_TIMEOUT, (id) => {
-    if (id === "os") return { hostname: () => "This-Host" };
-    throw new Error(`unexpected require(${id})`);
-  },
-  // ⚠ THE REAL FUNCTION, ONE ARGUMENT WIDER. `withTimeout` calls `withDeadline(promise, ms)` with
-  // no timers of its own, so the seam is closed here rather than in source: production keeps its
-  // `unref`'d global timer and the slice keeps its exact two-argument call.
-  (promise, ms, onDeadline) => deadline.withDeadline(promise, ms, onDeadline, timers),
-  deadline.DEADLINE);
-  return { fn, calls, timers };
+  const world = deviceTokenWorld({
+    record: token ? { token, expiresAt: 0, ...(label ? { label } : {}) } : null,
+    fetch,
+  });
+  const fn = world.lifecycle.revokeDeviceToken;
+  assert.equal(typeof fn, "function", "revokeDeviceToken must be exported");
+  return { fn, calls: { fetches: world.calls.fetches, logged: world.calls.diags }, timers: world.timers, world };
 }
 
 const ok = async () => ({ ok: true, status: 200 });
@@ -131,13 +83,27 @@ test("a record from a build that predates the stored label falls back to this ho
   assert.deepEqual(calls.fetches[0].opts.body, { label: "Dopl Desktop CLI (This-Host)" });
 });
 
-test("the mint and the revoke derive their label from ONE function", () => {
+test("the mint and the revoke derive their label from ONE function", async () => {
   // If the two ever drift, the revoke silently no-ops and the bug is back with a green suite.
-  assert.match(fnOf(MCP, "obtainDeviceToken"), /const label = deviceLabel\(\);/);
-  assert.match(fnOf(MCP, "obtainDeviceToken"), /body: \{ label \},/);
-  assert.match(fnOf(MCP, "obtainDeviceToken"), /expiresAt: parseExpiry\(data\.expiresAt\), label \}/,
+  // Mint on one hostname, rename the Mac, then revoke: the DELETE must carry the MINTED label.
+  let host = "Mint-Host";
+  let reads = 0;
+  const world = deviceTokenWorld({
+    hostname: () => { reads += 1; return host; },
+    fetch: (_p, o) => (o.method === "POST"
+      ? minted({ token: "dopl_at_new", expiresAt: Date.now() + 90 * 86400e3 })()
+      : { ok: true, status: 200, json: async () => ({ ok: true, revoked: 1 }) }),
+  });
+  assert.equal(await world.lifecycle.ensureDeviceToken(), "dopl_at_new");
+  const post = world.calls.fetches.find((f) => f.opts.method === "POST");
+  assert.deepEqual(post.opts.body, { label: "Dopl Desktop CLI (Mint-Host)" }, "the mint presents deviceLabel()");
+  assert.equal(world.stored().label, "Dopl Desktop CLI (Mint-Host)",
     "…and the label is persisted with the token, or the revoke cannot know it");
-  assert.ok(!/hostname\(\)/.test(fnOf(MCP, "obtainDeviceToken")), "no second, inline label recipe");
+  assert.equal(reads, 1, "one label recipe, read once per mint");
+  host = "Renamed-Host";
+  assert.equal(await world.lifecycle.revokeDeviceToken(), "revoked");
+  const del = world.calls.fetches.find((f) => f.opts.method === "DELETE");
+  assert.deepEqual(del.opts.body, { label: "Dopl Desktop CLI (Mint-Host)" }, "the revoke presents the minted label");
 });
 
 test("FIX M4: no cached token reports 'none', never a revoke we did not perform", async () => {
@@ -157,7 +123,7 @@ test("a hung request is bounded, and the residual is named in the log", async ()
   const { fn, calls, timers } = loadRevoke({ fetch: () => new Promise(() => {}) }); // never settles
   const pending = fn();
   assert.equal(timers.armed.length, 1, "the whole call is armed with ONE outer bound before it is awaited");
-  assert.equal(timers.armed[0].ms, FAST_TIMEOUT + 500,
+  assert.equal(timers.armed[0].ms, 3_000 + 500,
     "…and it OUTLASTS the request's own abort, or the outer bound would always fire first");
   assert.ok(timers.armed[0].unreffed, "…and it is unref'd, so a pending bound cannot hold the quit path");
   timers.fire();
@@ -166,13 +132,18 @@ test("a hung request is bounded, and the residual is named in the log", async ()
   assert.match(calls.logged.join("\n"), /stays valid server-side/, "the operator is told what is left");
 });
 
-test("the outer bound covers getAuthCookie too, not just the fetch", () => {
+test("the outer bound covers getAuthCookie too, not just the fetch", async () => {
   // apiFetch awaits auth.getAuthCookie() BEFORE its AbortController starts, and that call can
   // await a token refresh. Without the race, an offline refresh would hang the whole sign-out.
-  const fn = fnOf(MCP, "revokeDeviceToken");
-  assert.match(fn, /withTimeout\(/, "the whole call is raced, not only the request");
-  assert.match(fn, /timeoutMs: REVOKE_TIMEOUT_MS/, "…and the request keeps its own abort too");
-  assert.match(MCP, /REVOKE_TIMEOUT_MS = 3_000/, "a click-sized bound, not a network-sized one");
+  // So the fake apiFetch itself never settles (the cookie read is INSIDE it) and the outer bound
+  // must still end the call.
+  const { fn, calls, timers, world } = loadRevoke({ fetch: () => new Promise(() => {}) });
+  assert.equal(world.lifecycle.REVOKE_TIMEOUT_MS, 3_000, "a click-sized bound, not a network-sized one");
+  const pending = fn();
+  assert.equal(calls.fetches[0].opts.timeoutMs, 3_000, "…and the request keeps its own abort too");
+  assert.equal(timers.armed.length, 1, "the whole call is raced, not only the request");
+  timers.fire();
+  assert.equal(await pending, "failed");
 });
 
 test("a 5xx / 401 / 404 is a clean 'failed', never a throw", async () => {
@@ -291,8 +262,11 @@ test("sign-out leaves the CLI's own user-scope entry alone", () => {
   // may be one the operator wrote with their own credential — indistinguishable from ours from
   // outside. After a successful revoke its bearer is dead anyway (401), and the next sign-in
   // refreshes it. Deleting a hand-made global config entry would be the worse failure.
-  assert.ok(
-    !/removeMcpEntry/.test(codeOf(fnOf(MCP, "clearDeviceToken") + "\n" + fnOf(STATE, "signOut"))),
-    "no sign-out path spawns the CLI child process"
-  );
+  // The local teardown, run for real through mcp-config's export: the CLI seam is wired and
+  // must stay untouched (`calls.seq` records every remove/add/probe the CLI fake receives).
+  const world = deviceTokenWorld({ record: { token: "dopl_at_x", expiresAt: 0 } });
+  assert.equal(world.config.clearDeviceToken(), true);
+  assert.deepEqual(world.calls.seq, ["rm"], "only the spawn-file belt runs, no CLI child process");
+  // signOut is another sector's file and is still read as source.
+  assert.ok(!/removeMcpEntry/.test(codeOf(fnOf(STATE, "signOut"))), "no sign-out path spawns the CLI child process");
 });

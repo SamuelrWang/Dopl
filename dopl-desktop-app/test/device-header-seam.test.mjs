@@ -60,7 +60,7 @@ test("api.js › sendOnce puts X-Dopl-Device on the wire (and nothing when unkno
 });
 
 test("the token mint sites set no device header themselves", () => {
-  for (const f of ["mcp-config.js", "session-credential.js"]) {
+  for (const f of ["mcp-config.js", "mcp-device-token-lifecycle.js", "session-credential.js"]) {
     assert.equal(/X-Dopl-Device/.test(M(f)), false, `${f} should inherit it from the seam`);
   }
 });
