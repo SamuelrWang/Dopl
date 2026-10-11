@@ -8,12 +8,8 @@
  * the row math. This takes the pieces of "which surface am I looking at", and
  * nothing else.
  *
- * ⚠ `inboxOpen` / `openInbox` STOOD HERE AND ARE DELETED (Samuel, 2026-08-25).
- * The consent Inbox was a CENTER-COLUMN TAKEOVER, which is why it needed
- * selection state at all; `inbox-pane.tsx`, the sidebar row that opened it and
- * the nav badge that counted it are all gone, and the outbound review lives in
- * the work stream's card (`agent-stream.tsx`). **Nothing here has a third state
- * any more** — the center column is a channel or the first-run explainer.
+ * The center column is a channel or the first-run explainer, nothing else (the
+ * consent Inbox takeover is deleted: docs/INVARIANTS.md "WHAT IS DELETED").
  *
  * ⚠ IT IS STATE PLUS ONE RENDER-TIME ADJUSTMENT, and the adjustment is why this
  * is a hook rather than a reducer file: `initialChannelId` is re-applied DURING
@@ -24,10 +20,8 @@
  *
  * ⚠ THE COMPOSITE ACTIONS ARE STILL THE POINT, not a convenience. `selectChannel`
  * and `openThread` each move more than one piece at once, and the page had four
- * hand-written copies of those combinations. ⚠ Each was ALSO clearing the Inbox
- * takeover until 2026-08-25 — that clause is deleted with the takeover, not
- * forgotten, and re-adding a surface these actions have to close means re-adding
- * the state they close it with.
+ * hand-written copies of those combinations. Re-adding a surface these actions
+ * have to close means re-adding the state they close it with.
  */
 
 import { useCallback, useState } from "react";
