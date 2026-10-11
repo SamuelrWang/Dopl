@@ -80,6 +80,7 @@ export default function DesktopHandoffPage() {
     // `system-ui` makes the handoff read as a different product than the page before it.
     // ⚠ `bg-white` matches the login surface (`auth-split-layout.tsx` › AuthSplitLayout); without
     // an explicit surface the body's `.mosaic-bg` app-frame navy shows through.
+    // Sibling copy, deliberately not shared (each differs): `app/link/[token]/page.tsx`.
     <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-white p-6 text-center text-text-primary">
       {error ? (
         <>
