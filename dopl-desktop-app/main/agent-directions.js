@@ -395,7 +395,6 @@ module.exports = {
   start,
   stop,
   refresh, // the toggle moved: rebind realtime
-  deliver, // main/realtime.js's handler
   handle, // the one funnel — exported for the suite
   // ⚠ EXPORTED FOR THE SUITE ONLY, on `handle`'s terms. It matters more than a backstop
   // normally would: while the lane is OFF there is no realtime binding, so this sweep is the
@@ -403,6 +402,4 @@ module.exports = {
   // skip workspaces again would restore the silent drop with every other test still green.
   poll,
   reportDelivered, // session-engine.js's terminal write
-  POLL_MS,
-  MAX_REMEMBERED,
 };

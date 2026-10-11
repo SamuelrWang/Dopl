@@ -49,8 +49,8 @@
 // real answer in one round trip — the same reasoning `launch-directives.js` uses for refusing
 // rather than ignoring once it has decided the row is its own.
 //
-// PURE — no electron, no store, no require. `test/direction-rate.test.mjs` drives it with an
-// injected clock.
+// PURE — no electron, no store, no require. `test/launch-budget.test.mjs` and
+// `test/session-own-direct.test.mjs` drive it with an injected clock.
 
 // ⚠ THE TWO NUMBERS, AND WHY THEY ARE THESE. A loop needs a full turn per hop, and a turn is
 // seconds to minutes — so SIX directions inside five minutes is already faster than any real

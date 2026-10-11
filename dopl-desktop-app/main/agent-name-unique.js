@@ -36,7 +36,7 @@
 // it holds, so the truth table runs with no disk and no electron. The LIVE half is
 // `agent-identity-commit.js`, which is the one door every rename path already goes through.
 
-// ─── BEGIN AGENT-NAME-UNIQUE-PURE (pure; unit-tested via source extraction) ────
+// ─── BEGIN AGENT-NAME-UNIQUE-PURE (pure; its test requires the module directly) ────
 
 /**
  * THE HANDLE CONVENTION — lowercase, whitespace runs to a single `-`.

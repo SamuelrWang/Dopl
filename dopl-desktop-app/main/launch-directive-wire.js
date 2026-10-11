@@ -4,11 +4,11 @@
 
 // ─── BEGIN LAUNCH-DIRECTIVE-WIRE (pure; unit-tested via source extraction) ───────────────
 
-// Every list, bound and pattern lives in the vocabulary leaf; re-exported verbatim below.
+// Every list, bound and pattern lives in the vocabulary leaf; the names callers read are re-exported below.
 const vocab = require('./launch-directive-vocab');
 const {
-  DIRECTIVE_TABLE, ROUTES,
-  STATUS_PENDING, STATUS_CLAIMED, STATUS_LAUNCHED, STATUS_DONE, STATUS_REFUSED, STATUS_EXPIRED,
+  ROUTES,
+  STATUS_PENDING, STATUS_LAUNCHED, STATUS_DONE, STATUS_REFUSED,
   STATUSES,
   KIND_LAUNCH, KIND_END, KIND_RENAME, KIND_SET_MODE, KINDS, KINDS_NEEDING_LAUNCH_CONSENT,
   TOOL_MODES, APPLIED_TOOL_MODES, SETTING_RE, MESSAGE_MODES, REFUSAL_REASONS,
@@ -160,15 +160,12 @@ function decideBody(directiveId, outcome) {
 // ─── END LAUNCH-DIRECTIVE-WIRE ───────────────────────────────────────────────────────────
 
 module.exports = {
-  DIRECTIVE_TABLE,
   ROUTES,
   STATUSES,
   STATUS_PENDING,
-  STATUS_CLAIMED,
   STATUS_LAUNCHED,
   STATUS_DONE,
   STATUS_REFUSED,
-  STATUS_EXPIRED,
   KINDS,
   KIND_LAUNCH,
   KIND_END,

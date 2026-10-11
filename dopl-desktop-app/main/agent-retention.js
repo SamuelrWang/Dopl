@@ -16,17 +16,14 @@
 //                                            THAT MATTERS MOST: it is what a resume would use
 //                                            to re-attach an SDK conversation, and an ended
 //                                            agent must never be resumable.
-//   4. `session-summary.js › releaseEnded`   the in-memory projection's cache of ended cards.
+//   4. `session-summary.js › releaseEnded`   nudges the projection so the dropped cards leave it.
 //   5. `queued-notice.js › announced`        the "queued, not ignored" one-per-thread guard.
 //
 // ⚠ THREE MORE ARE KEYED BY THE SAME KEY AND ARE DELIBERATELY NOT SWEPT HERE, because they
 // PRUNE THEMSELVES to the live set on every cycle and a second cleaner would be a second
-// answer: `session-state-push.js › origin` and `› loggedAdHoc` (both pruned in `trackOrigin` /
-// `reportable`), and `session-narration.js › dirty` (cleared on every flush).
-// ⚠ `consent-watcher.js`'s records were keyed by `(channelId, seq)` — a REQUEST, not an agent —
-// and settled on their own decision, so they were never per-agent artifacts and were never swept
-// here. That module is DELETED with the inbound consent lane (2026-08-22); nothing replaced it,
-// so there is no fourth self-pruning store to account for.
+// answer: `session-state-push.js › origin` (pruned in `trackOrigin`),
+// `session-state-push-wire.js › loggedAdHoc` (pruned in `reportable`), and
+// `session-narration-fanout.js › dirty` (cleared on every flush).
 // ⚠ `ownPostIds` / `ownPostSeq` live ON the session object and die with it at `settle`; they
 // are never persisted, so there is nothing to sweep.
 // ⚠ `agent-names.js › agentNames` IS KEYED BY `agentId`, NOT BY SESSION KEY, and is therefore
@@ -63,7 +60,7 @@ let deps = { clearRecord: null, releaseEnded: null, forgetNotice: null };
 function bind(d) {
   deps = {
     clearRecord: (d && d.clearRecord) || null, // session-store: record + resume map, one key
-    releaseEnded: (d && d.releaseEnded) || null, // session-summary: the projection's ended cache
+    releaseEnded: (d && d.releaseEnded) || null, // session-summary: nudge the projection
     forgetNotice: (d && d.forgetNotice) || null, // queued-notice: the per-thread announce guard
   };
 }

@@ -86,7 +86,7 @@ function due(held, nowMs) {
 
 // ─── END CATALOG-PUBLISH-PURE ────────────────────────────────────────────────
 
-/** runtimeId → { body, sig, sentSig, sentAt, sending } */
+/** runtimeId → { body, sig, sentSig, sentAt, sending, retrySoon } */
 const held = new Map();
 let timer = null;
 
@@ -146,4 +146,4 @@ function start() {
   if (typeof timer.unref === 'function') timer.unref();
 }
 
-module.exports = { start, publishableCatalog };
+module.exports = { start };

@@ -9,8 +9,9 @@
 //
 // §2 SPLIT for the same reason `session-own-outbound.js` was split out of `session-profiles.js`
 // on 2026-08-24 (F-301): a ruling needs its ADMISSION ARGUMENT written down beside the list it
-// admits to, and that file measured 495 of the 500-line cap. PURE, with NO require at all: one
-// frozen op list, one scope rule, one posture rule, one depth rule.
+// admits to, and that file measured 495 of the 500-line cap. Nearly pure (it requires only
+// `channel-op-key` and, lazily, `session-profiles-runtime`): one frozen op list, one scope rule,
+// one posture rule, one depth rule.
 //
 // ⚠ IT CLASSIFIES AND IT BOUNDS; IT DOES NOT SPAWN. Nothing here starts a process — see the
 // consent paragraph below, which is the whole reason this admission is not the inversion F-320
@@ -50,7 +51,7 @@
 // ── ⚠ THE RECURSION BOUND (Samuel's ruling, 2026-08-25) ─────────────────────────────────────
 //
 // Agents launching agents must carry a bound, and `MAX_CONCURRENT_SESSIONS` is not one: it caps
-// how many run AT ONCE (six), not how many generations deep the chain goes, and sessions settle
+// how many run AT ONCE, not how many generations deep the chain goes, and sessions settle
 // and free their slots. So a session carries a LAUNCH DEPTH and may only ask while it is under
 // the cap.
 //
@@ -59,7 +60,7 @@
 //   depth 1+   EVERYTHING ELSE, and it is AT the cap: it may not ask for another agent.
 //
 // ⚠ **ABSENT MEANS THE CAP, NOT ZERO** (`normalizeLaunchDepth`). Every lane that does not
-// explicitly say "a human started this" — the directive lane (`launch-directives.js › spawn`) and
+// explicitly say "a human started this" — the directive lane (`launch-directive-spawn.js › spawn`) and
 // the peer-triggered responder (`trigger.js`) — lands at the cap and cannot launch. That is the
 // fail-CLOSED direction and it is the same discipline Axis A already follows (`manual` is its
 // start value AND its park reset: an abandoned session must never resume pre-authorized), and the
@@ -188,7 +189,7 @@ function launchDepthExhausted(depth) {
 
 /**
  * IS THE DEPTH BOUND LIFTED FOR THIS SESSION? The channel's chaining setting, stamped at spawn
- * (`channel-prefs.js › getAgentChain` → `launch-directives.js` → the funnel → the session).
+ * (`channel-prefs.js › getAgentChain` → `launch-directive-spawn.js` → the funnel → the session).
  *
  * ⚠ `=== true` AND NOTHING ELSE. A missing field, a string, a 1 and a truthy object all read
  * FALSE, so the bound survives every lane that does not deliberately hand a real boolean in —

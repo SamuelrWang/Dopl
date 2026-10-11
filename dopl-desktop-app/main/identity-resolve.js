@@ -186,13 +186,6 @@ function isSafeLabel(value) {
   return !UNSAFE_LABEL_RE.test(value);
 }
 
-/**
- * Narrow the renderer's overrides to what may reach a spawn. Absent is the only "no override";
- * `fields` replaces, never merges; `instructions` is prose (the column's bound, no charset rule).
- * The model is bounded, not coerced — the launch funnel resolves it on the live roster or refuses.
- * @returns {{model: string, instructions: string, fields: null | Array<{key: string, value: string}>}}
- *   `''` = "the chain continues".
- */
 // Per-model dimension picks off the wire (`{ reasoningEffort: 'high' }`): bounded key/value strings only;
 // the runtime's vocabulary and the live catalog decide what survives (`session-launch.js`).
 function dimensionsOf(raw) {
@@ -205,6 +198,13 @@ function dimensionsOf(raw) {
   return out;
 }
 
+/**
+ * Narrow the renderer's overrides to what may reach a spawn. Absent is the only "no override";
+ * `fields` replaces, never merges; `instructions` is prose (the column's bound, no charset rule).
+ * The model is bounded, not coerced — the launch funnel resolves it on the live roster or refuses.
+ * @returns {{model: string, instructions: string, fields: null | Array<{key: string, value: string}>, dimensions: object}}
+ *   `''` = "the chain continues".
+ */
 function narrowOverrides(overrides) {
   const o = overrides && typeof overrides === 'object' ? overrides : {};
   const asked = typeof o.model === 'string' ? o.model.slice(0, MAX_MODEL) : '';

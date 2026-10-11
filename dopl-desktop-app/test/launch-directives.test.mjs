@@ -45,7 +45,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  boot, claimPosts, decidePosts, row, wire,
+  boot, claimPosts, decidePosts, row, wire, CALLS_SRC,
   MAIN, SRC, WS, CH, OTHER, DID, IDENTITY_ID,
 } from "./_launch-directive-harness.mjs";
 import { codeOf } from "./helpers/source-probe.mjs";
@@ -419,6 +419,8 @@ test("BACKSTOP: a HEALTHY workspace is still reconciled — a live socket is not
   const polls = h.gets.filter((g) => g.path === wire.ROUTES.pending);
   assert.equal(polls.length, 1, "the reconcile read runs while push is up");
   assert.equal(h.api.POLL_MS, 60000);
+  // ⚠ Bounded by the lane's one timeout (imported from launch-directive-calls.js); a dropped export = unbounded GET.
+  assert.equal(polls[0].opts.timeoutMs, Number((/const HTTP_TIMEOUT_MS = (\d+);/.exec(CALLS_SRC) || [])[1]), "GET carries the lane timeout");
 });
 
 // ⚠ 60s IS THE RECONCILE'S CEILING, NOT A PREFERENCE: `LAUNCH_DIRECTIVE_TTL_MS` is 120s, so a

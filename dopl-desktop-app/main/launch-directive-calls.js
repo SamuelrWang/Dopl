@@ -20,9 +20,8 @@ const { apiFetch } = require('./api');
 const wire = require('./launch-directive-wire');
 const { diag } = require('./diag');
 
-// ⚠ THE SAME BOUND THE WATCHER USES, DECLARED HERE BECAUSE THIS IS WHERE THE CALL IS MADE. It is
-// deliberately NOT imported back from `launch-directives.js`: that would make the module this one
-// split out of a dependency of the split, which is how a cycle gets built one honest line at a time.
+// ⚠ THE ONE DECLARATION OF THE LANE'S HTTP BOUND: the watcher (`launch-directives.js`) imports it
+// from here for its backstop GET, never the other way round (that would build a require cycle).
 const HTTP_TIMEOUT_MS = 15000;
 
 async function post(workspaceId, path, body) {
@@ -54,7 +53,7 @@ async function claim(d) {
     // ⚠ **409 IS THE DESIGNED OUTCOME FOR EVERY MACHINE BUT ONE, NOT AN ERROR** (F-286).
     // `service-launch.ts › claimLaunchDirective` throws `LaunchDirectiveNotClaimableError` when
     // the CAS matches no row — taken, decided, or expired — which `http-mapping.ts` maps to 409.
-    // So on the ORDINARY multi-machine path (header step 4) the loser lands here, and telling it
+    // So on the ORDINARY multi-machine path (two Macs claim one row) the loser lands here, and telling it
     // "the row stays pending" asserts the opposite of the truth: the row is CLAIMED and another
     // machine is launching it. 404 is the same kind of answer. Only network faults and 5xx leave
     // the row genuinely pending.
@@ -144,4 +143,4 @@ const DECIDE_ATTEMPTS = 3;
 const DECIDE_BACKOFF_MS = 500;
 const sleep = (ms) => new Promise((r) => { const t = setTimeout(r, ms); if (t.unref) t.unref(); });
 
-module.exports = { post, claim, decide, HTTP_TIMEOUT_MS, DECIDE_ATTEMPTS, DECIDE_BACKOFF_MS };
+module.exports = { claim, decide, HTTP_TIMEOUT_MS };

@@ -1,6 +1,7 @@
 // What an ended agent leaves behind: a durable, READ-ONLY history (narration, what it sent, the 1:1 exchange, its
 // identity and final numbers) kept SEVEN DAYS from `endedAt`. Nothing here can wake anything, and channel messages
-// are never in it (they are the server's shared record). Written once at `settle`, never per frame: a hard kill
+// are never in it (they are the server's shared record). Written once per end (`session-teardown.js › settle`, and `session-boot.js › endInterrupted` for a record that
+// could not be re-parked), never per frame: a hard kill
 // loses the ring of a session that was live.
 
 const Store = require('electron-store');
@@ -110,7 +111,7 @@ function saveAll(all) {
   catch (err) { diag('agent-history: could not persist —', (err && err.message) || String(err)); }
 }
 
-/** Freeze an ended session's history, once, from `session-teardown.js › settle` before the registry entry goes.
+/** Freeze an ended session's history, once (`settle` before the registry entry goes, or boot's `endInterrupted`).
  *  Never throws: `settle` must still abort the child. */
 function record(rec) {
   const r = durableHistory(rec);
@@ -165,13 +166,6 @@ function sweep(now) {
 }
 
 module.exports = {
-  RETENTION_MS,
-  MAX_HISTORY,
-  historyName,
-  numberOrNull,
-  durableHistory,
-  expired,
-  sweepableKeys,
   record,
   historyFor,
   listEnded,

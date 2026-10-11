@@ -1,9 +1,7 @@
 // THE AGENT ID — the identity ONE spawned agent instance wears.
 //
-// ⚠ IT REPLACED THE STONE-NAME POOL (2026-08-21, Samuel's ruling). Until this file existed a
-// session pill was named from a curated 60-handle pool (`main/agent-names.js`, a byte-port of
-// `src/features/channels/server/agent-names.ts`, pinned by a parity test). Both copies and the
-// parity test are DELETED. The pool was a per-channel, first-free-handle picker whose whole
+// ⚠ IT REPLACED THE STONE-NAME POOL (2026-08-21, Samuel's ruling): a curated 60-handle pool,
+// since deleted (today's `main/agent-names.js` is the unrelated rename store). The pool was a per-channel, first-free-handle picker whose whole
 // contract — "the same room state always yields the same next name" — was written for ONE
 // session per (channel, thread). Multiplayer breaks that premise: N agents run on one thread at
 // once, they come and go, and a handle returned to the pool is immediately re-issued to a
@@ -34,7 +32,7 @@
 // mint lives:
 //
 //   • IT MINTS IN MAIN, NOT IN THE RENDERER, and that is the point of the op. This file owns the
-//     grammar, and `agents-model.ts › AGENT_POST_STAMP_RE` already carries a standing rule
+//     grammar, and `lib/agent-post-stamp.ts › AGENT_POST_STAMP_RE` already carries a standing rule
 //     against re-declaring that pattern anywhere. A renderer that minted its own would be a
 //     SECOND statement of the charset, in a tree that ships on another cadence.
 //   • THE OP'S PRESENCE IS THE SPA'S CAPABILITY GATE. A desktop older than the forward does not
@@ -48,7 +46,7 @@
 //     handled here: `session-launch.js`'s post-await `hasLiveSession(slot)` answers
 //     `skipped: 'busy'`, the refusal the SPA already renders.
 //
-// PURE + electron-free, like `agent-names.js` was, so the truth tables `require` it directly.
+// PURE + electron-free, so the truth tables `require` it directly.
 
 const crypto = require('crypto');
 
@@ -61,8 +59,8 @@ const REST_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 /**
  * The shape an agent id has. ⚠ Anchored and EXACT-length: this is used as an acceptance test on
- * values that arrive from a renderer (`main/session-ipc-ops.js`) and as the @-mention parser's
- * candidate filter, so "starts with something id-shaped" is not good enough.
+ * values that arrive from a renderer (`main/session-ipc-ops.js`) and by the framing and narration
+ * readers (`prompt-framing-self.js`, `session-narration.js`), so "starts with something id-shaped" is not good enough.
  */
 const AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
 
