@@ -97,7 +97,7 @@ async function callerHomeSpaceId(
 }
 
 /** Where a shelf-scoped read looks, resolved once per query. */
-export interface ShelfScope {
+interface ShelfScope {
   /** Applied with `.in()`. Empty is the fail-safe read: no home space, no personal rows. */
   workspaceIds: string[];
 }
@@ -123,7 +123,7 @@ export async function resolveShelfScope(
 }
 
 /** The insert fields this decision reads; both features' insert args already carry them. */
-export interface ShelfBoundInsert {
+interface ShelfBoundInsert {
   workspaceId: string;
   /** A routing flag, not a column: `true` = the author's home space, else `workspaceId`. */
   homeScoped?: boolean;

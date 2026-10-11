@@ -87,8 +87,6 @@ export const memberKeys = {
   invitations: (slug: string): ApiResourceKeys =>
     apiResource(invitationsPath(slug)),
   teams: (slug: string): ApiResourceKeys => apiResource(teamsPath(slug)),
-  accessMatrix: (slug: string): ApiResourceKeys =>
-    apiResource(accessMatrixPath(slug)),
   joinRequests: (slug: string): ApiResourceKeys =>
     apiResource(joinRequestsPath(slug)),
   joinLink: (slug: string): ApiResourceKeys => apiResource(joinLinkPath(slug)),

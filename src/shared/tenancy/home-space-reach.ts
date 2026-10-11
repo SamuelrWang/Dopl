@@ -24,7 +24,7 @@ export type HomeSpaceReachRefusal =
 
 /** Two shapes, not a boolean beside an id: `open` carries the container id, so no caller can read a
  *  null id as open. */
-export type HomeSpaceReach =
+type HomeSpaceReach =
   | { readonly kind: "open"; readonly containerId: string }
   | { readonly kind: "closed"; readonly refusal: HomeSpaceReachRefusal };
 

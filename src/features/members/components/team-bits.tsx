@@ -81,46 +81,14 @@ const SCOPE_LABEL: Record<"edit" | "read" | "none", string> = {
   none: "No access",
 };
 
-/** Read/edit/none pill, same base styling as RolePill. Interactive variant
- *  cycles none → read → edit on click. */
-export function ScopePill({
-  level,
-  onClick,
-  disabled,
-  className,
-}: {
-  level: AccessLevel | null;
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-}) {
+/** Read/edit/none pill, same base styling as RolePill. Display only. */
+export function ScopePill({ level }: { level: AccessLevel | null }) {
   const key = level ?? "none";
   const base = cn(
     "inline-flex items-center px-1.5 py-0.5 rounded text-label uppercase tracking-wider border whitespace-nowrap",
-    SCOPE_STYLE[key],
-    className
+    SCOPE_STYLE[key]
   );
-  if (!onClick) {
-    return <span className={base}>{SCOPE_LABEL[key]}</span>;
-  }
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      disabled={disabled}
-      className={cn(
-        base,
-        disabled
-          ? "opacity-60 cursor-not-allowed"
-          : "cursor-pointer hover:brightness-110 transition-all"
-      )}
-    >
-      {SCOPE_LABEL[key]}
-    </button>
-  );
+  return <span className={base}>{SCOPE_LABEL[key]}</span>;
 }
 
 /** None / Read / Edit segmented control. */

@@ -11,7 +11,6 @@ import type {
   TeamResourceType,
 } from "./access-levels";
 
-export type { AccessMode };
 
 export interface Team {
   id: string;

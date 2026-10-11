@@ -105,7 +105,7 @@ export function isGrantValidityViolation(err: unknown): boolean {
   return code === "P0001" && (message ?? "").includes("resource_grants:");
 }
 
-export interface GrantedResource extends ResourceGrantWrite {
+interface GrantedResource extends ResourceGrantWrite {
   workspaceId: string;
 }
 
