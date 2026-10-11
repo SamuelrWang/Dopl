@@ -99,7 +99,7 @@ export async function ontologiesOfObjects(
  * (Q9's read half), the same sentence `./service-reads.ts ›
  * walkAdmittedOntologies` says about the board.
  *
- * It is NOT `repository.ts › filterObjectIds`, and confusing the two is the
+ * It is NOT `repository-links.ts › filterObjectIds`, and confusing the two is the
  * one way to leak: that one answers "is this a live row inside my READ SCOPE",
  * and the scope holds the LENDER's whole container. This applies the
  * authorization on top.

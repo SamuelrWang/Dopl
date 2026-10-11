@@ -13,7 +13,7 @@ import { SEED_SKILL_SLUGS } from "@/features/skills/server/seed";
  * key/slug; `service-seed.ts` resolves them to uuids at insert time.
  */
 
-export const DOPL_PLAYBOOK_SLUG = "dopl-playbook";
+const DOPL_PLAYBOOK_SLUG = "dopl-playbook";
 
 /** An attribute on a seeded object, addressed by cross-reference key. */
 export type SeedAttr =
