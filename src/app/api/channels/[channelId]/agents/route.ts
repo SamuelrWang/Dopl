@@ -10,10 +10,10 @@ import {
 } from "@/features/channels/server/service";
 
 /**
- * Named-agent ATTRIBUTION roster — READ ONLY. Named agents are gone; this GET survives for one
- * consumer: the transcript resolving a stored `metadata.author_agent_id` to the handle it
- * rendered under. ⚠ Delete only when historical attribution stops mattering — the messages
- * outlive the feature.
+ * Named-agent ATTRIBUTION roster — READ ONLY: resolves a stored `metadata.author_agent_id` to
+ * the handle it rendered under. ⚠ It has NO client caller since the v2 cutover (2026-08-18,
+ * F-218; `channels/client/api.ts`'s Agents note). Delete only when historical attribution
+ * stops mattering — the messages outlive the feature.
  * NOT sessionOnly; the service enforces the channel's visibility rule.
  */
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
