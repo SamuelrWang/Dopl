@@ -82,9 +82,8 @@ function capMsLeft(s, now) {
  * THE WHOLE DECISION A WORK RE-ARM MAKES: stamp the stretch if it is new, then return how long the idle
  * timer may be armed for — the ordinary TTL, or what is left of the cap when that is less.
  *
- * ⚠ IT IS HERE RATHER THAN AT THE `setTimeout` SO IT CAN BE PINNED. The engine's `scheduleIdle` cannot be
- * unit-tested (it requires electron through the engine), and a clamp duplicated into a test is a copy that
- * drifts. The engine now reads as one line and the arithmetic is covered by `session-work-cap.test.mjs`.
+ * ⚠ IT IS HERE RATHER THAN AT THE `setTimeout` SO IT CAN BE PINNED: the arithmetic is covered by
+ * `session-work-cap.test.mjs`, and the engine's use of it end to end by `session-work-cap-engine.test.mjs`.
  * ⚠ IT ONLY EVER SHORTENS: `Math.min` against the TTL the reducer's own table chose, never a replacement
  * for it. A zero means the cap is spent and the caller's ordinary park fires on the next tick.
  */

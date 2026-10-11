@@ -63,7 +63,6 @@ const baseRecord = io.baseRecord;
 
 /** The one dispatch funnel. Answers whether an effect resolved a LIVE held-tool promise (FIX F1). */
 function dispatch(s, event) {
-  // A turn ended: spend one unit of the private window (a fact about the session object, not reducer state).
   // A turn ended: spend one unit of the private window, and END THE WORK STRETCH — the continuous-work cap
   // measures unbroken work, so the next stretch starts from its own first frame rather than inheriting this
   // one's age (`session-work-cap.js`).
