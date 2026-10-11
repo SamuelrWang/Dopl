@@ -8602,6 +8602,10 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - Candidate answers, none taken: fold the editor into the LIST rail (`../list/list-panel.tsx`) beside
   the node it describes; give the entry's own file view an excerpt field; or restore Contents as a
   third section and let Samuel rule on three.
+- 2026-10-11 (cleanup K02, orchestrator #3699 under Samuel's INVARIANTS §15 **DEAD CODE IS DELETED**
+  ruling): the two modules ARE deleted (09b22677), overriding the "should NOT be deleted" bullet above
+  — recover them from git history. The capability gap this entry records is unchanged: no surface writes
+  an entry excerpt or a folder description. F-726 tracks the deletion; this entry tracks the editor.
 
 ### F-688 — sixteen unexempted files are over the 500-line cap, so the ROOT lint gate is red (measured 2026-09-09)
 
@@ -10206,8 +10210,8 @@ The claim had been restated in five places from one sentence, which is how it su
 ### F-726 — five orphan modules survive the "dead code is deleted" ruling, and two of them say so in a comment (2026-09-17)
 
 - Location, all measured in final review with `npx knip` plus an import grep over `src apps packages dopl-desktop-app` (zero import sites each, not counting prose mentions):
-  `src/features/knowledge/components/knowledge-v2/detail/overview-contents.tsx` (398 lines) ·
-  `src/features/knowledge/components/knowledge-v2/detail/use-content-descriptions.ts` (102) ·
+  the knowledge Contents section `overview-contents` (398 lines; deleted 2026-10-11, cleanup K02) ·
+  its `use-content-descriptions` hook (102; deleted 2026-10-11, cleanup K02) ·
   the channels auto-send hook tombstone (40; deleted 2026-10-11, cleanup C08) ·
   the copy-paste skill template under `src/features/mcp-connect/` (112; deleted 2026-09-24) ·
   the shared layout's page top bar (40; deleted 2026-10-02).
@@ -10217,7 +10221,8 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **`AppPanel` WAS IN THIS CLASS AND WAS DELETED**, because it was different in one way that matters: 00-MASTER §5 Wave 0 carried it as scoped work (X9) and the row claimed it done. Its CSS rule `app-shell.module.css › .mainDetail` went with it — zero other users.
 - Proposed resolution: delete all five, each in its own commit, with the `RETIREMENT-UNWIRING-PLAN.md` rows repointed in the same change. **Re-derive the orphan set first** (`npx knip`) rather than trusting this list — §15's own warning is that "dead" is a MEASUREMENT, and `bits.tsx › agentAccent` was called an orphan while it still had a live call site.
 - 2026-09-24 (DMP-013 B5): the skill template is DELETED — still zero importers, and it taught tool names and args the server no longer serves (`*_admin`, `workspace=`, `op:'list'` on channels). The Connect page shows only the connection snippets (`src/features/mcp-connect/snippets.ts`). The other four remain.
-- Status: open (two of five: the knowledge `overview-contents` pair, which cleanup K02 deletes; the template, the top bar and the auto-send hook are gone).
+- 2026-10-11 (cleanup K02): the knowledge pair (`overview-contents`, `use-content-descriptions`) is DELETED — zero importers, INVARIANTS §15; `base-overview.tsx` now cites this entry for the deletion. The lost description editor is F-687's, and is still unbuilt.
+- Status: **RESOLVED 2026-10-11**, all five deleted (the knowledge pair in cleanup K02, the channels auto-send hook in cleanup C08, the skill template 2026-09-24, the page top bar 2026-10-02).
 
 ### F-727 — the search `tsvector` rides every transcript read, and the reads are `select("*")` (2026-09-17)
 

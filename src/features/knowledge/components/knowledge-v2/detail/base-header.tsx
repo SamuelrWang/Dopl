@@ -1,6 +1,5 @@
 "use client";
 
-import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { Fragment, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Download, Settings, Trash2 } from "lucide-react";
@@ -8,12 +7,10 @@ import {
   OPEN_SCALE_ICON_ONLY,
   OpenScaleIconButton,
 } from "@/shared/ui/open-scale-button";
-import { toast } from "@/shared/ui/toast";
 import { cn } from "@/shared/lib/utils";
 import { DeleteBaseConfirm } from "../../delete-base-confirm";
 import { KnowledgeSearch } from "../../knowledge-search";
-import { deleteBase } from "../../../client/api";
-import { evictDeletedBase } from "../../../client/hooks";
+import { deleteBaseAndLeave } from "../../delete-base";
 import type { KnowledgeBase, KnowledgeFolder } from "../../../types";
 import type { BaseTree, Selection } from "../types";
 import type { KnowledgeRouting } from "../routing";
@@ -86,21 +83,11 @@ export function BaseHeader({
   const [deleting, setDeleting] = useState(false);
   const queryClient = useQueryClient();
 
-  // Must mirror base-settings-form.tsx's danger-zone delete: same `deleteBase`
-  // call, then navigate to the base-less knowledge root so the view drops to an
-  // empty selection and the list is re-pulled.
+  // The same flow as base-settings-form.tsx's danger-zone delete, by construction.
   async function handleDeleteBase() {
-    const base = selection.base;
     setDeleting(true);
     try {
-      await deleteBase(base.id, workspaceId);
-      toast({ title: `"${base.name}" deleted` });
-      evictDeletedBase(queryClient, workspaceId, base.id);
-      routing.goToBase(null, "replace");
-      routing.refreshServerData();
-    } catch (err) {
-      const msg = userFacingMessage(err);
-      toast({ title: "Couldn't delete", description: msg });
+      await deleteBaseAndLeave(selection.base, workspaceId, queryClient, routing);
     } finally {
       setDeleting(false);
     }

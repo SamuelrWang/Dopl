@@ -5,11 +5,11 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import {
-  deleteBase,
   updateBase,
   updateFolder,
 } from "../client/api";
-import { evictDeletedBase, seedKnowledgeBase } from "../client/hooks";
+import { seedKnowledgeBase } from "../client/hooks";
+import { deleteBaseAndLeave } from "./delete-base";
 import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
 import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
@@ -111,14 +111,7 @@ export function BaseSettingsForm({
   async function handleDelete() {
     setDeleting(true);
     try {
-      await deleteBase(base.id, workspaceId);
-      toast({ title: `"${base.name}" deleted` });
-      evictDeletedBase(queryClient, workspaceId, base.id);
-      routing.goToBase(null, "replace");
-      routing.refreshServerData();
-    } catch (err) {
-      const msg = userFacingMessage(err);
-      toast({ title: "Couldn't delete", description: msg });
+      await deleteBaseAndLeave(base, workspaceId, queryClient, routing);
     } finally {
       setDeleting(false);
     }

@@ -158,7 +158,7 @@ export function KnowledgeBaseSkeleton({
  * (`rounded-[14px] p-3`), the `data-section-panel` hook and
  * `SECTION_PANEL_GROUND` — the ground `SectionPanel` paints for the two real
  * sections since R-38 — so this ghost re-grounds with `detail/meta-card.tsx`
- * and `detail/overview-contents.tsx` rather than beside them.
+ * and `detail/overview-changelog.tsx` rather than beside them.
  */
 function InfoPanelGhost({ lines }: { lines: number }) {
   return (

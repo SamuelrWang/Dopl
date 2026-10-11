@@ -192,7 +192,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    * ⚠ THE OPENED BASE'S TWO SECTIONS ARE WELLS, and the level decides the face:
    * they are drawn inside the shell's white `.pageCard` (or /home's record
    * pane), so they take `SECTION_PANEL_GROUND` exactly as `detail/meta-card.tsx`
-   * and `detail/overview-contents.tsx` do. Flat shimmer blocks resolved into a
+   * and `detail/overview-changelog.tsx` do. Flat shimmer blocks resolved into a
    * gray panel appearing under the reader.
    */
   it("the opened-base ghost grounds its info sections as SECTION_PANEL wells", () => {

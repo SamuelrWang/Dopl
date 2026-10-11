@@ -4631,7 +4631,7 @@ and cards directly on it.
   changes what that sweep MEANS — it is /home's flatness rule now, not one feature's. That is the
   right direction for a list that only grows: the failure mode of a sweep is a file nobody added, not
   a file added too eagerly.
-- **What was NOT done.** `knowledge-v2/detail/overview-contents.tsx` renders a `SectionBox` inside
+- **What was NOT done.** the Contents section (`overview-contents`, deleted 2026-10-11) rendered a `SectionBox` inside
   this same record pane when a base is opened. The ruling was about the Knowledge face's two
   sections, and extending it to the detail pane on inference is how a styling request becomes an
   unreviewed sweep. Recorded in INVARIANTS as a live divergence so the next reader does not have to
@@ -4881,7 +4881,7 @@ latch for the last loaded entry, leaving a file would blink its document into a 
 the way off screen — a face nobody navigated to, for 150ms. That cost is now written into the
 primitive's own row in DESIGN-SYSTEM, because the next caller with per-face data will hit it.
 
-**The divergence closed itself once someone asked.** `overview-contents.tsx`'s `SectionBox` had been
+**The divergence closed itself once someone asked.** The Contents section's `SectionBox` had been
 recorded in INVARIANTS §5A as a live divergence with an instruction not to "finish the job" without
 asking — written on 2026-08-27 by a wave that flattened the Knowledge FACE's two sections one level
 out. It sat for one day. The value of having written it down was not that it prevented a sweep; it is
