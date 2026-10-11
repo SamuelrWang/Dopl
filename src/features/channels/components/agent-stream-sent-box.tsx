@@ -15,6 +15,8 @@
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { agentColorVar } from "../lib/agent-colors";
+import type { RecipientTag } from "../lib/recipient-tags";
+import { AGENT_PILL_SHAPE } from "./agent-bits";
 import type { PostDestination } from "./agents-model";
 import { StreamProse } from "./agent-stream-prose";
 import type { AgentColorKey } from "../types";
@@ -98,6 +100,58 @@ const COLLAPSED_BODY_LINES = 6;
  * COLOUR, and the colour is unchanged.
  */
 const AGENT_BAR = "flex items-center gap-1.5 px-2.5 py-[5px]";
+
+/**
+ * **WHO THE POST WAS ADDRESSED TO, AS A PILL ON THE BANNER** (Samuel, 2026-10-10, #3081:
+ * *black pill(s) naming who the post was addressed to*).
+ *
+ * ⚠ **IT IS {@link AGENT_PILL_SHAPE} WITH ITS OWN INK, AND THE FILL IS WHY.** The black pill
+ * Samuel named is `agent-bits.tsx › AGENT_PILL_FACE`, and this banner is ALREADY
+ * `--surface-cta` — or, once a post has settled, the agent's own colour, which is a dark ramp
+ * (L 0.44). The black pill drawn there is black on black: the shape asked for, rendered
+ * unreadable. So the GEOMETRY is the one shared recipe and the fill is a translucent lift of
+ * the banner's own ink, which reads on the CTA face and on all sixteen colour keys without a
+ * second rule per hue.
+ * ⚠ **`text-on-cta` IS ALREADY THE PROVEN INK HERE.** The label and the timestamp beside it
+ * wear it on both faces (`AgentPill.color`'s note: the ramp is dark enough that one ink
+ * serves), so the pill borrows the contrast decision rather than making a new one.
+ * ⚠ **IT MAY SHRINK.** `AGENT_PILL_SHAPE` ships `shrink-0` and three addressees on a 380px
+ * panel have to elide; `cn` is tailwind-merge, so the later `shrink` wins — the same override
+ * `agent-activity.tsx` makes for the same reason.
+ */
+const BANNER_PILL = cn(
+  AGENT_PILL_SHAPE,
+  "flex min-w-0 shrink items-center bg-text-on-cta/20 text-text-on-cta"
+);
+
+/**
+ * THE ADDRESSEE PILLS, IN ORDER. ⚠ EMPTY DRAWS NOTHING — never a marker, never an "unaddressed"
+ * word. A post with no addressee is the ordinary case for a channel-wide message and for a
+ * `record`, and a frame-backed echo has no addressee to read at all (`agent-stream-model.ts ›
+ * StreamItem.tagUserIds`); all three are silence rather than a claim.
+ * ⚠ **FACES ONLY, RESOLVED UPSTREAM.** `lib/recipient-tags.ts` owns the resolution so a raw agent
+ * id can never reach this surface (`agent-id-visibility.test.ts`), and the face is rendered as a
+ * React TEXT CHILD on a `truncate` line — the one neutralisation every name render here relies on.
+ */
+function BannerTags({ tags }: { tags: readonly RecipientTag[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <>
+      {tags.map((tag) => (
+        <span
+          key={`${tag.kind}:${tag.id}`}
+          title={tag.title === tag.face ? undefined : tag.title}
+          /* The transcript's own tag row carries the same hook, so one test vocabulary covers
+             both panes' answer to "who did this post address". */
+          data-recipient-tag={tag.kind}
+          className={BANNER_PILL}
+        >
+          <span className="truncate">{tag.face}</span>
+        </span>
+      ))}
+    </>
+  );
+}
 
 /**
  * ⚠ READ IN `em`, AGAINST `text-caption`, SO A TOKEN CHANGE MOVES THE CLAMP WITH
@@ -242,6 +296,7 @@ export function SentToChannelBox({
   text,
   to,
   at,
+  tags = [],
   pending = false,
   requestId,
   expired = false,
@@ -250,6 +305,17 @@ export function SentToChannelBox({
   color = null,
 }: {
   text: string;
+  /**
+   * **WHO THIS POST WAS ADDRESSED TO** — already-resolved faces, agents and people
+   * (Samuel, 2026-10-10, #3081). See {@link BannerTags}.
+   *
+   * ⚠ **`[]` IS THE DEFAULT AND DRAWS NOTHING**, which keeps every existing caller
+   * byte-identical: an unaddressed post, a `record`, and a narration echo that has no
+   * addressee to read all render the banner exactly as they did before this prop existed.
+   * ⚠ **FACES, NEVER IDS** — the resolution is `lib/recipient-tags.ts`'s, done by the host
+   * that holds the roster, because an agent id is never printed at a person on this surface.
+   */
+  tags?: readonly RecipientTag[];
   /** WHERE IT WENT — see {@link postedToLabel}. `null` is "cannot say", which reads as
    *  the bare noun and never as a blank. */
   to?: PostDestination | null;
@@ -317,6 +383,13 @@ export function SentToChannelBox({
         <span className="min-w-0 truncate text-micro font-medium text-text-on-cta">
           {label}
         </span>
+        {/* ⚠ AFTER THE LABEL, BEFORE THE STAMP — the banner reads left to right as *what
+            happened*, *to whom*, *when*, and the stamp keeps its `ml-auto` trailing slot.
+            ⚠ THE PILLS SHOW ON EVERY FACE, Pending included: *who this is addressed to* is a
+            fact about the draft the operator is deciding on, not a claim that it was
+            delivered — unlike the agent's colour, which `paint` gates on `!pending` for
+            exactly that reason. */}
+        <BannerTags tags={tags} />
         {stamp && (
           <span className="ml-auto shrink-0 text-micro text-text-on-cta opacity-75">
             {stamp}

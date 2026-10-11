@@ -6,7 +6,7 @@ import { authorViewOf, desktopAddresseeOf } from "../lib/desktop-handle";
 import { viaOf, type MessageVia } from "../lib/message-via";
 // The module the server's router reads, so the faced tag and the woken agent agree.
 import { serverRoutedAgentIds } from "../lib/agent-post-stamp";
-import { addressKey } from "../lib/recipient-tags";
+import { addressKey, messageTagIds } from "../lib/recipient-tags";
 import {
   RECEIPT_LABEL,
   lifecycleReceiptStatus,
@@ -206,6 +206,9 @@ function toMessageRow(
   if (message.kind === "system") {
     return { kind: "system", id: message.id, seq: message.seq, body: message.body };
   }
+  // One call, two fields: the derivation reads metadata and allocates, and a row builder runs per
+  // message per render.
+  const tags = messageTagIds(message);
   return {
     kind: "message",
     id: message.id,
@@ -239,13 +242,12 @@ function toMessageRow(
     recipientUserIds:
       message.authorKind === "agent" ? [...(message.recipientUserIds ?? [])] : [],
     // THE TAG ROW (Samuel 2026-10-08, every row human or agent): who the post NAMES, as the server
-    // resolved it. People = the stamped mention set; agents = `to=` / body-tagged agents, but never
-    // an agent the SERVER picked for an unaddressed post (`wake_reason`): the post did not name it.
-    tagUserIds: mentionedUserIdsOf(message.metadata),
-    tagAgentIds:
-      typeof message.metadata?.wake_reason === "string"
-        ? []
-        : [...(message.recipientAgentIds ?? [])],
+    // resolved it. ⚠ THE RULE MOVED TO `lib/recipient-tags.ts › messageTagIds` ON 2026-10-10 (#3081)
+    // and is UNCHANGED — the agent stream's outbound box pills the same addressees off the same
+    // message, and two spellings of "who did this post address" is how one message comes to show
+    // different pills in two panes.
+    tagUserIds: tags.userIds,
+    tagAgentIds: tags.agentIds,
     channelId: message.channelId,
     // Server-written, reserved keys (stripped from caller input); a person's device, never an agent's.
     source: message.authorKind === "agent" ? null : messageSourceOf(message.metadata),

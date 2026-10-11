@@ -266,6 +266,18 @@ async function startSession(spec, rt) {
   // The tool set this session speaks (DMP-013), known before the first turn spells a call in it.
   await sessionQuery.stampToolSet(s);
   nameAndFrame(s, spec, rt);
+  // WHAT WOKE IT, AT THE TOP OF ITS OWN STREAM (#3081). ⚠ AFTER `nameAndFrame`, so the frame lands
+  // behind the first turn it describes rather than ahead of a session that may still fail to start,
+  // and BEFORE `startQuery`, so it is the ring's first entry and sorts above the agent's thinking.
+  // ⚠ RESPONDER ONLY, AND NEVER A PARKED SHELL — `session-narration.js › noteLaunchMessage` carries
+  // both gates' arguments: a requester's `firstMessage` is the operator's own goal with no sender,
+  // and a shell's rides `launchGoal` to a wake turn that dispatches its own `inbound_arrived`.
+  if (spec.side === 'responder' && !spec.parkedShell) {
+    sessionNarration.noteLaunchMessage(s, {
+      message: spec.firstMessage,
+      authorName: s.context && s.context.authorName,
+    });
+  }
   // Spawn idle starts no child (a held query would hold channel access unwatched); the timer arms the
   // abandonment bound, since no reducer event has run yet.
   if (spec.parkedShell) {

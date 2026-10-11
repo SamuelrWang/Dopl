@@ -15,9 +15,10 @@ export interface DesktopNarrationEntry {
    * `thinking` the model's reasoning (collapse by default) · `assistant` narrating a public turn ·
    * `operator` the operator spoke 1:1 (what they typed, never posted) · `private` the agent's answer
    * to a private turn · `tool` / `result` a call and its outcome · `post` the agent SENT this to the
-   * channel (it left the machine; a local echo, deduped against the transcript) · `status` a phase
-   * move · `directed` another of this operator's agents spoke 1:1 (not the operator) ·
-   * `directed-reply` this agent's answer to that.
+   * channel (it left the machine; a local echo, deduped against the transcript) · `inbound` a channel
+   * message ARRIVED for this agent and woke it (#3081; the counterparty's words, `senderName` beside
+   * them) · `status` a phase move · `directed` another of this operator's agents spoke 1:1 (not the
+   * operator) · `directed-reply` this agent's answer to that.
    */
   kind:
     | "thinking"
@@ -27,15 +28,19 @@ export interface DesktopNarrationEntry {
     | "tool"
     | "result"
     | "post"
+    | "inbound"
     | "status"
     | "directed"
     | "directed-reply";
   /**
-   * Who can see this line; it outranks `kind`. `channel` = it left the machine; `operator`,
+   * Who can see this line; it outranks `kind`. `channel` = it left the machine; `inbound` = it
+   * arrived from the channel, so both members have it but this agent did not write it; `operator`,
    * `private` and `directed` are 1:1. Absent on the narration kinds, and absent is not `channel`.
    * `directed` names the lane, not the direction (`agent-stream-model.ts › frameLane` splits them).
+   * ⚠ `inbound` is its own lane and NOT `channel`: `channel` is drawn as the dark "Posted to…" box,
+   * so an arriving message on that lane would render as something this agent said.
    */
-  lane?: "operator" | "private" | "channel" | "directed";
+  lane?: "operator" | "private" | "channel" | "inbound" | "directed";
   /** On `tool` and `result`: joins a result to its call. */
   toolUseId?: string;
   /** The raw tool name on a `tool` entry; the renderer shortens it. */
@@ -71,6 +76,24 @@ export interface DesktopNarrationEntry {
    * render "your agent", never a placeholder.
    */
   senderAgentId?: string;
+  /**
+   * `inbound` only: WHO SENT IT, already resolved to words by main (#3081) —
+   * `main/session-dispatch.js › authorLabel`: a member's display name, *"<person>'s agent"*, or its
+   * own "A teammate" fallback.
+   *
+   * ⚠ A CAPTION AND PEER-TYPED, on `senderAgentId`'s precedent: nothing may gate, route or
+   * authorize on it, and every face neutralizes it (a React text child on a `truncate` line).
+   * ⚠ Absent is ordinary — render the anonymous sentence, never a blank and never an id.
+   */
+  senderName?: string;
+  /**
+   * `inbound` only: the operator's own account sent it, rather than a counterparty (#3081).
+   *
+   * ⚠ NOT A PRIVACY FLAG. The message is in the channel either way — which is why it does not
+   * move the `lane` — and this only lets a face say "you" where it would otherwise name a member.
+   * Only `true` counts; absent means a counterparty or not answered.
+   */
+  fromOperator?: boolean;
   /**
    * `post` only: the outbound consent gate is holding it until a human presses Post (INVARIANTS §6).
    * Only `true` counts; absent means sent. It never clears — the transcript row says it landed.
