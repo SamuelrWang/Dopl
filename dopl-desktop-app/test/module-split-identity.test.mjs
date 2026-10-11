@@ -23,7 +23,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -162,20 +162,70 @@ test("SPLIT: the listener's identity + name-cache names are re-exported, never r
 
 // ── 6. THE CAP ITSELF ────────────────────────────────────────────────────────────────
 
-test("every file the splits touched is back under the 500-line cap, with headroom", () => {
+test("every capped file in the tree is under the 500-line cap, with headroom", () => {
   // ⚠ MEASURED, NOT REMEMBERED (§1's own rule about numbers in prose). The cap is `error` with
   // ZERO exemptions in the desktop config, so a file back over it is a red CI job, not a nit.
-  for (const f of [
-    "session-dispatch.js", "session-engine.js", "session-ipc-ops.js", "session-narration.js",
-    "session-profiles.js", "session-reopen.js", "session-summary.js",
-    "session-profiles-runtime.js", "session-engine-host.js", "session-ipc-window-op.js",
-    "narration-ring.js", "agent-handles.js", "agent-handles-escalation.js",
-  ]) {
-    const lines = read(f).split("\n").length;
-    assert.ok(lines <= 500, `main/${f} is ${lines} lines — over the §2 cap again`);
+  //
+  // ⚠ IT WALKS THE TREE; IT DOES NOT CARRY A LIST. This case used to name thirteen files by
+  // hand — the ones earlier splits had touched — which made it an ALLOWLIST pretending to be a
+  // cap. On 2026-10-11 four files crossed in one evening and this case caught exactly one of
+  // them (`session-narration.js`, which happened to be in the list) while `main/mcp-config.js`
+  // at 545, `test/auth-signed-in.test.mjs` at 505 and `test/session-engine-slot.test.mjs` at
+  // 517 went by unseen; only `npm run lint` saw those. A guard whose coverage is a memory of
+  // which files once needed help cannot catch the next file, which is the only one that matters.
+  //
+  // The globs below MIRROR `eslint.config.js`. Keep them in step: a tree that is capped by
+  // lint and absent here is a corner with no cap in the test tier, which is how
+  // `test/live/*.js` grew from ~1187 to 1681 lines unmeasured (see that config's own note).
+  const CAPPED = [
+    { dir: "main", ext: [".js"], recurse: true },
+    { dir: "scripts", ext: [".js"], recurse: true },
+    { dir: "renderer", ext: [".js"], recurse: true, skip: ["app"] },
+    { dir: "test", ext: [".mjs"], recurse: true },
+    { dir: join("test", "live"), ext: [".js"], recurse: true },
+  ];
+  const SKIP_ALWAYS = new Set(["node_modules", "dist", "build"]);
+
+  const walk = (abs, rel, ext, recurse, skip) => {
+    const out = [];
+    for (const entry of readdirSync(abs, { withFileTypes: true })) {
+      if (SKIP_ALWAYS.has(entry.name) || skip.includes(entry.name)) continue;
+      const childRel = join(rel, entry.name);
+      if (entry.isDirectory()) {
+        if (recurse) out.push(...walk(join(abs, entry.name), childRel, ext, recurse, skip));
+      } else if (ext.some((e) => entry.name.endsWith(e))) {
+        out.push(childRel);
+      }
+    }
+    return out;
+  };
+
+  // ⚠ COUNT THE WAY ESLINT COUNTS, or the guard is not the gate. A trailing newline is a
+  // TERMINATOR, not an empty last line: `"a\n".split("\n")` is `["a", ""]`, length 2, so a
+  // plain split over-reports every normally-terminated file by one. The version of this case
+  // that carried a list did exactly that — it reported `session-narration.js` as 604 where
+  // both `wc -l` and `max-lines` say 603 — which made it a 499-line cap wearing a 500 label,
+  // and it would have failed any file sitting at exactly the 500 the config permits. It never
+  // showed because none of the thirteen names it carried sat on the boundary.
+  const lineCount = (text) => text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+
+  const over = [];
+  let measured = 0;
+  for (const { dir, ext, recurse, skip = [] } of CAPPED) {
+    const abs = join(HERE, "..", dir);
+    if (!existsSync(abs)) continue;
+    for (const rel of walk(abs, dir, ext, recurse, skip)) {
+      const lines = lineCount(readFileSync(join(HERE, "..", rel), "utf8"));
+      measured += 1;
+      if (lines > 500) over.push(`${rel} is ${lines} lines`);
+    }
   }
-  const preload = readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8").split("\n").length;
-  assert.ok(preload <= 500, `renderer/app-preload.js is ${preload} lines — over the §2 cap again`);
+
+  // ⚠ FAILS ON ABSENCE. If the walk finds nothing — a renamed directory, a bad glob, a
+  // readdir that quietly returned [] — this case would otherwise pass by measuring zero
+  // files, which is the shape of green this very test was rewritten to stop trusting.
+  assert.ok(measured > 300, `the cap walk measured only ${measured} files — the walk is broken, not the tree`);
+  assert.deepEqual(over, [], `over the §2 cap again:\n  ${over.join("\n  ")}`);
 });
 
 // ── 7. THE WORKSPACE ID ON A SUMMARY ─────────────────────────────────────────────────

@@ -124,9 +124,21 @@ export function AuthSplitLayout({
         </div>
         <div className="hidden flex-[5] md:block">
           {/* A surface that names no pose renders the panel's historical
-              slab: `"default"` IS that slab. Only the padding above cares
-              about the omitted-vs-default distinction. */}
-          <AuthBannerPanel src={bannerSrc} pose={glassPose ?? "default"} />
+              slab: `"default"` IS that slab.
+              ⚠ `card` CARRIES THE OMITTED-VS-DEFAULT DISTINCTION ACROSS THIS
+              BOUNDARY, and it has to be a second argument because `pose`
+              collapses it: `glassPose ?? "default"` makes a plain auth surface
+              and onboarding's step 3 indistinguishable inside the panel, and
+              they disagree about the card. Derived from the SAME signal as the
+              footer padding above — "the caller named a pose" is what means
+              onboarding here — rather than a second opt-in prop, so the two
+              cannot drift apart and a future onboarding caller cannot get the
+              pose right and the card wrong. */}
+          <AuthBannerPanel
+            src={bannerSrc}
+            pose={glassPose ?? "default"}
+            card={glassPose !== undefined}
+          />
         </div>
       </div>
     </main>
@@ -265,7 +277,16 @@ function poseDepths(pose: AuthGlassPose, h: number): { top: number; bot: number 
   };
 }
 
-function AuthBannerPanel({ src, pose }: { src: string; pose: AuthGlassPose }) {
+function AuthBannerPanel({
+  src,
+  pose,
+  card,
+}: {
+  src: string;
+  pose: AuthGlassPose;
+  /** Onboarding only — see the call site. `false` on every plain auth surface. */
+  card: boolean;
+}) {
   const paneRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const still = usePrefersReducedMotion();
@@ -526,8 +547,21 @@ function AuthBannerPanel({ src, pose }: { src: string; pose: AuthGlassPose }) {
               from the SOLID part of the pose, so it can never sit over the
               bite, and it never animates its own position — it is simply
               absent while the glass moves. Wears the landing page's panel
-              recipe through `--glass-card-*`, not a copy of its values. */}
-          {masked && (
+              recipe through `--glass-card-*`, not a copy of its values.
+              ⚠ `card &&` IS LOAD-BEARING, AND `masked` ALONE WAS A BUG. This
+              read `{masked && (`, and `masked` only means "the pane has been
+              measured" — true on every surface — so an opaque #ffffff card
+              painted on /login, /signup, /authenticate, /oauth/authorize and
+              the desktop signed-out screen, contradicting this file's own
+              contract that a surface naming no pose is untouched. Worst on
+              /get-started, whose install animation is portaled into the slot
+              ABOVE: the card is a later absolutely-positioned sibling in the
+              same stacking context, so it covered all but a 34px frame of it.
+              ⚠ Do NOT gate this on `shaped` instead: onboarding's step 3 is
+              pose `"default"` BY DESIGN and must keep its card, so `shaped`
+              (pose !== default) would strip it from the one step that looks
+              like a plain surface and is not. */}
+          {masked && card && (
             <div
               aria-hidden
               style={{
