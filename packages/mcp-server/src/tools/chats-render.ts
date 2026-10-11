@@ -32,21 +32,8 @@ export function anyShared(chats: Array<{ visibility: string }>): boolean {
   return chats.some((c) => c.visibility !== "private");
 }
 
-function errorMessage(e: unknown): string {
-  if (e && typeof e === "object" && "message" in e) {
-    return String((e as { message: unknown }).message);
-  }
-  return String(e);
-}
-
-/**
- * Upstream failure text as a VALUE. ⚠ "It came from our own server" says where
- * the bytes were copied from, not who wrote them — a 4xx can echo a rejected
- * field, and the fields here are member-typed.
- */
-export function failureDetail(e: unknown): string {
-  return inlineOr(errorMessage(e), "`no detail reported`");
-}
+/** Upstream failure text as a VALUE — the one copy lives in `failure-detail.ts`. */
+export { failureDetail } from "./failure-detail";
 
 /** A chat title as a value, never as structure. */
 export function chatTitle(title: string | null | undefined): string {
