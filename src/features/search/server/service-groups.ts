@@ -85,7 +85,7 @@ function countMatches(text: string | null | undefined, pattern: RegExp): number 
  * at eight, and reporting eight when forty matched would hide what the reader is
  * about to scroll for.
  */
-export function toGroup(
+function toGroup(
   kind: SearchGroupKind,
   hits: SearchHit[],
   labels: SearchLabels,
