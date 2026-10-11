@@ -1,9 +1,5 @@
 import type { ChannelFoldedArtifact, ChannelMessage, ChannelReadEntry } from "../types";
-import {
-  isPendingId,
-  reconcileMessage,
-  type MessagesCache,
-} from "./optimistic-cache";
+import { isPendingId } from "./optimistic-cache";
 
 /**
  * **THE SWITCH-IN DELTA: what a `since=` page does to the transcript cache
@@ -74,7 +70,20 @@ function artifactArms(
 }
 
 /**
- * The merged envelope, FIRST COPY WINNING on `artifact.id`.
+ * The merged envelope, **THE DELTA'S COPY WINNING on `artifact.id`** and the
+ * CACHED ORDER kept.
+ *
+ * ⚠ **FIRST COPY WINNING WAS WRONG ACROSS TIME, WHICH IS THE ONLY DIRECTION THIS
+ * FUNCTION RUNS IN (fixed 2026-10-11).** The justification it borrowed from
+ * `message-window.ts › addArtifacts` — "two pages' copies of one card are
+ * IDENTICAL" — is a claim about TWO PAGES OF ONE READ. These two copies are from
+ * reads minutes apart: `count`, `firstSeq` and `lastSeq` are channel-wide facts
+ * that MOVE as the room talks, and `count` is rendered. Preferring the held copy
+ * made every switch-back paint a card whose member count had been stale since
+ * the reader left.
+ *
+ * ⚠ **IN PLACE, NEVER APPENDED.** The replacement keeps the slot the cached copy
+ * held, so a refreshed card does not jump to the end of the envelope.
  *
  * ⚠ **ARTIFACT ARMS ONLY, AND THE MESSAGE ARMS ARE DROPPED ON PURPOSE.** The
  * envelope in this cache entry is read for exactly one thing — the page's folded
@@ -92,10 +101,15 @@ function mergeArtifactEnvelope(
   delta: readonly ChannelReadEntry[] | null | undefined
 ): ChannelReadEntry[] | null {
   const held = artifactArms(cached);
-  const seen = new Set(held.map((folded) => folded.artifact.id));
+  const slotOf = new Map<string, number>();
+  held.forEach((folded, index) => slotOf.set(folded.artifact.id, index));
   for (const folded of artifactArms(delta)) {
-    if (seen.has(folded.artifact.id)) continue;
-    seen.add(folded.artifact.id);
+    const slot = slotOf.get(folded.artifact.id);
+    if (slot !== undefined) {
+      held[slot] = folded;
+      continue;
+    }
+    slotOf.set(folded.artifact.id, held.length);
     held.push(folded);
   }
   if (held.length === 0) return null;
@@ -103,18 +117,49 @@ function mergeArtifactEnvelope(
 }
 
 /**
+ * THE TWIN KEY — `clientMsgId` **SCOPED TO ITS AUTHOR**, or `null` for a row that
+ * carries no idempotency key and therefore has no twin.
+ *
+ * ⚠ **THE AUTHOR TERM IS THE WHOLE POINT, AND WITHOUT IT A MESSAGE VANISHES
+ * (fixed 2026-10-11).** `channel_messages.client_msg_id` is unique per *(channel,
+ * client_msg_id, AUTHOR)* by design, it is on every peer's DTO, and desktop keys
+ * are shaped `agent-<publicAgentId>-<n>` — so two authors sharing one key is a
+ * shape the product produces, not a coincidence. Matching on the key alone made
+ * the delta REPLACE the older author's row IN PLACE and the transcript simply
+ * lost a message, silently, with no duplicate or gap to notice.
+ *
+ * ⚠ `\u0000` SEPARATES, so no author id can run into a key and forge a twin, and
+ * a `null` author is its own bucket rather than fusing with the empty string.
+ */
+function twinKey(message: ChannelMessage): string | null {
+  if (message.clientMsgId === null) return null;
+  return `${message.authorUserId ?? ""}\u0000${message.clientMsgId}`;
+}
+
+/**
  * **FOLD A FORWARD `since=` PAGE INTO THE ENTRY ALREADY CACHED.**
  *
- * ⚠ **DEDUPED BY `reconcileMessage`, NOT BY `seq`.** A row can already be in the
- * cache under a PENDING id — the reader's own send, which the delta brings back
- * as the saved row — and seq-only dedupe would render that message twice. That
- * function is the one definition of "the saved row replaces its twin IN PLACE",
- * matched on `id` or `clientMsgId`, and a second one here is how a retry comes
- * to duplicate on one path and not the other.
+ * ⚠ **DEDUPED BY `id` OR BY AN AUTHOR-SCOPED {@link twinKey}, NOT BY `seq`.** A
+ * row can already be in the cache under a PENDING id — the reader's own send,
+ * which the delta brings back as the saved row — and seq-only dedupe would render
+ * that message twice: the pending seq is SYNTHETIC (`max + 1`), so the two match
+ * on the key and on nothing else.
  *
- * ⚠ **SORTED BY `seq` AFTER THE UPSERT.** `reconcileMessage` APPENDS a row with
- * no twin, so delta rows from other authors would otherwise land after the
- * reader's own pending row and the transcript would read out of order.
+ * ⚠ **IT IS `optimistic-cache.ts › reconcileMessage`'S RULE PLUS THE AUTHOR
+ * TERM, AND THE DIVERGENCE IS DELIBERATE** (2026-10-11). That function's one
+ * input is the POST's answer to the CALLER'S OWN send, where the author cannot
+ * differ and the term would be dead weight; this is the first path to run the
+ * rule over OTHER AUTHORS' rows, where dropping it loses a message (above). The
+ * ideal is one author-aware definition there, which is a change to a file this
+ * one does not own.
+ *
+ * ⚠ **INDEXED ONCE, UPSERTED, SORTED ONCE.** `reconcileMessage` slices the whole
+ * array per row, so 59 delta rows into a 100-row entry allocated 59 full copies
+ * and re-sorted the lot; the index makes the merge one pass over each side.
+ *
+ * ⚠ **SORTED BY `seq` AFTER THE UPSERT.** A row with no twin is APPENDED, so
+ * delta rows from other authors would otherwise land after the reader's own
+ * pending row and the transcript would read out of order.
  *
  * ⚠ **A PENDING ROW LOSES EVERY TIE, and the tie is not hypothetical.** Its seq
  * is `max + 1` of the cache it was built against, which is exactly the seq the
@@ -134,23 +179,53 @@ export function mergeDeltaPage(
 ): TranscriptCacheBody {
   const rows = delta.messages ?? [];
   const entries = mergeArtifactEnvelope(cached.entries, delta.entries);
+  // ⚠ `?? []` — THE §8 STALE-CACHE RULE, as every sibling on this path states it:
+  // an entry written by a build that had no `messages` key would otherwise throw
+  // inside the hook's `.then`, where the trailing `.catch` converts the throw
+  // into a silent full refetch — the cost option A exists to avoid, paid on
+  // every switch and attributed to nothing.
+  const held = cached.messages ?? [];
   if (rows.length === 0) {
     // Nothing arrived: same messages, same identity, so no memo below this moves.
-    return { ...cached, entries };
+    return { ...cached, messages: held, entries };
   }
-  let merged: MessagesCache = { messages: cached.messages };
-  for (const row of rows) {
-    // Defined in, defined out — `reconcileMessage` only passes `undefined` through.
-    merged = reconcileMessage(merged, row) as MessagesCache;
-  }
-  return {
-    ...cached,
-    messages: [...merged.messages].sort(bySeqPendingLast),
-    entries,
+  const merged = held.slice();
+  const slotById = new Map<string, number>();
+  const slotByTwin = new Map<string, number>();
+  const remember = (message: ChannelMessage, slot: number) => {
+    slotById.set(message.id, slot);
+    const twin = twinKey(message);
+    if (twin !== null) slotByTwin.set(twin, slot);
   };
+  merged.forEach(remember);
+  for (const row of rows) {
+    const twin = twinKey(row);
+    // ⚠ `??`, NEVER `||`: slot 0 is a real slot.
+    const slot =
+      slotById.get(row.id) ?? (twin === null ? undefined : slotByTwin.get(twin));
+    if (slot === undefined) {
+      merged.push(row);
+      remember(row, merged.length - 1);
+      continue;
+    }
+    // IN PLACE, so the message keeps its position and the transcript does not
+    // jump; and re-indexed, because the saved row's id is new to this entry.
+    merged[slot] = row;
+    remember(row, slot);
+  }
+  return { ...cached, messages: merged.sort(bySeqPendingLast), entries };
 }
 
-/** `seq` ascending; an unacknowledged row loses the tie. */
+/**
+ * `seq` ascending; an unacknowledged row loses the tie.
+ *
+ * ⚠ **ONE ORDERING RULE, TWO COMPARATORS — `message-window.ts › mergeWindow`
+ * SORTS THE SAME ARRAY WITH `(a, b) => a.seq - b.seq`, WITHOUT THE TIEBREAK.**
+ * The merged render order is only correct because V8's sort is stable and this
+ * one runs first. It should be ONE exported comparator used by both; folding them
+ * means editing `message-window.ts`, which this change does not own, so it is
+ * reported rather than done.
+ */
 function bySeqPendingLast(a: ChannelMessage, b: ChannelMessage): number {
   if (a.seq !== b.seq) return a.seq - b.seq;
   return Number(isPendingId(a.id)) - Number(isPendingId(b.id));

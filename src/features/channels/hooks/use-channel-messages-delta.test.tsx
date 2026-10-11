@@ -33,14 +33,41 @@ import {
   page,
   PAGE_PARAMS,
   requests,
+  settle,
 } from "./use-channel-messages-harness";
 import { appendPendingMessage, buildPendingMessage } from "../lib/optimistic-cache";
 import { CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS } from "../constants";
+import { channelMessagesPath } from "../client/query-keys";
 import type { ChannelMessage } from "../types";
 
 /** A cache entry as the transport left it — the RAW body, which is what `useApiQuery` stores. */
 function cached(messages: ChannelMessage[], hasMore = true) {
   return { messages, entries: null, hasMore };
+}
+
+/**
+ * Every read as `[path, query]`.
+ *
+ * ⚠ **THE PATH MATTERS HERE AND `requests()` DROPS IT.** A fallback aimed at the
+ * wrong channel sends the SAME query object to a DIFFERENT URL, so the query half
+ * alone cannot tell the bug from the fix.
+ */
+function addressedRequests(): Array<[string | null, Record<string, unknown>]> {
+  return vi
+    .mocked(apiRequest)
+    .mock.calls.map(([path, opts]) => [
+      path as string | null,
+      (opts?.query ?? {}) as Record<string, unknown>,
+    ]);
+}
+
+/** A promise this test resolves by hand — the delta held open across a switch. */
+function deferred<T>() {
+  let settle: (value: T) => void = () => {};
+  const promise = new Promise<T>((resolve) => {
+    settle = resolve;
+  });
+  return { promise, settle };
 }
 
 /** The forward read the hook should send: `since`, `limit`, and NO `lineBudget`. */
@@ -178,6 +205,68 @@ describe("the four ways a delta ends", () => {
 
     expect(requests()).toEqual([DELTA(50), PAGE_PARAMS]);
     expect(h.read().messages).toHaveLength(52);
+  });
+});
+
+/**
+ * **WHERE A FALLBACK IS AIMED**, which is only ever in question once the reader
+ * has moved: the whole point of a delta is that it is in flight across a switch.
+ *
+ * A `TranscriptBody` here is always AT ITS CEILING (`hasMore: true`), the arm that
+ * cannot merge and must re-read a page.
+ */
+describe("a delta resolving after the reader moved", () => {
+  /** A's delta, held open; every other read answers an ordinary page. */
+  function holdTheDelta() {
+    const held = deferred<{ messages: ChannelMessage[]; hasMore: boolean }>();
+    vi.mocked(apiRequest).mockImplementation((async (_path, opts) => {
+      const query = (opts?.query ?? {}) as { since?: number };
+      if (query.since !== undefined) return held.promise;
+      return { messages: page(80, 30), hasMore: true };
+    }) as typeof apiRequest);
+    return held;
+  }
+
+  /** A ceiling-sized answer: more arrived than one page holds. */
+  const CEILING = {
+    messages: page(50 + CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS, CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS),
+    hasMore: true,
+  };
+
+  it("🔒 RE-READS THE CHANNEL IT WAS ISSUED FOR, never the one now on screen", async () => {
+    const held = holdTheDelta();
+
+    const h = await mount(CHANNEL, cached(page(50, 50)));
+    await h.select(OTHER);
+    held.settle(CEILING);
+    await settle();
+
+    // 🔒 The third read is **A's** page. TanStack binds an observer's `refetch` in
+    // its constructor and it fetches the observer's CURRENT query, so this landed
+    // on B: A stayed un-caught-up AND the channel just opened paid a second full
+    // line-budgeted read — the exact fast-switch cost this wave removes.
+    expect(addressedRequests()).toEqual([
+      [channelMessagesPath(CHANNEL), DELTA(50)],
+      [channelMessagesPath(OTHER), PAGE_PARAMS],
+      [channelMessagesPath(CHANNEL), PAGE_PARAMS],
+    ]);
+  });
+
+  it("🔒 SENDS NOTHING AT ALL once the reader has DESELECTED", async () => {
+    const held = holdTheDelta();
+
+    const h = await mount(CHANNEL, cached(page(50, 50)));
+    await h.select(null);
+    held.settle(CEILING);
+    await settle();
+
+    // 🔒 The delta and nothing else. The observer's current key is `[null, …]`
+    // once nothing is selected, and `refetch()` on it fired a real request at a
+    // garbage URL — `use-api-query-core.ts` guards that with an `enabled` its
+    // wrapper CLOSED OVER while the channel was still selected, so the guard
+    // could not save a call made this late. And there is no paint left to
+    // correct: the next switch-in re-reads the same delta.
+    expect(addressedRequests()).toEqual([[channelMessagesPath(CHANNEL), DELTA(50)]]);
   });
 });
 
