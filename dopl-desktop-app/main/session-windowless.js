@@ -38,83 +38,31 @@ const channelPost = require('./channel-post'); // postTaskEvent: the in-thread r
 const sessionPermissions = require('./session-permissions');
 const { diag } = require('./diag');
 
-// ⚠ 3s SINCE 2026-08-25, DOWN FROM 10s, AND THE COST IS STATED RATHER THAN HIDDEN.
-// Samuel measured ~15s from pressing Post to the message appearing — almost all of it this
-// sleep, because the loop sleeps BEFORE its first poll, so a decision made at t=0 could not be
-// seen until t=10s. The gap is not a rendering problem and the card cannot paper over it: until
-// the row is delivered the honest face is "Pending" (`agent-stream-model.ts`), so the only real
-// fix is to ask sooner.
-//
-// ⚠ WHAT IT COSTS, MEASURED THE ONLY WAY THAT MATTERS — the ceiling. One request per interval
-// per WAITING post, and a post only waits while a human has not answered: at
-// `MAX_CONCURRENT_SESSIONS` posts all waiting at once that is ~5 req/s from one machine, against
-// ~1.5 before (the numbers were ~2 and ~0.6 while the cap was 6; they are cap/interval and MOVE
-// WITH THE CAP — 2026-09-01). Bounded by the session and by the human, and it stops dead on the first terminal
-// status.
-//
-// ⚠ NOT A LADDER, DELIBERATELY. An adaptive cadence that decays would optimise the case where
-// the operator answers instantly and punish the one where they come back to it later — which is
-// the case the 24h TTL exists for. `consent-cadence.js` was that idea and was deleted with the
-// inbound watcher (INVARIANTS §6); this does not resurrect it.
-//
-// ⚠ THE REAL FIX IS A DOORBELL, NOT A SHORTER SLEEP, and it is filed rather than guessed at:
-// REFACTOR-FINDINGS F-312. `channel_consent_requests` is already in `ui-sync.js › SYNC_TABLES`,
-// so main HEARS the decision — but that feed watches the ONE workspace the renderer is viewing
-// (last-writer-wins) and an event there is a DOORBELL, never content (INVARIANTS §7), so wiring
-// it to this loop is new cross-module plumbing with its own correctness questions.
+// ⚠ 3s (down from 10s, 2026-08-25): the loop sleeps BEFORE its first poll, so the interval is
+// the floor on how soon a decision shows up. COST: one request per interval per WAITING post,
+// so the ceiling is MAX_CONCURRENT_SESSIONS / 3s (~5 req/s at 15) and moves with the cap; it
+// stops on the first terminal status. NOT a decaying ladder, deliberately: that would punish
+// the operator who comes back later, the case the 24h TTL exists for (`consent-cadence.js`
+// was that idea and was deleted). The real fix is a doorbell, filed as F-312.
 const POLL_MS = 3_000;
 // …and the ceiling this poll gives back to when it is FAILING rather than waiting
 // (2026-08-30, F-354). See `watchRow` for why the two are different questions.
 const POLL_MAX_MS = 60_000;
 
 // ── THE CONCURRENCY CEILING FOR THIS LANE ────────────────────────────────────
-// ⚠ THE NAME MOVED HERE ON 2026-08-20, AND THE NUMBER DID NOT CHANGE. `MAX_CONCURRENT_SESSIONS`
-// used to name the HEADLESS pool's guard (`session-pool.js`, 4) while the windowless engine
-// enforced a SEPARATE number under a window's name (`settings.MAX_SESSION_WINDOWS`, 6, since
-// deleted). Two
-// ceilings, one of them called a window budget, and the lane that is actually left was the one
-// with the misleading name. The headless pool goes with its lane; this is the ceiling that
-// survives, so it takes the name INVARIANTS §11 already uses for it.
-//
-// ⚠ IT IS A COST CEILING, NOT JUST A CONCURRENCY ONE: EVERY PER-SESSION BOUND IS
-// MULTIPLICATIVE AGAINST IT (§11). The narration ring, the pending-inbound queue, the
-// retained-ended set and the gated-body ledger are each N times this number in the worst case.
-// Raising it is a memory decision as much as a concurrency one.
-//
-// ⚠ RAISED 6 → 15 ON 2026-09-01, SAMUEL'S RULING, AND THE OLD ARGUMENT FOR 6 IS RETIRED RATHER
-// THAN OVERRULED. The number moved because the PRODUCT SHAPE did: an ORCHESTRATOR SPAWNS WORKERS
-// and ends them when they stop being useful, so six is not a safety margin, it is a ceiling an
-// orchestrator hits with its own staff still running — *"if I have an orchestrator agent, that
-// agent should be able to spin other agents, and then end them when they're not useful anymore."*
-//
-// ⚠ THE RELEASE VALVE IS WHAT MADE THE RAISE SAFE, AND IT IS NAMED SO NOBODY RE-DERIVES 6 FROM
-// FIRST PRINCIPLES. `main/agent-self-ops.js` (2026-08-31) mounts `end_agent`, so an agent can
-// RETURN a slot — before it, the only way down from the ceiling was a settle or the operator's
-// hand, and a cap is the only backstop a population that cannot shrink itself has.
-//
-// ⚠ THE MEMORY ARGUMENT NO LONGER HOLDS AT 6, WHICH IS THE OTHER HALF. This block still says a
-// per-session bound is MULTIPLICATIVE against this number and that is still true — but the term
-// that made it bite was the narration ring, and the 17 GB dev-RSS incident it caused is CLOSED by
-// `session-narration.js › RING_CHAR_BUDGET` (60_000, 2026-08-30, INVARIANTS §11). The ring is now
-// bounded by CHARACTERS as well as entries, so its worst case is flat per session instead of
-// PROSE_CAP-shaped, and 15 × the bounded ring is smaller than the 6 × unbounded one that broke.
-//
-// ⚠ SO WHAT ACTUALLY LIMITS THIS BUILD IS NO LONGER THIS CONSTANT: it is N LIVE SDK CHILD
-// PROCESSES (each a real `claude` process with its own RSS) and API SPEND. Both are real and
-// neither is bounded here. If 15 turns out to be wrong, it will be wrong for one of those two
-// reasons — measure which before moving the number, and do not reach for the ring again.
+// The one ceiling on live sessions (the name INVARIANTS §11 uses). 15 since 2026-09-01
+// (Samuel's ruling: an orchestrator spawns workers and must not hit the cap with its own staff
+// running); `agent-self-ops.js › end_agent` lets an agent return a slot.
+// ⚠ EVERY PER-SESSION BOUND IS MULTIPLICATIVE AGAINST IT (§11): the narration ring, the
+// pending-inbound queue, the retained-ended set, the gated-body ledger. The ring is bounded by
+// characters (`session-narration.js › RING_CHAR_BUDGET`), so what really limits this build is
+// N live SDK child processes and API spend, neither bounded here. Measure which before moving it.
 const MAX_CONCURRENT_SESSIONS = 15;
 
 // ── The spawn surface ────────────────────────────────────────────────────────
-// ⚠ THERE IS ONE SHAPE LEFT AND IT MINTS NOTHING (2026-08-20, F-228). This function used
-// to branch: a WINDOW (freshly built by the injected factory, or the open pre-consent card
-// adopted through `session-consent.takeForAdopt`), or — under `spec.windowless` — none. The
-// window branch went with `session-window.js` and the renderer it painted into.
-//
-// It stays a function rather than being inlined at the call site because the ENGINE'S
-// ROLLBACK is the contract: `startSession` un-registers the session when a surface cannot
-// be attached, and keeping the seam keeps that failure expressible. Returns true when the
-// session has its surface; false = the caller rolls back.
+// One shape, and it mints nothing (the window branch was retired 2026-08-20, F-228). Kept a
+// function because the ENGINE'S ROLLBACK is the contract: `startSession` un-registers the
+// session when this returns false. Today it cannot (pinned by session-launch-refusal-detail).
 function attachSurface(s, _spec) {
   s.windowless = true; // every emit no-ops on the null win; the Agents tab is the surface
   return true;
