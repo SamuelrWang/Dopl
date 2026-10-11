@@ -51,12 +51,9 @@ function axisBTools(_session) {
 
 // ── THE IN-PROCESS AGENT-OPS SERVER ──────────────────────────────────────────────────────────
 //
-// ⚠ MOVED HERE FROM `main/agent-self-ops.js` ON 2026-08-31 (runtime-adapter port, step 3). Its
-// PURE half — the rename target rule, the end verdict table, the two result shapes — stayed in
-// core, because none of it is platform-shaped; what moved is the part built with THIS runtime's
-// own MCP-server helpers off a cached SDK namespace. The ruling, the own-agents bound, the
-// shadow argument and the self-end refusal all live in that module's header and are not
-// re-argued here.
+// Only the part built with THIS runtime's MCP-server helpers lives here. The pure half (rename
+// target rule, end verdict table, result shapes) is core's `main/agent-self-ops.js`, whose header
+// carries the ruling, the own-agents bound, the shadow argument and the self-end refusal.
 //
 // ⚠ A NULL SERVER MUST NEVER BREAK A LAUNCH. Null whenever the SDK namespace is not yet cached
 // or zod is unresolvable (a harness): the session then runs without the two verbs, which is the
@@ -66,17 +63,9 @@ function axisBTools(_session) {
 // routing shape; answers a CallToolResult either way. ⚠ THE ANSWER IS MAIN'S OWN STORED
 // VALUE, never an echo — `sessions:rename`'s rule, kept here for the same reason.
 function applyRename(target, value) {
-  // ⚠ THE WRITE ITSELF MOVED TO `agent-self-ops.js › applyRenameTo` ON 2026-09-01,
-  // when the external `rename_agent` DIRECTIVE became its third caller. What
-  // stayed here is the SENTENCE — the split every wire value on this lane takes,
-  // and for the same reason: prose belongs to the reader, and a rule shared by
-  // three surfaces belongs to one function.
-  // ⚠ AND IT COMMITS THROUGH `agent-identity-commit.js` SINCE 2026-09-05, which writes the store
-  // AND flushes the summary — the flush is what carries the new name to the server and so to
-  // every other member's @-picker. All THREE rename paths had the same missing flush; fixing only
-  // the one Samuel happened to use would have left the other two broken in a way nobody would
-  // notice for weeks. That module's header carries the argument, and the lazy require (the store
-  // opens an electron-store) moved in there with the write.
+  // The write is shared by all three rename surfaces; only the SENTENCE is this lane's.
+  // ⚠ `commitRename` writes the store AND flushes the summary — the flush carries the new name to
+  // every other member's @-picker. Lazy: the store opens an electron-store.
   const res = require('../../agent-identity-commit').commitRename(target, value);
   if (!res.ok) {
     return agentOps.refuse('Name refused: 1-60 visible characters on one line; control, zero-width and bidi characters are rejected, not stripped.');
