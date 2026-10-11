@@ -14,7 +14,8 @@ import { DevicePill } from "./device-pill";
 import { DisplayCard } from "./display-card";
 import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
-import { MessageMarkdown } from "./message-markdown";
+import { MessageMarkdown, bodyContextOf } from "./message-markdown";
+import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { messageTags } from "../lib/recipient-tags";
 import type { AuthorIndex } from "./view-model";
@@ -62,6 +63,10 @@ export function Transcript({
       </p>
     );
   }
+  // The system rows' one context, built once for the page rather than per row
+  // (`bodyContextOf` walks the roster). ⚠ `mentionsMe: false` — a system row carries no
+  // `metadata.mentionedUserIds` stamp, and the viewer wash is that server fact or nothing.
+  const systemCtx = bodyContextOf({ index, mentionsMe: false });
   return (
     <div className="flex flex-col gap-5">
       {rows.map((row) => {
@@ -72,7 +77,12 @@ export function Transcript({
               data-message-id={row.id}
               className="text-center text-caption text-text-muted"
             >
-              {row.body}
+              {/* ⚠ INLINE MARKDOWN, LIKE EVERY OTHER BODY IN THIS COLUMN (2026-10-10) —
+                  a system row is prose somebody wrote and it printed its own asterisks.
+                  ⚠ THE INLINE ARM because this row is ONE CENTRED LINE: block tokens would
+                  break the centring into left-aligned paragraphs
+                  (`message-markdown-inline.tsx` rule 2). */}
+              <MessageMarkdownInline text={row.body} ctx={systemCtx} />
             </p>
           );
         }

@@ -131,6 +131,33 @@ describe("the snippet's @-tags", () => {
     // all of them and distinguish nothing. Colour only — the composer's rule.
     expect(screen.getByText("@diana-taylor").className).not.toContain("bg-link");
   });
+
+  /**
+   * ⚠ **AND THE SNIPPET'S EMPHASIS READS TOO** (2026-10-10, second round, #3128). The row
+   * went straight to the mention LEAF, so a snippet of a body that was bold in the
+   * transcript arrived here as literal asterisks. It renders through
+   * `message-markdown-inline.tsx` now — one renderer, and a `line-clamp-2` that still
+   * clamps because the arm emits no blocks.
+   */
+  it("renders a snippet's bold as bold, not as asterisks", () => {
+    open({ rows: [mention({ messageId: "m-6", seq: 6, snippet: "shipped **today**" })] });
+    // The text leaf is a `<span>` of its own, so the emphasis is its ancestor.
+    const bold = screen.getByText("today");
+    expect(bold.closest("strong")).not.toBeNull();
+    expect(bold.closest(".line-clamp-2")).not.toBeNull();
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+  });
+
+  it("stops tinting a handle inside a code span — the closed half of F-266", () => {
+    open({
+      rows: [mention({ messageId: "m-5", seq: 5, snippet: "write `@diana-taylor` to tag" })],
+    });
+    // It tinted while nothing lexed the snippet: the token routes nobody, which is the
+    // one direction the tint may never lie in. The lexer gives the rule structurally.
+    const token = screen.getByText("@diana-taylor");
+    expect(token.tagName).toBe("CODE");
+    expect(token.className).not.toContain("text-link");
+  });
 });
 
 describe("channels mentions inbox", () => {

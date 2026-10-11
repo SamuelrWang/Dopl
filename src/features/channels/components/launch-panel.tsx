@@ -3,6 +3,7 @@
 import { Check, ShieldQuestion, Sparkles, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { StreamProse } from "./agent-stream-prose";
 import type { ChannelConsentRequest } from "../types";
 
 interface Props {
@@ -76,16 +77,32 @@ export function LaunchPanel({ request, onLaunch, onDecline, busy }: Props) {
         </span>
       </div>
 
+      {/* ⚠ **THE AGENT'S OWN PROSE, THROUGH THE AGENT WINDOW'S OWN RENDERER**
+          (2026-10-10, #3128). Both of these are text this operator's agent wrote, and
+          both printed their `**asterisks**` raw — so the operator approved a draft full of
+          markup and then watched the SAME string render bold in the transcript a second
+          later. `StreamProse` is what `agent-stream-sent-box.tsx` mounts for exactly this
+          text, so what is approved here and what is posted there are one rendering.
+          ⚠ **BLOCK ARM, NOT INLINE, AND THE SCROLL BOX IS WHY.** This preview is the whole
+          draft — lists and fences and all — in a `max-h` box that SCROLLS rather than
+          clamps, which is the one place in this surface where block structure both fits
+          and matters (`message-markdown-inline.tsx` rule 2 is about the clamped lanes).
+          ⚠ **`whitespace-pre-wrap` IS GONE FROM THE BODY AND MUST BE.** The renderer makes
+          the newlines into real blocks; keeping the rule on top of it would pay for every
+          blank line twice. */}
       {request.summary && (
-        <p className="mb-1 text-body leading-relaxed text-text-primary">
-          {request.summary}
-        </p>
+        <StreamProse
+          text={request.summary}
+          className="mb-1"
+          textClassName="text-body leading-relaxed text-text-primary"
+        />
       )}
       {preview && (
         <div className="concave-field mb-2 max-h-[200px] overflow-y-auto rounded-[8px] px-2.5 py-2">
-          <p className="whitespace-pre-wrap break-words text-caption leading-relaxed text-text-secondary">
-            {preview}
-          </p>
+          <StreamProse
+            text={preview}
+            textClassName="text-caption leading-relaxed text-text-secondary"
+          />
         </div>
       )}
 
