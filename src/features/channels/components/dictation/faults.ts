@@ -55,6 +55,12 @@ const TABLE: Record<string, Copy> = {
     reason: "Update Dopl for dictation",
     fix: (mac) => (mac ? FN : null),
   },
+  // The packaged app has no `Resources/dictation/dopl-dictation` (`main/dictation.js › probe`): a
+  // broken install, which "try again" cannot fix.
+  "helper-missing": {
+    reason: "Dictation engine missing",
+    fix: (mac) => (mac ? `Reinstall Dopl to restore it. ${FN}` : "Reinstall Dopl to restore it."),
+  },
   // Browser engine (`webkitSpeechRecognition` error codes).
   "not-allowed": {
     reason: "Microphone blocked",

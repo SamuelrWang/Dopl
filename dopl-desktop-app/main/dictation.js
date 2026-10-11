@@ -103,6 +103,24 @@ function parseProbeOutput(stdout) {
   return null;
 }
 
+/**
+ * How a helper's EXIT reads to the renderer: the fault code it still owes, or null.
+ *
+ * ⚠ A SIGNAL IS A FAULT TOO. macOS kills a process that trips a privacy check with a signal (no
+ * exit code), and a crash ends the same way; reading only `code` let either end the session
+ * silently — the button went red and then nothing, the exact report this engine exists to end.
+ * ⚠ EXCEPT A SIGNAL WE SENT: after our own stop (the grace-period kill, a closed window, quit)
+ * the operator asked for the ending, so it stays quiet.
+ * ⚠ AND NOTHING TWICE: a helper that already reported its own error, or a session already
+ * ended, owes nothing more.
+ */
+function exitFault(code, signal, session) {
+  if (!session || session.faulted || session.ended) return null;
+  if (code) return 'helper-failed';
+  if (signal && !session.stopping) return 'helper-failed';
+  return null;
+}
+
 // ─── END DICTATION-PURE ──────────────────────────────────────────────────────
 
 /** Packaged: Contents/Resources/dictation/. Dev (`electron .`): the build script's output. */
@@ -187,6 +205,7 @@ function kill(session) {
 
 function stopSession(session) {
   if (!session || session.ended) return;
+  session.stopping = true;
   try {
     session.child.stdin.write('stop\n');
     session.child.stdin.end();
@@ -214,7 +233,9 @@ function start(sender, locale) {
   // ⚠ A helper that exits before reading stdin turns the 'stop' write into EPIPE; unhandled, that
   // is an 'error' event that takes the main process down.
   child.stdin.on('error', () => {});
-  const session = { id: crypto.randomUUID(), child, sender, ended: false, timers: [], faulted: false };
+  const session = {
+    id: crypto.randomUUID(), child, sender, ended: false, timers: [], faulted: false, stopping: false,
+  };
   current = session;
 
   readline.createInterface({ input: child.stdout }).on('line', (line) => {
@@ -233,9 +254,13 @@ function start(sender, locale) {
     if (!session.faulted) send(session, { type: 'error', code: 'helper-failed' });
     finishSession(session);
   });
-  child.on('close', (code) => {
+  child.on('close', (code, signal) => {
     // A helper that died without saying why still owes the renderer an honest ending.
-    if (code && !session.faulted && !session.ended) send(session, { type: 'error', code: 'helper-failed' });
+    const owed = exitFault(code, signal, session);
+    if (owed) {
+      diag('dictation: helper exited without reporting —', `code=${code} signal=${signal}`);
+      send(session, { type: 'error', code: owed });
+    }
     finishSession(session);
   });
   session.timers.push(setTimeout(() => stopSession(session), MAX_SESSION_MS));
@@ -277,12 +302,15 @@ function register(opts = {}) {
   }));
 
   app.on('will-quit', () => {
-    if (current) kill(current);
+    if (!current) return;
+    current.stopping = true; // our own kill: the quit is not a fault (`exitFault`)
+    kill(current);
   });
 }
 
 module.exports = {
   register,
+  exitFault,
   availabilityFromProbe,
   parseHelperLine,
   parseProbeOutput,

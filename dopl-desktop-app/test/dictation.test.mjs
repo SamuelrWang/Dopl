@@ -24,9 +24,9 @@ function slice(src, name) {
   return src.slice(from, to);
 }
 
-const { availabilityFromProbe, parseHelperLine, parseProbeOutput, cleanLocale } = new Function(
+const { availabilityFromProbe, parseHelperLine, parseProbeOutput, cleanLocale, exitFault } = new Function(
   `${slice(read("main", "dictation.js"), "DICTATION-PURE")};` +
-    " return { availabilityFromProbe, parseHelperLine, parseProbeOutput, cleanLocale };"
+    " return { availabilityFromProbe, parseHelperLine, parseProbeOutput, cleanLocale, exitFault };"
 )();
 
 const READY = {
@@ -116,4 +116,48 @@ test("the shipping shape: helper source, build hook, resource path, usage string
   assert.ok(plist.includes(mac.extendInfo.NSSpeechRecognitionUsageDescription), "speech usage text drifted");
   assert.ok(plist.includes(mac.extendInfo.NSMicrophoneUsageDescription), "mic usage text drifted");
   assert.match(read("scripts", "build-dictation-helper.js"), /__info_plist/);
+});
+
+// ── THE HELPER'S EXIT (2026-10-11, release-readiness) ──────────────────────────────────────────
+// "Red and nothing" was the report. A helper killed by a SIGNAL (a macOS privacy kill, a crash)
+// has no exit code, and the old close handler read only the code, so the session ended in silence.
+const live = (over = {}) => ({ faulted: false, ended: false, stopping: false, ...over });
+
+test("🔒 a helper killed by a signal it was not sent owes the renderer a fault", () => {
+  assert.equal(exitFault(null, "SIGKILL", live()), "helper-failed");
+  assert.equal(exitFault(null, "SIGABRT", live()), "helper-failed");
+});
+
+test("a non-zero exit with no report of its own is a fault; a clean exit is not", () => {
+  assert.equal(exitFault(1, null, live()), "helper-failed");
+  assert.equal(exitFault(0, null, live()), null);
+});
+
+test("our own stop (grace kill, closed window, quit) stays quiet", () => {
+  assert.equal(exitFault(null, "SIGKILL", live({ stopping: true })), null);
+});
+
+test("never twice: a helper that already reported, or an ended session, owes nothing", () => {
+  assert.equal(exitFault(1, null, live({ faulted: true })), null);
+  assert.equal(exitFault(null, "SIGKILL", live({ ended: true })), null);
+  assert.equal(exitFault(1, null, null), null);
+});
+
+test("🔒 the close handler reads the SIGNAL and every one of our own kills marks the session stopping", () => {
+  const src = read("main", "dictation.js");
+  assert.match(src, /child\.on\('close', \(code, signal\) =>/);
+  assert.match(src, /exitFault\(code, signal, session\)/);
+  assert.match(src, /function stopSession\(session\) \{\n  if \(!session \|\| session\.ended\) return;\n  session\.stopping = true;/);
+  assert.match(src, /current\.stopping = true;[^\n]*\n    kill\(current\);/);
+});
+
+test("🔒 the plain build path rebuilds the SPA before packaging (a stale bundle ships the old mic)", () => {
+  // `DOPL_NOTARY_PROFILE=dopl-notary npm run build` is a supported release path. renderer/app is
+  // gitignored build output; packaging without rebuilding it shipped whatever was last built —
+  // on 2026-10-11 an Oct 2 bundle whose mic still used Electron's keyless Web Speech.
+  const { scripts } = JSON.parse(read("package.json"));
+  for (const name of ["build", "dist"]) {
+    assert.match(scripts[name], /^npm --prefix \.\. run build:ui && electron-builder --mac$/, `${name} must build the UI first`);
+  }
+  assert.match(read("scripts", "release.sh"), /npm run build:ui/, "release.sh builds the UI itself");
 });
