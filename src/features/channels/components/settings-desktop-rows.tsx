@@ -1,20 +1,19 @@
 "use client";
 
 /**
- * The Settings tab's DESKTOP-ONLY groups, split out of `settings-agent.tsx` at
- * the 500-line cap — one file per reason to change: these rows exist only
+ * The Settings tab's DESKTOP-ONLY groups, out of `settings-agent.tsx` — one file
+ * per reason to change: these rows exist only
  * inside the desktop shell (each gated on its own bridge upstream — no dead
  * rows), and both drive main-process launch state, never a server write.
  *
- * - **Working Folder** (named "Agent folder" until 2026-09-06) — where this
+ * - **Working Folder** — where this
  *   channel's agent RUNS on the operator's Mac.
  *   ⚠ FOR DEVELOPERS, and no longer printed (Samuel, 2026-08-19): CONTEXT, NOT
  *   A SANDBOX. The tool profile applies on top whatever the cwd is
  *   (`main/tool-profiles.js`), so changing the folder never changes what the
  *   agent may do. ⚠ An unset or vanished path falls back to the DESKTOP DEFAULT —
- *   `~/Downloads`, or the homedir when that is missing — and this sentence said
- *   "the isolated sandbox" until 2026-09-05, which is the same fiction the row
- *   below was printing. There is no sandbox anywhere in this feature.
+ *   `~/Downloads`, or the homedir when that is missing. There is no sandbox
+ *   anywhere in this feature.
  * - **Launch agents** — one pick over two records: agent chaining `(this channel)`,
  *   default OFF = the one-generation bound (`main/session-own-launch.js`), and
  *   orchestrator launches `(this Mac)`. See {@link LaunchAgentsRow}.
@@ -24,48 +23,34 @@
  *   {@link UseMyToolsRow}.
  */
 
-// ⚠ `Switch` LEFT WITH THE TWO LAUNCH TOGGLES AND THE REPLIES ROW (2026-09-06,
-// items 8 and 9). Nothing on this tab is a switch any more — every control is a
-// `SelectMenu` or the folder button — and an import kept "in case" is how a deleted
-// recipe comes back.
+// ⚠ No `Switch` on this tab (2026-09-06, items 8 and 9): every control is a `SelectMenu`
+// or the folder button, and an import kept "in case" is how a deleted recipe comes back.
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { SettingRow } from "./settings-agent-rows";
 import type { AgentFolderState } from "./settings-agent";
 
 /**
- * ⚠ `FOLDER_DEFAULT_LABEL = "Sandbox (default)"` STOOD HERE AND IS DELETED
- * (2026-09-05, task 15; Samuel's ruling is the ABBREVIATED form).
- *
- * It was rendered whenever `folder.label` was null, and that null meant "no
- * per-channel folder is set" — not "no folder". So the one row on this tab that
- * claims to say where the operator's agent runs was naming **a place that does not
- * exist**: there is no sandbox, and the desktop's default is `~/Downloads`, or the
- * homedir when that is missing (`main/channel-dirs.js › defaultSessionDir`).
- *
- * The bridge now answers the EFFECTIVE directory always, derived through the same
- * function that produces the spawn cwd, so this file no longer invents a name for
- * anything — and the reset control reads `custom`, which is the question the null
- * was standing in for. Do not reintroduce a constant here: a label this file can
- * spell is a label main did not agree to.
+ * ⚠ NO DEFAULT-FOLDER LABEL LIVES HERE (2026-09-05, task 15; Samuel's ruling is the
+ * ABBREVIATED form). The bridge answers the EFFECTIVE directory always, derived through
+ * the same function that produces the spawn cwd (`main/channel-dirs.js ›
+ * defaultSessionDir` when unset), and the reset control reads `custom`. Do not
+ * reintroduce a constant here: a label this file can spell is a label main did not
+ * agree to.
  */
 
 export function AgentFolderRows({
   folder,
 }: {
   folder: AgentFolderState;
-  // ⚠ `SettingName` IS GONE FROM THIS ROW'S PROPS (2026-09-06, item 4): the name is
-  // the left column of `SettingRow` now, so there is no standalone name to render.
+  // No `SettingName` prop: the name is `SettingRow`'s left column.
 }) {
   return (
     <>
       {/* ⚠ "Agent folder" → "Working Folder", ONE LINE, AND THE NAME IS THE BUTTON
           (2026-09-06, Samuel's settings overhaul, item 4).
 
-          ⚠ THE SEPARATE "Change folder…" BUTTON IS DELETED, NOT HIDDEN. The row was
-          three stacked elements — a name, a value PILL, and a button whose only job
-          was to open the picker the pill was already describing. The pill is now
-          PLAIN TEXT (underlined until 2026-09-10) and is itself the control, so the
-          row is a NAME and a CONTROL on one line: exactly the shape `SettingRow`
+          ⚠ NO SEPARATE "Change folder…" BUTTON: the plain-text value IS the control,
+          so the row is a NAME and a CONTROL on one line, the shape `SettingRow`
           states for this tab.
           ⚠ IT IS A REAL `<button>`, not a styled span with a click handler. It opens
           a native picker, so it has to be reachable by keyboard and has to announce

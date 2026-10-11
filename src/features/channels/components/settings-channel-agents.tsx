@@ -25,9 +25,7 @@
  * mistaken for "nobody nominated"), and there is no agent to name here.
  *
  * ⚠ **"Last addressed" IS THE DEFAULT AND THAT IS A STANDING RULING, NOT A PREFERENCE.**
- * (It read "Last Agent Addressed" until 2026-09-13 — a WORDING change on Samuel's
- * concision ruling, not a changed default: the value is still
- * `UNADDRESSED_RESPONDER_DEFAULT`.)
+ * The value is `UNADDRESSED_RESPONDER_DEFAULT`.
  * B1 (2026-09-04): a forgotten `@` must never stall a conversation, made off a live incident —
  * a person wrote in a room with two live agents and no default, the post fed 0 of 2, and he had
  * to send it again with a tag. So a member who never opens this panel is answered.

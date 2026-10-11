@@ -4,18 +4,14 @@
  * Channels — the Settings tab's AGENT half: its ROW VOCABULARY, and nothing
  * that reads, writes or decides anything.
  *
- * ⚠ PURE MOVE OUT OF `settings-agent.tsx` (2026-08-26). Not a redesign: every
- * recipe and every string below is the one that file rendered, byte for byte. It
- * moved because that file had reached the 500-line cap (INVARIANTS §1 — "a file
- * at 500 cannot absorb a comment") and the posture warning had to land in it; the
- * three presentational helpers are the part with the fewest reasons to change, so
- * they are the part that leaves.
+ * ⚠ OUT OF `settings-agent.tsx`: the three presentational helpers are the part of
+ * that tab with the fewest reasons to change.
  *
  * ⚠ THE MINIMAL-COPY RULING LIVES IN `settings-agent.tsx`'s DOCBLOCK AND STILL
  * GOVERNS EVERY ROW BUILT FROM THESE (Samuel, 2026-08-19; INVARIANTS §5): a row
  * on this tab is a NAME and a CONTROL, plus at most a few-word secondary line,
  * and no paragraph-style `text-caption` block anywhere. There is deliberately no
- * recipe here for a third line — see the `Note` tombstone below.
+ * recipe here for a third line.
  */
 
 import type { ReactNode } from "react";
@@ -125,11 +121,8 @@ export function SettingName({ children }: { children: ReactNode }) {
   );
 }
 
-// ⚠ `Note` STOOD IN `settings-agent.tsx` AND IS DELETED (2026-08-22). It was the
-// tab's one secondary-line recipe and its only two callers were trust's SCOPE
-// hint and the empty-roster line, both of which went with the "Always allow"
-// section. The minimal-copy ruling (INVARIANTS §5) stands: a row on this tab is a
-// NAME + a CONTROL, and there is now no recipe here to hang a third sentence off.
+// ⚠ No secondary-line (`Note`) recipe (2026-08-22): the minimal-copy ruling (INVARIANTS §5)
+// stands — a row on this tab is a NAME + a CONTROL, with no recipe to hang a third sentence off.
 
 /**
  * A named setting with its control on the right. The 380px panel (2026-08-25) is why the
