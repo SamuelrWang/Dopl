@@ -167,6 +167,6 @@ function normalize(msg, ctx) {
 }
 
 module.exports = {
-  normalize, toolCallEvents, tokensFrom, usageOf, isAuthShaped, callIdOf, textOf,
+  normalize,
   AGENT_CREATED, TURN_COMPLETED, ERROR_MESSAGE_TYPE,
 };

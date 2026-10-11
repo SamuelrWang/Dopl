@@ -32,8 +32,6 @@ const RUNTIME_HEADERS = {
 // is echoed on every later request, so a negotiated-down server is followed.
 const PROTOCOL_VERSION = '2025-11-25';
 
-const CHANNEL_TOOL = 'dopl_channel';
-
 function clientTimeoutMs() {
   // Lazy: `mcp-config` pulls auth, and an unwired harness must read as "no token", never throw.
   try {
@@ -224,6 +222,5 @@ const descriptor = {
 
 module.exports = {
   registerMcp, probeMcp, descriptor,
-  buildWiring, connect, parseSse, readBody, clientTimeoutMs,
-  RUNTIME_HEADERS, PROTOCOL_VERSION, CHANNEL_TOOL,
+  buildWiring, connect, parseSse, PROTOCOL_VERSION,
 };

@@ -167,5 +167,5 @@ function resume(spec, _priorHandle) {
 }
 
 module.exports = {
-  buildLaunchSpec, start, resume, frames, nativePair,
+  buildLaunchSpec, start, resume, nativePair,
 };

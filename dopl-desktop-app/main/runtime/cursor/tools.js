@@ -180,10 +180,9 @@ function buildSessionToolConfig(profile) {
 const WINDOWLESS_FLOOR = 'auto-review';
 
 module.exports = {
-  shortDoplName,
   buildSessionToolConfig, buildSecretPathDenyRules,
   axisAAllows, normalizeToolMode,
   TOOL_MODES, WINDOWLESS_FLOOR,
   AUTO_REVIEW_TOOLS, RUN_EVERYTHING_TOOLS,
-  SHELL_ANY, WRITE_ANY, WEB_ANY, MCP_ANY, SECRET_TOOLS,
+  SHELL_ANY, WRITE_ANY, WEB_ANY, MCP_ANY,
 };

@@ -16,9 +16,6 @@
 // `probe()` refuses for real and its reason must be readable by an operator.
 
 const SDK_PKG = '@cursor/sdk';
-const BIN = 'cursor-agent';
-// ⚠ BOUNDED: a binary that never answers must read as absent, not as a stuck launch.
-const PROBE_TIMEOUT_MS = 5000;
 
 let _sdk = null; // cached ESM namespace
 
@@ -33,15 +30,12 @@ async function loadSdk() {
   return _sdk;
 }
 
-/** The cached namespace or null — for a synchronous caller that must not import. */
-const peekSdk = () => _sdk;
-
 /**
  * Can this release start a Cursor session on this Mac?
  *
- * ⚠ ONE OF THREE QUESTIONS AND ANSWERS ONLY ITS OWN: "does the module load" (this), "is
- * `cursor-agent` on PATH" and "is this Mac signed in" (`credential.js`). Collapsing them is how a
- * machine with a good install was told channel requests could not be answered.
+ * ⚠ ANSWERS ONLY ITS OWN QUESTION: "does the module load" (this), not "is this Mac signed in"
+ * (`credential.js`). Collapsing them is how a machine with a good install was told channel requests
+ * could not be answered.
  */
 async function probe() {
   try {
@@ -83,8 +77,4 @@ async function resumeAgent(agentId, options) {
   return Agent.resume(agentId, options);
 }
 
-module.exports = {
-  SDK_PKG, BIN, PROBE_TIMEOUT_MS,
-  loadSdk, peekSdk, probe,
-  createAgent, resumeAgent,
-};
+module.exports = { loadSdk, probe, createAgent, resumeAgent };
