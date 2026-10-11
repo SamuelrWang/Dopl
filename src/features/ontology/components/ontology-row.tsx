@@ -147,14 +147,30 @@ export function OntologyRow({
                 key={row.key}
                 className="flex items-baseline gap-3 border-b border-border-subtle px-3 py-1.5 last:border-b-0"
               >
-                <dt
-                  className={
-                    row.edge
-                      ? "w-40 shrink-0 truncate text-caption italic text-text-muted"
-                      : "w-40 shrink-0 truncate text-caption font-medium text-text-muted"
-                  }
-                >
-                  {row.label}
+                {/* The `<dt>` keeps `w-40 shrink-0`, so every value below stays on
+                    one left edge whichever arm draws. */}
+                <dt className="w-40 shrink-0">
+                  {row.edge ? (
+                    <span className="block truncate text-caption italic text-text-muted">
+                      {row.label}
+                    </span>
+                  ) : (
+                    /* The field NAME as a black rectangular pill (Samuel #3031,
+                       Rows view per #3079). `bg-surface-cta` + `text-text-on-cta`
+                       is the app's existing ink/on-ink pair (globals.css:269-270),
+                       the one the CTA buttons wear, so no hex is minted here.
+                       `rounded-[4px]` deliberately, NOT `rounded-pill`: he asked
+                       for a rectangle with a small radius.
+                       `inline-block max-w-full truncate` is load-bearing — the pill
+                       hugs its text and the ellipsis lands INSIDE it. The old
+                       `truncate` sat on the `<dt>`, which would clip an
+                       inline-block child square instead of ellipsing it.
+                       EDGES KEEP THE OLD LOOK: relationships are edges, not
+                       fields, and he asked for field names. */
+                    <span className="inline-block max-w-full truncate rounded-[4px] bg-surface-cta px-1.5 py-px text-caption font-semibold text-text-on-cta">
+                      {row.label}
+                    </span>
+                  )}
                 </dt>
                 <dd className="min-w-0 flex-1 truncate text-caption text-text-primary">
                   {row.href ? (
