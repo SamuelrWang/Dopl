@@ -357,7 +357,6 @@ module.exports = {
   checkShape,
   declares,
   requiredShapeProblems,
-  refusalSentence,
   settleShape,
   launchShapeRefusal,
   declaresSafety,

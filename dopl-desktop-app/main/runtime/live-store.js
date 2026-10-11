@@ -131,4 +131,4 @@ function inject(next) {
   memo = null;
 }
 
-module.exports = { FILE_SCHEMA, FILE_NAME, KINDS, FLUSH_MS, read, save, flush, inject, _parse: parse };
+module.exports = { FILE_SCHEMA, KINDS, FLUSH_MS, read, save, flush, inject };
