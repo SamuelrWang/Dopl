@@ -2,7 +2,7 @@
 
 /**
  * **ONE ROW OF THE RENDERED STREAM — WHAT A ROW CAN CARRY, AND NOTHING ABOUT HOW ONE IS BUILT**
- * (§1 split out of `agent-stream-model.ts`, 2026-10-10, at the 500-line cap).
+ * (split out of `agent-stream-model.ts`).
  *
  * ⚠ THE SEAM IS "ONE FILE, ONE REASON TO CHANGE", not the line count that forced the question —
  * the same seam that split `agent-stream-lanes.ts` and `agent-stream-groups.ts` off the same file,

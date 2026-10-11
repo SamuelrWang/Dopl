@@ -127,13 +127,9 @@ export function StreamProse({
  * the log lane's clip row wears keeps one voice for "you are not seeing all
  * of it" across the column.
  *
- * ⚠ IT MOVED HERE FROM `agent-stream.tsx` ON 2026-09-14, PURE RELOCATION — not a
- * word of it changed. The seam is the one this file already states: every face
- * that needs the note is a caller of {@link StreamProse}, because the note exists
- * precisely for text rendered WHOLE with no clamp (rule 4 above), and the
- * container file was at exactly 500 of the 500-line cap when the live working row
- * landed — the cap naming a seam that was already there, as it did for
- * `agent-stream-log.tsx`.
+ * ⚠ IT LIVES HERE because every face that needs the note is a caller of
+ * {@link StreamProse}: the note exists precisely for text rendered WHOLE with no
+ * clamp (rule 4 above).
  */
 export function TruncatedNote({ alignEnd }: { alignEnd?: boolean }) {
   return (
