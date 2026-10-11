@@ -1,4 +1,4 @@
-// F-3031 — "clicking links across the app does not open them in the browser", pinned.
+// #3031 — "clicking links across the app does not open them in the browser", pinned.
 //
 // Two gates were each refusing ordinary links and NEITHER logged loudly enough to be noticed:
 //

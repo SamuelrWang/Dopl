@@ -130,7 +130,7 @@ function spaWebPreferences() {
 
 // REFUSING A NAVIGATION IS HALF AN ANSWER; THE OTHER HALF IS THE BROWSER.
 //
-// ⚠ THIS IS THE FIX FOR F-3031 — "links across the app don't open" (2026-10-10). The refusals
+// ⚠ THIS IS THE FIX FOR #3031 — "links across the app don't open" (2026-10-10). The refusals
 // below were complete and silent: `window.open` denied, `will-navigate` preventDefault'd, and
 // nothing more. So a plain `<a href="https://…">`, an `<a target="_blank">`, a link inside a
 // rendered markdown message, an ontology Link field, a link in a knowledge entry — every link

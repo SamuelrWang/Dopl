@@ -12,16 +12,15 @@
 // belongs only on the entry we own: `runtime/claude/loader.js`'s in-memory server, inside this process.
 //
 // ⚠ The token value NEVER hits logs/diag, and as of 2026-08-26 it never hits a file THIS APP
-// WRITES either. It is stored safeStorage-encrypted and passed as a `claude mcp add` header
-// argv (mcp-cli-add.js), where the CLI — not this process — owns whatever it persists.
+// WRITES either. It is stored safeStorage-encrypted (`mcp-device-token.js`) and passed as a
+// `claude mcp add` header argv (mcp-cli-add.js), where the CLI — not this process — owns it.
 // ⚠ The safeStorage cache is the ONLY source the SESSION path uses: `deviceTokenForSpawn()`
 // hands `runtime/claude/loader.js › buildMcpServers` the bearer in memory. Step 3 is now the ONLY step that
 // serves the CLI path (manual `claude` runs); there is no headless spawn path left to serve.
 
 const fs = require('fs');
 const path = require('path');
-const { app, safeStorage } = require('electron');
-const Store = require('electron-store');
+const { app } = require('electron');
 
 const auth = require('./auth');
 const spawner = require('./session-spawner');
@@ -36,11 +35,9 @@ const { withDeadline, DEADLINE } = require('./deadline');
 const { ensureDoplSkills } = require('./runtime/claude/skill-install');
 const { MCP_URL, MCP_DEVICE_TOKEN_PATH } = require('./config');
 const { isUuid } = require('./ipc-guards');
+// ⚠ ONE INSTANCE, read never restated: the store handle, its two keys and the mint-listener Set live in that module.
+const { store, DT_KEY, DT_KEY_PLAIN, REUSE_MARGIN_MS, saveDeviceToken, loadDeviceToken, onDeviceTokenMinted, notifyMinted } = require('./mcp-device-token');
 
-const store = new Store();
-const DT_KEY = 'mcpDeviceToken'; // safeStorage-encrypted base64(JSON{token,expiresAt,label,tokenId?})
-const DT_KEY_PLAIN = 'mcpDeviceTokenPlain';
-const REUSE_MARGIN_MS = 7 * 24 * 60 * 60 * 1000; // re-mint when <7d remain
 // ⚠ THE ONE DEFINITION of the per-server call abort every Dopl MCP entry this app builds must
 // carry. `runtime/claude/loader.js`'s in-memory entry is the only such entry left, and it IMPORTS this constant
 // rather than restating it — restating is exactly how the two drifted the last time (a stale
@@ -134,39 +131,6 @@ function removeSpawnConfig() {
   }
 }
 
-// ── Device-token cache (safeStorage) ─────────────────────────────────────────
-function saveDeviceToken(obj) {
-  try {
-    // A fresh mint is live for the NEXT session spawn without a restart — the in-memory copy
-    // is what buildMcpServers injects.
-    if (obj && obj.token) spawnToken = String(obj.token);
-    const json = JSON.stringify(obj);
-    if (safeStorage.isEncryptionAvailable()) {
-      store.set(DT_KEY, safeStorage.encryptString(json).toString('base64'));
-      store.delete(DT_KEY_PLAIN);
-    } else {
-      store.set(DT_KEY_PLAIN, json);
-      store.delete(DT_KEY);
-    }
-  } catch (_) {
-    /* best-effort cache */
-  }
-}
-
-function loadDeviceToken() {
-  try {
-    const enc = store.get(DT_KEY);
-    if (enc && safeStorage.isEncryptionAvailable()) {
-      return JSON.parse(safeStorage.decryptString(Buffer.from(enc, 'base64')));
-    }
-    const plain = store.get(DT_KEY_PLAIN);
-    if (plain) return JSON.parse(plain);
-  } catch (_) {
-    /* fall through */
-  }
-  return null;
-}
-
 // How the device heartbeat links the CURRENT token to this computer: its row id, or (records
 // minted before the server returned one) the label. Read once per arm/sign-in, never per beat.
 function deviceTokenLink() {
@@ -174,19 +138,6 @@ function deviceTokenLink() {
   if (!rec || !rec.token) return null;
   if (isUuid(rec.tokenId)) return { tokenId: rec.tokenId };
   return { tokenLabel: String(rec.label || deviceLabel()) };
-}
-
-// In-memory mint notifier so the heartbeat learns a re-mint's id without re-reading the store.
-const mintListeners = new Set();
-function onDeviceTokenMinted(cb) {
-  if (typeof cb !== 'function') return () => {};
-  mintListeners.add(cb);
-  return () => mintListeners.delete(cb);
-}
-function notifyMinted(link) {
-  for (const cb of mintListeners) {
-    try { cb(link); } catch (_) { /* a listener never breaks minting */ }
-  }
 }
 
 // ⚠ THE SDK PATH'S BEARER, never a file read — AND THE ONLY PLACE THE BEARER IS SPELLED, now
@@ -367,6 +318,10 @@ async function obtainDeviceToken() {
   const rec = { token: data.token, expiresAt: parseExpiry(data.expiresAt), label };
   // Older servers omit tokenId; the heartbeat then links by label.
   if (isUuid(data.tokenId)) rec.tokenId = data.tokenId;
+  // A fresh mint is live for the NEXT session spawn without a restart — the in-memory copy is what
+  // buildMcpServers injects. Ahead of the write, as it was when the memo sat inside
+  // `saveDeviceToken`; this is that function's only caller, so there is no second site to keep up.
+  spawnToken = String(rec.token);
   saveDeviceToken(rec);
   lastMintWasFresh = true;
   notifyMinted(rec.tokenId ? { tokenId: rec.tokenId } : { tokenLabel: label });

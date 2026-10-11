@@ -1,7 +1,7 @@
 // THE ONE ANSWER TO "may the OS opener be pointed at this?" — shared by every main-process
 // surface that hands a URL to the user's real browser.
 //
-// ⚠ WHY THIS MODULE EXISTS AT ALL (F-3031, 2026-10-10). Two independent gates were each
+// ⚠ WHY THIS MODULE EXISTS AT ALL (#3031, 2026-10-10). Two independent gates were each
 // refusing ordinary links, and nothing in the app opened one:
 //
 //   • `ui-bridge.js` ran a HOST allowlist (`EXTERNAL_HOST_ALLOWLIST = ['stripe.com',

@@ -40,7 +40,7 @@ const { resolveApiUrl, isWorkspaceId } = new Function(
   `${bridgePure}; return { resolveApiUrl, isWorkspaceId };`
 )();
 
-// ⚠ THE OS-OPENER POLICY MOVED OUT OF THIS SLICE (F-3031, 2026-10-10). It is
+// ⚠ THE OS-OPENER POLICY MOVED OUT OF THIS SLICE (#3031, 2026-10-10). It is
 // `main/external-url.js`, shared with spa-window.js's navigation hand-off, and
 // `test/external-url.test.mjs` drives it. What stays HERE is the one thing that is still
 // ui-bridge's own: that the handler actually asks.
@@ -188,7 +188,7 @@ test("the handler runs the destination policy and names only the host when it re
   // the call that makes the log safe, so pin the argument position instead.
   assert.ok(!/diag\([^)]*,\s*url\s*[),]/.test(fn), "a refused URL must never reach the log");
   assert.ok(!/diag\(\s*url\b/.test(fn), "nor as diag's first argument");
-  // ⚠ AND THE OLD HOST ALLOWLIST MUST NOT COME BACK (F-3031). It refused every ordinary
+  // ⚠ AND THE OLD HOST ALLOWLIST MUST NOT COME BACK (#3031). It refused every ordinary
   // link in the app; `main/external-url.js`'s header records which hole it was really for.
   assert.ok(
     !/EXTERNAL_HOST_ALLOWLIST/.test(BRIDGE),

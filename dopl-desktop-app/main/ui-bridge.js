@@ -101,7 +101,7 @@ function resolveApiUrl(path, apiBase) {
 }
 
 // ⚠ WHERE the OS opener may be pointed lives in `main/external-url.js`, NOT here, and the
-// policy is now a SCHEME allowlist rather than a HOST one (F-3031, 2026-10-10). The host list
+// policy is now a SCHEME allowlist rather than a HOST one (#3031, 2026-10-10). The host list
 // this block used to carry (`['stripe.com', 'github.com']` + the app origin) was refusing every
 // ordinary link in the app — read that module's header for which hole it was really closing and
 // what still closes it. The predicate is required, never re-implemented, because
@@ -468,7 +468,7 @@ module.exports = {
   register,
   broadcastAuthState,
   resolveApiUrl,
-  // ⚠ `isExternalUrl` / `isAllowedExternalUrl` are GONE from here (F-3031): the OS-opener
+  // ⚠ `isExternalUrl` / `isAllowedExternalUrl` are GONE from here (#3031): the OS-opener
   // policy is `main/external-url.js › isOpenableExternalUrl`, which spa-window.js shares.
   isWorkspaceId,
   isAppWindowSender,
