@@ -198,5 +198,4 @@ module.exports = {
   stampToolSet,
   startQuery,
   consume,
-  isAbortError,
 };
