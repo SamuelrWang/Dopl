@@ -298,7 +298,16 @@ function start(spec) {
     // Dopl's restrictions ride argv and are READ BACK before any thread starts (`proc-config.js`); only the
     // operator's own servers stay on the thread (their headers are the operator's, not for argv).
     const { proc, thread: threadConfig } = procConfig.split(config);
-    if (Object.keys(mine).length) threadConfig.mcp_servers = Object.assign(mine, threadConfig.mcp_servers);
+    // ⚠ A thread-level `mcp_servers` REPLACES the process-level (argv) table outright — it does not merge
+    // into it (MEASURED, codex-cli 0.162.1). So the moment the operator contributes one server, Dopl's own
+    // entry must ride along INSIDE that table or it is simply gone: no `dopl` startup status, the first
+    // turn's wait ends on its bound, and the session dies "no answer in time" (`mcp-ready.js`). Dopl's
+    // entry stays on argv as well, which is what `assertRestrictionsTook` reads back. LAST wins, so a
+    // server the operator managed to call `dopl` cannot shadow it (`operator-tools.js › entryFor` drops
+    // that row already; this is the second fence, not the first).
+    if (Object.keys(mine).length) {
+      threadConfig.mcp_servers = Object.assign({}, mine, threadConfig.mcp_servers, proc.mcp_servers);
+    }
     // A copy: the spec is the caller's (and `doplConfigured` read it); never rewritten under them.
     const threadStart = Object.assign({}, spec.threadStart || {});
     // The model, re-resolved against a SETTLED roster (follow-up A): a resume right after a restart reaches

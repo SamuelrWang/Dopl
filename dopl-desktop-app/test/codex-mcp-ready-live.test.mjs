@@ -25,6 +25,7 @@ const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
 const launchSpec = require(join(CODEX, 'launch-spec.js'));
 const configHome = require(join(CODEX, 'config-home.js'));
+const operatorTools = require(join(CODEX, 'operator-tools.js'));
 const { normalize } = require(join(CODEX, 'normalize.js'));
 
 const GATE = announceGate(liveGate());
@@ -81,11 +82,12 @@ function pushQueue() {
 }
 
 /** Dopl's real launch spec with the stand-in URL, the stub provider and a fresh cwd. */
-function doplSpec({ modelPort, url, prompts, cwd, lines }) {
+function doplSpec({ modelPort, url, prompts, cwd, lines, useMyTools }) {
   const spec = launchSpec.buildLaunchSpec({
     session: {
       key: 'live:codex:mcp-ready', profile: 'full', channelId: CH, state: {}, workspaceId: 'ws',
       model: STUB_MODEL.searchPath, containerToken: { token: 'mcp-ready-bearer' }, pushIterator: prompts,
+      ...(useMyTools ? { operatorTools: 'shared' } : null),
     },
     dispatch: () => {},
   });
@@ -101,20 +103,27 @@ function doplSpec({ modelPort, url, prompts, cwd, lines }) {
 }
 
 /** One launch through `start()`: push `hello`, collect frames to the first `turn/completed` (or `close`). */
-async function launched(t, { url, delayMs = SLOW_MS, closeAfterLaunchMs = null }) {
+async function launched(t, { url, delayMs = SLOW_MS, closeAfterLaunchMs = null, operatorServers = null }) {
   const model = await scriptedModel(null);
   const dopl = await slowDopl(delayMs);
   const cwd = mkdtempSync(join(tmpdir(), 'dopl-codex-mcp-ready-'));
   const prompts = pushQueue();
   const lines = [];
-  const spec = doplSpec({ modelPort: model.port, url: url === undefined ? dopl.url : url, prompts, cwd, lines });
+  const spec = doplSpec({
+    modelPort: model.port, url: url === undefined ? dopl.url : url, prompts, cwd, lines,
+    useMyTools: !!operatorServers,
+  });
   let conn = null;
   const realConnect = client.connect;
+  const realOperator = operatorTools.operatorServers;
+  // The operator's own config is never read in a test; the table they WOULD have contributed is injected.
+  if (operatorServers) operatorTools.operatorServers = async () => ({ ...operatorServers });
   client.connect = (o) => { conn = realConnect(o); return conn; };
   const t0 = Date.now();
   const handle = launchSpec.start(spec);
   t.after(async () => {
     client.connect = realConnect;
+    operatorTools.operatorServers = realOperator;
     handle.close();
     if (conn) await terminateConn(conn);
     await model.close();
@@ -185,6 +194,25 @@ describe('live: the first Codex turn waits for Dopl\'s MCP server', () => {
     assert.ok(m, run.lines[0]);
     assert.ok(run.readyAtMs != null && run.turnStartedAt >= run.readyAtMs, `turn at ${run.turnStartedAt}ms, Dopl ready at ${run.readyAtMs}ms`);
     t.diagnostic(`slow Dopl ready at ${run.readyAtMs}ms after start(); first turn waited ${m[2]}ms; turn/started at ${run.turnStartedAt}ms`);
+  });
+
+  // ⚠ 2026-10-11, MEASURED on codex-cli 0.162.1: a thread-level `mcp_servers` REPLACES the process-level
+  // (argv) table, it does not merge into it. Dopl's own entry rides argv, so one server from "Use my tools"
+  // was enough to evict it — the regression that stopped every Codex agent from starting. If this arm ever
+  // goes green with the merge at `launch-spec.js` removed, Codex changed its config layering and the
+  // comment there is stale. Unit twin: `codex-mcp-ready.test.mjs › REGRESSION`.
+  test('"Use my tools": an operator server on the thread does not evict Dopl from the real app-server', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const run = await launched(t, {
+      // Unreachable on purpose and quick to give up: all this arm needs is a thread-level table to exist.
+      operatorServers: { supabase: { url: UNREACHABLE, startup_timeout_sec: 1, default_tools_approval_mode: 'prompt' } },
+    });
+    assert.equal(run.ended, true, 'the turn completed');
+    assert.equal(doplVisible(run.requests[0]), true,
+      "the operator's thread-level mcp_servers replaced the argv table and took Dopl's own entry with it");
+    assert.deepEqual(run.lane.filter((l) => /did not connect/.test(l)), []);
+    assert.match(run.lines[0], /^codex: dopl mcp ready \((notification|list|already)\) first turn waited \d+ms/);
+    t.diagnostic(`with one operator server on the thread: ${run.lines[0].slice(0, 120)}`);
   });
 
   test('failed: an unreachable Dopl — the turn still runs, and ONE line says the tools did not connect', async (t) => {
