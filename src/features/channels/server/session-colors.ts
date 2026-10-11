@@ -147,27 +147,6 @@ export function liveColorClaim(row: {
   return key ? { key, shared: row.color_shared === true } : null;
 }
 
-/**
- * THE TAKEN SET A SURFACE OR A LAUNCH IS ANSWERED WITH — every colour held by a LIVE
- * session in one channel, whoever is running it.
- *
- * ⚠ Exported from the policy file rather than the repository because it is the same
- * rule stated once: "live" is `state !== 'ended'` and nothing else, which is exactly
- * the index's predicate. A second spelling in the repository is how a read starts
- * disagreeing with the constraint it exists to predict.
- */
-export function takenColorsFromRows(
-  rows: ReadonlyArray<{ color: string | null; state: string }>
-): Set<string> {
-  const taken = new Set<string>();
-  for (const row of rows) {
-    if (row.state === "ended") continue;
-    const key = agentColorOrNull(row.color);
-    if (key) taken.add(key);
-  }
-  return taken;
-}
-
 // ⚠ **THE `AGENT_COLOR_KEYS` RE-EXPORT IS DELETED (2026-09-14).** It stood here so "a caller
 // needing all sixteen imports ONE module rather than reaching past this file into `lib/`" — and
 // **no caller ever did**: every consumer in this tree (`schema-sessions.ts`, `schema-launch.ts`,
