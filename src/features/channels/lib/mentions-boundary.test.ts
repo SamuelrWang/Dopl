@@ -23,8 +23,11 @@ import { mentionHandleOf, mentionTokensOf } from "./mentions";
  *      which has carried `(?<![a-z0-9-])` since it was written and is the reason the DESKTOP
  *      never had this bug. It is asserted here so the three cannot drift apart again.
  *
- * ⚠ `packages/mcp-server` carries no tokenizer — `channel-post-guidance.ts › AGENT_HANDLE_RE` is
- * an anchored whole-string test, not a scanner — so there is no fourth copy to pin.
+ * ⚠ THERE IS A FOURTH COPY, `packages/mcp-server/src/tools/channel-post-guidance.ts ›
+ * MENTION_TOKEN_RE` (the scanner behind a post's `tags=`; its `AGENT_HANDLE_RE` is only the
+ * anchored id test). This line used to say it carried no tokenizer, and that copy missed this
+ * boundary until 2026-10-11 (cleanup M02). That package's vitest cannot see this one, so it pins
+ * the same table itself: `channel-post-guidance-boundary.test.ts`. Change both together.
  */
 
 const MAIN = (f: string) =>

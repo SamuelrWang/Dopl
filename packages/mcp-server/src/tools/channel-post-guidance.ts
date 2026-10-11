@@ -58,10 +58,14 @@ function resolvedMentionCount(message: ChannelMessage): number {
 
 /**
  * ⚠ HAND-COPIED from `src/features/channels/lib/mentions.ts › MENTION_TOKEN_RE`
- * — `@` plus one or more non-whitespace, non-`@` characters, at any position,
- * mid-word included. A stricter rule here would report "you tagged nobody" over
- * a body the server's parser reads as a tag, which is the two-parsers-disagreeing
- * bug that module exists to prevent.
+ * — `@` plus one or more non-whitespace, non-`@` characters, where the `@` is NOT
+ * preceded by a letter or digit (so `sam@example.com` is an address, not a tag).
+ * Any other rule here disagrees with the server's parser: a looser one reports
+ * "you tagged nobody" over a body that holds no tag, a stricter one over a body
+ * that does. Capture group 1 is the token WITHOUT the `@` (the app's group keeps
+ * it). ⚠ This copy missed the app's 2026-09-16 boundary until 2026-10-11 (cleanup
+ * M02), so emails posted as `tags=0/1`; `channel-post-guidance-boundary.test.ts`
+ * now runs the app's fixture table against it.
  *
  * ⚠ IT DOES NOT MIRROR THE CODE RULE, DELIBERATELY (2026-08-22). The server
  * skips a handle inside a code span or a fenced block; this does not, so a body
@@ -71,7 +75,7 @@ function resolvedMentionCount(message: ChannelMessage): number {
  * written. This asks "did the AUTHOR write one"; only the server answers "did it
  * land".
  */
-const MENTION_TOKEN_RE = /@([^\s@]+)/g;
+const MENTION_TOKEN_RE = /(?<![A-Za-z0-9])@([^\s@]+)/g;
 
 /**
  * ⚠ HAND-COPIED from `dopl-desktop-app/main/session-dispatch.js ›

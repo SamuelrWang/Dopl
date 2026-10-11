@@ -247,13 +247,16 @@ describe("P11 · what a post's result teaches about what to do NEXT", () => {
     expect(text).toContain("tags=1/1");
   });
 
-  it("reads the tag the way the SERVER's parser does — mid-word `@` counts", async () => {
-    // ⚠ `lib/mentions.ts › MENTION_TOKEN_RE` has no leading-boundary rule, so
-    // `ops@dopl` is a token to the resolver. Reporting `tags=-` over a body the
-    // server reads as a tag is the disagreement this mirrors away.
+  it("reads the tag the way the SERVER's parser does — an address is not a tag", async () => {
+    // ⚠ `lib/mentions.ts › MENTION_TOKEN_RE` has carried a leading boundary since
+    // 2026-09-16 (`(?<![A-Za-z0-9])@`), so `ops@dopl` is NOT a token to the
+    // resolver. Reporting `tags=0/1` ("you tagged nobody") over a body the server
+    // reads as tag-free is the disagreement this mirrors away. Until 2026-10-11
+    // (cleanup M02) this test pinned the pre-boundary rule, and with it the bug.
+    // The full table: `channel-post-guidance-boundary.test.ts`.
     const text = await resultOf("mail went to ops@dopl.example", THREAD);
-    expect(text).toContain("tags=0/1");
-    expect(text).not.toContain("tags=-");
+    expect(text).toContain("tags=-");
+    expect(text).not.toContain("tags=0/1");
   });
 
   it("CATCHES THE SILENT FAILURE: an `@` the server resolved to nobody", async () => {
