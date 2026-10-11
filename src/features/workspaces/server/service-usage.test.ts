@@ -10,6 +10,9 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// ⚠ The four AGGREGATES default to `null` in `beforeEach` — the un-applied
+// database — so every case below exercises the DEGRADE path, which is the live
+// one until the migration lands. The `*-row-cap` suites drive the applied side.
 vi.mock("./repository-usage", () => ({
   scanWorkspaceCreditEvents: vi.fn(),
   scanWorkspaceMcpCalls: vi.fn(),
@@ -18,6 +21,12 @@ vi.mock("./repository-usage", () => ({
   listWorkspaceRunningSessions: vi.fn(),
   listWorkspaceRoles: vi.fn(),
   listWorkspaceTokenSpend: vi.fn(),
+}));
+vi.mock("./repository-usage-tally", () => ({
+  sumWorkspaceCreditBins: vi.fn(),
+  tallyWorkspaceCredits: vi.fn(),
+  tallyWorkspaceMcpTools: vi.fn(),
+  tallyWorkspaceChannelMessages: vi.fn(),
 }));
 vi.mock("./repository", () => ({ listProfileSummaries: vi.fn() }));
 
@@ -33,6 +42,7 @@ import {
   tallyWorkspaceTools,
 } from "./service-usage";
 import * as repo from "./repository-usage";
+import * as tally from "./repository-usage-tally";
 import { listProfileSummaries } from "./repository";
 
 const WS = "11111111-1111-4111-8111-111111111111";
@@ -41,6 +51,7 @@ const CHAN = "33333333-3333-4333-8333-333333333333";
 const NOW = new Date("2026-09-17T09:30:00.000Z");
 
 const mocked = vi.mocked(repo);
+const mockedTally = vi.mocked(tally);
 
 function burn(over: Partial<repo.WorkspaceCreditEventRow> = {}) {
   return {
@@ -66,6 +77,10 @@ beforeEach(() => {
     rows: [],
     truncated: false,
   });
+  mockedTally.sumWorkspaceCreditBins.mockResolvedValue(null);
+  mockedTally.tallyWorkspaceCredits.mockResolvedValue(null);
+  mockedTally.tallyWorkspaceMcpTools.mockResolvedValue(null);
+  mockedTally.tallyWorkspaceChannelMessages.mockResolvedValue(null);
   mocked.listWorkspaceRoles.mockResolvedValue(new Map());
   mocked.listWorkspaceRunningSessions.mockResolvedValue({
     rows: [],
@@ -128,17 +143,28 @@ describe("the rails", () => {
   it("gives every VISIBLE channel a row and drops burns in the rest", () => {
     const rows = tallyWorkspaceChannels(
       [{ id: CHAN, name: "General" }],
-      [burn({ channel_id: CHAN, amount: 4 }), burn({ channel_id: OTHER, amount: 9 })],
-      [{ channel_id: CHAN }, { channel_id: OTHER }]
+      new Map([
+        [CHAN, 4],
+        [OTHER, 9],
+      ]),
+      new Map([
+        [CHAN, 1],
+        [OTHER, 1],
+      ])
     );
     expect(rows).toEqual([
       { channelId: CHAN, name: "General", credits: 4, messages: 1 },
     ]);
   });
 
-  it("drops a burn with no user rather than bucketing it as 'Unknown'", () => {
+  it("drops a person the roster does not carry rather than bucketing them", () => {
+    // ⚠ A burn with no `user_id` never reaches this map at all — the fold and the
+    // aggregate both drop the null key, so "Unknown" cannot read as a person.
     const rows = tallyWorkspacePeople(
-      [burn({ user_id: null }), burn({ user_id: "u2", amount: 3 })],
+      new Map([
+        ["u-gone", 500],
+        ["u2", 3],
+      ]),
       new Map([["u2", "guest" as const]]),
       new Map([["u2", "Ada"]])
     );
@@ -199,9 +225,8 @@ describe("the rails", () => {
 
   it("orders tools by calls and breaks ties on the key", () => {
     const rows = tallyWorkspaceTools([
-      { tool: "b", op: "x" },
-      { tool: "a", op: "x" },
-      { tool: "b", op: "x" },
+      { tool: "b", op: "x", calls: 2 },
+      { tool: "a", op: "x", calls: 1 },
     ]);
     expect(rows.map((r) => `${r.tool}:${r.op}=${r.calls}`)).toEqual([
       "b:x=2",

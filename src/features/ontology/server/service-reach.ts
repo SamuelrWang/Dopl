@@ -50,7 +50,7 @@ export async function getReach(
   ctx: OntologyContext
 ): Promise<OntologyReachEntry[]> {
   const audience = await resolveOntologyAudience(ctx);
-  const rows = await narrow.listOntologySummaries(audience.workspaceIds);
+  const { rows } = await narrow.listOntologySummaries(audience.workspaceIds);
   const out: OntologyReachEntry[] = [];
   for (const row of rows) {
     const level = levelForOntology(ctx, audience, row);

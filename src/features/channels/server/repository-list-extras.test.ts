@@ -45,10 +45,14 @@ let rec: Recorded;
 function primeSupabase(...batches: unknown[][]) {
   let call = -1;
   const builder: Record<string, unknown> = {};
+  let rangeFrom = 0;
+  let rangeSize = Number.POSITIVE_INFINITY;
   Object.assign(builder, {
     from: (t: string) => {
       rec.tables.push(t);
       call += 1;
+      rangeFrom = 0;
+      rangeSize = Number.POSITIVE_INFINITY;
       return builder;
     },
     select: (cols: string) => {
@@ -79,8 +83,23 @@ function primeSupabase(...batches: unknown[][]) {
       rec.limits.push(n);
       return builder;
     },
+    // ⚠ **IT SLICES, IT DOES NOT JUST RECORD** (Samuel #2935). `listChannelPeerIds`
+    // pages now, so one logical read is ONE `from` and MANY `range`s — a recorder
+    // that returned the whole batch per page would multiply the result and prove
+    // nothing about the walk.
+    range: (a: number, b: number) => {
+      rangeFrom = a;
+      rangeSize = b - a + 1;
+      return builder;
+    },
     then: (resolve: (r: unknown) => void) =>
-      resolve({ data: batches[Math.max(call, 0)] ?? [], error: null }),
+      resolve({
+        data: (batches[Math.max(call, 0)] ?? []).slice(
+          rangeFrom,
+          rangeFrom + rangeSize
+        ),
+        error: null,
+      }),
   });
   vi.mocked(supabaseAdmin).mockReturnValue(builder as never);
 }
@@ -114,9 +133,16 @@ describe("listChannelPeerIds", () => {
     // between loads without the tiebreaker.
     primeSupabase([]);
     await listChannelPeerIds(["chan-1"], ME, 20, 2000);
+    // ⚠ `channel_id` JOINED THE ORDER IN THE `max_rows` SWEEP (Samuel #2935) and
+    // it is LAST on purpose: the page walk needs a TOTAL order across channels
+    // (`joined_at` + `user_id` is not unique once the read spans them — `now()`
+    // is transaction-wide), and keeping the tie-break last leaves F-307's
+    // oldest-join-first prefix deciding which faces survive `perChannel`.
+    // `repository-list-extras-rowcap.test.ts` pins that prefix separately.
     expect(rec.order).toEqual([
       ["joined_at", true],
       ["user_id", true],
+      ["channel_id", true],
     ]);
     expect(rec.filters).toContainEqual([`neq:user_id`, ME]);
   });
@@ -131,8 +157,12 @@ describe("listChannelPeerIds", () => {
     const out = await listChannelPeerIds(["chan-1", "chan-2"], ME, 2, 2000);
     expect(out.get("chan-1")).toEqual(["u1", "u2"]);
     expect(out.get("chan-2")).toEqual(["u4"]);
-    // The query's own limit is the PAGE ceiling over the whole `.in()`.
-    expect(rec.limits).toEqual([2000]);
+    // ⚠ **`rowLimit` IS NO LONGER ASKED FOR IN ONE STATEMENT (Samuel #2935).** It
+    // was `.limit(2000)` and `max_rows` answered 1,000 silently, so the ceiling is
+    // now reached a page at a time and NOTHING calls `.limit()` here. The ceiling
+    // itself is pinned in `repository-list-extras-rowcap.test.ts`; what this case
+    // owns is the per-channel cap above, which no query could express.
+    expect(rec.limits).toEqual([]);
   });
 });
 

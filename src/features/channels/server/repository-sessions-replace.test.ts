@@ -65,6 +65,12 @@ function makeSequencedAdmin(
     },
     order: (c: string, o: unknown) => rec("order", [c, o]),
     limit: (n: number) => rec("limit", [n]),
+    // ⚠ **THE COLOUR READ PAGES NOW (Samuel #2935)** — without `.range()` this
+    // double dies on a TypeError inside `resolveColorsForPush`, which every
+    // replace goes through, so all nine cases below failed for one missing
+    // method. The empty colour result above is a SHORT first page, so the walk
+    // ends there and the sequenced queue is untouched.
+    range: (a: number, b: number) => rec("range", [a, b]),
     then: (resolve: (r: unknown) => void) => {
       if (colorRead) {
         colorRead = false;

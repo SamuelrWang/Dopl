@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
 import { LAUNCH_DIRECTIVES_TABLE } from "./repository-launch";
 import { selectTolerant } from "./color-shared-compat";
 import { isMissingRelation } from "./repository-sessions";
@@ -39,7 +40,16 @@ type ColorRow = {
  *  constant rather than an import — this read spans channels and members, so its
  *  headroom is a different product (the agent ceiling × the roster × the channels one
  *  push touches) and tying the two numbers together would mean tuning one for the
- *  other's shape. */
+ *  other's shape.
+ *
+ *  🔒 **AND IT WAS NEVER THE BOUND IN FORCE (Samuel #2935, the `max_rows` sweep).**
+ *  `supabase/config.toml › max_rows` ({@link POSTGREST_MAX_ROWS}) clips every select
+ *  server-side and raises NOTHING, so both reads below asked 2,000 and were answered
+ *  1,000 — and the sentence above says exactly what that costs: **a truncated taken
+ *  set hands out a colour somebody already holds.** Not a short list; a 23505 on the
+ *  push that follows, or two members wearing one key. Both reads now reach this
+ *  ceiling a page at a time ({@link readAllPages}) instead of asking for it in one
+ *  statement the server declines. */
 const COLOR_ROWS_LIMIT = 2000;
 
 /**
@@ -76,42 +86,67 @@ export async function foreignLiveColorsByChannel(
   // reporting that it now runs nothing).
   if (unique.length === 0) return new Map();
 
-  // Tolerates a database without `color_shared` (`color-shared-compat.ts`): every row then reads
-  // as exclusive, which is exactly what that database holds.
-  const { data, error } = await selectTolerant(
-    "channel_id, color, state, color_shared",
-    "channel_id, color, state",
-    (columns) => {
-      let query = supabaseAdmin()
-        .from("channel_sessions")
-        .select(columns)
-        .eq("workspace_id", workspaceId)
-        .in("channel_id", unique)
-        // ⚠ THE NULLS ARE FILTERED IN SQL, not in JS: an uncoloured session is the
-        // ordinary row and there may be hundreds of them, none of which can take a key.
-        .not("color", "is", null)
-        .limit(COLOR_ROWS_LIMIT);
-      if (exceptUserId !== null) query = query.neq("user_id", exceptUserId);
-      return query;
+  // ⚠ **PAGED, NOT `.limit(COLOR_ROWS_LIMIT)` (Samuel #2935)** — see the constant. The
+  // answer is a per-channel SET of keys, so nothing can be folded in SQL: the rows have
+  // to arrive, and before this they arrived 1,000 at a time out of an ask for 2,000.
+  // ⚠ **THE ORDER IS NEW AND TOTAL.** This read had NO `ORDER BY` — fine for one
+  // statement whose result goes into a map, and the worst case for a page walk, which
+  // PostgREST may answer in any permutation per page. `channel_sessions.id` is the
+  // PRIMARY KEY, so it is a total order by itself; it is ORDERED ON AND NEVER SELECTED
+  // (ORDER BY reaches any column of the relation), so the two-column projection this
+  // module's header argues for is untouched.
+  try {
+    const { rows } = await readAllPages<ColorRow>(
+      // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable; re-awaiting
+      // one re-sends the first range and the walk spins on page 0.
+      // ⚠ `selectTolerant` runs PER PAGE and that costs nothing: it remembers a missing
+      // `color_shared` for RECHECK_MS, so only the first page of an old database pays
+      // the failed round trip. Tolerates a database without the column: every row then
+      // reads as exclusive, which is exactly what that database holds.
+      async (from, toInclusive) => {
+        const { data, error } = await selectTolerant(
+          "channel_id, color, state, color_shared",
+          "channel_id, color, state",
+          (columns) => {
+            let query = supabaseAdmin()
+              .from("channel_sessions")
+              .select(columns)
+              .eq("workspace_id", workspaceId)
+              .in("channel_id", unique)
+              // ⚠ THE NULLS ARE FILTERED IN SQL, not in JS: an uncoloured session is the
+              // ordinary row and there may be hundreds of them, none of which can take a key.
+              .not("color", "is", null);
+            if (exceptUserId !== null) query = query.neq("user_id", exceptUserId);
+            return query.order("id", { ascending: true }).range(from, toInclusive);
+          }
+        );
+        return { data: (data ?? []) as unknown as ColorRow[], error };
+      },
+      // ⚠ The page size is the SERVER's ceiling — that is what makes a short page proof
+      // of exhaustion rather than proof of a clip.
+      { hardCap: COLOR_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+    );
+
+    const byChannel = new Map<string, ChannelColorClaims>();
+    for (const row of rows) {
+      // ⚠ `liveColorClaim` rather than a local `state !== 'ended'` test: "live" is stated once,
+      // in `session-colors.ts`, in the index predicate's own wording.
+      const claim = liveColorClaim(row);
+      if (!claim) continue;
+      const claims = byChannel.get(row.channel_id) ?? { holders: new Map(), exclusive: new Set() };
+      claims.holders.set(claim.key, (claims.holders.get(claim.key) ?? 0) + 1);
+      if (!claim.shared) claims.exclusive.add(claim.key);
+      byChannel.set(row.channel_id, claims);
     }
-  );
-  if (error) {
+    return byChannel;
+  } catch (error) {
+    // ⚠ **A `catch` NOW, NOT AN `error` BRANCH**, because the walk THROWS what a page
+    // answered. Same narrowness: only "there is no such relation" degrades, and every
+    // other failure still reaches the caller — an empty taken set conjured out of a
+    // network error hands two members the same key.
     if (isMissingRelation(error)) return new Map();
     throw error;
   }
-
-  const byChannel = new Map<string, ChannelColorClaims>();
-  for (const row of (data ?? []) as unknown as ColorRow[]) {
-    // ⚠ `liveColorClaim` rather than a local `state !== 'ended'` test: "live" is stated once,
-    // in `session-colors.ts`, in the index predicate's own wording.
-    const claim = liveColorClaim(row);
-    if (!claim) continue;
-    const claims = byChannel.get(row.channel_id) ?? { holders: new Map(), exclusive: new Set() };
-    claims.holders.set(claim.key, (claims.holders.get(claim.key) ?? 0) + 1);
-    if (!claim.shared) claims.exclusive.add(claim.key);
-    byChannel.set(row.channel_id, claims);
-  }
-  return byChannel;
 }
 
 /**
@@ -144,27 +179,42 @@ export async function pendingDirectiveColors(
   workspaceId: string,
   channelId: string
 ): Promise<Array<{ color: string | null; expires_at: string }>> {
-  const { data, error } = await supabaseAdmin()
-    .from(LAUNCH_DIRECTIVES_TABLE)
-    .select("color, expires_at")
-    .eq("workspace_id", workspaceId)
-    .eq("channel_id", channelId)
-    .in("status", ["pending", "claimed"])
-    // ⚠ NULLS FILTERED IN SQL: a directive that named none is the ordinary row and can hold
-    // nothing. (It is never "no colour" — the create resolves the pick before the insert.)
-    .not("color", "is", null)
-    .limit(COLOR_ROWS_LIMIT);
-  if (error) {
+  type DirectiveColorRow = { color: string | null; expires_at: string };
+  // ⚠ **PAGED, like the live read above and for the same reason (Samuel #2935)**: the ask
+  // was `COLOR_ROWS_LIMIT` and `max_rows` answered 1,000, so a clipped spoken-for set
+  // reports a key as FREE and the claim lane hands it out twice — the exact gap this
+  // function exists to close, re-opened by the ceiling it declared.
+  // ⚠ **THE ORDER IS NEW AND TOTAL**: `id` is the directives table's PRIMARY KEY, ordered
+  // on and never selected, so the two-column projection is unchanged. There was no
+  // `ORDER BY` here either, and an unordered page walk may repeat and skip rows.
+  try {
+    const { rows } = await readAllPages<DirectiveColorRow>(
+      // ⚠ A FRESH QUERY PER PAGE — one-shot thenable.
+      async (from, toInclusive) => {
+        const { data, error } = await supabaseAdmin()
+          .from(LAUNCH_DIRECTIVES_TABLE)
+          .select("color, expires_at")
+          .eq("workspace_id", workspaceId)
+          .eq("channel_id", channelId)
+          .in("status", ["pending", "claimed"])
+          // ⚠ NULLS FILTERED IN SQL: a directive that named none is the ordinary row and can hold
+          // nothing. (It is never "no colour" — the create resolves the pick before the insert.)
+          .not("color", "is", null)
+          .order("id", { ascending: true })
+          .range(from, toInclusive);
+        return { data: (data ?? []) as unknown as DirectiveColorRow[], error };
+      },
+      { hardCap: COLOR_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+    );
+    return rows;
+  } catch (error) {
     // ⚠ `[]` ON A MISSING RELATION, on {@link foreignLiveColorsByChannel}'s own argument: before
     // the migration the honest answer is "nothing is spoken for". Every other failure throws —
     // an empty set conjured out of a network error hands two agents one key.
+    // ⚠ A `catch` rather than an `error` branch: the walk throws what a page answered.
     if (isMissingRelation(error)) return [];
     throw error;
   }
-  return (data ?? []) as unknown as Array<{
-    color: string | null;
-    expires_at: string;
-  }>;
 }
 
 /**

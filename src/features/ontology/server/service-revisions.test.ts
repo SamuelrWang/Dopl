@@ -54,11 +54,11 @@ vi.mock("./repository-shares", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listOntologySlugs: vi.fn(async () => []),
-  listMembershipParents: vi.fn(async () => []),
-  listRelationshipsForSource: vi.fn(async () => []),
-  listOntologySummaries: vi.fn(async () => []),
-  listObjectSummariesByIds: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMembershipParents: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSource: vi.fn(async () => ({ rows: [], truncated: false })),
+  listOntologySummaries: vi.fn(async () => ({ rows: [], truncated: false })),
+  listObjectSummariesByIds: vi.fn(async () => ({ rows: [], truncated: false })),
 }));
 
 vi.mock("@/shared/tenancy/home-space-reach", () => ({
@@ -66,10 +66,10 @@ vi.mock("@/shared/tenancy/home-space-reach", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listOntologies: vi.fn(async () => []),
-  listMemberships: vi.fn(async () => []),
-  listObjectsByIds: vi.fn(async () => []),
-  listRelationshipsForSources: vi.fn(async () => []),
+  listOntologies: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMemberships: vi.fn(async () => ({ rows: [], truncated: false })),
+  listObjectsByIds: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSources: vi.fn(async () => ({ rows: [], truncated: false })),
   filterObjectIds: vi.fn(async () => new Set<string>()),
   replaceRelationshipsForSource: vi.fn(async () => {}),
   insertOntology: vi.fn(),

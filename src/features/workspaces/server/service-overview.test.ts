@@ -17,6 +17,9 @@ vi.mock("./repository-overview", () => ({
   listRecentTasksOpened: vi.fn(),
   listRecentTasksClosed: vi.fn(),
   listRecentUserMessageAuthors: vi.fn(),
+  // ⚠ Defaults to `null` below — the un-applied database — so these cases run the
+  // member-load DEGRADE path. `member-load-row-cap.test.ts` drives the applied side.
+  tallyUserMessageAuthors: vi.fn(),
   countMessagesInWindow: vi.fn(),
   countMcpCallsInWindow: vi.fn(),
   countThreadsInWindow: vi.fn(),
@@ -64,7 +67,11 @@ beforeEach(() => {
   mocked.listRecentMessages.mockResolvedValue([]);
   mocked.listRecentTasksOpened.mockResolvedValue([]);
   mocked.listRecentTasksClosed.mockResolvedValue([]);
-  mocked.listRecentUserMessageAuthors.mockResolvedValue([]);
+  mocked.listRecentUserMessageAuthors.mockResolvedValue({
+    rows: [],
+    truncated: false,
+  });
+  mocked.tallyUserMessageAuthors.mockResolvedValue(null);
   mocked.countMessagesInWindow.mockResolvedValue(0);
   mocked.countMcpCallsInWindow.mockResolvedValue(0);
   mocked.countThreadsInWindow.mockResolvedValue(0);
@@ -215,11 +222,13 @@ describe("getWorkspaceOverviewSeries", () => {
 });
 
 describe("tallyMemberLoad", () => {
-  it("is a share of the scanned total, top 6, descending", () => {
+  it("is a share of the counted total, top 6, descending", () => {
+    // ⚠ COUNTS, not a row per message (#2935): Postgres groups these now, and the
+    // degrade folds its capped haul into the same shape.
     const authors = [
-      ...Array(5).fill("u1"),
-      ...Array(3).fill("u2"),
-      ...Array(2).fill("u3"),
+      { userId: "u1", messages: 5 },
+      { userId: "u2", messages: 3 },
+      { userId: "u3", messages: 2 },
     ];
     const names = new Map<string, string | null>([
       ["u1", "Ada"],
@@ -237,9 +246,10 @@ describe("tallyMemberLoad", () => {
   });
 
   it("keeps only the top 6 bars", () => {
-    const authors = Array.from({ length: 9 }, (_, i) =>
-      Array(9 - i).fill(`u${i}`)
-    ).flat();
+    const authors = Array.from({ length: 9 }, (_, i) => ({
+      userId: `u${i}`,
+      messages: 9 - i,
+    }));
     const load = tallyMemberLoad(authors, new Map());
     expect(load.rows).toHaveLength(6);
     expect(load.rows[0].userId).toBe("u0");
@@ -400,7 +410,10 @@ describe("getWorkspaceOverview", () => {
   });
 
   it("resolves names once, display name over email, for both cards", async () => {
-    mocked.listRecentUserMessageAuthors.mockResolvedValue(["u1", "u1", "u2"]);
+    mocked.listRecentUserMessageAuthors.mockResolvedValue({
+      rows: ["u1", "u1", "u2"],
+      truncated: false,
+    });
     mockProfiles.mockResolvedValue(
       new Map([
         ["u1", { email: "ada@x.dev", displayName: "Ada", avatarUrl: null }],

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Clipped } from "@/shared/supabase/max-rows";
 import type {
   Ontology,
   OntologyContext,
@@ -7,7 +8,6 @@ import type {
 } from "../types";
 import {
   mapObjectRow,
-  ONTOLOGY_READ_LIMITS,
   pushEdge,
   type OntologyRow,
   type OntologyListItem,
@@ -101,26 +101,33 @@ export function walkAdmittedOntologies(
  *  differ only in WHICH columns they pull, never in the fence. */
 async function admittedWalk<T extends AudienceOntologyFacts>(
   ctx: OntologyContext,
-  readOntologies: (workspaceIds: readonly string[]) => Promise<T[]>
+  readOntologies: (workspaceIds: readonly string[]) => Promise<Clipped<T>>
 ): Promise<{
   audience: OntologyAudience;
-  ontologyCount: number;
-  membershipCount: number;
+  /** 🔒 **THE WALK'S OWN ANSWER, FROM THE READS THAT DID THE PAGING** — never
+   *  `rows.length >= ONTOLOGY_READ_LIMITS.x`. That comparison is the bug
+   *  (Samuel #2935): `max_rows` handed back 1,000 rows against a limit of
+   *  20,000, `1000 >= 20000` was false, and a clipped graph reported itself
+   *  complete. Only the page loop knows whether it stopped on a short page
+   *  (exhausted) or on the `hardCap` (clipped). */
+  truncated: boolean;
   admitted: T[];
   walk: OntologyWalk;
 }> {
   const audience = await resolveOntologyAudience(ctx);
-  const [ontologyRows, membershipRows] = await Promise.all([
+  const [ontologies, memberships] = await Promise.all([
     readOntologies(audience.workspaceIds),
     repo.listMemberships(audience.workspaceIds),
   ]);
-  const admitted = ontologyRows.filter((row) => audienceAdmits(ctx, audience, row));
+  const admitted = ontologies.rows.filter((row) => audienceAdmits(ctx, audience, row));
   return {
     audience,
-    ontologyCount: ontologyRows.length,
-    membershipCount: membershipRows.length,
+    truncated: ontologies.truncated || memberships.truncated,
     admitted,
-    walk: walkAdmittedOntologies(new Set(admitted.map((c) => c.id)), membershipRows),
+    walk: walkAdmittedOntologies(
+      new Set(admitted.map((c) => c.id)),
+      memberships.rows
+    ),
   };
 }
 
@@ -158,14 +165,14 @@ export async function getSnapshot(ctx: OntologyContext): Promise<OntologySnapsho
   ]);
 
   const objects: Record<string, OntologyObject> = {};
-  for (const row of objectRows) objects[row.id] = mapObjectRow(row);
+  for (const row of objectRows.rows) objects[row.id] = mapObjectRow(row);
 
   const ontologies = admitted.map((row) =>
     mapOntologyRow(row, shareCounts.get(row.id))
   );
   attachWalkRows(walk, new Map(ontologies.map((c) => [c.id, c])), objects);
 
-  for (const r of relationshipRows) {
+  for (const r of relationshipRows.rows) {
     const source = objects[r.source_object_id];
     if (!source || !objects[r.target_object_id]) continue;
     pushEdge(source.relationships, r.label, r.target_object_id);
@@ -243,8 +250,9 @@ function ownedOntologyIds(
 
 /**
  * Map-shaped read: `getSnapshot`'s structure minus every JSONB column and the
- * relationships table. Backs `dopl_map`. `truncated` = clipped by
- * `ONTOLOGY_READ_LIMITS`.
+ * relationships table. Backs `dopl_map`. `truncated` = one of the three page
+ * walks behind it stopped at its `ONTOLOGY_READ_LIMITS` `hardCap` — reported by
+ * the read, not re-derived from a row count here.
  *
  * The same fence as `getSnapshot` — R2: a leak here lands on the routing
  * surface every agent calls FIRST.
@@ -254,7 +262,7 @@ function ownedOntologyIds(
  * `op="get"`.
  */
 export async function getSummary(ctx: OntologyContext): Promise<OntologySummary> {
-  const { audience, ontologyCount, membershipCount, admitted, walk } =
+  const { audience, truncated: walkTruncated, admitted, walk } =
     await admittedWalk(ctx, (ids) => narrow.listOntologySummaries(ids));
   const objectRows = await narrow.listObjectSummariesByIds(
     audience.workspaceIds,
@@ -262,7 +270,7 @@ export async function getSummary(ctx: OntologyContext): Promise<OntologySummary>
   );
 
   const objects: Record<string, OntologyObjectSummary> = {};
-  for (const row of objectRows) {
+  for (const row of objectRows.rows) {
     objects[row.id] = {
       id: row.id,
       name: row.name,
@@ -280,11 +288,12 @@ export async function getSummary(ctx: OntologyContext): Promise<OntologySummary>
   }));
   attachWalkRows(walk, new Map(ontologies.map((c) => [c.id, c])), objects);
 
-  // At-ceiling is indistinguishable from exhausted → counts as clipped.
-  const truncated =
-    ontologyCount >= ONTOLOGY_READ_LIMITS.ontologies ||
-    objectRows.length >= ONTOLOGY_READ_LIMITS.objects ||
-    membershipCount >= ONTOLOGY_READ_LIMITS.memberships;
+  // 🔒 REPORTED BY THE READS THEMSELVES. Each of the three is a page walk now,
+  // so `truncated` means "the walk stopped at its `hardCap`", which is the only
+  // honest reading — the old `objectRows.length >= ONTOLOGY_READ_LIMITS.objects`
+  // compared 1,000 returned rows against a 5,000 limit the server never
+  // honoured, so `dopl_map`'s clipped line could not fire at all.
+  const truncated = walkTruncated || objectRows.truncated;
 
   return {
     ontologies,

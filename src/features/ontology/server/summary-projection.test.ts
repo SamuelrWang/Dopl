@@ -9,7 +9,8 @@
  *   3. THE RELATIONSHIPS TABLE IS NEVER READ — it grows with the square of the
  *      graph and no map-shaped render draws it.
  *   4. A CLIPPED READ SAYS SO — the row ceilings are only defensible while
- *      truncated is distinguishable from exhausted.
+ *      truncated is distinguishable from exhausted, and the only layer that can
+ *      tell them apart is the page walk itself (`prime`'s note, Samuel #2935).
  *
  * Repository layers mocked: the projection is what's under test.
  */
@@ -89,14 +90,35 @@ const MEMBERSHIPS: OntologyMembershipRow[] = [
   },
 ];
 
+/**
+ * ⚠ **`truncated` IS PRIMED, NOT DERIVED FROM THE FIXTURE'S LENGTH** (Samuel
+ * #2935). Each read is a `readAllPages` walk now and REPORTS whether it stopped
+ * on a short page or on its `ONTOLOGY_READ_LIMITS` `hardCap`;
+ * `service-reads.ts › getSummary` only ORs those answers together. Comparing a
+ * row count against the asked limit is the bug this suite's invariant 4 now
+ * guards against — `max_rows` answered 1,000 rows to a limit of 5,000, so
+ * `1000 >= 5000` was false and a clipped map called itself complete.
+ */
 function prime(over: {
   ontologies?: OntologyListItemRow[];
   objects?: OntologyObjectSummaryRow[];
   memberships?: OntologyMembershipRow[];
+  ontologiesTruncated?: boolean;
+  objectsTruncated?: boolean;
+  membershipsTruncated?: boolean;
 } = {}) {
-  mockNarrow.listOntologySummaries.mockResolvedValue(over.ontologies ?? [ONTOLOGY_ROW]);
-  mockNarrow.listObjectSummariesByIds.mockResolvedValue(over.objects ?? OBJECT_ROWS);
-  mockRepo.listMemberships.mockResolvedValue(over.memberships ?? MEMBERSHIPS);
+  mockNarrow.listOntologySummaries.mockResolvedValue({
+    rows: over.ontologies ?? [ONTOLOGY_ROW],
+    truncated: over.ontologiesTruncated ?? false,
+  });
+  mockNarrow.listObjectSummariesByIds.mockResolvedValue({
+    rows: over.objects ?? OBJECT_ROWS,
+    truncated: over.objectsTruncated ?? false,
+  });
+  mockRepo.listMemberships.mockResolvedValue({
+    rows: over.memberships ?? MEMBERSHIPS,
+    truncated: over.membershipsTruncated ?? false,
+  });
 }
 
 beforeEach(() => {
@@ -174,21 +196,25 @@ describe("getSummary — the row ceilings are reported, not silent", () => {
     expect(summary.truncated).toBe(false);
   });
 
-  it("reports truncated:true when the object read comes back AT its ceiling", async () => {
-    // At-ceiling is indistinguishable from over → counts as clipped.
+  it("reports truncated:true when the object WALK hit its hardCap", async () => {
+    // A full `ONTOLOGY_READ_LIMITS.objects` set AND the walk's own clip answer.
+    // The row count is here to show the shape of the case; what makes it
+    // truncated is the read saying so — at-hardCap is indistinguishable from
+    // exhausted, so `readAllPages` reports the pessimistic reading.
     prime({
       objects: Array.from({ length: ONTOLOGY_READ_LIMITS.objects }, (_, i) => ({
         id: `o-${i}`,
         name: `Object ${i}`,
         subtitle: "",
       })),
+      objectsTruncated: true,
       memberships: [],
     });
     const summary = await getSummary(CTX);
     expect(summary.truncated).toBe(true);
   });
 
-  it("reports truncated:true when the ontology read hits its ceiling", async () => {
+  it("reports truncated:true when the ontology walk hit its hardCap", async () => {
     prime({
       ontologies: Array.from({ length: ONTOLOGY_READ_LIMITS.ontologies }, (_, i) => ({
         id: `c-${i}`,
@@ -199,9 +225,33 @@ describe("getSummary — the row ceilings are reported, not silent", () => {
         created_by: "user-1",
         agents_may_edit: true,
       })),
+      ontologiesTruncated: true,
       memberships: [],
     });
     const summary = await getSummary(CTX);
     expect(summary.truncated).toBe(true);
+  });
+
+  it("reports truncated:true when the MEMBERSHIP walk hit its hardCap", async () => {
+    // The third input, and the one whose clip is worst: a short membership set
+    // is a graph with whole columns missing, not a graph that says it is short.
+    prime({ membershipsTruncated: true });
+    const summary = await getSummary(CTX);
+    expect(summary.truncated).toBe(true);
+  });
+
+  it("a full-length row set that the walk EXHAUSTED is not truncated", async () => {
+    // The other half of the honesty rule: rows up to the cap are now actually
+    // fetched, so a long answer is not by itself a clipped one.
+    prime({
+      objects: Array.from({ length: ONTOLOGY_READ_LIMITS.objects }, (_, i) => ({
+        id: `o-${i}`,
+        name: `Object ${i}`,
+        subtitle: "",
+      })),
+      memberships: [],
+    });
+    const summary = await getSummary(CTX);
+    expect(summary.truncated).toBe(false);
   });
 });

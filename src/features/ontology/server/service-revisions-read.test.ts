@@ -54,11 +54,11 @@ vi.mock("./repository-shares", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listOntologySlugs: vi.fn(async () => []),
-  listMembershipParents: vi.fn(async () => []),
-  listRelationshipsForSource: vi.fn(async () => []),
-  listOntologySummaries: vi.fn(async () => []),
-  listObjectSummariesByIds: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMembershipParents: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSource: vi.fn(async () => ({ rows: [], truncated: false })),
+  listOntologySummaries: vi.fn(async () => ({ rows: [], truncated: false })),
+  listObjectSummariesByIds: vi.fn(async () => ({ rows: [], truncated: false })),
 }));
 
 vi.mock("@/shared/tenancy/home-space-reach", () => ({
@@ -66,10 +66,10 @@ vi.mock("@/shared/tenancy/home-space-reach", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listOntologies: vi.fn(async () => []),
-  listMemberships: vi.fn(async () => []),
-  listObjectsByIds: vi.fn(async () => []),
-  listRelationshipsForSources: vi.fn(async () => []),
+  listOntologies: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMemberships: vi.fn(async () => ({ rows: [], truncated: false })),
+  listObjectsByIds: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSources: vi.fn(async () => ({ rows: [], truncated: false })),
   filterObjectIds: vi.fn(async () => new Set<string>()),
   replaceRelationshipsForSource: vi.fn(async () => {}),
   insertOntology: vi.fn(),
@@ -159,24 +159,27 @@ beforeEach(() => {
 
 describe("the ontology roll-up", () => {
   beforeEach(() => {
-    mockRepo.listMemberships.mockResolvedValue([
-      {
-        id: "m-1",
-        workspace_id: WS,
-        ontology_id: ONTOLOGY_ID,
-        parent_object_id: null,
-        child_object_id: OBJECT_ID,
-        position: 0,
-      },
-      {
-        id: "m-2",
-        workspace_id: WS,
-        ontology_id: "other-ontology",
-        parent_object_id: null,
-        child_object_id: "44444444-4444-4444-8444-444444444444",
-        position: 0,
-      },
-    ]);
+    mockRepo.listMemberships.mockResolvedValue({
+      rows: [
+        {
+          id: "m-1",
+          workspace_id: WS,
+          ontology_id: ONTOLOGY_ID,
+          parent_object_id: null,
+          child_object_id: OBJECT_ID,
+          position: 0,
+        },
+        {
+          id: "m-2",
+          workspace_id: WS,
+          ontology_id: "other-ontology",
+          parent_object_id: null,
+          child_object_id: "44444444-4444-4444-8444-444444444444",
+          position: 0,
+        },
+      ],
+      truncated: false,
+    });
   });
 
   it("asks for the ontology's OWN rows and its objects', and nothing else's", async () => {
@@ -283,14 +286,20 @@ describe("per-field restore", () => {
     mockRepo.findOntologyById.mockResolvedValue(
       ontologyRow({ workspace_id: OWNER_WS, created_by: "owner-1" })
     );
-    mockRepo.listOntologies.mockResolvedValue([
-      ontologyRow({ workspace_id: OWNER_WS, created_by: "owner-1" }),
-    ]);
+    mockRepo.listOntologies.mockResolvedValue({
+      rows: [
+        ontologyRow({ workspace_id: OWNER_WS, created_by: "owner-1" }),
+      ],
+      truncated: false,
+    });
     vi.mocked(
       (await import("./repository-projections")).listMembershipParents
-    ).mockResolvedValue([
-      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-    ]);
+    ).mockResolvedValue({
+      rows: [
+        { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+      ],
+      truncated: false,
+    });
     mockShares.listSharesForChannels.mockResolvedValue([
       {
         ontology_id: ONTOLOGY_ID,

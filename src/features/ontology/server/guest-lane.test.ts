@@ -46,10 +46,10 @@ vi.mock("./repository-shares", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listOntologySlugs: vi.fn(async () => []),
-  listOntologySummaries: vi.fn(async () => []),
-  listMembershipParents: vi.fn(async () => []),
-  listRelationshipsForSource: vi.fn(async () => []),
+  listOntologySlugs: vi.fn(async () => ({ rows: [], truncated: false })),
+  listOntologySummaries: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMembershipParents: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSource: vi.fn(async () => ({ rows: [], truncated: false })),
 }));
 
 vi.mock("@/shared/tenancy/home-space-reach", () => ({
@@ -61,10 +61,10 @@ vi.mock("@/features/billing/server/entitlements", () => ({
 }));
 
 vi.mock("./repository", () => ({
-  listOntologies: vi.fn(async () => []),
-  listMemberships: vi.fn(async () => []),
-  listObjectsByIds: vi.fn(async () => []),
-  listRelationshipsForSources: vi.fn(async () => []),
+  listOntologies: vi.fn(async () => ({ rows: [], truncated: false })),
+  listMemberships: vi.fn(async () => ({ rows: [], truncated: false })),
+  listObjectsByIds: vi.fn(async () => ({ rows: [], truncated: false })),
+  listRelationshipsForSources: vi.fn(async () => ({ rows: [], truncated: false })),
   findOntologyById: vi.fn(),
   findObjectById: vi.fn(),
   insertObject: vi.fn(),
@@ -167,31 +167,41 @@ function primeShare(guests: OntologyLevel | null) {
           },
         ]
   );
-  mockRepo.listOntologies.mockResolvedValue([ONTOLOGY_ROW]);
-  mockRepo.listMemberships.mockResolvedValue([MEMBERSHIP]);
+  // ⚠ `{ rows, truncated }` — every list read in this layer is a page walk now
+  // (`repository.ts`'s header: `max_rows` clipped them all at 1,000), so a bare
+  // array is no longer that layer's shape.
+  mockRepo.listOntologies.mockResolvedValue({ rows: [ONTOLOGY_ROW], truncated: false });
+  mockRepo.listMemberships.mockResolvedValue({ rows: [MEMBERSHIP], truncated: false });
   // Honours the ids it is given: a mock that answers the same row whatever it
   // is asked cannot tell "the walk found nothing" from "the walk found it and
   // the filter missed", which is exactly the case below.
-  mockRepo.listObjectsByIds.mockImplementation(async (_ws, ids) =>
-    ids.includes(OBJECT_ID) ? [OBJECT_ROW] : []
-  );
-  mockRepo.listRelationshipsForSources.mockResolvedValue([]);
+  mockRepo.listObjectsByIds.mockImplementation(async (_ws, ids) => ({
+    rows: ids.includes(OBJECT_ID) ? [OBJECT_ROW] : [],
+    truncated: false,
+  }));
+  mockRepo.listRelationshipsForSources.mockResolvedValue({ rows: [], truncated: false });
   mockRepo.findOntologyById.mockResolvedValue(ONTOLOGY_ROW);
   mockRepo.findObjectById.mockResolvedValue(OBJECT_ROW);
-  mockNarrow.listMembershipParents.mockResolvedValue([
-    { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
-  ] as never);
-  mockNarrow.listOntologySummaries.mockResolvedValue([
-    {
-      id: ONTOLOGY_ID,
-      workspace_id: OWNER_WS,
-      slug: "sales",
-      name: "Sales",
-      purpose: "",
-      created_by: OWNER,
-      agents_may_edit: true,
-    },
-  ]);
+  mockNarrow.listMembershipParents.mockResolvedValue({
+    rows: [
+      { ontology_id: ONTOLOGY_ID, parent_object_id: null, child_object_id: OBJECT_ID },
+    ],
+    truncated: false,
+  } as never);
+  mockNarrow.listOntologySummaries.mockResolvedValue({
+    rows: [
+      {
+        id: ONTOLOGY_ID,
+        workspace_id: OWNER_WS,
+        slug: "sales",
+        name: "Sales",
+        purpose: "",
+        created_by: OWNER,
+        agents_may_edit: true,
+      },
+    ],
+    truncated: false,
+  });
   mockRepo.insertObject.mockResolvedValue({ ...OBJECT_ROW, id: "obj-new" });
   mockRepo.updateObject.mockResolvedValue({ ...OBJECT_ROW, name: "Renamed" });
 }

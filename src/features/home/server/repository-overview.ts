@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { clippedAt, type Clipped } from "@/shared/supabase/max-rows";
 import { MCP_CALL_ROWS } from "@/features/analytics/server/mcp-tool-calls";
 import type { Role } from "@/features/workspaces/types";
 
@@ -42,22 +43,20 @@ const HOME_SCAN_LIMIT = 20_000;
 
 /**
  * 🔒 **THE CEILING POSTGREST APPLIES WHETHER OR NOT WE ASK FOR ONE** —
- * `supabase/config.toml › max_rows`. A `.limit(n)` above it is NOT the bound; the
- * server clips to this and raises NOTHING.
+ * `supabase/config.toml › max_rows`, now owned by
+ * `shared/supabase/max-rows.ts` and RE-EXPORTED here.
  *
- * ⚠ **IT EXISTS BECAUSE `truncated` LIED (Samuel #2935, 2026-10-10).** `clipped()`
- * compared against the ASKED limit, so a credit haul asking 20,000 and receiving
- * the server's 1,000 computed `1000 >= 20000` = false and reported a COMPLETE
- * read. The /home histogram drew ~1,000 credits — all of them the newest day —
- * beside a spend card reading the month's true 4,288, with no clip banner on the
- * one read that was actually a floor.
+ * ⚠ **IT MOVED BECAUSE THE SAME BUG WAS FOUND AT FIVE MORE CALL SITES** in
+ * `workspaces`, `channels`, `analytics` and `ontology` (the #2935 sweep). §2
+ * forbids those features importing this repository, so a second reader meant a
+ * second copy of the ceiling — and a ceiling copied per feature goes stale per
+ * feature. The re-export is kept so this module's own readers and
+ * `credit-histogram-bins.test.ts` are unchanged by the move.
  * ⚠ **A CONSTANT IS THE WEAKER HALF OF THE FIX AND IS NOT A LICENCE TO HAUL.**
- * The histogram now sums in SQL ({@link sumCreditUsageBins}); this bound only
- * makes the REMAINING hauling reads honest about their ceiling.
- * ⚠ Pinned against `supabase/config.toml` by `home-credit-bins-schema.test.ts`,
- * so raising the server setting cannot leave this number behind.
+ * The histogram sums in SQL ({@link sumCreditUsageBins}); this bound only makes
+ * the REMAINING hauling reads honest about their ceiling.
  */
-export const POSTGREST_MAX_ROWS = 1_000;
+export { POSTGREST_MAX_ROWS } from "@/shared/supabase/max-rows";
 
 /** `[startIso, endIso)`. */
 export interface HomeWindow {
@@ -66,20 +65,15 @@ export interface HomeWindow {
 }
 
 /** A scan that came back AT its ceiling is a FLOOR, and says so. */
-export interface Scan<T> {
-  rows: T[];
-  truncated: boolean;
-}
+export type Scan<T> = Clipped<T>;
 
 /**
- * ⚠ **THE EFFECTIVE CEILING IS THE SMALLER OF THE TWO**, never the asked one —
- * see {@link POSTGREST_MAX_ROWS}. Comparing against `limit` alone makes every
- * read that asks for more than the server will give report itself as complete.
+ * ⚠ **THE EFFECTIVE CEILING IS THE SMALLER OF THE TWO**, never the asked one.
+ * Comparing against `limit` alone makes every read that asks for more than the
+ * server will give report itself as complete — `shared/supabase/max-rows.ts`
+ * carries the finding and the test that pins the number.
  */
-function clipped<T>(rows: T[], limit: number): Scan<T> {
-  const ceiling = Math.min(limit, POSTGREST_MAX_ROWS);
-  return { rows, truncated: rows.length >= ceiling };
-}
+const clipped = clippedAt;
 
 /* ------------------------------- counts -------------------------------- */
 

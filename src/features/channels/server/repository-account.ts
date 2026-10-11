@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { POSTGREST_MAX_ROWS, clippedAt, type Clipped } from "@/shared/supabase/max-rows";
 import type { ChannelMessageRow } from "./dto";
 import type { SessionStateRow } from "./collab-dto";
 import { sessionRowsWhere } from "./repository-sessions";
@@ -44,14 +45,16 @@ import { sessionRowsWhere } from "./repository-sessions";
 
 /** A read that may have hit its ceiling. ⚠ AT the ceiling counts as clipped —
  *  at is indistinguishable from over (INVARIANTS §9). */
-interface AccountScan<T> {
-  rows: T[];
-  truncated: boolean;
-}
+type AccountScan<T> = Clipped<T>;
 
-function scan<T>(rows: T[], limit: number): AccountScan<T> {
-  return { rows, truncated: rows.length >= limit };
-}
+/**
+ * ⚠ **THE EFFECTIVE CEILING IS min(ask, `max_rows`), NEVER THE ASK** — see
+ * `shared/supabase/max-rows.ts › clippedAt` for the finding and its pin.
+ * 🔒 This was `rows.length >= limit`, the defect half of Samuel #2935: PostgREST
+ * clips server-side silently, so a read asking for more than the server gives
+ * computed `1000 >= <ask>` = false and called itself COMPLETE.
+ */
+const scan = clippedAt;
 
 /**
  * One channel the caller belongs to, with the two labels a cross-tenancy page
@@ -123,11 +126,17 @@ export const ACCOUNT_MESSAGE_LIMIT = 200;
 
 /**
  * ⚠ The unread TALLY reads `(channel_id, seq)` and nothing else, so it is cheap
- * per row and the ceiling can be high. Past it the counts are a FLOOR and the
- * service says so — a count rendered as exact when it was clipped is the §9
- * failure this constant exists to make visible.
+ * per row. Past the ceiling the counts are a FLOOR and the service says so
+ * (`service-account.ts › truncated.unread`) — a clipped count rendered as exact
+ * is the §9 failure this constant exists to make visible.
+ *
+ * 🔒 **DERIVED, NOT RESTATED (Samuel #2935).** It was the literal `1_000` — the
+ * same number, so correct by coincidence, and the coincidence was load-bearing:
+ * raised to "high" as this docblock once invited, the server would have kept
+ * clipping at `max_rows` while the old `>=` test called every count exact.
+ * ⚠ **A HIGHER CEILING NEEDS A DIFFERENT SHAPE, NOT A BIGGER NUMBER.**
  */
-const ACCOUNT_TALLY_LIMIT = 1_000;
+export const ACCOUNT_TALLY_LIMIT = POSTGREST_MAX_ROWS;
 
 /** How many "addressed to you" items one status answer carries. */
 export const ACCOUNT_ADDRESSED_LIMIT = 50;

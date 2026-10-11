@@ -24,13 +24,24 @@ import {
   listWorkspaceRunningSessions,
   listWorkspaceTokenSpend,
   scanWorkspaceCreditEvents,
-  scanWorkspaceMcpCalls,
-  scanWorkspaceMessageChannels,
-  type UsageScan,
-  type WorkspaceCreditEventRow,
   type WorkspaceSessionRow,
-  type WorkspaceToolCallRow,
 } from "./repository-usage";
+import { sumWorkspaceCreditBins } from "./repository-usage-tally";
+import {
+  filterSeatBurns,
+  isWorkspaceSeatBurn,
+  readCreditRails,
+  readMessageRail,
+  readToolRail,
+  toolKey,
+} from "./usage-rails";
+import type { WorkspaceToolTallyRow } from "./repository-usage-tally";
+
+/** 🔒 **RE-EXPORTED, NOT RE-DEFINED.** The predicate moved to `usage-rails.ts`
+ *  with the folds that apply it; every caller and `service-usage.test.ts` still
+ *  import it from here, and a second spelling of a wallet fence is how the rails
+ *  and the plot start disagreeing. */
+export { isWorkspaceSeatBurn };
 
 /**
  * THE WORKSPACE OVERVIEW'S USAGE HALF — the credit series, the three rails, the
@@ -56,43 +67,6 @@ const AGENT_ROWS = 24;
  *  draws, so the oldest column is never short at any hour but local midnight. */
 const TOKEN_SPEND_WINDOW_DAYS = 31;
 
-/**
- * IS THIS LEDGER ROW ONE OF **THIS WORKSPACE'S SEAT WALLETS** PAID FOR?
- *
- * 🔒 The definition behind every credit figure on this page, and the disjoint
- * twin of `home/server/overview-tally.ts › isPersonalWalletBurn` — a row cannot
- * satisfy both, because `wallet` cannot be `personal` and `seat` at once.
- *
- * ⚠ **FILTERED TWICE ON PURPOSE.** `repository-usage.ts ›
- * scanWorkspaceCreditEvents` pushes the same predicate into PostgREST; this is
- * the DEFINITION, and it fails closed if the pushdown is ever loosened.
- * ⚠ `wallet` is NOT narrowed to a union — the column has no `CHECK`, so an
- * unknown wallet is not this workspace's, which fails closed.
- */
-export function isWorkspaceSeatBurn(
-  row: WorkspaceCreditEventRow,
-  workspaceId: string,
-  channelIds: ReadonlySet<string>
-): boolean {
-  if (row.wallet !== "seat" && row.wallet !== "workspace") return false;
-  if (row.origin_workspace_id === workspaceId) return true;
-  return row.channel_id !== null && channelIds.has(row.channel_id);
-}
-
-/** The second half of "filtered twice on purpose", applied once however the
- *  rows were fetched. */
-function filterSeatBurns(
-  scan: UsageScan<WorkspaceCreditEventRow>,
-  workspaceId: string,
-  channelIds: ReadonlySet<string>
-): UsageScan<WorkspaceCreditEventRow> {
-  return {
-    rows: scan.rows.filter((row) =>
-      isWorkspaceSeatBurn(row, workspaceId, channelIds)
-    ),
-    truncated: scan.truncated,
-  };
-}
 
 /* ------------------------------ the tallies ----------------------------- */
 
@@ -111,25 +85,22 @@ function filterSeatBurns(
  */
 export function tallyWorkspaceChannels(
   visible: readonly VisibleChannelRef[],
-  credits: readonly WorkspaceCreditEventRow[],
-  messages: readonly { channel_id: string }[]
+  /** Credits per channel — Postgres' `GROUP BY`, or the fold over a capped scan.
+   *  ⚠ A CHANNEL ABSENT FROM THE MAP IS A ZERO ROW, NEVER A MISSING ONE. */
+  credits: ReadonlyMap<string, number>,
+  /** Messages per channel, same two sources. */
+  messages: ReadonlyMap<string, number>
 ): WorkspaceChannelUsage[] {
   const rows = new Map<string, WorkspaceChannelUsage>();
   for (const ref of visible) {
     rows.set(ref.id, {
       channelId: ref.id,
       name: ref.name,
-      credits: 0,
-      messages: 0,
+      // ⚠ READ THROUGH THE VISIBLE SET, never by iterating the tallies: a burn in
+      // a channel the caller cannot open counts on the series and on no row here.
+      credits: credits.get(ref.id) ?? 0,
+      messages: messages.get(ref.id) ?? 0,
     });
-  }
-  for (const event of credits) {
-    const row = event.channel_id ? rows.get(event.channel_id) : undefined;
-    if (row) row.credits += event.amount;
-  }
-  for (const message of messages) {
-    const row = rows.get(message.channel_id);
-    if (row) row.messages += 1;
   }
   return [...rows.values()]
     .sort(
@@ -157,25 +128,24 @@ export function tallyWorkspaceChannels(
  * "Unknown" row in a per-person breakdown reads as a person.
  */
 export function tallyWorkspacePeople(
-  rows: readonly WorkspaceCreditEventRow[],
+  /** Credits per `user_id` — Postgres' `GROUP BY`, or the fold over a capped
+   *  scan. ⚠ A `null` author never reaches this map (see {@link foldSeatBurns}
+   *  and the aggregate's own `null` key). */
+  credits: ReadonlyMap<string, number>,
   roles: Map<string, Role>,
   names: Map<string, string>
 ): WorkspacePersonUsage[] {
   const byUser = new Map<string, WorkspacePersonUsage>();
-  for (const row of rows) {
-    if (!row.user_id) continue;
-    const role = roles.get(row.user_id);
+  for (const [userId, amount] of credits) {
+    const role = roles.get(userId);
+    // 🔒 THE ROSTER IS THE FENCE: no role means not on the members page, which
+    // means no NAME and no row here.
     if (role === undefined) continue;
-    const found = byUser.get(row.user_id);
-    if (found) {
-      found.credits += row.amount;
-      continue;
-    }
-    byUser.set(row.user_id, {
-      userId: row.user_id,
-      name: names.get(row.user_id) ?? "",
+    byUser.set(userId, {
+      userId,
+      name: names.get(userId) ?? "",
       role,
-      credits: row.amount,
+      credits: amount,
     });
   }
   return [...byUser.values()]
@@ -183,23 +153,20 @@ export function tallyWorkspacePeople(
     .slice(0, PERSON_ROWS);
 }
 
-/** Tool + op, as one map key. A tool with no op keys on the tool alone rather
- *  than on a trailing separator. */
-function toolKey(tool: string, op: string): string {
-  return op ? `${tool}:${op}` : tool;
-}
-
 /** The busiest `(tool, op)` pairs. ⚠ TIES BREAK ON THE KEY, so the list is
  *  TOTALLY ordered and does not shuffle between two loads of the same numbers. */
 export function tallyWorkspaceTools(
-  rows: readonly WorkspaceToolCallRow[]
+  /** `(tool, op)` pairs with their call counts — Postgres' `GROUP BY`, or the
+   *  fold over a capped scan. ⚠ COUNTS, not rows: the aggregate answers one row
+   *  per pair and a per-row shape here would have to re-expand them. */
+  rows: readonly WorkspaceToolTallyRow[]
 ): WorkspaceToolUsage[] {
   const byPair = new Map<string, WorkspaceToolUsage>();
   for (const row of rows) {
     const key = toolKey(row.tool, row.op);
     const found = byPair.get(key);
-    if (found) found.calls += 1;
-    else byPair.set(key, { tool: row.tool, op: row.op, calls: 1 });
+    if (found) found.calls += row.calls;
+    else byPair.set(key, { tool: row.tool, op: row.op, calls: row.calls });
   }
   return [...byPair.values()]
     .sort(
@@ -254,32 +221,65 @@ export function mapWorkspaceAgents(
 /**
  * THE CREDIT SERIES' BINS — one summed figure per window, zero-filled.
  *
- * ⚠ **HAULED ONCE AND BINNED IN MEMORY**, unlike the three counted metrics:
- * PostgREST cannot aggregate a SUM, so this is the sanctioned haul-and-tally
- * (§9), and the only arm of the series that can report `truncated`.
- * ⚠ **THE HAUL IS BOUNDED AT BOTH ENDS** — an unbounded haul anchored in a PAST
- * window would return the current period's rows and bin the plotted one to
- * zeroes with nothing to report.
+ * 🔒 **SUMMED BY POSTGRES SINCE SAMUEL #2935, AND THE HAUL IT REPLACED WAS A
+ * WRONG ANSWER, NOT A SLOW ONE.** The superseded note here read "PostgREST
+ * cannot aggregate a SUM, so this is the sanctioned haul-and-tally" — true of
+ * PostgREST, and the reason this asked for 10,000 raw rows newest-first and
+ * binned them in memory. `max_rows` then handed back 1,000 of them, silently, so
+ * a container whose newest days exceed the cap drew a month whose older bars were
+ * zeroes nobody measured. `workspace_credit_usage_bins` returns ≤31 rows.
+ *
+ * ⚠ **THE WINDOW IS BOUNDED AT BOTH ENDS EITHER WAY** — unbounded, a PAST window
+ * returns the current period's rows and plots the asked-for one as zeroes.
+ * ⚠ **ZERO-FILLED FROM THE WINDOW ARRAY, NEVER FROM THE RESULT SET**: the
+ * aggregate answers only bins that HAVE spend, and the axis is the frame.
  */
 export async function readWorkspaceCreditBins(
   workspaceId: string,
   windows: OverviewWindow[],
   /** Narrow every bin to ONE channel. ⚠ THE CALLER MUST HAVE PROVED VISIBILITY
    *  FIRST — the route does it against `listVisibleChannelRefs`. */
-  channelId: string | null = null
+  channelId: string | null = null,
+  /** What one bin spans, from the shared calendar
+   *  (`overview-series/windows.ts › overviewBucketFor`). ⚠ It must MATCH the
+   *  windows passed above: Postgres groups by this, and a `day` grouping read
+   *  against hour bins lands every row on one bar. Day for every workspace range
+   *  (`types.ts › WorkspaceSeriesRange` has no `24h`). */
+  bucket: "hour" | "day" = "day"
 ): Promise<{ counts: number[]; truncated: boolean }> {
   // ⚠ NO WINDOWS, NO READ. An unreachable case today (every range has bins),
   // but the alternative spelling is an empty `since` — an UNBOUNDED scan of the
   // whole ledger to fill an array of length zero.
   if (windows.length === 0) return { counts: [], truncated: false };
+  const span = {
+    startIso: windows[0].startIso,
+    endIso: windows[windows.length - 1].endIso,
+  };
   const channelIds = await listWorkspaceChannelIds(workspaceId);
+  const bins = await sumWorkspaceCreditBins(
+    workspaceId,
+    channelIds,
+    span,
+    bucket,
+    channelId
+  );
+  if (bins) {
+    return {
+      counts: windows.map((win) => bins.get(win.startIso) ?? 0),
+      // ⚠ FALSE AS A MEASUREMENT: one row per bin cannot reach the ceiling.
+      truncated: false,
+    };
+  }
+  // ⚠ **THE DEGRADE, AND IT IS A FLOOR THAT SAYS SO.** The migration ships
+  // written-not-applied, so until it lands this is the live path: the old capped
+  // haul, binned in memory, reporting `truncated` through the now-honest
+  // `clippedAt`. Numbers can under-report on a busy month; the plot is never
+  // blank and the clip banner fires, which is the whole difference from the bug.
   const scan = filterSeatBurns(
-    await scanWorkspaceCreditEvents(
-      workspaceId,
-      channelIds,
-      windows[0].startIso,
-      { untilIso: windows[windows.length - 1].endIso, channelId }
-    ),
+    await scanWorkspaceCreditEvents(workspaceId, channelIds, span.startIso, {
+      untilIso: span.endIso,
+      channelId,
+    }),
     workspaceId,
     new Set(channelIds)
   );
@@ -300,7 +300,10 @@ export async function readWorkspaceCreditBins(
  * ⚠ **THE WINDOW IS THE CREDIT PERIOD AND NO CONTROL MOVES IT** — the same
  * split /home makes, so the rails and the page's `PeriodStats` figure answer
  * for one window. The range switcher belongs to the plot.
- * ⚠ FOUR STATEMENTS PLUS TWO LOOKUPS, NEVER A QUERY PER CHANNEL (§9).
+ * ⚠ FOUR STATEMENTS PLUS TWO LOOKUPS, NEVER A QUERY PER CHANNEL (§9) — and the
+ * three breakdown statements are GROUP BYs now rather than hauls (#2935). Each
+ * falls back to its old capped scan when the aggregate is not applied yet, which
+ * is a second statement on that arm and nothing more.
  */
 export async function getWorkspaceUsage(
   workspaceId: string,
@@ -309,27 +312,23 @@ export async function getWorkspaceUsage(
 ): Promise<WorkspaceUsageBreakdown> {
   const since = overviewSince("month", now);
   const channelIds = await listWorkspaceChannelIds(workspaceId);
-  const [credits, calls, messages, roles] = await Promise.all([
-    scanWorkspaceCreditEvents(workspaceId, channelIds, since),
-    scanWorkspaceMcpCalls(workspaceId, since),
-    scanWorkspaceMessageChannels(workspaceId, since),
+  const [credits, tools, messages, roles] = await Promise.all([
+    readCreditRails(workspaceId, channelIds, since),
+    readToolRail(workspaceId, since),
+    readMessageRail(workspaceId, since),
     listWorkspaceRoles(workspaceId),
   ]);
-  const seat = filterSeatBurns(credits, workspaceId, new Set(channelIds));
-  const names = await resolvePeopleNames(seat.rows, roles);
+  const names = await resolvePeopleNames(credits.people, roles);
   return {
     since,
-    channels: tallyWorkspaceChannels(visible, seat.rows, messages.rows),
-    people: tallyWorkspacePeople(seat.rows, roles, names),
-    tools: tallyWorkspaceTools(calls.rows),
-    // ⚠ THE DENOMINATOR IS THE LARGEST SCAN'S, because the breakdowns that can
-    // be clipped are read off one of the three.
-    scanned: Math.max(
-      credits.rows.length,
-      calls.rows.length,
-      messages.rows.length
-    ),
-    truncated: credits.truncated || calls.truncated || messages.truncated,
+    channels: tallyWorkspaceChannels(visible, credits.channels, messages.byChannel),
+    people: tallyWorkspacePeople(credits.people, roles, names),
+    tools: tallyWorkspaceTools(tools.rows),
+    // ⚠ THE DENOMINATOR IS THE LARGEST OF THE THREE, because the breakdowns are
+    // read off one of them. Exact where the aggregate answered; the surviving
+    // row count where its arm degraded.
+    scanned: Math.max(credits.events, tools.calls, messages.messages),
+    truncated: credits.truncated || tools.truncated || messages.truncated,
   };
 }
 
@@ -337,16 +336,10 @@ export async function getWorkspaceUsage(
  *  and 🔒 **only for ids the roster carries**, so a departed member's profile is
  *  never fetched, let alone rendered. */
 async function resolvePeopleNames(
-  rows: readonly WorkspaceCreditEventRow[],
+  credits: ReadonlyMap<string, number>,
   roles: Map<string, Role>
 ): Promise<Map<string, string>> {
-  const ids = [
-    ...new Set(
-      rows.flatMap((row) =>
-        row.user_id && roles.has(row.user_id) ? [row.user_id] : []
-      )
-    ),
-  ];
+  const ids = [...credits.keys()].filter((id) => roles.has(id));
   const profiles = await listProfileSummaries(ids);
   const names = new Map<string, string>();
   for (const id of ids) {

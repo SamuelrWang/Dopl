@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { clippedAt, type Clipped } from "@/shared/supabase/max-rows";
 import { MCP_CALL_ROWS } from "@/features/analytics/server/mcp-tool-calls";
 import { visibleChannelsOr } from "@/features/channels/server/repository-visibility";
 
@@ -216,21 +217,83 @@ export async function listRecentTasksClosed(
   return (data ?? []) as OverviewTaskRow[];
 }
 
+/** One author and how many user messages they wrote in the window. */
+export interface MessageAuthorTallyRow {
+  userId: string;
+  messages: number;
+}
+
+/** Postgres/PostgREST codes for "that function is not there" — the aggregate
+ *  below ships as an UNAPPLIED migration, so the degrade is the LIVE path. */
+const RPC_MISSING_CODES = new Set(["PGRST202", "42883"]);
+
 /**
- * Author ids of user-authored messages in the window, NEWEST FIRST.
+ * USER MESSAGES COUNTED PER AUTHOR, BY POSTGRES — the member-load card since
+ * Samuel #2935.
  *
- * ⚠ THIS ONE READ HAULS ROWS, and the ordering is the reason it is allowed to.
- * The member-load card is a set of RATIOS: clipping at `limit` narrows the
- * window the ratios describe (to the most recent `limit` messages) but leaves
- * every ratio true against the denominator the card reports beside them. The
- * SERIES cannot make that trade — a clipped day reads as zero, which is a
- * measurement nobody took — so it bins with per-day counts instead.
+ * 🔒 **IT IS THE DENOMINATOR THAT WAS WRONG, WHICH IS WHY A CLIP WAS NOT
+ * SURVIVABLE HERE AFTER ALL.** {@link listRecentUserMessageAuthors} asked for
+ * `MEMBER_LOAD_SCAN_LIMIT` (10,000) author ids over 30 days and `max_rows` handed
+ * back the newest 1,000, silently; `service-overview.ts › tallyMemberLoad` then
+ * published `rows.length` as `totalMessages` under a 30-DAY label and computed
+ * every share against it. The superseded argument — "a clip narrows the window
+ * but the ratios stay true against the denominator the card shows" — only ever
+ * held while that denominator was HONEST and `truncated` was true, and it was
+ * neither. One row per author is bounded by the membership.
+ *
+ * ⚠ **RETURNS `null` WHEN THE FUNCTION IS ABSENT, AND THAT IS NOT AN ERROR** —
+ * the migration is written, not applied, so the caller degrades to the capped
+ * haul rather than blanking the card. ⚠ A 42P01 is NOT degraded:
+ * `channel_messages` has existed since 2026-07-25, so an absent table there is a
+ * real fault and must not read as "nobody has written anything".
+ */
+export async function tallyUserMessageAuthors(
+  workspaceId: string,
+  sinceIso: string
+): Promise<MessageAuthorTallyRow[] | null> {
+  const { data, error } = await supabaseAdmin().rpc(
+    "workspace_message_author_tally",
+    { p_workspace_id: workspaceId, p_since: sinceIso }
+  );
+  if (error) {
+    if (!RPC_MISSING_CODES.has(error.code ?? "")) throw error;
+    console.warn(
+      `[workspaces/overview] workspace_message_author_tally absent, degrading to the capped scan: ${error.message}`
+    );
+    return null;
+  }
+  const rows: MessageAuthorTallyRow[] = [];
+  for (const row of (data ?? []) as Array<{
+    author_id: string | null;
+    messages: number | string;
+  }>) {
+    // ⚠ The SQL already excludes a null author (a deleted account). Dropping it
+    // again here keeps "Unknown" out of a per-person card if that ever loosens.
+    if (!row.author_id) continue;
+    // ⚠ `bigint` crosses the wire as a STRING; unconverted, the card's total
+    // becomes concatenation.
+    rows.push({ userId: row.author_id, messages: Number(row.messages) });
+  }
+  return rows;
+}
+
+/**
+ * Author ids of user-authored messages in the window, NEWEST FIRST — the
+ * member-load card's DEGRADE path, kept for the days before the aggregate above
+ * is applied.
+ *
+ * ⚠ **IT IS A FLOOR AND IT FINALLY SAYS SO.** `limit` is above `max_rows`, so the
+ * server clips this to 1,000 and raises nothing; `clippedAt` compares against the
+ * EFFECTIVE ceiling, where the superseded `rows.length >= limit` compared against
+ * the asked 10,000 and could never fire. The caller logs the clip — the payload
+ * has no field for it (`types.ts › WorkspaceOverview.memberLoad`), and the right
+ * answer to that is {@link tallyUserMessageAuthors}, not a wider haul.
  */
 export async function listRecentUserMessageAuthors(
   workspaceId: string,
   sinceIso: string,
   limit: number
-): Promise<string[]> {
+): Promise<Clipped<string>> {
   const { data, error } = await supabaseAdmin()
     .from("channel_messages")
     .select("author_user_id")
@@ -242,8 +305,11 @@ export async function listRecentUserMessageAuthors(
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return ((data ?? []) as Array<{ author_user_id: string }>).map(
-    (r) => r.author_user_id
+  return clippedAt(
+    ((data ?? []) as Array<{ author_user_id: string }>).map(
+      (r) => r.author_user_id
+    ),
+    limit
   );
 }
 

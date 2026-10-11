@@ -70,7 +70,7 @@ export async function listOntologyRevisions(
 ): Promise<RevisionPage> {
   const ontology = await requireOntology(ctx, ontologyId, "view");
   const audience = await resolveOntologyAudience(ctx);
-  const memberships = await repo.listMemberships(audience.workspaceIds);
+  const { rows: memberships } = await repo.listMemberships(audience.workspaceIds);
   const walk = walkAdmittedOntologies(new Set([ontology.id]), memberships);
   const refs = [
     { resourceType: "ontology" as const, resourceId: ontology.id },

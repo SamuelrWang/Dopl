@@ -55,7 +55,7 @@ function insertedEdges() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(repo.listOntologies).mockResolvedValue([]);
+  vi.mocked(repo.listOntologies).mockResolvedValue({ rows: [], truncated: false });
   vi.mocked(repo.insertOntology).mockResolvedValue({ id: ONTOLOGY } as never);
   vi.mocked(seedRepo.insertObjects).mockResolvedValue([]);
   vi.mocked(seedRepo.insertMemberships).mockResolvedValue(undefined);

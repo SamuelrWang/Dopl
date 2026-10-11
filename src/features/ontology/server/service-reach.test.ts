@@ -24,7 +24,7 @@ vi.mock("./repository-shares", () => ({
 }));
 
 vi.mock("./repository-projections", () => ({
-  listOntologySummaries: vi.fn(async () => []),
+  listOntologySummaries: vi.fn(async () => ({ rows: [], truncated: false })),
 }));
 
 vi.mock("@/shared/tenancy/home-space-reach", () => ({
@@ -83,9 +83,10 @@ function prime(opts: {
       owner_agents_level: s.ownerAgents ?? "none",
     })) as never
   );
-  mockNarrow.listOntologySummaries.mockResolvedValue(
-    (opts.ontologies ?? [summary(MINE, "Mine")]) as never
-  );
+  mockNarrow.listOntologySummaries.mockResolvedValue({
+    rows: opts.ontologies ?? [summary(MINE, "Mine")],
+    truncated: false,
+  } as never);
 }
 
 beforeEach(() => {
