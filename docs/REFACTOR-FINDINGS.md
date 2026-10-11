@@ -10206,8 +10206,8 @@ The claim had been restated in five places from one sentence, which is how it su
 ### F-726 — five orphan modules survive the "dead code is deleted" ruling, and two of them say so in a comment (2026-09-17)
 
 - Location, all measured in final review with `npx knip` plus an import grep over `src apps packages dopl-desktop-app` (zero import sites each, not counting prose mentions):
-  `src/features/knowledge/components/knowledge-v2/detail/overview-contents.tsx` (398 lines) ·
-  `src/features/knowledge/components/knowledge-v2/detail/use-content-descriptions.ts` (102) ·
+  the knowledge Contents section `overview-contents` (398 lines; deleted 2026-10-11, cleanup K02) ·
+  its `use-content-descriptions` hook (102; deleted 2026-10-11, cleanup K02) ·
   `src/features/channels/hooks/use-channel-auto-send.ts` (40) ·
   the copy-paste skill template under `src/features/mcp-connect/` (112; deleted 2026-09-24) ·
   the shared layout's page top bar (40; deleted 2026-10-02).
@@ -10217,7 +10217,8 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **`AppPanel` WAS IN THIS CLASS AND WAS DELETED**, because it was different in one way that matters: 00-MASTER §5 Wave 0 carried it as scoped work (X9) and the row claimed it done. Its CSS rule `app-shell.module.css › .mainDetail` went with it — zero other users.
 - Proposed resolution: delete all five, each in its own commit, with the `RETIREMENT-UNWIRING-PLAN.md` rows repointed in the same change. **Re-derive the orphan set first** (`npx knip`) rather than trusting this list — §15's own warning is that "dead" is a MEASUREMENT, and `bits.tsx › agentAccent` was called an orphan while it still had a live call site.
 - 2026-09-24 (DMP-013 B5): the skill template is DELETED — still zero importers, and it taught tool names and args the server no longer serves (`*_admin`, `workspace=`, `op:'list'` on channels). The Connect page shows only the connection snippets (`src/features/mcp-connect/snippets.ts`). The other four remain.
-- Status: open (four of five).
+- 2026-10-11 (cleanup K02): the knowledge pair (`overview-contents`, `use-content-descriptions`) is DELETED — zero importers, INVARIANTS §15; `base-overview.tsx` now cites this entry. The lost description editor itself is still unbuilt.
+- Status: open (one of five: the channels auto-send hook, which cleanup C08 deletes).
 
 ### F-727 — the search `tsvector` rides every transcript read, and the reads are `select("*")` (2026-09-17)
 

@@ -30,10 +30,9 @@ interface Props {
  * roll-up of every revision of it and of everything in it.
  *
  * Changelog replaced "Contents" on 2026-09-09; the inline folder/entry
- * description editor it carried has no other home today, so the loss is filed in
- * `docs/REFACTOR-FINDINGS.md` and `overview-contents.tsx` /
- * `use-content-descriptions.ts` are left in the tree, unmounted, for it to point
- * at.
+ * description editor it carried has no other home today. The loss is filed as
+ * F-726 in `docs/REFACTOR-FINDINGS.md`; the unmounted Contents modules were
+ * deleted under INVARIANTS §15 (cleanup K02) — read them from git history.
  *
  * No wrapper, on purpose: the stack's gap and padding belong to the scroll body
  * that hosts it (`../knowledge-v2.module.css › .infoBody`), so the sections are
