@@ -26,6 +26,8 @@ const { findModel, offeredDimensions, vouches, offers, modelRefusal, notOfferedS
 const FAILURE_TTL_MS = 5000;
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
+// A copy of the dimension keys a descriptor's `models` declares, or `[]`.
+const declaredDimensions = (declared) => (Array.isArray(declared && declared.dimensions) ? declared.dimensions.slice() : []);
 
 /**
  * One model, normalized. Every field but `id` is optional and absent is `null`, never `''`.
@@ -116,7 +118,7 @@ function makeCatalog(runtimeId, source, status, extra) {
 function catalogFromRoster(runtimeId, descriptor, roster) {
   const declared = (descriptor && descriptor.models) || {};
   const source = str(declared.source) || (roster && str(roster.source)) || null;
-  const dims = Array.isArray(declared.dimensions) ? declared.dimensions.slice() : [];
+  const dims = declaredDimensions(declared);
   if (!roster || typeof roster !== 'object') {
     return makeCatalog(runtimeId, source, STATUS.UNAVAILABLE, {
       dimensions: dims,
@@ -180,32 +182,28 @@ let readGeneration = 0;
 const settledStatus = new Map();
 const listeners = [];
 
+// Add `fn` to `list`; answers its unsubscribe. A non-function subscribes nothing.
+function subscribe(list, fn) {
+  if (typeof fn !== 'function') return () => {};
+  list.push(fn);
+  return () => {
+    const at = list.indexOf(fn);
+    if (at !== -1) list.splice(at, 1);
+  };
+}
+
 /**
  * Call `fn(runtimeId, from, to)` when a runtime's settled verdict changes; the first verdict is not a
  * transition. A hook, so this module need not require the connectivity layer
  * (`channel-runtime-reply.js` subscribes). A listener that throws never fails a read.
  */
-function onSettled(fn) {
-  if (typeof fn !== 'function') return () => {};
-  listeners.push(fn);
-  return () => {
-    const at = listeners.indexOf(fn);
-    if (at !== -1) listeners.splice(at, 1);
-  };
-}
+const onSettled = (fn) => subscribe(listeners, fn);
 
 // `onLiveReady`: every LIVE read that settles READY (never a persisted stand-in), transition or not.
 const readyListeners = [];
 
 /** Call `fn(runtimeId, catalog)` after each live READY read (`catalog-publish.js` subscribes). */
-function onLiveReady(fn) {
-  if (typeof fn !== 'function') return () => {};
-  readyListeners.push(fn);
-  return () => {
-    const at = readyListeners.indexOf(fn);
-    if (at !== -1) readyListeners.splice(at, 1);
-  };
-}
+const onLiveReady = (fn) => subscribe(readyListeners, fn);
 
 function noteLiveReady(id, catalog) {
   if (!catalog || catalog.status !== STATUS.READY || catalog.persisted) return;
@@ -286,7 +284,7 @@ function persist(adapter, catalog) {
 }
 
 const loadingCatalog = (id, declared) => makeCatalog(id, (declared && str(declared.source)) || null, STATUS.LOADING, {
-  dimensions: Array.isArray(declared && declared.dimensions) ? declared.dimensions.slice() : [],
+  dimensions: declaredDimensions(declared),
 });
 
 /**
@@ -316,7 +314,7 @@ function refresh(adapter, now) {
     .then(() => adapter.runtime.models())
     .then((roster) => Object.assign(catalogFromRoster(id, adapter.descriptor, roster), { key: readKey }))
     .catch((err) => makeCatalog(id, declared.source, STATUS.UNAVAILABLE, {
-      dimensions: Array.isArray(declared.dimensions) ? declared.dimensions.slice() : [],
+      dimensions: declaredDimensions(declared),
       reason: (err && err.message) || 'the model roster could not be read',
     }))
     .then((next) => {
@@ -329,7 +327,7 @@ function refresh(adapter, now) {
         snapshots.set(id, { catalog: entry.catalog, at: 0, inflight: null, dirty: false, due: true, key: null });
         return Object.assign({}, next, { moved: true });
       }
-      const kept = held && held.catalog && held.catalog.models.length ? held.catalog : null;
+      const kept = held.catalog && held.catalog.models.length ? held.catalog : null;
       // A failed refresh over held models is `stale` (they still label), not `unavailable`.
       const settled = next.status === STATUS.UNAVAILABLE && kept
         // `persisted` is dropped: a stand-in that failed its live read is held on the failure floor like
@@ -337,7 +335,7 @@ function refresh(adapter, now) {
         ? Object.assign({}, kept, { status: STATUS.STALE, reason: next.reason, persisted: false })
         : next;
       // Invalidated while in flight: the read may predate the repair, so a failure is due at once.
-      const dirty = !!(held && held.dirty);
+      const dirty = !!held.dirty;
       snapshots.set(id, { catalog: settled, at: dirty && settled.status !== STATUS.READY ? 0 : Date.now(), inflight: null, dirty: false });
       persist(adapter, settled);
       noteSettled(id, settled.status);
