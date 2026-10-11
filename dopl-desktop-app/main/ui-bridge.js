@@ -35,6 +35,8 @@ const authTokens = require('./auth-tokens');
 // `discardBody` is the transport-agnostic half, so it is shared, not re-implemented.
 const { discardBody } = require('./api-repair');
 const { API_BASE, APP_ORIGIN } = require('./config');
+// The OS-opener policy, shared with main/spa-window.js's navigation hand-off.
+const externalUrl = require('./external-url');
 const uiSync = require('./ui-sync');
 const sessionSummary = require('./session-summary'); // the session-pill projection
 const authActions = require('./auth-actions');
@@ -98,36 +100,12 @@ function resolveApiUrl(path, apiBase) {
   return u.href;
 }
 
-// Only http(s) may be opened externally: a `file:`/`smb:` URL handed to the OS
-// opener is a local-file / credential-leak primitive, not a link.
-function isExternalUrl(url) {
-  try {
-    const scheme = new URL(String(url)).protocol;
-    return scheme === 'http:' || scheme === 'https:';
-  } catch (_err) {
-    return false;
-  }
-}
-
-// ⚠ WHERE the OS opener may be pointed. The scheme check above is NOT a policy: no CSP applies
-// to `shell.openExternal`, so a scheme-only gate makes this handler the renderer's arbitrary
-// outbound GET — the one hole in the SPA's `connect-src 'none'` containment, and the exfil leg
-// for anything the renderer can read back over the API bridge. Hence an ALLOWLIST:
-//   • the app's own origin — settings, billing, account, sign-in help (DOPL_APP_URL in dev)
-//   • *.stripe.com  — hosted checkout + billing portal, URLs the API mints
-//   • *.github.com  — the notarized DMG on the releases page
-// Adding a destination is a deliberate edit HERE, never a side effect of a ported component.
-const EXTERNAL_HOST_ALLOWLIST = Object.freeze(['stripe.com', 'github.com']);
-
-function isAllowedExternalUrl(url, appOrigin) {
-  if (!isExternalUrl(url)) return false;
-  const u = new URL(String(url));
-  if (appOrigin && u.origin === appOrigin) return true;
-  // Third parties are https-only; the app origin above may be http in dev.
-  if (u.protocol !== 'https:') return false;
-  const host = u.hostname.toLowerCase();
-  return EXTERNAL_HOST_ALLOWLIST.some((h) => host === h || host.endsWith(`.${h}`));
-}
+// ⚠ WHERE the OS opener may be pointed lives in `main/external-url.js`, NOT here, and the
+// policy is now a SCHEME allowlist rather than a HOST one (F-3031, 2026-10-10). The host list
+// this block used to carry (`['stripe.com', 'github.com']` + the app origin) was refusing every
+// ordinary link in the app — read that module's header for which hole it was really closing and
+// what still closes it. The predicate is required, never re-implemented, because
+// `spa-window.js`'s navigation hand-off must answer identically.
 
 // ⚠ x-workspace-id is UUID-only server-side (src/shared/auth/with-workspace-auth.ts — blank or
 // non-UUID is a 400). Refuse a malformed id here rather than silently dropping the header and
@@ -436,16 +414,17 @@ function register(opts = {}) {
   ipcMain.handle(
     'dopl:open-external',
     bound('open-external', async (_event, url) => {
-      if (!isAllowedExternalUrl(url, APP_ORIGIN)) {
+      if (!externalUrl.isOpenableExternalUrl(url)) {
         // ⚠ Log the HOST, never the URL: a refused URL may carry whatever the caller was
         // trying to smuggle out in its query string.
-        let host = '?';
-        try { host = new URL(String(url)).host || '?'; } catch (_err) { /* unparseable */ }
-        diag('ui-bridge: refused open-external — host not on the allowlist:', host);
+        diag(
+          'ui-bridge: refused open-external — scheme is not openable:',
+          externalUrl.externalUrlHost(url)
+        );
         return { ok: false };
       }
       try {
-        await shell.openExternal(String(url));
+        await shell.openExternal(String(url).trim());
         return { ok: true };
       } catch (err) {
         diag('ui-bridge openExternal error', err && err.message);
@@ -489,8 +468,8 @@ module.exports = {
   register,
   broadcastAuthState,
   resolveApiUrl,
-  isExternalUrl,
-  isAllowedExternalUrl,
+  // ⚠ `isExternalUrl` / `isAllowedExternalUrl` are GONE from here (F-3031): the OS-opener
+  // policy is `main/external-url.js › isOpenableExternalUrl`, which spa-window.js shares.
   isWorkspaceId,
   isAppWindowSender,
   AUTH_STATE_EVENT,

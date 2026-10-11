@@ -25,7 +25,10 @@
 // dopl-desktop-app/WIRING.md for the two-line integration.
 
 const path = require('path');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
+// The OS-opener policy, shared with main/ui-bridge.js's `dopl:open-external`.
+const externalUrl = require('./external-url');
+const { diag } = require('./diag');
 
 const INDEX_HTML = path.join(__dirname, '../renderer/app/index.html');
 const PRELOAD = path.join(__dirname, '../renderer/app-preload.js');
@@ -125,6 +128,35 @@ function spaWebPreferences() {
   };
 }
 
+// REFUSING A NAVIGATION IS HALF AN ANSWER; THE OTHER HALF IS THE BROWSER.
+//
+// ⚠ THIS IS THE FIX FOR F-3031 — "links across the app don't open" (2026-10-10). The refusals
+// below were complete and silent: `window.open` denied, `will-navigate` preventDefault'd, and
+// nothing more. So a plain `<a href="https://…">`, an `<a target="_blank">`, a link inside a
+// rendered markdown message, an ontology Link field, a link in a knowledge entry — every link
+// the renderer did NOT hand to `window.dopl.openExternal` by hand — was swallowed here and
+// never reached the bridge at all. No renderer-side change could have fixed that, which is why
+// the fix is ONE main-process hand-off rather than an onClick on every anchor: a link kind
+// nobody has written yet is already covered.
+//
+// What the hand-off does NOT loosen: the navigation predicate is untouched, so the top frame
+// still cannot LEAVE the bundled document — the URL goes to the OS browser instead of into
+// this window. Scheme policy is `main/external-url.js` (http/https/mailto; `file:`,
+// `javascript:`, `data:` and the rest stay refused), shared with `dopl:open-external` so the
+// two cannot drift.
+function handOffExternal(url, why) {
+  if (!externalUrl.isOpenableExternalUrl(url)) {
+    // ⚠ The HOST, never the URL — a blocked navigation's query string is untrusted content.
+    diag(`spa-window: ${why} refused, not openable —`, externalUrl.externalUrlHost(url));
+    return false;
+  }
+  // Fire-and-forget: a failed OS opener must not reject into an Electron event handler.
+  Promise.resolve()
+    .then(() => shell.openExternal(String(url).trim()))
+    .catch((err) => diag('spa-window: openExternal failed —', (err && err.message) || 'error'));
+  return true;
+}
+
 // Deny every `window.open`, and police EVERY top-frame steering primitive with the one
 // predicate above: direct navigation, server-issued redirects, and subframe navigations
 // (frames are frame-src 'none' in the built CSP, but dev loadURL carries no CSP).
@@ -132,10 +164,17 @@ function spaWebPreferences() {
 // freely inside a window this locks down — and why a pop-out can be LANDED on a route by
 // loading the index with a hash rather than by being handed a URL.
 function policeNavigation(win) {
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // `target="_blank"` and `window.open` arrive here. The window is still DENIED — what is new
+  // is that the URL it wanted is handed to the real browser instead of dropped.
+  win.webContents.setWindowOpenHandler((details) => {
+    handOffExternal(details && details.url, 'window.open');
+    return { action: 'deny' };
+  });
   const indexHref = require('node:url').pathToFileURL(INDEX_HTML).href;
   const police = (event, url) => {
-    if (!isAllowedNavigation(url, devUrl(), indexHref)) event.preventDefault();
+    if (isAllowedNavigation(url, devUrl(), indexHref)) return;
+    event.preventDefault();
+    handOffExternal(url, 'navigation');
   };
   win.webContents.on('will-navigate', police);
   win.webContents.on('will-redirect', police);
@@ -143,7 +182,11 @@ function policeNavigation(win) {
     // Only the main frame may navigate at all; any subframe navigation is
     // refused outright.
     if (!event.isMainFrame) { event.preventDefault(); return; }
-    police(event, event.url);
+    // ⚠ REFUSE WITHOUT HANDING OFF, and that asymmetry is deliberate. Electron fires BOTH
+    // `will-navigate` and `will-frame-navigate` for one main-frame navigation, so handing off
+    // in both opens the destination TWICE — two browser tabs per clicked link. `will-navigate`
+    // above owns the hand-off; this listener stays what it has always been, the frame guard.
+    if (!isAllowedNavigation(event.url, devUrl(), indexHref)) event.preventDefault();
   });
   return win;
 }
@@ -189,6 +232,7 @@ module.exports = {
   wasOpenedHidden,
   spaWebPreferences,
   policeNavigation,
+  handOffExternal,
   devUrl,
   INDEX_HTML,
 };
