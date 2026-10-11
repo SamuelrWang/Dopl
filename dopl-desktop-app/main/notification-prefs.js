@@ -1,8 +1,13 @@
 // NOTIFICATION PREFERENCES — THE OPERATOR'S ACCOUNT RECORD, AND THE BANNER GATE THAT READS IT
 // (2026-10-09, KB dopl-development "Notifications Audit 2026-10-08"). The profile popup's
-// Notifications tab writes it over `/api/user/notification-preferences`; the passive banners
-// (`trigger.js › sendFyi`, `task-notify.js › notifyTaskReply`) ask `allowsMessage` before showing
-// anything.
+// Notifications tab writes it over `/api/user/notification-preferences`.
+//
+// ⚠ ONE CALL SITE ASKS `allowsMessage` DIRECTLY — `trigger.js › sendFyi`, which asks before it
+// even builds the copy for a muted event. Everything else is gated INSIDE the route
+// (`notification-route.js › raise` / `raiseActionable`, over `allowsIn`), so there is exactly one
+// place a notice can be raised and exactly one place the switch is read. This header named
+// `task-notify.js › notifyTaskReply` as a second direct caller until 2026-10-10; it is not one,
+// and `test/notification-prefs.test.mjs` now FORBIDS it from growing a copy of the gate back.
 //
 // ⚠ THE RECORD IS THE ACCOUNT'S, NOT THIS MAC'S (Samuel, 2026-10-09). One setting per user,
 // honored by every computer they sign in on, served by the route above

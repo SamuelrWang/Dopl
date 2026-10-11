@@ -31,7 +31,27 @@ test("a 'both' event raises the toast when Dopl is in front, and ONLY the toast"
   assert.equal(toasts.length, 1);
   assert.equal(banners.length, 0, "a banner over the window he is reading is noise");
   assert.equal(toasts[0].channel, "notifications:toast");
+  // ⚠ UPDATED DELIBERATELY 2026-10-10: `body` now rides along (it was dropped). `SPEC` carries
+  // none, so the shape is unchanged here — the case that pins the body is the next test.
   assert.deepEqual(toasts[0].payload, { eventId: "mention", title: SPEC.title, kind: "incoming" });
+});
+
+test("THE BODY RIDES THE TOAST: a popup event's second line is not dropped", async () => {
+  // Dropping `spec.body` made a mention toast say only the channel name, cost `decision_failed`
+  // its recovery sentence, and left POPUP-ONLY `tool_blocked` — whose only surface is this one —
+  // with no reachable body at all.
+  const { mod, prefs, toasts } = load({ focused: true });
+  await prefs.refresh(true);
+  assert.equal(mod.raise("mention", { title: "Design", body: "Ada mentioned you: ship it" }), "popup");
+  assert.deepEqual(toasts[0].payload, {
+    eventId: "mention", title: "Design", body: "Ada mentioned you: ship it", kind: "incoming",
+  });
+
+  const blocked = load({ focused: false });
+  await blocked.prefs.refresh(true);
+  assert.equal(blocked.mod.raise("tool_blocked", { title: "Bash blocked", body: "ask again to allow it" }), "popup");
+  assert.equal(blocked.toasts[0].payload.body, "ask again to allow it",
+    "popup-only: if this is dropped the body is unreachable on every surface");
 });
 
 test("a 'both' event raises the banner when Dopl is away, and ONLY the banner", async () => {
@@ -85,10 +105,20 @@ test("a popup-only event never raises a banner, and a mac-only never a toast", a
     assert.equal(pop.mod.raise("tool_blocked", SPEC), "popup");
     assert.equal(pop.banners.length, 0);
 
-    const mac = load({ focused });
-    await mac.prefs.refresh(true);
-    assert.equal(mac.mod.raise("direct_message", { title: "x" }), "none",
+    const off = load({ focused });
+    await off.prefs.refresh(true);
+    assert.equal(off.mod.raise("direct_message", { title: "x" }), "none",
       "direct_message is muted by default, so it raises nothing at all");
+
+    // ⚠ THE SECOND HALF OF THIS TEST'S OWN NAME, WHICH IT NEVER ASSERTED (2026-10-10). It read
+    // only the default-off case, so `mac.toasts` was never looked at and `direct_message` — the
+    // ONE 'mac' row in the surface map — could have been routed to a toast while Dopl was in
+    // front without a single test noticing. Turn it ON in the record and read both surfaces.
+    const mac = load({ focused, on: ["direct_message"] });
+    await mac.prefs.refresh(true);
+    assert.equal(mac.mod.raise("direct_message", { title: "A direct message" }), "mac");
+    assert.equal(mac.banners.length, 1, `focused=${focused}: a 'mac' event is the OS banner`);
+    assert.equal(mac.toasts.length, 0, `focused=${focused}: and never the toast, focus or not`);
   }
 });
 
@@ -160,12 +190,18 @@ test("a site that asks for sound gets it, and only then", async () => {
   // ⚠ `decision_failed` is the ONE event that chooses to sound and bounce the dock: the operator
   // believes they answered and they did not. That is a DELIBERATE sound, not one of the
   // accidental ones being removed, and the distinction lives at the call site.
-  const { mod, prefs, banners } = load({ focused: false });
+  const { mod, prefs, banners, counts } = load({ focused: false });
   await prefs.refresh(true);
   mod.raise("decision_failed", { ...SPEC, silent: false, attention: true });
   assert.equal(banners[0].opts.silent, false, "loud, because consent.js asked");
+  // ⚠ AND THE DOCK BOUNCE IS OBSERVED, NOT ASSUMED (2026-10-10). `macBanner` calls
+  // `requestAttention` inside a best-effort try/catch, and `./notify-action` was UNSTUBBED in the
+  // harness: the require threw, the catch swallowed it, and a typo in that call would have
+  // shipped green with every test passing.
+  assert.equal(counts.attention, 1, "`attention: true` bounces the dock, exactly once");
   mod.raise("signed_out", SPEC);
   assert.equal(banners[1].opts.silent, true, "its neighbour did not ask, so it is quiet");
+  assert.equal(counts.attention, 1, "and a neighbour that did not ask does not bounce it");
 });
 
 test("the safety pair cannot be muted, on either surface", async () => {
@@ -183,5 +219,66 @@ test("an OS that cannot show banners is reported, not crashed through", async ()
   const { mod, prefs } = load({ focused: false, noNotification: true });
   await prefs.refresh(true);
   assert.equal(mod.raise("mention", SPEC), "none");
+});
+
+// ─── SENT IS NOT DELIVERED ────────────────────────────────────────────────────────────────────
+//
+// `webContents.send` does not throw into a window whose renderer has not mounted `IncomingToasts`
+// yet, so `sent === 1` was true for a push nobody could ever see — and the `sent === 0` banner
+// fallback never ran. A toast is HELD until the renderer acks, and the banner takes it without one.
+
+test("a toast pushed before the renderer acks is HELD, not counted as delivered", async () => {
+  const { mod, prefs, toasts, banners } = load({ focused: true, rendererUnready: true });
+  await prefs.refresh(true);
+  assert.equal(mod.raise("mention", SPEC), "popup");
+  assert.equal(toasts.length, 0, "⚠ an unmounted renderer must not be told it was sent to");
+  assert.equal(banners.length, 0, "and the banner waits its turn rather than doubling up");
+});
+
+test("the renderer's ack flushes everything held for it, over the op the real one rides", async () => {
+  const { mod, prefs, toasts, ack } = load({ focused: true, rendererUnready: true });
+  await prefs.refresh(true);
+  mod.raise("mention", { title: "first" });
+  mod.raise("decision", { title: "second" });
+  assert.equal(toasts.length, 0);
+  assert.equal(ack(), true, "the ack rides `openFromToast` with main's reserved handle");
+  assert.deepEqual(toasts.map((t) => t.payload.title), ["first", "second"], "in order, both of them");
+  // Once acked, a later toast goes straight out.
+  mod.raise("mention", { title: "third" });
+  assert.equal(toasts.length, 3);
+});
+
+test("NO ACK, NO TOAST: the OS banner takes it rather than the offer being lost", async () => {
+  const { mod, prefs, toasts, banners, logs } = load({ focused: true, rendererUnready: true });
+  await prefs.refresh(true);
+  assert.equal(mod.raise("mention", SPEC), "popup");
+  await new Promise((r) => setTimeout(r, mod.ACK_WAIT_MS + 40));
+  assert.equal(toasts.length, 0, "nothing was ever shown in the window");
+  assert.equal(banners.length, 1, "⚠ THE WHOLE POINT: the fact is not lost, it changes surface");
+  assert.ok(logs.some((l) => /no renderer ack/.test(l)), "and it says so, rather than hiding it");
+});
+
+test("a late ack after the banner already took it does not raise a second time", async () => {
+  const { mod, prefs, toasts, banners, ack } = load({ focused: true, rendererUnready: true });
+  await prefs.refresh(true);
+  mod.raise("mention", SPEC);
+  await new Promise((r) => setTimeout(r, mod.ACK_WAIT_MS + 40));
+  assert.equal(banners.length, 1);
+  assert.equal(ack(), true);
+  assert.equal(toasts.length, 0, "the held entry is spent; one fact, one surface, still");
+  assert.equal(banners.length, 1);
+});
+
+test("a window that goes away forgets the ack: the next one starts unmounted", async () => {
+  const ctx = load({ focused: true });
+  await ctx.prefs.refresh(true);
+  assert.equal(ctx.mod.raise("mention", SPEC), "popup");
+  assert.equal(ctx.toasts.length, 1);
+  // Every window closes, then a new one opens — a fresh renderer that has not acked.
+  const gone = ctx.windows.splice(0, ctx.windows.length);
+  assert.equal(ctx.mod.raise("mention", SPEC), "mac", "no window at all: the banner, immediately");
+  ctx.windows.push(gone[0]);
+  ctx.mod.raise("mention", { title: "into the new window" });
+  assert.equal(ctx.toasts.length, 1, "⚠ a stale ack must not vouch for a renderer that just booted");
 });
 

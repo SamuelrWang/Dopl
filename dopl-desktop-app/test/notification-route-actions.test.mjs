@@ -21,7 +21,6 @@ const SPEC = { title: "A peer's agent asked you something" };
 /** Loads the route with notify-action faked, so the banner is observable. */
 function loadActionable(o = {}) {
   const ctx = load(o);
-  const built = [];
   const src = readFileSync(join(MAIN, "notification-route.js"), "utf8");
   const mod = evalModule(src, (id) => {
     if (id === "electron") {
@@ -42,17 +41,14 @@ function loadActionable(o = {}) {
     }
     if (id === "./notification-prefs") return ctx.prefs;
     if (id === "./diag") return { diag: () => {} };
-    if (id === "./notify-action") {
-      return {
-        buildActionNotification: (spec) => {
-          built.push(spec);
-          return { banner: true, spec };
-        },
-      };
-    }
+    // ⚠ THE HARNESS'S OWN STUB, so `built` and the dock-bounce count are one set of facts for
+    // both module instances — and so `requestAttention` is observable here too rather than
+    // throwing into `macBanner`'s best-effort catch.
+    if (id === "./notify-action") return ctx.notifyAction;
     throw new Error(`unexpected require: ${id}`);
   });
-  return { ...ctx, mod, built };
+  if (o.rendererUnready !== true) mod.noteRendererReady();
+  return { ...ctx, mod, built: ctx.built, ack: () => mod.openFromToast(mod.TOAST_READY_ID) };
 }
 
 const ASK = { title: "Design", body: "Ada's agent asks: ship it", actionText: "Launch agent", onAffirm: () => {}, onOpen: () => {} };
@@ -133,6 +129,22 @@ test("an unknown Open handle is simply false", async () => {
   assert.equal(mod.openFromToast(""), false);
 });
 
+test("an Open that cannot open anything answers FALSE, not {ok:true}", async () => {
+  // ⚠ IT USED TO ANSWER TRUE. The entry was found, `typeof entry.fn === 'function'` was false, and
+  // the function fell through to `return true` — so a button that did nothing at all reported that
+  // it had worked, and the ipc op answered `{ ok: true }` to the renderer.
+  const { mod, prefs, toasts } = loadActionable({ focused: true });
+  await prefs.refresh(true);
+  mod.raiseActionable("peer_ask", { ...ASK, onOpen: undefined });
+  const { openId } = toasts[0].payload;
+  assert.ok(openId, "the toast still carries a handle");
+  assert.equal(mod.openFromToast(openId), false, "but pressing it is honestly a no-op");
+  // A closure that EXISTS and throws is a different thing: it was there and it ran.
+  mod.raiseActionable("draft_reply", { ...ASK, onOpen: () => { throw new Error("window gone"); } });
+  const live = toasts[1].payload.openId;
+  assert.equal(mod.openFromToast(live), true, "a handler that throws still counts as pressed");
+});
+
 test("focused with no window to toast into falls back to the banner, never to nothing", async () => {
   const { mod, prefs, built } = loadActionable({ focused: true, windows: 0 });
   await prefs.refresh(true);
@@ -140,11 +152,39 @@ test("focused with no window to toast into falls back to the banner, never to no
   assert.equal(built.length, 1, "asking nobody is not an option");
 });
 
-test("a muted actionable event raises nothing — but approval cannot be muted", async () => {
+test("a muted actionable event raises nothing — but it is MUTED, never null", async () => {
+  // ⚠ CHANGED DELIBERATELY 2026-10-10. `null` is the "no surface exists" answer, and one caller
+  // DENIES a held tool on it while `trigger.js › handleTrigger` holds the listener's cursor on it.
+  // A mute is neither of those things: it silences the surface and nothing else. Answering null
+  // for it made a muted `peer_ask` indistinguishable from a machine that can raise nothing, and
+  // `handleTrigger` consumed the peer's ask with no launch and no courtesy reply.
   const { mod, prefs, built, toasts } = loadActionable({ focused: false, off: ["peer_ask"] });
   await prefs.refresh(true);
-  assert.equal(mod.raiseActionable("peer_ask", ASK), null);
-  assert.equal(built.length + toasts.length, 0);
+  const got = mod.raiseActionable("peer_ask", ASK);
+  assert.equal(got, mod.MUTED, "the mute is NAMED in the answer");
+  assert.notEqual(got, null, "⚠ and is never the falsy value that means 'nobody can be asked'");
+  assert.ok(got, "truthy, so no caller can read a switch being off as no-surface");
+  assert.equal(built.length + toasts.length, 0, "and still nothing is raised anywhere");
+});
+
+test("approval cannot be muted, so the tool gate can never reach MUTED", async () => {
+  const { mod, prefs } = loadActionable({ focused: false, off: ["approval"] });
+  await prefs.refresh(true);
+  const got = mod.raiseActionable("approval", { ...ASK, bannerAlways: true, actionText: "Allow" });
+  assert.notEqual(got, mod.MUTED, "the registry lock holds, so the banner is still built");
+  assert.ok(got);
+});
+
+test("⚠ THE CATCH-ALL: a raise that throws still answers a BANNER, never null", async () => {
+  // The last-resort fallback existed and nothing exercised it, so "a caller may read null as
+  // 'no surface exists'" was a promise no test kept. Make the gate itself explode.
+  const ctx = loadActionable({ focused: true });
+  await ctx.prefs.refresh(true);
+  ctx.prefs.getPrefs = () => { throw new Error("prefs exploded"); };
+  const got = ctx.mod.raiseActionable("peer_ask", ASK);
+  assert.ok(got, "⚠ falsy here would auto-deny a held tool (session-windowless.js:293)");
+  assert.equal(ctx.built.length, 1, "and the surface it answers with is the banner");
+  assert.equal(ctx.built[0].onAffirm, ASK.onAffirm, "with its affirmative wired, like any banner");
 });
 
 // ─── COALESCING ───────────────────────────────────────────────────────────────────────────────
@@ -202,8 +242,10 @@ test("SOURCE PIN: the launch funnel raises agent_started, and only after it has 
   // which also means a stubbed-require failure is SWALLOWED in the harnesses. So the wiring is
   // pinned here, at the source, rather than observed through them.
   assert.match(src, /raiseCoalesced\('agent_started'/);
-  const skipDisabled = src.indexOf("return { skipped: 'disabled' }");
-  const skipAuth = src.indexOf("return { skipped: 'auth-hold' }");
+  // ⚠ PREFIXES, NOT WHOLE LITERALS: a skip may carry a `detail` beside its code, and this pin is
+  // about the ORDER of the three landmarks, not about their payload shape.
+  const skipDisabled = src.indexOf("return { skipped: 'disabled'");
+  const skipAuth = src.indexOf("return { skipped: 'auth-hold'");
   const emit = src.indexOf("raiseCoalesced('agent_started'");
   assert.ok(skipDisabled > 0 && skipAuth > 0 && emit > 0, "all three landmarks found");
   assert.ok(emit > skipDisabled && emit > skipAuth,
@@ -263,6 +305,64 @@ test("with no window to toast into, the offer falls back to the banner", async (
   assert.equal(banners.length, 1, "starting hidden in the tray must not lose the offer");
   banners[0].handlers.click();
   assert.equal(resumed, 1, "and the banner's click resumes, as it always did");
+});
+
+test("⚠ A HIDDEN WINDOW IS NOT A WINDOW: the cold-start offer goes to the banner", async () => {
+  // THE DEFECT. This was the ONE raise path that never asked about visibility, while its own
+  // comment claimed it detected the case. `openAsHidden` means the shell window EXISTS and is
+  // invisible, and `sessionEngine.init()` → `offerResume` runs in that same `whenReady` tick — so
+  // every cold start pushed the offer into a window the operator could not see.
+  const { mod, prefs, toasts, banners } = load({ focused: false, hidden: true });
+  await prefs.refresh(true);
+  let resumed = 0;
+  assert.equal(mod.raiseResumeOffer({ ...RESUME, onResume: () => { resumed += 1; } }), "mac");
+  assert.equal(toasts.length, 0, "⚠ a toast in an invisible window is a SILENCED notification");
+  assert.equal(banners.length, 1);
+  banners[0].handlers.click();
+  assert.equal(resumed, 1, "and the offer still resumes, from the surface he can actually see");
+});
+
+test("a visible window takes the toast, and `isVisible` is the question asked", async () => {
+  const { mod, prefs, toasts, banners } = load({ focused: true });
+  await prefs.refresh(true);
+  assert.equal(mod.hasVisibleWindow(), true);
+  assert.equal(mod.raiseResumeOffer({ ...RESUME, onResume: () => {} }), "popup");
+  assert.equal(toasts.length, 1);
+  assert.equal(banners.length, 0);
+  // A window layer that cannot answer the question reads as NOT visible — fail toward the banner.
+  const dumb = load({ focused: true });
+  await dumb.prefs.refresh(true);
+  delete dumb.windows[0].isVisible;
+  assert.equal(dumb.mod.hasVisibleWindow(), false, "cannot tell ⇒ treat Dopl as unseen");
+  assert.equal(dumb.mod.raiseResumeOffer({ ...RESUME, onResume: () => {} }), "mac");
+});
+
+test("⚠ the STICKY closure outlives the 120s sweep, because its toast outlives it by a day", async () => {
+  // THE DEFECT. `OPEN_TTL_MS` is 120s and `incoming-toasts.tsx › STICKY_MS` is 24h, so the sweep
+  // dropped the resume offer's closure while its button was still on screen: "Resume" became a
+  // dead button and the renderer's `.catch(() => {})` hid the miss.
+  const { mod, prefs, toasts } = load({ focused: true });
+  await prefs.refresh(true);
+  let resumed = 0;
+  mod.raiseResumeOffer({ ...RESUME, onResume: () => { resumed += 1; } });
+  const sticky = toasts[0].payload.openId;
+  // And a NON-sticky handle raised at the same moment, which must still expire.
+  const ctx = loadActionable({ focused: true });
+  await ctx.prefs.refresh(true);
+  ctx.mod.raiseActionable("peer_ask", ASK);
+  const transient = ctx.toasts[0].payload.openId;
+
+  const realNow = Date.now;
+  try {
+    // Ten minutes on: well past 120s, nowhere near a day.
+    Date.now = () => realNow() + 10 * 60 * 1000;
+    assert.equal(mod.openFromToast(sticky), true, "the sticky offer is still answerable");
+    assert.equal(resumed, 1);
+    assert.equal(ctx.mod.openFromToast(transient), false,
+      "while an ordinary 'Open' handle is still swept, which is what the TTL is for");
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test("a muted resume offer raises nothing, and a malformed one is refused", async () => {

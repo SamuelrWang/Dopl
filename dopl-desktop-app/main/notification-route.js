@@ -1,27 +1,25 @@
 // WHICH SURFACE AN EVENT RAISES ON, AND THE GUARANTEE THAT IT IS EXACTLY ONE (2026-10-09, KB
 // dopl-development "Notification Spec Samuel 2026-10-09" › Build order step 2).
 //
-// ⚠ "BOTH" NEVER MEANS TWICE. Samuel's spec marks 9 events for Mac + popup, but A is an OS
-// banner raised here in main and B is a toast owned by a renderer module global
-// (`src/shared/ui/toast.tsx`). Firing both would notify the same fact twice at the same desk.
-// So `both` is resolved AT RAISE TIME to the ONE surface the operator can actually see:
-//   Dopl in front  → the in-app toast. A banner would be noise over the thing he is looking at.
-//   Dopl elsewhere → the OS banner. A toast would land on a window nobody is reading.
-// `runtime-credentials.js:83` has done exactly this for one event since before the spec; this
-// module generalizes that, and it is the pattern the spec names.
+// ⚠ "BOTH" NEVER MEANS TWICE. Samuel's spec marks 9 events for Mac + popup, but A is an OS banner
+// raised here in main and B is a toast owned by a renderer module global (`src/shared/ui/toast.tsx`),
+// so firing both notifies one fact twice at one desk. `both` resolves AT RAISE TIME to the ONE
+// surface the operator can see: Dopl in front → the in-app toast (a banner would be noise over
+// what he is reading); Dopl elsewhere → the OS banner (a toast would land on a window nobody is
+// reading). `runtime-credentials.js:83` did exactly this for one event before the spec named it.
 //
-// ⚠ FAIL TOWARD THE BANNER. If focus cannot be read we treat Dopl as NOT focused, because an
-// unseen toast is a silenced notification and a banner over a focused app is merely noise. Same
-// direction as every other default in this feature.
+// ⚠ FAIL TOWARD THE BANNER. Unreadable focus reads as NOT focused, because an unseen toast is a
+// silenced notification and a banner over a focused app is merely noise. So does an unseen window
+// (`hasVisibleWindow`) and a renderer that never acks (`deliverToast`).
 //
 // ⚠ IT CAN ONLY RAISE WHAT THE GATE ALLOWS. Every call runs the operator's preference first
 // (`notification-prefs.js › allowsIn`), so this module can never introduce a banner the
 // Notifications tab says is off. It raises nothing for an event it cannot name.
 //
-// ⚠ THE TOAST IS A SINGLE SLOT (`toast.tsx` holds one `currentToast`). A pushed toast REPLACES
-// whatever is on screen, including a result the operator's own click just produced. That is why
-// `push` carries `kind: 'incoming'`: the renderer decides whether to yield, and this module does
-// not get to assume it won.
+// ⚠ THE TOAST IS A SINGLE SLOT (`toast.tsx` holds one `currentToast`), so a push REPLACES whatever
+// is on screen. That is why every push carries `kind: 'incoming'`: the renderer owns the yielding
+// rule (`incoming-toasts.tsx` queues them, one visible life each), and this module does not get to
+// assume it won the slot.
 
 const prefs = require('./notification-prefs');
 const { diag } = require('./diag');
@@ -59,8 +57,21 @@ function allWindows() {
 }
 
 /**
+ * Is there a window the operator can actually SEE? ⚠ NOT `isAppFocused`'s question: with
+ * `openAsHidden` the shell window EXISTS while invisible, so a toast pushed into it is a SILENCED
+ * notification. FALSE when it cannot tell (no `isVisible` either), which routes to the banner.
+ */
+function hasVisibleWindow() {
+  // `allWindows` already answers [] for a missing or throwing window layer.
+  return allWindows().some((w) => {
+    try { return typeof w.isVisible === 'function' && w.isVisible() === true; } catch (_e) { return false; }
+  });
+}
+
+/**
  * Sends a toast to every renderer. Best-effort per window: one dead webContents must not stop
  * the others, and a failure here is never allowed to propagate into a caller's decision path.
+ * ⚠ ITS COUNT IS "SENT", WHICH IS NOT "SEEN" — go through `deliverToast`, never this directly.
  */
 function pushToast(payload) {
   let delivered = 0;
@@ -73,6 +84,68 @@ function pushToast(payload) {
     }
   }
   return delivered;
+}
+
+// ⚠ SENT IS NOT DELIVERED, AND READING IT AS DELIVERED LOST THE RESUME OFFER ON EVERY COLD START.
+// `webContents.send` does not throw into a window whose renderer has not mounted its listener yet,
+// and the shell window is created HIDDEN with `sessionEngine.init()` → `session-park.js ›
+// offerResume` in the SAME `whenReady` tick — long before React mounts `IncomingToasts`. So
+// `sent === 1` held, the `sent === 0` fallback never ran, and the offer was gone until next launch.
+// A toast is therefore HELD until the renderer says it can show one, and the banner takes it when
+// that word does not arrive. `rendererReady` is process-wide: the ack says "a toast layer is
+// mounted somewhere", which is the only fact `pushToast` can act on anyway.
+
+/**
+ * The reserved `openId` the renderer sends once `IncomingToasts` is mounted. ⚠ IT RIDES THE
+ * EXISTING NAVIGATION OP (`notifications:openFromToast`), already an opaque handle from the toast
+ * layer to here. A forged ack only flushes held toasts into the window that asked for them.
+ */
+const TOAST_READY_ID = 'toast-ready';
+/** How long a held toast waits for that ack before the banner takes it instead. */
+const ACK_WAIT_MS = 4000;
+/** Toasts held for a renderer that has not acked: `{ payload, fallback, timer }`. */
+const waitingToasts = new Set();
+let rendererReady = false;
+
+function runFallback(held) {
+  try {
+    if (typeof held.fallback === 'function') held.fallback();
+  } catch (err) {
+    diag('notification route: toast fallback failed —', (err && err.message) || 'error');
+  }
+}
+
+/** The renderer's toast layer is mounted: flush everything held for it. */
+function noteRendererReady() {
+  rendererReady = true;
+  for (const held of [...waitingToasts]) {
+    waitingToasts.delete(held);
+    if (held.timer) clearTimeout(held.timer);
+    if (pushToast(held.payload) === 0) runFallback(held);
+  }
+}
+
+/**
+ * Pushes a toast, or HOLDS it until the renderer acks.
+ * @param {object} payload
+ * @param {() => void} fallback raised when no renderer takes it within `ACK_WAIT_MS`.
+ * @returns {'delivered'|'queued'|'none'} 'none' = no window layer at all, so the caller falls
+ *   back NOW rather than wait on a renderer that does not exist.
+ */
+function deliverToast(payload, fallback) {
+  // A later window starts unmounted, whatever an old one once acked.
+  if (allWindows().length === 0) { rendererReady = false; return 'none'; }
+  if (rendererReady) return pushToast(payload) > 0 ? 'delivered' : 'none';
+  const held = { payload: payload, fallback: fallback, timer: null };
+  waitingToasts.add(held);
+  held.timer = setTimeout(() => {
+    if (!waitingToasts.delete(held)) return;
+    diag('notification route: no renderer ack —', payload.eventId || '?', '→ the banner takes it');
+    runFallback(held);
+  }, ACK_WAIT_MS);
+  // ⚠ UNREF'd: a held toast must never keep the app — or a test process — alive.
+  if (held.timer && typeof held.timer.unref === 'function') held.timer.unref();
+  return 'queued';
 }
 
 /**
@@ -136,11 +209,18 @@ function raise(eventId, spec) {
 
     const target = surface === 'both' ? (isAppFocused() ? 'popup' : 'mac') : surface;
     if (target === 'popup') {
-      const sent = pushToast({ eventId: eventId, title: spec.title, kind: 'incoming' });
-      // ⚠ A toast with no window to land in is a DROPPED notification. Fall back to the banner
-      // rather than lose the fact: this is the "popup only" case with the app closed, which the
-      // spec did not contemplate because it was written about a running app.
-      if (sent === 0) return macBanner(spec) ? 'mac' : 'none';
+      // ⚠ THE BODY RIDES ALONG. Dropping it made a mention toast say only the channel name, cost
+      // `decision_failed` its recovery sentence, and left POPUP-ONLY `tool_blocked` with no
+      // reachable surface for its body at all. The renderer draws the full card face when there
+      // is a body and the title-only one when there is not.
+      const payload = { eventId: eventId, title: spec.title, kind: 'incoming' };
+      if (spec.body) payload.body = spec.body;
+      // ⚠ A toast with no window to land in is a DROPPED notification: fall back to the banner
+      // rather than lose the fact (the "popup only" case with the app closed, which the spec did
+      // not contemplate). A window that exists but has not acked HOLDS it, same banner on timeout.
+      if (deliverToast(payload, () => macBanner(spec)) === 'none') {
+        return macBanner(spec) ? 'mac' : 'none';
+      }
       return 'popup';
     }
     return macBanner(spec) ? 'mac' : 'none';
@@ -182,23 +262,34 @@ function raise(eventId, spec) {
  *              harmless by construction, which is why `peer_ask` and `draft_reply` may use it
  *              while their decisions ("Launch agent", "Send") stay on the banner.
  *   'resume' — RESUMES THE OPERATOR'S OWN PARKED SESSION (`session_resume`). This one DOES act,
- *              and it is allowed to because it is not a consent decision: it starts the
- *              operator's own agent, exactly as the New Agent button does, there is no
- *              auto-deny contract behind it, and ignoring it leaves the session parked — which
- *              is precisely today's behaviour, so a missed toast decides nothing.
- *              It is NOT a precedent for putting "Send" or "Allow" in a toast: those answer
- *              somebody else's pending request, and a 4-second window to answer one is the
- *              thing the spec refused.
+ *              and may because it is not a consent decision: it starts the operator's own agent
+ *              exactly as the New Agent button does, no auto-deny contract sits behind it, and
+ *              ignoring it leaves the session parked — precisely today's behaviour, so a missed
+ *              toast decides nothing. NOT a precedent for "Send" or "Allow" in a toast: those
+ *              answer somebody else's pending request, and a 4-second window to answer one is
+ *              the thing the spec refused.
  */
 const pendingOpens = new Map();
 let nextOpenId = 1;
 // A toast the operator never pressed is not a leak worth keeping: drop the closure after this.
 const OPEN_TTL_MS = 120000;
+// ⚠ A STICKY TOAST OUTLIVES THAT BY A DAY (`incoming-toasts.tsx › STICKY_MS` = 24h). Sweeping its
+// closure at 120s left "Resume" on screen as a DEAD BUTTON, with the renderer's `.catch(()=>{})`
+// hiding the miss. So a sticky entry gets a ceiling the toast cannot outlive — still a ceiling,
+// because an unbounded map is a shape this tree has been bitten by.
+const STICKY_OPEN_TTL_MS = 25 * 60 * 60 * 1000;
 /** Truthy, and NOT a Notification: what a toast-raised actionable event answers. */
 const TOAST_RAISED = { surface: 'popup' };
+/**
+ * Truthy, and NOT a Notification: the operator MUTED this event, so no surface was raised.
+ * ⚠ DISTINCT FROM `null` ("no surface exists at all") — `trigger.js › handleTrigger` reads that
+ * difference to decide whether a peer's ask may be consumed.
+ */
+const MUTED = { surface: 'none', muted: true };
 
 function sweepOpens(now) {
-  for (const [id, e] of pendingOpens) if (now - e.at > OPEN_TTL_MS) pendingOpens.delete(id);
+  const ttlOf = (e) => (e.sticky === true ? STICKY_OPEN_TTL_MS : OPEN_TTL_MS);
+  for (const [id, e] of pendingOpens) if (now - e.at > ttlOf(e)) pendingOpens.delete(id);
 }
 
 /**
@@ -208,12 +299,21 @@ function sweepOpens(now) {
  * @returns {boolean} whether an entry was found.
  */
 function openFromToast(openId) {
+  // The renderer's "my toast layer is mounted" ack rides this op — see `TOAST_READY_ID`.
+  if (openId === TOAST_READY_ID) {
+    noteRendererReady();
+    return true;
+  }
   sweepOpens(Date.now());
   const entry = pendingOpens.get(openId);
   if (!entry) return false;
   pendingOpens.delete(openId);
+  // ⚠ AN "Open" THAT CANNOT OPEN ANYTHING IS NOT `{ ok: true }`. A handle whose closure was never
+  // given (or was lost to a shape change) used to answer success, so a button that did nothing
+  // reported that it had worked. A closure that RUNS and throws still counts: it was there.
+  if (typeof entry.fn !== 'function') return false;
   try {
-    if (typeof entry.fn === 'function') entry.fn();
+    entry.fn();
   } catch (err) {
     diag('notification route: toast open failed —', (err && err.message) || 'error');
   }
@@ -226,9 +326,10 @@ function openFromToast(openId) {
  * @param {string} eventId a registry id
  * @param {{title: string, body: string, actionText: string, onAffirm?: () => void,
  *          onOpen?: () => void, bannerAlways?: boolean}} spec
- * @returns {object|null} the Notification when a banner was raised, a truthy sentinel when a
- *   toast was, `null` when nothing could be raised. ⚠ CALLERS MAY TEST THIS FOR TRUTHINESS AND
- *   ONE OF THEM DENIES A TOOL ON FALSY — never return null merely because Dopl is focused.
+ * @returns {object|null} the Notification when a banner was raised, `TOAST_RAISED` when a toast
+ *   was, `MUTED` when the operator silenced the event, `null` ONLY when no surface exists.
+ *   ⚠ CALLERS MAY TEST THIS FOR TRUTHINESS AND ONE OF THEM DENIES A TOOL ON FALSY — never return
+ *   null merely because Dopl is focused, and never because a switch is off.
  */
 function raiseActionable(eventId, spec) {
   try {
@@ -238,7 +339,11 @@ function raiseActionable(eventId, spec) {
     // ⚠ `approval` is LOCKED ON in the registry, so this can never mute the tool gate. If a
     // future edit unlocks it, muting it would start auto-denying held tools — which is why
     // test/notification-route.test.mjs pins the lock and this contract together.
-    if (!prefs.allowsIn(prefs.getPrefs(), eventId)) return null;
+    // ⚠ AND MUTED IS NOT `null`. Null made a muted `peer_ask` indistinguishable from a platform
+    // that can raise nothing, and `handleTrigger` must tell them apart: a mute silences the
+    // surface and nothing else, a true no-surface means the ask is seen by nobody. Truthy either
+    // way, so no caller can read a mute as "no surface exists".
+    if (!prefs.allowsIn(prefs.getPrefs(), eventId)) return MUTED;
 
     const banner = () => require('./notify-action').buildActionNotification({
       title: spec.title,
@@ -254,19 +359,17 @@ function raiseActionable(eventId, spec) {
     const id = 'open-' + String(nextOpenId++);
     sweepOpens(Date.now());
     pendingOpens.set(id, { fn: spec.onOpen, at: Date.now() });
-    const sent = pushToast({
+    // No window took it, so there is no popup — fall back to the banner rather than ask nobody.
+    // A window that has not acked yet gets it HELD, with the same banner as the timeout fallback.
+    const went = deliverToast({
       eventId: eventId,
       title: spec.title,
       body: spec.body,
       openId: id,
       actionLabel: 'Open',
       kind: 'incoming',
-    });
-    // No window took it, so there is no popup — fall back to the banner rather than ask nobody.
-    if (sent === 0) {
-      pendingOpens.delete(id);
-      return banner();
-    }
+    }, () => { pendingOpens.delete(id); banner(); });
+    if (went === 'none') { pendingOpens.delete(id); return banner(); }
     return TOAST_RAISED;
   } catch (err) {
     diag('notification route: actionable raise failed —', (err && err.message) || 'error');
@@ -334,8 +437,12 @@ function raiseCoalesced(eventId, build, windowMs) {
  * Popup-only per Samuel's spec, with a button that RESUMES — see the `pendingOpens` header for
  * why this one may act when "Send" and "Allow" may not. ⚠ LONG-LIVED: the toast must sit until
  * it is pressed or dismissed, not expire in four seconds, because it is raised ONCE at startup
- * and a missed one loses the offer until the next launch. Falls back to the banner when there is
- * no window to toast into (app starting hidden in the tray), which is the route's usual rule.
+ * and a missed one loses the offer until the next launch.
+ *
+ * ⚠ IT NEEDS A WINDOW THE OPERATOR CAN SEE, not merely a window. This was the ONE raise path that
+ * never consulted focus while its own comment claimed it detected the hidden case: with
+ * `openAsHidden` the window exists and is invisible, so it pushed into an unseen window on every
+ * cold start. An invisible (or absent) window layer sends this to the banner, the route's rule.
  *
  * @param {{title: string, body?: string, onResume: () => void}} spec
  * @returns {'popup'|'mac'|'none'}
@@ -344,10 +451,16 @@ function raiseResumeOffer(spec) {
   try {
     if (!spec || !spec.title || typeof spec.onResume !== 'function') return 'none';
     if (!prefs.allowsIn(prefs.getPrefs(), 'session_resume')) return 'none';
+    const toBanner = () =>
+      (macBanner({ title: spec.title, body: spec.body, onClick: spec.onResume }) ? 'mac' : 'none');
+    // Starting hidden in the tray must not lose the offer, and must not pretend it was shown.
+    if (!hasVisibleWindow()) return toBanner();
     const id = 'resume-' + String(nextOpenId++);
     sweepOpens(Date.now());
-    pendingOpens.set(id, { fn: spec.onResume, at: Date.now() });
-    const sent = pushToast({
+    // ⚠ `sticky` HERE TOO, not only in the payload: the sweep's 120s default would otherwise drop
+    // this closure while the 24h toast still showed its button.
+    pendingOpens.set(id, { fn: spec.onResume, at: Date.now(), sticky: true });
+    const went = deliverToast({
       eventId: 'session_resume',
       title: spec.title,
       body: spec.body,
@@ -356,11 +469,8 @@ function raiseResumeOffer(spec) {
       // The renderer keeps this one on screen until it is answered or dismissed.
       sticky: true,
       kind: 'incoming',
-    });
-    if (sent === 0) {
-      pendingOpens.delete(id);
-      return macBanner({ title: spec.title, body: spec.body, onClick: spec.onResume }) ? 'mac' : 'none';
-    }
+    }, () => { pendingOpens.delete(id); toBanner(); });
+    if (went === 'none') { pendingOpens.delete(id); return toBanner(); }
     return 'popup';
   } catch (err) {
     diag('notification route: resume offer failed —', (err && err.message) || 'error');
@@ -371,11 +481,16 @@ function raiseResumeOffer(spec) {
 module.exports = {
   TOAST_EVENT,
   TOAST_RAISED,
+  TOAST_READY_ID,
+  MUTED,
+  ACK_WAIT_MS,
   COALESCE_MS,
   raiseCoalesced,
   raiseResumeOffer,
   isAppFocused,
+  hasVisibleWindow,
   pushToast,
+  noteRendererReady,
   raise,
   raiseActionable,
   openFromToast,
