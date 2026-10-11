@@ -286,6 +286,15 @@
   /* The segmented fill: one gray for every switcher (`.seg-pill`, `.seg-track`). */
   --seg-fill: #e9eaec;
 
+  /* The WHITE PANEL THAT SITS ON GLASS — the landing page's ontology window,
+     and onboarding's card on the auth banner. One recipe so the two cannot
+     drift. ⚠ MIRRORED in `apps/desktop-ui/src/styles/tokens.css`: the desktop
+     SPA never loads this file, so edit both (same convention as the other
+     ports noted in that file's kit.css). */
+  --glass-card-fill: #ffffff;
+  --glass-card-radius: 14px;
+  --glass-card-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+
   /* The raised-light face, as parts: `.auth-btn-3d-light` and `.raised-tab` are one elevation
      built from these, so a scoped override can wear it without forking a hex. */
   --raised-light-face: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);

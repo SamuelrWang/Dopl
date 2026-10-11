@@ -1,1 +1,1 @@
-export { AuthSplitLayout, AUTH_GLASS_SLOT_ID } from "./auth-split-layout";
+export { AuthSplitLayout, AUTH_GLASS_SLOT_ID, type AuthGlassPose } from "./auth-split-layout";

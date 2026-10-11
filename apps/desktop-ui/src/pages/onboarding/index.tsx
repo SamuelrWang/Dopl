@@ -1,4 +1,4 @@
-import { Navigate, useNavigate } from "react-router";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { OnboardingFlowCore } from "@/features/onboarding/components/onboarding-flow-core";
 import { useApiQuery } from "#/hooks/use-api-query";
 import { PageError, PageLoading, isUnauthorized } from "#/components/page-states";
@@ -7,6 +7,17 @@ import { ONBOARDING_STATE_PATH } from "#/pages/boot/use-boot-state";
 // Same bundled banner the signed-out screen passes, same reason: shared layout's
 // default is a web-only `public/` path (see that file).
 import frameworkBanner from "#/assets/framework-banner.jpg";
+// Same mark, same rounded app-icon treatment as the signed-out screen's lockup
+// (`pages/boot/signed-out-screen.tsx`). `?inline` for the same reason it is
+// there: a packaged `file://` document cannot fetch a hashed asset path.
+import doplMark from "#/assets/dopl-mark.png?inline";
+
+/** The brand mark, left of the wordmark in the onboarding lockup. */
+const BRAND_MARK = (
+  // next/image forbidden — no Next runtime in this SPA.
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src={doplMark} alt="" draggable={false} className="auth-logo-3d h-8 w-8 rounded-[8px]" />
+);
 
 /**
  * /onboarding — first-run flow. ⚠ The one page OUTSIDE `/:workspaceSegment`:
@@ -28,9 +39,36 @@ import frameworkBanner from "#/assets/framework-banner.jpg";
  */
 export default function OnboardingPage() {
   const navigate = useNavigate();
+  const [search] = useSearchParams();
   const state = useApiQuery<{ isOnboarded: boolean; surveyCompleted?: boolean }>(
     ONBOARDING_STATE_PATH
   );
+
+  /**
+   * 🔒 `#/onboarding?preview=1` — COPY REVIEW ONLY, and only in a dev build:
+   * `import.meta.env.DEV` is compile-time, so the packaged renderer cannot
+   * reach this branch no matter what a URL says. It skips the already-onboarded
+   * bounce below so these screens can be read by someone who finished
+   * onboarding long ago, and hands the core `previewOnly`, which makes every
+   * step render and WRITE NOTHING. No account state moves.
+   */
+  const preview = import.meta.env.DEV && search.get("preview") === "1";
+
+  // Preview renders on its own: the state read below decides signed-out vs
+  // bounce-to-home, and neither question applies when nothing is being
+  // written. Skipping it means the screens come up in a plain browser tab too,
+  // where this page has no session.
+  if (preview) {
+    return (
+      <OnboardingFlowCore
+        previewOnly
+        initialStep="survey"
+        brand={BRAND_MARK}
+        bannerSrc={frameworkBanner}
+        onDone={() => {}}
+      />
+    );
+  }
 
   // ⚠ Outside the workspace shell, so these render on the raw body — the dark
   // landing backdrop, where token text color is near-black on near-black. Pin
@@ -58,6 +96,7 @@ export default function OnboardingPage() {
   return (
     <OnboardingFlowCore
       initialStep={state.data?.surveyCompleted ? "connect" : "survey"}
+      brand={BRAND_MARK}
       bannerSrc={frameworkBanner}
       // The server answers `/home` for a home space — a ROOT SPA route,
       // not `/{segment}/overview` (`onboarding/server/service.ts ›

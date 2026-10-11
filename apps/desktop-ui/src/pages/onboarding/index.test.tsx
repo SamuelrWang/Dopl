@@ -118,7 +118,7 @@ describe("onboarding page", () => {
     expect(await screen.findByText("Connected")).toBeInTheDocument();
   });
 
-  it("the connect step shows a bar per runtime ABOVE the MCP connect, live, and never gates Continue", async () => {
+  it("the connect step shows NO runtime sign-in bars, even when runtimes report in, and never gates Continue", async () => {
     type Row = RuntimeCredentialStatus;
     const row = (runtimeId: string, label: string, state: Row["state"]): Row => ({ runtimeId, label, state, prompt: false });
     let push: (p: { runtimes: Row[] }) => void = () => {};
@@ -137,15 +137,21 @@ describe("onboarding page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    const heading = await screen.findByText("Connect Your Agent");
-    const bars = await screen.findByText("Claude Code");
-    expect(bars.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText("Sign-in expired")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Sign in to Claude Code" }));
-    expect(signIn).toHaveBeenCalledWith("claude");
+    await screen.findByText("Connect Your Agent");
+
+    // ⚠ The bridge above DOES report two runtimes, one of them expired — the
+    // bars are absent because onboarding no longer renders them (Samuel
+    // #3133: Claude and Codex ship inside the app), not because there was
+    // nothing to show. Pushing a live status change must not conjure them
+    // either. The component itself still exists for the post-onboarding popup.
+    expect(screen.queryByText("Claude Code")).toBeNull();
+    expect(screen.queryByText("Sign-in expired")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign in to Claude Code" })).toBeNull();
     act(() => push({ runtimes: [row("claude", "Claude Code", "signing-in"), row("codex", "Codex", "expired")] }));
-    expect(screen.getByRole("button", { name: "Signing in…" })).toBeDisabled();
-    // Continue waits on the MCP connect alone: nobody is signed in to a runtime here.
+    expect(screen.queryByText("Claude Code")).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
+
+    // Continue still waits on the MCP connect alone.
     await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
   });
 

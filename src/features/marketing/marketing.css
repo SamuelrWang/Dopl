@@ -1339,9 +1339,12 @@
   margin: 22px;
   height: var(--lp-ont-window-h);
   display: flex;
-  background: #ffffff;
-  border-radius: 14px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  /* ⚠ THE SOURCE OF TRUTH FOR THESE THREE IS `globals.css ›
+     --glass-card-*`, shared with onboarding's card on the auth banner so the
+     two white-panel-on-glass surfaces cannot drift. Values unchanged. */
+  background: var(--glass-card-fill);
+  border-radius: var(--glass-card-radius);
+  box-shadow: var(--glass-card-shadow);
 }
 /* The tab-swap surface INSIDE the fixed white panel — the component keys THIS
    per stage, so only the contents fade on a tab switch while the panel itself

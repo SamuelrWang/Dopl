@@ -6,7 +6,6 @@ import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildConnectPrompt } from "../bootstrap-prompt";
 import { getAppOrigin } from "@/shared/lib/app-origin";
-import { RuntimeCredentialBars } from "@/features/channels/components/runtime-credential-bars";
 
 interface McpConnectStepProps {
   connected: boolean;
@@ -38,8 +37,10 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
 
   return (
     <div>
-      {/* Dopl's own runtime sign-ins, above the MCP connect; never required to continue. */}
-      <RuntimeCredentialBars className="mb-8" />
+      {/* ⚠ NO RUNTIME SIGN-IN BARS HERE (Samuel #3133). Claude and Codex ship
+          inside the app, so onboarding has nothing to ask for. The component
+          stays in the tree on purpose — it moves to a post-onboarding popup,
+          so do not delete `features/channels/components/runtime-credential-bars`. */}
       <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
         Connect Your Agent
       </h2>
