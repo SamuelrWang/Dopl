@@ -106,6 +106,44 @@ test("the mint and the revoke derive their label from ONE function", async () =>
   assert.deepEqual(del.opts.body, { label: "Dopl Desktop CLI (Mint-Host)" }, "the revoke presents the minted label");
 });
 
+test("ONE label recipe, behaviourally: a hostname that throws still mints, and every reader agrees", async () => {
+  // Restores the pin the D04 split dropped (the old `!/hostname\(\)/` probe on obtainDeviceToken):
+  // `deviceLabel` is the only place the label is built, and it is the one that GUARDS a throwing
+  // `os.hostname()`. A recipe inlined at the mint site would either skip that guard (the mint
+  // throws, ensure answers '') or be a second copy (the single-source check below).
+  const world = deviceTokenWorld({
+    hostname: () => { throw new Error("hostname unavailable"); },
+    fetch: (_p, o) => (o.method === "POST"
+      ? minted({ token: "dopl_at_new", expiresAt: Date.now() + 90 * 86400e3 })()
+      : { ok: true, status: 200, json: async () => ({ ok: true, revoked: 1 }) }),
+  });
+  assert.equal(await world.lifecycle.ensureDeviceToken(), "dopl_at_new", "a throwing hostname must not stop the mint");
+  const post = world.calls.fetches.find((f) => f.opts.method === "POST");
+  assert.ok(post, "control: the mint request left");
+  assert.deepEqual(post.opts.body, { label: "Dopl Desktop CLI" }, "the mint presents deviceLabel()'s fallback");
+  assert.equal(world.stored().label, "Dopl Desktop CLI", "…and persists exactly that label");
+  // A label-less record (pre-label build) links and revokes under the SAME recipe.
+  const legacy = deviceTokenWorld({
+    record: { token: "dopl_at_old", expiresAt: Date.now() + 30 * 86400e3 },
+    hostname: () => { throw new Error("hostname unavailable"); },
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({ ok: true, revoked: 1 }) }),
+  });
+  assert.deepEqual(legacy.lifecycle.deviceTokenLink(), { tokenLabel: "Dopl Desktop CLI" });
+  assert.equal(await legacy.lifecycle.revokeDeviceToken(), "revoked");
+  assert.deepEqual(legacy.calls.fetches[0].opts.body, { label: "Dopl Desktop CLI" });
+});
+
+test("ONE label recipe, single source: the label is built in exactly one place", () => {
+  // Behaviour cannot tell a byte-identical second copy from a call, so the source says it:
+  // `hostname(` and the label literal each appear once in the lifecycle module, inside deviceLabel.
+  const src = codeOf(M("mcp-device-token-lifecycle.js")); // comments stripped: prose may name hostname()
+  const label = fnOf(src, "deviceLabel");
+  assert.match(label, /hostname\(\)/, "control: deviceLabel reads the hostname");
+  assert.equal(src.match(/hostname\(/g).length, 1, "a second hostname() read is a second label recipe");
+  assert.equal(src.match(/[`']Dopl Desktop CLI/g).length, 2, "the two literals (with and without host) live in deviceLabel only");
+  assert.equal(label.match(/[`']Dopl Desktop CLI/g).length, 2);
+});
+
 test("FIX M4: no cached token reports 'none', never a revoke we did not perform", async () => {
   // "We hold no copy" is not "the credential is dead" — the local copies may have been
   // cleared by an earlier sign-out whose revoke failed while the 90-day row stayed live.

@@ -315,6 +315,19 @@ test("C1: the accessor decrypts once and memoizes; nothing usable reads as ''", 
   }
 });
 
+test("C1: a fresh mint refreshes a WARM memo, so the next spawn carries the new bearer", async () => {
+  // Pins mcp-device-token-lifecycle.js › obtainDeviceToken's `spawnToken = String(rec.token)`:
+  // without it the memo keeps serving the token the mint just revoked server-side.
+  const world = deviceTokenWorld({
+    record: { token: "dopl_at_old", expiresAt: Date.now() + 86400e3 }, // inside the 7-day reuse margin
+    fetch: async () => ({ ok: true, status: 200,
+      json: async () => ({ token: "dopl_at_new", expiresAt: Date.now() + 90 * 86400e3 }) }),
+  });
+  assert.equal(world.config.deviceTokenForSpawn(), "dopl_at_old", "control: the memo is warm on the old token");
+  assert.equal(await world.lifecycle.ensureDeviceToken(), "dopl_at_new", "control: the near-expiry record re-minted");
+  assert.equal(world.config.deviceTokenForSpawn(), "dopl_at_new", "the warm memo now serves the fresh bearer");
+});
+
 test("C1: the token is never written to disk in plaintext — by ANY path in this app", () => {
   // This used to read "…by the session path", with the CLI-path spawn file admitted as the one
   // remaining writer. S3 removed that writer, so the exemption is gone and the claim is total:
