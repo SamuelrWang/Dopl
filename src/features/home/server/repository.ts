@@ -195,8 +195,6 @@ export * from "./repository-containers";
 
 /* ------------------------------ unread -------------------------------- */
 
-// ⚠ **`repository-unread.ts` IS DELETED (Wave 3, R-26)** and so is the re-export
-// that stood here. Its two reads served the /home row's unread marks; that row is
-// `GET /api/channels?scope=account` now, the dot is `dto.ts › mapChannelRow`'s
-// `unread`, and the mention scan is `channels/server/repository-mentions.ts ›
-// listMentionStamps` — beside the inbox read it shares a predicate with.
+// ⚠ No unread reads here (R-26): the /home row is `GET /api/channels?scope=account`,
+// the dot is `dto.ts › mapChannelRow`'s `unread`, and the mention scan is
+// `channels/server/repository-mentions.ts › listMentionStamps`.

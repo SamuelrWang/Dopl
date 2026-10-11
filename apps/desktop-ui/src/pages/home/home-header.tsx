@@ -10,10 +10,8 @@ import { PAGE_ACTION_BTN } from "./panel-buttons";
  * /home's HEADER STRIP — the page's one primary action over the channel picker,
  * the four-face selector, search, and the operator's Profile pill.
  *
- * ⚠ ITS OWN FILE SINCE 2026-09-09 — `index.tsx` sits AT the 500-line cap
- * (`eslint.config.mjs › max-lines`, an error over `apps/*​/src/**`). This is
- * markup with one reason to change: what the strip HOLDS. No state lives here;
- * every value is still the page's.
+ * Markup with one reason to change: what the strip HOLDS. No state lives here;
+ * every value is the page's.
  */
 export function HomeHeader({
   identity,

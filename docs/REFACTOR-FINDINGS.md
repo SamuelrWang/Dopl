@@ -4624,7 +4624,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
     (`POST /api/agent-identities`, member+) — all three HIDDEN below the floor rather than
     disabled — and the header's click-to-edit, which becomes honest because
     `relationship-record.tsx` now passes the role the surface was defaulting to `"member"`.
-  - 🔒 **THE CONTESTED FALLBACK WAS RULED DOWN.** `types.ts › EMPTY_ROLE` is `guest` (rank 0):
+  - 🔒 **THE CONTESTED FALLBACK WAS RULED DOWN.** `EMPTY_ROLE` (home `types.ts`, since deleted with the home channel row, R-26 (b)) was `guest` (rank 0):
     a payload cached by the previous bundle carries no key, and a member loses two buttons for
     one paint rather than the surface asserting a permission nobody read. Pinned by
     `pages/home/home-caller-role.test.tsx`, whose stale fixtures DELETE the key (§8).

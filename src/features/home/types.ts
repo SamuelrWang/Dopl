@@ -1,12 +1,8 @@
 /**
  * Home surface contracts — what is LEFT of them.
  *
- * 🔒 **THE CHANNEL ROW IS GONE FROM THIS FILE (Wave 3, Samuel's ruling R-26 (b)).**
- * `HomeChannel`, `HomeChannelsPayload`, `HomePeer`, `HomePendingLink`,
- * `EMPTY_PEERS` and `EMPTY_ROLE` all stated a SECOND answer to *"which channels am
- * I in and what is their state"* — 15 fields against `Channel`'s 26, off a second
- * route, into a second client cache, with `favoritedAt` spelled differently (R-27)
- * and two hand-written cache-to-cache BRIDGES holding the two entries together.
+ * 🔒 **NO CHANNEL ROW HERE (Samuel's ruling R-26 (b)).** A home-shaped channel type
+ * was a SECOND answer to *"which channels am I in and what is their state"*.
  * **One projection**: `channels/types.ts › Channel`, read with
  * `GET /api/channels?scope=account`. The peer and the pending link moved with it —
  * `› ChannelPeer`, and `shared/links/types.ts › ChannelPendingLink`.

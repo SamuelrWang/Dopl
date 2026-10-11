@@ -17,11 +17,8 @@ export interface AccountRailProps {
   activeWorkspacePublicId: string | null;
   onNavigate: (path: string) => void;
   onCreateWorkspace: () => void;
-  // ⚠ `className?: string` STOOD HERE AND IS DELETED (2026-08-30). Its only
-  // purpose was /home passing `!bg-home-frame` to repaint the rail's backdrop;
-  // `.rail` paints `--home-frame` at the source now, so both mounts get the one
-  // slab and the escape hatch had no caller left. A backdrop prop on a chrome
-  // component is how the rail and the shell drifted apart in the first place.
+  // ⚠ No `className`/backdrop prop: `.rail` paints `--home-frame` at the source, so
+  // both mounts get one slab. A backdrop prop is how the rail and the shell drifted.
 }
 
 /**
@@ -56,9 +53,9 @@ export function AccountRail({
         <img src={doplMark} alt="" className={styles.homeMark} />
       </button>
 
-      {/* ⚠ A `role="presentation"` divider rule stood here and is DELETED — see
-          `account-rail.module.css`. The account/container boundary is the 11px
-          break `.workspaces` opens with; the selected tile owns the only line. */}
+      {/* ⚠ No divider element: the account/container boundary is the 11px break
+          `.workspaces` opens with (`account-rail.module.css`); the selected tile
+          owns the only line. */}
       <div className={styles.workspaces}>
         {workspaces.map((ws) => {
           const isActive = ws.publicId === activeWorkspacePublicId;
