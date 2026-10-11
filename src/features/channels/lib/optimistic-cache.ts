@@ -226,12 +226,8 @@ export function upsertThread(
  * DROP one thread row from the thread list — the optimistic half of the thread
  * DELETE (Samuel, 2026-08-21).
  *
- * ⚠ IT STOOD HERE, WAS DELETED ON 2026-08-20 FOR HAVING NO CALLER, AND THE
- * DELETION NOTE SAID "none possible: a thread has no delete route". That was true
- * of the tree and false a day later — the route exists now
- * (`DELETE /api/channels/[channelId]/tasks/[taskId]`). ⚠ Still NOT a finished
- * state: a thread has no `closed`, and this removes the row rather than marking
- * it (INVARIANTS §5).
+ * ⚠ Not a finished state: a thread has no `closed`, and this removes the row rather than
+ * marking it (INVARIANTS §5).
  */
 export function dropThread(
   cache: ThreadsCache | undefined,
@@ -360,12 +356,6 @@ export function setFavorite(
     myFavoritedAt: favorited ? now : null,
   });
 }
-
-// ⚠ `TrustCache`, `addTrustRuleRow` AND `removeTrustRuleRow` STOOD HERE AND ARE
-// DELETED (Samuel, 2026-08-22). They were the optimistic half of the "Always
-// allow" roster — standing consent for an INBOUND ask, which is the decision
-// that ruling retired. Their one caller was the `trust` mutation in
-// `use-channel-preference-writes.ts`, deleted with them.
 
 /**
  * A decided consent request leaves the inbox at once. The inbox only holds

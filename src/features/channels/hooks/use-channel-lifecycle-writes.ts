@@ -56,14 +56,8 @@ import type { Channel, ChannelVisibility } from "../types";
  *    `removeQueries` messages/members/threads — and NEVER for a DM.
  */
 
-// ⚠ **`ArchiveDraft` AND `archiveConfig` ARE DELETED (Samuel's ruling R-21,
-// 2026-09-17): *"a user can delete a channel; no point in archives."* The whole
-// feature went — the Settings row, this write, the `archived` field on
-// `ChannelUpdateSchema`, the `archived_at` stamp in `service-writes-channel.ts`
-// and the list filter that hid stamped rows. ⚠ **The COLUMN is still there** and
-// the rows that carry a stamp now simply appear as ordinary channels; dropping it
-// is a later wave's migration (see the WRITTEN-NOT-APPLIED file under
-// `supabase/migrations/`).
+// ⚠ No archive write (R-21, 2026-09-17). The `archived_at` COLUMN still exists and stamped rows
+// read as ordinary channels; dropping it is a later migration (written, not applied).
 
 interface VisibilityDraft {
   channelId: string;
@@ -120,23 +114,9 @@ function failed(err: unknown, fallback: string) {
   toast({ title: userFacingMessage(err, fallback) });
 }
 
-// ⚠ **`ChannelAgentSettingsDraft` AND `channelAgentSettingsConfig` ARE DELETED (2026-09-07,
-// Samuel's ruling on items 10 and 11).** They were the ONE draft and ONE config behind BOTH
-// channel-agent settings, held together because the two were one PATCH to one row behind one
-// manage gate. Neither setting survives on the channel:
-//
-//   · `agentPosture` — the posture CEILING — went on 2026-09-06 (items 12, 13, 14). No room
-//     bounds a peer's agent on any axis now.
-//   · `defaultResponderAgentName` — the room-wide responder pin — goes here. The question is
-//     PER MEMBER (*"if there's another member in the room, their last agent address would be
-//     different from my last agent address"*), so its write is a `PATCH /members` against the
-//     caller's own row and lives with the other per-member preferences in
-//     `use-channel-preference-writes.ts`, not in this lifecycle hook.
-//
-// ⚠ WHAT THE DELETION MUST NOT TAKE WITH IT is the rule this docblock stated, because the rest
-// of the file still keeps it: **`null` is a VALUE on every field and `undefined` is
-// "unchanged"** (`service-writes.ts › updateChannel`). It survives on `infoCard`; it survived on
-// `archived` too until R-21 deleted that field (2026-09-17).
+// ⚠ No channel-wide agent settings (2026-09-07, items 10-11): the responder pin is per member
+// (`use-channel-preference-writes.ts`). The rule that survives on every field here:
+// **`null` is a VALUE and `undefined` is "unchanged"** (`service-writes.ts › updateChannel`).
 
 export function visibilityConfig(
   deps: LifecycleWriteDeps
@@ -310,10 +290,6 @@ export function useChannelLifecycleWrites({
     channelRequest,
     leaveConfig(deps)
   );
-  // ⚠ THE `agentSettings` MUTATION IS DELETED (2026-09-07, items 10 and 11) — its last field
-  // went with the room-wide responder, and a mutation whose draft is only a `channelId` is a
-  // PATCH with nothing to say.
-
   return {
     // ⚠ A DM is always private (DB CHECK). Guarded here as well as in the menu,
     // so nothing can send a request the server must 400.
