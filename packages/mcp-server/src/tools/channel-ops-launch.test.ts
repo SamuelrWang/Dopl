@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { LaunchDirective, LaunchRefusalReason } from "@dopl/client";
 import { channelDoctrine } from "./channel-doctrine";
 import { WRITE_RESULT_MAX_CHARS } from "./channel-facts";
+import { DIRECTIVE_WAIT_CAP_MS, RETRY_AFTER_EXPIRY } from "./channel-directive-hold";
 import {
   created,
   directive,
@@ -231,7 +232,7 @@ describe("REFUSED — nine words, nine next actions", () => {
   });
 });
 
-describe("TIMEOUT — pending, and the strongest possible do-not-re-issue", () => {
+describe("TIMEOUT — the two non-terminal answers, which may never read alike", () => {
   const pending = polls({ status: "pending" });
 
   it("gives the directive id and the expiry", async () => {
@@ -241,16 +242,41 @@ describe("TIMEOUT — pending, and the strongest possible do-not-re-issue", () =
     expect(out.startsWith("pending ")).toBe(true);
   });
 
-  // A second call starts a second agent on the same work, and nothing tells them apart afterwards.
-  it("REGRESSION: says a timeout is NOT a refusal, and forbids re-issuing", async () => {
+  /**
+   * THE SILENT DROP (2026-10-11). Both non-terminal statuses returned ONE line saying
+   * `retry=no` — the strongest do-not-re-issue the vocabulary has — and for an UNCLAIMED row
+   * that was an instruction to wait forever on a request already dead on arrival: the hold caps
+   * at 30s, the row lives 120s, `expired` is a READ-TIME verdict with no cron behind it, and no
+   * row is ever written `expired` (prod: 239 rows, 0 expired). Nothing reports the lapse, so
+   * the result is the only place it can be said.
+   */
+  it("REGRESSION: an UNCLAIMED hold says nobody took it, names the lapse, and says re-asking AFTER it is right", async () => {
     const out = await text(pending, { waitMs: 0 });
-    expect(out).toContain("retry=no");
     expect(out.startsWith("pending ")).toBe(true);
+    expect(out).toContain("claimed=no");
+    // ⚠ NOT A BARE `no`: the row is alive NOW (a second ask is a second agent) and dead LATER,
+    // and one word has to carry both halves.
+    expect(out).toContain(`retry=${RETRY_AFTER_EXPIRY}`);
+    expect(out).not.toContain("retry=no");
+    // The three things no `key=value` pair can say.
+    expect(out).toContain("NOT CLAIMED");
+    expect(out).toContain("NOTHING WILL REPORT THAT EXPIRY");
+    expect(out).toContain("Asking again AFTER it is the correct move");
+    // ⚠ With the INSTANT in it, so "after that" is actionable rather than a feeling.
+    expect(out).toContain("until 2026-08-22T12:02:00.000Z");
+    // Still not a refusal, and still not the old shouting.
     expect(out).not.toContain("refused");
     expect(out).not.toContain("DO NOT ISSUE THIS CALL AGAIN");
     expect(channelDoctrine()).toContain(
       "re-issuing without the SAME `client_msg_id` starts a SECOND agent",
     );
+  });
+
+  it("THE HOLD CANNOT OUTLIVE THE ROW, which is why that branch has to be honest", () => {
+    // 30s against a 120s TTL (`src/features/channels/constants.ts › LAUNCH_DIRECTIVE_TTL_MS` —
+    // another package's constant, so the number is restated rather than imported). A FIRST ask
+    // can therefore never reach the `expired` branch: it is converged-retry-only.
+    expect(DIRECTIVE_WAIT_CAP_MS).toBeLessThan(120_000);
   });
 
   it("says where the answer will show up instead", async () => {
@@ -260,11 +286,16 @@ describe("TIMEOUT — pending, and the strongest possible do-not-re-issue", () =
     );
   });
 
-  it("a CLAIMED-but-undecided hold says a machine has taken it", async () => {
+  it("a CLAIMED hold is its OWN answer: a machine has it, and a decision is imminent", async () => {
     // A real poll: `waitMs: 0` renders the create result and never reads the row. 100ms is one poll.
     const out = await text(polls({ status: "claimed" }), { waitMs: 100 });
-    expect(out).toContain("claimed=yes");
+    expect(out.startsWith("claimed ")).toBe(true);
+    // The one of the two that really does mean "do not ask again" — something is spawning.
     expect(out).toContain("retry=no");
+    expect(out).toContain("imminent");
+    // ⚠ AND IT MAY NEVER READ AS THE UNCLAIMED ONE. Conflating the two IS the bug.
+    expect(out).not.toContain("pending");
+    expect(out).not.toContain(RETRY_AFTER_EXPIRY);
   });
 
   // The one arm a caller may legitimately re-issue, so it states `retry=once` rather than nothing.
@@ -277,12 +308,14 @@ describe("TIMEOUT — pending, and the strongest possible do-not-re-issue", () =
 
   it("a FAILED poll ends on the PENDING shape, not on an error", async () => {
     // The request is filed and may still run; reporting a failure over it is the worse answer.
+    // ⚠ The facts are read off the LAST ROW SEEN, as everywhere else in this op — a poll that
+    // never answered cannot promote the row, so the unclaimed wording is the honest one.
     const out = await text(
       client({ getLaunchDirective: vi.fn(async () => { throw new Error("connection reset"); }) }),
       { waitMs: 5 }
     );
     expect(out.startsWith("pending ")).toBe(true);
-    expect(out).toContain("retry=no");
+    expect(out).toContain(`retry=${RETRY_AFTER_EXPIRY}`);
     expect(out).not.toContain("connection reset");
   });
 });

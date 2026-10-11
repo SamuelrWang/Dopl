@@ -13,6 +13,11 @@ import "server-only";
  * somebody ELSE'S exchange (declined, finished, proposed-for-close, reopened)
  * without touching the work it describes.
  *
+ * ⚠ ONE KEY ANSWERS TO A DIFFERENT GATE, AND NEVER TO A WEAKER STRIP:
+ * `session_ended` is re-stamped on the server-stamped `session_id` rather than on
+ * a thread tag, because a session ending is not a thread outcome (its own note
+ * below, and the fold in `service-writes-metadata.ts`).
+ *
  * ⚠ `channel_messages.kind` carries a CHECK constraint, so each marker buys a
  * distinction that would otherwise cost a migration deployed ahead of every
  * writer. That is why this list grows instead of the kind enum.
@@ -46,6 +51,12 @@ const CALM_FLAG_KEYS = [
   // failed"). ⚠ NOT read by `calmTerminalStatus` (which answers only for a
   // `task_failed`), and that is the point: a local session ending is not an
   // outcome for the shared thread.
+  // ⚠ **WHICH IS ALSO WHY ITS RE-STAMP GATE IS THE SESSION, NOT THE THREAD**
+  // (2026-10-11). Held to the five siblings' thread-tag gate, a CHANNEL-LEVEL
+  // session (`<channel>::<agent>`, which carries no thread tag by construction)
+  // could never say it had stopped — the flag was stripped and never re-stamped,
+  // silently, for every one of them. It re-stamps on the server-stamped
+  // `session_id` instead; no session id still means no stamp.
   "session_ended",
 ] as const;
 

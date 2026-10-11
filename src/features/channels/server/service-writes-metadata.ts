@@ -409,12 +409,41 @@ export async function resolvePostMetadata(
     if (task.target_user_id) metadata.taskTarget = task.target_user_id;
   }
 
-  // ⚠ Re-stamp only for the thread's own participants — which is the same
-  // question as "did a thread tag survive the gate above". Anything else (a
-  // foreign thread, unresolvable id, no thread) has no `taskId` left, so a
-  // fabricated outcome has nothing to attach to.
-  if (calmFlags.length > 0 && typeof metadata.taskId === "string") {
-    for (const key of calmFlags) metadata[key] = true;
+  // ⚠ TWO GATES, BECAUSE THE SIX CALM FLAGS ANSWER TWO DIFFERENT QUESTIONS
+  // (2026-10-11). Both re-stamp from a SERVER-held value only; neither admits a
+  // caller's claim.
+  //
+  //  · FIVE OF THEM (`declined` / `dropped` / `interrupted` / `capped` /
+  //    `ended`) describe a THREAD outcome, so they re-stamp only for the
+  //    thread's own participants — the same question as "did a thread tag
+  //    survive the gate above". Anything else (a foreign thread, unresolvable
+  //    id, no thread) has no `taskId` left, so a fabricated outcome has nothing
+  //    to attach to.
+  //  · `session_ended` IS NOT A THREAD OUTCOME, and gating it on a thread tag
+  //    was always wrong — `service-writes-metadata-markers.ts` says in as many
+  //    words that it is about ONE SESSION ending, rides a `task_progress` rather
+  //    than a `task_failed`, and is not read by `calmTerminalStatus`. The cost
+  //    was silent and total: a CHANNEL-LEVEL session (`<channel>::<agent>`,
+  //    no thread tag) could never report that it had stopped, so every such row
+  //    in prod carries `session_ended` NULL while every
+  //    `<channel>:<thread>:<agent>` row carries it. It now re-stamps on the
+  //    stamped `metadata.session_id` — the thing it actually describes —
+  //    INDEPENDENT of any thread tag.
+  //
+  // ⚠ UNFORGEABLE ON THE SAME TERMS AS THE OTHER FIVE: `session_id` was deleted
+  // from caller metadata above and re-stamped from `ctx.sessionId`, which comes
+  // from the `X-Dopl-Session-Id` header and never from the payload. NO SESSION
+  // ID => NO RE-STAMP, so a caller cannot narrate the end of a session it is not
+  // running, and a post that carries neither a session id nor a thread tag
+  // stamps nothing at all.
+  if (calmFlags.length > 0) {
+    const inOwnThread = typeof metadata.taskId === "string";
+    const inOwnSession = typeof metadata.session_id === "string";
+    for (const key of calmFlags) {
+      if (key === "session_ended" ? inOwnSession : inOwnThread) {
+        metadata[key] = true;
+      }
+    }
   }
 
   // Spawn-with-handoff, same discipline: only onto a thread tag the poster is

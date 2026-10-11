@@ -1,0 +1,63 @@
+-- ============================================================================
+-- `channel_launch_directives.requested_by_agent_id` — WHO FILED THE LAUNCH
+-- ============================================================================
+-- ⚠️ WRITTEN, NOT APPLIED (Samuel's standing gate on this directory).
+--
+-- ── THE DEFECT THIS COLUMN EXISTS FOR ──────────────────────────────────────
+-- A directive records WHOSE MACHINE is being asked (`operator_user_id`) and, since
+-- `20261006120000`, what the new agent should be CALLED (`agent_name`). It records
+-- nothing at all about the asker. An MCP launch is filed by an AGENT — one
+-- instance, with an id and a session — and that instance is dropped on the floor
+-- at create time.
+--
+-- The consequence is a notice that cannot be addressed. When the launched agent
+-- ends, or the row lapses unclaimed, there is no stored answer to "who was waiting
+-- for this?", so nothing can be sent back to the launcher by name: the only
+-- parties on the row are the operator and the agent that does not exist yet. An
+-- end notice therefore goes to the room or to nobody, and the launcher — the one
+-- process that is actually blocked on the answer — learns nothing.
+--
+-- ⚠ **A RUNTIME ADDRESSING FACT, NOT AN AUTHORIZATION FACT.** It may never become
+-- a permission: `operator_user_id` is the fence this table is read through, and
+-- the desktop re-checks ownership locally (`20260822160000` § RLS). An agent id is
+-- an eight-character instance handle that any process holding the operator's
+-- credential can name, so it answers "address the reply here" and nothing else.
+--
+-- ── WHAT THIS MIGRATION DOES AND DOES NOT DO ───────────────────────────────
+-- ⚠ ADDITIVE, NULLABLE, NO BACKFILL. Every existing row keeps NULL and NULL is a
+-- permanent legal value, not a gap waiting to be filled: the launcher of a row
+-- filed before this wave is unrecoverable (it was never recorded anywhere), and an
+-- older `@dopl/mcp-server` build in the field will keep filing rows without it
+-- (INVARIANTS §13 — an older peer is a supported peer). NULL reads as "not
+-- recorded", never as "filed by a human".
+--
+-- ⚠ NO RLS CHANGE IS NEEDED, STATED RATHER THAN OMITTED (`20260928130000`'s rule:
+-- an unstated absence is indistinguishable from a forgotten one). The column rides
+-- an EXISTING row whose only policy is the owner SELECT fenced on
+-- `operator_user_id = auth.uid()`, so it is readable by exactly the operator who
+-- was asked and nobody else. Writes on this table are service-role-only by design.
+--
+-- ⚠ NO CONSTRAINT, NO FK, NO INDEX, and each absence is a decision:
+--   · No FK to `channel_agents` — an agent instance is ephemeral and may be gone
+--     before the directive is decided, and a cascade from that table into this one
+--     would delete the request's own history. Every FK into `channels` is asserted
+--     CASCADE by `schema-sql.test.ts`; this edge is deliberately not an FK at all.
+--   · No kind fence — unlike `agent_name`, the asker is a fact about EVERY kind
+--     (`end` and `rename` are filed by an agent too), so pinning it to `launch`
+--     would have to be undone by the next wave that uses it.
+--   · No index — it is never filtered on. The addressing read starts from the row.
+--
+-- ⚠ **NOTHING READS IT YET, ON PURPOSE.** No code depends on this column until a
+-- follow-up wave wires the writer (the create path) and the reader (the end
+-- notice). Shipping the column first is what lets that wave be a code change
+-- against a schema already in place, rather than a schema change deployed ahead of
+-- every writer.
+
+-- ===========================================================================
+-- 1. THE COLUMN
+-- ===========================================================================
+ALTER TABLE public.channel_launch_directives
+  ADD COLUMN IF NOT EXISTS requested_by_agent_id TEXT;
+
+COMMENT ON COLUMN public.channel_launch_directives.requested_by_agent_id IS
+  'The agent INSTANCE that filed this directive (2026-10-11), so a runtime can address an end notice back to its launcher. An eight-character handle, or NULL for "not recorded" — rows filed before this wave, rows filed by an older client, and rows filed by a human. An ADDRESSING hint only: operator_user_id remains the fence, and nothing reads this column until the follow-up wave wires it.';
