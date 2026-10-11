@@ -27,8 +27,6 @@ export interface WorkspaceSwitcherCoreProps {
   /** Opens the WORKSPACES list; editing a workspace lives at `/{segment}/settings`. */
   onOpenSettings: (section: "workspaces") => void;
   onCreateWorkspace: () => void;
-  /** Web app uses it to enable its lazy fetch. */
-  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -45,7 +43,6 @@ export function WorkspaceSwitcherCore({
   onNavigate,
   onOpenSettings,
   onCreateWorkspace,
-  onOpenChange,
 }: WorkspaceSwitcherCoreProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -58,7 +55,6 @@ export function WorkspaceSwitcherCore({
 
   function setOpenState(next: boolean) {
     setOpen(next);
-    onOpenChange?.(next);
   }
 
   function close() {
