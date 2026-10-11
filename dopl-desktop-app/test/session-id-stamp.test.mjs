@@ -33,7 +33,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const LOADER = M(join("runtime", "claude", "loader.js"));
 const SPEC = M(join("runtime", "claude", "launch-spec.js"));
-const CONFIG = M("mcp-config.js");
+// The two modules that own the device token (cleanup D04 split the lifecycle out of mcp-config).
+const CONFIG = M("mcp-config.js") + "\n" + M("mcp-device-token-lifecycle.js");
 const STORE = M("session-store.js");
 const LEGACY = M("legacy-threads.js");
 

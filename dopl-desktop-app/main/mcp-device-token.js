@@ -1,25 +1,18 @@
 // THE DEVICE-TOKEN CACHE — the one electron-store handle, the two keys it writes under, and the
 // in-memory mint notifier. Nothing here decides anything: the LIFECYCLE (the mint, its sign-in
-// gate, the revoke, the sign-out teardown and the memoized bearer the session path reads) all
-// stays in `mcp-config.js`, which is the module that owns the policy.
+// gate, the revoke, the sign-out teardown and the memoized bearer the session path reads) is
+// `mcp-device-token-lifecycle.js`, re-exported by `mcp-config.js`.
 //
-// SPLIT NOTE (2026-10-11): extracted from mcp-config.js at the §2 500-line cap, the same shape
-// `mcp-cli-add.js` was extracted in (2026-07-31). `eslint.config.js` takes ZERO exemptions, so the
-// file had to come back under the cap and this is the cohesive block that could leave.
-// ⚠ THE STORAGE MOVED AND THE LIFECYCLE DID NOT, deliberately: every suite that drives the
-// lifecycle slices those function bodies out of `main/mcp-config.js` BY NAME and evaluates them
-// (device-token-no-cli, mcp-entry-origin, auth-signed-in, device-token-revoke,
-// device-token-revoke-count, device-identity, sdk-mcp-token). `loadDeviceToken` is INJECTED as a
-// free variable by every one of those harnesses, which is exactly why it is the half that could
-// move without a test change — and why moving a minting or revoking function here would not be a
-// refactor at all, but a rewrite of pins in files this change does not own.
+// SPLIT NOTE: extracted from mcp-config.js at the 500-line cap (2026-10-11, f96e7f07); the
+// lifecycle followed in cleanup D04 the same night, with its tests moved from source slices to
+// the real modules (`test/_device-token-harness.mjs`).
 //
-// ⚠ ONE INSTANCE, WHICH IS THE WHOLE POINT OF THE SPLIT. `mcp-config.js` takes these names back by
-// destructuring this module — the `auth.js` ← `auth-store.js` pattern — so the handle it deletes
-// keys through and the Set it notifies are the objects declared HERE. A second `new Store()` would
-// be a second cache under the same two keys; a copied `mintListeners` would be a listener that
-// never fires, because `device-registry.js` registers through `onDeviceTokenMinted` on one side of
-// the split while the mint calls `notifyMinted` on the other.
+// ⚠ ONE INSTANCE, WHICH IS THE WHOLE POINT OF THE SPLIT. The lifecycle and `mcp-config.js` take
+// these names back by destructuring this module — the `auth.js` ← `auth-store.js` pattern — so the
+// handle `clearDeviceToken` deletes keys through and the Set the mint notifies are the objects
+// declared HERE. A second `new Store()` would be a second cache under the same two keys; a copied
+// `mintListeners` would be a listener that never fires, because `device-registry.js` registers
+// through `onDeviceTokenMinted` while the mint calls `notifyMinted`.
 //
 // ⚠ The token value NEVER hits logs/diag, and never a file this app writes: safeStorage-encrypted
 // under DT_KEY when the keychain is available, and DT_KEY_PLAIN only when it is not. Every write
@@ -34,7 +27,7 @@ const DT_KEY_PLAIN = 'mcpDeviceTokenPlain';
 const REUSE_MARGIN_MS = 7 * 24 * 60 * 60 * 1000; // re-mint when <7d remain
 
 // ── Device-token cache (safeStorage) ─────────────────────────────────────────
-// ⚠ THE IN-MEMORY COPY IS NOT SET HERE. `mcp-config.js › obtainDeviceToken` is this function's one
+// ⚠ THE IN-MEMORY COPY IS NOT SET HERE. `mcp-device-token-lifecycle.js › obtainDeviceToken` is this function's one
 // caller and it refreshes `spawnToken` at the call site, ahead of the write — that memo is what
 // `buildMcpServers` injects, so it belongs to the module whose accessor reads it.
 function saveDeviceToken(obj) {
@@ -80,7 +73,7 @@ function notifyMinted(link) {
 }
 
 module.exports = {
-  store, // ⚠ THE handle, never a copy: `mcp-config.js › clearDeviceToken` deletes both keys through it
+  store, // ⚠ THE handle, never a copy: `mcp-device-token-lifecycle.js › clearDeviceToken` deletes both keys through it
   DT_KEY,
   DT_KEY_PLAIN,
   REUSE_MARGIN_MS,
