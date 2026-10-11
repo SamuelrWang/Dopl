@@ -24,8 +24,12 @@ function installDesktop(probe: Probe | (() => Probe), withDictation = true) {
       };
     }),
   };
+  // The REAL preload's shape (`renderer/app-preload.js`): the SPA transport, no `isDesktop`
+  // marker. `isDesktopApp` must recognise the desktop app from this alone.
   (window as unknown as { dopl?: unknown }).dopl = {
-    isDesktop: true,
+    apiRequest: vi.fn(),
+    getAuthState: vi.fn(),
+    openExternal: vi.fn(),
     ...(withDictation ? { dictation: bridge } : {}),
   };
   // ⚠ Present on purpose: Electron ships it, and it must be IGNORED on the desktop.
