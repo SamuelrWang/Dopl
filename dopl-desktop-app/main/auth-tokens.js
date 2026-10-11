@@ -373,11 +373,8 @@ async function getAccessToken() {
   return afterExp != null && afterExp > nowSec() ? after.access_token : null;
 }
 
-// ⚠ `getAuthHeader()` STOOD HERE AND IS DELETED (2026-08-20). It wrapped `getAccessToken()`
-// as `Bearer <token>` and had ZERO callers: every seam that attaches a credential builds the
-// header itself (`api.js`, `ui-bridge.js`, `listener-io.js`), which is exactly what INVARIANTS
-// §11's "exactly two cookie-attaching seams; a third copy of the rule is the bug" is about — a
-// convenience wrapper here is where a third one would start. Callers take `getAccessToken()`.
+// No `Bearer` wrapper here on purpose: each seam that attaches a credential
+// (api.js, ui-bridge.js, listener-io.js) builds its own header (INVARIANTS §11).
 
 /**
  * Force ONE rotation regardless of expiry — the 401-repair entry point. Returns

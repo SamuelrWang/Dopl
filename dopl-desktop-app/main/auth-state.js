@@ -309,7 +309,7 @@ function invalidateCookieIdentity() {
 // and after a successful revoke its bearer is dead anyway. Residual in F-085.
 //
 // FIX M4 — THE LINE MUST NEVER CLAIM A REVOKE THAT DID NOT HAPPEN. revokeDeviceToken
-// returns 'revoked' | 'none' | 'failed', and each gets its own words. 'none' (we hold
+// returns 'revoked' | 'no-match' | 'none' | 'failed', and each gets its own words. 'none' (we hold
 // no local copy, so nothing was asked of the server) used to be reported as a success:
 // a live 90-day row could still exist — cleared by an earlier sign-out whose revoke
 // failed, or by a wiped store — and the log said it was dead. A THROW is treated as

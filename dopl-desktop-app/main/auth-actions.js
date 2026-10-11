@@ -86,12 +86,5 @@ function beginSignIn({ showWindow, provider } = {}) {
   diag('auth: sign-in — opening external flow via', p);
   return shell.openExternal(url).catch((err) => diag('auth: sign-in open failed —', err && err.message));
 }
-// SIGN-OUT MOVED OUT (Stage D, 2026-08-06). `signOut({showWindow, load, onSignedOut})`
-// lived here and its whole shape was the retired remote shell's: it reloaded HOME_URL so
-// the WEB app would resolve server-side to /login. The SPA has no page to reload — the
-// renderer swaps to the sign-in screen off the pushed auth state — so the tray now calls
-// `shell-mode.spaSignOut`, and `ui-bridge` already routed around this function
-// deliberately ("NOT authActions.signOut(): that loads the remote page"). With the shell
-// deleted it had no caller left.
 
 module.exports = { SIGN_IN_URL, isAppOrigin, maybeBeginAuth, beginSignIn };
