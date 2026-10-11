@@ -30,17 +30,9 @@ const SUPABASE_ANON_KEY =
 const SUPABASE_REF = new URL(SUPABASE_URL).hostname.split('.')[0];
 
 // ── Auto-update tuning ────────────────────────────────────────────────────────
-// How often the running app looks for a published build. ⚠ 4h → 30 MINUTES on
-// 2026-08-22 (Samuel's ruling): at 4h an app that was already running would not
-// look again for most of a day after a release, and the operator's workaround was
-// to QUIT AND REOPEN to force the boot check. The near-immediate path is the
-// FOCUS check (`updater.js › checkOnFocus`, gapped by FOCUS_CHECK_MIN_GAP_MS);
-// this interval is the backstop for an app nobody is looking at.
-//
-// DOPL_UPDATE_CHECK_MS overrides it (minutes-scale for a fast iteration loop).
-// The value is CLAMPED to [60s, 24h] and falls back to the default when it is
-// absent or unparseable, so a typo like `=5` becomes 60s rather than a 5ms hot
-// loop against GitHub Releases. See main/update-policy.js for the resolver.
+// How often the running app looks for a published build (30m; the why, the
+// focus check and the clamp all live in main/update-policy.js). DOPL_UPDATE_CHECK_MS
+// overrides it, CLAMPED to [60s, 24h] so a typo cannot hot-loop GitHub Releases.
 const updatePolicy = require('./update-policy');
 
 const UPDATER = {
@@ -68,8 +60,7 @@ const UPDATER = {
 // and the release feed answer the same question and there is nothing to gain
 // from a second interval to tune. RETRY_MS is the one exception, for the machine
 // that boots offline and would otherwise not learn there is a floor until the
-// next sweep (30 minutes since 2026-08-22; it was 4h, which is what made that
-// exception urgent).
+// next sweep.
 const minVersion = require('./min-version');
 
 const VERSION_GATE = {

@@ -1,40 +1,19 @@
-// Auto-update via electron-updater against GitHub Releases (SamuelrWang/Dopl),
-// mirroring the study-notes app's proven setup: zip + dmg + latest-mac.yml feed.
+// Auto-update via electron-updater against GitHub Releases (SamuelrWang/Dopl):
+// zip + dmg + latest-mac.yml feed.
 //
-// Behavior: check at startup, on an interval (30m by default since 2026-08-22,
-// overridable via DOPL_UPDATE_CHECK_MS and clamped to [60s, 24h] — see
-// update-policy.js), and WHENEVER THE OPERATOR LOOKS AT THE APP (see the focus
-// check below);
-// download silently with progress on the tray; when the download completes,
-// offer a one-click restart. Never force-restarts on its own: install happens on
-// normal quit (autoInstallOnAppQuit) or an explicit click. A background listener
-// app must not yank itself out from under an active spawned session.
+// Behavior: check at startup, on an interval (30m, DOPL_UPDATE_CHECK_MS clamped
+// to [60s, 24h]), and WHENEVER THE OPERATOR LOOKS AT THE APP (the focus check
+// below); download silently with progress on the tray; when the download
+// completes, offer a one-click restart. Never force-restarts on its own: install
+// happens on normal quit (autoInstallOnAppQuit) or an explicit click, because a
+// restart mid-turn kills a live spawned session. update-policy.js holds the why
+// (the START→QUIT→START cycle that made "close and reopen" never enough), the
+// timings and every string.
 //
 // Q10: THE STAGED INSTALL IS THE FAILURE MODE. "Installs on quit" plus "never
-// quits" equals a Mac running a build nobody believes it is running — on
-// 2026-07-31 a peer sat on 1.7.14 all evening and the 1.7.15 fix read as broken.
-// So the download event has to reach a HUMAN surface, not just the log.
-//
-// WHAT "CLOSE AND REOPEN DOES NOT GET THE NEW BUILD" ACTUALLY IS (2026-08-01).
-// The operator's report was "it takes several tries over a few minutes". Nothing
-// is flaky: the cycle is START (download ~200MB in the background) → QUIT
-// (install) → START (new build), so ONE close-and-reopen can never suffice, and
-// quitting mid-download discards the partial copy, which is why it takes tries.
-// Three things were missing and are now here:
-//   1. the moment the download lands, an actionable RESTART prompt (one click),
-//   2. `download-progress` on a visible surface, so a long download stops looking
-//      like nothing happening (the reason people quit halfway),
-//   3. a manual "Check for updates now", because 4h after a publish is forever.
-//
-// UPDATE DISCOVERY LATENCY (2026-08-22, Samuel's ruling). Item 3 was a button;
-// the operator's actual habit was to QUIT AND REOPEN the app to force the boot
-// check, which is the feature failing at its one job. Two changes: the interval
-// dropped 4h → 30m, and a FOCUS CHECK now runs whenever the app is activated.
-// The focus path is the one that matters — a release becomes visible the moment
-// somebody goes to look, with no restart and no menu click.
-// The one thing deliberately NOT added is an automatic restart. The operator may
-// be mid-exchange with a live agent; the prompt names any live session and
-// defaults to "Later".
+// quits" equals a Mac running a build nobody believes it is running (2026-07-31,
+// a peer on 1.7.14 all evening). So every transition reaches a HUMAN surface
+// (the tray note), not just the log.
 
 // ⚠ No `Notification` binding on purpose: the update-ready banner is off by Samuel's spec
 // (2026-10-09), and an unused import is where a reinstated one would hide.
@@ -186,7 +165,7 @@ function init(opts) {
     note('up-to-date', { version: appVersion.appVersion() });
   });
   // A ~200MB download over a slow link used to be invisible. This is what makes
-  // "it is working, wait" a thing the operator can see (item 2).
+  // "it is working, wait" a thing the operator can see.
   autoUpdater.on('download-progress', (info) => {
     downloading = true;
     lastPercent = policy.progressPercent(info);
@@ -236,7 +215,7 @@ function init(opts) {
     const sessions = liveSessions();
     // ⚠ NO BANNER (Samuel's spec, 2026-10-09 — KB dopl-development "Notification Spec Samuel
     // 2026-10-09"). The TRAY ITEM carries the announcement (`onReadyCb` just above).
-    // ITEM 1: the restart is one click away the moment the bits are on disk.
+    // The restart is one click away the moment the bits are on disk.
     // With a live session we do NOT throw a modal over a running agent turn:
     // the tray item carries it and comes back through promptRestart(), which
     // names the session before it kills it.
@@ -309,7 +288,7 @@ function checkOnFocus() {
 // with a live session the dialog is suppressed (`update-downloaded` above). So on a machine running
 // agents a staged restart waits until the operator looks at the tray.
 
-// ITEM 3: the manual check. Called from the tray, and never a no-op click: every
+// The manual check. Called from the tray, and never a no-op click: every
 // path here ends in a note the operator can read (checking / up to date /
 // downloading / ready / failed / off in this build).
 function check(opts) {

@@ -18,20 +18,11 @@
 // predicate the teardown kills by ("holds a live child"), so the dialog can never name a set
 // the quit does not act on.
 //
-// TWO WAYS FORWARD, both real. "Quit anyway" kills now. "Wait for them to finish" waits for
-// every agent to come off a turn and THEN quits by itself — it is not a disguised cancel.
-//
-// ⚠ AMENDED 2026-08-30 (Samuel's ruling): THERE IS A THIRD BUTTON, AND IT IS A REAL CANCEL.
-// The 2026-08-07 shape had no way to say "I did not mean to quit". Both of its buttons ended in
-// a quit, so an accidental ⌘Q could be DEFERRED but never TAKEN BACK — and the safe default
-// (Wait) still closed the app minutes later, unattended, which is the same lost work arriving
-// late. "Cancel" aborts the quit outright: no teardown, no latch, no pending auto-quit, and
-// `app.isQuitting` is put BACK to false so an aborted quit leaves no trace of itself.
-//
-// THE PRIOR RULING SURVIVES INTACT. "Wait for them to finish" is NOT replaced by Cancel and is
-// still not a disguised one — it is the branch for "quit, but not on top of live work". Cancel
-// is the branch for "I did not mean this at all". Collapsing them would have deleted a decision
-// Samuel made deliberately, so this ADDS the third rather than trading one for the other.
+// THREE BUTTONS, all real (2026-08-07 ruling, Cancel added 2026-08-30). "Quit anyway" kills
+// now. "Wait for them to finish" waits for every agent to come off a turn and THEN quits by
+// itself — "quit, but not on top of live work", not a disguised cancel. "Cancel" aborts the quit
+// outright — "I did not mean this at all": no teardown, no latch, no pending auto-quit, and
+// `app.isQuitting` back to false. Do not collapse Wait and Cancel; each is a separate ruling.
 // Cancel takes `defaultId`/`cancelId`, because the safest of three is the one that does nothing.
 //
 // MID-TOOL-CALL IS NOT A REASON TO WAIT. On "Quit anyway" there is no grace period and no
@@ -42,11 +33,7 @@
 // THE PEER IS TOLD. Each killed session is ended through the reducer's `inactive` event —
 // C-5's calm terminal — so the requester's card stops pulsing "Working…" instead of claiming
 // work in progress on a machine that has quit. One terminal path, shared with the launch
-// watchdog. ⚠ IT NAMED "the window-budget eviction" AS A THIRD SHARER UNTIL 2026-08-20, and
-// there is no eviction: `session-park.js` records that `evictIdleShell` / `atCapAfterEvict`
-// went with the window, and the surviving ceiling
-// (`session-windowless.js › MAX_CONCURRENT_SESSIONS`) is a plain REFUSAL at launch — nothing
-// is ever reclaimed out from under a live session.
+// watchdog.
 //
 // ── THE TWO THINGS THAT MUST NOT GO WRONG ───────────────────────────────────────────────
 //
