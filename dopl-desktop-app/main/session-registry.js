@@ -3,9 +3,9 @@
 // ⚠ (channel, thread) STOPPED IDENTIFYING A SESSION ON 2026-08-21 (Samuel's multiplayer
 // ruling). It is a GROUP now — every one of this operator's agents working that thread — and an
 // empty thread id is a group too: the CHANNEL-LEVEL agents, whose scope is the channel's main
-// room. The four reads below are the ONLY sanctioned way to ask about either. Nothing outside
-// this file may iterate the registry or parse a key apart: the key is COMPARED, never split, so
-// nothing comes to depend on its internal shape.
+// room. The three reads below (`liveOnThread`, `liveInChannel`, `sessionOn`) are the way to ask
+// about either; the key is COMPARED, never split, so nothing comes to depend on its internal shape.
+// (`session-reopen.js` still iterates the Map itself for `resolveSession` and `listLiveSessions`.)
 //
 // ⚠ WHY ITS OWN FILE. `session-engine.js` sits under the hard 500-line §2 cap and these reads
 // pushed it over. The seam is real rather than arithmetic: the engine is the IMPERATIVE SHELL
@@ -13,7 +13,7 @@
 // about the registry and mutates nothing. It follows the `session-reopen.js` / `session-gate.js`
 // idiom exactly — the engine injects its in-memory Map via `bind()` at load, this module holds
 // no electron/SDK handle and never requires back into the engine, so there is no cycle. The
-// engine re-exports the reads under its own name, so every existing caller is unchanged.
+// engine re-exports `liveOnThread` and `sessionOn`; `room-roster.js` requires `liveInChannel` here.
 //
 // ⚠ EVERY FUNCTION HERE IS A PURE READ. If one ever needs to mutate a session, it belongs in the
 // engine: the value of this seam is that a caller can reason about it without knowing what a
@@ -41,8 +41,7 @@ function bind(d) {
  * ⚠ THE ORDER IS LOAD-BEARING and comes free from the Map's insertion order. Two callers depend
  * on it: the AMBIGUITY FALLBACK (`sessionOn` below, and `session-reopen.js › resolveSession`),
  * where an op that names no agent takes the OLDEST live one — which is byte-for-byte what every
- * caller got when a thread could hold only one session — and the framing's sibling list, which
- * reads better oldest-first.
+ * caller got when a thread could hold only one session.
  *
  * ⚠ AN EMPTY `taskId` IS A REAL SCOPE, not a missing value: it selects the CHANNEL-LEVEL agents,
  * and `threadKeyPrefix`'s trailing colon is what stops it also matching every threaded one.

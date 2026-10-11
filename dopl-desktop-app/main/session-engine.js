@@ -405,8 +405,8 @@ async function init() {
     const rec = records[key];
     if (!rec || store.reloadDisposition(rec.phase) !== 'resume') continue;
     store.setRecordPhase(key, 'ended');
-    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: store.getSdkSessionId(key) }, 'task_failed', { interrupted: true }, sessionEffects.terminalBody({ interrupted: true }));
     const sdkId = store.getSdkSessionId(key);
+    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: sdkId }, 'task_failed', { interrupted: true }, sessionEffects.terminalBody({ interrupted: true }));
     if (sdkId) sessionPark.offerResume(rec, sdkId);
   }
   try { sessionBoot.reparkDormant(); } catch (err) { diag('session-engine: repark failed', err && err.message); }
