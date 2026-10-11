@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
 import type { Role, WorkspaceKind } from "@/features/workspaces/types";
 import { CHANNEL_LINK_COLS, type ChannelLinkRow } from "@/shared/links/dto";
 import { listMyChannelMemberships } from "./repository-account";
@@ -89,8 +90,28 @@ export async function listMyContainerRoles(
  * who really did join first.
  *
  * ⚠ **THE CAP IS APPLIED PER CHANNEL IN CODE**, because PostgREST cannot express
- * one limit per group; the query's own `limit` is the page ceiling over the whole
+ * one limit per group; the query's own ceiling is the page bound over the whole
  * `.in()` and is the caller's to size.
+ *
+ * ── 🔒 PAGED, AND THE TIEBREAKER GREW A THIRD COLUMN ───────────────────────
+ *
+ * 🔒 **`.limit(rowLimit)` WAS NOT THE BOUND IN FORCE (Samuel #2935).** The caller
+ * passes `service-list.ts › PEER_ROW_LIMIT` = 2,000 and `supabase/config.toml ›
+ * max_rows` ({@link POSTGREST_MAX_ROWS}) clipped it to 1,000 server-side with no
+ * error — so a page of busy channels lost its LAST channels' faces at half the
+ * declared ceiling. The symptom was indistinguishable from an empty roster, which
+ * is why it survived: the surface draws no faces either way.
+ *
+ * 🔒 ⚠ **`channel_id` JOINED THE ORDER AND IT IS NOT DECORATION.** F-307 made the
+ * order total *within one channel* — `joined_at` plus `user_id` — and this read
+ * spans channels, where that pair is **NOT UNIQUE**: `now()` is TRANSACTION-wide
+ * in Postgres, so one statement seating a member in two channels stamps both rows
+ * the same `joined_at`, and `user_id` is then equal too. Two indistinguishable
+ * rows across a page boundary is the paging failure that returns one twice and
+ * drops the other — and the dropped one is a missing face in the OTHER channel.
+ * `PRIMARY KEY (channel_id, user_id)` closes it.
+ * ⚠ **IT IS LAST, SO OLDEST-JOIN-FIRST STILL DECIDES WHICH FACES SURVIVE**
+ * `perChannel`. A `channel_id`-first order would reshuffle the seats F-307 fixed.
  */
 export async function listChannelPeerIds(
   channelIds: string[],
@@ -100,19 +121,34 @@ export async function listChannelPeerIds(
 ): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   if (channelIds.length === 0) return out;
-  const { data, error } = await supabaseAdmin()
-    .from("channel_members")
-    .select("channel_id, user_id")
-    .in("channel_id", channelIds)
-    .neq("user_id", viewerId)
-    .order("joined_at", { ascending: true, nullsFirst: false })
-    .order("user_id", { ascending: true })
-    .limit(rowLimit);
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{
-    channel_id: string;
-    user_id: string;
-  }>) {
+  const db = supabaseAdmin();
+  const { rows } = await readAllPages<{ channel_id: string; user_id: string }>(
+    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+    // re-awaiting one re-sends the first range and the walk spins on page 0.
+    async (from, toInclusive) => {
+      const { data, error } = await db
+        .from("channel_members")
+        .select("channel_id, user_id")
+        .in("channel_id", channelIds)
+        .neq("user_id", viewerId)
+        .order("joined_at", { ascending: true, nullsFirst: false })
+        .order("user_id", { ascending: true })
+        .order("channel_id", { ascending: true })
+        .range(from, toInclusive);
+      return {
+        data: (data ?? []) as unknown as Array<{
+          channel_id: string;
+          user_id: string;
+        }>,
+        error,
+      };
+    },
+    // ⚠ `rowLimit` IS STILL THE CEILING AND STILL THE CALLER'S TO SIZE — the
+    // difference is that the rows beneath it now actually arrive. The page size is
+    // the SERVER's ceiling, which is what makes a short page proof of exhaustion.
+    { hardCap: rowLimit, pageSize: POSTGREST_MAX_ROWS }
+  );
+  for (const row of rows) {
     const seats = out.get(row.channel_id);
     if (seats === undefined) out.set(row.channel_id, [row.user_id]);
     else if (seats.length < perChannel) seats.push(row.user_id);

@@ -1,6 +1,7 @@
 /** Split out of `repository.ts` (2026-09-14, 500-line cap): the `channel_members` table's data access, on `repository-workspace.ts`'s precedent — `repository.ts` re-exports every name here, so `import * as repo from "./repository"` is unchanged. */
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
 import type { ChannelMemberRow } from "./dto";
 import { CHANNEL_MEMBER_ROWS_LIMIT } from "./repository-collab";
 
@@ -111,6 +112,31 @@ export async function hasMembership(
  * ⚠ BOUND STATED, NOT INHERITED (2026-08-20). PostgREST truncates an un-limited
  * select SILENTLY, and this feeds `Channel.memberCount` — a clipped page is a
  * wrong number on every channel row, not a crash anyone would see.
+ *
+ * ── 🔒 STATING THE BOUND DID NOT APPLY IT (Samuel #2935) ───────────────────
+ *
+ * 🔒 **THE ASK WAS `CHANNEL_MEMBER_ROWS_LIMIT` (10,000) AND THE ANSWER WAS 1,000,
+ * SILENTLY.** `supabase/config.toml › max_rows` ({@link POSTGREST_MAX_ROWS})
+ * clips a select server-side and raises nothing, so the paragraph above described
+ * the exact failure it was written to prevent: past a thousand membership rows
+ * across one page, `memberCount` was simply WRONG — short on the channels whose
+ * rows sorted last, and ZERO on the ones that fell off entirely. No error, no
+ * marker, and a count is the one value a reader cannot sanity-check by eye.
+ *
+ * ⚠ **THIS IS A COUNT-BY-GROUP, SO THE END SHAPE IS `count` PER CHANNEL IN SQL,
+ * NOT THIS WALK.** A hauled-and-folded count is the shape
+ * `shared/supabase/max-rows.ts` names as the weaker one: it moves N rows to
+ * compute one integer each. The grouped aggregate belongs in a migration and the
+ * migration is not this change's to write (§12), so the walk is the INTERIM —
+ * it makes the number correct up to the ceiling that was already declared here,
+ * which the old single statement never reached. ⚠ When the aggregate lands, this
+ * whole body is replaced; the ceiling and the fence are what carry over.
+ *
+ * ⚠ **THE ORDER IS NEW AND TOTAL — `channel_id, user_id` IS THE PRIMARY KEY.**
+ * This read had no `ORDER BY`, which one statement can afford and a page walk
+ * cannot: an unordered page may repeat rows the previous page already counted,
+ * and a double-counted membership row is an INFLATED member count — the same
+ * wrong number from the opposite direction.
  */
 export async function memberCounts(
   channelIds: string[]
@@ -118,13 +144,27 @@ export async function memberCounts(
   const counts = new Map<string, number>();
   if (channelIds.length === 0) return counts;
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_members")
-    .select("channel_id")
-    .in("channel_id", channelIds)
-    .limit(CHANNEL_MEMBER_ROWS_LIMIT);
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{ channel_id: string }>) {
+  const { rows } = await readAllPages<{ channel_id: string }>(
+    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+    // re-awaiting one re-sends the first range and the walk spins on page 0.
+    async (from, toInclusive) => {
+      const { data, error } = await db
+        .from("channel_members")
+        // ⚠ STILL ONE COLUMN. `user_id` is ORDERED on and never selected — the
+        // precedent `repository-token-spend.ts` set with `session_key`: ORDER BY
+        // reaches any column of the relation, so a total order costs no bytes.
+        .select("channel_id")
+        .in("channel_id", channelIds)
+        .order("channel_id", { ascending: true })
+        .order("user_id", { ascending: true })
+        .range(from, toInclusive);
+      return { data: (data ?? []) as unknown as Array<{ channel_id: string }>, error };
+    },
+    // ⚠ The page size is the SERVER's ceiling — that is what makes a short page
+    // proof of exhaustion rather than proof of a clip.
+    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  );
+  for (const row of rows) {
     counts.set(row.channel_id, (counts.get(row.channel_id) ?? 0) + 1);
   }
   return counts;

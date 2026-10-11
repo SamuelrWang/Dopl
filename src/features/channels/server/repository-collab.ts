@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
 import { HttpError } from "@/shared/lib/http-error";
 import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import type { AgentPresenceStatus, PresencePosture } from "../types";
@@ -9,6 +10,17 @@ import type { ConsentRequestRow, PresenceRow } from "./collab-dto";
 /**
  * ⚠ Explicit row caps. PostgREST truncates an un-limited select SILENTLY against
  * its own `max-rows`, so any read feeding a derived count states its bound here.
+ *
+ * 🔒 **AND STATING ONE WAS NEVER ENOUGH (Samuel #2935, the `max_rows` sweep).**
+ * `supabase/config.toml › max_rows` ({@link POSTGREST_MAX_ROWS}) clips every
+ * select SERVER-SIDE and raises nothing, so a `.limit()` ABOVE it is not a bound
+ * at all — it is a request the server silently declines. Both presence reads and
+ * the member read below asked 5,000 and 10,000 and were answered 1,000, with no
+ * error and no marker: a member of a big workspace read as OFFLINE because their
+ * row fell past the clip, and a channel's roster read SHORT. The two ceilings
+ * stay (they bound a runaway walk and are still reported), but they are now
+ * reached a page at a time through {@link readAllPages} rather than asked for in
+ * one hopeful statement.
  */
 const CONSENT_LIST_LIMIT = 200;
 const PRESENCE_ROWS_LIMIT = 5_000;
@@ -288,30 +300,62 @@ function derivePresence(
 }
 
 /**
+ * The three columns both presence scans project. ⚠ Declared once so the two page
+ * walks below cannot drift to different shapes off one table.
+ */
+type PresenceScanRow = {
+  user_id: string;
+  last_seen_at: string;
+  status: string | null;
+};
+
+/**
  * Presence for every workspace member, keyed by user id, `online` derived
  * against PRESENCE_ONLINE_WINDOW_MS. One indexed query for the whole page.
  *
  * ⚠ **THE SERVER IS THE ONLY THING THAT DECIDES `online` SINCE 2026-09-08** — a
  * client cannot see `status`, so one re-deriving the boolean from `lastSeenAt`
  * alone cannot agree. `view-model.ts › isPresent` now returns THIS flag.
+ *
+ * ── 🔒 PAGED, BECAUSE THE ANSWER IS THE MAP ────────────────────────────────
+ *
+ * 🔒 **ONE INDEXED QUERY WAS A WRONG ANSWER PAST 1,000 MEMBERS, NOT A SLOW ONE
+ * (Samuel #2935).** The ask was `.limit(PRESENCE_ROWS_LIMIT)` — 5,000 — and the
+ * server answered 1,000, silently; every member whose row fell past the clip was
+ * ABSENT from this map, and an absent key reads OFFLINE at every caller
+ * (`view-model.ts › isPresent`). Nothing is summed here, so no aggregate helps:
+ * the answer IS the per-member map, which is {@link readAllPages}'s case.
+ *
+ * ⚠ **THE ORDER IS NEW AND IT IS LOAD-BEARING.** This read had NO `ORDER BY` at
+ * all, which was harmless for one statement (the rows go into a map) and is the
+ * WORST case for a page walk: PostgREST promises no row order, so an unordered
+ * second page may repeat page one's rows and never return the rest. `PRIMARY KEY
+ * (user_id, workspace_id)` with `workspace_id` pinned by the `.eq` below leaves
+ * `user_id` UNIQUE within this read, so it is a total order on its own.
  */
 export async function presenceForWorkspace(
   workspaceId: string
 ): Promise<Map<string, MemberPresence>> {
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("agent_presence")
-    .select("user_id, last_seen_at, status")
-    .eq("workspace_id", workspaceId)
-    .limit(PRESENCE_ROWS_LIMIT);
-  if (error) throw error;
+  const { rows } = await readAllPages<PresenceScanRow>(
+    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
+    // re-awaiting one re-sends the first range and the walk spins on page 0.
+    async (from, toInclusive) => {
+      const { data, error } = await db
+        .from("agent_presence")
+        .select("user_id, last_seen_at, status")
+        .eq("workspace_id", workspaceId)
+        .order("user_id", { ascending: true })
+        .range(from, toInclusive);
+      return { data: (data ?? []) as unknown as PresenceScanRow[], error };
+    },
+    // ⚠ The page size is the SERVER's ceiling, which is what makes a short page
+    // proof of exhaustion rather than proof of a clip.
+    { hardCap: PRESENCE_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  );
   const now = Date.now();
   const out = new Map<string, MemberPresence>();
-  for (const row of (data ?? []) as Array<{
-    user_id: string;
-    last_seen_at: string;
-    status: string | null;
-  }>) {
+  for (const row of rows) {
     out.set(row.user_id, derivePresence(row.last_seen_at, row.status, now));
   }
   return out;
@@ -335,25 +379,50 @@ export async function presenceForWorkspace(
  * arrival would flip a member between online and offline across two identical
  * reads. `last_seen_at` is the only total order here, and taking its maximum is
  * also the honest one: the machine was up at the latest instant anything saw it.
+ *
+ * ── 🔒 PAGED, AND THIS READ MULTIPLIES ROWS BY CONTAINERS ──────────────────
+ *
+ * 🔒 **IT ASKED 5,000 AND WAS ANSWERED 1,000, SILENTLY (Samuel #2935).** One row
+ * per (member × container) is the widest presence read in the tree — the very
+ * shape `scope=account` exists for — so it reaches the clip FIRST, and reaching
+ * it drops members out of the map entirely, where an absent key reads OFFLINE.
+ * ⚠ Worse than the per-workspace read: a member present in container 13 but
+ * clipped out of the page was reported offline *while their machine was awake*,
+ * which is the same symptom the heartbeat fan-out below was rewritten to end.
+ *
+ * ⚠ **THE ORDER IS TOTAL ONLY WITH `workspace_id`, AND THAT IS THE WHOLE POINT
+ * HERE.** `user_id` ALONE IS NOT UNIQUE in this read — a member of N containers
+ * has N rows, which is exactly why the freshest-wins fold below exists. Ordering
+ * by `user_id` and stopping there would let one member's rows straddle a page
+ * boundary in an undefined order, so a page could repeat one of them and SKIP
+ * another — and a skipped row is a lost maximum, which flips the member offline.
+ * The tie-break runs down to `PRIMARY KEY (user_id, workspace_id)`.
+ * ⚠ The order is NOT `last_seen_at`: the maximum is taken in JS, and paging on a
+ * non-unique timestamp is the trap this paragraph describes.
  */
 export async function presenceForWorkspaces(
   workspaceIds: string[]
 ): Promise<Map<string, MemberPresence>> {
   const out = new Map<string, MemberPresence>();
   if (workspaceIds.length === 0) return out;
-  const { data, error } = await supabaseAdmin()
-    .from("agent_presence")
-    .select("user_id, last_seen_at, status")
-    .in("workspace_id", workspaceIds)
-    .limit(PRESENCE_ROWS_LIMIT);
-  if (error) throw error;
+  const db = supabaseAdmin();
+  const { rows } = await readAllPages<PresenceScanRow>(
+    // ⚠ A FRESH QUERY PER PAGE — the one-shot-thenable rule above.
+    async (from, toInclusive) => {
+      const { data, error } = await db
+        .from("agent_presence")
+        .select("user_id, last_seen_at, status")
+        .in("workspace_id", workspaceIds)
+        .order("user_id", { ascending: true })
+        .order("workspace_id", { ascending: true })
+        .range(from, toInclusive);
+      return { data: (data ?? []) as unknown as PresenceScanRow[], error };
+    },
+    { hardCap: PRESENCE_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  );
   const now = Date.now();
   const freshest = new Map<string, { last_seen_at: string; status: string | null }>();
-  for (const row of (data ?? []) as Array<{
-    user_id: string;
-    last_seen_at: string;
-    status: string | null;
-  }>) {
+  for (const row of rows) {
     const held = freshest.get(row.user_id);
     if (
       held === undefined ||
@@ -449,23 +518,49 @@ export async function presenceForUser(
   return derivePresence(row.last_seen_at, row.status);
 }
 
-/** Member user-ids per channel — pairs with presence for online counts. */
+/**
+ * Member user-ids per channel — pairs with presence for online counts.
+ *
+ * 🔒 **PAGED (Samuel #2935).** It asked `.limit(CHANNEL_MEMBER_ROWS_LIMIT)` —
+ * 10,000, the HIGHEST ask in this feature — and `max_rows` answered 1,000 with no
+ * error: a page of busy channels came back with its last channels' rosters
+ * missing or EMPTY, and the online count beside them read zero. The answer is the
+ * per-channel list itself, so nothing can be folded in SQL.
+ *
+ * ⚠ **THE ORDER IS NEW AND TOTAL: `channel_id, user_id` IS `PRIMARY KEY
+ * (channel_id, user_id)`.** This read had none, and an unordered page walk is the
+ * worst case of the §-order rule — PostgREST may answer any permutation per page,
+ * so one member could be listed twice in a channel (inflating its online count)
+ * while another vanished. Grouping by `channel_id` first also keeps each
+ * channel's rows contiguous, which is what makes the fold below cheap.
+ */
 export async function channelMemberUserIds(
   channelIds: string[]
 ): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   if (channelIds.length === 0) return out;
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("channel_members")
-    .select("channel_id, user_id")
-    .in("channel_id", channelIds)
-    .limit(CHANNEL_MEMBER_ROWS_LIMIT);
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{
-    channel_id: string;
-    user_id: string;
-  }>) {
+  const { rows } = await readAllPages<{ channel_id: string; user_id: string }>(
+    // ⚠ A FRESH QUERY PER PAGE — one-shot thenable.
+    async (from, toInclusive) => {
+      const { data, error } = await db
+        .from("channel_members")
+        .select("channel_id, user_id")
+        .in("channel_id", channelIds)
+        .order("channel_id", { ascending: true })
+        .order("user_id", { ascending: true })
+        .range(from, toInclusive);
+      return {
+        data: (data ?? []) as unknown as Array<{
+          channel_id: string;
+          user_id: string;
+        }>,
+        error,
+      };
+    },
+    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  );
+  for (const row of rows) {
     const list = out.get(row.channel_id);
     if (list) list.push(row.user_id);
     else out.set(row.channel_id, [row.user_id]);

@@ -49,14 +49,39 @@ function makeAdmin(
     calls.push({ op, args });
     return builder;
   };
+  // ⚠ **`range` SLICES, IT DOES NOT JUST RECORD** (Samuel #2935). The presence
+  // reads page now (`readAllPages`), and a recorder that handed the SAME rows
+  // back for every page would either loop or silently multiply the result —
+  // either way it would be testing the mock, not the walk.
+  let from = 0;
+  let size = Number.POSITIVE_INFINITY;
+  // ⚠ `rows` is not always an array here — `maybeSingle()` callers hand this
+  // recorder a single object — so the page window only applies to a list.
   const settle = (resolve: (r: unknown) => void) =>
-    resolve({ data: error ? null : rows, error });
+    resolve({
+      data: error
+        ? null
+        : Array.isArray(rows)
+          ? rows.slice(from, from + size)
+          : rows,
+      error,
+    });
   Object.assign(builder, {
-    from: (t: string) => rec("from", [t]),
+    from: (t: string) => {
+      from = 0;
+      size = Number.POSITIVE_INFINITY;
+      return rec("from", [t]);
+    },
     select: (c: string) => rec("select", [c]),
     eq: (c: string, v: unknown) => rec("eq", [c, v]),
     in: (c: string, v: unknown) => rec("in", [c, v]),
+    order: (c: string, o?: { ascending?: boolean }) => rec("order", [c, o]),
     limit: (n: number) => rec("limit", [n]),
+    range: (a: number, b: number) => {
+      from = a;
+      size = b - a + 1;
+      return rec("range", [a, b]);
+    },
     maybeSingle: () => ({ then: settle }),
     then: settle,
   });
