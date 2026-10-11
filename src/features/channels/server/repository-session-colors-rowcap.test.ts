@@ -5,22 +5,18 @@
  * clips every select SERVER-SIDE at 1,000 and **raises nothing**.
  *
  * ⚠ **THE CONSTANT'S OWN DOCBLOCK NAMES THE CONSEQUENCE: "a truncated taken set
- * would hand out a colour somebody already holds."** That is not a short list. A
- * key missing from the taken set is reported FREE, so the push lane assigns it to
- * a second session and the unique index answers 23505 — on the one lane whose
- * whole contract is that it REFUSES rather than substitutes
- * (`server/errors.ts › AgentColorTakenError`). The read declared a 2,000-row
- * headroom and had 1,000.
+ * would hand out a colour somebody already holds."** Not a short list: a key
+ * missing from the set is reported FREE, so the push lane assigns it twice and
+ * the unique index answers 23505 — on the one lane whose contract is that it
+ * REFUSES rather than substitutes (`server/errors.ts › AgentColorTakenError`).
  *
  * ⚠ **THE ORDERS ARE NEW.** Neither read had an `ORDER BY`: harmless for one
- * statement whose rows fold into a map, and the worst case for a page walk, which
- * PostgREST may answer in any permutation per page. Both now order by the table's
- * PRIMARY KEY `id`, ORDERED ON AND NEVER SELECTED, so the deliberately narrow
- * two-column projection this module argues for is untouched.
+ * statement folding rows into a map, worst case for a page walk, which PostgREST
+ * may answer in any permutation per page. Both now order by PRIMARY KEY `id`,
+ * ORDERED ON AND NEVER SELECTED, so the narrow projection is untouched.
  *
- * ⚠ **`selectTolerant` NOW RUNS PER PAGE**, which is the riskiest structural part
- * of this change, so the legacy-database path is driven across a page boundary
- * below rather than assumed.
+ * ⚠ **`selectTolerant` NOW RUNS PER PAGE** — the riskiest structural part of this
+ * change, so the legacy path is driven across a page boundary below, not assumed.
  *
  * MUTATION-VERIFY (each reverted alone turns the named case red):
  *  - put `.limit(COLOR_ROWS_LIMIT)` back for either page walk → "every one of

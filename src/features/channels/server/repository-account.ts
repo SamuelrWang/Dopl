@@ -1,10 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import {
-  POSTGREST_MAX_ROWS,
-  clippedAt,
-  type Clipped,
-} from "@/shared/supabase/max-rows";
+import { POSTGREST_MAX_ROWS, clippedAt, type Clipped } from "@/shared/supabase/max-rows";
 import type { ChannelMessageRow } from "./dto";
 import type { SessionStateRow } from "./collab-dto";
 import { sessionRowsWhere } from "./repository-sessions";
@@ -52,18 +48,11 @@ import { sessionRowsWhere } from "./repository-sessions";
 type AccountScan<T> = Clipped<T>;
 
 /**
- * ⚠ **THE EFFECTIVE CEILING IS THE SMALLER OF THE ASK AND `max_rows`, NEVER THE
- * ASK** — `shared/supabase/max-rows.ts › clippedAt`, which carries the finding
- * and the test that pins the number against `supabase/config.toml`.
- *
- * 🔒 **THIS USED TO BE `rows.length >= limit`, AND THAT IS THE DEFECT HALF OF
- * Samuel #2935.** PostgREST clips a select server-side and raises nothing, so any
- * read here asking for MORE than the server will give computed `1000 >= <ask>` =
- * false and reported itself COMPLETE — a floor claiming to be exhaustive, on the
- * one read that was actually a floor. Every ceiling in this file is under
- * `max_rows` today except {@link ACCOUNT_TALLY_LIMIT}, which SITS ON IT; routing
- * all of them through one honest comparison is what keeps the next raised
- * constant from re-opening it silently.
+ * ⚠ **THE EFFECTIVE CEILING IS min(ask, `max_rows`), NEVER THE ASK** — see
+ * `shared/supabase/max-rows.ts › clippedAt` for the finding and its pin.
+ * 🔒 This was `rows.length >= limit`, the defect half of Samuel #2935: PostgREST
+ * clips server-side silently, so a read asking for more than the server gives
+ * computed `1000 >= <ask>` = false and called itself COMPLETE.
  */
 const scan = clippedAt;
 
@@ -137,22 +126,15 @@ export const ACCOUNT_MESSAGE_LIMIT = 200;
 
 /**
  * ⚠ The unread TALLY reads `(channel_id, seq)` and nothing else, so it is cheap
- * per row and the ceiling can be high. Past it the counts are a FLOOR and the
- * service says so (`service-account.ts › truncated.unread`) — a count rendered as
- * exact when it was clipped is the §9 failure this constant exists to make
- * visible.
+ * per row. Past the ceiling the counts are a FLOOR and the service says so
+ * (`service-account.ts › truncated.unread`) — a clipped count rendered as exact
+ * is the §9 failure this constant exists to make visible.
  *
- * 🔒 **IT IS `POSTGREST_MAX_ROWS` BECAUSE THAT IS THE HIGHEST A ONE-STATEMENT
- * READ CAN GO, AND IT IS DERIVED RATHER THAN RESTATED (Samuel #2935).** It was
- * the literal `1_000`, which is the same number — so this tally was correct
- * TODAY purely by coincidence, and **the coincidence was load-bearing**: the
- * instant anyone acted on the docblock above and raised this to "high", the
- * server would have kept clipping at `max_rows` while `rows.length >= limit`
- * computed `1000 >= <new value>` = false and reported every per-channel count as
- * EXACT. Writing the relationship down is the fix; a second literal is the trap.
- * ⚠ **A HIGHER CEILING NEEDS A DIFFERENT SHAPE, NOT A BIGGER NUMBER** — a
- * `count`-per-channel aggregate or a page walk. Raising this alone buys nothing,
- * which is exactly what the old literal hid.
+ * 🔒 **DERIVED, NOT RESTATED (Samuel #2935).** It was the literal `1_000` — the
+ * same number, so correct by coincidence, and the coincidence was load-bearing:
+ * raised to "high" as this docblock once invited, the server would have kept
+ * clipping at `max_rows` while the old `>=` test called every count exact.
+ * ⚠ **A HIGHER CEILING NEEDS A DIFFERENT SHAPE, NOT A BIGGER NUMBER.**
  */
 export const ACCOUNT_TALLY_LIMIT = POSTGREST_MAX_ROWS;
 
