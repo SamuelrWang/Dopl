@@ -185,3 +185,47 @@ describe("🔒 a GRANT names a row in a container the caller is not in", () => {
     expect(calls).toEqual([]);
   });
 });
+
+/**
+ * 🔴 EVIDENCE, NOT A FIX (cleanup/w03-lock-escape, 2026-10-11; KB codebase-cleanup sectors/W03 §Flags,
+ * HIGH). Clause 3 promises a LOCKED credential "resolves inside its lock plus its operator's home space,
+ * never wider" — but the lock narrows only `listContainersForCaller`. On an id miss the grant lane asks
+ * `grantedResourceIds(caller.userId, …)`, which never sees `apiKeyWorkspaceId`, and reads the row with
+ * no container filter. This case is EXPECTED TO FAIL on this branch until someone decides the fix.
+ */
+describe("🔴 a LOCKED credential and the grant lane (expected to fail: reproduces the escape)", () => {
+  const WS_C = "cccccccc-0000-4000-8000-00000000000c";
+  const locked = { userId: ME, credentialSubjectUserId: ME, apiKeyWorkspaceId: WS_A };
+  const rowInC = {
+    id: T1,
+    name: "Payroll",
+    workspace_id: WS_C,
+    created_by: "someone-else",
+    workspace: { name: "Other", kind: "standard" },
+  };
+  /** Lent to CONTAINER B, which the caller belongs to OUTSIDE their lock (A). */
+  function scene() {
+    return makeAdmin(
+      {
+        resource_grants: [{ scope_type: "container", scope_id: WS_B, resource_id: T1, level: "read" }],
+        workspaces: [], // no home space: the lock is exactly [A]
+      },
+      {
+        // 1st read = the lock-narrowed candidate set (only A survives the `.in()`);
+        // 2nd read = the grant lane's own membership check, which sees B.
+        workspace_members: [[member(WS_A)], [member(WS_A), member(WS_B)]],
+        knowledge_bases: [[], [rowInC]],
+      }
+    );
+  }
+
+  it("control: UNLOCKED, the same grant names the row (so the setup reaches the grant lane)", async () => {
+    scene();
+    expect(await resolveResource(caller, "knowledge_base", T1)).toMatchObject({ containerId: WS_C });
+  });
+
+  it("🔴 LOCKED to A, a row in C lent to B (outside the lock) must NOT resolve", async () => {
+    scene();
+    expect(await resolveResource(locked, "knowledge_base", T1)).toBeNull();
+  });
+});
