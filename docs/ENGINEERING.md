@@ -6323,7 +6323,8 @@ a hold that RETURNED messages closed with **1,599 characters** of re-arm doctrin
 timed out with **644** — paid by an orchestrator sitting on a quiet exchange, every ~45 seconds,
 forever, on the one result that carries the least news there is. So the fix pulls in both
 directions at once: the rule becomes ONE canonical statement (`channel-doctrine.ts › waiting`, 593
-chars, capped at 600 by `WAITING_MAX_CHARS`), and every result that used to restate it spends ONE
+chars, capped at 600 by `WAITING_MAX_CHARS`, a cap no test ever enforced: it reached 609 and was deleted
+2026-10-11, cleanup M03; the per-section budget in `channel-doctrine-budget.test.ts` is what bounds it), and every result that used to restate it spends ONE
 line instead — `cursor=<seq> · hold, never poll: <the exact call> · dopl://doctrine/channels ›
 Waiting`, bounded by `channel-result-budget.test.ts`. Arrived 1,599 → 134. Timed out 644 → 131.
 The workspace hold's 656 → 112.
