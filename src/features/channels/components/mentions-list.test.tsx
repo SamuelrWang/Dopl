@@ -148,6 +148,48 @@ describe("the snippet's @-tags", () => {
     expect(screen.queryByText(/\*\*/)).toBeNull();
   });
 
+  /**
+   * 🔴 **AND A LINK IN A SNIPPET IS TEXT, NOT AN ANCHOR INSIDE THE ROW'S BUTTON**
+   * (release review, 2026-10-11).
+   *
+   * ⚠ **THE INLINE ARM LEXES WITH GFM AUTOLINKS ON**, so a BARE url in a peer's snippet —
+   * no markdown at all — became a live `<a target="_blank">` nested inside this row's
+   * `<button onClick={onOpen}>`. Two failures at once: interactive content inside a
+   * button is invalid HTML, and `ExternalAnchor` preempts the default only on the SPA
+   * renderer and never stops propagation, so ONE press opened a PEER-CHOSEN url in the
+   * user's real browser AND fired the row. The snippet is arbitrary peer text.
+   * ⚠ **THE `button a` QUERY IS THE ASSERTION, not the absence of a class.** What may
+   * never exist is an interactive descendant; a text-coloured span is fine.
+   */
+  it("renders a BARE url in a snippet as text — never an anchor inside the row's button", () => {
+    const { container } = render(
+      <Harness
+        onOpen={() => {}}
+        rows={[mention({ messageId: "m-url", seq: 4, snippet: "see https://evil.example/x" })]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Mentions/ }));
+    // 🔒 THE PROPERTY: no interactive content anywhere inside a mention row.
+    expect(container.querySelector("button a")).toBeNull();
+    // ...and the url still READS, so nothing is hidden from the person deciding to click.
+    expect(screen.getByText(/evil\.example/)).toBeTruthy();
+  });
+
+  it("renders an EMAIL in a snippet as text too — `a@b.com` lexes to a mailto link", () => {
+    // ⚠ THE ONE A READER WOULD NEVER GUESS IS A LINK, which is why it is pinned beside the
+    // url: GFM's autolink extension turns a bare address into a `mailto:` token, and
+    // `safeHref` allows `mailto:` — correctly, for a BODY.
+    const { container } = render(
+      <Harness
+        onOpen={() => {}}
+        rows={[mention({ messageId: "m-mail", seq: 3, snippet: "ask ops@evil.example please" })]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Mentions/ }));
+    expect(container.querySelector("button a")).toBeNull();
+    expect(container.querySelector("a")).toBeNull();
+  });
+
   it("stops tinting a handle inside a code span — the closed half of F-266", () => {
     open({
       rows: [mention({ messageId: "m-5", seq: 5, snippet: "write `@diana-taylor` to tag" })],

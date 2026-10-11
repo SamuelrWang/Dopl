@@ -6,6 +6,7 @@
  * side (INVARIANTS §5).
  */
 
+import { useMemo } from "react";
 import { cn } from "@/shared/lib/utils";
 import { ArtifactCard } from "./artifact-card";
 import { AuthoredRow } from "./authored-row";
@@ -14,7 +15,7 @@ import { DevicePill } from "./device-pill";
 import { DisplayCard } from "./display-card";
 import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
-import { MessageMarkdown, bodyContextOf } from "./message-markdown";
+import { MessageMarkdown, TextOnlyLinks, bodyContextOf } from "./message-markdown";
 import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { messageTags } from "../lib/recipient-tags";
@@ -56,6 +57,30 @@ export function Transcript({
   /** Jump to a cited seq (the host resolves it to a message id); absent makes citations plain. */
   onJumpToSeq?: (seq: number) => void;
 }) {
+  /**
+   * **ONE CONTEXT FOR EVERY PREVIEW LANE ON THE PAGE, MEMOISED ON THE ROSTER**
+   * (release review, 2026-10-11).
+   *
+   * ⚠ **`bodyContextOf` WALKS THE ROSTER** — member × handles plus an agent mention
+   * index — and this call used to be UN-MEMOISED and duplicated: once here for the
+   * system rows (built on every transcript render, including the ordinary page that
+   * holds none) and once inside `ThreadCardMessage`, which renders inside the map
+   * below, so a page of N cards did N more walks per render. `mentions-list.tsx`
+   * states the rule where it holds one in a `useMemo`; these two sites diverged
+   * from it the day the preview arm landed.
+   * ⚠ **IT IS HOISTED ACROSS BOTH LANES BECAUSE THE FACTS ARE IDENTICAL** — the same
+   * roster, the same `mentionsMe: false` (neither a system row nor a card carries a
+   * `metadata.mentionedUserIds` stamp, and the viewer wash is that server fact or
+   * nothing), and no `newestSeq` / `onJumpToSeq`, so a `#1759` stays plain text in
+   * both: a card is already a press that opens its thread, and a citation inside
+   * one could go nowhere else.
+   * ⚠ **BEFORE THE EMPTY RETURN, because it is a hook.** The empty page pays for one
+   * roster walk; the alternative is a rule about hook order nobody can see.
+   */
+  const previewCtx = useMemo(
+    () => bodyContextOf({ index, mentionsMe: false }),
+    [index]
+  );
   if (rows.length === 0) {
     return (
       <p className="py-10 text-center text-caption text-text-muted">
@@ -63,10 +88,6 @@ export function Transcript({
       </p>
     );
   }
-  // The system rows' one context, built once for the page rather than per row
-  // (`bodyContextOf` walks the roster). ⚠ `mentionsMe: false` — a system row carries no
-  // `metadata.mentionedUserIds` stamp, and the viewer wash is that server fact or nothing.
-  const systemCtx = bodyContextOf({ index, mentionsMe: false });
   return (
     <div className="flex flex-col gap-5">
       {rows.map((row) => {
@@ -81,8 +102,15 @@ export function Transcript({
                   a system row is prose somebody wrote and it printed its own asterisks.
                   ⚠ THE INLINE ARM because this row is ONE CENTRED LINE: block tokens would
                   break the centring into left-aligned paragraphs
-                  (`message-markdown-inline.tsx` rule 2). */}
-              <MessageMarkdownInline text={row.body} ctx={systemCtx} />
+                  (`message-markdown-inline.tsx` rule 2).
+                  🔒 **AND IT DRAWS NO ANCHOR** ({@link TextOnlyLinks}, 2026-10-11). That arm
+                  lexes with GFM autolinks on, so a bare URL in the text a system row carries
+                  became a live `target="_blank"` link in a muted status line that has never
+                  been clickable. The lane is a REPORT about the channel; the destination
+                  renders as its own words. */}
+              <TextOnlyLinks>
+                <MessageMarkdownInline text={row.body} ctx={previewCtx} />
+              </TextOnlyLinks>
             </p>
           );
         }
@@ -95,6 +123,8 @@ export function Transcript({
               key={row.id}
               row={row}
               index={index}
+              // ⚠ HANDED DOWN, NOT BUILT PER CARD — see `previewCtx` above.
+              previewCtx={previewCtx}
               flash={row.id === flashId}
               canLaunchAgent={canLaunchAgent}
               launchBusy={launchBusy}

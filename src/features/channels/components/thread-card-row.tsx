@@ -15,8 +15,9 @@
 import { Bot } from "lucide-react";
 import { AddresseePill, CARD_BUTTON } from "./bits";
 import { AuthoredRow } from "./authored-row";
-import { bodyContextOf } from "./message-markdown";
+import { TextOnlyLinks } from "./message-markdown";
 import { MessageMarkdownInline } from "./message-markdown-inline";
+import type { BodyContext } from "./message-markdown-context";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { ThreadCardRow } from "./view-model-rows";
 
@@ -51,6 +52,7 @@ import type { ThreadCardRow } from "./view-model-rows";
 export function ThreadCardMessage({
   row,
   index,
+  previewCtx,
   flash,
   canLaunchAgent,
   launchBusy,
@@ -59,6 +61,19 @@ export function ThreadCardMessage({
 }: {
   row: ThreadCardRow;
   index: AuthorIndex;
+  /**
+   * The preview's body context, **BUILT ONCE BY `transcript.tsx` FOR THE WHOLE PAGE**
+   * (release review, 2026-10-11).
+   *
+   * ⚠ **IT WAS `bodyContextOf({ index, mentionsMe: false })` HERE, UN-MEMOISED.** That
+   * builder walks the roster, and this component renders inside the transcript's
+   * `rows.map` — so a page of N cards did N roster walks on every render, next to a
+   * `mentions-list.tsx` whose `useMemo` documents exactly this rule for a bounded page.
+   * The facts are the page's, not the card's (same roster, `mentionsMe: false`, no
+   * citation ceiling), so the page is where it is built; that call site carries the
+   * whole argument.
+   */
+  previewCtx: BodyContext;
   flash: boolean;
   canLaunchAgent: boolean;
   launchBusy: boolean;
@@ -66,13 +81,6 @@ export function ThreadCardMessage({
   onOpen: () => void;
 }) {
   const first = row.threads[0];
-  // One context per card, not per token — `bodyContextOf` walks the roster
-  // (`mentions-list.tsx` states that rule where it holds one for a whole page).
-  // ⚠ `mentionsMe: false`: a card row carries no `metadata.mentionedUserIds` stamp, and
-  // the viewer wash is that server fact or nothing (`message-markdown-mentions.tsx`).
-  // ⚠ NO `newestSeq` / `onJumpToSeq`, so a `#1759` in the preview stays plain: the card is
-  // already a press that opens the thread, and a citation inside it could go nowhere else.
-  const previewCtx = bodyContextOf({ index, mentionsMe: false });
   return (
     <AuthoredRow
       id={row.id}
@@ -117,9 +125,17 @@ export function ThreadCardMessage({
             ⚠ INLINE ARM, and the `line-clamp-3` is why — `message-markdown-inline.tsx`
             rule 2: block markdown under a `line-clamp` does not clamp, and a preview lexed
             into paragraphs and fences would push this card open. The title above stays
-            plain: a thread title is a LABEL, not prose anybody wrote markdown into. */}
+            plain: a thread title is a LABEL, not prose anybody wrote markdown into.
+            🔒 **AND NO LINK IN IT IS AN ANCHOR** ({@link TextOnlyLinks}, 2026-10-11). The
+            inline arm lexes with GFM autolinks ON, so a bare URL — or an `a@b.com`, which
+            lexes to a `mailto` — in the opening message of a peer's thread became a live
+            `target="_blank"` anchor in a card whose two real actions are the buttons below
+            it. A preview states what the thread is ABOUT; following it is the thread's
+            own body, one press away. */}
         <p className="line-clamp-3 wrap-anywhere text-caption text-text-muted">
-          <MessageMarkdownInline text={row.preview} ctx={previewCtx} />
+          <TextOnlyLinks>
+            <MessageMarkdownInline text={row.preview} ctx={previewCtx} />
+          </TextOnlyLinks>
         </p>
 
         <div className="flex flex-wrap gap-1.5">

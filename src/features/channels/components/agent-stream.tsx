@@ -6,7 +6,7 @@
  * markdown (`agent-stream-prose.tsx`); log lines stay plain because they clip by slicing (`agent-stream-log.tsx`).
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { cn } from "@/shared/lib/utils";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
@@ -118,14 +118,27 @@ export function AgentStream({
   className?: string;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const items = buildAgentStream({
-    entries,
-    sent,
-    // The landing check is channel-wide: `sent` is filtered on `metadata.taskId`, which a threadless post lacks.
-    delivered,
-    pending,
-    destination,
-  });
+  /**
+   * ⚠ MEMOISED (release review, 2026-10-11): both of these ran on EVERY render, and this
+   * surface re-renders at TELEMETRY RATE — the liveness pill, the working row and the
+   * narration push all move while an agent is mid-turn. `buildAgentStream` walks the ring,
+   * the transcript and the pending rows and builds three `Set`/`Map`s; `groupStreamItems`
+   * walks the result again. Neither reads anything but its arguments (both files are pure
+   * by their own headers), so the deps ARE the inputs.
+   */
+  const items = useMemo(
+    () =>
+      buildAgentStream({
+        entries,
+        sent,
+        // The landing check is channel-wide: `sent` is filtered on `metadata.taskId`, which a threadless post lacks.
+        delivered,
+        pending,
+        destination,
+      }),
+    [entries, sent, delivered, pending, destination]
+  );
+  const groups = useMemo(() => groupStreamItems(items), [items]);
   // Always pin to the bottom (a log has no reading position to protect). The live tail is a dep because it
   // toggles without changing `items.length`.
   const working = liveness?.tone === "working";
@@ -149,7 +162,7 @@ export function AgentStream({
       ) : (
         <ol className="flex flex-col gap-2.5">
           {/* Grouped, not filtered: a tool run is one summary row; every other lane is a group of one. */}
-          {groupStreamItems(items).map((group) => (
+          {groups.map((group) => (
             <StreamRow
               color={color}
               key={group.key}
@@ -204,8 +217,17 @@ function StreamRow({
   /** Sent/display lanes only — a `directed` box is private and keeps its own weight. */
   color?: AgentColorKey | null;
 }) {
-  if (group.tools !== null) return <ToolRunGroup group={group} />;
   const item = group.items[0];
+  /**
+   * ⚠ MEMOISED, AND HOISTED ABOVE EVERY EARLY RETURN BECAUSE IT IS A HOOK (release review,
+   * 2026-10-11). `addresseeTags` resolves faces off the LIVE roster on purpose — that is
+   * `lib/recipient-tags.ts`'s rule and why a rename re-faces history — but it ran on every
+   * render of every row, and this surface re-renders at telemetry rate. Only the ids on the
+   * item and the roster can change the answer. ⚠ A tool group reaches here too and pays
+   * nothing: it carries no tag ids, so the function returns {@link NO_TAGS} on its first line.
+   */
+  const tags = useMemo(() => addresseeTags(item, roster), [item, roster]);
+  if (group.tools !== null) return <ToolRunGroup group={group} />;
   // A display (every decision too) is a sent post with a payload — checked before the plain sent box,
   // not given its own lane, so one set of dedupe rules keeps an echo from doubling a transcript row.
   if (item.lane === "sent" && item.display) {
@@ -235,7 +257,7 @@ function StreamRow({
           text={item.text}
           to={item.to}
           at={item.at}
-          tags={addresseeTags(item, roster)}
+          tags={tags}
           pending={item.pending}
           requestId={item.requestId}
           expired={item.expired}
@@ -253,7 +275,16 @@ function StreamRow({
   if (item.lane === "inbound") {
     return (
       <li>
-        <InboundBox text={item.text} sender={item.senderName} at={item.at} />
+        {/* ⚠ `fromOperator` IS THREADED, NOT DROPPED (release review, 2026-10-11): main stamps
+            it so this face can say "you" where the channel post is the operator's own, and the
+            field rode main → frame → item and stopped here — so their own post read back at
+            them as "Message received from <their own name>". */}
+        <InboundBox
+          text={item.text}
+          sender={item.senderName}
+          fromOperator={item.fromOperator}
+          at={item.at}
+        />
         {item.truncated === true && <TruncatedNote />}
       </li>
     );

@@ -53,7 +53,31 @@ import { StreamProse } from "./agent-stream-prose";
  */
 export const INBOUND_ANON_LABEL = "Message received";
 
-export function inboundLabel(sender: string | null | undefined): string {
+/**
+ * 🔴 **WHEN IT CAME FROM THE OPERATOR'S OWN ACCOUNT, THE FACE SAYS "you"** (release
+ * review, 2026-10-11).
+ *
+ * ⚠ **THE FLAG WAS ON THE WIRE AND ON THE ITEM AND THEN DROPPED.** Main stamps
+ * `fromOperator` *"so the face can say 'you' where it is the operator's own channel
+ * post"* (`spa-bridge-narration.ts`), `agent-stream-model.ts` carries it onto the
+ * item lane-gated — and the renderer never read it, so the operator's own post read
+ * back at them as **"Message received from Sam Wang"**: their own display name,
+ * captioned as if a counterparty had written it.
+ * ⚠ **IT IS STILL NOT A PRIVACY CLAIM AND IT DOES NOT MOVE THE LANE.** The message is
+ * in the channel either way; what changes is the one word naming who wrote it.
+ * ⚠ **IT OUTRANKS THE RESOLVED NAME, because the name is the LESS specific fact.**
+ * Main's `authorLabel` answers a display name or *"<person>'s agent"* — and ruling 2
+ * (2026-09-25) folds the operator's OWN agents into this flag, so `fromOperator` with
+ * a name attached is still the operator's account speaking. Naming it twice over
+ * would print the viewer's own name at them, which is what this closes.
+ */
+export const INBOUND_OPERATOR_LABEL = "Message received from you";
+
+export function inboundLabel(
+  sender: string | null | undefined,
+  fromOperator?: boolean
+): string {
+  if (fromOperator === true) return INBOUND_OPERATOR_LABEL;
   const name = typeof sender === "string" ? sender.trim() : "";
   return name ? `Message received from ${name}` : INBOUND_ANON_LABEL;
 }
@@ -69,6 +93,7 @@ export function inboundLabel(sender: string | null | undefined): string {
 export function InboundBox({
   text,
   sender,
+  fromOperator,
   at,
 }: {
   text: string;
@@ -82,6 +107,9 @@ export function InboundBox({
    * ⚠ `null` renders {@link INBOUND_ANON_LABEL} — never a blank, and never an id.
    */
   sender?: string | null;
+  /** THE OPERATOR'S OWN ACCOUNT SENT IT (`StreamItem.fromOperator`) — only `true` counts, and
+   *  it names the sender "you" instead. See {@link INBOUND_OPERATOR_LABEL}. */
+  fromOperator?: boolean;
   /** Epoch ms. `0` means the stamp was unreadable: the tag drops rather than printing an epoch date
    *  at somebody (the sent box's rule). */
   at?: number;
@@ -98,7 +126,7 @@ export function InboundBox({
     >
       <div className="flex items-center gap-1.5 bg-bg-inset px-2.5 py-[5px]">
         <span className="min-w-0 truncate text-micro font-medium text-text-secondary">
-          {inboundLabel(sender)}
+          {inboundLabel(sender, fromOperator)}
         </span>
         {stamp && (
           <span className="ml-auto shrink-0 text-micro text-text-muted">{stamp}</span>

@@ -37,6 +37,7 @@
 
 import { cn } from "@/shared/lib/utils";
 import { StreamProse } from "./agent-stream-prose";
+import { TextOnlyLinks } from "./message-markdown";
 import { useOverflowMeasure } from "./use-overflow-measure";
 import type { ArtifactMember } from "./view-model-artifacts";
 
@@ -239,14 +240,24 @@ export function ArtifactCard({
           (2026-10-10). It is the folding agent's own prose, and it was printing its
           `**asterisks**` two rows above member bodies that render them bold — one card,
           two readings of one author's markdown. `StreamProse` is the mount this file
-          already uses for those bodies, so the roster, the link policy and the block
-          geometry are the ones it wears; only the type and the padding are stated here. */}
+          already uses for those bodies, so the roster and the block geometry are the ones
+          it wears; only the type and the padding are stated here.
+          🔒 **THE ONE THING IT DOES *NOT* INHERIT IS THE BODIES' LINK POLICY**
+          ({@link TextOnlyLinks}, 2026-10-11). A summary is `ChannelArtifact.summary` —
+          ARBITRARY MEMBER INPUT, authored by whoever folded the run — and it is the
+          CAPTION of messages the reader has chosen not to open. A bare URL in it became a
+          live `target="_blank"` anchor the day the renderer landed (GFM autolinks are an
+          inline rule), making the fold's caption the one clickable destination on a card
+          whose own control merely unfolds. The words render; the member bodies BELOW keep
+          their anchors, which is where a link in this card belongs. */}
       {summary !== "" && (
-        <StreamProse
-          text={summary}
-          className="px-3 pt-2"
-          textClassName="text-caption text-text-muted"
-        />
+        <TextOnlyLinks>
+          <StreamProse
+            text={summary}
+            className="px-3 pt-2"
+            textClassName="text-caption text-text-muted"
+          />
+        </TextOnlyLinks>
       )}
       {members.length > 0 && <FoldedRun members={members} />}
       {members.length > 0 && members.length < count && (

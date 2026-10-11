@@ -90,8 +90,8 @@ const type = (field: HTMLTextAreaElement, value: string) =>
 
 const line = () => screen.getByLabelText("Recipients").textContent ?? "";
 /** 🔴 **NO REACH DRAWS `→ @nobody` AND THE LINE ALWAYS RENDERS** (Samuel, #3166,
- *  2026-10-11). ⚠ REVERSES 2026-09-20's *"just have it be nothing"*: the blank row
- *  was invisible in the case it taught, and it hid the working pills with it. */
+ *  2026-10-11), reversing 2026-09-20's *"just have it be nothing"*. ⚠ THREE `it` TITLES
+ *  BELOW READ `draws NOTHING` WHILE CALLING THIS — renamed in the 2026-10-11 review. */
 const nobodyLine = () => {
   expect(line()).toContain(REACH_NOBODY_LABEL);
 };
@@ -165,12 +165,12 @@ describe("the recipient line — always on, whatever the draft says", () => {
    * line to name it — RR3's configured arm, deleted with the room-wide field. The case worth
    * pinning in its place is the opposite one: a member who chose "No one" must be shown NO
    * reach at all, because the server will wake none of them. A line naming one would be
-   * OVERSTATING reach, which this file calls worse than no line — and since 2026-09-20 the
-   * honest rendering of no reach is no element.
+   * OVERSTATING reach, which this file calls worse than no line — and since #3166 the honest
+   * rendering of no reach is the `@nobody` NAME in the row, not a missing row.
    * ⚠ It is set on the ROSTER, not on a prop: the composer reads the viewer's own membership
    * row rather than being handed a channel value.
    */
-  it("🔒 draws NOTHING when the VIEWER chose No one, with two agents live", () => {
+  it("🔒 says `@nobody` when the VIEWER chose No one, with two agents live", () => {
     const body = mount({
       liveAgents: [PEER_AGENT, BARE_AGENT],
       members: [{ ...MEMBERS[0], unaddressedResponder: "none" }, MEMBERS[1]],
@@ -193,7 +193,7 @@ describe("the recipient line — always on, whatever the draft says", () => {
    * will not wake tells a person their message was seen when it was not. Silence predicted,
    * silence delivered; the server half of this exact fixture is in `draft-reach-parity.test.ts`.
    */
-  it("🔒 draws NOTHING with TWO live and neither addressed", () => {
+  it("🔒 says `@nobody` with TWO live and neither addressed", () => {
     const body = mount({ liveAgents: [PEER_AGENT, BARE_AGENT] });
     type(body, "who is around");
     nobodyLine();
@@ -224,7 +224,7 @@ describe("the recipient line — always on, whatever the draft says", () => {
     expect(line()).toContain("@agent-z9q1w4er");
   });
 
-  it("draws NOTHING in an empty room, before anything is typed", () => {
+  it("says `@nobody` in an empty room, before anything is typed", () => {
     mount();
     nobodyLine();
   });

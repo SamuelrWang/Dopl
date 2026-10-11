@@ -87,6 +87,41 @@ describe("the drafted reply renders as the transcript will render it", () => {
     expect(container.querySelector(".concave-field")).toBeNull();
   });
 
+  /**
+   * 🔴 **AND NOTHING IN THE CARD IS AN ANCHOR — THE OPERATOR APPROVES BYTES, NOT A
+   * DESTINATION** (release review, 2026-10-11).
+   *
+   * ⚠ **THIS IS THE LAST GATE BEFORE A MACHINE SPEAKS FOR A HUMAN.** Routing the draft
+   * through the block arm gave it the bodies' link policy, so an AGENT-AUTHORED
+   * `[tap me](https://…)` — and a bare url, since GFM autolinks are an inline rule —
+   * rendered as a live `target="_blank"` link inside the approve/decline card: a press
+   * that leaves the app instead of deciding, in the one surface whose whole job is a
+   * decision, over text the operator has not approved yet.
+   * ⚠ **THE WORDS AND THE URL BOTH STILL SHOW**, which is MORE of what will post rather
+   * than less — the point of a preview is to read the bytes, and a link's face hides its
+   * destination behind its label.
+   * ⚠ **THE MARKDOWN ITSELF IS UNTOUCHED** (the cases above): this is a rule about which
+   * lanes draw an `<a>`, not a retreat to plain text.
+   */
+  it("renders a drafted link as its WORDS, never a live anchor in the gate", () => {
+    const { container } = panel({
+      summary: "please approve",
+      proposedReply: "details in [the doc](https://evil.example/x) and at https://evil.example/y",
+    });
+    expect(container.querySelector("a")).toBeNull();
+    // The label survives, and so does the bare url the autolink would have swallowed.
+    expect(screen.getByText(/the doc/)).toBeTruthy();
+    expect(screen.getByText(/evil\.example\/y/)).toBeTruthy();
+  });
+
+  it("renders a link in the SUMMARY as words too — both halves of the card are the gate", () => {
+    const { container } = panel({
+      summary: "approve [this](https://evil.example/x)",
+      proposedReply: "body",
+    });
+    expect(container.querySelector("a")).toBeNull();
+  });
+
   it("prints HTML in a draft as characters — the untrusted-body rule holds here too", () => {
     const { container } = panel({ proposedReply: "hi <img src=x onerror=1>" });
     expect(container.querySelector("img")).toBeNull();

@@ -126,6 +126,36 @@ describe("the card's face", () => {
     expect(screen.queryByText(/\*\*/)).toBeNull();
   });
 
+  /**
+   * 🔴 **BUT A LINK IN THE SUMMARY IS TEXT, WHERE A LINK IN A FOLDED BODY IS AN ANCHOR**
+   * (release review, 2026-10-11).
+   *
+   * ⚠ **THE SUMMARY IS `ChannelArtifact.summary` — ARBITRARY MEMBER INPUT**, written by
+   * whoever folded the run, and it is the CAPTION of messages the reader has chosen not
+   * to open. Routing it through `StreamProse` on 2026-10-10 gave it the bodies' link
+   * policy along with their emphasis, and GFM autolinks are an inline rule — so a BARE
+   * url in it became a live `target="_blank"` anchor, making the fold's caption the one
+   * clickable destination on a card whose own control merely unfolds.
+   * ⚠ **THE PAIR IS THE ASSERTION.** "No anchor on this card" would also pass if the
+   * member bodies lost theirs, which would be a worse defect than the one being closed:
+   * a message inside a fold is still a message.
+   */
+  it("renders a url in the SUMMARY as text, while a folded BODY keeps its anchor", () => {
+    layoutIs(40);
+    const { container } = card({
+      summary: "see https://evil.example/x for the thread",
+      members: [
+        { id: "m-2", seq: 2, authorLabel: "Dana", time: "09:01", body: "docs: https://example.com/d" },
+      ],
+    });
+    const anchors = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    // The body's link survives...
+    expect(anchors.some((href) => href?.includes("example.com/d"))).toBe(true);
+    // ...and the summary's is not among them, though its words still read.
+    expect(anchors.some((href) => href?.includes("evil.example"))).toBe(false);
+    expect(screen.getByText(/evil\.example/)).toBeTruthy();
+  });
+
   it("names the artifact and prints count and span over the WHOLE artifact", () => {
     layoutIs(40);
     card({ count: 12, firstSeq: 2, lastSeq: 99 });

@@ -4,6 +4,7 @@ import { Check, ShieldQuestion, Sparkles, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { StreamProse } from "./agent-stream-prose";
+import { TextOnlyLinks } from "./message-markdown";
 import type { ChannelConsentRequest } from "../types";
 
 interface Props {
@@ -89,20 +90,31 @@ export function LaunchPanel({ request, onLaunch, onDecline, busy }: Props) {
           and matters (`message-markdown-inline.tsx` rule 2 is about the clamped lanes).
           ⚠ **`whitespace-pre-wrap` IS GONE FROM THE BODY AND MUST BE.** The renderer makes
           the newlines into real blocks; keeping the rule on top of it would pay for every
-          blank line twice. */}
+          blank line twice.
+          🔒 **AND NOTHING IN HERE IS AN ANCHOR** ({@link TextOnlyLinks}, 2026-10-11). This
+          is the last gate before a machine speaks for a human, and the operator is
+          approving BYTES: an agent-authored `[tap me](https://…)` rendered as a live
+          `target="_blank"` link turns the approve/decline card itself into a destination —
+          a press that leaves the app instead of deciding, inside the one surface in the
+          product whose whole job is a decision. The URL still shows, as its own characters,
+          which is MORE of what will post rather than less. */}
       {request.summary && (
-        <StreamProse
-          text={request.summary}
-          className="mb-1"
-          textClassName="text-body leading-relaxed text-text-primary"
-        />
+        <TextOnlyLinks>
+          <StreamProse
+            text={request.summary}
+            className="mb-1"
+            textClassName="text-body leading-relaxed text-text-primary"
+          />
+        </TextOnlyLinks>
       )}
       {preview && (
         <div className="concave-field mb-2 max-h-[200px] overflow-y-auto rounded-[8px] px-2.5 py-2">
-          <StreamProse
-            text={preview}
-            textClassName="text-caption leading-relaxed text-text-secondary"
-          />
+          <TextOnlyLinks>
+            <StreamProse
+              text={preview}
+              textClassName="text-caption leading-relaxed text-text-secondary"
+            />
+          </TextOnlyLinks>
         </div>
       )}
 
