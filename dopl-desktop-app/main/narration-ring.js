@@ -1,6 +1,5 @@
-// THE NARRATION RING’S TWO BOUNDS AND ITS ONE APPEND — §2 SPLIT out of `session-narration.js`
-// (2026-09-14, the 500-line cap). Pure, requires nothing, and every name is re-exported from
-// that file unchanged, so no caller and no test moved.
+// THE NARRATION RING’S TWO BOUNDS AND ITS ONE APPEND. Pure, requires nothing, and every name is
+// re-exported from `session-narration.js`.
 
 // The per-session ring. See the header for the arithmetic; 200 is roughly an hour of a
 // busy agent and comfortably more than a human scrolls back through.

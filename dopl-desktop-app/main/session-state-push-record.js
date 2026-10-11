@@ -1,8 +1,8 @@
 // THE PERSISTED "WORKSPACES THIS MACHINE HAS ROWS IN" RECORD — `session-state-push.js`'s memory
 // of where it has written, kept beside the listener's cursors in electron-store.
 //
-// ⚠ MOVED OUT OF `session-state-push.js` ON 2026-09-14 (F-698), at the 500-line cap and on a real
-// seam: this is what the writer REMEMBERS across runs, where that file is what it SENDS. Same
+// ⚠ ITS OWN MODULE (F-698): this is what the writer REMEMBERS across runs, where
+// `session-state-push.js` is what it SENDS. Same
 // factory shape as `session-state-push-wire.js › makeWireFilter` and for the same reason — the
 // writer's suites evaluate its block with an injected `store` and `diag`, so the record takes both
 // as arguments and the harness hands in the REAL module.

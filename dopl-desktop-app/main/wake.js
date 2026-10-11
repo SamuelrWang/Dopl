@@ -1,11 +1,6 @@
 // Wake-from-sleep fast catch-up: the one place that decides what has to be
 // kicked when this Mac comes back.
 //
-// SPLIT NOTE: moved out of index.js, which was AT the 500-line ENGINEERING §2
-// cap when the minimum-version gate landed (the app-menu.js / auth-actions.js
-// idiom). Nothing about the behavior changed in the move; the gate is the one
-// new participant.
-//
 // WHY EACH KICK. On resume the listener's long-polls are holding sockets that
 // died while the lid was shut, and both network stacks in this process (Chromium
 // in the renderer, undici in main) can be sitting on dead keepalive connections.

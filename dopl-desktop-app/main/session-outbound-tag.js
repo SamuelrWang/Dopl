@@ -33,8 +33,7 @@
 //     wire, and works for both a first-class UUID and a legacy `task-<channel>-<seq>` id (the
 //     server passes a non-UUID through verbatim rather than resolving it).
 //
-// Split out of session-io.js because that file is AT the 500-line §2 cap, and kept
-// dependency-free (session-profiles only, which is crypto + tool-profiles) so the truth table
+// Its own module, kept dependency-free (session-profiles only, which is crypto + tool-profiles) so the truth table
 // drives the real shipped code instead of a slice.
 
 const {
