@@ -50,18 +50,23 @@ function retireCodexTrustFile(home) {
   if (onlyTrustEntries(text)) fs.unlinkSync(file);
 }
 
+/** `dir` and every ancestor up to `/`, nearest first; `[]` for no path. */
+function ancestors(dir) {
+  const out = [];
+  if (typeof dir !== 'string' || !dir) return out;
+  let d = path.resolve(dir);
+  for (;;) {
+    out.push(d);
+    const up = path.dirname(d);
+    if (up === d) return out;
+    d = up;
+  }
+}
+
 // `thread/start.config.projects`: cwd AND every ancestor `untrusted` (a marker-found project root can sit
 // above cwd). Thread-scoped; nothing is written.
 function projectTrustFence(cwd) {
-  const out = {};
-  if (typeof cwd !== 'string' || !cwd) return out;
-  let dir = path.resolve(cwd);
-  for (;;) {
-    out[dir] = { trust_level: 'untrusted' };
-    const up = path.dirname(dir);
-    if (up === dir) return out;
-    dir = up;
-  }
+  return Object.fromEntries(ancestors(cwd).map((dir) => [dir, { trust_level: 'untrusted' }]));
 }
 
 const lstatOrNull = (file) => {
@@ -136,7 +141,7 @@ function isolatedEnv(env, userDataRoot) {
 }
 
 module.exports = {
-  isolatedEnv, privateHome, hasAmbientConfig, onlyTrustEntries, projectTrustFence,
+  isolatedEnv, privateHome, hasAmbientConfig, onlyTrustEntries, projectTrustFence, ancestors,
   hasAuth, removeAuth, loginEnv, clearLoginHome, installAuth, authFile,
   PRIVATE_HOME, AUTH_STORE_ARGS,
 };

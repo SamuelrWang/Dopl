@@ -7,22 +7,11 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { ancestors } = require('./config-home');
 
 const MAX_DEPTH = 4;
 const MAX_SKILLS = 1000;
 const NAME_RE = /^name:\s*["']?([^"'\r\n]+?)["']?\s*$/m;
-
-function ancestors(dir) {
-  const out = [];
-  if (typeof dir !== 'string' || !dir) return out;
-  let d = path.resolve(dir);
-  for (;;) {
-    out.push(d);
-    const up = path.dirname(d);
-    if (up === d) return out;
-    d = up;
-  }
-}
 
 /** Every root Codex reads skills from, as a superset: every ancestor of cwd, not only the project's. */
 function skillRoots(opts) {
