@@ -11,7 +11,7 @@
  * they fed (the transcript card's inline Decline / Launch agent, and
  * `thread-consent.tsx › ThreadAwaitingStrip`). **There is no inbound decision on
  * this page.** Launching an agent on a thread is a direct act — the card's
- * "Launch agent" calls `use-agents-panel.ts › launchAgent`, which spawns one on
+ * "Launch agent" calls `use-launch-controls.ts › useLaunchControls`'s `launchAgent`, which spawns one on
  * that thread and answers to nobody's request.
  *
  * ⚠ WHAT IS LEFT IS ONE DIRECTION AND IT IS THE OPERATOR'S OWN. Their agent
