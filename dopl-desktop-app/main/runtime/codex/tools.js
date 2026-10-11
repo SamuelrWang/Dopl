@@ -5,12 +5,10 @@ const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY,
   DOPL_CHANNEL_TOOL, normalizeProfile,
 } = require('../../tool-profiles');
-const doplTools = require('../../session-dopl-tools');
+const {
+  DOPL_WRITE_TOOLS, DOPL_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer,
+} = require('../../session-dopl-tools');
 const { canonicalDoplName } = require('../../mcp-tool-names');
-
-const DOPL_WRITE_TOOLS = doplTools.DOPL_WRITE_TOOLS;
-const DOPL_READ_TOOLS = doplTools.DOPL_READ_TOOLS;
-const { GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTools;
 
 // Per-server `enabled_tools` lists use the bare server-local name.
 function shortDoplName(full) {
@@ -79,52 +77,43 @@ function buildSessionToolConfig(profile) {
   const channelShort = shortDoplName(DOPL_CHANNEL_TOOL);
   // `dopl_channel` is in no deny or pre-approval list, so it reaches the gate for Axis B.
   const doplSurfaceDeny = DOPL_ADMIN_TOOLS.concat(RETIRED_DOPL_TOOLS);
+  const restrictedNative = () => ({ sandbox_mode: 'read-only', approval_policy: 'untrusted' });
+  // Every profile: no named built-ins, nothing pre-approved, the whole feature fence.
+  const row = (fields) => Object.assign({ builtinTools: [], preApproved: [] }, fields, { features: { ...FEATURE_FENCE } });
 
   if (p === 'read_only') {
-    return {
-      builtinTools: [],
-      preApproved: [],
+    return row({
       disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny, DOPL_SAFE_TOOLS, GRANULAR_SAFE_TOOLS),
       doplToolsPolicy: withGranularOffer([channelShort]),
-      native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
-      features: { ...FEATURE_FENCE },
-    };
+      native: restrictedNative(),
+    });
   }
 
   if (p === 'dopl_only') {
-    return {
-      builtinTools: [],
-      preApproved: [],
+    return row({
       // Non-admin Dopl surface offered; each write reaches the gate per op (`mcp.js`).
       disallowedTools: RESTRICTED_DENY.concat(doplSurfaceDeny),
       doplToolsPolicy: withGranularOffer(DOPL_SAFE_TOOLS.map(shortDoplName).concat([channelShort])),
-      native: { sandbox_mode: 'read-only', approval_policy: 'untrusted' },
-      features: { ...FEATURE_FENCE },
-    };
+      native: restrictedNative(),
+    });
   }
 
   // `full` minus the shell AND the escape that reaches it (`ESCALATION_ITEMS`); `native` stays null so the
   // operator's Axis-A pick rides.
   if (p === 'channel_agent') {
-    return {
-      builtinTools: [],
-      preApproved: [],
+    return row({
       disallowedTools: UNIVERSAL_HARD_DENY.concat(ESCALATION_ITEMS),
       doplToolsPolicy: null,
       native: null,
-      features: { ...FEATURE_FENCE },
-    };
+    });
   }
 
   // full: the universal floor only (Dopl admin + retired tools).
-  return {
-    builtinTools: [],
-    preApproved: [],
+  return row({
     disallowedTools: UNIVERSAL_HARD_DENY.slice(),
     doplToolsPolicy: null,
     native: null,
-    features: { ...FEATURE_FENCE },
-  };
+  });
 }
 
 // Declared data: `capability.js › floorWindowlessTool` raises a windowless session to it by index into

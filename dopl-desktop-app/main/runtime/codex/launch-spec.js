@@ -19,6 +19,7 @@ const resolveBin = require('./resolve-bin');
 const mcp = require('./mcp');
 const mcpReady = require('./mcp-ready');
 const normalizer = require('./normalize');
+const { makeFrameQueue, boundedInterrupt, handleFor } = require('./launch-handle');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionCredential = require('../../session-credential');
@@ -169,49 +170,14 @@ function buildLaunchSpec(request) {
   };
 }
 
-// ── HANDLE ───────────────────────────────────────────────────────────────────────────────────
-// Returned synchronously: an await between "the child exists" and "the session points at it" is the
-// two-children bug (a second child keeps the session's channel access with nothing to stop it).
-
-function makeFrameQueue() {
-  const queue = [];
-  let waiting = null;
-  let failure = null;
-  let closed = false;
-  const settle = () => {
-    if (!waiting) return;
-    const w = waiting; waiting = null;
-    if (queue.length) { w.resolve({ value: queue.shift(), done: false }); return; }
-    if (failure) { const e = failure; failure = null; w.reject(e); return; }
-    if (closed) { w.resolve({ value: undefined, done: true }); }
-  };
-  return {
-    push(frame) { if (!closed) { queue.push(frame); settle(); } },
-    // Ignored after `close()` (a deliberate shutdown is not a crash) and after a first failure (the cause).
-    fail(err) {
-      if (closed || failure) return;
-      failure = err instanceof Error ? err : new Error(String(err));
-      settle();
-    },
-    close() { closed = true; settle(); },
-    [Symbol.asyncIterator]() { return this; },
-    next() {
-      if (queue.length) return Promise.resolve({ value: queue.shift(), done: false });
-      if (failure) { const e = failure; failure = null; return Promise.reject(e); }
-      if (closed) return Promise.resolve({ value: undefined, done: true });
-      return new Promise((resolve, reject) => { waiting = { resolve, reject }; });
-    },
-  };
-}
-
-// Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
-// translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
 /** Do two absolute paths name the same folder? (`/var` vs `/private/var` on macOS.) */
 function sameDir(a, b) {
   const real = (p) => { try { return fs.realpathSync(p); } catch (_) { return path.resolve(p); } };
   return real(a) === real(b);
 }
 
+// Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
+// translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
 function makeApprovalHandler(s, dispatch, operatorServers, onUnknown, replyFor) {
   const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
@@ -426,56 +392,9 @@ function start(spec) {
   return handleFor(link, frames, () => threadId, () => activeTurnId);
 }
 
-const { assertPolicyTook } = policy;
-
 function codexBin() {
   const r = resolveBin.resolveCodexBin();
   return r && r.ok ? r.path : null;
-}
-
-// `turn/interrupt` on an already-interrupted turn never answers (codex-cli 0.155.1), so it is bounded.
-// It resolves, never rejects (the terminal state arrives on the frame stream either way), and the timer
-// is `unref`'d so a pending bound cannot hold Node open at exit (Node 22 CI).
-const INTERRUPT_TIMEOUT_MS = 5000;
-
-function boundedInterrupt(pending) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, INTERRUPT_TIMEOUT_MS);
-    if (typeof timer.unref === 'function') timer.unref();
-    pending.then(
-      () => { clearTimeout(timer); resolve(); },
-      () => { clearTimeout(timer); resolve(); }
-    );
-  });
-}
-
-function handleFor(link, frames, threadIdOf, turnIdOf) {
-  return {
-    [Symbol.asyncIterator]() { return frames[Symbol.asyncIterator](); },
-    next() { return frames.next(); },
-    /** Dopl's only way to stop a running turn (`session-engine.js › runEffect` `interruptQuery`). */
-    interrupt() {
-      const conn = link.conn;
-      if (!conn) return Promise.resolve();
-      // During the first turn's wait: cut it short; the pump interrupts the turn once it has an id.
-      if (link.ready.isWaiting()) {
-        link.interruptPending = true;
-        link.ready.release('interrupted');
-        return Promise.resolve();
-      }
-      const threadId = threadIdOf();
-      const turnId = turnIdOf();
-      // No active turn (cleared on `turn/completed`), no request: an interrupted turn never answers one.
-      if (!threadId || !turnId) return Promise.resolve();
-      return boundedInterrupt(conn.request('turn/interrupt', { threadId, turnId }));
-    },
-    close() {
-      link.closed = true;
-      link.ready.release('closed');
-      frames.close();
-      if (link.conn) link.conn.close();
-    },
-  };
 }
 
 /** Resume a parked thread. Codex's total continues across `thread/resume`, so core keeps the baseline. */
@@ -492,5 +411,5 @@ const appVersion = () => require('../../app-version').appVersion();
 module.exports = {
   buildLaunchSpec, start, resume,
   buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue,
-  assertPolicyTook, boundedInterrupt,
+  assertPolicyTook: policy.assertPolicyTook, boundedInterrupt,
 };
