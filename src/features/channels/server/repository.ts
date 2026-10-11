@@ -342,7 +342,7 @@ export {
 /**
  * The container a channel lives in, IF `userId` is a member of that channel, else `null` — so a
  * caller learns nothing about a channel it cannot see. Used only to resolve a request that named no
- * workspace (`shared/api/channel-route.ts › withChannelWorkspaceAuth`); every gate still runs after.
+ * workspace (`shared/api/channel-route.ts › channelWorkspace`); every gate still runs after.
  */
 export async function findChannelWorkspaceForMember(
   channelId: string,

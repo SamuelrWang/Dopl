@@ -166,7 +166,7 @@ export async function hasMessagesAfter(
 /**
  * ⚠ `latestThreadActivitySeq` USED TO LIVE HERE — the newest `seq` in a thread
  * that was not itself a close proposal. Its ONE caller was
- * `service-tasks-propose.ts › proposeTaskClose`, which keyed a re-proposal on
+ * service-tasks-propose.ts's proposeTaskClose, which keyed a re-proposal on
  * it; both are DELETED with thread closing (wiring plan Phase 4, 2026-08-18).
  *
  * ⚠ IT WAS THE PRODUCTION ORPHAN THIS PHASE ALMOST LEFT BEHIND, and the reason
@@ -185,7 +185,7 @@ export async function hasMessagesAfter(
 
 // ⚠ `findMessageByClientId` — the CHANNEL-SCOPED read of (channel,
 // client_msg_id) — STOOD HERE AND IS DELETED (2026-09-02). Its one caller was
-// `service-tasks.ts › storedOpeningSeq`, the arm a create took when it converged
+// service-tasks.ts's storedOpeningSeq, the arm a create took when it converged
 // on SOMEBODY ELSE's thread. Author-scoping the thread probe
 // (`repository-tasks.ts › findOwnTaskByClientId`) removed that arm: a colliding
 // key from another member yields a separate thread instead of converging, so

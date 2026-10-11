@@ -93,7 +93,7 @@ export async function listMyChannelMentions(
   // just fetched, and the profile hydration is the distinct authors of those
   // same rows. Neither is sized by the workspace.
   // ⚠ ONE PAGE-WIDE JOIN FOR THE AGENT HALF — name, colour and liveness together
-  // (`repository-sessions.ts › agentFacets`). The id still comes off the ONE
+  // (`repository-agent-facets.ts › agentFacets`). The id still comes off the ONE
   // parser, so the inbox and the message it points at cannot name one agent
   // differently. Bounded by the page like the two reads beside it.
   const agentIds = rows
@@ -155,7 +155,7 @@ export async function listMyChannelMentions(
   //
   // ⚠ **"ENDED" IS "NOT LIVE IN `channel_sessions`"** — that table is a projection
   // of live desktop registries and an ended session is dropped from it
-  // (`repository-sessions.ts › agentFacets` carries the argument).
+  // (`repository-agent-facets.ts › agentFacets` carries the argument).
   //
   // ⚠ **ONLY A ROW WE CAN ATTRIBUTE IS ELIGIBLE.** No agent id means CANNOT SAY,
   // not ENDED (INVARIANTS §11), so an older unstamped agent post and every human
