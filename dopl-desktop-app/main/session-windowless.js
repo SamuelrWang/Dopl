@@ -2,8 +2,8 @@
 // retirement's second half).
 //
 // A responder session now runs on the REAL SDK engine with NO window: it registers in the
-// engine's session Map (so the Agents tab, pause/end and the metrics all work), its emits
-// no-op on the null `win`, and the two decisions the window used to host move to the
+// engine's session Map (so the Agents tab, pause/end and the metrics all work), its only
+// emit is the gate bridge below (`claimGate`), and the two decisions the window used to host move to the
 // channels surfaces:
 //
 //   INBOUND  — auto-consumed. The spawn's message axis is floored at `auto_inbound`
@@ -64,7 +64,7 @@ const MAX_CONCURRENT_SESSIONS = 15;
 // function because the ENGINE'S ROLLBACK is the contract: `startSession` un-registers the
 // session when this returns false. Today it cannot (pinned by session-launch-refusal-detail).
 function attachSurface(s, _spec) {
-  s.windowless = true; // every emit no-ops on the null win; the Agents tab is the surface
+  s.windowless = true; // the Agents tab is the surface
   return true;
 }
 
@@ -77,8 +77,8 @@ function liveCount(sessions) {
 }
 
 // ── The gate bridge ──────────────────────────────────────────────────────────
-// Claim a PENDING gate payload on a windowless session. Returns true when claimed (the
-// caller must not fall through to the window emit). `decide(requestId, 'allow'|'deny')`
+// Claim a PENDING gate payload on a windowless session. Returns true when claimed (the engine's
+// `emit` ignores it; tests pin it). `decide(requestId, 'allow'|'deny')`
 // dispatches the reducer's own `permission_decision`, so state stays consistent.
 function claimGate(s, payload, decide) {
   if (!s.windowless || !payload) return false;
@@ -172,7 +172,7 @@ function noteDenied(s, tool) {
 // LIE (GATE-BUG-REPORT 2026-09-15, fix 1). Every `dopl_channel` call is classified per-OP on the
 // MESSAGE axis; `denied mcp__dopl__dopl_channel (tool mode bypass)` reads as "bypass is broken"
 // and sends the operator to widen a posture that never decided the call. The real code is already
-// on the payload — `session-gate-bridge.js:119` sets `gateReason` from the verdict — so the line
+// on the payload — `session-gate-bridge.js` sets `gateReason` from the verdict — so the line
 // prints THE REASON when there is one and falls back to the mode only when there is not.
 //
 // ⚠ IT IS `task_progress`, NOT A `message`. A lifecycle kind reaches no session at all
@@ -217,6 +217,21 @@ function recordDenial(s, tool, gateReason) {
   if (noteDenied(s, tool)) announceDenial(s, tool, gateReason);
 }
 
+/** A notification's open action: this session's thread. Best-effort navigation. */
+function openThread(s, channelName) {
+  try {
+    targeting.openChannelForEntry(
+      {
+        channel: { id: s.channelId, name: channelName },
+        workspaceId: s.workspaceId,
+        // openChannelForEntry no-ops without the SEGMENT — it rides the context.
+        workspaceSegment: (s.context && s.context.workspaceSegment) || null,
+      },
+      { threadId: s.taskId }
+    );
+  } catch (_) { /* navigation is best-effort */ }
+}
+
 function bridgeToolGate(s, payload, decide) {
   const rid = payload.requestId;
   const tool = toolLabel(payload);
@@ -225,18 +240,7 @@ function bridgeToolGate(s, payload, decide) {
     channelName,
     tool,
     onAllow: () => decide(rid, 'allow-once'),
-    onOpen: () => {
-      try {
-        targeting.openChannelForEntry(
-          {
-            channel: { id: s.channelId, name: channelName },
-            workspaceId: s.workspaceId,
-            workspaceSegment: (s.context && s.context.workspaceSegment) || null,
-          },
-          { threadId: s.taskId }
-        );
-      } catch (_) { /* navigation is best-effort */ }
-    },
+    onOpen: () => openThread(s, channelName),
   });
   if (!notif) {
     // The TRUE no-surface case — no Notification support on this platform. The pre-2026-08-31
@@ -292,8 +296,8 @@ function bridgeToolGate(s, payload, decide) {
 // is dismissed wholesale and takes the first, informative one with it. The first
 // denial of tool T on session S notifies; later denials of T on S do not.
 //
-// ⚠ THE DENY IS UNCHANGED AND STILL HAPPENS EVERY TIME. `claimGate` has already
-// dispatched it above and the diag line still records every one. This
+// ⚠ THE DENY IS UNCHANGED AND STILL HAPPENS EVERY TIME. `bridgeToolGate` has already
+// dispatched it before calling here and the diag line still records every one. This
 // de-duplicates the INTERRUPTION, never the decision — a notice cannot become a
 // grant by being skipped.
 //
@@ -317,10 +321,7 @@ function firstDenialOf(s, tool) {
 
 function notifyDenied(s, payload) {
   try {
-    const tool = String((payload && payload.name) || 'A tool')
-      .replace(/[\r\n\t]+/g, ' ')
-      .trim()
-      .slice(0, 40);
+    const tool = toolLabel(payload);
     // ⚠ KEYED ON THE SANITIZED, CAPPED LABEL — the string the operator actually reads, so two
     // names that DISPLAY identically collapse into one banner (they are one banner to a human),
     // and a hostile name cannot mint unbounded distinct keys past the cap above.
@@ -382,19 +383,7 @@ async function bridgeOutbound(s, payload, decide) {
     onSend: () => {
       void consent.submitDecision(s.workspaceId, rowId, 'allow', { channelName });
     },
-    onOpen: () => {
-      try {
-        targeting.openChannelForEntry(
-          {
-            channel: { id: s.channelId, name: channelName },
-            workspaceId: s.workspaceId,
-            // openChannelForEntry no-ops without the SEGMENT — it rides the context.
-            workspaceSegment: (s.context && s.context.workspaceSegment) || null,
-          },
-          { threadId: s.taskId }
-        );
-      } catch (_) { /* navigation is best-effort */ }
-    },
+    onOpen: () => openThread(s, channelName),
   });
   await watchRow(s, rowId, rid, decide);
 }
