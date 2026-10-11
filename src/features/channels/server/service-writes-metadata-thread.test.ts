@@ -23,174 +23,35 @@ vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
 vi.mock("./repository-tasks");
 
-import * as repo from "./repository";
-import * as repoSessions from "./repository-sessions";
+// ⚠ `repoMessages` and `repoTasks` are still named HERE because the cases below assert on them
+// directly; `repo` and `repoSessions` are only FILLED IN, which now happens in the fixtures, so
+// naming them here would be an unused import. The four `vi.mock` calls above still cover all
+// four — they are hoisted per module graph and must stay in this file.
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
 import { TaskForbiddenError } from "./errors";
 import { postMessage } from "./service-writes";
-import type {
-  ChannelMemberRow,
-  ChannelMessageRow,
-  ChannelRow,
-  ChannelTaskRow,
-} from "./dto";
-import type { ChannelContext } from "./service-shared";
+// ⚠ THE FIXTURE LAYER MOVED, NOT A SINGLE CASE (§2 split, 2026-10-11): this file reached 567
+// lines against a 500-line `error` cap. All 23 cases are still here — a cap-driven split of a
+// test file risks dropping one in transit, so what left is the layer that cannot be dropped
+// silently. `vi.mock` stays above, hoisted per module graph. Same shape as
+// `_service-writes-metadata-escalation-fixtures.ts`, which split on this cap on 2026-09-14.
+import {
+  USER,
+  PEER,
+  THIRD,
+  TASK_ID,
+  LEGACY_ID,
+  ctx,
+  desktopCtx,
+  taskRow,
+  opener,
+  capturedMetadata,
+  has,
+  installThreadMocks,
+} from "./_service-writes-metadata-thread-fixtures";
 
-const WS = "ws-1";
-const USER = "11111111-e29b-41d4-a716-446655440000";
-const PEER = "22222222-e29b-41d4-a716-446655440000";
-const THIRD = "33333333-e29b-41d4-a716-446655440000";
-const TASK_ID = "44444444-e29b-41d4-a716-446655440000";
-
-/** A legacy `task-{channelId}-{seq}` id — the shape the desktop still posts. */
-const LEGACY_ID = "task-chan-1-7";
-
-const ctx: ChannelContext = {
-  workspaceId: WS,
-  userId: USER,
-  credentialSubjectUserId: USER,
-  source: "agent",
-  role: "member",
-};
-
-/**
- * The ctx a lifecycle post really arrives on. `postMessage` refuses
- * `task_started` / `task_finished` / `task_failed` from an AGENT-TOKEN caller,
- * and the desktop's own echoes are not that lane:
- * `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the Electron
- * session's Supabase cookies, so ctx is `source: "user"` with the body declaring
- * `authorKind: "agent"`.
- */
-const desktopCtx: ChannelContext = { ...ctx, source: "user" };
-
-function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
-  return {
-    id: "chan-1",
-    workspace_id: WS,
-    created_by: USER,
-    slug: "dm",
-    name: "Direct message",
-    topic: "",
-    visibility: "private",
-    is_direct: true,
-    direct_key: [USER, PEER].sort().join(":"),
-    archived_at: null,
-    deleted_at: null,
-    created_at: "2026-07-31T00:00:00Z",
-    updated_at: "2026-07-31T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function memberRow(userId: string, role = "member"): ChannelMemberRow {
-  return {
-    channel_id: "chan-1",
-    user_id: userId,
-    workspace_id: WS,
-    role,
-    last_read_at: null,
-    notify_scope: "all",
-    agent_tool_profile: "full",
-    favorited_at: null,
-    added_by: USER,
-    joined_at: "2026-07-31T00:00:00Z",
-  };
-}
-
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
-  return {
-    id: TASK_ID,
-    channel_id: "chan-1",
-    workspace_id: WS,
-    title: "Wire the listener",
-    status: "open",
-    outcome: null,
-    mode: "interactive",
-    created_by: PEER,
-    target_user_id: USER,
-    created_at: "2026-07-31T00:00:00Z",
-    updated_at: "2026-07-31T00:00:00Z",
-    closed_at: null,
-    outcome_summary: null,
-    ...overrides,
-  };
-}
-
-/** The legacy exchange's opening request at seq 7: PEER asked USER. */
-function opener(overrides: Partial<ChannelMessageRow> = {}): ChannelMessageRow {
-  return {
-    id: "msg-open",
-    seq: 7,
-    channel_id: "chan-1",
-    workspace_id: WS,
-    author_user_id: PEER,
-    author_kind: "user",
-    kind: "message",
-    body: "please do X",
-    metadata: { to_user_id: USER },
-    client_msg_id: null,
-    created_at: "2026-07-31T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function insertedRow(
-  row: Parameters<typeof repoMessages.insertMessage>[0]
-): ChannelMessageRow {
-  return {
-    id: "msg-1",
-    seq: 98,
-    channel_id: row.channel_id,
-    workspace_id: row.workspace_id,
-    author_user_id: row.author_user_id,
-    author_kind: row.author_kind,
-    kind: row.kind,
-    body: row.body,
-    metadata: row.metadata,
-    client_msg_id: row.client_msg_id,
-    created_at: "2026-07-31T00:00:00Z",
-  };
-}
-
-/** The metadata object handed to `repoMessages.insertMessage`. */
-function capturedMetadata(): Record<string, unknown> {
-  return vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
-}
-
-function has(meta: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(meta, key);
-}
-
-beforeEach(() => {
-  // ⚠ THE AUTHOR'S OWN PROJECTION, EMPTY (2026-09-02, F-589). RR2 reads it to
-  // check the `client_msg_id` agent stamp — a CALLER-SUPPLIED claim — against
-  // the agents this author actually runs, so a file that leaves it unstubbed
-  // reaches the real admin client and times out rather than failing.
-  vi.mocked(repoSessions.listSessionStates).mockResolvedValue([]);
-  vi.clearAllMocks();
-  vi.mocked(repo.findChannelBySlug).mockResolvedValue(channelRow());
-  vi.mocked(repo.findMembership).mockImplementation(async (_c, userId) =>
-    userId === USER || userId === PEER ? memberRow(userId) : null
-  );
-  // ⚠ An explicit `to` also asserts ACTIVE workspace membership. Load-bearing
-  // for every addressed post now that DM auto-address is retired.
-  vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
-  vi.mocked(repo.listMembers).mockResolvedValue([
-    memberRow(USER, "owner"),
-    memberRow(PEER),
-  ]);
-  vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
-  vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
-  vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
-    insertedRow(row)
-  );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [],
-      truncated: false,
-    });
-  vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(opener());
-});
+beforeEach(installThreadMocks);
 
 describe("postMessage — legacy thread tag, kept for the exchange's own pair", () => {
   it("keeps the tag for the ADDRESSEE of the opening request (the responder's reply)", async () => {
