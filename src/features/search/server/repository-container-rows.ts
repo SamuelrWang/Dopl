@@ -37,7 +37,7 @@ export type OwnerRef = string | null;
 const CANDIDATE_LIMIT = SEARCH_CANDIDATE_ROW_LIMIT;
 
 /** Bounds the fence, not the page: past it a container under-counts rather than leaks. */
-export const SEARCH_REACH_ROW_LIMIT = 500;
+const SEARCH_REACH_ROW_LIMIT = 500;
 
 /**
  * Bases the caller may see — the fence every entry read is bounded by. Two queries,

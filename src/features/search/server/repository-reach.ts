@@ -65,7 +65,7 @@ export interface SearchReach {
  * A clipped reach is NOT reported as a clipped group (INVARIANTS §9): the two are
  * different claims, and under-counting beats lying about a specific group.
  */
-export const SEARCH_REACH_LIMIT = 500;
+const SEARCH_REACH_LIMIT = 500;
 
 /**
  * The caller's whole reach, in three queries for any number of containers.
