@@ -18,7 +18,7 @@ import type { BootPayload } from "#/pages/boot/use-boot-state";
  * only way into settings.
  *
  * ⚠ ITS OWN FILE, not thirty lines inside `index.tsx` — one coherent
- * responsibility, and that page is at the 500-line cap (INVARIANTS §1).
+ * responsibility.
  * ⚠ **IT READS NO PROFILE (2026-09-15)** — the face is gone, so `/api/user/profile`
  * has no renderer here; if an avatar ever returns, the read comes back UNGATED on
  * `open`, or the control pops into existence a round trip after paint.
@@ -31,12 +31,9 @@ import type { BootPayload } from "#/pages/boot/use-boot-state";
  * MEASUREMENT (2026-09-08).** The obvious shape is to hoist `open`/`section`
  * into `pages/home/index.tsx` and drill an `openSettings(section)` prop down
  * through `HomeOverviewPanels` → `UsageCard` → `CreditsBar` → the bar. That
- * page measured **499 lines** against the 500-line cap (INVARIANTS §1,
- * `eslint.config.mjs › max-lines`) on the day this landed — `wc -l` it before
- * repeating the claim — so the hoist could not be made without first splitting
- * an unrelated page, which is a bigger change than the feature. This keeps the
- * state exactly where it already lives and adds no prop to any component
- * between.
+ * page then measured 499 of its 500-line cap (it has been split since), so the
+ * hoist was blocked. The registry stays because it keeps the state where it
+ * lives and adds no prop to any component between.
  *
  * ⚠ **ONE SLOT, AND THAT IS SOUND HERE BECAUSE /home MOUNTS ONE OF THESE.** The
  * control is rendered once, in the page header strip. A second mount would make

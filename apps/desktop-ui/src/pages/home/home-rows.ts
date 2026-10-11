@@ -10,11 +10,10 @@ import type {
  * /home's LEFT-PANE ROWS, derived from **the ONE channel projection** (R-26 (b),
  * 2026-09-17).
  *
- * 🔒 **`HOME_CHANNELS_PATH` IS DELETED WITH THE ROUTE IT NAMED.** This page reads
- * `GET /api/channels?scope=account` (`use-channels.ts › useAccountChannels`), and
- * its rows are `Channel` — the same type the workspace channels page renders.
- * `HomeChannel` and both cache-to-cache BRIDGES went with the second cache: **one
- * cache needs no bridge** (G4).
+ * 🔒 This page reads `GET /api/channels?scope=account` (`use-channels.ts ›
+ * useAccountChannels`), and its rows are `Channel` — the same type the workspace
+ * channels page renders. **One cache needs no bridge** (G4): no home-shaped
+ * channel route or cache.
  */
 
 /** ⚠ NOT workspace-scoped — `withUserAuth`, no `X-Workspace-Id`. ⚠ The LEGACY
@@ -102,9 +101,8 @@ export function homeChannels(payload: ChannelListPayload): Channel[] {
  *
  * ⚠ TWO SHAPES, ONE QUESTION (2026-08-25). A BOUND link is a state of a channel
  * (`linkOut`); a LEGACY unbound one has no channel and is a row of its own. The
- * row's "Link out" chip is the ONLY reader since 2026-08-27 — the segmented
- * "All | Links" filter and its badge, the other two, are deleted (Samuel: links
- * are no longer a filterable state). It stays ONE named predicate because the
+ * row's "Link out" chip is the ONLY reader (Samuel: links are not a filterable
+ * state). It stays ONE named predicate because the
  * chip has to answer for both shapes, and an inline test that knows only one of
  * them renders a row with an open invitation as a row without one.
  *
@@ -116,25 +114,18 @@ export function hasLinkOut(row: HomeRow): boolean {
 }
 
 /**
- * 🔒 **`visibleRows` AND ITS `searchText` ARE DELETED (Samuel, 2026-09-17:**
- * *"right now, during search, it just filters by channel name, and it like
- * removes channel on the left sidebar. that doesnt make sense, it should be a
- * pop up like this."*). The header pill drives a popup now
- * (`@/features/search/components/search-popup`) and this column shows every row,
- * always — so there is no narrowing to own here, and `index.tsx` hands the list
- * and the record pane the SAME `homeRows` output. **Do not re-derive a filter
- * for this list**: two answers to one query is the bug the popup replaced.
+ * 🔒 **NO SEARCH FILTER ON THIS LIST (Samuel, 2026-09-17).** Search is the header
+ * pill's popup (`@/features/search/components/search-popup`); this column shows
+ * every row, and `index.tsx` hands the list and the record pane the SAME
+ * `homeRows` output. **Do not re-derive a filter**: two answers to one query is
+ * the bug the popup replaced.
  */
 
 /**
  * EVERYBODY ELSE IN THIS CHANNEL, oldest join first — the ONE read of
  * `Channel.peers` on this page.
  *
- * 🔒 **A PLAIN `?? EMPTY_PEERS` NOW, AND THE TWO-FIELD MERGE IS GONE (R-26).** It
- * used to fall back through `HomeChannel.peer` for entries the 2026-08-26 upgrade
- * left in a 24h-`gcTime` cache; that payload and its entry no longer exist, and the
- * account list is read under a tuple no bundle has ever written — so there is
- * nothing to degrade from and the §8 exception is retired with it.
+ * 🔒 A plain `?? EMPTY_PEERS` (R-26): no older cache entry exists to degrade from.
  *
  * ⚠ **IT STAYS A FUNCTION, AND ITS ENFORCEMENT STAYS**: `home-rows.test.ts` reads
  * this directory's SOURCE and fails if any other file names `.peers`.
@@ -146,21 +137,11 @@ export function channelPeople(channel: Channel): readonly ChannelPeer[] {
 /**
  * The row's own title — **THE CHANNEL'S NAME, ALWAYS.**
  *
- * 🔒 **THE MEMBER-DERIVED TITLE IS DELETED (Samuel, 2026-09-01), AND THIS IS A
- * MODEL CORRECTION, NOT A TWEAK.** This function used to name a channel after
- * the PEOPLE in it — one peer's display name, then their email, then two names
- * and a `+N` — which made a channel's identity a function of its membership. So
- * adding somebody to a channel RENAMED it: the row you had been working in for
- * a week became "Priya Shah" (or `priya@shahco.tax`) the moment she claimed a
- * link, and it changed again when the next person joined. **A channel's name is
- * its own immutable display identity; a roster is not a name.**
+ * 🔒 **NEVER A MEMBER-DERIVED TITLE (Samuel, 2026-09-01).** Naming a channel after
+ * the people in it made adding somebody RENAME it. **A channel's name is its own
+ * immutable display identity; a roster is not a name.**
  *
- * ⚠ **THAT PRESENTATION WAS A DM'S, ON A THING THAT IS NOT A DM.** It was
- * written on 2026-08-24 when a home container really was a two-party
- * relationship, and it outlived the model twice — the channel-first inversion
- * the same week (a channel exists BEFORE anyone else is in it) and the
- * multi-member containers of 2026-08-30. ⚠ **REAL DMs ARE UNAFFECTED and their
- * code is elsewhere**: `channels.is_direct` + `Channel.directPeer`, rendered by
+ * ⚠ **REAL DMs are a different thing and their code is elsewhere**: `channels.is_direct` + `Channel.directPeer`, rendered by
  * the channels feature. Nothing in this file ever touched them — home
  * containers hold a PRIVATE, NON-DIRECT channel by construction
  * (`home/server/repository-containers.ts › listContainerChannels` says so).

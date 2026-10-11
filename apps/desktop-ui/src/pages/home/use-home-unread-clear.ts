@@ -6,11 +6,8 @@ import { channelKeys } from "@/features/channels/client/query-keys";
  * CLEAR THE OPEN CHANNEL'S UNREAD MARKS — re-read the channel LIST once the
  * selected channel's TRANSCRIPT has come back (2026-09-13).
  *
- * 🔒 **IT IS NOT A BRIDGE ANY MORE, AND THE RENAME SAYS SO (Wave 3, R-26 (b)).**
- * It was `use-home-unread-refresh.ts`, one of two cache-to-cache bridges holding
- * `GET /api/home/channels` in step with the channels cache; that cache is deleted
- * and the other bridge went with it. What is left is ONE invalidation of ONE cache,
- * because the row list and the transcript are still two ENTRIES of it.
+ * 🔒 ONE invalidation of ONE cache (R-26 (b)): the row list and the transcript are
+ * two ENTRIES of it.
  *
  * 🔒 **AND IT IS STILL NEEDED — MEASURED, NOT ASSUMED.** Dropping it leaves the dot
  * and the `@ N` pill lit over a channel the operator is reading: every
