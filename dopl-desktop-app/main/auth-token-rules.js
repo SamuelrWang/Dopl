@@ -14,7 +14,7 @@
 // `require`-able for real — which is strictly better than the slice and is the
 // direction a future test should move.
 //
-// ⚠ `auth-tokens.js` RE-EXPORTS every name below, so no call site moved.
+// ⚠ `auth-tokens.js` re-exports only `shouldRepairAuth`; require this file for the rest.
 
 // ─── BEGIN AUTH-TOKENS-PURE (no electron/require refs below) ────────────────
 // Every scheduling and failure decision is a pure function of injected numbers, so

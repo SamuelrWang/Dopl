@@ -38,14 +38,13 @@ const { diag } = require('./diag');
 // ─── THE PURE CORE LIVES NEXT DOOR (main/auth-token-rules.js) ───────────────
 // Every scheduling and failure decision — the constants, `needsRefresh`,
 // `refreshDelayMs`, `classifyFailure`, `nextFailureState`, `retryDelayMs`,
-// `mayRefreshNow`, `shouldRepairAuth` — moved there VERBATIM (sentinels included, so
-// the two suites still slice one source) when this file hit the §2 cap and the
-// 2026-08-30 rejected-session latch had nowhere to go. Nothing inside changed, and
-// every name is re-exported below, so no call site moved.
+// `mayRefreshNow`, `shouldRepairAuth` — live there (sentinels included, so the
+// suites slice one source). Only `shouldRepairAuth` is re-exported below: it is
+// the one rule a caller (api-repair, ui-bridge) reaches through this module.
 const rules = require('./auth-token-rules');
 const {
-  NEAR_EXPIRY_SEC, DEFAULT_LIFETIME_SEC, MAX_DEFINITIVE_FAILURES,
-  needsRefresh, refreshDelayMs, classifyFailure, nextFailureState,
+  DEFAULT_LIFETIME_SEC, MAX_DEFINITIVE_FAILURES,
+  needsRefresh, refreshDelayMs, nextFailureState,
   retryDelayMs, mayRefreshNow, shouldRepairAuth,
 } = rules;
 
@@ -445,14 +444,6 @@ module.exports = {
   onWake,
   onSignIn,
   onSignOut,
-  // Pure core — exported for callers that need the rule, not the timer.
-  needsRefresh,
-  refreshDelayMs,
-  classifyFailure,
-  nextFailureState,
-  retryDelayMs,
-  mayRefreshNow,
+  // The 401 rule, for callers that need it without the timer.
   shouldRepairAuth,
-  NEAR_EXPIRY_SEC,
-  MAX_DEFINITIVE_FAILURES,
 };

@@ -248,11 +248,6 @@ function isSignedIn() {
   return st.signedIn;
 }
 
-// Token-free one-liner for the diag log: which source(s) currently authorize us.
-function signedInSource() {
-  return signedInState().source;
-}
-
 // FIX S4 — the listener's hook. channel-listener only re-resolves `myUserId` when it
 // is null (it caches the id for the life of the process), so a machine whose two
 // credentials disagree would keep classifying traffic under whichever identity it
@@ -370,7 +365,6 @@ module.exports = {
   isSignedIn,
   ensureSignedIn,
   refreshSignedInState,
-  signedInSource,
   identityMismatch,
   invalidateCookieIdentity,
   signOut,

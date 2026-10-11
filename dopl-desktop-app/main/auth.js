@@ -442,16 +442,12 @@ module.exports = {
   getAccessTokenInfo,
   refresh,
   ensureFresh,
-  getSessionCookieHeader: cookies.getSessionCookieHeader,
   getAuthCookie,
   writeSessionCookies: cookies.writeSessionCookies,
-  clearSession,
   // Q4 signed-in state (auth-state.js) — re-exported so every existing
   // `auth.isSignedIn()` call site keeps working, now cookie-aware.
   isSignedIn: state.isSignedIn,
   ensureSignedIn: state.ensureSignedIn,
-  refreshSignedInState: state.refreshSignedInState,
-  signedInSource: state.signedInSource,
   identityMismatch: state.identityMismatch, // S4: the jar and the blob name different users
   signOut: state.signOut,
 };

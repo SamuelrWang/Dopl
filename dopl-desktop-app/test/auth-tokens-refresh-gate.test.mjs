@@ -41,7 +41,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const TOKENS = readFileSync(join(HERE, "..", "main", "auth-tokens.js"), "utf8");
 // ⚠ THE PURE BLOCK MOVED (2026-08-30). It lives in `main/auth-token-rules.js` — sentinels
 // and all — because auth-tokens.js hit the §2 cap and the rejected-session latch had
-// nowhere to go. Same source, new address; auth-tokens.js re-exports every name.
+// nowhere to go. Same source, new address.
 const RULES = readFileSync(join(HERE, "..", "main", "auth-token-rules.js"), "utf8");
 
 const PURE = between(
