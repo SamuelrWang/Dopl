@@ -51,7 +51,9 @@ function refusalFor(field: string): string {
 
 describe("packages/mcp-server knowledge caps mirror the server's", () => {
   it("input shape: dopl_kb accepts a body of exactly MAX_BODY_BYTES and refuses one more", () => {
-    const body = z.object(kbShape()).shape.body;
+    // `ZodRawShape` types its values as zod/v4/core's `$ZodType`, which has no `.safeParse`; the
+    // package registers classic schemas, so narrow to the classic type (no runtime change).
+    const body = z.object(kbShape()).shape.body as z.ZodType;
     expect(body.safeParse("x".repeat(MAX_BODY_BYTES)).success).toBe(true);
     expect(body.safeParse("x".repeat(MAX_BODY_BYTES + 1)).success).toBe(false);
   });
