@@ -1,6 +1,5 @@
-// ⚠ NO "use client" AND NO COMPONENT — this file is two data tables now (the
-// `RequestPermissionRowView` that made it a component was deleted below). It is
-// imported by client components and renders nothing itself.
+// ⚠ NO "use client" AND NO COMPONENT — this file is two data tables, imported by
+// client components; it renders nothing itself.
 import type { SelectMenuOption } from "@/shared/ui/select-menu";
 import type { MessageMode } from "../lib/permission-modes";
 import type { PermissionLevel } from "../lib/launch-selection";
