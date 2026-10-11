@@ -16,14 +16,8 @@ import {
 } from "./dto";
 
 /**
- * ⚠ EXPLICIT AGAIN (2026-08-24), and the star it replaces was a DATED EXPIRY
- * rather than a lapse: `kind` shipped in `20260823150000_home_link_channels`,
- * naming a nonexistent column in a PostgREST select is a 42703 ERROR rather
- * than a null, so `*` was the only safe spelling while that migration was
- * unapplied. It has applied — the measurement is `supabase migration list` /
- * MCP `list_migrations`, where the NAME matches and the version is re-stamped
- * (INVARIANTS §12) — so the expiry is discharged here and §9's list-reads-select-
- * columns rule holds again with nothing carved out of it.
+ * Explicit column lists (§9's list-reads-select-columns rule; the temporary `*` and
+ * its discharged expiry are recorded in INVARIANTS).
  *
  * ⚠ NO query filters on `kind` even now: every kind filter in this feature runs
  * in CODE, through `isStandardWorkspace`, so there is one predicate to read.
@@ -148,9 +142,8 @@ const OWNED_WORKSPACE_LIMIT = 200;
  * there exactly one standard row here?" — an account that owns 200 workspaces
  * is ambiguous under any prefix of them.
  *
- * ⚠ **A COLD PATH AGAIN SINCE 2026-09-07, AND THE BOUND STAYS.** Its reader was
- * on the MCP credit-consume reroute — once per tool call, every container agent
- * — and that reroute is DELETED. An unbounded owner scan still has no ceiling.
+ * ⚠ A cold path (billing only), and the bound stays: an unbounded owner scan has
+ * no ceiling.
  */
 async function listWorkspacesOwnedBy(userId: string): Promise<Workspace[]> {
   const { data, error } = await supabaseAdmin()
@@ -270,13 +263,9 @@ export async function findMembership(
   const { data, error } = await db
     .from("workspace_members")
     .select(MEMBER_COLS)
-    // 🔒 `status='active'` (added 2026-08-26). THIS READ IS AN AUTHZ READ — its
-    // callers compare `.role` against a floor (`service.ts ›
-    // requireWorkspaceRole`, `home/server/service-writes.ts ›
-    // mintContainerLink`) — and without the filter it happily returned a
-    // `revoked` or `pending` row's role, so a removed admin still measured as
-    // one. Every sibling read here gates on status; this one did not, and
-    // nothing in its shape said so.
+    // 🔒 `status='active'`: THIS IS AN AUTHZ READ — callers compare `.role` against a
+    // floor (`service.ts › requireWorkspaceRole`, `home/server/service-writes.ts ›
+    // mintContainerLink`), so a `revoked`/`pending` row's role must never answer.
     .eq("status", "active")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
@@ -345,12 +334,9 @@ export async function listMemberRolesByUserIds(
   const { data, error } = await supabaseAdmin()
     .from("workspace_members")
     .select("user_id, role")
-    // ⚠ `status='active'` (added 2026-08-26) — every sibling read here gates on
-    // it and this one did not. The consumer is the roster's "Guest" pill, so a
-    // departed member's `revoked` row rendered their STALE role: a peer removed
-    // from the container kept whatever pill they had, and a departed guest kept
-    // reading as a guest beside a name that is no longer a member. An absent
-    // entry maps `?? null` → "not a guest", which is the fail-safe answer.
+    // ⚠ `status='active'`, like every sibling read: a departed member's stale role
+    // must not keep its "Guest" pill. An absent entry maps `?? null` → "not a
+    // guest", the fail-safe answer.
     .eq("status", "active")
     .eq("workspace_id", workspaceId)
     .in("user_id", userIds);
@@ -463,38 +449,6 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   if (error) throw error;
 }
 
-export interface ProfileSummary {
-  email: string | null;
-  displayName: string | null;
-  avatarUrl: string | null;
-}
-
-/**
- * Batch profile lookup for member-list hydration — one query, not a per-user
- * `auth.admin.getUserById` loop.
- */
-export async function listProfileSummaries(
-  userIds: string[]
-): Promise<Map<string, ProfileSummary>> {
-  const out = new Map<string, ProfileSummary>();
-  if (userIds.length === 0) return out;
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("profiles")
-    .select("id, email, display_name, avatar_url")
-    .in("id", userIds);
-  if (error) throw error;
-  for (const row of (data ?? []) as Array<{
-    id: string;
-    email: string | null;
-    display_name: string | null;
-    avatar_url: string | null;
-  }>) {
-    out.set(row.id, {
-      email: row.email,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-    });
-  }
-  return out;
-}
+// The batch profile read lives in `./repository-profiles` (a separate table); re-exported so
+// every importer and every module mock of this path is unchanged.
+export { listProfileSummaries, type ProfileSummary } from "./repository-profiles";

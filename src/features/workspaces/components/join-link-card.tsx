@@ -30,9 +30,8 @@ type JoinOutcome =
  *   - signed in  → "Request to join"; success says it is with an admin
  *   - already a member → desktop handoff, straight into the workspace
  *
- * ⚠ NOTHING HERE NAVIGATES. Both branches used to `router.push` an SPA path,
- * and `/{slug}-{publicId}` is 302'd to `/get-started`. The outcome of a join is
- * a `dopl://` handoff (`desktop-handoff-panel.tsx`), not a page.
+ * ⚠ NOTHING HERE NAVIGATES: `/{slug}-{publicId}` is 302'd to `/get-started`, so the
+ * outcome of a join is a `dopl://` handoff (`desktop-handoff-panel.tsx`), not a page.
  *
  * The already-member branch is ALSO the approved-request branch: a requester
  * returning after approval gets `already_member` from `requestJoin`, so the
