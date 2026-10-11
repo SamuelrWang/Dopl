@@ -439,9 +439,5 @@ module.exports = {
   register,
   broadcastAuthState,
   resolveApiUrl,
-  // ⚠ `isExternalUrl` / `isAllowedExternalUrl` are GONE from here (#3031): the OS-opener
-  // policy is `main/external-url.js › isOpenableExternalUrl`, which spa-window.js shares.
   isWorkspaceId,
-  isAppWindowSender,
-  AUTH_STATE_EVENT,
 };
