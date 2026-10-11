@@ -266,7 +266,6 @@ module.exports = {
   getCursor,
   setCursor,
   markSeeded,
-  seedModeFor,
   shouldSeed,
   notifyStale,
   resetStale,
@@ -274,7 +273,6 @@ module.exports = {
   apiFetch,
   awaitOrCheap,
   idleAfterAwait,
-  sleepOrWake,
   wakeEntry,
   // Re-exported so the listen loop releases the bodies it never reads.
   discardBody,

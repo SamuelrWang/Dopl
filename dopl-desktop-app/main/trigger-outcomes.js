@@ -1,40 +1,18 @@
 // trigger-outcomes.js — EVERY ECHO INTO THE CHANNEL THAT IS NOT A REPLY.
 //
-// Extracted from trigger.js to hold that AT-CAP file (§2, 500 lines) under the cap. TWO FAMILIES
-// lived here, and ONE IS LEFT. What they shared is the shape that matters: nothing was (or will
-// be) posted as an ANSWER, and the only job is to stop the peer waiting on one.
+// Nothing here is posted as an ANSWER; the only job is to stop the peer waiting on one.
 //
-// ── ⚠ (1) THE REQUEST TERMINALS ARE DELETED (2026-08-22, Samuel's inbound-consent ruling) ────
-//
-// `inboundDenied`, `inboundExpired`, `outboundCancelled` and `onInterrupted` each posted a
-// `task_failed` under the original `task_started`'s deterministic taskId, and the METADATA FLAG
-// was what the web rendered: `{declined}` a calm "Declined", `{dropped}` "Reply was not sent",
-// `{interrupted}` a calm "Interrupted", no flag a REAL error. Every one of the four was a
-// resolver of `consent-watcher.js`, dispatched when a WATCHED INBOUND RECORD reached a terminal
-// status — and there are no inbound records: the row, the watcher, its durable store and its poll
-// cadence are all deleted (`trigger.js`'s header carries the ruling). A peer's ask now raises a
-// notification whose Dismiss decides nothing, so there is no decline to echo, no expiry to
-// report, and no mid-spawn record for a restart to find interrupted.
-//
-// ⚠ THE FLAG VOCABULARY ITSELF IS NOT RETIRED and must not be treated as free: `CALM_FLAG_KEYS`
+// ⚠ THE CALM FLAG VOCABULARY IS NOT RETIRED and must not be treated as free: `CALM_FLAG_KEYS`
 // stay reserved server-side (INVARIANTS §5), installed builds still write them, and the web still
-// renders them. What went is this machine's four PRODUCERS of them.
+// renders them. This machine no longer produces the request-terminal ones (inbound consent is
+// retired, 2026-08-22).
 //
-//   (2) THE SESSION LIFECYCLE ECHO — `lifecycleHandlers`, the engine's `setLifecycleHandlers`
-//       seam, and now the whole of this file. ⚠ MOVED HERE FROM `main/session-window.js` ON
-//       2026-08-20, and the move is the point: that file was the SESSION WINDOW FACTORY, deleted
-//       with the window model (INVARIANTS §11, F-228), and this half is nothing to do with
-//       windows. It is what tells a WAITING PEER that this machine stopped, it is required of the
-//       quit path (§11's quit guard depends on it), and a WINDOWLESS session needs it exactly as
-//       much as a windowed one did. Deleting the factory with this attached would have silently
-//       taken peer notification with it — which is why the move is its own wave, ahead of any
-//       deletion.
+// THE SESSION LIFECYCLE ECHO — `lifecycleHandlers`, the engine's `setLifecycleHandlers` seam. It
+// tells a WAITING PEER that this machine stopped; the quit path requires it (§11's quit guard),
+// and a windowless session needs it.
 //
-// SEAM: the lifecycle echo takes NO injection — it derives its own targets from the flat info
-// object the engine hands it. ⚠ `bind({ entryFromRecord, msgFromRecord, taskIdFor })` went with
-// the terminals above: those three record→shape helpers existed to rebuild an `entry`/`m` pair
-// from a PERSISTED consent record, and nothing persists one. Leaf deps are required directly;
-// nothing here requires trigger.js back.
+// SEAM: no injection — it derives its own targets from the flat info object the engine hands it.
+// Leaf deps are required directly; nothing here requires trigger.js back.
 
 const { postTaskEvent } = require('./channel-post');
 const { diag } = require('./diag');
@@ -75,16 +53,7 @@ const AUTH_HELD_REPLY =
 const CANNOT_RUN =
   "I couldn't pick this up — my agent isn't able to run it right now. Try me again later, or reach me another way.";
 
-// ⚠ `notifyReplied(entry, reply)` STOOD HERE AND IS DELETED (2026-08-20) — zero callers. It
-// raised a local "Dopl: replied in <channel>" banner carrying the REPLY TEXT, and its caller
-// was the `claude -p` headless lane, which handed a reply STRING back for the desktop to post
-// on the agent's behalf. That lane is deleted (Samuel's ruling, the same day) and the surviving
-// executor posts its own bytes, so there is no moment at which main holds a reply to announce.
-// ⚠ IT IS ALSO THE SHAPE INVARIANTS §11 RETIRED: per-message desktop notifications are gone —
-// the MENTION is the escalation and the Tags inbox is the record. Reviving this would be a new
-// notification producer, and there are exactly three.
-
-// ── (2) THE SESSION LIFECYCLE ECHO (engine → channel) ────────────────────────
+// ── THE SESSION LIFECYCLE ECHO (engine → channel) ────────────────────────
 // The engine's runLifecycle hands a flat info object { channelId, taskId, workspaceId,
 // side, sessionId, key, sdkSessionId }. postTaskEvent needs only channel.id, workspaceId,
 // and a `seq` for the idempotent clientMsgId `${kind}-${channelId}-${seq}` (it does NOT
@@ -103,13 +72,8 @@ const CANNOT_RUN =
 //           cycles that both die before init still get distinct rows.
 // The DELIBERATE same-cycle dedupe (I-LOW(b)) is preserved: two attempts within one cycle
 // share that cycle's sdk id, so they still collapse to ONE server row.
-//
-// ⚠ P2-9's TERMINAL COLLAPSE LIVED HERE AND WENT WITH THE TERMINAL ECHOES (Phase 5,
-// 2026-08-18). It keyed `task_finished` / `task_failed` on the THREAD rather than the cycle,
-// so five park+resume cycles posted one row for one logical failure — a rule about a card
-// this phase deleted, for kinds this module no longer posts. The `kind` argument went with
-// it: ONE kind reaches this derivation now, and it is the non-terminal note, which wants the
-// per-cycle discriminator FIX #2 gives it (a genuinely new run that ends is a new note).
+// Only the non-terminal note reaches this derivation, which wants FIX #2's per-cycle
+// discriminator (a genuinely new run that ends is a new note).
 function echoSeq(info) {
   const i = info || {};
   if (i.seq != null) return i.seq;

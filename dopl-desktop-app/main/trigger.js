@@ -212,10 +212,4 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
   return true;
 }
 
-// `skippedHint` lived here and is GONE with the local banner it wrote (Samuel's spec,
-// 2026-10-09): it was the operator-facing half of the unanswered-request notice — which of `cap`
-// / `no-sdk` it was and what to do about it. Nothing else called it. The PEER's half is
-// untouched and still vendor-free (`trigger-outcomes.js › CANNOT_RUN`), and the skip code is
-// still in `diag` above. Re-adding the hint means re-adding a notification, which needs a ruling.
-
-module.exports = { handleTrigger, sendFyi, notifyAsk, launchResponderSession };
+module.exports = { handleTrigger, sendFyi, launchResponderSession };

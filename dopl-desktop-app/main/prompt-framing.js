@@ -324,8 +324,4 @@ module.exports = {
   sanitizeName,
   buildFencedTurn,
   replyCall,
-  PROSE_RULE, // prose is a message, final answer included — asserted on every branch
-  VOCABULARY, // the kinds are not an interchangeable list (prompt-framing-text.js)
-  CONCISION,
-  HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY,
   ontologyReachLines, decisionCall };

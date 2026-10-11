@@ -183,7 +183,6 @@ module.exports = {
   createWakeCoalescer,
   wakeChannelId,
   wakePayloadBytes,
-  redactSecrets,
   describeSubscribeError,
   isAuthFailure,
   wsHealthy,

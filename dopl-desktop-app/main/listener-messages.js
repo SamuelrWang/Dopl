@@ -43,15 +43,9 @@ async function dispatchMessage(entry, m, myUserId) {
   // ⚠ **THE DELIVERY LANE — ONE CALL, AND IT IS THE ONLY THING THAT MAY CLAIM A MESSAGE FOR AN
   // AGENT.** It feeds the sessions the SERVER'S STORED VERDICT names (`session-dispatch.js`), and
   // claiming is terminal: a message an agent took is not also a consent card.
-  // ⚠ FOUR ROUTES STOOD BESIDE IT AND ARE DELETED (2026-08-20, F-228) — the requester-window
-  // opener, the settled-requester reopen, the lifecycle-strip observer and the post-classify
-  // reopen. All four were window-mode-gated and the switch is permanently off.
-  // ⚠ THE CHAT BRAKE WENT WITH THEM, and that is a deletion rather than a relaxation. It
-  // existed because routes 2 and 3 could claim a peer's chat line and bring a session INTO
-  // existence before classify's own chat brake ran. This one was DELIBERATELY above that guard
-  // and stays unguarded for the same reason it always was: it feeds a session that is ALREADY
-  // RUNNING, which is "seen", not "started". Chat still reaches classify, where an @-tag makes
-  // it 'fyi' and an untagged line 'ignore'.
+  // ⚠ NOT CHAT-GUARDED, deliberately: it feeds a session that is ALREADY RUNNING, which is
+  // "seen", not "started". Chat still reaches classify, where an @-tag makes it 'fyi' and an
+  // untagged line 'ignore'.
   // ⚠ **SYNCHRONOUS AGAIN SINCE 2026-09-02 (ruling B6).** It was awaited for one wave and one
   // reason: TIER 3 bought a multi-agent room's unaddressed message a bounded claim/pass MODEL
   // CALL before it could say who it had woken, and that call HELD THIS CHANNEL'S CURSOR — which
@@ -180,12 +174,6 @@ function deferBackoff(entry) {
 }
 
 module.exports = {
-  dispatchMessage,
   drainPage,
   deferBackoff,
-  // the pure policy (exported for the test; drainPage is the only production caller)
-  deferralDelayMs,
-  deferralExhausted,
-  noteDeferral,
-  clearDeferral,
 };
