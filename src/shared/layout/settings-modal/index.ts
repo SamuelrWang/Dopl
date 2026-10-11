@@ -1,3 +1,2 @@
-export { SettingsModal } from "./settings-modal";
-export type { SettingsSection } from "./settings-modal";
+export type { SettingsSection } from "./settings-modal-core";
 export { ModalShell } from "./modal-shell";

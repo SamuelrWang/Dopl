@@ -117,8 +117,9 @@ export interface SettingsModalCoreProps {
 
 /**
  * Next-free settings-modal core: chrome and section list are shared; the
- * platform-divergent panes arrive as slots. `./settings-modal` = web binding,
- * desktop's is `apps/desktop-ui/src/components/settings-modal`.
+ * platform-divergent panes arrive as slots. The one binding is desktop's,
+ * `apps/desktop-ui/src/components/settings-modal`; the web binding
+ * (`./settings-modal`) was never mounted and was deleted 2026-10-11 (cleanup ST1).
  *
  * ⚠ IT OWNS NO PANE OF ITS OWN SINCE 2026-08-30. The members pane was the one
  * exception and it is deleted (see `SettingsSection`), which is why this
