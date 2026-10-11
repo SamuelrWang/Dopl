@@ -112,6 +112,20 @@ function card(props: Partial<Parameters<typeof ArtifactCard>[0]> = {}) {
 }
 
 describe("the card's face", () => {
+  /**
+   * ⚠ **THE SUMMARY READS LIKE THE BODIES UNDER IT** (2026-10-10, #3128). It is the
+   * folding agent's own prose and it printed its `**asterisks**` two rows above member
+   * bodies that render them — one card, two readings of one author's markdown. It takes
+   * `StreamProse`, the mount this card already uses for those bodies.
+   */
+  it("renders the summary's bold as bold, like the folded bodies below it", () => {
+    layoutIs(40);
+    card({ summary: "the **rollout** call" });
+    // The text leaf is a `<span>` of its own, so the emphasis is its ancestor.
+    expect(screen.getByText("rollout").closest("strong")).not.toBeNull();
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+  });
+
   it("names the artifact and prints count and span over the WHOLE artifact", () => {
     layoutIs(40);
     card({ count: 12, firstSeq: 2, lastSeq: 99 });
