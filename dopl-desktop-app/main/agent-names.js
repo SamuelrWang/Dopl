@@ -87,7 +87,7 @@ function patched(map, agentId, field, value) {
 
 // A tick-scoped memo of the name map: `store.get()` re-reads and re-parses the file, and the summary asks twice per
 // row. Safe because a projection is synchronous. This module is the ONLY writer of NAMES_KEY and every write
-// invalidates the memo; a writer added elsewhere must call `invalidateNames()`.
+// invalidates the memo; a writer added elsewhere must invalidate it too (`invalidateNames` is not exported today).
 let cachedNames = null;
 let cacheArmed = false;
 

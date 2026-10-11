@@ -1,10 +1,9 @@
 // THE PRIVATE DIRECT LANE'S WIRE CONTRACT — `channel_agent_directions`, as this machine
 // reads and writes it (Samuel's ruling, 2026-08-31).
 //
-// ⚠ **PURE, AND IT MAY HOLD NO `require`.** Everything below the sentinel is sliced out of
-// source and evaluated by the suite, `launch-directive-wire.js`'s arrangement and for the
-// same reason: a wire contract tested through the module that uses it is a contract tested
-// against one caller's habits.
+// ⚠ **PURE, AND IT HOLDS NO `require`.** Its suites `require` it directly and drive the contract
+// itself, not through the module that uses it: a wire contract tested through one caller is a
+// contract tested against that caller's habits.
 //
 // ⚠ **THIS FILE IS WHERE A FIELD SILENTLY NEVER ARRIVES.** `directionFrom` is a LITERAL
 // WHITELIST: a column the server adds and this function does not name reaches this machine
@@ -35,8 +34,8 @@ const STATUSES = [
 // stored nor reach an MCP render as raw text.
 const REFUSAL_REASONS = ['no-session', 'auth-hold', 'busy', 'blocked', 'no-bridge'];
 
-// ⚠ A LOCAL COPY, on `launch-directive-wire.js`'s terms: this block may hold no `require`,
-// so `ipc-guards.js › isUuid` is unreachable from it. `uuid-rule-parity.test.mjs` records
+// ⚠ A LOCAL COPY: this file holds no `require` (see the header), so `ipc-guards.js › isUuid`
+// is not reached from it. `uuid-rule-parity.test.mjs` records
 // the copy with its review rather than letting it look like a missed reuse.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -49,13 +48,13 @@ const AGENT_ID_RE = /^[a-z][a-z0-9]{7}$/;
 const BODY_MAX = 4000;
 
 /**
- * Bound one display/prose value.
+ * Bound one display/prose value. No production caller today (`directionFrom` does not use it);
+ * its suite pins it.
  *
- * ⚠ **IT COLLAPSES WHITESPACE, WHICH IS WRONG FOR A BODY AND RIGHT FOR EVERYTHING ELSE** —
- * so the body deliberately does NOT go through it (see `directionFrom`). A direction's body
- * is prose an agent will read; flattening its paragraphs would change what the agent was
- * asked. `launch-directive-wire.js › text` flattens its `goal` for the opposite reason: that
- * value is spliced into a diag line.
+ * ⚠ **IT COLLAPSES WHITESPACE, WHICH IS WRONG FOR A BODY**: a direction's body is prose an agent
+ * will read, and flattening its paragraphs would change what the agent was asked.
+ * `launch-directive-vocab.js › text` flattens a launch `goal` because that value is spliced into
+ * a diag line.
  */
 function text(value, max) {
   if (typeof value !== 'string') return '';
