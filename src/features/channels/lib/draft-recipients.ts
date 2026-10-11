@@ -378,7 +378,7 @@ function agentRecipient(
  * to the RR3 arm, which understates the reach — the safe direction.
  *
  * ⚠ **THERE IS A SECOND COPY OF THIS PAIR IN THE TREE** —
- * `channels/components/use-agents-panel.ts › launchAgent` derives the same
+ * `channels/components/use-launch-controls.ts › buildLaunchPayload` derives the same
  * counterparty for a launch. Filed as **F-551**; folding them is a change to a
  * file this slice does not own.
  */
