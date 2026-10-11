@@ -70,6 +70,14 @@ export interface Ontology {
   name: string;
   purpose: string;
   columnIds: string[];
+  /** Persisted dragged node positions (id → {x,y}); `{}` = pure auto-layout. Optional here: the
+   *  server always sends it, but nothing in this package reads it. */
+  layout?: Record<string, { x: number; y: number }>;
+  /** The solo toggle (`ontologies.agents_may_edit`). Absent on a cached older payload. */
+  agentsMayEdit?: boolean;
+  /** Home channels this ontology is lent into. Absent is UNKNOWN, never zero; emitted only for
+   *  ontologies the caller owns. */
+  sharedChannelCount?: number;
 }
 
 export interface OntologySnapshot {

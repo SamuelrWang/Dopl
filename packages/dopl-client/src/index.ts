@@ -45,6 +45,7 @@ export type {
   AgentIdentityUpdateInput,
   IdentityField,
   IdentityKnowledgeBaseRef,
+  IdentityKnowledgeFolderBrief,
   IdentityKnowledgeRef,
   IdentityKnowledgeScope,
   IdentityKnowledgeScopeKind,

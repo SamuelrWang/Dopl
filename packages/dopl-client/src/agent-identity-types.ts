@@ -45,6 +45,21 @@ export interface IdentityKnowledgeRef {
   entryTitle?: string;
   path: string;
   toolPath?: string;
+  /** Base card (`scope: "base"` only); an address `dopl_kb` accepts as `base`. Absent on an older server. */
+  baseSlug?: string;
+  /** `knowledge_bases.description`, carried whole or not at all. */
+  baseSummary?: string;
+  /** Top-level folders only, capped. */
+  baseFolders?: IdentityKnowledgeFolderBrief[];
+  /** The TRUE top-level folder count; a folder line is complete only when it equals `baseFolders.length`. */
+  baseFolderCount?: number;
+}
+
+/** One top-level folder on an identity's base card. */
+export interface IdentityKnowledgeFolderBrief {
+  name: string;
+  /** `knowledge_folders.description`; absent (never clipped) when longer than a card carries. */
+  summary?: string;
 }
 
 /** Which surface LISTS an identity (the wire's `?shelf=`), not who may read it. Absent = no filter. */
@@ -68,6 +83,8 @@ export interface AgentIdentity {
   knowledgeBases: IdentityKnowledgeBaseRef[];
   /** Every attached scope (base, folder, entry). Optional per §8: a cached older payload lacks it. */
   knowledge?: IdentityKnowledgeRef[];
+  /** How many attachments the viewer filter dropped: a count, never a location. Read `?? 0`. */
+  unreachableKnowledgeBaseCount?: number;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
