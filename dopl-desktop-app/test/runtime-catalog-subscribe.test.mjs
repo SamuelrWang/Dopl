@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadCatalog, adapter, row, settle } from "./_model-catalog-harness.mjs";
 
-/** An adapter whose roster read fails until `state.ok` flips, counting reads. */
+/** An adapter whose roster read fails until `state.ok` flips. */
 function flippable() {
   const state = { ok: false };
   const a = adapter({ id: "rt", label: "Rt", models: { source: "live", dimensions: null } }, async () => {
