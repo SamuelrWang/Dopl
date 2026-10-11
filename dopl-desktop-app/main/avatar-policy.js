@@ -25,7 +25,7 @@
 // list is `null`, and the component keeps its initials.
 // ⚠ THIS SENTENCE USED TO CITE ui-bridge.js's `EXTERNAL_HOST_ALLOWLIST` as the
 // same hole closed the same way. It is NOT the same hole, and that list is gone
-// (F-3031, 2026-10-10 — it was refusing every ordinary link in the app). THIS
+// (#3031, 2026-10-10 — it was refusing every ordinary link in the app). THIS
 // handler fetches silently and returns the BODY to the renderer, so a host
 // allowlist is the only thing bounding it; `shell.openExternal` returns no body
 // and surfaces a visible browser window, so it is bounded by SCHEME
