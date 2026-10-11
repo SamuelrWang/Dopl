@@ -85,10 +85,10 @@ export function takeCalmFlags(
  * writer:
  *
  *  - `CLOSE_PROPOSAL_KEYS` = `closeProposed` / `closeOutcome`, stamped by the
- *    deleted `service-tasks-propose.ts › proposeTaskClose` and by the deleted
+ *    deleted service-tasks-propose.ts proposeTaskClose and by the deleted
  *    stale-threads cron. They raised a "Close?" prompt on a human's card.
  *  - `REOPEN_MARKER_KEY` = `threadReopened`, stamped by the deleted
- *    `service-tasks-lifecycle.ts › reopenTask` as the echo that rang the
+ *    service-tasks-lifecycle.ts reopenTask as the echo that rang the
  *    `channel_messages` doorbell for a status change `channel_tasks` (in no
  *    realtime table set) could not deliver itself.
  *
