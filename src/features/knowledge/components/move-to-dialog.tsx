@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen, X } from "lucide-react";
-// Deep import, not the `settings-modal` barrel: the barrel re-exports
-// SettingsModal, which is Next-coupled (see base-settings-modal.tsx).
+// Deep import of `modal-shell`, as every dialog in this kit does. The `settings-modal`
+// barrel used to re-export the web SettingsModal and so reached `next/navigation`; that
+// modal was deleted 2026-10-11 (cleanup ST1) and the barrel is Next-free now.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";

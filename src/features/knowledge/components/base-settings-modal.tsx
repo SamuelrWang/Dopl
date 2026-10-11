@@ -1,9 +1,9 @@
 "use client";
 
 import { X } from "lucide-react";
-// Deep import, not the `settings-modal` barrel: the barrel re-exports
-// SettingsModal, whose delete-account section pulls `next/navigation` and would
-// drag Next into the desktop SPA's import graph.
+// Deep import of `modal-shell`, as every dialog in this kit does. The `settings-modal`
+// barrel used to re-export the web SettingsModal and so reached `next/navigation`; that
+// modal was deleted 2026-10-11 (cleanup ST1) and the barrel is Next-free now.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { Role } from "@/features/workspaces/types";

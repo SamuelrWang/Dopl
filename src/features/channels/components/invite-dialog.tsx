@@ -4,10 +4,9 @@ import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Info, UserMinus } from "lucide-react";
-// Deep import, not the `settings-modal` barrel: the barrel also re-exports
-// SettingsModal, whose section tree reaches `next/navigation`. This dialog is
-// bundled by the desktop SPA, where a `next/*` module anywhere in the graph
-// fails the build (apps/desktop-ui/CONVENTIONS.md § Sharing code).
+// Deep import of `modal-shell`, as every dialog in this kit does. The `settings-modal`
+// barrel used to re-export the web SettingsModal and so reached `next/navigation`; that
+// modal was deleted 2026-10-11 (cleanup ST1) and the barrel is Next-free now.
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { SearchField } from "@/shared/ui/search-field";
