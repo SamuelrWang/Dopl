@@ -1,7 +1,7 @@
 // Claude Code's usage readers. ⚠ NO MODEL DATA (2026-10-08): the frozen model table, its id -> alias map,
 // the launch-default id and the context-window table (with its family guess) are DELETED. The roster is
-// live (`models.js`), the default is the CLI's `sonnet` alias, and every window is the one the CLI reports
-// on a `result` (`normalize.js › learnWindows`). Requires nothing.
+// live (`models.js`), a no-pick launch sends no model so the CLI runs its own default, and every window is
+// the one the CLI reports on a `result` (`normalize.js › learnWindows`). Requires nothing.
 
 // ─── BEGIN CLAUDE-MODEL-TABLE (pure; unit-tested via source extraction) ───────────
 

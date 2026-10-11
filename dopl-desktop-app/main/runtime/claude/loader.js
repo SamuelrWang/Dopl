@@ -4,13 +4,16 @@
 //
 // ⚠ The SINGLE module that touches the ESM-only SDK, so CJS->ESM interop and packaged-binary
 // path math live in exactly one place (contract §D).
-//   getSdk()                   cached dynamic import() of the ESM SDK
+//   getSdk() / peekSdk()       cached dynamic import() of the ESM SDK / its sync read (null pre-await)
 //   resolveClaudeExecutable()  the binary a new launch runs (a verified download, else the asar-unpacked
 //                              bundle) for options.pathToClaudeCodeExecutable
 //   buildMcpServers(cfg, wsId) in-memory mcpServers object (dopl bearer from safeStorage +
 //                              the session's X-Workspace-Id pin)
+//   withSessionStamp()         this run's slot key onto that entry (X-Dopl-Session-Id)
 //   withToolProfileStamp()     this session's containment PROFILE onto that entry (X-Dopl-Tool-Profile)
+//   withToolSetStamp()         the negotiated dopl tool set onto that entry (granular only)
 //   buildSecretPathDenyRules() credential-path deny rules every session runs with
+//   buildScrubbedEnv()         the child env: permission knobs and credentials dropped, lane pins set
 //
 // ⚠ Dynamic import, not require: the SDK ships `sdk.mjs` (ESM only) and Electron main is CJS,
 // so a static require throws ERR_REQUIRE_ESM.

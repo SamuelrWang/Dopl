@@ -1,17 +1,9 @@
 // THE CLAUDE ADAPTER'S TOOL VOCABULARY — Axis A's tail, and the per-profile containment table.
 //
-// ⚠ MOVED HERE FROM `main/session-profiles.js` + `main/tool-profiles.js` ON 2026-08-31
-// (runtime-adapter port, step 3 / §0.1b). What changed is that core now ASKS for these instead of
-// holding them. `main/session-profiles.js › grantDecision` — its order, its four verdicts, its
-// reason codes, every Axis-B lane, the universal hard-deny and both windowless floors' arguments —
-// did not move and must not.
-//
-// ⚠ THE LISTS AND TRANSFORMS BELOW ARE WHAT MOVED UNCHANGED — three profile branches verified
-// byte-for-byte against `git show HEAD:` — BUT THIS HEADER SAID "byte-identical" OF THE WHOLE FILE
-// AND THAT IS NO LONGER TRUE (2026-09-01): each profile's `preApproved` now DECLARES the two
-// agent-ops verbs that were being appended downstream in `launch-spec.js`. The port's honest claim
-// is behaviour-preserving with SEVEN declared observable differences; `docs/INVARIANTS.md` §11.0g
-// enumerates them and carries the argument for this one.
+// Core ASKS the adapter for these (runtime-adapter port, 2026-08-31). `main/session-profiles.js ›
+// grantDecision` — its order, its four verdicts, its reason codes, every Axis-B lane, the
+// universal hard-deny and both windowless floors' arguments — stays in core and must not move.
+// The port's declared observable differences are enumerated in `docs/INVARIANTS.md` §11.0g.
 //
 // ⚠ WHY THE AXIS-A TAIL COULD NOT STAY IN CORE. `toolModeAllows` resolves against `AUTO_TOOLS` /
 // `BYPASS_TOOLS`, both built from Claude BUILT-IN names, and `normalizeToolMode` fail-closes any
@@ -44,7 +36,7 @@ const { AGENT_OPS_TOOL_NAMES } = require('../../agent-self-ops');
 // ─── BEGIN CLAUDE TOOL TABLE (extracted by session-profiles/sdk-grant tests) ───
 
 // The dopl server registers tools bare (`dopl_channel`); the CLI exposes them as
-// `mcp__dopl__<tool>`. Per-server MCP `tools` policy uses the bare server-local name.
+// `mcp__dopl__<tool>`. `doplToolsPolicy` below is spelled in the bare server-local names.
 function shortDoplName(full) {
   return String(full).replace(/^mcp__dopl__/, '');
 }
@@ -62,12 +54,14 @@ const { GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTool
 
 // SESSION grant config for a profile. `preApproved` -> SDK allowedTools (shadowed, no button).
 // `builtinTools` -> SDK tools (POSITIVE bound, ALWAYS sent; [] = no built-ins at all, `launch-spec.js`). `disallowedTools` -> SDK
-// disallowedTools (hard-denied, never offered). `doplToolsPolicy` -> dopl MCP server's
-// per-server `tools` allowlist (null => all dopl tools reachable).
+// disallowedTools (hard-denied, never offered). `doplToolsPolicy` -> the profile's intended
+// dopl surface in bare names (null => all). ⚠ ON THIS RUNTIME IT IS NOT SENT: the CLI's
+// per-server `tools` field is a permission policy and a list of names drops the whole server
+// (`loader.js › buildMcpServers`, pinned by `test/mcp-server-tools-policy.test.mjs`), so the
+// dopl bound here is `disallowedTools` plus the gate. Codex and Cursor do send theirs.
 //
 // ⚠ `dopl_channel` is in NEITHER preApproved NOR disallowedTools on ANY profile, so it REACHES
-// the gate where grantDecision op-scopes it. It stays in each restricted profile's
-// `doplToolsPolicy` (defense in depth).
+// the gate where grantDecision op-scopes it.
 //
 // ⚠ AND `disallowedTools` IS NOT MERELY A LAUNCH FLAG. `grantDecision` step 1 reads it as the
 // GATE's own first check — the one verdict no task grant and no `bypass` can open — which is why
@@ -126,7 +120,7 @@ function buildSessionToolConfig(profile) {
     // Local reads + web reads + READ-ONLY dopl tools pre-approved; channel delivery AND the
     // workspace-WRITE dopl tools via the gate. Admins + write/exec/escape denied.
     // ⚠ DOPL_WRITE_TOOLS must stay out of preApproved (== allowedTools == SHADOWED): they
-    // reach the gate like dopl_channel, and stay in doplToolsPolicy.
+    // reach the gate like dopl_channel.
     return {
       builtinTools: READ_BUILTINS.concat(WEB_TOOLS),
       preApproved: READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ_TOOLS, GRANULAR_READ_TOOLS, AGENT_OPS_TOOL_NAMES), // + AGENT-OPS
@@ -248,8 +242,8 @@ const BYPASS_TOOLS = AUTO_TOOLS.concat(ESCALATION_TOOLS, DOPL_WRITE_TOOLS, BYPAS
 //
 // ⚠ THE DOPL NAMES ARE FILTERED BECAUSE THIS FIELD BOUNDS BUILT-INS ONLY. `options.tools` does
 // not bound MCP tools (`tool-profiles.js`'s L0 note), so an `mcp__dopl__*` entry here would be a
-// claim the wire does not honour — and the dopl surface is bounded by `doplToolsPolicy` and
-// `disallowedTools`, which is where `read_only` and `dopl_only` already narrow it.
+// claim the wire does not honour — and the dopl surface is bounded by `disallowedTools` and the
+// gate, which is where `read_only` and `dopl_only` already narrow it.
 //
 // ⚠ CONTAINMENT IS UNCHANGED — THIS IS OFFERED SURFACE, NOT A FENCE. `disallowedTools` is still
 // `SESSION_HARD_DENY` and nothing else, every built-in F-177 released still resolves `gate`

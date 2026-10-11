@@ -24,13 +24,13 @@ async function probeShape(candidateBin) {
   return require('./roster').observeShape(await driverFor(candidateBin));
 }
 
-/** The candidate's safety SEMANTICS, live (`semantics.js`: four short turns; runs only on a new build), on the
- *  CHEAPEST model this Mac has seen cost (learned, `cost-rates.js`); none learned → the CLI's own default. */
 /** Can the live probe run now? Signed out it cannot (the updater then skips the download, uncounted). */
 function probeReady() {
   try { return require('./credential').credentialState().usable === true; } catch (_) { return false; }
 }
 
+/** The candidate's safety SEMANTICS, live (`semantics.js`: four short turns; runs only on a new build), on the
+ *  CHEAPEST model this Mac has seen cost (learned, `cost-rates.js`); none learned → the CLI's own default. */
 async function verifySemantics(candidateBin) {
   // Signed out: no turn can run, so none is attempted, and the build is not judged (final review M2).
   if (!probeReady()) return { refuse: [], inconclusive: [], unrun: ['Claude Code is not signed in to Dopl'], turns: 0 };

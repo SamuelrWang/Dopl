@@ -187,10 +187,6 @@ async function probeShellDeny(o) {
   }
 }
 
-/**
- * Every probe against one build. `o` = `{ sdk, options: { env, pathToClaudeCodeExecutable }, timeoutMs?,
- * tmpRoot? }`. Resolves `{ refuse, inconclusive, unrun: [why], turns }`; rejects only on a crash (retry later).
- */
 // Every throwaway folder a probe makes starts with one of these (final review L4).
 const TEMP_PREFIXES = ['dopl-semantic-cwd-', 'dopl-deny-probe-', 'dopl-outside-probe-'];
 // Older than any probe can run (four turns × TURN_TIMEOUT_MS is 8 minutes), so a live probe's folder is never swept.
@@ -214,6 +210,10 @@ function sweepStale(root, now) {
   return swept;
 }
 
+/**
+ * Every probe against one build. `o` = `{ sdk, options: { env, pathToClaudeCodeExecutable }, timeoutMs?,
+ * tmpRoot?, model? }`. Resolves `{ refuse, inconclusive, unrun: [why], turns }`; rejects only on a crash (retry later).
+ */
 async function verifySemantics(o) {
   sweepStale(o && o.tmpRoot);
   const cwd = fs.mkdtempSync(path.join((o && o.tmpRoot) || os.tmpdir(), 'dopl-semantic-cwd-'));
@@ -238,4 +238,4 @@ async function verifySemantics(o) {
   }
 }
 
-module.exports = { verifySemantics, probeGate, probeDeny, probeShellOutside, probeShellDeny, sweepStale, TEMP_PREFIXES, STALE_MS };
+module.exports = { verifySemantics, probeGate, probeDeny, probeShellOutside, probeShellDeny, sweepStale, TEMP_PREFIXES };

@@ -133,4 +133,4 @@ function mismatchSentence(init, contract) {
     + 'Running it would have left one of Dopl\'s restrictions off.';
 }
 
-module.exports = { contractOf, verifyInit, mismatchSentence, serverToken, configuredServer, REPORTED_AS };
+module.exports = { contractOf, verifyInit, mismatchSentence, configuredServer };
