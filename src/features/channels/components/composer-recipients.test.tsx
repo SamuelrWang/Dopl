@@ -36,7 +36,7 @@ vi.mock("../hooks/use-thread-writes", () => ({
 const send = vi.fn();
 
 import { ChannelsComposer } from "./composer";
-import { ComposerRecipients, REACH_NOBODY } from "./composer-recipients";
+import { ComposerRecipients, REACH_NOBODY, REACH_NOBODY_LABEL } from "./composer-recipients";
 import { ChannelAgentsSettings } from "./settings-channel-agents";
 import {
   draftReach,
@@ -89,11 +89,11 @@ const type = (field: HTMLTextAreaElement, value: string) =>
   fireEvent.change(field, { target: { value } });
 
 const line = () => screen.getByLabelText("Recipients").textContent ?? "";
-/** 🔴 **NO REACH DRAWS NO LINE SINCE 2026-09-20** (*"if there is no addressee just
- *  have it be nothing"*). ⚠ Assertion 2 proves `REACH_NOBODY` renders nowhere. */
-const noLine = () => {
-  expect(screen.queryByLabelText("Recipients")).toBeNull();
-  expect(document.body.textContent ?? "").not.toContain(REACH_NOBODY);
+/** 🔴 **NO REACH DRAWS `→ @nobody` AND THE LINE ALWAYS RENDERS** (Samuel, #3166,
+ *  2026-10-11). ⚠ REVERSES 2026-09-20's *"just have it be nothing"*: the blank row
+ *  was invisible in the case it taught, and it hid the working pills with it. */
+const nobodyLine = () => {
+  expect(line()).toContain(REACH_NOBODY_LABEL);
 };
 
 describe("the picker offers the CHANNEL's live agents", () => {
@@ -176,7 +176,7 @@ describe("the recipient line — always on, whatever the draft says", () => {
       members: [{ ...MEMBERS[0], unaddressedResponder: "none" }, MEMBERS[1]],
     });
     type(body, "who is around");
-    noLine();
+    nobodyLine();
   });
   /**
    * 🔒 **TWO LIVE, NEITHER ADDRESSED → THE LINE SAYS `nobody`** (2026-09-15, Samuel's ruling —
@@ -196,7 +196,7 @@ describe("the recipient line — always on, whatever the draft says", () => {
   it("🔒 draws NOTHING with TWO live and neither addressed", () => {
     const body = mount({ liveAgents: [PEER_AGENT, BARE_AGENT] });
     type(body, "who is around");
-    noLine();
+    nobodyLine();
   });
   /**
    * 🔒 **AND A POST THAT WILL ROUTE STILL MUST NOT READ AS `nobody`** — the 2026-09-04 intent of
@@ -226,7 +226,7 @@ describe("the recipient line — always on, whatever the draft says", () => {
 
   it("draws NOTHING in an empty room, before anything is typed", () => {
     mount();
-    noLine();
+    nobodyLine();
   });
 
   it("takes the room's ONE live agent with no nomination at all (RR3 arm 2)", () => {
@@ -482,7 +482,7 @@ describe("🔒 the settings control and the composer read one source", () => {
         currentUserId={ME}
       />
     );
-    noLine();
+    nobodyLine();
   });
 
   it("the default renders as Last addressed, and the line still names an agent", () => {
