@@ -34,11 +34,12 @@ export interface OnboardingFlowCoreProps {
   initialStep: OnboardingStep;
   /** Deep-link passthrough; the server re-validates via safeRedirect. */
   redirectTo?: string;
-  /** Fires with the server-chosen landing path. Router-agnostic: web pushes
-   *  via `next/navigation`, desktop SPA uses its hash router. */
+  /** Fires with the server-chosen landing path. Router-agnostic: the mount
+   *  navigates with its own router (the desktop SPA's hash router). */
   onDone: (redirectTo: string) => void;
-  /** Brand mark above the wordmark. ⚠ Packaged SPA passes nothing: it is a
-   *  `file://` document where `/favicons/...` resolves to filesystem root. */
+  /** Brand mark beside the wordmark. ⚠ Must load from a `file://` document in
+   *  the packaged SPA, where `/favicons/...` resolves to filesystem root: the
+   *  SPA passes an inlined image. */
   brand?: ReactNode;
   /** Right-pane banner, passed through to `AuthSplitLayout`. Same `file://`
    *  problem as `brand`: packaged SPA hands a Vite-bundled asset URL, else the
@@ -58,8 +59,9 @@ export interface OnboardingFlowCoreProps {
 }
 
 /**
- * Onboarding stepper core, Next-free (web binding: `./onboarding-flow`):
- * survey → MCP connect → workspace naming, on the login split layout.
+ * Onboarding stepper core, Next-free (its one mount: the desktop SPA's
+ * `/onboarding` page): survey → MCP connect → home-space naming, on the login
+ * split layout.
  *
  * ⚠ Writes must go through `apiRequest`, not raw `fetch` — packaged desktop
  * renderer ships `connect-src 'none'` and rides that seam over IPC.
@@ -137,9 +139,6 @@ export function OnboardingFlowCore({
           },
         }
       );
-      // ⚠ `dopl:welcome` WAS SET HERE AND IS DELETED (Samuel's ruling R-49,
-      // 2026-09-17): the welcome popup that read it is gone, and a write with
-      // no reader is dead code, not a seam for a reimplementation.
       onDone(body.redirectTo);
     } catch {
       finishRef.current = false;
