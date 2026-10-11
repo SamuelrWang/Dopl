@@ -213,7 +213,6 @@
     "docs/INVARIANTS.md::dopl-desktop-app/main/consent-watcher.js",
     "docs/INVARIANTS.md::hooks/use-channel-agents.ts",
     "docs/INVARIANTS.md::hooks/use-trust-rules.ts",
-    "docs/INVARIANTS.md::launch-panel.test.tsx",
     "docs/INVARIANTS.md::lib/agent-display.ts",
     "docs/INVARIANTS.md::main/session-ipc.js",
     "docs/INVARIANTS.md::main/session-pool.js",
