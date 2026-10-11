@@ -34,8 +34,14 @@ export async function resolveDirectiveColor(
     const key = agentColorOrNull(row.color);
     if (key) taken.set(key, (taken.get(key) ?? 0) + 1);
   }
+  // ⚠ A CLIPPED read is a floor: a key held by a clipped-off row reads free. Same rule as
+  // `repository-session-colors.ts › resolveColorsForPush`: a NEW pick over a floor is refused
+  // (null = no colour; the push lane assigns one on the next state push), never guessed.
+  const clipped = byChannel.truncated === true || directives.truncated === true;
   // Omitted: a free key, or with every key held the best one to share (`pickAgentColor`).
-  if (!wanted) return pickAgentColor(taken);
+  if (!wanted) return clipped ? null : pickAgentColor(taken);
+  // A NAMED key that no visible row holds is still granted over a floor: the operator chose it,
+  // and `channel_sessions_channel_color_live_key` plus the push lane's 23505 degrade back it.
   if (taken.has(wanted)) {
     // Best first, so the refusal's first suggestion is the key the server would itself pick.
     throw new AgentColorTakenError(wanted, rankFreeAgentColors(taken));

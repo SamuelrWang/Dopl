@@ -186,3 +186,42 @@ describe("a NAMED key that is taken is refused, never substituted", () => {
     expect(pendingDirectiveColors).toHaveBeenCalledWith(WS, CHAN);
   });
 });
+
+/** The repository's clip marker: non-enumerable, exactly as `repository-session-colors.ts ›
+ *  clipMarker` attaches it, so the stub cannot pass a check the real value would fail. */
+function clipped<T extends object>(value: T): T {
+  Object.defineProperty(value, "truncated", { value: true, enumerable: false });
+  return value;
+}
+
+/**
+ * 🔒 **A CLIPPED TAKEN SET IS A FLOOR, AND A FLOOR CANNOT VOUCH A KEY IS FREE** (backlog #3304,
+ * ruled #3686). Both reads walk to a row ceiling and say `truncated` when they hit it; a key held
+ * by a clipped-off row then reads as free. The push lane refuses a NEW pick in that state
+ * (`repository-session-colors.ts › resolveColorsForPush`); the launch lane follows it.
+ */
+describe("a clipped taken set records no picked colour", () => {
+  it("an omitted key over a CLIPPED live set records null, not a guess", async () => {
+    vi.mocked(foreignLiveColorsByChannel).mockResolvedValue(clipped(new Map()));
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBeNull();
+  });
+
+  it("an omitted key over a CLIPPED directive set records null, not a guess", async () => {
+    pending();
+    vi.mocked(pendingDirectiveColors).mockResolvedValue(clipped([]));
+    expect(await resolveDirectiveColor(ctx, CHAN, undefined, NOW)).toBeNull();
+  });
+
+  it("a NAMED free key is still granted over a clipped set (the unique index backs it)", async () => {
+    vi.mocked(foreignLiveColorsByChannel).mockResolvedValue(clipped(new Map()));
+    expect(await resolveDirectiveColor(ctx, CHAN, SECOND, NOW)).toBe(SECOND);
+  });
+
+  it("a NAMED key a visible row holds is still refused over a clipped set", async () => {
+    const holders = new Map([[THIRD, 1]]);
+    vi.mocked(foreignLiveColorsByChannel).mockResolvedValue(
+      clipped(new Map([[CHAN, { holders, exclusive: new Set([THIRD]) }]]))
+    );
+    await expect(resolveDirectiveColor(ctx, CHAN, THIRD, NOW)).rejects.toBeInstanceOf(AgentColorTakenError);
+  });
+});
