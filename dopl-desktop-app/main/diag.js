@@ -4,7 +4,10 @@
 // points (targeting verdicts, FYI sent/muted, sign-in flow states, mcp-config
 // ensure results) are deliberately silent. Append one-line diagnostics to
 // userData/listener.log so those decisions are observable in the field.
-// Truncates when it grows past ~1MB.
+// Past ~1MB the log ROTATES to listener.log.1 (one prior file kept, overwritten on
+// the next wrap) so a wrap never erases the history just before it (KB
+// dopl-development "Silent Agent Drops 2026-10-11"). A failed rename falls back to
+// truncation so the log stays bounded.
 //
 // SECURITY: never pass tokens or secrets to diag() — the log is plaintext.
 // Callers redact before logging (mcp-config / claude-auth log outcomes, never
@@ -19,7 +22,13 @@ function diag(...parts) {
     const f = path.join(app.getPath('userData'), 'listener.log');
     try {
       const st = fs.statSync(f);
-      if (st.size > 1_000_000) fs.truncateSync(f, 0);
+      if (st.size > 1_000_000) {
+        try {
+          fs.renameSync(f, f + '.1');
+        } catch (_) {
+          fs.truncateSync(f, 0);
+        }
+      }
     } catch (_) {
       /* first write */
     }
