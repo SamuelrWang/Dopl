@@ -339,8 +339,13 @@ test("Auto's reviewer (the app's \"Approve for me\") rides on-request only, and 
     assert.equal(launchSpec.nativePair(codexState({ tools, native: auto }), RT.toolConfigFor("full")).approvals_reviewer, undefined, tools);
   }
   assert.equal(launchSpec.nativePair({ state: { toolMode: "on-request", native: auto } }, RT.toolConfigFor("read_only")).approvals_reviewer, undefined);
-  assert.match(readFileSync(new URL("../main/runtime/codex/launch-spec.js", import.meta.url), "utf8"),
-    /if \(pair\.approvals_reviewer\) threadStart\.approvalsReviewer = pair\.approvals_reviewer;/);
+  // …and the pair's reviewer is what the real launch assembly puts on `thread/start`, or nothing.
+  const specFor = (tools) => launchSpec.buildLaunchSpec({
+    session: { profile: "full", channelId: null, workspaceId: "ws-1", model: "", ...codexState({ tools, native: auto }) },
+    dispatch: () => {},
+  });
+  assert.equal(specFor("on-request").threadStart.approvalsReviewer, "guardian_subagent");
+  assert.ok(!("approvalsReviewer" in specFor("untrusted").threadStart), "no reviewer field when the pair has none");
 });
 
 test("`granular` uses the measured structured app-server shape and asks every shown category", () => {

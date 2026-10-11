@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  mkdtempSync, mkdirSync, writeFileSync, rmSync, lstatSync, readFileSync, symlinkSync, existsSync, statSync,
+  mkdtempSync, mkdirSync, writeFileSync, rmSync, lstatSync, readFileSync, symlinkSync, existsSync, statSync, chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -159,10 +159,35 @@ test("installAuth installs a login as Dopl's own 0600 file; removeAuth drops it"
   }
 });
 
-test("every Dopl-run Codex pins the file credential store", () => {
+// A stand-in `codex` that answers every request with the argv it was started with.
+const ARGV_ECHO = `#!/usr/bin/env node
+let buf = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (d) => {
+  buf += d;
+  for (let at = buf.indexOf('\\n'); at !== -1; at = buf.indexOf('\\n')) {
+    const msg = JSON.parse(buf.slice(0, at)); buf = buf.slice(at + 1);
+    if (msg.id != null) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { argv: process.argv.slice(2) } }) + '\\n');
+  }
+});
+`;
+
+test("every Dopl-run Codex pins the file credential store", async () => {
   assert.deepEqual([...configHome.AUTH_STORE_ARGS], ["-c", 'cli_auth_credentials_store="file"']);
-  const client = readFileSync(join(HERE, "..", "main", "runtime", "codex", "client.js"), "utf8");
-  assert.match(client, /\['app-server'\]\.concat\(AUTH_STORE_ARGS, o\.args \|\| \[\]\)/);
+  // The spawned child's own argv: `app-server`, the store pin, then the caller's args.
+  const dir = mkdtempSync(join(tmpdir(), "dopl-codex-argv-"));
+  const bin = join(dir, "codex");
+  writeFileSync(bin, ARGV_ECHO);
+  chmodSync(bin, 0o755);
+  const client = require(join(HERE, "..", "main", "runtime", "codex", "client.js"));
+  const conn = client.connect({ bin, args: ["-c", "x=1"] });
+  try {
+    const { argv } = await conn.request("initialize", {});
+    assert.deepEqual(argv, ["app-server", ...configHome.AUTH_STORE_ARGS, "-c", "x=1"]);
+  } finally {
+    conn.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 function existsLink(p) {

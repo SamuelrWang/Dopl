@@ -21,15 +21,11 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import {
   loadCatalog, loadCodexModels, fakeClient, row, noClaude, CODEX_DESCRIPTOR,
 } from "./_model-catalog-harness.mjs";
 import { liveGate, announceGate, skipLive } from "./_codex-app-server.mjs";
-import { codeOf } from "./helpers/source-probe.mjs";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
 
 const GATE = announceGate(liveGate());
 
@@ -234,21 +230,24 @@ test("a FAILED read is NOT cached — an operator who fixes their install with D
 //
 // 🔒 `models.js › listPages` sent `{ cursor }` as an admitted SYMMETRIC GUESS: Implementation Log
 // D had measured the RESPONSE and never sent a second page. The supported CLI's own
-// `ModelListParams` schema settles it. These two cases keep it settled — one reads Dopl's source,
+// `ModelListParams` schema settles it. These two cases keep it settled — one drives Dopl's reader,
 // the other reads the CLI, and the live one is the only one allowed to say what the protocol IS.
 
-test("Dopl sends `cursor`, and sends neither `includeHidden` nor `limit`", () => {
-  const src = readFileSync(join(HERE, "..", "main", "runtime", "codex", "models.js"), "utf8");
-  assert.match(src, /const params = cursor \? \{ cursor \} : \{\};/);
+test("Dopl sends `cursor`, and sends neither `includeHidden` nor `limit`", async () => {
+  const client = fakeClient([
+    { data: [row("p1")], nextCursor: "c1" },
+    { data: [row("p2", { isDefault: true, hidden: true })], nextCursor: null },
+  ]);
+  const roster = await loadCodexModels(client).models();
   // ⚠ OMITTING `includeHidden` IS THE POLICY, NOT AN OVERSIGHT: omitted, the server withholds
   // models it hides from a picker, which is the roster a picker should offer. Asking for them and
-  // filtering here would make Dopl responsible for a policy the platform already has.
-  const code = codeOf(src);
-  assert.ok(!/includeHidden/.test(code), "includeHidden must not be sent");
-  assert.ok(!/\blimit\b\s*:/.test(code), "limit must not be sent — the server's default is wanted");
+  // filtering here would make Dopl responsible for a policy the platform already has. `limit` is
+  // omitted too: the server's default page size is wanted. So the params are EXACTLY these.
+  const sent = client.asked.filter(([m]) => m === "model/list").map(([, params]) => params);
+  assert.deepEqual(sent, [{}, { cursor: "c1" }], "first page bare, then the server's own cursor");
   // `hidden` is still READ off each row: a hidden model can be the one a session already runs, and
   // a card must label what it cannot offer.
-  assert.match(code, /row\.hidden === true/);
+  assert.equal(roster.models.find((m) => m.id === "p2").hidden, true);
 });
 
 test("the supported CLI declares `cursor` — LIVE, and it skips loudly", (t) => {

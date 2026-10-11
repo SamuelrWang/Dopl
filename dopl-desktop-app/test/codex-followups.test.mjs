@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { threadEcho, configEcho } from "./helpers/codex-echo.mjs";
 
@@ -19,6 +19,7 @@ const codexModels = require(join(CODEX, "models.js"));
 const catalogs = require(join(MAIN, "runtime", "model-catalog.js"));
 const sdkShape = require(join(MAIN, "runtime", "sdk-shape.js"));
 const REQUIRED = require(join(CODEX, "required-shape.js"));
+const policy = require(join(CODEX, "policy.js"));
 const fixture = require("./fixtures/codex-shape.json");
 
 // ── A ──
@@ -115,8 +116,18 @@ test("C: a schema that ADDS a sandbox field → the UPDATE is refused, the insta
 });
 
 test("C: the per-launch backstop reads the SAME closed list (one place to add a field)", () => {
-  const src = readFileSync(join(CODEX, "policy.js"), "utf8");
-  assert.match(src, /require\('\.\/required-shape'\)\.safety\.closed\['result thread\/start sandbox'\]/);
+  const list = REQUIRED.safety.closed["result thread/start sandbox"];
+  const sent = { approvalPolicy: "on-request", sandbox: "workspace-write", cwd: "/w" };
+  const took = (box) => policy.assertThreadTook(sent,
+    { approvalPolicy: "on-request", approvalsReviewer: "user", cwd: "/w", model: "gpt-x", sandbox: box }, (a, b) => a === b);
+  // Every field on the list, at a value that is not wider, is read and passes…
+  const valid = { type: "workspaceWrite", networkAccess: false, writableRoots: [], excludeSlashTmp: true, excludeTmpdirEnvVar: false };
+  assert.deepEqual(Object.keys(valid).sort(), list.slice().sort(), "this case covers the whole list");
+  took(valid);
+  // …and a field off the list, carrying any value, refuses the launch (the backstop is that list, nothing more).
+  for (const extra of ["restrictReads", "deniedPaths", "fullDiskRead"]) {
+    assert.throws(() => took({ ...valid, [extra]: false }), new RegExp(extra), extra);
+  }
   assert.deepEqual(REQUIRED.safety.closed["result thread/start sandbox"],
     ["type", "networkAccess", "writableRoots", "excludeSlashTmp", "excludeTmpdirEnvVar"]);
 });
