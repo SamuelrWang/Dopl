@@ -36,22 +36,33 @@ import {
 import type { ChannelMember } from "../types";
 
 /**
- * 🔴 **THE `→ nobody` FACE IS DELETED (Samuel, 2026-09-20: *"instead of having it
- * show an arrow pointing to nobody, just have no arrow basically … if there is no
- * addressee just have it be nothing"*).**
+ * 🔴 **THE `→ @nobody` FACE IS BACK, AND THE LINE NOW RENDERS AT EVERY STATE**
+ * (Samuel, #3166, 2026-10-11: *"when reach is empty, the line STILL renders,
+ * showing `→ @nobody` … and the working pills always show"*).
  *
- * ⚠ **THE WORD IS KEPT AS AN EXPORT AND NOTHING RENDERS IT.** Two suites and the
- * parity tests name this constant as the line's own vocabulary; deleting the
- * symbol would be a rename dressed as a behaviour change. What changed is that an
- * empty reach now draws NO ELEMENT AT ALL — see the early return below.
- * ⚠ **AND THE OLD ARGUMENT FOR SHOWING IT IS SPENT.** It read "nobody" rather
- * than "the channel" because *"broadcast" is not a shape this product has* — true,
- * and it is exactly why the line is unnecessary now: since 2026-09-20 an
- * auto-addressed draft carries its tag in the BODY, so the line has something to
- * say precisely when somebody will be reached, and silence is the honest rest
- * state rather than a fact withheld.
+ * ⚠ **THIS REVERSES THE 2026-09-20 RULING** (*"instead of having it show an arrow
+ * pointing to nobody, just have no arrow basically … if there is no addressee just
+ * have it be nothing"*), deliberately and by name, so nobody re-derives the old
+ * behaviour from that quote later. What the blank row cost is now known: it is
+ * invisible in exactly the case it was built to teach, and it took the working
+ * pills down with it (#3166) because they lived inside the element it deleted.
+ * A row that says `@nobody` cannot do either.
+ * ⚠ **THE `@` IS PART OF THE FACE, AND IT IS THE TEACHING.** The other states name
+ * real `@handle`s — the token the resolver accepts and the picker inserts — so the
+ * empty state wearing the same shape reads as "the address slot, with nothing in
+ * it" rather than as prose about the room.
+ * ⚠ **IT STILL DOES NOT MEAN "the channel"** — *"broadcast" is not a shape this
+ * product has*. It means: send this as it stands and nothing is woken.
+ * ⚠ **THE RESPONDER RULE IS UNTOUCHED** (F-705, *never a guess that wanders*):
+ * `lib/agent-mentions-responder.ts` still answers nobody when several agents are
+ * live and none was addressed last. This is what that answer LOOKS like, not a
+ * change to what it is.
  */
 export const REACH_NOBODY = "nobody";
+
+/** The empty state's face. ⚠ ONE PLACE, because two suites assert this exact
+ *  string and the composer's own vocabulary test reads {@link REACH_NOBODY}. */
+export const REACH_NOBODY_LABEL = `@${REACH_NOBODY}`;
 
 /** ⚠ MODULE-LEVEL so the default is one REFERENCE, not a fresh `[]` per render —
  *  the memo below has it in its dependency list. */
@@ -147,12 +158,35 @@ export function ComposerRecipients({
       threadOtherParty,
     ]
   );
-    // ⚠ **CANCELLED DRAWS NOTHING, THE SAME AS AN EMPTY REACH** — Escape removed the
-  // address, so there is no address to report and the line must not linger as a
-  // ghost of one.
-  if (cancelled || reach.recipients.length === 0) return null;
-  const note =
-    reach.via === "responder" ? CANCEL_NOTE : VIA_NOTE[reach.via];
+  /**
+   * 🔴 **THERE IS NO EARLY RETURN ANY MORE, AND ITS ABSENCE IS THE RULING** (Samuel,
+   * #3166). The row renders at every state; what varies is the NAME in it.
+   *
+   * ⚠ **CANCELLED IS AN EMPTY REACH AND READS AS ONE.** Escape refused the
+   * auto-address, so there is no addressee — which is exactly what `@nobody` says, and
+   * saying it is better than a blank row that looks identical to a bug. The `esc to
+   * cancel` badge is gone with the address it described, which is the visible
+   * confirmation that the key did something.
+   * ⚠ **THE WORKING STRIP IS NOT GATED BY ANY OF THIS, AND IT USED TO BE** — the whole
+   * defect in #3166. The two facts are independent and only the LAYOUT ever joined
+   * them: this row reports who the DRAFT reaches, while the strip reports MY OWN
+   * AGENTS MID-TURN off a different feed (`channel-surface.tsx` builds it from
+   * `agentSessions`; the recipients come from `liveAgents`). Nothing about an
+   * unaddressed draft makes a working agent stop working.
+   * ⚠ **HOW IT BROKE, BECAUSE THE OLD SHAPE INVITES IT AGAIN.** `62d34326` deleted the
+   * `→ nobody` face by returning NO ELEMENT and, in the same diff, added the strip as a
+   * CHILD of that element. So the day a room held several live agents with none
+   * recently addressed (F-705's last arm — nobody is the deliberate answer, not a
+   * failure) the arrow's absence silently took the pills with it: a ruling about the
+   * ARROW enforced on the whole row. Keeping the row unconditional is what makes that
+   * class of bug unreachable, rather than fixed once.
+   */
+  const addressed = !cancelled && reach.recipients.length > 0;
+  const note = addressed
+    ? reach.via === "responder"
+      ? CANCEL_NOTE
+      : VIA_NOTE[reach.via]
+    : undefined;
   return (
     <p
       role="status"
@@ -164,9 +198,14 @@ export function ComposerRecipients({
       // recipient list shrinking rather than pushing the card wider.
       className="flex min-w-0 items-center justify-start gap-1 px-0.5 pb-1 text-caption text-text-muted"
     >
+      {/* ⚠ THE ARROW IS UNCONDITIONAL NOW — it is the row's own shape, and the
+          empty state is a NAME in it ({@link REACH_NOBODY_LABEL}), not a missing
+          one. */}
       <span aria-hidden>→</span>
       <span className="truncate">
-        {reach.recipients.map((r) => r.label).join(", ")}
+        {addressed
+          ? reach.recipients.map((r) => r.label).join(", ")
+          : REACH_NOBODY_LABEL}
       </span>
       {note && (
         <span className="shrink-0 rounded-[6px] bg-surface-raised-1 px-1.5 text-micro">

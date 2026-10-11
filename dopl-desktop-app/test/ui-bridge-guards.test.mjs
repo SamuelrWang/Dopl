@@ -36,10 +36,14 @@ function slice(src, name) {
 
 const BRIDGE = M("ui-bridge.js");
 const bridgePure = slice(BRIDGE, "UI-BRIDGE-PURE");
-const { resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId } =
-  new Function(
-    `${bridgePure}; return { resolveApiUrl, isExternalUrl, isAllowedExternalUrl, isWorkspaceId };`
-  )();
+const { resolveApiUrl, isWorkspaceId } = new Function(
+  `${bridgePure}; return { resolveApiUrl, isWorkspaceId };`
+)();
+
+// ⚠ THE OS-OPENER POLICY MOVED OUT OF THIS SLICE (F-3031, 2026-10-10). It is
+// `main/external-url.js`, shared with spa-window.js's navigation hand-off, and
+// `test/external-url.test.mjs` drives it. What stays HERE is the one thing that is still
+// ui-bridge's own: that the handler actually asks.
 
 // ⚠ THE SENDER GUARD IS SLICED FROM ITS OWN MODULE NOW (2026-08-20). It used to live verbatim
 // in BOTH `ui-bridge.js` and `channel-dir-ipc.js`, and this suite drove ui-bridge's copy while
@@ -173,60 +177,23 @@ test("isAppWindowSender fails CLOSED on an absent/empty/non-Set registry", () =>
   }
 });
 
-test("isExternalUrl: http(s) only", () => {
-  assert.equal(isExternalUrl("https://example.com/x"), true);
-  assert.equal(isExternalUrl("http://example.com"), true);
-  for (const evil of ["file:///etc/passwd", "smb://host/share", "javascript:alert(1)", "not a url", ""]) {
-    assert.equal(isExternalUrl(evil), false, `admitted: ${evil}`);
-  }
-});
-
-// ── open-external is a DESTINATION policy, not just a scheme check ───────────
-// Fleet audit 2026-08-03 (medium): `shell.openExternal` is the renderer's only
-// outbound primitive and no CSP applies to the OS opener, so a scheme-only gate
-// turned this handler into an arbitrary outbound GET — the single hole in the
-// SPA's `connect-src 'none'` containment, and the exfiltration leg for anything
-// readable back over the API bridge (e.g. a minted device token).
-
-test("open-external admits the app origin, Stripe and the release host — nothing else", () => {
-  const APP = "https://www.usedopl.com";
-  for (const ok of [
-    `${APP}/ws/canvas?billing=upgrade`,
-    `${APP}/login`,
-    "https://billing.stripe.com/p/session/live_abc",
-    "https://checkout.stripe.com/c/pay/cs_test",
-    "https://github.com/SamuelrWang/Dopl/releases/latest/download/Dopl-arm64.dmg",
-  ]) {
-    assert.equal(isAllowedExternalUrl(ok, APP), true, `refused a real destination: ${ok}`);
-  }
-  for (const evil of [
-    "https://evil.example/?t=dopl_at_live_token", // the exfiltration shape
-    "https://usedopl.com.evil.example/x", // suffix-shaped lookalike
-    "https://notgithub.com/x",
-    "https://stripe.com.evil.example/x",
-    "http://billing.stripe.com/p/session/x", // third parties are https-only
-    "file:///etc/passwd",
-    "javascript:alert(1)",
-    "not a url",
-    "",
-    null,
-  ]) {
-    assert.equal(isAllowedExternalUrl(evil, APP), false, `admitted: ${evil}`);
-  }
-});
-
-test("open-external follows a dev app origin (DOPL_APP_URL) including plain http", () => {
-  const DEV = "http://localhost:3000";
-  assert.equal(isAllowedExternalUrl(`${DEV}/ws/canvas`, DEV), true);
-  assert.equal(isAllowedExternalUrl("http://localhost:3001/x", DEV), false, "a different port is a different origin");
-  // The production origin is NOT implicitly allowed just because it is ours.
-  assert.equal(isAllowedExternalUrl("http://www.usedopl.com/x", DEV), false);
-});
-
 test("the handler runs the destination policy and names only the host when it refuses", () => {
   const fn = between(BRIDGE, "'dopl:open-external'", "broadcastAuthState");
-  assert.match(fn, /isAllowedExternalUrl\(url, APP_ORIGIN\)/, "the scheme check alone is not the gate");
-  assert.ok(!/diag\([^)]*url\b/.test(fn), "a refused URL's query string must never reach the log");
+  assert.match(
+    fn,
+    /externalUrl\.isOpenableExternalUrl\(url\)/,
+    "the handler must ask main/external-url.js, not re-decide locally"
+  );
+  // ⚠ The URL must never be a diag ARGUMENT. A bare `url)` match hits `externalUrlHost(url)`,
+  // the call that makes the log safe, so pin the argument position instead.
+  assert.ok(!/diag\([^)]*,\s*url\s*[),]/.test(fn), "a refused URL must never reach the log");
+  assert.ok(!/diag\(\s*url\b/.test(fn), "nor as diag's first argument");
+  // ⚠ AND THE OLD HOST ALLOWLIST MUST NOT COME BACK (F-3031). It refused every ordinary
+  // link in the app; `main/external-url.js`'s header records which hole it was really for.
+  assert.ok(
+    !/EXTERNAL_HOST_ALLOWLIST/.test(BRIDGE),
+    "the host allowlist is gone; the bound is the scheme"
+  );
 });
 
 // ── a refused watch must not read as a committed one ─────────────────────────

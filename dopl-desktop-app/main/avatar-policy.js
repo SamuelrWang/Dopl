@@ -20,10 +20,16 @@
 // every public host. That is right for the session window, whose input is a
 // workspace member's stored avatar_url. It is NOT right for an IPC handler the
 // RENDERER calls with an arbitrary string: a scheme-only gate would make
-// `dopl:avatar` the renderer's arbitrary outbound GET — the same hole
-// ui-bridge.js's EXTERNAL_HOST_ALLOWLIST exists to close for openExternal, and
-// the exfiltration leg out of a `connect-src 'none'` document. So the answer to
-// anything not on this list is `null`, and the component keeps its initials.
+// `dopl:avatar` the renderer's arbitrary outbound GET and the exfiltration leg
+// out of a `connect-src 'none'` document. So the answer to anything not on this
+// list is `null`, and the component keeps its initials.
+// ⚠ THIS SENTENCE USED TO CITE ui-bridge.js's `EXTERNAL_HOST_ALLOWLIST` as the
+// same hole closed the same way. It is NOT the same hole, and that list is gone
+// (F-3031, 2026-10-10 — it was refusing every ordinary link in the app). THIS
+// handler fetches silently and returns the BODY to the renderer, so a host
+// allowlist is the only thing bounding it; `shell.openExternal` returns no body
+// and surfaces a visible browser window, so it is bounded by SCHEME
+// (main/external-url.js). Do not re-derive one from the other.
 //
 // Adding a provider is a deliberate one-line edit here.
 

@@ -2,13 +2,27 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { apiRequest } from "@/shared/api/api-client";
-import { AuthSplitLayout } from "@/shared/layout/auth-split";
+import { AuthSplitLayout, type AuthGlassPose } from "@/shared/layout/auth-split";
 import { useMcpConnectionPoll } from "../hooks/use-mcp-connection-poll";
 import type { OnboardingStep, SurveySubmission } from "../types";
 import { McpConnectStep } from "./mcp-connect-step";
 import { ProvisioningChecklist } from "./provisioning-checklist";
 import { SurveyStep } from "./survey-step";
 import { WorkspaceNameStep } from "./workspace-name-step";
+
+/**
+ * The banner glass panel's pose per step. The layout owns the motion; this is
+ * only which of its three poses the step wants, and going BACK a step reverses
+ * the same animation for free.
+ *
+ * Step 3 is `default` on purpose: the plain centred rounded rect the panel has
+ * always been.
+ */
+const GLASS_POSE: Record<OnboardingStep, AuthGlassPose> = {
+  survey: "lowered-top-notch",
+  connect: "raised-bottom-notch",
+  workspace: "default",
+};
 
 interface FinishArgs {
   mcpConnected: boolean;
@@ -31,6 +45,16 @@ export interface OnboardingFlowCoreProps {
    *  layout's `public/` default. Why the shared file can't import the image:
    *  `shared/layout/auth-split/auth-split-layout.tsx` › AuthSplitLayout. */
   bannerSrc?: string;
+  /**
+   * 🔒 COPY-PREVIEW ONLY, and the one caller is a `import.meta.env.DEV` branch
+   * in the desktop SPA's `/onboarding` page. True means: render every step for
+   * review and WRITE NOTHING — neither `POST /api/onboarding/survey` nor
+   * `POST /api/onboarding/complete` fires, and `onDone` never runs, so an
+   * already-onboarded reviewer's account and workspace names are untouched.
+   * Also surfaces a step jumper, since the real step 2 → 3 gate needs a live
+   * MCP connection. Defaults false: zero effect on the real flow.
+   */
+  previewOnly?: boolean;
 }
 
 /**
@@ -46,6 +70,7 @@ export function OnboardingFlowCore({
   onDone,
   brand,
   bannerSrc,
+  previewOnly = false,
 }: OnboardingFlowCoreProps) {
   const [step, setStep] = useState<OnboardingStep>(initialStep);
   const [submitting, setSubmitting] = useState(false);
@@ -67,6 +92,11 @@ export function OnboardingFlowCore({
   }
 
   async function handleSurveySubmit(answers: SurveySubmission) {
+    // Preview: advance the stepper, send nothing.
+    if (previewOnly) {
+      changeStep("connect");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -83,6 +113,12 @@ export function OnboardingFlowCore({
   }
 
   async function finish(args: FinishArgs) {
+    // Preview: show the provisioning checklist, which is a screen worth
+    // reviewing, but neither write nor navigate. Reload to start over.
+    if (previewOnly) {
+      setFinishing(true);
+      return;
+    }
     if (finishRef.current) return;
     finishRef.current = true;
     finishArgsRef.current = args;
@@ -113,21 +149,59 @@ export function OnboardingFlowCore({
   }
 
   return (
-    <AuthSplitLayout bannerSrc={bannerSrc}>
+    <AuthSplitLayout bannerSrc={bannerSrc} glassPose={GLASS_POSE[step]}>
       <div className="w-full max-w-[360px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
-        {/* Brand: mark + wordmark (matches login), then step indicator */}
+        {/* Brand: mark BESIDE the wordmark as one lockup, then step indicator */}
         <div className="mb-6 flex flex-col items-start gap-1.5">
-          {brand}
-          <span
-            className="text-[21px] font-medium text-[#181818]"
-            style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
-          >
-            Dopl
-          </span>
+          <div className="flex items-center gap-2.5">
+            {brand}
+            <span
+              className="text-[21px] font-medium text-[#181818]"
+              style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
+            >
+              Dopl
+            </span>
+          </div>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[#9a9a9a]">
             Step {step === "survey" ? "1" : step === "connect" ? "2" : "3"} of 3
           </p>
         </div>
+
+        {previewOnly && (
+          <div className="mb-5 rounded-[10px] border border-dashed border-[#c9c9c9] bg-[#f7f7f7] px-3.5 py-2.5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#9a9a9a]">
+              Preview, nothing is saved
+            </p>
+            <div className="mt-2 flex gap-1.5">
+              {(["survey", "connect", "workspace"] as const).map((s, i) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    setFinishing(false);
+                    changeStep(s);
+                  }}
+                  className={`cursor-pointer rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                    step === s && !finishing
+                      ? "bg-[#181818] text-white"
+                      : "bg-white text-[#74808C] hover:text-[#181818]"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setFinishing(true)}
+                className={`cursor-pointer rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                  finishing ? "bg-[#181818] text-white" : "bg-white text-[#74808C] hover:text-[#181818]"
+                }`}
+              >
+                Finishing
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="mb-5 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-[14px] text-red-700">

@@ -38,10 +38,9 @@ import { formatRelativeTime } from "@/shared/lib/format-time";
 import { AgentPill } from "./agent-bits";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { ChannelMention } from "../types";
-import { MentionText } from "./message-markdown-mentions";
+import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { BodyContext } from "./message-markdown-context";
-import { buildMentionIndex } from "../lib/mentions";
-import { addressableAgents, buildAgentMentionIndex } from "../lib/agent-mentions";
+import { bodyContextOf } from "./message-markdown";
 
 /**
  * ⚠ **`MENTIONS_CLIPPED_NOTE` STOOD HERE AND IS DELETED (Samuel, 2026-09-15):
@@ -124,10 +123,11 @@ export function MentionsList({
    * ⚠ **BUILT ONCE FOR THE WHOLE PAGE, NOT PER ROW.** `buildMentionIndex` walks every
    * member and `addressableAgents` every agent; a bounded page of rows would redo both
    * for each one, on every read-state change.
-   * ⚠ **IT IS `message-markdown.tsx`'S OWN RECIPE, FIELD FOR FIELD** — the same two
-   * builders over the same `index` this list already receives. A hand-rolled handle map
-   * here is the two-readers-one-fact defect, and the fact in question is WHICH @-tokens
-   * resolve to somebody.
+   * ⚠ **IT IS `message-markdown.tsx › bodyContextOf`, CALLED — not copied** (2026-10-10,
+   * second round). It was this file's own object literal spelling the same two builders
+   * field for field, with a note saying a hand-rolled handle map would be the
+   * two-readers-one-fact defect; the builder is exported now, so the note is enforced
+   * instead of asked for. The fact in question is WHICH @-tokens resolve to somebody.
    * ⚠ **`mentionsMe: false`, AND THAT IS NOT A SHORTCUT.** `MentionText`'s extra
    * `bg-link/10` wash means "this message tags YOU" — a fact that is true of every row
    * in this inbox by construction, so switching it on would wash every handle in the
@@ -138,23 +138,17 @@ export function MentionsList({
    * press lands the transcript, and a button inside it could not navigate anywhere else.
    * That is the absent-not-disabled arm `message-markdown-context.ts` documents, used
    * on purpose.
-   * ⚠ **KNOWN DIVERGENCE, AND IT IS THE NARROW END OF F-266**: a snippet is the body
-   * FLATTENED by `server/service-mentions.ts`, never walked by `marked`, so a handle the
-   * transcript keeps plain for being inside code — `` `@samuel-wang` `` — tints here.
-   * `composer-tint.tsx` fixed the same class of thing with `maskNonTaggingRegions` + an
-   * offset walk, which cannot be reached through `MentionText`'s single `text` argument.
-   * It is cosmetic on an excerpt (this surface asserts nothing about routing) and the
-   * strict fix is a renderer change, so it is left stated rather than half-done.
+   * ⚠ **THE F-266 DIVERGENCE THIS NOTE USED TO CONFESS IS CLOSED** (2026-10-10, second
+   * round). A snippet is the body FLATTENED by `server/service-mentions.ts`, and while it
+   * went to `MentionText` directly it was never walked by `marked` — so a handle the
+   * transcript keeps plain for being inside code, `` `@samuel-wang` ``, tinted here. The
+   * row renders through `message-markdown-inline.tsx` now, so that token arrives as a
+   * `codespan` and the mention leaf never sees it: the renderer gives the rule
+   * structurally, which is the argument `composer-tint.tsx` makes about the same defect.
+   * ⚠ WHAT IS STILL CUT IS BLOCK STRUCTURE, by design — see that file's rule 2.
    */
   const bodyCtx = useMemo<BodyContext>(
-    () => ({
-      handles: buildMentionIndex([...index.byId.values()]),
-      agentHandles: buildAgentMentionIndex(addressableAgents(index.agents)),
-      index,
-      mentionsMe: false,
-      block: "",
-      text: "",
-    }),
+    () => bodyContextOf({ index, mentionsMe: false }),
     [index]
   );
 
@@ -300,16 +294,20 @@ function MentionItem({
         </span>
         <span className="sr-only">{unread ? "unread mention" : "read mention"}</span>
       </span>
-      {/* ⚠ **THE TRANSCRIPT'S OWN LEAF, NOT A SECOND TINT** (2026-10-10). `MentionText`
-          is the component the chat stream calls at every text node, so a handle that is
-          blue in the body is blue here, and one the roster does not resolve is plain in
-          both — by construction rather than by two rules agreeing. The blue itself is
-          `--link`, the palette's only blue, and it is never named in this file.
+      {/* ⚠ **THE TRANSCRIPT'S OWN RENDERER, NOT A SECOND TINT** (2026-10-10). The leaf
+          `MentionText` is reached THROUGH it, so a handle that is blue in the body is blue
+          here, and one the roster does not resolve is plain in both — by construction
+          rather than by two rules agreeing. The blue itself is `--link`, the palette's
+          only blue, and it is never named in this file.
+          ⚠ **AND IT RENDERS THE EMPHASIS TOO, SINCE THE SAME DAY'S SECOND ROUND**
+          (`message-markdown-inline.tsx`): a snippet of a body that reads bold in the
+          transcript read as literal asterisks in this list. Inline tokens only — the arm
+          exists so the `line-clamp-2` below still clamps (see that file's rule 2).
           ⚠ **THE ROW'S OWN TYPE SURVIVES**: `text-caption text-text-secondary` stays on
           the wrapper, so the un-tagged prose keeps the size and colour it had and only
-          the TOKENS change. `MentionText` sets weight and colour on the tokens alone. */}
+          the TOKENS change. The renderer sets weight and colour on the tokens alone. */}
       <span className="line-clamp-2 text-caption text-text-secondary">
-        <MentionText text={mention.snippet} ctx={bodyCtx} />
+        <MessageMarkdownInline text={mention.snippet} ctx={bodyCtx} />
       </span>
     </button>
   );

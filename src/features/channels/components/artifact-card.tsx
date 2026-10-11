@@ -235,8 +235,18 @@ export function ArtifactCard({
           {artifactSpanLabel(count, firstSeq, lastSeq)}
         </span>
       </div>
+      {/* ⚠ **THE SUMMARY GOES THROUGH THE SAME RENDERER AS THE BODIES UNDER IT**
+          (2026-10-10). It is the folding agent's own prose, and it was printing its
+          `**asterisks**` two rows above member bodies that render them bold — one card,
+          two readings of one author's markdown. `StreamProse` is the mount this file
+          already uses for those bodies, so the roster, the link policy and the block
+          geometry are the ones it wears; only the type and the padding are stated here. */}
       {summary !== "" && (
-        <p className="wrap-anywhere px-3 pt-2 text-caption text-text-muted">{summary}</p>
+        <StreamProse
+          text={summary}
+          className="px-3 pt-2"
+          textClassName="text-caption text-text-muted"
+        />
       )}
       {members.length > 0 && <FoldedRun members={members} />}
       {members.length > 0 && members.length < count && (

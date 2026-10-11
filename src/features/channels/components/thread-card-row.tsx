@@ -15,6 +15,8 @@
 import { Bot } from "lucide-react";
 import { AddresseePill, CARD_BUTTON } from "./bits";
 import { AuthoredRow } from "./authored-row";
+import { bodyContextOf } from "./message-markdown";
+import { MessageMarkdownInline } from "./message-markdown-inline";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { ThreadCardRow } from "./view-model-rows";
 
@@ -64,6 +66,13 @@ export function ThreadCardMessage({
   onOpen: () => void;
 }) {
   const first = row.threads[0];
+  // One context per card, not per token — `bodyContextOf` walks the roster
+  // (`mentions-list.tsx` states that rule where it holds one for a whole page).
+  // ⚠ `mentionsMe: false`: a card row carries no `metadata.mentionedUserIds` stamp, and
+  // the viewer wash is that server fact or nothing (`message-markdown-mentions.tsx`).
+  // ⚠ NO `newestSeq` / `onJumpToSeq`, so a `#1759` in the preview stays plain: the card is
+  // already a press that opens the thread, and a citation inside it could go nowhere else.
+  const previewCtx = bodyContextOf({ index, mentionsMe: false });
   return (
     <AuthoredRow
       id={row.id}
@@ -102,8 +111,15 @@ export function ThreadCardMessage({
         <span className="wrap-anywhere text-body font-semibold text-text-primary">
           {first.title}
         </span>
+        {/* ⚠ **THE OPENING MESSAGE'S OWN BODY, SO IT READS LIKE THE BODY** (2026-10-10):
+            `row.preview` is that message verbatim (`view-model-rows.ts`), and it was the
+            one copy of it in the channel that printed its author's `**asterisks**`.
+            ⚠ INLINE ARM, and the `line-clamp-3` is why — `message-markdown-inline.tsx`
+            rule 2: block markdown under a `line-clamp` does not clamp, and a preview lexed
+            into paragraphs and fences would push this card open. The title above stays
+            plain: a thread title is a LABEL, not prose anybody wrote markdown into. */}
         <p className="line-clamp-3 wrap-anywhere text-caption text-text-muted">
-          {row.preview}
+          <MessageMarkdownInline text={row.preview} ctx={previewCtx} />
         </p>
 
         <div className="flex flex-wrap gap-1.5">

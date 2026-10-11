@@ -77,20 +77,20 @@ export const MD_TABLE = "w-full border-collapse text-text-primary";
 export const MD_TH = "border-b border-border-default px-2 py-1 text-left font-semibold";
 export const MD_TD = "border-b border-border-subtle px-2 py-1 align-top";
 
-export function MessageMarkdown({
-  text,
-  index,
-  mentionsMe,
-  blockClassName = "",
-  textClassName = "",
-  newestSeq = null,
-  onJumpToSeq,
-}: {
-  text: string;
+/**
+ * WHAT A HOST KNOWS ABOUT A BODY — the renderer's props minus the body itself.
+ *
+ * ⚠ ITS OWN TYPE SINCE 2026-10-10, when the INLINE ARM landed
+ * (`message-markdown-inline.tsx`): the two arms differ in what they LEX and in
+ * nothing else, so they take the one shape and share {@link bodyContextOf}. A
+ * second spelling of "the roster, and whether this row tags me" is the failure
+ * every note in this file is written against.
+ */
+export interface BodyContextInput {
   index: AuthorIndex;
   /** SERVER-STAMPED (`metadata.mentionedUserIds`), never re-derived here. */
   mentionsMe: boolean;
-  /** The caller's block GEOMETRY — see rules 4 and 5 above. */
+  /** The caller's block GEOMETRY — see rules 4 and 5 above. ⚠ Inline has no blocks and ignores it. */
   blockClassName?: string;
   /** The caller's body TYPE — see rule 5. */
   textClassName?: string;
@@ -98,8 +98,24 @@ export function MessageMarkdown({
   newestSeq?: number | null;
   /** Jump the transcript to a cited message. ⚠ ABSENT = citations stay plain text. */
   onJumpToSeq?: (seq: number) => void;
-}) {
-  const ctx: BodyContext = {
+}
+
+/**
+ * THE CONTEXT EVERY LEAF AND BLOCK IS HANDED, BUILT IN EXACTLY ONE PLACE.
+ *
+ * ⚠ IT WALKS THE ROSTER, so a host with many bodies on one page builds it ONCE and
+ * passes it down — `mentions-list.tsx` states that rule where it holds it in a
+ * `useMemo`, and the inline arm takes a ready `ctx` for precisely that reason.
+ */
+export function bodyContextOf({
+  index,
+  mentionsMe,
+  blockClassName = "",
+  textClassName = "",
+  newestSeq = null,
+  onJumpToSeq,
+}: BodyContextInput): BodyContext {
+  return {
     handles: buildMentionIndex([...index.byId.values()]),
     // ⚠ FROM THE LIVE FEED, so a rename re-tints the same token under a new spelling on the next
     // push. Empty wherever there is no desktop (the web tree, the pop-out) — no tint, no error.
@@ -115,6 +131,10 @@ export function MessageMarkdown({
     newestSeq,
     onJumpToSeq,
   };
+}
+
+export function MessageMarkdown({ text, ...rest }: { text: string } & BodyContextInput) {
+  const ctx = bodyContextOf(rest);
   // ⚠ `lexer`, NEVER `parse`. GFM on for tables / strikethrough / autolinks;
   // `breaks` OFF so the markdown's own line rules hold — a chat body's single
   // newlines still separate blocks through the paragraph tokens themselves.
@@ -330,7 +350,15 @@ function Block({
   }
 }
 
-function Inline({ tokens, ctx }: { tokens?: Token[]; ctx: BodyContext }): ReactNode {
+/**
+ * ONE RUN OF INLINE TOKENS.
+ *
+ * ⚠ EXPORTED FOR THE INLINE ARM ONLY (`message-markdown-inline.tsx`, 2026-10-10).
+ * That file lexes a body with no BLOCK structure and hands the tokens here, which
+ * is what keeps one emphasis rule, one link policy and one mention leaf across
+ * both arms. It is not a styling hook: nothing outside this pair may call it.
+ */
+export function Inline({ tokens, ctx }: { tokens?: Token[]; ctx: BodyContext }): ReactNode {
   if (!tokens) return null;
   return (
     <>

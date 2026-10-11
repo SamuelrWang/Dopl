@@ -129,7 +129,13 @@ describe("channels transcript — an unbroken body wraps", () => {
     );
     const drawn = screen.getAllByText(UNBROKEN);
     expect(drawn.length).toBeGreaterThan(1); // the title AND the preview
-    for (const el of drawn) expect(el.className).toContain("wrap-anywhere");
+    // ⚠ **THE NEAREST ANCESTOR THAT OWNS THE RULE, NOT THE ELEMENT THE TEXT LANDED IN**
+    // (2026-10-10). The preview renders through `message-markdown-inline.tsx` now, so its
+    // text sits in a leaf `<span>` the renderer built while the `wrap-anywhere` stays on
+    // the `<p>` around it — and `overflow-wrap` is an INHERITED property, so the token
+    // still wraps. Asserting on the leaf's own `className` would have pinned the DOM shape
+    // of the renderer rather than the containment this test is about.
+    for (const el of drawn) expect(el.closest(".wrap-anywhere")).not.toBeNull();
   });
 
   it("wraps a roster name with no spaces in it", () => {
@@ -218,5 +224,54 @@ describe("channels transcript — my own message: anchored right, text left", ()
     expect(run.innerHTML).not.toContain("w-10");
     expect(bodyFor(UNBROKEN).parentElement?.className).toContain("items-end");
     expect(bodyFor(UNBROKEN).className).toContain("max-w-[92%]");
+  });
+});
+
+/**
+ * **EVERY PROSE LANE IN THIS COLUMN READS AS MARKDOWN, NOT ONLY THE BODY** (Samuel,
+ * 2026-10-10, #3128: the main chat area showed raw asterisks where the agent panel showed
+ * bold). The body itself has rendered since 2026-08-21 and `message-markdown.test.tsx`
+ * pins it; what these two pin is the lanes that were left behind, and they live HERE
+ * because this is the file that already mounts `Transcript` over real derived rows.
+ *
+ * ⚠ **THE INLINE ARM IS LOAD-BEARING IN BOTH, AND ITS FAILURE IS SILENT.** Were either to
+ * start lexing BLOCKS, no assertion below would fail on its own: the thread card would
+ * quietly grow past its `line-clamp-3` and the system row's centring would break into
+ * left-aligned paragraphs. `message-markdown-inline.test.tsx` guards that half.
+ */
+describe("the column's other prose lanes render emphasis", () => {
+  it("a thread card's preview — the opening message, as the body would read it", () => {
+    renderRows(
+      channelRows(
+        // `taskId` is what makes this the THREAD CARD's opening message rather than an
+        // ordinary row — the same link the wrapping case above uses.
+        [message({ id: "open", body: "ship **today**", metadata: { taskId: "t-1" } })],
+        [thread({ id: "t-1", title: "Picker fix" })],
+        INDEX,
+        formatChannelTimestamp
+      )
+    );
+    // ⚠ `closest`, NOT `tagName`: every plain-text leaf is a `<span>` of its own
+    // (`message-markdown-refs.tsx` puts the author's characters back one part at a time),
+    // so the emphasis is the ANCESTOR of the text, not the element holding it.
+    const bold = screen.getByText("today");
+    expect(bold.closest("strong")).not.toBeNull();
+    // The clamp is still the caller's, on the element around the run.
+    expect(bold.closest(".line-clamp-3")).not.toBeNull();
+  });
+
+  it("a system row, which is prose a peer needs and printed its own asterisks", () => {
+    renderRows(
+      channelRows(
+        [message({ id: "s", kind: "system", body: "thread closed by **Diana**" })],
+        [],
+        INDEX,
+        formatChannelTimestamp
+      )
+    );
+    const bold = screen.getByText("Diana");
+    expect(bold.closest("strong")).not.toBeNull();
+    // Still ONE centred line: the inline arm adds no block of its own.
+    expect(bold.closest(".text-center")).not.toBeNull();
   });
 });
