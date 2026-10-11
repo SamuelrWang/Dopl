@@ -213,9 +213,7 @@ module.exports = {
   denyMessageFor, // 2026-08-25 (F-320): which sentence a `deny` VERDICT carries
   AUTO_DENY_MESSAGE,
   OPERATOR_DENY_MESSAGE,
-  GATE_TIMEOUT_MESSAGE,
   LAUNCH_DEPTH_DENY_MESSAGE,
   AWAIT_DENY_MESSAGE, // 2026-09-01 (T85): the fifth sentence — a call that could not have helped
   BLOCKED_MESSAGE,
-  MAX_AUTO_DENIED,
 };

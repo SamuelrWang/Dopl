@@ -297,17 +297,9 @@ function notifyToolGate({ channelName, tool, onAllow, onOpen }) {
 
 module.exports = {
   clampBody,
-  truncate,
   createConsentRequest,
-  patchDecision,
-  // F-067: the decision entry point every surface should call — patchDecision is
-  // exported only for the tests and for a caller that wants the raw outcome.
+  // F-067: the decision entry point every surface calls.
   submitDecision,
-  notifyDecisionFailed,
-  decisionFailedCopy,
-  DECISION_OK,
-  DECISION_SETTLED,
-  DECISION_FAILED,
   pollStatus,
   notifyOutbound,
   notifyToolGate, // 2026-08-31: the held tool gate's banner — local, no row behind it

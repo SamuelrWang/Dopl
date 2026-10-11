@@ -279,4 +279,4 @@ function makeGrantDetail(grantDecision, predicates) {
   };
 }
 
-module.exports = { GATE_REASONS, makeGateReason, makeGrantDetail };
+module.exports = { GATE_REASONS, makeGrantDetail };
