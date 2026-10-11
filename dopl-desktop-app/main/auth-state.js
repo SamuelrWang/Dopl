@@ -248,11 +248,6 @@ function isSignedIn() {
   return st.signedIn;
 }
 
-// Token-free one-liner for the diag log: which source(s) currently authorize us.
-function signedInSource() {
-  return signedInState().source;
-}
-
 // FIX S4 — the listener's hook. channel-listener only re-resolves `myUserId` when it
 // is null (it caches the id for the life of the process), so a machine whose two
 // credentials disagree would keep classifying traffic under whichever identity it
@@ -309,7 +304,7 @@ function invalidateCookieIdentity() {
 // and after a successful revoke its bearer is dead anyway. Residual in F-085.
 //
 // FIX M4 — THE LINE MUST NEVER CLAIM A REVOKE THAT DID NOT HAPPEN. revokeDeviceToken
-// returns 'revoked' | 'none' | 'failed', and each gets its own words. 'none' (we hold
+// returns 'revoked' | 'no-match' | 'none' | 'failed', and each gets its own words. 'none' (we hold
 // no local copy, so nothing was asked of the server) used to be reported as a success:
 // a live 90-day row could still exist — cleared by an earlier sign-out whose revoke
 // failed, or by a wiped store — and the log said it was dead. A THROW is treated as
@@ -370,7 +365,6 @@ module.exports = {
   isSignedIn,
   ensureSignedIn,
   refreshSignedInState,
-  signedInSource,
   identityMismatch,
   invalidateCookieIdentity,
   signOut,

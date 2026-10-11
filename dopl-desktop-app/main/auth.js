@@ -1,22 +1,17 @@
 // Main-process auth store for the background listener.
 //
-// WHY COOKIES, NOT A BEARER TOKEN (documented deviation from the contract):
-// The contract's listener sketch calls the API with `Authorization: Bearer
-// <access token>`. The real shared auth layer (src/shared/auth/with-auth.ts)
-// treats ANY Authorization header as an OAuth *MCP* token and validates it
-// against the MCP token store; a raw Supabase JWT fails that check and the
-// request 401s WITHOUT falling through to cookies. The only bearer it accepts
-// is a Dopl-OAuth token, which the desktop app never mints. The supported path
-// for a session caller is the Supabase auth cookies (getSessionUser). So the
-// listener authenticates by forwarding the Electron session's
-// `sb-<ref>-auth-token*` cookies — the session path the server actually honors.
+// TWO TRANSPORTS. The server (src/shared/auth/with-auth.ts) accepts a session
+// two ways: the Supabase auth cookies, and `Authorization: Bearer <Supabase
+// access JWT>` (any bearer not prefixed `dopl_at_`). api.js and the listener
+// forward the Electron session's `sb-<ref>-auth-token*` cookies (getAuthCookie
+// below); the bearer lane is auth-tokens.js. Both read the SAME session blob and
+// rotate it through the SAME single-flight refresh() here.
 //
-// The captured access/refresh tokens + Supabase refresh endpoint (both required
-// by Phase 3) are still implemented here: they keep a valid session alive when
-// the window is hidden, and repair the cookie jar if it goes stale.
+// The captured access/refresh tokens + the Supabase refresh endpoint keep a
+// valid session alive when the window is hidden, and repair the cookie jar if
+// it goes stale.
 //
-// SPLIT NOTE (Q4, 500-line cap). Three siblings sit under this file and it
-// re-exports all of them, so no caller changed:
+// Three siblings sit under this file, and it re-exports what callers need:
 //   auth-store.js   — the encrypted blob + JWT decoders + throttled failure log
 //   auth-cookies.js — everything that touches the Electron cookie jar
 //   auth-state.js   — isSignedIn / ensureSignedIn / blob repair / signOut
@@ -24,7 +19,6 @@
 // Supabase refresh call, and the Cookie-header assembly for API calls.
 
 const crypto = require('crypto');
-const { app } = require('electron');
 const cookies = require('./auth-cookies');
 const state = require('./auth-state');
 const {
@@ -58,54 +52,34 @@ const PENDING_AUTH_MAX = 4; // concurrent sign-in attempts worth remembering
 // clock, and whatever `state` a fragment echoed, WHICH record (if any)
 // authorizes adoption.
 //
-// TWO RECORD KINDS in the code; only ONE is still armed by any live path.
+// TWO RECORD KINDS in the code; only ONE is armed by any live path.
 //   requireState — the flow controls the whole round trip, so the returning
-//     fragment echoes our nonce and an EXACT match is enforceable. ALL THREE
-//     sign-in flows arm this way (every `beginPendingAuth` caller in main/
-//     passes `requireState: true`):
+//     fragment echoes our nonce and an EXACT match is enforceable. Both
+//     `beginPendingAuth` callers in main/ pass `requireState: true`:
 //       · the BROWSER handoff (OAuth), armed in auth-actions.maybeBeginAuth.
 //         Our ?state rides the entire web leg: /auth/desktop-start forwards it
 //         into the Supabase redirectTo, /auth/callback threads it on to
 //         /auth/desktop-handoff, and that page puts it in the dopl:// fragment.
 //       · the in-process password adoption (auth-password.js), whose fragment
 //         main builds itself and which never crosses a process or the OS.
-//       · the MAGIC LINK (auth-password.js:156, closed 2026-08-08). The nonce
-//         rides out on GoTrue's `redirect_to=/auth/desktop-handoff?state=<n>`,
-//         so the emailed link returns through the same state-bearing capture as
-//         the OAuth leg. It used to be the one presence-only flow; it is not.
 //     A 128-bit nonce is UNGUESSABLE, which is the property this rests on — an
-//     injected dopl:// link cannot invent one. It is NOT unreadable, and the
-//     difference matters for the browser leg: that nonce transits the system
-//     browser as a query param, so it exists in the address bar, in history,
-//     and in the access log of every server on the web leg. Anything able to
-//     read those is inside the trust boundary already, but the TTL (and
-//     single use) is what bounds that exposure, not secrecy of the value.
-//   presence-only — a record with no `requireState`. NOTHING WRITES ONE ANY
-//     MORE. `pickPendingAuth`'s no-echo branch exists only for records left in
-//     a pre-upgrade store by a build that armed the magic link the old way;
-//     they age out on the TTL and the branch then becomes dead. Do not arm a
-//     new flow this way — see the fail-closed note below for why.
+//     injected dopl:// link cannot invent one. It is NOT unreadable: on the
+//     browser leg it transits the system browser as a query param (address bar,
+//     history, server access logs). The TTL and single use bound that exposure,
+//     not secrecy of the value.
+//   presence-only — a record with no `requireState`. NOTHING WRITES ONE. The
+//     no-echo branch of `pickPendingAuth` serves only records an older build
+//     left in the store; they age out on the TTL. Do not arm a new flow this
+//     way — see the fail-closed note below.
 //
-// FAIL CLOSED IN BOTH DIRECTIONS (F-054, 2026-08-08). A fragment that echoes a
-// state may spend ONLY the record carrying that exact nonce — a mismatch
-// matches nothing and does NOT fall back to presence+TTL admission. A fragment
-// with no state may spend only a record that does not require one. Before this,
-// the browser record was armed WITHOUT requireState, so a state-less fragment
-// still round-tripped on presence alone: the web half echoed a value the
-// desktop merely read, and echoing a value nothing insists on is not CSRF
-// protection.
+// FAIL CLOSED IN BOTH DIRECTIONS (F-054). A fragment that echoes a state may
+// spend ONLY the record carrying that exact nonce — a mismatch matches nothing
+// and does NOT fall back to presence+TTL admission. A fragment with no state may
+// spend only a record that does not require one.
 //
-// RESIDUAL: CLOSED (2026-08-08). This read "the magic-link record is the last
-// presence-only kind", and the fix it described — threading a state through
-// GoTrue's `redirect_to` — has since landed in auth-password.js. Every flow is
-// now state-bound; the only presence-only records that can exist are ones an
-// older build already wrote to a user's store.
-//
-// A LIST, not one record: the store held a single slot, so a password sign-in
-// silently voided an in-flight browser handoff (and an emailed magic link went
-// permanently dead). Records are single-use and expired ones are pruned on
-// every read/write, so the set stays small on its own; PENDING_AUTH_MAX is the
-// belt-and-braces bound.
+// A LIST, not one record, so one sign-in never voids another in flight.
+// Records are single-use and expired ones are pruned on every read/write;
+// PENDING_AUTH_MAX is the belt-and-braces bound.
 function livePendingAuth(list, now, ttlMs) {
   return (Array.isArray(list) ? list : []).filter(
     (p) =>
@@ -145,12 +119,6 @@ function beginPendingAuth(opts) {
   writePendingAuth([...readPendingAuth(), rec]);
   return nonce;
 }
-
-// ⚠ `hasValidPendingAuth()` STOOD HERE AND IS DELETED (2026-08-20) — zero callers. It answered
-// "is any auth flow in flight", which nothing asks: the gate is `takePendingAuth(nonce)`, which
-// CONSUMES a specific record, and a boolean "something is pending" is the shape that invites a
-// caller to branch on presence instead of spending the nonce (INVARIANTS §11: a mismatch must
-// match nothing, never fall back to presence+TTL).
 
 // Single-use: consumes (deletes) the matching pending record and returns whether
 // one was found. The OTHER live records survive — a completed password sign-in
@@ -474,18 +442,12 @@ module.exports = {
   getAccessTokenInfo,
   refresh,
   ensureFresh,
-  getSessionCookieHeader: cookies.getSessionCookieHeader,
   getAuthCookie,
   writeSessionCookies: cookies.writeSessionCookies,
-  clearSession,
   // Q4 signed-in state (auth-state.js) — re-exported so every existing
   // `auth.isSignedIn()` call site keeps working, now cookie-aware.
   isSignedIn: state.isSignedIn,
   ensureSignedIn: state.ensureSignedIn,
-  refreshSignedInState: state.refreshSignedInState,
-  signedInSource: state.signedInSource,
   identityMismatch: state.identityMismatch, // S4: the jar and the blob name different users
   signOut: state.signOut,
-  // ⚠ `_appName` STOOD HERE AND IS DELETED (2026-08-20) — an underscore-prefixed test hook with
-  // zero readers, in tests or anywhere else.
 };

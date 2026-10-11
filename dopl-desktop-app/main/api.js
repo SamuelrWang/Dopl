@@ -1,14 +1,13 @@
-// Shared authenticated HTTP helper for the newer main-process modules
-// (mcp-config, consent, presence, session-history, session-peer-post; and
-// session-close-task, until that module was deleted with thread closing —
-// wiring plan Phase 4, 2026-08-18). The Channels listener still keeps its own SEND (E2E-
+// Shared authenticated HTTP helper for main-process modules (mcp-config,
+// consent, presence, device-registry, launch directives, …). The Channels
+// listener still keeps its own SEND (E2E-
 // verified — its long-poll wires a caller abort signal into the controller and
 // its timeouts are load-bearing), but the two no longer keep separate 401
 // REPAIRS: that half is api-repair.js and both call it. Keeping a second copy of
 // the repair is what produced the 1.8.x Channels outage — see api-repair.js.
 //
-// Auth is via the Electron session's Supabase cookies (see auth.js for why not
-// a bearer). withUserAuth endpoints ({ sessionOnly: true } included) honor them.
+// Auth is via the Electron session's Supabase cookies (auth.js › getAuthCookie).
+// withUserAuth endpoints ({ sessionOnly: true } included) honor them.
 
 const auth = require('./auth');
 const appVersion = require('./app-version');
@@ -67,10 +66,8 @@ async function sendOnce(pathname, opts) {
 
 // 401 REPAIR (Phase 2 — desktop-main.md B3/R1). `api.js` had NO repair at all:
 // only the listener retried on 401 (channel-listener.js:102-115), so presence
-// skipped a cycle and consent, mcp-config, session-history, session-peer-post and
-// the since-deleted session-close-task simply failed. Today the remote page hides that by keeping
-// the cookie jar fresh; the bundled SPA removes the page and with it the
-// refresher, and `getAuthCookie()` only repairs an EMPTY jar, never a STALE one.
+// skipped a cycle and every other caller simply failed. `getAuthCookie()` only
+// repairs an EMPTY jar, never a STALE one, so a stale jar needs this repair.
 //
 // The repair itself now lives in api-repair.js and is SHARED with listener-io.js,
 // which shipped without it and took the whole Channels subsystem down on 1.8.x.

@@ -428,7 +428,7 @@ test("every authenticated main-process fetch seam goes through the shared repair
   const repairers = files.filter((f) => /shouldRepairAuth\(/.test(M(f))).sort();
   // ⚠ `auth-tokens.js` LEFT THIS LIST ON 2026-08-30 and `auth-token-rules.js` took its
   // place: the rule's definition moved with the rest of the pure block when that file hit
-  // the §2 cap. auth-tokens.js still re-exports the name — it simply no longer CALLS it.
+  // the §2 cap. auth-tokens.js still re-exports the name; it does not CALL it.
   assert.deepEqual(repairers, ["api-repair.js", "auth-token-rules.js", "ui-bridge.js"],
     "a module deciding 401 policy on its own is how listener-io drifted in the first place");
 });
