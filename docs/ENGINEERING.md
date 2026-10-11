@@ -1584,10 +1584,13 @@ same channel with the same payload; every capability the web tree detects is
 provided; and every member `SpaBridgeSurface` declares exists. Restricting
 parity to CALLABLE members is deliberate — it is the set that can be
 feature-detected, and it excludes the legacy markers (`isDesktop`, `platform`,
-`versions`) the SPA preload intentionally does not set. **Do not add
-`isDesktop` to the SPA preload:** `isDesktopApp()` gates the web login page
-into the browser-OAuth + `dopl://` handoff, which the SPA must not take (it
-signs in through main). That divergence is pinned by the same test.
+`versions`) the SPA preload intentionally does not set. **`isDesktopApp()`
+answers true in the SPA without the marker** (since 77d8e1bf it also reads the
+bridge: `src/shared/lib/desktop.ts` via `spa-bridge.ts › isSpaRenderer`), which
+is what lets `use-dictation.ts` pick the on-device engine. The browser-OAuth +
+`dopl://` handoff it gates in `use-login.ts` is unaffected: that hook serves the
+web-only `login-form.tsx`, and the SPA mounts `login-form-core` with its own
+actions and signs in through main. Pinned by `src/shared/lib/desktop.test.ts`.
 **Adding an op is a FOUR-file change:** the preload(s), the `ipcMain` handler,
 the renderer-side typed mirror `apps/desktop-ui/src/lib/dopl-bridge.ts`, and
 the web tree's feature detector.
