@@ -13,8 +13,7 @@
 // MODULE, and it is ONE module now, not two: realtime.js keeps its own socket, breaker
 // and health model for delivery (`realtime-agents.js` is deleted — realtime.js `:73`).
 // The UI feed watches channel_messages + agent_presence TOO, on ITS OWN socket, for web
-// parity — the first dogfood proved excluding them froze the transcript. `channel_agents`
-// was bound here; GONE 2026-08-06, write-dead since rollback §1 (the TABLE stays).
+// parity — the first dogfood proved excluding them froze the transcript.
 //
 // THE CREDENTIAL RULE, inherited verbatim from realtime.js. Realtime authorizes
 // postgres_changes with the USER JWT from setAuth. With NO JWT realtime-js joins on
@@ -52,12 +51,9 @@ const { diag } = require('./diag');
 
 // ── THE DECISION CORE (main/ui-sync-core.js) ─────────────────────────────────
 // Which tables to bind, which topic to join under, when a burst becomes one send, how long
-// to wait, whether a frame may be forwarded — every one of those is a pure function of
-// injected values, and they live NEXT DOOR since 2026-08-18 (wiring plan Phase 10) because
-// this file sat at exactly the §2 500-line cap. The `BEGIN/END UI-SYNC-PURE` sentinels the
-// three ui-sync test files slice went with them, verbatim; nothing inside changed.
-// ⚠ Re-exported below, unchanged, so `require('./ui-sync')` still answers the whole
-// Phase-3 surface index.js and the tests are told to call.
+// to wait, whether a frame may be forwarded: pure functions of injected values, sliced by
+// the ui-sync test files. ⚠ Re-exported below, so `require('./ui-sync')` still answers the
+// whole surface index.js and the tests call.
 const {
   SYNC_TABLES, LISTENER_OWNED_TABLES,
   COALESCE_MS, RECONNECT_DELAYS_MS, AUTH_RECHECK_MS, AUTH_READ_TIMEOUT_MS,
