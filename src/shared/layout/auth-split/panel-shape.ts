@@ -33,6 +33,18 @@ export interface PanelShapeOpts {
   notchRadius: number;
   /** Shrink the SOLID REGION by this much, px — the rim's inner edge. */
   inset?: number;
+  /**
+   * Take `radius` / `notchRadius` AS GIVEN instead of offsetting them by
+   * `inset`.
+   *
+   * The default is a true concentric offset, which is what a 1px rim wants:
+   * corners tighten by the inset and the bite's concave corner opens by it,
+   * so the two outlines stay parallel. A DEEP inset under that rule drives
+   * the corner radius to zero — the white card sits 34px in, and 20 − 34
+   * clamps to a square corner. This flag is for that caller: it insets the
+   * EDGES only and lets the shape keep its own rounding.
+   */
+  keepRadii?: boolean;
 }
 
 /**
@@ -60,14 +72,16 @@ export function panelPath(
   w: number,
   h: number,
   shape: PanelShape,
-  { radius, notchRadius, inset = 0 }: PanelShapeOpts
+  { radius, notchRadius, inset = 0, keepRadii = false }: PanelShapeOpts
 ): string {
   const x0 = inset;
   const y0 = inset;
   const x1 = Math.max(x0, w - inset);
   const y1 = Math.max(y0, h - inset);
 
-  const r = clamp(radius - inset, 0, Math.min((x1 - x0) / 2, (y1 - y0) / 2));
+  /** Concentric by default; `keepRadii` opts out. See the flag's note. */
+  const grow = keepRadii ? 0 : inset;
+  const r = clamp(radius - grow, 0, Math.min((x1 - x0) / 2, (y1 - y0) / 2));
   // Depth is inset-invariant on purpose — see the note above.
   const dT = Math.max(0, shape.topDepth);
   const dB = Math.max(0, shape.botDepth);
@@ -83,10 +97,10 @@ export function panelPath(
   // Convex corner shrinks with the inset, concave grows. BOTH are capped at
   // half the bite's depth, so at depth 0 they collapse to 0 together and the
   // bite's four commands land collinear on the straight edge, drawing nothing.
-  const tConvex = notchCorner(notchRadius - inset, dT, (sx - x0 - r) / 2, (x1 - sx - r) / 2);
-  const tConcave = notchCorner(notchRadius + inset, dT, (sx - x0 - r) / 2, (x1 - sx - r) / 2);
-  const bConvex = notchCorner(notchRadius - inset, dB, (x1 - bx - r) / 2, (bx - x0 - r) / 2);
-  const bConcave = notchCorner(notchRadius + inset, dB, (x1 - bx - r) / 2, (bx - x0 - r) / 2);
+  const tConvex = notchCorner(notchRadius - grow, dT, (sx - x0 - r) / 2, (x1 - sx - r) / 2);
+  const tConcave = notchCorner(notchRadius + grow, dT, (sx - x0 - r) / 2, (x1 - sx - r) / 2);
+  const bConvex = notchCorner(notchRadius - grow, dB, (x1 - bx - r) / 2, (bx - x0 - r) / 2);
+  const bConcave = notchCorner(notchRadius + grow, dB, (x1 - bx - r) / 2, (bx - x0 - r) / 2);
 
   return [
     `M ${n(x0 + r)},${n(y0)}`,

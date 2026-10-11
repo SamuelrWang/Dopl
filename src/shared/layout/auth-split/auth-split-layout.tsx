@@ -182,12 +182,16 @@ const GLASS_MS = 820;
  * nothing on it, then the card fades in at its new size and place. So the
  * glass is BARE for the whole move, and the two never overlap.
  */
-const CARD_OUT_MS = 120;
-const CARD_IN_MS = 150;
-/** Even inset from whichever part of the pose is solid. */
+const CARD_OUT_MS = 300;
+const CARD_IN_MS = 400;
+const CARD_EASE = "ease-out";
+/** Even margin between the card's outline and the glass's, all the way round
+ *  — including along the bite. */
 const CARD_INSET = 34;
-/** Width cap, as a share of the glass. Keeps it a card, not a fill. */
-const CARD_MAX_W = 0.56;
+/** ⚠ KEEP IN SYNC with `--glass-card-radius` (globals.css + the desktop
+ *  tokens mirror). The card is a MASK now, so `border-radius` no longer
+ *  applies to it and the number has to exist in JS as well. */
+const CARD_RADIUS = 14;
 
 
 /** The JS twin of {@link GLASS_EASE} — the morph is driven frame by frame, the
@@ -215,21 +219,16 @@ function glassShape(w: number, topDepth: number, botDepth: number): PanelShape {
  * the card insets from the bite's floor (lowered) or its ceiling (raised),
  * which is also what repositions it per page.
  */
-function cardRect(pose: AuthGlassPose, w: number, h: number) {
-  const d = h * GLASS_NOTCH_DEPTH;
-  const top = pose === "lowered-top-notch" ? d : 0;
-  const bottom = pose === "raised-bottom-notch" ? d : 0;
-  // Even inset from the solid band, then capped and CENTRED so it reads as a
-  // small card rather than a fill — the band is much wider than it is tall,
-  // so an even inset alone leaves a letterbox.
-  const bandH = Math.max(0, h - top - bottom);
-  const width = Math.min(w - CARD_INSET * 2, w * CARD_MAX_W);
-  return {
-    left: Math.max(CARD_INSET, (w - width) / 2),
-    top: top + CARD_INSET,
-    width: Math.max(0, width),
-    height: Math.max(0, bandH - CARD_INSET * 2),
-  };
+function cardPath(pose: AuthGlassPose, w: number, h: number): string {
+  const { top, bot } = poseDepths(pose, h);
+  return panelPath(w, h, glassShape(w, top, bot), {
+    radius: CARD_RADIUS,
+    notchRadius: CARD_RADIUS,
+    inset: CARD_INSET,
+    // Edges in by `CARD_INSET`, rounding left alone: a concentric offset this
+    // deep would square the corners off (20 − 34 clamps to 0).
+    keepRadii: true,
+  });
 }
 
 /** Bite depths the pose is heading for. */
@@ -278,6 +277,7 @@ function AuthBannerPanel({ src, pose }: { src: string; pose: AuthGlassPose }) {
     shadow: `asm-${uid}`,
     rimBlur: `arb-${uid}`,
     shadowBlur: `asb-${uid}`,
+    card: `acm-${uid}`,
   };
 
   // Every mask path is written IMPERATIVELY, never from JSX: the morph runs
@@ -507,14 +507,23 @@ function AuthBannerPanel({ src, pose }: { src: string; pose: AuthGlassPose }) {
               aria-hidden
               style={{
                 position: "absolute",
-                ...cardRect(movePose, mw, mh),
+                inset: 0,
+                // Masked to an inset copy of THIS pose's outline, bite and
+                // all. No morph needed: the card is invisible for the whole
+                // flight, so it only ever shows a settled pose.
+                mask: `url(#${ids.card})`,
+                WebkitMask: `url(#${ids.card})`,
                 background: "var(--glass-card-fill)",
-                borderRadius: "var(--glass-card-radius)",
-                boxShadow: "var(--glass-card-shadow)",
+                // ⚠ `drop-shadow`, NOT `box-shadow`: a box-shadow is drawn on
+                // the border box and the mask then cuts it away, so a masked
+                // card would lose its shadow entirely. `drop-shadow` is
+                // computed from the masked alpha, so it follows the bite.
+                // The token's value is already in drop-shadow's grammar.
+                filter: "drop-shadow(var(--glass-card-shadow))",
                 opacity: cardShown ? 1 : 0,
                 transition: still
                   ? undefined
-                  : `opacity ${cardShown ? CARD_IN_MS : CARD_OUT_MS}ms ease`,
+                  : `opacity ${cardShown ? CARD_IN_MS : CARD_OUT_MS}ms ${CARD_EASE}`,
               }}
             />
           )}
@@ -549,6 +558,12 @@ function AuthBannerPanel({ src, pose }: { src: string; pose: AuthGlassPose }) {
               outright. That is a blank panel, not a subtle bug. */}
           <mask id={ids.glass} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
             <path ref={keep(0)} fill="#fff" />
+          </mask>
+
+          {/* The card's outline. Driven by React, not the morph loop: it is
+              one settled pose at a time, never an in-between. */}
+          <mask id={ids.card} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
+            <path d={box ? cardPath(movePose, mw, mh) : undefined} fill="#fff" />
           </mask>
 
           {/* A blurred band ON the outline, trimmed to the inside of the
