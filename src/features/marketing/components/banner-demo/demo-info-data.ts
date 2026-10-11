@@ -15,7 +15,6 @@ import type { ActivityBin } from "@/features/channels/components/thread-activity
 import {
   AGENT_IDS,
   CHANNEL_ID,
-  CURRENT_USER_ID,
   FACE,
   NOW_MS,
   minsAgo,
@@ -63,9 +62,6 @@ export const MENTIONS: ChannelMention[] = [
     read: true,
   },
 ];
-
-/** The viewer of that inbox. Stated once so the tab and the transcript agree. */
-export const MENTIONS_VIEWER = CURRENT_USER_ID;
 
 /**
  * 31 UTC days of message counts — what
