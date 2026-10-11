@@ -162,7 +162,7 @@ export type ResolvedAgentToolProfile = AgentToolProfile | "channel_agent";
  * {@link PresencePosture}; `listening` is what an older build still sends, so it stays
  * in this union and the CHECK (§13's older-peer rule), while `busy` / `paused` /
  * `offline` were reserved and never written. ⚠ **ONLY THE LITERAL `away` SUPPRESSES
- * THE DOT**: `repository-collab.ts › presenceForWorkspace` tests `status !== "away"`,
+ * THE DOT**: `server/repository-presence.ts › presenceForWorkspace` tests `status !== "away"`,
  * NOT `status === "active"` — an allow-list would take every pre-1.30 machine offline
  * on deploy day.
  */
@@ -204,7 +204,7 @@ export type Channel = {
   lastReadAt: string | null;
   /** Message newer than the caller's `lastReadAt`. */
   unread: boolean;
-  /** ⛔ Dead since F-170 — nothing sets or reads it. See `NotifyScope`. */
+  /** Set from the caller's `notify_scope` (`server/dto.ts`). See `NotifyScope`. */
   myNotifyScope: NotifyScope | null;
   myAgentToolProfile: AgentToolProfile | null;
   /**
@@ -337,8 +337,7 @@ export type ChannelMessagePosted = ChannelMessage & {
 
 /**
  * ⚠ `ChannelMention` MOVED TO `types-mentions.ts` at the 500-line cap
- * (2026-09-15), re-exported below exactly like the SESSION and LAUNCH families —
- * no import path changed and there is still one path to the symbol.
+ * (2026-09-15) and is re-exported here, like the SESSION and LAUNCH families.
  */
 export type { ChannelMention } from "./types-mentions";
 

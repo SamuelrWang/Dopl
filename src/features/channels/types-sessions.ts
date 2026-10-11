@@ -55,16 +55,6 @@ export type {
 };
 
 /**
- * One live (or just-ended) session, as answered by
- * `dopl_channel(op="read_sessions")`. Server-visible projection of desktop
- * `session-summary.list()` — ⚠ the SAME derivation the pills use, lifted, never
- * a second one (F-142).
- *
- * Delivery: desktop pushes ON STATE CHANGE (not heartbeat) into
- * `channel_sessions`; the read is scoped to the caller's own sessions. See
- * `session-state-service.ts`.
- */
-/**
  * WHICH OF SIX SITUATIONS A LIVE SESSION IS IN — the CLOSED key vocabulary
  * `dopl-desktop-app/main/session-detail.js › detailFor` derives, and the ONLY
  * finer-than-`state` signal that crosses machines (2026-08-22).
@@ -88,6 +78,16 @@ export type {
  */
 export type SessionDetailKey = NonNullable<DesktopSessionSummary["detail"]>;
 
+/**
+ * One live (or just-ended) session, as answered by
+ * `dopl_channel(op="read_sessions")`. Server-visible projection of desktop
+ * `session-summary.list()` — ⚠ the SAME derivation the pills use, lifted, never
+ * a second one (F-142).
+ *
+ * Delivery: desktop pushes ON STATE CHANGE (not heartbeat) into
+ * `channel_sessions`; the read is scoped to the caller's own sessions. See
+ * `session-state-service.ts`.
+ */
 export type ChannelSessionState = {
   channelId: string;
   threadId: string | null;

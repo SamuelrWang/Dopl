@@ -10,8 +10,8 @@ import type {
  * COLLAB request schemas — consent, trust and presence.
  *
  * ⚠ SPLIT OUT OF `schema.ts` ON 2026-08-19 at the 500-line cap (INVARIANTS §5), on
- * the boundary `server/repository-collab.ts` already draws — *consent + trust +
- * presence*, three things that change together and for reasons the CHANNEL and
+ * the boundary `server/repository-collab.ts` drew then — *consent + trust + presence*
+ * (trust since deleted, presence reads moved to `repository-presence.ts`), things that change together and for reasons the CHANNEL and
  * MESSAGE schemas do not share. Precedent: `schema-sessions.ts`.
  *
  * ⚠ RE-EXPORTED THROUGH `schema.ts`, so every existing `@/features/channels/schema`

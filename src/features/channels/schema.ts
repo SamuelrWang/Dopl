@@ -16,8 +16,8 @@ import {
 } from "./escalation";
 
 /** ⚠ ANNOTATED `z.ZodType<ChannelVisibility>` (2026-08-20) so TS-side drift BREAKS THE
- *  BUILD: the set is declared twice — the union in `types.ts` and this enum — and
- *  nothing tied them. (A third statement as a SQL `CHECK` is still on trust.) */
+ *  BUILD: the union (`@dopl/contracts`, re-exported by `types.ts`) and this enum
+ *  must agree. (The SQL `CHECK` is still on trust.) */
 const VisibilitySchema = closedEnum<ChannelVisibility>()(["private", "public"]);
 
 /**
@@ -47,7 +47,7 @@ const PostableAuthorKindSchema = closedEnum<PostableAuthorKind>()([
 ]);
 // `system` server-emitted only. ⚠ `closedEnum` over the DERIVED type, so drift
 // against the full union is a COMPILE ERROR both ways; the three statements no
-// compiler reaches (the column CHECK, the SDK's two mirrors) are held by
+// compiler reaches (today the column CHECK) are held by
 // `scripts/check-message-kind-drift.ts`. Argument: `types.ts › PostableMessageKind`.
 const PostableMessageKindSchema = closedEnum<PostableMessageKind>()([
   "message",
@@ -275,8 +275,8 @@ export type { ArtifactActionInput } from "./schema-artifacts";
 
 /**
  * Session-state schemas live in `schema-sessions.ts`, and the CONSENT / TRUST /
- * PRESENCE schemas in `schema-collab.ts` (split 2026-08-19 at the 500-line cap, on
- * the boundary `server/repository-collab.ts` already draws), both re-exported here —
+ * PRESENCE schemas in `schema-collab.ts` (split 2026-08-19 at the 500-line cap; presence
+ * reads now live in `server/repository-presence.ts`), both re-exported here —
  * this file is the barrel, and there is no third path to a symbol.
  */
 export {
@@ -306,8 +306,8 @@ export type {
 } from "./schema-collab";
 
 /**
- * LAUNCH-OVER-MCP schemas live in `schema-launch.ts` (2026-08-22), re-exported
- * here so this file stays the one barrel and there is no third path to a symbol.
+ * LAUNCH-OVER-MCP schemas live in `schema-launch.ts` (2026-08-22; `LaunchDecideSchema`
+ * in `schema-launch-decide.ts`), re-exported here so this file stays the barrel.
  */
 export {
   // ⚠ THE AGENT-MANAGEMENT HALF (2026-09-01) rides the SAME file and the same

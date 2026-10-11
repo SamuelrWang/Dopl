@@ -29,7 +29,8 @@ export const PRESENCE_TABLES = ["agent_presence"] as const;
  * an idle focused tab, not 900 at 4s.
  *
  * ⚠ Passed only by the surfaces that RENDER a pending draft
- * (`channels/components/channel-surface-data.ts`, `.../agent-window.tsx`) — an
+ * (`channels/components/channel-surface-data.ts`, `.../agent-window.tsx`,
+ * `.../thread-window.tsx`) — an
  * interval belongs to a surface that can act on the rows. The always-mounted nav
  * badge this rule once exempted is DELETED (Samuel, 2026-08-25 — INVARIANTS §6).
  */
@@ -53,7 +54,7 @@ export const GROUP_CHANNEL_MIN_MEMBERS = 3;
 
 /**
  * Agent counts as online when its last heartbeat is newer than this AND its stored
- * `status` is not the literal `'away'` (`server/repository-collab.ts ›
+ * `status` is not the literal `'away'` (`server/repository-presence.ts ›
  * derivePresence`).
  *
  * ⚠ **120s — FOUR BEATS, RAISED FROM 90s (THREE) ON 2026-09-08, AND THE REASON IS
@@ -108,11 +109,8 @@ export const THREAD_MODE_LABELS: Record<ThreadMode, string> = {
 /**
  * Human labels for the per-channel agent tool scope.
  *
- * ⚠ ONE CONSUMER TODAY, and this docblock claimed two until 2026-08-21:
- * `channels/components/settings-agent.tsx` (re-measure: `grep -rn
- * AGENT_TOOL_PROFILE_LABELS src`). The second was the consent card, and both halves
- * of that claim had expired — `components/consent-card.tsx` is DELETED (INVARIANTS
- * §6) and no surface has said "Allow" since the affirmative became **Launch agent**.
+ * ⚠ ONE CONSUMER TODAY: `channels/components/settings-agent-rows.tsx` (re-measure:
+ * `grep -rn AGENT_TOOL_PROFILE_LABELS src`).
  */
 export const AGENT_TOOL_PROFILE_LABELS: Record<ResolvedAgentToolProfile, string> = {
   full: "Full access",

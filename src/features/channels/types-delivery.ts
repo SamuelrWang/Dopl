@@ -1,12 +1,11 @@
 /**
- * THE DELIVERY CONTRACT AND THE POSTURE CEILING (2026-09-02, v2 wave A slice A9).
+ * THE DELIVERY CONTRACT (2026-09-02, v2 wave A slice A9; the posture ceiling that
+ * shared this file was deleted 2026-09-06, recorded below).
  *
  * ⚠ **ITS OWN FILE (§1) BECAUSE `types.ts` REACHED THE 500-LINE CAP**, and the
  * seam is real rather than arithmetic: everything here changes when the DELIVERY
- * contract or the launch ceiling changes, and `types.ts` when a channel shape
- * does. Same arrangement `types-sessions.ts` / `types-launch.ts` /
- * `types-direction.ts` / `types-ping.ts` already have — **`types.ts` is the
- * barrel and there is no second import path to any of these symbols.**
+ * contract changes, and `types.ts` when a channel shape does. Same arrangement as
+ * the other `types-*.ts` files — **`types.ts` is the barrel.**
  */
 
 // ⚠ 2026-09-07: `LaunchMessageMode` / `LaunchToolMode` were imported here for
