@@ -10,14 +10,15 @@ export const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
 
 // ── Reserved workspace slugs ────────────────────────────────────────
 // Workspace slugs share the URL root with every top-level static route.
-// `slugifyWorkspaceName` consults this list and refuses any base slug
-// that would collide; collisions get the numeric `-2`, `-3`, ... suffix
-// the dedupe loop already applies for in-user collisions.
+// ⚠ Checked ONLY where a caller sets a slug explicitly:
+// `workspaces/server/service.ts › renameWorkspace` refuses a listed slug with
+// 409 WORKSPACE_SLUG_RESERVED. Auto-derived slugs (`workspaces/slug.ts ›
+// slugifyWorkspaceName`) do NOT consult this list.
 //
 // Add any new top-level route directory here when you create it. Next.js
 // resolves static segments before dynamic ones, so a collision wouldn't
 // 500 — it would silently route to the static page and the workspace
-// becomes unreachable. Cheaper to forbid the collision at creation time.
+// becomes unreachable.
 export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "admin",
   "api",
