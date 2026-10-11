@@ -20,7 +20,7 @@ import { mentionedUserIdsOf, mentionHandleOf, mentionSlug } from "./mentions";
  * 2026-10-10, #3081).
  *
  * ⚠ **IT IS AN EXTRACTION, NOT A NEW RULE.** Every word of it was inline in
- * `components/view-model-rows.ts › rowFor`, which still calls it, and the agent stream's
+ * `components/view-model-rows.ts › toMessageRow`, which still calls it, and the agent stream's
  * outbound box now needs the same answer for the same message (Samuel: the addressees as
  * pills in the box's top bar). **Two spellings of "who did this post address" is how one
  * message comes to show different pills in two panes** — the defect this file's header is

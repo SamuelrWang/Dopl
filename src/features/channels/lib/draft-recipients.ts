@@ -42,7 +42,7 @@
  *
  * ⚠ **WHAT IT DELIBERATELY DOES NOT MODEL: the bare `@<id>` form** the desktop
  * routes on and the web index does not claim (**F-448**, and
- * `service-wake-verdict.ts › bareId` is the server's own normalisation for it).
+ * `service-wake-verdict-handles.ts › bareId` is the server's own normalisation for it).
  * The picker never inserts that form, so predicting it here would be a rule with
  * no producer on this surface — and the honest failure is the line UNDERSTATING
  * reach, never overstating it.
@@ -378,8 +378,9 @@ function agentRecipient(
  * to the RR3 arm, which understates the reach — the safe direction.
  *
  * ⚠ **THERE IS A SECOND COPY OF THIS PAIR IN THE TREE** —
- * `channels/components/use-launch-controls.ts › buildLaunchPayload` derives the same
- * counterparty for a launch. Filed as **F-551**; folding them is a change to a
+ * `channels/components/use-agents-panel.ts › useAgentsPanel` derives the same
+ * counterparty for a launch (its `thread` site; `use-launch-controls.ts ›
+ * buildLaunchPayload` only forwards it). Filed as **F-551**; folding them is a change to a
  * file this slice does not own.
  */
 export function threadOtherPartyOf(
