@@ -48,15 +48,21 @@ interface GrantRow {
 
 /**
  * Which of `resourceIds` are lent to a channel or container the caller is in. A batch precompute, never
- * a query per row: at most five queries, none when `resourceIds` is empty (an empty `.in()` is a
+ * a query per row: at most six queries, none when `resourceIds` is empty (an empty `.in()` is a
  * PostgREST hazard) or nothing is granted.
  * Not filtered by the caller's container: a grant is filed under the resource's container but reached
  * through the scope's, so a `workspace_id` term would refuse exactly the grants this honours.
+ * ⚠ `opts.lock` IS THE CREDENTIAL LOCK, AND IT FILTERS THE SCOPE, NEVER THE RESOURCE (2026-10-11, #3610,
+ * Samuel-approved fix). A locked credential reaches a grant only through a scope INSIDE the containers
+ * it may stand in (`resolve-resource.ts › lockedCandidates`: its lock plus its home space): a container
+ * scope must be one of them, a channel scope must sit in one. Without it a token locked to A resolved a
+ * row lent to a scope the user holds in B, outside the lock. Absent = unlocked, unchanged.
  */
 export async function grantedResourceIds(
   userId: string,
   resourceType: GrantResourceType,
-  resourceIds: readonly string[]
+  resourceIds: readonly string[],
+  opts?: { lock?: readonly string[] }
 ): Promise<GrantedResourceIds> {
   if (resourceIds.length === 0) return NO_GRANTS;
   const db = supabaseAdmin();
@@ -78,22 +84,46 @@ export async function grantedResourceIds(
   const scopeIds = (kind: GrantRow["scope_type"]) => [
     ...new Set(admitting.filter((r) => r.scope_type === kind).map((r) => r.scope_id)),
   ];
-  const [containers, channels, ignoredChannels] = await Promise.all([
+  const lock = opts?.lock ? new Set(opts.lock) : null;
+  const [containers, channels, ignoredChannels, channelsInLock] = await Promise.all([
     reachableContainers(db, userId, scopeIds("container")),
     reachableChannels(db, userId, scopeIds("channel")),
     // A channel-scoped row in a standard workspace widens nobody's read.
     channelsWhereScopeIsIgnored(scopeIds("channel")),
+    lock ? channelsInContainers(db, scopeIds("channel"), lock) : null,
   ]);
 
   const granted = new Set<string>();
   for (const row of admitting) {
     const reached =
       row.scope_type === "container"
-        ? containers.has(row.scope_id)
-        : channels.has(row.scope_id) && !ignoredChannels.has(row.scope_id);
+        ? containers.has(row.scope_id) && (!lock || lock.has(row.scope_id))
+        : channels.has(row.scope_id) && !ignoredChannels.has(row.scope_id)
+          && (!channelsInLock || channelsInLock.has(row.scope_id));
     if (reached) granted.add(row.resource_id);
   }
   return granted.size === 0 ? NO_GRANTS : granted;
+}
+
+/** Which of `channelIds` sit in one of `containers` (the credential lock). Fails closed: a channel it
+ *  cannot resolve is not in the lock. */
+async function channelsInContainers(
+  db: ReturnType<typeof supabaseAdmin>,
+  channelIds: string[],
+  containers: ReadonlySet<string>
+): Promise<Set<string>> {
+  if (channelIds.length === 0) return new Set();
+  const { data, error } = await db
+    .from("channels")
+    .select("id, workspace_id")
+    .in("id", channelIds)
+    .limit(GRANT_REACH_LIMIT);
+  if (error) throw error;
+  return new Set(
+    ((data ?? []) as unknown as Array<{ id: string; workspace_id: string }>)
+      .filter((r) => containers.has(r.workspace_id))
+      .map((r) => r.id)
+  );
 }
 
 /** `status='active'` and the role floor, both: a removed member is not one, and `guest` stays out. */
