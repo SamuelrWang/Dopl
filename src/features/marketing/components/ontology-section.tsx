@@ -16,10 +16,8 @@ import { useGlassScrub } from "./use-glass-scrub";
 /**
  * "Ontology" — four-stage tab tour. Window content IS the tab; vignettes live
  * in ./ontology-windows. Add/reorder stages via STAGES.
- * *
- * ⚠ THE `key` IS LOAD-BEARING, not a fade detail. "Define Objects" is a ~4.7s
- * CSS sequence with no state of its own, and remount on tab change is the ONLY
- * thing that restarts it — drop the key and it plays once per page load.
+ *
+ * ⚠ The panel's `key` is load-bearing — see the comment on `.lp-ont-window-swap`.
  */
 type Stage = {
   id: string;

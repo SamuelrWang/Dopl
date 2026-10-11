@@ -47,7 +47,6 @@ type DevTab = {
   install?: { label: string; href: string };
 };
 
-
 /** Currentcolor so active/ghost tab states tint it with the text. */
 function ClaudeCodeGlyph({ className }: { className?: string }) {
   return (
@@ -192,90 +191,90 @@ export function ConnectSection() {
               className="lp-connect-glass"
             >
               <div className="lp-connect-glass-pad">
-          <div
-            className="lp-connect-tabs"
-            role="tablist"
-            aria-label="Ways to connect"
-            onKeyDown={onKeyDown}
-          >
-            {TABS.map((item, i) => {
-              const selected = i === active;
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  id={`lp-connect-tab-${item.id}`}
-                  ref={(node) => {
-                    tabRefs.current[i] = node;
-                  }}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  aria-controls="lp-connect-panel"
-                  tabIndex={selected ? 0 : -1}
-                  className="lp-connect-tab"
-                  data-active={selected}
-                  onClick={() => select(i)}
+                <div
+                  className="lp-connect-tabs"
+                  role="tablist"
+                  aria-label="Ways to connect"
+                  onKeyDown={onKeyDown}
                 >
-                  <Icon className="lp-connect-tab-icon" size={15} strokeWidth={1.9} />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
+                  {TABS.map((item, i) => {
+                    const selected = i === active;
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        id={`lp-connect-tab-${item.id}`}
+                        ref={(node) => {
+                          tabRefs.current[i] = node;
+                        }}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        aria-controls="lp-connect-panel"
+                        tabIndex={selected ? 0 : -1}
+                        className="lp-connect-tab"
+                        data-active={selected}
+                        onClick={() => select(i)}
+                      >
+                        <Icon className="lp-connect-tab-icon" size={15} strokeWidth={1.9} />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
 
-          <div className="lp-connect-term">
-            <div className="lp-connect-term-bar">
-              <span className="lp-connect-dots" aria-hidden>
-                <i />
-                <i />
-                <i />
-              </span>
-              <button
-                type="button"
-                className="lp-connect-copy"
-                data-copied={copied}
-                onClick={onCopy}
-              >
-                <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
-                {copied ? (
-                  <Check size={14} strokeWidth={2} aria-hidden />
-                ) : (
-                  <Copy size={14} strokeWidth={1.8} aria-hidden />
-                )}
-              </button>
-            </div>
+                <div className="lp-connect-term">
+                  <div className="lp-connect-term-bar">
+                    <span className="lp-connect-dots" aria-hidden>
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <button
+                      type="button"
+                      className="lp-connect-copy"
+                      data-copied={copied}
+                      onClick={onCopy}
+                    >
+                      <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
+                      {copied ? (
+                        <Check size={14} strokeWidth={2} aria-hidden />
+                      ) : (
+                        <Copy size={14} strokeWidth={1.8} aria-hidden />
+                      )}
+                    </button>
+                  </div>
 
-            <div
-              key={tab.id}
-              id="lp-connect-panel"
-              role="tabpanel"
-              aria-labelledby={`lp-connect-tab-${tab.id}`}
-              className="lp-connect-term-body"
-            >
-              <span className="lp-connect-prompt" aria-hidden>
-                &rsaquo;
-              </span>
-              <code className="lp-connect-cmd">{tab.command}</code>
-            </div>
-          </div>
+                  <div
+                    key={tab.id}
+                    id="lp-connect-panel"
+                    role="tabpanel"
+                    aria-labelledby={`lp-connect-tab-${tab.id}`}
+                    className="lp-connect-term-body"
+                  >
+                    <span className="lp-connect-prompt" aria-hidden>
+                      &rsaquo;
+                    </span>
+                    <code className="lp-connect-cmd">{tab.command}</code>
+                  </div>
+                </div>
 
-          {/* ⚠ Rendered for EVERY tab at a FIXED height (see `.lp-connect-hint`),
-              empty or not — the glass-scrub hook measures the pad once and a
-              tab-dependent height would break that measurement (same rationale
-              as the fixed `.lp-connect-term-body`). */}
-          <div key={`${tab.id}-hint`} className="lp-connect-hint">
-            {tab.install && (
-              <a
-                href={tab.install.href}
-                className="lp-btn lp-btn--sm lp-btn--3d"
-              >
-                {tab.install.label}
-                <ArrowRight size={14} strokeWidth={2} aria-hidden />
-              </a>
-            )}
-            {tab.hint && <span>{tab.hint}</span>}
-          </div>
+                {/* ⚠ Rendered for EVERY tab at a FIXED height (see `.lp-connect-hint`),
+                    empty or not — the glass-scrub hook measures the pad once and a
+                    tab-dependent height would break that measurement (same rationale
+                    as the fixed `.lp-connect-term-body`). */}
+                <div key={`${tab.id}-hint`} className="lp-connect-hint">
+                  {tab.install && (
+                    <a
+                      href={tab.install.href}
+                      className="lp-btn lp-btn--sm lp-btn--3d"
+                    >
+                      {tab.install.label}
+                      <ArrowRight size={14} strokeWidth={2} aria-hidden />
+                    </a>
+                  )}
+                  {tab.hint && <span>{tab.hint}</span>}
+                </div>
               </div>
             </LiquidGlass>
           </div>

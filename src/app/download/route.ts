@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
  * (`Dopl-1.7.24-arm64.dmg`), so no static github.com URL stays valid.
  * `src/shared/version/mac-download.ts` carries the argument (incl. why electron-builder lost).
  *
- * ⚠ PUBLIC — must stay in `src/proxy.ts` PUBLIC_ROUTES; without that entry the middleware
- * bounces the download to `/login`, and a never-signed-in visitor is the entire audience.
+ * ⚠ PUBLIC — must stay in PUBLIC_ROUTES (`src/shared/auth/public-routes.ts`, read by
+ * `src/proxy.ts`); without that entry the middleware bounces the download to `/login`, and a
+ * never-signed-in visitor is the entire audience.
  *
  * ⚠ NEVER FAILS: `resolveMacDownloadUrl()` cannot throw and cannot return a non-GitHub URL (worst
  * case is the releases page), so this handler has no error branch — a Download button must not be

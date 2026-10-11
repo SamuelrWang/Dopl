@@ -10,7 +10,7 @@ import {
 } from "./ontology-marks";
 
 /**
- * Four static vignettes, one per Framework tab (mounted by
+ * Four static vignettes, one per Ontology tab (mounted by
  * ./ontology-section). No real data, nothing interactive.
  *
  * ⚠ ONE vertical geometry across all four: three 44px items + 22px gaps = 176px

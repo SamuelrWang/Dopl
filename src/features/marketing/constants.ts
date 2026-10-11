@@ -5,7 +5,7 @@ export const BRAND = "Dopl";
 export const NAV_LINKS = ["Product", "Services", "Career", "Pricing", "About"] as const;
 
 /**
- * Page has exactly ONE CTA. Funnel: Get Started → `/signup` → `/get-started`
+ * Page has exactly ONE CTA. Funnel: Get Started → `/authenticate?mode=signup` → `/get-started`
  * (fires dmg + install steps) → sign in in-app. Account before download, so
  * install drop-off is measurable.
  */
@@ -15,7 +15,7 @@ export const GET_STARTED_LABEL = "Get Started";
  * Route: `src/app/(auth)/authenticate/page.tsx`, opened in sign-up by the
  * `mode` param. NEW accounts only — middleware,
  * `/auth/callback`, reset-password and OAuth consent bounce existing accounts
- * to `/login`. ⚠ `signup` must stay in RESERVED_WORKSPACE_SLUGS
+ * to `/login`. ⚠ `authenticate` must stay in RESERVED_WORKSPACE_SLUGS
  * (`config/index.ts`) or a workspace can claim it.
  */
 export const GET_STARTED_URL = "/authenticate?mode=signup";

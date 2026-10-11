@@ -49,6 +49,7 @@ const { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } = await import(
   "@/features/billing/prices"
 );
 const { billingPath } = await import("@/features/billing/url");
+const { WEB_POST_AUTH_LANDING } = await import("@/shared/lib/url/post-auth-landing");
 
 afterEach(() => {
   cleanup();
@@ -259,6 +260,35 @@ describe("the paid CTAs", () => {
     await clickCta("Go Pro");
     expect(nav.push).toHaveBeenCalledWith(
       `/login?redirectTo=${encodeURIComponent("/pricing")}`
+    );
+  });
+});
+
+/**
+ * "Try today" (both Free cards) never disables, so the auth check is awaited
+ * through a paid CTA going live — otherwise a signed-in click could race the
+ * check and read as signed out.
+ */
+describe("the free CTA", () => {
+  async function clickTryToday() {
+    render(tree());
+    const paid = (await screen.findByRole("button", { name: "Go Pro" })) as HTMLButtonElement;
+    await waitFor(() => expect(paid.disabled).toBe(false));
+    const tries = screen.getAllByRole("button", { name: "Try today" });
+    expect(tries).toHaveLength(2);
+    fireEvent.click(tries[0]!);
+  }
+
+  it("takes a signed-in visitor straight to the post-auth landing", async () => {
+    nav.user = { id: "u-1" };
+    await clickTryToday();
+    expect(nav.push).toHaveBeenCalledWith(WEB_POST_AUTH_LANDING);
+  });
+
+  it("sends a signed-out visitor through login, returning to the landing", async () => {
+    await clickTryToday();
+    expect(nav.push).toHaveBeenCalledWith(
+      `/login?redirectTo=${encodeURIComponent(WEB_POST_AUTH_LANDING)}`
     );
   });
 });
