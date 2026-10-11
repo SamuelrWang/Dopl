@@ -7,7 +7,7 @@ import { mapTeamRow, type TeamRow } from "./dto";
  * The `teams` table itself, and the barrel for the rest of the repository:
  *   repository.ts            `teams` rows (here)
  *   repository-members.ts    `team_members` + `workspace_invitation_teams`
- *   repository-grants.ts     `team_resource_access`
+ *   repository-grants.ts     team-scoped `resource_grants`
  *   repository-resources.ts  the tables a grant can point AT
  * ⚠ Keep the re-exports: this module is the address outside callers import,
  * including `vi.mock("@/features/teams/server/repository")` in the chats

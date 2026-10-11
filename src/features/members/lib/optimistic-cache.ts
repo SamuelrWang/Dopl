@@ -16,8 +16,7 @@ import type {
  * ⚠ CACHE SHAPES ARE THE RAW RESPONSE BODIES. `useApiQuery` stores what the
  * endpoint returned and applies `select` on read, so patch
  * `{ members: [...] }` / `{ teams: [...] }`, never the selected array —
- * selectors filter (`useInvitations` drops accepted, `useWorkspaceResources`
- * drops retired types), so writing the SELECTED shape back would delete the
+ * selectors may filter (`useInvitations` drops accepted), so writing the SELECTED shape back would delete the
  * rows the selector hid.
  *
  * ⚠ AN UNDEFINED CACHE STAYS UNDEFINED, everywhere. Seeding a never-loaded

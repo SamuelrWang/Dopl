@@ -8,7 +8,7 @@ import type { ActivityEventRow, ActivityVerb } from "../activity-visibility";
  *
  * ⚠ SERVICE-ROLE BOTH WAYS. The table has SELECT revoked from `authenticated`
  * because its read filter is effective-access, which RLS cannot express
- * (see the migration). This module and the activity route are the only readers.
+ * (see the migration). This module is the only reader (the activity route calls it).
  */
 
 const COLUMNS = "id, actor_user_id, verb, resource_type, resource_id, metadata, created_at";

@@ -2,6 +2,8 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { channelsWhereScopeIsIgnored } from "./channel-scope";
+// The same floor as every read (`guest` ranks below it): one declaration, not two.
+import { CONTAINER_READ_FLOOR } from "./resolve-resource-tables";
 
 /**
  * The read half of a grant: which rows are lent to a scope the caller is in, decided only here (F-604).
@@ -36,8 +38,6 @@ export const NO_GRANTS: GrantedResourceIds = new Set<string>();
  *  both grant lanes truncate at the same point. PostgREST truncates silently, in the safe direction. */
 export const GRANT_REACH_LIMIT = 500;
 
-/** Same floor as every read; `guest` ranks below it. */
-const CONTAINER_READ_FLOOR: Role = "viewer";
 
 interface GrantRow {
   scope_type: "channel" | "container";

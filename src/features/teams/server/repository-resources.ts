@@ -8,7 +8,7 @@ import type { AccessMode, TeamResourceType } from "../access-levels";
  * ⚠ Every query filtered by `workspace_id`.
  */
 
-export interface TeamsModeResourceRow {
+interface TeamsModeResourceRow {
   resourceType: TeamResourceType;
   resourceId: string;
   createdBy: string | null;
@@ -53,7 +53,7 @@ export async function listTeamsModeResources(
   ];
 }
 
-export interface ResourceAccessMeta {
+interface ResourceAccessMeta {
   name: string;
   accessMode: AccessMode;
   createdBy: string | null;

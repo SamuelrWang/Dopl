@@ -135,7 +135,7 @@ async function lockedCandidates(
   const reach = await resolveHomeSpaceReach({
     userId: caller.userId,
     credentialSubjectUserId: caller.credentialSubjectUserId,
-    // The room is the lock: a DB fact off the token row, never a header or the container asked about.
+    // Not read by `resolveHomeSpaceReach`; the lock is applied by the `!== lockedWorkspaceId` check below.
     workspaceId: lockedWorkspaceId,
     source: caller.source,
     sessionId: caller.sessionId,

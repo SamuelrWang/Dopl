@@ -89,7 +89,7 @@ async function callerHomeSpaceId(
   const reach = await resolveHomeSpaceReach({
     userId: scope.userId,
     credentialSubjectUserId: scope.userId,
-    // The room is the lock where there is one; an unlocked session stands in the container it named.
+    // Not read by `resolveHomeSpaceReach` (it ignores `workspaceId`); kept for the interface.
     workspaceId: scope.credentialWorkspaceId ?? callingWorkspaceId,
     source: scope.source,
   });
@@ -97,7 +97,7 @@ async function callerHomeSpaceId(
 }
 
 /** Where a shelf-scoped read looks, resolved once per query. */
-export interface ShelfScope {
+interface ShelfScope {
   /** Applied with `.in()`. Empty is the fail-safe read: no home space, no personal rows. */
   workspaceIds: string[];
 }
@@ -117,14 +117,13 @@ export async function resolveShelfScope(
   }
   // Unfiltered reads see both shelves, so a personal row is findable from any room it resolves in.
   // Not a default-workspace fallback: the caller's own container is added by owner, nothing guessed.
-  // `knowledge/server/repository-bases.ts › listHomeScopedBaseIds` asks this too: label = list.
   return containerId === null || containerId === workspaceId
     ? { workspaceIds: [workspaceId] }
     : { workspaceIds: [workspaceId, containerId] };
 }
 
 /** The insert fields this decision reads; both features' insert args already carry them. */
-export interface ShelfBoundInsert {
+interface ShelfBoundInsert {
   workspaceId: string;
   /** A routing flag, not a column: `true` = the author's home space, else `workspaceId`. */
   homeScoped?: boolean;

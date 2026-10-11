@@ -13,9 +13,8 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { type AccessLevel } from "@/features/teams/access-levels";
 
-/** Resource kinds the badge UI may ask about. Teams-mode resolution only
- *  produces knowledge_base entries; skill falls through to the role
- *  default. */
+/** Resource kinds the badge UI may ask about. Teams-mode overrides cover
+ *  both; anything without one reads the role default. */
 type ResourceType = "knowledge_base" | "skill";
 
 interface Override<T extends string> {
@@ -24,16 +23,8 @@ interface Override<T extends string> {
   level: AccessLevel;
 }
 
-/**
- * What the endpoint actually sends.
- *
- * ⚠ **IT CARRIED `| "workflow"` AND A NARROWING FILTER UNTIL 2026-09-02
- * (F-466).** `team_resource_access.resource_type` kept the value in its CHECK
- * after the feature was dropped (`20260811120000`), so a surviving row could
- * reach this hook with no live code between. Ruling B4 moved the route onto
- * `resource_grants`, whose CHECK refuses it — the wire union is the resource
- * union now, and there is nothing to narrow from.
- */
+/** What the endpoint actually sends. No narrowing: `resource_grants`' CHECK
+ *  refuses retired types, so the wire union is the resource union. */
 interface MyAccessPayload {
   defaultLevel: AccessLevel;
   overrides: Array<Override<ResourceType>>;
@@ -103,7 +94,8 @@ function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
 
 const MyAccessCtx = createContext<UseMyAccessResult | null>(null);
 
-/** App-shell provider — call once at the top of `layout-shell.tsx`;
+/** App-shell provider — mounted by the desktop UI's `app-shell.tsx` (and
+ *  `knowledge-base-view.tsx`);
  *  descendants read via `useMyAccessContext()` so the request is shared.
  *  Without it the context returns a no-op shape (data null, resolve null),
  *  so consumers don't crash on pages with no workspace in scope. */

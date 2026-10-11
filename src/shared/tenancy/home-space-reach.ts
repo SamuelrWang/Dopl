@@ -24,7 +24,7 @@ export type HomeSpaceReachRefusal =
 
 /** Two shapes, not a boolean beside an id: `open` carries the container id, so no caller can read a
  *  null id as open. */
-export type HomeSpaceReach =
+type HomeSpaceReach =
   | { readonly kind: "open"; readonly containerId: string }
   | { readonly kind: "closed"; readonly refusal: HomeSpaceReachRefusal };
 
@@ -35,7 +35,7 @@ export interface HomeSpaceReachCaller extends CredentialAxes {
   /** The room the call stands in. {@link resolveHomeSpaceReach} ignores it;
    *  {@link homeSpaceShelfContainerIds} uses it to skip the calling container. */
   workspaceId: string;
-  /** Not read here; still discriminates in `knowledge/server/service-audience.ts`. */
+  /** Not read here (`knowledge/server/service-audience.ts` reads its own `ctx.source`). */
   source?: string | null;
   /** `X-Dopl-Session-Id` (`<channelId>:<tail>`). Not read here. */
   sessionId?: string | null;

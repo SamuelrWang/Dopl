@@ -12,7 +12,7 @@ import { assertChannelScopeAllowedInContainer } from "@/shared/tenancy/channel-s
 import type { ResourceGrantWrite } from "./schema";
 
 /**
- * The grant write (`dopl_kb` / `dopl_agent` `op="grant"`, the /home share control). Fences, in order:
+ * The grant write (`dopl_kb` / `dopl_agent` `op="grant"`). Fences, in order:
  *  1. the route's `withWorkspaceAuth` — authenticated, but not the fence for either side of a grant;
  *  2. the resource resolves and the caller created it ({@link assertGrantableResource}): reading a
  *     row is not lending it;
@@ -105,7 +105,7 @@ export function isGrantValidityViolation(err: unknown): boolean {
   return code === "P0001" && (message ?? "").includes("resource_grants:");
 }
 
-export interface GrantedResource extends ResourceGrantWrite {
+interface GrantedResource extends ResourceGrantWrite {
   workspaceId: string;
 }
 
