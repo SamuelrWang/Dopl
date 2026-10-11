@@ -187,14 +187,19 @@ describe("🔒 a GRANT names a row in a container the caller is not in", () => {
 });
 
 /**
- * 🔴 EVIDENCE, NOT A FIX (cleanup/w03-lock-escape, 2026-10-11; KB codebase-cleanup sectors/W03 §Flags,
- * HIGH). Clause 3 promises a LOCKED credential "resolves inside its lock plus its operator's home space,
- * never wider" — but the lock narrows only `listContainersForCaller`. On an id miss the grant lane asks
- * `grantedResourceIds(caller.userId, …)`, which never sees `apiKeyWorkspaceId`, and reads the row with
- * no container filter. This case is EXPECTED TO FAIL on this branch until someone decides the fix.
+ * 🔒 CLAUSE 3 HOLDS ON THE GRANT ARM TOO (#3610, 2026-10-11; KB codebase-cleanup sectors/W03 §Flags,
+ * HIGH, Samuel-approved fix). A LOCKED credential resolves "inside its lock plus its operator's home
+ * space, never wider" — so a grant counts only when its SCOPE is inside the lock: a container scope must
+ * be a lock container, a channel scope must sit in one. The resource itself may live anywhere (that is
+ * what a grant is for). Unlocked credentials are unchanged.
+ * ⚠ The mock applies no filters, so each scene SEQUENCES its result sets: `workspaces` answers the
+ * home-space lookup first (empty: no home space, so the lock is exactly [A]) and the channel-kind
+ * lookup last; `workspace_members` answers the lock-narrowed candidate read first.
  */
-describe("🔴 a LOCKED credential and the grant lane (expected to fail: reproduces the escape)", () => {
+describe("🔒 a LOCKED credential reaches a grant only through a scope inside its lock", () => {
   const WS_C = "cccccccc-0000-4000-8000-00000000000c";
+  const CH_A = "aaaaaaaa-cccc-4ccc-8ccc-cccccccccccc";
+  const CH_B = "bbbbbbbb-cccc-4ccc-8ccc-cccccccccccc";
   const locked = { userId: ME, credentialSubjectUserId: ME, apiKeyWorkspaceId: WS_A };
   const rowInC = {
     id: T1,
@@ -203,29 +208,69 @@ describe("🔴 a LOCKED credential and the grant lane (expected to fail: reprodu
     created_by: "someone-else",
     workspace: { name: "Other", kind: "standard" },
   };
-  /** Lent to CONTAINER B, which the caller belongs to OUTSIDE their lock (A). */
-  function scene() {
+
+  /** Lent to CONTAINER `scope`; the caller is a member of A (the lock) and of B (outside it). */
+  function containerScene(scope: string, isLocked: boolean) {
     return makeAdmin(
       {
-        resource_grants: [{ scope_type: "container", scope_id: WS_B, resource_id: T1, level: "read" }],
-        workspaces: [], // no home space: the lock is exactly [A]
+        resource_grants: [{ scope_type: "container", scope_id: scope, resource_id: T1, level: "read" }],
+        workspaces: [],
       },
       {
-        // 1st read = the lock-narrowed candidate set (only A survives the `.in()`);
-        // 2nd read = the grant lane's own membership check, which sees B.
-        workspace_members: [[member(WS_A)], [member(WS_A), member(WS_B)]],
+        workspace_members: [
+          isLocked ? [member(WS_A)] : [member(WS_A), member(WS_B)],
+          [member(WS_A), member(WS_B)],
+        ],
         knowledge_bases: [[], [rowInC]],
       }
     );
   }
 
-  it("control: UNLOCKED, the same grant names the row (so the setup reaches the grant lane)", async () => {
-    scene();
+  /** Lent `visible` to a CHANNEL in `container` (a link workspace); the caller is in the channel. */
+  function channelScene(channel: string, container: string, isLocked: boolean) {
+    const kind = [{ id: container, kind: "link" }];
+    return makeAdmin(
+      {
+        resource_grants: [{ scope_type: "channel", scope_id: channel, resource_id: T1, level: "visible" }],
+        channel_members: [{ channel_id: channel }],
+        channels: [{ id: channel, workspace_id: container }],
+      },
+      {
+        // Locked: the one home-space lookup answers "none", then the kind read.
+        workspaces: isLocked ? [[], kind] : [kind],
+        workspace_members: [isLocked ? [member(WS_A)] : [member(WS_A), member(WS_B)]],
+        knowledge_bases: [[], [rowInC]],
+      }
+    );
+  }
+
+  it("control: UNLOCKED, a container grant to B names the row", async () => {
+    containerScene(WS_B, false);
     expect(await resolveResource(caller, "knowledge_base", T1)).toMatchObject({ containerId: WS_C });
   });
 
-  it("🔴 LOCKED to A, a row in C lent to B (outside the lock) must NOT resolve", async () => {
-    scene();
+  it("🔒 LOCKED to A, a row in C lent to container B (outside the lock) does NOT resolve", async () => {
+    containerScene(WS_B, true);
     expect(await resolveResource(locked, "knowledge_base", T1)).toBeNull();
+  });
+
+  it("LOCKED to A, a row in C lent to container A (inside the lock) still resolves", async () => {
+    containerScene(WS_A, true);
+    expect(await resolveResource(locked, "knowledge_base", T1)).toMatchObject({ containerId: WS_C });
+  });
+
+  it("control: UNLOCKED, a channel grant in B names the row", async () => {
+    channelScene(CH_B, WS_B, false);
+    expect(await resolveResource(caller, "knowledge_base", T1)).toMatchObject({ containerId: WS_C });
+  });
+
+  it("🔒 LOCKED to A, a channel grant whose channel sits in B does NOT resolve", async () => {
+    channelScene(CH_B, WS_B, true);
+    expect(await resolveResource(locked, "knowledge_base", T1)).toBeNull();
+  });
+
+  it("LOCKED to A, a channel grant whose channel sits in A still resolves", async () => {
+    channelScene(CH_A, WS_A, true);
+    expect(await resolveResource(locked, "knowledge_base", T1)).toMatchObject({ containerId: WS_C });
   });
 });

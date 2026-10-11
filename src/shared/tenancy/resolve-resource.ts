@@ -92,7 +92,9 @@ export async function resolveResourcesByName(
  * `status='active'` is required: a pending or revoked membership is not one.
  */
 async function listContainersForCaller(
-  caller: ResourceCaller
+  caller: ResourceCaller,
+  /** {@link lockedCandidates} for a locked caller, computed once by the caller; null when unlocked. */
+  lock: readonly string[] | null
 ): Promise<Map<string, Role>> {
   const db = supabaseAdmin();
   let query = db
@@ -102,12 +104,7 @@ async function listContainersForCaller(
     .eq("status", "active");
   // Clause 3, the container axis: narrows the candidate set only. Which rows inside it are visible
   // is clause 1's subject axis — reading one off the other is F-333/F-336.
-  if (caller.apiKeyWorkspaceId) {
-    query = query.in(
-      "workspace_id",
-      await lockedCandidates(caller, caller.apiKeyWorkspaceId)
-    );
-  }
+  if (lock) query = query.in("workspace_id", [...lock]);
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as unknown as Array<{
@@ -157,7 +154,11 @@ async function findResources(
 ): Promise<ResolvedResource[]> {
   // Clause 1: a shared credential never even queries.
   if (isSharedCredential(caller)) return [];
-  const containers = await listContainersForCaller(caller);
+  // Clause 3's container set, asked once and used by both arms (the grant arm too, #3610).
+  const lock = caller.apiKeyWorkspaceId
+    ? await lockedCandidates(caller, caller.apiKeyWorkspaceId)
+    : null;
+  const containers = await listContainersForCaller(caller, lock);
   if (containers.size === 0) return [];
   const spec = RESOURCE_TABLES[type];
   const db = supabaseAdmin();
@@ -180,7 +181,7 @@ async function findResources(
       toResolved(type, spec, row, containers, caller.userId)
     );
   }
-  return findGrantedResource(caller, type, spec, ref.id);
+  return findGrantedResource(caller, type, spec, ref.id, lock);
 }
 
 /** A grantee holds no membership in the row's container, so {@link toResolved} takes its
@@ -199,9 +200,12 @@ async function findGrantedResource(
   caller: ResourceCaller,
   type: ResourceType,
   spec: ResourceTable,
-  id: string
+  id: string,
+  lock: readonly string[] | null
 ): Promise<ResolvedResource[]> {
-  const granted = await grantedResourceIds(caller.userId, type, [id]);
+  // Clause 3 on this arm too (#3610): a locked credential reaches a grant only through a scope inside
+  // the containers it may stand in, the same set `listContainersForCaller` narrows to.
+  const granted = await grantedResourceIds(caller.userId, type, [id], lock ? { lock } : undefined);
   if (!granted.has(id)) return [];
   // No container filter and no `.or()`: the grant is the standing. The soft-delete filter stays —
   // a trashed row is listable by nobody, grantee included.
