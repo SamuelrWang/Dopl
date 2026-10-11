@@ -98,8 +98,30 @@ export function AgentLiveness({
  * tailwind-merge, so the later `shrink` wins): three pills on the recipient line have
  * to elide, and a pill that refuses to shrink clips hard instead of eliding.
  */
-export const AGENT_PILL_FACE =
-  "shrink-0 rounded-[6px] bg-surface-cta px-2 py-px text-micro font-medium text-text-on-cta";
+/**
+ * **THE PILL'S GEOMETRY WITHOUT ITS FILL** — the shape, the padding and the type, and no
+ * statement about what colour it is (extracted 2026-10-10, #3081).
+ *
+ * ⚠ **IT EXISTS BECAUSE ONE SURFACE NEEDS THIS PILL ON A DARK BANNER, WHERE THE BLACK FILL
+ * IS INVISIBLE.** The agent stream's outbound box names the post's addressees as pills in
+ * its own top bar (Samuel: *black pills naming who it was addressed to*), and that bar is
+ * already `--surface-cta` — or the agent's own colour, which is a dark ramp
+ * (`agent-bits.tsx › AgentPill.color`). {@link AGENT_PILL_FACE} rendered there is a black
+ * pill on a black strip: the shape Samuel asked for, drawn so it cannot be read.
+ * ⚠ **SO THE DARK-BANNER CASE TAKES THE SHAPE AND SUPPLIES ITS OWN INK**
+ * (`agent-stream-sent-box.tsx › BANNER_PILL`), and there is still exactly one place the
+ * geometry is written. Copying four utilities into that file instead is the drift this
+ * module's header is about.
+ * ⚠ **{@link AGENT_PILL_FACE} IS THIS PLUS THE CTA FILL — THE SAME CLASS SET, AND THE
+ * ORDER IS THE ONE THING THAT MOVED** (the two fill utilities are now last rather than
+ * mid-string). Nothing reads it as a literal, and the classes do not conflict with each
+ * other, so `cn`/tailwind-merge resolves the pair exactly as before. No caller moved and
+ * the ordinary black pill is still the default everywhere: this is a split, not a widening.
+ */
+export const AGENT_PILL_SHAPE =
+  "shrink-0 rounded-[6px] px-2 py-px text-micro font-medium";
+
+export const AGENT_PILL_FACE = `${AGENT_PILL_SHAPE} bg-surface-cta text-text-on-cta`;
 
 /**
  * THE BLACK PILL'S FACE, and nothing about what it MEANS (extracted 2026-09-15).

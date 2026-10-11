@@ -27,10 +27,18 @@ import type { AgentNarrationEntry } from "./use-agent-narration";
  * THE LANES A STREAM ROW CAN BE IN.
  *
  * `thinking` the agent's own words · `tool` a command it ran · `sent` what it
- * POSTED into the channel · `operator` something I said to it privately ·
- * `private` its private answer to me · `directed` **another of my agents said it
- * to this one** · `directed-reply` **this agent's answer to that** · `note` a
- * status line, or a frame this build does not recognise.
+ * POSTED into the channel · `inbound` **a channel message that ARRIVED for it —
+ * what woke it** · `operator` something I said to it privately · `private` its
+ * private answer to me · `directed` **another of my agents said it to this one** ·
+ * `directed-reply` **this agent's answer to that** · `note` a status line, or a
+ * frame this build does not recognise.
+ *
+ * ⚠ **`inbound` AND `sent` ARE THE TWO HALVES OF ONE EXCHANGE AND MUST NEVER
+ * COLLAPSE** (#3081). `sent` means *these words left this machine*; `inbound` means
+ * *the counterparty's words arrived here*. Both are in the channel, which is exactly
+ * why the wire cannot tell them apart by audience alone and gives the arriving half
+ * its own lane: drawn as `sent`, somebody else's message would wear the dark "Posted
+ * to…" banner and read as something this agent said.
  *
  * ⚠ THE TWO DIRECTED LANES ARE SPLIT HERE WHERE THE WIRE KEEPS THEM TOGETHER
  * (2026-08-31, F-366's operator half). Main tags both `lane: 'directed'` and
@@ -44,6 +52,7 @@ export type StreamLane =
   | "thinking"
   | "tool"
   | "sent"
+  | "inbound"
   | "operator"
   | "private"
   | "directed"
@@ -72,6 +81,12 @@ const LANE_BY_KIND: Record<string, StreamLane> = {
   tool_result: "tool",
   sent: "sent",
   posted: "sent",
+  // WHAT WOKE IT (#3081, `session-narration.js › entryFor`'s `inbound_arrived` arm). ⚠ Rows here as
+  // well as in `frameLane`'s explicit branch, on the `directed` precedent: the branch reads main's
+  // `lane`, and this covers a build that emits the kind without one. ⚠ IT MUST NOT FALL TO `note` —
+  // an arriving message rendered as an anonymous log line is the defect #3081 was filed for.
+  inbound: "inbound",
+  received: "inbound",
   operator: "operator",
   steer: "operator",
   user: "operator",
@@ -114,6 +129,10 @@ export function frameLane(entry: AgentNarrationEntry): StreamLane {
   }
   if (lane === "private") return "private";
   if (lane === "operator") return "operator";
+  // ⚠ **BEFORE THE `channel` BRANCH, AND THE ORDER IS LOAD-BEARING** (#3081). These two lanes are
+  // the halves of one exchange (see {@link StreamLane}) and only this one says the words ARRIVED;
+  // reaching the `sent` branch would paint a counterparty's message as this agent's own post.
+  if (lane === "inbound") return "inbound";
   if (lane === "channel" || lane === "sent") return "sent";
   return LANE_BY_KIND[kind] ?? "note";
 }

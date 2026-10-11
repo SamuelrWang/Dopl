@@ -80,7 +80,7 @@ import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
-import { indexMembers, viewerPerson } from "./view-model";
+import { indexMembers, viewerPerson, type AuthorIndex } from "./view-model";
 import type { AgentColorKey } from "../types";
 import { answersByEscalation } from "./view-model-display";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
@@ -175,11 +175,26 @@ export function ChannelsAgentPanel({
   postBusy,
   onAnswerDisplay,
   currentUserId,
+  index,
   workspaceSlug = "",
   full = false, color = null,
   onClose,
   onRefreshSessions,
 }: {
+  /**
+   * **THE CHANNEL'S ROSTER** — members and every member's agents, for the addressee pills on a
+   * posted box (#3081). The host already holds it (`derivations.ts › index`, spread onto
+   * `ChannelSurfaceData`), so this panel still fetches nothing.
+   *
+   * ⚠ **IT IS NOT THE `displayIndex` BUILT BELOW.** That one is roster-LESS on purpose — what
+   * gates a card's buttons is the viewer — and handing a roster to it would change which names
+   * a DisplayCard labels. This is a second, read-only fact: what the addressees are CALLED.
+   * ⚠ **OPTIONAL, AND ABSENT DRAWS NO PILLS** — the panel's long-standing "no roster prop
+   * threaded through two hosts" rule is relaxed exactly this far: a caller that has not threaded
+   * it renders what it rendered before, rather than facing people it would have to invent names
+   * for (`agent-stream.tsx › roster`).
+   */
+  index?: AuthorIndex | null;
   /** `agentKey(session)` of the open agent, or `null` for closed. */
   openAgent: string | null;
   /** THE BANNER'S FILL (2026-09-13) — ⚠ resolved by the HOST off `channel-surface-data.ts ›
@@ -362,6 +377,9 @@ export function ChannelsAgentPanel({
             // first-answer-wins rule the channel transcript applies
             // (`view-model-display.ts › answersByEscalation`).
             displayIndex={displayIndex}
+            // ⚠ THE ROSTER, BESIDE THE VIEWER-ONLY `displayIndex` AND NOT INSTEAD OF IT —
+            // two different questions, stated at the prop above.
+            roster={index}
             displayAnswers={displayAnswers}
             onAnswerDisplay={onAnswerDisplay}
             destination={postDestination(agent)}

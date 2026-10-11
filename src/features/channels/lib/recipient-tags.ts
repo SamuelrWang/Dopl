@@ -13,7 +13,38 @@
 
 import { agentFaceName } from "@/shared/lib/agent-name";
 import { agentIdHandle, agentMentionFace } from "./agent-mentions";
-import { mentionHandleOf, mentionSlug } from "./mentions";
+import { mentionedUserIdsOf, mentionHandleOf, mentionSlug } from "./mentions";
+
+/**
+ * **WHICH IDS ONE MESSAGE NAMES** — the rule stated once, over a stored row (extracted
+ * 2026-10-10, #3081).
+ *
+ * ⚠ **IT IS AN EXTRACTION, NOT A NEW RULE.** Every word of it was inline in
+ * `components/view-model-rows.ts › rowFor`, which still calls it, and the agent stream's
+ * outbound box now needs the same answer for the same message (Samuel: the addressees as
+ * pills in the box's top bar). **Two spellings of "who did this post address" is how one
+ * message comes to show different pills in two panes** — the defect this file's header is
+ * already about for the FACES, applied one layer down to the IDS.
+ *
+ * ⚠ **THE `wake_reason` EXCLUSION IS THE WHOLE SUBTLETY.** `recipient_agent_ids` holds both
+ * the agents a post NAMED and the one the SERVER picked to answer an unaddressed post; only
+ * the first was addressed by anybody. Pilling the server's pick would tell the operator their
+ * agent was named when nothing named it.
+ * ⚠ IDS ONLY. Faces resolve at render ({@link recipientTags}), never here.
+ */
+export function messageTagIds(message: {
+  metadata?: Record<string, unknown> | null;
+  recipientAgentIds?: readonly string[] | null;
+}): { userIds: string[]; agentIds: string[] } {
+  return {
+    // Reserved server-stamped metadata, stripped from caller input; absent means tags nobody.
+    userIds: mentionedUserIdsOf(message.metadata),
+    agentIds:
+      typeof message.metadata?.wake_reason === "string"
+        ? []
+        : [...(message.recipientAgentIds ?? [])],
+  };
+}
 
 /** One delivered-to face. Both strings are already words; the raw agent id is never rendered. */
 export interface RecipientTag {

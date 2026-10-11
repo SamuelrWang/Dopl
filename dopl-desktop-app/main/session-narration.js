@@ -86,6 +86,40 @@ const NARRATION_EVENT = 'dopl:session-narration';
 const PUSH_COALESCE_MS = 200;
 
 /**
+ * HOW MUCH OF A SENDER'S NAME RIDES AN INBOUND FRAME (2026-10-10, #3081).
+ *
+ * ⚠ IT IS A CAPTION CAP, so it goes through {@link line} with everything that implies: one row,
+ * flattened, no newline a peer-typed name could use to forge a second line in the banner. 80 is
+ * generous for a display name and still bounded — `authorLabel` can hand over *"<display name>'s
+ * agent"*, which is a member's own prose plus eight characters.
+ * ⚠ NOT `TOOL_CAP` (40), which it is close enough to borrow and would be wrong to: that number is
+ * a tool identifier's bound and would start cutting real names the day somebody tightened it.
+ */
+const SENDER_CAP = 80;
+
+/**
+ * AN ARRIVING MESSAGE'S BODY: PROSE SHAPE, POST-SIZED BOUND (2026-10-10, #3081).
+ *
+ * ⚠ **IT IS TWO CAPS ON PURPOSE AND NEITHER IS REDUNDANT.** {@link prose} is the only shaper that
+ * keeps a message's structure (indents, bullets, fences, one blank line between paragraphs) and the
+ * only one that reports its own cut — but its bound is `PROSE_CAP`, which is sized for text THIS
+ * RING IS THE ONLY COPY OF. An inbound message is not that: it is on the server and in the message
+ * pane. So the shape comes from `prose` and the LENGTH from `POST_CAP`, the bound the `outbound_post`
+ * arm already justifies for the same reason.
+ *
+ * ⚠ **THE TRUNCATION FLAG IS THE OR OF BOTH CAPS.** `prose` reports only its own; the re-slice below
+ * is a second place the tail can be lost, and a frame that lost it without saying so is the silent
+ * cut `narration-text.js › prose` was written to abolish (INVARIANTS §9). Either cut must confess.
+ * ⚠ TRIMMED AFTER THE SLICE, matching {@link line}'s chain: a slice that lands on the space between
+ * two words must not leave it dangling.
+ */
+function inboundBody(value) {
+  const { text: whole, truncated } = prose(value);
+  const text = whole.slice(0, POST_CAP).trim();
+  return { text, truncated: truncated || text.length < whole.length };
+}
+
+/**
  * ONE REDUCER EVENT -> ONE NARRATION ENTRY, or `null` for an event this lane has nothing
  * to say about.
  *
@@ -100,6 +134,8 @@ const PUSH_COALESCE_MS = 200;
  *   result          how that call came back (ok / failed), summarized
  *   post            the agent SENT a message into the channel or thread — or is WAITING to
  *                   (`pending: true`, 2026-08-25): the outbound consent gate is holding it.
+ *   inbound         a channel message ARRIVED for this agent and woke it (2026-10-10, #3081) —
+ *                   the counterparty's own words, with `senderName` beside them.
  *   status          a phase/activity move worth a line (a park, a gate, an end)
  *
  * ⚠ `tool_result` CARRIES NO `name` — the SDK gives it a `toolUseId` and nothing else — so
@@ -118,6 +154,9 @@ const PUSH_COALESCE_MS = 200;
  *   'operator'  the operator said it, 1:1. Private.
  *   'private'   the agent said it, 1:1, to the operator. Private.
  *   'channel'   it LEFT THE MACHINE — the other member has it.
+ *   'inbound'   it ARRIVED from the channel — the counterparty wrote it and both members have it.
+ *               ⚠ Deliberately NOT `'channel'`: that lane is drawn as the dark "Posted to…" box,
+ *               so reusing it would render somebody else's message as something this agent said.
  * A kind can be renamed, aliased or added; `lane` cannot drift into meaning something else, so
  * a future rename cannot leak a private reply into a public-looking face — nor, symmetrically,
  * dress a real channel post as private, which would hide that it was shared.
@@ -178,6 +217,56 @@ function entryFor(event, now) {
     if (event.directed === true && AGENT_ID_RE.test(String(event.senderAgentId || ''))) {
       entry.senderAgentId = String(event.senderAgentId);
     }
+    if (truncated) entry.truncated = true;
+    return entry;
+  }
+  // ⚠ **WHAT WOKE IT** (2026-10-10, Samuel #3081: the stream showed the agent working and the boxes
+  // it posted, and nothing about the message it was answering). A channel post addressed to this
+  // agent — an `@agent-<id>` tag, a `to=`, or a reply in the thread it is working — arrives as
+  // `inbound_arrived` through `session-gate.js › enqueue`, reaches this funnel like every other
+  // event, and produced NOTHING: there was no arm for it, so `note()` appended nothing and the one
+  // half of the exchange the operator cannot reconstruct was the half that was missing.
+  //
+  // ⚠ **`event.message` IS THE RAW BODY, WHICH IS WHY NO FENCE IS STRIPPED HERE.** The security
+  // wrapper (`session-seed.js › frameContinuation`'s `BEGIN-REQUEST-<nonce>` block, its addressing
+  // lines and its "Answer IN THE CHANNEL" instruction) is built LATER, in the `pushInbound` effect,
+  // over this same string — so the frame sees the peer's words before any of it exists. A reader
+  // that stripped markers out of the framed prompt instead would be parsing an instruction to a
+  // model and showing the leftovers to a human.
+  //
+  // ⚠ **IT IS ITS OWN `lane`, AND IT MAY NOT BE `'channel'`.** A lane states AUDIENCE and the reader
+  // is required to prefer it (see the `lane` note above), but `'channel'` already means ONE thing on
+  // this surface — *these words LEFT the machine* — and the renderer paints it as the dark "Posted
+  // to…" box. An arriving message wearing that lane would be drawn as something this agent SAID,
+  // which is the exact class of lie the lane vocabulary exists to make impossible. `'inbound'` is
+  // the symmetric fact: it is in the channel, and the counterparty is the one who wrote it.
+  //
+  // ⚠ **THE BODY IS PROSE, BOUNDED AT `POST_CAP` RATHER THAN `PROSE_CAP`** — both halves deliberate.
+  // PROSE because this is a MESSAGE and its structure is its content (`narration-text.js`'s
+  // CAPTION-vs-PROSE rule: `line` would flatten a peer's numbered task list into one paragraph and
+  // delete the meaning of everything that arrived). `POST_CAP` because the **channel transcript is
+  // the record**, exactly as the `outbound_post` arm argues for its own echo: the full message is on
+  // the server and in the message pane, so this frame only has to be worth reading in place. At
+  // `PROSE_CAP` one 8000-char peer message would spend an eighth of `RING_CHAR_BUDGET` and evict the
+  // agent's own work frames to show words that are already two panes away.
+  // ⚠ AND THE CUT SAYS SO (INVARIANTS §9) — {@link inboundBody} ORs both caps' truncation.
+  //
+  // ⚠ **THE SENDER IS A CAPTION AND AN UNVERIFIED ONE**, on `senderAgentId`'s precedent. It is
+  // `session-dispatch.js › authorLabel`'s already-resolved label (a display name, *"<person>'s
+  // agent"*, or its own `'A teammate'` fallback) — peer-typed prose that nothing here may gate,
+  // route or attribute authority on, and the renderer neutralizes it as a text child.
+  // ⚠ OMITTED WHEN ABSENT rather than written as null, the `truncated` / `pending` discipline: the
+  // reader's fallback is the anonymous sentence, never a blank and never an id.
+  if (type === 'inbound_arrived') {
+    const { text, truncated } = inboundBody(event && event.message);
+    if (!text) return null;
+    const entry = { at: now, kind: 'inbound', lane: 'inbound', text: text };
+    const who = line(event && event.authorName, SENDER_CAP);
+    if (who) entry.senderName = who;
+    // ⚠ WHOSE SIDE IT CAME FROM, so the face can say "you" where it is the operator's own channel
+    // post. It is NOT a privacy claim: this message is in the channel either way, which is what
+    // keeps it off the `lane`.
+    if (event && event.fromOperator === true) entry.fromOperator = true;
     if (truncated) entry.truncated = true;
     return entry;
   }
@@ -403,6 +492,40 @@ function noteEnded(s, payload) {
   schedule();
 }
 
+/**
+ * THE MESSAGE THAT **LAUNCHED** THIS SESSION, as the same inbound frame (2026-10-10, #3081).
+ *
+ * ⚠ **IT IS A SECOND ENTRY POINT FOR THE SAME REASON {@link noteEnded} IS ONE: there is no event.**
+ * A trigger message does not arrive as `inbound_arrived` — `trigger.js › handleTrigger` passes it to
+ * `session-launch.js › launchResponderSession` as the launch's `firstMessage`, and
+ * `session-engine.js › firstTurnFor` frames it straight into the session's FIRST QUERY TURN. No
+ * reducer event is ever dispatched for it, so `entryFor` cannot see it however many arms it grows.
+ * ⚠ **AND IT IS THE CASE THAT MATTERS MOST.** #3081 is about an agent whose stream opens with it
+ * already thinking; the message it was woken to answer is the first thing that happened to it and
+ * was the one thing not on screen. Covering only the follow-ups would leave every freshly woken
+ * agent — the common one — exactly as it was.
+ *
+ * ⚠ **THE WAKE TURN OF A PARKED SHELL IS NOT THIS PATH AND MUST NOT BE SENT HERE.** A spawn-idle
+ * session pushes nothing at launch (`firstTurnFor` returns `''`); its goal rides `launchGoal` to the
+ * wake turn, and that wake IS an `inbound_arrived` dispatch — so it already has a frame, and a
+ * second one minted here would double it. The caller gates on `parkedShell`.
+ * ⚠ **AND NEITHER IS A REQUESTER LAUNCH.** `side: 'requester'` carries the OPERATOR's own goal
+ * (`launchRequesterSession`'s `a.goal`), which nobody sent to anybody: labelling it as a message
+ * that arrived from a counterparty would be this lane inventing a sender. The caller gates on side.
+ *
+ * ⚠ IT RUNS THROUGH {@link stampToolRun} LIKE EVERY OTHER APPEND, so the run counter is touched in
+ * exactly one place. The reset is a no-op here by construction (nothing has run yet), and that is
+ * the point: the ordinal stays `session-narration`'s single rule rather than acquiring an exception.
+ */
+function noteLaunchMessage(s, a) {
+  if (!s || !s.key || !a) return;
+  const entry = entryFor({ type: 'inbound_arrived', message: a.message, authorName: a.authorName }, Date.now());
+  if (!entry) return;
+  push(s, stampToolRun(s, entry));
+  dirty.set(String(s.key), true);
+  schedule();
+}
+
 /** The ring for one session, newest last. `[]` for a session with nothing said yet — a
  *  DIFFERENT answer from the renderer's "could not ask", which is its own to make. */
 function ringFor(s) {
@@ -475,5 +598,6 @@ module.exports = {
   start,
   note,
   noteEnded, // A9: minted from the `ended` EMIT, which is the only thing that knows why
+  noteLaunchMessage, // #3081: the trigger message, which arrives as a launch arg and never as an event
   ringFor,
 };

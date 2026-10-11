@@ -58,6 +58,11 @@ export function SurfaceAgentView({
       }
       sessions={data.agentSessions}
       messages={data.messages}
+      /* ⚠ THE ROSTER THE SURFACE ALREADY DERIVED (#3081) — `derivations.ts › index`, the same
+         one the transcript beside this panel faces its authors with, so a post's addressee
+         pills read identically in both panes. No new read, on this file's "it fetches
+         nothing" rule. */
+      index={data.index}
       // ⚠ THE POINT OF THE INLINE CARD, ON THIS HOST ESPECIALLY (Samuel,
       // 2026-08-25). A solo /home channel has no tree and never had the consent
       // Inbox beside it, so before the card a draft its agent held could not be

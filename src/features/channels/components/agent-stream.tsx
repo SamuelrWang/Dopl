@@ -18,6 +18,8 @@ import { displayViewFrom, type PageAnswer } from "./view-model-display";
 import type { AuthorIndex } from "./view-model";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { DirectedBox } from "./agent-stream-directed";
+import { InboundBox } from "./agent-stream-inbound-box";
+import { messageTags, type RecipientTag } from "../lib/recipient-tags";
 import { StreamProse, TruncatedNote } from "./agent-stream-prose";
 import { StreamWorkingRow } from "./agent-stream-working";
 import { SentToChannelBox } from "./agent-stream-sent-box";
@@ -33,6 +35,7 @@ import {
   buildAgentStream,
   groupStreamItems,
   type StreamGroup,
+  type StreamItem,
 } from "./agent-stream-model";
 
 /** "This build cannot show the work" — distinct from "nothing yet" (INVARIANTS §11). Asserted by tests. */
@@ -60,9 +63,25 @@ export function AgentStream({
   destination,
   viewer,
   agentNameFor,
+  roster,
   liveness = null,
   color = null, className,
 }: {
+  /**
+   * **THE CHANNEL'S ROSTER, FOR THE ADDRESSEE PILLS ON A POSTED BOX** (#3081).
+   *
+   * ⚠ **IT IS NOT {@link displayIndex} AND MUST NOT BE FUSED WITH IT.** That one is
+   * deliberately `indexMembers([], currentUserId)` — no members, no agents — because what it
+   * answers is *may this viewer press a card's buttons*, and `agent-panel.tsx` states that
+   * choice at its call site. This one answers *what are these people and agents CALLED*, and
+   * a roster-less index would face every person as "Member" and fall every agent back to its
+   * `agent-<id>` handle, which is the one thing this surface may never print at a person
+   * (`agent-id-visibility.test.ts`).
+   * ⚠ **ABSENT DRAWS NO PILLS, WHICH IS WHY IT IS OPTIONAL.** A host with no roster in hand
+   * (the pop-out window) renders exactly what it rendered before, rather than showing faces
+   * it would have to invent.
+   */
+  roster?: AuthorIndex | null;
   /** `null` = could not ask; `[]` = asked, nothing yet. */
   entries: AgentNarrationEntry[] | null;
   /** One of the operator's agent ids → display name; `null`/absent ⇒ the anonymous sentence, never the id
@@ -142,6 +161,7 @@ export function AgentStream({
               displayIndex={displayIndex}
               displayAnswers={displayAnswers}
               agentNameFor={agentNameFor}
+              roster={roster}
             />
           ))}
         </ol>
@@ -168,6 +188,7 @@ function StreamRow({
   displayIndex,
   displayAnswers,
   agentNameFor,
+  roster,
   color,
 }: {
   group: StreamGroup;
@@ -178,6 +199,8 @@ function StreamRow({
   displayIndex?: AuthorIndex;
   displayAnswers?: ReadonlyMap<string, PageAnswer>;
   agentNameFor?: (agentId: string) => string | null;
+  /** The addressee pills' faces come from here; absent draws none (see {@link AgentStream}). */
+  roster?: AuthorIndex | null;
   /** Sent/display lanes only — a `directed` box is private and keeps its own weight. */
   color?: AgentColorKey | null;
 }) {
@@ -212,6 +235,7 @@ function StreamRow({
           text={item.text}
           to={item.to}
           at={item.at}
+          tags={addresseeTags(item, roster)}
           pending={item.pending}
           requestId={item.requestId}
           expired={item.expired}
@@ -219,6 +243,18 @@ function StreamRow({
           busy={postBusy}
           color={color}
         />
+      </li>
+    );
+  }
+  // WHAT WOKE IT (#3081). ⚠ CHECKED BESIDE `sent` AND NEVER FOLDED INTO IT: both lanes are in the
+  // channel, and only this one says the words ARRIVED (`agent-stream-lanes.ts › StreamLane`).
+  // ⚠ The sender is main's already-resolved label, so no roster lookup happens here — and nothing
+  // may fall back to an id if it is absent (`agent-stream-inbound-box.tsx › inboundLabel`).
+  if (item.lane === "inbound") {
+    return (
+      <li>
+        <InboundBox text={item.text} sender={item.senderName} at={item.at} />
+        {item.truncated === true && <TruncatedNote />}
       </li>
     );
   }
@@ -258,6 +294,34 @@ function StreamRow({
     );
   }
   return <LogLine item={item} />;
+}
+
+/** Shared empty row: a `[]` literal would be a fresh array on every render of every box. */
+const NO_TAGS: readonly RecipientTag[] = [];
+
+/**
+ * **THE ADDRESSEE FACES FOR ONE POSTED BOX** (#3081).
+ *
+ * ⚠ **IT RESOLVES AT RENDER, OFF THE LIVE ROSTER, BY RULE** — `lib/recipient-tags.ts`'s header:
+ * faces are never stored on a row, so a rename re-faces history instead of leaving a stale name
+ * baked into a stream item. The ids reach here on the item; the words are decided here.
+ * ⚠ **IT IS `messageTags`, THE TRANSCRIPT'S OWN FUNCTION** — including its body-order rule, which
+ * is why `item.text` is handed over: a reader scanning the two panes sees the same faces in the same
+ * order for one message. A second ordering here would be the drift that file exists to prevent.
+ * ⚠ **NO ROSTER, NO PILLS.** Returning the shared empty row (rather than resolving against an
+ * empty index) is the difference between drawing nothing and drawing "Member" three times.
+ */
+function addresseeTags(
+  item: StreamItem,
+  roster: AuthorIndex | null | undefined
+): readonly RecipientTag[] {
+  if (!roster) return NO_TAGS;
+  if (!item.tagUserIds?.length && !item.tagAgentIds?.length) return NO_TAGS;
+  return messageTags(
+    { body: item.text, tagUserIds: item.tagUserIds, tagAgentIds: item.tagAgentIds },
+    roster.agents,
+    roster.byId
+  );
 }
 
 /** The operator's own turn: right-aligned with their avatar and no name. Must not resemble
