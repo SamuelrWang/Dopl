@@ -147,16 +147,45 @@ export function ComposerRecipients({
       threadOtherParty,
     ]
   );
-    // ⚠ **CANCELLED DRAWS NOTHING, THE SAME AS AN EMPTY REACH** — Escape removed the
+  // ⚠ **CANCELLED DRAWS NO ADDRESS, THE SAME AS AN EMPTY REACH** — Escape removed the
   // address, so there is no address to report and the line must not linger as a
   // ghost of one.
-  if (cancelled || reach.recipients.length === 0) return null;
-  const note =
-    reach.via === "responder" ? CANCEL_NOTE : VIA_NOTE[reach.via];
+  const addressed = !cancelled && reach.recipients.length > 0;
+
+  /**
+   * 🔴 **THE WORKING STRIP IS NOT GATED BY THE ADDRESS, AND IT USED TO BE** (Samuel,
+   * #3166, 2026-10-11: the pills vanished out of a live room).
+   *
+   * ⚠ **THE TWO FACTS ARE INDEPENDENT AND ONLY THE LAYOUT EVER JOINED THEM.** This row
+   * reports who the DRAFT reaches; the strip reports MY OWN AGENTS MID-TURN, off a
+   * different feed entirely (`channel-surface.tsx` builds it from `agentSessions`, the
+   * recipients come from `liveAgents`). Nothing about an unaddressed draft makes a
+   * working agent stop working.
+   * ⚠ **HOW IT BROKE, BECAUSE THE SHAPE INVITES IT AGAIN.** `62d34326` deleted the
+   * `→ nobody` face — correctly, per *"if there is no addressee just have it be
+   * nothing"* — by returning NO ELEMENT, and added the strip as a CHILD of that same
+   * element in the same commit. So the day a room held several live agents with none
+   * recently addressed (`lib/agent-mentions-responder.ts`'s last arm, F-705: nobody is
+   * the deliberate answer, not a failure) the arrow's absence silently took the pills
+   * with it. The ruling was about the ARROW; it was enforced on the whole row.
+   * ⚠ **SO THE EARLY RETURN NOW ASKS ABOUT BOTH**, and draws nothing only when there is
+   * genuinely nothing to say — which is still the common rest state.
+   */
+  if (!addressed && !working) return null;
+  const note = addressed
+    ? reach.via === "responder"
+      ? CANCEL_NOTE
+      : VIA_NOTE[reach.via]
+    : undefined;
   return (
     <p
       role="status"
-      aria-label="Recipients"
+      // ⚠ **THE LABEL FOLLOWS WHAT THE ROW ACTUALLY SAYS.** Naming a strip of working
+      // agents "Recipients" would be a lie to a screen reader, and it is also what keeps
+      // `noLine()` and `demo-home-chrome.test.tsx` honest: "no addressee draws no
+      // recipients line" stays literally true, rather than passing because the strip
+      // happened to be absent in those fixtures.
+      aria-label={addressed ? "Recipients" : "Agents working"}
       // ⚠ `justify-start` — half of the ABOVE-THE-CARD, top-left placement Samuel called on
       // 2026-09-08 (`composer.tsx` owns the other half). It was `justify-end` for the 2026-09-04
       // top-RIGHT placement, and the two halves move together.
@@ -164,14 +193,18 @@ export function ComposerRecipients({
       // recipient list shrinking rather than pushing the card wider.
       className="flex min-w-0 items-center justify-start gap-1 px-0.5 pb-1 text-caption text-text-muted"
     >
-      <span aria-hidden>→</span>
-      <span className="truncate">
-        {reach.recipients.map((r) => r.label).join(", ")}
-      </span>
-      {note && (
-        <span className="shrink-0 rounded-[6px] bg-surface-raised-1 px-1.5 text-micro">
-          {note}
-        </span>
+      {addressed && (
+        <>
+          <span aria-hidden>→</span>
+          <span className="truncate">
+            {reach.recipients.map((r) => r.label).join(", ")}
+          </span>
+          {note && (
+            <span className="shrink-0 rounded-[6px] bg-surface-raised-1 px-1.5 text-micro">
+              {note}
+            </span>
+          )}
+        </>
       )}
       {/* **THE WORKING STRIP FOLLOWS THE BADGE, PACKED LEFT** (Samuel,
           2026-09-20, twice: first *"put agents working to the right"* — out of
