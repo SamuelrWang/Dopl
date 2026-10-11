@@ -19,12 +19,10 @@
 // external agent, a build that predates the stamp) produces nothing at all, which
 // is exactly today's behavior.
 //
-// ONE LINE, NOT A NAG. At most one diag + one silent banner per (peer, version)
+// ONE LINE, NOT A NAG. At most one diag + one tray line per (peer, version)
 // for the life of the process, so a peer who stays stale for a week is mentioned
-// once, not on every message they send.
-
-// ⚠ `electron` is no longer required here: the skew banner left 2026-10-09 and the tray line is
-// the surface. The harness still INJECTS a Notification as a fence, and asserts it is unused.
+// once, not on every message they send. No banner (Samuel's spec, 2026-10-09);
+// the test harness injects a Notification as a fence and asserts it is unused.
 const appVersion = require('./app-version');
 const io = require('./listener-io');
 const targeting = require('./targeting');

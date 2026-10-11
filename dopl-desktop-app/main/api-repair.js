@@ -55,17 +55,6 @@ const authTokens = require('./auth-tokens');
 const { diag } = require('./diag');
 
 /**
- * Run `send()`, repairing the cookie jar and retrying ONCE on a 401.
- *
- * @param {string} label   log prefix naming the transport ('api' / 'listener')
- * @param {string} what    the request being made, for the log (a pathname)
- * @param {() => Promise<Response>} send  a fresh attempt — called at most twice.
- *   It MUST re-read the cookie jar each time (both transports do, via
- *   `auth.getAuthCookie()`), or the retry carries the same dead credential.
- * @returns {Promise<Response>} the retry's response when one happened, else the
- *   original. Rejections (AbortError, network) propagate untouched.
- */
-/**
  * RELEASE A RESPONSE NOBODY WILL READ (2026-08-30, the 17 GB dev incident).
  *
  * ⚠ AN UNREAD `Response` IS NOT FREE, and that is the whole reason this exists. Node's `fetch`
@@ -92,6 +81,17 @@ function discardBody(res) {
   return res;
 }
 
+/**
+ * Run `send()`, repairing the cookie jar and retrying ONCE on a 401.
+ *
+ * @param {string} label   log prefix naming the transport ('api' / 'listener')
+ * @param {string} what    the request being made, for the log (a pathname)
+ * @param {() => Promise<Response>} send  a fresh attempt — called at most twice.
+ *   It MUST re-read the cookie jar each time (both transports do, via
+ *   `auth.getAuthCookie()`), or the retry carries the same dead credential.
+ * @returns {Promise<Response>} the retry's response when one happened, else the
+ *   original. Rejections (AbortError, network) propagate untouched.
+ */
 async function fetchWithAuthRepair(label, what, send) {
   const res = await send();
   if (!authTokens.shouldRepairAuth(res.status, false)) return res;

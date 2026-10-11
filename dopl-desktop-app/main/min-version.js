@@ -202,9 +202,10 @@ function gateScreen(input) {
 }
 
 // ── The warning surface's copy ───────────────────────────────────────────────
-// One silent banner + one standing disabled tray line (the version-skew.js idiom). ⚠ Quiet on
-// purpose: this state means a config mistake on OUR side, so it explains and gets out of the
-// way rather than demanding an action the operator cannot take.
+// One standing disabled tray line, plus one silent banner for 'no-update-published' only
+// (version-gate.js › surfaceWarning). ⚠ Quiet on purpose: this state means a config mistake on
+// OUR side, so it explains and gets out of the way rather than demanding an action the operator
+// cannot take.
 function floorNotice(v) {
   const n = v || {};
   const floor = n.floor ? `v${n.floor}` : 'a newer build';

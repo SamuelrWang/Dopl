@@ -36,10 +36,8 @@
 // be mid-exchange with a live agent; the prompt names any live session and
 // defaults to "Later".
 
-// ⚠ `Notification` IS NOT DESTRUCTURED HERE ANY MORE (2026-10-11, release review). The
-// update-ready banner went on 2026-10-09 (Samuel's spec) and the binding outlived it with no
-// remaining use — only the comments below still mention the surface. An unused import of the
-// one API this module must not reach is the shape a reinstated banner would hide in.
+// ⚠ No `Notification` binding on purpose: the update-ready banner is off by Samuel's spec
+// (2026-10-09), and an unused import is where a reinstated one would hide.
 const { app, dialog } = require('electron');
 const { diag } = require('./diag');
 const { UPDATER } = require('./config');
@@ -237,13 +235,11 @@ function init(opts) {
     }
     const sessions = liveSessions();
     // ⚠ NO BANNER (Samuel's spec, 2026-10-09 — KB dopl-development "Notification Spec Samuel
-    // 2026-10-09"). "App update ready" is not on his list. The announcement is NOT lost: the
-    // TRAY ITEM carries it on every path (`onReadyCb` just above), and with no live session the
-    // restart dialog below still opens. What is gone is only the OS banner.
+    // 2026-10-09"). The TRAY ITEM carries the announcement (`onReadyCb` just above).
     // ITEM 1: the restart is one click away the moment the bits are on disk.
     // With a live session we do NOT throw a modal over a running agent turn:
-    // the notification and the tray item carry it, and both routes come back
-    // through promptRestart(), which names the session before it kills it.
+    // the tray item carries it and comes back through promptRestart(), which
+    // names the session before it kills it.
     if (!promptedThisRun && !sessions.length) {
       promptedThisRun = true;
       promptRestart();
@@ -307,20 +303,11 @@ function checkOnFocus() {
   return true;
 }
 
-// `showDownloadedNotification` raised the update-ready banner (with a "Restart now" action on
-// alert-style delivery) and is GONE (Samuel's spec, 2026-10-09 — "App update ready" is not on
-// his list). Its two restart paths, `requestRestart` and `promptRestart`, are untouched and are
-// still reached from the TRAY ITEM, which carries the announcement on every path.
-//
-// ⚠ ONE THING THE BANNER DID THAT NOTHING ELSE DOES: it survived being MISSED. A dialog behind
-// another Space does not, and with a live session the dialog is deliberately suppressed
-// (`update-policy.js:235-239`). So on a machine running agents the tray item is now the whole
-// announcement, and a restart waits until the operator happens to look at it. That is the
-// ruling's cost, recorded here rather than discovered later.
-//
-// ⚠ `policy.downloadedNotification` (update-policy.js) wrote this copy and now has no caller.
-// LEFT IN PLACE DELIBERATELY: it is a pure exported helper in another module with its own test
-// suite, so deleting it is a separate decision, not part of turning a banner off.
+// NO UPDATE-READY BANNER (Samuel's spec, 2026-10-09). The TRAY ITEM carries the announcement on
+// every path and leads to `requestRestart` / `promptRestart`.
+// ⚠ THE RULING'S COST: a banner survived being MISSED; a dialog behind another Space does not, and
+// with a live session the dialog is suppressed (`update-downloaded` above). So on a machine running
+// agents a staged restart waits until the operator looks at the tray.
 
 // ITEM 3: the manual check. Called from the tray, and never a no-op click: every
 // path here ends in a note the operator can read (checking / up to date /
@@ -373,8 +360,8 @@ function checkNow() {
 
 // The restart prompt. NOTHING here restarts on its own: the dialog defaults to
 // "Later" (button 0, also the cancel action), and only an explicit click on
-// "Restart now" reaches quitAndInstall. Single-flight, because the tray item, the
-// notification body and its action button all lead here.
+// "Restart now" reaches quitAndInstall. Single-flight, because the tray item, a
+// manual check and the download landing can all lead here.
 //
 // Windowless on purpose: the app is usually a hidden background listener, and a
 // modal parented to a hidden window would be invisible.
@@ -430,10 +417,9 @@ function quitAndInstall() {
 }
 
 // Q10 — THE STATE, ASKABLE WITHOUT THE EVENT. `onReady` fires exactly once, so
-// anything built after the download would otherwise never learn about it. These
-// two were added for that and sat with ZERO callers until 2026-07-31; tray.js
-// (refreshUpdateReady) now reads them on every menu rebuild, which is what makes
-// the restart item independent of index.js's create()-then-init() ordering.
+// anything built after the download would otherwise never learn about it. tray.js
+// (refreshUpdateReady) reads these on every menu rebuild, which makes the restart
+// item independent of index.js's create()-then-init() ordering.
 function updateReadyVersion() {
   return readyVersion;
 }

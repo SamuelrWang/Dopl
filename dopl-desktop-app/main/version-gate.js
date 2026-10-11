@@ -267,7 +267,7 @@ function onUpdaterState() {
 }
 
 // Wake: the machine has been asleep, the floor may have moved and the network
-// stack has just been rebuilt. Ask again now rather than at the next 4h alarm.
+// stack has just been rebuilt. Ask again now rather than at the next interval.
 function onWake() {
   if (VERSION_GATE.MODE === 'off') return;
   void refresh();
@@ -307,8 +307,4 @@ module.exports = {
   act,
   onUpdaterState,
   onWake,
-  // ⚠ `currentVerdict: () => verdict` STOOD HERE AND IS DELETED (2026-08-20). Its comment said
-  // "read by the tests", and no test reads it — the suites drive `screen()` / `subscribe()`,
-  // which is the surface an operator actually meets. An accessor justified by a reader that
-  // does not exist is the shape this sweep was looking for.
 };
