@@ -25,6 +25,7 @@ import { KanbanBoard } from "./kanban-board";
 import { NewObjectDialog } from "./new-object-dialog";
 import { ObjectPanel } from "./object-panel";
 import { OntologyBoardSkeleton } from "./ontology-skeleton";
+import { Fill, Float } from "./ontology-frame";
 
 interface Props {
   workspaceId: string;
@@ -480,21 +481,5 @@ export function OntologyView({
         onConfirm={handleDeleteOntology}
       />
     </OntologyResourcesProvider>
-  );
-}
-
-/** Floats the surface as one raised card via the global .page-float. */
-function Float({ children }: { children?: React.ReactNode }) {
-  return (
-    <div className="page-float flex flex-col antialiased">{children}</div>
-  );
-}
-
-/** Fills a host that is already the page panel — no second card. */
-function Fill({ children }: { children?: React.ReactNode }) {
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col antialiased">
-      {children}
-    </div>
   );
 }
