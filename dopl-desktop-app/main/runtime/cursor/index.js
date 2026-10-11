@@ -3,9 +3,8 @@
 // No permission callback: Axis A is the platform's own run mode and Axis B is `local.customTools`,
 // an in-process tool boundary. Nothing here was tested against a live Cursor; what could not be
 // grounded is declared `'unverified'`. It is registered (`runtime/index.js`). `session.interrupt` is
-// `'unverified'` (§5 X0), and the web reads it: the descriptor crosses in `channel-runtime-reply.js`
-// and `runtime-capability.ts › interruptRefusal` turns it into the agent panel's Stop refusal
-// (`agent-panel-controls.tsx`).
+// `'unverified'` (§5 X0), and the web reads it: `runtime-capability.ts › interruptRefusal` turns it
+// into the agent panel's Stop refusal and the launch dialog's stop warning.
 
 const tools = require('./tools');
 const axisB = require('./axis-b');
