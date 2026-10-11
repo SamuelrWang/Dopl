@@ -147,6 +147,11 @@ const WORKSPACE_SUMMARY: Record<string, string> = {
   team: "Your whole team, uncapped — pay only per seat, synced automatically.",
 };
 
+/** Sign-in hop that returns to `to`. ⚠ Param is `redirectTo`, never `redirect` —
+ *  nothing reads the latter and the round-trip fails silently (ENGINEERING §9.2,
+ *  `shared/lib/url/post-auth-landing.ts`). */
+const loginThen = (to: string) => `/login?redirectTo=${encodeURIComponent(to)}`;
+
 /* -------------------------------- the page ------------------------------- */
 
 export function PricingContent() {
@@ -198,7 +203,7 @@ export function PricingContent() {
 
   function requireUser(then: () => void) {
     if (!user) {
-      router.push(`/login?redirectTo=${encodeURIComponent("/pricing")}`);
+      router.push(loginThen("/pricing"));
       return;
     }
     then();
@@ -232,19 +237,12 @@ export function PricingContent() {
     router.push(
       user
         ? billingPath({ intent: "return" })
-        : `/login?redirectTo=${encodeURIComponent("/pricing")}`
+        : loginThen("/pricing")
     );
   }
 
-  // ⚠ Param is `redirectTo`, never `redirect` — nothing reads the latter and
-  // the round-trip fails silently (ENGINEERING §9.2,
-  // `shared/lib/url/post-auth-landing.ts`).
   function handleGetStarted() {
-    if (user) {
-      router.push(WEB_POST_AUTH_LANDING);
-    } else {
-      router.push(`/login?redirectTo=${encodeURIComponent(WEB_POST_AUTH_LANDING)}`);
-    }
+    router.push(user ? WEB_POST_AUTH_LANDING : loginThen(WEB_POST_AUTH_LANDING));
   }
 
   return (
