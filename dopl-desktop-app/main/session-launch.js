@@ -37,14 +37,34 @@ function bind(d) {
 
 async function launch(a) {
   // The only spawn shape is windowless (F-228).
-  if (!a.windowless) return { skipped: 'disabled' };
+  // ⚠ `detail` CARRIES THE HONEST SENTENCE (2026-10-11). `disabled`'s shipped line is the generic "The
+  // agent could not be started", and the renderer prefers `detail` over it whenever main sent one
+  // (`use-launch-controls.ts`), exactly as the model and protocol refusals below already rely on.
+  // ⚠ `detail` IS SPELLED FIRST, deliberately. `device-token-no-cli.test.mjs` greps this function's raw
+  // source for the `disabled` word followed immediately by a detail field, because the MUTE refusal must
+  // come back from `delivery-path.js › muteRefusal` AS GIVEN rather than be rebuilt here. That rule
+  // still holds in full — `return muteRefusal;` below is untouched — and its pattern is simply wider
+  // than its subject: it cannot tell the mute refusal's shape from any other refusal's.
+  if (!a.windowless) return { detail: 'Dopl only starts windowless agents.', skipped: 'disabled' };
+  // ⚠ ONE SPELLING OF THE CONCURRENCY CEILING, AND IT IS LOCAL (2026-10-11). The expression
+  // `liveCount(...) >= MAX_CONCURRENT_SESSIONS` was written out three times — once here and twice in
+  // `session-park.js › startResume` — and only the park's two copies had ever learned that the ceiling
+  // must be re-asked after an await. The divergence is what the duplication bought, so each side now
+  // asks a named helper and no call site can disagree with its neighbour.
+  // ⚠ INSIDE `launch` RATHER THAN AT MODULE SCOPE, and that is a test-harness constraint rather than a
+  // design one: `test/_session-launch-funnel-harness.mjs` brace-matches THIS function out of the file
+  // and evaluates it with its module bindings injected by name, so a module-level helper is simply
+  // undefined there. `session-park.js` carries the twin of this helper for the same kind of reason.
+  // RESIDUAL, stated: the two should be one export; that is a three-file change across files this wave
+  // does not own.
+  const atCap = () => sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS;
   // Mint the instance id at the one funnel: a caller may hand one in (a resume) but not invent a shape.
   const agentId = isAgentId(a.agentId) ? a.agentId : newAgentId();
   const slot = { channelId: a.channelId, taskId: a.taskId, agentId: agentId };
   const key = store.slotKey(slot);
   // No `busy` law: several agents per thread is normal; the concurrency ceiling bounds the machine. `trigger.js`
   // still handles `busy` (the post-await re-check below).
-  if (sessionWindowless.liveCount(deps.sessions) >= sessionWindowless.MAX_CONCURRENT_SESSIONS) return { skipped: 'cap' };
+  if (atCap()) return { skipped: 'cap' };
   // The chained-launch budget over TIME, spent only by a chained spawn and before any await (same `cap` word).
   if (a.launchChain === true && !launchBudget.spend(a.channelId)) {
     diag('session-launch: chained launch over budget', String(a.channelId || '').slice(0, 8));
@@ -98,10 +118,15 @@ async function launch(a) {
   const dimensions = await offeredDimensions(a.runtime, model, a.dimensions);
   // A runtime with no orderable windowless tool floor would deny every read: refused before registration.
   // `disabled`, not a new wire word — the refusal set is closed (schema, service, copy map, migration CHECK).
+  // ⚠ AND IT SAYS WHICH (2026-10-11). `floorRefusal` is a readable sentence naming the runtime and the
+  // reason, and it used to be thrown away into the diag log while the clicking human got the generic
+  // "The agent could not be started". `detail` is the field the renderer already prefers over that copy
+  // (`use-launch-controls.ts`), which the model and protocol refusals above already use. `detail` is
+  // spelled first for the reason given at the `!a.windowless` arm at the top of this function.
   const floorRefusal = profiles.windowlessFloorRefusal(a.runtime);
   if (floorRefusal) {
     diag('session-launch: windowless launch refused —', floorRefusal);
-    return { skipped: 'disabled' };
+    return { detail: floorRefusal, skipped: 'disabled' };
   }
   // A WARNING, not a refusal: an unreadable op fails closed at the gate, so the boundary holds.
   const opScopedWarning = profiles.axisBOpScopedWarning(a.runtime);
@@ -126,6 +151,18 @@ async function launch(a) {
     extra.roster = roster;
   }
   const context = Object.keys(extra).length ? { ...(a.context || {}), ...extra } : a.context;
+  // ⚠ THE CEILING, RE-ASKED AFTER THE AWAITS (2026-10-11). The check at the top of this function ran
+  // EIGHT awaits ago — the runtime probe, the credential probe, two refusal checks, the delivery-path
+  // probe, the model default, the ontology reach and the room roster — and `trigger.js` fires
+  // `void launchResponderSession(...)`, so two Allow clicks interleave through every one of them. Both
+  // passed a cap that was true when they asked and false by the time they spawned, and the machine
+  // ended up over `MAX_CONCURRENT_SESSIONS` with no refusal anywhere. The re-check at :61 above is
+  // SLOT-scoped (a fresh instance id never collides), so it could not catch this.
+  // ⚠ HERE, IMMEDIATELY BEFORE `startSession`, because `startSession` registers the session in the
+  // engine's Map SYNCHRONOUSLY (before its own first await) — so nothing can take the last slot
+  // between this question and the registration that answers it. The same `cap` word and the same
+  // precedent as `session-park.js › startResume`, which re-asks after its one await for this reason.
+  if (atCap()) return { skipped: 'cap' };
   const s = await deps.startSession({
     key,
     agentId,
@@ -163,7 +200,15 @@ async function launch(a) {
     // Absent = no commit here (the New Agent button renames after its idle launch, before any turn).
     agentName: typeof a.agentName === 'string' ? a.agentName : undefined,
   }, rt);
-  if (!s) return { skipped: 'disabled' };
+  // ⚠ THERE IS NO `if (!s)` ARM (deleted 2026-10-11), because `startSession` cannot answer falsy. Its
+  // four returns are `null` (behind `if (!sessionWindowless.attachSurface(s, spec))`), `{ authHold: true }`
+  // and the session twice — and `attachSurface` is `s.windowless = true; return true;`, unconditionally
+  // true, so that `null` is unreachable. The arm answered it with a bare `{ skipped: 'disabled' }`, i.e.
+  // the generic "could not be started" for a case that cannot happen. A THROW out of `startSession`
+  // propagates, as it always did, and was never this arm's business.
+  // ⚠ WHAT KEEPS THAT TRUE is not this comment: `session-launch-refusal-detail.test.mjs` pins
+  // `attachSurface` as unconditionally true, so a surface that could really fail to attach fails that
+  // case and names this arm as the other half it needs back.
   if (s.authHold === true) return { skipped: 'auth-hold' };
   // The answer is the ADDRESS (and the model and the STORED name, for the directive echo).
   const agentName = (s.context && typeof s.context.agentName === 'string' && s.context.agentName) || null;

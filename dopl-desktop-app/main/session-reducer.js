@@ -37,9 +37,23 @@ function feedInboundEffects(state, event) {
   return effects;
 }
 
+/** The TTL re-arm a LIVE FRAME asks for: an ordinary `scheduleIdle` that the engine additionally clamps to
+ *  what is left of the continuous-work cap. ⚠ One builder, so the word cannot be spelled two ways across
+ *  the THREE arms that emit it (the `tool_use` / `assistant` / `thinking` arm, and both returns of the
+ *  `tool_result` arm). ⚠ The engine also lets this re-arm be DEFERRED rather than taken while a tool call
+ *  is still in flight (`session-engine.js › scheduleIdle`), which is the half of "never park mid-work" a
+ *  frame-driven re-arm cannot do on its own: one long call streams nothing between its two frames. */
+function workIdle() {
+  return { type: 'scheduleIdle', from: 'work' };
+}
+
 /**
  * DOES A STREAMED FRAME OF LIVE WORK CORRECT THIS SESSION'S LABEL? The patch, or `null` for a label that
  * is already right — or that must not move (2026-10-10, Samuel's "waiting while it is clearly working").
+ *
+ * ⚠ THIS DOCBLOCK DESCRIBES `workingPatch`, AND IT NOW SITS ON IT (moved 2026-10-11). It was written
+ * above `workIdle` — two adjacent blocks, the first of them orphaned — so the long argument read as
+ * documentation for the one-line timer builder while the function it is about had none.
  *
  * ⚠ THE DEFECT IT CLOSES. Nothing in the live stream touched state: `tool_use`, `assistant` and `thinking`
  * had no arm at all and fell through to the tail's no-op, and `tool_result` only ever un-counted a denied
@@ -62,13 +76,6 @@ function feedInboundEffects(state, event) {
  * including the ones this returns `null` for — a session already reading `working` is exactly the one whose
  * TTL has to be held open. See {@link sessionReducer}'s live-frame arm.
  */
-/** The TTL re-arm a LIVE FRAME asks for: an ordinary `scheduleIdle` that the engine additionally clamps to
- *  what is left of the continuous-work cap. ⚠ One builder, so the word cannot be spelled two ways across
- *  the four arms that emit it. */
-function workIdle() {
-  return { type: 'scheduleIdle', from: 'work' };
-}
-
 function workingPatch(state) {
   if (state.parked === true) return null;
   if (state.activity !== 'idle' && state.activity !== 'awaiting_peer') return null;
@@ -110,6 +117,11 @@ function sessionReducer(state, event) {
   // `session-work-cap.js › WORK_CAP_MS` (two hours of unbroken work), so a runaway loop still parks — as
   // today, by the ordinary `idle_timeout`, resumable. Without that word this arm would make a tool loop
   // unparkable, which is the one thing re-arming must not buy.
+  // ⚠ AND IT IS NOT ENOUGH ON ITS OWN, which is what 2026-10-11 fixed. These arms re-arm on FRAMES, and
+  // one long tool call produces no frames at all between its `tool_use` and its `tool_result`: there is
+  // no heartbeat, and the normalizer's `context` frames are consumed and deliberately never dispatched
+  // (`session-io.js › applyCoreEvents`). So a twenty-minute call still hit the park, and the engine now
+  // DEFERS it while a tool is in flight — still bounded by the same two-hour cap.
   // ⚠ A PARKED SESSION GETS NOTHING: its drained tail must neither read as live (FIX #5) nor push out the
   // ABANDONMENT bound, which is the timer `scheduleIdle` would re-arm there.
   if (type === 'tool_use' || type === 'assistant' || type === 'thinking') {

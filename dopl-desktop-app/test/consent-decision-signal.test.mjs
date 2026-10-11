@@ -65,22 +65,24 @@ const FAILED = "failed";
 
 // ── harness: the real patchDecision + submitDecision, faked electron/HTTP ────
 
-function harness({ fetch, notifySupported = true, notifyThrows = false } = {}) {
-  const calls = { fetches: [], notices: [], clicks: [], logged: [], attention: 0, shown: 0 };
+// ⚠ `notifySupported` / `notifyThrows` / `FakeNotification` ARE GONE (2026-10-11, review item 6).
+// `notifyDecisionFailed` has not touched `Notification` since 2026-10-09 — it hands the event to
+// `notification-route`, which owns the surface choice — so the harness's own
+// `if (!notifySupported || notifyThrows) return "none"` was the only thing those three options
+// controlled. The two cases that used them ("an unsupported platform is a quiet no-op", "a Notification
+// constructor that throws is swallowed") therefore exercised the FAKE and passed whatever the shipped
+// module did, which is the fail-open shape this round is clearing out. `FakeNotification` was declared
+// and never referenced at all. What replaces them is `routeAnswers`: the route's own answer word, which
+// IS real wire — `notifyDecisionFailed` maps `'none'` to `null` and anything else through.
+// `routeThrows` is REAL WIRE, unlike the three options above it that were deleted: the route is a
+// required module and a module-load failure escapes `raise()`'s own internal guard, so "the raise
+// throws" is a state the shipped code can actually meet.
+function harness({ fetch, routeAnswers = "mac", routeThrows = false } = {}) {
+  const calls = { fetches: [], notices: [], clicks: [], logged: [], attention: 0, shown: 0, events: [] };
   const apiFetch = (path, opts) => {
     calls.fetches.push({ path, opts });
     return fetch(path, opts);
   };
-  class FakeNotification {
-    constructor(opts) {
-      if (notifyThrows) throw new Error("notification construction blew up");
-      this.opts = opts;
-      calls.notices.push(opts);
-    }
-    static isSupported() { return notifySupported; }
-    on(evt, fn) { if (evt === "click") calls.clicks.push(fn); }
-    show() { calls.shown++; }
-  }
   const body = [
     CONSTS,
     asyncFnOf(SRC, "patchDecision"),
@@ -95,12 +97,16 @@ function harness({ fetch, notifySupported = true, notifyThrows = false } = {}) {
   // the click handoff, the dock bounce and the platform fallbacks.
   const notificationRoute = {
     raise: (eventId, spec) => {
-      if (!notifySupported || notifyThrows) return "none"; // the route swallows both
-      calls.notices.push({ title: spec.title, body: spec.body, silent: spec.silent !== false ? true : false });
+      if (routeThrows) throw new Error("notification-route failed to load");
+      calls.events.push({ eventId, spec });
+      // ⚠ RECORDED EVEN WHEN NO SURFACE TOOK IT. The route's answer word is the only thing a
+      // surfaceless platform changes, and the module's handling of that word is the real behaviour —
+      // so the ASK is always captured and only the ANSWER varies.
+      calls.notices.push({ title: spec.title, body: spec.body, silent: spec.silent === true });
       calls.shown++;
       if (typeof spec.onClick === "function") calls.clicks.push(spec.onClick);
       if (spec.attention === true) calls.attention++;
-      return "mac";
+      return routeAnswers;
     },
   };
   const api = new Function(
@@ -236,15 +242,36 @@ test("the navigation handler is handed to the route, which is where it is guarde
   assert.equal(h.calls.clicks[0], onOpen, "the operator's way back is passed through");
 });
 
-test("an unsupported platform is a quiet no-op, not a crash inside a decision", async () => {
-  const h = harness({ fetch: () => Promise.resolve(res(500)), notifySupported: false });
-  assert.equal(await h.submitDecision("w1", "row-1", "allow", {}), FAILED);
-  assert.equal(h.calls.notices.length, 0);
+test("THE ASK ITSELF IS REAL WIRE: the route gets `decision_failed`, loud and with attention", async () => {
+  // ⚠ WHAT THIS REPLACES. Nothing asserted the event id or the two fields that make this notice
+  // different from every other one Dopl raises — a decision that silently did not land is the one
+  // notice that must not be silent. The old pair of cases in this slot asserted the HARNESS's own
+  // `notifySupported` / `notifyThrows` branches instead, which no shipped line reads.
+  const h = harness({ fetch: () => Promise.resolve(res(500)) });
+  assert.equal(await h.submitDecision("w1", "row-1", "allow", { channelName: "design" }), FAILED);
+  assert.equal(h.calls.events.length, 1);
+  const { eventId, spec } = h.calls.events[0];
+  assert.equal(eventId, "decision_failed", "the route keys the operator's switch on this id");
+  assert.equal(spec.silent, false, "NOT silent — a lost decision has to be heard");
+  assert.equal(spec.attention, true, "…and it bounces the dock");
+  assert.equal(h.calls.attention, 1);
 });
 
-test("a Notification constructor that throws is swallowed — the decision path survives", async () => {
-  const h = harness({ fetch: () => Promise.resolve(res(500)), notifyThrows: true });
+test("A SURFACELESS PLATFORM: the route answers 'none' and the module reports null, quietly", async () => {
+  // The real behaviour the deleted case was reaching for, asserted on the shipped line that implements
+  // it (`went === 'none' ? null : went`) rather than on a fake that returned early. The ASK still
+  // happens — `notifyDecisionFailed` cannot know there is no surface — and the DECISION still reports
+  // FAILED, which is what the caller acts on.
+  const h = harness({ fetch: () => Promise.resolve(res(500)), routeAnswers: "none" });
   assert.equal(await h.submitDecision("w1", "row-1", "allow", {}), FAILED);
+  assert.equal(h.calls.events.length, 1, "the route was still asked");
+  assert.equal(h.notifyDecisionFailed({ channelName: "design", decision: "allow" }), null,
+    "…and 'none' is reported as null, never as a surface that took it");
+});
+
+test("…and a surface that DID take it is reported as itself, so the two cannot be confused", () => {
+  const h = harness({ fetch: okFetch, routeAnswers: "mac" });
+  assert.equal(h.notifyDecisionFailed({ channelName: "design", decision: "deny" }), "mac");
 });
 
 test("submitDecision NEVER rejects, so a fire-and-forget caller cannot leak a rejection", async () => {
@@ -338,4 +365,38 @@ test("EVERY decision site calls submitDecision, and none still calls patchDecisi
 test("patchDecision handles a 409 in an explicit branch", () => {
   const fn = codeOf(fnOf(SRC, "patchDecision"));
   assert.match(fn, /res\.status === 409/, "the settled case is an explicit branch, not a default");
+});
+
+// ── the fire-and-forget contract, which nothing used to hold ──────────────────
+
+test("🔒 a THROWING route cannot reject submitDecision — the notice is best-effort, the outcome is the answer", async () => {
+  // ⚠ THE CONTRACT IS WRITTEN ON `submitDecision` ITSELF: "Fire-and-forget safe: it NEVER
+  // rejects, so the notification-action callbacks can call it without an await or a .catch and
+  // still cannot produce an unhandled rejection." The notify call sat OUTSIDE the try/catch, so
+  // a throw from the route rejected it — an unhandled rejection on the one path whose job is to
+  // tell the operator their decision did not land.
+  //
+  // This was invisible while the suite had a `notifyThrows` option, because that option was read
+  // by the HARNESS's own early return rather than by any shipped line. Deleting it as fail-open
+  // is what exposed the real gap.
+  const h = harness({
+    fetch: async () => ({ ok: false, status: 500, json: async () => ({}) }),
+    routeThrows: true,
+  });
+
+  const out = await h.submitDecision("w1", "row-1", "allow", { channelName: "design" });
+
+  assert.equal(out, FAILED, "the PATCH outcome still comes back, undisturbed by the dead notice");
+  assert.ok(
+    h.calls.logged.some((l) => /could not be raised/.test(l)),
+    "and the swallowed throw is stated in the diag rather than vanishing"
+  );
+});
+
+test("🔒 …and the happy path still raises, so the guard did not become a mute", async () => {
+  // Without this, wrapping the call in `try { } catch { }` and then deleting the call
+  // altogether would also pass the case above.
+  const h = harness({ fetch: async () => ({ ok: false, status: 500, json: async () => ({}) }) });
+  assert.equal(await h.submitDecision("w1", "row-1", "allow", { channelName: "design" }), FAILED);
+  assert.equal(h.calls.events.length, 1, "the decision-failed event is still asked for");
 });

@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require_ = createRequire(import.meta.url);
@@ -105,9 +106,22 @@ test("nothing newly shared selects nothing, and a session with no channel is ski
 // shows them ended. This module no longer raises anything, which the next test pins.
 
 test("the module raises no notification at all", () => {
-  const src = readFileSync(M("session-park-on-claim.js"), "utf8").replace(/\/\/.*$/gm, "");
+  // ⚠ THIS CASE WAS FAIL-OPEN UNTIL 2026-10-11 (review item 6). It greped for `new Notification` and a
+  // bare `require('electron')` — the pre-2026-10-09 way of raising a banner — and the whole point of
+  // that wave was that EVERY raise site moved to `require('./notification-route').raise(...)`. So the
+  // one idiom a banner would actually reappear as was the one idiom this did not look for, and the case
+  // read as coverage while checking for a spelling nothing uses any more.
+  // ⚠ AND IT IS OVER `codeOf`. The old `replace(/\/\/.*$/gm, "")` strips line comments only, so a block
+  // comment naming any of these satisfied it; `codeOf` masks every comment form through the parser.
+  const src = codeOf(readFileSync(M("session-park-on-claim.js"), "utf8"));
   assert.doesNotMatch(src, /new Notification/, "ending a session is not an alert any more");
   assert.doesNotMatch(src, /require\(['"]electron['"]\)/, "and it needs no window layer to do it");
+  assert.doesNotMatch(src, /notification-route/,
+    "…nor through the route, which is how every raise site in this tree is spelled since 2026-10-09");
+  // Belt: the route's three doors by name, in case it is ever reached through an injected handle.
+  for (const door of [/\braise\s*\(/, /raiseCoalesced\s*\(/, /raiseResumeOffer\s*\(/]) {
+    assert.doesNotMatch(src, door, `a raise door (${door}) is a banner by another name`);
+  }
 });
 
 // ── the wiring ──────────────────────────────────────────────────────────────

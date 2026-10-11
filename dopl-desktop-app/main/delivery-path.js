@@ -59,9 +59,17 @@ async function deliveryBlockedReason() {
 // funnel for the directive lane too, which PERSISTS the word it returns. `session-launch.js`
 // already refuses `windowlessFloorRefusal` as `disabled` for exactly this reason, and
 // `disabled`'s shipped line is "The agent could not be started", which is precisely what
-// happened. `detail` carries the honest sentence to the diag log; nothing renders it today.
-// ⚠ RESIDUAL, stated rather than hidden: a dedicated word would let the UI say WHICH of the two
-// it was. That is a four-place change ending in a migration, so it is not taken here.
+// happened.
+// ⚠ AND `detail` IS WHAT THE OPERATOR READS, not just the diag log (corrected 2026-10-11). This block
+// said "nothing renders it today" and that was already untrue when it was written:
+// `use-launch-controls.ts` sets the launch error to `res.detail ? res.detail : launchRefusalText(...)`,
+// so main's own sentence WINS over the generic copy whenever one was sent. Every `disabled` refusal in
+// `session-launch.js` carries one for that reason.
+// ⚠ AND THE RESIDUAL IS CLOSED, not outstanding. This block said a dedicated wire word was still needed
+// so the UI could say WHICH of the two refusals it was — but the two DETAIL strings below already
+// discriminate them, in the sentence the operator is shown ("Not signed in to Dopl…" vs "The desktop
+// could not get this machine a Dopl credential…"). A new word would move nothing except the copy's
+// owner, at the price of a four-place change ending in a migration.
 const DETAIL = {
   'signed-out': 'Not signed in to Dopl, so this agent would have no Dopl tools and no way to post. Sign in, then launch.',
   'mint-failed': 'The desktop could not get this machine a Dopl credential, so the agent would have no Dopl tools and no way to post.',
