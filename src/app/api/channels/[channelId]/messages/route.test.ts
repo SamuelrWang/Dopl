@@ -13,7 +13,7 @@
  * do so has been made.
  *
  * ⚠ **THE FOLD VERDICT IS NOT THIS ROUTE'S, AND THAT IS THE OTHER PIN.** Whether
- * a read folds is decided once, in `server/service-artifacts.ts ›
+ * a read folds is decided once, in `server/service-artifacts-fold.ts ›
  * readNamesMessages` (a `thread` read and a `since`+`before` window NAME
  * messages and never fold), and its own suite pins every direction. What this
  * file proves is the CHAIN: the route parses those four params and hands them to

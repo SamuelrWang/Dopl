@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
+import { POSTGREST_MAX_ROWS, readAllPages, type Clipped } from "@/shared/supabase/max-rows";
 import type { ConsentRequestRow } from "./collab-dto";
 
 /**
@@ -24,6 +24,35 @@ const CONSENT_LIST_LIMIT = 200;
 /** ⚠ EXPORTED (2026-08-20) so `repository.ts › memberCounts` shares it — two
  *  ceilings would be two answers to "how many members". */
 export const CHANNEL_MEMBER_ROWS_LIMIT = 10_000;
+
+/** A `channel_members` select builder, between `.select()` and `.range()`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MembersQuery = any;
+
+/**
+ * THE ONE `channel_members` PAGE WALK every roster read here shares (`listMyMemberships`,
+ * `listMembers`, `memberCounts`, {@link channelMemberUserIds}): a FRESH query per page (a
+ * Supabase builder is a one-shot thenable; re-awaiting one re-sends page 0 and the walk spins),
+ * paged at the SERVER's ceiling ({@link POSTGREST_MAX_ROWS}, so a short page proves exhaustion)
+ * up to {@link CHANNEL_MEMBER_ROWS_LIMIT}. `narrow` adds the caller's filters and its ORDER BY,
+ * which ⚠ MUST BE TOTAL: an unordered page walk may repeat one row and drop another.
+ */
+export function walkChannelMembers<T>(
+  columns: string,
+  narrow: (query: MembersQuery) => MembersQuery
+): Promise<Clipped<T>> {
+  const db = supabaseAdmin();
+  return readAllPages<T>(
+    async (from, toInclusive) => {
+      const { data, error } = await narrow(db.from("channel_members").select(columns)).range(
+        from,
+        toInclusive
+      );
+      return { data: (data ?? []) as unknown as T[], error };
+    },
+    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  );
+}
 
 /**
  * Pure data access for the collaboration tables: consent requests, and the
@@ -284,26 +313,13 @@ export async function channelMemberUserIds(
 ): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   if (channelIds.length === 0) return out;
-  const db = supabaseAdmin();
-  const { rows } = await readAllPages<{ channel_id: string; user_id: string }>(
-    // ⚠ A FRESH QUERY PER PAGE — one-shot thenable.
-    async (from, toInclusive) => {
-      const { data, error } = await db
-        .from("channel_members")
-        .select("channel_id, user_id")
+  const { rows } = await walkChannelMembers<{ channel_id: string; user_id: string }>(
+    "channel_id, user_id",
+    (q) =>
+      q
         .in("channel_id", channelIds)
         .order("channel_id", { ascending: true })
         .order("user_id", { ascending: true })
-        .range(from, toInclusive);
-      return {
-        data: (data ?? []) as unknown as Array<{
-          channel_id: string;
-          user_id: string;
-        }>,
-        error,
-      };
-    },
-    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
   );
   for (const row of rows) {
     const list = out.get(row.channel_id);
