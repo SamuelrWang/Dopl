@@ -57,13 +57,20 @@ const renderRow = () =>
   );
 
 describe("the field name wears a black pill in Rows", () => {
-  it("draws the label on the app's ink/on-ink token pair, not a hex", () => {
+  it("draws the label on the app's dark-gray surface token, not a hex", () => {
     renderRow();
     const label = screen.getByText("Stage");
-    expect(label.className).toContain("bg-surface-cta");
-    expect(label.className).toContain("text-text-on-cta");
-    // A minted colour would pass a "looks black" assertion. This one cannot.
-    expect(label.className).not.toMatch(/\[#|bg-black|text-white/);
+    expect(label.className).toContain("bg-home-frame");
+    expect(label.className).toContain("text-text-on-invert");
+    // A minted colour would pass a "looks dark gray" assertion. This cannot.
+    expect(label.className).not.toMatch(/\[#|bg-black|text-white|bg-gray-/);
+  });
+
+  it("is DARK GRAY, not the near-black CTA ink (Samuel #3162)", () => {
+    renderRow();
+    // Pinned because the two are one hex apart by eye and a revert to the CTA
+    // token would look "still fine" in review while undoing what he asked for.
+    expect(screen.getByText("Stage").className).not.toContain("surface-cta");
   });
 
   it("is a RECTANGLE with a small radius, never a lozenge", () => {

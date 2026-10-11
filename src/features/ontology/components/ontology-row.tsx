@@ -155,10 +155,24 @@ export function OntologyRow({
                       {row.label}
                     </span>
                   ) : (
-                    /* The field NAME as a black rectangular pill (Samuel #3031,
-                       Rows view per #3079). `bg-surface-cta` + `text-text-on-cta`
-                       is the app's existing ink/on-ink pair (globals.css:269-270),
-                       the one the CTA buttons wear, so no hex is minted here.
+                    /* The field NAME as a DARK GRAY rectangular badge (Samuel
+                       #3031 → Rows view #3079 → dark gray not black #3162).
+                       `bg-home-frame` is the app frame's own dark gray
+                       (globals.css:281, #2f3542) — the only dark gray already
+                       published as a utility, so no hex is minted. It is a real
+                       surface token, not a border one: `--body-bg` is built from
+                       it. Its `--home-` prefix is legacy, not a page scope
+                       (globals.css:276).
+                       CONTRAST, computed not eyeballed: #2f3542 vs #ffffff =
+                       12.29:1, well past WCAG AA 4.5:1 and past AAA 7:1, and the
+                       token is defined ONCE with no dark-theme override, so the
+                       white cannot be undercut by a theme flip. The step it makes
+                       is real: `surface-cta` #1c2127 is 16.20:1, so this reads a
+                       shade lighter without going near the floor.
+                       `text-text-on-invert` (#ffffff), NOT `text-on-cta`: the
+                       badge is no longer a CTA surface, and pairing on-dark text
+                       with a dark surface keeps the pair readable to whoever
+                       edits it next. Same white, zero visual change.
                        `rounded-[4px]` deliberately, NOT `rounded-pill`: he asked
                        for a rectangle with a small radius.
                        `inline-block max-w-full truncate` is load-bearing — the pill
@@ -167,7 +181,7 @@ export function OntologyRow({
                        inline-block child square instead of ellipsing it.
                        EDGES KEEP THE OLD LOOK: relationships are edges, not
                        fields, and he asked for field names. */
-                    <span className="inline-block max-w-full truncate rounded-[4px] bg-surface-cta px-1.5 py-px text-caption font-semibold text-text-on-cta">
+                    <span className="inline-block max-w-full truncate rounded-[4px] bg-home-frame px-1.5 py-px text-caption font-semibold text-text-on-invert">
                       {row.label}
                     </span>
                   )}
