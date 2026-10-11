@@ -150,6 +150,7 @@ module.exports = {
   CHANNEL_AGENT_HARD_DENY,
   SHELL_BUILTINS,
   NATIVE_BUILTINS,
+  onUnknownProfile, // the reporter seam; suites install their own (channel-agent-profile.test.mjs)
   DOPL_SAFE_TOOLS,
   DOPL_ADMIN_TOOLS,
   RETIRED_DOPL_TOOLS,
