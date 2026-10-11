@@ -41,7 +41,7 @@ import { err, type ToolResponse } from "./respond";
  * same reason: this package cannot import from `src/`. ⚠ **IT IS NOT `body`'s 16000 AND MUST
  * NOT BE "CORRECTED" TO IT.** The two numbers are two different routes' and both are right.
  */
-export const LAUNCH_GOAL_MAX_CHARS = 2000;
+const LAUNCH_GOAL_MAX_CHARS = 2000;
 
 /**
  * The goal this launch may file, or the refusal to return instead.

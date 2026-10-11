@@ -30,7 +30,7 @@ import { err, type ToolResponse } from "./respond";
  * in `name`'s own `.describe()` ("1-60 visible characters") and in `channel-errors.ts ›
  * fieldCapsNote()`; this is the third statement of it, and the only one that can refuse.
  */
-export const LAUNCH_NAME_MAX_CHARS = 60;
+const LAUNCH_NAME_MAX_CHARS = 60;
 
 /**
  * The name this launch should file, or the refusal to return instead.
@@ -141,7 +141,7 @@ export function launchedTag(name: string): string {
  * ALREADY USES** for the same shape of silence on the same result line, so one line no longer
  * carries two vocabularies for one fact.
  */
-export const NAME_NOT_REPORTED = "(not reported)";
+const NAME_NOT_REPORTED = "(not reported)";
 
 /**
  * **THE `name=` FIELD ON A LAUNCHED RESULT** — the machine's value, or the one spelling of

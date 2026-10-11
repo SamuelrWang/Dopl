@@ -48,7 +48,7 @@ const MENTIONS_METADATA_KEY = "mentionedUserIds";
  * missing key, or a value that is not an array of strings, counts as ZERO
  * rather than being trusted.
  */
-export function resolvedMentionCount(message: ChannelMessage): number {
+function resolvedMentionCount(message: ChannelMessage): number {
   const value = (message.metadata as Record<string, unknown> | undefined)?.[
     MENTIONS_METADATA_KEY
   ];

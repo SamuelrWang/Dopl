@@ -7,11 +7,11 @@
 import type { LaunchRefusalReason } from "@dopl/client";
 
 /** The bounded hold every mailbox op runs: default and cap. */
-export const DIRECTIVE_WAIT_DEFAULT_MS = 15_000;
+const DIRECTIVE_WAIT_DEFAULT_MS = 15_000;
 export const DIRECTIVE_WAIT_CAP_MS = 30_000;
 
 /** Coarse on purpose: the far end is a human-scale toggle plus a spawn or a turn on a machine. */
-export const DIRECTIVE_POLL_INTERVAL_MS = 1_500;
+const DIRECTIVE_POLL_INTERVAL_MS = 1_500;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
