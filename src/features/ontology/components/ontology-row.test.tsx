@@ -1,21 +1,29 @@
 // @vitest-environment jsdom
 /**
- * The field NAME wears a black rectangular pill in the Rows display (Samuel
- * #3031, Rows view chosen in #3079). First coverage this component has had.
+ * The field NAME wears a gray rectangular badge in the Rows display (Samuel
+ * #3031, Rows view #3079, gray not black #3162/#3186). First coverage this
+ * component has had.
  *
- * What is pinned is the TOKEN PAIR, not a colour: `bg-surface-cta` /
- * `text-text-on-cta` is the app's existing ink/on-ink pair, so a brand change
- * moves the pill with it and a literal hex would not. A test on "black" would
- * pass against a minted `#000`, which is the thing the brief forbade.
+ * What is pinned is the TOKEN, not a colour: `bg-text-secondary` /
+ * `text-text-on-invert`, so a brand change moves the badge with it and a literal
+ * hex would not. A test on "looks gray" would pass against a minted `#555`,
+ * which is the thing the brief forbade.
  *
- * Three things here are easy to break and silent when broken:
+ * Four things here are easy to break and silent when broken:
  * - RECTANGLE, not a lozenge. `rounded-[4px]`, never `rounded-pill`.
  * - EDGES ARE NOT FIELDS. Relationship labels share this `<dt>` and must stay
- *   italic and unpilled — he asked for field names.
- * - The ellipsis belongs INSIDE the pill. `truncate` on the `<dt>` would clip an
- *   inline-block child square instead of ellipsing it, so the pill owns it.
+ *   italic and unbadged — he asked for field names.
+ * - The ellipsis belongs INSIDE the badge. `truncate` on the `<dt>` would clip an
+ *   inline-block child square instead of ellipsing it, so the badge owns it.
+ * - THE TOKEN MUST ACTUALLY EXIST. A class-string assertion cannot tell
+ *   present-and-correct from absent-entirely: name a token that was renamed or
+ *   never defined and Tailwind emits no rule, the badge renders UNPAINTED, and
+ *   every assertion above still passes. The last test closes that by reading
+ *   `globals.css` and making absence THROW.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { GraphState } from "../graph-state";
@@ -105,7 +113,43 @@ describe("the field name wears a black pill in Rows", () => {
   it("does not touch the value", () => {
     renderRow();
     const value = screen.getByText("Qualified");
-    expect(value.className).not.toContain("bg-surface-cta");
+    expect(value.className).not.toContain("bg-text-secondary");
     expect(value.textContent).toBe("Qualified");
+  });
+
+  /**
+   * The guard the other tests cannot be: they asserted a STRING. This asserts the
+   * token behind it is declared, so a rename or typo fails here instead of
+   * shipping an unpainted badge under a green suite.
+   *
+   * Reads the SOURCE css, not a build artifact — no build has to have run, and
+   * there is nothing stale to match against. Every lookup throws on absence
+   * rather than measuring zero, including the file read itself.
+   */
+  it("uses only colour tokens that globals.css actually declares", () => {
+    // Project-root relative, NOT `import.meta.url`: under the jsdom environment
+    // that is not a file: URL and `fileURLToPath` throws on it.
+    const cssPath = resolve(process.cwd(), "src/app/globals.css");
+    const css = readFileSync(cssPath, "utf8"); // throws if the path ever moves
+    expect(css.length).toBeGreaterThan(1000);
+
+    renderRow();
+    const classes = screen.getByText("Stage").className.split(/\s+/);
+    const colourUtilities = classes.filter((c) => /^(bg|text)-/.test(c));
+    // Guard the guard: if the badge stops carrying colour utilities, this test
+    // must fail rather than vacuously pass over an empty list.
+    expect(colourUtilities).toContain("bg-text-secondary");
+
+    for (const utility of colourUtilities) {
+      const token = utility.replace(/^(bg|text)-/, "");
+      // `text-caption` and `font-*` are type scale, not colour — skipped by
+      // looking for the --color-* declaration and only asserting when the
+      // utility is a colour one (every colour utility here maps 1:1).
+      if (/^(caption|micro|body|lead|label)$/.test(token)) continue;
+      expect(
+        css.includes(`--color-${token}:`),
+        `${utility} has no --color-${token} in globals.css, so Tailwind emits no rule and the badge renders unpainted`
+      ).toBe(true);
+    }
   });
 });
