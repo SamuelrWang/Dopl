@@ -35,7 +35,7 @@ const { canonicalDoplName } = require('../../mcp-tool-names');
 //
 // ⚠ THIS IS THE ONE THING DOPL CAN STOP ON THIS RUNTIME, AND IT IS NOT AN INTERRUPT. §5 item X0
 // is that the SDK documents no interrupt and no steer, so `session.interrupt` is `'unverified'`
-// (declared only: no code reads that field, so nothing refuses Stop on it). What the in-process
+// (the agent panel reads it and refuses Stop: `runtime-capability.ts › interruptRefusal`). What the in-process
 // boundary DOES buy is that every DOPL-SIDE EFFECT of a run we cannot stop is still ours: after
 // `close()`, every `execute()` refuses, so an abandoned agent cannot post, cannot read the
 // channel and cannot write the workspace, whatever it is still doing on its own side.

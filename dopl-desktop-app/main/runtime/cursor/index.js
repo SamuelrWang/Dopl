@@ -3,7 +3,9 @@
 // No permission callback: Axis A is the platform's own run mode and Axis B is `local.customTools`,
 // an in-process tool boundary. Nothing here was tested against a live Cursor; what could not be
 // grounded is declared `'unverified'`. It is registered (`runtime/index.js`). `session.interrupt` is
-// `'unverified'` (§5 X0); no code reads that field, so nothing gates Stop on it today.
+// `'unverified'` (§5 X0), and the web reads it: the descriptor crosses in `channel-runtime-reply.js`
+// and `runtime-capability.ts › interruptRefusal` turns it into the agent panel's Stop refusal
+// (`agent-panel-controls.tsx`).
 
 const tools = require('./tools');
 const axisB = require('./axis-b');
@@ -30,7 +32,8 @@ const descriptor = {
   session: {
     resume: true,
     steer: 'unverified',
-    // §5 X0: the SDK documents no interrupt. Declared only; no gate reads this field.
+    // §5 X0: the SDK documents no interrupt. The SPA reads this and refuses Stop with a
+    // sentence (`runtime-capability.ts › interruptRefusal`).
     interrupt: 'unverified',
     liveModelSwitch: true,
     // Refuses a resume until measured (§5 X4); a cold launch is unaffected.
