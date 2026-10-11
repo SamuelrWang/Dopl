@@ -169,7 +169,7 @@ export const OUTSIDE_SESSION_HANDLE = DESKTOP_GROUP_HANDLE;
  * as an outside session nobody marked.
  */
 export const EXTERNAL_SESSION_META_KEY = EXTERNAL_SESSION_METADATA_KEY;
-export function isOutsideSession(m: ChannelMessage): boolean {
+function isOutsideSession(m: ChannelMessage): boolean {
   return authorViewOf(m) === "external";
 }
 
@@ -194,7 +194,7 @@ export function isOutsideSession(m: ChannelMessage): boolean {
  * ⚠ **AND IT IS NOT AN ASSERTED IDENTITY ON ITS OWN**: the label still carries
  * `for <operator> (<user id>)`, the half the author does not control.
  */
-export function agentHandleOf(m: ChannelMessage): string | null {
+function agentHandleOf(m: ChannelMessage): string | null {
   const named = m.authorAgentName ? neutralizeInline(m.authorAgentName) : null;
   if (named) return `@${named}`;
   const session = sessionIdOf(m);
@@ -315,7 +315,7 @@ export function agentNamesFromMessages(messages: ChannelMessage[]): Map<string, 
  * else the `agent-<id>` handle. ⚠ Both halves neutralized: the name has no
  * charset rule anywhere in the product, and the id comes off a stored column.
  */
-export function agentRef(agentId: string, view: MemberView): string {
+function agentRef(agentId: string, view: MemberView): string {
   const name = view.agentNames?.get(agentId);
   const safe = name ? neutralizeInline(name) : null;
   return safe ? `@${safe}` : `@agent-${inlineOr(agentId, UNREADABLE_ID)}`;
@@ -338,7 +338,7 @@ const WAKE_REASONS = new Set([
   "most recent",
   "most recently launched",
 ]);
-export function wakeReasonOf(m: ChannelMessage): string | undefined {
+function wakeReasonOf(m: ChannelMessage): string | undefined {
   const reason = metaString(m, "wake_reason");
   return reason && WAKE_REASONS.has(reason) ? reason : undefined;
 }

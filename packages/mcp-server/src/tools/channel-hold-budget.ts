@@ -87,7 +87,7 @@ export const HOLD_DEFAULT_MS = 215_000;
  * EVERY op (not just `await`) would die at exactly 60.0s. Shortening the hold
  * does not fix that; only streaming does.
  */
-export const EXTERNAL_CLIENT_ABORT_MS = 60_000;
+const EXTERNAL_CLIENT_ABORT_MS = 60_000;
 
 /**
  * ⚠ How far under {@link EXTERNAL_CLIENT_ABORT_MS} an unstamped caller's hold
@@ -97,7 +97,7 @@ export const EXTERNAL_CLIENT_ABORT_MS = 60_000;
  * smaller budget: a hold sized AT the abort loses that race and hands back the
  * transport error instead of the result.
  */
-export const HOLD_EXTERNAL_MARGIN_MS = 15_000;
+const HOLD_EXTERNAL_MARGIN_MS = 15_000;
 
 /**
  * DEFAULT hold when the request carried NO desktop runtime stamp (T03).
