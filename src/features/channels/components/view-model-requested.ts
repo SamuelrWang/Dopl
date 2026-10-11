@@ -16,7 +16,7 @@
  * `requested` state anywhere in this tree any more**, derived or otherwise, and a
  * reader must not re-derive one: an inbound ask is no longer a thing the operator
  * answers, so nothing may render as if it were. Launching an agent on a thread is
- * a direct act (`use-agents-panel.ts › launchAgent`), not a reply to a request.
+ * a direct act (`use-launch-controls.ts › useLaunchControls`), not a reply to a request.
  *
  * ⚠ WHAT SURVIVES IS THE OUTBOUND LANE, WHOLE. This operator's OWN agent
  * drafting a reply and waiting on their Send is a different question with a
