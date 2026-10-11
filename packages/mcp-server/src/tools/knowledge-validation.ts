@@ -26,11 +26,11 @@ import { fieldTooLong, KB_INVALID_FIELD, refusal } from "./tool-errors";
  * ⚠ **HAND-MIRRORED, AND EACH HAS TWO SOURCES ON THE OTHER SIDE**:
  * `src/config/index.ts › DESCRIPTION_MAX` (300) with the route's own
  * `.max(DESCRIPTION_MAX)` on `excerpt` and `.max(300)` on `section` and `title`;
- * and `src/app/api/knowledge/bases/[baseId]/files/route.ts › MAX_BODY_BYTES`
+ * and `src/features/knowledge/schema.ts › MAX_BODY_BYTES` (the files route imports it)
  * (1 MB) with `KB_INPUT_SHAPE.body`'s `.max(1_048_576)`. ⚠ A number quoted in a
  * refusal that UNDERCUTS the real bound refuses a legal write and tells the
  * agent to shorten something that already fitted — so if either moves, move
- * this. `knowledge-validation.test.ts` is where the pair is pinned.
+ * this. `src/features/knowledge/body-cap-mirror.test.ts` pins all three.
  */
 const KB_TEXT_FIELD_MAX = 300;
 const MB_LIMIT_CHARS = 1_048_576;

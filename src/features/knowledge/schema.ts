@@ -124,8 +124,9 @@ const FolderNameSchema = decodedLabel(
 
 // Cap body size to 1 MB: unbounded markdown blows up the search_tsv generated
 // column and the per-entry payload.
-const MAX_BODY_BYTES = 1_048_576;
-const bodyMaxMessage = "Body must be 1 MB or less";
+// ⚠ Also read by `api/knowledge/bases/[baseId]/files/route.ts` (the MCP write lane).
+export const MAX_BODY_BYTES = 1_048_576;
+export const bodyMaxMessage = "Body must be 1 MB or less";
 
 const KnowledgeEntryTypeSchema = z.enum([
   "note",

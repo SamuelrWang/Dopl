@@ -10,7 +10,7 @@ import {
   readFileByPath,
   writeFileByPath,
 } from "@/features/knowledge/server/service";
-import { EntryTitleSchema } from "@/features/knowledge/schema";
+import { EntryTitleSchema, MAX_BODY_BYTES, bodyMaxMessage } from "@/features/knowledge/schema";
 import {
   outlinePayload,
   projectFile,
@@ -38,11 +38,10 @@ function requirePathParam(request: NextRequest): string {
 // this line used to re-type carried an entity-decoding `.transform()` on the
 // other three entry-title sites and not here, which is the MCP write lane
 // (`writeKbFileByPath` → this route) and therefore the one that mattered. The
-// 1 MB body cap is still a mirror of features/knowledge/schema.ts; keep in sync.
-const MAX_BODY_BYTES = 1_048_576;
+// 1 MB body cap and its message are imported from the same module, not mirrored.
 const WriteFileSchema = z.object({
   path: z.string(),
-  body: z.string().max(MAX_BODY_BYTES, "Body must be 1 MB or less").optional(),
+  body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
   title: EntryTitleSchema.optional(),
   // Agent-facing summary (≤300 chars) shown in get_tree / list_dir. `null` clears; omit keeps.
   excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
