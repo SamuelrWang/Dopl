@@ -28,8 +28,8 @@ import { safeLabel, safeOptionalLabel, safeOptionalProse } from "@/shared/lib/sa
  * ⚠ IT RIDES `kind: 'message'` AND MUST KEEP DOING SO. Three reasons, any one
  * sufficient: `dopl-desktop-app/main/targeting.js › classify` returns `ignore`
  * for every `m.kind !== 'message'`, so a card on any other kind can never
- * notify anybody; the six `kind` values are a column CHECK plus four
- * hand-mirrored unions and every one of those lanes is already owned; and the
+ * notify anybody; the six `kind` values are one `@dopl/contracts` declaration plus the column CHECK,
+ * and every one of those lanes is already owned; and the
  * transcript's own card precedent is metadata-keyed rather than kind-keyed
  * (`channels/components/view-model.ts › threadIdOf`).
  *
@@ -66,7 +66,7 @@ const ESCALATION_MAX_OPTIONS = 6;
  * ⚠ THE STORED CEILING IS WIDER THAN THE INPUT ONE (unified display, 2026-09-28). A `dopl_show`
  * display with a `choice` block is a decision too, and its decision INDEX (`display/core/adapt.ts ›
  * decisionIndexOf`) carries up to 12 options with optional consequences. Readers parse with
- * {@link parseStoredEscalation}; the INPUT schema above stays 2–6 with consequences required.
+ * {@link parseStoredEscalation}; the INPUT schema (`ChannelEscalationSchema`, below) stays 2–6 with consequences required.
  */
 const ESCALATION_STORED_MAX_OPTIONS = 12;
 
@@ -82,7 +82,7 @@ export interface ChannelEscalationOption {
 }
 
 /** Which option the agent would take, and why. `index` is into `options`. */
-export interface ChannelEscalationRecommendation {
+interface ChannelEscalationRecommendation {
   index: number;
   why: string;
 }

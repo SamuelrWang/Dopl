@@ -31,4 +31,3 @@ export const MentionReadSchema = z.object({
     .min(1)
     .max(CHANNEL_MENTION_MARK_MAX),
 });
-export type MentionReadInput = z.infer<typeof MentionReadSchema>;

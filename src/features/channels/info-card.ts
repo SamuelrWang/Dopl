@@ -216,8 +216,8 @@ export function parseInfoCard(raw: unknown): ChannelInfoCard {
   return parsed.success ? parsed.data : EMPTY_INFO_CARD;
 }
 
-/** True when a card is the shipped one — nothing hidden, nothing added. Used to
- *  keep an untouched channel's PATCH body out of the wire. */
+/** True when a card is the shipped one — nothing hidden, nothing added. (No
+ *  production caller today; pinned by `info-card.test.ts`.) */
 export function isEmptyInfoCard(card: ChannelInfoCard): boolean {
   return card.hidden.length === 0 && card.rows.length === 0;
 }

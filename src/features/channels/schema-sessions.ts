@@ -83,7 +83,7 @@ export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
 const SESSION_REPORT_MAX = 32;
 
 /** One machine's receipt for one message, keyed by `seq` — only what the machine itself did. */
-export const DeliveryAckSchema = z.object({
+const DeliveryAckSchema = z.object({
   /** The fence: must name a session in this same push (`service-writes-delivery.ts`), or any room
    *  member could forge a monotonic `woken`. Required is safe only because no older desktop sends `acks`. */
   sessionKey: z.string().regex(SESSION_KEY_RE, "Invalid session key"),
