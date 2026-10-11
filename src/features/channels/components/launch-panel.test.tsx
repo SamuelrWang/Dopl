@@ -33,7 +33,10 @@ function request(over: Partial<ChannelConsentRequest> = {}): ChannelConsentReque
     workspaceId: "ws-1",
     operatorUserId: ME,
     requesterUserId: null,
-    kind: "outbound_message",
+    // ⚠ `ConsentKind` is `"inbound" | "outbound"` — and OUTBOUND is the only arm this
+    // panel still has (`launch-panel.tsx`: the inbound half was deleted 2026-08-20, and
+    // its one consumer `thread-consent.tsx › ThreadSendBox` always passes outbound).
+    kind: "outbound",
     messageSeq: null,
     summary: "",
     bodyPreview: "",
