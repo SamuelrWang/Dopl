@@ -51,6 +51,7 @@ export function AuthSplitLayout({
   bannerSrc?: string;
 }) {
   return (
+    // Same fixed white surface, deliberately NOT shared (each differs): `app/auth/desktop-handoff/page.tsx`, `app/link/[token]/page.tsx`.
     <main
       className="fixed inset-0 z-50 overflow-hidden bg-white"
       style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}

@@ -55,6 +55,7 @@ export default async function LinkClaimPage({ params }: PageProps) {
     // ⚠ Face is the LANDING grotesk (`features/marketing/marketing.css` › `.lp`
     // `--grotesk`), stated inline for the same reason AuthSplitLayout states it:
     // that custom property is declared on `.lp`, which this page is not inside.
+    // Sibling copy, deliberately not shared (each differs): `app/auth/desktop-handoff/page.tsx`.
     <main
       className="fixed inset-0 z-50 overflow-y-auto bg-white"
       style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
