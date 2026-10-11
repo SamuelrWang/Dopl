@@ -23,7 +23,7 @@ import type { OntologyLevel } from "../types";
  * and the `dopl_ontology_readable` twin (S1) is not a backstop for it.
  */
 
-export const ONTOLOGY_SHARE_COLS =
+const ONTOLOGY_SHARE_COLS =
   "ontology_id, channel_id, workspace_id, members_level, guests_level, owner_agents_level";
 
 export interface OntologyShareRow {
@@ -43,7 +43,7 @@ export interface OntologyShareRow {
  * `knowledge › CONTAINER_CHANNEL_LIMIT`'s reason: PostgREST truncates an
  *  un-limited select SILENTLY, which narrows the admitted set invisibly — safe,
  *  and undebuggable. */
-export const ONTOLOGY_SHARE_LIMIT = 500;
+const ONTOLOGY_SHARE_LIMIT = 500;
 
 /** `workspaces.kind` for one workspace, or `null` when the row is gone.
  *  Raw COLUMN, not a predicate — the ceiling asks "is this specifically a

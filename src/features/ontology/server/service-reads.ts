@@ -170,12 +170,9 @@ function attachWalkRows(
  * marker could not fire at all. Only a page loop knows whether it stopped on a
  * short page or on its cap.
  *
- * ⚠ **THE FIELD IS DECLARED ON THE RETURN TYPE AND NOT ON `OntologySnapshot`**,
- * which is this change's reach rather than its preference: `../types.ts` (and the
- * `@dopl/client` twin every MCP reader consumes) is where it belongs, so a typed
- * client can read it off `GET /api/ontology`. The intersection is additive — every
- * existing `OntologySnapshot` consumer is unchanged — and the key is already on
- * the wire.
+ * ⚠ **`OntologySnapshot.truncated` IS OPTIONAL; THIS RETURN TYPE MAKES IT
+ * REQUIRED** (cleanup O03): a client-built snapshot may lack it, the server's
+ * answer never does. The `@dopl/client` twin is tracked in KB sectors/X04.
  */
 export async function getSnapshot(
   ctx: OntologyContext

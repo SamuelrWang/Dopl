@@ -11,9 +11,9 @@ import type {
 import type { OntologyObjectUpdateInput } from "../schema";
 
 /** Plan-gate code the free object-cap denial carries (ENGINEERING §8). */
-export const OVER_FREE_CAP_CODE = "over_free_cap";
+const OVER_FREE_CAP_CODE = "over_free_cap";
 
-export class OntologyApiError extends Error {
+class OntologyApiError extends Error {
   readonly status: number;
   readonly code: string;
   constructor(status: number, code: string, message: string) {

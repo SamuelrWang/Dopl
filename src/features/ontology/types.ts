@@ -122,6 +122,19 @@ export interface OntologySnapshot {
    * already cleared `levelForOntology`.
    */
   homeSpaceOntologyIds?: string[];
+  /**
+   * 🔒 **THE SERVER'S OWN CLIP MARKER** (Samuel #2935): `true` when one of the
+   * page walks behind `GET /api/ontology` stopped at its `hardCap`, so the graph
+   * is SMALLER than the stored one. Set by `server/service-reads.ts ›
+   * getSnapshot` on every answer.
+   *
+   * ⚠ **OPTIONAL, AND ABSENT IS "NOT ANSWERED", NEVER "COMPLETE"** — the same
+   * rule as {@link homeSpaceOntologyIds}: snapshots the client builds itself
+   * (optimistic create, delete rollback, graph state, the playground pane) and
+   * payloads cached against an older server carry no such key.
+   * ⚠ The `@dopl/client` twin type needs the same key (X04's file).
+   */
+  truncated?: boolean;
 }
 
 /** A workspace knowledge base or skill, with the caller's access resolved. */

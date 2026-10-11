@@ -15,12 +15,12 @@ import {
 
 /** TanStack key for one ontology's share rows. Ontology-scoped, because the route
  *  is: one dialog, one read, whatever the container's channel fan is. */
-export const ontologySharesKey = (workspaceId: string, ontologyId: string) =>
+const ontologySharesKey = (workspaceId: string, ontologyId: string) =>
   ["ontology-shares", workspaceId, ontologyId] as const;
 
 /** A share row is unshared, not stored, when all three audiences are `none` (I4).
  *  One place decides it, so the dialog and the write cannot disagree. */
-export function isUnshared(share: OntologyShare): boolean {
+function isUnshared(share: OntologyShare): boolean {
   return (
     share.membersLevel === "none" &&
     share.guestsLevel === "none" &&
