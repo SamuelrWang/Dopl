@@ -39,18 +39,9 @@ interface McpAuthContext {
 }
 
 /**
- * ⚠ **`tokenId` LEFT THIS CONTEXT ON 2026-09-02 (batch-3 review), BECAUSE ITS
- * ONLY CONSUMER DID.** It was the opaque key one MCP connection was identified
- * by, and the session workspace PIN (`@dopl/mcp-server › session-pin.ts`, T41)
- * was the whole of what read it. B13 deleted both pin ops and that module, and
- * the docblock here went on describing a map key nothing keyed, a
- * `WORKSPACE_REQUIRED` fallback B10/B14 deleted, and a `bootServer` argument
- * that is no longer passed.
- *
- * ⚠ **THE TOKEN ROW ID IS STILL THE RATE-LIMIT SUBJECT** — `mcp:<tokenId>`,
- * read straight off `validateAccessToken`'s result inside
- * {@link authenticateMcpRequest} — so nothing about the identifier changed;
- * only the field that carried it out of this function, which nobody caught.
+ * ⚠ The context carries no token id (nothing reads one since B13), but THE TOKEN ROW ID IS STILL
+ * THE RATE-LIMIT SUBJECT — `mcp:<tokenId>`, read straight off `validateAccessToken`'s result inside
+ * {@link authenticateMcpRequest}.
  */
 
 export type McpAuthResult =
