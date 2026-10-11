@@ -1339,12 +1339,27 @@
   margin: 22px;
   height: var(--lp-ont-window-h);
   display: flex;
-  /* ⚠ THE SOURCE OF TRUTH FOR THESE THREE IS `globals.css ›
-     --glass-card-*`, shared with onboarding's card on the auth banner so the
-     two white-panel-on-glass surfaces cannot drift. Values unchanged. */
-  background: var(--glass-card-fill);
-  border-radius: var(--glass-card-radius);
-  box-shadow: var(--glass-card-shadow);
+  /* ⚠ LITERALS, NOT `var(--glass-card-*)`, AND THAT IS MEASURED RATHER THAN
+     PREFERRED. These three were briefly swapped for the shared tokens so this
+     panel and onboarding's card on the auth banner could not drift. On the WEB
+     build the result was a panel with no fill, no radius and no shadow:
+     `.lp-ont-window` computed `background-color: rgba(0, 0, 0, 0)` and
+     `border-radius: 0px`, because the served stylesheet did not carry the
+     declarations at all (`curl …/_next/static/css/app/layout.css | grep -c
+     glass-card-fill` → 0). `--seg-fill` next to them survives, and the
+     difference is that it is also referenced from INSIDE globals.css, so the
+     token graph keeps it; a token declared in `:root` and consumed ONLY from
+     another stylesheet was dropped from the output. The desktop SPA resolved
+     all three correctly, which is what hid it.
+     ⚠ So the sharing is deliberately ONE-WAY: `--glass-card-*` stays, and
+     onboarding's card (desktop SPA only) uses it. This file does not, because
+     a cross-stylesheet `var()` is not reliably served here. The cost is that
+     these numbers are stated twice; the guard against drift is
+     `marketing-glass-card-literals.test.ts`, not a shared token.
+     Values are byte-identical to 96930123^. */
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
 }
 /* The tab-swap surface INSIDE the fixed white panel — the component keys THIS
    per stage, so only the contents fade on a tab switch while the panel itself

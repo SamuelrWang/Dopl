@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -88,7 +89,16 @@ test("every runtime's entry carries the header for granular, and nothing at all 
 test("a session is stamped before its first turn, and only ever moves back to the default", () => {
   const query = readFileSync(M("session-query.js"), "utf8");
   const engine = readFileSync(M("session-engine.js"), "utf8");
-  assert.ok(engine.indexOf("await sessionQuery.stampToolSet(s);") < engine.indexOf("nameAndFrame(s, spec, rt);\n  // Spawn idle"),
+  // ⚠ ANCHORED ON THE TWO CALLS, AND ON NOTHING NEXT TO THEM. This read `indexOf(...) <
+  // indexOf("nameAndFrame(s, spec, rt);\n  // Spawn idle")` — the second anchor reached past the
+  // call into the COMMENT that happened to follow it, so #3081 rewording that comment turned the
+  // case red while the invariant it names was intact (the two calls are still adjacent, in order).
+  // It was also fail-OPEN in the direction that matters: `indexOf` answers -1 for a missing
+  // needle, and -1 < anyPositive, so DELETING the `stampToolSet` call entirely — the whole
+  // subject of the case — made it PASS. `orderOf` throws on either anchor being absent, so
+  // absence is now a failure rather than a silent true.
+  assert.ok(
+    orderOf(engine, "await sessionQuery.stampToolSet(s);", "nameAndFrame(s, spec, rt);"),
     "the tool set must be known before the first turn spells a call in it");
   assert.match(query, /s\.doplToolSet = advertisedToolSet \|\| mcpConnect\.LEGACY_TOOL_SET;/);
   assert.match(query, /if \(heard === mcpConnect\.LEGACY_TOOL_SET && s\.doplToolSet === mcpConnect\.GRANULAR_TOOL_SET\) s\.doplToolSet = heard;/);
