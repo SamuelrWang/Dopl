@@ -6,13 +6,12 @@ import {
   EntitlementError,
   entitlementDeniedBody,
 } from "@/features/billing/server/entitlements";
-import { LegacyTolerantObjectCreateSchema } from "@/features/ontology/legacy-aliases";
+import { OntologyObjectCreateSchema } from "@/features/ontology/schema";
 import { buildOntologyContext, createObject } from "@/features/ontology/server/service";
 
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    // LEGACY (≤ 1.36.0 desktops): the old parent key is re-keyed first — `legacy-aliases.ts`.
-    const input = await parseJson(request, LegacyTolerantObjectCreateSchema);
+    const input = await parseJson(request, OntologyObjectCreateSchema);
     const object = await createObject(buildOntologyContext(auth), input);
     return NextResponse.json({ object }, { status: 201 });
   } catch (err) {

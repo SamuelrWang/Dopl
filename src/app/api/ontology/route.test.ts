@@ -1,14 +1,15 @@
 /**
  * 🔒 **`GET /api/ontology` CARRIES THE SNAPSHOT'S CLIP MARKER TO EVERY CLIENT**
  * (cleanup O03; Samuel #2935). `server/service-reads.ts › getSnapshot` sets
- * `truncated`; this route must hand it on unchanged — including through
- * `legacy-aliases.ts › withLegacySnapshotKeys`, which rebuilds the body for a
- * desktop ≤ 1.36.0 — and `OntologySnapshot` declares it (optional) so a typed
- * client can read it.
+ * `truncated`; this route must hand it on unchanged, and `OntologySnapshot`
+ * declares it (optional) so a typed client can read it.
+ *
+ * The ≤ 1.36.0 retired-name body aliases (`legacy-aliases.ts`) were DELETED 2026-10-11
+ * (cleanup, Samuel #3738: the desktop floor is 1.39.0); an old version header now gets
+ * exactly the current body.
  *
  * MUTATION-VERIFY (each alone turns the named case red):
- *  - `withLegacySnapshotKeys` rebuilds the legacy body from `ontologies` /
- *    `objects` only (drops the spread) → "legacy desktop" case.
+ *  - re-add any version-gated key to the body → "an old desktop" case.
  *  - drop `truncated?: boolean` from `OntologySnapshot` → the type pin fails to
  *    compile (`expectTypeOf` is a compile-time check; proven with a scoped tsc).
  */
@@ -66,12 +67,10 @@ describe("GET /api/ontology — the clip marker reaches the client", () => {
     expect((await getBody()).truncated).toBe(true);
   });
 
-  it("a legacy desktop (≤ 1.36.0) gets it too, beside the old list keys", async () => {
-    const current = Object.keys(await getBody()).length;
+  it("an old desktop (1.36.0 header) gets exactly the current body: no retired keys", async () => {
+    const current = await getBody();
     auth.appVersion = "1.36.0";
-    const body = await getBody();
-    expect(Object.keys(body).length, "control: the legacy body carries its extra old keys").toBeGreaterThan(current);
-    expect(body.truncated).toBe(true);
+    expect(await getBody()).toEqual(current);
   });
 
   it("OntologySnapshot declares it, optional", () => {

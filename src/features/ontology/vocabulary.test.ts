@@ -52,9 +52,6 @@ const EXEMPT: ReadonlyArray<readonly [path: string, reason: string]> = [
   ["dopl-desktop-app/test/session-channel-read.test.mjs", "asserts the retired names stay denied in a channel read session"],
   ["packages/mcp-server/src/retirement.test.ts", "asserts the retired tool names are never registered"],
   // One release of compatibility with desktops ≤ 1.36.0 — removal trigger in each file's header.
-  ["src/features/ontology/legacy-aliases.ts", "old wire names for desktops ≤ 1.36.0 (removal trigger in its header)"],
-  ["src/features/ontology/legacy-aliases.test.ts", "tests the module above"],
-  ["src/app/api/ontology/clusters/", "the retired route paths, aliased onto `api/ontology/ontologies/**`"],
   ["packages/mcp-server/src/legacy-aliases.ts", "old MCP arg/op names, refused with their successor (removal trigger in its header)"],
   ["packages/mcp-server/src/legacy-aliases.test.ts", "tests the module above"],
   ["packages/mcp-server/dist/legacy-aliases.js", "the committed build of the module above"],

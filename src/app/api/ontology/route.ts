@@ -7,7 +7,6 @@ import {
   getSnapshot,
   getSummary,
 } from "@/features/ontology/server/service";
-import { withLegacySnapshotKeys } from "@/features/ontology/legacy-aliases";
 
 /**
  * `?view=summary` — a projection param, not a second route (one resource, one shape).
@@ -26,8 +25,7 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     }
     const ctx = buildOntologyContext(auth);
     const body = view === "summary" ? await getSummary(ctx) : await getSnapshot(ctx);
-    // LEGACY (≤ 1.36.0 desktops): the old list keys beside the new — `legacy-aliases.ts`.
-    return NextResponse.json(withLegacySnapshotKeys(body, auth.appVersion));
+    return NextResponse.json(body);
   } catch (err) {
     return toHttpErrorResponse("ontology", err);
   }
