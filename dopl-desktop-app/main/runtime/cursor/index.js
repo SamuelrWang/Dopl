@@ -2,8 +2,8 @@
 //
 // No permission callback: Axis A is the platform's own run mode and Axis B is `local.customTools`,
 // an in-process tool boundary. Nothing here was tested against a live Cursor; what could not be
-// grounded is declared `'unverified'`. It registers but does not ship: `session.interrupt` is
-// unverified (§5 X0), and a runtime Dopl cannot stop does not ship.
+// grounded is declared `'unverified'`. It is registered (`runtime/index.js`). `session.interrupt` is
+// `'unverified'` (§5 X0); no code reads that field, so nothing gates Stop on it today.
 
 const tools = require('./tools');
 const axisB = require('./axis-b');
@@ -30,7 +30,7 @@ const descriptor = {
   session: {
     resume: true,
     steer: 'unverified',
-    // The ship gate (§5 X0): with no interrupt the Stop control is refused.
+    // §5 X0: the SDK documents no interrupt. Declared only; no gate reads this field.
     interrupt: 'unverified',
     liveModelSwitch: true,
     // Refuses a resume until measured (§5 X4); a cold launch is unaffected.
