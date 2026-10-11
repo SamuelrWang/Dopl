@@ -42,6 +42,11 @@ function oldDatabase(liveColorRows: Array<{ channel_id: string; color: string; s
   let selected = "";
   let upserted: unknown = null;
   let colorRead = false;
+  // ⚠ **THE COLOUR READS PAGE NOW (Samuel #2935)**, so this double has to answer
+  // `.order()` and `.range()` or the compat path dies on a TypeError before it
+  // ever reaches the missing-column branch these cases are about.
+  let rangeFrom = 0;
+  let rangeSize = Number.POSITIVE_INFINITY;
   const builder: Record<string, unknown> = {};
   const chain = (op: string, arg?: unknown) => {
     calls.push({ op, arg });
@@ -52,6 +57,8 @@ function oldDatabase(liveColorRows: Array<{ channel_id: string; color: string; s
       selected = "";
       upserted = null;
       colorRead = false;
+      rangeFrom = 0;
+      rangeSize = Number.POSITIVE_INFINITY;
       return chain("from");
     },
     select: (c: string) => {
@@ -67,6 +74,15 @@ function oldDatabase(liveColorRows: Array<{ channel_id: string; color: string; s
     neq: () => builder,
     in: () => builder,
     limit: () => builder,
+    order: () => builder,
+    // ⚠ IT SLICES rather than just recording: one logical read is now ONE `from`
+    // and MANY `range`s, and a double handing back the whole set per page would
+    // multiply the taken colours — the one thing these reads must not do.
+    range: (a: number, b: number) => {
+      rangeFrom = a;
+      rangeSize = b - a + 1;
+      return builder;
+    },
     not: () => {
       colorRead = true;
       return builder;
@@ -76,7 +92,11 @@ function oldDatabase(liveColorRows: Array<{ channel_id: string; color: string; s
         selected.includes("color_shared") ||
         (Array.isArray(upserted) && upserted.some((r) => "color_shared" in (r as object)));
       if (namesColumn) return resolve({ data: null, error: MISSING });
-      if (colorRead) return resolve({ data: liveColorRows, error: null });
+      if (colorRead)
+        return resolve({
+          data: liveColorRows.slice(rangeFrom, rangeFrom + rangeSize),
+          error: null,
+        });
       return resolve({ data: [], error: null });
     },
   });
