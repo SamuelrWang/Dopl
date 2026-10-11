@@ -150,3 +150,14 @@ test("🔒 the close handler reads the SIGNAL and every one of our own kills mar
   assert.match(src, /function stopSession\(session\) \{\n  if \(!session \|\| session\.ended\) return;\n  session\.stopping = true;/);
   assert.match(src, /current\.stopping = true;[^\n]*\n    kill\(current\);/);
 });
+
+test("🔒 the plain build path rebuilds the SPA before packaging (a stale bundle ships the old mic)", () => {
+  // `DOPL_NOTARY_PROFILE=dopl-notary npm run build` is a supported release path. renderer/app is
+  // gitignored build output; packaging without rebuilding it shipped whatever was last built —
+  // on 2026-10-11 an Oct 2 bundle whose mic still used Electron's keyless Web Speech.
+  const { scripts } = JSON.parse(read("package.json"));
+  for (const name of ["build", "dist"]) {
+    assert.match(scripts[name], /^npm --prefix \.\. run build:ui && electron-builder --mac$/, `${name} must build the UI first`);
+  }
+  assert.match(read("scripts", "release.sh"), /npm run build:ui/, "release.sh builds the UI itself");
+});

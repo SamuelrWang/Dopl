@@ -1609,7 +1609,9 @@ the web tree's feature detector.
   on the web and for CSP-permitted URLs, so a new `<img src>` on a remote origin
   is the only thing that ever needs to think about this.
 - `renderer/app/` — build output of `apps/desktop-ui` (`npm run build:ui` at the
-  repo root). Gitignored; must exist before `npm run dist`/`release`.
+  repo root). Gitignored. `npm run build` / `npm run dist` rebuild it first (2026-10-11:
+  a stale bundle would have shipped the old Web Speech mic beside the new dictation
+  helper); `release` builds it in `release.sh`.
 
 ### Commands
 ```bash
@@ -1617,7 +1619,7 @@ cd dopl-desktop-app
 npm install              # first time / after clone (node_modules not committed)
 npm run start            # run from source (dev)
 npm run smoke            # headless load check of the local renderer/app/index.html
-npm run build            # signed DMG -> dist/Dopl-<ver>-arm64.dmg
+npm run build            # rebuild the SPA, then signed DMG -> dist/Dopl-<ver>-arm64.dmg
 npm run notarize         # notarize + staple the built DMG (no rebuild)
 npm run release          # THE supported publish path (scripts/release.sh, F-193):
                          #   preflight -> build -> staple the DMG -> re-hash the
