@@ -7,7 +7,7 @@ import { SelectMenu } from "@/shared/ui/select-menu";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphAction, GraphState } from "../graph-state";
-import { convertValue } from "../field-kinds";
+import { convertValue, fieldKey } from "../field-kinds";
 import type { ObjectAttribute, OntologyObject, TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
 import { FieldDescription, withDescription } from "./field-description";
@@ -105,7 +105,7 @@ export function AttributesEditor({
       type: "ATTRIBUTE_UPSERT",
       id: object.id,
       index: null,
-      attribute: { key: label.toLowerCase().replace(/\s+/g, "-"), label, value: row.value },
+      attribute: { key: fieldKey(label), label, value: row.value },
     });
     drop(index);
   };

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { FormDialog, FormSection, UnderlineField } from "@/shared/ui/form-dialog";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+import { fieldKey } from "../field-kinds";
 import { NEW_COLUMN_NAME, type ColumnDraftPatch } from "../optimistic-create";
 import type { TemplateField } from "../types";
 import { InlineUnderlineField } from "./board-header-bits";
@@ -183,16 +184,16 @@ function nextRowId(): string {
 }
 
 /**
- * Rows → the stored template. Same key derivation as `TemplateEditor` (label
- * lowercased, spaces hyphenated) so a field added here and one added in the panel
- * are the same field; blank rows are dropped.
+ * Rows → the stored template. Keys come from `field-kinds.ts › fieldKey`, the rule
+ * `TemplateEditor` uses too, so a field added here and one added in the panel are
+ * the same field; blank rows are dropped.
  */
 function toTemplate(rows: readonly FieldRow[]): TemplateField[] {
   const template: TemplateField[] = [];
   for (const row of rows) {
     const label = row.label.trim();
     if (label === "") continue;
-    const key = label.toLowerCase().replace(/\s+/g, "-");
+    const key = fieldKey(label);
     if (template.some((f) => f.key === key)) continue;
     template.push({ key, label, kind: row.kind });
   }
