@@ -155,24 +155,35 @@ export function OntologyRow({
                       {row.label}
                     </span>
                   ) : (
-                    /* The field NAME as a DARK GRAY rectangular badge (Samuel
-                       #3031 → Rows view #3079 → dark gray not black #3162).
-                       `bg-home-frame` is the app frame's own dark gray
-                       (globals.css:281, #2f3542) — the only dark gray already
-                       published as a utility, so no hex is minted. It is a real
-                       surface token, not a border one: `--body-bg` is built from
-                       it. Its `--home-` prefix is legacy, not a page scope
-                       (globals.css:276).
-                       CONTRAST, computed not eyeballed: #2f3542 vs #ffffff =
-                       12.29:1, well past WCAG AA 4.5:1 and past AAA 7:1, and the
-                       token is defined ONCE with no dark-theme override, so the
-                       white cannot be undercut by a theme flip. The step it makes
-                       is real: `surface-cta` #1c2127 is 16.20:1, so this reads a
-                       shade lighter without going near the floor.
+                    /* The field NAME as a MID-GRAY rectangular badge (Samuel
+                       #3031 → Rows view #3079 → "not black" #3162 → "still reads
+                       black, go clearly gray" #3186).
+                       `bg-text-secondary` = `--text-secondary` #57606b, a
+                       neutral Samuel hand-darkened himself (#646d78 → #57606b,
+                       2026-08-19) and the ONLY published token inside the 5.5-7:1
+                       band he asked for.
+                       CONTRAST, computed not eyeballed: #57606b vs #ffffff =
+                       6.38:1 — AA 4.5 PASS, and roughly HALF the contrast of the
+                       #2f3542 it replaces (12.29:1), which is why that one still
+                       read as black. `surface-cta` #1c2127 was 16.20:1.
+                       NO NEW TOKEN ON PURPOSE, though one was authorised:
+                       `--home-frame-ink`/`--home-frame-hover` were added and then
+                       REMOVED in Samuel's own 2026-08-30 review because "a
+                       two-token pair with one consumer is an indirection that
+                       says nothing" (tokens.css:363). A `--badge-gray` with one
+                       consumer is that same shape, and minting would also put
+                       this on `scripts/check-css-token-drift.ts`, which fails if
+                       the globals.css and desktop tokens.css copies disagree.
+                       A TEXT TOKEN AS A FILL IS ESTABLISHED HERE, not a liberty:
+                       `--color-chart-2` is `var(--text-secondary)` in BOTH trees,
+                       and `bg-text-primary` paints the selected-row marker in five
+                       playground panes. Defined in globals.css:209 AND
+                       desktop tokens.css:234, same value, so the badge survives
+                       in the desktop SPA, which never loads globals.css.
                        `text-text-on-invert` (#ffffff), NOT `text-on-cta`: the
-                       badge is no longer a CTA surface, and pairing on-dark text
-                       with a dark surface keeps the pair readable to whoever
-                       edits it next. Same white, zero visual change.
+                       badge is not a CTA surface. Still 4.5+ at this fill, which
+                       is the reason the band had a ceiling at all — go lighter
+                       than ~7:1 inverted and white starts to fail.
                        `rounded-[4px]` deliberately, NOT `rounded-pill`: he asked
                        for a rectangle with a small radius.
                        `inline-block max-w-full truncate` is load-bearing — the pill
@@ -181,7 +192,7 @@ export function OntologyRow({
                        inline-block child square instead of ellipsing it.
                        EDGES KEEP THE OLD LOOK: relationships are edges, not
                        fields, and he asked for field names. */
-                    <span className="inline-block max-w-full truncate rounded-[4px] bg-home-frame px-1.5 py-px text-caption font-semibold text-text-on-invert">
+                    <span className="inline-block max-w-full truncate rounded-[4px] bg-text-secondary px-1.5 py-px text-caption font-semibold text-text-on-invert">
                       {row.label}
                     </span>
                   )}
