@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
@@ -353,18 +354,33 @@ test("NOTE: a session with something to say gets a ring keyed to it", () => {
 });
 
 // ── 5. THE FAN-OUT ───────────────────────────────────────────────────────────────────
+//
+// ⚠ **THESE THREE READ `main/session-narration-fanout.js`, NOT `session-narration.js` (2026-10-11).**
+// The live half — the dirty set, the one coalescing timer, the window-registry fan-out and the
+// engine's `bind` — moved there in the §2 split, so pointing these at the host file would have
+// left three assertions grepping for code that is no longer in it. They are still the right
+// claims; they are claims about the module that now makes the push.
+//
+// ⚠ **AND THEY RUN OVER CODE WITH THE COMMENTS BLANKED, WHICH THEY DID NOT BEFORE.** As written
+// these three grepped the raw source, so the prose that EXPLAINS the fan-out satisfied them:
+// deleting `sendToWindows`'s body while keeping its docblock — or writing the pattern into any
+// comment in the tree — left them green over a feed that pushed nothing. `codeOf` blanks every
+// comment (offsets preserved), the same concession the `inputFull` case above makes and the
+// opposite conclusion, because that case is about a name a comment names DELIBERATELY while
+// these are about code that must actually be there. Each one now fails on absence.
+const FANOUT = codeOf(readFileSync(join(MAIN, "session-narration-fanout.js"), "utf8"));
 
 test("PUSH: it fans out over the app-window REGISTRY, like every other main->renderer push", () => {
   // INVARIANTS §11: "EVERY MAIN→RENDERER PUSH FANS OUT OVER THE REGISTRY, or the pop-out is
   // stale with no error anywhere." Three pushes were widened in Phase 10 for exactly this.
-  assert.match(SRC, /appWindows\.liveWindows\(\)/);
-  assert.match(SRC, /for \(const win of wins\)/);
+  assert.match(FANOUT, /appWindows\.liveWindows\(\)/);
+  assert.match(FANOUT, /for \(const win of wins\)/);
 });
 
 test("PUSH: frames are keyed by sessionKey so a window can filter", () => {
   // Main deliberately tracks no subscriptions — a subscription protocol's only failure mode
   // is the two sides going out of step, and the filter here is a string compare.
-  assert.match(SRC, /sessionKey: key/);
+  assert.match(FANOUT, /sessionKey: key/);
 });
 
 // ── THE 2026-08-22 KINDS: thinking, and the 1:1 lane in both directions ──────────────

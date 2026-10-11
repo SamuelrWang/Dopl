@@ -43,16 +43,23 @@
 // ⚠ IT IS A VIEW OF A RUN, NOT A RECORD OF ONE. A window opened after the fact sees the
 // last 200 entries and no more; the channel transcript is what persists. That is the same
 // retention argument `session-summary.js` makes for an ended pill.
+//
+// ⚠ IT IS FIVE FILES NOW (§2 SPLITS, under the hard 500-line §1 cap), AND THE SEAM IS THE
+// SUBJECT. THIS file holds the EVENT -> ENTRY mapping (`entryFor`, `retagPrivate`) and the three
+// append entry points. `session-narration-shape.js` (2026-10-11) holds the per-entry shapers;
+// `session-narration-fanout.js` (2026-10-11) holds the dirty set, the ONE coalescing timer and
+// the window fan-out, so `flush()` and `sendToWindows` as named above are ITS functions;
+// `narration-text.js` holds the four caps and `narration-ring.js` the ring's two bounds. Every
+// name is re-exported here unchanged, so no caller and no test moved.
 
-const appWindows = require('./app-windows');
 // A9 (2026-09-06): the operator-facing copy for an ended session. ⚠ REQUIRED ABOVE THE SENTINEL
-// like `appWindows`, and used only in the live half below it — the pure block must stay free of
-// `require`, and `endedStatusText` is not called from inside it. session-effects.js is pure and
-// requires nothing back, so this cannot cycle.
+// like every other require in this file, and used only in the append half below it — the pure
+// block must stay free of `require`, and `endedStatusText` is not called from inside it.
+// session-effects.js is pure and requires nothing back, so this cannot cycle.
 const sessionEffects = require('./session-effects');
 // 2026-08-22: is the turn this entry belongs to a PRIVATE (1:1) one? `session-private.js` owns
-// the window; this lane only asks. Required above the sentinel like `appWindows`, so it is a
-// free var the source-extraction test injects.
+// the window; this lane only asks. Required above the sentinel like every other one here, so it
+// is a free var the source-extraction test injects.
 const { isPrivateTurn } = require('./session-private');
 // 2026-08-31: WHOSE question this turn answers — the operator's own, or another of their
 // agents'. Attribution only; it reaches no gate.
@@ -60,11 +67,10 @@ const { isDirectedTurn } = require('./session-directed');
 // F-376a (2026-08-31): the agent-id charset, so the sender CAPTION on a directed entry is
 // shape-gated against the ONE grammar rather than a second copy of it.
 const { AGENT_ID_RE } = require('./agent-id');
-const { diag } = require('./diag');
 // ⚠ THE FOUR CAPS AND THE TWO SHAPERS MOVED TO `main/narration-text.js` ON 2026-08-31 (§2 split,
 // under the §1 cap). Read that file's header before touching a bound: it carries the CAPTION vs
 // PROSE rule, why `line` flattens and `prose` must not, and the "bounded by CHARACTERS, never by
-// SHAPE" rule F-376b was filed for. ⚠ ABOVE THE SENTINEL, like `appWindows` and `isPrivateTurn`:
+// SHAPE" rule F-376b was filed for. ⚠ ABOVE THE SENTINEL, like every other require here:
 // everything below it is a free var, and a `require` inside the block would break the extraction
 // idiom the marker promises. Re-exported at the foot, so no caller and no test moved.
 const { TEXT_CAP, TOOL_CAP, POST_CAP, PROSE_CAP, line, prose } = require('./narration-text');
@@ -74,50 +80,28 @@ const { TEXT_CAP, TOOL_CAP, POST_CAP, PROSE_CAP, line, prose } = require('./narr
 // ⚠ ABOVE THE SENTINEL like every other require here, so the block below keeps its extraction
 // promise and the four names stay free vars in it. Re-exported at the foot, unchanged.
 const { NARRATION_MAX, RING_CHAR_BUDGET, ENTRY_OVERHEAD_CHARS, entryChars, push } = require('./narration-ring');
+// ⚠ THE PER-ENTRY SHAPERS MOVED TO `main/session-narration-shape.js` (§2 SPLIT, 2026-10-11):
+// `SENDER_CAP`, `inboundBody`, `stampToolRun` and `retagDirected`. Each is pure over ONE entry or
+// one string; what stays here is the event -> entry MAPPING (`entryFor`) and the privacy re-tag
+// beside it, which is a different question. Read that file before touching a cap or the ordinal.
+// ⚠ ABOVE THE SENTINEL like every other require here, so the four stay free vars in the block
+// below. `stampToolRun` is re-exported at the foot, unchanged, so no caller and no test moved.
+const { SENDER_CAP, inboundBody, stampToolRun, retagDirected } = require('./session-narration-shape');
+// ⚠ THE LIVE HALF MOVED TO `main/session-narration-fanout.js` (§2 SPLIT, 2026-10-11): the dirty
+// set, the one coalescing timer, `PUSH_COALESCE_MS`, `NARRATION_EVENT`, the window-registry
+// fan-out, `ringFor` and the engine's `bind`. Read that file's header before touching the cadence.
+// ⚠ **THE MUTABLE STATE WENT WITH IT AND THERE IS EXACTLY ONE OF EACH.** This file keeps no dirty
+// Map and no timer: the three `note*` entry points below call `fanout.touch(key)`, which marks and
+// arms inside the module that owns both. A copy here would mark keys the flush never reads, and a
+// second timer would double-fire a push whose rate is what `RING_CHAR_BUDGET` bounds.
+// ⚠ **AND THE DEPENDENCY POINTS ONE WAY.** This module replaces `module.exports` wholesale, so a
+// partner that required it back would capture `{}` at load and throw on the first append; the
+// fan-out requires only `app-windows` and `diag`, and neither sibling reaches back here at all.
+const fanout = require('./session-narration-fanout');
+const { NARRATION_EVENT, PUSH_COALESCE_MS, bind, start, ringFor } = fanout;
 
 // ─── BEGIN SESSION-NARRATION-PURE (injectable; unit-tested via source extraction) ─────
-// `appWindows` and `diag` are free vars from here down.
-
-const NARRATION_EVENT = 'dopl:session-narration';
-
-// One burst of engine dispatches must cost ONE render, exactly as the summaries feed
-// decided. Deliberately the SAME 200ms: two feeds landing on one surface at different
-// cadences make the panel judder for no benefit.
-const PUSH_COALESCE_MS = 200;
-
-/**
- * HOW MUCH OF A SENDER'S NAME RIDES AN INBOUND FRAME (2026-10-10, #3081).
- *
- * ⚠ IT IS A CAPTION CAP, so it goes through {@link line} with everything that implies: one row,
- * flattened, no newline a peer-typed name could use to forge a second line in the banner. 80 is
- * generous for a display name and still bounded — `authorLabel` can hand over *"<display name>'s
- * agent"*, which is a member's own prose plus eight characters.
- * ⚠ NOT `TOOL_CAP` (40), which it is close enough to borrow and would be wrong to: that number is
- * a tool identifier's bound and would start cutting real names the day somebody tightened it.
- */
-const SENDER_CAP = 80;
-
-/**
- * AN ARRIVING MESSAGE'S BODY: PROSE SHAPE, POST-SIZED BOUND (2026-10-10, #3081).
- *
- * ⚠ **IT IS TWO CAPS ON PURPOSE AND NEITHER IS REDUNDANT.** {@link prose} is the only shaper that
- * keeps a message's structure (indents, bullets, fences, one blank line between paragraphs) and the
- * only one that reports its own cut — but its bound is `PROSE_CAP`, which is sized for text THIS
- * RING IS THE ONLY COPY OF. An inbound message is not that: it is on the server and in the message
- * pane. So the shape comes from `prose` and the LENGTH from `POST_CAP`, the bound the `outbound_post`
- * arm already justifies for the same reason.
- *
- * ⚠ **THE TRUNCATION FLAG IS THE OR OF BOTH CAPS.** `prose` reports only its own; the re-slice below
- * is a second place the tail can be lost, and a frame that lost it without saying so is the silent
- * cut `narration-text.js › prose` was written to abolish (INVARIANTS §9). Either cut must confess.
- * ⚠ TRIMMED AFTER THE SLICE, matching {@link line}'s chain: a slice that lands on the space between
- * two words must not leave it dangling.
- */
-function inboundBody(value) {
-  const { text: whole, truncated } = prose(value);
-  const text = whole.slice(0, POST_CAP).trim();
-  return { text, truncated: truncated || text.length < whole.length };
-}
+// Everything required above is a free var from here down.
 
 /**
  * ONE REDUCER EVENT -> ONE NARRATION ENTRY, or `null` for an event this lane has nothing
@@ -370,79 +354,9 @@ function retagPrivate(entry, isPrivate) {
   return { ...entry, kind: 'private', lane: 'private' };
 }
 
-/**
- * HOW MANY TOOL USES THIS RUN HAS HAD, STAMPED ON THE FRAME (2026-10-10, Samuel's "the count went down").
- *
- * ⚠ **THE RING IS A WINDOW AND A COUNT DERIVED FROM IT IS NOT A COUNT.** The stream groups a run of
- * consecutive tool frames into one row and prints the run's size, and it computed that size by COUNTING THE
- * FRAMES IT STILL HAD (`agent-stream-model.ts › toolUses`). Both of this ring's bounds then evict the
- * OLDEST entries by design — `NARRATION_MAX` is 200 and a call plus its result is two frames, so a run of
- * more than ~100 uses starts dropping its own head, and `RING_CHAR_BUDGET` gets there sooner. The row
- * counted up to 105 and then counted DOWN as the head went over the side: a running total that decreases,
- * which is the one thing a running total cannot do.
- *
- * ⚠ **SO THE NUMBER IS STAMPED WHERE NOTHING IS EVICTED — HERE, AT THE APPEND.** The ordinal travels ON the
- * newest frames, which are the ones a ring never drops, so the reader's `max` is exact however much of the
- * head is gone. ⚠ It is a per-RUN ordinal and not a session total: the row says what THIS run did, and a
- * session total under one of several runs would be a different (and wrong) sentence.
- *
- * ⚠ **THE RESET MIRRORS THE READER'S RUN BREAK, WHICH IS "ANY NON-TOOL LANE"** — `agent-stream-lanes.ts ›
- * LANE_BY_KIND` puts `tool` and `result` in the tool lane and everything else elsewhere, so `result`
- * carries the run's current ordinal WITHOUT advancing it (a call and its result are two frames about ONE
- * use, the rule `toolUses` already stated) and every other kind ends the run. Two tables, one rule: if that
- * map gains a tool-lane kind, this reset gains it too.
- *
- * ⚠ **ABSENT IS THE HONEST DEGRADATION.** A `result` with no run behind it, and every non-tool frame, carry
- * nothing rather than a zero — the reader falls back to its own frame count, which is exactly the behaviour
- * every build before this one had.
- */
-function stampToolRun(s, entry) {
-  if (!entry || !s) return entry;
-  const run = Number.isFinite(s.toolRun) && s.toolRun > 0 ? s.toolRun : 0;
-  if (entry.kind === 'tool') {
-    s.toolRun = run + 1;
-    return { ...entry, runCount: s.toolRun };
-  }
-  if (entry.kind === 'result') return run > 0 ? { ...entry, runCount: run } : entry;
-  s.toolRun = 0;
-  return entry;
-}
-
-/**
- * THE ANSWER TO A DIRECTION, TAGGED AS ONE (2026-08-31).
- *
- * ⚠ APPLIED AFTER {@link retagPrivate} AND ONLY OVER ITS OUTPUT, so there is exactly one
- * place an `assistant` line becomes private and this narrows that result rather than
- * competing with it. A directed turn IS a private turn; what this adds is WHOSE question it
- * answers, which is the half the operator cannot otherwise see.
- * ⚠ ONLY `private` MOVES — the same rule `retagPrivate` follows for `assistant`. A `post`
- * inside a directed turn keeps `lane: 'channel'`, because it is the one thing that did not
- * stay private.
- */
-function retagDirected(entry, isDirected) {
-  if (!entry || !isDirected || entry.kind !== 'private') return entry;
-  return { ...entry, kind: 'directed-reply', lane: 'directed' };
-}
-
-
 // ─── END SESSION-NARRATION-PURE ──────────────────────────────────────────────────────
 
-// ── The live half: the coalesced fan-out ─────────────────────────────────────────────
-
-// sessionKey -> true, for keys that gained entries since the last flush. Only those are
-// pushed, so a busy session cannot cost a frame for every idle one.
-const dirty = new Map();
-let pushTimer = null;
-let getWindowsFn = null;
-
-/** Arm the push. ⚠ `getWindows()` is called at SEND time, never captured — modelled on
- *  `session-summary.js › start`, and for the same reason: a window is rebuilt on reopen
- *  and an agent window can appear at any moment. Idempotent. */
-function start(opts) {
-  getWindowsFn = opts && typeof opts.getWindows === 'function'
-    ? opts.getWindows
-    : () => appWindows.liveWindows();
-}
+// ── The append half: one event -> one ring entry, then `fanout.touch` ────────────────
 
 /**
  * A session dispatched an event. Record what it says, if anything.
@@ -459,8 +373,7 @@ function note(s, event) {
   // The run ordinal is stamped at the APPEND, because the ring evicts and a count derived from what
   // survived is not a count ({@link stampToolRun}).
   push(s, stampToolRun(s, entry));
-  dirty.set(String(s.key), true);
-  schedule();
+  fanout.touch(s.key);
 }
 
 /**
@@ -488,8 +401,7 @@ function noteEnded(s, payload) {
   // Through the same stamp as every other append: a `status` frame ENDS a tool run (it is not in the tool
   // lane), and the reset belongs at the one place the run counter is touched.
   push(s, stampToolRun(s, { at: Date.now(), kind: 'status', text: text }));
-  dirty.set(String(s.key), true);
-  schedule();
+  fanout.touch(s.key);
 }
 
 /**
@@ -522,61 +434,7 @@ function noteLaunchMessage(s, a) {
   const entry = entryFor({ type: 'inbound_arrived', message: a.message, authorName: a.authorName }, Date.now());
   if (!entry) return;
   push(s, stampToolRun(s, entry));
-  dirty.set(String(s.key), true);
-  schedule();
-}
-
-/** The ring for one session, newest last. `[]` for a session with nothing said yet — a
- *  DIFFERENT answer from the renderer's "could not ask", which is its own to make. */
-function ringFor(s) {
-  return (s && Array.isArray(s.narration)) ? s.narration.slice() : [];
-}
-
-function schedule() {
-  if (pushTimer) return;
-  pushTimer = setTimeout(flush, PUSH_COALESCE_MS);
-  if (typeof pushTimer.unref === 'function') pushTimer.unref();
-}
-
-/**
- * ⚠ FANS OUT OVER THE REGISTRY, like every other main->renderer push since Phase 10
- * (INVARIANTS §11: "EVERY MAIN→RENDERER PUSH FANS OUT OVER THE REGISTRY, or the pop-out is
- * stale with no error anywhere"). One dead window must not swallow the rest.
- * ⚠ The payload is keyed by `sessionKey`, so a window filters to the agent it is showing
- * and every other window ignores the frame. Main does not track who is watching what —
- * that would be a subscription protocol whose only failure mode is going out of step.
- */
-function sendToWindows(payload) {
-  let wins = null;
-  try { wins = getWindowsFn ? getWindowsFn() : appWindows.liveWindows(); }
-  catch (_err) { return false; }
-  if (!Array.isArray(wins) || wins.length === 0) return false;
-  let sent = 0;
-  for (const win of wins) {
-    if (!appWindows.isLiveWindow(win)) continue;
-    try { win.webContents.send(NARRATION_EVENT, payload); sent += 1; }
-    catch (err) { diag('session-narration send error', err && err.message); }
-  }
-  return sent > 0;
-}
-
-let getSessions = null;
-
-/** The engine binds its registry here at load, exactly as session-summary does. */
-function bind(d) {
-  getSessions = (d && d.sessions) || null;
-}
-
-function flush() {
-  pushTimer = null;
-  if (!getSessions || dirty.size === 0) { dirty.clear(); return; }
-  for (const key of [...dirty.keys()]) {
-    const s = getSessions.get(key);
-    // A session that settled between the append and the flush has nothing to send; its
-    // ring went with it.
-    if (s) sendToWindows({ sessionKey: key, entries: ringFor(s) });
-  }
-  dirty.clear();
+  fanout.touch(s.key);
 }
 
 module.exports = {
@@ -593,7 +451,7 @@ module.exports = {
   stampToolRun, // 2026-10-10: the run's tool-use ordinal, stamped where nothing is evicted
   POST_CAP,
   push,
-  // the live half
+  // the live half (`bind` / `start` / `ringFor` are the fan-out's own objects, re-exported)
   bind,
   start,
   note,
