@@ -1,6 +1,6 @@
 /**
- * Stand-in for every unported route (`src/routes.tsx`). To port a page, write
- * the real component and repoint its row's `element`.
+ * The `*` route's "Not found" page, and the fallback for a `WORKSPACE_PAGES` row with no
+ * `element` (`src/routes.tsx`; every row has one today).
  */
 export function PlaceholderPage({
   title,

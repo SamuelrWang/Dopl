@@ -20,8 +20,7 @@ export interface CreateWorkspaceDialogCoreProps {
 }
 
 /**
- * Create-workspace dialog's Next-free core (`./create-workspace-dialog` is the
- * web binding). Fields stay minimal (name + description); server picks the slug.
+ * Create-workspace dialog's Next-free core. Fields stay minimal (name + description); server picks the slug.
  */
 export function CreateWorkspaceDialogCore({
   open,

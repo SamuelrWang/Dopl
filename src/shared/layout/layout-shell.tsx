@@ -4,9 +4,9 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { FlushGrid } from "@/shared/design";
 
-// ⚠ Top-level routes that are NOT a workspace slug. Anything absent from this
-// set is treated as a workspace route, where the (app) group AppShell owns all
-// chrome and this legacy shell renders nothing.
+// ⚠ Top-level routes this shell dresses. Anything absent renders bare on the
+// app frame colour — the shape of pages that draw their own app-shell surface
+// (`/c/{workspaceId}` below, `/playground`, which reuses `app-shell.module.css`).
 //
 // ⚠ `/c/{workspaceId}` — the guest web channel (2026-08-25) — is DELIBERATELY
 // ABSENT, not an oversight. Listing it would dress the page in the centred
@@ -41,8 +41,8 @@ const NON_WORKSPACE_ROOTS = new Set([
 /**
  * Legacy chrome shell — dresses only non-workspace pages (login, pricing,
  * /workspaces, /settings, admin, invite, oauth, legal) in the dark
- * centered-column look. Marketing landing passes through bare; every workspace
- * route is dressed by the (app) group AppShell and bypasses this entirely.
+ * centered-column look. Marketing landing passes through bare; any other
+ * top-level route renders bare on the app frame (see `NON_WORKSPACE_ROOTS`).
  */
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

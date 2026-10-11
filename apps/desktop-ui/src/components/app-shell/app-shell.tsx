@@ -31,9 +31,7 @@ import { useWorkspaceRoute } from "./use-workspace-route";
  * The workspace shell — SPA layout route standing in for the web
  * `src/app/[workspaceSlug]/(app)/layout.tsx`.
  *
- * Composes the web app's Next-free CORES (`@/`) with router + transport
- * injected; the web `AppShell` itself binds `next/navigation` + `useAuthUser`
- * and is not reusable.
+ * Composes the Next-free CORES (`@/`) with router + transport injected.
  *
  * 🔴 **IT MOUNTS NO GUIDANCE LAYER (Samuel's ruling R-49, 2026-09-17).** The
  * tour, the join-request notices, the connect-agent banner and the welcome
@@ -52,15 +50,10 @@ export function AppShellLayout() {
   const { workspace, segment, role, isPending, error, refetch, needsRedirect } =
     useWorkspaceRoute();
 
-  // ⚠ THE CHANNELS NAV BADGE AND ITS `useConsentInbox` READ STOOD HERE AND ARE
-  // DELETED (Samuel, 2026-08-25). The count was a claim that something was
-  // ACTIONABLE somewhere else — the consent Inbox — and that pane is gone: the
-  // outbound review is the work stream's own card
-  // (`agent-stream.tsx › SentToChannelBox`), reachable on a solo /home channel
-  // that this shell does not even wrap. **The shell no longer reads consent at
-  // all**, so it no longer mounts a workspace-wide realtime subscription on
-  // every page of the app. Do not re-add a badge for a surface that does not
-  // exist; the GATE itself is untouched (INVARIANTS §6).
+  // ⚠ The shell reads NO consent and draws no Channels badge (Samuel, 2026-08-25):
+  // the outbound review is the work stream's own card
+  // (`agent-stream.tsx › SentToChannelBox`). Do not re-add a badge, or the
+  // workspace-wide subscription it would mount on every page.
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Seeded to the gear's section: Escape-then-reopen must not flash the wrong pane.

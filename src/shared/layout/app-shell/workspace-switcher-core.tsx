@@ -24,17 +24,13 @@ export interface WorkspaceSwitcherCoreProps {
   isLoading: boolean;
   /** `router.push` / SPA `navigate`. */
   onNavigate: (path: string) => void;
-  /** ⚠ `"workspace"` UNTIL 2026-09-18 — the popup's General pane it opened is
-   *  gone, so this row opens the WORKSPACES list instead. Editing a workspace
-   *  lives at `/{segment}/settings` now. */
+  /** Opens the WORKSPACES list; editing a workspace lives at `/{segment}/settings`. */
   onOpenSettings: (section: "workspaces") => void;
   onCreateWorkspace: () => void;
-  /** Web app uses it to enable its lazy fetch. */
-  onOpenChange?: (open: boolean) => void;
 }
 
 /**
- * Next-free switcher core (`./workspace-switcher` = web binding).
+ * Next-free switcher core.
  * a11y contract: Escape closes and RETURNS FOCUS to the pill; every row is a
  * real button.
  */
@@ -47,7 +43,6 @@ export function WorkspaceSwitcherCore({
   onNavigate,
   onOpenSettings,
   onCreateWorkspace,
-  onOpenChange,
 }: WorkspaceSwitcherCoreProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -60,7 +55,6 @@ export function WorkspaceSwitcherCore({
 
   function setOpenState(next: boolean) {
     setOpen(next);
-    onOpenChange?.(next);
   }
 
   function close() {

@@ -82,8 +82,8 @@ export interface AppSidebarCoreProps {
 }
 
 /**
- * Next-free sidebar core (`./app-sidebar` = web binding). Router- and
- * fetch-shaped things are props so the SPA mounts the same sidebar.
+ * Next-free sidebar core. Router- and fetch-shaped things are props, so the
+ * SPA injects them.
  */
 export function AppSidebarCore({
   workspaceSegment,

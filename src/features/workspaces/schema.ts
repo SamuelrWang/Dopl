@@ -10,10 +10,11 @@ import { safeLabel, safeOptionalProse } from "@/shared/lib/safe-label";
  * neutralizes both at render time (`UNTRUSTED_DIRECTORY_NOTE`); this is the
  * INPUT half. See `@/shared/lib/safe-label` for why both layers exist.
  *
- * ⚠ Description is charset-bounded too, so a newline is now a validation error
- * — both editors still render a `<textarea rows={3}>`
- * (`workspace-settings-form.tsx`, `create-workspace-dialog.tsx`). Follow-up:
- * make those inputs single-line so the affordance matches the rule.
+ * ⚠ Description is charset-bounded too, so a newline is a validation error —
+ * yet both editors still render a textarea: `create-workspace-dialog-core.tsx`
+ * (`<textarea rows={3}>`) and `workspace-settings-form-core.tsx` (`UnderlineField
+ * multiline`, where Enter breaks the line). Follow-up: make both single-line so the
+ * affordance matches the rule.
  */
 const WorkspaceNameSchema = safeLabel("Workspace name", 120);
 
