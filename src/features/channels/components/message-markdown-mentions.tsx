@@ -18,7 +18,7 @@ import type { BodyContext } from "./message-markdown-context";
  * VIEWER additionally tinted — these are the rows the Tags inbox points at, and
  * they should be findable by eye once a scroll lands nearby.
  *
- * ⚠ MOVED HERE FROM `transcript.tsx › Body` (2026-08-21) UNCHANGED IN RULE. It
+ * ⚠ MOVED HERE FROM transcript.tsx's former Body (2026-08-21) UNCHANGED IN RULE. It
  * used to be the whole body renderer, splitting one line; it is now the LEAF the
  * markdown renderer calls at every text node, which is what makes a mention
  * inside a heading, a bullet or a bold run tint like any other.
