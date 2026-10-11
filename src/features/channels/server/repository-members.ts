@@ -1,9 +1,8 @@
 /** Split out of `repository.ts` (2026-09-14, 500-line cap): the `channel_members` table's data access, on `repository-workspace.ts`'s precedent — `repository.ts` re-exports every name here, so `import * as repo from "./repository"` is unchanged. */
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { POSTGREST_MAX_ROWS, readAllPages } from "@/shared/supabase/max-rows";
 import type { ChannelMemberRow } from "./dto";
-import { CHANNEL_MEMBER_ROWS_LIMIT } from "./repository-collab";
+import { walkChannelMembers } from "./repository-collab";
 
 /**
  * A `Map` of counts THAT SAYS WHETHER IT IS COMPLETE — {@link memberCounts}'s
@@ -52,21 +51,8 @@ export async function listMyMemberships(
   workspaceId: string,
   userId: string
 ): Promise<ChannelMemberRow[]> {
-  const db = supabaseAdmin();
-  const { rows } = await readAllPages<ChannelMemberRow>(
-    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
-    // re-awaiting one re-sends the first range and the walk spins on page 0.
-    async (from, toInclusive) => {
-      const { data, error } = await db
-        .from("channel_members")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .eq("user_id", userId)
-        .order("channel_id", { ascending: true })
-        .range(from, toInclusive);
-      return { data: (data ?? []) as unknown as ChannelMemberRow[], error };
-    },
-    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  const { rows } = await walkChannelMembers<ChannelMemberRow>("*", (q) =>
+    q.eq("workspace_id", workspaceId).eq("user_id", userId).order("channel_id", { ascending: true })
   );
   return rows;
 }
@@ -95,20 +81,11 @@ export async function listMyMemberships(
 export async function listMembers(
   channelId: string
 ): Promise<ChannelMemberRow[]> {
-  const db = supabaseAdmin();
-  const { rows } = await readAllPages<ChannelMemberRow>(
-    // ⚠ A FRESH QUERY PER PAGE — one-shot thenable.
-    async (from, toInclusive) => {
-      const { data, error } = await db
-        .from("channel_members")
-        .select("*")
-        .eq("channel_id", channelId)
-        .order("joined_at", { ascending: true })
-        .order("user_id", { ascending: true })
-        .range(from, toInclusive);
-      return { data: (data ?? []) as unknown as ChannelMemberRow[], error };
-    },
-    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  const { rows } = await walkChannelMembers<ChannelMemberRow>("*", (q) =>
+    q
+      .eq("channel_id", channelId)
+      .order("joined_at", { ascending: true })
+      .order("user_id", { ascending: true })
   );
   return rows;
 }
@@ -231,26 +208,14 @@ export async function memberCounts(
 ): Promise<MemberCounts> {
   const counts = new Map<string, number>();
   if (channelIds.length === 0) return clipMarker(counts, false);
-  const db = supabaseAdmin();
-  const { rows, truncated } = await readAllPages<{ channel_id: string }>(
-    // ⚠ A FRESH QUERY PER PAGE. A Supabase builder is a one-shot thenable;
-    // re-awaiting one re-sends the first range and the walk spins on page 0.
-    async (from, toInclusive) => {
-      const { data, error } = await db
-        .from("channel_members")
-        // ⚠ STILL ONE COLUMN. `user_id` is ORDERED on and never selected — the
-        // precedent `repository-token-spend.ts` set with `session_key`: ORDER BY
-        // reaches any column of the relation, so a total order costs no bytes.
-        .select("channel_id")
-        .in("channel_id", channelIds)
-        .order("channel_id", { ascending: true })
-        .order("user_id", { ascending: true })
-        .range(from, toInclusive);
-      return { data: (data ?? []) as unknown as Array<{ channel_id: string }>, error };
-    },
-    // ⚠ The page size is the SERVER's ceiling — that is what makes a short page
-    // proof of exhaustion rather than proof of a clip.
-    { hardCap: CHANNEL_MEMBER_ROWS_LIMIT, pageSize: POSTGREST_MAX_ROWS }
+  // ⚠ STILL ONE COLUMN. `user_id` is ORDERED on and never selected — the precedent
+  // `repository-token-spend.ts` set with `session_key`: ORDER BY reaches any column of the
+  // relation, so a total order costs no bytes.
+  const { rows, truncated } = await walkChannelMembers<{ channel_id: string }>("channel_id", (q) =>
+    q
+      .in("channel_id", channelIds)
+      .order("channel_id", { ascending: true })
+      .order("user_id", { ascending: true })
   );
   for (const row of rows) {
     counts.set(row.channel_id, (counts.get(row.channel_id) ?? 0) + 1);
