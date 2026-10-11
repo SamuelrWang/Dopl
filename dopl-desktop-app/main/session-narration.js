@@ -37,15 +37,13 @@
 // ⚠ NOTHING PRIVILEGED CROSSES. Entries carry ALREADY-SUMMARIZED display text: the tool
 // name through the gate's own normalizer, and `inputSummary` — which `session-io.js ›
 // summarizeInput` has already capped at 140 chars. **`inputFull` NEVER enters the ring.**
-// It exists for the session window's expandable card, it can carry an entire file's
-// contents, and this feed crosses to a renderer that logs nothing and stores nothing.
+// It can carry an entire file's contents, and this feed crosses to a renderer that logs nothing and stores nothing.
 //
 // ⚠ IT IS A VIEW OF A RUN, NOT A RECORD OF ONE. A window opened after the fact sees the
 // last 200 entries and no more; the channel transcript is what persists. That is the same
 // retention argument `session-summary.js` makes for an ended pill.
 //
-// ⚠ IT IS FIVE FILES NOW (§2 SPLITS, under the hard 500-line §1 cap), AND THE SEAM IS THE
-// SUBJECT. THIS file holds the EVENT -> ENTRY mapping (`entryFor`, `retagPrivate`) and the three
+// ⚠ IT IS FIVE FILES, AND THE SEAM IS THE SUBJECT. THIS file holds the EVENT -> ENTRY mapping (`entryFor`, `retagPrivate`) and the three
 // append entry points. `session-narration-shape.js` (2026-10-11) holds the per-entry shapers;
 // `session-narration-fanout.js` (2026-10-11) holds the dirty set, the ONE coalescing timer and
 // the window fan-out, so `flush()` and `sendToWindows` as named above are ITS functions;

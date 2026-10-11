@@ -323,7 +323,33 @@ test("the park door closes the runtime handle, exactly as the resume door does",
   assert.match(body, /teardownHandles\(s\);/,
     "abortQuery must close the runtime's own handle, not only the abort signal");
 
-  // The same shape, at the other door — `session-park.js › reapPriorChild`.
-  assert.match(SRC, /typeof prior\.close === 'function'/,
-    "the resume lane's reap is the pattern this one follows");
+  // The same helper at the other door: the resume lane is pinned BEHAVIOURALLY below.
+});
+
+test("the resume door reaps the PRIOR child through the shared teardown: abort, iterator, handle", () => {
+  const h = harness();
+  const calls = [];
+  const s = {
+    settled: false, sdkSessionId: "sdk-abc",
+    abortController: { abort: () => calls.push("abort") },
+    pushIterator: { close: () => calls.push("iterator.close") },
+    query: { close: () => calls.push("handle.close") },
+  };
+  h.resumeParked(s);
+  assert.deepEqual(calls, ["abort", "iterator.close", "handle.close"],
+    "the Codex child dies only on handle.close(), so the reap must reach it");
+});
+
+test("the resume door's reap tolerates a throwing step and a handle without close", () => {
+  const h = harness();
+  const calls = [];
+  const s = {
+    settled: false, sdkSessionId: "sdk-abc",
+    abortController: { abort: () => { throw new Error("boom"); } },
+    pushIterator: { close: () => calls.push("iterator.close") },
+    query: { __claudeShaped: true },
+  };
+  assert.doesNotThrow(() => h.resumeParked(s));
+  assert.deepEqual(calls, ["iterator.close"]);
+  assert.ok(s.pushIterator.__iter, "the fresh iterator is still assigned");
 });

@@ -1,23 +1,14 @@
 // ENGINE STATE -> WHAT A HUMAN IS SHOWN ABOUT IT. The pill, and the liveness beside it.
 //
-// ⚠ SPLIT OUT OF `main/session-summary.js` ON 2026-08-22, at the hard 500-line §2 cap. That file
-// stood at exactly 500 with no headroom, and Samuel's Waiting/Idle ruling needed a new derivation
-// plus the argument for it — a file at the cap does not just stop growing, it stops being
-// CORRECTABLE, which is the state F-226 was taken out of.
-//
-// THE SEAM IS REASON-TO-CHANGE, and it is a real one. THIS file answers "given the reducer's
+// THE SEAM IS REASON-TO-CHANGE. THIS file answers "given the reducer's
 // state, what word does a person see" — one input, no session object, no registry, no I/O. It
 // changes when the VOCABULARY changes. `session-summary.js` owns the PROJECTION: which sessions
 // exist, what identity and measurements ride with each, when the digest moved and who is told.
 // It changes when the shape of a summary changes. They shared a file because the projection is
 // the mapping's only caller, which is not the same thing as being one concern.
 //
-// ⚠ ONE DERIVATION, AND NOW ONE IMPORT PATH. The split shipped with a compatibility re-export in
-// `session-summary.js` ("every existing reader is unchanged"), and on 2026-08-22 a census found
-// that re-export had NO production reader in either tree — only this suite's harnesses, which
-// already require THIS module. It is deleted: **require this file.** Two names for one function
-// is how a second mapping gets added without anyone deciding to, and two readers deriving state
-// their own way and disagreeing in production is the defect the pills exist to delete (F-142).
+// ⚠ ONE DERIVATION, ONE IMPORT PATH: **require this file**, never a re-export. Two readers deriving
+// state their own way and disagreeing is the defect the pills exist to delete (F-142).
 //
 // PURE, and it must stay so: no require below the sentinel, no session object, no clock.
 

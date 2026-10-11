@@ -4,10 +4,8 @@
 // ⚠ SAMUEL'S RULING, 2026-08-31: **the user's OWN agents may `direct_agent` each other privately.
 // Another user's agent: NEVER — channel or thread only; the existing fence stays for peers.**
 //
-// §2 SPLIT, on `session-own-launch.js`'s own precedent (which split out of `session-profiles.js`
-// on the same argument on 2026-08-25): a ruling needs its ADMISSION ARGUMENT written down beside
-// the list it admits, and `session-profiles.js` is AT the 500-line cap. PURE, with NO require at
-// all: one frozen op list, one scope rule, one posture rule.
+// Its own module so the ruling's ADMISSION ARGUMENT sits beside the list it admits. PURE, with NO
+// require at all: one frozen op list, one scope rule, one posture rule.
 //
 // ⚠ IT CLASSIFIES; IT DOES NOT DELIVER. Nothing here starts a turn, claims a row or decides one.
 //

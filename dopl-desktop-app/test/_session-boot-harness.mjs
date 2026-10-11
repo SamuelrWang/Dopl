@@ -105,11 +105,13 @@ const storePure = new Function(
 )();
 
 // ...and the REAL record readers the two record-driven rebuilds share.
+// `knownProfile` delegates to `tool-profiles.js › normalizeProfile` (one profile rule), so the REAL
+// module is injected under the name session-park.js binds it to.
 const parkReaders = new Function(
+  "toolProfiles",
   `${fnOf(PARK_SRC, "knownProfile")}\n${fnOf(PARK_SRC, "contextFromRecord")}\n` +
-    `${(PARK_SRC.match(/^const KNOWN_PROFILES = [^\n]*$/m) || [])[0]}\n` +
     ` return { knownProfile, contextFromRecord };`
-)();
+)(require_(join(MAIN, "tool-profiles.js")));
 
 const CHANNEL = "bb0f57db-1111-4222-8333-444455556666";
 const KEY = `${CHANNEL}::y1uun32v`; // ⚠ the INCIDENT's own key shape: a CHANNEL-LEVEL agent, so the thread segment is empty
@@ -194,11 +196,13 @@ function harness(over = {}) {
   });
 
   // The REAL `resumeParked`, so "resumable" is the shipped function accepting this shape.
+  // session-park.js binds these two at module scope; the block calls them.
+  const __parkShared = [createRequire(import.meta.url)("../main/tool-profiles.js"), createRequire(import.meta.url)("../main/session-handles.js")];
   const park = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
+    "toolProfiles", "sessionHandles", "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
     "directedTurn", "sessionWindowless", "diag", "sessionCredential", "runtimeRegistry", "runtimeCapability",
     `${PARK_BLOCK}\n return { bind, resumeParked, startResume };`
-  )({ makePushIterator: () => ({ __iter: true, pushed: [], push(m) { this.pushed.push(m); }, close() { this.closed = true; } }) },
+  )(...__parkShared, { makePushIterator: () => ({ __iter: true, pushed: [], push(m) { this.pushed.push(m); }, close() { this.closed = true; } }) },
     store, crypto, () => "zzzzzzzz", () => true, null,
     require_(join(MAIN, "session-private.js")), require_(join(MAIN, "session-directed.js")),
     { MAX_CONCURRENT_SESSIONS: 15, liveCount: (m) => { let n = 0; for (const s of m.values()) if (!s.settled) n += 1; return n; } },

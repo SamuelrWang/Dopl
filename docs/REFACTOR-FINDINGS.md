@@ -7665,7 +7665,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE DRIFT IS SILENT IN THE ONE DIRECTION THAT MATTERS.** A profile missing from the park copy does not refuse — it RECREATES the session at `read_only`, which reads as an agent that has quietly lost its tools, which is F-267's symptom exactly.
 - ⚠ **WHY IT WAS NOT DEDUPLICATED HERE.** `session-park.js`'s pure block may not reference `require(`, and every extraction harness that slices it would have to inject a new module-scope identifier — five test files, none of them this slice's. The test is the cheap half of the fix.
 - Proposed resolution: bind `normalizeProfile` at module scope beside `directedTurn` / `runtimeCapability` (both of which the pure block already reads that way) and delete the Set, injecting it in the five harnesses in one change.
-- Status: open.
+- Status: **RESOLVED 2026-10-11 (cleanup D06, 3f029707)** as proposed: `session-park.js` binds `toolProfiles` (and `sessionHandles`) at module scope, `knownProfile` returns `toolProfiles.normalizeProfile(p)`, the Set is deleted, and every slicer injects the real module. The parity test named above is replaced by `test/channel-agent-profile.test.mjs` › *"the DURABLE record resumes through the table's own rule — one profile vocabulary"* (behavioural; the unknown value goes through the table's reporter).
 
 ### F-513 — "shared container" is `kind='link'` only, so a multi-member `standard` workspace is "solo" (2026-09-02)
 

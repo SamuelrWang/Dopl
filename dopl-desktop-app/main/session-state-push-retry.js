@@ -1,9 +1,8 @@
 // THE FAILURE LANE of `main/session-state-push.js` — the once-per-shape log line, the
 // `retryable` status rule, and (2026-09-14) THE BACKOFF THAT MAKES A FAILED RECONCILE LAND.
 //
-// ⚠ ITS OWN MODULE for the reason `session-state-push-wire.js` is: that file sits at the
-// 500-line cap, and this is a real seam — it changes when FAILURE handling changes, where the
-// rest of the writer changes when the PUSH does. It is MINTED PER WRITER because it REMEMBERS
+// ⚠ ITS OWN MODULE because it changes when FAILURE handling changes, where the rest of the
+// writer changes when the PUSH does. It is MINTED PER WRITER because it REMEMBERS
 // three things: the failure shapes it has already said out loud, how many cycles have failed in
 // a row, and the one timer it may hold.
 //

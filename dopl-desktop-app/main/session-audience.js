@@ -2,11 +2,7 @@
 
 // session-audience.js — THE AUDIENCE CEILING'S DESKTOP BELT (plan §4.4 B2).
 //
-// ⚠ SPLIT OUT OF `main/session-profiles.js` (2026-08-26) under the hard 500-line cap, which that
-// file was sitting exactly on. §1's rule applied literally: a file at the cap does not merely stop
-// growing, it stops being CORRECTABLE — and this is a new REASON TO CHANGE for the gate rather
-// than another line of an existing one. `session-own-outbound.js` and `session-own-launch.js` came
-// off the same file for the same reason.
+// Its own module (out of `session-profiles.js`): a separate REASON TO CHANGE for the gate.
 //
 // WHAT IT DECIDES: an agent whose session is CONTAINER-ONLY — spawned into a `kind='link'`
 // container that has a PEER in it — asked a dopl tool to act in a DIFFERENT workspace. This

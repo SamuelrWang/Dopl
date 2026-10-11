@@ -17,6 +17,9 @@ const { diag } = require('./diag');
 const sessionCredential = require('./session-credential');
 const runtimeRegistry = require('./runtime');
 const runtimeCapability = runtimeRegistry.capability;
+// The block's two shared rules, at module scope because the PURE block may not `require(`.
+const toolProfiles = require('./tool-profiles');
+const sessionHandles = require('./session-handles');
 
 // ─── BEGIN SESSION-PARK-PURE (injectable; unit-tested via source extraction) ──────
 
@@ -27,12 +30,10 @@ function bind(d) {
   deps = d || null;
 }
 
-// Profiles a record may carry; anything else resumes `read_only` (fail restrictive). A copy of
-// `tool-profiles.js › KNOWN_PROFILES` (the block may not require), held equal by channel-agent-profile.test.
-const KNOWN_PROFILES = new Set(['full', 'dopl_only', 'channel_agent', 'read_only']);
-
+// The profile a record may resume at: `tool-profiles.js › normalizeProfile`, which fails closed to
+// `read_only` (and logs the unknown value). Exported under this name for `session-boot.js`.
 function knownProfile(p) {
-  return KNOWN_PROFILES.has(p) ? p : 'read_only';
+  return toolProfiles.normalizeProfile(p);
 }
 
 /**
@@ -69,16 +70,6 @@ function contextFromRecord(rec) {
   };
 }
 
-// Reap the prior child BEFORE a resume assigns fresh handles (assigning them makes the old ones unreachable):
-// a Codex thread has one writer (`-32600`) and dies only on `handle.close()`. Never throws. The same three
-// steps as `session-handles.js › teardownHandles`, which this block may not require.
-function reapPriorChild(s) {
-  const prior = s.query;
-  try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
-  try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
-  try { if (prior && typeof prior.close === 'function') prior.close(); } catch (_) { /* best effort */ }
-}
-
 // Resume a PARKED session IN PLACE. The new controller and iterator are assigned SYNCHRONOUSLY so the push
 // the reducer queues next lands on them.
 function resumeParked(s) {
@@ -93,7 +84,9 @@ function resumeParked(s) {
   }
   // Decided before any teardown, off the record's word where the session has one.
   const usageZeroes = runtimeCapability.resumeZeroesBaseline(descriptor, s.usageBaseline);
-  reapPriorChild(s);
+  // Reap the prior child BEFORE assigning fresh handles (assigning them makes the old ones unreachable):
+  // a Codex thread has one writer (`-32600`) and dies only on `handle.close()`.
+  sessionHandles.teardownHandles(s);
   // A rebuilt query owes no results: the private window and any directed capture reset with it.
   s.resuming = true;
   privateTurn.resetPrivateTurn(s); privateTurn.resetPeerTurn(s);
@@ -201,7 +194,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
     // The same instance id, else it comes back as a stranger (slot, pill, @-address).
     agentId: agentId, bind: rec.bind === 'room' ? 'room' : 'pair',
-    // Fail restrictive: a raw stored profile would fall through `normalizeProfile`'s fallback to FULL.
+    // Fail restrictive: an unknown stored profile resumes `read_only`, never the stored string.
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
     // The launch stamps are restored, never minted; absent reads as the cap at the gate.
     launchDepth: rec.launchDepth, launchChain: rec.launchChain === true, operatorTools: rec.operatorTools,

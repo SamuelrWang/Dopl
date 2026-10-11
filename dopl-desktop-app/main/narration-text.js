@@ -1,15 +1,9 @@
 // NARRATION TEXT SHAPING — the four caps and the two shapers, and the RULE that keeps them
 // apart: a CAPTION is flattened, a MESSAGE keeps its shape.
 //
-// ⚠ §2 SPLIT OUT OF `main/session-narration.js` ON 2026-08-31, under the hard 500-line §1 cap.
-// That file took the raised `PROSE_CAP` + the `truncated` confession (Samuel's cutoff report),
-// the sender caption (F-376a) and the newline rule (F-376b) in one day and went 43 lines over.
-//
-// THE SEAM IS REASON-TO-CHANGE, and it is a real one rather than a place the file happened to be
-// long: **this file changes when the answer to "how is a string bounded and shaped on its way to
-// a renderer" changes.** `session-narration.js` changes when the RING, the event mapping or the
-// fan-out changes. The three edits above were all this question and none of the other, which is
-// the evidence the seam is where it belongs.
+// THE SEAM: **this file changes when the answer to "how is a string bounded and shaped on its
+// way to a renderer" changes.** `session-narration.js` changes when the RING, the event mapping
+// or the fan-out changes.
 //
 // ⚠ PURE, WITH NO REQUIRE AT ALL. `session-narration.js` re-exports every member below, so no
 // caller and no test moved.

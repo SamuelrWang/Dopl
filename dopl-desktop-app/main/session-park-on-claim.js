@@ -87,11 +87,9 @@ function sessionsToStop(liveSessions, newlyShared) {
   );
 }
 
-// `claimNotice` wrote the banner's copy and is GONE with it (Samuel's spec, 2026-10-09): the
-// count, and the line telling the operator a new session only reaches knowledge shared into the
-// channel. Nothing else called it. ⚠ THAT SCOPE WARNING NOW HAS NO NOTIFICATION CARRYING IT —
-// the Agents tab shows the sessions ended, not why a new one sees less. If that turns out to
-// matter it belongs in the Agents tab, not in a re-added banner.
+// ⚠ No notification carries the scope warning (Samuel's spec, 2026-10-09, removed the banner):
+// the Agents tab shows the sessions ended, not why a new one sees less. If that matters it
+// belongs in the Agents tab, not in a re-added banner.
 
 // ─── END PARK-ON-CLAIM-PURE ────────────────────────────────────────────────
 
@@ -101,9 +99,8 @@ let seenShared = null;
 /**
  * Called once per reconcile pass with the workspace list that pass already fetched.
  *
- * ⚠ LAZY `require`s, both of them. `session-engine.js` is at the 500-line cap and cannot take a
- * bind line, and a top-level require of it from a module the LISTENER requires would close a
- * cycle. The tray does exactly this, for exactly this reason.
+ * ⚠ LAZY `require`s, both of them: a top-level require of `session-engine.js` from a module the
+ * LISTENER requires would close a cycle. The tray does exactly this, for exactly this reason.
  *
  * ⚠ BEST-EFFORT THROUGHOUT. This runs inside the reconcile pass that keeps every channel loop
  * alive; a throw here would take the listener down to end a session, which is a worse outcome
@@ -143,9 +140,6 @@ function noteWorkspaces(workspaces, diag) {
   }
   return ended;
 }
-
-// `notifyOperator` raised the banner and is GONE (Samuel's spec, 2026-10-09). This module now
-// ends sessions and logs; it raises nothing, and `electron` is no longer required anywhere in it.
 
 /** Test seam: drop the memo so a suite can replay a cold start. */
 function resetForTests() {

@@ -71,6 +71,12 @@ for (const banned of ["require(", "electron", "process.", "child_process", "@ant
   assert.ok(!BLOCK.includes(banned), `SESSION-PARK-PURE block must not reference ${banned}`);
 }
 
+// The two shared rules the block calls are injected below as the REAL modules, so the module must
+// bind them to exactly those modules above its sentinel — one profile rule, one teardown.
+const PARK_HEADER = SRC.slice(0, SRC.indexOf(BLOCK));
+assert.match(PARK_HEADER, /^const toolProfiles = require\('\.\/tool-profiles'\);$/m);
+assert.match(PARK_HEADER, /^const sessionHandles = require\('\.\/session-handles'\);$/m);
+
 const flush = () => new Promise((r) => setImmediate(r));
 
 // ⚠ THE CEILING, READ OUT OF THE FILE THAT OWNS IT (2026-08-22, F-272). `session-windowless.js`
@@ -150,8 +156,10 @@ function harness(over = {}) {
   // `session-windowless.js`'s source.
   const MAX = cfg.cap === undefined ? REAL_MAX : cfg.cap;
   const liveCount = (map) => { let n = 0; for (const s of map.values()) if (!s.settled) n += 1; return n; };
+  // session-park.js binds these two at module scope; the block calls them.
+  const __parkShared = [createRequire(import.meta.url)("../main/tool-profiles.js"), createRequire(import.meta.url)("../main/session-handles.js")];
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "notificationRoute", "privateTurn",
+    "toolProfiles", "sessionHandles", "io", "store", "crypto", "newAgentId", "isAgentId", "notificationRoute", "privateTurn",
     // ⚠ `directedTurn` JOINED THE INJECTED SET ON 2026-08-31 (the private direct lane).
     // `resumeParked` drops a DIRECTED capture for the same reason it zeroes the private
     // depth: a rebuilt query owes no results, so a capture carried across a resume would
@@ -160,7 +168,7 @@ function harness(over = {}) {
     "directedTurn",
     "sessionWindowless", "diag", "sessionCredential", "runtimeRegistry", "runtimeCapability",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
-  )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, notificationRoute,
+  )(...__parkShared, io, store, crypto, agentId.newAgentId, agentId.isAgentId, notificationRoute,
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-directed.js")),
     { MAX_CONCURRENT_SESSIONS: MAX, liveCount }, diag,

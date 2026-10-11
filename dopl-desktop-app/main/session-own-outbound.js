@@ -1,11 +1,8 @@
 // THE OWN-CHANNEL OUTBOUND SHAPES BESIDE THE PLAIN POST — AXIS B's outbound half for the
 // `dopl_channel` sends that carry a `kind` or open a thread.
 //
-// §2 SPLIT out of session-profiles.js (2026-08-24, Samuel's create_thread ruling). That file
-// measured 496 of the 500-line cap, and the ruling needed the ADMISSION ARGUMENT written down
-// beside the list it admits to — a file at the cap does not just stop growing, it stops being
-// correctable, which is the same reason session-grant-keys.js was split out (2026-08-02) and
-// session-preset-census.test.mjs before it.
+// Its own module (out of session-profiles.js, Samuel's create_thread ruling 2026-08-24) so the
+// ruling's ADMISSION ARGUMENT sits beside the list it admits to.
 //
 // PURE: op lists, one scope rule over them, and the ONE key spelling (`channel-op-key.js`) every
 // classifier in this tree matches through — no electron, no state, no I/O.
