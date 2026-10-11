@@ -125,6 +125,19 @@ async function listContainersForCaller(
  * `workspace_members` read, so clauses 2 and 4 still apply and every other container stays fenced.
  * A closed answer stays `[lock]`, never a refusal, so the id takes the ordinary 404 path.
  */
+/**
+ * Clause 3's container set for a LOCKED credential (its lock plus its home space), or `null` when
+ * unlocked. ⚠ THE ONE SPELLING every grant read passes as `grantedResourceIds(…, { lock })`, so a
+ * feature's grant arm narrows exactly as the resolver does (#3610; identity bases, Batch 11).
+ */
+export async function credentialLockFor(
+  caller: ResourceCaller
+): Promise<readonly string[] | null> {
+  return caller.apiKeyWorkspaceId
+    ? lockedCandidates(caller, caller.apiKeyWorkspaceId)
+    : null;
+}
+
 async function lockedCandidates(
   caller: ResourceCaller,
   lockedWorkspaceId: string
@@ -155,9 +168,7 @@ async function findResources(
   // Clause 1: a shared credential never even queries.
   if (isSharedCredential(caller)) return [];
   // Clause 3's container set, asked once and used by both arms (the grant arm too, #3610).
-  const lock = caller.apiKeyWorkspaceId
-    ? await lockedCandidates(caller, caller.apiKeyWorkspaceId)
-    : null;
+  const lock = await credentialLockFor(caller);
   const containers = await listContainersForCaller(caller, lock);
   if (containers.size === 0) return [];
   const spec = RESOURCE_TABLES[type];
