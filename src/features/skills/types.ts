@@ -125,24 +125,6 @@ export interface WorkspaceKbSummary {
   name: string;
 }
 
-/** Metadata projection for `skill_list` / library cards. No body — keeps
- *  the index payload small. */
-export interface SkillSummary {
-  id: string;
-  slug: string;
-  publicId: string;
-  name: string;
-  description: string;
-  whenToUse: string;
-  whenNotToUse: string | null;
-  status: SkillStatus;
-  agentWriteEnabled: boolean;
-  visibility: Visibility;
-  accessMode: SkillAccessMode;
-  folder: string | null;
-  updatedAt: string;
-}
-
 /** `resolveSkillBody` output: body plus an availability check per
  *  reference. Drives `skill_get` and the detail page's broken-ref badges. */
 export interface ResolvedSkillReference {
