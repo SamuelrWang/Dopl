@@ -32,10 +32,18 @@ export function AuthSplitLayout({
   children,
   brand,
   bannerSrc = WEB_BANNER_SRC,
-  glassPose = "default",
+  glassPose,
 }: {
   children: ReactNode;
-  /** Pose for the right pane's glass panel; omitted = today's static slab. */
+  /**
+   * Pose for the right pane's glass panel.
+   *
+   * ⚠ OMITTED IS NOT THE SAME AS `"default"`, and the difference is
+   * load-bearing: a caller that passes nothing is a PLAIN AUTH SURFACE
+   * (login, signup, `/oauth/authorize`, the desktop signed-out screen) and
+   * gets the geometry it had before any of this. Only a caller that names a
+   * pose is onboarding, and only onboarding gets the footer padding below.
+   */
   glassPose?: AuthGlassPose;
   /** Pinned to the PAGE's upper-left corner, matching the landing nav
    *  (`features/marketing/marketing.css` › .lp-brand). Optional: the desktop
@@ -85,23 +93,40 @@ export function AuthSplitLayout({
         </div>
       )}
       <div className="mx-auto flex h-full max-w-[1500px] items-stretch gap-10 p-6 md:p-10">
-        {/* ⚠ `py-7`, NOT `pb-7`, and the symmetry is load-bearing. This column
-            scrolls, so it clips at its PADDING box — which was cutting the
-            footer button's drop shadow off at the bottom edge (Samuel #3064).
-            Bottom room has to clear the HOVER shadow (`0 10px 24px`,
-            `--shadow-raised-hover`), not the resting `0 6px 16px`, or it
-            reappears on hover alone; 28px covers it.
-            Padding on BOTH sides keeps the centring exactly where it was: the
-            child's `min-h-full` resolves against this element's CONTENT box, so
-            equal padding shifts the box down 28px and shortens it 56px, leaving
-            the centre on the same pixel. `pb` alone would lift every auth form
-            14px. `scroll-pb-7` keeps scrollIntoView from parking the button
-            flush against the clip again. */}
-        <div className="flex-[4] overflow-y-auto py-7 scroll-pb-7">
+        {/* ⚠ THE PADDING IS INLINE STYLE AND ONBOARDING-ONLY, and both halves
+            were learned by measuring rather than reasoning.
+            INLINE because this file's geometry must be: Tailwind's scan does
+            not reliably emit this file's utilities for every route chain (the
+            same note the glass panel below carries). Shipped as `py-7` first —
+            the class sat in the DOM on web with NO rule emitted and padding
+            computing to 0, so the fix worked in the desktop SPA and did
+            nothing on the web. A class-name assertion would have passed.
+            ONBOARDING-ONLY because that is whose button it is (Samuel #3064),
+            and onboarding exists solely in the desktop SPA. Login, signup,
+            `/oauth/authorize` and the signed-out screen pass no pose and keep
+            the geometry they have always had.
+            SYMMETRIC, not `paddingBottom` alone: the child's `min-h-full`
+            resolves against this element's CONTENT box, so equal padding
+            shifts it down 28 and shortens it 56, leaving the centre on the
+            same pixel. Bottom alone would lift the form 14px.
+            28px clears the HOVER shadow (`0 10px 24px`,
+            `--shadow-raised-hover`), not the resting `0 6px 16px` — pad for
+            the resting one and it clips again exactly on hover. */}
+        <div
+          className="flex-[4] overflow-y-auto"
+          style={
+            glassPose
+              ? { paddingTop: 28, paddingBottom: 28, scrollPaddingBottom: 28 }
+              : undefined
+          }
+        >
           <div className="flex min-h-full items-center justify-center">{children}</div>
         </div>
         <div className="hidden flex-[5] md:block">
-          <AuthBannerPanel src={bannerSrc} pose={glassPose} />
+          {/* A surface that names no pose renders the panel's historical
+              slab: `"default"` IS that slab. Only the padding above cares
+              about the omitted-vs-default distinction. */}
+          <AuthBannerPanel src={bannerSrc} pose={glassPose ?? "default"} />
         </div>
       </div>
     </main>
