@@ -118,6 +118,106 @@ describe("🔒 a non-member sees NOTHING from a container", () => {
   });
 });
 
+describe("🔒 a grant reaches a locked credential only from inside its lock", () => {
+  /**
+   * Batch 11's policy call, the same class as #3610: the lock narrows search to ONE container
+   * (the case above), but the per-row grant arm (`repository-visibility.ts › grantSets`) asked
+   * `grantedResourceIds` with no lock. So a row that LIVES in the locked container, private to
+   * somebody else, lent only to a scope OUTSIDE the lock, was served — the knowledge base by its
+   * entries' text, the identity by name.
+   */
+  function withForeignGrant(scope: string): FakeTables {
+    const tables = world();
+    // A grant is reached only at the `viewer` floor (`resource-grant-reach.ts ›
+    // CONTAINER_READ_FLOOR`), and the world's rows carry no role (it reads as `guest`).
+    (tables.workspace_members[0] as { role?: string }).role = "member";
+    tables.workspace_members.push(
+      { workspace_id: WS_MINE, user_id: STRANGER, status: "active" },
+      // The grant's scope is reachable: ME really is in the locked-out container.
+      { workspace_id: WS_THEIRS, user_id: ME, status: "active", role: "member" }
+    );
+    tables.knowledge_bases.push({
+      id: "kb-lent",
+      name: "Lent",
+      workspace_id: WS_MINE,
+      visibility: "private",
+      created_by: STRANGER,
+      deleted_at: null,
+    });
+    tables.knowledge_entries.push({
+      id: "kn-lent",
+      title: "zephyr lent",
+      body: "zephyr",
+      knowledge_base_id: "kb-lent",
+      workspace_id: WS_MINE,
+      updated_at: "2026-09-02T00:00:00Z",
+      deleted_at: null,
+    });
+    tables.agent_identities.push({
+      id: "tpl-lent",
+      name: "zephyr lent bot",
+      description: null,
+      workspace_id: WS_MINE,
+      visibility: "private",
+      created_by: STRANGER,
+      updated_at: "2026-09-02T00:00:00Z",
+    });
+    tables.resource_grants = [
+      {
+        resource_type: "knowledge_base",
+        resource_id: "kb-lent",
+        scope_type: "container",
+        scope_id: scope,
+        level: "read",
+      },
+      {
+        resource_type: "agent_identity",
+        resource_id: "tpl-lent",
+        scope_type: "container",
+        scope_id: scope,
+        level: "read",
+      },
+    ];
+    return tables;
+  }
+
+  it("LOCKED to mine: a row lent only to a scope in the other container is hidden", async () => {
+    mount(withForeignGrant(WS_THEIRS));
+
+    const out = await runSearch(
+      { ...CTX, lockedWorkspaceId: WS_MINE },
+      { q: "zephyr", scope: "account" }
+    );
+
+    const ids = allItems(out.groups).map((i) => i.id);
+    expect(ids).not.toContain("kn-lent");
+    expect(ids).not.toContain("tpl-lent");
+  });
+
+  it("LOCKED to mine: a row lent to a scope INSIDE the lock is still served", async () => {
+    mount(withForeignGrant(WS_MINE));
+
+    const out = await runSearch(
+      { ...CTX, lockedWorkspaceId: WS_MINE },
+      { q: "zephyr", scope: "account" }
+    );
+
+    const ids = allItems(out.groups).map((i) => i.id);
+    expect(ids).toContain("kn-lent");
+    expect(ids).toContain("tpl-lent");
+  });
+
+  it("UNLOCKED: the same foreign grant still serves both rows (unchanged)", async () => {
+    mount(withForeignGrant(WS_THEIRS));
+
+    const out = await runSearch(CTX, { q: "zephyr", scope: "account" });
+
+    const ids = allItems(out.groups).map((i) => i.id);
+    expect(ids).toContain("kn-lent");
+    expect(ids).toContain("tpl-lent");
+  });
+});
+
 describe("🔒 home scope never returns members / skills / chats", () => {
   it("does not QUERY those tables at all", async () => {
     const queries = mount();
