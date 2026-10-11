@@ -88,9 +88,6 @@ async function models() {
   return roster;
 }
 
-/** Drop the cache (tests, an explicit re-probe). */
-function forget() { cached = null; }
-
 // Descriptor half.
 const descriptor = {
   source: 'live',
@@ -106,4 +103,4 @@ const descriptor = {
   dimensionOptions: null,
 };
 
-module.exports = { models, forget, descriptor, LIST_TIMEOUT_MS };
+module.exports = { models, descriptor };
