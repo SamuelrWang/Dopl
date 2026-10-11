@@ -30,6 +30,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { boot, WS, CH, row } from "./_launch-directive-harness.mjs";
+import { fnOf } from "./helpers/source-probe.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -154,15 +155,23 @@ test("KNOWN_PROFILES is the four, and an unknown value still fails closed", () =
   }
 });
 
-test("the DURABLE record's profile set is held EQUAL to the table's", () => {
-  // ⚠ `session-park.js` carries a second copy (its PURE block may not `require`), and a profile
-  // missing there does not fail loudly — it silently RECREATES every parked session carrying it
-  // at `read_only`. Source-probed, because that copy is a literal inside an extracted block.
-  const src = readMain("session-park.js");
-  const m = /const KNOWN_PROFILES = new Set\(\[([^\]]*)\]\)/.exec(src);
-  assert.ok(m, "session-park.js must declare KNOWN_PROFILES as a Set over a literal array");
-  const parked = m[1].split(",").map((s) => s.trim().replace(/^'|'$/g, "")).filter(Boolean);
-  assert.deepEqual(parked.slice().sort(), PROFILES.KNOWN_PROFILES.slice().sort());
+test("the DURABLE record resumes through the table's own rule — one profile vocabulary", () => {
+  // `session-park.js › knownProfile` (resume + boot) must BE `normalizeProfile`, not a second copy:
+  // a profile missing from a copy silently recreates every parked session carrying it at
+  // `read_only`. Driven with the REAL tool-profiles module injected, and the unknown-value
+  // reporter spied — only the table's own rule calls it.
+  const knownProfile = new Function(
+    "toolProfiles", `${fnOf(readMain("session-park.js"), "knownProfile")}\n return knownProfile;`
+  )(PROFILES);
+  const seen = [];
+  PROFILES.onUnknownProfile((v) => seen.push(v));
+  try {
+    for (const p of PROFILES.KNOWN_PROFILES) assert.equal(knownProfile(p), p, p);
+    assert.equal(knownProfile("channel-agent"), "read_only");
+    assert.deepEqual(seen, ["channel-agent"], "an unknown record value goes through the table's reporter");
+  } finally {
+    PROFILES.onUnknownProfile(() => {});
+  }
 });
 
 test("the label and the hint exist for it — a consent card must never fall back to full's", () => {

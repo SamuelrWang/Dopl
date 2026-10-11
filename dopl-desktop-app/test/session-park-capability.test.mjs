@@ -131,8 +131,10 @@ function harness(over = {}) {
     MAX_CONCURRENT_SESSIONS: cfg.cap === undefined ? REAL_MAX : cfg.cap,
     liveCount: (map) => { let n = 0; for (const s of map.values()) if (!s.settled) n += 1; return n; },
   };
+  // session-park.js binds these two at module scope; the block calls them.
+  const __parkShared = [createRequire(import.meta.url)("../main/tool-profiles.js"), createRequire(import.meta.url)("../main/session-handles.js")];
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
+    "toolProfiles", "sessionHandles", "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "privateTurn",
     // ⚠ `directedTurn` JOINED THE INJECTED SET ON 2026-08-31 (the private direct lane).
     // `resumeParked` drops a DIRECTED capture for the same reason it zeroes the private
     // depth: a rebuilt query owes no results, so a capture carried across a resume would
@@ -141,7 +143,7 @@ function harness(over = {}) {
     "directedTurn",
     "sessionWindowless", "diag", "sessionCredential", "runtimeRegistry", "runtimeCapability",
     `${BLOCK}\n return { bind, resumeParked, startResume };`
-  )(io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
+  )(...__parkShared, io, store, crypto, agentId.newAgentId, agentId.isAgentId, Notification,
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js")),
     createRequire(import.meta.url)(join(HERE, "..", "main", "session-directed.js")),
     sessionWindowless, diag,

@@ -62,11 +62,13 @@ function harness() {
   // deliberately out of their way; its own cases live in `session-park.test.mjs`. A resume
   // refused here would pass every budget assertion vacuously by constructing nothing.
   const sessionWindowless = { MAX_CONCURRENT_SESSIONS: Number.MAX_SAFE_INTEGER, liveCount: () => 0 };
+  // session-park.js binds these two at module scope; the block calls them.
+  const __parkShared = [createRequire(import.meta.url)("../main/tool-profiles.js"), createRequire(import.meta.url)("../main/session-handles.js")];
   const api = new Function(
-    "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "sessionWindowless", "diag",
+    "toolProfiles", "sessionHandles", "io", "store", "crypto", "newAgentId", "isAgentId", "Notification", "sessionWindowless", "diag",
     "runtimeRegistry", "runtimeCapability",
     `${BLOCK}\n return { bind, startResume };`
-  )(io, store, { randomBytes: () => ({ toString: () => "beef" }) }, ids.newAgentId, ids.isAgentId, null,
+  )(...__parkShared, io, store, { randomBytes: () => ({ toString: () => "beef" }) }, ids.newAgentId, ids.isAgentId, null,
     sessionWindowless, () => {},
     // ⚠ THE RESUME CAPABILITY (2026-08-31, port wave D). `resumeParked` / `startResume` refuse a
     // resume on a runtime whose `session.usageResetsOnResume` is `'unverified'`, because a runtime

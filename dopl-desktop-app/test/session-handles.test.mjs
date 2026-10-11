@@ -78,6 +78,6 @@ test("every teardown site goes through the helper", () => {
   assert.match(fnOf(read("session-teardown.js"), "settle"), /teardownHandles\(s\);/);
   assert.match(fnOf(read("session-query.js"), "abortInFlight"), /teardownHandles\(s, \{ supersede: true \}\);/);
   assert.match(fnOf(read("session-auth.js"), "holdIfAuthFailure"), /deps\.teardown\(s\);/);
-  // The resume door's reap is in a pure block that may not require, so it repeats the steps inline.
-  assert.match(fnOf(read("session-park.js"), "reapPriorChild"), /typeof prior\.close === 'function'\) prior\.close\(\)/);
+  // The resume door reaches the helper through a module-scope binding (its pure block may not require).
+  assert.match(fnOf(read("session-park.js"), "resumeParked"), /sessionHandles\.teardownHandles\(s\);/);
 });
