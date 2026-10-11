@@ -5,7 +5,7 @@
 //
 //   control  a turn started at once (the old pump) is built without Dopl: the first request cannot find it
 //   fix      the same slow server through `start()`: the first request carries Dopl
-//   failed   an unreachable server: the turn still runs, and one line says Dopl's tools did not connect
+//   failed   an unreachable server: the agent does NOT run (F-692), and one line says the tools did not connect
 //   close    a close during the wait ends the stream and the child, and no request reaches the model
 
 import { test, describe } from 'node:test';
@@ -25,11 +25,15 @@ const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
 const launchSpec = require(join(CODEX, 'launch-spec.js'));
 const configHome = require(join(CODEX, 'config-home.js'));
+const operatorTools = require(join(CODEX, 'operator-tools.js'));
 const { normalize } = require(join(CODEX, 'normalize.js'));
 
 const GATE = announceGate(liveGate());
 const SLOW_MS = 2000;
 const BUDGET_MS = 60000;
+// How long a NO-TURN claim is watched after the failure report: a turn that was going to start has
+// started and reached the model well inside this (measured: the mutation trips it in ~200ms).
+const MUTE_GRACE_MS = 2000;
 const UNREACHABLE = 'http://127.0.0.1:1/api/mcp';
 
 /** Dopl's MCP endpoint whose `initialize` answers after `delayMs`; `readyAt` is when `tools/list` answered. */
@@ -81,11 +85,12 @@ function pushQueue() {
 }
 
 /** Dopl's real launch spec with the stand-in URL, the stub provider and a fresh cwd. */
-function doplSpec({ modelPort, url, prompts, cwd, lines }) {
+function doplSpec({ modelPort, url, prompts, cwd, lines, useMyTools }) {
   const spec = launchSpec.buildLaunchSpec({
     session: {
       key: 'live:codex:mcp-ready', profile: 'full', channelId: CH, state: {}, workspaceId: 'ws',
       model: STUB_MODEL.searchPath, containerToken: { token: 'mcp-ready-bearer' }, pushIterator: prompts,
+      ...(useMyTools ? { operatorTools: 'shared' } : null),
     },
     dispatch: () => {},
   });
@@ -101,20 +106,29 @@ function doplSpec({ modelPort, url, prompts, cwd, lines }) {
 }
 
 /** One launch through `start()`: push `hello`, collect frames to the first `turn/completed` (or `close`). */
-async function launched(t, { url, delayMs = SLOW_MS, closeAfterLaunchMs = null }) {
+async function launched(t, {
+  url, delayMs = SLOW_MS, closeAfterLaunchMs = null, operatorServers = null, untilMcpStatus = false,
+}) {
   const model = await scriptedModel(null);
   const dopl = await slowDopl(delayMs);
   const cwd = mkdtempSync(join(tmpdir(), 'dopl-codex-mcp-ready-'));
   const prompts = pushQueue();
   const lines = [];
-  const spec = doplSpec({ modelPort: model.port, url: url === undefined ? dopl.url : url, prompts, cwd, lines });
+  const spec = doplSpec({
+    modelPort: model.port, url: url === undefined ? dopl.url : url, prompts, cwd, lines,
+    useMyTools: !!operatorServers,
+  });
   let conn = null;
   const realConnect = client.connect;
+  const realOperator = operatorTools.operatorServers;
+  // The operator's own config is never read in a test; the table they WOULD have contributed is injected.
+  if (operatorServers) operatorTools.operatorServers = async () => ({ ...operatorServers });
   client.connect = (o) => { conn = realConnect(o); return conn; };
   const t0 = Date.now();
   const handle = launchSpec.start(spec);
   t.after(async () => {
     client.connect = realConnect;
+    operatorTools.operatorServers = realOperator;
     handle.close();
     if (conn) await terminateConn(conn);
     await model.close();
@@ -125,6 +139,7 @@ async function launched(t, { url, delayMs = SLOW_MS, closeAfterLaunchMs = null }
   const events = [];
   let ended = false;
   let turnStartedAt = null;
+  let graceAt = null;
   const budget = setTimeout(() => handle.close(), BUDGET_MS);
   try {
     for (;;) {
@@ -134,9 +149,16 @@ async function launched(t, { url, delayMs = SLOW_MS, closeAfterLaunchMs = null }
       // The wait begins as the thread handle lands; close inside it.
       if (value && value.method === 'dopl/threadStarted' && closeAfterLaunchMs != null) setTimeout(() => handle.close(), closeAfterLaunchMs);
       events.push(...normalize(value, {}));
+      // F-692: no turn starts without Dopl's tools, so there is no `turn/completed` to wait for and
+      // BUDGET_MS would just burn. But the claim is a NEGATIVE one, so the read cannot stop at the report
+      // either: it keeps going for a grace window, long enough that a turn which WAS going to start has
+      // started and reached the model. Closing is what ends the loop; what arrived in between is the proof.
+      if (untilMcpStatus && !graceAt && events.some((e) => e.type === 'mcp_status_report')) {
+        graceAt = setTimeout(() => handle.close(), MUTE_GRACE_MS);
+      }
       if (value && value.method === 'turn/completed') { ended = true; break; }
     }
-  } finally { clearTimeout(budget); }
+  } finally { clearTimeout(budget); clearTimeout(graceAt); }
   return {
     requests: model.requests, events, lines, ended, conn,
     readyAtMs: dopl.at.readyAt == null ? null : dopl.at.readyAt - t0, turnStartedAt,
@@ -187,13 +209,40 @@ describe('live: the first Codex turn waits for Dopl\'s MCP server', () => {
     t.diagnostic(`slow Dopl ready at ${run.readyAtMs}ms after start(); first turn waited ${m[2]}ms; turn/started at ${run.turnStartedAt}ms`);
   });
 
-  test('failed: an unreachable Dopl — the turn still runs, and ONE line says the tools did not connect', async (t) => {
+  // ⚠ 2026-10-11, MEASURED on codex-cli 0.162.1: a thread-level `mcp_servers` REPLACES the process-level
+  // (argv) table, it does not merge into it. Dopl's own entry rides argv, so one server from "Use my tools"
+  // was enough to evict it — the regression that stopped every Codex agent from starting. If this arm ever
+  // goes green with the merge at `launch-spec.js` removed, Codex changed its config layering and the
+  // comment there is stale. Unit twin: `codex-mcp-ready.test.mjs › REGRESSION`.
+  test('"Use my tools": an operator server on the thread does not evict Dopl from the real app-server', async (t) => {
     if (skipLive(t, GATE)) return;
-    const run = await launched(t, { url: UNREACHABLE });
-    assert.equal(run.ended, true, 'the turn ran without Dopl');
-    assert.equal(run.requests.length >= 1, true);
+    const run = await launched(t, {
+      // Unreachable on purpose and quick to give up: all this arm needs is a thread-level table to exist.
+      operatorServers: { supabase: { url: UNREACHABLE, startup_timeout_sec: 1, default_tools_approval_mode: 'prompt' } },
+    });
+    assert.equal(run.ended, true, 'the turn completed');
+    assert.equal(doplVisible(run.requests[0]), true,
+      "the operator's thread-level mcp_servers replaced the argv table and took Dopl's own entry with it");
+    assert.deepEqual(run.lane.filter((l) => /did not connect/.test(l)), []);
+    assert.match(run.lines[0], /^codex: dopl mcp ready \((notification|list|already)\) first turn waited \d+ms/);
+    t.diagnostic(`with one operator server on the thread: ${run.lines[0].slice(0, 120)}`);
+  });
+
+  // ⚠ NO MUTE AGENT (F-692; Codex side 7854b400, 2026-10-08 — "no tool-free first turn"): an agent with no
+  // delivery path is NOT RUN. Until 7854b400 this arm asserted the opposite — a tool-free turn that ran and
+  // completed — and it was simply not updated with the behaviour; it has been red on master since.
+  // The terminal frame is the `mcp_status_report` the shared guard reads (`mcp-connect-guard.js`): one
+  // retry, then a visible end. That guard is the engine's, so nothing retries inside this test.
+  test('failed: an unreachable Dopl — the agent does NOT run, and ONE line says the tools did not connect', async (t) => {
+    if (skipLive(t, GATE)) return;
+    const run = await launched(t, { url: UNREACHABLE, untilMcpStatus: true });
+    assert.equal(run.ended, false, 'a turn completed without Dopl: the mute-agent fence is open');
+    assert.equal(run.requests.length, 0, 'the model was asked for a turn the agent could not have posted');
+    assert.equal(run.turnStartedAt, null, 'no turn may start without Dopl');
     assert.deepEqual(run.lane.filter((l) => /did not connect/.test(l)),
-      ["Dopl's tools did not connect (the connection failed), so this turn runs without them."]);
+      ["Dopl's tools did not connect (the connection failed), so the agent will not run without them."]);
+    assert.deepEqual(run.events.filter((e) => e.type === 'mcp_status_report').map((e) => e.status), ['failed'],
+      'the shared MCP guard gets exactly one report, and it is the failure');
     assert.equal(run.events.filter((e) => e.type === 'auth_hold').length, 0);
     assert.match(run.lines[0], /^codex: dopl mcp failed \((notification|list|already)\) first turn waited \d+ms/);
     t.diagnostic(run.lines[0].slice(0, 160));

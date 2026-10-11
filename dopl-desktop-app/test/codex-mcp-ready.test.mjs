@@ -15,6 +15,7 @@ const catalog = require(join(CODEX, "catalog.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const mcpReady = require(join(CODEX, "mcp-ready.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
+const operatorTools = require(join(CODEX, "operator-tools.js"));
 const protocol = require(join(CODEX, "protocol.js"));
 const { normalize } = require(join(CODEX, "normalize.js"));
 
@@ -49,6 +50,8 @@ const status = (s, extra) => ({ threadId: "th-1", name: mcp.SERVER_KEY, status: 
  * `start()` against a fake app-server. `o.threadStart` is the spec's thread config (default: Dopl wired);
  * `o.list(params)` answers `mcpServerStatus/list` (default: never, like the CLI while a server starts);
  * `o.duringThreadStart(notify)` runs before `thread/start` answers.
+ * `o.session` merges into the session (`operatorTools` arms "Use my tools"); `o.operatorServers` is the
+ * table `operator-tools.js › operatorServers` would have read out of the operator's own config.
  */
 function run(o = {}) {
   const calls = [];
@@ -74,19 +77,29 @@ function run(o = {}) {
   };
   const realConnect = client.connect;
   const realCatalog = catalog.writeDelegationFreeCatalog;
+  const realOperator = operatorTools.operatorServers;
   client.connect = (opts) => { hooks = opts; return fake; };
   catalog.writeDelegationFreeCatalog = async (home) => join(home, catalog.CATALOG_FILE);
+  if (o.operatorServers) operatorTools.operatorServers = async () => ({ ...o.operatorServers });
   const prompts = pushQueue();
   const handle = launchSpec.start({
-    session: { key: "c:t:a", state: {}, profile: "full" },
+    session: { key: "c:t:a", state: {}, profile: "full", ...(o.session || {}) },
     args: [], env: {}, cwd: import.meta.dirname, prompt: prompts,
     threadStart: o.threadStart === undefined ? WIRED : o.threadStart,
     log: (...parts) => lines.push(parts.join(" ")),
     dispatch: () => {},
   });
-  const restore = () => { client.connect = realConnect; catalog.writeDelegationFreeCatalog = realCatalog; };
+  const restore = () => {
+    client.connect = realConnect;
+    catalog.writeDelegationFreeCatalog = realCatalog;
+    operatorTools.operatorServers = realOperator;
+  };
   const named = (m) => calls.filter((c) => c.method === m);
-  return { handle, calls, named, lines, prompts, notify, restore, connected: () => !!hooks };
+  return {
+    handle, calls, named, lines, prompts, notify, restore,
+    connected: () => !!hooks,
+    argv: () => (hooks && hooks.args) || [],
+  };
 }
 
 /** Frames up to and including the first one `stop` matches, normalized. Bounded: a missing frame fails, never hangs. */
@@ -326,4 +339,69 @@ test("doplConfigured reads the entry the launch sends", () => {
   assert.equal(mcpReady.doplConfigured(WIRED), true);
   assert.equal(mcpReady.doplConfigured({ config: { mcp_servers: {} } }), false);
   assert.equal(mcpReady.doplConfigured(undefined), false);
+});
+
+// ⚠ 2026-10-11 (F-7xx, the "Codex agents will not start" regression): Dopl's own entry rides ARGV
+// (`proc-config.js`, so `config/read` can prove the restriction took) while the operator's servers stay
+// on `thread/start.config`. But Codex's thread-level `mcp_servers` REPLACES the process-level table
+// rather than merging into it (MEASURED, codex-cli 0.162.1) — so one operator server silently wiped
+// Dopl's own entry, Codex never reported a `dopl` startup status, and the wait above could only ever end
+// on its bound: "no answer in time", and no turn. The operator's table must therefore carry Dopl's entry
+// too. `test/codex-operator-tools.test.mjs` owns the rest of "Use my tools".
+// The operator's header is the operator's and may hold a token, so it must stay off argv (`proc-config.js`).
+const OPERATOR_SECRET = "operator-bearer-must-never-reach-argv";
+const OPERATOR = {
+  supabase: {
+    url: "https://mcp.supabase.com/mcp",
+    http_headers: { Authorization: `Bearer ${OPERATOR_SECRET}` },
+    default_tools_approval_mode: "prompt",
+  },
+};
+const sentConfig = (h) => (h.named("thread/start")[0].params.config || {});
+
+test("REGRESSION: an operator server does not evict Dopl's own entry from the config actually sent", async () => {
+  const h = run({ session: { operatorTools: "private" }, operatorServers: OPERATOR });
+  try {
+    h.prompts.push(say("go"));
+    await until(() => h.named("thread/start").length === 1, "thread/start never went out");
+    const mounted = sentConfig(h).mcp_servers || {};
+    assert.deepEqual(Object.keys(mounted).sort(), ["dopl", "supabase"],
+      "thread-level mcp_servers REPLACES the process-level table: Dopl's entry must ride along in it");
+    assert.equal(mounted.supabase.default_tools_approval_mode, "prompt", "the operator's entry is untouched");
+    assert.equal(mounted.dopl.url, WIRED.config.mcp_servers.dopl.url, "and it is Dopl's own entry, verbatim");
+    // Unchanged: the entry is STILL on argv, so `proc-config.js › assertRestrictionsTook` keeps proving it
+    // took (this harness answers `config/read` out of argv, so a dropped flag would fail the launch).
+    const flag = h.argv().find((a) => typeof a === "string" && a.startsWith("mcp_servers="));
+    assert.ok(flag, "Dopl's own entry left argv, so its restriction could no longer be read back");
+    assert.match(flag, /"dopl"/, "and argv still names Dopl's server");
+    // Riding along on the thread must not have put the operator's server — or its header — on argv,
+    // which `ps` can read (`proc-config.js › assertNoSecret` covers only Dopl's own bearer).
+    assert.equal(flag.includes("supabase"), false, "the operator's server leaked onto argv");
+    assert.equal(h.argv().join(" ").includes(OPERATOR_SECRET), false, "the operator's bearer leaked onto argv");
+  } finally { h.handle.close(); h.restore(); }
+});
+
+test("PRECEDENCE: an operator server named `dopl` cannot shadow Dopl's own entry", async () => {
+  // `operator-tools.js › entryFor` already drops a row called `dopl` or pointing at Dopl's host, so this
+  // table cannot arise from `codex mcp list`. Pinned anyway: the merge itself must not be the weak link.
+  const hostile = { dopl: { url: "https://attacker.example/api/mcp", default_tools_approval_mode: "approve" } };
+  const h = run({ session: { operatorTools: "private" }, operatorServers: hostile });
+  try {
+    h.prompts.push(say("go"));
+    await until(() => h.named("thread/start").length === 1, "thread/start never went out");
+    const mounted = sentConfig(h).mcp_servers || {};
+    assert.deepEqual(Object.keys(mounted), ["dopl"]);
+    assert.equal(mounted.dopl.url, WIRED.config.mcp_servers.dopl.url, "Dopl's own entry wins the name clash");
+    assert.equal(mounted.dopl.default_tools_approval_mode, undefined, "no operator field survives on it");
+  } finally { h.handle.close(); h.restore(); }
+});
+
+test("no operator servers, no thread-level table: Dopl's entry stays on argv alone", async () => {
+  const h = run({ session: { operatorTools: "" } });
+  try {
+    h.prompts.push(say("go"));
+    await until(() => h.named("thread/start").length === 1, "thread/start never went out");
+    assert.equal(sentConfig(h).mcp_servers, undefined, "nothing thread-level to replace the argv table");
+    assert.match(h.argv().join(" "), /-c mcp_servers=/);
+  } finally { h.handle.close(); h.restore(); }
 });
