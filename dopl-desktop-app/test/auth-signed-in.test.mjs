@@ -276,7 +276,13 @@ test("in-window navigation is locked to the EXACT app origin, not the domain fam
   assert.match(SPA, /on\('will-navigate', police\)/, "the live lock is the SPA window's");
   assert.match(SPA, /on\('will-redirect', police\)/, "…and it covers redirects too");
   assert.match(SPA, /function policeNavigation\(win\)/, "one policy, applied to every app window");
-  assert.match(SPA, /if \(!isAllowedNavigation\(url, devUrl\(\), indexHref\)\) event\.preventDefault\(\)/);
+  // ⚠ `police` GREW AN ELSE-BRANCH (F-3031, 2026-10-10) and this used to pin its one-liner
+  // verbatim. The PREDICATE and the refusal are unchanged — what is new is that a refused URL
+  // is handed to the real browser instead of silently dropped, which is what made every link
+  // in the app dead. Pinned as two facts rather than one line so the hand-off cannot be
+  // deleted and cannot be mistaken for a loosening of the gate.
+  assert.match(SPA, /if \(isAllowedNavigation\(url, devUrl\(\), indexHref\)\) return;/);
+  assert.match(SPA, /event\.preventDefault\(\);\s*\n\s*handOffExternal\(url, 'navigation'\);/);
 });
 
 // ── EVERY GATE CALL SITE ACTUALLY USES THE NEW ANSWER ───────────────────────

@@ -45,6 +45,10 @@ function boot() {
     "./auth": {},
     "./avatar-policy": {},
     "./ipc-guards": { isAppWindowSender: () => senderOk },
+    // ⚠ THE REAL POLICY, never a stand-in (F-3031): a stubbed open-external gate is a second
+    // copy of the thing `main/external-url.js` exists to be the only one of. It is pure and
+    // requires no Electron, so the real module loads here unchanged.
+    "./external-url": real("./external-url"),
     "./diag": { diag: (...parts) => lines.push(parts.join(" ")) },
     "./api": { currentPool: () => "pool-1", resetPool: (opts) => { resets.push(opts); return true; } },
     "./ui-bridge-net": net,
