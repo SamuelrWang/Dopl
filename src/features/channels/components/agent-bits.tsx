@@ -25,7 +25,7 @@ import type { AgentColorKey } from "../types";
  * LIVENESS of one agent — a dot and a word, no pill chrome.
  *
  * Deliberately NOT A BORDERED PILL: the channel Info tab carried one for its
- * settled "Active" state (`bits.tsx › StatusPill`, deleted with the archive
+ * settled "Active" state (bits.tsx's StatusPill, deleted with the archive
  * feature on 2026-09-17), and that chrome would out-shout the agent label beside
  * it. The word carries the state for anyone the colour does not reach.
  *
