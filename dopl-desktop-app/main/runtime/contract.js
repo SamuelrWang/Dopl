@@ -163,7 +163,6 @@ function selectionProblems(d) {
     const declared = models.dimensionOptions || {};
     for (const key of dims) {
       const entry = declared[key];
-      // A LIVE dimension's options are each model's own (the catalog); storage gates the alphabet instead.
       // A LIVE dimension's values come from the runtime itself (catalog + build schema); no local list needed.
       const live = !!entry && entry.live === true;
       if (!live && (!entry || !Array.isArray(entry.options) || !entry.options.length)) {

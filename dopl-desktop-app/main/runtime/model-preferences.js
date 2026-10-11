@@ -48,10 +48,10 @@ function setFamily(runtimeId, family) {
 
 // `gpt-5.6-sol` → tokens ['gpt','5','6','sol']: the family is a whole token, never a substring.
 const tokens = (id) => String(id || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+// The numeric tokens BEFORE the family: `gpt-5.6-sol` → [5, 6].
 const versionOf = (id, family) => {
   const t = tokens(id);
-  const nums = t.slice(0, t.indexOf(family)).filter((x) => /^\d+$/.test(x)).map(Number);
-  return nums;
+  return t.slice(0, t.indexOf(family)).filter((x) => /^\d+$/.test(x)).map(Number);
 };
 function newer(a, b) {
   for (let i = 0; i < Math.max(a.length, b.length); i += 1) {

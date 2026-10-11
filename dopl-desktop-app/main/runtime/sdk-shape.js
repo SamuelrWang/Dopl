@@ -144,8 +144,6 @@ function refusalSentence(label, verdict) {
 
 const states = new Map(); // runtimeId → { key, status, observed, reason, persisted, at, attempts, inflight }
 
-const keyOf = (adapter) => rosterKeyOf(adapter);
-
 function backoffMs(attempts) {
   return Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));
 }
@@ -206,7 +204,7 @@ async function settleShape(adapter, opts) {
     return { status: STATUS.NONE, key: null, observed: null, reason: '', persisted: false };
   }
   const id = adapter.descriptor.id;
-  const key = keyOf(adapter);
+  const key = rosterKeyOf(adapter);
   const st = states.get(id);
   // An in-flight probe answers only for the build it is checking (final review M1).
   if (st && st.inflight && st.key === key) return st.inflight;
@@ -222,7 +220,7 @@ async function settleShape(adapter, opts) {
     const current = states.get(id);
     // Forgotten (`forgetShape`) or superseded by a newer probe while this one ran: its answer is not stored.
     if (!current || current.gen !== gen) return Object.assign(publicState(settledFrom(id, null, null, { reason: 'superseded' })), { moved: true });
-    if (keyOf(adapter) !== key) {
+    if (rosterKeyOf(adapter) !== key) {
       // The build switched mid-probe: what was observed may be either build's, so it is filed under NEITHER.
       states.delete(id);
       return { status: STATUS.UNKNOWN, key, observed: null, reason: 'the build changed while Dopl was checking it', persisted: false, moved: true };
@@ -359,7 +357,6 @@ module.exports = {
   checkShape,
   declares,
   requiredShapeProblems,
-  refusalSentence,
   settleShape,
   launchShapeRefusal,
   declaresSafety,
