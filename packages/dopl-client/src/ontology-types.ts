@@ -89,6 +89,17 @@ export interface OntologySnapshot {
    * already cleared `levelForOntology`.
    */
   homeSpaceOntologyIds?: string[];
+  /**
+   * 🔒 **THE SERVER'S OWN CLIP MARKER** — the twin of
+   * `src/features/ontology/types.ts › OntologySnapshot.truncated`: `true` when a
+   * page walk behind `GET /api/ontology` stopped at its `hardCap`, so the graph
+   * is SMALLER than the stored one.
+   *
+   * ⚠ **OPTIONAL, AND ABSENT IS "NOT ANSWERED", NEVER "COMPLETE"** — the same
+   * rule as {@link homeSpaceOntologyIds}: payloads cached against an older
+   * server, and snapshots a client builds itself, carry no such key.
+   */
+  truncated?: boolean;
 }
 
 /**
