@@ -23,17 +23,21 @@ test("`onLiveReady` hands each live ready read to a subscriber until it unsubscr
   const { state, a } = flippable();
   state.ok = true;
   const seen = [];
+  const control = []; // never unsubscribes: proves the second live read really reached listeners
   const off = catalog.onLiveReady((id, c) => seen.push([id, c.status, c.models.map((m) => m.id)]));
+  catalog.onLiveReady((id) => control.push(id));
   assert.equal(typeof off, "function");
   catalog.snapshot(a);
   await settle();
   assert.deepEqual(seen, [["rt", "ready", ["m-1"]]]);
+  assert.deepEqual(control, ["rt"]);
 
   off();
   catalog.invalidate("rt", "test");
   catalog.snapshot(a);
   await settle();
   assert.equal(catalog.snapshot(a).status, "ready", "a second live read did settle");
+  assert.deepEqual(control, ["rt", "rt"], "the still-subscribed control heard the second live read");
   assert.equal(seen.length, 1, "an unsubscribed listener is not called again");
 });
 
@@ -59,10 +63,25 @@ test("`onSettled` stops calling a listener once it unsubscribes", async () => {
   assert.equal(seen.length, 1, "an unsubscribed listener is not called again");
 });
 
-test("a non-function subscriber answers an unsubscribe and never breaks a read", async () => {
+test("a non-function subscriber is never stored, answers an unsubscribe and never breaks a read", async () => {
   const catalog = loadCatalog();
-  for (const subscribe of [catalog.onSettled, catalog.onLiveReady]) {
-    const off = subscribe(null);
+  // ⚠ WHY A PUSH SPY. Listener calls are try/catch-wrapped, so a stored non-function is swallowed
+  // when called and no read can show it: the guard's ONLY effect is that nothing is stored. The
+  // module is evaluated in this realm (`new Function`), so its `list.push` is this Array.prototype.push.
+  const NOT_A_FN = { notAFunction: true };
+  const pushed = [];
+  const realPush = Array.prototype.push;
+  Array.prototype.push = function (...items) { if (this !== pushed) realPush.apply(pushed, items); return realPush.apply(this, items); };
+  const fn = () => {};
+  let offs;
+  try {
+    offs = [catalog.onSettled, catalog.onLiveReady].flatMap((subscribe) => [subscribe(NOT_A_FN), subscribe(fn)]);
+  } finally {
+    Array.prototype.push = realPush;
+  }
+  assert.equal(pushed.filter((x) => x === fn).length, 2, "control: a function subscriber IS stored (the spy sees pushes)");
+  assert.equal(pushed.includes(NOT_A_FN), false, "a non-function subscriber is never stored");
+  for (const off of offs) {
     assert.equal(typeof off, "function");
     assert.doesNotThrow(() => off());
   }
@@ -70,5 +89,5 @@ test("a non-function subscriber answers an unsubscribe and never breaks a read",
   state.ok = true;
   catalog.snapshot(a);
   await settle();
-  assert.equal(catalog.snapshot(a).status, "ready", "a read with a null subscriber settles normally");
+  assert.equal(catalog.snapshot(a).status, "ready", "a read after a non-function subscribe settles normally");
 });
