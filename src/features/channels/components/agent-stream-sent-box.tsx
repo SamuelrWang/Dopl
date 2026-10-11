@@ -1,15 +1,13 @@
 "use client";
 
 /**
- * Channels — THE OUTBOUND REVIEW CARD, split out of `agent-stream.tsx` on
- * 2026-08-31 when that file crossed the 500-line cap (INVARIANTS §1).
+ * Channels — THE OUTBOUND REVIEW CARD.
  *
- * ⚠ THE SEAM IS §1's "one file, one reason to change", not the count that forced
- * the question. This card moves when the OUTBOUND CONSENT product moves (§6) —
+ * ⚠ ITS OWN FILE by §1's "one file, one reason to change". This card moves when the OUTBOUND CONSENT product moves (§6) —
  * it has already gained a Pending face, a decision and an expiry rule, and it is
  * the ONLY review surface left now the consent inbox is deleted — where
- * `agent-stream.tsx` moves when a STREAM ROW's shape moves. It moved VERBATIM,
- * and it is re-exported from that file so no importer changed.
+ * `agent-stream.tsx` moves when a STREAM ROW's shape moves. It is re-exported from
+ * that file, the import path its callers use.
  */
 
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
@@ -84,13 +82,8 @@ const COLLAPSED_BODY_LINES = 6;
 /**
  * **THE BANNER'S GEOMETRY** — the dark strip across the top of this card.
  *
- * ⚠ **IT CAME BACK HOME ON 2026-09-14, AND THE MOVE IS THE MEASUREMENT.** From 2026-09-13 it
- * lived in the message-box-agent component because the transcript's agent BOX had a top bar that
- * Samuel had ruled *"similar to the posted channel bar"* — a PAIR, owned by the colour rule,
- * imported from here so neither could drift. **That pair no longer exists.** The box and its
- * top bar are deleted (Samuel, 2026-09-14: *"instead of it being an entire box … a vertical
- * bar"*), and the transcript's accent is now a 3px side bar and a ring around the pill, which
- * shares no geometry with a full-width banner at all.
+ * ⚠ **THIS FILE'S OWN, SHARED WITH NOTHING:** the transcript's agent accent is a 3px side bar
+ * and a ringed pill (Samuel, 2026-09-14), which shares no geometry with a full-width banner.
  *
  * ⚠ **AND THIS CARD IS DELIBERATELY *NOT* RESTYLED TO FOLLOW** (measured, not assumed). The
  * restyle is a rule about a TRANSCRIPT ROW: it needs a side because a row has one, and it
@@ -237,16 +230,10 @@ function SentBody({ text, collapsible }: { text: string; collapsible: boolean })
  * WHAT THE AGENT POSTED INTO THE CHANNEL — **the v1 session window's outbound
  * record, recovered.**
  *
- * ⚠ PROVENANCE — AND THE PATHS BELOW NO LONGER RESOLVE, WHICH IS THE POINT:
- * the `.outbound` rules (`.outbound__banner` / `__label` / `__tag` / `__body`) in
- * `renderer/session/session.css`, and their DOM factory `makeOutbound` in
- * `renderer/session/session-render.js`. Both were deleted whole in `db901c39` —
- * "desktop: wave 1 — delete the session window, whole". Read them with
- * `git show 'db901c39^:dopl-desktop-app/renderer/session/session.css'`.
- * **This is an ADAPTATION, not a byte-copy**: the geometry, the banner idea and
- * the label wording are v1's; every colour is read from the current token set per
- * docs/DESIGN-SYSTEM.md rather than from `renderer/session/tokens.css`, which was
- * that window's own private copy and no longer exists.
+ * ⚠ PROVENANCE: v1's `.outbound` rules + `makeOutbound` (deleted with the session window in
+ * `db901c39`; `git show 'db901c39^:dopl-desktop-app/renderer/session/session.css'`). An
+ * ADAPTATION: v1's geometry, banner idea and label wording, with every colour from the
+ * current token set (docs/DESIGN-SYSTEM.md).
  *
  * ⚠ WHAT WAS KEPT, and why each part earned its way back:
  *   - **Full stream width, not a chat bubble.** v1's own comment: "a delivery
@@ -264,12 +251,9 @@ function SentBody({ text, collapsible }: { text: string; collapsible: boolean })
  *
  * ── ⚠ v1'S PENDING FACE IS BACK, AND SO IS THE DECISION (Samuel, 2026-08-25) ──
  *
- * This docblock used to say `.outbound-pending` / `.is-not-sent` were dropped
- * "deliberately", because "this surface only ever renders posts that ALREADY
- * EXIST in the transcript". **That was never true and the box had been lying
- * since it shipped.** The work stream's `post` frame is pushed the moment the
+ * The pending face exists because the work stream's `post` frame is pushed the moment the
  * agent CALLS the tool — before the outbound consent gate has been answered, and
- * whether or not it ever will be — so a held draft was painted "Posted to
+ * whether or not it ever will be — without it a held draft would read "Posted to
  * channel" over words the counterparty had not seen and might never see.
  *
  * ⚠ THE CARD IS NOW THE REVIEW SURFACE, AND IT IS THE ONLY ONE. The separate

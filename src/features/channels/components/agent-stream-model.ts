@@ -48,8 +48,8 @@ export { frameLane, type StreamLane } from "./agent-stream-lanes";
 import { frameLane } from "./agent-stream-lanes";
 
 /**
- * ⚠ THE TOOL-RUN GROUPING LIVES IN `agent-stream-groups.ts` SINCE 2026-10-10 (§2, the
- * 500-line cap), and this file stays its import path of record — {@link StreamGroup},
+ * ⚠ THE TOOL-RUN GROUPING LIVES IN `agent-stream-groups.ts`, and this file stays its import
+ * path of record — {@link StreamGroup},
  * {@link groupStreamItems}, `toolUses` and {@link shortToolName} are re-exported here, so
  * no importer changed. The seam: that file moves when the RUN COUNT's arithmetic moves
  * (what main stamped vs what this side received past the ring's bounds), this one when the
@@ -62,8 +62,8 @@ export {
   type StreamGroup,
 } from "./agent-stream-groups";
 /**
- * ⚠ THE ROW SHAPE LIVES IN `agent-stream-item.ts` SINCE 2026-10-10 (§1, the 500-line cap), and
- * this file stays its import path of record — {@link StreamItem} is re-exported here, so no
+ * ⚠ THE ROW SHAPE LIVES IN `agent-stream-item.ts`, and this file stays its import path of
+ * record — {@link StreamItem} is re-exported here, so no
  * importer changed. The seam: that file moves when a FACE needs a new FACT about a row, this one
  * when the stream's own ARITHMETIC does (the echo dedupe, the held-draft join, the TTL, the
  * ordering) — and neither has ever needed the other's reason.

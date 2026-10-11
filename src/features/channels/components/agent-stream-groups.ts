@@ -2,7 +2,7 @@
 
 /**
  * THE TOOL-RUN GROUPING — a run of consecutive tool activity as ONE row, its count, and the
- * name that row shows (§2 split out of `agent-stream-model.ts`, 2026-10-10, at the 500-line cap).
+ * name that row shows (split out of `agent-stream-model.ts`).
  *
  * ⚠ THE SEAM IS THE ONE THAT FILE'S HEADER ALREADY NAMED, and it is a real one.
  * `agent-stream-lanes.ts` moves when THE DESKTOP's vocabulary moves; `agent-stream-model.ts`
