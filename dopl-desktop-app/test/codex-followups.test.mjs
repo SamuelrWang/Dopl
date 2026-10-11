@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { threadEcho, configEcho } from "./helpers/codex-echo.mjs";
+import { loadWithStubs } from "./helpers/module-sandbox.mjs";
 
 const require = createRequire(import.meta.url);
 const MAIN = join(import.meta.dirname, "..", "main");
@@ -130,4 +131,21 @@ test("C: the per-launch backstop reads the SAME closed list (one place to add a 
   }
   assert.deepEqual(REQUIRED.safety.closed["result thread/start sandbox"],
     ["type", "networkAccess", "writableRoots", "excludeSlashTmp", "excludeTmpdirEnvVar"]);
+});
+
+test("C: a field added to required-shape's closed list is accepted by the backstop (no second copy)", () => {
+  // The SAME policy.js source, its one require answered by a required-shape whose list carries one extra
+  // field. A backstop reading its own hardcoded copy refuses that field; one reading the list accepts it.
+  const base = REQUIRED.safety.closed["result thread/start sandbox"];
+  const grown = base.concat(["futureField"]);
+  const stubbed = loadWithStubs(join("runtime", "codex", "policy.js"), {
+    "./required-shape": { safety: { closed: { "result thread/start sandbox": grown } } },
+  });
+  const sent = { approvalPolicy: "on-request", sandbox: "workspace-write", cwd: "/w" };
+  const echo = (box) => ({ approvalPolicy: "on-request", approvalsReviewer: "user", cwd: "/w", model: "gpt-x", sandbox: box });
+  const box = { type: "workspaceWrite", futureField: "on" };
+  // Control: the real list does not carry it, so the real backstop refuses — the case is not vacuous.
+  assert.throws(() => policy.assertThreadTook(sent, echo(box), (a, b) => a === b), /futureField/);
+  assert.doesNotThrow(() => stubbed.assertThreadTook(sent, echo(box), (a, b) => a === b),
+    "policy.js must read the closed list from required-shape, not keep its own copy");
 });
