@@ -1,11 +1,8 @@
-const { app, BrowserWindow, Menu, session, shell } = require('electron');
-const path = require('path');
+const { app, session } = require('electron');
 const Store = require('electron-store');
 
 // Shared origins/URLs live in config.js so the window shell and the background
 // listener never drift. See config.js for APP_URL / APP_ORIGIN / PROTOCOL.
-// (HOME_URL is gone — it named `/canvas`, which the website retirement deleted,
-// and the SPA routes in the renderer rather than loading a URL at all.)
 const { APP_ORIGIN, PROTOCOL } = require('./config');
 const auth = require('./auth');
 const authActions = require('./auth-actions');
@@ -37,7 +34,6 @@ const deepLinkModule = require('./deep-link');
 const uiBridge = require('./ui-bridge');
 const authTokens = require('./auth-tokens');
 const uiSync = require('./ui-sync');
-const settings = require('./settings');
 const triggerOutcomes = require('./trigger-outcomes'); // the engine's lifecycle echo seam (2026-08-20)
 const agentRetention = require('./agent-retention'); // 2026-08-22: the ended-agent 7-day sweep
 const launchDirectives = require('./launch-directives'); // 2026-08-22: the orchestrator launch lane
@@ -52,31 +48,12 @@ const quitGuard = require('./quit-guard');
 
 const store = new Store();
 let mainWindow = null;
-// ⚠ `latestPendingSegment` STOOD HERE AND IS DELETED (2026-08-22). It remembered the newest
-// pending INBOUND consent request's workspace segment so the tray "Pending: N" item could open
-// straight to it. That lane is deleted (`main/trigger.js`'s header carries the ruling): an ask
-// is a notification whose own body click already navigates to the thread.
-
-// `isAppOrigin` / `maybeBeginAuth` were destructured here for `wireNavigation`, which is
-// deleted (see below). index.js no longer opens anything externally, so the M4 sign-in CSRF
-// nonce is armed in exactly ONE place — `authActions.beginSignIn` — which is stronger than
-// the two call sites this line existed to share.
 
 // ── Window ────────────────────────────────────────────────────────────────────
-// THE REMOTE WRAPPER IS GONE (Stage D, 2026-08-06). `createMainWindow` built a
-// BrowserWindow around `loadURL(https://www.usedopl.com/canvas)` and handed its load
-// lifecycle to `load-guard.js` — a loading screen before first paint, a watchdog for a
-// hung network load, and did-fail-load retries. All of that existed because the product
-// UI arrived over the network. It has not since 1.8.0: `spa-window.js` does
-// `loadFile(renderer/app/index.html)`, off local disk, and the web pages it used to load
-// were deleted with the rest of Stage D — so the rollback path now leads to 404s.
-//
-// `createShellWindow` (shell-mode.js) is the ONE factory every "make or show the window"
-// path goes through, and the min-version gate is its single enforcement point.
-// `wasOpenedHidden()` MOVED to main/spa-window.js (2026-08-07). It was read only by the
-// deleted `createMainWindow`, so it sat here unreferenced while the app went on
-// registering itself as a hidden login item below — the intent surviving nowhere but a
-// function nobody called. It now lives beside the one factory that decides whether to show.
+// The UI is the bundled SPA (`spa-window.js` loadFile, off local disk). `createShellWindow`
+// (shell-mode.js) is the ONE factory every "make or show the window" path goes through, and
+// the min-version gate is its single enforcement point. Whether a hidden login launch shows
+// the window is decided there (`spa-window.js › wasOpenedHidden`).
 
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -84,9 +61,6 @@ function showMainWindow() {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  // The old remote shell primed a loading screen here so a hung network load never
-  // revealed the bare backgroundColor. The SPA paints from disk, so there is no hung
-  // load to cover and nothing to prime.
   mainWindow.show();
   mainWindow.focus();
 }
@@ -116,17 +90,8 @@ function loadApp() {
 }
 
 // ── Navigation / link handling ─────────────────────────────────────────────────
-// `wireNavigation(contents)` LIVED HERE AND IS DELETED (2026-08-07). Its only call site
-// was the last line of `createMainWindow`, so Stage D left it unreachable — and worse than
-// merely dead: its docblock said "this is how sign-in leaves the app: the login page calls
-// window.open('/auth/desktop-start')", which the SPA window now DENIES outright
-// (`spa-window.js` installs `setWindowOpenHandler(() => ({ action: 'deny' }))` plus
-// will-navigate/will-redirect/will-frame-navigate policing). An editor reading it would
-// have believed a mechanism the shell forbids. A test also pinned its CSRF-arming line, so
-// the suite was green about a path that could not run; that assertion now pins the live one.
-//
-// THE LIVE PATH: sign-in leaves through `authActions.beginSignIn` → `maybeBeginAuth(url)` →
-// `shell.openExternal` (`auth-actions.js:73`), which is the one place the M4 nonce is armed.
+// index.js opens nothing externally. Sign-in leaves through `authActions.beginSignIn` →
+// `maybeBeginAuth(url)` → `shell.openExternal`, the ONE place the M4 login-CSRF nonce is armed.
 
 // ── Menu ────────────────────────────────────────────────────────────────────
 // The menu-bar template lives in app-menu.js (extracted at the 500-line cap).
@@ -191,11 +156,7 @@ if (!gotLock) {
 
     buildMenu();
 
-    // Menu-bar tray for the background role. Terminal mode is RETIRED (§G Q2).
-    // ⚠ THIS COMMENT CLAIMED THE "Sessions" SUBMENU CARRIED A "Run sessions in a window"
-    // TOGGLE, DEFAULT ON — contradicted by the note 20 lines below, in this same call, which
-    // says both are GONE with window mode (F-228). Corrected 2026-08-20; the note below is the
-    // accurate one.
+    // Menu-bar tray for the background role.
     tray.create({
       onOpen: () => openMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
@@ -212,9 +173,6 @@ if (!gotLock) {
       // reloads the app (which resolves to /login) and re-reconciles the listener.
       onSignIn: () => authActions.beginSignIn({ showWindow: showMainWindow }),
       onSignOut: () => { void spaSignOut({ auth, authTokens, listener, showMainWindow }); },
-      // ⚠ `onPending` STOOD HERE AND IS DELETED (2026-08-22) with the tray item it opened.
-      // ⚠ The windowMode toggle and the "Sessions" submenu accessors are GONE with
-      // window mode (2026-08-20, settings.js header) — no session window is ever minted.
       // Round C "Channel folders": accessors read fresh on every rebuild; the chosen
       // path stays local (channel-dirs.js). A set/clear rebuilds the menu.
       getChannels: () => listener.listWatchedChannels(),
@@ -231,15 +189,12 @@ if (!gotLock) {
       },
     });
 
-    // In-app "Change folder" control. The channel UI (the bundled SPA — this said "the remote
-    // webview" until 2026-08-20, and that webview is deleted) reaches the native folder picker
-    // through these three narrow,
-    // label-only IPC handlers. onChanged refreshes the tray so its "Channel
-    // folders" submenu stays in sync with a change made from the web control.
+    // In-app "Change folder" control. The bundled SPA reaches the native folder picker
+    // through these three narrow, label-only IPC handlers. onChanged refreshes the tray so its
+    // "Channel folders" submenu stays in sync with a change made from the SPA.
     // H3: the sender binding — every handler in that file answers only an APP-OWNED
-    // window's own top frame, never an iframe inside it. ⚠ WIDENED 2026-08-18 (wiring
-    // plan Phase 10, Samuel's ruling — option (a)): `getSenderIds` was `getMainWindow`,
-    // so the subject is now the registry (shell + pop-outs) rather than the one slot.
+    // window's own top frame, never an iframe inside it. The subject is the registry
+    // (shell + pop-outs; Phase 10, Samuel's ruling).
     // An ACCESSOR, not a snapshot: register() runs before any window exists, the shell is
     // rebuilt on reopen, and a pop-out can appear or close at any moment.
     channelDirIpc.register({ onChanged: () => tray.refresh(), getSenderIds: () => appWindows.senderIds() });
@@ -320,11 +275,7 @@ if (!gotLock) {
     deepLink.flushPending();
 
     // Session seam: lifecycle handlers, then init() (registers session IPC + reloads records) BEFORE listener.start.
-    // ⚠ THE WINDOW FACTORY INJECTION IS GONE (2026-08-20, F-228). `setWindowFactory` was the
-    // §B.5 seam that let the engine mint a session window without importing electron; there
-    // is no session window, so there is nothing to inject and the seam is deleted rather than
-    // fed a null. The LIFECYCLE ECHO below survives and moved with the retirement — it is the
-    // calm `session_ended` note a WAITING PEER needs, raised by windowless sessions too.
+    // The lifecycle echo is the calm `session_ended` note a WAITING PEER needs.
     sessionEngine.setLifecycleHandlers(triggerOutcomes.lifecycleHandlers);
     // ⚠ THE 7-DAY SWEEP IS ARMED BEFORE `init()` (2026-08-22, Samuel's ended-agent ruling), and
     // the order matters in one direction only: `init()` reads the durable records back and
@@ -369,9 +320,6 @@ if (!gotLock) {
     // openChannel handler lets a clicked notification open + navigate the window
     // — since Phase 9 it is handed (segment, channelId) and lands ON the channel,
     // which is the "windowing inverts" ruling's whole focus-the-app half.
-    // ⚠ THE SECOND HANDLER, `onPending`, IS DELETED (2026-08-22): it fed the tray "Pending: N"
-    // count and remembered the newest pending channel, and its only producer was the inbound
-    // consent watcher.
     listener.start((status, meta) => tray.update(status, meta), {
       openChannel: navigateToChannels,
     });
@@ -421,10 +369,6 @@ if (!gotLock) {
       });
     } catch (err) { diag('agentDirections.start error', err && err.message); }
 
-    // ⚠ **A THIRD MAILBOX STOOD HERE UNTIL 2026-09-02 (slice B16): THE "NEEDS YOU" PING.**
-    // It is not "not started yet" — the LANE IS GONE. Ruling B8 folded it into a directed
-    // `send`, which arrives on the ordinary message path and terminates at the same
-    // `feedInbound` door this used to borrow, so nothing here has to reach a recipient twice.
     // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;
     // no-ops when signed out or the CLI/endpoint isn't available).
     mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config startup error', err && err.message));
@@ -448,19 +392,10 @@ if (!gotLock) {
     });
   });
 
-  // THE QUIT TEARDOWN (C-8, 2026-08-08). This was a two-line handler — set `isQuitting`,
-  // stop the listener — and the audit's C-8 is what it left out: it never iterated the
-  // session registry, so every live `sdk.query()` kept a bundled `claude` child running
-  // after the app was gone, with this session's pre-approved `dopl_channel` access still
-  // in hand. main/quit-guard.js owns the whole decision now (extracted rather than inlined
-  // because it is a dialog, a wait loop and a bounded flush, and index.js is wiring): it
-  // NAMES the threads a quit would interrupt, offers Quit anyway / Wait for them to finish,
-  // ends each session through the reducer's calm `inactive` terminal so the waiting peer is
-  // told, and races one final session-state push so this machine's rows do not outlive it.
-  // It fails OPEN on every path — a quit the operator asked for always happens.
-  //
-  // (Round B's windowless-modal veto is still gone as dead code: consent is a notification
-  // plus a durable row, neither of which can take the app down on dismissal.)
+  // THE QUIT TEARDOWN (C-8). main/quit-guard.js owns the whole decision: it NAMES the
+  // threads a quit would interrupt, offers Quit anyway / Wait / Cancel, ends each session
+  // through the reducer's calm `inactive` terminal so the waiting peer is told, and races one
+  // final session-state push. It fails OPEN on every path — a requested quit always happens.
   quitGuard.arm({
     listener,
     listOrphanRisk: () => sessionEngine.listOrphanRisk(),
