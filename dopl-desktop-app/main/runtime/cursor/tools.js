@@ -82,10 +82,6 @@ function buildSecretPathDenyRules(userDataDir) {
 // Cursor's built-ins, which Dopl cannot read and must not assume.
 const TOOL_MODES = ['allowlist', 'auto-review', 'run-everything'];
 
-// The CLI spelling of the widest mode (`-f`, alias `--yolo`). ⚠ Dopl's widest mode is NOT this flag:
-// hard-deny and the outbound gate survive every mode.
-const RUN_EVERYTHING_FLAG = '--force';
-
 // ⚠ POSITIVE ALLOW-LISTS, NEVER NEGATIVE: a negative mode auto-allows every UNRECOGNISED name, which
 // a build-time hard-deny cannot cover. Unknown GATES IN EVERY MODE, `run-everything` included.
 const ALLOWLIST_TOOLS = DOPL_READ_TOOLS.slice();

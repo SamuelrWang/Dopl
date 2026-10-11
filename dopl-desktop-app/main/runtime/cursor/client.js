@@ -10,12 +10,10 @@
 //   Cloud Agents REST   remote execution, out of scope (decision 6).
 // ⚠ THE SDK IS PUBLIC BETA, so every reader in this adapter is tolerant and the whole surface sits
 // behind this one module: an API move is a change here, not everywhere.
-// ⚠ THE SINGLE MODULE THAT IMPORTS THE SDK OR TOUCHES A CHILD PROCESS — the same contract
+// ⚠ THE SINGLE MODULE THAT IMPORTS THE SDK — the same contract
 // `runtime/claude/loader.js` and `runtime/codex/client.js` hold.
 // ⚠ DELIVERY IS `path` (`packaging.js`): this release ships neither the SDK nor `cursor-agent`, so
 // `probe()` refuses for real and its reason must be readable by an operator.
-
-const { execFile } = require('child_process');
 
 const SDK_PKG = '@cursor/sdk';
 const BIN = 'cursor-agent';
@@ -60,38 +58,6 @@ async function probe() {
         + `Install it alongside Dopl and re-open. (${(err && err.message) || err})`,
     };
   }
-}
-
-/**
- * Is there a `cursor-agent` on PATH, and what does it call itself?
- *
- * ⚠ A DIAGNOSTIC AND A CREDENTIAL PREREQUISITE, NOT THE LAUNCH GATE. The SDK is the runtime; this
- * binary is what `credential.js` asks about sign-in state, and its absence is why a sign-in probe
- * has to fail OPEN rather than take the machine off the air.
- */
-function probeBinary() {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (v) => { if (!done) { done = true; resolve(v); } };
-    const timer = setTimeout(() => finish({
-      ok: false,
-      reason: `\`${BIN}\` did not answer within ${PROBE_TIMEOUT_MS}ms.`,
-      version: null,
-    }), PROBE_TIMEOUT_MS);
-    try {
-      execFile(BIN, ['--version'], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
-        clearTimeout(timer);
-        if (err) {
-          finish({ ok: false, reason: `\`${BIN}\` is not on this Mac's PATH.`, version: null });
-          return;
-        }
-        finish({ ok: true, reason: '', version: String(stdout || '').trim() || null });
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      finish({ ok: false, reason: `\`${BIN}\` could not be started: ${(err && err.message) || err}`, version: null });
-    }
-  });
 }
 
 // ── THE AGENT FACTORY ────────────────────────────────────────────────────────────────────────
