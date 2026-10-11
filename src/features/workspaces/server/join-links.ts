@@ -369,10 +369,8 @@ export async function resolveJoinRequest(
 /* --------------------------- my notices ---------------------------- */
 
 /**
- * 🔴 **DELETED (Samuel's ruling R-49, 2026-09-17): `listMyJoinNotices`,
- * `acknowledgeJoinNotice` and the `JoinRequestNotice` type.** Their one reader
- * was `JoinRequestNoticesCore`, which is deleted with the rest of the guidance
- * layer; `GET /api/me/join-requests` and its `/ack` POST went with them.
+ * No requester-side notice exists (Samuel's ruling R-49, 2026-09-17, removed it with the
+ * guidance layer).
  *
  * ⚠ **THE TWO ACK COLUMNS SURVIVE, WITH NO READER AND NO WRITER** —
  * `workspace_join_requests.pending_acknowledged_at` / `resolved_acknowledged_at`
