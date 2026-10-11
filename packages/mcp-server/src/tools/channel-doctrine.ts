@@ -73,7 +73,7 @@ AN OUTSIDE SESSION (anything on the operator's token this product did not spawn)
 /**
  * The one canonical "hold, never poll" statement; hold results point here rather than repeat it.
  * The economics sentence is the argument and must stay; both shapes stay, since many clients lack
- * background tasks. Capped by {@link WAITING_MAX_CHARS}.
+ * background tasks.
  */
 const waiting = () => `WAITING — A HOLD, NOT A POLL.
 Every wake re-sends a session's whole context: a timer pays that per tick; a hold pays once, on arrival.
@@ -81,9 +81,6 @@ WITH BACKGROUND TASKS: run the hold in one (skill \`dopl-channels-wait\` where i
 WITHOUT: ${callRef("channel.read", { channel: "<ref>", since: "<cursor>", wait_ms: "<ms>" })}, re-armed on the SAME cursor each turn.
 STOP when nothing has come from the MEMBER YOU ADDRESSED — not the room — for ~30 min; LOOK before each re-arm. No thread ever closes; silence is the only stop signal.
 A DESKTOP-RUN SESSION MAY NOT HOLD: the message wakes it.`;
-
-/** Caps {@link waiting} tighter than the per-section budget. */
-export const WAITING_MAX_CHARS = 600;
 
 /** The own-agent contract and the refusal vocabulary. */
 const manage = () => `${callRef("channel.manage", {}, { form: "op" })} — YOUR OWN OPERATOR'S AGENTS, AND ONLY THEIR MACHINE.

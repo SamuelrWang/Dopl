@@ -65,7 +65,7 @@ import { sessionBlockLines } from "./channel-session-table";
  * so an orchestrator can re-arm forever on a busy workspace while the one agent
  * it is blocked on died an hour ago.
  */
-export function workspaceRearmStopRule(): string {
+function workspaceRearmStopRule(): string {
   return `⚠ A WORKSPACE hold wakes on ANY message in ANY channel you belong to, so a wake is not news about the ONE exchange you are blocked on — read THAT channel by name and judge liveness there, never off workspace activity.`;
 }
 

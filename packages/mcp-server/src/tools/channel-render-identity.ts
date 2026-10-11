@@ -23,9 +23,7 @@ import { UNREADABLE_ID } from "./channel-render-threads";
 // ⚠ The outside-session vocabulary — hand-copied constants pinned against the
 // web tree, plus the two projections a renderer reads. See that file.
 import {
-  DESKTOP_GROUP_HANDLE,
   DESKTOP_HANDLE_TAG,
-  EXTERNAL_SESSION_METADATA_KEY,
   authorViewOf,
   desktopAddresseeOf,
 } from "./channel-desktop-tag";
@@ -133,27 +131,13 @@ export function formatAuthor(m: ChannelMessage, view: MemberView = NO_MEMBER_VIE
 }
 
 /**
- * 🔒 **THE GROUP HANDLE FOR AN OPERATOR'S OUTSIDE SESSIONS** — one built-in
- * handle meaning *the operator's MCP sessions that are not app-spawned agents*
- * (Claude Code, Codex, Cursor, a script).
- *
- * ⚠ **THE SEAM IS CLOSED AND THE MECHANISM ARRIVED** (integration, 2026-09-19).
- * The handle's minting, its reservation against the member/agent namespaces and
- * the author kind on the wire were built on the SIBLING BRANCH that is now
- * merged, so this is an ALIAS of `channel-desktop-tag.ts ›
- * DESKTOP_GROUP_HANDLE` and not a second declaration of the string. Two copies
- * of a handle is exactly how a rename lands in one renderer and not the other.
- */
-export const OUTSIDE_SESSION_HANDLE = DESKTOP_GROUP_HANDLE;
-
-/**
  * ⚠ **THE THIRD AUTHOR SHAPE IS NOT A NEW `authorKind`, AND IT IS NOT A DTO
  * FIELD EITHER.** `@dopl/contracts › MessageAuthorKind` is a CLOSED union guarded
  * by `scripts/check-message-kind-drift.ts` and the column's own `CHECK`, and both
  * `ChannelMessage` declarations sit at the 500-line cap — so the outside-session
  * marker rides server-owned `metadata.external_session` and is READ THROUGH A
- * FUNCTION on the sibling branch (`authorViewOf(message)` →
- * `MessageAuthorKind | "external"`).
+ * FUNCTION, `channel-desktop-tag.ts › authorViewOf(message)` →
+ * `MessageAuthorKind | "external"` (built on a sibling branch, merged 2026-09-19).
  *
  * 🔒 **THIS IS THE ONE PLACE THIS TIER ASKS THE QUESTION**, and since the merge
  * (2026-09-19) it does not ask it itself: the body IS
@@ -168,8 +152,7 @@ export const OUTSIDE_SESSION_HANDLE = DESKTOP_GROUP_HANDLE;
  * an old row renders exactly the line it always did rather than being reported
  * as an outside session nobody marked.
  */
-export const EXTERNAL_SESSION_META_KEY = EXTERNAL_SESSION_METADATA_KEY;
-export function isOutsideSession(m: ChannelMessage): boolean {
+function isOutsideSession(m: ChannelMessage): boolean {
   return authorViewOf(m) === "external";
 }
 
@@ -194,7 +177,7 @@ export function isOutsideSession(m: ChannelMessage): boolean {
  * ⚠ **AND IT IS NOT AN ASSERTED IDENTITY ON ITS OWN**: the label still carries
  * `for <operator> (<user id>)`, the half the author does not control.
  */
-export function agentHandleOf(m: ChannelMessage): string | null {
+function agentHandleOf(m: ChannelMessage): string | null {
   const named = m.authorAgentName ? neutralizeInline(m.authorAgentName) : null;
   if (named) return `@${named}`;
   const session = sessionIdOf(m);
@@ -315,7 +298,7 @@ export function agentNamesFromMessages(messages: ChannelMessage[]): Map<string, 
  * else the `agent-<id>` handle. ⚠ Both halves neutralized: the name has no
  * charset rule anywhere in the product, and the id comes off a stored column.
  */
-export function agentRef(agentId: string, view: MemberView): string {
+function agentRef(agentId: string, view: MemberView): string {
   const name = view.agentNames?.get(agentId);
   const safe = name ? neutralizeInline(name) : null;
   return safe ? `@${safe}` : `@agent-${inlineOr(agentId, UNREADABLE_ID)}`;
@@ -338,7 +321,7 @@ const WAKE_REASONS = new Set([
   "most recent",
   "most recently launched",
 ]);
-export function wakeReasonOf(m: ChannelMessage): string | undefined {
+function wakeReasonOf(m: ChannelMessage): string | undefined {
   const reason = metaString(m, "wake_reason");
   return reason && WAKE_REASONS.has(reason) ? reason : undefined;
 }
