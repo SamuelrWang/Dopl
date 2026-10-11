@@ -150,7 +150,7 @@ export function ChannelsComposer({
       channelId,
       clientMsgId: newClientMsgId(),
       body: tagged,
-      // Explicit: absence reads as a request on the wire (`schema.ts › MessageIntentSchema`).
+      // Explicit: absence reads as a request on the wire (`schema-intent.ts › MessageIntentSchema`).
       intent: "chat" as const,
       // Only ever `false`, only after Escape; absent is the wire default.
       ...(addressOff ? { autoAddress: false as const } : {}),

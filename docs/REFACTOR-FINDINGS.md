@@ -824,7 +824,7 @@ COMMIT;
   - **(a) `reopen` still has no MCP op**, and it matters MORE than it did. The only mcp-server mention is a comment at `packages/mcp-server/src/tools/channel-post-linkage.ts:58`. That mattered little while nothing closed threads; **F-105's propose-then-confirm means closes now actually happen**, so an agent working a thread a human closed early has no way back in and no op to point at. **Not a drive-by:** the close is deliberately human-only (`ThreadCloseIsHumanOnlyError`), so the reopen's authority is a product call.
   - **(b) A LEGACY thread tag can never warn.** The legacy branch never assigns `task` — it only strips or keeps the tag — so there is no status to read. Correct (it is not a thread, which is the same reason F-115 renders it `ad-hoc`), but it means an ad-hoc exchange has no "this is over" signal at all.
 - Status: open (residuals)
-- ⚠ **CLOSED 2026-08-30 — superseded:** threads no longer close at all (wiring plan Phase 4). `close`, `propose_close` and `reopen` are always-failing tombstones at `src/features/channels/schema.ts › removedOp` under `REMOVED_THREAD_CLOSE`, so there is no close for an agent to be locked out of, and residual (b)'s legacy-tag warning has nothing left to warn about.
+- ⚠ **CLOSED 2026-08-30 — superseded:** threads no longer close at all (wiring plan Phase 4). `close`, `propose_close` and `reopen` are always-failing tombstones at `src/features/channels/schema-removed-params.ts › removedOp` under `REMOVED_THREAD_CLOSE`, so there is no close for an agent to be locked out of, and residual (b)'s legacy-tag warning has nothing left to warn about.
 
 ### F-115: A synthetic `task-<channel>-<seq>` id is labelled `ad-hoc`, and so is a fabricated one
 - Location: `packages/mcp-server/src/tools/channel-render-threads.ts:147` (`isFirstClassThreadId(id) ? "thread" : "ad-hoc"`, the predicate a bare `UUID_RE.test` at `:87-89`); same split at `:194-195`
@@ -1095,7 +1095,7 @@ COMMIT;
 - Status: open (one stale sentence + its pinning test)
 
 ---
-- ⚠ **CLOSED 2026-08-30 — superseded:** the whole op went with thread closing. The string *"Do not propose again"* is absent from `packages/` (source and `dist/`), and the pinning test is INVERTED — `packages/mcp-server/src/tools/channel-closed-thread.test.ts` now asserts the response mentions neither `propose_close` nor `close_thread`, backed by the tombstones at `src/features/channels/schema.ts › REMOVED_THREAD_CLOSE`.
+- ⚠ **CLOSED 2026-08-30 — superseded:** the whole op went with thread closing. The string *"Do not propose again"* is absent from `packages/` (source and `dist/`), and the pinning test is INVERTED — `packages/mcp-server/src/tools/channel-closed-thread.test.ts` now asserts the response mentions neither `propose_close` nor `close_thread`, backed by the tombstones at `src/features/channels/schema-removed-params.ts › REMOVED_THREAD_CLOSE`.
 
 ## F-175 — Desktop reliability round: the two field-triggered residuals
 
