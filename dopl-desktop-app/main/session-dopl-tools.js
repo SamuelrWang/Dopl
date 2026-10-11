@@ -1,9 +1,5 @@
 // DOPL'S OWN TOOL SURFACE, SPLIT BY WHAT IT DOES TO THE SHARED WORKSPACE.
 //
-// ⚠ §2 SPLIT OUT OF `main/session-profiles.js` ON 2026-08-31 (runtime-adapter port, step 3). The
-// two lists and the reason for the split are unchanged, word for word; what changed is that they
-// now have to be reachable from BOTH sides of the runtime seam without a cycle.
-//
 // ⚠ THESE NAMES ARE RUNTIME-INDEPENDENT AND THAT IS WHY THEY LIVE IN CORE. Everything else Axis A
 // resolves against — `READ_BUILTINS`, `EDIT_TOOLS`, `ESCALATION_TOOLS`, `BYPASS_READS` — is a
 // vocabulary of one runtime's BUILT-IN tools and moved to that runtime's adapter

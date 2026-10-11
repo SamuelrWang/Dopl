@@ -11,19 +11,22 @@ const { diag } = require('./diag');
 const agentOps = require('./agent-self-ops');
 const wire = require('./launch-directive-wire');
 
+// This machine's live session rows (`session-engine.listLiveSessions`), or [] when the engine is
+// unavailable. Required lazily, per call, as both call sites did.
+function liveRows() {
+  try {
+    const engine = require('./session-engine');
+    return typeof engine.listLiveSessions === 'function' ? engine.listLiveSessions() : [];
+  } catch (_err) { return []; }
+}
+
 /**
  * End the agent a directive names → `{ done: true }` or `{ refused }`. The verdict table is
  * `endVerdict`'s, handed `''` as the caller id. `no-session` is the ordinary answer (it already
  * finished), and a `bad-agent-id` verdict maps to it rather than minting an unreachable word.
  */
 function endAgent(d) {
-  let rows = [];
-  try {
-    const engine = require('./session-engine');
-    rows = typeof engine.listLiveSessions === 'function' ? engine.listLiveSessions() : [];
-  } catch (_err) { rows = []; }
-
-  const v = agentOps.endVerdict('', d.targetAgentId, rows);
+  const v = agentOps.endVerdict('', d.targetAgentId, liveRows());
   if (!v.ok) {
     diag('directive-agent-ops: end', String(d.targetAgentId || '(none)'),
       '— no live session (' + String(v.reason) + '), which is usually an agent that already finished');
@@ -101,12 +104,7 @@ function setAgentMode(d) {
     return { refused: 'no-bridge' };
   }
 
-  let rows = [];
-  try {
-    const engine = require('./session-engine');
-    rows = typeof engine.listLiveSessions === 'function' ? engine.listLiveSessions() : [];
-  } catch (_err) { rows = []; }
-  const row = rows.find((r) => r && String(r.agentId || '') === d.targetAgentId) || null;
+  const row = liveRows().find((r) => r && String(r.agentId || '') === d.targetAgentId) || null;
   if (!row) {
     diag('directive-agent-ops: set_agent_mode', d.targetAgentId, '— no live session');
     return { refused: 'no-session' };

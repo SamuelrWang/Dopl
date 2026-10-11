@@ -5,17 +5,10 @@
 // PATCH the row) or this app's native notification (Send action → PATCH the row; Dismiss PARKS
 // it, leaving the row pending).
 //
-// ── ⚠ THE INBOUND HALF IS DELETED (2026-08-22, Samuel's ruling) ──────────────────────────────
+// THERE IS NO INBOUND CONSENT (2026-08-22, Samuel's ruling): a peer's addressed ask raises a
+// notification (`trigger.js › notifyAsk`) whose Dismiss decides nothing; there is no row.
 //
-// `notifyInbound` stood in this file and is GONE, and with it the whole approve-IN lane:
-// `trigger.js` no longer creates an `inbound` row, `consent-watcher.js` / `consent-store.js` /
-// `consent-cadence.js` are deleted whole, and there is no `auto_allowed` READ left on this
-// machine's inbound path (the trust rules that produced that status never fired once in the
-// table's history). A peer's addressed ask now raises a NOTIFICATION with two verbs — Launch
-// agent, and Open thread — and dismissing it does nothing. **That is not consent moving to
-// another surface: there is no row and nothing to decide.**
-//
-// ⚠ APPROVE-OUT IS UNTOUCHED AND IS WHAT THIS FILE IS FOR NOW. A windowless session's own-channel
+// ⚠ APPROVE-OUT IS WHAT THIS FILE IS FOR. A windowless session's own-channel
 // post still bridges to an `outbound` row (`session-windowless.js › bridgeOutbound`), still polls
 // that row for the human's Send, and the PRIVATE-TURN gate (`session-private.js`) still withdraws
 // Axis B's outbound widening so a 1:1 answer cannot leave the machine on its own. Everything
@@ -24,14 +17,6 @@
 // This module owns only the STATELESS primitives: the consent-row HTTP (create / decide / poll)
 // and the two native-notification builders on top of `notify-action.js`. The row's LIFECYCLE
 // lives with the session that raised it (`session-windowless.js › watchRow`).
-//
-// WHAT ROUND B REMOVED (was here in v1.3.x): the app-modal `dialog.showMessageBox`
-// consent dialog, the unified dialog+notif+poll `raceDecision`, and the
-// before-quit quit guard (beginConsentModal / endConsentModal /
-// isConsentModalGuardActive) that existed ONLY because dismissing that windowless
-// modal could terminate the app. With no consent dialog there is no such
-// terminate, so the guard and its index.js veto are gone as dead code. The orphan
-// outbound sweep (cancelStaleOutbound) is also gone.
 //
 // TRUST is evaluated SERVER-SIDE only (H-3) and this desktop no longer reads its verdict
 // anywhere: `createConsentRequest` may still hand back whatever status the server gives an
@@ -43,15 +28,10 @@
 // there is no approve-out without a row. Tokens are never logged; the message body is truncated,
 // never a token.
 
-// ⚠ `electron` is no longer required here: every notice this module raises goes through the
-// route, which owns the surface choice and builds the banner (`notification-route.js`).
-// §2 SPLIT (2026-08-22): the banner SHAPE — one action button, a navigating body click, and a
-// Dismiss that decides nothing — is shared with `trigger.js`, whose banner is not about a row.
-// ⚠ DESTRUCTURED AT MODULE SCOPE ON PURPOSE: both names stay FREE VARS inside the functions
-// below, which is what keeps `test/consent-decision-signal.test.mjs`'s source-extraction harness
-// able to inject fakes for them.
-// Which surface an actionable notice takes. ⚠ `buildActionNotification` is no longer called from
-// here: the route owns that choice now, and still builds the same banner underneath.
+// Every notice goes through the route, which owns the surface choice and builds the banner
+// (`notification-route.js`). ⚠ MODULE-SCOPE NAMES ON PURPOSE: `notificationRoute`, `apiFetch` and
+// `diag` stay FREE VARS inside the functions below, which is what lets
+// `test/consent-decision-signal.test.mjs`'s source-extraction harness inject fakes for them.
 const notificationRoute = require('./notification-route');
 const { apiFetch } = require('./api');
 const { discardBody } = require('./api-repair');
@@ -98,11 +78,11 @@ function statusOf(row) {
 }
 
 // Create a consent request row. Resolves `{ rowId, status }` (best-effort) or
-// null when unavailable (404) / failed — the caller then fails closed (no spawn).
-// The server decides the birth status: a standing trust rule makes it
-// `auto_allowed` immediately, which the watcher honors on its first poll. Bodies
-// are clamped to the server's caps first so an oversized payload can never 400
-// the create and silently kill the web surface.
+// null when unavailable (404) / failed — the caller then fails closed (no post).
+// The server decides the birth status; the one reader (`session-windowless.js`)
+// never treats it as an authorization (see the header). Bodies are clamped to the
+// server's caps first so an oversized payload can never 400 the create and
+// silently kill the web surface.
 async function createConsentRequest(workspaceId, payload) {
   const body = {
     channelId: payload.channelId,
@@ -137,10 +117,9 @@ async function createConsentRequest(workspaceId, payload) {
 // 'web' | 'desktop' and rejects the server-only 'trust'.
 //
 // A 409 means the OTHER surface (the web list) decided first — the server CASes on
-// status='pending' and maps ConsentAlreadyDecidedError to 409/CONSENT_ALREADY_DECIDED
-// (server/http-mapping.ts:80, the ONLY 409 this route emits). That is a lost race, not
-// a failure: the decision stands, it just isn't ours, and the watcher's poll will read
-// whatever status won.
+// status='pending' and maps ConsentAlreadyDecidedError to 409/CONSENT_ALREADY_DECIDED.
+// That is a lost race, not a failure: the decision stands, it just isn't ours, and
+// `session-windowless.js › watchRow`'s poll reads whatever status won.
 //
 // FIX F-067 — THE OUTCOME IS THREE-VALUED, NOT A BOOLEAN. This used to collapse every
 // non-ok answer to `false` and every caller dropped it on the floor, so an Allow that
@@ -181,11 +160,8 @@ async function patchDecision(workspaceId, rowId, decision) {
 //
 // The notification that carried the Allow/Send button is GONE by the time the PATCH
 // answers (macOS removes it on action), and the pre-consent window has closed on its
-// own decision, so there is no live surface left to show an inline error on. A second
-// notification is the closest existing idiom in the app — the shape `channel-post.notifyLocal`
-// carried until 2026-10-09 (`Dopl: <what failed> in "<channel>"` + a recovery sentence), the same
-// trigger.js uses for an approved reply that never posted. Built here rather than
-// required from channel-post so this module keeps its single electron import.
+// own decision, so there is no live surface left to show an inline error on, so a
+// second notice carries it (`Dopl: <what failed> in "<channel>"` + a recovery sentence).
 //
 // QUIET ON SUCCESS, AND QUIET ON 409. Re-notifying a lost race would tell the operator
 // something broke when the truth is that their own web click (or the other surface)
@@ -252,9 +228,9 @@ async function submitDecision(workspaceId, rowId, decision, opts = {}) {
 }
 
 // One poll of a single row's status. Returns the raw status string
-// ('pending' | 'allowed' | 'auto_allowed' | 'denied' | 'expired') for the watcher
-// to map, or null on a transient error (keep waiting). A 404 (row hard-deleted)
-// is terminal → reported as 'expired' so the watcher drops it silently.
+// ('pending' | 'allowed' | 'auto_allowed' | 'denied' | 'expired') for
+// `session-windowless.js › watchRow` to map, or null on a transient error (keep
+// waiting). A 404 (row hard-deleted) is terminal → reported as 'expired'.
 async function pollStatus(workspaceId, rowId) {
   let res;
   try {
@@ -277,13 +253,7 @@ async function pollStatus(workspaceId, rowId) {
 }
 
 // ── Native notifications ─────────────────────────────────────────────────────
-// ⚠ THE SHAPE MOVED TO `notify-action.js` AND `notifyInbound` IS DELETED (2026-08-22, Samuel's
-// ruling). That builder raised "<requester>'s agent asks: <summary>" with an ALLOW action whose
-// only job was to PATCH an inbound consent row; there is no inbound row. Its BLAST-RADIUS line
-// (where the agent would run, under which tool profile, plus `tool-profiles.profileHint`) was the
-// half worth keeping and it did not go with it — `trigger.js › notifyAsk` carries the same three
-// facts above the same kind of banner, in front of a button that LAUNCHES rather than approves.
-// Reviving an Allow here would be reviving a decision with nothing to decide.
+// No inbound Allow here: there is no inbound row to decide (see the header).
 
 // Outbound: the drafted reply preview with a Send action.
 // ⚠ ROUTED (2026-10-09, Samuel's spec): `draft_reply` is "Mac + popup", which resolves to the
