@@ -238,4 +238,4 @@ function observeShape(o) {
   });
 }
 
-module.exports = { probe, observeShape, rosterFrom, match, matchExact, baseId, isPinned };
+module.exports = { probe, observeShape, rosterFrom, match, matchExact, baseId };
