@@ -12,7 +12,6 @@
 //
 // Re-exported from targeting.js verbatim, so every existing caller
 // (`channel-listener.setHandlers`, `session-dispatch`'s `resolveToolProfile`) is unchanged.
-// `channel-agents.js` was a third caller and is deleted (channels rollback §1).
 
 let handlers = {}; // window-control callbacks from index.js (openChannel)
 
@@ -76,11 +75,6 @@ function openChannelForEntry(entry, opts) {
 //
 // `tool-profiles.js` has no top-level requires, so this costs targeting.js none of the
 // dependency-freedom its four extraction harnesses rely on.
-//
-// The parallel track this used to name — `myNotifyScope` — no longer exists anywhere
-// (F-170, 2026-08-08): the control, the schema field, the DTO and both runtime reads are
-// gone, so pointing at it as the shape to follow would send the next reader looking for a
-// field nothing sets.
 const { normalizeProfile, profileForChannel } = require('./tool-profiles');
 
 function resolveToolProfile(channel) {

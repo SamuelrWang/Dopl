@@ -1,17 +1,8 @@
 // ui-sync-core.js — THE UI FEED'S DECISION CORE, with no socket, clock or BrowserWindow.
 //
-// ⚠ SPLIT OUT OF main/ui-sync.js ON 2026-08-18 (wiring plan Phase 10). That file sat at
-// EXACTLY the ENGINEERING §2 500-line cap, so the Phase 10 fan-out — pushing the doorbell
-// to EVERY app window instead of one — could not be written until something moved. The
-// seam was already drawn: ui-sync.js's own header called this half "a pure function of
-// injected values, testable without a socket, clock or BrowserWindow", and it was already
-// fenced by the sentinels below.
-//
-// ⚠ THE SENTINELS MOVED WITH THE CODE, BYTE FOR BYTE. `test/ui-sync.test.mjs`,
-// `test/ui-sync-tables.test.mjs` and `test/ui-sync-replica-identity.test.mjs` all SLICE
-// `BEGIN UI-SYNC-PURE … END UI-SYNC-PURE` and drive it in a bare scope; they now slice it
-// from HERE. Nothing inside changed in the split — the fan-out is entirely in ui-sync.js's
-// electron half, which is the point of the seam.
+// `test/ui-sync.test.mjs`, `test/ui-sync-tables.test.mjs` and
+// `test/ui-sync-replica-identity.test.mjs` all SLICE `BEGIN UI-SYNC-PURE … END UI-SYNC-PURE`
+// and drive it in a bare scope.
 //
 // ⚠ NOTHING BELOW MAY REQUIRE ANYTHING. The block is evaluated in a bare `new Function`
 // scope by three test files; a `require` in it ends that, and with it the ability to test

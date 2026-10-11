@@ -1,18 +1,8 @@
-// The BUNDLED UI window (docs/DESKTOP-MIGRATION-PLAN.md Phase 2).
+// The BUNDLED UI window: renders `renderer/app/` (the Vite build of `apps/desktop-ui`) as a
+// LOCAL page with the typed data bridge (`renderer/app-preload.js` + `main/ui-bridge.js`).
+// It is the app's only shell (`shell-mode.js › createShellWindow`; dopl-desktop-app/WIRING.md).
 //
-// This is the window that replaces `loadURL('https://www.usedopl.com/canvas')`.
-// It renders `renderer/app/` — the Vite build of `apps/desktop-ui` — as a LOCAL
-// page, and gets the typed data bridge (`renderer/app-preload.js` +
-// `main/ui-bridge.js`).
-// ⚠ THE SENTENCE THIS REPLACES DESCRIBED A TREE THAT NO LONGER EXISTS (corrected 2026-08-20):
-// it said "today's main window hosts REMOTE content and therefore gets the deliberately-minimal
-// `renderer/preload.js` bridge", contrasting this window with the remote shell. That shell and
-// its preload are DELETED — `test/preload-parity.test.mjs` asserts `renderer/preload.js` is
-// absent — so there is no second window and no second bridge to contrast with. This IS the
-// window.
-//
-// The security shape is the DELETED `main/session-window.js`'s, verbatim, because that is
-// the repo's proven pattern for a local Electron page:
+// Security shape:
 //   • contextIsolation + sandbox + nodeIntegration:false, one dedicated preload
 //     as the ENTIRE privileged surface;
 //   • `loadFile` in production — never a remote URL;
@@ -20,9 +10,6 @@
 //   • a page CSP (`default-src 'none'`, no `connect-src`) shipped in the built
 //     index.html by the SPA's own build — see apps/desktop-ui/vite.config.ts.
 //     The renderer never touches the network; main does, behind IPC.
-//
-// NOT WIRED YET. index.js still creates the remote main window; see
-// dopl-desktop-app/WIRING.md for the two-line integration.
 
 const path = require('path');
 const { app, BrowserWindow, shell } = require('electron');

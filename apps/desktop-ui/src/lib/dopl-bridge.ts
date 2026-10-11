@@ -53,9 +53,7 @@ declare global {
 
 /**
  * The bridge inside Electron, else null.
- * Keyed on `apiRequest`, never on `window.dopl` being truthy: the legacy desktop wrapper exposes a
- * partial `window.dopl`. No `isDesktop()` alias: `@/shared/lib/desktop › isDesktopApp` reads the
- * legacy wrapper's marker, which answers the opposite way in this renderer.
+ * Keyed on `apiRequest`, never on `window.dopl` being truthy (`spa-bridge.ts › getSpaBridge`).
  */
 export function getBridge(): DoplBridge | null {
   if (typeof window === "undefined") return null;

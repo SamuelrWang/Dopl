@@ -4,23 +4,12 @@
 // the thread view's "Open as new window" affordance. Not a session window: it shows the
 // THREAD (the shared transcript), not an agent's run.
 //
-// ⚠ IT LANDED ON THE WHOLE CHANNELS PAGE UNTIL 2026-08-19, AND THAT WAS THE BUG SAMUEL
-// CALLED. A window opened to read one exchange arrived carrying the app sidebar, the
-// channels tree and the info panel — every surface the operator already had open behind it.
-// The landing is now a route of its own, OUTSIDE the SPA's `AppShellLayout`
-// (`apps/desktop-ui/src/pages/thread-window/index.tsx`), whose whole content is the
-// transcript, the composer and the thread's title. Its default size moved with it: 520x600,
-// the OLD SESSION WINDOW'S footprint (`main/session-window.js`), because that is the shape a
-// single-column transcript beside another app wants — the 720x820 it used before was sized
-// for a three-column page.
+// It lands on a route of its own, OUTSIDE the SPA's `AppShellLayout`
+// (`apps/desktop-ui/src/pages/thread-window/index.tsx`): transcript, composer and title only,
+// never the sidebar and panels the operator already has open behind it (Samuel, 2026-08-19).
 //
-// ⚠ WHY IT COULD NOT EXIST BEFORE. Every renderer-reachable `ipcMain.handle` was bound to
-// the MAIN window's top frame, so a second SPA window would have had every `apiRequest`
-// refused and would have rendered nothing while reporting nothing — the silent
-// feature-deletion failure INVARIANTS §11 describes. Samuel's ruling (2026-08-18) took
-// option (a): WIDEN the binding to a registry of app-owned windows (main/app-windows.js).
-// Option (b) — reuse the session window's renderer — was rejected because it builds the
-// thread view twice, which is the duplication the channels port exists to remove.
+// It works because every renderer-reachable `ipcMain.handle` is bound to a REGISTRY of
+// app-owned windows (main/app-windows.js, Samuel's 2026-08-18 ruling), not to the main window.
 //
 // ⚠ THE PRELOAD IS THE SPA'S OWN, DELIBERATELY. A pop-out is an app window; what
 // authorizes it is REGISTRATION, not a narrower bridge. `spa-window.js ›
@@ -98,11 +87,8 @@ function sweep() {
 // The window itself. Same bundle, same preload, same navigation lock as the shell —
 // smaller, and freely movable/resizable, because it exists to sit beside something else.
 //
-// ⚠ 520x600 IS THE OLD SESSION WINDOW'S FOOTPRINT, taken deliberately (from the since-deleted
-// `session-window.js`,
-// item 7 of v2.2: default size = the MIN size, so the window opens at its most compact and
-// the operator grows it only when they want to). This window holds ONE single-column
-// transcript now, and that is the shape it was already proven at. ⚠ `title` is the
+// ⚠ 520x600 is sized for ONE single-column transcript beside another app, and default = MIN
+// size so the window opens at its most compact (v2.2 item 7). ⚠ `title` is the
 // PRE-PAINT name only — the renderer sets `document.title` to "Dopl — <thread>" once the
 // thread loads and Electron copies it onto the window (`thread-window.tsx ›
 // threadWindowTitle`); nothing here disables that, and it must not start to.

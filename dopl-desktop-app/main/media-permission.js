@@ -7,16 +7,9 @@
 // never REACHABLE by a foreign page; it was still an unfenced default sitting behind one gate
 // instead of two, which INVARIANTS §11 does not accept anywhere else in this tree.
 //
-// ⚠ THE MICROPHONE IS WHY IT LANDED NOW (Samuel, 2026-09-08 — the composer's dictation glyph).
-// The composer's `use-dictation.ts` drives `webkitSpeechRecognition`, which opens a capture
-// stream; that ask reaches this handler. ⚠ **AND ALLOWING IT DOES NOT MAKE DICTATION WORK IN
-// ELECTRON** — the capture succeeds and the RECOGNITION SERVICE is what fails, because
-// `webkitSpeechRecognition` posts to Google's speech endpoint with the Chromium build's API key
-// and Electron ships none. That is a property of the runtime, not of this fence; it is recorded
-// here so nobody reads this file as the fix and stops looking.
-// ⚠ 2026-10-08: THE FIX LANDED ELSEWHERE. The desktop no longer uses `webkitSpeechRecognition` at
-// all; dictation runs Apple's on-device recognizer in a helper (`main/dictation.js`), which asks
-// for the microphone itself. `media` stays allowed for the page's own audio capture.
+// The microphone is why it landed (Samuel, 2026-09-08, the composer's dictation glyph). Desktop
+// dictation now runs Apple's on-device recognizer in a helper (`main/dictation.js`), which asks
+// for the microphone itself; `media` stays allowed for the page's own audio capture.
 //
 // THE SHAPE: an explicit allowlist, checked against the app's OWN document, and `false` for
 // everything else — including for our own document. A permission is added here WITH the feature

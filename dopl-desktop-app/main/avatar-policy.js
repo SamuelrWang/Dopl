@@ -8,28 +8,22 @@
 // bundled SPA falls back to initials.
 //
 // THE FIX. Main fetches the image and hands back a `data:` URI, which the CSP
-// already allows. The FETCH itself is not new: main/avatar-cache.js has done
-// exactly this for the session window since v2.2 (bounded one-shot GET,
+// already allows. The FETCH is main/avatar-cache.js's (bounded one-shot GET,
 // https-only, raster image/* only, ≤256KB, 4s abort, `redirect:'error'`,
-// SSRF host guard, positive+negative memoization). This module adds the ONE
-// thing the session window never needed — a DESTINATION ALLOWLIST — and
-// re-checks the answer at the IPC boundary.
+// SSRF host guard, positive+negative memoization). This module adds a
+// DESTINATION ALLOWLIST and re-checks the answer at the IPC boundary.
 //
 // WHY AN ALLOWLIST ON TOP OF avatar-cache's guards. avatar-cache's
 // `isSafeAvatarHost` is an SSRF guard: it blocks internal targets and admits
-// every public host. That is right for the session window, whose input is a
-// workspace member's stored avatar_url. It is NOT right for an IPC handler the
-// RENDERER calls with an arbitrary string: a scheme-only gate would make
-// `dopl:avatar` the renderer's arbitrary outbound GET and the exfiltration leg
-// out of a `connect-src 'none'` document. So the answer to anything not on this
-// list is `null`, and the component keeps its initials.
-// ⚠ THIS SENTENCE USED TO CITE ui-bridge.js's `EXTERNAL_HOST_ALLOWLIST` as the
-// same hole closed the same way. It is NOT the same hole, and that list is gone
-// (#3031, 2026-10-10 — it was refusing every ordinary link in the app). THIS
-// handler fetches silently and returns the BODY to the renderer, so a host
-// allowlist is the only thing bounding it; `shell.openExternal` returns no body
-// and surfaces a visible browser window, so it is bounded by SCHEME
-// (main/external-url.js). Do not re-derive one from the other.
+// every public host. That is NOT enough for an IPC handler the RENDERER calls
+// with an arbitrary string: a scheme-only gate would make `dopl:avatar` the
+// renderer's arbitrary outbound GET and the exfiltration leg out of a
+// `connect-src 'none'` document. So the answer to anything not on this list is
+// `null`, and the component keeps its initials.
+// ⚠ NOT THE SAME HOLE AS THE OS OPENER. This handler fetches silently and returns
+// the BODY to the renderer, so a host allowlist is the only thing bounding it;
+// `shell.openExternal` returns no body and surfaces a visible browser window, so
+// it is bounded by SCHEME (main/external-url.js). Do not re-derive one from the other.
 //
 // Adding a provider is a deliberate one-line edit here.
 

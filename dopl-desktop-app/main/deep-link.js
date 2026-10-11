@@ -12,7 +12,7 @@
 //   auth, authTokens, listener, mcpConfig  — the auth handoff's collaborators
 //   showMainWindow()                       — reveal/recreate the shell
 //   navigateTo(path)                       — the SPA bridge (shell-mode.js)
-//   getMainWindow()                        — the window (the remote-mode loader is gone)
+//   getMainWindow()                        — the window
 //   appOrigin, diag
 
 const { app } = require('electron');
@@ -71,11 +71,6 @@ function pushRoute(deps, route) {
  * there is deliberately no deferred navigation here, because there is none
  * anywhere else in this app to reuse and a queue that outlives an OAuth round
  * trip is a feature, not a hardening detail.
- *
- * A REMOTE-MODE BRANCH SAT HERE and went with that shell (Stage D, 2026-08-06). It gave
- * the rollback window nothing but a show, because its routing was a URL load through the
- * load guard — and teaching a rollback path a new trick is how it stops being one. Both
- * the shell and the guard are deleted, so there is one routing path now.
  */
 function openApp(url, parsed, deps) {
   deps.showMainWindow();
@@ -97,10 +92,7 @@ function openApp(url, parsed, deps) {
   pushRoute(deps, route);
 }
 
-/**
- * `dopl://auth#<tokens>` — the OAuth / magic-link handoff. MOVED HERE
- * UNCHANGED; every comment below predates this file and still governs.
- */
+/** `dopl://auth#<tokens>` — the OAuth / magic-link handoff. */
 function adoptSession(fragment, deps) {
   // Capture the Supabase tokens into the encrypted main-process store so the background
   // listener has a session (and a refresh token) even when the window is hidden.
@@ -121,11 +113,8 @@ function adoptSession(fragment, deps) {
   // Surface the app — CREATING the window when the link arrived with it closed, which the
   // SPA window makes routine (it is destroyed on close, not hidden).
   deps.showMainWindow();
-  // THE COMPLETION-PAGE LOAD IS GONE (Stage D, 2026-08-06). The retired remote shell
-  // navigated to the web auth-completion route here so that page could plant the cookie
-  // jar. In the SPA the captured tokens ARE the session — `onSignIn()` above pushed the
-  // flip — and loading that page stranded the window on "Signing you in…". With the shell
-  // deleted the branch has no caller, and the page itself was deleted with it.
+  // No completion page is loaded: the captured tokens ARE the session, and `onSignIn()`
+  // above already pushed the flip to the renderer.
 
   // Let the session settle, then restart the listener against it and ensure the CLI's
   // Dopl MCP config.
@@ -147,11 +136,10 @@ function openDeepLink(url, deps) {
 }
 
 /**
- * PARK ONLY BEFORE app-ready. The old gate was "is there a window?" — almost always true
- * pre-migration (the remote window hid on close), routinely false now that the SPA window
- * is DESTROYED on close while the app stays in the tray. An OAuth return or a clicked
- * magic link then parked forever (the park is flushed exactly once, at startup) and the
- * pending-auth record expired. Capture needs no window; openDeepLink surfaces one.
+ * PARK ONLY BEFORE app-ready, never on "is there a window?": the SPA window is DESTROYED
+ * on close while the app stays in the tray, and the park is flushed exactly once, at
+ * startup, so a window-keyed park strands an OAuth return until its pending-auth record
+ * expires. Capture needs no window; openDeepLink surfaces one.
  */
 function handle(url, deps) {
   if (!url || !url.startsWith(target.PROTOCOL_PREFIX)) return;

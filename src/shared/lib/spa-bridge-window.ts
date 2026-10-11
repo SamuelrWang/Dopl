@@ -5,11 +5,9 @@
  * `frame: false`), so macOS draws no close button and no zoom button and its header draws its own.
  * These two wrappers are how those buttons reach main.
  *
- * ⚠ WHY IT IS NOT IN `spa-bridge.ts`. That file sits at EXACTLY the 500-line cap (INVARIANTS §1,
- * lint-enforced at `error` over `src/**`), and a file at the cap cannot absorb a new namespace —
- * let alone the paragraph explaining one. The seam is honest rather than a dodge: the bridge
- * surface moves when the DESKTOP's ops move, and this moves when a WINDOW's chrome does. The
- * detection still goes through `getSpaBridge()`, so there is exactly one reader of `window.dopl`.
+ * ⚠ WHY IT IS NOT IN `spa-bridge.ts`: the bridge surface moves when the DESKTOP's ops move, and
+ * this moves when a WINDOW's chrome does. The detection still goes through `getSpaBridge()`, so
+ * there is exactly one reader of `window.dopl`.
  *
  * ⚠ NEITHER OP TAKES AN ARGUMENT, AND THAT IS THE SECURITY CONTENT. Main resolves the target as
  * `BrowserWindow.fromWebContents(event.sender)` (`main/window-chrome.js`), so the ONLY window
