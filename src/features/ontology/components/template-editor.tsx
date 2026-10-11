@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type { Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
+import { fieldKey } from "../field-kinds";
 import type { GraphAction } from "../graph-state";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { OntologyObject, TemplateField } from "../types";
@@ -109,7 +110,7 @@ export function TemplateEditor({
         ? column.template.map((f) => (f === existing ? { ...f, label, kind: row.kind } : f))
         : [
             ...column.template,
-            { key: label.toLowerCase().replace(/\s+/g, "-"), label, kind: row.kind },
+            { key: fieldKey(label), label, kind: row.kind },
           ]
     );
     drop(index);
