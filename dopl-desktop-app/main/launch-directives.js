@@ -45,34 +45,120 @@ const calls = require('./launch-directive-calls');
 const { claim, decide } = calls;
 
 /**
- * The one funnel. SILENT on every non-decision — lane off, not mine, already handled, not pending:
- * no server write, no per-row log; the row expires where the orchestrator sees it.
+ * ⚠ A NON-DECISION IS NOW LOGGED WITH ITS REASON, AND THE HEADER ABOVE USED TO PROMISE OTHERWISE.
+ * It said the funnel was "SILENT on every non-decision … the row expires where the orchestrator
+ * sees it". The second half is false and was the whole of F-3201: nothing writes `expired` (239
+ * prod rows, ZERO of them expired), the status is only ever computed at read time, and the MCP
+ * launch op gives up on its 30s hold 90 seconds before a 120s TTL can elapse — so the launcher is
+ * told `pending retry=no` about a row that is already dead and is never told again. Two rows died
+ * that way (18b15b76 "Credit Card Fix", accdb17f "Tool Gate Probe"): `pending`, never claimed, no
+ * trace on either side.
+ *
+ * This still does not WRITE on a non-decision, and must not: the claim is the authorisation, and a
+ * machine that declined to act has no standing to write a verdict another machine may be about to
+ * earn (§6). What it does now is SAY WHY, locally, with the row id — so the next person reading
+ * this log can tell "the lane is off" from "another Mac won" from "the claim 500'd", which were
+ * previously one silence. The two codes the OPERATOR can act on also raise their banner; the rest
+ * are ordinary and stay quiet.
  */
+function declined(d, code, detail) {
+  diag('launch-directive: NOT acted on', String((d && d.id) || '?').slice(0, 8),
+    '—', code, detail ? `(${detail})` : '');
+}
+
+/**
+ * The two reasons a directive dies that are the OPERATOR's to fix, as opposed to ordinary racing.
+ * `lane-off`: they filed a launch and this Mac's arming switch is off, so nothing will ever take
+ * it. `claim-failed`: the claim could not be written at all, so the row stays pending and rots.
+ * Reuses `decision_failed` — locked on, sounds, bounces the dock, and its own registry note reads
+ * "the operator believes they answered and they did not", which is this fact exactly.
+ */
+function tellOperator(title, body) {
+  try { require('./notification-route').raise('decision_failed', { title, body, silent: false, attention: true }); }
+  catch (err) { diag('launch-directive: operator notice failed —', (err && err.message) || 'error'); }
+}
+
+/** The one funnel. Every exit is coded; only a decision writes to the server. */
 async function handle(raw, workspaceId) {
   if (!armed) return;
   const d = wire.directiveFrom(raw, workspaceId);
-  if (!d || d.status !== wire.STATUS_PENDING) return;
-  if (wire.KINDS_NEEDING_LAUNCH_CONSENT.indexOf(d.kind) !== -1 && !launchEnabled()) return;
+  if (!d) return;
+  if (d.status !== wire.STATUS_PENDING) return; // already taken or decided: not ours to report
+  if (wire.KINDS_NEEDING_LAUNCH_CONSENT.indexOf(d.kind) !== -1 && !launchEnabled()) {
+    declined(d, 'lane-off', `kind ${d.kind} needs the launch toggle`);
+    // ⚠ ONCE PER ROW, not once per delivery: realtime and the backstop poll both deliver it.
+    if (!decided.has(d.id)) {
+      remember(d.id);
+      tellOperator('A launch could not start',
+        'An agent asked this Mac to start one and the launch lane is off for it. Nothing will take the request, and it expires in two minutes.');
+    }
+    return;
+  }
   // The realtime filter is workspace-wide, so the owner is re-checked here (the claim re-checks too).
   const me = (deps.getUserId && deps.getUserId()) || null;
-  if (!me || d.operatorUserId !== me) return;
-  if (decided.has(d.id) || inflight.has(d.id)) return;
+  if (!me) { declined(d, 'no-identity', 'this machine has not resolved its operator yet'); return; }
+  if (d.operatorUserId !== me) return; // another operator's row on a shared workspace: ordinary
+  if (decided.has(d.id) || inflight.has(d.id)) return; // our own duplicate delivery: ordinary
   inflight.add(d.id);
   try {
     const claimed = await claim(d);
-    if (!claimed) { remember(d.id); return; } // lost the race, or the row is gone
+    if (!claimed) {
+      // ⚠ TWO VERY DIFFERENT FACTS WEAR ONE `null` HERE, and `claim` has already logged which:
+      // 409/404 is another machine winning (ordinary), while a network fault or 5xx leaves the row
+      // genuinely pending with nobody coming. Only the second is the operator's.
+      declined(d, 'claim-lost', 'see the claim line above for which');
+      remember(d.id);
+      return;
+    }
     // Remembered the moment it is ours, BEFORE the spawn: the poll can deliver the same row meanwhile.
     // Dispatch on the CLAIMED row (the authenticated answer), never the frame; every branch decides.
     remember(claimed.id);
     const outcome = claimed.kind === wire.KIND_LAUNCH
       ? await require('./launch-directive-spawn').spawn(claimed, deps)
       : require('./directive-agent-ops').apply(claimed);
-    await decide(claimed, outcome);
+    const recorded = await decide(claimed, outcome);
+    if (!recorded) await reportLostDecision(claimed, outcome);
   } catch (err) {
     // No decision on a throw: whether the spawn happened is unknown, so the row is left to expire.
-    diag('launch-directive: handler threw —', (err && err.message) || String(err));
+    declined(d, 'handler-threw', (err && err.message) || String(err));
   } finally {
     inflight.delete(d.id);
+  }
+}
+
+/**
+ * THE ORPHAN. The decide write is lost after the spawn already happened, so the launcher's picture
+ * ("nothing started") and this machine's ("an agent is running") disagree, and the row will read
+ * `expired` forever. `decide` has exhausted its retries by the time we get here.
+ *
+ * An agent WITH an id is the dangerous half and gets a channel post naming it, because the fix is
+ * to address that agent rather than relaunch the work — relaunching is how one task gets two
+ * agents. A refusal that failed to record is only a lost wait, so it stays local.
+ *
+ * ⚠ THE POST IS THE SAME UNADDRESSED, NON-TRIGGERING SHAPE AS A DROP NOTICE (`postDropNotice`),
+ * for the reason recorded there: an addressed agent-authored post would spawn a session on a
+ * peer's machine. Never throws — the agent is already running and nothing here may unwind that.
+ */
+async function reportLostDecision(d, outcome) {
+  const agentId = outcome && outcome.agentId;
+  try {
+    if (!agentId) {
+      tellOperator('A launch answer was not saved',
+        'This Mac declined an agent request and could not record the answer. The asker will see it expire instead.');
+      return;
+    }
+    tellOperator('An agent is running unrecorded',
+      `Agent ${agentId} started on this Mac, but the answer could not be saved. Whoever asked believes nothing started.`);
+    const name = (outcome && outcome.appliedAgentName) || '';
+    const text = `${name ? name + ' ' : ''}@agent-${agentId} IS RUNNING on this machine, but the launch answer could not be saved, so the request will read as expired. Address this agent rather than asking again: a second request starts a second agent on the same work.`;
+    const posted = await require('./channel-post').postDropNotice(
+      { channel: { id: d.channelId }, workspaceId: d.workspaceId },
+      text,
+      { clientMsgId: `lost-decision-${d.id}`, summary: `Agent ${agentId} is running but its launch was not recorded` },
+    );
+    diag('launch-directive: lost-decision notice', posted ? 'posted' : 'POST FAILED TOO', agentId);
+  } catch (err) {
+    diag('launch-directive: lost-decision report threw —', (err && err.message) || 'error');
   }
 }
 
@@ -169,6 +255,7 @@ module.exports = {
   deliver,
   handle,
   poll, // exported so the suite can drive the backstop tick
+  reportLostDecision, // exported so the suite can drive the orphan path without a real spawn
   POLL_MS,
   MAX_REMEMBERED,
 };

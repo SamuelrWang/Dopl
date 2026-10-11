@@ -125,6 +125,8 @@ export function boot(over = {}) {
   const flushes = [];  // every `session-summary.touch()` the commit wrapper announced
   const modes = [];    // every `session-engine.setModeByTask` call the lane made (2026-09-01)
   const resolves = [];
+  const notices = []; // every operator banner the lane raised (F-3201)
+  const drops = [];   // every drop/orphan post the lane made (F-3201)
   const acquires = []; // every `runtime.acquire` this lane made (2026-09-21, U9)
   const rosters = [];  // every `runtime.models()` read this lane made (2026-09-21, U9)
   const identityAsks = []; // every runtime the identity link was asked of (2026-09-23)
@@ -174,6 +176,15 @@ export function boot(over = {}) {
               ? { ...a.json, directive: granted }
               : a.json;
             return { ok: a.ok, status: a.status, json: async () => json };
+          }
+          // ⚠ F-3201 — THE DECIDE WRITE IS DRIVABLE PER ATTEMPT. `cfg.decideAnswer` is a
+          // FUNCTION, not a value, because the behaviour under test is the RETRY: a case needs
+          // "fails twice then lands" to be expressible, and a fixed answer cannot say it.
+          // Absent, it still answers 200, so every case written before this keeps its decision.
+          if (path === wire.ROUTES.decide && typeof cfg.decideAnswer === "function") {
+            const a = cfg.decideAnswer() || {};
+            return { ok: a.ok === true, status: a.status || 0, error: a.error,
+              json: async () => a.json || {} };
           }
           return { ok: true, status: 200, json: async () => ({ ok: true }) };
         },
@@ -366,6 +377,22 @@ export function boot(over = {}) {
     // push, driven for real in the desktop's own summary tests.
     if (id === "./session-summary") return { touch: () => { flushes.push(true); } };
     if (id === "./diag") return { diag: (...p) => logged.push(p.join(" ")) };
+    // ⚠ F-3201 — THE TWO SURFACES A NON-DECISION NOW REACHES, stubbed at their seams because
+    // both are the fix under test. The lane's calls are inside try/catch (an end must never be
+    // unwound by a failed notice), so WITHOUT these stubs the `unexpected require` below would be
+    // swallowed and every case would pass against a lane that reported nothing — which is the
+    // exact failure mode this wave exists to close.
+    if (id === "./notification-route") {
+      return { raise: (eventId, spec) => { notices.push({ eventId, spec }); return "mac"; } };
+    }
+    if (id === "./channel-post") {
+      return {
+        postDropNotice: async (entry, text, opts) => {
+          drops.push({ entry, text, opts });
+          return cfg.dropPostOk !== false;
+        },
+      };
+    }
     throw new Error(`unexpected require: ${id}`);
   };
   const api = evalModule(SRC, stub);
@@ -379,7 +406,7 @@ export function boot(over = {}) {
   // was actually asked about. Nothing about the module is wrapped — `handle` is the real one.
   const handle = (frame, ws) => { cfg.lastFrame = frame; return api.handle(frame, ws); };
   return { api: { ...api, handle }, cfg, posts, gets, arms, logged, resolves, controls, names,
-    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, ceilingAsks };
+    flushes, modes, acquires, rosters, identityAsks, runtimeAsks, ceilingAsks, notices, drops };
 }
 
 export const claimPosts = (h) => h.posts.filter((p) => p.path === wire.ROUTES.claim);

@@ -143,6 +143,39 @@ async function postCourtesy(entry, m, text) {
   return postResult(entry, m, text, null, { intent: 'chat' });
 }
 
+// ── THE DROP NOTICE ──────────────────────────────────────────────────────────
+//
+// A REAL MESSAGE saying an agent stopped without reporting (`session-drop-notice.js`). It exists
+// because the lifecycle marker beside it is not a report: `task_progress` renders as a status
+// line, addresses nobody, and carries no agent name or cause — so a launcher waiting on a DONE
+// learned nothing when the agent parked silent or was reaped at the 12h bound.
+//
+// ⚠ `intent: 'chat'` IS LOAD-BEARING, for the reason P1-5 records above and not as caution. An
+// unaddressed agent post in a DIRECT channel is auto-addressed to the peer by
+// `resolvePostMetadata`, which `targeting.classify` reads as 'trigger' — so a notice about THIS
+// machine's agent stopping would spawn a session on the peer's. `chat` is suppressed ahead of
+// every branch that can return 'trigger', so this is visible in the transcript and starts nothing,
+// anywhere. The operator's own banner (`agent_dropped`) is the half that interrupts somebody.
+//
+// ⚠ `sessionId` IS WHAT MAKES IT ATTRIBUTABLE — the slot key, on the header, never in metadata
+// (see postTaskEvent's note). Without it the row reads "Agent" and names nobody, which is the
+// defect this notice was written to fix.
+//
+// `clientMsgId` is the caller's, keyed per (session cycle, code), so the bounded retry below and
+// the server's own uniqueness agree and one drop can never post twice.
+async function postDropNotice(entry, text, opts) {
+  const o = opts || {};
+  return postWithRetry(entry, {
+    body: consent.clampBody(text),
+    kind: 'message',
+    authorKind: 'agent',
+    intent: 'chat',
+    clientMsgId: o.clientMsgId,
+    ...(o.summary ? { summary: o.summary } : {}),
+    ...(o.taskId ? { metadata: { taskId: o.taskId } } : {}),
+  }, o.sessionId);
+}
+
 // `postAgentMessage` lived here — a post this machine made on behalf of one of the operator's
 // `channel_agents` rows, carrying a top-level `authorAgentId` (never a metadata key: the
 // server strips `metadata.author_agent_id` and re-stamped it only from the validated
@@ -153,7 +186,7 @@ async function postCourtesy(entry, m, text) {
 // M5a: bounded retry with backoff, shared by both agent-authored writers. The caller's
 // `clientMsgId` is what makes it safe — the server dedupes, so a retry can never
 // double-post. Returns true only on a confirmed post; never throws.
-async function postWithRetry(entry, body) {
+async function postWithRetry(entry, body, sessionId) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await io.apiFetch(`/api/channels/${entry.channel.id}/messages`, {
@@ -161,6 +194,8 @@ async function postWithRetry(entry, body) {
         workspaceId: entry.workspaceId,
         body,
         timeoutMs: 20000,
+        // Only where a session really wrote it; absent for every other caller, as before.
+        ...(sessionId ? { sessionId } : {}),
       });
       if (res.ok) return true;
       // 4xx (other than rate-limit) won't improve on retry — stop early.
@@ -186,4 +221,4 @@ async function postWithRetry(entry, body) {
 // — so removing it closes one of those without a separate edit. A new local notice belongs on the
 // route, where the operator's switch and the surface choice both live.
 
-module.exports = { postTaskEvent, postResult, postCourtesy };
+module.exports = { postTaskEvent, postResult, postCourtesy, postDropNotice };

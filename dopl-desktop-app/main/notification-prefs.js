@@ -51,6 +51,7 @@ const EVENT_IDS = [
   'mention', 'decision', 'direct_message', 'approval', 'peer_ask',
   'draft_reply', 'agent_started', 'signed_out', 'credits_exhausted',
   'runtime_signin', 'decision_failed', 'tool_blocked', 'session_resume', 'shared_with_me',
+  'agent_dropped',
 ];
 // `approval` plus the four SAFETY events Samuel kept at #2775 ("always on, like approvals").
 const LOCKED_ON = ['approval', 'signed_out', 'credits_exhausted', 'runtime_signin', 'decision_failed'];
@@ -73,6 +74,10 @@ const SURFACE = {
   tool_blocked: 'popup',
   session_resume: 'popup',
   shared_with_me: 'popup',
+  // The counterpart to `agent_started`: an agent that STOPPED without reporting. See the web
+  // registry's note — it marks work stopping silently, but it is default ON and not locked,
+  // because the channel post is the durable record and the banner is only the interruption.
+  agent_dropped: 'both',
 };
 // ⚠ THE ONE EVENT THAT DEFAULTS OFF, mirroring the registry's `defaultOn: false`. Samuel ruled
 // DMs out entirely (#2773), so silence is the answer he gave, not a record we failed to read.

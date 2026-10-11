@@ -4,7 +4,7 @@
 
 // Required above the sentinel: inside the block these are free vars, and test/_reducer-block.mjs prepends
 // the effects and state blocks to evaluate the set standalone.
-const { gateActivity, endEffects, endReasonOf, parkEffects, terminalBody } = require('./session-effects');
+const { gateActivity, endEffects, endReasonOf, parkEffects, parkNoticeFor, terminalBody } = require('./session-effects');
 const {
   DEFAULT_IDLE_MS, MESSAGE_MODES, coerceMode, toolModesOf, initialSessionState, nextIdleMs, idleTimeout,
 } = require('./session-state');
@@ -228,10 +228,13 @@ function sessionReducer(state, event) {
     // grants survive the park (M2) and the park arms the abandonment bound; one-shot resolvers and the per-turn
     // post counters still clear.
     if (state.parked === true) return { state: state, effects: [] };
+    // ⚠ `parkNoticeFor` READS THE INCOMING STATE, BEFORE THE CLONE BELOW OVERWRITES `activity`.
+    // That ordering is the whole correctness of it: `activity` is the only surviving record of
+    // whether the turn that just ended posted anything, and this branch sets it to 'parked'.
     return {
       state: clone(state, { phase: 'parked', parked: true, activity: 'parked',
         pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
-      effects: parkEffects({ armAbandon: true }),
+      effects: parkEffects({ armAbandon: true, notice: parkNoticeFor(state) }),
     };
   }
 
