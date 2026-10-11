@@ -91,7 +91,10 @@ function createPresence(deps) {
 
   let timer = null;
   let started = false;
-  let paused = false; // suspended / screen locked — the loop stands down
+  let paused = false; // suspended / shutting down — the loop stands down
+  // Screen locked but the machine awake — the loop KEEPS beating, as `away` (Samuel, 2026-10-11:
+  // a locked, awake Mac stays launchable; the server's launch gate reads `last_seen_at`).
+  let locked = false;
   let workspaceIds = [];
   let unavailableUntil = 0; // presence is not deployed at all (the per-workspace 404)
   let allUnavailableUntil = 0; // the user-scoped arm is not deployed (its own 404)
@@ -104,7 +107,7 @@ function createPresence(deps) {
 
   /** The Slack rule, evaluated fresh on every tick. */
   function posture() {
-    if (paused) return 'away';
+    if (paused || locked) return 'away';
     let idle = null;
     try { idle = idleSeconds(); } catch (_) { idle = null; }
     if (typeof idle !== 'number' || Number.isNaN(idle)) return 'active'; // see header
@@ -245,6 +248,7 @@ function createPresence(deps) {
     if (started) return;
     started = true;
     paused = false;
+    locked = false;
     beat().catch(() => {});
     arm();
     diag('presence: started (30s ±3s heartbeat, one POST per tick)');
@@ -253,6 +257,7 @@ function createPresence(deps) {
   /** powerMonitor resume / unlock — assert `active` NOW and re-arm if the timer was lost. */
   function wake() {
     paused = false;
+    locked = false;
     if (!started) { start(); return Promise.resolve('started'); }
     arm();
     diag('presence: re-armed after wake');
@@ -260,13 +265,21 @@ function createPresence(deps) {
   }
 
   /**
-   * powerMonitor suspend / lock-screen / shutdown — post `away` NOW and stand the loop down.
+   * powerMonitor suspend / lock-screen / shutdown — post `away` NOW.
+   *
+   * ⚠ LOCK-SCREEN KEEPS THE LOOP (2026-10-11, Samuel; KB codebase-cleanup "Launch Stall
+   * Investigation"). A locked Mac is still awake and still runs agents, but standing the loop down
+   * let `last_seen_at` age past the 120s window, and the server's launch gate
+   * (`service-launch-presence.ts › operatorIsOnline`) then refused every launch, end and direct as
+   * `offline`. So a lock only demotes the posture to `away` and the heartbeat keeps stamping;
+   * SUSPEND and SHUTDOWN still stand the loop down. `wake()` (unlock / resume) clears both.
    *
    * ⚠ BEST-EFFORT ON A SHORT LEASH, AND IT MUST NOT BE AWAITED BY ANYTHING THAT CAN BLOCK THE
    * SUSPEND. If it does not land, the server's own window takes the row offline four beats
    * later; the post only buys immediacy.
    */
   function sleep(reason) {
+    if (reason === 'lock-screen') return lockScreen();
     paused = true;
     if (timer) { clearTimer(timer); timer = null; }
     if (retryTimer) { clearTimer(retryTimer); retryTimer = null; }
@@ -274,6 +287,17 @@ function createPresence(deps) {
     diag('presence: away —', reason);
     if (!isSignedIn()) return Promise.resolve('signed-out');
     hook(onAway, reason);
+    return postAway();
+  }
+
+  /** The lock half of {@link sleep}: `away` now, and the loop keeps running (re-armed if lost). */
+  function lockScreen() {
+    locked = true;
+    if (inFlight) { try { inFlight.abort(); } catch (_) { /* gone */ } inFlight = null; }
+    diag('presence: away — lock-screen (heartbeat continues as away)');
+    if (started && !paused && !timer) arm();
+    if (!isSignedIn()) return Promise.resolve('signed-out');
+    hook(onAway, 'lock-screen');
     return postAway();
   }
 

@@ -298,6 +298,66 @@ test("a paused loop reports `away` even when the machine is not idle", async () 
   assert.equal(h.presence._posture(), "away");
 });
 
+// ── LOCKED BUT AWAKE (2026-10-11, Samuel; KB codebase-cleanup "Launch Stall Investigation") ──
+// A lock used to stand the loop down like a suspend, so `last_seen_at` aged past the server's 120s
+// window and every launch was refused `offline` while the Mac sat awake running agents.
+
+const flush = () => new Promise((r) => setImmediate(r));
+async function ticks(h, n) {
+  for (let i = 0; i < n; i++) { h.advance(HEARTBEAT_MS); await flush(); }
+}
+
+test("LOCK-SCREEN: the heartbeat keeps beating, as `away`", async () => {
+  const h = harness({ [ALL_PATH]: 200 });
+  h.presence.start();
+  await h.presence.sleep("lock-screen");
+  h.calls.length = 0;
+  await ticks(h, 3);
+  assert.ok(h.calls.length >= 2, `expected >=2 beats while locked, got ${h.calls.length}`);
+  assert.ok(h.statuses().every((st) => st === "away"), `every locked beat is away: ${h.statuses()}`);
+});
+
+test("SUSPEND: no beat at all until resume (control for the lock case)", async () => {
+  const h = harness({ [ALL_PATH]: 200 });
+  h.presence.start();
+  await h.presence.sleep("suspend");
+  h.calls.length = 0;
+  await ticks(h, 3);
+  assert.equal(h.calls.length, 0);
+});
+
+test("UNLOCK after a lock: `active` at once, and the loop keeps beating `active`", async () => {
+  const h = harness({ [ALL_PATH]: 200 });
+  h.presence.start();
+  await h.presence.sleep("lock-screen");
+  await h.presence.wake();
+  h.calls.length = 0;
+  await ticks(h, 2);
+  assert.ok(h.calls.length >= 2, `expected beats after unlock, got ${h.calls.length}`);
+  assert.ok(h.statuses().every((st) => st === "active"), `${h.statuses()}`);
+});
+
+test("RESUME after a suspend: the loop beats `active` again", async () => {
+  const h = harness({ [ALL_PATH]: 200 });
+  h.presence.start();
+  await h.presence.sleep("suspend");
+  await h.presence.wake();
+  h.calls.length = 0;
+  await ticks(h, 2);
+  assert.ok(h.calls.length >= 2, `expected beats after resume, got ${h.calls.length}`);
+  assert.ok(h.statuses().every((st) => st === "active"), `${h.statuses()}`);
+});
+
+test("LOCK then SUSPEND: the suspend still stands the loop down", async () => {
+  const h = harness({ [ALL_PATH]: 200 });
+  h.presence.start();
+  await h.presence.sleep("lock-screen");
+  await h.presence.sleep("suspend");
+  h.calls.length = 0;
+  await ticks(h, 3);
+  assert.equal(h.calls.length, 0);
+});
+
 test("RESUME: `active` immediately, and the interval is re-armed", async () => {
   const h = harness({ [ALL_PATH]: 200 });
   h.presence.start();
