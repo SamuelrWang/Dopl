@@ -7,7 +7,7 @@
  * It's a fixed size, and it does not get cut off. You see there's a little X button, so you can
  * see I can add a new tab, stuff like that. … We're moving the logo out to the top left."*
  *
- * ⚠ **IT WAS `agent-window.tsx › AgentWindowHeader` AND IT MOVED WHOLE.** The drag region, the
+ * ⚠ **IT WAS agent-window.tsx's AgentWindowHeader AND IT MOVED WHOLE.** The drag region, the
  * mark, the status badge and the expand/close pair are the SAME code, re-laid-out around the
  * strip — not rewritten. The file split is §1's cap: `agent-window.tsx` was at 470 lines and the
  * strip, the rail and the shell do not fit under it. `agent-window-chrome.test.tsx` already

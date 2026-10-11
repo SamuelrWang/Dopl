@@ -454,7 +454,7 @@ export function AgentPanelHeader({
         </span>
       </span>
       {/* ⚠ The pill REPLACES the liveness on an ended agent — one fact, one
-          element. `bits.tsx › AgentEndedPill` carries why. */}
+          element. `agent-bits.tsx › AgentEndedPill` carries why. */}
       {agent.state === "ended" ? (
         <AgentEndedPill />
       ) : (
