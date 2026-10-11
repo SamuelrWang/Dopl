@@ -56,6 +56,11 @@ describe("faults", () => {
     expect(dictationFault("helper-failed", true)).toMatchObject({ reason: "Dictation failed" });
     expect(dictationFault("helper-failed", true)?.fix).toMatch(/Fn twice/);
     expect(dictationFault("helper-failed", false)?.fix).not.toMatch(/Fn/);
+    // A missing helper is a broken install: "try again" cannot fix it, so it never says so.
+    const missing = dictationFault("helper-missing", true);
+    expect(missing).toMatchObject({ reason: "Dictation engine missing" });
+    expect(missing?.fix).toMatch(/^Reinstall Dopl/);
+    expect(missing?.fix).not.toMatch(/Try again/);
   });
 
   it("copy has no em dashes (copy voice)", () => {
