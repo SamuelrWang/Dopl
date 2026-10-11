@@ -13,10 +13,6 @@ let updateReadyVersion = null; // staged-update version; see refreshUpdateReady(
 let updateNote = null; // { text, busy } — what the updater is doing right now
 let peerSkew = null; // Q10: the newest older-build peer seen this run ({ peer, mine, who })
 let versionFloor = null; // min-version gate, WARNING state only ({ tray, ... }) or null
-// ⚠ `pendingCount` STOOD HERE AND IS DELETED (2026-08-22). It counted INBOUND consent requests
-// awaiting a human decision, written by `consent-watcher.js › emitCount` through index.js. The
-// inbound consent lane is deleted (`trigger.js`'s header carries the ruling), so the number has
-// no producer: an ask is a notification, and the messages behind it are in the channel.
 
 function iconPath() {
   // Base 16px + a trayTemplate@2x.png sibling for retina (nativeImage picks up
@@ -58,11 +54,6 @@ function channelFoldersSubmenu() {
   }
   return items;
 }
-
-// ⚠ The "Sessions" tray submenu is GONE with window mode (2026-08-20, settings.js
-// header). It held the "Run sessions in a window" executor checkbox and the live
-// session windows' Reopen/Show rows — with no session window ever minted, both
-// were permanently empty chrome. Sessions are headless, watched in the Agents tab.
 
 // ─── BEGIN TRAY-AUTH (pure; unit-tested via source extraction) ──────────────
 // Q4 fix 3: the tray was the ONLY surface that knew the listener was signed out,
@@ -158,18 +149,12 @@ function floorMenuLabel(notice) {
 }
 // ─── END TRAY-UPDATE ─────────────────────────────────────────────────────────
 
-// WHERE "an update is staged" IS READ FROM (2026-07-31). The tray used to keep
-// ONLY its own copy, fed exclusively by updater's `onReady` event — so the menu
-// could answer the question only for a tray that already existed when the
-// download finished. updater.isUpdateReady() / updateReadyVersion() were added
-// for exactly that gap and then never called by anyone: two dead exports next to
-// the bug they were written for. index.js happens to call tray.create() BEFORE
-// updater.init(), which is the one ordering under which the event-only path
-// works, and nothing pins it — reorder those two lines, or rebuild the tray
-// after a download, and the restart item silently vanishes while a staged build
-// sits there. That is precisely the Q10 failure (a Mac running a build nobody
-// believes it is running), so the menu now asks the module that OWNS the fact
-// and keeps the event echo as the fallback.
+// WHERE "an update is staged" IS READ FROM (Q10). The `onReady` event alone only
+// reaches a tray that already existed when the download finished; reorder
+// tray.create() / updater.init() in index.js, or rebuild the tray after a
+// download, and the restart item would silently vanish while a staged build sits
+// there. So the menu asks the module that OWNS the fact and keeps the event echo
+// as the fallback.
 //
 // Lazily required so tray.js holds no top-level updater dependency and still
 // loads in a harness where the module is absent. Refreshed on every rebuild
@@ -192,9 +177,6 @@ function buildMenu() {
   if (authItem.signedOut) {
     template.push({ label: authItem.label, click: () => handlers.onSignIn && handlers.onSignIn() });
   }
-  // ⚠ THE "Pending: N" ITEM STOOD HERE AND IS DELETED (2026-08-22). It surfaced the count of
-  // inbound consent requests and jumped to the Channels / Pending Requests view; with no inbound
-  // lane there is nothing pending on this machine to count. `handlers.onPending` went with it.
   // A staged update sits with the other CALLS TO ACTION at the top, not buried
   // under the submenus where it lived before: it is the item that explains a
   // whole class of "the fix does not work" (Q10c).
@@ -301,9 +283,6 @@ function setVersionFloor(notice) {
   versionFloor = next;
   if (tray) buildMenu();
 }
-
-// ⚠ `setPendingCount(n)` STOOD HERE AND IS DELETED (2026-08-22) with the menu item it rebuilt.
-// Its ONE caller was index.js's `onPending` handler, fed by the consent watcher.
 
 // Round C: rebuild the menu now (after a channel folder is set / cleared) so the
 // "Channel folders" submenu reflects the change without waiting for a status tick.
