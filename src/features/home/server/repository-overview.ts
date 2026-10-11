@@ -339,7 +339,7 @@ export async function scanCreditEvents(
 /** Postgres/PostgREST codes for "that function is not there" — the migration
  *  below has not been applied yet. ⚠ Distinct from the ledger-missing codes: a
  *  missing RPC still has readable rows, so the caller DEGRADES rather than
- *  zeroing (`service-overview.ts › scanUsageHistogramBurns`). */
+ *  zeroing (`service-overview.ts › usageHistogramPoints`). */
 const RPC_MISSING_CODES = new Set(["PGRST202", "42883"]);
 
 /** Codes for "the ledger itself is not there" — `credit_usage_events` or one of
