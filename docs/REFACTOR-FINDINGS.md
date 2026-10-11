@@ -8390,7 +8390,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 
 ### F-682 — a lent reader's snapshot shares the LENDER's whole membership budget (2026-09-09)
 
-- Locations: `src/features/ontology/server/repository.ts › listMemberships` called from
+- Locations: `src/features/ontology/server/repository-links.ts › listMemberships` called from
   `src/features/ontology/server/service-reads.ts › getSnapshot` / `› getSummary`, against
   `src/features/ontology/server/dto.ts › ONTOLOGY_READ_LIMITS`.
 - **The mechanism.** The read is now `.in("workspace_id", audience.workspaceIds)` under ONE

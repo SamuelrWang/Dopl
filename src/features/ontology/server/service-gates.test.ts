@@ -358,7 +358,7 @@ describe("home container — Q9, an object in TWO ontologies", () => {
  * Q8 on a WRITE — an edge may not reach out of the shared ontology.
  *
  * The scope holds the LENDER's whole container by construction, so
- * `repository.ts › filterObjectIds` (which asks only "is this a live row in the
+ * `repository-links.ts › filterObjectIds` (which asks only "is this a live row in the
  * scope") admits a target the caller cannot see. `service-gates.ts ›
  * admittedObjectIds` is the second half, and this is the case that would pass
  * without it.

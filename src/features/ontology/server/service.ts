@@ -331,7 +331,7 @@ export async function updateObject(
  *
  * Targets are validated against the AUDIENCE'S ANSWER, not its scope, and the
  * difference is Q8. The scope holds the LENDER's whole container, so
- * `./repository.ts › filterObjectIds` alone would let somebody lent ONE ontology
+ * `./repository-links.ts › filterObjectIds` alone would let somebody lent ONE ontology
  * point an edge at any row in that container — the "widens the scope and forgets
  * the filter" failure, arriving on a WRITE. `./service-gates.ts ›
  * admittedObjectIds` applies the ontology walk on top.
