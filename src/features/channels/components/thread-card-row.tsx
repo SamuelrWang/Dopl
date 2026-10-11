@@ -45,7 +45,7 @@ import type { ThreadCardRow } from "./view-model-rows";
  * `PendingChip`, the `requested` set behind it and the inline **Decline /
  * Launch agent** consent pair are all DELETED. What is left is TWO ACTIONS and
  * neither is an answer to anybody: **Open thread** (the existing selection nav)
- * and **Launch agent** (the direct launch — `use-agents-panel.ts › launchAgent`,
+ * and **Launch agent** (the direct launch — `use-launch-controls.ts › useLaunchControls`,
  * which spawns a responder-style agent on this card's own thread). No decline
  * anywhere.
  */
@@ -179,7 +179,7 @@ export function ThreadCardMessage({
 
               "Launch agent" is the DIRECT launch — the same bridge op the
               composer's Bot icon and the Agents tab's New Agent button fire
-              (`use-agents-panel.ts › launchAgent`), spawning one of the
+              (`use-launch-controls.ts › useLaunchControls`), spawning one of the
               operator's own agents on THIS card's thread. It raises no consent
               row and answers no request.
 
