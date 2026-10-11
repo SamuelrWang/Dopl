@@ -10217,7 +10217,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **`AppPanel` WAS IN THIS CLASS AND WAS DELETED**, because it was different in one way that matters: 00-MASTER §5 Wave 0 carried it as scoped work (X9) and the row claimed it done. Its CSS rule `app-shell.module.css › .mainDetail` went with it — zero other users.
 - Proposed resolution: delete all five, each in its own commit, with the `RETIREMENT-UNWIRING-PLAN.md` rows repointed in the same change. **Re-derive the orphan set first** (`npx knip`) rather than trusting this list — §15's own warning is that "dead" is a MEASUREMENT, and `bits.tsx › agentAccent` was called an orphan while it still had a live call site.
 - 2026-09-24 (DMP-013 B5): the skill template is DELETED — still zero importers, and it taught tool names and args the server no longer serves (`*_admin`, `workspace=`, `op:'list'` on channels). The Connect page shows only the connection snippets (`src/features/mcp-connect/snippets.ts`). The other four remain.
-- Status: open (four of five).
+- Status: open (two of five: the knowledge `overview-contents` pair, which cleanup K02 deletes; the template, the top bar and the auto-send hook are gone).
 
 ### F-727 — the search `tsvector` rides every transcript read, and the reads are `select("*")` (2026-09-17)
 
