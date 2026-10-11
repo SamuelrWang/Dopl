@@ -83,22 +83,6 @@ export async function findSkillBySlug(
   return data ? mapSkillRow(data as SkillRow) : null;
 }
 
-export async function findSkillByPublicId(
-  workspaceId: string,
-  publicId: string
-): Promise<Skill | null> {
-  const db = readClient();
-  const { data, error } = await db
-    .from("skills")
-    .select(SKILL_COLS)
-    .eq("workspace_id", workspaceId)
-    .eq("public_id", publicId)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (error) throw error;
-  return data ? mapSkillRow(data as SkillRow) : null;
-}
-
 export async function findSkillById(
   workspaceId: string,
   id: string,
