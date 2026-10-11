@@ -2,10 +2,7 @@
  * WHAT IS NOT A TAGGABLE WORD — the masking half of the ONE @-mention parser.
  * The MATCH RULE (what a handle is, and who it names) is `mentions.ts`.
  *
- * ⚠ SPLIT OUT OF `mentions.ts` ON 2026-08-22, when that file crossed the
- * 500-line cap adding the markup masks (INVARIANTS §1: a file at 500 cannot
- * absorb a COMMENT, so the fix is a split, not a shorter docblock). ⚠ THE SEAM
- * IS A REASON TO CHANGE, not a line count: this file moves when MARKDOWN's
+ * ⚠ ITS OWN FILE, out of `mentions.ts`. THE SEAM IS A REASON TO CHANGE: this file moves when MARKDOWN's
  * structure does — a delimiter, an escape, a destination syntax — and
  * `mentions.ts` moves when the HANDLE derivation does. Neither reason has ever
  * fired for both.

@@ -4,11 +4,9 @@
  * THE COMPOSER'S @-PICKER, AS STATE — the token under the caret, the shortlist it offers, which
  * row Enter takes, and the two ways a handle gets into the draft.
  *
- * ⚠ SPLIT OUT OF `composer.tsx` ON 2026-08-27, at the 500-line cap. **The seam is §1's
- * reason-to-change**: that file is about SENDING, this is the PICKER, which moved twice in one
- * day while nothing about sending changed. `use-agent-launch.ts` took the same seam. ⚠ **THE
- * THIRD SIBLING, `use-thread-request.ts`, IS DELETED (2026-09-08)** — thread creation is a popup
- * owning its own state (`new-thread-dialog.tsx`).
+ * ⚠ ITS OWN HOOK, out of `composer.tsx`. **The seam is §1's reason-to-change**: that file is
+ * about SENDING, this is the PICKER. `use-agent-launch.ts` took the same seam; thread creation
+ * is a popup owning its own state (`new-thread-dialog.tsx`).
  *
  * ⚠ IT OWNS NO DRAFT. The text belongs to the composer — it is what gets SENT — so this takes a
  * setter and never a second copy. Two states holding one string is how a picker inserts into a
@@ -92,8 +90,7 @@ export function useComposerMentions({
       setHighlight(0);
     },
     /**
-     * **THE FIELD'S KEY HANDLING, WHICH IS MOSTLY THE PICKER'S** (moved here
-     * 2026-09-02, slice B10, at the composer's 500-line cap — §1).
+     * **THE FIELD'S KEY HANDLING, WHICH IS MOSTLY THE PICKER'S** (slice B10).
      *
      * ⚠ **THE SEAM IS §1's REASON-TO-CHANGE.** Four of the five branches are
      * about the shortlist and moved when the picker did; what is left for the

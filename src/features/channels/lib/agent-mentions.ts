@@ -380,9 +380,8 @@ export function resolveAgentHandle(
   return index.get(handle) ?? null;
 }
 
-// ⚠ THE DEFAULT-RESPONDER LANE MOVED TO `agent-mentions-responder.ts`
-// (2026-09-14, 500-line cap) — RR3, its reason vocabulary and the per-member
-// setting. Re-exported here because that is the path every caller already
+// ⚠ THE DEFAULT-RESPONDER LANE LIVES IN `agent-mentions-responder.ts` — RR3, its
+// reason vocabulary and the per-member setting. Re-exported here because that is the path every caller already
 // imports them from (§1).
 export type {
   ResponderChoice,
