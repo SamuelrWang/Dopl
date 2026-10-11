@@ -1,45 +1,22 @@
-// Auto-update via electron-updater against GitHub Releases (SamuelrWang/Dopl),
-// mirroring the study-notes app's proven setup: zip + dmg + latest-mac.yml feed.
+// Auto-update via electron-updater against GitHub Releases (SamuelrWang/Dopl):
+// zip + dmg + latest-mac.yml feed.
 //
-// Behavior: check at startup, on an interval (30m by default since 2026-08-22,
-// overridable via DOPL_UPDATE_CHECK_MS and clamped to [60s, 24h] — see
-// update-policy.js), and WHENEVER THE OPERATOR LOOKS AT THE APP (see the focus
-// check below);
-// download silently with progress on the tray; when the download completes,
-// offer a one-click restart. Never force-restarts on its own: install happens on
-// normal quit (autoInstallOnAppQuit) or an explicit click. A background listener
-// app must not yank itself out from under an active spawned session.
+// Behavior: check at startup, on an interval (30m, DOPL_UPDATE_CHECK_MS clamped
+// to [60s, 24h]), and WHENEVER THE OPERATOR LOOKS AT THE APP (the focus check
+// below); download silently with progress on the tray; when the download
+// completes, offer a one-click restart. Never force-restarts on its own: install
+// happens on normal quit (autoInstallOnAppQuit) or an explicit click, because a
+// restart mid-turn kills a live spawned session. update-policy.js holds the why
+// (the START→QUIT→START cycle that made "close and reopen" never enough), the
+// timings and every string.
 //
 // Q10: THE STAGED INSTALL IS THE FAILURE MODE. "Installs on quit" plus "never
-// quits" equals a Mac running a build nobody believes it is running — on
-// 2026-07-31 a peer sat on 1.7.14 all evening and the 1.7.15 fix read as broken.
-// So the download event has to reach a HUMAN surface, not just the log.
-//
-// WHAT "CLOSE AND REOPEN DOES NOT GET THE NEW BUILD" ACTUALLY IS (2026-08-01).
-// The operator's report was "it takes several tries over a few minutes". Nothing
-// is flaky: the cycle is START (download ~200MB in the background) → QUIT
-// (install) → START (new build), so ONE close-and-reopen can never suffice, and
-// quitting mid-download discards the partial copy, which is why it takes tries.
-// Three things were missing and are now here:
-//   1. the moment the download lands, an actionable RESTART prompt (one click),
-//   2. `download-progress` on a visible surface, so a long download stops looking
-//      like nothing happening (the reason people quit halfway),
-//   3. a manual "Check for updates now", because 4h after a publish is forever.
-//
-// UPDATE DISCOVERY LATENCY (2026-08-22, Samuel's ruling). Item 3 was a button;
-// the operator's actual habit was to QUIT AND REOPEN the app to force the boot
-// check, which is the feature failing at its one job. Two changes: the interval
-// dropped 4h → 30m, and a FOCUS CHECK now runs whenever the app is activated.
-// The focus path is the one that matters — a release becomes visible the moment
-// somebody goes to look, with no restart and no menu click.
-// The one thing deliberately NOT added is an automatic restart. The operator may
-// be mid-exchange with a live agent; the prompt names any live session and
-// defaults to "Later".
+// quits" equals a Mac running a build nobody believes it is running (2026-07-31,
+// a peer on 1.7.14 all evening). So every transition reaches a HUMAN surface
+// (the tray note), not just the log.
 
-// ⚠ `Notification` IS NOT DESTRUCTURED HERE ANY MORE (2026-10-11, release review). The
-// update-ready banner went on 2026-10-09 (Samuel's spec) and the binding outlived it with no
-// remaining use — only the comments below still mention the surface. An unused import of the
-// one API this module must not reach is the shape a reinstated banner would hide in.
+// ⚠ No `Notification` binding on purpose: the update-ready banner is off by Samuel's spec
+// (2026-10-09), and an unused import is where a reinstated one would hide.
 const { app, dialog } = require('electron');
 const { diag } = require('./diag');
 const { UPDATER } = require('./config');
@@ -188,7 +165,7 @@ function init(opts) {
     note('up-to-date', { version: appVersion.appVersion() });
   });
   // A ~200MB download over a slow link used to be invisible. This is what makes
-  // "it is working, wait" a thing the operator can see (item 2).
+  // "it is working, wait" a thing the operator can see.
   autoUpdater.on('download-progress', (info) => {
     downloading = true;
     lastPercent = policy.progressPercent(info);
@@ -237,13 +214,11 @@ function init(opts) {
     }
     const sessions = liveSessions();
     // ⚠ NO BANNER (Samuel's spec, 2026-10-09 — KB dopl-development "Notification Spec Samuel
-    // 2026-10-09"). "App update ready" is not on his list. The announcement is NOT lost: the
-    // TRAY ITEM carries it on every path (`onReadyCb` just above), and with no live session the
-    // restart dialog below still opens. What is gone is only the OS banner.
-    // ITEM 1: the restart is one click away the moment the bits are on disk.
+    // 2026-10-09"). The TRAY ITEM carries the announcement (`onReadyCb` just above).
+    // The restart is one click away the moment the bits are on disk.
     // With a live session we do NOT throw a modal over a running agent turn:
-    // the notification and the tray item carry it, and both routes come back
-    // through promptRestart(), which names the session before it kills it.
+    // the tray item carries it and comes back through promptRestart(), which
+    // names the session before it kills it.
     if (!promptedThisRun && !sessions.length) {
       promptedThisRun = true;
       promptRestart();
@@ -307,22 +282,13 @@ function checkOnFocus() {
   return true;
 }
 
-// `showDownloadedNotification` raised the update-ready banner (with a "Restart now" action on
-// alert-style delivery) and is GONE (Samuel's spec, 2026-10-09 — "App update ready" is not on
-// his list). Its two restart paths, `requestRestart` and `promptRestart`, are untouched and are
-// still reached from the TRAY ITEM, which carries the announcement on every path.
-//
-// ⚠ ONE THING THE BANNER DID THAT NOTHING ELSE DOES: it survived being MISSED. A dialog behind
-// another Space does not, and with a live session the dialog is deliberately suppressed
-// (`update-policy.js:235-239`). So on a machine running agents the tray item is now the whole
-// announcement, and a restart waits until the operator happens to look at it. That is the
-// ruling's cost, recorded here rather than discovered later.
-//
-// ⚠ `policy.downloadedNotification` (update-policy.js) wrote this copy and now has no caller.
-// LEFT IN PLACE DELIBERATELY: it is a pure exported helper in another module with its own test
-// suite, so deleting it is a separate decision, not part of turning a banner off.
+// NO UPDATE-READY BANNER (Samuel's spec, 2026-10-09). The TRAY ITEM carries the announcement on
+// every path and leads to `requestRestart` / `promptRestart`.
+// ⚠ THE RULING'S COST: a banner survived being MISSED; a dialog behind another Space does not, and
+// with a live session the dialog is suppressed (`update-downloaded` above). So on a machine running
+// agents a staged restart waits until the operator looks at the tray.
 
-// ITEM 3: the manual check. Called from the tray, and never a no-op click: every
+// The manual check. Called from the tray, and never a no-op click: every
 // path here ends in a note the operator can read (checking / up to date /
 // downloading / ready / failed / off in this build).
 function check(opts) {
@@ -373,8 +339,8 @@ function checkNow() {
 
 // The restart prompt. NOTHING here restarts on its own: the dialog defaults to
 // "Later" (button 0, also the cancel action), and only an explicit click on
-// "Restart now" reaches quitAndInstall. Single-flight, because the tray item, the
-// notification body and its action button all lead here.
+// "Restart now" reaches quitAndInstall. Single-flight, because the tray item, a
+// manual check and the download landing can all lead here.
 //
 // Windowless on purpose: the app is usually a hidden background listener, and a
 // modal parented to a hidden window would be invisible.
@@ -430,10 +396,9 @@ function quitAndInstall() {
 }
 
 // Q10 — THE STATE, ASKABLE WITHOUT THE EVENT. `onReady` fires exactly once, so
-// anything built after the download would otherwise never learn about it. These
-// two were added for that and sat with ZERO callers until 2026-07-31; tray.js
-// (refreshUpdateReady) now reads them on every menu rebuild, which is what makes
-// the restart item independent of index.js's create()-then-init() ordering.
+// anything built after the download would otherwise never learn about it. tray.js
+// (refreshUpdateReady) reads these on every menu rebuild, which makes the restart
+// item independent of index.js's create()-then-init() ordering.
 function updateReadyVersion() {
   return readyVersion;
 }

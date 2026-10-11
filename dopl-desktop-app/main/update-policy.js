@@ -231,24 +231,10 @@ function isRestartChoice(response) {
   return response === RESTART_BUTTON_INDEX;
 }
 
-// ── The notification: DELETED, not retired ───────────────────────────────────
-//
-// ⚠ `downloadedNotification` BUILT THE UPDATE-READY BANNER'S COPY AND IS GONE (2026-10-11,
-// release review). The banner itself went on 2026-10-09 (Samuel's spec — "App update ready" is
-// not on his list), and `updater.js` recorded that the builder was being "LEFT IN PLACE
-// DELIBERATELY ... deleting it is a separate decision". This is that decision, and the reason to
-// take it is that the thing was not merely unused: it was unused WITH SIX PASSING ASSERTIONS
-// across two suites, which is how a dead surface comes to look maintained. Anyone reading the
-// copy tests would have concluded the app still announces an update by banner. It does not.
-//
-// WHAT CARRIES THE ANNOUNCEMENT NOW is the tray item — `tray.js › updateMenuState`, whose label
-// is "Update ready — restart to install v<x>" — and `restartPrompt` below when a dialog is
-// appropriate. `test/tray-update-ready.test.mjs` asserts the tray copy says what to do, and
-// pins that no second announcement builder reappears here.
-//
-// THE COST THE RULING ACCEPTED, repeated from updater.js so it is not rediscovered: a banner
-// survived being MISSED (it waits in Notification Center) and the tray item does not, so on a
-// machine running agents a staged restart now waits until the operator happens to look.
+// ── No banner copy ───────────────────────────────────────────────────────────
+// The update-ready banner is off (Samuel's spec, 2026-10-09) and its copy builder was deleted
+// 2026-10-11. The announcement is the tray item (`tray.js › updateMenuState`) plus
+// `restartPrompt` above; `test/tray-update-ready.test.mjs` pins that no builder reappears here.
 
 module.exports = {
   DEFAULT_CHECK_INTERVAL_MS,

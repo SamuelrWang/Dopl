@@ -10,11 +10,10 @@
 // itself and drives the updater that already exists instead of duplicating it.
 //
 // IT COMPOSES WITH THE UPDATER, IT DOES NOT REPLACE IT. updater.js keeps owning
-// the feed, the download, the timer (30m since 2026-08-22; it was 4h) and the
-// restart prompt. ⚠ The updater's FOCUS check is deliberately NOT shared: this
-// gate has its own timer and its own server, and hanging a `/api/version` request
-// off every window focus is a cost nobody asked for (min-version.js § Cadence).
-// This module adds
+// the feed, the download, the timer and the restart prompt. ⚠ The updater's FOCUS
+// check is deliberately NOT shared: this gate has its own timer and its own server,
+// and hanging a `/api/version` request off every window focus is a cost nobody
+// asked for (min-version.js § Cadence). This module adds
 // one question ("is this build still allowed?") on the same cadence, reads the
 // updater's state to decide whether a block is even survivable, and hands the
 // screen's buttons straight back to updater.checkNow / requestRestart.
@@ -114,9 +113,9 @@ async function fetchFloor() {
 }
 
 // One round trip, then re-decide and re-arm. An answer (even "no floor") goes
-// back on the updater's steady cadence (30m since 2026-08-22); NO answer retries
-// in minutes, so a machine that booted offline learns about a floor shortly after
-// the network returns rather than at the next sweep.
+// back on the updater's steady cadence; NO answer retries in minutes, so a machine
+// that booted offline learns about a floor shortly after the network returns
+// rather than at the next sweep.
 async function refresh() {
   if (fetching) return;
   fetching = true;
@@ -267,7 +266,7 @@ function onUpdaterState() {
 }
 
 // Wake: the machine has been asleep, the floor may have moved and the network
-// stack has just been rebuilt. Ask again now rather than at the next 4h alarm.
+// stack has just been rebuilt. Ask again now rather than at the next interval.
 function onWake() {
   if (VERSION_GATE.MODE === 'off') return;
   void refresh();
@@ -307,8 +306,4 @@ module.exports = {
   act,
   onUpdaterState,
   onWake,
-  // ⚠ `currentVerdict: () => verdict` STOOD HERE AND IS DELETED (2026-08-20). Its comment said
-  // "read by the tests", and no test reads it — the suites drive `screen()` / `subscribe()`,
-  // which is the surface an operator actually meets. An accessor justified by a reader that
-  // does not exist is the shape this sweep was looking for.
 };

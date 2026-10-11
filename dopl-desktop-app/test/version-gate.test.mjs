@@ -448,7 +448,7 @@ test("the fetch does NOT go through api.js (no cookies, no 401 repair)", () => {
   assert.match(SRC, /await fetch\(/);
 });
 
-test("an answer keeps the 4h cadence; NO answer retries in minutes", () => {
+test("an answer keeps the steady cadence; NO answer retries in minutes", () => {
   const SRC = require("node:fs").readFileSync(MAIN("version-gate.js"), "utf8");
   assert.match(SRC, /arm\(gotAnswer \? VERSION_GATE\.CHECK_INTERVAL_MS : VERSION_GATE\.RETRY_MS\)/);
   reset();
