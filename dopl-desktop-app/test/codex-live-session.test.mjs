@@ -152,7 +152,7 @@ describe('live: steer and interrupt target the ACTIVE turn, and only the active 
         },
       );
       // 🔒 ⚠ **BUT A SECOND `turn/interrupt` ANSWERS NOTHING AT ALL — NOT A RESULT, NOT AN ERROR.**
-      // This is the asymmetry that pays for `launch-spec.js › boundedInterrupt`. Steer rejects
+      // This is the asymmetry that pays for `launch-handle.js › boundedInterrupt`. Steer rejects
       // cleanly in every dead-turn state, and an interrupt aimed at a turn that ended NORMALLY
       // rejects with the same `-32600`; only an interrupt aimed at an ALREADY-INTERRUPTED turn
       // just sits there. An unbounded `handle.interrupt()` would hand its caller a promise that
