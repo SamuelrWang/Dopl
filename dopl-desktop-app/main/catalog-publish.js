@@ -86,7 +86,7 @@ function due(held, nowMs) {
 
 // ─── END CATALOG-PUBLISH-PURE ────────────────────────────────────────────────
 
-/** runtimeId → { body, sig, sentSig, sentAt, sending } */
+/** runtimeId → { body, sig, sentSig, sentAt, sending, retrySoon } */
 const held = new Map();
 let timer = null;
 

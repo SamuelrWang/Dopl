@@ -277,10 +277,12 @@ function declaresHandoff(m) {
 }
 
 // ── Requester auto-open detector ─────────────────────────────────────────────
-// TRUE iff this message is MY OWN first-class thread opener addressed to a peer, so the
-// desktop opens a REQUESTER session window driving the thread. ⚠ Checked by the listener
-// SEPARATELY from classify() and never inside classify's body — the 1536-case truth table
-// depends on that. task* keys are stamped SERVER-SIDE, so they cannot be spoofed.
+// ⚠ NO PRODUCTION CALLER SINCE THE REQUESTER WINDOW ROUTE WAS RETIRED (2026-08-20, F-228): this
+// predicate, `declaresHandoff`, `requesterTypedByOperator` and `desktopRuntime` are kept only as
+// the truth tables `test/operator-typed-request.test.mjs` pins. Deleting them is a product call.
+// TRUE iff this message is MY OWN first-class thread opener addressed to a peer (the case that
+// used to open a REQUESTER session window). Never read inside classify's body — the 1536-case
+// truth table depends on that. task* keys are stamped SERVER-SIDE, so they cannot be spoofed.
 //
 //   - firstClassTaskId(m) present   → a real first-class (UUID) task, not legacy.
 //   - m.authorUserId === myId       → MY message.
@@ -312,8 +314,8 @@ function requesterTaskOpen(m, myId) {
 }
 
 // TRUE iff the OPERATOR typed this in the app's UI, rather than one of their spawned sessions.
-// One display-only use: arming the request lifecycle strip (Sent / Accepted / Declined /
-// Replied). ⚠ Read ONLY alongside requesterTaskOpen, never as a gate of its own.
+// (Its one use, the retired request lifecycle strip, is gone; see the block above.)
+// ⚠ Never a gate of its own.
 function requesterTypedByOperator(m) {
   return metaStr(m, 'runtime') === 'desktop-ui';
 }
@@ -340,7 +342,7 @@ module.exports = {
   DESKTOP_RUNTIMES, // the two stamps this app produces
   declaresHandoff, // reserved handoff flag an external create may set
   requesterTaskOpen,
-  requesterTypedByOperator, // lifecycle strip only
+  requesterTypedByOperator, // no production caller (see its block)
   openChannelForEntry: win.openChannelForEntry,
   resolveToolProfile: win.resolveToolProfile, // the channel's STORED scope
   resolveLaunchToolProfile: win.resolveLaunchToolProfile, // …and what a launch starts at (B7)

@@ -152,11 +152,11 @@ async function launch(a) {
   }
   const context = Object.keys(extra).length ? { ...(a.context || {}), ...extra } : a.context;
   // ⚠ THE CEILING, RE-ASKED AFTER THE AWAITS (2026-10-11). The check at the top of this function ran
-  // EIGHT awaits ago — the runtime probe, the credential probe, two refusal checks, the delivery-path
-  // probe, the model default, the ontology reach and the room roster — and `trigger.js` fires
+  // a run of awaits ago — the runtime probe, the credential probe, two refusal checks, the delivery-path
+  // probe, the model default, the offered dimensions, the ontology reach and the room roster — and `trigger.js` fires
   // `void launchResponderSession(...)`, so two Allow clicks interleave through every one of them. Both
   // passed a cap that was true when they asked and false by the time they spawned, and the machine
-  // ended up over `MAX_CONCURRENT_SESSIONS` with no refusal anywhere. The re-check at :61 above is
+  // ended up over `MAX_CONCURRENT_SESSIONS` with no refusal anywhere. The post-await re-check above is
   // SLOT-scoped (a fresh instance id never collides), so it could not catch this.
   // ⚠ HERE, IMMEDIATELY BEFORE `startSession`, because `startSession` registers the session in the
   // engine's Map SYNCHRONOUSLY (before its own first await) — so nothing can take the last slot
@@ -217,7 +217,7 @@ async function launch(a) {
   // directive), and only once a session really exists — after the two skip returns above, so a
   // refused launch never claims one started.
   //
-  // ⚠ WHY NOT THE CHANNEL MESSAGE: `task_started` is dropped at `targeting.js:133` by the
+  // ⚠ WHY NOT THE CHANNEL MESSAGE: `task_started` is dropped at `targeting.js › classify` by the
   // `kind !== 'message'` guard and always was, which is why this needed a new emit rather than a
   // new arm. It is a LOCAL fact about this machine's spawns, so a local emit is also the honest
   // place for it.

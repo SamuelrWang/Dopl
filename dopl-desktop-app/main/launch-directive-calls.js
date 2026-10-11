@@ -54,7 +54,7 @@ async function claim(d) {
     // ⚠ **409 IS THE DESIGNED OUTCOME FOR EVERY MACHINE BUT ONE, NOT AN ERROR** (F-286).
     // `service-launch.ts › claimLaunchDirective` throws `LaunchDirectiveNotClaimableError` when
     // the CAS matches no row — taken, decided, or expired — which `http-mapping.ts` maps to 409.
-    // So on the ORDINARY multi-machine path (header step 4) the loser lands here, and telling it
+    // So on the ORDINARY multi-machine path (two Macs claim one row) the loser lands here, and telling it
     // "the row stays pending" asserts the opposite of the truth: the row is CLAIMED and another
     // machine is launching it. 404 is the same kind of answer. Only network faults and 5xx leave
     // the row genuinely pending.

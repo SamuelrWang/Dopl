@@ -58,8 +58,8 @@ const { claim, decide } = calls;
  * machine that declined to act has no standing to write a verdict another machine may be about to
  * earn (§6). What it does now is SAY WHY, locally, with the row id — so the next person reading
  * this log can tell "the lane is off" from "another Mac won" from "the claim 500'd", which were
- * previously one silence. The two codes the OPERATOR can act on also raise their banner; the rest
- * are ordinary and stay quiet.
+ * previously one silence. `lane-off`, the one code the OPERATOR can act on, also raises their
+ * banner (via `tellOperator`); the rest, `claim-lost` included, are ordinary and stay quiet.
  */
 function declined(d, code, detail) {
   diag('launch-directive: NOT acted on', String((d && d.id) || '?').slice(0, 8),
@@ -67,10 +67,9 @@ function declined(d, code, detail) {
 }
 
 /**
- * The two reasons a directive dies that are the OPERATOR's to fix, as opposed to ordinary racing.
- * `lane-off`: they filed a launch and this Mac's arming switch is off, so nothing will ever take
- * it. `claim-failed`: the claim could not be written at all, so the row stays pending and rots.
- * Reuses `decision_failed` — locked on, sounds, bounces the dock, and its own registry note reads
+ * A directive dying for a reason that is the OPERATOR's to fix, as opposed to ordinary racing:
+ * today only `lane-off` (they filed a launch and this Mac's arming switch is off, so nothing will
+ * ever take it). Reuses `decision_failed` — locked on, sounds, bounces the dock, and its own registry note reads
  * "the operator believes they answered and they did not", which is this fact exactly.
  */
 function tellOperator(title, body) {

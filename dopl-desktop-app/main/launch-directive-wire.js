@@ -4,7 +4,7 @@
 
 // ─── BEGIN LAUNCH-DIRECTIVE-WIRE (pure; unit-tested via source extraction) ───────────────
 
-// Every list, bound and pattern lives in the vocabulary leaf; re-exported verbatim below.
+// Every list, bound and pattern lives in the vocabulary leaf; the names callers read are re-exported below.
 const vocab = require('./launch-directive-vocab');
 const {
   DIRECTIVE_TABLE, ROUTES,

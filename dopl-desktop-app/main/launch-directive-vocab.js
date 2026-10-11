@@ -1,5 +1,5 @@
 // The launch-directive VOCABULARY: every list, bound and pattern the directive lane shares. A pure
-// leaf (requires nothing); `launch-directive-wire.js` re-exports every name. The server owns these
+// leaf (requires nothing); `launch-directive-wire.js` re-exports the names its callers read. The server owns these
 // shapes — each list is mirrored by `schema-launch-modes.ts`, the column CHECKs and the MCP side.
 
 const DIRECTIVE_TABLE = 'channel_launch_directives'; // the second `postgres_changes` binding (`realtime.js`)

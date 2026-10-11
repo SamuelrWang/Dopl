@@ -32,10 +32,10 @@
 // A durable ledger would additionally have to be a durable ledger an agent with `Bash` could
 // rewrite, which buys nothing.
 //
-// ⚠ THE REFUSAL IS `cap`, NOT A NEW WORD. `launch-directive-wire.js › REFUSAL_REASONS` is a
-// SEVEN-word closed vocabulary an orchestrator has been taught to read, and `cap`'s own sentence
+// ⚠ THE REFUSAL IS `cap`, NOT A NEW WORD. `launch-directive-vocab.js › REFUSAL_REASONS` is a
+// closed vocabulary an orchestrator has been taught to read, and `cap`'s own sentence
 // already says "the machine is FULL" and sends the agent to `read_sessions` rather than to a
-// retry — which is the true and useful thing to say here. An eighth word would be a wire change
+// retry — which is the true and useful thing to say here. A new word would be a wire change
 // bought for a shade of meaning.
 //
 // PURE — no electron, no store, no require. `test/launch-budget.test.mjs` drives it with an
