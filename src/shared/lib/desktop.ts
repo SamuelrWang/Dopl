@@ -1,8 +1,8 @@
+import { isSpaRenderer } from "./spa-bridge";
+
 /**
- * Desktop-shell detection via the preload's read-only `window.dopl` marker. Used
- * to branch auth into the system-browser + `dopl://` deep-link flow — the normal
- * in-window redirect can't work in the wrapper, since Supabase PKCE needs the
- * OAuth to run where the code-verifier lives.
+ * Desktop-shell detection, plus the typed slices of `window.dopl` the web tree reads
+ * (channel folders, the pop-out thread window, dictation).
  */
 
 /**
@@ -85,8 +85,14 @@ function doplBridge(): DoplDesktopBridge | undefined {
   return (window as unknown as { dopl?: DoplDesktopBridge }).dopl;
 }
 
+/**
+ * True inside the desktop app. ⚠ The bundled SPA's preload (`renderer/app-preload.js`) has NO
+ * `isDesktop` member — that marker was the deleted remote wrapper's — so the SPA is recognised
+ * by its bridge (`spa-bridge.ts › isSpaRenderer`). Reading the marker alone answered false there
+ * and sent desktop dictation to Electron's keyless browser engine.
+ */
 export function isDesktopApp(): boolean {
-  return !!doplBridge()?.isDesktop;
+  return !!doplBridge()?.isDesktop || isSpaRenderer();
 }
 
 /** Channel-folder bridge, else null. Feature-detected on `chooseFolder` so a
