@@ -308,7 +308,14 @@ test("the two async gates await ensureSignedIn, so a cold cache never skips them
   // cookie cache. A sync read there would answer 'signed out' from a cold start
   // with a dead blob — the exact skip that wedged want=0 across reboots.
   assert.match(fnOf(LISTENER, "reconcileInner"), /await auth\.ensureSignedIn\(\)/);
-  assert.match(fnOf(MCP, "ensureMcpConfigInner"), /await auth\.ensureSignedIn\(\)/);
+  // ⚠ MOVED, NOT DROPPED (2026-10-10, device-token-fix): mcp-config's gate now lives on the
+  // MINT (`ensureDeviceTokenInner`), which `ensureMcpConfigInner` awaits first. It moved because
+  // an EXTERNAL-CLI probe used to sit between this gate and the mint and returned before it, so
+  // a Mac with no separately installed `claude` never got a device token at all. The gate itself
+  // is unchanged and still async for the reason above — the cold-cache claim is the same claim.
+  assert.match(fnOf(MCP, "ensureDeviceTokenInner"), /await auth\.ensureSignedIn\(\)/);
+  assert.match("async " + fnOf(MCP, "ensureMcpConfigInner"), /await ensureDeviceToken\(\)/,
+    "and the ensure still passes through it, so the gate is not bypassable");
 });
 
 test("auth failures reach listener.log, not just an invisible console", () => {

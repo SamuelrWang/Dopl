@@ -51,6 +51,12 @@ const ENGINE = readFileSync(join(MAIN, "session-launch.js"), "utf8");
 const REGISTRY_SRC = readFileSync(join(MAIN, "session-registry.js"), "utf8");
 const STORE_SRC = readFileSync(join(MAIN, "session-store.js"), "utf8");
 const WINDOWLESS_SRC = readFileSync(join(MAIN, "session-windowless.js"), "utf8");
+// The Dopl delivery-path pre-flight (2026-10-10). Its REFUSAL half is pure and is sliced in whole,
+// `DETAIL` included — `muteRefusal` closes over it, so a slice without it returns null for every
+// reason and the gate silently disappears. Same shape as CAP_DECL below.
+const DELIVERY_SRC = readFileSync(join(MAIN, "delivery-path.js"), "utf8");
+const DELIVERY_DETAIL = (DELIVERY_SRC.match(/^const DETAIL = \{[\s\S]*?^\};$/m) || [])[0];
+assert.ok(DELIVERY_DETAIL, "the DETAIL table moved or changed shape in delivery-path.js");
 // ⚠ THE REAL `session-profiles.js`, REQUIRED not sliced (2026-09-01, D1). It is the electron-free
 // module, so a plain require works, and the funnel's one launch-blocking question
 // (`windowlessFloorRefusal`) is therefore asked of the SHIPPED descriptors in every case below.
@@ -119,6 +125,7 @@ function harness(cfg = {}) {
     "deps", "store", "sessionWindowless", "diag", "newAgentId", "isAgentId", "profiles",
     "ontologyReach", "roomRoster", "refuseUnknownModel", "launchDefault", "credentials", // faked; own suites drive the real ones
     "operatorTools", "refuseUnreadableProtocol", "offeredDimensions", // faked: operator-tools / sdk-shape / launch-dimensions suites drive the real ones
+    "deliveryPath", // the REAL `muteRefusal` over a configurable reason (see below)
     `${LAUNCH_SRC}\n${asyncFnOf(ENGINE, "credentialMissing")}\n${fnOf(ENGINE, "hasLiveSession")}\n${fnOf(ENGINE, "isAuthHeldSession")}\n` +
       ` return { launch, hasLiveSession, isAuthHeldSession };`
   )(
@@ -155,7 +162,17 @@ function harness(cfg = {}) {
     { fetchRoomRoster: async () => { if (cfg.rosterThrows) throw new Error("roster exploded"); return cfg.roster || { agents: [], agentsMore: 0, people: [], peopleMore: 0, read: 'skipped' };
     } }, async () => cfg.modelRefusal || null, { withRuntimeDefault: async (_rt, model) => model },
     { needSignIn: (id) => calls.signIn.push(id) }, { launchScope: () => cfg.operatorScope || '' },
-    async () => cfg.shapeRefusal || null, async (_rt, _model, raw) => cfg.dimensions || raw || {});
+    async () => cfg.shapeRefusal || null, async (_rt, _model, raw) => cfg.dimensions || raw || {},
+    // ⚠ 2026-10-10 (device-token-fix): the DOPL DELIVERY-PATH pre-flight. `muteRefusal` is the
+    // REAL one — sliced, not faked, for `windowlessFloorRefusal`'s reason: it owns the refusal
+    // WORD, and a `() => null` here would make every case in this file green over a gate that
+    // does not exist. Only the READ is configurable (`cfg.deliveryBlocked`), because the real
+    // one asks electron-store for a credential this file has none of. Default '' = a machine
+    // with a bearer, which is what every other case in this file assumes.
+    {
+      deliveryBlockedReason: async () => cfg.deliveryBlocked || '',
+      muteRefusal: new Function(`${fnOf(DELIVERY_SRC, "muteRefusal")}\n${DELIVERY_DETAIL}\n return muteRefusal;`)(),
+    });
   return { ...api, sessions, calls };
 }
 

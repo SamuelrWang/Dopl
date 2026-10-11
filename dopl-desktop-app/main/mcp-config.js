@@ -379,6 +379,61 @@ async function obtainDeviceToken() {
 // revoked bearer until the next mint.
 let lastMintWasFresh = false;
 
+// ── THE DEVICE TOKEN ─────────────────────────────────────────────────────────
+// MINTING DEPENDS ON THE DOPL SIGN-IN AND NOTHING ELSE (2026-10-10, launch-critical).
+//
+// THE DEFECT. `ensureMcpConfigInner` asked `spawner.getClaudeBinPath()` BEFORE it minted, and
+// returned `skip (claude cli unresolved)` when that answered null. That probe is EXTERNAL-ONLY
+// (`claude-resolve.js › probeStaticPath` over common install dirs + a login-shell `command -v`,
+// and its `claudeBinPath` override has no writer anywhere in main/), so the asar-unpacked binary
+// a SESSION actually runs cannot satisfy it. `saveDeviceToken` has exactly one caller —
+// `obtainDeviceToken`, below — so there is no second minting path: a Mac with no separately
+// installed Claude Code CLI never got a token at all. `loader.js › buildMcpServers` then returns
+// `{}` with no bearer, the init message reports no `dopl` server, and `mcp-connect-guard.js`
+// ends every launched session `mcp-unreachable` — AFTER New Agent already answered `{ ok: true }`.
+// Most users we distribute to have no external CLI.
+//
+// ⚠ THIS IS THE SAME SPLIT `claude-runtime.js:15-33` ALREADY MADE, and that header says it
+// outright: `claudeAvailable()` answers "is there an EXTERNAL cli for `claude mcp …` /
+// `claude setup-token`", NOT "can this machine do the thing". Minting needs neither a binary nor
+// a CLI — only the session this app is signed in with. So the order is now: SIGN IN → MINT, and
+// the external probe gates ONLY the operator's own user-scope CLI entry, which genuinely needs a
+// binary to write. Pinned by test/device-token-no-cli.test.mjs.
+// ⚠ SINGLE-FLIGHT for `ensureMcpConfig`'s reason, and over the same mint: the launch pre-flight
+// (`delivery-path.js`) calls this on a click while startup's ensure may still be in flight, and
+// two mints would revoke each other's token.
+let minting = null;
+function ensureDeviceToken() {
+  if (minting) return minting;
+  minting = ensureDeviceTokenInner().finally(() => {
+    minting = null;
+  });
+  return minting;
+}
+
+/** '' when signed out or the mint failed; the bearer otherwise. Never throws. */
+async function ensureDeviceTokenInner() {
+  try {
+    // ⚠ ASYNC gate: this runs at startup BEFORE the first reconcile warms the cookie-identity
+    // cache, so it must re-read the jar itself. A sync blob-only check silently stops
+    // refreshing the CLI's Dopl MCP entry whenever the blob is dead but the web UI is signed in.
+    if (!(await auth.ensureSignedIn())) {
+      diag('mcp-config: skip (signed out)');
+      return '';
+    }
+    lastMintWasFresh = false;
+    const token = await obtainDeviceToken();
+    if (!token) {
+      diag('mcp-config: NO DEVICE TOKEN (mint failed) — a session launched now would have no Dopl tools');
+      return '';
+    }
+    return token;
+  } catch (err) {
+    diag('mcp-config: device-token ensure error', err && err.message);
+    return '';
+  }
+}
+
 // ── CLI entry ensure ─────────────────────────────────────────────────────────
 // The three `claude mcp …` child processes live in mcp-cli-add.js. Best-effort; never throws.
 // ⚠ SINGLE-FLIGHT: startup and post-sign-in both call this, and overlapping calls must coalesce
@@ -394,24 +449,9 @@ function ensureMcpConfig() {
 
 async function ensureMcpConfigInner() {
   try {
-    // ⚠ ASYNC gate: this runs at startup BEFORE the first reconcile warms the cookie-identity
-    // cache, so it must re-read the jar itself. A sync blob-only check silently stops
-    // refreshing the CLI's Dopl MCP entry whenever the blob is dead but the web UI is signed in.
-    if (!(await auth.ensureSignedIn())) {
-      diag('mcp-config: skip (signed out)');
-      return;
-    }
-    const bin = await spawner.getClaudeBinPath();
-    if (!bin) {
-      diag('mcp-config: skip (claude cli unresolved)');
-      return;
-    }
-    lastMintWasFresh = false;
-    const token = await obtainDeviceToken();
-    if (!token) {
-      diag('mcp-config: skip (no device token)');
-      return;
-    }
+    // THE TOKEN FIRST, and on the sign-in alone — see the header above this function's block.
+    const token = await ensureDeviceToken();
+    if (!token) return; // the minting path logged WHICH of the two it was
     // ⚠ A REMOVAL, not a write. This is where an already-installed machine sheds the plaintext
     // 90-day bearer an older build left in userData/mcp-spawn.json.
     removeSpawnConfig();
@@ -423,8 +463,20 @@ async function ensureMcpConfigInner() {
     // early enough to stop a session polling a channel on a timer.
     // ⚠ Best-effort and it never throws (`skill-install.js`); it also never overwrites a file
     // the operator edited. Placed after the sign-in gate and before the CLI probe so a machine
-    // whose `claude` binary is unresolved still gets the skill.
+    // whose `claude` binary is unresolved still gets the skill — which is only TRUE as of
+    // 2026-10-10: until the token moved above the probe, this line sat BEHIND the external-CLI
+    // gate and the machines this sentence names were exactly the ones it never ran on.
     ensureDoplSkills();
+
+    // ⚠ FROM HERE DOWN IS THE OPERATOR'S OWN CLI ENTRY, and it is the ONE part that genuinely
+    // needs an external binary: `mcp-cli-add.js` runs `claude mcp …` as a child process. A Mac
+    // with no external CLI has nothing to write an entry for and has already got everything
+    // above, so this is a skip, not a failure — and never a reason to withhold the token.
+    const bin = await spawner.getClaudeBinPath();
+    if (!bin) {
+      diag('mcp-config: device token ready; no external claude cli — skipping the operator CLI entry');
+      return;
+    }
 
     const probe = await probeMcpEntry(bin);
     if (probe.state === 'unknown') {
@@ -482,6 +534,7 @@ async function ensureMcpConfigInner() {
 
 module.exports = {
   ensureMcpConfig,
+  ensureDeviceToken, // the ONE mint, on the Dopl sign-in alone — `delivery-path.js`'s pre-flight
   spawnConfigPath,
   deviceTokenForSpawn, // the SDK path's bearer, from safeStorage — never off disk
   deviceTokenLink, // device-registry.js › arm (once per sign-in)
