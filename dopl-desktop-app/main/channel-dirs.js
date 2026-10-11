@@ -187,8 +187,6 @@ async function promptAndSetChannelDir(channelId) {
 // folder pill moved), and five exported-but-internal helpers. What remains is what another
 // module actually calls, plus the two pure functions the extraction suite slices by name.
 module.exports = {
-  resolveSpawnDir, // sliced by test/channel-dirs.test.mjs (the CHANNEL-DIR-RESOLVE block)
-  abbreviateHome, // same
   clearChannelDir,
   liveChannelDirLabel,
   // ⚠ RE-EXPORTED 2026-09-05 (task 15), and it is the ANSWER to "show the actual effective

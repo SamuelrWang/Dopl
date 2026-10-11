@@ -212,4 +212,4 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
   return true;
 }
 
-module.exports = { handleTrigger, sendFyi, notifyAsk, launchResponderSession };
+module.exports = { handleTrigger, sendFyi, launchResponderSession };

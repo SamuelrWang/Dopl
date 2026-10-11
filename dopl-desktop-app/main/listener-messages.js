@@ -174,12 +174,6 @@ function deferBackoff(entry) {
 }
 
 module.exports = {
-  dispatchMessage,
   drainPage,
   deferBackoff,
-  // the pure policy (exported for the test; drainPage is the only production caller)
-  deferralDelayMs,
-  deferralExhausted,
-  noteDeferral,
-  clearDeferral,
 };
