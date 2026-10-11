@@ -11,6 +11,8 @@ const profiles = require('./session-profiles');
 const operatorTools = require('./operator-tools');
 // Producers for `context.ontologies` / `context.roster`; each requires lazily and never throws (F-681).
 const ontologyReach = require('./ontology-reach');
+// "Would a session launched now get the Dopl MCP server at all?" — requires lazily and never throws.
+const deliveryPath = require('./delivery-path');
 const { diag } = require('./diag');
 const roomRoster = require('./room-roster');
 const launchDefault = require('./runtime/launch-default');
@@ -77,6 +79,18 @@ async function launch(a) {
   if (shapeRefusal) {
     diag('session-launch: protocol refused —', shapeRefusal);
     return { skipped: 'no-sdk', detail: shapeRefusal };
+  }
+  // NEVER RUN A MUTE AGENT, AND SAY SO BEFORE "started" (2026-10-10). A session with no Dopl bearer gets NO
+  // `dopl` MCP server (`loader.js › buildMcpServers` returns {}) and `mcp-connect-guard.js` ends it
+  // `mcp-unreachable` — after `session-launch-op.js` has already answered the clicking human `{ ok: true }`.
+  // That guard is the backstop; this is the same ruling where it can still be read. Before `startSession`, so
+  // there is nothing to roll back, and it covers all three lanes because all three go mute identically.
+  // ⚠ `disabled` + `detail`, never a new wire word, and a probe that cannot read answers '' (fail OPEN) —
+  // both reasoned out in `delivery-path.js`.
+  const muteRefusal = deliveryPath.muteRefusal(await deliveryPath.deliveryBlockedReason());
+  if (muteRefusal) {
+    diag('session-launch: no Dopl delivery path —', muteRefusal.detail);
+    return muteRefusal;
   }
   // No pick -> the runtime's own default, here and only here (and only a model its catalog just proved).
   const model = await launchDefault.withRuntimeDefault(rt, a.model);

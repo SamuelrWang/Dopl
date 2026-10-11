@@ -60,6 +60,11 @@ const CLI_ADD = M("mcp-cli-add.js");
 // ⚠ `fnOf` anchors on the `function` keyword, so it drops a leading `async` — and this function
 // is `async` and full of `await`. Re-attached here rather than loosening the shared probe.
 const ENSURE = "async " + fnOf(CONFIG, "ensureMcpConfigInner");
+// ⚠ THE MINT MOVED OUT OF THE ENSURE ON 2026-10-10 (device-token-fix) and the REAL control flow is
+// now split across these two, so both are sliced in rather than faked: the sign-in gate and the
+// "did it mint" branch are the halves this file's §3 pins, and a fake would pin the fake.
+const ENSURE_TOKEN = "async " + fnOf(CONFIG, "ensureDeviceTokenInner");
+const ENSURE_TOKEN_FLIGHT = fnOf(CONFIG, "ensureDeviceToken");
 const PARSE = fnOf(CLI_ADD, "parseEntryUrl");
 
 const OURS = "http://localhost:3001/api/mcp";
@@ -92,6 +97,9 @@ function runEnsure(opts) {
     const probeMcpEntry = async () => { CALLS.push(["probe"]); return PROBE; };
     const removeMcpEntry = async () => { CALLS.push(["remove"]); return REMOVE_OK; };
     const addMcpEntry = async (b, t) => { CALLS.push(["add", t]); return ADD_OK; };
+    let minting = null;
+    ${ENSURE_TOKEN}
+    ${ENSURE_TOKEN_FLIGHT}
     ${ENSURE}
     return ensureMcpConfigInner();
   `;
@@ -176,10 +184,22 @@ test("a present entry with an UNPARSEABLE url is not treated as drifted", async 
 
 // ── 3. THE EARLIER GATES ARE UNCHANGED ───────────────────────────────────────
 
-test("signed out / no cli / no token all stop BEFORE the probe", async () => {
+test("signed out / no token stop BEFORE the probe", async () => {
   assert.deepEqual((await runEnsure({ signedIn: false, probe: present(STALE) })).names, []);
-  assert.deepEqual((await runEnsure({ bin: "", probe: present(STALE) })).names, []);
   assert.deepEqual((await runEnsure({ token: "", probe: present(STALE) })).names, ["mint"]);
+});
+
+test("NO EXTERNAL CLI still mints, still sheds the spawn file, still installs the skill", async () => {
+  // ⚠ THIS ASSERTION USED TO READ `[]`, AND THAT WAS THE BUG WRITTEN DOWN (2026-10-10). The
+  // external probe ran BEFORE the mint, so a Mac with no separately installed Claude Code CLI —
+  // most of the people this app is distributed to — never got a device token from any path
+  // (`saveDeviceToken` has one caller), `buildMcpServers` returned {} for every spawn, and every
+  // launched session ended `mcp-unreachable` after New Agent had reported success.
+  const r = await runEnsure({ bin: "", probe: present(STALE) });
+  assert.deepEqual(r.names, ["mint", "removeSpawnConfig", "skills"],
+    "everything that does not need a binary must run; only the operator's CLI entry is skipped");
+  assert.ok(!r.names.includes("probe"), "there is no CLI to probe");
+  assert.ok(r.diags.some((d) => /no external claude cli/.test(d)), "and the skip says which part was skipped");
 });
 
 // ── 4. THE URL PARSER TAKES THE URL LINE AND NOTHING ELSE ────────────────────
