@@ -80,8 +80,8 @@ const UNIVERSAL_HARD_DENY = [...DOPL_ADMIN_TOOLS, ...RETIRED_DOPL_TOOLS];
 // `channel_agent`'s floor: `full`'s plus the shell, DERIVED so the two move together.
 const CHANNEL_AGENT_HARD_DENY = [...UNIVERSAL_HARD_DENY, ...SHELL_BUILTINS];
 
-// Narrowest first. `session-park.js › KNOWN_PROFILES` is a second copy over the durable record, held
-// equal by `test/channel-agent-profile.test.mjs`.
+// Narrowest first. The durable record resumes through `normalizeProfile` too (`session-park.js ›
+// knownProfile`), so this is the one list.
 const KNOWN_PROFILES = ['read_only', 'dopl_only', 'channel_agent', 'full'];
 
 // An unknown value fails CLOSED to `read_only` (an unresolvable profile must never become the widest);

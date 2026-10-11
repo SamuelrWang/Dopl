@@ -72,7 +72,7 @@ test("CXP-4: the record's two measured words and `capability.js`'s copy of them 
   // CORE — it owns what a durable record may say — and `main/runtime/capability.js` is the RUNTIME
   // layer, which may not depend on core; but `capability.js › resumeZeroesBaseline` is where a
   // record's persisted word overrides today's descriptor, so it needs the same two strings. It is
-  // the `session-park.js › KNOWN_PROFILES` precedent and it carries the same hazard: a word that
+  // the hazard the old park copy of the profile list had (deduped in D06): a word that
   // drifts does NOT fail loudly. It falls through to the descriptor, which is exactly the silent
   // re-interpretation of a finished run that persisting the field was meant to prevent.
   assert.equal(registry.capability.USAGE_BASELINE_RESETS, truth.USAGE_RESETS);
