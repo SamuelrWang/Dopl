@@ -463,3 +463,105 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * `session_ended` — THE ONE FLAG WHOSE GATE IS THE SESSION, NOT THE THREAD
+ * (2026-10-11).
+ *
+ * ⚠ **THE REGRESSION IT PINS.** The re-stamp ran only
+ * `if (calmFlags.length > 0 && typeof metadata.taskId === "string")`, so a
+ * CHANNEL-LEVEL session — slot key `<channel>::<agent>`, which carries no thread
+ * tag by construction — had its `session_ended` stripped and NEVER re-stamped.
+ * Prod said so exactly: every `task_progress` row whose `metadata.session_id` is
+ * `<channel>::<agent>` carries `session_ended` NULL, every
+ * `<channel>:<thread>:<agent>` row carries `'true'`. The flag is documented in
+ * `service-writes-metadata-markers.ts` as explicitly NOT a thread outcome — it
+ * is about ONE SESSION ending — so the thread tag was never the right question.
+ *
+ * ⚠ **AND IT IS STILL UNFORGEABLE**, which is the half that may not be traded
+ * for the fix: `session_id` is deleted from caller metadata and re-stamped from
+ * `ctx.sessionId` (the `X-Dopl-Session-Id` header, never the payload), so NO
+ * SESSION ID => NO STAMP.
+ */
+describe("postMessage — session_ended answers to the SESSION, not the thread", () => {
+  /** A ROOM slot: channel + agent, the shape with no thread in it at all. */
+  const CHANNEL_SLOT = "chan-1::a1b2c3d4";
+
+  it("REGRESSION: SURVIVES with a session id and NO thread tag (the channel-level session)", async () => {
+    await postMessage(
+      { ...desktopCtx, sessionId: CHANNEL_SLOT },
+      "dm",
+      {
+        body: "Session ended",
+        kind: "task_progress",
+        metadata: { session_ended: true },
+      }
+    );
+
+    const meta = capturedMetadata();
+    expect(meta.session_ended).toBe(true);
+    expect(meta.session_id).toBe(CHANNEL_SLOT);
+    // No tag was sent and none was invented — the point is that it is not needed.
+    expect(has(meta, "taskId")).toBe(false);
+    // The session gate costs no thread lookup.
+    expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
+  });
+
+  it("SECURITY: DROPPED when the request carried no session id, tag or no tag", async () => {
+    // Nothing identifies the session being narrated, so there is nothing to narrate with.
+    await postMessage(desktopCtx, "dm", {
+      body: "Session ended",
+      kind: "task_progress",
+      metadata: { session_ended: true },
+    });
+    expect(has(capturedMetadata(), "session_ended")).toBe(false);
+
+    vi.mocked(repoMessages.insertMessage).mockClear();
+    await postMessage(desktopCtx, "dm", {
+      body: "Session ended",
+      kind: "task_progress",
+      metadata: { taskId: LEGACY_ID, session_ended: true },
+    });
+    expect(has(capturedMetadata(), "session_ended")).toBe(false);
+    // The tag itself still resolves normally — only the flag is withheld.
+    expect(capturedMetadata().taskId).toBe(LEGACY_ID);
+  });
+
+  it("a THREAD-gated flag still needs the tag, session id or not", async () => {
+    // ⚠ THE OTHER FIVE DID NOT MOVE. `interrupted` describes a THREAD outcome, so a session id
+    // buys it nothing: widening it here would be the forgery the strip list exists to stop.
+    await postMessage(
+      { ...desktopCtx, sessionId: CHANNEL_SLOT },
+      "dm",
+      {
+        body: "Request interrupted",
+        kind: "task_failed",
+        metadata: { interrupted: true, session_ended: true },
+      }
+    );
+
+    const meta = capturedMetadata();
+    expect(has(meta, "interrupted")).toBe(false);
+    // Same post, same gate list, opposite answers — which is the whole split.
+    expect(meta.session_ended).toBe(true);
+  });
+
+  it("the thread-tagged session keeps stamping it, exactly as before", async () => {
+    // The arm that already worked in prod, pinned so the fix cannot be read as a swap.
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
+
+    await postMessage(
+      { ...desktopCtx, sessionId: `chan-1:${TASK_ID}:a1b2c3d4` },
+      "dm",
+      {
+        body: "Session ended",
+        kind: "task_progress",
+        metadata: { taskId: TASK_ID, session_ended: true },
+      }
+    );
+
+    const meta = capturedMetadata();
+    expect(meta.session_ended).toBe(true);
+    expect(meta.taskId).toBe(TASK_ID);
+  });
+});

@@ -61,6 +61,7 @@ export function loadReducer() {
               endReasonOf, END_EVENT_REASONS, INACTIVE_NOTE, AUTH_HELD_NOTE, CLAIMED_NOTE,
               wakeEffects, feedInboundEffects, coerceMode, toolModesOf,
               nextAbandonMs, idleTimeout, AWAITING_PEER_IDLE_MS, ABANDONED_MS, LAUNCHING_MS,
-              DEFAULT_IDLE_MS };`
+              DEFAULT_IDLE_MS,
+              parkNoticeFor, endNoticeFor, DROP_PARKED_SILENT, DROP_ENDED };`
   )();
 }

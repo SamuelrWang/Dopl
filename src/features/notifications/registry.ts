@@ -44,6 +44,7 @@ export const NOTIFICATION_EVENT_IDS = [
   "tool_blocked",
   "session_resume",
   "shared_with_me",
+  "agent_dropped",
 ] as const;
 
 export type NotificationEventId = (typeof NOTIFICATION_EVENT_IDS)[number];
@@ -126,6 +127,17 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // which is today's behaviour. STICKY, because it is offered once at startup.
   { id: "session_resume", label: "Resume an interrupted session", surface: "popup", wired: true },
   { id: "shared_with_me", label: "Something shared with you", surface: "popup" },
+  // ⚠ THE COUNTERPART TO `agent_started`, and the reason it exists is a measured hole, not a
+  // symmetry: an agent that stops WITHOUT REPORTING used to be entirely silent. Two shapes, both
+  // observed in channel bb0f57db on 2026-10-10 — a turn that ended having posted nothing
+  // (`viloxuwt`, zero channel messages across a 7-minute run), and a parked session reaped by the
+  // 12h abandonment bound with no closing post (`jsk2zowk`, last word a MILESTONE, never a DONE).
+  // Both wrote a `task_progress` lifecycle marker, which addresses nobody and wakes nothing, so
+  // whoever launched the agent went on believing the work was in flight.
+  // Same family as the safety four above — it marks WORK STOPPING SILENTLY — but default ON and
+  // NOT locked: the channel post is the durable record either way, so muting the banner costs the
+  // operator an interruption, never the fact.
+  { id: "agent_dropped", label: "An agent stops without reporting", surface: "both", wired: true },
 ];
 
 /** The rows the Notifications tab draws: only events something actually raises. */

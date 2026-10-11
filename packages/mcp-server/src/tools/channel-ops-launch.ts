@@ -1,7 +1,12 @@
 /**
  * `dopl_channel` op="manage" action="launch" — asks the operator's own desktop to start an agent.
- * This op asks, it starts nothing: a refusal is a normal answer, and a timeout is not a failure
- * (re-issuing without the same `client_msg_id` queues a second agent).
+ * This op asks, it starts nothing: a refusal is a normal answer, and the HOLD timing out is not the
+ * DIRECTIVE expiring (re-issuing without the same `client_msg_id` queues a second agent).
+ * ⚠ **AND A HOLD THAT TIMED OUT UNCLAIMED IS NOT A NON-EVENT EITHER** — it was reported as one
+ * until 2026-10-11. The hold's cap is 30s and `LAUNCH_DIRECTIVE_TTL_MS` is 120s, so an unclaimed
+ * row is handed back 90s before it dies, expiry is computed at READ time with no cron, and nothing
+ * ever reports it: a caller told `retry=no` over that row waits forever on a request that is
+ * already dead on arrival. The pending branch below says so, and names the instant.
  * A directive is not a message (no `seq`, INVARIANTS §5), so the op holds on the row (`holdRow`).
  * `channel-` filename prefix is required by the parity split-scan (`tool-group-files.ts`).
  */
@@ -13,7 +18,11 @@ import type {
   LaunchToolMode,
 } from "@dopl/client";
 import { ok, err, apiErrorCode, isNotFound, type ToolResponse } from "./respond";
-import { LAUNCH_RETRY_ADVICE, holdRow } from "./channel-directive-hold";
+import {
+  LAUNCH_RETRY_ADVICE,
+  RETRY_AFTER_EXPIRY,
+  holdRow,
+} from "./channel-directive-hold";
 import { channelNotFound, inlineOr, isErr, resolveChannelOr } from "./channel-shared";
 import { factsLine, postureFacts, runtimeFacts } from "./channel-facts";
 import { colorTaken, freeColors } from "./channel-ops-launch-color";
@@ -36,7 +45,9 @@ import {
 
 /**
  * Ask for an agent, then hold briefly for the answer.
- * Terminal shapes: offline (nothing filed), launched, refused (reason + `retry=`), pending / expired.
+ * TERMINAL shapes: offline (nothing filed), launched, refused (reason + `retry=`), expired.
+ * NON-TERMINAL, and they are two different answers: `claimed` (a machine has it, a decision is
+ * imminent) and `pending` (nobody has it, and it lapses unannounced at `expires=`).
  */
 export async function opLaunchAgent(
   client: DoplClient,
@@ -158,6 +169,11 @@ export async function opLaunchAgent(
 
   if (directive.status === "expired") {
     // No machine ever answered, so asking once more is legitimate (`LAUNCH_RETRY_ADVICE`'s `once`).
+    // ⚠ UNREACHABLE ON A FRESH LAUNCH, and only ever reached on a CONVERGED RETRY of an older row:
+    // the hold caps at 30s and the row lives 120s, so a first ask can never outlast its own
+    // directive. `expired` is a READ-TIME verdict (`service-launch.ts › toDirective`) with no cron
+    // behind it, so no row is stored `expired` either — which is why the pending branch cannot
+    // treat this one as the place the news will eventually arrive.
     return ok(
       factsLine("expired", {
         directive: directive.id,
@@ -168,15 +184,40 @@ export async function opLaunchAgent(
     );
   }
 
-  // Pending or claimed: `retry=no`, because re-issuing starts a second agent on the same work.
+  if (directive.status === "claimed") {
+    // A machine HAS taken the row and is spawning, so the decision lands on it within seconds.
+    // `retry=no` and it means it: re-issuing starts a second agent on the same work.
+    return ok(
+      [
+        factsLine("claimed", {
+          directive: directive.id,
+          expires: directive.expiresAt,
+          retry: "no",
+          ...converged,
+        }),
+        "A machine has TAKEN this request and is starting the agent; the hold ran out before it reported back, so a decision is imminent and will land on this row. Do not ask again — read your own machine's sessions instead.",
+      ].join("\n"),
+    );
+  }
+
+  // PENDING — NOTHING HAS TAKEN IT, which is the one answer this op used to tell a lie about.
+  // ⚠ It printed `retry=no` here, the same word the CLAIMED row gets, over a row no process has
+  // touched: the launcher then sat on a request that dies silently (see the header). The facts
+  // publish the instant and the retry word says what to do with it; the sentence says the part no
+  // `key=value` can — that the expiry is ANNOUNCED NOWHERE.
+  // ⚠ `expiresAt` is the server's own `toISOString()` (`service-launch-agent.ts`), not a
+  // caller-supplied value, and it is the same string the facts line above already rendered.
   return ok(
-    factsLine("pending", {
-      directive: directive.id,
-      claimed: directive.status === "claimed",
-      expires: directive.expiresAt,
-      retry: false,
-      ...converged,
-    }),
+    [
+      factsLine("pending", {
+        directive: directive.id,
+        claimed: false,
+        expires: directive.expiresAt,
+        retry: RETRY_AFTER_EXPIRY,
+        ...converged,
+      }),
+      `NOT CLAIMED — no machine has picked this up. The row stays answerable until ${directive.expiresAt} and then lapses, and NOTHING WILL REPORT THAT EXPIRY: there is no cron, no message and no notice, so silence after that instant is not "still waiting". Asking again AFTER it is the correct move; asking before it starts a second agent.`,
+    ].join("\n"),
   );
 }
 

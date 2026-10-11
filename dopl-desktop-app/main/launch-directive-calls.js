@@ -85,14 +85,63 @@ async function claim(d) {
   return wire.directiveFrom(granted, d.workspaceId);
 }
 
-/** The terminal write. Best-effort by the same logic as the claim — the machine has already
- *  done the thing; a lost decision costs the orchestrator a wait, not a wrong action. */
+/**
+ * THE TERMINAL WRITE, AND IT IS NOT BEST-EFFORT ANY MORE.
+ *
+ * ⚠ IT USED TO BE, AND THE COMMENT THAT SAID SO WAS WRONG IN THE WORST DIRECTION. It read "a lost
+ * decision costs the orchestrator a wait, not a wrong action", which is true of a REFUSAL and
+ * false of a LAUNCH: when the status is `launched` the agent is ALREADY RUNNING, holding this
+ * channel's pre-approved access, and the row stays `claimed` and reads `expired` forever. The
+ * launcher then believes nothing started while an agent works unwatched. That is not a wait; it is
+ * two parties with opposite pictures of the same machine. Observed 2026-10-11T09:23:34Z:
+ * `launch-directive 3edc3195 launched agent jqxz7mr9 — DECISION NOT RECORDED`, and jqxz7mr9 was
+ * live for hours afterwards against a row that said nobody had decided anything.
+ *
+ * So: BOUNDED RETRY WITH BACKOFF, and an honest answer. ⚠ SAFE TO RETRY BY CONSTRUCTION — the
+ * route CASes on `pending`/`claimed` (`service-launch.ts`: "a retried decide is a 409, never an
+ * overwrite"), so a second attempt after a response we never saw cannot overwrite a landed one.
+ * A 409 therefore means ALREADY DECIDED and is success, not a reason to try again.
+ *
+ * ⚠ 4xx IS NOT RETRIED. A rejected body will be rejected identically three times; only network
+ * faults, timeouts and 5xx can improve. (429 is the exception the claim path does not have to
+ * make, because this write is one per directive, not one per row seen.)
+ *
+ * @returns {Promise<boolean>} whether the decision is RECORDED — true also for a 409.
+ */
 async function decide(d, outcome) {
   const body = wire.decideBody(d.id, outcome);
-  const res = await post(d.workspaceId, wire.ROUTES.decide, body);
-  diag('launch-directive', String(d.id).slice(0, 8), body.status,
-    body.agentId ? `agent ${body.agentId}` : `(${body.refusalReason})`,
-    res.ok ? '' : '— DECISION NOT RECORDED, the orchestrator will see it expire');
+  const label = String(d.id).slice(0, 8);
+  const what = body.agentId ? `agent ${body.agentId}` : `(${body.refusalReason})`;
+  for (let attempt = 1; attempt <= DECIDE_ATTEMPTS; attempt += 1) {
+    const res = await post(d.workspaceId, wire.ROUTES.decide, body);
+    if (res.ok) {
+      diag('launch-directive', label, body.status, what, attempt > 1 ? `(recorded on attempt ${attempt})` : '');
+      return true;
+    }
+    if (res.status === 409) {
+      diag('launch-directive', label, body.status, what,
+        '— already decided (HTTP 409); the record stands, nothing to retry');
+      return true;
+    }
+    const permanent = res.status >= 400 && res.status < 500 && res.status !== 429;
+    if (permanent) {
+      diag('launch-directive', label, 'decide REFUSED', `HTTP ${res.status}`, what,
+        '— a 4xx will not improve on retry, so this is final');
+      return false;
+    }
+    diag('launch-directive', label, 'decide failed',
+      res.status ? `HTTP ${res.status}` : res.error || 'network', `attempt ${attempt}/${DECIDE_ATTEMPTS}`);
+    if (attempt < DECIDE_ATTEMPTS) await sleep(DECIDE_BACKOFF_MS * 2 ** (attempt - 1));
+  }
+  diag('launch-directive', label, 'DECISION NOT RECORDED after', String(DECIDE_ATTEMPTS),
+    'attempts —', what, 'and the row will read expired');
+  return false;
 }
 
-module.exports = { post, claim, decide, HTTP_TIMEOUT_MS };
+/** Three tries over ~1.5s: long enough to cross a transport blip, short enough to stay inside the
+ *  120s TTL with the spawn already paid for. Same shape as `channel-post.js › postWithRetry`. */
+const DECIDE_ATTEMPTS = 3;
+const DECIDE_BACKOFF_MS = 500;
+const sleep = (ms) => new Promise((r) => { const t = setTimeout(r, ms); if (t.unref) t.unref(); });
+
+module.exports = { post, claim, decide, HTTP_TIMEOUT_MS, DECIDE_ATTEMPTS, DECIDE_BACKOFF_MS };

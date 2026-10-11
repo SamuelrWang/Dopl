@@ -140,7 +140,15 @@ function runEffect(s, eff) {
     case 'clearIdle': if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; } break;
     case 'resumeQuery': sessionPark.resumeParked(s); break;
     case 'lifecycle': runLifecycle(s, eff.kind, eff.extra, eff.body); break;
-    case 'settle': settle(s, eff.outcome); break;
+    // The drop report (`session-drop-notice.js`): a park that posted nothing, or an end nobody
+    // chose. Beside the lifecycle marker, never instead of it — the marker is for the waiting
+    // peer, this is for whoever launched the agent.
+    case 'notice': require('./session-drop-notice').report(s, eff); break;
+    case 'settle':
+      // The cause, stamped before the teardown freezes history off `s` (`session-teardown.js`).
+      if (eff.endCode && !s.endCode) s.endCode = eff.endCode;
+      settle(s, eff.outcome);
+      break;
     default: diag('session-engine: unknown effect', eff && eff.type);
   }
 }

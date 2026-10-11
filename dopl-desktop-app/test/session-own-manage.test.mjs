@@ -323,8 +323,16 @@ test("🔒 THE DELIVERY END'S PER-KIND CONSENT IS UNTOUCHED — widening a gate 
   const wire = read("launch-directive-wire.js");
   assert.match(wire, /KINDS_NEEDING_LAUNCH_CONSENT/);
   const directives = read("launch-directives.js");
+  // ⚠ PINNED ON THE CONDITION, NOT ON `return;` AFTER IT. F-3201 turned the one-liner into a
+  // block that also CODES the refusal and tells the operator their launch lane is off — a row
+  // nothing will ever claim used to die with no trace on either side. What this line asserts is
+  // unchanged and is still exactly here: the gate, the same kinds, and no widening.
   assert.match(directives,
-    /if \(wire\.KINDS_NEEDING_LAUNCH_CONSENT\.indexOf\(d\.kind\) !== -1 && !launchEnabled\(\)\) return;/);
+    /if \(wire\.KINDS_NEEDING_LAUNCH_CONSENT\.indexOf\(d\.kind\) !== -1 && !launchEnabled\(\)\) \{/);
+  // The gate still ADMITS NOTHING on the refused path: no claim, no decide, no server write.
+  const gated = directives.slice(directives.indexOf("KINDS_NEEDING_LAUNCH_CONSENT.indexOf"));
+  assert.ok(!/claim\(|decide\(/.test(gated.slice(0, gated.indexOf("\n  }"))),
+    "an unarmed lane writes nothing: the toggle is the consent");
   // ...and this lane's CODE says nothing about any of it. COMMENTS ARE STRIPPED FIRST: the header
   // names that consent split, so a raw regex over the file text would redden the invariant the
   // prose documents.

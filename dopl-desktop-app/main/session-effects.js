@@ -78,11 +78,64 @@ function endedStatusText(reason) {
   return reason;
 }
 
-// The shared end: abort first, the calm note, the `ended` emit, then settle.
+// ─── THE DROP NOTICE ─────────────────────────────────────────────────────────
+//
+// ⚠ THE LIFECYCLE MARKER ABOVE IS NOT A REPORT, and treating it as one is what made two runs
+// vanish in channel bb0f57db on 2026-10-10. `endLifecycle` posts `task_progress` carrying
+// `INACTIVE_NOTE`, which is correct for what it is — a CALM note to a waiting COUNTERPARTY,
+// deliberately free of local detail. It is also: addressed to nobody, so it wakes no agent and
+// notifies no person; named after no agent; and silent about the cause. Measured:
+//   `viloxuwt`  (Notif Account Store) — 7 minutes of edits, ZERO channel messages ever, parked on
+//               turn end, reaped 12h later. Its only row was the marker.
+//   `jsk2zowk`  (Row Cap Fix) — last word a MILESTONE with two tests still failing, parked, reaped
+//               12h later. No DONE. Its only row was the marker.
+// Whoever launched them went on believing the work was in flight. So the marker STAYS (the peer
+// still needs it) and a REPORT is added beside it, which is what `notice` is.
+//
+// ⚠ TWO CAUSES, NOT ONE, AND THE EARLIER ONE IS THE USEFUL ONE. The 12h reap is where the session
+// dies; the turn that ended having posted nothing is where the information was lost, 12 hours
+// earlier. Flagging only the reap reports a stall half a day after anyone could act on it.
+const DROP_PARKED_SILENT = 'parked_silent';
+const DROP_ENDED = 'ended';
+
+/**
+ * PARKED HAVING REPORTED NOTHING, or null when the turn did report.
+ *
+ * ⚠ READS `activity`, NOT `postedThisTurn`, AND THAT IS THE ONLY SIGNAL LEFT BY PARK TIME. The
+ * `result` branch clears `postedThisTurn` the instant the turn ends and folds the answer into
+ * `activity` — `awaiting_peer` for exactly the turn that posted, `idle` otherwise
+ * (`session-state.js › nextIdleMs` depends on the same fact) — and the idle timer fires minutes
+ * later. Reading the flag here would report every park as silent.
+ *
+ * ⚠ `turns === 0` IS NOT A DROP. A stand-by agent (`idle: !goal` on the directive lane) parks
+ * having been asked nothing; "paused without reporting" about a session that never ran is noise.
+ */
+function parkNoticeFor(state) {
+  const s = state || {};
+  if (s.activity === 'awaiting_peer') return null;
+  if (!(Number(s.turns) > 0)) return null;
+  return { type: 'notice', code: DROP_PARKED_SILENT, reason: 'paused without reporting' };
+}
+
+/**
+ * THE END REPORT. Only the ends nobody chose: an operator's own End needs no report (they did it),
+ * and `claimed` already says a person joined, visibly, to everyone reading.
+ */
+function endNoticeFor(reason) {
+  if (reason === 'abandoned') return { type: 'notice', code: DROP_ENDED, reason: 'left parked' };
+  if (reason === 'inactive') return { type: 'notice', code: DROP_ENDED, reason: 'went inactive' };
+  return null;
+}
+
+// The shared end: abort first, the calm note, the report, the `ended` emit, then settle.
+// ⚠ `endCode` RIDES THE SETTLE so the frozen history can name the cause: `session-teardown.js`
+// reads `s.endCode` into `agent-history.js`, and every reaped record on this machine had it NULL —
+// so even the local 7-day history could not say why a run stopped.
 function endEffects(state, outcome, reason, summary) {
   const lc = endLifecycle(reason);
-  return [{ type: 'abortQuery' }].concat(lc ? [lc] : [],
-    [endedEmit(outcome, reason, summary), { type: 'settle', outcome: outcome }]);
+  const notice = endNoticeFor(reason);
+  return [{ type: 'abortQuery' }].concat(lc ? [lc] : [], notice ? [notice] : [],
+    [endedEmit(outcome, reason, summary), { type: 'settle', outcome: outcome, endCode: reason }]);
 }
 
 /**
@@ -100,6 +153,10 @@ function parkEffects(opts) {
     { type: 'persist', phase: 'parked' },
   ];
   if (o.lifecycle === true) effects.push(endLifecycle('auth_hold'));
+  // ⚠ ONLY THE IDLE PARK REPORTS. An auth hold already posts its own sentence saying a person is
+  // needed, and a hold that also said "paused without reporting" would be two notices for one
+  // fact — the same mistake `firstInactiveNote` exists to prevent.
+  if (o.notice) effects.push(o.notice);
   return effects;
 }
 
@@ -109,6 +166,10 @@ module.exports = {
   gateActivity,
   terminalBody,
   TERMINAL_BODIES,
+  DROP_PARKED_SILENT,
+  DROP_ENDED,
+  parkNoticeFor,
+  endNoticeFor,
   endedEmit,
   endLifecycle,
   endReasonOf,
