@@ -47,7 +47,7 @@ const { claim, decide } = calls;
 /**
  * ⚠ A NON-DECISION IS NOW LOGGED WITH ITS REASON, AND THE HEADER ABOVE USED TO PROMISE OTHERWISE.
  * It said the funnel was "SILENT on every non-decision … the row expires where the orchestrator
- * sees it". The second half is false and was the whole of F-3201: nothing writes `expired` (239
+ * sees it". The second half is false and was the whole of #3201: nothing writes `expired` (239
  * prod rows, ZERO of them expired), the status is only ever computed at read time, and the MCP
  * launch op gives up on its 30s hold 90 seconds before a 120s TTL can elapse — so the launcher is
  * told `pending retry=no` about a row that is already dead and is never told again. Two rows died

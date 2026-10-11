@@ -323,7 +323,7 @@ test("🔒 THE DELIVERY END'S PER-KIND CONSENT IS UNTOUCHED — widening a gate 
   const wire = read("launch-directive-wire.js");
   assert.match(wire, /KINDS_NEEDING_LAUNCH_CONSENT/);
   const directives = read("launch-directives.js");
-  // ⚠ PINNED ON THE CONDITION, NOT ON `return;` AFTER IT. F-3201 turned the one-liner into a
+  // ⚠ PINNED ON THE CONDITION, NOT ON `return;` AFTER IT. #3201 turned the one-liner into a
   // block that also CODES the refusal and tells the operator their launch lane is off — a row
   // nothing will ever claim used to die with no trace on either side. What this line asserts is
   // unchanged and is still exactly here: the gate, the same kinds, and no widening.

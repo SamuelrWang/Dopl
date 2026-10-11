@@ -1,4 +1,4 @@
-// THE DROP REPORT (F-3201). Two silences this covers, both measured in channel bb0f57db on
+// THE DROP REPORT (#3201). Two silences this covers, both measured in channel bb0f57db on
 // 2026-10-10 before the fix existed:
 //   `viloxuwt` ran 7 minutes, posted NOTHING, parked on turn end, reaped 12h later.
 //   `jsk2zowk` posted a MILESTONE with two tests still failing, parked, reaped 12h later, no DONE.

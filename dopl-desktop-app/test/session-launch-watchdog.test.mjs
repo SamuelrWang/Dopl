@@ -160,7 +160,7 @@ test("the watchdog's event ENDS the session — abort, post, settle, slot freed"
   const r = sessionReducer(launching(), { type: "inactive" });
   assert.equal(r.state.phase, "ended", "terminal at the top of the reducer");
   const types = r.effects.map((e) => e.type);
-  // ⚠ `notice` JOINED EVERY UNCHOSEN END IN F-3201 — a child that never spoke is exactly the
+  // ⚠ `notice` JOINED EVERY UNCHOSEN END IN #3201 — a child that never spoke is exactly the
   // shape nobody was told about — and the claim here is unchanged: this is the SAME list the
   // other unchosen end (`abandoned`) produces, so there is still no second teardown path.
   assert.deepEqual(types, ["abortQuery", "lifecycle", "notice", "emit", "settle"],

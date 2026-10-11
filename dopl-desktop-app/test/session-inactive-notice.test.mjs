@@ -151,7 +151,7 @@ test("ABANDONMENT: the common silent path now tells the person still waiting", (
 
 test("ABANDONMENT: the note comes BEFORE the settle, so it posts from a live session object", () => {
   const effects = endEffects(parked(), "ended", "abandoned").map((e) => e.type);
-  // ⚠ `notice` JOINED THIS LIST IN F-3201 and sits in the same window, for the same reason: it is
+  // ⚠ `notice` JOINED THIS LIST IN #3201 and sits in the same window, for the same reason: it is
   // the REPORT to whoever launched the agent ("ended: left parked", naming it and its last tool),
   // where `lifecycle` is the CALM NOTE to a waiting counterparty. Both read off a live `s`, so
   // both must precede the settle that deletes the registry entry and freezes the ring.

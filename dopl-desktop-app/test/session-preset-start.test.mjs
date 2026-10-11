@@ -356,7 +356,7 @@ test("M2: a park KEEPS the posture; only the AUTH HOLD resets it", () => {
   const REDUCER = read("session-reducer.js");
   const idle = between(REDUCER, "if (type === 'idle_timeout')", "if (type === 'abandon_timeout')");
   assert.doesNotMatch(idle, /toolMode: 'manual'/, "the idle park writes no posture at all");
-  // ⚠ ANCHORED ON `armAbandon`, NOT ON THE WHOLE LITERAL (F-3201 added a second argument — the
+  // ⚠ ANCHORED ON `armAbandon`, NOT ON THE WHOLE LITERAL (#3201 added a second argument — the
   // drop report for a turn that ended having posted nothing). What this line is about is that the
   // idle park ARMS THE ABANDONMENT BOUND rather than clearing the timer; pinning the argument
   // list byte-for-byte made it go red for every unrelated addition to the same call.

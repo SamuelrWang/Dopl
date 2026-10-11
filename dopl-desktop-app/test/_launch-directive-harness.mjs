@@ -125,8 +125,8 @@ export function boot(over = {}) {
   const flushes = [];  // every `session-summary.touch()` the commit wrapper announced
   const modes = [];    // every `session-engine.setModeByTask` call the lane made (2026-09-01)
   const resolves = [];
-  const notices = []; // every operator banner the lane raised (F-3201)
-  const drops = [];   // every drop/orphan post the lane made (F-3201)
+  const notices = []; // every operator banner the lane raised (#3201)
+  const drops = [];   // every drop/orphan post the lane made (#3201)
   const acquires = []; // every `runtime.acquire` this lane made (2026-09-21, U9)
   const rosters = [];  // every `runtime.models()` read this lane made (2026-09-21, U9)
   const identityAsks = []; // every runtime the identity link was asked of (2026-09-23)
@@ -177,7 +177,7 @@ export function boot(over = {}) {
               : a.json;
             return { ok: a.ok, status: a.status, json: async () => json };
           }
-          // ⚠ F-3201 — THE DECIDE WRITE IS DRIVABLE PER ATTEMPT. `cfg.decideAnswer` is a
+          // ⚠ #3201 — THE DECIDE WRITE IS DRIVABLE PER ATTEMPT. `cfg.decideAnswer` is a
           // FUNCTION, not a value, because the behaviour under test is the RETRY: a case needs
           // "fails twice then lands" to be expressible, and a fixed answer cannot say it.
           // Absent, it still answers 200, so every case written before this keeps its decision.
@@ -377,7 +377,7 @@ export function boot(over = {}) {
     // push, driven for real in the desktop's own summary tests.
     if (id === "./session-summary") return { touch: () => { flushes.push(true); } };
     if (id === "./diag") return { diag: (...p) => logged.push(p.join(" ")) };
-    // ⚠ F-3201 — THE TWO SURFACES A NON-DECISION NOW REACHES, stubbed at their seams because
+    // ⚠ #3201 — THE TWO SURFACES A NON-DECISION NOW REACHES, stubbed at their seams because
     // both are the fix under test. The lane's calls are inside try/catch (an end must never be
     // unwound by a failed notice), so WITHOUT these stubs the `unexpected require` below would be
     // swallowed and every case would pass against a lane that reported nothing — which is the
