@@ -221,7 +221,7 @@ export function useChannelSurfaceData({
   // workspace-wide, sliced per consumer. `null` means "could not ask" (plain
   // browser, or an older main) and is carried as null all the way to the tab,
   // which words the two absences differently.
-  // ⚠ `refresh` is the REFUSAL path only (`agents-model.ts › DesktopSessionsFeed`)
+  // ⚠ `refresh` is the REFUSAL path only (`use-desktop-sessions.ts › DesktopSessionsFeed`)
   // — main answering `{ok:false}` is the one fact no push announces. Not a poll.
   const { sessions: agentSessions, refresh: refreshAgents } =
     useDesktopSessions();
@@ -331,8 +331,8 @@ export function useChannelSurfaceData({
    * ⚠ **THE PICKER USED TO READ `agentsPanel.peerSessions` ALONE, WHICH IS A POLL.**
    * `channel_sessions` is unpublished (INVARIANTS §7) so that read ticks every
    * `PEER_SESSIONS_POLL_MS` (30 s); a just-launched agent is spawn-idle (§5) so it
-   * rings no message doorbell; and `use-agents-panel.ts › launchAgent`'s own
-   * `void refetch()` runs BEFORE main's HTTP push has landed the row, which re-reads
+   * rings no message doorbell; and the launch's own settle-time
+   * `void refetch()` (`use-agents-panel.ts › useAgentsPanel`) runs BEFORE main's HTTP push has landed the row, which re-reads
    * the old set and restarts that interval. The agent was therefore un-taggable for
    * one full poll period by construction — while `useDesktopSessions` had it within
    * 200 ms (`main/session-summary.js › PUSH_COALESCE_MS`).
