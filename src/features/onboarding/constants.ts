@@ -1,6 +1,7 @@
 /**
  * Survey question data + MCP server constants. Pure data — no React, no server
- * code. Bootstrap prompt + card template: `./bootstrap-prompt.ts`.
+ * code. The connect prompt: `./bootstrap-prompt.ts`. `./schema.ts` validates
+ * against the lists here, so a value added here is accepted there.
  *
  * ⚠ Copy must stay MODEL-AGNOSTIC: no "Claude"/"Codex"/"Cursor". Connect step
  * addresses "your AI agent" only.
@@ -11,7 +12,8 @@ export interface SurveyOption {
   label: string;
 }
 
-export type EntityType = "solo" | "team" | "company";
+export const ENTITY_TYPES = ["solo", "team", "company"] as const;
+export type EntityType = (typeof ENTITY_TYPES)[number];
 
 /** Identity selector (single choice) — drives descriptor question + whether
  *  the size slider shows. */

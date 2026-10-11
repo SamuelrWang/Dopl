@@ -1,14 +1,15 @@
 import { z } from "zod";
+import { ENTITY_TYPES, SIZE_BUCKETS } from "./constants";
 
 /**
  * ⚠ Answers land in conversion_events.metadata VERBATIM — this is the only
  * validation layer between form and analytics table, so bound every field.
  */
 export const SurveySubmissionSchema = z.object({
-  entityType: z.enum(["solo", "team", "company"]),
+  entityType: z.enum(ENTITY_TYPES),
   descriptors: z.array(z.string().min(1).max(80)).min(1).max(20),
   // Slider — team/company only, absent for solo.
-  size: z.enum(["1-2", "2-10", "10-50", "50-100", "100-1000", "1000+"]).optional(),
+  size: z.enum(SIZE_BUCKETS).optional(),
 });
 
 export const CompleteOnboardingSchema = z.object({
