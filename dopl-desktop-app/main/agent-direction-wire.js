@@ -183,11 +183,7 @@ function decideBody(directionId, outcome) {
 
 module.exports = {
   ROUTES,
-  STATUSES,
   STATUS_PENDING,
-  STATUS_CLAIMED,
-  STATUS_REFUSED,
-  STATUS_EXPIRED,
   REFUSAL_REASONS,
   BODY_MAX,
   text,

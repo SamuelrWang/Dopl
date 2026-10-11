@@ -15,8 +15,6 @@ const channelPrefs = require('./channel-prefs');
 const wire = require('./launch-directive-wire');
 const { diag } = require('./diag');
 
-const HTTP_TIMEOUT_MS = 15000;
-
 // The backstop covers a breaker AND a dropped frame (a healthy socket cannot say THIS row arrived),
 // so it polls every armed workspace. 60s keeps it inside `LAUNCH_DIRECTIVE_TTL_MS` (120s); `unref`'d.
 const POLL_MS = 60000;
@@ -42,7 +40,7 @@ function launchEnabled() {
 
 // The two authenticated calls (claim / decide) live in `launch-directive-calls.js`.
 const calls = require('./launch-directive-calls');
-const { claim, decide } = calls;
+const { claim, decide, HTTP_TIMEOUT_MS } = calls;
 
 /**
  * ⚠ A NON-DECISION IS NOW LOGGED WITH ITS REASON, AND THE HEADER ABOVE USED TO PROMISE OTHERWISE.

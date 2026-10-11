@@ -149,14 +149,6 @@ function descriptionForAgent(agentId) {
 
 module.exports = {
   MAX_NAME,
-  MAX_DESCRIPTION,
-  MAX_NAMES,
-  sanitizeName,
-  sanitizeDescription,
-  sweepable,
-  nameFrom,
-  descriptionFrom,
-  patched,
   rename,
   describe,
   clear,

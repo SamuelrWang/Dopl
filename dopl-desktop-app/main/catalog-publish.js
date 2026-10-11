@@ -146,4 +146,4 @@ function start() {
   if (typeof timer.unref === 'function') timer.unref();
 }
 
-module.exports = { start, publishableCatalog };
+module.exports = { start };

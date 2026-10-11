@@ -20,9 +20,8 @@ const { apiFetch } = require('./api');
 const wire = require('./launch-directive-wire');
 const { diag } = require('./diag');
 
-// ⚠ THE SAME BOUND THE WATCHER USES, DECLARED HERE BECAUSE THIS IS WHERE THE CALL IS MADE. It is
-// deliberately NOT imported back from `launch-directives.js`: that would make the module this one
-// split out of a dependency of the split, which is how a cycle gets built one honest line at a time.
+// ⚠ THE ONE DECLARATION OF THE LANE'S HTTP BOUND: the watcher (`launch-directives.js`) imports it
+// from here for its backstop GET, never the other way round (that would build a require cycle).
 const HTTP_TIMEOUT_MS = 15000;
 
 async function post(workspaceId, path, body) {
@@ -144,4 +143,4 @@ const DECIDE_ATTEMPTS = 3;
 const DECIDE_BACKOFF_MS = 500;
 const sleep = (ms) => new Promise((r) => { const t = setTimeout(r, ms); if (t.unref) t.unref(); });
 
-module.exports = { post, claim, decide, HTTP_TIMEOUT_MS, DECIDE_ATTEMPTS, DECIDE_BACKOFF_MS };
+module.exports = { claim, decide, HTTP_TIMEOUT_MS };

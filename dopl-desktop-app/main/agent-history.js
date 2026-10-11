@@ -166,13 +166,6 @@ function sweep(now) {
 }
 
 module.exports = {
-  RETENTION_MS,
-  MAX_HISTORY,
-  historyName,
-  numberOrNull,
-  durableHistory,
-  expired,
-  sweepableKeys,
   record,
   historyFor,
   listEnded,

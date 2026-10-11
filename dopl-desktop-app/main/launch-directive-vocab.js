@@ -2,7 +2,6 @@
 // leaf (requires nothing); `launch-directive-wire.js` re-exports the names its callers read. The server owns these
 // shapes — each list is mirrored by `schema-launch-modes.ts`, the column CHECKs and the MCP side.
 
-const DIRECTIVE_TABLE = 'channel_launch_directives'; // the second `postgres_changes` binding (`realtime.js`)
 
 // All authenticated (`api.js`); claim is a compare-and-swap, decide a write, pending the backstop read.
 const ROUTES = {
@@ -84,14 +83,11 @@ const IDENTITY_NAME_MAX = 120;
 const MODEL_MAX = 120;
 
 module.exports = {
-  DIRECTIVE_TABLE,
   ROUTES,
   STATUS_PENDING,
-  STATUS_CLAIMED,
   STATUS_LAUNCHED,
   STATUS_DONE,
   STATUS_REFUSED,
-  STATUS_EXPIRED,
   STATUSES,
   KIND_LAUNCH,
   KIND_END,
