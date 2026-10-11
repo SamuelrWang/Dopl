@@ -16,7 +16,7 @@ const TeamNameSchema = safeLabel("Team name", 80);
  * Resource types the MEMBERS CONSOLE may address — exactly what
  * `getAccessMatrix` puts in its `resources` array.
  * ⚠ `chat` and `chat_folder` are DELIBERATELY absent. They are valid
- * `TeamResourceType` values and real `team_resource_access` rows, but the
+ * `TeamResourceType` values and real team-scoped `resource_grants` rows, but the
  * matrix never emits them and their scope is not independently settable: a
  * folder's scope is authoritative for its chats and propagates to them. Chat
  * sharing belongs to the chats surface; a grant written here sidesteps it.

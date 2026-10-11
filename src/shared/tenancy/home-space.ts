@@ -89,7 +89,7 @@ async function callerHomeSpaceId(
   const reach = await resolveHomeSpaceReach({
     userId: scope.userId,
     credentialSubjectUserId: scope.userId,
-    // The room is the lock where there is one; an unlocked session stands in the container it named.
+    // Not read by `resolveHomeSpaceReach` (it ignores `workspaceId`); kept for the interface.
     workspaceId: scope.credentialWorkspaceId ?? callingWorkspaceId,
     source: scope.source,
   });
@@ -117,7 +117,6 @@ export async function resolveShelfScope(
   }
   // Unfiltered reads see both shelves, so a personal row is findable from any room it resolves in.
   // Not a default-workspace fallback: the caller's own container is added by owner, nothing guessed.
-  // `knowledge/server/repository-bases.ts › listHomeScopedBaseIds` asks this too: label = list.
   return containerId === null || containerId === workspaceId
     ? { workspaceIds: [workspaceId] }
     : { workspaceIds: [workspaceId, containerId] };

@@ -110,7 +110,8 @@ export async function deleteTeam(
   await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
-  // Members + grants cascade via FK.
+  // Members cascade via FK; grants (polymorphic `resource_grants`, no FK) go via the
+  // `resource_grants_scope_cleanup` trigger on `teams` delete.
   await deleteTeamRow(teamId);
 }
 

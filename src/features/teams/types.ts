@@ -1,8 +1,8 @@
 /**
  * Teams — named member groups carrying resource access grants for KBs and
  * skills. A resource's `access_mode` is 'workspace' (every active member,
- * level by role default) or 'teams' (only teams with a grant row; owner,
- * admin and creator always retain edit).
+ * level by role default) or 'teams' (only teams with a grant row; owner and
+ * admin always edit, the creator keeps their role ceiling).
  */
 
 import type {

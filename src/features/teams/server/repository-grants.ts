@@ -174,7 +174,7 @@ export async function deleteGrantsForResources(
 }
 
 /** `insertReadGrantsIfMissing` over resources × teams, one upsert per chunk.
- *  ⚠ Same never-downgrade rule: existing (possibly `write`) grants stand. */
+ *  ⚠ Same never-downgrade rule: existing (possibly `edit`) grants stand. */
 export async function insertReadGrantsForResources(
   workspaceId: string,
   resourceType: TeamResourceType,

@@ -33,10 +33,8 @@ const ROLE_OPTIONS: Array<{
 
 /**
  * Label + icon per grantable resource in the access UI.
- * ⚠ `workflow` is DELIBERATELY ABSENT: retired from the UI and filtered out
- * of the access matrix in `use-workspace-resources`, so a stale row reads as
- * the neutral fallback instead of reintroducing the word. The DB still
- * accepts `workflow` grants — only the rendering is gone.
+ * Covers every `TeamResourceType`; the fallback is a runtime guard against an
+ * off-type value in a payload (`resource_grants`' CHECK refuses `workflow`).
  */
 const RESOURCE_META: Partial<
   Record<TeamResourceType, { label: string; icon: LucideIcon }>
@@ -57,8 +55,8 @@ export function resourceMeta(type: TeamResourceType): {
 }
 
 /**
- * Resources a team is scoped to. ⚠ **IT FILTERED RETIRED TYPES UNTIL 2026-09-02
- * (F-466)**; `resource_grants` cannot hold one, so the count is the length.
+ * Resources a team is scoped to: the count is the length (`resource_grants`
+ * cannot hold a retired type).
  * Kept as a function because both call sites (the teams list and the team pane)
  * must caption from ONE derivation.
  */

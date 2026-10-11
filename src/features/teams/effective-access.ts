@@ -1,9 +1,10 @@
 /**
  * Pure effective-access computation, ⚠ SERVER-invoked only — never import
  * from client code; effective access must always resolve server-side. The
- * `/members/[userId]/access` route runs it over pre-fetched teams+resources.
+ * `/members/[userId]/access` and `/members/[userId]/activity` routes run it over
+ * pre-fetched teams+resources.
  * ⚠ Encodes the same rules as the authoritative resolvers in
- * `./server/access.ts` (admins and creators edit; workspace-mode → role
+ * `./server/access.ts` (admins edit; creators get the role ceiling; workspace-mode → role
  * default; teams-mode → max team grant capped at the role ceiling). They stay
  * separate because the server fns early-return to skip team queries — change
  * a rule here and change `server/access.ts` too.
