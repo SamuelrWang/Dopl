@@ -1,68 +1,37 @@
 // THE CURSOR ADAPTER'S TOOL VOCABULARY — Axis A's tail, and the per-profile containment table.
 //
-// ⚠ EVERY NAME IN THIS FILE IS ONE `cursor-research.md` WRITES DOWN. The three Axis-A modes are
-// the run modes' own names (§"Cursor's native permission vocabulary"); the deny entries are that
-// same section's PERMISSION STRINGS — `Shell(commandBase)`, `Read(pathOrGlob)`, `Write(pathOrGlob)`,
-// `WebFetch(domainOrPattern)`, `Mcp(server:tool)`, with `**`/`*`/`?` globs and DENY BEATING ALLOW.
-// Nothing is translated from another runtime's vocabulary and nothing is invented.
+// ⚠ EVERY NAME HERE IS ONE `cursor-research.md` WRITES DOWN: the run modes' own names, and the
+// permission strings `Shell(commandBase)`, `Read(pathOrGlob)`, `Write(pathOrGlob)`,
+// `WebFetch(domainOrPattern)`, `Mcp(server:tool)` (globs `**`/`*`/`?`, DENY BEATS ALLOW).
 //
-// ⚠ WHAT REACHES DOPL'S GATE ON THIS RUNTIME IS ONLY DOPL'S OWN SURFACE, and that asymmetry is
-// the whole shape of the adapter. This platform has NO programmatic permission callback
-// (`approval.js › descriptor.heldCallback` is `false`, and hooks are file-based, which the design
-// puts out of scope). So a Cursor BUILT-IN — a shell command, a file write, a web fetch — is
-// supervised by CURSOR: its run mode, its classifier, its sandbox and the permission strings
-// below. It never reaches `grantDecision`. What DOES reach `grantDecision` is every Dopl tool,
-// because on this runtime those are `local.customTools` this process IMPLEMENTS (`axis-b.js`).
-// Two consequences, both deliberate and both written here rather than discovered later:
-//   1. `taxonomy.edits` / `taxonomy.escalation` / `taxonomy.bypassReads` are EMPTY. `[]` says
-//      "no members", which is true; `null` would say "no such concept", which is not — Cursor has
-//      edits and escalations, they are simply not names Dopl's gate is ever asked about.
-//   2. The permission strings in `disallowedTools` are INERT AT THE GATE and LOAD-BEARING AT
-//      LAUNCH. `grantDecision` step 1 will never match `Shell(*)` against a tool name, because no
-//      call arrives under that name; the string does its work as a `deny` entry on the launch
-//      (`launch-spec.js`), where deny beats allow. Both halves are in ONE list on purpose, so a
+// ⚠ ONLY DOPL'S OWN SURFACE REACHES DOPL'S GATE. With no permission callback (`approval.js`), a
+// Cursor built-in is supervised by CURSOR (run mode, classifier, sandbox, the strings below) and
+// never reaches `grantDecision`; every Dopl tool does (`axis-b.js`). Consequences:
+//   1. `taxonomy.edits` / `.escalation` / `.bypassReads` are `[]` ("no members"), not `null`.
+//   2. The permission strings in `disallowedTools` are INERT AT THE GATE (no call arrives under
+//      `Shell(*)`) and LOAD-BEARING AT LAUNCH as deny entries (`launch-spec.js`). One list, so a
 //      profile's containment cannot be half-declared.
 //
-// ⚠ AND THE HALF THIS RESEARCH CANNOT GROUND IS ON THE SMOKE CHECKLIST, NOT GUESSED SILENT.
-// Claude's `DENIED_BUILTINS` has five harm groups. Three map cleanly onto something Cursor
-// documents:
-//   local execution      -> `Shell(*)` + `sandboxOptions.enabled`
-//   filesystem writes    -> `Write(**)` + the sandbox's write boundary
-//   outbound channels    -> `WebFetch(*)` (and the sandbox's network boundary, allowlist-only)
-// The other two do NOT, and each is a live question rather than a covered group:
-//   DELEGATION       Cursor's subagents are DECLARED BY THE CLIENT (`agents: {…}` on
-//                    `Agent.create()`), so declaring none is a plausible deny — and it is not a
-//                    PROVEN one, because nothing in the research says a model cannot reach a
-//                    delegation tool that was never declared. `launch-spec.js` declares none;
-//                    §5 item X11 is what turns "plausible" into "proven".
-//   PERSISTENCE/SCHEDULING  Automations (cron, webhooks) are a CLOUD/dashboard surface with no
-//                    documented agent-invocable verb and no documented deny. `Shell(*)` covers
-//                    the local half (`launchd`, `cron`); the cloud half is §5 item X12.
-// ⚠ SO A CURSOR SESSION AT `read_only` OR `dopl_only` IS NOT PROVEN UNABLE TO DELEGATE, exactly
-// as on the other native-containment runtime. It is Samuel's §8 open question 2 in concrete form
-// and it is recorded, not papered over.
+// ⚠ HARM GROUPS (Claude's `DENIED_BUILTINS`): local execution -> `Shell(*)` + sandbox; filesystem
+// writes -> `Write(**)` + sandbox; outbound -> `WebFetch(*)` + sandbox network allowlist. NOT
+// grounded: DELEGATION (subagents are client-declared; `launch-spec.js` declares none — plausible,
+// not proven, §5 item X11) and PERSISTENCE (cloud Automations have no documented deny; `Shell(*)`
+// covers local cron/launchd; §5 item X12). So `read_only` / `dopl_only` are NOT proven unable to
+// delegate (Samuel's §8 open question 2).
 //
 // ── ⚠ FROZEN AT THREE PROFILES (2026-09-02, ruling X0) ───────────────────────────────────────
-// The other two adapters gained a FOURTH, `channel_agent` (ruling B7: `full` minus the shell, for
-// a session launched into a SHARED container). THIS TABLE DID NOT, AND THAT IS THE FREEZE, NOT AN
-// OVERSIGHT. X0 holds this runtime: `descriptor.session.interrupt` is `'unverified'`, and *"Dopl
-// cannot own a session it cannot stop"* — a runtime that does not ship does not grow a profile,
-// because a containment table written against research nobody has smoke-tested is a claim, not a
-// fence.
-// ⚠ THE REFUSAL IS THE ONE ALREADY IN THE CONTRACT, not a new branch here.
-// `contract.js › LAUNCH_BLOCKING[1]` (`containment.profiles.<profile>.denyList`) refuses a LAUNCH
-// AT A PROFILE this adapter declares no deny list for. `cursor/index.js › containment.profiles` therefore names three,
-// and `test/channel-agent-profile.test.mjs` pins the refusal so the freeze cannot rot into a
-// silent fall-through. ⚠ WHEN X0 CLEARS, this file gains the branch and that descriptor gains the
-// entry, in one change with the smoke item that grounds it.
+// The other adapters gained `channel_agent` (ruling B7). This one did not, by design: X0 holds
+// (`descriptor.session.interrupt` is `'unverified'`), and a containment table written against
+// unsmoke-tested research is a claim, not a fence. `contract.js › LAUNCH_BLOCKING[1]` refuses a
+// launch at an undeclared profile; `test/channel-agent-profile.test.mjs` pins it. When X0 clears,
+// this file gains the branch and `index.js` the entry, in one change with the grounding smoke item.
 
 const {
   DOPL_SAFE_TOOLS, DOPL_ADMIN_TOOLS, RETIRED_DOPL_TOOLS, UNIVERSAL_HARD_DENY,
   DOPL_CHANNEL_TOOL, normalizeProfile,
 } = require('../../tool-profiles');
-// ⚠ DOPL'S OWN SURFACE, IMPORTED AND NEVER RESTATED. `mcp__dopl__*` names are OUR server on every
-// runtime; a second copy of "which dopl tool writes" is how one adapter comes to gate a read
-// another allows (`main/session-dopl-tools.js`'s header).
+// ⚠ DOPL'S OWN SURFACE, IMPORTED, NEVER RESTATED: a second copy is how one adapter gates a read
+// another allows (`main/session-dopl-tools.js` header).
 const doplTools = require('../../session-dopl-tools');
 const { canonicalDoplName } = require('../../mcp-tool-names');
 
@@ -77,24 +46,18 @@ function shortDoplName(full) {
 
 // ── CURSOR'S OWN PERMISSION STRINGS ──────────────────────────────────────────────────────────
 //
-// ⚠ THE WIDEST GLOB EACH CLASS TAKES, because a deny list is a FLOOR and a narrow deny is a hole.
-// `Shell(commandBase)` matches a command base and takes argument-level globs (`curl:*`), so `*`
-// is the whole class; `Read`/`Write` take path globs, where `**` is every path.
+// ⚠ THE WIDEST GLOB EACH CLASS TAKES: a deny list is a FLOOR and a narrow deny is a hole.
 const SHELL_ANY = 'Shell(*)';
 const WRITE_ANY = 'Write(**)';
 const WEB_ANY = 'WebFetch(*)';
-// ⚠ `Mcp(server:tool)` DENIED WHOLESALE ON THE RESTRICTED PROFILES, and it is not redundant with
-// registering no servers: this runtime reads MCP entries from the operator's own
-// `~/.cursor/mcp.json` and from a team dashboard as well as from the inline registration, and
-// there is no documented per-launch flag that skips those files (§5 item X13). The deny is what
-// makes "no third-party MCP surface" true rather than intended. ⚠ It does NOT touch Dopl's own
-// tools, which are `customTools` on this runtime and are not an MCP server the model can name.
+// ⚠ `Mcp(*)` DENIED WHOLESALE ON RESTRICTED PROFILES — not redundant: the operator's
+// `~/.cursor/mcp.json` and team dashboard are read too, with no flag to skip them (§5 item X13).
+// It does not touch Dopl's own tools (`customTools`, not an MCP server the model can name).
 const MCP_ANY = 'Mcp(*)';
 
-// The credential paths every profile fences, in this runtime's own string form. ⚠ The twin of the
-// other runtime's secret-path rules and it exists for the same reason: a tool the platform
-// auto-runs never reaches Dopl's gate, so only a launch-time deny can fence it. Path tools only —
-// a `Shell(<path>)` entry would match a COMMAND BASE and deny nothing while reading as coverage.
+// The credential paths every profile fences: an auto-run tool never reaches Dopl's gate, so only a
+// launch-time deny fences it. ⚠ Path tools only — `Shell(<path>)` matches a COMMAND BASE and would
+// deny nothing while reading as coverage.
 const SECRET_TOOLS = ['Read', 'Write'];
 const SECRET_PATHS = ['**/.cursor/**', '**/.codex/**', '**/.claude*/**'];
 
@@ -111,35 +74,20 @@ function buildSecretPathDenyRules(userDataDir) {
 
 // ── AXIS A: THE RUN MODES, IN CURSOR'S OWN WORDS ─────────────────────────────────────────────
 //
-// ⚠ NARROWEST FIRST, AND THE ORDER IS READ BY CORE (`main/runtime/capability.js`). `[0]` is where
-// every unknown value fail-closes and the LAST entry is the widest, which is how the windowless
-// floor stays widen-only.
-//
-// ⚠ WHY `allowlist` IS NARROWER THAN `auto-review`, WHICH IS NOT THE ORDER THE DOCS PRINT THEM IN.
-// Read what each one does with a call that is NOT on the allowlist: under **Allowlist** it ASKS;
-// under **Auto-review** it is sandboxed where possible and otherwise goes to a CLASSIFIER that may
-// ALLOW it. A mode that can auto-allow an unlisted call is wider than one that always asks, so
-// `allowlist` is index 0. Getting this backwards would make the windowless floor NARROW a session
-// (the floor is widen-only by index) — the same defect the Codex adapter's `granular` placement
-// note records.
-//
-// ⚠ AND `auto-review` ALLOWS NOTHING MORE THAN `allowlist` DOES IN DOPL'S OWN GATE. Its extra
-// reach is CURSOR'S: a classifier reviewing CURSOR'S built-ins, which never reach `grantDecision`.
-// Dopl cannot read what that classifier decided, so Dopl's gate must not assume it decided
-// anything — the fail-closed reading, and the same argument the other native runtime's `granular`
-// mode is placed on. What picking `auto-review` changes is what CURSOR runs without asking.
+// ⚠ NARROWEST FIRST; CORE READS THE ORDER (`capability.js`): unknown fail-closes to `[0]`, the last
+// is widest, which keeps the windowless floor widen-only.
+// ⚠ `allowlist` < `auto-review` (not the docs' order): for an unlisted call Allowlist ASKS, while
+// Auto-review may let a CLASSIFIER allow it. Reversed, the floor would NARROW a session.
+// ⚠ `auto-review` allows nothing more in DOPL's gate: its extra reach is Cursor's classifier over
+// Cursor's built-ins, which Dopl cannot read and must not assume.
 const TOOL_MODES = ['allowlist', 'auto-review', 'run-everything'];
 
-// The CLI spelling of the widest mode, kept beside the mode it belongs to rather than in the
-// launch spec: `-f, --force` (alias `--yolo`). ⚠ Dopl's widest mode is NOT this flag — hard-deny
-// and the outbound gate survive every mode, which is why the launch maps modes to a run-mode
-// setting rather than to a bypass switch.
+// The CLI spelling of the widest mode (`-f`, alias `--yolo`). ⚠ Dopl's widest mode is NOT this flag:
+// hard-deny and the outbound gate survive every mode.
 const RUN_EVERYTHING_FLAG = '--force';
 
-// ⚠ POSITIVE ALLOW-LISTS, NEVER NEGATIVE — the same rule both other adapters state and for the
-// same reason: a negative mode auto-allows every UNRECOGNISED name ('', null, a renamed channel
-// tool, a Dopl tool a later server ships), and hard-deny is a build-time blacklist that cannot
-// cover them. Unknown therefore GATES IN EVERY MODE, `run-everything` included.
+// ⚠ POSITIVE ALLOW-LISTS, NEVER NEGATIVE: a negative mode auto-allows every UNRECOGNISED name, which
+// a build-time hard-deny cannot cover. Unknown GATES IN EVERY MODE, `run-everything` included.
 const ALLOWLIST_TOOLS = DOPL_READ_TOOLS.slice();
 const AUTO_REVIEW_TOOLS = DOPL_READ_TOOLS.slice(); // see TOOL_MODES: no wider in DOPL's gate
 const RUN_EVERYTHING_TOOLS = DOPL_READ_TOOLS.concat(DOPL_WRITE_TOOLS);
@@ -148,9 +96,8 @@ function normalizeToolMode(mode) {
   return TOOL_MODES.indexOf(mode) === -1 ? TOOL_MODES[0] : mode; // fail-closed to `allowlist`
 }
 
-// Does Axis A auto-allow this call? ⚠ Never sees a channel call — `grantDecision` branches a
-// message op to Axis B before Axis A is consulted, on every runtime. The name is CANONICALISED
-// first so a Dopl tool arriving under any host prefix matches the same list (F-139's rule).
+// Does Axis A auto-allow this call? Never sees a channel call (`grantDecision` branches a message op
+// to Axis B first). The name is CANONICALISED first (F-139).
 function axisAAllows(mode, toolName) {
   const m = normalizeToolMode(mode);
   const name = canonicalDoplName(toolName);
@@ -161,45 +108,23 @@ function axisAAllows(mode, toolName) {
 
 // ── THE PER-PROFILE CONTAINMENT TABLE ────────────────────────────────────────────────────────
 //
-// ⚠ `preApproved` IS EMPTY ON EVERY PROFILE, AND THAT IS NOT AN OMISSION. Claude pre-approves its
-// local read built-ins because on that runtime a read would otherwise raise a permission prompt.
-// Here a Cursor built-in never reaches Dopl's gate at all, so there is nothing to pre-approve; and
-// the one surface that DOES reach it — Dopl's own tools, implemented in-process — must never be
-// pre-approved, because a pre-approval list is a SHADOW and the channel op is the call that has to
-// gate (`main/runtime/claude/axis-b.js`'s header, and design §6's last invariant).
-//
-// ⚠ `builtinBound` IS NULL ON EVERY PROFILE. Claude's L0 layer is `options.tools`, a POSITIVE
-// bound on built-in names. This runtime documents `tools: [...]` as an allowlist too, but in what
-// vocabulary its entries are read — bare tool names, or the permission strings above — is NOT
-// settled by the research (§5 item X14), and a positive bound written in the wrong vocabulary is a
-// bound that silently offers everything. So the positive bound is declared absent and the fence is
-// the DENY plus the sandbox, both of which fail closed if the vocabulary turns out to be the other
-// one. Null says "this runtime has no such control we can honestly drive"; `[]` would say "no
-// members", which on a positive bound means the opposite of what it looks like.
-//
-// ⚠ THE RESTRICTED PROFILES PIN THE SANDBOX AND THE RUN MODE; `full` EXPOSES BOTH. `read_only`
-// and `dopl_only` are containment, so they pin `sandboxOptions.enabled` and the run mode and the
-// operator's Axis-A pick does not move them. `full`'s supervision IS Axis A plus the sandbox row
-// (`toolMode.secondaryAxis`), so its `native` is null and the operator's choices ride.
-//
-// ⚠ `dopl_only` KEEPS THE WEB HERE, unlike on the other native runtime. Network on Codex is a
-// property of the sandbox with no named tool, so its `dopl_only` lost web reads; Cursor has
-// `WebFetch(domainOrPattern)` as a first-class permission string, so the profile's documented
-// posture — "look things up, with no shell" — ports intact. Recorded because it is the one place
-// the two native-containment adapters differ on what a profile MEANS.
-// ⚠ THE CREDENTIAL-PATH RULES ARE NOT IN THIS TABLE, AND THAT IS THE OTHER LANES' PRECEDENT
-// RATHER THAN AN OMISSION. `buildSecretPathDenyRules` reads the app's own userData directory,
-// which a plain-Node harness cannot answer — so a profile entry built at MODULE LOAD (the
-// descriptor) and one built at LAUNCH would carry different lists, and the descriptor would be
-// describing containment the gate does not apply. `runtime/claude/launch-spec.js` concatenates
-// them onto `disallowedTools` at assembly time for exactly this reason; so does ours.
+// ⚠ `preApproved` IS EMPTY ON EVERY PROFILE: built-ins never reach Dopl's gate, and Dopl's own tools
+// must never be pre-approved (a pre-approval list is a SHADOW; the channel op has to gate).
+// ⚠ THERE IS NO POSITIVE BUILT-IN BOUND (`builtinTools: []`): the vocabulary of the SDK's `tools`
+// allowlist is unsettled (§5 item X14), and a bound in the wrong vocabulary silently offers
+// everything. The fence is the DENY plus the sandbox, both fail-closed.
+// ⚠ RESTRICTED PROFILES PIN SANDBOX + RUN MODE (`native`); `full` leaves both to the operator
+// (Axis A + `toolMode.secondaryAxis`).
+// ⚠ `dopl_only` KEEPS THE WEB here, unlike Codex: `WebFetch` is a first-class permission string, so
+// "look things up, with no shell" ports intact.
+// ⚠ CREDENTIAL-PATH RULES ARE NOT IN THIS TABLE: they read userData, which a plain-Node harness
+// cannot, so `launch-spec.js` concatenates them at assembly time (as Claude's does).
 function buildSessionToolConfig(profile) {
   const p = normalizeProfile(profile);
   const channelShort = shortDoplName(DOPL_CHANNEL_TOOL);
-  // ⚠ `dopl_channel` is in NEITHER the deny list NOR the pre-approval list on ANY profile, exactly
-  // as on both other runtimes, so it REACHES the gate where `grantDecision` op-scopes it against
-  // Axis B. It stays in each restricted profile's `doplToolsPolicy` as defence in depth — and on
-  // THIS runtime that policy is not advisory: it is the list of `customTools` we register at all.
+  // ⚠ `dopl_channel` is in NEITHER deny NOR pre-approval on ANY profile, so it REACHES the gate and
+  // is op-scoped against Axis B. Here `doplToolsPolicy` is not advisory: it is the list of
+  // `customTools` registered at all.
   const doplSurfaceDeny = DOPL_ADMIN_TOOLS.concat(RETIRED_DOPL_TOOLS);
 
   if (p === 'read_only') {
@@ -228,15 +153,9 @@ function buildSessionToolConfig(profile) {
   }
 
   // 🔒 ⚠ `channel_agent` THROWS RATHER THAN FALLING THROUGH TO `full` (2026-09-02, F-594).
-  // `normalizeProfile` KNOWS the fourth profile — it is in `KNOWN_PROFILES` for the two adapters
-  // that ship it — so it arrives here unchanged and, without this arm, took the `full` return
-  // below: the exact posture ruling B7 exists to narrow, with the shell NOT denied. The freeze
-  // note above says the refusal lives in `contract.js › LAUNCH_BLOCKING[1]`, and it does; this is
-  // the arm that makes that true when a caller reaches this builder by another road. **A FREEZE
-  // whose fall-through is the WIDEST profile on the table is not a freeze.**
-  // ⚠ THROWS rather than returning `read_only`: a silent downgrade would run the session under
-  // containment the operator did not ask for and nothing would say so, and a silent UPGRADE is
-  // what this replaces. When X0 clears, this arm becomes the fourth branch.
+  // `normalizeProfile` knows the name, so without this arm it took the `full` return — the widest
+  // profile, shell not denied. Throws rather than downgrading to `read_only`, which would silently
+  // run containment the operator did not ask for. When X0 clears, this becomes the fourth branch.
   if (p === 'channel_agent') {
     throw new Error(
       'cursor: no containment table for profile "channel_agent" — this runtime is frozen at three profiles (ruling X0, interrupt unverified). Launch is refused by contract.js LAUNCH_BLOCKING before this point.',
@@ -254,12 +173,10 @@ function buildSessionToolConfig(profile) {
   };
 }
 
-// ⚠ AXIS A'S WINDOWLESS FLOOR IS DECLARED DATA ON THIS RUNTIME, NOT A TRANSFORM. Its value is
-// `descriptor.toolMode.windowlessFloor` and `main/runtime/capability.js › floorWindowlessTool`
-// applies it by INDEX into TOOL_MODES above. The argument is the other adapters', unchanged: a
-// windowless session has no gate surface, so a gated call there is a silent DENY of work the
-// prompt ORDERS the agent to do; the floor widens what the PROFILE already permits and nothing
-// else, because hard-deny and the profile's deny list are both checked before Axis A.
+// ⚠ AXIS A'S WINDOWLESS FLOOR IS DECLARED DATA, applied by INDEX into TOOL_MODES
+// (`capability.js › floorWindowlessTool`). A windowless session has no gate surface, so a gated call
+// is a silent DENY of ordered work; the floor only widens what the profile permits (hard-deny and
+// the deny list are checked before Axis A).
 //
 //     allowlist       -> auto-review
 //     auto-review     -> auto-review

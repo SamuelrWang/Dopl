@@ -1,56 +1,41 @@
-// MCP ON THIS RUNTIME — ⚠ THE SESSION TRANSPORT IS `in-process`, WHICH MEANS DOPL MAKES THE CALL.
+// MCP ON THIS RUNTIME — ⚠ THE SESSION TRANSPORT IS `in-process`: DOPL MAKES THE CALL.
 //
-//   SESSION TRANSPORT   what the SPAWNED session gets. On the other two runtimes that is a remote
-//                       HTTP entry the host connects to, and the desktop is NOT in the call path.
-//                       Here it is `local.customTools` (`axis-b.js`) — Dopl IMPLEMENTS the tools,
-//                       so Dopl is in the call path, which is the entire reason Axis B has an
-//                       enforcement point on a runtime with no permission callback.
-//   HOST REGISTRATION   the OPERATOR's own entry. ⚠ There is NOTHING TO WRITE here — see
-//                       `registerMcp`. This runtime takes servers INLINE on `Agent.create()`, so
-//                       Dopl registers per session and leaves no file behind.
+//   SESSION TRANSPORT   Dopl's tools are `local.customTools` (`axis-b.js`), so the desktop is in the
+//                       call path — the reason Axis B has an enforcement point here at all.
+//   HOST REGISTRATION   nothing to write (`registerMcp`): servers go inline on `Agent.create()`.
 //
-// ⚠ SO THIS FILE CARRIES A CLIENT THE OTHER ADAPTERS DO NOT NEED: an allowed `execute()` still has
-// to reach `packages/mcp-server`. It speaks Streamable HTTP JSON-RPC to the SAME endpoint the
-// other runtimes' hosts connect to, with the same headers, so there is one server surface and one
-// auth story rather than two.
-//
-// ⚠ THE URL IS ALWAYS THE COMPILED-IN `MCP_URL`. Reading it off disk would let any local process
-// repoint the session's whole MCP surface — bearer included — at its own endpoint.
-// ⚠ THE BEARER NEVER TOUCHES ARGV OR A LOG. It is held in the per-session wiring object, sent as
-// a header, and never serialised anywhere else.
-// ⚠ THE POLICY LAYER STAYS IN CORE. `main/mcp-config.js` owns the per-server call timeout
-// (`MCP_CLIENT_TIMEOUT_MS`, derived from the server's own await budget) and the device token. Both
-// are READ from there and never restated — the timeout drifted once already by being restated.
+// So this file carries an MCP CLIENT: an allowed `execute()` still has to reach
+// `packages/mcp-server`, over Streamable HTTP JSON-RPC to the SAME endpoint and headers the other
+// runtimes' hosts use — one server surface, one auth story.
+// ⚠ THE URL IS ALWAYS THE COMPILED-IN `MCP_URL`: reading it off disk would let a local process
+// repoint the session's MCP surface, bearer included.
+// ⚠ THE BEARER NEVER TOUCHES ARGV OR A LOG: held in the per-session wiring, sent as a header only.
+// ⚠ THE POLICY LAYER STAYS IN CORE: `mcp-config.js` owns the call timeout and the device token; both
+// are READ, never restated (the timeout drifted once by being restated).
 
 const { MCP_URL } = require('../../config');
 // The two-shape body reader (JSON or SSE) and the tool-set header are core's (`mcp-connect.js`).
 const { parseSse, readBody, toolSetHeaders } = require('../../mcp-connect');
 
-// ⚠ CUSTODY, NOT VENDOR — two headers, two facts, and port step 1 exists because they were nearly
-// fused. `desktop-session` means "the desktop app spawned this" and stays TRUE for a Dopl-driven
-// Cursor session; three live consumers compare it by strict equality or array membership
-// (`packages/mcp-server/src/tools/identity.ts › runtimeWord`, `› channel-wake-guidance.ts`,
-// `main/targeting.js › DESKTOP_RUNTIMES`), so a vendor word THERE would silently drop every Cursor
-// session out of the desktop branch. The vendor is the second header, and
-// `src/shared/auth/runtime-header.ts › CURSOR_VENDOR` is the literal it must match — there is no
-// shared module across that join, so the two sides agree by literal or not at all.
+// ⚠ CUSTODY, NOT VENDOR — two headers, two facts. `desktop-session` ("the desktop spawned this") is
+// compared by strict equality / membership (`identity.ts › runtimeWord`, `channel-wake-guidance.ts`,
+// `main/targeting.js › DESKTOP_RUNTIMES`), so a vendor word there would drop every Cursor session
+// out of the desktop branch. The vendor must match `src/shared/auth/runtime-header.ts ›
+// CURSOR_VENDOR` by literal: no shared module crosses that join.
 const RUNTIME_HEADERS = {
   'X-Dopl-Runtime': 'desktop-session',
   'X-Dopl-Vendor': 'cursor',
 };
 
-// ⚠ THE REVISION THIS CLIENT IS BUILT AGAINST, named rather than inherited. It is
-// `@modelcontextprotocol/sdk`'s own `LATEST_PROTOCOL_VERSION` at the pin this repo carries
-// (`^1.29.0`, measured 2026-08-31) — the same package `src/app/api/mcp/route.ts` serves with. The
-// server ANSWERS a version in `initialize` and this client echoes THAT back on every later
-// request, so a server that negotiates down is followed rather than argued with.
+// The revision this client is built against: `@modelcontextprotocol/sdk`'s `LATEST_PROTOCOL_VERSION`
+// at the repo's pin (`^1.29.0`, measured 2026-08-31). The version the server answers in `initialize`
+// is echoed on every later request, so a negotiated-down server is followed.
 const PROTOCOL_VERSION = '2025-11-25';
 
 const CHANNEL_TOOL = 'dopl_channel';
 
 function clientTimeoutMs() {
-  // ⚠ ONE DEFINITION, READ NOT RESTATED. Lazy because `mcp-config` pulls auth, and an unwired
-  // harness must read as "no token", never throw into a launch.
+  // Lazy: `mcp-config` pulls auth, and an unwired harness must read as "no token", never throw.
   try {
     return require('../../mcp-config').MCP_CLIENT_TIMEOUT_MS;
   } catch (_) {
@@ -69,14 +54,12 @@ function doplBearer() {
 /**
  * The per-session wiring an in-process call carries.
  *
- * ⚠ NO TOKEN => NO SURFACE, and the session still launches. A half-built wiring that 401s on every
- * call would tell the agent it HAS a delivery path and let it watch that path fail.
- * 🔒 `bearerOverride` is the CONTAINER LOCK: a child credential locked to one workspace, minted at
- * spawn for a shared link container. It REPLACES the device token, and it is what actually refuses
- * another workspace server-side. `X-Workspace-Id` stays a HINT that grants nothing.
- * ⚠ The SLOT KEY is a LABEL, not a lock: it names the registry slot this run occupies so two
- * concurrent sessions of one agent handle are distinguishable on the wire, which nothing else
- * about them is.
+ * ⚠ NO TOKEN => NO SURFACE, and the session still launches: a wiring that 401s on every call tells
+ * the agent it HAS a delivery path and lets it watch that path fail.
+ * 🔒 `bearerOverride` is the CONTAINER LOCK (a child credential locked to one workspace, minted at
+ * spawn for a shared link container). It REPLACES the device token and is what refuses another
+ * workspace server-side; `X-Workspace-Id` is a HINT that grants nothing.
+ * ⚠ The SLOT KEY is a LABEL, not a lock: it tells two concurrent sessions of one agent apart on the wire.
  */
 function buildWiring(workspaceId, bearerOverride, slotKey, toolSet) {
   const override = typeof bearerOverride === 'string' ? bearerOverride.trim() : '';
@@ -84,9 +67,8 @@ function buildWiring(workspaceId, bearerOverride, slotKey, toolSet) {
   if (!token) return { usable: false, headers: null };
   const headers = Object.assign({
     'Content-Type': 'application/json',
-    // ⚠ BOTH, because a Streamable HTTP server may answer either a JSON body or an SSE stream for
-    // the same request, and a client that advertises one gets refused when the server picks the
-    // other. `readBody` below parses both.
+    // ⚠ BOTH: Streamable HTTP may answer JSON or SSE; advertising one gets refused when the server
+    // picks the other. `readBody` parses both.
     Accept: 'application/json, text/event-stream',
     Authorization: `Bearer ${token}`,
   }, RUNTIME_HEADERS, toolSetHeaders(toolSet));
@@ -100,20 +82,15 @@ function buildWiring(workspaceId, bearerOverride, slotKey, toolSet) {
 
 // ── THE WIRE ─────────────────────────────────────────────────────────────────────────────────
 //
-// ⚠ ONE FRAME PER REQUEST, AND THE RESPONSE MAY BE EITHER SHAPE. Streamable HTTP lets a server
-// answer a POST with `application/json` or with an SSE stream carrying the same JSON-RPC response.
-// A reader that assumed one would work in development and fail in production, or the reverse, so
-// `readBody` (core's, shared with the launch pre-flight) reads both and treats an unparseable body
-// as a failure rather than as an empty result.
+// ⚠ ONE FRAME PER REQUEST, EITHER SHAPE (JSON or SSE). `readBody` (core's, shared with the launch
+// pre-flight) reads both and treats an unparseable body as a failure, not an empty result.
 
 /**
  * One JSON-RPC request against the Dopl endpoint.
  *
- * ⚠ BOUNDED BY THE SERVER'S OWN AWAIT BUDGET. a HELD `dopl_channel(op="read", wait_ms=…)` HOLDS for up to ~215s by
- * design, so a short timeout here would turn every await into a transport error and lose the
- * re-arm teaching the result carries. The number is `mcp-config.js`'s and is read, never restated.
- * ⚠ AN ERROR IS RETURNED, NEVER THROWN PAST THE TOOL. `execute()` has to answer the model
- * something; a thrown fetch would surface as an opaque platform failure the agent cannot act on.
+ * ⚠ BOUNDED BY THE SERVER'S OWN AWAIT BUDGET: a held channel read waits up to ~215s by design, so a
+ * short timeout would turn every await into a transport error.
+ * ⚠ AN ERROR IS RETURNED, NEVER THROWN: `execute()` must answer the model something it can act on.
  */
 async function rpc(state, method, params) {
   const headers = Object.assign({}, state.headers);
@@ -150,25 +127,22 @@ async function handshake(state) {
   const init = await rpc(state, 'initialize', {
     protocolVersion: PROTOCOL_VERSION,
     capabilities: {},
-    // ⚠ The client identity the server logs this session under. It is the only forensic join
-    // between a Dopl session and the calls it made, and it is set deliberately.
+    // ⚠ The client identity the server logs this session under: the forensic join between a
+    // session and its calls.
     clientInfo: { name: 'dopl-desktop', version: state.appVersion || '0.0.0' },
   });
   if (!init.ok) return init;
   const negotiated = init.result && init.result.protocolVersion;
   state.protocolVersion = typeof negotiated === 'string' && negotiated ? negotiated : PROTOCOL_VERSION;
-  // The notification is fire-and-forget by protocol; a failure to send it is not fatal here
-  // because the next request carries the negotiated version and the session header anyway.
+  // Fire-and-forget by protocol; not fatal, the next request carries version and session header.
   await rpc(state, 'notifications/initialized', {}).catch(() => {});
   state.ready = true;
   return { ok: true };
 }
 
 /**
- * A live connection to the Dopl endpoint for ONE session.
- *
- * ⚠ IT IS NOT A CHILD PROCESS AND NOT A SOCKET — it is a header set plus a session id. Held per
- * session so the handshake is paid once, and disposable.
+ * A live connection to the Dopl endpoint for ONE session: a header set plus a session id (no child
+ * process, no socket), held so the handshake is paid once.
  */
 function connect(wiring, appVersion) {
   const state = {
@@ -199,8 +173,7 @@ function connect(wiring, appVersion) {
       const text = Array.isArray(result.content)
         ? result.content.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('\n').trim()
         : '';
-      // ⚠ The SERVER's own `isError` is honoured rather than reinterpreted: a refusal it issued is
-      // a refusal, and dressing it as a success would let an agent read a denial as a delivery.
+      // ⚠ The SERVER's `isError` is honoured: a refusal dressed as success reads as a delivery.
       return { ok: result.isError !== true, text };
     },
   };
@@ -211,13 +184,9 @@ function connect(wiring, appVersion) {
 /**
  * The OPERATOR's own entry.
  *
- * ⚠ THERE IS NOTHING TO WRITE, AND THAT IS A CAPABILITY DIFFERENCE RATHER THAN A REFUSAL. This
- * runtime accepts `mcpServers` INLINE on `Agent.create()`, so every session Dopl spawns reaches
- * Dopl without touching `.cursor/mcp.json`, `~/.cursor/mcp.json` or a team dashboard — which is
- * how the design's §7 claim that the MCP shared-file reconciliation problem is AVOIDED is actually
- * true here rather than aspirational. Writing an entry anyway would create the exact side effect
- * the other adapter refuses to leave behind: a file the operator also owns and would have to find
- * and undo by hand.
+ * ⚠ NOTHING TO WRITE — a capability difference, not a refusal. Sessions Dopl spawns reach Dopl
+ * without touching `.cursor/mcp.json`, `~/.cursor/mcp.json` or a team dashboard (design §7). Writing
+ * an entry anyway would leave a file the operator also owns and must find and undo by hand.
  */
 function registerMcp(_cfg) {
   return Promise.resolve({
@@ -229,9 +198,7 @@ function registerMcp(_cfg) {
 }
 
 /**
- * ⚠ THERE IS NO PERSISTED ENTRY TO PROBE, so `present` is `false` rather than `null`: this is a
- * CONFIRMED ABSENCE and not an unknown. The other native runtime answers `null` because it cannot
- * tell "no such server" from "unreadable config"; here the answer is structural.
+ * ⚠ `present: false`, not `null`: no persisted entry exists by construction, so absence is CONFIRMED.
  */
 function probeMcp() {
   return Promise.resolve({ present: false, reason: 'this runtime registers inline per session; there is no stored entry' });
@@ -239,26 +206,18 @@ function probeMcp() {
 
 // Descriptor half.
 const descriptor = {
-  // ⚠ THE ONLY `in-process` OF THE THREE, and it is Axis B's whole mechanism rather than a spare
-  // seam. See `axis-b.js`.
+  // ⚠ The only `in-process` of the three: Axis B's whole mechanism (`axis-b.js`).
   sessionTransport: 'in-process',
-  // ⚠ NOT `cli-verb`. There is no verb and no file — registration is an argument to the SDK call
-  // that creates the agent.
+  // ⚠ Not `cli-verb`: registration is an argument to the SDK call that creates the agent.
   hostRegistration: 'inline',
-  // ⚠ TRUE: absent is a CONFIRMED answer here, because there is no stored entry by construction.
+  // ⚠ TRUE: absent is a CONFIRMED answer (no stored entry by construction).
   probe: true,
-  // ⚠ null: what prefix the MODEL sees on a custom tool is not documented — the research says only
-  // that `customTools` are "registered as a built-in `custom-user-tools` MCP server". It is
-  // recorded as §5 item X17 and, unlike the same question on the other native runtime, it CANNOT
-  // reproduce F-139: the gate is asked the name THIS PROCESS registered, canonicalised at build
-  // time (`axis-b.js › buildTool`), so no host spelling can miss a list. What it affects is prose.
+  // ⚠ null: the prefix the MODEL sees on a custom tool is undocumented (§5 item X17). It cannot
+  // reproduce F-139: the gate is asked the name this process registered (`axis-b.js › buildTool`).
   toolNamePrefix: null,
-  // ⚠ null: we own the tools, so there is no per-tool approval policy to set on a host. The pin
-  // the other native runtime needs (`tools.dopl_channel.approval_mode`) is unnecessary here
-  // because the channel op cannot execute without passing through `execute()`.
+  // ⚠ null: we own the tools; the channel op cannot execute without passing through `execute()`.
   perToolApproval: null,
-  // ⚠ null: nothing in the research says this runtime defers MCP tools behind a search verb, which
-  // is also why `prose.toolSearchVerb` is null.
+  // ⚠ null: no documented deferral behind a search verb (hence `prose.toolSearchVerb` null too).
   eagerLoadFlag: null,
   sessionStampHeader: 'X-Dopl-Session-Id',
 };
