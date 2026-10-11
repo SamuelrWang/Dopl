@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { evalModule, MAIN } from "./helpers/module-sandbox.mjs";
+import { codeOf } from "./helpers/source-probe.mjs";
 import { load } from "./_notification-route-harness.mjs";
 
 const SPEC = { title: "A peer's agent asked you something" };
@@ -242,12 +243,23 @@ test("SOURCE PIN: the launch funnel raises agent_started, and only after it has 
   // which also means a stubbed-require failure is SWALLOWED in the harnesses. So the wiring is
   // pinned here, at the source, rather than observed through them.
   assert.match(src, /raiseCoalesced\('agent_started'/);
-  // ⚠ PREFIXES, NOT WHOLE LITERALS: a skip may carry a `detail` beside its code, and this pin is
-  // about the ORDER of the three landmarks, not about their payload shape.
-  const skipDisabled = src.indexOf("return { skipped: 'disabled'");
-  const skipAuth = src.indexOf("return { skipped: 'auth-hold'");
-  const emit = src.indexOf("raiseCoalesced('agent_started'");
-  assert.ok(skipDisabled > 0 && skipAuth > 0 && emit > 0, "all three landmarks found");
+  // ⚠ THE SKIP WORD, NOT THE `return {` LITERAL, AND OVER COMMENT-BLANKED SOURCE. Two separate
+  // failures taught both halves on 2026-10-11. (a) This read `return { skipped: 'disabled'`,
+  // which stopped matching the moment the refusal gained a `detail` spelled BEFORE its code —
+  // the pin went red while the ordering it names was untouched. Anchoring on the skip word
+  // alone survives any field order, because the payload shape is not what this case is about.
+  // (b) `session-launch.js` now carries `{ skipped: 'disabled' }` inside a COMMENT explaining
+  // the deleted dead arm, so an unmasked search can be satisfied by prose describing code that
+  // is not there. `codeOf` blanks comments while preserving offsets, so the landmarks are real.
+  const code = codeOf(src);
+  // `lastIndexOf`: the claim is that the emit sits after EVERY refusal return, not merely after
+  // the first one. There are two of each word today.
+  const skipDisabled = code.lastIndexOf("skipped: 'disabled'");
+  const skipAuth = code.lastIndexOf("skipped: 'auth-hold'");
+  const emit = code.indexOf("raiseCoalesced('agent_started'");
+  assert.ok(skipDisabled > 0, "no `skipped: 'disabled'` return in the funnel's code");
+  assert.ok(skipAuth > 0, "no `skipped: 'auth-hold'` return in the funnel's code");
+  assert.ok(emit > 0, "the agent_started emit is gone from the funnel");
   assert.ok(emit > skipDisabled && emit > skipAuth,
     "a refused launch must never claim an agent started");
 });

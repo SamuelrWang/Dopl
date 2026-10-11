@@ -105,13 +105,27 @@ function shouldSeed(channelId) {
 // highest-value interrupt in the app. Routed, so it takes the toast while Dopl is in front and
 // the banner while it is away. It carries no button — signing in is not a one-press act — and no
 // sound, because the latch below means it is said once and the copy says what to do.
+// ⚠ GUARDED, AND LATCHED ONLY ON SUCCESS (restored 2026-10-11, release review). The old
+// `new Notification` form was wrapped in `try { … } catch {}`; routing it dropped the wrapper.
+// `raise()` guards its own internals, but the LAZY `require('./notification-route')` does not —
+// and this function's two callers (`listWorkspaces`, `listChannels`) call it OUTSIDE any try, so
+// a module-load throw escaped a function whose contract is to return null. That turned a stale
+// session into a crashed reconcile pass. Worse, `staleNotified = true` was set FIRST, so the
+// notice was lost AND latched: the operator was never told, and never would be.
 function notifyStale() {
   if (staleNotified) return;
+  try {
+    require('./notification-route').raise('signed_out', {
+      title: 'Dopl',
+      body: 'Your session expired. Open Dopl and sign in to resume channel listening.',
+    });
+  } catch (err) {
+    // NOT latched: the next 401 may find a loadable route. One diag line per attempt is a far
+    // better failure than one silently swallowed notice about a dead subsystem.
+    diag('listener: stale-session notice failed —', (err && err.message) || 'error');
+    return;
+  }
   staleNotified = true;
-  require('./notification-route').raise('signed_out', {
-    title: 'Dopl',
-    body: 'Your session expired. Open Dopl and sign in to resume channel listening.',
-  });
 }
 // The listen loop resets this after a successful await, so a later expiry notifies again.
 function resetStale() {

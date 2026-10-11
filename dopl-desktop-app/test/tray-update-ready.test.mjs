@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { between, fnOf, orderOf } from "./helpers/source-probe.mjs";
+import { between, codeOf, fnOf, orderOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -177,17 +177,32 @@ test("NEVER auto-restarts: the operator decides when a live session may die", ()
 /**
  * ⚠ THE UPDATE-READY BANNER IS GONE (Samuel's spec, 2026-10-09 — "App update ready" is not on
  * his list), so the two assertions that pinned the updater's USE of this copy (`silent: true`,
- * `if (!notified)`) went with it. The copy BUILDER is still here and still correct; it just has
- * no caller, pending a cleanup decision. What carries the announcement now is the tray item.
+ * `if (!notified)`) went with it. ⚠ AND SO IS THE COPY BUILDER (2026-10-11, release review):
+ * `update-policy.js › downloadedNotification` had no caller and six passing assertions, which
+ * made a dead surface look maintained. This case is RE-POINTED at the surface that really does
+ * carry the announcement now — the tray item — and at the fact that nothing else may.
  */
 test("the update-ready copy still says what the operator has to DO about it", () => {
-  const { title, body } = POLICY.downloadedNotification({ version: "1.7.19" });
-  assert.equal(title, "Dopl update ready");
-  assert.match(body, /^Version 1\.7\.19 is downloaded\./);
-  assert.match(body, /restart Dopl/i);
-  assert.match(body, /keeps running the old build/, "names the consequence of doing nothing");
+  // The tray item IS the announcement: version, plus the one action that applies it.
+  const { ready, label, version } = updateMenuState("1.7.19");
+  assert.equal(ready, true);
+  assert.equal(version, "1.7.19");
+  assert.match(label, /^Update ready/);
+  assert.match(label, /restart to install/i, "the action, not just the state");
+  assert.match(label, /v1\.7\.19/, "and which build it installs");
+  // The tooltip carries it without the menu being opened — the other half of "visible".
+  assert.match(trayTooltip("Dopl: listening", "1.7.19"), /1\.7\.19/);
+  // And no second announcement builder survives in the policy module.
+  assert.equal(POLICY.downloadedNotification, undefined, "the banner's copy builder is deleted");
 });
 
-test("and the updater raises no banner for it", () => {
+test("and the updater raises no banner for it — it does not even IMPORT the API", () => {
   assert.doesNotMatch(UPDATER, /new Notification/, "the announcement is the tray item's job now");
+  // ⚠ THE IMPORT IS WHERE A REINSTATED BANNER WOULD HIDE (2026-10-11, release review). The
+  // `new Notification` grep passed happily while `Notification` was still destructured off
+  // electron with no remaining use, so the module kept the one API it must not reach within
+  // arm's length. `codeOf` masks comments, which still name the surface on purpose.
+  const code = codeOf(UPDATER);
+  assert.doesNotMatch(code, /\bNotification\b/, "updater.js must not hold a Notification binding");
+  assert.match(code, /const \{ app, dialog \} = require\('electron'\)/, "exactly the two it uses");
 });
