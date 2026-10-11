@@ -11,11 +11,6 @@
 // probing common install dirs + the user's login-shell PATH, cache it, and pass
 // an augmented PATH to execFile. Spawning is gated on resolution success.
 
-// ⚠ FOUR REQUIRES AND ONE CONSTANT WENT WITH `spawnEnv` / `channelCwd` (2026-08-20):
-// `electron`'s `app` and `fs.mkdirSync` built the per-channel scratch dir, `claude-token`'s
-// `getStoredOAuthToken` injected the headless spawn's credential, and `UUID_RE` guarded the
-// channel id on its way into a filesystem path. All three were the deleted lane's, and this
-// module's SIXTH copy of the UUID rule went with them — see `main/ipc-guards.js`.
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -119,23 +114,6 @@ function augmentedEnv(binPath) {
   const merged = parts.filter((p) => p && !seen.has(p) && seen.add(p)).join(':');
   return { ...process.env, PATH: merged };
 }
-
-// ⚠ `spawnEnv(bin)` AND `channelCwd(channelId)` STOOD HERE AND ARE DELETED (2026-08-20,
-// F-235's audit). Both belonged to the `claude -p` HEADLESS LANE, which Samuel's ruling
-// deleted the same day (`session-spawner.js` is a re-export facade over what survived), and
-// both had ZERO callers afterwards:
-//
-//   spawnEnv     built the channel-answering spawn's env — PATH-augmented plus a
-//                CLAUDE_CODE_OAUTH_TOKEN when `claude setup-token` had printed one for us to
-//                hold. The SDK lane does not use it: `runtime/claude/launch-spec.js` is the only
-//                spawn left and it does not go through this module at all.
-//   channelCwd   minted a per-channel SCRATCH dir under userData for that spawn to run in.
-//                The surviving cwd rule is `channel-dirs.js › sessionSpawnDir` — the
-//                operator's chosen folder, else ~/Downloads — which is a different answer to
-//                a different question and has been the live one since Round C.
-//
-// ⚠ THE OAUTH-TOKEN INJECTION IS NOT LOST: `runtime/claude/credential.js › withCredential` sets the
-// same token on the SDK lane, and a Dopl sign-out still clears it.
 
 // Best-effort probe so the listener can warn if the CLI is missing AND gate
 // spawning. Resolves true only when an absolute claude binary was found.

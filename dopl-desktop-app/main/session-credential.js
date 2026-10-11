@@ -185,7 +185,7 @@ async function releaseContainerCredential(s, diag) {
     }
     const body = await res.json().catch(() => null);
     // ⚠ The route is IDEMPOTENT, so `res.ok` is not the answer — the `revoked`
-    // COUNT is the discriminator, exactly as `mcp-config.js › revokeDeviceToken`
+    // COUNT is the discriminator, exactly as `mcp-device-token-lifecycle.js › revokeDeviceToken`
     // learned to read its own.
     return body && body.revoked > 0 ? 'revoked' : 'no-match';
   } catch (err) {

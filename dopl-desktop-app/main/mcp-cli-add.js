@@ -3,8 +3,8 @@
 //
 // SPLIT NOTE (2026-07-31): extracted from mcp-config.js at the §2 500-line cap.
 // mcp-config.js keeps the policy (when to add, when to leave alone, when a fresh
-// mint forces a refresh); this file is the three child-process calls it makes.
-// Nothing here is exported beyond mcp-config.
+// mint forces a refresh); this file is the three child-process calls it makes. Its other reader
+// is `runtime/claude/mcp.js`.
 //
 // THIS FILE NEVER EDITS `~/.claude.json` DIRECTLY. `claude mcp add/remove/get` is
 // the only interface we use to the operator's own config — the deleted
