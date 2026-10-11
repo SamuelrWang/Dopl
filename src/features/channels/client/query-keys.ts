@@ -79,9 +79,6 @@ export function channelArtifactsPath(channelId: string): string {
 }
 
 export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
-// ⚠ `CHANNEL_TRUST_PATH` IS DELETED (Samuel, 2026-08-22) with the inbound consent
-// lane, reader (`use-trust-rules.ts`) and writer alike — a client path constant
-// left standing is how a deleted endpoint gets called again.
 
 export const channelKeys = {
   /**
@@ -105,11 +102,6 @@ export const channelKeys = {
     apiResource(channelArtifactsPath(channelId)),
   consent: (): ApiResourceKeys => apiResource(CHANNEL_CONSENT_PATH),
 };
-
-// ⚠ **`channelListParams` IS DELETED (Samuel's ruling R-21, 2026-09-17).** It
-// answered `{ include: "archived" }` or `undefined` — the ONE reason the channel
-// list had two cache entries. The archive feature is gone, so `useChannels` reads
-// with no params at all and `channelKeys.list()` names a single entry.
 
 /**
  * The exact query params `useChannelMessages` reads its NEWEST page with — and

@@ -1796,7 +1796,7 @@ COMMIT;
 ## F-238 — the SPA's bridge mirror has no guard, and it drifted twice in one day (2026-08-20)
 
 - Found during: the same audit, diffing `src/shared/lib/spa-bridge.ts` against `apps/desktop-ui/src/lib/dopl-bridge.ts` member by member
-- **`dopl-bridge.ts`'s `channels` block was wrong in BOTH directions at once.** It declared `getPermissionPreset` / `setPermissionPreset` — ops `renderer/app-preload.js` had DELETED with the single-use arm — and omitted `getLaunchPosture` / `setLaunchPosture` / `getAutoSend` / `setAutoSend`, **all four of which the web tree actively calls** (`hooks/use-channel-launch-posture.ts`, `hooks/use-channel-auto-send.ts`)
+- **`dopl-bridge.ts`'s `channels` block was wrong in BOTH directions at once.** It declared `getPermissionPreset` / `setPermissionPreset` — ops `renderer/app-preload.js` had DELETED with the single-use arm — and omitted `getLaunchPosture` / `setLaunchPosture` / `getAutoSend` / `setAutoSend`, **all four of which the web tree actively calls** (`hooks/use-channel-launch-posture.ts`, and the auto-send hook, deleted 2026-10-11)
 - ⚠ **THE OMISSION IS THE DANGEROUS HALF.** The shared tree feature-detects each capability and renders **nothing** when it is absent, so a gap in the mirror does not fail — **it deletes a feature silently** (INVARIANTS §11 states exactly this about the preload; the same logic reaches the mirror). Declaring a dead op is merely noise; hiding a live one is an invisible product regression
 - **WHY IT DRIFTED: the ops were added and removed on the DESKTOP side, and nothing on the web side is held against them.** `test/preload-parity.test.mjs › APP_OPS` pins the PRELOAD's inventory and fails on add as well as remove — an excellent guard, on one of the four files the surface spans. The TS mirrors have no equivalent, so the pin can be green while the mirror is two ops behind in each direction
 - **The corrected mirror is committed** (2026-08-20); this entry is about the ABSENCE OF A GUARD, which is untouched
@@ -7400,7 +7400,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
 - ⚠ **THE HONEST OPTION WAS NOT "WAIT".** A clamp with no writer is inert and reversible; a *promise* of a clamp with no writer would be the class G6 exists to record. So the API accepts it, the tests drive it, and the columns are documented as "not recorded" rather than "unrestricted" at every site.
 - ⚠ **AND DO NOT CLOSE IT BY MIRRORING THE DESKTOP STORE AUTOMATICALLY.** `channelAgentChain` and the operator's stored pair are that OPERATOR's settings on that MACHINE; `channels.agent_*` is a property of the ROOM, manage-gated, and applies to every member's launches. They are two different facts that happen to constrain the same axis, and a sync would quietly make one member's local preference everybody's ceiling.
 - Proposed resolution: a Settings-tab control on the channel (manage-gated to match the server), wired to the existing channel PATCH — no new endpoint. Until then the columns stay null and the desktop is the only fence, which is the pre-A9 state.
-- Status: RESOLVED 2026-09-02 (v2 wave B slice B4). `channels/components/settings-channel-agents.tsx` is the control, exactly as proposed: three axes plus "No ceiling" on each, wired to the ordinary channel PATCH through `hooks/use-channel-lifecycle-writes.ts › channelAgentSettingsConfig`, and mounted only for a manager (`channel-manage.tsx`). ⚠ **THE SERVER IS STILL THE GATE** — `MANAGED_CHANNEL_FIELDS`, unchanged; the panel is an affordance and hiding it would fence nothing. ⚠ **IT SHARES THE PANEL WITH THE DEFAULT RESPONDER** (ruling B6) rather than getting one of its own: both are channel properties, manage-gated, about somebody else's machine. ⚠ **THE PROHIBITION ABOVE IS UNCHANGED AND UNSPENT**: nothing mirrors the desktop's `channelAgentChain` into the column, and a channel nobody has set still behaves exactly as it did before.
+- Status: RESOLVED 2026-09-02 (v2 wave B slice B4). `channels/components/settings-channel-agents.tsx` is the control, exactly as proposed: three axes plus "No ceiling" on each, wired to the ordinary channel PATCH through the channel-agent settings config in `hooks/use-channel-lifecycle-writes.ts` (deleted 2026-09-07, items 10-11), and mounted only for a manager (`channel-manage.tsx`). ⚠ **THE SERVER IS STILL THE GATE** — `MANAGED_CHANNEL_FIELDS`, unchanged; the panel is an affordance and hiding it would fence nothing. ⚠ **IT SHARES THE PANEL WITH THE DEFAULT RESPONDER** (ruling B6) rather than getting one of its own: both are channel properties, manage-gated, about somebody else's machine. ⚠ **THE PROHIBITION ABOVE IS UNCHANGED AND UNSPENT**: nothing mirrors the desktop's `channelAgentChain` into the column, and a channel nobody has set still behaves exactly as it did before.
 
 ### F-450 — G20 ("channel work is answered into the channel") is the one A9 row that did not ship, and it is an eighth session-health field (2026-09-02)
 
@@ -10208,7 +10208,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - Location, all measured in final review with `npx knip` plus an import grep over `src apps packages dopl-desktop-app` (zero import sites each, not counting prose mentions):
   `src/features/knowledge/components/knowledge-v2/detail/overview-contents.tsx` (398 lines) ·
   `src/features/knowledge/components/knowledge-v2/detail/use-content-descriptions.ts` (102) ·
-  `src/features/channels/hooks/use-channel-auto-send.ts` (40) ·
+  the channels auto-send hook tombstone (40; deleted 2026-10-11, cleanup C08) ·
   the copy-paste skill template under `src/features/mcp-connect/` (112; deleted 2026-09-24) ·
   the shared layout's page top bar (40; deleted 2026-10-02).
 - Found during: the final whole-set review of the nine parity waves.
@@ -10217,7 +10217,7 @@ The claim had been restated in five places from one sentence, which is how it su
 - ⚠ **`AppPanel` WAS IN THIS CLASS AND WAS DELETED**, because it was different in one way that matters: 00-MASTER §5 Wave 0 carried it as scoped work (X9) and the row claimed it done. Its CSS rule `app-shell.module.css › .mainDetail` went with it — zero other users.
 - Proposed resolution: delete all five, each in its own commit, with the `RETIREMENT-UNWIRING-PLAN.md` rows repointed in the same change. **Re-derive the orphan set first** (`npx knip`) rather than trusting this list — §15's own warning is that "dead" is a MEASUREMENT, and `bits.tsx › agentAccent` was called an orphan while it still had a live call site.
 - 2026-09-24 (DMP-013 B5): the skill template is DELETED — still zero importers, and it taught tool names and args the server no longer serves (`*_admin`, `workspace=`, `op:'list'` on channels). The Connect page shows only the connection snippets (`src/features/mcp-connect/snippets.ts`). The other four remain.
-- Status: open (four of five).
+- Status: open (two of five: the knowledge `overview-contents` pair, which cleanup K02 deletes; the template, the top bar and the auto-send hook are gone).
 
 ### F-727 — the search `tsvector` rides every transcript read, and the reads are `select("*")` (2026-09-17)
 

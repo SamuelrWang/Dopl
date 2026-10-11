@@ -18,7 +18,7 @@
  *
  * ⚠ IT MIRRORS THE STORE, IT DOES NOT OWN IT. Main is the record
  * (`orchestratorLaunchEnabled`); this reads once per bridge and writes through.
- * Optimistic with REVERT on refusal, the `use-channel-auto-send.ts` idiom
+ * Optimistic with REVERT on refusal, the `use-channel-flag.ts` idiom
  * verbatim — never leave a switch claiming a posture that was not stored.
  *
  * ⚠ THE BRIDGE SHAPE IS A GUESS AS OF 2026-08-22 AND IS DECLARED LOCALLY ON
