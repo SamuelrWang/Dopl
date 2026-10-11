@@ -187,6 +187,6 @@ function assertThreadTook(sent, response, sameDir) {
 }
 
 module.exports = {
-  nativeApprovalPolicy, placePolicy, assertPolicyTook, assertThreadTook, sandboxWidening, SANDBOX_ECHO,
+  nativeApprovalPolicy, placePolicy, assertPolicyTook, assertThreadTook, SANDBOX_ECHO,
   NEVER_NATIVE, GRANULAR_KEYS, APPROVALS_REVIEWER,
 };

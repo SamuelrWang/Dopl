@@ -204,14 +204,14 @@ function makeFrameQueue() {
   };
 }
 
-// Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
-// translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
 /** Do two absolute paths name the same folder? (`/var` vs `/private/var` on macOS.) */
 function sameDir(a, b) {
   const real = (p) => { try { return fs.realpathSync(p); } catch (_) { return path.resolve(p); } };
   return real(a) === real(b);
 }
 
+// Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
+// translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
 function makeApprovalHandler(s, dispatch, operatorServers, onUnknown, replyFor) {
   const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
@@ -426,8 +426,6 @@ function start(spec) {
   return handleFor(link, frames, () => threadId, () => activeTurnId);
 }
 
-const { assertPolicyTook } = policy;
-
 function codexBin() {
   const r = resolveBin.resolveCodexBin();
   return r && r.ok ? r.path : null;
@@ -492,5 +490,5 @@ const appVersion = () => require('../../app-version').appVersion();
 module.exports = {
   buildLaunchSpec, start, resume,
   buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue,
-  assertPolicyTook, boundedInterrupt,
+  assertPolicyTook: policy.assertPolicyTook, boundedInterrupt,
 };
