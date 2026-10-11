@@ -300,12 +300,12 @@ export function HomeOntologyPanels({
 }
 
 /**
- * THE /home CONTROLS, ALL FOUR, AS **ROWS IN THE BOARD'S GEAR MENU** — what the
+ * THE /home CONTROLS, ALL FIVE, AS **ROWS IN THE BOARD'S GEAR MENU** — what the
  * card's pill row used to carry (2026-09-10).
  *
  * ⚠ **ROWS, NOT A MENU OF ITS OWN.** This returned a `…` trigger plus its own
  * `Popover` until Samuel made the trigger a settings circle owned by the board
- * (`ontology-view.tsx › BoardSettingsMenu`); the host now contributes its five
+ * (`board-header-bits.tsx › BoardSettingsMenu`); the host now contributes its five
  * rows into that one menu, under the divider, and `close` is the menu's.
  *
  * ⚠ **ONE PLACE PER CONTROL.** Nothing here is repeated in the board and nothing
