@@ -82,7 +82,7 @@ export interface ChannelEscalationOption {
 }
 
 /** Which option the agent would take, and why. `index` is into `options`. */
-export interface ChannelEscalationRecommendation {
+interface ChannelEscalationRecommendation {
   index: number;
   why: string;
 }
