@@ -101,15 +101,10 @@ function idleTimeout(state) {
 
 module.exports = {
   DEFAULT_IDLE_MS,
-  AWAITING_PEER_IDLE_MS,
-  ABANDONED_MS,
-  LAUNCHING_MS,
-  TOOL_MODES,
   MESSAGE_MODES,
   coerceMode,
   toolModesOf,
   initialSessionState,
   nextIdleMs,
-  nextAbandonMs,
   idleTimeout,
 };

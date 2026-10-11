@@ -32,7 +32,7 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "session-windowless.js"), "utf8");
 
-function load(consentOver = {}) {
+function load(consentOver = {}, targetingOver = null) {
   const notices = [];
   const posts = []; // T25: the ONE task_progress a first denial writes into the channel
   const diags = [];
@@ -70,7 +70,7 @@ function load(consentOver = {}) {
       };
     }
     if (id === "./consent") return consent;
-    if (id === "./targeting") return { openChannelForEntry: () => {} };
+    if (id === "./targeting") return targetingOver || { openChannelForEntry: () => {} };
     if (id === "./session-permissions") {
       return {
         noteAutoDenied: (s, rid) => stamps.push(["auto", rid]),
@@ -387,4 +387,35 @@ test("T25: the DENY is dispatched before the notice runs — visibility never de
   m.claimGate(s, REQ, (rid, d) => decisions.push([rid, d]));
   await flush();
   assert.deepEqual(decisions, [["req-1", "deny"]]);
+});
+
+// ── THE BANNERS' OPEN ACTION (cleanup d05: one `openThread` behind both banners) ──
+// Both the tool-gate banner and the outbound banner open THIS session's thread, and a throwing
+// navigation must never escape into the notification callback.
+test("both banners' open action opens this session's thread, and navigation failure is swallowed", async () => {
+  timers.reset();
+  const opened = [];
+  const outbound = [];
+  const nav = { openChannelForEntry: (entry, opts) => opened.push({ entry, opts }) };
+  const m = load({
+    createConsentRequest: async () => ({ rowId: "row-9", status: "pending" }),
+    notifyOutbound: (args) => outbound.push(args),
+    pollStatus: async () => "allowed",
+  }, nav);
+  const s = session({ context: { channelName: "Website", workspaceSegment: "acme" },
+    pendingPermissions: new Map([["req-1", {}], ["req-2", {}]]) });
+  m.claimGate(s, REQ, () => {});
+  m.claimGate(s, { type: "outbound_gate", requestId: "req-2", text: "hi" }, () => {});
+  await flush(); await flush();
+  assert.equal(m.banners.length, 1, "the tool banner exists");
+  assert.equal(outbound.length, 1, "the outbound banner exists");
+  m.banners[0].onOpen();
+  outbound[0].onOpen();
+  const want = { entry: { channel: { id: "chan-1", name: "Website" }, workspaceId: "ws-1", workspaceSegment: "acme" },
+    opts: { threadId: "task-1" } };
+  assert.deepEqual(opened, [want, want]);
+  nav.openChannelForEntry = () => { throw new Error("window gone"); };
+  assert.doesNotThrow(() => m.banners[0].onOpen());
+  assert.doesNotThrow(() => outbound[0].onOpen());
+  timers.reset();
 });

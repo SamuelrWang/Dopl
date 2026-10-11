@@ -1,15 +1,8 @@
 // Claude Code RESOLUTION + CONTAINMENT, re-exported for every caller that needs to reach the
 // operator's CLI.
 //
-// ⚠ THIS FILE USED TO BE THE HEADLESS EXECUTOR AND NO LONGER RUNS ANYTHING (2026-08-20,
-// Samuel's ruling). `runForChannel` spawned `claude -p` through `execFile`, built its own prompt
-// (`buildPrompt`), wrote its own scoped settings, held its own concurrency pool
-// (`session-pool.js`, deleted with it), remembered its own resumable session ids under the
-// `claudeSessions` store key, and handed a REPLY STRING back for `trigger-headless.js` to put in
-// front of a human. It was the fallback for when the SDK engine skipped, and there is no second
-// executor any more: `trigger.js`'s terminals answer the peer and settle instead.
-//
-// ⚠ WHAT SURVIVES IS A FACADE, AND IT IS LOAD-BEARING FOR FIVE CALLERS. `claudeAvailable`,
+// ⚠ IT RUNS NOTHING (the headless `claude -p` executor was deleted 2026-08-20, Samuel's ruling;
+// there is no second executor). What survives is a FACADE, AND IT IS LOAD-BEARING FOR FIVE CALLERS. `claudeAvailable`,
 // `getClaudeBinPath` and `cliEnv` come from `claude-resolve.js`; `sessionSpawnAvailable` from
 // `claude-runtime.js`. Nothing here computes
 // them — this module is the NAME those callers already import (`mcp-config.js`,

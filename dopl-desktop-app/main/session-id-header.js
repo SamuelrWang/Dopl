@@ -1,35 +1,13 @@
 // `X-Dopl-Session-Id` — WHICH SESSION OF THIS OPERATOR'S A MAIN-PROCESS POST IS ABOUT.
 //
-// ── THE DEFECT IT EXISTS FOR (2026-09-15, docs/traces/AGENT-BADGE-TRACE.md) ──────────────────────────────
+// WHY: the posts this process writes ABOUT a session (the calm ended note, the windowless denial
+// counter) arrived anonymous and rendered as a bare "Agent" (2026-09-15, docs/traces/
+// AGENT-BADGE-TRACE.md). Their `client_msg_id`s cannot carry the post stamp, and the server
+// re-stamps `metadata.session_id` from this HEADER alone. A spawned session's own posts already
+// had it (`loader.js › withSessionStamp`); this gives main's posts about it the same.
 //
-// Samuel: *"occasionally I'll see a message that says agent ended. But this isn't one of Dopl's
-// agents. The badge says just Agent … I notice it popping up randomly."*
-//
-// Those rows are `task_progress` posts THIS PROCESS writes about a session — the calm ended
-// note (`trigger-outcomes.js › onEnded`) and the windowless denial counter — and they arrived
-// carrying no identity at all. Two doors name an agent and both were shut:
-//   1. the post STAMP on `client_msg_id`, which these writers cannot use (their ids are
-//      `task_progress-<channelUUID>-<seq>` and `denied-<channelId>-<sessionId>`, and the
-//      anchored pattern in `src/features/channels/lib/agent-post-stamp.ts` refuses both by
-//      design — a channel UUID can begin with eight id-shaped characters); and
-//   2. this HEADER, which `listener-io.js` never set. `resolvePostMetadata` strips any
-//      caller-supplied `metadata.session_id` and re-stamps the reserved key from the header
-//      ALONE, so an unstamped post is anonymous no matter what it puts in its body.
-// `authorAgentIdOf` therefore answered null, the `channel_sessions.display_name` join was never
-// attempted, and the transcript honestly rendered the bare noun "Agent" over a session the
-// operator had named and could no longer recognise.
-//
-// ⚠ A SPAWNED SESSION ALREADY HAD THIS, from a seam main does not use:
-// `runtime/claude/launch-spec.js` hands the slot key to `loader.js › withSessionStamp`, which
-// pins the header onto the SDK's MCP entry. That asymmetry is the whole bug — an agent's own
-// posts were attributable and the desktop's posts ABOUT that agent were not.
-//
-// ── WHY A MODULE RATHER THAN THREE LINES IN `listener-io.js` ─────────────────────────────────
-//
-// It is `app-version.js`'s shape, deliberately: a stamp with a shape rule, a header name and a
-// `{}`-or-`{header}` helper, so a caller SPREADS it and never branches. That is what keeps an
-// absent value from being sent as a blank header, it gives the rule one home to be corrected in,
-// and it keeps `listener-io.js` (at the §2 500-line cap) to the two lines that actually post.
+// Shaped like `app-version.js`: a rule, a header name, and a `{}`-or-`{header}` helper the caller
+// SPREADS, so an absent value is never sent as a blank header.
 //
 // ⚠ A LABEL, NOT A LOCK — the server's own header module says the same sentence and it is the
 // one property that must never erode. Nothing is granted, nothing enforced, no session count

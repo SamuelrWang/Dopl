@@ -211,9 +211,5 @@ function reparkOne(key, rec) {
 
 module.exports = {
   bind,
-  parkedSessionFromRecord,
-  endInterrupted,
   reparkDormant,
-  REPARK_WINDOW_MS,
-  withinReparkWindow,
 };

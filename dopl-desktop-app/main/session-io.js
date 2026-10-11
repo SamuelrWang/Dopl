@@ -144,7 +144,7 @@ function postWillGate(s, input, toolName) {
 }
 
 const sessionPrivate = require('./session-private'); const postSurface = require('./session-post-surface');
-const { withPostSurface, postKindOf, postTextOf } = postSurface;
+const { withPostSurface, postTextOf } = postSurface;
 
 // The whitelisted durable projection (mirrors session-store); live handles are never copied.
 function baseRecord(s) {
@@ -262,17 +262,11 @@ module.exports = {
   userMessage,
   frameContinuation: seed.frameContinuation,
   replyFor: seed.replyFor,
-  frameHistorySeed: seed.frameHistorySeed,
-  historyTranscript: seed.historyTranscript,
   noteGatedBody: seed.noteGatedBody,
-  isGatedEntry: seed.isGatedEntry,
   withSeed: seed.withSeed,
   discoveryFor: seed.discoveryFor,
-  frameOperatorTurn: seed.frameOperatorTurn,
   postWillGate,
   grantArgs,
-  postAddress: postSurface.postAddress,
-  postKindOf,
   postTextOf,
   withPostSurface,
   // How much of a tool input may appear on a card is a privacy rule, so these three stay in one place.

@@ -1,7 +1,6 @@
 // DELETE ONE AGENT — the body of `sessions:delete` (2026-08-25, Samuel's ruling).
 //
-// ⚠ SPLIT OUT OF `main/session-ipc-ops.js` UNDER THE HARD 500-LINE §1 CAP, on the
-// `session-launch-op.js` precedent. That file owns the IPC SURFACE —
+// Split out of `main/session-ipc-ops.js` (the 500-line cap). That file owns the IPC SURFACE —
 // which verbs exist, who may call them, how a bad payload is refused — and this owns WHAT ONE
 // DELETION IS. The wrapper stays written LITERALLY at the `ipcMain.handle` site, because
 // `test/channel-ipc-sender.test.mjs`'s structural belt reads exactly that shape; this module is
@@ -20,7 +19,7 @@
 // `client_msg_id`) and never a local table. INVARIANTS §5 / §11.
 //
 // ⚠ **THERE IS ONE STOP PATH AND THIS IS NOT A SECOND ONE.** A LIVE agent is ended through
-// `session-engine.js › controlByTask({action:'end'})` — the same reducer event the Agents tab's
+// `session-reopen.js › controlByTask({action:'end'})` (re-exported by the engine) — the same reducer event the Agents tab's
 // End button dispatches, reaching the same `session-teardown.js › settle`. A delete that tore
 // down its own way would be a second set of the C3 bugs (an orphaned `claude` child still
 // holding this session's pre-approved `dopl_channel` access). END, THEN PURGE — in that order,

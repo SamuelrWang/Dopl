@@ -164,7 +164,7 @@ function stampParked(record) {
   return record;
 }
 
-// The ONE write every record goes through; the runtime-truth fields are whitelisted here because the PURE
+// The ONE full-record write (`setRecordPhase`, prune and forget touch existing records); the runtime-truth fields are whitelisted here because the PURE
 // block cannot reach a helper.
 function saveRecord(rec) {
   const record = stampParked({
@@ -181,7 +181,7 @@ function setRecordPhase(key, phase) {
   const all = loadRecords();
   if (!all[key]) return;
   all[key].phase = phase;
-  if (phase === 'parked') all[key].parkedAt = Date.now();
+  stampParked(all[key]);
   store.set(RECORDS_KEY, all);
 }
 
@@ -245,13 +245,10 @@ module.exports = {
   sessionKey,
   slotKey,
   threadKeyPrefix,
-  isTerminalPhase,
   reloadDisposition,
-  durableName,
   durableSessionRecord,
   RESUME_POST_SEQ_SLACK,
   resumedPostSeq,
-  prunableKeys,
   loadRecords,
   saveRecord,
   setRecordPhase,

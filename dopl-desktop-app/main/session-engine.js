@@ -63,7 +63,6 @@ const baseRecord = io.baseRecord;
 
 /** The one dispatch funnel. Answers whether an effect resolved a LIVE held-tool promise (FIX F1). */
 function dispatch(s, event) {
-  // A turn ended: spend one unit of the private window (a fact about the session object, not reducer state).
   // A turn ended: spend one unit of the private window, and END THE WORK STRETCH — the continuous-work cap
   // measures unbroken work, so the next stretch starts from its own first frame rather than inheriting this
   // one's age (`session-work-cap.js`).
@@ -406,8 +405,8 @@ async function init() {
     const rec = records[key];
     if (!rec || store.reloadDisposition(rec.phase) !== 'resume') continue;
     store.setRecordPhase(key, 'ended');
-    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: store.getSdkSessionId(key) }, 'task_failed', { interrupted: true }, sessionEffects.terminalBody({ interrupted: true }));
     const sdkId = store.getSdkSessionId(key);
+    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: sdkId }, 'task_failed', { interrupted: true }, sessionEffects.terminalBody({ interrupted: true }));
     if (sdkId) sessionPark.offerResume(rec, sdkId);
   }
   try { sessionBoot.reparkDormant(); } catch (err) { diag('session-engine: repark failed', err && err.message); }

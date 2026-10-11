@@ -9,7 +9,7 @@ function gateActivity(state, activity) {
   return pending && pending.length > 0 ? 'awaiting_permission' : activity;
 }
 
-// The `ended` emit every end shares: abort the query, tell the work lane why, settle the record.
+// The `ended` emit payload every end shares (tells the work lane why); `endEffects` wraps it.
 function endedEmit(outcome, reason, summary) {
   const payload = { type: 'ended', outcome: outcome, reason: reason };
   if (summary !== undefined) payload.summary = summary;
@@ -80,17 +80,10 @@ function endedStatusText(reason) {
 
 // ─── THE DROP NOTICE ─────────────────────────────────────────────────────────
 //
-// ⚠ THE LIFECYCLE MARKER ABOVE IS NOT A REPORT, and treating it as one is what made two runs
-// vanish in channel bb0f57db on 2026-10-10. `endLifecycle` posts `task_progress` carrying
-// `INACTIVE_NOTE`, which is correct for what it is — a CALM note to a waiting COUNTERPARTY,
-// deliberately free of local detail. It is also: addressed to nobody, so it wakes no agent and
-// notifies no person; named after no agent; and silent about the cause. Measured:
-//   `viloxuwt`  (Notif Account Store) — 7 minutes of edits, ZERO channel messages ever, parked on
-//               turn end, reaped 12h later. Its only row was the marker.
-//   `jsk2zowk`  (Row Cap Fix) — last word a MILESTONE with two tests still failing, parked, reaped
-//               12h later. No DONE. Its only row was the marker.
-// Whoever launched them went on believing the work was in flight. So the marker STAYS (the peer
-// still needs it) and a REPORT is added beside it, which is what `notice` is.
+// ⚠ THE LIFECYCLE MARKER ABOVE IS NOT A REPORT. `endLifecycle` posts a CALM `task_progress` note
+// for a waiting COUNTERPARTY: addressed to nobody, named after no agent, silent about the cause
+// (two runs vanished that way, 2026-10-10; evidence in test/session-drop-notice.test.mjs). So the
+// marker STAYS (the peer still needs it) and a REPORT for the launcher, `notice`, is added beside it.
 //
 // ⚠ TWO CAUSES, NOT ONE, AND THE EARLIER ONE IS THE USEFUL ONE. The 12h reap is where the session
 // dies; the turn that ended having posted nothing is where the information was lost, 12 hours
@@ -129,8 +122,7 @@ function endNoticeFor(reason) {
 
 // The shared end: abort first, the calm note, the report, the `ended` emit, then settle.
 // ⚠ `endCode` RIDES THE SETTLE so the frozen history can name the cause: `session-teardown.js`
-// reads `s.endCode` into `agent-history.js`, and every reaped record on this machine had it NULL —
-// so even the local 7-day history could not say why a run stopped.
+// reads `s.endCode` into `agent-history.js`, which otherwise could not say why a run stopped.
 function endEffects(state, outcome, reason, summary) {
   const lc = endLifecycle(reason);
   const notice = endNoticeFor(reason);
@@ -166,18 +158,10 @@ module.exports = {
   gateActivity,
   terminalBody,
   TERMINAL_BODIES,
-  DROP_PARKED_SILENT,
-  DROP_ENDED,
   parkNoticeFor,
-  endNoticeFor,
-  endedEmit,
   endLifecycle,
   endReasonOf,
-  END_EVENT_REASONS,
   endedStatusText,
   endEffects,
   parkEffects,
-  INACTIVE_NOTE,
-  AUTH_HELD_NOTE,
-  CLAIMED_NOTE,
 };

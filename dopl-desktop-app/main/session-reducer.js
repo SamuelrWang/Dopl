@@ -51,10 +51,6 @@ function workIdle() {
  * DOES A STREAMED FRAME OF LIVE WORK CORRECT THIS SESSION'S LABEL? The patch, or `null` for a label that
  * is already right — or that must not move (2026-10-10, Samuel's "waiting while it is clearly working").
  *
- * ⚠ THIS DOCBLOCK DESCRIBES `workingPatch`, AND IT NOW SITS ON IT (moved 2026-10-11). It was written
- * above `workIdle` — two adjacent blocks, the first of them orphaned — so the long argument read as
- * documentation for the one-line timer builder while the function it is about had none.
- *
  * ⚠ THE DEFECT IT CLOSES. Nothing in the live stream touched state: `tool_use`, `assistant` and `thinking`
  * had no arm at all and fell through to the tail's no-op, and `tool_result` only ever un-counted a denied
  * post. So `result`'s end-of-turn word (`idle`, or `awaiting_peer` for a turn that posted) stood for the

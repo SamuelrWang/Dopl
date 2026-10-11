@@ -11,7 +11,7 @@
 // reads as `auto_inbound`, `auto_outbound` as `ask` — so any `dopl_channel` post or milestone
 // reaches `grantDecision`'s `return 'gate'`, which on a windowless session bridges to an outbound
 // consent row plus a notification. Not "cannot post", but "cannot post WITHOUT you". One standing
-// exception since 2026-08-31 (stated in full at `effectiveMessageMode`): an out-half posture is the
+// exception since 2026-09-06 (stated in full at `effectiveMessageMode`): an out-half posture is the
 // operator's explicit channel-wide consent and defeats the withdrawal.
 //
 // THE IN HALF IS DELIBERATELY LEFT ALONE, a considered deviation from "as if message mode were
@@ -50,17 +50,6 @@ function turnInFlight(state) {
   return a === 'working' || a === 'awaiting_permission';
 }
 
-/**
- * OPEN the window for a message just pushed. Returns the new depth. It ADDS rather than SETS, so
- * two 1:1 messages in a row each get their own covered turn.
- *
- * The `+2` DOUBLE-COUNTED when the in-flight turn was already private (2026-08-22, the confirmed
- * root cause of the posture degradation): the extra unit exists to cover a CHANNEL turn that
- * happened to be running, but when the turn in flight is itself private its own depth already pays
- * for it, and the surplus never drains — leaving every later CHANNEL turn with Axis B's outbound
- * widening withdrawn on a session nobody had made private. The remaining over-cover for a
- * NON-private turn in flight stands: the alternative failure is a private answer posted in public.
- */
 // A push into a running turn that the runtime may JOIN to it, remembered by its framed text so the
 // join can pay back the unit opened for the push's own turn. Bounded; stale entries go oldest-first.
 const PRIVATE_JOIN_MAX = 16;
@@ -72,6 +61,17 @@ const PEER_WINDOW = { depth: 'peerDepth', join: 'peerJoinable' };
 
 const windowOpen = (s, w) => (Number(s && s[w.depth]) || 0) > 0;
 
+/**
+ * OPEN the window for a message just pushed. Returns the new depth. It ADDS rather than SETS, so
+ * two 1:1 messages in a row each get their own covered turn.
+ *
+ * The `+2` DOUBLE-COUNTED when the in-flight turn was already private (2026-08-22, the confirmed
+ * root cause of the posture degradation): the extra unit exists to cover a CHANNEL turn that
+ * happened to be running, but when the turn in flight is itself private its own depth already pays
+ * for it, and the surplus never drains — leaving every later CHANNEL turn with Axis B's outbound
+ * widening withdrawn on a session nobody had made private. The remaining over-cover for a
+ * NON-private turn in flight stands: the alternative failure is a private answer posted in public.
+ */
 function openWindow(s, w, wasInFlight, prompt) {
   if (!s) return 0;
   // THE WINDOW IS OPENED AFTER THE DISPATCH SINCE 2026-08-31, AND `wasInFlight` IS WHAT MAKES THAT
@@ -162,13 +162,6 @@ const peerPushJoined = (s, pushedText) => joinWindow(s, PEER_WINDOW, pushedText)
 const resetPeerTurn = (s) => resetWindow(s, PEER_WINDOW);
 const closePeerTurn = (s) => closeWindow(s, PEER_WINDOW);
 const isPeerTurn = (s) => windowOpen(s, PEER_WINDOW);
-
-// `autoSendMessageMode` stood here and is DELETED (2026-09-06, item 8). It forced Axis B's OUT half
-// on over whatever the stored posture said — the mechanism by which the auto-send toggle overrode
-// Messaging. There is nothing left to force: Messaging IS the posture now, so an operator who wants
-// the out half picks it and `effectiveMessageMode` reads that pick live. Deleted alongside
-// `channel-prefs.getAutoSend` / `setAutoSend`, the two `channels:*AutoSend` IPC handlers and the
-// web hook.
 
 /**
  * AXIS B AS THE GATE SHOULD SEE IT for this session, right now.
@@ -357,7 +350,6 @@ module.exports = {
   resetPrivateTurn, // 2026-08-22: a torn-down query owes no results — the window closes with it
   isPrivateTurn,
   openPeerTurn, peerPushJoined, resetPeerTurn, closePeerTurn, isPeerTurn,
-  // ⚠ `autoSendMessageMode` REMOVED 2026-09-06 (item 8) — see the block above it.
   effectiveMessageMode,
   channelMessageMode, // 2026-09-06: the live read of the channel's Messaging value, for the suite
   effectiveToolMode, // 2026-09-16: Axis A's decision-time read — the half that was missing
