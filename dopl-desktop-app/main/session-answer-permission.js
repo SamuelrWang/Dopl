@@ -1,8 +1,7 @@
 // session-answer-permission.js — THE OPERATOR ANSWERING ONE HELD TOOL CALL, INLINE.
 //
 // It is a sibling of `main/session-reopen.js`'s `controlByTask` / `setModeByTask` /
-// `messageByTask` and lives apart only because that file sits at the 500-line §1 cap; it moves
-// back the day there is room. It takes `resolveSession` by injection so the multiplayer address
+// `messageByTask`. It takes `resolveSession` by injection so the multiplayer address
 // rule stays stated once, in `session-reopen.js`, and it re-validates its own payload
 // (`main/session-delete-op.js`'s rule: the gates go where the body is). `session-ipc-ops.js`
 // keeps the IPC surface — op name, sender binding, refusal shape.

@@ -52,9 +52,8 @@ const AGENT_OPS_TOOL_NAMES = [RENAME_TOOL, END_TOOL];
 
 // ─── BEGIN AGENT-SELF-OPS-PURE (electron-free; unit-tested by direct require) ─────────
 
-// The instance-id shape, restated from `agent-id.js › AGENT_ID_RE` via lazy require at the
-// call sites… deliberately NOT: the predicate is needed inside this pure block, and
-// `agent-id.js` is itself electron-free, so the ONE definition is required here directly.
+// The ONE instance-id predicate (`agent-id.js`), required inside this pure block because that
+// module is itself electron-free.
 const { isAgentId } = require('./agent-id');
 
 // WHO IS BEING RENAMED. No id => SELF — the ergonomic default for "name yourself after your

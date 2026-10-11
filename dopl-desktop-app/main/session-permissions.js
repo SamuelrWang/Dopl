@@ -149,27 +149,24 @@ function denyMessageFor(reason) {
   return DENY_MESSAGES.get(reason) || BLOCKED_MESSAGE;
 }
 
+// Add a request id to one of the session's bounded Sets, oldest out at MAX_AUTO_DENIED.
+function noteBounded(s, key, requestId) {
+  if (!s || !requestId) return;
+  if (!s[key]) s[key] = new Set();
+  if (s[key].size >= MAX_AUTO_DENIED) s[key].delete(s[key].values().next().value);
+  s[key].add(String(requestId));
+}
+
 // Record that THIS request was refused for want of a surface. Called by the engine at the one
 // place that takes that branch.
 function noteAutoDenied(s, requestId) {
-  if (!s || !requestId) return;
-  if (!s.autoDeniedIds) s.autoDeniedIds = new Set();
-  if (s.autoDeniedIds.size >= MAX_AUTO_DENIED) {
-    s.autoDeniedIds.delete(s.autoDeniedIds.values().next().value);
-  }
-  s.autoDeniedIds.add(String(requestId));
+  noteBounded(s, 'autoDeniedIds', requestId);
 }
 
 // Record that THIS request was shown to the operator and expired unanswered (2026-08-31).
-// Same bounded-Set idiom and the same bound as `noteAutoDenied` — the two sets are disjoint by
-// construction (one branch stamps each request, once).
+// Disjoint from `autoDeniedIds` by construction (one branch stamps each request, once).
 function noteGateTimeout(s, requestId) {
-  if (!s || !requestId) return;
-  if (!s.gateTimeoutIds) s.gateTimeoutIds = new Set();
-  if (s.gateTimeoutIds.size >= MAX_AUTO_DENIED) {
-    s.gateTimeoutIds.delete(s.gateTimeoutIds.values().next().value);
-  }
-  s.gateTimeoutIds.add(String(requestId));
+  noteBounded(s, 'gateTimeoutIds', requestId);
 }
 
 // Which denial message does this request deserve? ⚠ FAILS TOWARD `'Denied by operator'`: an
@@ -216,9 +213,7 @@ module.exports = {
   denyMessageFor, // 2026-08-25 (F-320): which sentence a `deny` VERDICT carries
   AUTO_DENY_MESSAGE,
   OPERATOR_DENY_MESSAGE,
-  GATE_TIMEOUT_MESSAGE,
   LAUNCH_DEPTH_DENY_MESSAGE,
   AWAIT_DENY_MESSAGE, // 2026-09-01 (T85): the fifth sentence — a call that could not have helped
   BLOCKED_MESSAGE,
-  MAX_AUTO_DENIED,
 };
