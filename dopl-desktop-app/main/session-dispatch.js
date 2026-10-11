@@ -1,21 +1,8 @@
 // Session dispatch — the listener's pre-classify routing.
 //
-// ⚠ ONE ROUTE SURVIVES (2026-08-20, F-228). This file held FIVE, and four of them opened on a
-// master-switch read that Samuel's live-test ruling turned permanently false. They are deleted
-// with the machinery they drove — and the switch itself is gone too, a wave later:
-//
-//   (2) maybeOpenRequesterSession   MY OWN thread opener minted a REQUESTER WINDOW on MY OWN
-//                                   machine and launched my agent against my own message — the
-//                                   self-trigger bug the retirement was ruled from.
-//   (3) maybeSurfaceRequesterReply  a peer reply on a thread I requested, HELD at that window's
-//                                   inbound gate. No window, no gate, no hold.
-//   (4) noteRequestLifecycle        advanced the request STRIP in the window chrome.
-//   (5) maybeReopenAddressedThread  a peer follow-up reopened the window that answered it.
-// `diagRuntimeGateSkip`, `REQUEST_MILESTONES`, `exchangeTag` and `reopenableRecord` were helpers
-// of those four alone and went with them.
-//
-//   (1) feedLiveSession — the delivery lane. It claims nothing into existence; a live session's
-//       own existence is the gate.
+// ONE ROUTE: `feedLiveSession`, the delivery lane. It claims nothing into existence; a live
+// session's own existence is the gate. (Four requester/reopen routes were deleted with the
+// window machinery, 2026-08-20, F-228.)
 //
 // ── THE FAN-OUT IS NARROWED TO THE ADDRESSED RECIPIENT (2026-09-02, ruling B1) ─────────────
 //
@@ -42,8 +29,7 @@
 //
 // ⚠ **TWO RESILIENCE ARMS MAKE THE NARROWING SAFE** (RR1/RR3, INVARIANTS §5): a forgotten `@`
 // from a PERSON must never stall a conversation, so the SERVER repairs that address once at
-// write time and nothing here repairs one. 🔴 RR2 was the third and is DELETED (2026-09-18): an
-// agent either addresses somebody or files a RECORD, so there is nothing left to repair.
+// write time and nothing here repairs one.
 //
 // ⚠ **AND THE FALLBACK IS THE WHOLE COMPATIBILITY STORY. TWO CAUSES, ONE FACT: THE SERVER DID
 // NOT ANSWER.**
@@ -58,20 +44,14 @@
 //
 // ── THE LOOP FENCE IS ONE PREDICATE NOW (2026-09-02) ───────────────────────────────────────
 //
-// ⚠ TWELVE RULES OVER "WHO WAKES", ACROSS `session-wake-tiers.js`, `session-triage.js` AND THIS
-// FILE, BECOME FOUR BRAKES AND ONE OF THEM IS TWO LINES. The three that were always structural
-// are unchanged:
+// FOUR BRAKES ON "WHO WAKES":
 //   • a non-`message` kind reaches no session at all (the `kind` filter below);
 //   • an AUTHORLESS row reaches nothing — a system row, nobody spoke;
-//   • a session is never fed its OWN post (`wroteIt`, by `client_msg_id`).
-// The fourth is `mayWake` below (the 2026-08-31 SAME-ACCOUNT CARVE), all that is left of
-// `wakeEligibility`'s three-string enum: redundant under a stored verdict, load-bearing under
-// the fallback. One predicate right in both places beats two spellings of one rule.
-//
-// ⚠ **THE LLM TRIAGE TIER IS DELETED** (ruling B6). Tier 2 (the solo room) and tier 3 (a
-// claim/pass model call per dormant candidate) both answered "which of my agents did this
-// unaddressed HUMAN message mean?" — a question RR3 now answers SERVER-SIDE for free. Tier 1
-// (the @-mention) is the `agent` verdict, on the same handle grammar the transcript tints with.
+//   • a session is never fed its OWN post (`wroteIt`, by `client_msg_id`);
+//   • `mayWake` below (the 2026-08-31 SAME-ACCOUNT CARVE): redundant under a stored verdict,
+//     load-bearing under the fallback. One predicate right in both places beats two spellings.
+// There is no LLM triage tier (deleted, ruling B6): the server's RR3 answers who an unaddressed
+// human message meant, and the @-mention is the `agent` verdict.
 //
 // ── THE SPAWN-IDLE WAKE RULE (2026-08-22, Samuel's ruling) ────────────────────────────────
 //
