@@ -30,7 +30,9 @@ const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
  *  transitions, short enough that leaving a page releases its subscriptions. */
 const TEARDOWN_GRACE_MS = 1_000;
 
-type Listener = () => void;
+/** The table that changed, or `null` for a catch-up (fresh SUBSCRIBED, a late joiner, the
+ *  bridge's empty-table signal): `null` means "assume anything changed". */
+type Listener = (table: string | null) => void;
 type ChannelStatus = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED";
 
 interface Entry {
@@ -75,12 +77,12 @@ function entryKey(
   return `${topicPrefix}|${workspaceId}|${tables.join(",")}`;
 }
 
-function fire(entry: Entry): void {
+function fire(entry: Entry, table: string | null): void {
   if (entry.dead) return;
   // Snapshot: a listener may unsubscribe (or subscribe a sibling) mid-iterate.
   for (const listener of [...entry.listeners]) {
     try {
-      listener();
+      listener(table);
     } catch {
       // One listener throwing must not starve the others.
     }
@@ -177,7 +179,7 @@ function connect(entry: Entry): void {
       },
       () => {
         if (myGen !== entry.generation) return; // stale channel
-        fire(entry);
+        fire(entry, table);
       }
     );
   }
@@ -193,7 +195,7 @@ function connect(entry: Entry): void {
       // against a now-healthy channel would tear it down for nothing.
       clearReconnect(entry);
       // Catch-up refetch: events during the disconnect window were missed.
-      fire(entry);
+      fire(entry, null);
       return;
     }
     if (
@@ -287,7 +289,7 @@ export function subscribeSharedWorkspaceTables(
 
   // Late joiner on a live channel gets the catch-up refetch a fresh SUBSCRIBED
   // would have delivered.
-  if (entry.subscribed) listener();
+  if (entry.subscribed) listener(null);
 
   const owned = entry;
   let released = false;
@@ -411,7 +413,7 @@ function subscribeViaBridge(
           // everyone, mirroring the web SUBSCRIBED catch-up.
           if (e.table && !s.tables.has(e.table)) continue;
           try {
-            s.listener();
+            s.listener(e.table || null);
           } catch {
             // One listener throwing must not starve the others.
           }
@@ -421,7 +423,7 @@ function subscribeViaBridge(
   updateWatch(bridge);
   // Catch-up: web path fires on SUBSCRIBED, bridge path fires once on subscribe.
   try {
-    listener();
+    listener(null);
   } catch {
     /* listener errors are the caller's problem */
   }

@@ -30,13 +30,14 @@ import {
 
 /**
  * Realtime refetch signal for the channels tables of a workspace. Fires
- * `onChange` on any channels / channel_members / channel_messages event —
+ * `onChange(table)` on any channels / channel_members / channel_messages event —
  * the view refetches through the filtered service (RLS + service filters
  * stay authoritative), never merging the raw payload.
  */
 export function useChannelsRealtime(
   workspaceId: string | null | undefined,
-  onChange: () => void
+  /** `table`: which of CHANNEL_TABLES changed, or `null` for a catch-up. */
+  onChange: (table: string | null) => void
 ): void {
   useWorkspaceTablesRealtime(
     workspaceId,

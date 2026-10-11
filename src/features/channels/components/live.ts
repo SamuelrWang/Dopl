@@ -28,16 +28,39 @@ import { useRefetchGate, type MutationGate } from "@/shared/hooks/use-api-mutati
 import { PRESENCE_REFETCH_DEBOUNCE_MS } from "../constants";
 import { useChannelsRealtime, usePresenceRealtime } from "../client/realtime";
 
+/** The one table whose events cannot change a transcript, thread or mention (TABLE-AWARE DOORBELL). */
+const MEMBERS_TABLE = "channel_members";
+
+/**
+ * WHAT A COALESCED BATCH OF DOORBELLS INVALIDATES. `"roster"` only when EVERY signal in the batch
+ * named `channel_members` — the read watermark (`last_read_at`), a join/leave, a favourite or a
+ * role. Anything else, an unnamed catch-up (`null`), or an empty batch is `"all"`: the safe answer
+ * is today's full refetch.
+ */
+export function doorbellScope(tables: ReadonlySet<string | null>): "roster" | "all" {
+  if (tables.size === 0) return "all";
+  for (const t of tables) if (t !== MEMBERS_TABLE) return "all";
+  return "roster";
+}
+
 export function useChannelsLive({
   workspaceId,
   refetchAll,
   refetchMembers,
+  refetchRoster,
 }: {
   workspaceId: string;
   /** Everything a content change can invalidate — channels, messages, members, threads, mentions. */
   refetchAll: () => void;
   /** The ROSTER alone, for presence. */
   refetchMembers: () => void;
+  /**
+   * ⚠ TABLE-AWARE DOORBELL: what a `channel_members`-only batch refetches (the member roster and
+   * the channel list's unread state). Absent, such a batch runs `refetchAll` as before. It exists
+   * because the read watermark is a `channel_members` write: without it, every member with the
+   * channel open re-read the whole transcript each time ANYONE opened that channel.
+   */
+  refetchRoster?: () => void;
 }): { gate: MutationGate } {
   // ⚠ The refs are written in an EFFECT, not during render — the same shape
   // `use-api-mutation.ts › useRefetchGate` uses for its own `runRef`. A ref assigned in the
@@ -45,13 +68,27 @@ export function useChannelsLive({
   // callback that may fire before the render commits.
   const refetchRef = useRef<() => void>(() => {});
   const membersRefetchRef = useRef<() => void>(() => {});
+  const rosterRefetchRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     refetchRef.current = refetchAll;
     membersRefetchRef.current = refetchMembers;
+    rosterRefetchRef.current = refetchRoster;
   });
 
-  const { signal, gate } = useRefetchGate(() => refetchRef.current());
-  useChannelsRealtime(workspaceId, signal);
+  // The tables named since the last run. The gate coalesces many signals into ONE run, so the
+  // run reads the whole batch and clears it.
+  const pendingTablesRef = useRef<Set<string | null>>(new Set());
+  const { signal, gate } = useRefetchGate(() => {
+    const scope = doorbellScope(pendingTablesRef.current);
+    pendingTablesRef.current = new Set();
+    const roster = rosterRefetchRef.current;
+    if (scope === "roster" && roster) roster();
+    else refetchRef.current();
+  });
+  useChannelsRealtime(workspaceId, (table) => {
+    pendingTablesRef.current.add(table);
+    signal();
+  });
 
   // Presence is high-churn (~30s per listener) and never clobbers a send, so it bypasses
   // the coordinator — but refetches the ROSTER only, on a trailing debounce. The 90s

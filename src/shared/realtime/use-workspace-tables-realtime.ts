@@ -2,7 +2,7 @@
 
 /**
  * Subscribe to postgres_changes on workspace-scoped tables; fires `onChange` on
- * every INSERT/UPDATE/DELETE. Single implementation behind useKnowledgeRealtime
+ * every INSERT/UPDATE/DELETE, naming the table (`null` on a catch-up). Single implementation behind useKnowledgeRealtime
  * / useSkillsRealtime / useChannelsRealtime.
  *
  * Channels are SHARED: every mount with the same `(topicPrefix, workspaceId,
@@ -23,7 +23,8 @@ export function useWorkspaceTablesRealtime(
   tables: readonly string[],
   /** Channel topic prefix, e.g. "knowledge-realtime". */
   topicPrefix: string,
-  onChange: () => void
+  /** `table` is the table that changed, or `null` for a catch-up ("anything may have"). */
+  onChange: (table: string | null) => void
 ): void {
   // Latest onChange in a ref: freshest closure, no resubscribe per render.
   const onChangeRef = useRef(onChange);
@@ -40,7 +41,7 @@ export function useWorkspaceTablesRealtime(
       workspaceId,
       tablesRef.current,
       topicPrefix,
-      () => onChangeRef.current()
+      (table) => onChangeRef.current(table)
     );
     // ⚠ join() keeps the dep primitive so an accidentally-inline array with
     // identical contents still behaves.
