@@ -174,27 +174,56 @@ const pollDegraded = new Set();
 // order then row order, exactly as before (a spawn is never raced against another spawn).
 const POLL_CONCURRENCY = 4;
 
-/** One workspace's pending rows; [] on any failure (the backstop is best-effort by construction). */
+/** Workspaces whose last read FAULTED; the line is edge-triggered, like `pollDegraded`. */
+const pollFaulted = new Set();
+
+/**
+ * One workspace's pending rows. A refusal or an unreadable body is [] — the backstop is
+ * best-effort by construction — but a REJECTION is left to the caller: `worker()` is the one
+ * place that turns a thrown read into [], so the slot it owns always settles (see there).
+ */
 async function fetchPending(wsId) {
-  try {
-    const res = await apiFetch(wire.ROUTES.pending, {
-      method: 'GET', workspaceId: wsId, timeoutMs: HTTP_TIMEOUT_MS, noStore: true,
-    });
-    if (!res || !res.ok) return [];
-    const body = await res.json().catch(() => null);
-    const rows = (body && (body.directives || body.rows)) || [];
-    return Array.isArray(rows) ? rows : [];
-  } catch (_err) { return []; }
+  const res = await apiFetch(wire.ROUTES.pending, {
+    method: 'GET', workspaceId: wsId, timeoutMs: HTTP_TIMEOUT_MS, noStore: true,
+  });
+  if (!res || !res.ok) return [];
+  const body = await res.json().catch(() => null);
+  const rows = (body && (body.directives || body.rows)) || [];
+  return Array.isArray(rows) ? rows : [];
 }
 
-/** One promise per workspace, in list order; at most `limit` GETs in flight at once. */
+/**
+ * One promise per workspace, in list order; at most `limit` GETs in flight at once.
+ *
+ * ⚠ **EVERY SLOT SETTLES, OR THE WHOLE LANE STOPS** (Review 26). `runPass` awaits the slots in
+ * order and `poll()` is single-flight, so ONE unsettled slot is not one missed workspace: the pass
+ * never finishes, `passInFlight` never clears, and every 60s tick from then on joins the dead pass.
+ * The lane that is supposed to cover a realtime outage would go quiet permanently, with nothing in
+ * the log and no error — and this is the lane that has to work when push does not. So the read is
+ * wrapped HERE rather than inside `fetchPending`: one catch, at the only place that owns a slot,
+ * and `void worker()` can never leave an unhandled rejection either.
+ */
 function fetchAllBounded(list, limit) {
   const slots = list.map(() => { let resolve; const p = new Promise((r) => { resolve = r; }); return { p, resolve }; });
   let next = 0;
   async function worker() {
     while (next < list.length) {
       const i = next++;
-      slots[i].resolve(await fetchPending(list[i]));
+      const wsId = list[i];
+      let rows = [];
+      try {
+        rows = await fetchPending(wsId);
+        if (pollFaulted.delete(wsId)) diag('launch-directives: backstop read recovered for', wsId);
+      } catch (err) {
+        // Edge-triggered, like the push-DOWN line: a workspace that is failing every minute
+        // must not bury the log one line a tick.
+        if (!pollFaulted.has(wsId)) {
+          pollFaulted.add(wsId);
+          diag('launch-directives: backstop read FAULTED for', wsId, '—', (err && err.message) || err);
+        }
+        rows = [];
+      }
+      slots[i].resolve(rows);
     }
   }
   for (let k = 0; k < Math.min(limit, list.length); k++) void worker();
@@ -276,6 +305,7 @@ function refresh() {
 function stop() {
   armed = false;
   pollDegraded.clear();
+  pollFaulted.clear();
   passInFlight = null; // a stale pass never answers the next start's poll
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   decided.clear();

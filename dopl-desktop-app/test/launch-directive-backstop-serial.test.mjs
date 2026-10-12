@@ -8,7 +8,9 @@
 //   2. so 21 timed-out GETs all START inside the TTL;
 //   3. a pass is single-flight: a tick during a pass joins it; the next pass starts fresh;
 //   4. `handle()` still runs one row at a time, in WORKSPACE order, even when a later
-//      workspace's GET answers first.
+//      workspace's GET answers first;
+//   5. a REJECTING read settles its slot anyway (Review 26), because an unsettled slot stops the
+//      whole lane for good, not just that workspace.
 //
 // Run: `node --test dopl-desktop-app/test/launch-directive-backstop-serial.test.mjs`
 
@@ -45,6 +47,7 @@ function load(workspaces, fetchFor, rowsFor = () => []) {
   const clock = { now: 0 };
   const gets = [];
   const claims = [];
+  const logged = [];
   let inFlight = 0;
   let maxInFlight = 0;
   const stub = (id) => {
@@ -62,7 +65,7 @@ function load(workspaces, fetchFor, rowsFor = () => []) {
     if (id === "./realtime") return { setDirectives: () => {}, isWorkspaceHealthy: () => false };
     if (id === "./channel-prefs") return { getOrchestratorLaunch: () => true };
     if (id === "./launch-directive-wire") return wire;
-    if (id === "./diag") return { diag: () => {} };
+    if (id === "./diag") return { diag: (...a) => logged.push(a.map(String).join(" ")) };
     if (id === "./launch-directive-calls") {
       return { claim: async (d) => { claims.push(d.id); return null; }, decide: async () => true, HTTP_TIMEOUT_MS };
     }
@@ -77,7 +80,13 @@ function load(workspaces, fetchFor, rowsFor = () => []) {
     watchedChannel: () => null,
     workspaces: () => workspaces,
   });
-  return { api, gets, claims, clock, maxInFlight: () => maxInFlight };
+  const deps = {
+    getUserId: () => ME,
+    launch: async () => ({}),
+    watchedChannel: () => null,
+    workspaces: () => workspaces,
+  };
+  return { api, gets, claims, logged, clock, deps, maxInFlight: () => maxInFlight };
 }
 
 /**
@@ -173,6 +182,96 @@ test("handle() runs rows in WORKSPACE order, even when a later workspace answers
   } finally { api.stop(); }
   assert.deepEqual(claims, [did(1), did(2), did(3), did(4)],
     "the funnel saw every row, one at a time, in workspace then row order");
+});
+
+/**
+ * ⚠ **AN UNSETTLED SLOT IS NOT ONE MISSED WORKSPACE — IT IS THE LANE, FOR GOOD** (Review 26).
+ * `runPass` awaits the slots in order and `poll()` is single-flight, so a slot that never settles
+ * hangs the pass, leaves `passInFlight` set, and makes every later tick join the dead pass. The
+ * read is therefore wrapped in `worker()`, the only place that owns a slot.
+ *
+ * These cases REACH that catch: `fetchPending` deliberately does not swallow a rejection, so an
+ * apiFetch that rejects arrives at `worker()`. Measured before the fix: with the catch inside
+ * `fetchPending` instead, all three of these PASSED while the hazard was live — the guard was
+ * unreachable and a test written against it was vacuous.
+ */
+function raceHang(promise, label) {
+  let timer;
+  const hung = new Promise((r) => { timer = setTimeout(() => r("HUNG"), 2000); });
+  return Promise.race([promise.then(() => "completed", () => "rejected"), hung])
+    .then((outcome) => { clearTimeout(timer); assert.equal(outcome, "completed", label); });
+}
+
+test("a REJECTING read settles its slot: the pass completes and every other workspace is handled", async () => {
+  const bad = ws(2);
+  const list = [ws(1), bad, ws(3)];
+  const rows = {
+    [ws(1)]: [row({ id: did(1), workspace_id: ws(1) })],
+    [ws(3)]: [row({ id: did(4), workspace_id: ws(3) })],
+  };
+  const { api, gets, claims, logged } = load(
+    list,
+    async (id) => { if (id === bad) throw new Error("socket hangup"); },
+    (id) => rows[id] || []
+  );
+  try {
+    await raceHang(api.poll(), "a rejecting GET must not hang the pass");
+    assert.deepEqual(gets.map((g) => g.wsId), list, "every workspace was still read");
+    assert.deepEqual(claims, [did(1), did(4)],
+      "the good workspaces are handled, in workspace order, and the faulted one contributes none");
+    assert.equal(logged.filter((l) => l.includes("backstop read FAULTED")).length, 1,
+      "the fault is named once, with the workspace");
+    assert.ok(logged.some((l) => l.includes("backstop read FAULTED") && l.includes(bad)));
+  } finally { api.stop(); }
+});
+
+test("a REJECTING read does not poison the next tick: a fresh pass runs", async () => {
+  const bad = ws(1);
+  const list = [bad, ws(2)];
+  const { api, gets } = load(list, async (id) => { if (id === bad) throw new Error("socket hangup"); });
+  try {
+    const first = api.poll();
+    await raceHang(first, "pass 1 must finish");
+    const second = api.poll();
+    assert.notEqual(second, first, "the dead pass is not what the next tick joins");
+    await raceHang(second, "pass 2 must finish");
+    assert.equal(gets.length, 4, "both workspaces were polled again on the next tick");
+  } finally { api.stop(); }
+});
+
+test("the FAULT line is edge-triggered, and the recovery is logged once", async () => {
+  let failing = true;
+  const list = [ws(1)];
+  const { api, logged } = load(list, async () => { if (failing) throw new Error("socket hangup"); });
+  try {
+    await raceHang(api.poll(), "tick 1");
+    await raceHang(api.poll(), "tick 2");
+    assert.equal(logged.filter((l) => l.includes("backstop read FAULTED")).length, 1,
+      "two failing ticks, ONE line — not one a minute");
+    failing = false;
+    await raceHang(api.poll(), "tick 3");
+    assert.equal(logged.filter((l) => l.includes("backstop read recovered")).length, 1,
+      "the recovery is named once");
+    await raceHang(api.poll(), "tick 4");
+    assert.equal(logged.filter((l) => l.includes("backstop read recovered")).length, 1,
+      "and not repeated while it stays healthy");
+  } finally { api.stop(); }
+});
+
+test("stop() drops the fault edges, so a re-armed watcher names a still-failing workspace again", async () => {
+  // ⚠ Same reason `stop()` clears `pollDegraded`: a consumed edge must not outlive the watcher,
+  // or after a restart a workspace that is STILL failing never says so again.
+  const list = [ws(1)];
+  const h = load(list, async () => { throw new Error("socket hangup"); });
+  await raceHang(h.api.poll(), "tick 1");
+  assert.equal(h.logged.filter((l) => l.includes("backstop read FAULTED")).length, 1);
+  h.api.stop();
+  h.api.start(h.deps);
+  try {
+    await raceHang(h.api.poll(), "tick after the restart");
+    assert.equal(h.logged.filter((l) => l.includes("backstop read FAULTED")).length, 2,
+      "the re-armed watcher names the still-failing workspace again");
+  } finally { h.api.stop(); }
 });
 
 // Moved here from launch-directives.test.mjs (that file was at the 480-line split threshold):
