@@ -10,10 +10,15 @@
  * ⚠ `credentials` is deliberately NOT shared and is pinned per transport: this
  * one sends the cookie explicitly when `VITE_API_BASE_URL` names a cross-origin
  * dev API, and keeps the stricter `same-origin` otherwise.
+ *
+ * ⚠ EVERY EXPECTATION HERE IS A LITERAL, never a call to the helper under test.
+ * Comparing `init.headers` against `requestHeaders(…)` is a tautology: it
+ * compares the shared function with itself and stays GREEN when that function
+ * is mutated (measured — dropping the `x-workspace-id` line left this suite
+ * 6/6 passing). Spell the wire out.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normalizeFetchResponse, requestHeaders } from "@/shared/api/api-envelope";
 import { sendRequest } from "./api-transport";
 
 /** No `window.dopl` → `getBridge()` is null → the fetch transport runs. */
@@ -46,15 +51,29 @@ describe("fetchTransport sends the shared headers", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] ?? {};
-    expect(init.headers).toEqual(
-      requestHeaders({
-        workspaceId: "ws-7",
-        body: { a: 1 },
-        expectedUpdatedAt: "2026-10-12T00:00:00Z",
-      })
-    );
+    expect(init.headers).toEqual({
+      "x-workspace-id": "ws-7",
+      "content-type": "application/json",
+      "x-updated-at": "2026-10-12T00:00:00Z",
+    });
     // The field the two transports legitimately disagree on.
     expect(init.credentials).toBe("same-origin");
+  });
+
+  it("content-type keys off body PRESENCE, so an explicit null still sends it", async () => {
+    noBridge();
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+      status: 200,
+      statusText: "OK",
+      json: async () => ({}),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await sendRequest({ path: "/api/thing", method: "POST", body: null });
+
+    expect((fetchMock.mock.calls[0]?.[1] ?? {}).headers).toEqual({
+      "content-type": "application/json",
+    });
   });
 
   it("asks for no headers when the request carries none", async () => {
@@ -126,18 +145,22 @@ describe("fetchTransport normalizes the answer the shared way", () => {
     });
   });
 
-  it("answers exactly what the shared normalizer answers for the same input", async () => {
+  it("a non-2xx body is still parsed and handed on, envelope intact", async () => {
     noBridge();
-    const makeRes = () =>
-      ({
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
         status: 404,
         statusText: "Not Found",
         json: async () => ({ error: { code: "NOPE", message: "nope" } }),
-      }) as unknown as Response;
-    vi.stubGlobal("fetch", vi.fn(async () => makeRes()));
-
-    expect(await sendRequest({ path: "/api/thing", method: "GET" })).toEqual(
-      await normalizeFetchResponse(makeRes())
+      }))
     );
+
+    expect(await sendRequest({ path: "/api/thing", method: "GET" })).toEqual({
+      status: 404,
+      statusText: "Not Found",
+      hasBody: true,
+      body: { error: { code: "NOPE", message: "nope" } },
+    });
   });
 });

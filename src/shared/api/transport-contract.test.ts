@@ -129,13 +129,13 @@ describe("api-client fetch branch sends the shared contract", () => {
     expect(out).toEqual({ hello: "world" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] ?? {};
-    expect(init.headers).toEqual(
-      requestHeaders({
-        workspaceId: "ws-9",
-        body: { a: 1 },
-        expectedUpdatedAt: "2026-10-12T00:00:00Z",
-      })
-    );
+    // ⚠ A LITERAL, never `requestHeaders(…)`: comparing the wire against the
+    // helper under test compares it with itself and survives its own mutation.
+    expect(init.headers).toEqual({
+      "x-workspace-id": "ws-9",
+      "content-type": "application/json",
+      "x-updated-at": "2026-10-12T00:00:00Z",
+    });
     expect(init.credentials).toBe("same-origin");
   });
 
