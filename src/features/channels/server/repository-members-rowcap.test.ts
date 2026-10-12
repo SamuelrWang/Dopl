@@ -277,6 +277,8 @@ describe("memberCounts — the order and the projection", () => {
       in: () => client,
       order: () => client,
       range: () => client,
+      // The tally RPC is absent (migration unapplied), so the walk runs and meets the page error.
+      rpc: () => Promise.resolve({ data: null, error: { code: "PGRST202", message: "absent" } }),
       then: (resolve: (r: unknown) => void) =>
         resolve({ data: null, error: { code: "42501", message: "denied" } }),
     } as Record<string, unknown>;

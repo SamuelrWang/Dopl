@@ -186,8 +186,13 @@ export async function hasMembership(
  * compute one integer each. The grouped aggregate belongs in a migration and the
  * migration is not this change's to write (§12), so the walk is the INTERIM —
  * it makes the number correct up to the ceiling that was already declared here,
- * which the old single statement never reached. ⚠ When the aggregate lands, this
- * whole body is replaced; the ceiling and the fence are what carry over.
+ * which the old single statement never reached.
+ *
+ * ⚠ **THE AGGREGATE IS WRITTEN NOW, AND THE WALK IS ITS FALLBACK**
+ * (`20261121120000_channel_member_tally_rpc.sql`, cleanup C13): the RPC answers
+ * first and exactly ({@link memberTally}); only when it is ABSENT (PGRST202 /
+ * 42883, the migration not yet applied) does the walk below run, `truncated`
+ * and all. Delete the walk once the migration is applied everywhere.
  *
  * ⚠ **THE ORDER IS NEW AND TOTAL — `channel_id, user_id` IS THE PRIMARY KEY.**
  * This read had no `ORDER BY`, which one statement can afford and a page walk
@@ -208,6 +213,8 @@ export async function memberCounts(
 ): Promise<MemberCounts> {
   const counts = new Map<string, number>();
   if (channelIds.length === 0) return clipMarker(counts, false);
+  const exact = await memberTally(channelIds);
+  if (exact) return clipMarker(exact, false);
   // ⚠ STILL ONE COLUMN. `user_id` is ORDERED on and never selected — the precedent
   // `repository-token-spend.ts` set with `session_key`: ORDER BY reaches any column of the
   // relation, so a total order costs no bytes.
@@ -221,6 +228,36 @@ export async function memberCounts(
     counts.set(row.channel_id, (counts.get(row.channel_id) ?? 0) + 1);
   }
   return clipMarker(counts, truncated);
+}
+
+/** Postgres/PostgREST codes for "that function is not there": the
+ *  `channel_member_tally` migration has not been applied yet. */
+const RPC_MISSING_CODES = new Set(["PGRST202", "42883"]);
+
+/**
+ * EXACT COUNTS, BY POSTGRES — `channel_member_tally`
+ * (`20261121120000_channel_member_tally_rpc.sql`), one row per channel, so no
+ * cap is reachable and the answer is never `truncated`.
+ *
+ * ⚠ **RETURNS `null` WHEN THE FUNCTION IS ABSENT, AND THAT IS NOT AN ERROR.**
+ * The migration ships written, not applied, so code deployed before it must
+ * still answer: {@link memberCounts} degrades to the paged walk and carries its
+ * `truncated`. Any other error throws, as the walk's own read errors do.
+ * ⚠ A channel with no members has no row and so no key, exactly as the walk.
+ */
+async function memberTally(channelIds: string[]): Promise<Map<string, number> | null> {
+  const { data, error } = await supabaseAdmin().rpc("channel_member_tally", {
+    p_channel_ids: channelIds,
+  });
+  if (error) {
+    if (RPC_MISSING_CODES.has((error as { code?: string }).code ?? "")) return null;
+    throw error;
+  }
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{ channel_id: string; member_count: number | string }>) {
+    counts.set(row.channel_id, Number(row.member_count));
+  }
+  return counts;
 }
 
 type MemberInsert = {
