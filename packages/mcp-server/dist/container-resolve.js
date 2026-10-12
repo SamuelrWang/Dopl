@@ -31,6 +31,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.resolveCallAddress = resolveCallAddress;
 exports.ambiguousContainer = ambiguousContainer;
 const call_ref_js_1 = require("./call-ref.js");
+// ⚠ `err` is `respond.ts`'s, not a local copy: this file had a byte-identical
+// one. `gating.ts` beside it still hand-rolls the same object, deliberately —
+// `respond.ts` → `call-ref.ts` → `tool-manifest.ts` → `gating.ts` is a cycle.
+const respond_js_1 = require("./tools/respond.js");
 const narration_js_1 = require("./tools/narration.js");
 const workspace_arg_js_1 = require("./workspace-arg.js");
 const tool_errors_js_1 = require("./tools/tool-errors.js");
@@ -39,9 +43,6 @@ const workspace_directory_js_1 = require("./workspace-directory.js");
  *  the rest. ⚠ A cap, not a page — `knowledge-shared.ts › MAX_LISTED_MATCHES`
  *  carries the argument, and this is the same number for the same reason. */
 const MAX_LISTED_MATCHES = 10;
-function err(text) {
-    return { isError: true, content: [{ type: "text", text }] };
-}
 /**
  * Resolve one call's container.
  *
@@ -67,7 +68,7 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
         // 🔒 R-32 item 4 — a MINT with no address, on a connection that names no
         // container, would land in the home space. Refuse; do not guess.
         if ((0, workspace_arg_js_1.refusesUnaddressedWrite)(tool, op) && activeWorkspace === null) {
-            return { kind: "refusal", response: err((0, workspace_arg_js_1.unaddressedWriteRefusal)(tool, op ?? "")) };
+            return { kind: "refusal", response: (0, respond_js_1.err)((0, workspace_arg_js_1.unaddressedWriteRefusal)(tool, op ?? "")) };
         }
         return { kind: "unaddressed", note: null };
     }
@@ -78,7 +79,7 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
     if (!supplied) {
         return {
             kind: "refusal",
-            response: err(`The \`${argName}\` argument was blank. Pass a container slug or id from \`${(0, call_ref_js_1.toolName)("workspaces.list")}\`, or \`home\` for your home space — or omit it entirely to use this connection's container.`),
+            response: (0, respond_js_1.err)(`The \`${argName}\` argument was blank. Pass a container slug or id from \`${(0, call_ref_js_1.toolName)("workspaces.list")}\`, or \`home\` for your home space — or omit it entirely to use this connection's container.`),
         };
     }
     let resolved;
@@ -90,7 +91,7 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
     catch (e) {
         return {
             kind: "refusal",
-            response: err(`Couldn't validate the \`${argName}\` argument (${(0, narration_js_1.inlineOr)(e instanceof Error ? e.message : String(e), "`no detail reported`")}). Try again, or call without \`${argName}=\`.`),
+            response: (0, respond_js_1.err)(`Couldn't validate the \`${argName}\` argument (${(0, narration_js_1.inlineOr)(e instanceof Error ? e.message : String(e), "`no detail reported`")}). Try again, or call without \`${argName}=\`.`),
         };
     }
     if (!resolved) {
@@ -98,13 +99,13 @@ async function resolveCallAddress(tool, op, args, { directory, activeWorkspace }
             kind: "refusal",
             // ⚠ Caller's own arg, but a raw backtick still escapes this span and puts
             // the tail into narration.
-            response: err(`Container not found: ${(0, narration_js_1.inlineOr)(supplied, "`(unreadable ref)`")}. Call \`${(0, call_ref_js_1.toolName)("workspaces.list")}\` for every container you can reach — workspaces, home channels and your home space alike; \`home\` names the last of those.`),
+            response: (0, respond_js_1.err)(`Container not found: ${(0, narration_js_1.inlineOr)(supplied, "`(unreadable ref)`")}. Call \`${(0, call_ref_js_1.toolName)("workspaces.list")}\` for every container you can reach — workspaces, home channels and your home space alike; \`home\` names the last of those.`),
         };
     }
     if ((0, workspace_directory_js_1.isAmbiguousContainer)(resolved)) {
         return {
             kind: "refusal",
-            response: err(ambiguousContainer(argName, supplied, resolved.ambiguous)),
+            response: (0, respond_js_1.err)(ambiguousContainer(argName, supplied, resolved.ambiguous)),
         };
     }
     return {

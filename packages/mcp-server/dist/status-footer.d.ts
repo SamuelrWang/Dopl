@@ -47,8 +47,8 @@ export declare function requestedFormat(args: unknown): ResponseFormat | undefin
  * the one place the published promise was untrue.
  *
  * ⚠ **THE `note` IS NOT METADATA AND SURVIVES.** It is a fact about what THIS
- * call just did that nothing else reports — a `workspace=` argument that was
- * dropped (`workspace-arg.ts › deprecatedAliasNote`, whose whole value is that
+ * call just did that nothing else reports — a `container=` argument that was
+ * dropped (`workspace-arg.ts › ignoredWorkspaceNote`, whose whole value is that
  * *the ignore is REPORTED, not swallowed*) or a call that went unmetered. A
  * concise response therefore carries a one-line footer when there is something
  * to say and none at all when there is not, which is the smallest honest answer.

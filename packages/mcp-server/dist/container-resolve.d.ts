@@ -26,7 +26,7 @@
  * unaddressed MINT is REFUSED — see `workspace-arg.ts ›
  * UNADDRESSED_WRITE_REFUSALS`.
  */
-import type { ToolResponse } from "./tools/respond.js";
+import { type ToolResponse } from "./tools/respond.js";
 import type { ActiveWorkspaceState, EffectiveWorkspace, WorkspaceDirectory } from "./workspace-directory.js";
 import type { WorkspaceListItem } from "@dopl/client";
 /** The address the caller sent, if any. ⚠ ONE KEY since the alias retired. */

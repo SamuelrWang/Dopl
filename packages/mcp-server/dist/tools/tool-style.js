@@ -1,7 +1,8 @@
 "use strict";
 /**
- * THE HOUSE STYLE — ⚠ **ONE description shape for all thirteen tools, rendered
- * rather than written** (A14, 2026-09-02).
+ * THE HOUSE STYLE — ⚠ **ONE description shape for every tool on this surface,
+ * rendered rather than written** (A14, 2026-09-02). Eleven today; the count is
+ * the number of {@link composeDescription} callers and is not restated here.
  *
  * ⚠ WHY A RENDERER AND NOT A CONVENTION. Every description on this surface was
  * hand-written prose, and each grew the way honest prose grows: a rule somebody

@@ -1,7 +1,8 @@
 "use strict";
 /**
- * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Two: the channels
- * doctrine, and the knowledge one.
+ * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Three: the channels
+ * doctrine, the knowledge one, and the displays one. {@link RESOURCES} is the
+ * list; a reader counting them reads that table, never this sentence.
  *
  * ⚠ WHY A RESOURCE AND NOT A LONGER DESCRIPTION (T10/T82, 2026-09-02). A tool
  * description is PUSHED — every connected client pays for it on every

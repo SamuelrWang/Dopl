@@ -7,12 +7,9 @@
  * ⚠ **THERE IS NO DEFAULT WORKSPACE HERE ANY MORE** (B10/B13). It held the
  * "you belong to N workspaces, name one" refusal and the sole-membership
  * auto-target; both are gone, and the server resolves the caller's own
- * container when a call names none. A blank `workspace=` is still rejected by
- * the caller in `registrar.ts` — fail-closed on an argument that was PASSED is
- * a different question from guessing one that was not.
- *
- * ⚠ A FAILED boot directory load does not seed the cache, so the first
- * resolution retries instead of serving a bogus empty list for a full TTL.
+ * container when a call names none. A blank `container=` is still rejected, by
+ * `container-resolve.ts` — fail-closed on an argument that was PASSED is a
+ * different question from guessing one that was not.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HOME_ADDRESS = void 0;
@@ -159,24 +156,6 @@ function createWorkspaceDirectory(client, options = {}) {
     };
 }
 /**
- * 🔒 **WHAT KIND OF CONTAINER THIS ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
- * (F-564).
- *
- * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
- * predicate answers "does this belong in the rail"; its NEGATION was read as
- * "therefore a home channel" at four sites in this package, which was correct
- * by accident while `standard` and `link` were the only kinds and stops being
- * correct the moment `20260920120000` mints a `home` container for every
- * user at once. A `default` arm that says "workspace" also fails safe for a
- * kind added later: an unknown container is not silently advertised as somebody
- * else's room.
- *
- * ⚠ **RENDERED, NEVER INFERRED BY THE READER.** A container and a workspace are
- * different things to the operator, and every surface that lists these rows
- * prints this label — which is what lets `getWorkspaceList()` stop hiding
- * containers (B10) without ever calling one a workspace.
- */
-/**
  * How a kind is RENDERED in a directory row. The Home space is the one
  * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
  * Workspace" read as the home space, and the home space read as a workspace),
@@ -200,9 +179,26 @@ function containerKindLabel(kind) {
     return CONTAINER_KIND_LABELS[kind];
 }
 /**
- * ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
+ * 🔒 **WHAT KIND OF CONTAINER A ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
+ * (F-564) — ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
  * check-role-drift.ts › checkContainerKind` holds it against the `workspaces.
- * kind` `CHECK` in both directions.
+ * kind` `CHECK` in both directions. ⚠ It SLICES THIS FILE for the declaration
+ * below (comments stripped first, because this docblock once became the anchor),
+ * so renaming or moving it makes that gate THROW rather than quietly pass.
+ *
+ * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
+ * predicate answers "does this belong in the rail"; its NEGATION was read as
+ * "therefore a home channel" at four sites in this package, which was correct
+ * by accident while `standard` and `link` were the only kinds and stops being
+ * correct the moment `20260920120000` mints a `home` container for every
+ * user at once. A `default` arm that says "workspace" also fails safe for a
+ * kind added later: an unknown container is not silently advertised as somebody
+ * else's room.
+ *
+ * ⚠ **RENDERED, NEVER INFERRED BY THE READER.** A container and a workspace are
+ * different things to the operator, and every surface that lists these rows
+ * prints this kind — which is what lets `getWorkspaceList()` stop hiding
+ * containers (B10) without ever calling one a workspace.
  */
 function containerKind(row) {
     switch (row.kind ?? "standard") {
