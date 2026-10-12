@@ -398,23 +398,23 @@
   --raised-light-focus: var(--raised-light-bevel), var(--focus-halo);
 
   /* App-shell chrome palette. Duplicates of semantic tokens are ALIASED, not
-     re-valued, to keep one source; purple/lavender/orange/line have no
-     semantic equivalent.
+     re-valued, to keep one source; `--line` has no semantic equivalent.
+     ⚠ It read "purple/lavender/orange/line" until 2026-10-12, when those three
+     named hues were deleted as unread (Samuel's call, #4201).
      ⚠ `--rail: #2c3640` STOOD HERE AND IS DELETED (2026-08-30). It was the old
      app frame, had had ZERO `var(--rail)` consumers since the shell went gray
      on 2026-08-11, and was a second near-identical dark slab one hex off
      `--home-frame` (drift ledger ASK-31). Samuel's ruling that day made the
      home frame THE frame — one token, not two — so this is a delete, not an
-     alias. `--rail-tile`/`--rail-tile-hi` are a different colour: left alone. */
+     alias. `--rail-tile` is a different colour and is left alone; its
+     `--rail-tile-hi` companion, named here until 2026-10-12, went in the X01
+     dead-token sweep with zero readers. */
   --rail-tile: #3a4651;
   --bg: #d6dee7;
   --panel: var(--bg-base);
   --ink: var(--text-primary);
   --ink-soft: var(--text-secondary);
   --line: #d6dde5;
-  --purple: #6f93bf;
-  --lavender: #e3eaf2;
-  --orange: #d8bca6;
   --black: var(--surface-cta);
 
   /* Panel shine + selection — consumed by canvas-panel INLINE styles. */
@@ -433,11 +433,11 @@
 
   --radius: 0.625rem;
 
-  /* ── Legacy named palette ─────────────────────────────────────── */
+  /* ── Legacy named palette, down to its one live member ─────────── */
+  /* `--forest` is the BODY INK (`body { color: var(--forest) }` below), which
+     is the only reason it outlived the six named hues deleted beside it on
+     2026-10-12 (Samuel's call, #4201). Do not add a seventh. */
   --forest: #e0e0e0;      /* primary text */
-  --coral: #FF8C69;       /* alerts / errors */
-  --mint: #9EFFBF;        /* success */
-  --gold: #F4D35E;        /* warnings */
 
   /* IS the frame colour, read from it, so the body behind the shell matches —
      else a dark flash on route transitions. Was a hand-copied `#2c3640`, one

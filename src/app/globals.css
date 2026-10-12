@@ -310,9 +310,6 @@
   --ink: var(--text-primary);
   --ink-soft: var(--text-secondary);
   --line: #d6dde5;
-  --purple: #6f93bf;
-  --lavender: #e3eaf2;
-  --orange: #d8bca6;
   --black: var(--surface-cta);
 
   /* Panel shine + selection. */
@@ -331,11 +328,11 @@
   /* Radius base */
   --radius: 0.625rem;
 
-  /* Legacy accent palette */
+  /* Legacy accent palette, down to its one live member: `--forest` is the
+     BODY INK (`@layer base › body { color: var(--forest) }` below), which is
+     the only reason it outlived the six named hues deleted beside it on
+     2026-10-12 (Samuel's call, #4201). Do not add a seventh. */
   --forest: #e0e0e0;
-  --coral: #FF8C69;
-  --mint: #9EFFBF;
-  --gold: #F4D35E;
 
   /* The frame colour by reference, or the body flashes a different dark on route transitions. */
   --body-bg: var(--home-frame);
