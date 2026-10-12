@@ -105,3 +105,34 @@ export function citationScrollTargetId(
 ): string {
   return rows.find((row) => row.seq === seq)?.id ?? `seq:${seq}`;
 }
+
+/**
+ * **THE SEQ A MISS SENTINEL NAMES** — the inverse of {@link citationScrollTargetId},
+ * and `null` for a real message id (2026-10-12).
+ *
+ * ⚠ **THIS IS WHAT MAKES THE MISS ACTIONABLE RATHER THAN MERELY HONEST.** The
+ * sentinel was built to carry a miss as far as the notice
+ * (`message-pane.tsx › missing`) so a click could never do nothing at all. It
+ * turns out to carry enough to FIX the miss too: the seq is right there in the
+ * target, so a host that can fetch older history knows exactly what it is
+ * hunting. `use-jump-page-back.ts` is that host, and this is how it reads the
+ * quarry off a target it did not mint.
+ *
+ * ⚠ **ANCHORED, AND IT HAS TO BE.** A real message id is a UUID, and nothing
+ * stops one containing the substring `seq:`; an unanchored read could mistake a
+ * loaded row for a miss and page backwards hunting a message already on screen.
+ * The anchors mean exactly the shape {@link citationScrollTargetId} mints matches,
+ * and nothing else does.
+ *
+ * ⚠ **THE DIGIT FLOOR IS DELIBERATELY ABSENT HERE.** `MESSAGE_REF_TOKEN_RE`
+ * refuses `#1` because a one-digit citation in PROSE is a rank or a list item —
+ * a question about authored text. This function reads a target the code itself
+ * minted, where `seq:1` is simply message one, so re-applying the prose rule
+ * would strip a legitimate target.
+ */
+export function scrollTargetSeq(messageId: string): number | null {
+  const m = /^seq:(\d+)$/.exec(messageId);
+  if (m === null) return null;
+  const seq = Number(m[1]);
+  return Number.isSafeInteger(seq) && seq > 0 ? seq : null;
+}

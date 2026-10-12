@@ -283,6 +283,33 @@ export const CHANNEL_TRANSCRIPT_LINE_BUDGET = 300;
  */
 export const CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS = 60;
 
+/**
+ * **HOW MANY OLDER PAGES A JUMP MAY WALK BEFORE IT GIVES UP AND SAYS SO**
+ * (`use-jump-page-back.ts`, 2026-10-12).
+ *
+ * ⚠ **A BOUND IS NOT OPTIONAL HERE, AND IT IS COUNTED IN ATTEMPTS RATHER THAN
+ * SECONDS.** The hunt is driven by `hasOlder`, which the SERVER answers
+ * (§ `hasMore` — never re-derived from `rows.length`), so a channel that keeps
+ * answering "yes" would page to the beginning of its history on one click. An
+ * attempt count is also the honest unit for the two failure modes a clock
+ * misreads: a page that comes back EMPTY and a page that FAILS both change no
+ * rows, and both are attempts.
+ *
+ * ⚠ **20 PAGES IS ~860 ROWS** at the 43-row yield the line budget actually
+ * returns (`CHANNEL_TRANSCRIPT_LINE_BUDGET` / `estimateMessageLines`), which
+ * covers the whole of every channel in production except one: the Dopl channel
+ * held 2,421 messages on 2026-10-12. A citation older than that reaches the
+ * honest notice instead of hanging — which is the same answer it gets today,
+ * arrived at after trying.
+ *
+ * ⚠ **IT IS A CEILING ON WORK, NOT A PROMISE ABOUT DEPTH.** Raising it makes a
+ * deep citation reachable at the cost of up to that many sequential reads on one
+ * click; the real fix for depth is a server-side anchored read ("the page
+ * containing message N"), which is scoped separately and would retire this
+ * constant rather than tune it.
+ */
+export const JUMP_PAGE_BACK_MAX_PAGES = 20;
+
 /** Await long-poll: hard cap on the client-requested timeout (ms). */
 export const MAX_AWAIT_TIMEOUT_MS = 50_000;
 

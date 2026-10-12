@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { PaneHeader } from "./message-pane-header";
 import { useStickToBottom } from "./use-stick-to-bottom";
+import { useJumpPageBack } from "./use-jump-page-back";
 import { useLoadOlder } from "./use-load-older";
 import { Transcript } from "./transcript";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
@@ -203,22 +204,47 @@ export function ChannelsMessagePane({
   // Citation ceiling: what the pane holds (`rows`, not `visibleRows`); null when empty.
   const newestSeq = rows.length > 0 ? (rows[rows.length - 1]?.seq ?? null) : null;
 
+  // 🔒 A TARGET OFF THE LOADED PAGE PAGES BACK INSTEAD OF STOPPING AT THE NOTICE
+  // (Samuel, 2026-10-12). ⚠ A DRIVER, NOT A SECOND MECHANISM: it only decides
+  // whether to ask `onLoadOlder` for another page, and re-resolves the target
+  // against the rows that arrive. The landing below is unchanged and still owns
+  // the scroll, the flash and the nonce.
+  const pageBack = useJumpPageBack({
+    scrollTarget,
+    rows,
+    hasOlder,
+    loadingOlder,
+    onLoadOlder,
+  });
+
   // The flash is derived: a target flashes until the timeout spends its nonce.
   const [spentNonce, setSpentNonce] = useState(0);
   const live = scrollTarget !== null && scrollTarget.nonce !== spentNonce;
+  // ⚠ `pageBack.targetId`, NOT `scrollTarget.messageId`: a citation that missed
+  // carries the `seq:<n>` SENTINEL, and after a page brings its row in the target
+  // string still says `seq:<n>`. Re-resolving is what lets the hunt actually land.
   // Answered from `rows`, not the DOM, so the notice needs no setState in an effect.
-  const loaded = live && rows.some((row) => row.id === scrollTarget.messageId);
-  const flashId = loaded ? scrollTarget.messageId : null;
+  const loaded = live && pageBack.found;
+  const flashId = loaded ? pageBack.targetId : null;
   // Not while loading: "older than the loaded history" needs a finished transcript.
-  const missing = live && !loading && !loaded;
+  // ⚠ **AND NOT WHILE HUNTING**: mid-hunt is neither a hit nor a miss, and saying
+  // "older than the loaded history" while actively loading that history is both
+  // wrong and the flicker Samuel asked us to avoid.
+  const missing = live && !loading && !loaded && !pageBack.hunting;
 
   // Post-render, so a view swap's new transcript is already in the DOM.
   useEffect(() => {
     // Spending the nonce against an unloaded transcript would lose the navigation.
-    if (!scrollTarget || loading) return;
-    const row = scrollerRef.current?.querySelector(
-      `[data-message-id="${scrollTarget.messageId}"]`
-    );
+    // ⚠ **`hunting` IS IN THIS GUARD FOR THE SAME REASON `loading` IS, AND IT IS
+    // THE LOAD-BEARING HALF OF THE WHOLE FEATURE.** Without it the first page
+    // settles, this effect finds no row, spends the nonce on `MISSING_NOTICE_MS`,
+    // and `live` goes false — killing the hunt after exactly one page.
+    if (!scrollTarget || loading || pageBack.hunting) return;
+    const row = pageBack.targetId
+      ? scrollerRef.current?.querySelector(
+          `[data-message-id="${pageBack.targetId}"]`
+        )
+      : null;
     if (row) {
       // A deliberate landing in history is a reading position; unpin so the next
       // message does not drag the reader back out of it.
@@ -237,7 +263,7 @@ export function ChannelsMessagePane({
       row ? FLASH_MS : MISSING_NOTICE_MS
     );
     return () => clearTimeout(timer);
-  }, [scrollTarget, loading, releasePin]);
+  }, [scrollTarget, loading, releasePin, pageBack.hunting, pageBack.targetId]);
 
   return (
     // `contain: inline-size` stops wide content (a long code line) widening the column;
