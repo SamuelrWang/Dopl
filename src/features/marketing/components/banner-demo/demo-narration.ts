@@ -35,7 +35,7 @@ const dm = (
     kind: lane,
     lane,
     text,
-  } as DesktopNarrationEntry,
+  },
 });
 
 /**
@@ -91,29 +91,23 @@ const inbound = (
       text: message.body,
       senderName,
       /**
-       * 🔴 **THE BANNER'S PAINT CARRIER, WRITTEN AHEAD OF THE FIELDS EXISTING**
-       * (@received-banner-color's shape, confirmed 2026-10-12; committed on
-       * `ui/received-banner-color`, which is NOT merged yet).
+       * **THE BANNER'S PAINT CARRIER** (`ui/received-banner-color`, merged 2026-10-12).
        *
-       * ⚠ **INERT TODAY AND THAT IS THE POINT.** `DesktopNarrationEntry` on this branch
-       * has no `authorKind`, `senderAgentName` or `senderColor`, so nothing reads these
-       * and the banner renders exactly as it does now. Writing them here means the
-       * human-versus-agent colouring arrives with the MERGE rather than with a follow-up
-       * edit, and that the demo is one of the things proving the new fields work.
+       * ⚠ **THE `as` CAST IS GONE, WHICH WAS THE WHOLE POINT OF THE FOLLOW-UP.** These
+       * three fields were written here before they existed on `DesktopNarrationEntry`,
+       * admitted by a cast, with three probes standing in for the compiler. The fields
+       * have landed, so the cast is deleted and the TYPE now checks the shape — a
+       * misspelled key is a build error rather than a pill that quietly never paints.
        *
-       * ⚠ **THE `as` CAST IS WHAT ADMITS THEM**, and it was already here for the lane
-       * fields. ⚠ When the branch lands, DELETE THE CAST: the compiler should be the thing
-       * that checks this shape, and until the cast goes it is not.
-       *
-       * ⚠ **THE GATE IS MIRRORED, NOT RE-DECIDED.** The reader drops `senderAgentName` and
-       * `senderColor` unless `authorKind === "agent"`, so this omits them on a member's
-       * post rather than sending values it knows will be discarded.
+       * ⚠ **THE GATE IS MIRRORED, NOT RE-DECIDED.** The reader drops `senderAgentName`
+       * and `senderColor` unless `authorKind === "agent"`, so this omits them on a
+       * member's post rather than sending values it knows will be discarded.
        */
       authorKind: fromAgent ? "agent" : "user",
       ...(fromAgent
         ? { senderAgentName: senderName, senderColor: agentColor ?? undefined }
         : {}),
-    } as DesktopNarrationEntry,
+    },
   };
 };
 

@@ -312,39 +312,38 @@ describe("4. the agent view is fed an inbound lane", () => {
   });
 
   /**
-   * **THE PAINT CARRIER** (@received-banner-color's shape, 2026-10-12). The fields do not
-   * exist on `DesktopNarrationEntry` on this branch yet, so these read through a cast and
-   * assert the SHAPE only.
+   * **THE PAINT CARRIER, NOW ASSERTED ON THE PAINT** (`ui/received-banner-color` merged
+   * 2026-10-12).
    *
-   * ⚠ **AFTER THAT BRANCH MERGES, THESE BECOME THE PAINT ASSERTION**: render the lane and
-   * check `data-stream-inbound-paint` is `human` for the member's post and `agent` for each
-   * agent's. Until then this is the strongest thing available, and it is worth having —
-   * without it the three fields are write-only and nothing would notice a typo in a key.
+   * ⚠ **THESE REPLACED THREE SHAPE PROBES, AND THE SHAPE PROBES WERE A STAND-IN FOR THE
+   * COMPILER.** The three carrier fields were written before they existed on
+   * `DesktopNarrationEntry`, admitted by an `as` cast, so nothing but a test could have
+   * caught a misspelled key. The cast is deleted and the type checks the shape now, which
+   * frees these to assert the thing that actually matters: which weight the card DRAWS.
+   *
+   * ⚠ `data-stream-inbound-paint` is the component's own test vocabulary
+   * (`agent-stream-inbound-box.tsx`: "read, never styled on"), so this asserts through the
+   * contract it publishes rather than by sniffing a colour out of a style attribute.
    */
-  describe("the banner's paint carrier", () => {
+  describe("the banner's paint", () => {
     const inbound = entries.filter((e) => e.lane === "inbound");
-    /** The fields land with the banner branch; read through a cast until they do. */
-    const carrier = (entry: (typeof inbound)[number]) =>
-      entry as unknown as {
-        authorKind?: string;
-        senderAgentName?: string;
-        senderColor?: string;
-      };
+
+    it("has an arrival to paint at all", () => {
+      expect(inbound.length).toBeGreaterThan(0);
+    });
 
     it("says whether every arrival came from a member or an agent", () => {
-      expect(inbound.length).toBeGreaterThan(0);
       for (const entry of inbound) {
-        expect(["user", "agent"]).toContain(carrier(entry).authorKind);
+        expect(["user", "agent"]).toContain(entry.authorKind);
       }
     });
 
     it("carries a name and a bank colour on an agent's arrival", () => {
-      const fromAgents = inbound.filter((e) => carrier(e).authorKind === "agent");
+      const fromAgents = inbound.filter((e) => e.authorKind === "agent");
       expect(fromAgents.length).toBeGreaterThan(0);
       for (const entry of fromAgents) {
-        const { senderAgentName, senderColor } = carrier(entry);
-        expect((senderAgentName ?? "").trim()).not.toBe("");
-        expect(isAgentColorKey(senderColor), `${senderColor}`).toBe(true);
+        expect((entry.senderAgentName ?? "").trim()).not.toBe("");
+        expect(isAgentColorKey(entry.senderColor), `${entry.senderColor}`).toBe(true);
       }
     });
 
@@ -353,9 +352,9 @@ describe("4. the agent view is fed an inbound lane", () => {
       // whatever arrivals exist rather than requiring one of each: an entry claiming
       // `user` must carry neither agent field. It becomes load-bearing again the moment
       // a human-sent arrival is scripted, which is why it is not deleted.
-      for (const entry of inbound.filter((e) => carrier(e).authorKind === "user")) {
-        expect(carrier(entry).senderAgentName).toBeUndefined();
-        expect(carrier(entry).senderColor).toBeUndefined();
+      for (const entry of inbound.filter((e) => e.authorKind === "user")) {
+        expect(entry.senderAgentName).toBeUndefined();
+        expect(entry.senderColor).toBeUndefined();
       }
       // The scene must still feed the lane something, or this file proves nothing.
       expect(inbound.length).toBeGreaterThan(0);

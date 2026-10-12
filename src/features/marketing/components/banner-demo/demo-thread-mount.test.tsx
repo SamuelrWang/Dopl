@@ -26,6 +26,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { mentionSlug } from "@/features/channels/lib/mentions";
 import { DemoScene } from "./demo-scene";
 import { stepIndex } from "./demo-steps";
 import {
@@ -154,5 +155,60 @@ describe("4. the cursor's agent target is the one the private chat belongs to", 
       first,
       `${name} is not among the agent rows in thread view`
     ).toBeTruthy();
+  });
+});
+
+/**
+ * **THE BANNER'S PAINT, ASSERTED ON THE RENDERED CARD** (`ui/received-banner-color`
+ * merged 2026-10-12; @cleanup-orchestrator: "turn the 3 shape probes into
+ * `data-stream-inbound-paint` assertions").
+ *
+ * The shape probes live in `demo-script.test.ts` and now read typed fields rather than a
+ * cast. This is the other half: mount the agent view and check which weight the card
+ * actually draws, through the component's own published test attribute.
+ *
+ * ⚠ **v3 DRAWS ONLY THE AGENT WEIGHT, AND THAT IS THE STORY.** The opened agent is a
+ * coder its orchestrator launched and briefed, so the only thing that arrives in its
+ * private lane is another agent's message. There is no human-sent arrival to paint
+ * `human`, and inventing one would be a line nobody approved. The `human` case stays
+ * covered by the product's own `agent-stream-inbound-weight.test.tsx`.
+ */
+describe("5. the inbound banner draws the sending agent's weight", () => {
+  const AT_PRIVATE = stepIndex("dm-agent-1");
+
+  const cards = (root: HTMLElement) => [
+    ...root.querySelectorAll("[data-stream-inbound]"),
+  ];
+
+  it("renders an inbound card once the agent view is open", () => {
+    const { container } = render(
+      <DemoScene step={AT_PRIVATE} thread={OPEN_THREAD} agentOpen />
+    );
+    expect(cards(container).length).toBeGreaterThan(0);
+  });
+
+  it("🔒 paints it `agent`, not `human` and not `neutral`", () => {
+    const { container } = render(
+      <DemoScene step={AT_PRIVATE} thread={OPEN_THREAD} agentOpen />
+    );
+    const weights = cards(container).map((c) =>
+      c.getAttribute("data-stream-inbound-paint")
+    );
+    expect(weights.length).toBeGreaterThan(0);
+    for (const weight of weights) expect(weight).toBe("agent");
+  });
+
+  it("names the briefing orchestrator by its HANDLE, which is the merged wording", () => {
+    // ⚠ `@<slug>`, not the display name: an agent arrival reads "Message received from
+    // @cleanup-planner". Asserted as the slug of the identity's own name so a rename
+    // moves both together rather than leaving a literal behind.
+    const { container } = render(
+      <DemoScene step={AT_PRIVATE} thread={OPEN_THREAD} agentOpen />
+    );
+    const planner = AGENT_INDEX.get(AGENT_IDS.planner)?.displayName;
+    expect(planner).toBeTruthy();
+    expect(cards(container)[0].textContent).toContain(
+      `@${mentionSlug(planner as string)}`
+    );
   });
 });
