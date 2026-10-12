@@ -4,6 +4,8 @@ import { getSpaBridge } from "@/shared/lib/spa-bridge";
 import {
   ApiError,
   decodeResponse,
+  normalizeFetchResponse,
+  requestHeaders,
   transportFailure,
   withQuery,
   type ApiRequestOpts,
@@ -65,16 +67,21 @@ export async function apiRequest<T>(
       .catch((err: unknown) => {
         throw transportFailure(err, opts.signal);
       });
-    const out = await (opts.signal
-      ? Promise.race([
-          call,
-          new Promise<never>((_resolve, reject) => {
-            const onAbort = () =>
-              reject(new DOMException("Aborted", "AbortError"));
-            if (opts.signal!.aborted) onAbort();
-            else opts.signal!.addEventListener("abort", onAbort, { once: true });
-          }),
-        ])
+    // ⚠ THE ABORT LISTENER IS REMOVED WHEN THE CALL WINS. `{ once: true }` only
+    // fires it once; it does not detach a listener that never fired, so racing
+    // without this left one listener on the signal per completed request (the
+    // leak `api-transport.ts › ipcTransport` already avoids this way).
+    const signal = opts.signal;
+    const out = await (signal
+      ? new Promise<RawApiResponse>((resolve, reject) => {
+          const onAbort = () =>
+            reject(new DOMException("Aborted", "AbortError"));
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+          call.then(resolve, reject).finally(() => {
+            signal.removeEventListener("abort", onAbort);
+          });
+        })
       : call);
     raw = {
       status: out.status,
@@ -83,16 +90,11 @@ export async function apiRequest<T>(
       body: out.body,
     };
   } else {
-    const headers: Record<string, string> = {};
-    if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
-    if (opts.body !== undefined) headers["content-type"] = "application/json";
-    if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
-
     let res: Response;
     try {
       res = await fetch(url, {
         method: opts.method ?? "GET",
-        headers,
+        headers: requestHeaders(opts),
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
         credentials: "same-origin",
         signal: opts.signal,
@@ -100,27 +102,8 @@ export async function apiRequest<T>(
     } catch (err) {
       throw transportFailure(err, opts.signal);
     }
-    raw =
-      res.status === 204
-        ? { status: res.status, statusText: res.statusText, hasBody: false }
-        : await readJsonBody(res);
+    raw = await normalizeFetchResponse(res);
   }
 
   return decodeResponse<T>(raw);
-}
-
-/** `fetch` half of the normalization: an unparseable body is "no body", which
- *  the decoder turns into `undefined` (2xx) or a statusText ApiError (non-2xx). */
-async function readJsonBody(res: Response): Promise<RawApiResponse> {
-  try {
-    const body = await res.json();
-    return {
-      status: res.status,
-      statusText: res.statusText,
-      hasBody: true,
-      body,
-    };
-  } catch {
-    return { status: res.status, statusText: res.statusText, hasBody: false };
-  }
 }
