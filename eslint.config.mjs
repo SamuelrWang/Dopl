@@ -122,10 +122,16 @@ const eslintConfig = defineConfig([
       // `packages/dopl-client/src/channel-types.ts` was 499 when B2 needed two
       // declaration lines for `channelSeq` / `threadSeq` — 501 with no comment
       // whatsoever, so it took a "split scheduled" entry rather than an inline
-      // disable. It was 550 after grammar B added `cites` and
-      // `ChannelMessageCite`, and is now **452**: the thread subject moved whole
-      // to `channel-thread-types.ts` (133), which re-exports under the original
-      // filename so no importer moved. ⚠ `ChannelMessage` and
+      // disable. B2 left it at **518**; grammar B's `cites` and
+      // `ChannelMessageCite` took it to **550**; it is now **467**, with the
+      // thread subject moved whole to `channel-thread-types.ts` (**125**), which
+      // re-exports under the original filename so no importer moved.
+      // ⚠ **THOSE TWO NUMBERS WERE WRONG IN THE FIRST VERSION OF THIS NOTE**
+      // (Review 37): it said 452 and 133, which were measured MID-SPLIT, before
+      // the session re-export was moved back and the `@dopl/contracts` imports
+      // the thread shapes need were added. Both landed after the measurement and
+      // neither was re-taken — which is this list's own standing instruction,
+      // written three entries down: re-measure before repeating a number. ⚠ `ChannelMessage` and
       // `WorkspaceChannelMessage` STAYED, deliberately — `twin-drift.test.ts`
       // registers the twin by this exact filename, and a parity gate that has to
       // chase a type between files is a gate that gets turned off. Removed, not
