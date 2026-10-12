@@ -5,9 +5,6 @@
  * Single-use constants stay co-located with their consumers.
  */
 
-// ── Context budgets ─────────────────────────────────────────────────
-export const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
-
 // ── Reserved workspace slugs ────────────────────────────────────────
 // Workspace slugs share the URL root with every top-level static route.
 // ⚠ Checked ONLY where a caller sets a slug explicitly:
