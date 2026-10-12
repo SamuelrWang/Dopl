@@ -96,7 +96,7 @@ function waitingLine(item: AccountChannelStatus["waiting"][number]): string {
  * **WHICH LANE PUT THIS ITEM ON THE LIST** (2026-09-18, the `@desktop` tag).
  *
  * ⚠ **A GUESS MAY NOT READ AS LOUD AS A FACT**, which is the same rule the
- * transcript marks follow (`channel-desktop-tag.ts › outsideMark`). `to you` and
+ * transcript marks follow (`channel-render.ts › outsideMark`). `to you` and
  * `to @desktop` both say somebody NAMED this caller; `likely for you` says this
  * server inferred it, and the wording is what keeps the two apart when they sit
  * in one list under one ⚠.

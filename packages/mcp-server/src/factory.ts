@@ -152,10 +152,13 @@ export async function bootServer(
 
   // 🔒 **THE CONNECTION'S CONTAINER IS THE `X-Workspace-Id` HEADER AND NOTHING
   // ELSE** (B10/B13). The sole-membership auto-target and the agent's own
-  // session pin are DELETED: neither is something the caller said on this call,
-  // and the sole-membership rule was a second copy of one the API already
-  // applies (`with-workspace-auth.ts › resolveActiveWorkspace`) — so a
-  // one-workspace caller resolves identically, one layer down, from one rule.
+  // session pin are DELETED: neither is something the caller said on this call.
+  // ⚠ WHAT AN UNBOUND CALL LANDS IN IS THE API'S ANSWER, NOT A GUESS REPEATED
+  // HERE: `workspaces/server/service.ts › resolveActiveWorkspace` resolves the
+  // caller's HOME SPACE when no header names a container (`ensureHomeSpace`),
+  // which is the sentence `server.ts`, `meta-tools.ts` and `workspace-arg.ts`
+  // all serve. It is NOT a sole-membership rule — a caller whose one membership
+  // is a standard workspace still lands in their home space.
   // ⚠ NO HEADER ⇒ NO `X-Workspace-Id` ON THE LOOPBACK, which is what lets the
   // server answer with the caller's own container rather than this process
   // guessing at one.
