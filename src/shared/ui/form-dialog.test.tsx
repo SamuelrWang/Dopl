@@ -23,7 +23,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FormDialog, FormSection, PillChoice, UnderlineField } from "./form-dialog";
@@ -292,14 +292,53 @@ describe("FormDialog — one exit, two buttons, one height", () => {
     );
   });
 
-  it("routes the ×, the backdrop's Escape AND the Discard button to ONE callback", async () => {
-    // ⚠ ONE EXIT, NOT TWO. A × that kept a draft the operator dismissed would be remembering a
-    // decision they undid, and a second callback is how the two come to disagree.
+  /**
+   * ⚠ ONE EXIT, NOT TWO — the invariant the three cases below share, and the reason they assert
+   * the SAME `onDiscard` rather than three callbacks. A × that kept a draft the operator
+   * dismissed would be remembering a decision they undid, and a second callback is how the two
+   * come to disagree.
+   *
+   * ⚠ THEY WERE ONE CASE FIRING ALL THREE EXITS AND ASSERTING `toHaveBeenCalledTimes(3)`, AND IT
+   * FLAKED — 1 in 6 runs on master `9917639e`, measured on a clean control worktree, always
+   * "expected 3 times, got 2". The missing one is always ESCAPE, and the cause is not the test
+   * being fast: `settings-modal/modal-shell.tsx:51-63` attaches the `document` keydown listener
+   * from a PASSIVE EFFECT GATED ON `mounted`, and `mounted` is only set inside a
+   * `requestAnimationFrame` (:32-39). `findByRole` resolves as soon as the button is in the DOM —
+   * the same commit that sets `mounted` — so there is a real window where the dialog is on screen
+   * and Escape is not yet wired. The × and the Discard button are plain `onClick` props, so they
+   * never miss; only the aggregate count could, which is exactly what made the failure look
+   * random and unrelated to whatever change was in flight.
+   *
+   * So each exit is now its own case, in isolation, one call each — and the Escape case WAITS FOR
+   * THE LISTENER rather than hoping. `dialogReady` waits on `document.body.style.overflow`, which
+   * the SAME effect sets on the same line pair as `addEventListener`: observing it is observing
+   * the listener being attached. A sleep or a bare retry would not pin that, and a retry that
+   * re-fires the key could count twice.
+   */
+  const dialogReady = async () => {
+    await screen.findByRole("button", { name: "Discard" });
+    // Fails rather than hangs if that effect ever stops locking scroll — then this helper is
+    // watching the wrong signal and the Escape case below needs a new one.
+    await waitFor(() => expect(document.body.style.overflow).toBe("hidden"));
+  };
+
+  it("routes the Discard button to onDiscard, exactly once", async () => {
     const { onDiscard } = open();
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
-    fireEvent.click(screen.getByRole("button", { name: "Close new thing" }));
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes the × to THE SAME onDiscard, exactly once", async () => {
+    const { onDiscard } = open();
+    fireEvent.click(await screen.findByRole("button", { name: "Close new thing" }));
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes the backdrop's Escape to THE SAME onDiscard, exactly once", async () => {
+    const { onDiscard } = open();
+    await dialogReady();
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(onDiscard).toHaveBeenCalledTimes(3);
+    expect(onDiscard).toHaveBeenCalledTimes(1);
   });
 
   it("DIMS a disabled verb and merely stops a BUSY one", async () => {
