@@ -256,6 +256,39 @@ describe("a failed dictation SAYS SO instead of blinking", () => {
     expect(screen.queryByRole("button", { name: "Microphone blocked" })).toBeNull();
   });
 
+  /**
+   * **CAPTURING IS RED INK, NOT A RED BUTTON** (Samuel, 2026-10-12: *"today it gets a
+   * circle, elevates, and turns red. Make it ONLY the icon turning red: no circle, no
+   * elevation, no background"*).
+   *
+   * ⚠ **THE FACE IS `.raised-tab`, A KIT CLASS, so the assertion is on the class and not
+   * on a computed style** — jsdom loads no stylesheet, so `getComputedStyle` would report
+   * no background whatever the markup said, and a test that checked it would pass on the
+   * unfixed code. The class is also exactly what a regression would re-add.
+   * ⚠ **THE RESTING FACE IS ASSERTED IN THE SAME BREATH.** `bare` is the absence of the
+   * resting surface too, so the mutation to guard against is not "the raise came back" but
+   * "the hover fill left with it" — the mic would then be the one glyph in the row with no
+   * hover face at all.
+   */
+  it("goes RED WITHOUT A FACE while capturing, and keeps its resting hover fill", () => {
+    mount();
+    const resting = btn("Dictate");
+    // ⚠ Closed state unchanged: the quiet fill every sibling glyph wears.
+    expect(resting.className).toContain("hover:bg-surface-raised-1");
+
+    fireEvent.click(resting);
+    const live = btn("Stop dictation");
+    // The glyph's colour is the whole affordance.
+    expect(live.className).toContain("text-danger");
+    // ⚠ NO CIRCLE, NO ELEVATION, NO BACKGROUND — `.raised-tab` is all three in one rule.
+    expect(live.className).not.toContain("raised-tab");
+    // The state is still carried, just not painted as a surface.
+    expect(live.getAttribute("aria-pressed")).toBe("true");
+    // ⚠ And it did not resize on the way: `bare`'s 32px box must stay merged away.
+    expect(live.className).toContain("h-6");
+    expect(live.className).not.toContain("h-8");
+  });
+
   it("stays SILENT for the two ordinary ways a dictation ends", () => {
     // ⚠ `no-speech` is a quiet room and `aborted` is our own stop. Painting either as a fault
     // puts a red glyph on the two most common endings.

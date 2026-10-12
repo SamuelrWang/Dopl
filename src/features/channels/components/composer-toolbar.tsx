@@ -109,6 +109,31 @@ export function ComposerToolbar({
           }
           size={TOOLBAR_GLYPH}
           active={dictation.listening}
+          /**
+           * **CAPTURING IS A RED GLYPH AND NOTHING ELSE — no circle, no elevation, no
+           * background** (Samuel, 2026-10-12: *"today it gets a circle, elevates, and
+           * turns red. Make it ONLY the icon turning red"*).
+           *
+           * ⚠ **`bare` IS THAT RULING ALREADY WRITTEN DOWN**, which is why no prop was
+           * added for it: `icon-button.tsx › bare` suppresses the `active` raise
+           * (`.raised-tab` — the fill the toolbar's `rounded-full` was drawing as a
+           * circle, and the elevation with it) and its own docblock states the reason
+           * this control can afford that — *"the colour shift is the whole affordance
+           * either way, and `aria-pressed` still carries the state"*. Red IS the colour
+           * shift here, so the raise was the one surface in this row saying a thing its
+           * glyph already said.
+           * ⚠ **IT IS BOUND TO `listening`, NOT PASSED FLAT, because the RESTING face is
+           * unchanged** — the quiet hover fill every sibling glyph wears. `bare` would
+           * take that too (it is the absence of the resting surface as well), and this
+           * ruling was about the pressed state only.
+           * ⚠ **THE FAULT FACE NEVER HAD A RAISE TO LOSE**: `error` is red ink on a
+           * button that is not `active`, so it is untouched by this and stays hoverable.
+           * ⚠ **`h-6 w-6` SURVIVES** — `bare`'s 32px hit area is a BASE class and
+           * `TOOLBAR_ICON` is `className`, which tailwind-merge resolves last, so the
+           * glyph does not resize when capture opens (`composer-toolbar.test.tsx` pins
+           * the 24px face).
+           */
+          bare={dictation.listening}
           onClick={dictation.toggle}
           className={cn(
             TOOLBAR_ICON,
