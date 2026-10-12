@@ -25,12 +25,40 @@ enforced by the filesystem, not by a comment asking people to be careful.
 
 ## ⚠ A held file may sort BEFORE applied ones
 
-Both remaining held files (`20261110140000`, `20261110150000`) sort before the
-`20261114…` drops released on 2026-09-29. Production is not applied with
+Two of the three held files (`20261110140000`, `20261110150000`) sort before the
+`20261114…` drops released on 2026-09-29; `20261122120000` sorts after every
+applied file. Production is not applied with
 `supabase db push` — versions there are stamped at apply time and reconciled by
 migration NAME (see `docs/RELEASE-MCP-V2-2026-09-02.md` §0) — so this only
 affects the local/CI replay, which is safe because a held file is order-proof
 (assertion 4).
+
+## ⚠ PICK A VERSION FROM EVERY LIVE BRANCH, NEVER FROM THIS DIRECTORY
+
+`migration-versions.test.ts` guards a duplicate stamp WITHIN `migrations/` and
+WITHIN `migrations-held/`, and `migrations-held.test.ts` guards one ACROSS the
+two. **None of them can see another branch**, and that is where the slot
+actually gets taken: a version read off the tree is correct when a branch is cut
+and stale by the time it merges. `migration-versions.test.ts` says so in its own
+header — *"Nobody is careless; the information expires."*
+
+This is the F-id rule applied to migrations (CLAUDE.md: allocate from the highest
+claimed on ANY LIVE BRANCH, never from `master`'s). Re-derive before stamping:
+
+```
+git log --all --name-only --pretty=format: -- 'supabase/migrations*' \
+  | grep -oE '^[0-9]{14}' | sort -u | tail -5
+```
+
+Measured 2026-10-12: `20261122120000` was stamped only after that command showed
+`20261121120000` already claimed by `channel_member_tally_rpc.sql` on
+`cleanup/c13-tally` and `fix/c13-tally-r` — a collision no test on either branch
+could have reported, because neither branch can read the other.
+
+⚠ **A `git log --all` CHECK IS DELIBERATELY NOT A TEST.** CI clones shallow and
+single-branch, so such a test would see no branches and pass vacuously — the
+fail-open class this repo has already paid for. The command above is run by the
+person choosing the stamp.
 
 ## Releasing a held file
 
@@ -59,6 +87,26 @@ against production on 2026-09-28. Each file's header lists what it drops and why
 
 They are independent of each other; release either. After releasing one,
 re-generate `src/shared/supabase/types.ts`.
+
+### Per-channel numbering — `20261122120000`
+
+**Held by Samuel's ruling, not by an unmet precondition** (2026-10-12): *"write
+them, NEVER apply them."* The only held file here that **adds** rather than
+drops, so it is absent from the drop-completeness list in
+`migrations-held.test.ts` by design.
+
+| File | Adds | Extra gate before release |
+|---|---|---|
+| `20261122120000_channel_per_channel_numbering.sql` | `channel_messages.channel_seq` (NOT NULL) + `.thread_seq` (nullable), two unique indexes, and `channel_message_insert` allocating both under the advisory lock it already holds | Samuel's word to apply, **and** the five-step release checklist in the file's own header — the `CHANNEL_MESSAGE_COLS` step is the one that breaks page reads if it happens in the wrong order |
+
+⚠ **IT IS A `CREATE OR REPLACE` OF `channel_message_insert`, COPIED FROM
+`20260912120000` §4.** If any migration applied after that one redefines the
+function, releasing this file would silently revert it — re-derive the body
+first (`grep -rln channel_message_insert supabase/migrations/`).
+
+The design, including the inventory this was built from and the two decisions
+still on Samuel's card, is the Dopl knowledge base, `codebase-cleanup` ›
+"Per-Channel Numbering Design".
 
 ## Released
 
