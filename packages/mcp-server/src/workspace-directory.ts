@@ -377,12 +377,9 @@ export function containerKindLabel(kind: ContainerKind): string {
  * 🔒 **WHAT KIND OF CONTAINER A ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
  * (F-564) — ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
  * check-role-drift.ts › checkContainerKind` holds it against the `workspaces.
- * kind` `CHECK` in both directions. ⚠ That checker SLICES THIS FILE from the
- * declaration below, by source text, so moving or renaming it breaks the gate —
- * it throws rather than passing, and `src/features/workspaces/
- * container-kind-drift.test.ts` is what holds it to that. ⚠ Do not write the
- * marker it searches for into a comment here: the gate strips comments before
- * slicing precisely because this docblock once did.
+ * kind` `CHECK` in both directions. ⚠ It SLICES THIS FILE for the declaration
+ * below (comments stripped first, because this docblock once became the anchor),
+ * so renaming or moving it makes that gate THROW rather than quietly pass.
  *
  * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
  * predicate answers "does this belong in the rail"; its NEGATION was read as

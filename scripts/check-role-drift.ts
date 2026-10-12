@@ -142,6 +142,13 @@ function extractSqlRoleArms(migrationsDir: string): { file: string; roles: strin
  * two declarations disagree", which is a claim this function is not in a
  * position to make; a throw says "this gate could not read its own subject",
  * which is the truth and is the thing a CI log has to show.
+ *
+ * ⚠ **AND THE CALLER STRIPS COMMENTS BEFORE SLICING.** A docblock that MENTIONS
+ * the marker is matched by `indexOf` ahead of the real declaration, so the slice
+ * starts inside prose and the rename passes anyway — measured the same day, on a
+ * trap note added to `workspace-directory.ts`'s own docblock warning about this
+ * exact gate. `src/features/workspaces/container-kind-drift.test.ts` holds both
+ * halves: the throw, and the comment that must not satisfy the slice.
  */
 export function sliceFrom(source: string, marker: string, what: string): string {
   const at = source.indexOf(marker);
