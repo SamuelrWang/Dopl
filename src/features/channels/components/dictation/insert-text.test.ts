@@ -150,7 +150,14 @@ describe("the separator", () => {
   });
 });
 
-describe("the operator keeps typing while the mic is open", () => {
+/**
+ * **THE FUNCTION STAYS TOTAL FOR ANY SPAN — which is NOT the same as surviving an outside edit**
+ * (Review 21). A span whose indices no longer describe the draft still gets a sane answer here,
+ * but keeping the operator's characters when they type mid-dictation is the CALLER's re-anchor
+ * (`components/composer.tsx › lastWritten`), pinned in `composer-toolbar.test.tsx`. This describe
+ * block read "the operator keeps typing while the mic is open" and implied it covered that.
+ */
+describe("any span it is handed gets a sane answer", () => {
   it("survives a draft that was CLEARED under a live span", () => {
     // ⚠ Discard, or a send, mid-dictation. The anchor now points PAST THE END of the draft, and
     // without the clamp `start` stays 4: the separator rule then sees a `start > 0` with no

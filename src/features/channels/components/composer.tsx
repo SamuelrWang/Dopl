@@ -143,27 +143,62 @@ export function ChannelsComposer({
   const dictationSpan = useRef<DictationSpan | null>(null);
   const dictationCaret = useRef<number | null>(null);
   const latest = useRef(draft);
+  /**
+   * 🔴 **THE DRAFT AS THIS CLOSURE LAST LEFT IT — the whole of the stale-span fix** (Review 21).
+   *
+   * ⚠ **A SPAN IS A CHARACTER RANGE, AND AN OUTSIDE EDIT MOVES EVERY INDEX AFTER THE CARET.** So
+   * the range the last interim wrote comes to cover the OPERATOR'S characters, and the next
+   * interim replaces them: a `Z` typed at position 0 of `abc hi def` turned the next phrase into
+   * `Zab hi therei def`, with the `c` gone. **It is a loss mode the old append-to-the-end
+   * behaviour did not have**, which is why it is guarded by a ref rather than by care.
+   * ⚠ **COMPARING AGAINST WHAT WE WROTE IS THE DETECTION, and it has to be its own ref.**
+   * `latest` tracks the draft through every render, so it equals the typed text and cannot tell
+   * who typed it; this one only ever moves when dictation itself writes. They are equal exactly
+   * while nobody else has touched the box.
+   */
+  const lastWritten = useRef<string | null>(null);
   // Typing updates the mirror: every render, so the next phrase inserts into what is really there.
   useEffect(() => {
     latest.current = draft;
   });
   const dictation = useDictation((text, final) => {
     const before = latest.current;
+    /**
+     * ⚠ **AN EDIT THIS CLOSURE DID NOT MAKE RE-ANCHORS THE SESSION, AND THE OPERATOR'S EDIT
+     * WINS** (Review 21's rule, in all three of its shapes — before the span, inside it, after
+     * it). The anchor becomes their caret with an EMPTY span, so the next phrase is INSERTED
+     * where they are writing and the stale range is never replaced. Whatever the last interim
+     * had already put in the box stays behind as ordinary typed text: nothing is rewound,
+     * nothing is deleted, and the words they typed are still theirs.
+     * ⚠ **AN EMPTY SPAN IS WHAT MAKES IT LOSSLESS**, not the clamp in `insert-text.ts` — a
+     * clamped span still REPLACES, it just replaces inside the bounds of the string.
+     * ⚠ **IT MUST NOT FIRE ON OUR OWN WRITES**, or every interim would be appended instead of
+     * replaced and a re-worded phrase would stack up ("hello wor hello world"). That is the
+     * equality below, and `composer-toolbar.test.tsx` pins both directions.
+     */
+    const outsideEdit = before !== lastWritten.current;
     // ⚠ THE ANCHOR IS THE CARET, TAKEN ON THE FIRST PHRASE OF A SESSION rather than on the click:
     // a click that the engine's probe then refuses would have moved nothing, and the textarea
     // keeps its selection while the mic button holds focus.
     const span =
-      dictationSpan.current ?? dictationSpanAt(draftRef.current?.selectionStart ?? before.length);
+      dictationSpan.current !== null && !outsideEdit
+        ? dictationSpan.current
+        : dictationSpanAt(draftRef.current?.selectionStart ?? before.length);
     const edit = insertDictation(before, span, text, final);
     dictationSpan.current = edit.span;
     dictationCaret.current = edit.caret;
     latest.current = edit.text;
+    lastWritten.current = edit.text;
     setDraft(edit.text);
   });
   // ⚠ A SESSION'S ANCHOR DIES WITH THE SESSION. Without this the next dictation would resume at
-  // the end of the last one, wherever the caret has been since.
+  // the end of the last one, wherever the caret has been since. `lastWritten` goes with it: a
+  // draft left standing from the last session is not evidence about this one.
   useEffect(() => {
-    if (!dictation.listening) dictationSpan.current = null;
+    if (!dictation.listening) {
+      dictationSpan.current = null;
+      lastWritten.current = null;
+    }
   }, [dictation.listening]);
   // ⚠ AFTER the value lands, so the caret sits past the dictated words "as if typed" — a
   // controlled textarea's selection is reset by the render that changes its value.

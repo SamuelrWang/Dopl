@@ -17,8 +17,19 @@
  *
  * ⚠ **THE SPAN IS THE STATE, AND IT IS THE ONLY STATE.** A caller holds one {@link DictationSpan}
  * per dictation session and hands back whatever this returns. There is no "accumulated text"
- * anywhere: the draft itself is the accumulator, which is what makes a mid-sentence keystroke
- * survivable — see {@link insertDictation}'s clamp.
+ * anywhere: the draft itself is the accumulator.
+ *
+ * 🔴 **AND BECAUSE A SPAN IS A CHARACTER RANGE, THIS FUNCTION CANNOT SURVIVE AN OUTSIDE EDIT ON
+ * ITS OWN — THE CALLER MUST RE-ANCHOR** (Review 21; this docblock claimed the opposite and
+ * pointed at the clamp, which was false in both halves). The operator may type while the mic is
+ * open — the box stays live, which is the whole point of streaming into it — and a keystroke
+ * before the caret shifts every index after it, so the stored range comes to cover THEIR
+ * characters and the next interim replaces them. **A clamp cannot help with that**: it bounds
+ * where the replacement happens, it does not stop one. The rule that makes it lossless lives in
+ * `components/composer.tsx` (`lastWritten`): a draft that differs from what dictation last wrote
+ * re-anchors the session at the caret with an EMPTY span, so the next phrase is inserted rather
+ * than swapped in. What this function owes is only that it stays total for whatever span it is
+ * handed — see {@link insertDictation}'s clamp, which is all the clamp is for.
  */
 
 /** Where the live (not yet committed) dictated span sits in the draft. */
@@ -47,11 +58,12 @@ export function dictationSpanAt(start: number): DictationSpan {
 }
 
 /**
- * Keep the ANCHOR inside `draft`. ⚠ **THE OPERATOR MAY TYPE, SELECT OR DISCARD WHILE THE MIC IS
- * OPEN**, and nothing stops them — the box stays live, which is the entire point of streaming
- * into it. So a span recorded one phrase ago can point past the end of a draft that was just
- * cleared, and `start > 0` with no character before it makes the separator rule indent the next
- * phrase into an empty box.
+ * Keep the ANCHOR inside `draft`, so this function is TOTAL for any span it is handed.
+ *
+ * ⚠ **IT IS NOT THE ANSWER TO AN OUTSIDE EDIT, AND IT NEVER WAS** (Review 21) — that is the
+ * caller's re-anchor, stated in the header. What it answers is narrower and real: a span recorded
+ * one phrase ago can point PAST THE END of a draft that was since cleared, and `start > 0` with no
+ * character before it makes the separator rule indent the next phrase into an empty box.
  *
  * ⚠ **ONLY `start` IS CLAMPED, AND THE SPAN'S LENGTH DELIBERATELY IS NOT.** It is read in exactly
  * one place — `draft.slice(start + length)` — and `String.prototype.slice` already treats an index
