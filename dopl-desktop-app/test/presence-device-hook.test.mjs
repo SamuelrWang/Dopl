@@ -98,7 +98,7 @@ test("sleep() never waits on the device hook (suspend stays fire-and-forget)", a
   assert.equal(await h.presence.sleep("suspend"), "ok");
 });
 
-test("quit-guard races listener.stop()'s promise inside FLUSH_DEADLINE_MS (unchanged 1500ms)", () => {
+test("quit-guard BOUNDS listener.stop()'s promise by FLUSH_DEADLINE_MS (unchanged 1500ms)", () => {
   const { readFileSync } = require("node:fs");
   const Q = readFileSync(new URL("../main/quit-guard.js", import.meta.url), "utf8");
   const L = readFileSync(new URL("../main/channel-listener.js", import.meta.url), "utf8");

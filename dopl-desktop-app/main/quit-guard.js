@@ -41,10 +41,10 @@
 //    resolves the same way: let the quit happen. A dialog that throws, a registry that throws,
 //    a network that hangs — none of them may trap an operator inside an app they asked to
 //    close. `disarmed` is the one-way latch that guarantees a second pass cannot re-prompt.
-// 2. THE QUIT MUST NOT FEEL BROKEN. The final state push is RACED against a short deadline,
+// 2. THE QUIT MUST NOT FEEL BROKEN. Every final request is BOUNDED by a short deadline,
 //    never awaited outright: `session-state-push.send` carries a 15s HTTP timeout and one
-//    retry, which is right for a running app and absurd for a quit. If the flush has not
-//    landed by then it is abandoned and said so — the rows go stale, which is the same
+//    retry, which is right for a running app and absurd for a quit. If one has not landed
+//    by then it is abandoned and said so BY NAME — the rows go stale, which is the same
 //    outcome a crash produces and strictly better than a quit that appears to hang.
 //
 // ── 2026-10-12: THE TEARDOWN ORDER, AND WHY IT IS NOT THE OBVIOUS ONE ───────────────────
@@ -95,19 +95,34 @@ const BUTTON_WAIT = 1;
 const BUTTON_CANCEL = 2; // 2026-08-30: the one button that does not end in a quit
 
 let deps = null;
-let disarmed = false; // one-way: the teardown has run (or failed), so let every quit through
-let prompting = false; // a dialog is on screen — a second quit must not open a second one
-let waitTimer = null;
 let waitStartedAt = 0;
 
-// (the local `sleep` helper went with the hand-rolled flush race, 2026-10-12: `deadline.js ›
+// (the local `sleep` helper went with the hand-rolled flush bound, 2026-10-12: `deadline.js ›
 // withDeadline` owns the timer now, and it `unref`s it so a pending bound cannot hold the
 // process open on the one path whose whole job is to close it.)
 
-// ─── BEGIN QUIT-GUARD-PURE (injectable; unit-tested via source extraction) ───
-// `deps`, the constants and `diag` are free vars from here down. Nothing in this block
-// reaches a window, a timer or the network, so test/quit-guard.test.mjs evaluates it
-// verbatim with fakes.
+// ─── BEGIN QUIT-GUARD-PURE (injectable; unit-tested by EXECUTION) ────────────
+// `deps`, `app`, the constants, `withDeadline`/`DEADLINE`, `terminalPosts` and `diag` are free
+// vars from here down. Nothing in this block NAMES a module or reaches a window, a timer or the
+// network DIRECTLY — every platform edge arrives injected — so test/quit-guard.test.mjs
+// evaluates it verbatim with fakes.
+//
+// ⚠ IT NOW COVERS THE TEARDOWN AND THE EXIT, NOT JUST THE COPY (2026-10-12, review 16). The
+// block used to hold the dialog's strings and two predicates, so everything about the quit that
+// could actually go wrong was reachable only by GREPPING THE SOURCE — and the reviewer showed
+// what that costs: `await teardown(reason)` → `void teardown(reason)` and serialising the drain
+// behind the flush both left the whole new suite green, because a source probe cannot see
+// ordering it does not happen to spell out. `teardown`, `finishQuit` and `stopWaiting` moved in
+// here UNCHANGED (a move, not an edit) so the tests drive them and measure the bound on a fake
+// clock instead of asserting about their text.
+//
+// ⚠ AND THE LATCH STATE MOVED WITH THEM, which is what makes each evaluation independent: a
+// `new Function` over this block gets its OWN `disarmed`/`prompting`/`waitTimer`, so one test
+// cannot leave the guard latched for the next. At runtime these are module scope exactly as
+// before — the markers are comments, not a boundary.
+let disarmed = false; // one-way: the teardown has run (or failed), so let every quit through
+let prompting = false; // a dialog is on screen — a second quit must not open a second one
+let waitTimer = null;
 
 /** One session, as a line a human can recognise. Never a bare count. */
 function describeSession(s) {
@@ -171,21 +186,6 @@ function waitExpired(now, startedAt) {
   return now - startedAt >= WAIT_CAP_MS;
 }
 
-// ─── END QUIT-GUARD-PURE ────────────────────────────────────────────────────
-
-function notify(title, body) {
-  try {
-    if (Notification.isSupported()) new Notification({ title, body, silent: true }).show();
-  } catch (_) { /* best-effort */ }
-}
-
-function orphanRisk() {
-  try { return deps.listOrphanRisk() || []; } catch (err) {
-    diag('quit-guard: could not read the session registry —', err && err.message);
-    return []; // FAIL OPEN: an unreadable registry must not trap the operator in the app
-  }
-}
-
 /**
  * End every session holding a child, then take this machine off the air, then give what the ends
  * OWE one bounded moment to leave. Never throws, and never takes longer than FLUSH_DEADLINE_MS
@@ -226,8 +226,8 @@ async function teardown(reason) {
   let awayPost = null;
   try { awayPost = deps.listener.stop(); } catch (err) { diag('quit-guard: listener.stop threw', err && err.message); }
   try {
-    // ⚠ THE THREE ARE BOUNDED SEPARATELY AND REPORTED BY NAME. `Promise.all`-ing them under one
-    // race would let a hung `away` post make a landed end notice report as skipped, which is a
+    // ⚠ THE THREE ARE BOUNDED SEPARATELY AND REPORTED BY NAME. One bound over all three would
+    // let a hung `away` post make a landed end notice report as skipped, which is a
     // lie in the log this module exists to keep honest. Each `withDeadline` resolves to its own
     // DEADLINE sentinel, and because all three are armed on the same tick with the same number
     // the `Promise.all` below cannot outlive FLUSH_DEADLINE_MS.
@@ -282,6 +282,21 @@ async function finishQuit(reason) {
   prompting = false;
   try { await teardown(reason); } catch (err) { diag('quit-guard: teardown threw', err && err.message); }
   try { app.quit(); } catch (err) { diag('quit-guard: app.quit threw', err && err.message); }
+}
+
+// ─── END QUIT-GUARD-PURE ────────────────────────────────────────────────────
+
+function notify(title, body) {
+  try {
+    if (Notification.isSupported()) new Notification({ title, body, silent: true }).show();
+  } catch (_) { /* best-effort */ }
+}
+
+function orphanRisk() {
+  try { return deps.listOrphanRisk() || []; } catch (err) {
+    diag('quit-guard: could not read the session registry —', err && err.message);
+    return []; // FAIL OPEN: an unreadable registry must not trap the operator in the app
+  }
 }
 
 // ABORT the quit (2026-08-30). The mirror image of `finishQuit`, and every line of it is the

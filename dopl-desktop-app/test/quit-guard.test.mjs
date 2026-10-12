@@ -21,7 +21,9 @@
 //   3. MID-TOOL-CALL IS NOT A REASON TO WAIT. On Quit anyway there is no grace period.
 //   4. THE PEER IS TOLD. Killed sessions take C-5's calm `inactive` terminal, so the waiting
 //      requester's card stops pulsing "Working…" — one terminal path, not a second one.
-//   5. THE ROWS ARE FLUSHED IF THAT IS FREE. Raced against a short deadline, never awaited.
+//   5. THE FINAL REQUESTS ARE FLUSHED IF THAT IS FREE. Each BOUNDED by a short deadline and
+//      reported by name, never awaited outright. Since 2026-10-12 that is three of them
+//      sharing one window; `test/quit-end-notice.test.mjs` measures it on a fake clock.
 //   6. QUITTING ALWAYS REMAINS POSSIBLE. Every failure path lets the quit through.
 //
 // Run: `node --test dopl-desktop-app/test/quit-guard.test.mjs`
@@ -201,9 +203,9 @@ test("a SECOND quit while waiting re-opens the dialog — Quit anyway is always 
 // ── 3. NO GRACE PERIOD, and 4. THE PEER IS TOLD ──────────────────────────────────────
 
 test("Quit anyway tears down immediately — there is no wait for the current tool call", () => {
-  const teardown = SRC.slice(SRC.indexOf("async function teardown("), SRC.indexOf("function stopWaiting()"));
+  const teardown = codeOf(fnOf(SRC, "teardown"));
   assert.match(teardown, /deps\.endLiveSessions\(\)/);
-  // The ONLY await in the teardown is the raced flush, i.e. the wire, not the child.
+  // The ONLY await in the teardown is the bounded flush, i.e. the wire, not the child.
   assert.equal((teardown.match(/await /g) || []).length, 1,
     "the kill is synchronous; nothing waits on the agent");
   assert.ok(teardown.indexOf("deps.endLiveSessions()") < teardown.indexOf("await"),
@@ -278,16 +280,16 @@ test("the dialog list and the kill list are the SAME predicate — one cannot na
   assert.match(REOPEN, /function liveChildSessions\(\)/, "…because both read one function");
 });
 
-// ── 5. THE FINAL FLUSH IS RACED, NEVER AWAITED ───────────────────────────────────────
+// ── 5. THE FINAL FLUSH IS BOUNDED, NEVER AWAITED OUTRIGHT ────────────────────────────
 
 test("the flush is bounded, and the bound is stated as a quit-perception number", () => {
   assert.match(SRC, /const FLUSH_DEADLINE_MS = 1500;/);
-  const teardown = SRC.slice(SRC.indexOf("async function teardown("), SRC.indexOf("function stopWaiting()"));
+  const teardown = codeOf(fnOf(SRC, "teardown"));
   // ⚠ 2026-10-12: the hand-rolled `Promise.race([both, sleep(…).then(() => false)])` is replaced
   // by F-700's `withDeadline`, one per wait, so each can be reported BY NAME — the end notice,
   // the state push and the away post. The bound itself is unchanged and is still the only thing
   // that ends the wait; `test/quit-end-notice.test.mjs` pins the order and the drain.
-  assert.match(teardown, /withDeadline\(/, "bounded — never a bare await");
+  assert.match(teardown, /withDeadline\(/, "every wait goes through the bound");
   assert.match(teardown, /FLUSH_DEADLINE_MS,/);
   assert.match(teardown, /SKIPPED/, "a flush that did not land says so, and says what it costs");
   assert.ok(!/sleep\(/.test(teardown), "the local sleep helper is no longer the deadline");
@@ -295,7 +297,7 @@ test("the flush is bounded, and the bound is stated as a quit-perception number"
   assert.match(M("session-state-push.js"), /const HTTP_TIMEOUT_MS = 15000;/);
 });
 
-test("the push exposes an AWAITABLE flush, so the race has something to race", () => {
+test("the push exposes an AWAITABLE flush, so the bound has something to bound", () => {
   const push = M("session-state-push.js");
   assert.match(push, /function flush\(\)/);
   assert.match(push, /return draining \|\| Promise\.resolve\(\);/);
@@ -334,7 +336,12 @@ test("no live agents means no dialog at all — the teardown just runs", () => {
 });
 
 test("finishQuit is the ONE exit: it latches, tears down, and re-issues app.quit()", () => {
-  const finish = SRC.slice(SRC.indexOf("async function finishQuit("), SRC.indexOf("function startWaiting()"));
+  // ⚠ `fnOf`, NOT a marker slice (2026-10-12). `finishQuit` moved up into the QUIT-GUARD-PURE
+  // block, so `…indexOf("function startWaiting()")` now swallows the block's END marker, `notify`
+  // and `cancelQuit` too — assertions that read as being about finishQuit while matching four
+  // other functions. `test/quit-end-notice.test.mjs` EXECUTES this exit path; these three lines
+  // stay as the cheap statement of its shape.
+  const finish = codeOf(fnOf(SRC, "finishQuit"));
   assert.match(finish, /disarmed = true;/);
   assert.match(finish, /try \{ await teardown\(reason\); \} catch/);
   assert.match(finish, /try \{ app\.quit\(\); \} catch/, "even a throwing quit call is survivable");

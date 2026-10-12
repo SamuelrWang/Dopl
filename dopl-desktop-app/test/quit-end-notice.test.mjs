@@ -35,6 +35,26 @@
 // `reloadDisposition` is not 'dormant', so a correctly-ended record is counted in neither
 // column by design. Those tests are regression guards, green both sides of this change.
 //
+// ── 2026-10-12, REVIEW 16: WHY THE QUIT PATH IS NOW EXECUTED, NOT GREPPED ───────────────
+//
+// The first version of this suite asserted all of the above by reading `quit-guard.js` as TEXT,
+// and the reviewer showed what that is worth with two mutations that left every one of its
+// twenty tests green:
+//
+//   • `await teardown(reason)` → `void teardown(reason)` in `finishQuit`. That IS the shipped
+//     defect in miniature — `app.quit()` on the next tick, POST dead with the process — and not
+//     one probe could see it, because none of them was about WHEN anything happened.
+//   • serialising the drain behind the flush. Every text probe still passes ("each wait is
+//     bounded by FLUSH_DEADLINE_MS" stays literally true) while a quit with three hung requests
+//     takes 4500 ms: the exact "app refuses to close" defect the 1500 number exists to prevent.
+//
+// So `teardown`, `finishQuit` and `stopWaiting` MOVED into the QUIT-GUARD-PURE block, unchanged
+// (the move is proved byte-identical in the commit), and `guard()` below drives them with every
+// platform edge faked and `deadline.js › withDeadline` running on a VIRTUAL clock. Tests (a),
+// (b), (b2) and (c) are the result; each one kills its own mutation. The probes they subsume
+// were deleted rather than left as decoration — one is kept, and only because it pins a choice
+// of DEPENDENCY (the real register, the real bound) that no clock can observe.
+//
 // Run: `node --test dopl-desktop-app/test/quit-end-notice.test.mjs`
 
 import { test } from "node:test";
@@ -44,6 +64,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
 import * as terminalPosts from "../main/session-terminal-posts.js";
+import { DEADLINE, withDeadline as realWithDeadline } from "../main/deadline.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
@@ -55,106 +76,255 @@ const BOOT = M("session-boot.js");
 const ENGINE = M("session-engine.js");
 
 // The teardown, sliced the way quit-guard.test.mjs slices it, so both suites read one region.
-const teardownSrc = () =>
-  SRC.slice(SRC.indexOf("async function teardown("), SRC.indexOf("function stopWaiting()"));
+const teardownSrc = () => codeOf(fnOf(SRC, "teardown"));
+
+// ── THE HARNESS: the quit path EXECUTED, on a fake clock ─────────────────────────────
+//
+// ⚠ WHY THIS EXISTS, in the reviewer's own two mutations (review 16). Everything below used to
+// be asserted by GREPPING `quit-guard.js`, and a source probe cannot see ordering it does not
+// happen to spell out: turning `await teardown(reason)` into `void teardown(reason)`, and
+// serialising the drain behind the flush, BOTH left all twenty tests green. So `teardown`,
+// `finishQuit` and `stopWaiting` moved into the QUIT-GUARD-PURE block (unchanged) and are driven
+// here instead. The source probes that these three tests subsume are gone with them.
+
+const BLOCK = between(SRC, "// ─── BEGIN QUIT-GUARD-PURE", "// ─── END QUIT-GUARD-PURE",
+  "quit-guard pure block");
+
+/** A promise nobody will ever settle — the hung POST this whole fix is bounded against. */
+const never = () => new Promise(() => {});
+
+/** Let every queued microtask run, so a chained `.then` has landed before we assert. */
+async function settleMicrotasks(n = 25) {
+  for (let i = 0; i < n; i++) await Promise.resolve();
+}
+
+/**
+ * A virtual clock with the `{setTimeout, clearTimeout}` shape `deadline.js › withDeadline` takes
+ * as its test seam. `armed` records WHEN each bound was armed and for how long, which is how the
+ * parallel-vs-serial question below is answered as a measurement rather than an opinion.
+ */
+function fakeClock() {
+  let now = 0;
+  let seq = 0;
+  const pending = new Map();
+  const armed = [];
+  // ⚠ CLOSURE, NOT `this`. `withDeadline` lifts the seam out (`const set = timers.setTimeout`)
+  // and calls it UNBOUND, so a method reading `this.armed` throws inside the deadline promise's
+  // executor — which rejects it, which makes the bound resolve instantly and every test here
+  // pass for the wrong reason. Found exactly that way on the first run.
+  const clock = {
+    armed,
+    at: () => now,
+    setTimeout: (fn, ms) => {
+      const id = ++seq;
+      pending.set(id, { at: now + ms, fn });
+      armed.push({ t: now, ms });
+      return { id, unref: () => undefined };
+    },
+    clearTimeout: (h) => { if (h && h.id) pending.delete(h.id); },
+    /** Move the clock to now+ms, firing what comes due in time order. */
+    async advance(ms) {
+      const target = now + ms;
+      for (;;) {
+        const due = [...pending.entries()]
+          .filter(([, t]) => t.at <= target)
+          .sort((a, b) => a[1].at - b[1].at)[0];
+        if (!due) break;
+        pending.delete(due[0]);
+        now = due[1].at;
+        due[1].fn();
+        await settleMicrotasks();
+      }
+      now = target;
+      await settleMicrotasks();
+    },
+  };
+  return clock;
+}
+
+/**
+ * The real block, evaluated with every platform edge faked. Returns the functions under test
+ * plus the recorders: `calls` (what was invoked, in order), `quits` (the fake clock time at each
+ * `app.quit()`), `log` (the diag lines) and `clock`.
+ */
+function guard(over = {}) {
+  const clock = fakeClock();
+  const calls = [];
+  const quits = [];
+  const log = [];
+  const deps = {
+    endLiveSessions: () => { calls.push("endLiveSessions"); return over.ended ?? 1; },
+    listener: {
+      stop: () => {
+        calls.push("listener.stop");
+        return (over.away || (() => Promise.resolve("ok")))();
+      },
+    },
+    flushSessionState: () => {
+      calls.push("flushSessionState");
+      return (over.flush || (() => Promise.resolve()))();
+    },
+    listOrphanRisk: () => [],
+  };
+  const posts = {
+    drain: () => { calls.push("drain"); return (over.drain || (() => Promise.resolve()))(); },
+    pendingCount: () => over.pending ?? 0,
+  };
+  const api = new Function(
+    "deps", "app", "diag", "FLUSH_DEADLINE_MS", "withDeadline", "DEADLINE", "terminalPosts",
+    "BUTTON_QUIT", "BUTTON_WAIT", "BUTTON_CANCEL", "WAIT_CAP_MS",
+    `${BLOCK}\n return { teardown, finishQuit, stopWaiting };`
+  )(
+    deps,
+    { quit: () => { calls.push("app.quit"); quits.push(clock.at()); }, isQuitting: true },
+    (...a) => log.push(a.join(" ")),
+    1500,
+    // The REAL bound, on the virtual clock: the logic under test is the shipped logic.
+    (p, ms, onDeadline) => realWithDeadline(p, ms, onDeadline, clock),
+    DEADLINE,
+    posts,
+    0, 1, 2, 16 * 60 * 1000,
+  );
+  return { ...api, clock, calls, quits, log };
+}
 
 // ── 1. ORDER: END + FLUSH BEFORE THE TRANSPORTS COME DOWN ────────────────────────────
 
-test("the live sessions are ENDED before the listener is stopped, not after", () => {
-  const t = teardownSrc();
-  const ended = t.indexOf("deps.endLiveSessions()");
-  const stopped = t.indexOf("deps.listener.stop()");
-  assert.ok(ended > -1, "endLiveSessions is gone from the teardown");
-  assert.ok(stopped > -1, "listener.stop is gone from the teardown");
+test("(a) EXECUTED: the sessions are ended before listener.stop, with no await between", async () => {
+  const g = guard();
+  // Not awaited: an async function runs synchronously up to its FIRST await, so whatever has
+  // been recorded by the time this line returns is what happens before anything can yield.
+  const running = g.teardown("quit anyway");
+  assert.deepEqual(
+    g.calls,
+    ["endLiveSessions", "listener.stop", "drain", "flushSessionState"],
+    "the ends go first, the listener comes down second, and both are SYNCHRONOUS — an await " +
+      "between them would let a beat land in the gap, and the shipped order was the reverse"
+  );
+  await running;
+  assert.deepEqual(g.quits, [], "teardown itself never closes the app — finishQuit does");
+});
+
+test("(b) EXECUTED: a hung end notice holds the quit to the bound, and never past it", async () => {
+  // THE MUTATION THIS CATCHES: `await teardown(reason)` -> `void teardown(reason)` in
+  // `finishQuit`. That is the shipped defect in miniature — `app.quit()` fires on the next tick
+  // and the POST dies with the process — and every source probe in this file stayed green on it.
+  const g = guard({ drain: never });
+  let done = false;
+  const quitting = g.finishQuit("operator chose Quit anyway").then(() => { done = true; });
+  await settleMicrotasks();
+  assert.equal(done, false, "the quit may not complete while the end notice is still in flight");
+  assert.deepEqual(g.quits, [], "…and app.quit() must NOT have been called yet");
+  await g.clock.advance(1500);
+  // ⚠ ASSERTED BEFORE THE AWAIT, DELIBERATELY. `await quitting` on a quit that never completes
+  // is a 20s suite TIMEOUT, not a failure anybody can read — and that is exactly what a stacked
+  // budget (FLUSH_DEADLINE_MS * 2) produces here. Checking the flag first turns it into a line.
+  assert.equal(done, true, "…but the bound always ends the wait: quitting stays possible");
+  await quitting;
+  assert.deepEqual(g.quits, [1500], "the app closes AT the bound, not before and not after");
   assert.ok(
-    ended < stopped,
-    "the ends must be issued while this machine's transports are still up and before presence " +
-      "has declared it away — the shipped order was listener.stop() first"
+    g.log.some((l) => l.includes("end notice") && l.includes("SKIPPED")),
+    "a notice that did not land says so by name: " + JSON.stringify(g.log)
   );
 });
 
-test("the ends are still SYNCHRONOUS — nothing waits on the agent itself", () => {
-  // Rule (3): mid-tool-call is not a reason to wait. The only await in the teardown is the wire.
-  const t = teardownSrc();
+test("(b2) EXECUTED: a post that DOES land is drained before the quit returns", async () => {
+  // The other half of the same property, and the half that says the wait is a BOUND rather than
+  // a sleep: the quit must not sit out the full window once the post has landed, and must not
+  // close before it has. Released by hand rather than on a timer, so "landed" is a fact about
+  // the drain and not about which queue ran first.
+  let release;
+  let landed = false;
+  const g = guard({ drain: () => new Promise((r) => { release = () => { landed = true; r(); }; }) });
+  let done = false;
+  const quitting = g.finishQuit("operator chose Quit anyway").then(() => { done = true; });
+  await settleMicrotasks();
+  assert.equal(done, false, "held while the post is in flight");
+  release();
+  await settleMicrotasks();
+  await quitting;
+  assert.equal(landed, true, "the post settled");
+  assert.equal(done, true);
+  assert.deepEqual(g.quits, [0], "closed on the POST, at clock 0 — not held to the 1500ms bound");
+  assert.ok(
+    !g.log.some((l) => l.includes("SKIPPED")),
+    "a landed post may never be reported as skipped: " + JSON.stringify(g.log)
+  );
+});
+
+// ── 2. ONE WINDOW FOR ALL THREE, MEASURED ────────────────────────────────────────────
+
+test("(c) MEASURED: the three waits run in PARALLEL — worst case ~1500ms, not 3000", async () => {
+  // THE MUTATION THIS CATCHES: serialising the drain behind the flush (`await bound(drain); await
+  // bound(flush)`). The code still "bounds each wait by FLUSH_DEADLINE_MS", so every text probe
+  // keeps passing, while a quit with three hung requests takes 4500ms — the exact "app refuses
+  // to close" defect the 1500 number exists to prevent. Only the clock can tell the difference.
+  const g = guard({ drain: never, flush: never, away: never });
+  let done = false;
+  const quitting = g.finishQuit("operator chose Quit anyway").then(() => { done = true; });
+  await settleMicrotasks();
+  assert.deepEqual(
+    g.clock.armed,
+    [{ t: 0, ms: 1500 }, { t: 0, ms: 1500 }, { t: 0, ms: 1500 }],
+    "all three bounds are armed on the SAME tick for the SAME number; a serialised teardown " +
+      "arms the second only after the first has expired (t: 1500) and the third at t: 3000"
+  );
+  await g.clock.advance(1500);
   assert.equal(
-    (t.match(/await /g) || []).length,
-    1,
-    "one await only: the bounded wire moment, never the child"
+    done, true,
+    "ONE 1500ms window covers all three. Serialised, the quit would still be pending here and " +
+      "would need 4500ms to finish."
   );
-  assert.ok(
-    t.indexOf("deps.endLiveSessions()") < t.indexOf("await"),
-    "the kill happens before the deadline, not inside it"
-  );
-});
-
-// ── 2. THE TERMINAL POSTS ARE FLUSHED, AND THE WAIT IS BOUNDED ───────────────────────
-
-test("the teardown waits for the END's own posts, not only for the state rows", () => {
-  const t = teardownSrc();
-  assert.match(
-    t,
-    /terminalPosts\.drain\(\)/,
-    "the posts the end issued must be in the bounded moment — unawaited was the whole defect"
-  );
-  assert.match(
-    SRC,
-    /const terminalPosts = require\('\.\/session-terminal-posts'\);/,
-    "…from the real register, not a copy of its idea"
-  );
-});
-
-test("the drain shares ONE deadline with the flush and the away post — no second window", () => {
-  const t = teardownSrc();
-  assert.match(SRC, /const FLUSH_DEADLINE_MS = 1500;/, "the quit-perception number is unchanged");
-  // Every bounded item takes the SAME constant, so the worst case stays 1500ms total.
-  const bounds = t.match(/FLUSH_DEADLINE_MS/g) || [];
-  assert.ok(
-    bounds.length >= 3,
-    "each of the three waits is bounded by the same number; found " + bounds.length
-  );
-  assert.ok(
-    !/FLUSH_DEADLINE_MS \* 2|END_FLUSH_DEADLINE|\+ FLUSH_DEADLINE_MS/.test(t),
-    "the budget may not be stacked: a 3s quit is the defect the 1500ms bound prevents"
-  );
-});
-
-test("the bound is the real withDeadline primitive, so the quit can never hang on a post", () => {
-  assert.match(
-    SRC,
-    /require\('\.\/deadline'\)/,
-    "F-700's one bound for a promise that may never settle, not a hand-rolled race"
-  );
-  const t = teardownSrc();
-  assert.match(t, /withDeadline\(/);
-});
-
-test("one wait that THROWS cannot abandon the other two", () => {
-  // `deps.flushSessionState` is injected and may throw synchronously. Evaluated in the
-  // `Promise.all` argument list it would throw straight past the race into the outer catch and
-  // drop the end notice — the one post this fix exists to land — on a failure that has nothing
-  // to do with it. So each wait is a THUNK, called inside its own try.
-  const t = teardownSrc();
-  assert.match(t, /bound\(\(\) => terminalPosts\.drain\(\), 'end notice'\)/,
-    "each wait must be passed lazily, never as an already-evaluated promise");
-  assert.match(t, /bound\(\(\) => deps\.flushSessionState\(\), 'session-state push'\)/);
-  assert.match(t, /try \{ p = make\(\); \} catch/, "…and a thrower is reported, not fatal");
-  assert.ok(
-    !/bound\(terminalPosts\.drain\(\)|bound\(deps\.flushSessionState\(\)/.test(t),
-    "the eager shape is the one that couples the three failures together"
-  );
-});
-
-test("each wait is reported BY NAME — a landed post may never read as skipped", () => {
-  // The module's own honesty rule: Promise.all-ing the three would let a hung away post make a
-  // landed end notice report as SKIPPED, which is a lie in the log this module exists to keep.
-  const t = teardownSrc();
-  assert.match(t, /SKIPPED/, "something that did not land still says so");
-  for (const name of ["end notice", "session-state push", "away"]) {
+  await quitting;
+  assert.deepEqual(g.quits, [1500]);
+  // …and all three said so, each by its own name.
+  for (const what of ["end notice", "session-state push", "away post"]) {
     assert.ok(
-      t.includes(name),
-      `the log must be able to name "${name}" on its own; found: ${t.slice(0, 0)}`
+      g.log.some((l) => l.includes(what) && l.includes("SKIPPED")),
+      `"${what}" must be reported on its own: ` + JSON.stringify(g.log)
     );
   }
+});
+
+test("EXECUTED: one wait that THROWS SYNCHRONOUSLY cannot abandon the other two", async () => {
+  // `deps.flushSessionState` is injected and may throw. Evaluated in the `Promise.all` argument
+  // list it would throw past the bound into the outer catch and drop the end notice — the one
+  // post this fix exists to land — on a failure that has nothing to do with it.
+  const g = guard({
+    flush: () => { throw new Error("rows exploded"); },
+    drain: () => Promise.resolve(),
+    away: () => Promise.resolve("ok"),
+  });
+  await g.finishQuit("operator chose Quit anyway");
+  assert.ok(g.calls.includes("drain"), "the end notice was still drained: " + g.calls.join(","));
+  assert.deepEqual(g.quits, [0], "and the quit still completed");
+  assert.ok(
+    g.log.some((l) => l.includes("session-state push") && l.includes("threw before it was sent")),
+    "the thrower is reported by name: " + JSON.stringify(g.log)
+  );
+});
+
+test("EXECUTED: a teardown that throws outright still closes the app (rule 1)", async () => {
+  // Quitting must ALWAYS remain possible. `finishQuit` catches the teardown and quits anyway.
+  const g = guard({ drain: () => { throw new Error("register exploded"); } });
+  await g.finishQuit("operator chose Quit anyway");
+  assert.deepEqual(g.quits, [0], "a broken teardown must not become an app that cannot close");
+});
+
+// ── THE SHAPE THE CLOCK CANNOT SEE ───────────────────────────────────────────────────
+//
+// Two text probes are left, and only because they pin a CHOICE OF DEPENDENCY rather than a
+// behaviour: the teardown must reach the real register and the real bound, not a local copy of
+// either idea. Everything the three tests above measure has had its probe deleted.
+
+test("the teardown reaches the REAL register and the REAL bound, not a copy of either", () => {
+  assert.match(SRC, /const terminalPosts = require\('\.\/session-terminal-posts'\);/);
+  assert.match(SRC, /require\('\.\/deadline'\)/,
+    "F-700's one bound for a promise that may never settle");
+  const t = teardownSrc();
+  assert.match(t, /terminalPosts\.drain\(\)/);
+  assert.match(t, /withDeadline\(/);
+  assert.match(SRC, /const FLUSH_DEADLINE_MS = 1500;/, "the quit-perception number is unchanged");
 });
 
 // ── 3. THE REGISTER ITSELF (the real shipped functions) ──────────────────────────────
