@@ -28,7 +28,12 @@ import { DemoChannelList, DemoHomeHeader } from "./demo-home-chrome";
 import { DemoScene } from "./demo-scene";
 import { HOME_ROW_ID, homeRowsAt } from "./demo-home-rows";
 import { stepIndex } from "./demo-steps";
-import { messagesAt } from "./demo-data";
+import {
+  CHANNEL_NAME,
+} from "./demo-data";
+import {
+  messagesAt,
+} from "./demo-transcript";
 
 const CHROME_SRC = "src/features/marketing/components/banner-demo/demo-home-chrome.tsx";
 const ROWS_SRC = "src/features/marketing/components/banner-demo/demo-home-rows.ts";
@@ -114,11 +119,11 @@ describe("the channel column is the product's three wells over the product's row
 
   it("🔒 gives the live channel the black card and everything else the white one", () => {
     render(<DemoChannelList rows={rows()} selectedId={HOME_ROW_ID} />);
-    const live = screen.getByText("q4-outbound").closest("button");
+    const live = screen.getByText(CHANNEL_NAME).closest("button");
     expect(live?.className).toContain(HOME_CARD_FACE_SELECTED);
     expect(live?.className).not.toContain(HOME_CARD_FACE);
 
-    const other = screen.getByText("renewals-q3").closest("button");
+    const other = screen.getByText("flaky-tests").closest("button");
     expect(other?.className).toContain(HOME_CARD_FACE);
     expect(other?.className).not.toContain(HOME_CARD_FACE_SELECTED);
   });
@@ -131,7 +136,7 @@ describe("the channel column is the product's three wells over the product's row
     expect(screen.getAllByText("Link out").length).toBeGreaterThan(0);
     // (2026-09-15) A solo channel's description takes line two, in italic — the
     // faces' alternative in that one slot, never stacked with them.
-    const solo = screen.getByText(/Friday sweep of the pipeline/);
+    const solo = screen.getByText(/Build and release notices/);
     expect(solo.className).toContain("italic");
   });
 
@@ -157,7 +162,7 @@ describe("the channel column is the product's three wells over the product's row
 
 describe("the column tracks the scripted conversation", () => {
   it("🔒 stamps the live row with the transcript's newest message", () => {
-    const step = stepIndex("agent-msg-3");
+    const step = stepIndex("split-2");
     const script = messagesAt(step);
     const live = homeRowsAt(step).find((row) => row.id === HOME_ROW_ID);
     expect(live?.at).toBe(script[script.length - 1]?.createdAt);
@@ -231,7 +236,7 @@ describe("the record pane plays /home's channel record", () => {
       (t) => t.textContent ?? ""
     );
     // The five FACE tabs are the header's; the four after them are the column's.
-    expect(tabs.slice(-4)).toEqual(["Info", "Threads0", "Agents3", "Settings"]);
+    expect(tabs.slice(-4)).toEqual(["Info", "Threads3", "Agents6", "Settings"]);
     // And the thread column is not there — `channelPaneTabs` drops Threads in
     // thread view and `ThreadInfoTab` heads itself "Thread info".
     expect(screen.queryByText("Thread info")).toBeNull();

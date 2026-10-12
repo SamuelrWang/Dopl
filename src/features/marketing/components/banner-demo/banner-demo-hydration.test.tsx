@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { renderToString } from "react-dom/server";
 import { hydrateRoot } from "react-dom/client";
+import { CHANNEL_NAME } from "./demo-data";
 
 /** One fixed instant, so neither render reads the wall clock by accident. */
 const FROZEN = new Date("2026-09-17T09:24:00.000Z");
@@ -87,7 +88,7 @@ describe("the hero scene's first paint", () => {
     const html = renderToString(<DemoScene step={stepIndex("hold")} />);
     expect(html.length).toBeGreaterThan(5000);
     // The row whose timestamp is the thing that diverges in case 2.
-    expect(html).toContain("q4-outbound");
+    expect(html).toContain(CHANNEL_NAME);
   });
 
   it("🚫 a clock that moved between the two module evaluations still fails", async () => {

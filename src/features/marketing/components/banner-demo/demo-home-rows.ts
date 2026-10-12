@@ -24,7 +24,16 @@
 import type { HomeChannelWellId } from "@/features/channels/components/home-channel-wells";
 import type { HomeChannelRowFacts } from "@/shared/ui/home-channel-row";
 import type { AvatarPerson } from "@/shared/ui/avatar";
-import { CURRENT_USER_ID, FACE, MEMBERS, messagesAt, minsAgo } from "./demo-data";
+import {
+  CHANNEL_NAME,
+  CURRENT_USER_ID,
+  FACE,
+  MEMBERS,
+  minsAgo,
+} from "./demo-data";
+import {
+  messagesAt,
+} from "./demo-transcript";
 
 /** One row of /home's channel list: what it says, and which well it is filed in. */
 export type HomeRowMock = HomeChannelRowFacts & {
@@ -32,9 +41,9 @@ export type HomeRowMock = HomeChannelRowFacts & {
   well: HomeChannelWellId;
 };
 
-/** The row the scene sits in — `q4-outbound`, the channel the record pane plays.
+/** The row the scene sits in — the channel the record pane plays.
  *  `rel:`-prefixed like the real ids (`home-rows.ts › channelRowId`). */
-export const HOME_ROW_ID = "rel:demo-ws-q4";
+export const HOME_ROW_ID = "rel:demo-ws-debt";
 
 /**
  * The operator, as the agent view's viewer identity. (2026-09-15) The header
@@ -93,27 +102,31 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     ...QUIET,
     id: "rel:demo-ws-weekly",
     well: "pinned",
-    name: "weekly-review",
+    name: "deploys",
     // (2026-09-15) A solo channel shows its description where a peopled one
     // shows faces — one slot, never both.
     faces: [],
-    description: "Friday sweep of the pipeline with the Analyst",
+    description: "Build and release notices",
     at: minsAgo(60 * 27),
   },
   {
     ...QUIET,
     id: HOME_ROW_ID,
     well: "recent",
-    name: "q4-outbound",
+    // ⚠ THE SAME NAME THE PANE'S HEADER AND EVERY SESSION ROW CARRY. It is spelled
+    // once in `demo-data.ts`; a literal here is what left the column reading
+    // `q4-outbound` beside a pane reading `tech-debt` after the v3 rewrite, which the
+    // thread mount probe caught.
+    name: CHANNEL_NAME,
     faces: PEERS,
     // Overwritten per step by `homeRowsAt` — see there.
     at: minsAgo(0),
   },
   {
     ...QUIET,
-    id: "rel:demo-ws-renewals",
+    id: "rel:demo-ws-flakes",
     well: "recent",
-    name: "renewals-q3",
+    name: "flaky-tests",
     faces: [PEERS[0]],
     // The `@ N` pill and the dot are EXCLUSIVE — this row takes the louder one.
     mentions: 2,
@@ -121,9 +134,9 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
   },
   {
     ...QUIET,
-    id: "rel:demo-ws-acme",
+    id: "rel:demo-ws-apiv2",
     well: "recent",
-    name: "acme-migration",
+    name: "api-v2-migration",
     faces: [PEERS[1]],
     linkOut: true,
     unread: true,
@@ -133,7 +146,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     ...QUIET,
     id: "rel:demo-ws-design",
     well: "earlier",
-    name: "design-partners",
+    name: "design-review",
     faces: PEERS,
     at: minsAgo(60 * 50),
   },
