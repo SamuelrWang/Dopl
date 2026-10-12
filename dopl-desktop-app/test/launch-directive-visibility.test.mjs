@@ -14,9 +14,15 @@
 // NOTHING to the server (the claim is the authorisation — §6), but it now SAYS WHY locally, and
 // the two reasons the OPERATOR can act on raise their banner.
 
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { boot, row, claimPosts, decidePosts, wire, DID, CH, WS, OTHER } from "./_launch-directive-harness.mjs";
+
+// decide's backoff sleep is `unref`'d (it must never hold the app open), so while it is the only
+// pending timer Node 22's runner sees an empty event loop and cancels the file. Hold it open here.
+let keepAlive;
+before(() => { keepAlive = setInterval(() => {}, 1000); });
+after(() => clearInterval(keepAlive));
 
 const said = (h, needle) => h.logged.filter((l) => l.includes(needle));
 const codes = (h) => said(h, "NOT acted on");
