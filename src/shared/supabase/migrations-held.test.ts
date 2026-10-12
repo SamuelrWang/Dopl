@@ -148,6 +148,12 @@ describe("held migrations cannot be applied by accident", () => {
     expect(HELD).toEqual([
       "20261110140000_drop_pooled_credit_counter.sql",
       "20261110150000_drop_profile_legacy_billing_columns.sql",
+      // ⚠ The only held file that ADDS rather than drops, so it is deliberately
+      // absent from the drop-completeness list above — there is no object whose
+      // survival the hold protects. It is held by Samuel's ruling (2026-10-12,
+      // "write them, NEVER apply them"), and the README documents its release
+      // checklist.
+      "20261122120000_channel_per_channel_numbering.sql",
     ]);
   });
 });
