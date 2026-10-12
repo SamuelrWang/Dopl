@@ -2,12 +2,21 @@
  * **THE CITATION FIELD'S VALIDATION** — grammar B (2026-10-12).
  *
  * ⚠ **THE COERCION CASES ARE THE POINT OF THIS FILE.** A citation is a POINTER,
- * and `z.coerce.number()` turns `true` into **1** and `""` / `[]` into **0** — so
- * a lenient schema would manufacture a confident pill at message one out of
+ * and `z.coerce.number()` turns `true` into **1** — a perfectly valid citation —
+ * so a lenient schema would manufacture a confident pill at message one out of
  * junk. The read args in `schema-reads.ts` coerce on purpose (MCP clients send
  * numbers as strings, and a bad cursor is only a bad page); this field follows
  * `schema-collab.ts › ConsentMessageSeqSchema` instead, which refuses coercion
  * because a de-dupe key must never be manufactured.
+ *
+ * ⚠ **WHICH OF THESE CASES ACTUALLY BITE WAS MEASURED, NOT ASSUMED** (2026-10-12,
+ * by switching this schema to `z.coerce` and reading which assertions went red).
+ * The live hazards are `true` → **1** and `" 12"` → **12**: a padded digit string
+ * is accepted by coercion and refused by the explicit transform, which is the
+ * whole difference between the two. The `""` / `[]` / `null` case does NOT bite,
+ * because they coerce to 0 and `positive()` refuses 0 whatever produced it — so
+ * that case pins the floor rather than the coercion decision, and an earlier
+ * version of this docblock claimed otherwise.
  *
  * ⚠ A numeric STRING is still accepted — clients do send `"12"` — through an
  * explicit digits-only transform, which is the whole difference between
