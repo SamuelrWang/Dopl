@@ -15,6 +15,8 @@
 // Leaf deps are required directly; nothing here requires trigger.js back.
 
 const { postTaskEvent } = require('./channel-post');
+// The register a quit drains before it closes the process (`quit-guard.js › teardown`).
+const terminalPosts = require('./session-terminal-posts');
 const { diag } = require('./diag');
 
 // ── THE TWO PEER-FACING COURTESY REPLIES ─────────────────────────────────────
@@ -172,7 +174,13 @@ function onEnded(info, kind, extra, bodyOverride) {
   const body = bodyOverride || (meta.session_ended ? 'Session ended' : undefined);
   // ⚠ THE SLOT KEY RIDES WITH IT. This note is ABOUT one session, so the row must say which —
   // see `echoTargets` above and `channel-post.js › postTaskEvent`'s `sessionId` note.
-  Promise.resolve(postTaskEvent(entry, m, 'task_progress', taskId, meta, body, { sessionId }))
+  // ⚠ AND IT IS REGISTERED, NOT MERELY FIRED (2026-10-12). Fire-and-forget is right while the
+  // app is running and wrong at the one moment this note matters most: a session ended by a QUIT
+  // posts from here and then `quit-guard.js › teardown` calls `app.quit()`, which took the
+  // process away with the request in flight — so the peer waiting on a reply was told nothing.
+  // `track` only HOLDS the promise so the quit path can give it a bounded moment; it does not
+  // change this call's outcome, and the `.catch` below is still the only error handler.
+  terminalPosts.track(postTaskEvent(entry, m, 'task_progress', taskId, meta, body, { sessionId }))
     .catch((err) => diag('session onEnded echo error', err && err.message));
 }
 

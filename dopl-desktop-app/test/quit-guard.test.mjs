@@ -283,9 +283,14 @@ test("the dialog list and the kill list are the SAME predicate — one cannot na
 test("the flush is bounded, and the bound is stated as a quit-perception number", () => {
   assert.match(SRC, /const FLUSH_DEADLINE_MS = 1500;/);
   const teardown = SRC.slice(SRC.indexOf("async function teardown("), SRC.indexOf("function stopWaiting()"));
-  assert.match(teardown, /Promise\.race\(\[/, "raced — never a bare await");
-  assert.match(teardown, /sleep\(FLUSH_DEADLINE_MS\)\.then\(\(\) => false\)/);
+  // ⚠ 2026-10-12: the hand-rolled `Promise.race([both, sleep(…).then(() => false)])` is replaced
+  // by F-700's `withDeadline`, one per wait, so each can be reported BY NAME — the end notice,
+  // the state push and the away post. The bound itself is unchanged and is still the only thing
+  // that ends the wait; `test/quit-end-notice.test.mjs` pins the order and the drain.
+  assert.match(teardown, /withDeadline\(/, "bounded — never a bare await");
+  assert.match(teardown, /FLUSH_DEADLINE_MS,/);
   assert.match(teardown, /SKIPPED/, "a flush that did not land says so, and says what it costs");
+  assert.ok(!/sleep\(/.test(teardown), "the local sleep helper is no longer the deadline");
   // `send` carries a 15s HTTP timeout and one retry: right for a running app, absurd for a quit.
   assert.match(M("session-state-push.js"), /const HTTP_TIMEOUT_MS = 15000;/);
 });

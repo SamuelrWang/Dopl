@@ -149,7 +149,12 @@ function report(s, eff) {
     const text = noticeText(label, code, eff.reason, last);
     diag('session-drop-notice:', code, s.agentId || '(no id)', '—', text);
     notifyOperator(label, code, eff.reason);
-    void Promise.resolve(require('./channel-post').postDropNotice(
+    // ⚠ REGISTERED, NOT MERELY FIRED (2026-10-12) — the same argument as the lifecycle marker's
+    // in `trigger-outcomes.js › onEnded`. This notice is issued from inside `settle`, and a
+    // settle reached by a QUIT is one tick from `app.quit()`; unheld, the POST died with the
+    // process and the launcher learned nothing about the agent they were waiting on.
+    // `track` returns the same promise, so the reporting below is unchanged.
+    void require('./session-terminal-posts').track(require('./channel-post').postDropNotice(
       { channel: { id: s.channelId }, workspaceId: s.workspaceId },
       text,
       { clientMsgId: key, summary: oneLine(text, 180), taskId: s.taskId || undefined, sessionId: s.key },

@@ -31,7 +31,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+// ⚠ THE REAL REGISTER, not a fake (2026-10-12). It is dependency-free by contract
+// (`test/quit-end-notice.test.mjs` pins that), so the harness can hand `trigger-outcomes.js` the
+// shipped `track` and keep proving that the calm note's own outcome is untouched by being held.
+import * as terminalPostsNs from "../main/session-terminal-posts.js";
 
+const terminalPosts = terminalPostsNs.default || terminalPostsNs;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(HERE, "..", "main", "trigger-outcomes.js"), "utf8");
 
@@ -139,6 +144,10 @@ function loadLifecycleEcho() {
       return { postTaskEvent: (...args) => { posts.push(args); return Promise.resolve(); } };
     }
     if (id === "./diag") return { diag: () => {} };
+    // The calm note is HELD so a quit can wait for it (`quit-guard.js › teardown`); the register
+    // only keeps the promise and returns it unchanged, so every assertion below still reads the
+    // same post. Listed deliberately — an unlisted require is meant to stop here and be reviewed.
+    if (id === "./session-terminal-posts") return terminalPosts;
     if (id === "./targeting") return { truncate: (s) => s };
     if (id === "./consent-watcher") return { settle: () => {} };
     if (id === "./session-engine") return { closeConsentWindow: () => {} };
