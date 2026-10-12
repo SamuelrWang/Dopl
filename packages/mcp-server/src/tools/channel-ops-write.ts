@@ -32,6 +32,7 @@ import { ok, err, type ToolResponse } from "./respond";
 // FIELDS, not prose; the standing rules they used to restate live once in
 // `channel-doctrine.ts`, behind `op="rooms" action="help"`.
 import { deliveryFact, factsLine, type FactValue } from "./channel-facts";
+import { channelNoOf } from "./channel-numbering";
 // "Did it thread?" — the question a sender cannot otherwise settle.
 import { threadFacts } from "./channel-post-linkage";
 // "What became of the `@…` tokens?" — the server's own resolution, read back.
@@ -419,11 +420,17 @@ export async function opPost(
   // one row (seq 963) read as two messages in an agent's own transcript. It is
   // the HEAD rather than a field because "posted" is the claim that is wrong —
   // a caller that scans the first word must not read a replay as a send.
-  // ⚠ THE SEQ IS IN IT, and repeating it in `seq=` costs nothing worth saving:
+  // ⚠ A NUMBER IS IN IT, and repeating one in `seq=` costs nothing worth saving:
   // the head is prose a reader takes at a glance and the fields are what a
   // parser reads, and neither should have to consult the other.
+  // ⚠ **AND THEY ARE NOW TWO DIFFERENT NUMBERS, DELIBERATELY** (2026-10-12): the
+  // head's `#N` is the PER-CHANNEL number a person cites, `seq=` below stays the
+  // table-wide CURSOR a caller arms a hold with. Until the held migration lands
+  // `channelNoOf` falls back to `seq` and the two agree, so this line is
+  // byte-identical to before — but a reader must never copy the head into
+  // `since=`, which is why only one of them is routed through the numbering.
   const head = message.replayed
-    ? `already posted as #${message.seq} (idempotent replay — not re-sent)`
+    ? `already posted as #${channelNoOf(message)} (idempotent replay — not re-sent)`
     : (opts.resultHead ?? "posted");
   return ok(
     factsLine(head, {
