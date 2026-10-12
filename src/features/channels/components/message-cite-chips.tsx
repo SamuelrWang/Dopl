@@ -29,14 +29,24 @@ export function MessageCiteChips({
   body,
   onJumpToSeq,
 }: {
-  cites: MessageCites;
+  /** ⚠ **OPTIONAL, AND LOOSELY GUARDED BELOW** — see the `== null` note. */
+  cites?: MessageCites;
   /** The row's stored text — what the chips are measured AGAINST, never rendered. */
   body: string;
   onJumpToSeq?: (seq: number) => void;
 }) {
   // ⚠ `null` IS A LEGACY ROW, not an empty list: it has no resolved citations at
   // all and nothing to chip. Both land here, deliberately, on the same `return`.
-  if (cites === null || cites.length === 0 || onJumpToSeq === undefined) {
+  //
+  // ⚠ **`== null`, LOOSE AND ON PURPOSE** (2026-10-12). A strict `=== null` here
+  // CRASHED THE WHOLE TRANSCRIPT for a row whose `cites` was `undefined` —
+  // `undefined.length` throws, React unwinds, and a reader gets a blank pane
+  // instead of one missing chip row. `MessageRow.cites` is typed non-optional, so
+  // the type system said this could not happen; rows are also hand-built in tests
+  // and by any future projection that forgets the field, and a component that
+  // blanks a transcript when a field is missing is not worth the strictness.
+  // `MessageRefText` already used the loose form — the INCONSISTENCY was the bug.
+  if (cites == null || cites.length === 0 || onJumpToSeq === undefined) {
     return null;
   }
   const orphans = citesNotInBody(cites, body);

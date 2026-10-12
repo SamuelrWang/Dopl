@@ -130,6 +130,43 @@ describe("it draws only what the body left out", () => {
 });
 
 describe("the states that draw nothing", () => {
+  it("🔒 a row with NO `cites` FIELD AT ALL renders — it does not blank the pane", () => {
+    /**
+     * ⚠ **A REGRESSION, AND THE FAILURE WAS WHOLE-TRANSCRIPT.** The first cut
+     * guarded with `cites === null`, so a row whose field was `undefined` reached
+     * `undefined.length`, threw inside render, and React unwound the entire
+     * transcript — a blank pane instead of one missing chip row. `MessageRow.cites`
+     * is typed non-optional, so the type system said this could not happen;
+     * `transcript-preview-lanes.test.tsx` builds rows by hand and found it anyway.
+     * Any future projection that forgets the field is the same crash.
+     */
+    const row = {
+      kind: "message",
+      id: "m-bare",
+      seq: 9,
+      side: "peer",
+      agent: false,
+      author: { userId: PEER, email: null, displayName: "Diana Taylor", avatarUrl: null },
+      authorLabel: "Diana Taylor",
+      time: "10:01",
+      body: "no cites field on this row at all",
+      continuation: false,
+      mentionsMe: false,
+    } as unknown as Parameters<typeof Transcript>[0]["rows"][number];
+    render(
+      <Transcript
+        rows={[row]}
+        index={INDEX}
+        flashId={null}
+        onOpenThread={vi.fn()}
+        newestSeq={2000}
+        onJumpToSeq={vi.fn()}
+      />
+    );
+    expect(screen.getByText("no cites field on this row at all")).toBeTruthy();
+    expect(chipRow()).toBeNull();
+  });
+
   it("a LEGACY row has no chips — it has no resolved citations at all", () => {
     renderBody("re #1759 — fixed", undefined);
     expect(chipRow()).toBeNull();
