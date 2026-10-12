@@ -234,6 +234,13 @@ class FakeQuery implements PromiseLike<{ data: FakeRow[]; error: null }> {
     return out.slice(0, this.cap);
   }
 
+  /** `home-space.ts › findHomeSpaceId` ends its chain here — at most one row, `null` for none.
+   *  Reached only by a LOCKED credential (`credentialLockFor`), which is why the world needs no
+   *  `kind='home'` row for the unlocked suites. */
+  maybeSingle(): Promise<{ data: FakeRow | null; error: null }> {
+    return Promise.resolve({ data: this.run()[0] ?? null, error: null });
+  }
+
   then<R1 = { data: FakeRow[]; error: null }, R2 = never>(
     onfulfilled?:
       | ((value: { data: FakeRow[]; error: null }) => R1 | PromiseLike<R1>)

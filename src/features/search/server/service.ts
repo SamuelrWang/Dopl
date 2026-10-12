@@ -1,6 +1,7 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
+import { credentialLockFor } from "@/shared/tenancy/resolve-resource";
 import {
   CONTAINER_ONLY_SEARCH_GROUPS,
   SEARCH_GROUP_ORDER,
@@ -124,6 +125,17 @@ async function runGroupReads(
     ownerUserId,
     credentialSubjectUserId: ctx.credentialSubjectUserId,
     roleByContainer: new Map(reach.containers.map((c) => [c.id, c.role])),
+    // 🔒 B1 AGAIN, ONE LEVEL DOWN (Batch 11, #3610 class). `loadSearchReach` applied the lock to the
+    // CONTAINER fence; this applies it to the grant's SCOPE, or a row inside the locked container
+    // lent only to a scope outside it is served. One spelling for every grant read
+    // (`resolve-resource.ts › credentialLockFor`), so this set is the lock PLUS the operator's home
+    // space — the same reach `resolveResource` admits for the same id. `null` when unlocked, and
+    // then nothing extra is read.
+    lock: await credentialLockFor({
+      userId: ctx.userId,
+      credentialSubjectUserId: ctx.credentialSubjectUserId,
+      apiKeyWorkspaceId: ctx.lockedWorkspaceId,
+    }),
   };
 
   const bases = await listReadableBases(containerIds, caller);

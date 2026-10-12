@@ -2,8 +2,10 @@ import "server-only";
 import { isSharedCredential } from "@/shared/auth/credential-audience";
 import {
   grantedResourceIds,
+  NO_GRANTS,
   type GrantedResourceIds,
 } from "@/shared/tenancy/resource-grant-reach";
+import { credentialLockFor } from "@/shared/tenancy/resolve-resource";
 import { slugify } from "@/shared/lib/slug/slugify";
 import type { Role } from "@/features/workspaces/types";
 import {
@@ -83,16 +85,23 @@ export function needsGrantArm(
   );
 }
 
-/** {@link grantedResourceIds} for this resource type, narrowed by {@link needsGrantArm}. */
-export function baseGrantsFor(
+/**
+ * {@link grantedResourceIds} for this resource type, narrowed by {@link needsGrantArm}.
+ * ⚠ WITH THE LOCK (Batch 11, #3610 class): a locked credential reaches a grant only through a scope
+ * inside its lock, so a base that lives in the locked container but is lent only to a scope outside it
+ * is not read. Unlocked: the same 3-argument call as before, and no home-space probe.
+ */
+export async function baseGrantsFor(
   ctx: KnowledgeContext,
   bases: readonly KnowledgeBase[]
 ): Promise<GrantedResourceIds> {
-  return grantedResourceIds(
-    ctx.userId,
-    "knowledge_base",
-    bases.filter((b) => needsGrantArm(ctx, b)).map((b) => b.id)
-  );
+  const ids = bases.filter((b) => needsGrantArm(ctx, b)).map((b) => b.id);
+  // Before `credentialLockFor`: nothing to ask about costs no query (`grantedResourceIds` agrees).
+  if (ids.length === 0) return NO_GRANTS;
+  const lock = await credentialLockFor(ctx);
+  return lock
+    ? grantedResourceIds(ctx.userId, "knowledge_base", ids, { lock })
+    : grantedResourceIds(ctx.userId, "knowledge_base", ids);
 }
 
 /** Single-base read gate; a teams-mode base is 404 outside every granted team. */

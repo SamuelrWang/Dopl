@@ -34,6 +34,14 @@ export interface SearchCaller {
   ownerUserId: string | null;
   credentialSubjectUserId: string | null;
   roleByContainer: ReadonlyMap<string, Role>;
+  /**
+   * The containers a LOCKED credential may stand in — its lock plus its operator's home space
+   * (`resolve-resource.ts › credentialLockFor`) — or `null` when it is unlocked. Only
+   * {@link grantSets} reads it, and only to filter the grant's SCOPE (Batch 11, #3610 class).
+   * ⚠ REQUIRED, like `credentialSubjectUserId`: a caller that cannot say whether it is locked has
+   * not answered the question, and `service.ts` is the one place that answers it.
+   */
+  lock: readonly string[] | null;
 }
 
 function ctxFor(caller: SearchCaller, workspaceId: string) {
@@ -42,7 +50,8 @@ function ctxFor(caller: SearchCaller, workspaceId: string) {
     userId: caller.userId,
     role: caller.roleByContainer.get(workspaceId) ?? null,
     source: "user" as const,
-    // Never the container lock: it answers which workspace, not which rows (F-336).
+    // Not the lock: no `canSee*` predicate reads this axis, and the lock is applied where it belongs
+    // — the container fence (`repository-reach.ts`) and the grant's scope ({@link grantSets}).
     apiKeyWorkspaceId: null,
     credentialSubjectUserId: caller.credentialSubjectUserId,
   };
@@ -67,6 +76,10 @@ export interface CandidateRow {
 /**
  * Both grant sets, read once per candidate page rather than per container. None for a
  * shared credential: every predicate refuses it past the widest visibility anyway.
+ * ⚠ `caller.lock` NARROWS THE SCOPE GRANT (Batch 11, #3610 class): the lock already cut the
+ * container fence to one container, but a row INSIDE it, private to somebody else and lent only to a
+ * scope outside the lock, was still served. The team arm takes no lock: `team` scope is answered by
+ * the teams tables, not `grantedResourceIds`. Unlocked = the same 3-argument call as before.
  */
 async function grantSets(
   caller: SearchCaller,
@@ -80,7 +93,9 @@ async function grantSets(
   const [scoped, team] = await Promise.all([
     opts.scope === false
       ? Promise.resolve(NO_GRANTS)
-      : grantedResourceIds(caller.userId, type, ids),
+      : caller.lock
+        ? grantedResourceIds(caller.userId, type, ids, { lock: caller.lock })
+        : grantedResourceIds(caller.userId, type, ids),
     opts.team === false
       ? Promise.resolve(NO_GRANTS)
       : teamGrantedResourceIds(caller.userId, type, ids),

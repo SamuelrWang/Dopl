@@ -49,6 +49,8 @@ const caller = (ownerUserId: string | null = ME) => ({
   ownerUserId,
   credentialSubjectUserId: ownerUserId,
   roleByContainer: new Map([[WS, "member" as const]]),
+  /** Unlocked: these cases assert query SHAPE, and the lock only narrows the grant's scope. */
+  lock: null,
 });
 const WS = "33333333-3333-3333-3333-333333333333";
 const CH = "55555555-5555-5555-5555-555555555555";

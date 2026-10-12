@@ -121,6 +121,22 @@ export async function resolveNowhereMock(importOriginal: () => Promise<typeof Re
   };
 }
 
+/**
+ * The credential lock, without the home-space query. `shareCtxForIdentities` asks for it before its
+ * grant read (Batch 11) and unmocked that reaches Supabase and hangs. It answers what the real
+ * `credentialLockFor` would for these fixtures — the lock itself, no home space — so a LOCKED caller
+ * stays locked here rather than being quietly turned into an unlocked one.
+ */
+export async function credentialLockMock(importOriginal: () => Promise<typeof Resolver>) {
+  return {
+    ...(await importOriginal()),
+    credentialLockFor: vi.fn(
+      async (caller: { apiKeyWorkspaceId?: string | null }) =>
+        caller.apiKeyWorkspaceId ? [caller.apiKeyWorkspaceId] : null
+    ),
+  };
+}
+
 /** A standard "ws-1": the create gates read the workspace row, and unmocked they hang. */
 export function workspaceRepoMock() {
   return {
