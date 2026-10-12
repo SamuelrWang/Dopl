@@ -266,6 +266,12 @@ export function useChannelSurfaceData({
       void agentsPanel.refetch();
     },
     refetchMembers: () => void refetchMembers(),
+    // ⚠ A `channel_members`-only doorbell (the read watermark, joins, favourites) can change the
+    // roster and the list's unread state, never a transcript, thread, mention or agent card.
+    refetchRoster: () => {
+      onDoorbell?.();
+      void refetchMembers();
+    },
   });
   // ⚠ THE SAME gate the reads register — the mark-read write holds the realtime
   // doorbell open for its own life, or a coalesced refetch mid-flight reverts
