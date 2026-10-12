@@ -29,9 +29,9 @@ import {
   SALES_CHANNEL,
   WORKSPACE_ID,
   messagesAt,
-  narrationAt,
 } from "./demo-data";
-import { ACTIVITY_BINS, MENTIONS } from "./demo-info-data";
+import { narrationAt } from "./demo-narration";
+import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
 import {
   DemoAccountRail,
@@ -145,7 +145,9 @@ export function DemoScene({
                       peerSessions={peers}
                       openAgent={agentOpen ? agentKey(MY_SESSION) : null}
                       onOpenAgent={onOpenAgent}
-                      mentions={MENTIONS}
+                      // Step-gated like every sibling feed: a mention appears with
+                      // the post it cites (`demo-info-data.ts › mentionsAt`).
+                      mentions={mentionsAt(step)}
                       mentionsTruncated={false}
                       mentionsLoading={false}
                       onOpenMention={NOOP}
@@ -173,6 +175,10 @@ export function DemoScene({
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}
                     viewer={VIEWER}
+                    // The addressee pills on a posted-to box resolve off this, exactly as
+                    // `agent-panel.tsx` hands it down. Absent draws NO pills at all
+                    // (`agent-stream.tsx › roster`), which is what the demo showed.
+                    roster={index}
                     // From the index, as the real panel resolves it: colour belongs to the session.
                     color={
                       index.agents.get(MY_SESSION.agentId ?? "")?.color ?? null

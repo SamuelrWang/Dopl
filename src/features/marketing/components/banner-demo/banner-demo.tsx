@@ -186,7 +186,30 @@ export function BannerDemo() {
             transition: cursor.instant ? "none" : undefined,
           }}
         >
-          <svg viewBox="0 0 13 19" width="17" height="25" fill="none">
+          {/* ⚠ ONE CURSOR ACROSS THE WHOLE BANNER (Samuel, 2026-10-12). This is
+              `hero-banner.tsx`'s pointer — the thin, right-leaning one that slides in
+              and presses the notification card — GEOMETRY AND ROTATION COPIED EXACTLY:
+              13x19 at the same `d`, turned 45deg about the TIP. It used to be the same
+              path at 17x25 with no rotation, so the pointer that entered the scene was
+              visibly fatter and aimed up-LEFT, and the reader watched the cursor change
+              shape halfway through one continuous motion.
+
+              ⚠ THE WHITE STROKE STAYS, AND IT IS THE ONE DEVIATION (approved). The
+              banner cursor rides a daylight photograph and needs no outline; this one
+              rides /home's dark slab, where a `#0b0b0c` fill with no keyline is very
+              nearly invisible.
+
+              ⚠ `transformOrigin` IS THE TIP, for `hero-banner.tsx`'s reason: the
+              choreography translates the ELEMENT ORIGIN to the target
+              (`locate` above), so the rotation has to pivot on the tip or the point
+              lands off the control it is pressing. */}
+          <svg
+            viewBox="0 0 13 19"
+            width="13"
+            height="19"
+            fill="none"
+            style={{ transform: "rotate(45deg)", transformOrigin: "0.75px 0.9px" }}
+          >
             <path
               d="M0.75 0.9 L0.75 15.2 L4.3 11.9 L6.4 16.8 L8.3 15.9 L6.3 11.1 L10.6 10.8 Z"
               fill="#0b0b0c"

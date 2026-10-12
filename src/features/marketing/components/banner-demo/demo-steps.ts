@@ -22,17 +22,19 @@ export type StepId =
   | "agent-msg-2"
   | "agent-msg-3"
   | "agent-msg-4"
-  | "agent-msg-5"
   | "cursor-to-tab"
   | "click-tab"
   | "tab-open"
   | "cursor-to-agent"
   | "click-agent"
   | "agent-open"
+  | "inbound-1"
+  | "inbound-2"
   | "dm-user-1"
   | "dm-agent-1"
   | "dm-user-2"
   | "dm-agent-2"
+  | "agent-post-2"
   | "hold"
   | "reset-fade";
 
@@ -48,17 +50,26 @@ export const STEPS: ReadonlyArray<{ id: StepId; dur: number }> = [
   { id: "agent-msg-2", dur: 2100 },
   { id: "agent-msg-3", dur: 2100 },
   { id: "agent-msg-4", dur: 1900 },
-  { id: "agent-msg-5", dur: 2000 },
   { id: "cursor-to-tab", dur: 1200 },
   { id: "click-tab", dur: 550 },
   { id: "tab-open", dur: 1300 },
   { id: "cursor-to-agent", dur: 1200 },
   { id: "click-agent", dur: 550 },
   { id: "agent-open", dur: 1500 },
+  // What woke the agent, before it answers: one human sender, one agent sender.
+  { id: "inbound-1", dur: 1600 },
+  { id: "inbound-2", dur: 1800 },
   { id: "dm-user-1", dur: 1700 },
   { id: "dm-agent-1", dur: 2300 },
   { id: "dm-user-2", dur: 1700 },
   { id: "dm-agent-2", dur: 2400 },
+  // ⚠ THE SECOND POSTED-TO BOX LANDS HERE, AFTER THE PRIVATE EXCHANGE (Samuel,
+  // 2026-10-12). It used to be revealed with the other channel posts, ten beats
+  // before the agent view even opened, so the box the conversation PRODUCES was
+  // already on screen when the conversation started and the operator's turns
+  // filled in above it. The stream itself was never wrong: it sorts by stamp
+  // (`agent-stream-model.ts › buildAgentStream`). The reveal was.
+  { id: "agent-post-2", dur: 2200 },
   { id: "hold", dur: 2800 },
   { id: "reset-fade", dur: 450 },
 ];

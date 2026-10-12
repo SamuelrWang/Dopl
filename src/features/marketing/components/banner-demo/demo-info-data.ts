@@ -12,56 +12,81 @@
 
 import type { ChannelMention } from "@/features/channels/types";
 import type { ActivityBin } from "@/features/channels/components/thread-activity";
-import {
-  AGENT_IDS,
-  CHANNEL_ID,
-  FACE,
-  NOW_MS,
-  minsAgo,
-} from "./demo-data";
+import { AGENT_INDEX, CHANNEL_ID, FACE, NOW_MS, citedMessage } from "./demo-data";
+import { reached, type StepId } from "./demo-steps";
 
 /**
- * My mentions in this channel, newest first — the server's `seq DESC` order,
- * which `MentionsList` never re-sorts.
+ * My mentions in this channel, revealed with the post each one cites.
  *
  * (2026-09-15) One unread, one read: the list has no badge on /home, so an unread
  * row's own dot and tint need both states on screen to be visible at all.
  * `threadId: null` — a channel-level post, which is every post in this scene.
+ *
+ * ⚠ **EVERY FIELD BUT THE SNIPPET IS DERIVED FROM THE POST IT CITES** (`demo-data.ts ›
+ * citedMessage`), so the inbox cannot disagree with the transcript about who wrote a
+ * message, when, or in which colour. The two rows used to author all of it by hand and
+ * two of those answers had gone stale — see that function's header.
+ *
+ * The snippet stays authored: it is a server-side excerpt, which the demo has nothing
+ * to compute from.
  */
-export const MENTIONS: ChannelMention[] = [
-  {
-    messageId: "demo-m9",
-    seq: 9,
-    channelId: CHANNEL_ID,
-    threadId: null,
-    authorUserId: "demo-u-anthony",
-    authorKind: "agent",
-    authorName: "Anthony Reyes",
-    authorAvatarUrl: FACE["demo-u-anthony"],
-    authorAgentId: AGENT_IDS.analyst,
-    authorAgentName: "Pipeline Analyst",
-    authorAgentColor: "agent-03",
-    snippet: "@Samuel Director+ at 50–500 headcount closed 3× faster — 74 of the 186.",
-    createdAt: minsAgo(1),
-    read: false,
-  },
-  {
-    messageId: "demo-m2",
-    seq: 2,
-    channelId: CHANNEL_ID,
-    threadId: null,
-    authorUserId: "demo-u-grace",
-    authorKind: "user",
-    authorName: "Grace Okafor",
-    authorAvatarUrl: FACE["demo-u-grace"],
-    authorAgentId: null,
-    authorAgentName: null,
-    authorAgentColor: null,
-    snippet: "@Samuel half of them are missing titles in the CRM again.",
-    createdAt: minsAgo(24),
-    read: true,
-  },
+function mention(
+  messageId: string,
+  snippet: string,
+  read: boolean,
+): { step: StepId; mention: ChannelMention } {
+  const { step, message, agentId, agentColor } = citedMessage(messageId);
+  const author = message.authorUserId;
+  if (!author) {
+    throw new Error(`banner demo: mention cites authorless message ${messageId}`);
+  }
+  return {
+    step,
+    mention: {
+      messageId: message.id,
+      seq: message.seq,
+      channelId: CHANNEL_ID,
+      threadId: null,
+      authorUserId: author,
+      authorKind: message.authorKind,
+      authorName: message.authorName,
+      authorAvatarUrl: FACE[author as keyof typeof FACE] ?? null,
+      authorAgentId: agentId,
+      authorAgentName: agentId
+        ? (AGENT_INDEX.get(agentId)?.displayName ?? null)
+        : null,
+      authorAgentColor: agentColor,
+      snippet,
+      createdAt: message.createdAt,
+      read,
+    },
+  };
+}
+
+/** Newest first, the server's own `seq DESC`, which `MentionsList` never re-sorts. */
+const MENTION_SCRIPT: ReadonlyArray<{ step: StepId; mention: ChannelMention }> = [
+  mention(
+    "demo-m10",
+    "@Samuel Director+ at 50–500 headcount closed 3× faster — 74 of the 186.",
+    false,
+  ),
+  mention("demo-m2", "@Samuel half of them are missing titles in the CRM again.", true),
 ];
+
+/**
+ * **THE INBOX AT THIS BEAT** (Samuel, 2026-10-12: a mention must appear at the moment it
+ * happens).
+ *
+ * ⚠ **IT WAS THE ONE FEED IN THE SCENE THAT WAS NOT STEP-GATED.** `demo-scene.tsx` passed
+ * the bare array while every sibling went through `messagesAt` / `narrationAt` /
+ * `homeRowsAt`, so both rows sat in the column from the first frame — including one citing
+ * a post that had not been made yet.
+ *
+ * ⚠ Still newest first: the gate FILTERS, it never re-orders.
+ */
+export function mentionsAt(step: number): ChannelMention[] {
+  return MENTION_SCRIPT.filter((m) => reached(step, m.step)).map((m) => m.mention);
+}
 
 /**
  * 31 UTC days of message counts — what

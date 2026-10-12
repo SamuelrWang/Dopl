@@ -14,6 +14,7 @@ import type {
   DesktopSessionSummary,
 } from "@/shared/lib/spa-bridge";
 import type { ChannelMessage } from "@/features/channels/types";
+import type { AuthorIndex } from "@/features/channels/components/view-model";
 import type { AgentColorKey } from "@dopl/contracts";
 import {
   agentDisplayName,
@@ -38,6 +39,7 @@ export function DemoAgentView({
   messages,
   currentUserId,
   viewer,
+  roster,
   color,
   onClose,
 }: {
@@ -49,6 +51,10 @@ export function DemoAgentView({
   messages: ChannelMessage[];
   currentUserId: string;
   viewer: AvatarPerson;
+  /** The channel's roster, for the addressee pills on a posted box (`agent-stream.tsx ›
+   *  roster`). ⚠ NOT the same index as that file's `displayIndex`, which answers a
+   *  different question; the demo presses no card buttons, so it hands none. */
+  roster: AuthorIndex;
   /** Resolved by the mount from the channel's bank (`view-model.ts › AgentRosterEntry.color`). */
   color: AgentColorKey | null;
   onClose: () => void;
@@ -78,6 +84,7 @@ export function DemoAgentView({
       <AgentStream
         entries={entries}
         supported
+        roster={roster}
         // The key the transcript paints this agent's posts in.
         color={color}
         // The header pill's own verdict, handed down so the two cannot disagree.
