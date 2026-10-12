@@ -17,7 +17,7 @@
 // purpose.
 //
 // ⚠ DEPENDENCY-FREE ON PURPOSE (no electron, no store, no diag) — the same argument as
-// `deadline.js`: `test/quit-end-notice.test.mjs` drives the REAL shipped functions under
+// `deadline.js`: `test/session-terminal-posts.test.mjs` drives the REAL shipped functions under
 // `node --test` rather than a source-sliced copy, so the thing the quit path depends on is the
 // thing that was tested. The logging is the caller's.
 //
