@@ -1,6 +1,10 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { CHANNEL_MESSAGE_COLS, type ChannelMessageRow } from "./dto";
+import {
+  CITE_MODE_CURRENT,
+  CITE_MODE_METADATA_KEY,
+} from "../lib/cites";
 // ⚠ SPLIT ON THE 500-LINE CAP (2026-09-05): the two bounded recent-activity reads.
 export {
   listRecentRoomAgentPosts,
@@ -279,6 +283,40 @@ export async function findMessageBySeq(
 }
 
 /**
+ * **THE ROWS A SET OF `seq`s NAMES, IN ONE QUERY** — citation resolution
+ * (grammar B, 2026-10-12).
+ *
+ * ⚠ **A THIRD (channel, seq) READ, AND IT EARNS ITS PLACE ON THE TERMS THE TWO
+ * ABOVE SET.** `findMessageBySeq` returns the whole row and `findMessageAuthorBySeq`
+ * one column; this returns a NARROW projection for MANY seqs. Resolving up to
+ * `CHANNEL_CITES_MAX` citations through the row-returning read would pull up to
+ * twenty 16 KB bodies to learn twenty ids — exactly the cost that docblock says
+ * the narrow select exists to avoid — and twenty round trips to do it.
+ *
+ * ⚠ `metadata` IS IN THE PROJECTION AND `body` IS NOT. The thread check needs
+ * `metadata.taskId`; nothing here needs the body, which is the whole saving.
+ *
+ * ⚠ **`channel_id` IS THE FENCE, NOT A NARROWING** — `findMessageById`'s rule.
+ * The caller has been proved a member of THIS channel, so scoping the lookup is
+ * what stops a citation naming a row in a room the caller has never been in.
+ * A seq outside this channel simply does not come back, and the caller is told.
+ */
+export async function findMessageRefsBySeqs(
+  channelId: string,
+  seqs: readonly number[]
+): Promise<Array<{ id: string; seq: number; metadata: unknown }>> {
+  if (seqs.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_messages")
+    .select("id, seq, metadata")
+    .eq("channel_id", channelId)
+    .in("seq", seqs as number[]);
+  if (error) throw error;
+  return (data ?? []) as Array<{ id: string; seq: number; metadata: unknown }>;
+}
+
+/**
  * ONE MESSAGE BY ID, SCOPED TO ITS CHANNEL.
  *
  * ⚠ **THE `channel_id` PREDICATE IS THE FENCE, NOT A NARROWING.** `id` is a
@@ -345,6 +383,28 @@ export async function insertMessage(
   row: MessageInsert
 ): Promise<ChannelMessageRow> {
   const db = supabaseAdmin();
+  // ⚠ **THE GRAMMAR STAMP, WRITTEN HERE AND NOWHERE ELSE** (grammar B,
+  // 2026-10-12). Its PRESENCE is what tells a renderer this row was written
+  // under grammar B, so its prose numbers are not links; a row without it
+  // predates the rule and keeps the legacy `#NNNN` pills it has always had.
+  //
+  // ⚠ **THIS FUNCTION, NOT THE SERVICE, AND THE REASON IS THE FUNNEL.** Measured
+  // 2026-10-12: exactly one database function inserts into `channel_messages`
+  // (`channel_message_insert`), this is its only call site, and nothing writes
+  // the table directly — `insert-funnel.test.ts` pins all three. Stamping a layer
+  // up would leave `service-tasks.ts › createTask`, the artifact writes and
+  // anything added later unstamped, and an unstamped NEW row silently gets
+  // legacy pills, which is the exact failure the stamp exists to prevent.
+  //
+  // ⚠ **SPREAD LAST, SO IT OVERWRITES ANY CALLER-SUPPLIED VALUE.** Absence cannot
+  // be forged — the server always adds it — but a caller setting `citeMode`
+  // itself must not be able to opt a new message back into legacy pills.
+  // `service-writes-metadata.ts` also strips it from caller metadata; this is the
+  // half that holds when a future writer forgets to.
+  const metadata = {
+    ...(row.metadata as Record<string, unknown>),
+    [CITE_MODE_METADATA_KEY]: CITE_MODE_CURRENT,
+  };
   const { data, error } = await db.rpc("channel_message_insert", {
     p_channel_id: row.channel_id,
     p_workspace_id: row.workspace_id,
@@ -352,7 +412,7 @@ export async function insertMessage(
     p_author_kind: row.author_kind,
     p_kind: row.kind,
     p_body: row.body,
-    p_metadata: row.metadata,
+    p_metadata: metadata,
     p_client_msg_id: row.client_msg_id,
     p_wake_verdict: row.wake_verdict,
     p_recipient_user_ids: row.recipient_user_ids,
