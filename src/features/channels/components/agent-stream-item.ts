@@ -24,6 +24,7 @@
 import type { DisplayPayload } from "./view-model-display";
 import type { PostDestination } from "./agents-model";
 import type { StreamLane } from "./agent-stream-lanes";
+import type { AgentColorKey } from "../types";
 
 
 /** One row of the rendered stream. */
@@ -130,6 +131,36 @@ export interface StreamItem {
    *  claim: the message is in the channel either way, which is why it does not move the
    *  lane. Only an explicit `true` rides through. */
   fromOperator?: boolean;
+  /**
+   * `inbound` rows only — **WHAT KIND OF AUTHOR WROTE IT** (Samuel, 2026-10-12): `"user"` for a
+   * person, `"agent"` for a machine, absent for "cannot say".
+   *
+   * ⚠ **SERVER-DERIVED FROM THE AUTHOR'S CREDENTIAL** (`main/session-dispatch.js ›
+   * feedLiveSession`), never recovered from {@link StreamItem.senderName}, which is peer prose.
+   * ⚠ **IT OUTRANKS {@link StreamItem.fromOperator} ON THE BANNER** — that flag folds the
+   * operator's own agents into "you", and this face names an agent as an agent.
+   * ⚠ ABSENT IS UNKNOWN AND PAINTS NOTHING: the neutral banner, never a human's black.
+   */
+  authorKind?: "user" | "agent";
+  /**
+   * `inbound` rows only, and only beside `authorKind: "agent"` — **THE OPERATOR'S NAME FOR THE
+   * AGENT THAT WROTE IT** (2026-10-12), so the banner names `@the-agent` rather than
+   * *"<person>'s agent"*.
+   *
+   * 🔒 A CAPTION, PEER-TYPED AND UNVERIFIED — {@link StreamItem.senderName}'s rule exactly.
+   * ⚠ ABSENT IS ORDINARY: the face falls back through `senderName` to the anonymous sentence.
+   */
+  senderAgentName?: string;
+  /**
+   * `inbound` rows only, beside `authorKind: "agent"` — **THAT AGENT'S IDENTITY COLOUR**, the key
+   * its banner is painted with (2026-10-12).
+   *
+   * ⚠ **ALREADY NARROWED TO ONE OF THE SIXTEEN** by `agent-stream-model.ts` through
+   * `lib/agent-colors.ts › agentColorOrNull`, which is why the type is `AgentColorKey` here and a
+   * bare `string` on the wire. ⚠ ABSENT IS THE NEUTRAL FACE: an uncoloured agent is legitimate, and
+   * a renderer must degrade rather than invent a hue.
+   */
+  senderColor?: AgentColorKey;
   /**
    * `sent` rows FROM THE TRANSCRIPT only — **WHO THE POST WAS ADDRESSED TO**, as raw
    * ids for the face to resolve (#3081, Samuel: black pills naming the addressees in

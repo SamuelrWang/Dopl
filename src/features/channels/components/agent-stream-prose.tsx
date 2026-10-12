@@ -21,15 +21,27 @@
  * would otherwise land as loose siblings inside a `<li>` with no rhythm between
  * them. The wrapper supplies the rhythm and nothing else.
  *
- * ⚠ 2. THE ROSTER IS EMPTY, AND THAT IS A MEASUREMENT RATHER THAN A SHORTCUT.
- * Neither agent host holds one — `agent-panel.tsx` already builds
- * `indexMembers([], currentUserId)` for the escalation derivation and says why,
- * and `agent-window.tsx`'s diet is messages plus consent — so an index threaded
- * through two hosts would carry an empty `byId` at both ends and tint exactly
- * nothing. **An empty index is what those hosts would pass**, so it is built here
- * once instead, and an @-handle in this lane renders as its own characters. That
- * is also the correct claim: a tint asserts the roster resolved somebody, and
- * this surface did not ask.
+ * ⚠ 2. **THE ROSTER ARRIVES FROM THE HOST NOW, AND AN @-HANDLE IN THIS LANE TINTS**
+ * (Samuel, 2026-10-12: *"@-mention slugs currently render in plain black text. Make them blue"*
+ * — ruling 2a, *give both agent hosts a real roster*).
+ *
+ * ⚠ **THE OLD ANSWER WAS "EMPTY INDEX", AND THE REASON IT GAVE WAS SOUND — WHICH IS WHY THE FIX
+ * IS A ROSTER AND NOT A TINT.** A tint asserts that the roster RESOLVED SOMEBODY (F-266: the
+ * server's stamp and the transcript's highlight must never disagree about who a message tagged),
+ * so painting every `@word` blue here would have been this surface claiming a resolution nobody
+ * made. Both hosts now ASK — the web panel passes the index its surface already derived
+ * (`surface-agent-view.tsx`), and the window reads the roster it used to skip — so the tint means
+ * exactly what it means in the transcript.
+ * ⚠ **IT ARRIVES THROUGH A CONTEXT, NOT SIX PROPS.** {@link StreamProse} is called from five
+ * faces across four files (this stream's own turns, the inbound box, the directed box and the
+ * sent box); threading an index through each of them is five chances for one lane to go quietly
+ * untinted. {@link StreamRoster} is set ONCE around the list by `agent-stream.tsx`, off the
+ * `roster` prop the addressee pills already take, so the two cannot disagree about who is in the
+ * room. ⚠ **AND THE DEFAULT IS STILL THE EMPTY INDEX**: a host with no roster in hand renders
+ * exactly what it rendered before this wave — no tint, and no error.
+ * ⚠ **AN UNRESOLVED HANDLE STAYS PLAIN**, by that same rule: an ended agent, a typo and a handle
+ * belonging to nobody here all render as their own characters, which is the honest signal that
+ * they address nobody.
  *
  * ⚠ 3. `mentionsMe` IS `false` AND MUST STAY SO. It is the SERVER-STAMPED
  * `metadata.mentionedUserIds` fact, and a narration frame has no metadata and
@@ -59,6 +71,7 @@
  * text it did not receive.
  */
 
+import { createContext, useContext } from "react";
 import { cn } from "@/shared/lib/utils";
 import { MessageMarkdown } from "./message-markdown";
 import { indexMembers } from "./view-model";
@@ -73,6 +86,34 @@ import type { AuthorIndex } from "./view-model";
  * highlight cannot fire here even if `mentionsMe` were somehow true.
  */
 const NO_AUTHORS: AuthorIndex = indexMembers([], "");
+
+/**
+ * **THE ROSTER EVERY FACE IN ONE STREAM FACES ITS @-HANDLES AGAINST** (2026-10-12).
+ *
+ * ⚠ **ONE PROVIDER PER STREAM, SET BY `agent-stream.tsx` FROM THE `roster` PROP IT ALREADY TAKES**
+ * for the addressee pills. A second source would let the pills and the tints disagree about who is
+ * in the room, which is the same class of split F-266 closed between the server's stamp and the
+ * transcript's tint.
+ * ⚠ **THE DEFAULT IS {@link NO_AUTHORS}**, so a face rendered outside a provider — a test, a
+ * preview lane, a host with no roster — resolves nothing and renders plain characters.
+ */
+const StreamRosterContext = createContext<AuthorIndex>(NO_AUTHORS);
+
+/** Wrap one stream's rows. ⚠ `null` / `undefined` is "this host has no roster", which is the
+ *  empty index: identical to the pre-2026-10-12 behaviour, deliberately. */
+export function StreamRoster({
+  index,
+  children,
+}: {
+  index?: AuthorIndex | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <StreamRosterContext.Provider value={index ?? NO_AUTHORS}>
+      {children}
+    </StreamRosterContext.Provider>
+  );
+}
 
 /** The stream's own body type — `text-caption` on `text-primary`, the size every
  *  message face in this column already uses. */
@@ -91,11 +132,17 @@ export function StreamProse({
    *  and receive neither). */
   textClassName?: string;
 }) {
+  /* ⚠ READ FROM THE CONTEXT, NOT A PROP — {@link StreamRoster} carries why. The default is the
+     shared empty index, so this is a no-op for a host that supplies none. */
+  const index = useContext(StreamRosterContext);
   return (
     <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
       <MessageMarkdown
         text={text}
-        index={NO_AUTHORS}
+        index={index}
+        /* ⚠ `mentionsMe` STAYS `false` AND MUST (rule 3): it is the SERVER-STAMPED
+           `metadata.mentionedUserIds` fact, and a narration frame never touched the server. A
+           roster resolves WHERE a handle points; only the stamp may claim it tagged the viewer. */
         mentionsMe={false}
         // ⚠ THE GEOMETRY EVERY TOP-LEVEL BLOCK WEARS. `wrap-anywhere` is the one
         // rule this column cannot do without: a posted body is somebody's real

@@ -356,6 +356,12 @@ async function startSession(spec, rt) {
     sessionNarration.noteLaunchMessage(s, {
       message: spec.firstMessage,
       authorName: s.context && s.context.authorName,
+      // WHAT KIND OF AUTHOR WOKE IT, and its name when that author is an agent (2026-10-12) —
+      // off the same launch context the label above comes from (`trigger.js`), so the launch
+      // card is painted by the same rule as every later inbound one.
+      authorKind: s.context && s.context.authorKind,
+      authorAgentName: s.context && s.context.authorAgentName,
+      authorAgentColor: s.context && s.context.authorAgentColor,
     });
   }
   // Spawn idle starts no child (a held query would hold channel access unwatched); the timer arms the

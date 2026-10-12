@@ -440,6 +440,22 @@ function feedLiveSession(entry, m, myUserId) {
       // becoming a second spelling of the wake rule.
       wake: wake === true, ...(m.authorKind !== 'agent' && m.metadata && m.metadata.source ? { source: m.metadata.source } : {}), // member's device (message-source.js)
       fromOperator: fromMe(m, myUserId), // the operator's account: their posts and their own agents' (ruling 2, 2026-09-25)
+      // 🔴 **WHO WROTE IT, FOR THE INBOUND BANNER'S WEIGHT** (Samuel, 2026-10-12; the full argument
+      // is `session-narration.js`'s inbound arm + INVARIANTS §11). `author_kind` is server-derived
+      // from the author's credential (`authorLabel` above), so it is the one honest human-vs-agent
+      // answer; the alternative — reading `"<person>'s agent"` out of the resolved LABEL — sniffs
+      // unverified peer prose. ⚠ It NARROWS ruling 2 for that face only and both flags ride:
+      // `fromOperator` answers whose ACCOUNT spoke, this answers what kind of AUTHOR wrote it.
+      // ⚠ ONLY THE TWO KNOWN SPELLINGS, never coerced onto `'user'`: absent must read as the
+      // neutral banner rather than paint a machine's words with a person's weight.
+      ...(m.authorKind === 'agent' || m.authorKind === 'user' ? { authorKind: m.authorKind } : {}),
+      // AND, FOR AN AGENT, ITS NAME AND ITS COLOUR KEY — both joined server-side onto the row
+      // (`types.ts › ChannelMessage.authorAgentName` / `.authorAgentColor`), so the banner can name
+      // `@the-agent` and paint with the colour that agent already wears. ⚠ GATED ON THE KIND, and
+      // the colour rides as the KEY: `lib/agent-colors.ts` is the only place one becomes a `var()`
+      // and this machine does not own the palette.
+      ...(m.authorKind === 'agent' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
+      ...(m.authorKind === 'agent' && m.authorAgentColor ? { authorAgentColor: m.authorAgentColor } : {}),
     });
     if (!ok) { ack(s, { refused: 1 }); continue; }
     fed += 1;

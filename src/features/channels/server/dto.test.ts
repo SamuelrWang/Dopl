@@ -372,6 +372,71 @@ describe("mapMessageRow", () => {
       ).toBeNull();
     });
   });
+
+  /**
+   * **THE AGENT'S IDENTITY COLOUR, OFF THE SAME ONE READ AS ITS NAME** (2026-10-12 — the agent
+   * stream's inbound banner paints an arriving agent message in that agent's own colour).
+   *
+   * ⚠ **THE NARROWING IS THE PROPERTY, NOT THE LOOKUP.** The column is TEXT and is written by a
+   * desktop, so a key this build does not know must arrive at every renderer as `null`: a
+   * `var(--agent-color-99)` resolves to nothing and paints an INVISIBLE banner, which is worse
+   * than the neutral face it replaced. `lib/agent-colors.ts › agentColorOrNull` is the one
+   * membership test and this is the boundary it runs at.
+   * ⚠ **AND IT IS GATED ON `author_kind` LIKE THE NAME**, for that field's reason: a person's
+   * cookie session carries a `session_id` too, so a human row must not borrow an agent's hue.
+   */
+  describe("authorAgentColor", () => {
+    const COLORS = new Map([["k3v7d2mq", "agent-03"]]);
+
+    it("resolves off the same stamp the name does", () => {
+      const dto = mapMessageRow(
+        messageRow({ author_kind: "agent", client_msg_id: "agent-k3v7d2mq-4" }),
+        undefined,
+        new Map([["k3v7d2mq", "Mobile Main"]]),
+        COLORS
+      );
+      expect(dto.authorAgentColor).toBe("agent-03");
+      expect(dto.authorAgentName).toBe("Mobile Main");
+    });
+
+    it("🔒 narrows an unknown key to null rather than letting it reach a `var()`", () => {
+      for (const bad of ["agent-99", "agent-3", "AGENT-03", "", "red", "var(--x)"]) {
+        expect(
+          mapMessageRow(
+            messageRow({ author_kind: "agent", client_msg_id: "agent-k3v7d2mq-4" }),
+            undefined,
+            undefined,
+            new Map([["k3v7d2mq", bad]])
+          ).authorAgentColor
+        ).toBeNull();
+      }
+    });
+
+    it("is null for a PERSON, for an uncoloured agent, and for a page with no join", () => {
+      expect(
+        mapMessageRow(
+          messageRow({ author_kind: "user", metadata: { session_id: "chan-1::k3v7d2mq" } }),
+          undefined,
+          undefined,
+          COLORS
+        ).authorAgentColor
+      ).toBeNull();
+      expect(
+        mapMessageRow(
+          messageRow({ author_kind: "agent", client_msg_id: "agent-zzzzzzzz-1" }),
+          undefined,
+          undefined,
+          COLORS
+        ).authorAgentColor
+      ).toBeNull();
+      expect(
+        mapMessageRow(
+          messageRow({ author_kind: "agent", client_msg_id: "agent-k3v7d2mq-4" }),
+          undefined
+        ).authorAgentColor
+      ).toBeNull();
+    });
+  });
 });
 
 describe("mapTaskRow", () => {

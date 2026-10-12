@@ -127,6 +127,67 @@ test("`fromOperator` rides only on an explicit true", () => {
   }
 });
 
+// ── 3b. WHAT KIND OF AUTHOR WROTE IT (2026-10-12) ────────────────────────────────────
+//
+// 🔴 The banner paints a HUMAN's message black and an AGENT's in that agent's own colour, and
+// `author_kind` — derived server-side from the author's credential — is the only honest
+// discriminator this lane has. Two properties, both quiet failures:
+//
+//  - **AN UNKNOWN SPELLING MUST NOT BECOME A PERSON.** Absent reads as the neutral banner; a
+//    coerced `'user'` would paint a machine's words with a person's weight.
+//  - **AN AGENT NAME MUST NOT RIDE A HUMAN'S FRAME.** The face reads the name only on the agent
+//    arm, so a name stamped beside `'user'` is a field with nowhere honest to go.
+
+test("`authorKind` rides only the two spellings the face knows", () => {
+  assert.equal(inbound({ authorKind: "user" }).authorKind, "user");
+  assert.equal(inbound({ authorKind: "agent" }).authorKind, "agent");
+  for (const v of ["system", "", "AGENT", true, 1, null, undefined]) {
+    assert.equal("authorKind" in inbound({ authorKind: v }), false, `unknown stays unknown: ${String(v)}`);
+  }
+});
+
+test("the agent's own name rides ONLY beside `authorKind: 'agent'`, flattened and bounded", () => {
+  const agent = inbound({ authorKind: "agent", authorAgentName: "Cleanup Orchestrator" });
+  assert.equal(agent.senderAgentName, "Cleanup Orchestrator");
+  // A human's frame carries no agent name, whatever was handed in.
+  const human = inbound({ authorKind: "user", authorAgentName: "Cleanup Orchestrator" });
+  assert.equal("senderAgentName" in human, false);
+  // Nor does a frame that could not say what kind of author wrote it.
+  assert.equal("senderAgentName" in inbound({ authorAgentName: "Cleanup Orchestrator" }), false);
+  // ⚠ IT IS A CAPTION AND GOES THROUGH `line` LIKE THE LABEL BESIDE IT: a newline in a peer-typed
+  // name would forge a second row in a banner that promises one.
+  assert.equal(
+    inbound({ authorKind: "agent", authorAgentName: "Merge\nOwner" }).senderAgentName,
+    "Merge Owner"
+  );
+  // And it is bounded by the same `SENDER_CAP` as the label — read from the shape module rather
+  // than restated, so the two move together.
+  const CAP = createRequire(import.meta.url)(join(MAIN, "session-narration-shape.js")).SENDER_CAP;
+  const long = inbound({ authorKind: "agent", authorAgentName: "n".repeat(500) });
+  assert.equal(long.senderAgentName.length, CAP);
+});
+
+test("the agent's COLOUR rides the same gate, unvalidated here on purpose", () => {
+  // ⚠ MAIN DOES NOT OWN THE PALETTE: the key crosses as the server wrote it and
+  // `channels/lib/agent-colors.ts › agentColorOrNull` is the ONE membership test, at the item
+  // boundary. Two validators would be two chances to disagree about one agent's colour — so this
+  // arm's job is the GATE (kind + presence) and the BOUND, not the vocabulary.
+  assert.equal(
+    inbound({ authorKind: "agent", authorAgentColor: "agent-03" }).senderColor,
+    "agent-03"
+  );
+  assert.equal(
+    inbound({ authorKind: "agent", authorAgentColor: "agent-99" }).senderColor,
+    "agent-99",
+    "an unknown key is passed through for the renderer to narrow, not dropped here"
+  );
+  // A human's frame carries none, whatever was handed in — the kind gate, as for the name.
+  assert.equal("senderColor" in inbound({ authorKind: "user", authorAgentColor: "agent-03" }), false);
+  assert.equal("senderColor" in inbound({ authorAgentColor: "agent-03" }), false);
+  // And absent stays absent rather than becoming an empty string.
+  assert.equal("senderColor" in inbound({ authorKind: "agent" }), false);
+});
+
 // ── 4. THE LAUNCH DOOR ───────────────────────────────────────────────────────────────
 
 test("`noteLaunchMessage` appends ONE inbound frame for the message that launched the session", () => {
@@ -140,6 +201,29 @@ test("`noteLaunchMessage` appends ONE inbound frame for the message that launche
   assert.equal(ring[0].lane, "inbound");
   assert.equal(ring[0].text, "please review #916");
   assert.equal(ring[0].senderName, "Peer Person");
+});
+
+test("the launch frame carries the author facts too, or the woken agent's own card cannot say", () => {
+  // ⚠ THE CASE #3081 CARES ABOUT MOST: the message an agent was WOKEN for. It mints the same frame
+  // through `entryFor`, so leaving the kind off this door would make exactly that card the one
+  // inbound box that could never be painted — the launch facts ride `s.context` (`trigger.js`).
+  const s = { key: "c:t:a3" };
+  m.noteLaunchMessage(s, {
+    message: "take #916",
+    authorName: "Sam Wang's agent",
+    authorKind: "agent",
+    authorAgentName: "Cleanup Orchestrator",
+    authorAgentColor: "agent-07",
+  });
+  const [frame] = m.ringFor(s);
+  assert.equal(frame.authorKind, "agent");
+  assert.equal(frame.senderAgentName, "Cleanup Orchestrator");
+  assert.equal(frame.senderColor, "agent-07");
+  // A human-triggered launch is the other half, and carries no agent name.
+  const h = { key: "c:t:a4" };
+  m.noteLaunchMessage(h, { message: "take #917", authorName: "Sam Wang", authorKind: "user" });
+  assert.equal(m.ringFor(h)[0].authorKind, "user");
+  assert.equal("senderAgentName" in m.ringFor(h)[0], false);
 });
 
 test("`noteLaunchMessage` is inert on junk rather than throwing into a launch", () => {

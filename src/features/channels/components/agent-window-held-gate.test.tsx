@@ -29,6 +29,13 @@ vi.mock("../hooks/use-channel-messages", () => ({
   useChannelMessages: () => ({ messages: [], loading: false, refetch: () => {} }),
 }));
 vi.mock("./live", () => ({ useChannelsLive: () => ({ gate: {} }) }));
+// ⚠ **AND THE ROSTER SINCE 2026-10-12** (Samuel's ruling 2a — the window's @-handles tint, so it
+// reads the members it used to skip). Mocked for this suite's reason, the same as the two reads
+// below: these tests mount with NO QueryClient on purpose, and the roster's own behaviour is
+// `agent-stream-mentions.test.tsx`'s, over the stream.
+vi.mock("../hooks/use-channel-members", () => ({
+  useChannelMembers: () => ({ members: [], stale: false, refetch: () => {} }),
+}));
 vi.mock("../hooks/use-consent-inbox", () => ({
   useConsentInbox: () => ({ requests: [], outbound: [], refetch: () => {} }),
 }));

@@ -68,6 +68,13 @@ vi.mock("./live", () => ({ useChannelsLive: live }));
 // ruling): the work stream's held-draft card is decidable here. Both are real
 // hooks over TanStack + the API, and this suite mounts with no QueryClient — the
 // card's own behaviour is `agent-stream.test.tsx`'s, over the pure model.
+// ⚠ **AND THE ROSTER SINCE 2026-10-12** (Samuel's ruling 2a — the window's @-handles tint, so it
+// reads the members it used to skip). Mocked for this suite's reason, the same as the two reads
+// below: these tests mount with NO QueryClient on purpose, and the roster's own behaviour is
+// `agent-stream-mentions.test.tsx`'s, over the stream.
+vi.mock("../hooks/use-channel-members", () => ({
+  useChannelMembers: () => ({ members: [], stale: false, refetch: () => {} }),
+}));
 vi.mock("../hooks/use-consent-inbox", () => ({
   useConsentInbox: () => ({ requests: [], outbound: [], refetch: refetchPending }),
 }));

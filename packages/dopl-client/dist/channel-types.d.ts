@@ -113,6 +113,12 @@ export interface ChannelMessage {
      * ⚠ PEER-TYPED: neutralize it before splicing it into any narration.
      */
     authorAgentName?: string | null;
+    /**
+     * The IDENTITY COLOUR KEY of the agent that wrote this row (`agent-01` … `agent-16`), joined off
+     * the same read as `authorAgentName` (2026-10-12). ⚠ Absent, `null` and an unknown key all mean
+     * "no colour to draw": degrade to a neutral face, never invent a hue.
+     */
+    authorAgentColor?: string | null;
     wakeVerdict?: ChannelWakeVerdict | null;
     recipientUserIds?: string[] | null;
     recipientAgentIds?: string[] | null;

@@ -154,6 +154,12 @@ export interface ChannelMessage {
    * ⚠ PEER-TYPED: neutralize it before splicing it into any narration.
    */
   authorAgentName?: string | null;
+  /**
+   * The IDENTITY COLOUR KEY of the agent that wrote this row (`agent-01` … `agent-16`), joined off
+   * the same read as `authorAgentName` (2026-10-12). ⚠ Absent, `null` and an unknown key all mean
+   * "no colour to draw": degrade to a neutral face, never invent a hue.
+   */
+  authorAgentColor?: string | null;
   // ── THE DELIVERY KEYSTONE (2026-09-02, A9; `delivery-types.ts`) ─────────
   // ⚠ **OPTIONAL *AND* NULLABLE, AND BOTH MEAN "NOT ANSWERED HERE"** — an older
   // server omits the key, a newer one sends `null` for a row it could not

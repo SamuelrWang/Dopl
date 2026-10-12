@@ -249,6 +249,35 @@ function entryFor(event, now) {
     // post. It is NOT a privacy claim: this message is in the channel either way, which is what
     // keeps it off the `lane`.
     if (event && event.fromOperator === true) entry.fromOperator = true;
+    // 🔴 **WHAT KIND OF AUTHOR WROTE IT** (Samuel, 2026-10-12) — `'user'` or `'agent'`, derived
+    // server-side from the author's credential (`session-dispatch.js › feedLiveSession`).
+    //
+    // ⚠ **IT IS THE ONLY HONEST HUMAN-VS-AGENT ANSWER ON THIS LANE, AND IT OUTRANKS
+    // `fromOperator` ON THE FACE.** That flag folds the operator's own agents into "you" by ruling
+    // 2 (2026-09-25) — right for *whose account spoke*, wrong for *who wrote it* — so the banner
+    // reads this field first and names the operator's own agent as an agent.
+    // ⚠ **NOT DERIVED FROM `senderName`, EVER.** The label beside it is already-resolved peer
+    // prose; recovering a kind by looking for `"'s agent"` in it would make a display name
+    // somebody typed decide how a card is painted.
+    // ⚠ OMITTED UNLESS IT IS ONE OF THE TWO KNOWN SPELLINGS — the `truncated` / `fromOperator`
+    // discipline: absent is unknown, and the reader's fallback is the neutral banner.
+    if (event && (event.authorKind === 'user' || event.authorKind === 'agent')) {
+      entry.authorKind = event.authorKind;
+    }
+    // THE AGENT'S OWN NAME when an agent wrote it, bounded by `SENDER_CAP` like the label it sits
+    // beside. ⚠ GATED ON THE KIND STAMPED ABOVE, so a name can never ride a frame the face would
+    // read as a person's. ⚠ Peer-typed and neutralized at render, `senderName`'s rule exactly.
+    if (entry.authorKind === 'agent') {
+      const agentName = line(event && event.authorAgentName, SENDER_CAP);
+      if (agentName) entry.senderAgentName = agentName;
+      // ITS IDENTITY COLOUR, as the server's KEY. ⚠ NOT VALIDATED HERE, DELIBERATELY: the palette
+      // belongs to the renderer's token layer and `channels/lib/agent-colors.ts › agentColorOrNull`
+      // is the ONE membership test — a seventeenth key from a newer server must read as "no colour"
+      // at that one boundary rather than at two that can disagree. Bounded like every caption so a
+      // long value cannot ride the ring, and gated on the kind like the name above.
+      const color = line(event && event.authorAgentColor, SENDER_CAP);
+      if (color) entry.senderColor = color;
+    }
     if (truncated) entry.truncated = true;
     return entry;
   }
@@ -429,7 +458,16 @@ function noteEnded(s, payload) {
  */
 function noteLaunchMessage(s, a) {
   if (!s || !s.key || !a) return;
-  const entry = entryFor({ type: 'inbound_arrived', message: a.message, authorName: a.authorName }, Date.now());
+  // ⚠ THE AUTHOR FACTS RIDE HERE TOO (2026-10-12). This path mints the SAME frame as the event
+  // arm, so leaving them off would make the one message #3081 cares about most — the one the
+  // agent was woken for — the only inbound card that could not say what kind of author wrote it.
+  // The launch carries them on `s.context` (`trigger.js`), which is where a responder's author
+  // facts already live.
+  const entry = entryFor({
+    type: 'inbound_arrived', message: a.message, authorName: a.authorName,
+    authorKind: a.authorKind, authorAgentName: a.authorAgentName,
+    authorAgentColor: a.authorAgentColor,
+  }, Date.now());
   if (!entry) return;
   push(s, stampToolRun(s, entry));
   fanout.touch(s.key);

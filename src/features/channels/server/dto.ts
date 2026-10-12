@@ -22,6 +22,7 @@ import type {
   ThreadStatus,
 } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
+import { agentColorOrNull } from "../lib/agent-colors";
 // ⚠ THE ONE COERCION, IMPORTED RATHER THAN REPEATED (2026-09-07). The rule that junk and
 // absence land on the DEFAULT and never on `"none"` is a ruling, and a mapper with its own
 // `as` cast would be a second place it lived — the shape this wave has now found four times.
@@ -164,6 +165,21 @@ function agentNameOf(
   return id === null ? null : (agentNames.get(id) ?? null);
 }
 
+/** The joined colour key for a row's author agent, or `null` — {@link agentNameOf}'s rule
+ *  exactly, including the `author_kind` gate, because the two answers come off one read and must
+ *  never disagree about whether a row has an agent author at all. */
+function agentColorOf(
+  row: ChannelMessageRow,
+  agentColors: ReadonlyMap<string, string> | undefined
+): string | null {
+  if (!agentColors || row.author_kind !== "agent") return null;
+  const id = authorAgentIdOf({
+    clientMsgId: row.client_msg_id,
+    metadata: isRecord(row.metadata) ? row.metadata : null,
+  });
+  return id === null ? null : (agentColors.get(id) ?? null);
+}
+
 export function mapMessageRow(
   row: ChannelMessageRow,
   profile: ProfileRef | undefined,
@@ -173,7 +189,17 @@ export function mapMessageRow(
    * rather than a guess: the write path builds a message with no page to join
    * against, and every renderer already falls back to the `agent-<id>` handle.
    */
-  agentNames?: ReadonlyMap<string, string>
+  agentNames?: ReadonlyMap<string, string>,
+  /**
+   * Agent id → its IDENTITY COLOUR KEY, off the same one read as the names
+   * (`service-shared.ts › agentFacesFor`, 2026-10-12).
+   *
+   * ⚠ **OPTIONAL AND A MISS IS `null`, LIKE THE NAMES BESIDE IT** — the write path joins against
+   * no page, an uncoloured agent is legitimate (a seventeenth live agent in one room runs with no
+   * key, `lib/agent-colors.ts`), and every renderer degrades to its neutral face rather than
+   * inventing a hue.
+   */
+  agentColors?: ReadonlyMap<string, string>
 ): ChannelMessage {
   return {
     id: row.id,
@@ -194,6 +220,12 @@ export function mapMessageRow(
     // and for a page nobody resolved names for — three situations every
     // renderer answers the same way, with the `agent-<id>` handle.
     authorAgentName: agentNameOf(row, agentNames),
+    // ⚠ **THE SAME LOOKUP AS THE NAME ABOVE, NARROWED AT THIS ONE BOUNDARY.** The column is TEXT
+    // and is written by a desktop, so `agentColorOrNull` is where an unknown or malformed key
+    // becomes `null` — the membership test `lib/agent-colors.ts` states is never a cast, so a
+    // seventeenth key from a newer machine reads as "no colour" instead of reaching a
+    // `var(--agent-color-…)` that resolves to nothing and paints an invisible banner.
+    authorAgentColor: agentColorOrNull(agentColorOf(row, agentColors)),
     // ⚠ PASSED THROUGH, NEVER RE-DERIVED. The verdict was computed ONCE, on the
     // write, by `service-wake-verdict.ts`; a mapper that recomputed it would be
     // the second reader this whole slice exists to delete. `?? null` normalizes
