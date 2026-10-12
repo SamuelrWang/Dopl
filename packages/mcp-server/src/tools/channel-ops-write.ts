@@ -27,6 +27,10 @@
 
 import { bySet, callRef, toolName } from "../call-ref.js";
 import type { ChannelMessageInput, DoplClient } from "@dopl/client";
+
+/** `cites` ON THE WIRE — by NUMBER, never by id. ⚠ Declared, not imported: the
+ *  SDK source has the field and its committed `dist` does not yet. */
+type CitesOnWire = { cites?: Array<{ no?: number; seq?: number; thread?: string }> };
 import { ok, err, type ToolResponse } from "./respond";
 // ⚠ THE RESULT IS ONE LINE OF FACTS (T10/T12). Each import below contributes
 // FIELDS, not prose; the standing rules they used to restate live once in
@@ -200,6 +204,9 @@ interface PostOptions {
   summary?: string;
   /** A thread id — threads this post under that thread's card (server-validated). */
   thread?: string;
+  /** THE MESSAGES THIS POST CITES (grammar B). ⚠ Each entry becomes a message id
+   *  at the write or the send is REFUSED, so a stored citation is never dead. */
+  cites?: CitesOnWire["cites"];
   /**
    * Caller's OBSERVED runtime stamp (`CallerIdentity.runtime`). Changes nothing
    * this op does — only what the result may claim about waiting for the reply.
@@ -275,20 +282,31 @@ export async function opPost(
     : opts.metadata;
 
   let message;
+  // ⚠ **AN INTERSECTION, NOT A CAST, AND THE REASON IS THE COMMITTED `dist`.** This
+  // package type-checks against `@dopl/client`'s BUILT output, which does not carry
+  // `cites` until the merge owner rebuilds it — the same stale-`dist` boundary the
+  // numbering wave crossed with `NumberedMessage`. An `as` would silence the gap;
+  // widening the local type keeps every other field checked and makes the extra one
+  // explicit, and it simply becomes redundant once `dist` catches up.
+  const input: ChannelMessageInput & CitesOnWire = {
+    body,
+    kind: opts.kind,
+    metadata,
+    clientMsgId: opts.clientMsgId,
+    // ⚠ THE UNION FIELD, NOT `toUserId`. One recipient, one resolver, one
+    // refusal — see this module's header.
+    to: opts.to,
+    summary: opts.summary,
+    // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
+    intent: opts.intent,
+    // ⚠ FORWARDED, NEVER DROPPED: a param an MCP client can see is a param a model
+    // will try, and a silently-ignored citation is the same shape of failure as a
+    // silently-dropped address (`channel-addressing-rule.test.ts`).
+    cites: opts.cites,
+    escalation: opts.escalation,
+  };
   try {
-    message = await client.postChannelMessage(ch.id, {
-      body,
-      kind: opts.kind,
-      metadata,
-      clientMsgId: opts.clientMsgId,
-      // ⚠ THE UNION FIELD, NOT `toUserId`. One recipient, one resolver, one
-      // refusal — see this module's header.
-      to: opts.to,
-      summary: opts.summary,
-      // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
-      intent: opts.intent,
-      escalation: opts.escalation,
-    });
+    message = await client.postChannelMessage(ch.id, input);
   } catch (e) {
     // ⚠ Map 400s off the CODE, never off which params happened to be set —
     // param-guessing misreads a rejected BODY (>16000-char body, >200-char

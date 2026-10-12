@@ -18,7 +18,18 @@ import {
 // +54 (2026-09-25): `posture.tools` names the permission levels and the runtime words behind them.
 // +13/+31 (2026-09-28, unified display): CHOOSING names dopl_show for structure; paid by the pushed
 // `dopl_send_message.display` param (-469) leaving the granular schema.
-const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 13_575, granular: 13_772 };
+// +973 (2026-10-12, grammar B — approved by @cleanup-orchestrator-2, ASK 9, channel seq #4461):
+// FIELDS gained the `cites` rule (+461: a typed `#N` is not a link, cite via the field, `seq` today
+// and `no` after the numbering migration, cross-channel and unresolvable both refused) and the
+// `posture` EXPLANATORY PROSE (+607) that used to be pushed on every connection.
+// ⚠ **PAID FOR ON THE PUSHED SURFACE, WHICH IS THE WHOLE RULE ABOVE.** `posture` went 922 → 473 in
+// the served schema (-449), so `cites` (444) landed with `SCHEMA_MAX_CHARS` UNTOUCHED: 9,110 → 9,114
+// against a 9,155 ceiling. Bytes moved from the surface every agent pays for on every handshake to
+// the one they pay for only when they ask.
+// ⚠ **AND THIS RAISE LEAVES ZERO HEADROOM, DELIBERATELY** — the ruling was "exactly what's needed,
+// nothing extra", so the ceilings below ARE the measured sizes. The next line of doctrine is
+// therefore a conversation, not an edit: re-derive, then pay for it.
+const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 14_548, granular: 14_745 };
 // Per section as served (a typical pull is one section); a ceiling only. `send` is the largest, so
 // its next rule should split the section rather than raise this. Re-derive, never quote.
 const DOCTRINE_SECTION_MAX_CHARS: Record<ToolSet, number> = { legacy: 3_600, granular: 3_650 };

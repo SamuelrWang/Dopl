@@ -119,7 +119,16 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
   {
     name: "dopl_send_message",
     bind: "dopl_channel:send",
-    params: ["channel", "to", "body", "kind", "thread", "summary", "client_msg_id"],
+    // ⚠ **`cites` IS LISTED HERE OR THE GRANULAR SET CANNOT CITE AT ALL** (grammar B,
+    // 2026-10-12). The legacy `dopl_channel` shape publishes every param, so adding
+    // one there is invisible work on this surface: a granular connection serves 40
+    // tools and each declares its own allowlist. The gap showed up as an ASYMMETRY in
+    // the budget — the legacy surface moved 6 chars and the granular one 650 — which
+    // is the only reason it was caught before shipping.
+    // ⚠ **ORDINARY SENDS ONLY IN v1.** `dopl_request_decision` binds the same op and
+    // could carry it, at another ~444 pushed chars; a card's prose is a question, and
+    // nothing has asked to cite from one yet.
+    params: ["channel", "to", "body", "kind", "thread", "summary", "cites", "client_msg_id"],
     alwaysLoad: true,
   },
   {
