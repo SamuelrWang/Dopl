@@ -20,7 +20,7 @@ import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { DirectedBox } from "./agent-stream-directed";
 import { InboundBox } from "./agent-stream-inbound-box";
 import { messageTags, type RecipientTag } from "../lib/recipient-tags";
-import { StreamProse, TruncatedNote } from "./agent-stream-prose";
+import { StreamProse, StreamRoster, TruncatedNote } from "./agent-stream-prose";
 import { StreamWorkingRow } from "./agent-stream-working";
 import { SentToChannelBox } from "./agent-stream-sent-box";
 import type { AgentColorKey } from "../types";
@@ -160,6 +160,12 @@ export function AgentStream({
           {supported ? NARRATION_EMPTY : NARRATION_UNSUPPORTED}
         </p>
       ) : (
+        /* ⚠ THE ROSTER IS SET ONCE, HERE, FOR EVERY FACE'S PROSE (Samuel, 2026-10-12 — @-handles
+           tint in the agent view). It is the SAME `roster` the addressee pills resolve against, so
+           the two cannot disagree about who is in the room; `agent-stream-prose.tsx › StreamRoster`
+           carries why it is a context rather than a prop on five faces, and why a host with none
+           renders exactly what it did before. */
+        <StreamRoster index={roster}>
         <ol className="flex flex-col gap-2.5">
           {/* Grouped, not filtered: a tool run is one summary row; every other lane is a group of one. */}
           {groups.map((group) => (
@@ -178,6 +184,7 @@ export function AgentStream({
             />
           ))}
         </ol>
+        </StreamRoster>
       )}
       {/* Live tail: inside this scroller under the most recent item; outside the `<ol>` so an empty
           lane shows it too. */}

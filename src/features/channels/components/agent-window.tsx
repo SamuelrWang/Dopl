@@ -35,6 +35,7 @@ import { Bot, CornerDownRight } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { CONSENT_INBOX_POLL_MS } from "../constants";
+import { useChannelMembers } from "../hooks/use-channel-members";
 import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
@@ -44,7 +45,7 @@ import { AgentStream } from "./agent-stream";
 import { splitEndNote } from "./agent-stream-lanes";
 import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import { NO_THREAD_LABEL, agentDisplayName, agentLiveness, postDestination } from "./agents-model";
-import { viewerPerson } from "./view-model";
+import { agentIndexFromKey, agentIndexKey, indexAgents, indexMembers, viewerPerson } from "./view-model";
 import { useDesktopSessions } from "./use-desktop-sessions";
 import { AgentComposer } from "./agent-composer";
 import { AgentHeldGates } from "./agent-held-gate";
@@ -162,6 +163,35 @@ export function ChannelsAgentWindow({
     undefined,
     CONSENT_INBOX_POLL_MS
   );
+  /**
+   * 🔴 **THE ROSTER — THE READ THIS WINDOW USED TO REFUSE** (Samuel, 2026-10-12, ruling 2a: *give
+   * both agent hosts a real roster*; *"@-mention slugs currently render in plain black text. Make
+   * them blue"*).
+   *
+   * ⚠ **WHAT IT BUYS, AND WHY NOTHING ELSE WOULD DO.** `agent-stream-prose.tsx` renders every
+   * message face through the TRANSCRIPT's markdown renderer, whose @-handle tint is gated on
+   * RESOLUTION (F-266: a tint asserts the roster resolved somebody). With no roster, every handle
+   * in this window rendered as plain characters — so an agent reading *"@samuel-wang I am
+   * blocked"* in its own stream saw nothing a reader could scan for. Tinting unresolved tokens
+   * instead would have been this surface claiming a resolution nobody made.
+   * ⚠ **ONE READ, AND IT IS THE ONE THE PAGE ALREADY OWNS** (`hooks/use-channel-members.ts`,
+   * presence-hydrated, with its own 60s backstop). The MEMBERS half comes from it; the AGENTS half
+   * is this machine's live feed, already subscribed above — so a handle naming one of the
+   * operator's own agents resolves without a second server read.
+   * ⚠ **IT ALSO FEEDS THE ADDRESSEE PILLS**, which took `roster` and never got one here: a posted
+   * box in this window drew no pills at all. Same index, so the pills and the tints cannot
+   * disagree about who is in the room.
+   * ⚠ **MEMOISED ON THE FEED'S CONTENT, NOT ITS ARRAY** — `derivations.ts`' rule, and this surface
+   * re-renders at telemetry rate: `agentIndexKey` round-trips the identity facts so the index
+   * stays stable until a name, an end or a colour actually moves.
+   */
+  const { members, refetch: refetchMembers } = useChannelMembers(channelId, workspaceId);
+  const agentKey = useMemo(() => agentIndexKey(indexAgents(sessions)), [sessions]);
+  const agents = useMemo(() => agentIndexFromKey(agentKey), [agentKey]);
+  const roster = useMemo(
+    () => indexMembers(members, currentUserId, agents),
+    [members, currentUserId, agents]
+  );
 
   // ⚠ THIS WINDOW REGISTERS FOR THE DOORBELL (2026-08-20). It did not until then,
   // and the failure had no error shape: the narration and posture lanes are
@@ -172,10 +202,12 @@ export function ChannelsAgentWindow({
   // hears it (INVARIANTS §7). This is the third registered live surface in
   // channels, after the page core and the pop-out thread window.
   //
-  // ⚠ MESSAGES AND CONSENT, and that is the whole diet. There is no roster and
-  // no thread list here — nothing to refetch and no presence dot to keep fresh —
-  // so `refetchMembers` is deliberately a no-op rather than a read this surface
-  // would then have to justify owning.
+  // ⚠ MESSAGES, CONSENT AND — SINCE 2026-10-12 — THE ROSTER. That last one WAS deliberately a
+  // no-op ("there is no roster and no thread list here"), and the roster read above is what
+  // changed: Samuel's ruling 2a gave this window one so its @-handles can tint and its posted
+  // boxes can draw addressee pills. It is refetched on the bell like the other two, because a
+  // member who joins mid-session is exactly who the next handle will name. ⚠ THE THREAD LIST is
+  // still absent and still needs nothing.
   // ⚠ THE `gate` IS TAKEN NOW (2026-08-25). This window HAS a server write: the
   // held-draft card's Post is the CAS'd `PATCH /consent/[id]`, and a write that
   // skips the coordinator lets a coalesced refetch land mid-flight (INVARIANTS
@@ -186,8 +218,11 @@ export function ChannelsAgentWindow({
     refetchAll: () => {
       void refetchMessages();
       void refetchPending();
+      void refetchMembers();
     },
-    refetchMembers: () => {},
+    refetchMembers: () => {
+      void refetchMembers();
+    },
   });
   const { consent } = useChannelPreferenceWrites({ workspaceId, gate });
 
@@ -200,11 +235,11 @@ export function ChannelsAgentWindow({
   );
 
   // ⚠ THE VIEWER'S FACE, OFF THE TRANSCRIPT THIS WINDOW ALREADY READS (Samuel,
-  // 2026-08-27 — their own turns in the stream wear it). No roster read: the
-  // window's diet is messages + consent and stays that way, and the hydrated
-  // author fields are keyed on the user id, so a row this viewer authored
-  // carries the profile a roster would have handed back (`view-model.ts ›
-  // viewerPerson`).
+  // 2026-08-27 — their own turns in the stream wear it). ⚠ **STILL THE TRANSCRIPT, EVEN NOW THAT
+  // A ROSTER IS READ ABOVE** (2026-10-12): the hydrated author fields are keyed on the user id, so
+  // a row this viewer authored carries the profile a roster would have handed back, and a face
+  // that came from one source before must not start coming from two
+  // (`view-model.ts › viewerPerson` carries why the transcript is the source).
   const viewer = useMemo(
     () => viewerPerson(messages, currentUserId),
     [messages, currentUserId]
@@ -307,6 +342,9 @@ export function ChannelsAgentWindow({
         // has resolved, which reads as the bare noun rather than a blank.
         destination={agent ? postDestination(agent) : null}
         viewer={viewer}
+        // ⚠ THE ROSTER, FOR THE @-HANDLE TINTS *AND* THE ADDRESSEE PILLS (2026-10-12) — one index
+        // for both, so they cannot disagree about who is in the room. See the read above.
+        roster={roster}
         className="px-4"
       />
       <AgentComposer

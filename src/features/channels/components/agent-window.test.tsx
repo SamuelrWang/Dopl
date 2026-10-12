@@ -75,6 +75,13 @@ vi.mock("./live", () => ({ useChannelsLive: live }));
 // ruling): the work stream's held-draft card is decidable here. Both are real
 // hooks over TanStack + the API, and this suite mounts with no QueryClient — the
 // card's own behaviour is `agent-stream.test.tsx`'s, over the pure model.
+// ⚠ **AND THE ROSTER SINCE 2026-10-12** (Samuel's ruling 2a — the window's @-handles tint, so it
+// reads the members it used to skip). Mocked for this suite's reason, the same as the two reads
+// below: these tests mount with NO QueryClient on purpose, and the roster's own behaviour is
+// `agent-stream-mentions.test.tsx`'s, over the stream.
+vi.mock("../hooks/use-channel-members", () => ({
+  useChannelMembers: () => ({ members: [], stale: false, refetch: () => {} }),
+}));
 vi.mock("../hooks/use-consent-inbox", () => ({
   useConsentInbox: () => ({ requests: [], outbound: [], refetch: refetchPending }),
 }));
@@ -447,13 +454,20 @@ describe("the window is a LIVE surface", () => {
     expect(refetchPending).toHaveBeenCalledTimes(1);
   });
 
-  // ⚠ Deliberately a no-op, not an oversight: this window holds no roster and no
-  // presence dot, so there is nothing for the presence debounce to refresh. It is
-  // asserted so a reader does not "complete" it with a read this surface would
-  // then own for no one.
-  it("asks for no roster refetch — it has no roster and no presence to keep fresh", async () => {
+  /**
+   * 🔴 **IT ASKS FOR THE ROSTER NOW, AND THE NO-OP THIS CASE USED TO PIN IS GONE** (Samuel's
+   * ruling 2a, 2026-10-12).
+   *
+   * ⚠ **THE OLD CLAIM WAS "no roster, nothing to refresh", AND IT WAS TRUE UNTIL THE TINTS NEEDED
+   * ONE.** The window now reads `useChannelMembers` so its @-handles can resolve, which means the
+   * presence bell has something to refresh after all: a member who joins mid-session is exactly
+   * who the next handle will name.
+   */
+  it("refetches the ROSTER on the presence bell, now that it holds one", async () => {
     installBridge({ sessions: [summary()] });
     await mount();
     expect(() => live.mock.calls.at(-1)?.[0].refetchMembers()).not.toThrow();
+    // And on the main bell too, beside the transcript and the drafts.
+    expect(() => live.mock.calls.at(-1)?.[0].refetchAll()).not.toThrow();
   });
 });
