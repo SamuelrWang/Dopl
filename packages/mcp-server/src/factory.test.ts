@@ -73,10 +73,11 @@ beforeEach(() => {
 
 describe("bootServer workspace resolution", () => {
   it("single membership → binds NOTHING; the server resolves it (B10)", async () => {
-    // ⚠ **THE AUTO-TARGET IS DELETED, NOT MOVED.** It was a second copy of the
-    // rule `with-workspace-auth.ts › resolveActiveWorkspace` applies anyway, so
-    // a one-membership caller lands in exactly the same workspace — from one
-    // rule instead of two that could disagree.
+    // ⚠ **THE AUTO-TARGET IS DELETED, NOT MOVED.** Where an unbound call lands
+    // is the API's to decide: `workspaces/server/service.ts ›
+    // resolveActiveWorkspace` answers with the caller's HOME SPACE when no
+    // header names a container. Binding the single membership here would make
+    // this process contradict that, on a caller who named nothing.
     const client = mockClient({ directory: [WS1], pin: null });
     const res = await bootServer(client);
     expect(client.setWorkspaceId).toHaveBeenCalledWith(null);

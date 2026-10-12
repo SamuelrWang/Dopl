@@ -9,9 +9,9 @@
  * surface that visibly keeps metadata a caller asked it to drop teaches the
  * opposite.
  *
- * ⚠ **AND THE `note` IS NOT METADATA.** A dropped `workspace=` argument and an
+ * ⚠ **AND THE `note` IS NOT METADATA.** A dropped `container=` argument and an
  * unmetered call are facts about THIS call that nothing else reports
- * (`workspace-arg.ts › deprecatedAliasNote`, `credits-unmetered.ts`), so they
+ * (`workspace-arg.ts › ignoredWorkspaceNote`, `credits-unmetered.ts`), so they
  * survive the knob. Everything else on the footer does not.
  */
 

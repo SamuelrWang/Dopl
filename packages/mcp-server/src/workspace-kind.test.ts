@@ -80,10 +80,10 @@ describe("bootServer — nothing auto-targets, of any kind", () => {
   it("one standard + N links binds NOTHING and sends no X-Workspace-Id", async () => {
     // ⚠ **THIS USED TO ASSERT THE STANDARD ONE WAS PICKED**, and the pick is
     // what B10 deletes: a container the caller never named must not become the
-    // one their calls land in, and neither must a workspace. The API applies
-    // the identical sole-membership rule one layer down
-    // (`with-workspace-auth.ts › resolveActiveWorkspace`), so the caller's
-    // answer is unchanged and there is now ONE copy of it.
+    // one their calls land in, and neither must a workspace. Where an unbound
+    // call DOES land is the API's answer — `workspaces/server/service.ts ›
+    // resolveActiveWorkspace` resolves the caller's home space — so there is
+    // ONE rule for it, one layer down, and this process does not second-guess it.
     const client = mockClient([LINK_A, STANDARD, LINK_B]);
     const res = await bootServer(client);
     expect(res.activeWorkspace).toBeNull();

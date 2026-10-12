@@ -28,7 +28,10 @@
  */
 
 import { toolName } from "./call-ref.js";
-import type { ToolResponse } from "./tools/respond.js";
+// ⚠ `err` is `respond.ts`'s, not a local copy: this file had a byte-identical
+// one. `gating.ts` beside it still hand-rolls the same object, deliberately —
+// `respond.ts` → `call-ref.ts` → `tool-manifest.ts` → `gating.ts` is a cycle.
+import { err, type ToolResponse } from "./tools/respond.js";
 import { inlineOr, NO_NAME } from "./tools/narration.js";
 import {
   acceptsWorkspaceArg,
@@ -64,10 +67,6 @@ export type AddressOutcome =
   | { kind: "refusal"; response: ToolResponse }
   | { kind: "addressed"; effective: EffectiveWorkspace; note: string | null }
   | { kind: "unaddressed"; note: string | null };
-
-function err(text: string): ToolResponse {
-  return { isError: true, content: [{ type: "text" as const, text }] };
-}
 
 export interface AddressDeps {
   directory: WorkspaceDirectory;

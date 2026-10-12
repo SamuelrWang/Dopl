@@ -126,6 +126,44 @@ function extractSqlRoleArms(migrationsDir: string): { file: string; roles: strin
 }
 
 /**
+ * ⚠ **A SOURCE SLICE THAT CANNOT SILENTLY MATCH NOTHING.** `source.slice(
+ * source.indexOf(marker))` is the shape every other reader in this file already
+ * refuses: `indexOf` answers −1 for an absent marker, `slice(-1)` hands back the
+ * file's LAST CHARACTER, and a check that then looks for `case "…"` in one
+ * character finds nothing to complain about and prints its tick.
+ *
+ * Measured 2026-10-12: renaming `workspace-directory.ts › containerKind` to
+ * `containerKindOf` made this gate exit 0 AND print *"✅ Container kind: …"*,
+ * i.e. it reported agreement about a mapping it could no longer see. The
+ * `[drift]` arm for a DELETED arm worked the whole time, which is what made the
+ * hole invisible: the gate failed only in the direction somebody had tested.
+ *
+ * So the marker's absence is a THROW, not a drift line. A drift line says "these
+ * two declarations disagree", which is a claim this function is not in a
+ * position to make; a throw says "this gate could not read its own subject",
+ * which is the truth and is the thing a CI log has to show.
+ *
+ * ⚠ **AND THE CALLER STRIPS COMMENTS BEFORE SLICING.** A docblock that MENTIONS
+ * the marker is matched by `indexOf` ahead of the real declaration, so the slice
+ * starts inside prose and the rename passes anyway — measured the same day, on a
+ * trap note added to `workspace-directory.ts`'s own docblock warning about this
+ * exact gate. `src/features/workspaces/container-kind-drift.test.ts` holds both
+ * halves: the throw, and the comment that must not satisfy the slice.
+ */
+export function sliceFrom(source: string, marker: string, what: string): string {
+  const at = source.indexOf(marker);
+  if (at === -1) {
+    throw new Error(
+      `could not find \`${marker}\` in ${what} — this gate slices that declaration ` +
+        `by source text, so it cannot check anything until the marker is found again. ` +
+        `If the declaration was renamed or moved, update this gate's marker in the SAME ` +
+        `change; do not delete the check.`,
+    );
+  }
+  return source.slice(at);
+}
+
+/**
  * Strip block and line comments, so a docblock's `{@link …}` cannot be mistaken
  * for structure and a commented-out field cannot be mistaken for a real one.
  */
@@ -335,8 +373,18 @@ function extractSqlKindValues(migrationsDir: string): { file: string; kinds: str
  *      exactly why a green compile proves nothing here: the `switch` is TOTAL
  *      whatever the column gains.
  */
-function checkContainerKind(
-  read: (rel: string) => string,
+/**
+ * The declaration this gate slices for. ⚠ A named constant so the test that
+ * mutation-proves the slice asserts against the SAME string the gate uses — a
+ * test carrying its own copy of the marker proves only that its copy is present.
+ */
+export const CONTAINER_KIND_MARKER = "export function containerKind(";
+
+/** One file's text by repo-relative path; the mutation surface the test swaps. */
+export type Read = (rel: string) => string;
+
+export function checkContainerKind(
+  read: Read,
   migrationsDir: string,
 ): boolean {
   let drift = false;
@@ -365,8 +413,19 @@ function checkContainerKind(
 
   // ⚠ Read from the `switch`'s SOURCE, not from its behaviour: the `default`
   // arm makes every input resolve, so only the written arms are evidence.
-  const mapper = read("packages/mcp-server/src/workspace-directory.ts");
-  const body = mapper.slice(mapper.indexOf("export function containerKind("));
+  // ⚠ COMMENTS ARE STRIPPED FIRST, for the reason `extractInterfaceKeys` strips
+  // them: a docblock that MENTIONS the marker is matched by `indexOf` ahead of
+  // the real declaration, and the slice then starts inside prose. Measured
+  // 2026-10-12 — a trap note added to that file's own docblock spelled the
+  // marker out and silently became the anchor.
+  // ⚠ And through {@link sliceFrom}, so a renamed declaration THROWS rather than
+  // leaving this loop searching one character and printing a tick.
+  const mapperPath = "packages/mcp-server/src/workspace-directory.ts";
+  const body = sliceFrom(
+    stripComments(read(mapperPath)),
+    CONTAINER_KIND_MARKER,
+    `${mapperPath} (the \`containerKind\` switch)`,
+  );
   for (const kind of storable) {
     // `standard` is the `default` arm by design — it is the fail-safe, and
     // naming it in a `case` would delete the fail-safe.
