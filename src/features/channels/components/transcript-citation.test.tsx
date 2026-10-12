@@ -150,8 +150,13 @@ describe("the two gates survive the wiring", () => {
   });
 
   it("draws no pill when the host cannot jump", () => {
-    // 🔒 THE POP-OUT'S CASE (`thread-window.tsx` hands no `onJumpToSeq`):
-    // absent-not-disabled, so the citation is plain text rather than a dead control.
+    // 🔒 ABSENT-NOT-DISABLED: a host with no transcript to move hands no
+    // `onJumpToSeq`, so the citation is plain text rather than a dead control.
+    // ⚠ **THE EXAMPLE MOVED, THE RULE DID NOT** (2026-10-12): this used to name
+    // the pop-out, and `thread-window.tsx` now DOES hand a jump — under grammar B
+    // a pill is the only way a reader reaches a cited message, and a pop-out is
+    // where one exchange is read most closely. A digest or a preview lane is the
+    // live example; `mentions-list.tsx` states the same rule where it holds one.
     render(
       <Transcript
         rows={channelRows(

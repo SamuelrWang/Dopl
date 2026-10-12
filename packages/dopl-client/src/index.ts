@@ -152,6 +152,7 @@ export type {
   ChannelMember,
   ChannelMemberRole,
   ChannelMessage,
+  ChannelMessageCite,
   ChannelMessageInput,
   ChannelMessagePosted,
   ChannelMessageKind,

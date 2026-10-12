@@ -2,6 +2,7 @@
  *  (INVARIANTS §5): the side is always the server-stamped `authorUserId === currentUserId`. */
 
 import { mentionedUserIdsOf } from "../lib/mentions";
+import type { MessageCites } from "../lib/cites";
 import { authorViewOf, desktopAddresseeOf } from "../lib/desktop-handle";
 import { viaOf, type MessageVia } from "../lib/message-via";
 // The module the server's router reads, so the faced tag and the woken agent agree.
@@ -57,6 +58,14 @@ export interface MessageRow {
   continuation: boolean;
   /** The server-stamped mention set names the viewer — one source with the Tags inbox. */
   mentionsMe: boolean;
+  /**
+   * **WHAT THIS MESSAGE CITED** (grammar B). Three states, and `null` is NOT
+   * `[]`: `null` is a row written before the rule (legacy prose pills), `[]` is a
+   * row written under it that cited nothing (no pills at all), a list is the
+   * allowlist. ⚠ The DTO decided this from the STAMP (`server/dto-cites.ts`); a
+   * row must never re-derive it from `metadata`.
+   */
+  cites: MessageCites;
   /** Agents the server routed an untagged post to (`lib/agent-post-stamp.ts ›
    *  serverRoutedAgentIds`); ids only, named at render. */
   routedAgentIds: string[];
@@ -233,6 +242,9 @@ function toMessageRow(
     mentionsMe: mentionedUserIdsOf(message.metadata).includes(
       index.currentUserId
     ),
+    // ⚠ `?? null` FOLDS ABSENT ONTO LEGACY, WHICH IS THE SAFE DIRECTION: an older
+    // server that does not answer renders exactly as the product does today.
+    cites: message.cites ?? null,
     // The stored verdict, never re-derived from the body (that would be a second router).
     routedAgentIds: serverRoutedAgentIds(message),
     // Agent rows only — a human's address is in their own words. `?? []` merges absent and

@@ -28,6 +28,7 @@ import { agentColorOrNull } from "../lib/agent-colors";
 // `as` cast would be a second place it lived — the shape this wave has now found four times.
 import { normalizeUnaddressedResponder } from "../lib/agent-mentions";
 import { parseInfoCard } from "../info-card";
+import { messageCitesOf } from "./dto-cites";
 
 // ⚠ THE ROW SHAPES MOVED TO `dto-rows.ts` (2026-09-14, 500-line cap) AND ARE
 // RE-EXPORTED HERE VERBATIM: ~100 files import `ChannelRow` / `ChannelMemberRow`
@@ -247,6 +248,14 @@ export function mapMessageRow(
     // move in the commit that releases the migration.
     channelSeq: bigintOrNull(row.channel_seq),
     threadSeq: bigintOrNull(row.thread_seq),
+    // ⚠ **NARROWED HERE AND NOWHERE ELSE** (grammar B, `dto-cites.ts`). `metadata`
+    // above is carried whole, so a component COULD read `metadata.cites` itself —
+    // and the second reader of a peer-typed key is how junk reaches a renderer.
+    // This hands down a three-state field instead: `null` for a row not written
+    // under the rule, `[]` for one that cited nothing, a list for one that cited.
+    // ⚠ No column and no migration: citations ride in `metadata`, which
+    // `CHANNEL_MESSAGE_COLS` already selects.
+    cites: messageCitesOf(row.metadata),
     authorName: profile?.display_name || profile?.email || null,
     authorAvatarUrl: profile?.avatar_url ?? null,
     // ⚠ THE ONE PARSER decides WHICH agent wrote the row (`lib/agent-post-stamp

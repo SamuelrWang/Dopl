@@ -118,24 +118,20 @@ const eslintConfig = defineConfig([
       // happened to land in the same working tree. Two edits, one diff; the
       // split moved methods between files and removed none.
       "src/features/knowledge/server/seed-fixtures-data.ts",
-      // SPLIT SCHEDULED (2026-10-12, per-channel numbering B2): the SDK twin
-      // `packages/dopl-client/src/channel-types.ts` sat at 499 — ONE line of
-      // headroom — so adding `ChannelMessage.channelSeq` and `.threadSeq` put it
-      // at 518. ⚠ **THE TWO FIELDS COULD NOT BE ADDED UNDER THE CAP AT ALL**:
-      // 499 + 2 declaration lines is already 501 with no comment whatsoever, so
-      // this is not a verbose-docblock problem and trimming one would not have
-      // fixed it. The file is a hand-maintained MIRROR of
-      // `src/features/channels/types.ts` (there is no codegen — the package
-      // cannot import the app tree), so it grows every time the message contract
-      // does, and the next field hits the same wall.
-      // ⚠ The split has to keep `ChannelMessage`, `WorkspaceChannelMessage` and
-      // `ChannelContainer` IN THIS FILE: `twin-drift.test.ts` registers the twin
-      // by this exact filename, and `fieldsOf` returns null for an alias of a
-      // union or intersection, so the seam must move OTHER types out rather than
-      // re-shape these. That is a real split on a real seam and it is bigger than
-      // a contracts branch — scheduled, not done here, and deliberately exempted
-      // rather than silenced with an inline disable.
-      "packages/dopl-client/src/channel-types.ts",
+      // REMOVED (2026-10-12, per-channel numbering B5): the SDK twin
+      // `packages/dopl-client/src/channel-types.ts` was 499 when B2 needed two
+      // declaration lines for `channelSeq` / `threadSeq` — 501 with no comment
+      // whatsoever, so it took a "split scheduled" entry rather than an inline
+      // disable. It was 550 after grammar B added `cites` and
+      // `ChannelMessageCite`, and is now **452**: the thread subject moved whole
+      // to `channel-thread-types.ts` (133), which re-exports under the original
+      // filename so no importer moved. ⚠ `ChannelMessage` and
+      // `WorkspaceChannelMessage` STAYED, deliberately — `twin-drift.test.ts`
+      // registers the twin by this exact filename, and a parity gate that has to
+      // chase a type between files is a gate that gets turned off. Removed, not
+      // moved. ⚠ And it is the lesson `invitations.ts` and `upgrade-modal.tsx`
+      // both recorded here: what finally split it was a behavioural requirement
+      // landing on the file, not the line count that had been scheduling it.
       // REMOVED, not renamed: `settings-modal/sections/plans-billing.tsx` was
       // split for the desktop port into a 103-line web binding, the Stripe-free
       // `plans-billing-core.tsx`, and `plan-cards.tsx`. All three are under the
