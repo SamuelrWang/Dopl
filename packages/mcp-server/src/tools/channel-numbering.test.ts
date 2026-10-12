@@ -136,3 +136,103 @@ describe("the rendered transcript", () => {
     expect(page).not.toContain("cursor=2421");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE OTHER THREE CURSOR SURFACES (Review 33).
+//
+// ⚠ **THE FIRST VERSION OF THIS FILE PINNED THE ANTI-MIX INVARIANT ON ONE
+// SURFACE OF FOUR, AND CALLED IT "THE WHOLE DESIGN IN ONE ASSERTION".** It was
+// `opRead` only. Routing `lastSeq` through `channelNoOf` in the channel hold, the
+// workspace hold or the account read left all 2,963 pre-existing tests green —
+// and a hold RE-ARMS ON THAT CURSOR EVERY TURN, so a wrong watermark there is not
+// a cosmetic slip but a permanently mis-set cursor that silently skips or replays
+// another room's history. One assertion per surface, each red when that path's
+// own `lastSeq` is routed through the numbering.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { opHold } from "./channel-ops-hold";
+import { opHoldWorkspace } from "./channel-ops-hold-workspace";
+import { opReadAccount } from "./channel-ops-account";
+import type { WorkspaceDirectory } from "../workspace-directory.js";
+
+/** Unlocked and empty — the lock's behaviour is `account-scope.test.ts`'s subject. */
+const DIRECTORY: WorkspaceDirectory = {
+  getWorkspaceList: async () => [],
+  resolveWorkspaceRef: async () => null,
+  noWorkspaceError: async () => ({ content: [], isError: true }),
+  resolveContainerRef: async () => null,
+  homeContainer: async () => null,
+  containerKindIndex: async () => new Map(),
+  lockedWorkspaceId: () => null,
+};
+
+/** The numbered row every case below renders: global 4228, per-channel 2421. */
+const NUMBERED = msg({ channelSeq: 2421 });
+
+describe("the anti-mix pin, on every surface that hands back a cursor", () => {
+  it("🔒 CHANNEL HOLD: head is per-channel, `cursor=` stays global", async () => {
+    const client = {
+      listChannels: vi.fn(async () => [
+        { id: "chan-1", slug: "general", name: "General", visibility: "private" },
+      ]),
+      awaitChannelMessages: vi.fn(async () => ({
+        messages: [NUMBERED],
+        timedOut: false,
+      })),
+    } as unknown as DoplClient;
+
+    const text = (await opHold(client, "general", 7)).content[0].text as string;
+
+    expect(text).toContain("**#2421**");
+    expect(text).toContain("cursor=4228");
+    expect(text).not.toContain("cursor=2421");
+  });
+
+  it("🔒 WORKSPACE HOLD: head is per-channel, `cursor=` stays global", async () => {
+    const client = {
+      listChannels: vi.fn(async () => [
+        { id: "chan-1", slug: "general", name: "General", visibility: "private" },
+      ]),
+      awaitWorkspaceMessages: vi.fn(async () => ({
+        messages: [
+          { ...NUMBERED, channelName: "General", channelSlug: "general" },
+        ],
+        channelCount: 1,
+        timedOut: false,
+      })),
+    } as unknown as DoplClient;
+
+    const text = (await opHoldWorkspace(client, 7)).content[0].text as string;
+
+    expect(text).toContain("**#2421**");
+    expect(text).toContain("cursor=4228");
+    expect(text).not.toContain("cursor=2421");
+  });
+
+  it("🔒 ACCOUNT READ: head is per-channel, the continue cursor stays global", async () => {
+    const client = {
+      readAccountMessages: vi.fn(async () => ({
+        messages: [
+          {
+            ...NUMBERED,
+            channelId: "ch-a",
+            channelName: "Dopl Main",
+            channelSlug: "dopl-main",
+            workspaceId: "ws-container-1",
+          },
+        ],
+        channelCount: 1,
+        truncated: false,
+      })),
+    } as unknown as DoplClient;
+
+    const text = (
+      await opReadAccount(client, DIRECTORY, 7, undefined)
+    ).content[0].text as string;
+
+    expect(text).toContain("**#2421**");
+    expect(text).toContain("Highest seq shown: 4228");
+    expect(text).not.toContain("Highest seq shown: 2421");
+    expect(text).not.toContain("since=2421");
+  });
+});
