@@ -21,6 +21,7 @@ import type { ChannelInfoCard } from "./info-card";
 // symbol, one source. The barrel's re-export creates no local binding, which is why this line
 // is needed as well as that one.
 import type { AgentColorKey } from "./types-sessions";
+import type { MessageCites } from "./lib/cites";
 // ⚠ `ChannelAgentPosture` LEFT THIS IMPORT ON 2026-09-06 with the field it typed.
 import type { ChannelDelivery, ChannelWakeVerdict } from "./types-delivery";
 // ⚠ IMPORTED, NOT RE-DECLARED (2026-09-07), for `ChannelInfoCard`'s reason: the setting
@@ -290,6 +291,13 @@ export type ChannelMessage = {
    * Threads are small: median 2, max 103 (production, 2026-10-12).
    */
   threadSeq?: number | null;
+  /**
+   * **WHAT THIS MESSAGE CITED** (grammar B, card #4401). ⚠ **THREE STATES, AND
+   * `null` IS NOT `[]`** — the one field in this shape where absent and empty
+   * differ. {@link MessageCites} states the law; `server/dto-cites.ts` is the
+   * only place that decides the state, and it decides from the STAMP.
+   */
+  cites?: MessageCites;
   channelId: string;
   authorUserId: string | null;
   authorKind: MessageAuthorKind;

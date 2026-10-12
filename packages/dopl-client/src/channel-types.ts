@@ -127,6 +127,24 @@ export interface Channel {
 import type { ChannelDelivery, ChannelWakeVerdict } from "./delivery-types.js";
 export type { ChannelDelivery, ChannelWakeVerdict };
 
+/**
+ * ONE RESOLVED CITATION on a message (grammar B).
+ *
+ * A citation is structured, not parsed: the author named the message it was
+ * citing in a field on the send, and the server turned that into a row id before
+ * storing it. Nothing reads a number out of prose to decide where one points.
+ */
+export interface ChannelMessageCite {
+  /** The cited message. ⚠ THE ONLY FIELD NAVIGATION SHOULD USE. */
+  messageId: string;
+  /** The cited row's table-wide `seq`. */
+  seq: number;
+  /** Its per-channel number, when the server has one. */
+  no?: number | null;
+  /** The thread it belongs to, when it is in one. */
+  thread?: string | null;
+}
+
 export interface ChannelMessage {
   id: string;
   /** Monotonic cursor — `read`/`await` return messages with a higher seq. */
@@ -150,6 +168,20 @@ export interface ChannelMessage {
    * same reason as {@link ChannelMessage.channelSeq}.
    */
   threadSeq?: number | null;
+  /**
+   * What this message cited, resolved by the server at write time.
+   *
+   * ⚠ **THREE STATES, AND `null` IS NOT `[]`.** `null` or absent means the row
+   * was not written under the structured-citation rule (an older row, or an older
+   * server) — read its prose `#NNNN` as a global `seq`, as clients always have.
+   * `[]` means it WAS written under the rule and cited nothing, so a number in
+   * its body is just a number. A populated list is the only case where a number
+   * in the body is a reference, and only for the entries named here.
+   *
+   * ⚠ `messageId` is the pointer; `no` and `seq` are the face. Navigate by the
+   * id — the numbers can mean different things in different rooms, the id cannot.
+   */
+  cites?: ChannelMessageCite[] | null;
   channelId: string;
   authorUserId: string | null;
   authorKind: ChannelAuthorKind;

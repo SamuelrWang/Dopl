@@ -73,3 +73,57 @@ export type ResolvedCite = {
   /** The thread the cited row belongs to, when it is in one. */
   thread?: string | null;
 };
+
+/**
+ * **WHAT A RENDERER IS HANDED — THREE STATES IN ONE FIELD** (2026-10-12).
+ *
+ *   `null` / absent  **NOT WRITTEN UNDER GRAMMAR B.** A row that predates the
+ *                    stamp, or a server too old to answer. It keeps the legacy
+ *                    face exactly: prose `#NNNN` of two or more digits, read as
+ *                    a global `seq` and gated by the pane's ceiling. ⚠ The two
+ *                    causes are conflated DELIBERATELY, because they want the
+ *                    same answer and that answer is today's behaviour — so an
+ *                    old client against a new server, or the reverse, degrades
+ *                    to what shipped rather than to a blank.
+ *   `[]`             **WRITTEN UNDER GRAMMAR B, CITED NOTHING.** The common case,
+ *                    and the one the ruling is for: no pill is drawn ANYWHERE in
+ *                    this body, so `my #1 priority` and `the #12 regression` are
+ *                    the text the author typed.
+ *   `[…]`            **WRITTEN UNDER GRAMMAR B, CITING THESE.** Only a number
+ *                    naming one of these entries becomes a pill — at ANY digit
+ *                    length, `#7` included, because the allowlist has replaced
+ *                    the guess that needed a two-digit floor.
+ *
+ * ⚠ **EMPTY AND ABSENT ARE NOT THE SAME STATE HERE, WHICH IS UNUSUAL IN THIS
+ * TREE** and is the reason this field is documented at this length. Everywhere
+ * else a `?` field folds `undefined` onto `null` as "not answered". Here the
+ * difference between "cited nothing" and "not written under the rule" is the
+ * difference between a dead `#12` and a live one, so the DTO is the only place
+ * allowed to decide it and it decides from the STAMP, never from the list.
+ */
+export type MessageCites = ResolvedCite[] | null;
+
+/**
+ * **WHICH CITATION A NUMBER TYPED IN A BODY NAMES** — `null` for a number that
+ * names none of them, which is the common answer and the one that keeps text as
+ * text.
+ *
+ * ⚠ **`no` IS TRIED BEFORE `seq`, AND THE ORDER IS THE ONLY INTERESTING LINE IN
+ * THIS FUNCTION.** Both numbers name the SAME row for a given entry, so matching
+ * either can never mis-target — that is why both are matched at all, and why the
+ * transition needs no flag: an agent citing by `seq` today and by `no` after the
+ * held migration lands both get a live pill from the same code. The one case
+ * where it matters is two different entries, one whose per-channel `no` and one
+ * whose global `seq` are the same integer. Post-migration an author writes the
+ * per-channel number, so that reading wins.
+ */
+export function findCite(
+  cites: readonly ResolvedCite[],
+  n: number
+): ResolvedCite | null {
+  return (
+    cites.find((c) => c.no !== null && c.no !== undefined && c.no === n) ??
+    cites.find((c) => c.seq === n) ??
+    null
+  );
+}
