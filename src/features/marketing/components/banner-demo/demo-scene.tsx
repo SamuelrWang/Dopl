@@ -10,26 +10,46 @@ import { useMemo, useState, type RefObject } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { AgentLaunchControls } from "@/features/channels/components/use-agents-panel";
+import type { ChannelThread } from "@/features/channels/types";
 import { ChannelsMessagePane } from "@/features/channels/components/message-pane";
 import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
 import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import { indexMembers } from "@/features/channels/components/view-model";
-import { channelRows } from "@/features/channels/components/view-model-rows";
+import {
+  channelRows,
+  threadRows,
+} from "@/features/channels/components/view-model-rows";
 import { agentKey } from "@/features/channels/components/agents-model";
+import {
+  AgentActivityRows,
+  ownAgentsWorking,
+} from "@/features/channels/components/agent-activity";
+import { agentColorVar } from "@/features/channels/lib/agent-colors";
+import {
+  liveAgentsFromKey,
+  liveAgentsKey,
+} from "@/features/channels/lib/live-agents";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { reached } from "./demo-steps";
 import {
+  AGENT_IDS,
   AGENT_INDEX,
   CHANNEL_ID,
+  CHANNEL_NAME,
   CURRENT_USER_ID,
+  DEMO_CHANNEL,
   MEMBERS,
   MY_SESSION,
-  PEER_ANALYST,
-  PEER_ENRICHER,
-  SALES_CHANNEL,
+  MY_SESSIONS,
+  PEER_SCOUT,
+  PEER_TRIAGE,
+  SERVER_SESSIONS,
   WORKSPACE_ID,
-  messagesAt,
 } from "./demo-data";
+import {
+  messagesAt,
+  threadsAt,
+} from "./demo-transcript";
 import { narrationAt } from "./demo-narration";
 import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
@@ -44,9 +64,6 @@ import { DemoAgentView } from "./demo-agent-view";
 const DEMO_GATE: MutationGate = { begin() {}, end() {} };
 
 const NOOP = () => {};
-
-/** One reference, not a fresh `[]` per render: it is a memo dependency. */
-const NO_THREADS: never[] = [];
 
 /** `canLaunch` draws the composer's Bot glyph, as desktop /home does; every handler refuses. */
 const DEMO_LAUNCH: AgentLaunchControls = {
@@ -63,6 +80,9 @@ export function DemoScene({
   paneRef,
   agentOpen = false,
   onOpenAgent = NOOP,
+  thread = null,
+  onOpenThread = NOOP,
+  onExitThread = NOOP,
 }: {
   step: number;
   /** Bumped per loop so the info column's tab state resets on every replay. */
@@ -71,6 +91,19 @@ export function DemoScene({
   paneRef?: RefObject<HTMLDivElement | null>;
   agentOpen?: boolean;
   onOpenAgent?: () => void;
+  /**
+   * **THE OPEN THREAD, OR `null` FOR THE CHANNEL RECORD.**
+   *
+   * ⚠ `null` IS THE CHANNEL VIEW and that is the product's own switch, not a demo flag
+   * (`message-pane.tsx › thread`). One pane renders one or the other and never both,
+   * which is why step 8 walks the cursor back out through the crumb rather than trying
+   * to show a thread and the channel at once.
+   */
+  thread?: ChannelThread | null;
+  /** The thread card's own "Open thread" button fires this. */
+  onOpenThread?: () => void;
+  /** The breadcrumb's channel crumb fires this — the way back out. */
+  onExitThread?: () => void;
 }) {
   const [qc] = useState(() => new QueryClient());
   const messages = useMemo(() => messagesAt(step), [step]);
@@ -78,22 +111,87 @@ export function DemoScene({
     () => indexMembers(MEMBERS, CURRENT_USER_ID, AGENT_INDEX),
     []
   );
-  /** No threads by design: the Threads tab reads `0`, as on a /home channel with none. */
+  /**
+   * ⚠ **THE PANE'S ROWS ARE A DIFFERENT DERIVATION IN EACH VIEW, off ONE message array.**
+   * `channelRows` collapses every thread-tagged message into one card per thread;
+   * `threadRows` filters the same array back down to one thread's own transcript. Nothing
+   * is authored twice, which is what keeps the card preview and the thread body identical
+   * by construction.
+   */
   const rows = useMemo(
-    () => channelRows(messages, NO_THREADS, index, formatChannelTimestamp),
-    [messages, index]
+    () =>
+      thread
+        ? threadRows(messages, thread.id, index, formatChannelTimestamp)
+        : channelRows(messages, threadsAt(step), index, formatChannelTimestamp),
+    [messages, index, thread, step]
   );
-  const sessions = useMemo(
-    () => (reached(step, "launch-2") ? [MY_SESSION] : []),
-    [step]
-  );
+  /**
+   * ⚠ **STEP-GATED ON EACH AGENT'S OWN LAUNCH BEAT**, so the Agents tab counts what has
+   * actually been launched: the orchestrator on `launch-2`, then its three coders as
+   * `thread-launch-1`…`-3` fire. The order is `MY_SESSIONS`'s own, which is launch order,
+   * and the cursor depends on it (see that export).
+   */
+  const sessions = useMemo(() => {
+    const live: typeof MY_SESSIONS = [];
+    if (reached(step, "launch-2")) live.push(MY_SESSIONS[0]);
+    if (reached(step, "thread-launch-1")) live.push(MY_SESSIONS[1]);
+    if (reached(step, "thread-launch-2")) live.push(MY_SESSIONS[2]);
+    if (reached(step, "thread-launch-3")) live.push(MY_SESSIONS[3]);
+    return live;
+  }, [step]);
   const peers = useMemo(() => {
     const out = [];
-    if (reached(step, "launch-1")) out.push(PEER_ENRICHER);
-    if (reached(step, "launch-3")) out.push(PEER_ANALYST);
+    if (reached(step, "launch-1")) out.push(PEER_TRIAGE);
+    if (reached(step, "launch-3")) out.push(PEER_SCOUT);
     return out;
   }, [step]);
+  /**
+   * The server's projection at this beat, gated on the SAME launch beats as the desktop
+   * feed above — the two are one event seen from two sides, so a row appearing in one and
+   * not the other would be a state the product never has.
+   */
+  const serverSessions = useMemo(
+    () =>
+      SERVER_SESSIONS.filter((row) => {
+        if (row.name === AGENT_IDS.triage) return reached(step, "launch-1");
+        if (row.name === AGENT_IDS.planner) return reached(step, "launch-2");
+        if (row.name === AGENT_IDS.scout) return reached(step, "launch-3");
+        if (row.name === AGENT_IDS.teardown)
+          return reached(step, "thread-launch-1");
+        if (row.name === AGENT_IDS.notice) return reached(step, "thread-launch-2");
+        if (row.name === AGENT_IDS.wake) return reached(step, "thread-launch-3");
+        return false;
+      }),
+    [step]
+  );
   const homeRows = useMemo(() => homeRowsAt(step), [step]);
+
+  /**
+   * **THE COMPOSER'S LIVE SET** (Samuel, 2026-10-12: show the agents currently working
+   * above the input, with the auto-tag control).
+   *
+   * ⚠ **BUILT THROUGH THE PRODUCT'S OWN DERIVATION, NOT HAND-ROLLED.**
+   * `liveAgentsKey` → `liveAgentsFromKey` is what `channel-surface.tsx` uses, and it is
+   * where the name/colour precedence rule lives (names from the desktop feed, colours
+   * from the server projection only). Constructing `LiveAgentSession` rows directly here
+   * would be a second answer to that question and would drift the day it changes.
+   *
+   * ⚠ It feeds BOTH the working strip and `ComposerRecipients` — the "→ @handle" reach
+   * line, which is the auto-tag control: it predicts who an unaddressed draft would go
+   * to. One set, so the strip and the line cannot disagree about who is live.
+   */
+  const live = useMemo(
+    () => liveAgentsFromKey(liveAgentsKey(serverSessions, sessions, CHANNEL_ID)),
+    [serverSessions, sessions]
+  );
+  /** `agentId` → a `var()` reference, resolved by the host exactly as the real one does. */
+  const workingColors = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const agent of live) {
+      if (agent.color) out.set(agent.name, agentColorVar(agent.color));
+    }
+    return out;
+  }, [live]);
 
   return (
     <QueryClientProvider client={qc}>
@@ -112,9 +210,8 @@ export function DemoScene({
                     key={`pane-${run}`}
                     channelId={CHANNEL_ID}
                     workspaceId={WORKSPACE_ID}
-                    channelName="q4-outbound"
-                    // Always the channel record, never a thread (no breadcrumb or thread column).
-                    thread={null}
+                    channelName={CHANNEL_NAME}
+                    thread={thread}
                     rows={rows}
                     index={index}
                     members={MEMBERS}
@@ -124,23 +221,40 @@ export function DemoScene({
                     favorited
                     gate={DEMO_GATE}
                     newAgent={DEMO_LAUNCH}
+                    // The composer's live set: the tint, the mention picker and the
+                    // reach line ("→ @handle", the auto-tag control) all read it.
+                    liveAgents={live}
+                    // The working strip above the input, scoped to whatever the composer
+                    // is pointed at — so it narrows to the thread's coders inside it.
+                    agentActivity={
+                      <AgentActivityRows
+                        agents={ownAgentsWorking(
+                          sessions,
+                          CHANNEL_ID,
+                          thread?.id ?? null
+                        )}
+                        colors={workingColors}
+                      />
+                    }
                     onToggleInfo={NOOP}
                     onToggleFavorite={NOOP}
-                    onExitThread={NOOP}
+                    // The breadcrumb's channel crumb: the cursor's way back out.
+                    onExitThread={onExitThread}
+                    onOpenThread={onOpenThread}
                     onOpenAgent={onOpenAgent}
                   />
                   <div className="channel-info-slide" data-open="true">
                     <ChannelsInfoPanel
                       key={`info-${run}`}
-                      channel={SALES_CHANNEL}
-                      channelName="q4-outbound"
+                      channel={DEMO_CHANNEL}
+                      channelName={CHANNEL_NAME}
                       members={MEMBERS}
-                      threads={NO_THREADS}
+                      threads={threadsAt(step)}
                       threadsTruncated={false}
                       threadsLoading={false}
                       index={index}
-                      openThread={null}
-                      onOpenThread={NOOP}
+                      openThread={thread}
+                      onOpenThread={onOpenThread}
                       agentSessions={sessions}
                       peerSessions={peers}
                       openAgent={agentOpen ? agentKey(MY_SESSION) : null}

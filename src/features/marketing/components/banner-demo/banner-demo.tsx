@@ -20,6 +20,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CANVAS_H, CANVAS_W, at, reached } from "./demo-steps";
+import { CHANNEL_NAME, OPEN_THREAD } from "./demo-data";
 import { DemoScene } from "./demo-scene";
 import { useDemoTimeline } from "./use-demo-timeline";
 
@@ -49,12 +50,20 @@ export function BannerDemo() {
    *  scaled canvas is EXACTLY the slot (see the file docblock). */
   const [box, setBox] = useState({ scale: 1, h: CANVAS_H });
 
-  // Set by the REAL components' own callbacks when the cursor clicks them; gated
-  // on the step so a loop reset closes everything without an effect. The scene
-  // never leaves the channel record, so the only thing the cursor opens is an
-  // agent.
+  /**
+   * Set by the REAL components' own callbacks when the cursor clicks them, then gated on
+   * the step so a loop reset closes everything with no teardown effect.
+   *
+   * ⚠ **THE THREAD IS A `reached` WINDOW, NOT A LATCH** (v3). It opens on `click-thread`
+   * and closes on `click-crumb`, which is what lets the channel animate again for step 8
+   * while the agent view stays open. Deriving it from the step rather than storing a
+   * boolean is what makes the loop reset free: at `step = 0` both reads are false.
+   */
   const [agentClicked, setAgentClicked] = useState(false);
   const agentOpen = agentClicked && reached(step, "click-agent");
+  const [threadClicked, setThreadClicked] = useState(false);
+  const threadOpen =
+    threadClicked && reached(step, "click-thread") && !reached(step, "click-crumb");
 
   const [cursor, setCursor] = useState<Cursor>({
     x: CANVAS_W + 40,
@@ -96,11 +105,21 @@ export function BannerDemo() {
     // Searched in the pane, measured against the canvas — see `paneRef`.
     const pane = paneRef.current;
     const target = (): HTMLElement | null => {
+      // ⚠ EVERY ARM PRESSES A REAL CONTROL, found by its own visible label. Nothing here
+      // is a demo-only hook, which is why the product's handlers run and the scene
+      // reacts the way the app does.
+      if (at(step, "cursor-to-thread") || at(step, "click-thread"))
+        // The thread card's own button (`thread-card-row.tsx`).
+        return findButton(pane, (l) => l === "Open thread");
       if (at(step, "cursor-to-tab") || at(step, "click-tab"))
         // The count badge concatenates into textContent ("Agents3").
         return findButton(pane, (l) => l.startsWith("Agents"));
       if (at(step, "cursor-to-agent") || at(step, "click-agent"))
         return findButton(pane, (l) => l === "Open");
+      if (at(step, "cursor-to-crumb") || at(step, "click-crumb"))
+        // The breadcrumb's channel crumb, which is a button in thread view only
+        // (`message-pane-header.tsx`). Its label IS the channel name.
+        return findButton(pane, (l) => l === CHANNEL_NAME);
       return null;
     };
     const locate = (el: HTMLElement) => {
@@ -119,7 +138,12 @@ export function BannerDemo() {
     // step's DOM committed anyway.
     let raf = 0;
     const t = window.setTimeout(() => {
-      if (at(step, "cursor-to-tab") || at(step, "cursor-to-agent")) {
+      if (
+        at(step, "cursor-to-thread") ||
+        at(step, "cursor-to-tab") ||
+        at(step, "cursor-to-agent") ||
+        at(step, "cursor-to-crumb")
+      ) {
         const el = target();
         const to = el && locate(el);
         if (!to) return;
@@ -138,18 +162,31 @@ export function BannerDemo() {
         return;
       }
 
-      if (at(step, "click-tab") || at(step, "click-agent")) {
+      if (
+        at(step, "click-thread") ||
+        at(step, "click-tab") ||
+        at(step, "click-agent") ||
+        at(step, "click-crumb")
+      ) {
         const { x, y } = cursorPos.current;
         setRipple((r) => ({ x, y, n: r.n + 1 }));
         const el = target();
         // The REAL control's own handler runs — this is the product reacting,
         // not the demo repainting.
         el?.click();
+        if (at(step, "click-thread")) setThreadClicked(true);
         if (at(step, "click-agent")) setAgentClicked(true);
         return;
       }
 
-      if (at(step, "tab-open") || at(step, "agent-open")) {
+      // ⚠ `click-crumb` is NOT in this list: the cursor stays on stage through step 8,
+      // because the channel it just came back to is the thing the reader should be
+      // watching and a pointer vanishing mid-scene reads as the demo ending.
+      if (
+        at(step, "thread-open") ||
+        at(step, "tab-open") ||
+        at(step, "agent-open")
+      ) {
         setCursor((c) => (c.shown ? { ...c, shown: false } : c));
       }
     }, 0);
@@ -177,6 +214,9 @@ export function BannerDemo() {
           paneRef={paneRef}
           agentOpen={agentOpen}
           onOpenAgent={() => setAgentClicked(true)}
+          thread={threadOpen ? OPEN_THREAD : null}
+          onOpenThread={() => setThreadClicked(true)}
+          onExitThread={() => setThreadClicked(false)}
         />
 
         <div

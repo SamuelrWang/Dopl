@@ -44,10 +44,14 @@ import {
   AGENT_IDS,
   AGENT_INDEX,
   MEMBERS,
+  OPEN_THREAD,
+} from "./demo-data";
+import {
   citedMessage,
   mentionMetadata,
   messagesAt,
-} from "./demo-data";
+  threadsAt,
+} from "./demo-transcript";
 import { narrationAt } from "./demo-narration";
 import { mentionsAt } from "./demo-info-data";
 import { STEPS, stepIndex, type StepId } from "./demo-steps";
@@ -81,10 +85,10 @@ const epoch = (iso: string): number => {
   return ms;
 };
 
-/** `agentPost` stamps `agent-<id>-<n>`; these are the writer's two channel posts. */
-const WRITER_FIRST_POST = `agent-${AGENT_IDS.writer}-1`;
-const WRITER_SECOND_POST = `agent-${AGENT_IDS.writer}-2`;
-
+/** `agentPost` stamps `agent-<id>-<n>`. The opened coder's only channel post. */
+const CODER_POST = `agent-${AGENT_IDS.teardown}-1`;
+/** The brief that woke it, which its inbound banner carries. */
+const BRIEF_POST = `agent-${AGENT_IDS.planner}-3`;
 describe("1. the scripted cursor is one shape for the whole demo", () => {
   const demo = source("banner-demo.tsx");
   const banner = source("../hero-banner.tsx");
@@ -125,8 +129,8 @@ describe("1. the scripted cursor is one shape for the whole demo", () => {
 describe("2. every agent has its own colour", () => {
   const entries = [...AGENT_INDEX.entries()];
 
-  it("indexes all three agents", () => {
-    expect(entries).toHaveLength(3);
+  it("indexes every agent in the scene: three orchestrators and three coders", () => {
+    expect(entries).toHaveLength(6);
   });
 
   it("gives each one a key from the product's own bank", () => {
@@ -231,8 +235,8 @@ describe("3. mention metadata is derived from the body, never authored beside it
      * wiring is pinned the only way it can be until the new lines land.
      */
     it("is wired into every scripted message, not merely available", () => {
-      const text = source("demo-data.ts");
-      expect(text).toContain("metadata: mentionMetadata(body, authorUserId)");
+      const text = source("demo-transcript.ts");
+      expect(text).toContain("...mentionMetadata(body, authorUserId),");
       expect(text).not.toContain("metadata: {}");
     });
   });
@@ -283,16 +287,28 @@ describe("4. the agent view is fed an inbound lane", () => {
     }
   });
 
-  it("shows both banner faces: one from a member, one from an agent", () => {
-    // The human-versus-agent colouring is `ui/received-banner-color`'s; the scene has to
-    // feed it one of each or only half of it is ever visible here.
+  /**
+   * 🔴 **v3 SHOWS ONLY THE AGENT FACE OF THIS BANNER, AND THAT IS THE STORY, NOT A GAP.**
+   * v2 fed one member arrival and one agent arrival, so both paints were on screen. In v3
+   * the opened agent is a CODER that its orchestrator launched and briefed, so the only
+   * thing that ever arrives in its private lane is another agent's message — which is
+   * precisely the "agents hand work to each other" point. There is no human message
+   * addressed to it to show, and inventing one to exercise the other paint would be a
+   * line nobody approved.
+   *
+   * ⚠ Reported to @cleanup-orchestrator rather than papered over: the human/black face is
+   * no longer exercised by this scene.
+   */
+  it("shows the agent face, which is the only arrival v3's coder ever gets", () => {
     const senders = entries
       .filter((e) => e.lane === "inbound")
       .map((e) => e.senderName);
-    const people = new Set(MEMBERS.map((m) => m.displayName));
     const agents = new Set([...AGENT_INDEX.values()].map((a) => a.displayName));
-    expect(senders.some((s) => people.has(s ?? ""))).toBe(true);
-    expect(senders.some((s) => agents.has(s ?? ""))).toBe(true);
+    expect(senders.length).toBeGreaterThan(0);
+    expect(senders.every((s) => agents.has(s ?? ""))).toBe(true);
+    // And no member sender, so the claim above is pinned rather than just asserted.
+    const people = new Set(MEMBERS.map((m) => m.displayName));
+    expect(senders.some((s) => people.has(s ?? ""))).toBe(false);
   });
 
   /**
@@ -332,20 +348,26 @@ describe("4. the agent view is fed an inbound lane", () => {
       }
     });
 
-    it("omits both on a member's arrival, mirroring the reader's own gate", () => {
-      const fromPeople = inbound.filter((e) => carrier(e).authorKind === "user");
-      expect(fromPeople.length).toBeGreaterThan(0);
-      for (const entry of fromPeople) {
+    it("would omit both on a member's arrival, mirroring the reader's own gate", () => {
+      // ⚠ v3 has no member arrival (see the note above), so this asserts the RULE over
+      // whatever arrivals exist rather than requiring one of each: an entry claiming
+      // `user` must carry neither agent field. It becomes load-bearing again the moment
+      // a human-sent arrival is scripted, which is why it is not deleted.
+      for (const entry of inbound.filter((e) => carrier(e).authorKind === "user")) {
         expect(carrier(entry).senderAgentName).toBeUndefined();
         expect(carrier(entry).senderColor).toBeUndefined();
       }
+      // The scene must still feed the lane something, or this file proves nothing.
+      expect(inbound.length).toBeGreaterThan(0);
     });
   });
 
-  it("stamps each arrival no earlier than the agent's first post", () => {
-    const first = epoch(post(WRITER_FIRST_POST).createdAt);
+  it("stamps each arrival no earlier than the post it carries", () => {
+    // An inbound is when a message REACHED this agent, which cannot precede the post.
     for (const entry of entries.filter((e) => e.lane === "inbound")) {
-      expect(entry.at).toBeGreaterThanOrEqual(first);
+      const origin = messagesAt(LAST_STEP).find((m) => m.body === entry.text);
+      expect(origin, "inbound text is not a scripted post").toBeTruthy();
+      expect(entry.at).toBeGreaterThanOrEqual(epoch(origin!.createdAt));
     }
   });
 });
@@ -392,33 +414,73 @@ describe("5. the mentions inbox is live", () => {
   });
 });
 
-describe("6. the second posted box lands after the private exchange", () => {
+
+describe("6. the thread, the private chat and the channel interleave", () => {
   const stepOf = (clientMsgId: string): StepId =>
     citedMessage(post(clientMsgId).id).step;
 
-  it("reveals the first post before the agent view opens", () => {
-    expect(stepIndex(stepOf(WRITER_FIRST_POST))).toBeLessThan(
-      stepIndex("agent-open")
-    );
+  it("posts the coder's line inside the thread, before its view is opened", () => {
+    // It is history by the time the panel opens, which is what a sent box IS here.
+    expect(stepIndex(stepOf(CODER_POST))).toBeLessThan(stepIndex("agent-open"));
   });
 
-  it("reveals the second post only after the last private turn", () => {
-    expect(stepIndex(stepOf(WRITER_SECOND_POST))).toBeGreaterThan(
-      stepIndex("dm-agent-2")
-    );
+  it("🔒 opens the thread before the agent, and closes it while the agent stays open", () => {
+    expect(stepIndex("click-thread")).toBeLessThan(stepIndex("click-agent"));
+    // The crumb click is the step-8 hinge: thread shut, agent view still up.
+    expect(stepIndex("click-crumb")).toBeGreaterThan(stepIndex("click-agent"));
   });
 
-  it("stamps the second post after every narration entry, so the stream sorts it last", () => {
-    // `agent-stream-model.ts › buildAgentStream` orders on `at`; the reveal and the
-    // stamp have to agree or the box pops in above the conversation.
-    const second = epoch(post(WRITER_SECOND_POST).createdAt);
-    const latest = Math.max(...narrationAt(LAST_STEP).map((e) => e.at));
-    expect(second).toBeGreaterThan(latest);
+  it("🔒 runs the channel lines BETWEEN the private turns, not after them", () => {
+    // This is the concurrency claim. If both concurrent beats sat after `dm-agent-2`
+    // the scene would be sequential and the step-8 ask unmet, which no other probe
+    // here would notice.
+    expect(stepIndex("concurrent-1")).toBeGreaterThan(stepIndex("dm-agent-1"));
+    expect(stepIndex("concurrent-1")).toBeLessThan(stepIndex("dm-user-2"));
+    expect(stepIndex("concurrent-3")).toBeGreaterThan(stepIndex("dm-agent-2"));
   });
 
-  it("keeps the first post earlier than the second on both axes", () => {
-    expect(epoch(post(WRITER_FIRST_POST).createdAt)).toBeLessThan(
-      epoch(post(WRITER_SECOND_POST).createdAt)
+  it("stamps the brief before the first private turn, so the banner reads first", () => {
+    const brief = narrationAt(LAST_STEP).find((e) => e.lane === "inbound");
+    const firstTurn = narrationAt(LAST_STEP).find((e) => e.lane === "operator");
+    expect(brief).toBeTruthy();
+    expect(firstTurn).toBeTruthy();
+    expect(brief!.at).toBeLessThan(firstTurn!.at);
+  });
+
+  it("carries the brief's own words on that banner", () => {
+    const brief = narrationAt(LAST_STEP).find((e) => e.lane === "inbound");
+    expect(brief?.text).toBe(post(BRIEF_POST).body);
+  });
+});
+
+describe("7. threads exist only once their opener has landed", () => {
+  it("opens none before the first opener", () => {
+    expect(threadsAt(stepIndex("split-3"))).toHaveLength(0);
+  });
+
+  it("opens one per orchestrator by the time all three have posted", () => {
+    expect(threadsAt(stepIndex("thread-3"))).toHaveLength(3);
+  });
+
+  it("🔒 includes the thread the cursor opens", () => {
+    const ids = threadsAt(stepIndex("thread-3")).map((t) => t.id);
+    expect(ids).toContain(OPEN_THREAD.id);
+  });
+
+  it("tags the briefs into that thread, so the thread view has a body", () => {
+    const inThread = messagesAt(LAST_STEP).filter(
+      (m) => m.metadata?.taskId === OPEN_THREAD.id
     );
+    // Three launches, three briefs, the opener and the coder's reply.
+    expect(inThread.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it("🔒 keeps the mention set alongside the thread tag", () => {
+    // The two share `metadata`, and an earlier cut of `msg()` spread `extra` whole over
+    // it — which would have dropped one silently. Every briefing line carries an agent
+    // tag, so the thread's posts are exactly where that would have shown.
+    const brief = post(BRIEF_POST);
+    expect(brief.metadata?.taskId).toBe(OPEN_THREAD.id);
+    expect(brief.body.startsWith("@")).toBe(true);
   });
 });

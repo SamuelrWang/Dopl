@@ -14,7 +14,13 @@
  */
 
 import type { DesktopNarrationEntry } from "@/shared/lib/spa-bridge";
-import { AGENT_INDEX, NOW_MS, citedMessage } from "./demo-data";
+import {
+  AGENT_INDEX,
+  NOW_MS,
+} from "./demo-data";
+import {
+  citedMessage,
+} from "./demo-transcript";
 import { reached, type StepId } from "./demo-steps";
 
 const dm = (
@@ -122,29 +128,29 @@ const inbound = (
  */
 const DM_SCRIPT: ReadonlyArray<{ step: StepId; entry: DesktopNarrationEntry }> =
   [
-    // Grace's kickoff: a MEMBER's post, so the banner names a person.
-    inbound("inbound-1", "demo-m4", 100),
-    // The enricher's post: another operator's AGENT, so the banner names the agent.
-    inbound("inbound-2", "demo-m11", 55),
+    /**
+     * **WHAT WOKE THIS CODER: ITS OWN BRIEF, FROM ANOTHER AGENT.**
+     *
+     * ⚠ The brief is `brief-1`, posted by Cleanup Planner, so this is the agent→agent
+     * banner in the sending agent's colour. The coder was launched BY that orchestrator
+     * and briefed by it, so there is no human sender in this agent's lane at all, which
+     * is the point of v3: the work was handed over without a person in the middle.
+     */
+    inbound("agent-open", "demo-m18", 100),
     dm(
       "dm-user-1",
       "operator",
-      "Keep variant A casual — and mention the SOC 2 launch up top.",
-      40,
+      "don't fix the ordering yet. just tell me if the post ever lands",
+      70,
     ),
     dm(
       "dm-agent-1",
       "private",
-      "Done — reworked the opener around SOC 2, kept it under 90 words. Want a CTO-specific version too?",
-      25,
+      "It doesn't. The socket closes first, so the final post races the shutdown and loses. Want me to write that up before touching anything?",
+      52,
     ),
-    dm("dm-user-2", "operator", "Yes. Same angle, more technical.", 12),
-    dm(
-      "dm-agent-2",
-      "private",
-      "On it. Two drafts landing in the thread in a minute.",
-      4,
-    ),
+    dm("dm-user-2", "operator", "yes write it up first", 34),
+    dm("dm-agent-2", "private", "Writing it up now.", 18),
   ];
 
 export function narrationAt(step: number): DesktopNarrationEntry[] {

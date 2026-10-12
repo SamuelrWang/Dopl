@@ -12,7 +12,15 @@
 
 import type { ChannelMention } from "@/features/channels/types";
 import type { ActivityBin } from "@/features/channels/components/thread-activity";
-import { AGENT_INDEX, CHANNEL_ID, FACE, NOW_MS, citedMessage } from "./demo-data";
+import {
+  AGENT_INDEX,
+  CHANNEL_ID,
+  FACE,
+  NOW_MS,
+} from "./demo-data";
+import {
+  citedMessage,
+} from "./demo-transcript";
 import { reached, type StepId } from "./demo-steps";
 
 /**
@@ -30,9 +38,24 @@ import { reached, type StepId } from "./demo-steps";
  * The snippet stays authored: it is a server-side excerpt, which the demo has nothing
  * to compute from.
  */
+/**
+ * **THE SERVER'S EXCERPT, AS AN EXCERPT.**
+ *
+ * ⚠ **DERIVED, BECAUSE THE AUTHORED VERSION WAS THE LAST DUPLICATE IN THE SCENE.** The
+ * snippet used to be typed out beside the post it quotes, which is the same two-copies
+ * problem that had already mis-keyed these rows once. Cutting the body is what the
+ * server does, so cutting it here is both honest and un-driftable.
+ */
+const SNIPPET_MAX = 90;
+function excerpt(body: string): string {
+  if (body.length <= SNIPPET_MAX) return body;
+  const cut = body.slice(0, SNIPPET_MAX);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
 function mention(
   messageId: string,
-  snippet: string,
   read: boolean,
 ): { step: StepId; mention: ChannelMention } {
   const { step, message, agentId, agentColor } = citedMessage(messageId);
@@ -56,21 +79,25 @@ function mention(
         ? (AGENT_INDEX.get(agentId)?.displayName ?? null)
         : null,
       authorAgentColor: agentColor,
-      snippet,
+      snippet: excerpt(message.body),
       createdAt: message.createdAt,
       read,
     },
   };
 }
 
-/** Newest first, the server's own `seq DESC`, which `MentionsList` never re-sorts. */
+/**
+ * Newest first, the server's own `seq DESC`, which `MentionsList` never re-sorts.
+ *
+ * Both rows are tags OF Samuel by somebody else's agent, which is what a real inbox
+ * holds: his own agents' posts are authored under his account and the mention set
+ * excludes the author, so they could never file a row here.
+ */
 const MENTION_SCRIPT: ReadonlyArray<{ step: StepId; mention: ChannelMention }> = [
-  mention(
-    "demo-m10",
-    "@Samuel Director+ at 50–500 headcount closed 3× faster — 74 of the 186.",
-    false,
-  ),
-  mention("demo-m2", "@Samuel half of them are missing titles in the CRM again.", true),
+  // `concurrent-3`, the orchestrator's question to him, still unread.
+  mention("demo-m24", false),
+  // `split-2`, where the orchestrators handed him the teardown work.
+  mention("demo-m10", true),
 ];
 
 /**
