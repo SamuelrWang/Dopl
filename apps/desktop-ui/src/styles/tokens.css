@@ -213,16 +213,7 @@
   --bg-overlay: #fefefe;
 
   --panel-surface: #fbfcfd;
-  --panel-surface-focus: #ffffff;
-  --input-surface: #f1f4f7;
-  --input-surface-focus: #ffffff;
-  --card-surface: #fefefe;
-  --card-surface-elevated: #ffffff;
   --card-surface-subtle: #f4f6f9;
-  --navbar-surface: oklch(0.145 0 0);
-  --panel-group-tab-surface: oklch(0.08 0 0);
-  --panel-group-menu-surface: oklch(0.06 0 0);
-  --tabs-surface: oklch(0.135 0 0);
 
   --border-subtle: oklch(0 0 0 / 6%);
   --border-default: oklch(0 0 0 / 8%);
@@ -235,8 +226,11 @@
   --text-muted: #98a2ad;
   --text-disabled: #c4cad1;
 
-  /* Accent — neutral UI ink. accent-glow/soft are legacy cyan effect tints
-     still consumed by canvas/marketing glows. */
+  /* Accent — neutral UI ink. accent-glow/soft are legacy cyan effect tints.
+     ⚠ NEITHER HAS A READER (measured 2026-10-12, repo-wide): the glow and
+     gradient tokens they were cut for were deleted as dead the same day, and
+     the only thing keeping them is globals.css's unused `--color-accent-*`
+     `@theme` aliases, whose utilities nothing uses either. */
   --accent-primary: #3e3a3b;
   --accent-glow: oklch(0.68 0.22 250);
   --accent-soft: oklch(0.45 0.12 245);
@@ -285,10 +279,11 @@
   --agent-color-15: oklch(0.44 0.11 335);
   --agent-color-16: oklch(0.44 0.11 358);
 
-  /* These back the --color-* tokens above. The effect tokens further down
-     (glows, gradients, ontology-outline, panel shadow/shine, navbar/ontology
-     surfaces) still hold legacy dark/cyan values consumed only by canvas
-     effects + marketing. */
+  /* These back the --color-* tokens above. ⚠ The legacy effect families this
+     note used to list — glows, gradients, the ontology/panel-group outline,
+     navbar/tabs/panel-group surfaces — were DELETED on 2026-10-12 with zero
+     readers repo-wide; what survives below is the panel shine, read by
+     canvas-panel inline styles. */
 
   /* Elevation tints — exact alpha equivalents of bg-white/[0.02/0.04/0.06/0.08] */
   --surface-raised-1: oklch(0 0 0 / 2%);
@@ -402,11 +397,6 @@
   --focus-halo: 0 0 0 3px rgba(24, 24, 24, 0.07);
   --raised-light-focus: var(--raised-light-bevel), var(--focus-halo);
 
-  /* Panel header — dark frame surface, white text. */
-  --panel-header-surface: var(--surface-cta);
-  --panel-header-border: rgba(255, 255, 255, 0.12);
-  --panel-header-text: #ffffff;
-
   /* App-shell chrome palette. Duplicates of semantic tokens are ALIASED, not
      re-valued, to keep one source; purple/lavender/orange/line have no
      semantic equivalent.
@@ -417,26 +407,15 @@
      home frame THE frame — one token, not two — so this is a delete, not an
      alias. `--rail-tile`/`--rail-tile-hi` are a different colour: left alone. */
   --rail-tile: #3a4651;
-  --rail-tile-hi: #46535f;
   --bg: #d6dee7;
-  --sidebar: var(--bg);
   --panel: var(--bg-base);
   --ink: var(--text-primary);
   --ink-soft: var(--text-secondary);
-  --ink-faint: var(--text-muted);
   --line: #d6dde5;
-  --line-soft: #dce3ea;
-  --active: #d9e1e9;
   --purple: #6f93bf;
   --lavender: #e3eaf2;
   --orange: #d8bca6;
   --black: var(--surface-cta);
-
-  /* Panel-group outline (dashed region behind grouped panels) — drawn in SVG. */
-  --panel-group-outline-stroke: oklch(0.78 0.16 240 / 60%);
-  --panel-group-outline-stroke-strong: oklch(0.78 0.16 240 / 80%);
-  --panel-group-outline-fill: oklch(0.78 0.16 240 / 5%);
-  --panel-group-outline-fill-strong: oklch(0.78 0.16 240 / 8%);
 
   /* Panel shine + selection — consumed by canvas-panel INLINE styles. */
   --shine-top-gradient: linear-gradient(
@@ -455,9 +434,7 @@
   --radius: 0.625rem;
 
   /* ── Legacy named palette ─────────────────────────────────────── */
-  --paper: #1a1a1a;       /* main surface */
   --forest: #e0e0e0;      /* primary text */
-  --grid-line: #a0a0a0;   /* secondary text */
   --coral: #FF8C69;       /* alerts / errors */
   --mint: #9EFFBF;        /* success */
   --gold: #F4D35E;        /* warnings */
@@ -466,19 +443,6 @@
      else a dark flash on route transitions. Was a hand-copied `#2c3640`, one
      hex off the frame, until 2026-08-30. */
   --body-bg: var(--home-frame);
-
-  --gradient-elevated: linear-gradient(
-    180deg,
-    oklch(0.21 0 0) 0%,
-    oklch(0.14 0 0) 100%
-  );
-  --gradient-orb: radial-gradient(
-    circle at 35% 30%,
-    oklch(0.95 0.05 230) 0%,
-    oklch(0.78 0.18 240) 25%,
-    oklch(0.45 0.22 250) 60%,
-    oklch(0.20 0.15 260) 100%
-  );
 
   --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),
     0 2px 8px -2px oklch(0 0 0 / 40%);
@@ -510,15 +474,6 @@
   --shadow-raised-hover: 0 4px 7px rgba(0, 0, 0, 0.24), 0 10px 24px rgba(0, 0, 0, 0.24);
   /** THE CARD HOVER LIFT'S SHADOW — mirrored from `src/app/globals.css`, same change. */
   --shadow-card-lift: 0 2px 4px rgba(0, 0, 0, 0.07), 0 12px 28px rgba(0, 0, 0, 0.1);
-  --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
-    0 4px 16px -4px oklch(0 0 0 / 50%);
-  --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),
-    0 0 48px oklch(0.68 0.22 250 / 25%);
-  --glow-accent-strong: 0 0 32px oklch(0.68 0.22 250 / 70%),
-    0 0 64px oklch(0.68 0.22 250 / 40%),
-    0 0 96px oklch(0.68 0.22 250 / 20%);
-  --inset-highlight: inset 0 1px 0 0 oklch(1 0 0 / 14%);
-  --inset-highlight-strong: inset 0 1px 0 0 oklch(1 0 0 / 22%);
 }
 
 html {
@@ -677,7 +632,12 @@ html {
      there would not have given. ⚠ The other three float margins stay literal:
      nothing outside the float reads them. */
   --page-float-gap-top: 7px;
-  /* Derived: viewport insets of the main panel. */
+  /**
+   * Derived: viewport insets of the main panel. ⚠ MIRRORED FROM
+   * `src/app/globals.css`, same change — unread, and kept on purpose: over
+   * there they hold the only in-file reference to the shell geometry tokens
+   * that three stylesheets read. That file carries the full reason.
+   */
   --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));
   --app-panel-left: calc(
     var(--shell-rail-w) + var(--shell-gap-left) + var(--shell-sidebar-w)
