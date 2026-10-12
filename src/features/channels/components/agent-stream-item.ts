@@ -131,6 +131,26 @@ export interface StreamItem {
    *  lane. Only an explicit `true` rides through. */
   fromOperator?: boolean;
   /**
+   * `inbound` rows only — **WHAT KIND OF AUTHOR WROTE IT** (Samuel, 2026-10-12): `"user"` for a
+   * person, `"agent"` for a machine, absent for "cannot say".
+   *
+   * ⚠ **SERVER-DERIVED FROM THE AUTHOR'S CREDENTIAL** (`main/session-dispatch.js ›
+   * feedLiveSession`), never recovered from {@link StreamItem.senderName}, which is peer prose.
+   * ⚠ **IT OUTRANKS {@link StreamItem.fromOperator} ON THE BANNER** — that flag folds the
+   * operator's own agents into "you", and this face names an agent as an agent.
+   * ⚠ ABSENT IS UNKNOWN AND PAINTS NOTHING: the neutral banner, never a human's black.
+   */
+  authorKind?: "user" | "agent";
+  /**
+   * `inbound` rows only, and only beside `authorKind: "agent"` — **THE OPERATOR'S NAME FOR THE
+   * AGENT THAT WROTE IT** (2026-10-12), so the banner names `@the-agent` rather than
+   * *"<person>'s agent"*.
+   *
+   * 🔒 A CAPTION, PEER-TYPED AND UNVERIFIED — {@link StreamItem.senderName}'s rule exactly.
+   * ⚠ ABSENT IS ORDINARY: the face falls back through `senderName` to the anonymous sentence.
+   */
+  senderAgentName?: string;
+  /**
    * `sent` rows FROM THE TRANSCRIPT only — **WHO THE POST WAS ADDRESSED TO**, as raw
    * ids for the face to resolve (#3081, Samuel: black pills naming the addressees in
    * the box's top bar).

@@ -329,6 +329,21 @@ export function buildAgentStream({
         ? { senderName: entry.senderName }
         : {}),
       ...(lane === "inbound" && entry.fromOperator === true ? { fromOperator: true } : {}),
+      // WHAT KIND OF AUTHOR WROTE IT (2026-10-12) — the banner's human-vs-agent split. ⚠ THE TWO
+      // KNOWN SPELLINGS ONLY, and lane-gated like the two fields above: a frame from an older main
+      // stamps nothing, and an unknown value must reach the face as ABSENT so it paints the
+      // neutral banner rather than a human's black (INVARIANTS §11).
+      ...(lane === "inbound" && (entry.authorKind === "user" || entry.authorKind === "agent")
+        ? { authorKind: entry.authorKind }
+        : {}),
+      // THE AGENT'S OWN NAME, for the banner that names it. ⚠ GATED ON THE KIND as well as the
+      // lane, so a name can never ride a row the face would read as a person's.
+      ...(lane === "inbound" &&
+      entry.authorKind === "agent" &&
+      typeof entry.senderAgentName === "string" &&
+      entry.senderAgentName.trim()
+        ? { senderAgentName: entry.senderAgentName }
+        : {}),
       ...(held
         ? { pending: true, requestId: request?.id ?? null, expired: isExpired(request, now) }
         : {}),

@@ -63,6 +63,13 @@ function enqueue(s, a) {
   deps.dispatch(s, {
     type: 'inbound_arrived', message: a.message, authorName: a.authorName,
     authorNote: a.authorNote || null, addressing: a.addressing || null, replyTo: a.replyTo || '', fromOperator: a.fromOperator === true,
+    // WHAT KIND OF AUTHOR WROTE IT, and — for an agent — the operator's name for it (2026-10-12;
+    // `session-dispatch.js › feedLiveSession` carries the argument). ⚠ FRAMING FOR ONE FACE, LIKE
+    // `authorNote` AND `addressing` BESIDE THEM: nothing here gates, routes or authorizes on
+    // either, and each is OMITTED when absent so unknown stays unknown rather than becoming
+    // a default.
+    ...(a.authorKind ? { authorKind: a.authorKind } : {}),
+    ...(a.authorAgentName ? { authorAgentName: a.authorAgentName } : {}),
     ...(a.source ? { source: a.source } : {}), // the member's device (message-source.js)
   });
   return true;

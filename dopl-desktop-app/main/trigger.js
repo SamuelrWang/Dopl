@@ -176,6 +176,11 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
     context: {
       channelName: entry.channel.name, authorName: requesterName,
       authorKind: m.authorKind, taskTitle: targeting.metaStr(m, 'taskTitle') || null,
+      // THE OPERATOR'S NAME FOR THE AGENT THAT TRIGGERED THIS LAUNCH, when an agent did
+      // (2026-10-12). ⚠ FRAMING FOR THE LAUNCH CARD ONLY (`session-narration.js ›
+      // noteLaunchMessage`): `authorKind` beside it is what decides whether it is read at all,
+      // and `null` is the ordinary absence for a human author or an unresolved page.
+      authorAgentName: (m.authorKind === 'agent' && m.authorAgentName) || null,
       channelId: entry.channel.id, workspaceId: entry.workspaceId, taskId,
       workspaceSegment: entry.workspaceSegment || null, // the outbound bridge's nav target
     },

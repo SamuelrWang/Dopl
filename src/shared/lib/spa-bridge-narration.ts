@@ -95,6 +95,29 @@ export interface DesktopNarrationEntry {
    */
   fromOperator?: boolean;
   /**
+   * `inbound` only: WHAT KIND OF AUTHOR wrote it (2026-10-12) — `"user"` for a person, `"agent"`
+   * for a machine.
+   *
+   * ⚠ **DERIVED SERVER-SIDE FROM THE AUTHOR'S CREDENTIAL**, which is what makes it the one
+   * trustworthy human-vs-agent answer on this lane: `senderName` is already-resolved peer prose
+   * and must never be sniffed for `"'s agent"` to recover this.
+   * ⚠ **IT OUTRANKS {@link DesktopNarrationEntry.fromOperator} ON THE FACE.** That flag folds the
+   * operator's own agents into "you" (ruling 2, 2026-09-25) — the right answer to *whose account
+   * spoke* and the wrong one to *who wrote it*.
+   * ⚠ Absent is UNKNOWN, not a person: an older main stamps nothing, and the face then paints the
+   * neutral banner rather than a human's weight (INVARIANTS §11).
+   */
+  authorKind?: "user" | "agent";
+  /**
+   * `inbound` only, and only beside `authorKind: "agent"`: the OPERATOR'S NAME for the agent that
+   * wrote it, joined server-side (`channels/types.ts › ChannelMessage.authorAgentName`).
+   *
+   * ⚠ A CAPTION AND PEER-TYPED, `senderName`'s rule exactly — neutralized at every render.
+   * ⚠ Absent is ordinary (a human author, or a page that resolved no name): the face falls back
+   * through `senderName` to the anonymous sentence, never to an id.
+   */
+  senderAgentName?: string;
+  /**
    * `post` only: the outbound consent gate is holding it until a human presses Post (INVARIANTS §6).
    * Only `true` counts; absent means sent. It never clears — the transcript row says it landed.
    */

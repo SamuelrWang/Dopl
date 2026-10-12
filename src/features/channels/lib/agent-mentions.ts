@@ -93,6 +93,23 @@ function retypable(handle: string): boolean {
   return handle.length > 0 && mentionHandleOf(`@${handle}`) === handle;
 }
 
+/**
+ * **A NAME → THE HANDLE A READER MAY RETYPE, OR `null`** (2026-10-12).
+ *
+ * ⚠ **IT IS {@link agentMentionFace}'S LAST TWO LINES, EXPORTED FOR A CALLER THAT HAS THE NAME AND
+ * NOT THE ID.** The inbound banner names the agent that wrote a message
+ * (`components/agent-stream-inbound-box.tsx › inboundLabel`) off a joined display name alone, so it
+ * cannot ask {@link agentMentionHandle} — that function's fallback IS the id form. Reaching for
+ * `mentionSlug` directly instead is what this exists to stop: it would spell `@bot!` for an agent
+ * named "Bot!", a tag the strip eats and no reader could make work.
+ * ⚠ **`null` MEANS "SHOW THE NAME, NOT A HANDLE"** — the same answer, and the same caller
+ * obligation, as {@link agentMentionFace}'s. It is never a blank and never an id.
+ */
+export function agentNameHandle(displayName: string | null | undefined): string | null {
+  const slug = mentionSlug((displayName ?? "").trim());
+  return retypable(slug) ? slug : null;
+}
+
 /** An agent reduced to what the handle rule reads — satisfied by the desktop's session summary
  *  without this module importing the bridge type. */
 export interface AgentMentionCandidate {

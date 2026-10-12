@@ -279,10 +279,16 @@ function StreamRow({
             it so this face can say "you" where the channel post is the operator's own, and the
             field rode main → frame → item and stopped here — so their own post read back at
             them as "Message received from <their own name>". */}
+        {/* ⚠ `authorKind` AND THE AGENT'S NAME RIDE WITH IT (Samuel, 2026-10-12): the banner
+            paints a person's message black and an agent's in its own colour, and names an agent
+            by its handle rather than by its operator. Server-derived, never sniffed out of
+            `senderName` — `agent-stream-inbound-box.tsx › inboundLabel` carries the ruling. */}
         <InboundBox
           text={item.text}
           sender={item.senderName}
           fromOperator={item.fromOperator}
+          authorKind={item.authorKind}
+          senderAgentName={item.senderAgentName}
           at={item.at}
         />
         {item.truncated === true && <TruncatedNote />}
