@@ -821,3 +821,25 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   - ⚠ **NAME THE HOVER GROUP** (`group/meta`, `group/infocard`). Rows inside an
     editable section already own one for their own ×; an anonymous `group`
     makes a row's hover reveal the section's control too.
+- **A chrome glyph whose POPUP IS OPEN, and a pressed state that is INK ONLY**
+  (2026-10-12, Samuel's composer wave; again no new kit class).
+  - **Open popup = the flat CTA on the control's own square**:
+    `bg-surface-cta text-text-on-cta` on `rounded-[7px]`, restated at `hover:`.
+    ⚠ **THE `hover:` HALF IS NOT BELT-AND-BRACES** — tailwind-merge keeps a
+    `hover:bg-*` INDEPENDENTLY of its unprefixed twin, so `IconButton`'s resting
+    `hover:bg-surface-raised-1` survives underneath the open face and repaints it
+    grey under the cursor, which is where the cursor always is when a popup is
+    open. ⚠ **HAND THE OPEN AND CLOSED FACES OVER WHOLE, never composed** — a
+    radius pair in one string resolves by string order, not by state. ⚠ **FLAT,
+    NOT `.auth-btn-3d`**: the raised black button is the 36px page ACTION, and
+    borrowing it puts a second button scale in a 24px row. Reference:
+    `channels/components/composer-toolbar.tsx › TOOLBAR_ICON_OPEN` / `› openFace`
+    (Agent, New thread and Mention; `composer-open-face.test.tsx` pins each,
+    open and closed).
+  - **`bare` SUPPRESSES THE RAISE FOR ONE STATE, not just for one control.**
+    `IconButton`'s `active` paints `.raised-tab` — a fill, a border and a shadow
+    in one rule — so a glyph whose pressed state is carried by COLOUR (the mic's
+    red, the CTA face above) passes `bare={thatState}` rather than flat. Passing
+    it flat also drops the RESTING hover fill, which leaves one glyph in a row
+    with no hover face at all. Reference:
+    `channels/components/composer-toolbar.tsx` (the mic's `bare={dictation.listening}`).

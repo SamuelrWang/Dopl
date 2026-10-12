@@ -20,7 +20,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  engineError,
+  installWebRecognition,
+  removeWebRecognition,
+} from "./dictation/recognition-harness";
 
 vi.mock("../hooks/use-thread-writes", () => ({
   useThreadWrites: () => ({
@@ -45,34 +50,15 @@ const MEMBERS = [
 /**
  * ⚠ THE MIC RENDERS ONLY WHERE THE BROWSER HAS AN ENGINE (`use-dictation.ts`, the
  * feature-detection rule), and jsdom ships none — so every case about the mic's POSITION would
- * silently assert on an absent button without this. A constructor is all `recognitionCtor` probes.
+ * silently assert on an absent button without this.
+ *
+ * ⚠ **THE FAKE IS A MODULE NOW** (`dictation/recognition-harness.ts`, 2026-10-12): the live
+ * dictation cases moved to `composer-dictation.test.tsx` when this file hit the 500-line cap, and
+ * both suites need the engine present. A copy each would part the day `onresult`'s shape changes.
  */
-class FakeRecognition {
-  continuous = false;
-  interimResults = false;
-  lang = "";
-  onstart: (() => void) | null = null;
-  onresult: ((e: unknown) => void) | null = null;
-  onerror: ((e: { error?: string }) => void) | null = null;
-  onend: (() => void) | null = null;
-  static last: FakeRecognition | null = null;
-  constructor() {
-    FakeRecognition.last = this;
-  }
-  start() {
-    this.onstart?.();
-  }
-  stop() {
-    this.onend?.();
-  }
-}
-
-beforeEach(() => {
-  FakeRecognition.last = null;
-  (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition = FakeRecognition;
-});
+beforeEach(installWebRecognition);
 afterEach(() => {
-  delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition;
+  removeWebRecognition();
   cleanup();
 });
 
@@ -117,17 +103,6 @@ function mountAddressed() {
     target: { value: "@scout look at the build" },
   });
   return container;
-}
-
-/**
- * ⚠ `act`, BECAUSE THE ENGINE'S EVENTS ARE NOT CLICKS. `fireEvent` wraps its own dispatch; a
- * callback we invoke straight off the fake recognition object is a state write from outside
- * React's batching, and the render it schedules never flushes before the next assertion.
- */
-function engineError(code: string) {
-  act(() => {
-    FakeRecognition.last?.onerror?.({ error: code });
-  });
 }
 
 describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
@@ -254,6 +229,39 @@ describe("a failed dictation SAYS SO instead of blinking", () => {
     fireEvent.click(btn("Microphone blocked"));
     expect(btn("Stop dictation")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Microphone blocked" })).toBeNull();
+  });
+
+  /**
+   * **CAPTURING IS RED INK, NOT A RED BUTTON** (Samuel, 2026-10-12: *"today it gets a
+   * circle, elevates, and turns red. Make it ONLY the icon turning red: no circle, no
+   * elevation, no background"*).
+   *
+   * ⚠ **THE FACE IS `.raised-tab`, A KIT CLASS, so the assertion is on the class and not
+   * on a computed style** — jsdom loads no stylesheet, so `getComputedStyle` would report
+   * no background whatever the markup said, and a test that checked it would pass on the
+   * unfixed code. The class is also exactly what a regression would re-add.
+   * ⚠ **THE RESTING FACE IS ASSERTED IN THE SAME BREATH.** `bare` is the absence of the
+   * resting surface too, so the mutation to guard against is not "the raise came back" but
+   * "the hover fill left with it" — the mic would then be the one glyph in the row with no
+   * hover face at all.
+   */
+  it("goes RED WITHOUT A FACE while capturing, and keeps its resting hover fill", () => {
+    mount();
+    const resting = btn("Dictate");
+    // ⚠ Closed state unchanged: the quiet fill every sibling glyph wears.
+    expect(resting.className).toContain("hover:bg-surface-raised-1");
+
+    fireEvent.click(resting);
+    const live = btn("Stop dictation");
+    // The glyph's colour is the whole affordance.
+    expect(live.className).toContain("text-danger");
+    // ⚠ NO CIRCLE, NO ELEVATION, NO BACKGROUND — `.raised-tab` is all three in one rule.
+    expect(live.className).not.toContain("raised-tab");
+    // The state is still carried, just not painted as a surface.
+    expect(live.getAttribute("aria-pressed")).toBe("true");
+    // ⚠ And it did not resize on the way: `bare`'s 32px box must stay merged away.
+    expect(live.className).toContain("h-6");
+    expect(live.className).not.toContain("h-8");
   });
 
   it("stays SILENT for the two ordinary ways a dictation ends", () => {

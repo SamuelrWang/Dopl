@@ -67,6 +67,30 @@ function WorkingDots() {
 }
 
 /**
+ * **THE NAME CLIPS, IT DOES NOT ELIDE — BECAUSE {@link WorkingDots} FOLLOWS IT**
+ * (Samuel, 2026-10-12: *"a long name truncates with a static `…`, and the working
+ * animation adds three animated dots, so six dots show"*).
+ *
+ * ⚠ **IT IS `truncate` MINUS THE ELLIPSIS, SPELLED OUT, AND THAT IS DELIBERATE.**
+ * `truncate` is three utilities in one (`overflow-hidden`, `text-ellipsis`,
+ * `whitespace-nowrap`) and tailwind-merge puts `truncate` and `text-clip` in the SAME
+ * group — so `cn("truncate", "text-clip")` deletes `truncate` outright and takes the
+ * overflow clip and the nowrap with it, leaving a name that WRAPS the pill to two
+ * lines. The only safe form is the one that never states `truncate` here at all.
+ * ⚠ **`text-clip` IS NOT A NO-OP, it is the CSS default said out loud.** It is stated
+ * so a later edit that reaches for `truncate` reads a conflict instead of silently
+ * restoring the second ellipsis.
+ * ⚠ **THE PILL IS STILL THE THING THAT ELIDES** — the strip's own `truncate`
+ * ({@link AgentActivityRows}) drops a whole pill with a `…` when the row runs out of
+ * room, which is the 2026-09-20 ruling and is untouched. What is gone is the ellipsis
+ * INSIDE one pill, immediately before three animated dots.
+ * ⚠ **NOT THE RULE FOR A PILL WITH NO DOTS.** `agent-bits.tsx › AgentPill` — the
+ * Mentions inbox, the ended badge — keeps `truncate`: nothing follows the name there,
+ * so its `…` is the only mark saying the name was cut and it must stay.
+ */
+const WORKING_NAME = "min-w-0 overflow-hidden whitespace-nowrap text-clip";
+
+/**
  * MY agents mid-turn on the surface as it is currently scoped. Pure and exported
  * for the test.
  *
@@ -225,7 +249,9 @@ export function AgentActivityRows({
                 near-white. {@link AgentPill} already rules this exact case for a live
                 agent in a room whose sixteen keys are out: *"both are ordinary, both
                 get the CTA face"*. So no `paint` means no inline style at all. */}
-            <span className="min-w-0 truncate">{agentActivityText(agent)}</span>
+            {/* ⚠ {@link WORKING_NAME}, NOT `truncate` — the dots below are the pill's
+                only dots. */}
+            <span className={WORKING_NAME}>{agentActivityText(agent)}</span>
             <WorkingDots />
           </span>
         );

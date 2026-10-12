@@ -259,7 +259,75 @@ describe("the working dots", () => {
   });
 
   it("does not shrink away when the name is long", () => {
-    // The name truncates; the dots are the fixed half of the pill.
+    // The name clips; the dots are the fixed half of the pill.
     expect(dots()?.className).toContain("shrink-0");
+  });
+});
+
+/**
+ * **SIX DOTS — THE NAME'S STATIC `…` PLUS THE THREE ANIMATED ONES** (Samuel,
+ * 2026-10-12: *"a long name truncates with a static `…`, and the working animation
+ * adds three animated dots, so six dots show … drop the static ellipsis and clip
+ * cleanly, so the animated dots are the only dots"*).
+ *
+ * ⚠ **jsdom LAYS NOTHING OUT, so the overflow itself is not observable here** — a long
+ * name does not actually overflow a zero-width box and no `…` is ever painted. What IS
+ * observable, and what decides the painted result in a real browser, is the
+ * `text-overflow` the name span carries. So the assertions are on that declaration,
+ * which is also the only thing a regression would change.
+ * ⚠ **THE TWO HALVES ARE ASSERTED TOGETHER ON PURPOSE.** The naive fix is
+ * `cn("truncate", "text-clip")`, and tailwind-merge resolves that to `text-clip` ALONE —
+ * same group — which drops `overflow-hidden` and `whitespace-nowrap` and wraps the pill
+ * to two lines. A test that only checked for the absence of the ellipsis would pass on
+ * that, so the presence of the other two is checked in the same case.
+ */
+describe("the name's overflow", () => {
+  function pill(displayName: string) {
+    render(
+      <AgentActivityRows agents={ownAgentsWorking([session({ displayName })], CHANNEL_ID)} />
+    );
+    return screen.getByRole("status");
+  }
+
+  /** The element holding the name — the dots' own span is the other child. */
+  function nameEl(displayName: string): HTMLElement {
+    const el = pill(displayName);
+    const name = [...el.querySelectorAll("span")].find(
+      (s) => s.textContent === displayName
+    );
+    expect(name).toBeDefined();
+    return name as HTMLElement;
+  }
+
+  const LONG = "Composer Polish Working Agent With A Very Long Name";
+
+  it("CLIPS the name instead of eliding it", () => {
+    const classes = nameEl(LONG).className.split(/\s+/);
+    // ⚠ The whole ruling: no second ellipsis immediately before three animated dots.
+    expect(classes).not.toContain("truncate");
+    expect(classes).not.toContain("text-ellipsis");
+    expect(classes).toContain("text-clip");
+  });
+
+  it("still clips on ONE line — the overflow and the nowrap survive", () => {
+    const classes = nameEl(LONG).className.split(/\s+/);
+    // ⚠ What `cn("truncate","text-clip")` would have silently deleted.
+    expect(classes).toContain("overflow-hidden");
+    expect(classes).toContain("whitespace-nowrap");
+    expect(classes).toContain("min-w-0");
+  });
+
+  it("leaves the STRIP's own pill-level `…` alone", () => {
+    // ⚠ A long row still drops a whole pill with an ellipsis (2026-09-20). Only the
+    // ellipsis INSIDE a pill went; the one BETWEEN pills is a different ruling.
+    const strip = pill(LONG).parentElement;
+    expect(strip?.className.split(/\s+/)).toContain("truncate");
+  });
+
+  it("keeps the dots as the pill's only dots", () => {
+    const el = pill(LONG);
+    // The rendered text is the name then exactly three periods — no `…` between them.
+    expect(el.textContent).toBe(`${LONG}...`);
+    expect(el.textContent).not.toContain("…");
   });
 });

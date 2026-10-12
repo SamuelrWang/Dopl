@@ -6,7 +6,7 @@
  * the thread dialog calls it — one `channel_tasks` row per addressee (INVARIANTS §5).
  */
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { cn } from "@/shared/lib/utils";
 import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
@@ -23,6 +23,11 @@ import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
 import { useDictation } from "./use-dictation";
+import {
+  dictationSpanAt,
+  insertDictation,
+  type DictationSpan,
+} from "./dictation/insert-text";
 import { useThreadWrites } from "../hooks/use-thread-writes";
 import { newClientMsgId } from "../lib/optimistic-cache";
 import { messageLanded } from "../client/api";
@@ -90,6 +95,10 @@ export function ChannelsComposer({
   const launch = useAgentLaunch();
   // The toolbar glyph's own nonce, summed with `newThreadSignal`.
   const [threadDialogNonce, setThreadDialogNonce] = useState(0);
+  // ⚠ A MIRROR OF THE DIALOG'S OWN `open`, for the glyph's face only (item 4, 2026-10-12). The
+  // dialog still owns the state and reports it (`new-thread-dialog.tsx › onOpenChange`); nothing
+  // here may open or close it, which is what keeps the nonce the single way in.
+  const [threadOpen, setThreadOpen] = useState(false);
   const { send, fanOutThreads, pending } = useThreadWrites({
     workspaceId,
     currentUserId,
@@ -110,13 +119,95 @@ export function ChannelsComposer({
     <ComposerTint text={value} members={members} sessions={liveAgents} />
   );
 
-  // Append-only, via a functional update so a phrase landing mid-typing keeps what was typed since.
-  const dictation = useDictation((text) =>
-    setDraft((prev) => {
-      const kept = prev.replace(/\s+$/, "");
-      return kept.length === 0 ? text : `${kept} ${text}`;
-    })
-  );
+  /**
+   * **DICTATION TYPES INTO THE BOX, AT THE CARET, AS IT IS HEARD** (Samuel, 2026-10-12, item 2).
+   *
+   * 🔴 **IT WAS APPEND-TO-THE-END-ON-FINAL AND BOTH HALVES OF THAT ARE GONE.** The old callback
+   * took finished phrases only and pushed each one onto the tail of the draft after stripping
+   * trailing space, so nothing appeared until the engine closed a phrase and when it did it
+   * appeared at the far end, wherever the operator was actually writing.
+   *
+   * ⚠ **THE ARITHMETIC IS NOT HERE.** `dictation/insert-text.ts › insertDictation` owns the
+   * separator, the in-place replacement and the commit, and it is pure. This closure is the
+   * three refs that pure function needs and nothing else.
+   * ⚠ **`setDraft` TAKES A VALUE, NEVER AN UPDATER, AND THAT IS DELIBERATE.** The span and the
+   * mirror below have to be written when the phrase arrives, and React may invoke a functional
+   * updater twice (`composer-launch.test.tsx` pins exactly that defect for the launch panel), so
+   * an updater that moved the anchor would advance it twice under StrictMode and write the phrase
+   * beside itself.
+   * ⚠ **`latest` IS WRITTEN SYNCHRONOUSLY HERE, which is what makes two phrases in one tick
+   * compose.** The engine's events are async callbacks, so reading `draft` out of this closure
+   * would read whatever the last RENDER saw — correct for the first phrase of a tick and one
+   * phrase stale for the second.
+   */
+  const dictationSpan = useRef<DictationSpan | null>(null);
+  const dictationCaret = useRef<number | null>(null);
+  const latest = useRef(draft);
+  /**
+   * 🔴 **THE DRAFT AS THIS CLOSURE LAST LEFT IT — the whole of the stale-span fix** (Review 21).
+   *
+   * ⚠ **A SPAN IS A CHARACTER RANGE, AND AN OUTSIDE EDIT MOVES EVERY INDEX AFTER THE CARET.** So
+   * the range the last interim wrote comes to cover the OPERATOR'S characters, and the next
+   * interim replaces them: a `Z` typed at position 0 of `abc hi def` turned the next phrase into
+   * `Zab hi therei def`, with the `c` gone. **It is a loss mode the old append-to-the-end
+   * behaviour did not have**, which is why it is guarded by a ref rather than by care.
+   * ⚠ **COMPARING AGAINST WHAT WE WROTE IS THE DETECTION, and it has to be its own ref.**
+   * `latest` tracks the draft through every render, so it equals the typed text and cannot tell
+   * who typed it; this one only ever moves when dictation itself writes. They are equal exactly
+   * while nobody else has touched the box.
+   */
+  const lastWritten = useRef<string | null>(null);
+  // Typing updates the mirror: every render, so the next phrase inserts into what is really there.
+  useEffect(() => {
+    latest.current = draft;
+  });
+  const dictation = useDictation((text, final) => {
+    const before = latest.current;
+    /**
+     * ⚠ **AN EDIT THIS CLOSURE DID NOT MAKE RE-ANCHORS THE SESSION, AND THE OPERATOR'S EDIT
+     * WINS** (Review 21's rule, in all three of its shapes — before the span, inside it, after
+     * it). The anchor becomes their caret with an EMPTY span, so the next phrase is INSERTED
+     * where they are writing and the stale range is never replaced. Whatever the last interim
+     * had already put in the box stays behind as ordinary typed text: nothing is rewound,
+     * nothing is deleted, and the words they typed are still theirs.
+     * ⚠ **AN EMPTY SPAN IS WHAT MAKES IT LOSSLESS**, not the clamp in `insert-text.ts` — a
+     * clamped span still REPLACES, it just replaces inside the bounds of the string.
+     * ⚠ **IT MUST NOT FIRE ON OUR OWN WRITES**, or every interim would be appended instead of
+     * replaced and a re-worded phrase would stack up ("hello wor hello world"). That is the
+     * equality below, and `composer-toolbar.test.tsx` pins both directions.
+     */
+    const outsideEdit = before !== lastWritten.current;
+    // ⚠ THE ANCHOR IS THE CARET, TAKEN ON THE FIRST PHRASE OF A SESSION rather than on the click:
+    // a click that the engine's probe then refuses would have moved nothing, and the textarea
+    // keeps its selection while the mic button holds focus.
+    const span =
+      dictationSpan.current !== null && !outsideEdit
+        ? dictationSpan.current
+        : dictationSpanAt(draftRef.current?.selectionStart ?? before.length);
+    const edit = insertDictation(before, span, text, final);
+    dictationSpan.current = edit.span;
+    dictationCaret.current = edit.caret;
+    latest.current = edit.text;
+    lastWritten.current = edit.text;
+    setDraft(edit.text);
+  });
+  // ⚠ A SESSION'S ANCHOR DIES WITH THE SESSION. Without this the next dictation would resume at
+  // the end of the last one, wherever the caret has been since. `lastWritten` goes with it: a
+  // draft left standing from the last session is not evidence about this one.
+  useEffect(() => {
+    if (!dictation.listening) {
+      dictationSpan.current = null;
+      lastWritten.current = null;
+    }
+  }, [dictation.listening]);
+  // ⚠ AFTER the value lands, so the caret sits past the dictated words "as if typed" — a
+  // controlled textarea's selection is reset by the render that changes its value.
+  useEffect(() => {
+    const at = dictationCaret.current;
+    if (at === null) return;
+    dictationCaret.current = null;
+    draftRef.current?.setSelectionRange(at, at);
+  }, [draft]);
 
   const body = draft.trim();
   // A disabled send still says why (INVARIANTS §8, rule 4).
@@ -212,7 +303,11 @@ export function ChannelsComposer({
             onToggleLaunch={launch.toggle}
             // Closes the launch form so two forms never stand at once.
             onNewThread={() => { launch.close(); setThreadDialogNonce((n) => n + 1); }}
+            threadOpen={threadOpen}
             onMention={() => { mentions.openFromButton(); draftRef.current?.focus(); }}
+            // ⚠ THE SAME FACT THE POPOVER ITSELF RENDERS ON (`mentions.query !== null`, the
+            // condition above), so the glyph cannot disagree with the list it opened.
+            mentionOpen={mentions.query !== null}
             dictation={dictation}
             hasContent={body.length > 0}
             onClear={clear}
@@ -251,6 +346,7 @@ export function ChannelsComposer({
             members={members}
             currentUserId={currentUserId}
             onCreate={fanOutThreads.mutate}
+            onOpenChange={setThreadOpen}
           />
         </div>
       </div>

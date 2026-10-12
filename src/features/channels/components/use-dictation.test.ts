@@ -75,25 +75,78 @@ describe("useDictation on the desktop", () => {
     expect(result.current.listening).toBe(true);
   });
 
-  it("partials preview, finals append, and a stop keeps the last partial", async () => {
+  /**
+   * 🔴 **EVERY PHRASE REACHES THE CALLER, FLAGGED — it is not "finals only" any more** (Samuel,
+   * 2026-10-12, item 2). This case read *"partials preview, finals append"* and asserted
+   * `result.current.partial`; that field is off the interface, because an interim IS draft text
+   * now and the preview beside the mic that it fed is gone.
+   *
+   * ⚠ **WHAT IS STILL THE SAME, AND IS STILL THE POINT: NO STOP LOSES WORDS.** An interim
+   * outstanding when the session ends is delivered as a FINAL, so the characters it already put
+   * in the box are committed where they stand rather than dropped.
+   * ⚠ **AND THE EMPTY TRAILING COMMIT IS STILL SUPPRESSED** — `end` after a `final` must not
+   * deliver `("", true)`, which would advance the caller's anchor for no words.
+   */
+  it("hands over EVERY phrase with its final flag, and loses nothing on a stop", async () => {
     const { bridge, push } = installDesktop({ state: "ready" });
-    const phrases: string[] = [];
-    const { result } = renderHook(() => useDictation((t) => phrases.push(t)));
+    const phrases: [string, boolean][] = [];
+    const { result } = renderHook(() => useDictation((t, final) => phrases.push([t, final])));
     await flush();
     act(() => result.current.toggle());
     await flush();
     await push({ type: "start" });
+    // ⚠ AN INTERIM ARRIVES IMMEDIATELY — the whole ruling. It used to be held back.
     await push({ type: "partial", text: "hello wor" });
-    expect(result.current.partial).toBe("hello wor");
-    expect(phrases).toEqual([]);
+    expect(phrases).toEqual([["hello wor", false]]);
     await push({ type: "final", text: "hello world" });
+    expect(phrases).toEqual([
+      ["hello wor", false],
+      ["hello world", true],
+    ]);
     await push({ type: "partial", text: "and more" });
     act(() => result.current.toggle());
     expect(bridge.stop).toHaveBeenCalledWith("s1");
     await push({ type: "end" });
-    expect(phrases).toEqual(["hello world", "and more"]);
+    // The trailing interim is COMMITTED, not dropped and not re-worded.
+    expect(phrases).toEqual([
+      ["hello wor", false],
+      ["hello world", true],
+      ["and more", false],
+      ["and more", true],
+    ]);
     expect(result.current.listening).toBe(false);
-    expect(result.current.partial).toBe("");
+  });
+
+  it("does not deliver an EMPTY final when the session ends on a final", async () => {
+    const { push } = installDesktop({ state: "ready" });
+    const phrases: [string, boolean][] = [];
+    const { result } = renderHook(() => useDictation((t, final) => phrases.push([t, final])));
+    await flush();
+    act(() => result.current.toggle());
+    await flush();
+    await push({ type: "start" });
+    await push({ type: "final", text: "done" });
+    await push({ type: "end" });
+    // ⚠ `["", true]` here would move the caller's anchor past nothing.
+    expect(phrases).toEqual([["done", true]]);
+  });
+
+  it("passes a RETRACTED interim on, so the box can give the words back", async () => {
+    // ⚠ The engine re-hearing itself to nothing means the words are gone; an empty interim that
+    // was swallowed here would leave them in the draft forever.
+    const { push } = installDesktop({ state: "ready" });
+    const phrases: [string, boolean][] = [];
+    const { result } = renderHook(() => useDictation((t, final) => phrases.push([t, final])));
+    await flush();
+    act(() => result.current.toggle());
+    await flush();
+    await push({ type: "start" });
+    await push({ type: "partial", text: "maybe" });
+    await push({ type: "partial", text: "" });
+    expect(phrases).toEqual([
+      ["maybe", false],
+      ["", false],
+    ]);
   });
 
   it("a fault mid-session names itself and persists past the stop", async () => {
