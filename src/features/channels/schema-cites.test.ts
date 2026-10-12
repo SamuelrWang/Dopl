@@ -79,6 +79,40 @@ describe("no coercion — junk never becomes a message number", () => {
     expect(() => CiteInputSchema.parse({ seq: -1 })).toThrow();
     expect(() => CiteInputSchema.parse({ seq: "0" })).toThrow();
   });
+
+  /**
+   * **THE NUMERIC ARM'S CEILING IS ZOD'S, AND THAT IS WHY IT IS PINNED HERE**
+   * (Review 36 item 4, 2026-10-12).
+   *
+   * The review asked for an explicit `Number.isSafeInteger` refine on the number
+   * arm, to match the one the STRING arm carries. I measured it first: on **zod
+   * 4.3.6** `z.number().int()` already refuses `2 ** 53`, `1e300` and `Infinity`
+   * — so the refine would be a branch that can never run, and dead validation
+   * reads as live validation to the next person.
+   *
+   * ⚠ **SO THE GUARANTEE IS PINNED INSTEAD OF RESTATED.** These cases are a gate
+   * on the DEPENDENCY: if an upgrade ever loosens `.int()` to `Number.isInteger`,
+   * this goes red, and THAT is the moment the refine earns its place. The string
+   * arm keeps its own refine because `Number("…")` has no such guarantee.
+   */
+  it("🔒 the ceiling is MAX_SAFE_INTEGER — zod's `.int()`, measured not assumed", () => {
+    expect(CiteInputSchema.parse({ seq: Number.MAX_SAFE_INTEGER })).toEqual({
+      seq: Number.MAX_SAFE_INTEGER,
+    });
+    // An integer, but not a safe one — the distinction the refine was about.
+    expect(Number.isInteger(2 ** 53)).toBe(true);
+    expect(Number.isSafeInteger(2 ** 53)).toBe(false);
+    expect(() => CiteInputSchema.parse({ seq: 2 ** 53 })).toThrow();
+    expect(() => CiteInputSchema.parse({ seq: 1e300 })).toThrow();
+    expect(() => CiteInputSchema.parse({ seq: Infinity })).toThrow();
+    expect(() => CiteInputSchema.parse({ seq: NaN })).toThrow();
+  });
+
+  it("🔒 and the STRING arm holds the same ceiling, by its own refine", () => {
+    // `Number("9007199254740993")` silently becomes 9007199254740992, so this
+    // arm cannot lean on zod and does not.
+    expect(() => CiteInputSchema.parse({ seq: "9007199254740993" })).toThrow();
+  });
 });
 
 describe("the list", () => {

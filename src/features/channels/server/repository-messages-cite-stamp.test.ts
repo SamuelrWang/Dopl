@@ -67,9 +67,19 @@ describe("every new row is stamped", () => {
     expect(sent[CITE_MODE_METADATA_KEY]).toBe(CITE_MODE_CURRENT);
   });
 
-  it("🔒 OVERWRITES a caller-supplied CURRENT value too", async () => {
-    // Harmless in outcome, but the rule is "the server decides", not "the server
-    // decides when it disagrees".
+  it("OVERWRITES a caller-supplied CURRENT value too", async () => {
+    /**
+     * ⚠ **THIS CASE DOCUMENTS THE RULE'S SHAPE, NOT ITS COVERAGE** (Review 36,
+     * 2026-10-12) — and it is unmarked for that reason, while its neighbours
+     * carry 🔒.
+     *
+     * A caller value of `2` is INDISTINGUISHABLE from the server's own, so this
+     * assertion stays GREEN under the mutation that makes the stamp forgeable
+     * (spreading the server's value first instead of last). I measured that: the
+     * legacy and junk cases above are what bite. It is kept because the rule is
+     * "the server decides", not "the server decides when it disagrees", and a
+     * reader should find that stated — but nobody should count it as protection.
+     */
     const sent = await metadataSentFor({ [CITE_MODE_METADATA_KEY]: 2 });
     expect(sent[CITE_MODE_METADATA_KEY]).toBe(CITE_MODE_CURRENT);
   });
