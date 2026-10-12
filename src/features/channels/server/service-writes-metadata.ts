@@ -12,6 +12,8 @@ import {
 import { takeCalmFlags } from "./service-writes-metadata-markers";
 import { addressedMentionStamp, resolveBodyMentions } from "./service-writes-metadata-mentions";
 import { MENTIONS_METADATA_KEY } from "../lib/mentions";
+import { CITES_METADATA_KEY, CITE_MODE_METADATA_KEY } from "../lib/cites";
+import { resolveCites } from "./service-writes-metadata-cites";
 // ⚠ The outside-session vocabulary, stated once — the reserved key names (`via`: the client).
 import { DESKTOP_TO_METADATA_KEY, EXTERNAL_SESSION_METADATA_KEY } from "../lib/desktop-handle";
 import { VIA_METADATA_KEY } from "../lib/message-via";
@@ -234,6 +236,18 @@ export async function resolvePostMetadata(
   // a caller able to set it could put its words in anybody's inbox without
   // naming them. Re-stamped from the server's own parse below.
   delete metadata[MENTIONS_METADATA_KEY];
+  // ⚠ **THE TWO CITATION KEYS, ON `mentionedUserIds`' TERMS** (grammar B,
+  // 2026-10-12). `cites` is what a pill POINTS AT, so a settable copy would let a
+  // post aim a reader at a row the server never checked it could see — the same
+  // shape of hole as a settable mention list, one indirection further. Re-stamped
+  // below from the server's own resolution.
+  // ⚠ `citeMode` is stripped here AND written authoritatively at the funnel
+  // (`repository-messages.ts › insertMessage`). Both, deliberately: absence
+  // cannot be forged, but a caller setting it could otherwise opt a NEW message
+  // back into legacy prose pills, and this is the half that reads as a rule
+  // rather than a side effect of the insert.
+  delete metadata[CITES_METADATA_KEY];
+  delete metadata[CITE_MODE_METADATA_KEY];
   // ⚠ Same terms as `fanoutGroup`, and the sharpest of the family: the card this
   // key renders carries OPTION BUTTONS that write back and wake an agent. A
   // caller able to set it could hang a working control off anybody's words, and
@@ -394,6 +408,18 @@ export async function resolvePostMetadata(
   const mentioned = await addressedMentionStamp(input.body, mentions.userIds, opts, ctx, roster);
   if (mentioned.length > 0) {
     metadata[MENTIONS_METADATA_KEY] = mentioned;
+  }
+
+  // CITATIONS (12). ⚠ **STAMPED ONLY WHEN THERE IS SOMETHING TO STAMP, AND THE
+  // ABSENCE IS NOT A GAP.** `citeMode` alone already says "written under grammar
+  // B, cited nothing" — the renderer's empty-allowlist state — so an empty
+  // `cites` array would be a second way to spell the same thing.
+  // ⚠ **IT CAN THROW, LIKE THE ESCALATION ANSWER BELOW**, and that is the
+  // design: an unresolvable citation refuses the send rather than storing prose
+  // whose reference is already dead.
+  const cites = await resolveCites(channel.id, input.cites);
+  if (cites.length > 0) {
+    metadata[CITES_METADATA_KEY] = cites;
   }
 
   // ESCALATION (10) and its ANSWER (11). ⚠ The answer runs LAST because it is
