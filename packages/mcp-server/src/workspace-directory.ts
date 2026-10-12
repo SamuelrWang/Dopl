@@ -6,12 +6,9 @@
  * ⚠ **THERE IS NO DEFAULT WORKSPACE HERE ANY MORE** (B10/B13). It held the
  * "you belong to N workspaces, name one" refusal and the sole-membership
  * auto-target; both are gone, and the server resolves the caller's own
- * container when a call names none. A blank `workspace=` is still rejected by
- * the caller in `registrar.ts` — fail-closed on an argument that was PASSED is
- * a different question from guessing one that was not.
- *
- * ⚠ A FAILED boot directory load does not seed the cache, so the first
- * resolution retries instead of serving a bogus empty list for a full TTL.
+ * container when a call names none. A blank `container=` is still rejected, by
+ * `container-resolve.ts` — fail-closed on an argument that was PASSED is a
+ * different question from guessing one that was not.
  */
 
 import type { ContainerKind } from "@dopl/contracts";
@@ -146,21 +143,18 @@ export interface WorkspaceDirectoryOptions {
    * whatever the cache holds.
    *
    * Set by `factory.ts › bootServer` when the session's pin resolves to a
-   * `kind='link'` container with MORE THAN ONE active member — i.e. an agent
-   * working in a room a PEER is also in. Its operator's other workspaces are
-   * not that peer's business, and neither is their existence.
+   * container with MORE THAN ONE active member — i.e. an agent working in a
+   * room a PEER is also in. ⚠ **ANY KIND OF CONTAINER, AND THE MEMBER COUNT IS
+   * THE WHOLE TEST** (R-15, F-513; `shared-room.ts › isSharedRoom`): it used to
+   * ask `kind='link'` FIRST, which answered "solo" for a nine-member standard
+   * workspace. Its operator's other workspaces are not that peer's business,
+   * and neither is their existence.
    *
    * ⚠ IT IS A TRIPWIRE, NOT A FENCE, AND THE DIFFERENCE MUST NOT BE DRESSED
-   * AWAY. It narrows what THIS MCP connection will do. A `full`-profile session
-   * has Bash and the operator's 90-day device token is on disk, so the same
-   * agent can open a SECOND MCP connection with no pin, or issue the loopback
-   * HTTP itself, and this object will never see either. What actually refuses
-   * those is the credential lock (the token is workspace-scoped, so
-   * `with-workspace-auth.ts` 403s a contradicting target) and the audience
-   * ceiling in `knowledge/server/service-audience.ts`, both of which live in the
-   * server that owns the rows. This lock exists so a WELL-BEHAVED agent is never
-   * even shown the door — which is worth having, and is not the same as the door
-   * being locked.
+   * AWAY — the argument, and the two things that actually refuse a
+   * cross-container read (the workspace-scoped credential, and the audience
+   * ceiling in `knowledge/server/service-audience.ts`), are stated once at
+   * {@link narrowToLock}.
    */
   lockedTo?: WorkspaceListItem | null;
 }
@@ -355,24 +349,6 @@ export function createWorkspaceDirectory(
 }
 
 /**
- * 🔒 **WHAT KIND OF CONTAINER THIS ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
- * (F-564).
- *
- * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
- * predicate answers "does this belong in the rail"; its NEGATION was read as
- * "therefore a home channel" at four sites in this package, which was correct
- * by accident while `standard` and `link` were the only kinds and stops being
- * correct the moment `20260920120000` mints a `home` container for every
- * user at once. A `default` arm that says "workspace" also fails safe for a
- * kind added later: an unknown container is not silently advertised as somebody
- * else's room.
- *
- * ⚠ **RENDERED, NEVER INFERRED BY THE READER.** A container and a workspace are
- * different things to the operator, and every surface that lists these rows
- * prints this label — which is what lets `getWorkspaceList()` stop hiding
- * containers (B10) without ever calling one a workspace.
- */
-/**
  * How a kind is RENDERED in a directory row. The Home space is the one
  * an agent keeps mistaking for a workspace (Samuel, 2026-09-06: "Samuel's
  * Workspace" read as the home space, and the home space read as a workspace),
@@ -398,9 +374,26 @@ export function containerKindLabel(kind: ContainerKind): string {
 }
 
 /**
- * ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
+ * 🔒 **WHAT KIND OF CONTAINER A ROW IS, ASKED POSITIVELY AND IN ONE PLACE**
+ * (F-564) — ⚠ **THE ONE MAPPING FROM THE COLUMN TO THE WIRE**, and `scripts/
  * check-role-drift.ts › checkContainerKind` holds it against the `workspaces.
- * kind` `CHECK` in both directions.
+ * kind` `CHECK` in both directions. ⚠ That checker SLICES THIS FILE from
+ * `indexOf("export function containerKind(")`, so moving or renaming the
+ * declaration below turns the drift gate into a no-op rather than a failure.
+ *
+ * ⚠ **IT IS A `switch` ON `kind`, NOT `!isStandardWorkspace(…)`.** That
+ * predicate answers "does this belong in the rail"; its NEGATION was read as
+ * "therefore a home channel" at four sites in this package, which was correct
+ * by accident while `standard` and `link` were the only kinds and stops being
+ * correct the moment `20260920120000` mints a `home` container for every
+ * user at once. A `default` arm that says "workspace" also fails safe for a
+ * kind added later: an unknown container is not silently advertised as somebody
+ * else's room.
+ *
+ * ⚠ **RENDERED, NEVER INFERRED BY THE READER.** A container and a workspace are
+ * different things to the operator, and every surface that lists these rows
+ * prints this kind — which is what lets `getWorkspaceList()` stop hiding
+ * containers (B10) without ever calling one a workspace.
  */
 export function containerKind(row: { kind?: WorkspaceKind }): ContainerKind {
   switch (row.kind ?? "standard") {
