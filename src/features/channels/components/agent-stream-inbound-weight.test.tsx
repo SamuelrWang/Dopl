@@ -126,7 +126,7 @@ describe("the inbound banner's author weight", () => {
       entries: [inboundFrame({ senderName: "Diana Taylor", authorKind: "user" })],
     });
     const { weight, cardStyle, banner } = painted(container);
-    expect(weight).toBe("author");
+    expect(weight).toBe("human");
     // ⚠ THE TOKEN, NOT A HEX — docs/DESIGN-SYSTEM.md forbids a colour value in a component, and
     // `--surface-cta` is the one black this tree has (`globals.css` aliases `--black` to it).
     expect(cardStyle).toContain("var(--surface-cta)");
@@ -144,6 +144,49 @@ describe("the inbound banner's author weight", () => {
     expect(cardStyle).toBe("");
     expect(banner?.className).toContain("bg-bg-inset");
     expect(banner?.querySelector("span")?.className).toContain("text-text-secondary");
+  });
+
+  it("paints an AGENT's message in that agent's own colour, never in the human's black", () => {
+    // ⚠ THE COLOUR THE READER HAS ALREADY BEEN TAUGHT — the key that agent's avatar, its
+    // transcript accent and its own posted banner wear (docs/specs/agent-colors.md item 5).
+    const { container } = renderStream({
+      entries: [
+        inboundFrame({
+          senderName: "Sam Wang",
+          fromOperator: true,
+          authorKind: "agent",
+          senderAgentName: "Cleanup Orchestrator",
+          senderColor: "agent-03",
+        }),
+      ],
+    });
+    const { weight, cardStyle, banner } = painted(container);
+    expect(weight).toBe("agent");
+    // ⚠ THROUGH THE ONE PAINT ROUTE (`lib/agent-colors.ts › agentColorVar`) — a key becomes a
+    // `var()` in exactly one place, and no hex ever reaches a component.
+    expect(cardStyle).toContain("var(--agent-color-03)");
+    expect(banner?.getAttribute("style")).toContain("var(--agent-color-03)");
+    // ⚠ AND IT IS NOT THE HUMAN'S BLACK: that fill is this surface's claim that a PERSON wrote it.
+    expect(cardStyle).not.toContain("var(--surface-cta)");
+    // The ink is the badge's own decision, which every one of the sixteen dark ramps shares.
+    expect(banner?.querySelector("span")?.className).toContain("text-text-on-cta");
+  });
+
+  it("leaves an UNCOLOURED agent neutral rather than borrowing the human's black", () => {
+    // A seventeenth live agent in one room runs with no key (`lib/agent-colors.ts`), and an older
+    // server sends none at all. Both must degrade, and neither may be painted as a person.
+    for (const over of [{}, { senderColor: "agent-99" }, { senderColor: "" }]) {
+      cleanup();
+      const { container } = renderStream({
+        entries: [
+          inboundFrame({ authorKind: "agent", senderAgentName: "Merge Owner", ...over }),
+        ],
+      });
+      const { weight, cardStyle, banner } = painted(container);
+      expect(weight).toBe("neutral");
+      expect(cardStyle).toBe("");
+      expect(banner?.className).toContain("bg-bg-inset");
+    }
   });
 
   it("carries the kind onto the item lane-gated, and drops a spelling it does not know", () => {
@@ -175,6 +218,29 @@ describe("the inbound banner's author weight", () => {
       sent: [],
     });
     expect("authorKind" in thinking).toBe(false);
+  });
+
+  it("🔒 narrows the colour key at ONE boundary, so an unknown one can never reach a `var()`", () => {
+    const [ok] = buildAgentStream({
+      entries: [inboundFrame({ authorKind: "agent", senderColor: "agent-16" })],
+      sent: [],
+    });
+    expect(ok.senderColor).toBe("agent-16");
+    // ⚠ EVERY NEAR-MISS IS ABSENT, not passed through: `var(--agent-color-99)` resolves to nothing
+    // and paints an INVISIBLE banner, which is worse than the neutral face it replaced.
+    for (const bad of ["agent-99", "agent-3", "AGENT-03", "", "red", "var(--x)", 3]) {
+      const [item] = buildAgentStream({
+        entries: [inboundFrame({ authorKind: "agent", senderColor: bad })],
+        sent: [],
+      });
+      expect("senderColor" in item, `unknown key must not ride: ${String(bad)}`).toBe(false);
+    }
+    // ⚠ AND A COLOUR NEVER RIDES A HUMAN'S ROW — the kind gate, same as the name's.
+    const [human] = buildAgentStream({
+      entries: [inboundFrame({ authorKind: "user", senderColor: "agent-03" })],
+      sent: [],
+    });
+    expect("senderColor" in human).toBe(false);
   });
 
   it("🔒 THREADS the kind from the item to the face", () => {

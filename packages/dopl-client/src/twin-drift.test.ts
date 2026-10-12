@@ -36,9 +36,23 @@ function repoRoot(): string {
 const ROOT = repoRoot();
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
-/** Top-level field names of `export interface <name>`, or null when it is not declared there. */
+/**
+ * Top-level field names of `export interface <name>` **or `export type <name> = { … }`**, or null
+ * when it is not declared there.
+ *
+ * ⚠ **THE TYPE-ALIAS ARM LANDED 2026-10-12, AND IT IS WHY `ChannelMessage` CAN BE COVERED AT ALL.**
+ * The server declares that one as an alias of an object literal, so an interface-only matcher
+ * answered `null` for it — and the pair could not be listed here without tripping the "not
+ * declared" control. The brace walk below is shape-agnostic; only the head had to learn the second
+ * spelling. ⚠ An alias of a UNION or an intersection is deliberately not modelled: the walk would
+ * read one arm and quietly under-report, so such a type keeps answering `null` and the control
+ * fires rather than a half-measured comparison passing.
+ */
 function fieldsOf(source: string, name: string): Set<string> | null {
-  const head = new RegExp(`^export interface ${name}(?:<[^>]*>)?(?:\\s+extends\\s+[^{]+)?\\s*\\{`, "m");
+  const head = new RegExp(
+    `^export (?:interface ${name}(?:<[^>]*>)?(?:\\s+extends\\s+[^{]+)?\\s*|type ${name}(?:<[^>]*>)?\\s*=\\s*)\\{`,
+    "m"
+  );
   const m = head.exec(source);
   if (!m) return null;
   let depth = 1;
@@ -79,6 +93,11 @@ const TWINS: Array<[string, string, string]> = [
   ["AccountWaitingItem", "account-types.ts", "src/features/channels/types-account.ts"],
   ["AgentIdentity", "agent-identity-types.ts", "src/features/agent-identities/types.ts"],
   ["ChannelContainer", "types.ts", "src/features/channels/types-list.ts"],
+  // ⚠ ADDED 2026-10-12 with `authorAgentColor`, the field that made the gap visible: the message
+  // row is the most-read shape on the wire and was outside this guard because the server declares
+  // it as a type alias (see `fieldsOf`). Every desktop reads these rows through the SDK, so a
+  // server-only field here is a feature that silently does not exist on the client.
+  ["ChannelMessage", "channel-types.ts", "src/features/channels/types.ts"],
   ["ChannelPendingLink", "home-types.ts", "src/shared/links/types.ts"],
   ["DisplayAnswerStamp", "display-types.ts", "src/features/display/core/types.ts"],
   ["HomeChannelCreateResult", "home-types.ts", "src/features/home/types.ts"],

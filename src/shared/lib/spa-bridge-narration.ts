@@ -118,6 +118,19 @@ export interface DesktopNarrationEntry {
    */
   senderAgentName?: string;
   /**
+   * `inbound` only, and only beside `authorKind: "agent"`: THAT AGENT'S IDENTITY COLOUR KEY
+   * (`agent-01` … `agent-16`), joined server-side onto the message
+   * (`channels/types.ts › ChannelMessage.authorAgentColor`) and passed through main untouched.
+   *
+   * ⚠ **A KEY, NEVER A COLOUR VALUE** — `channels/lib/agent-colors.ts › agentColorVar` is the only
+   * place one becomes a `var()`, and main does not own the palette.
+   * ⚠ **UNNARROWED ON THIS WIRE, ON PURPOSE**: a newer server may name a seventeenth key, and
+   * `agentColorOrNull` is the ONE membership test — it runs where the item is built, so an unknown
+   * key reads as "no colour" at one boundary rather than at two that can disagree.
+   * ⚠ Absent is ordinary: a human author, an uncoloured agent, an older server.
+   */
+  senderColor?: string;
+  /**
    * `post` only: the outbound consent gate is holding it until a human presses Post (INVARIANTS §6).
    * Only `true` counts; absent means sent. It never clears — the transcript row says it landed.
    */

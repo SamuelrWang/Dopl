@@ -361,6 +361,7 @@ async function startSession(spec, rt) {
       // card is painted by the same rule as every later inbound one.
       authorKind: s.context && s.context.authorKind,
       authorAgentName: s.context && s.context.authorAgentName,
+      authorAgentColor: s.context && s.context.authorAgentColor,
     });
   }
   // Spawn idle starts no child (a held query would hold channel access unwatched); the timer arms the

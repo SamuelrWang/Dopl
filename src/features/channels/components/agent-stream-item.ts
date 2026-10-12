@@ -24,6 +24,7 @@
 import type { DisplayPayload } from "./view-model-display";
 import type { PostDestination } from "./agents-model";
 import type { StreamLane } from "./agent-stream-lanes";
+import type { AgentColorKey } from "../types";
 
 
 /** One row of the rendered stream. */
@@ -150,6 +151,16 @@ export interface StreamItem {
    * ⚠ ABSENT IS ORDINARY: the face falls back through `senderName` to the anonymous sentence.
    */
   senderAgentName?: string;
+  /**
+   * `inbound` rows only, beside `authorKind: "agent"` — **THAT AGENT'S IDENTITY COLOUR**, the key
+   * its banner is painted with (2026-10-12).
+   *
+   * ⚠ **ALREADY NARROWED TO ONE OF THE SIXTEEN** by `agent-stream-model.ts` through
+   * `lib/agent-colors.ts › agentColorOrNull`, which is why the type is `AgentColorKey` here and a
+   * bare `string` on the wire. ⚠ ABSENT IS THE NEUTRAL FACE: an uncoloured agent is legitimate, and
+   * a renderer must degrade rather than invent a hue.
+   */
+  senderColor?: AgentColorKey;
   /**
    * `sent` rows FROM THE TRANSCRIPT only — **WHO THE POST WAS ADDRESSED TO**, as raw
    * ids for the face to resolve (#3081, Samuel: black pills naming the addressees in

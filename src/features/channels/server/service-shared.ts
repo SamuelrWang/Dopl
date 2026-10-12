@@ -17,6 +17,7 @@ import type { ChannelMessage } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
+import * as repoAgentFacets from "./repository-agent-facets";
 import type { MessageSourceStamp } from "./message-source-stamp";
 
 /**
@@ -233,6 +234,59 @@ export async function agentNamesFor(
   return repoSessions.agentDisplayNames([...new Set(workspaceIds)], [...ids]);
 }
 
+/**
+ * The author agent ids a page of rows NAMES — {@link agentNamesFor}'s first half, lifted out so
+ * the pair-read below cannot derive them a second way.
+ *
+ * ⚠ **THE ONE PARSER DECIDES WHICH AGENT WROTE A ROW** (`lib/agent-post-stamp.ts ›
+ * authorAgentIdOf`: the post stamp, else the server's own session key), and this only collects its
+ * answers. ⚠ Gated on `author_kind`: a person's cookie session carries a `session_id` too.
+ */
+function authorAgentIdsOf(
+  rows: readonly { author_kind: string; client_msg_id: string | null; metadata: unknown }[]
+): string[] {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.author_kind !== "agent") continue;
+    const id = authorAgentIdOf({
+      clientMsgId: row.client_msg_id,
+      metadata:
+        row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+          ? (row.metadata as Record<string, unknown>)
+          : null,
+    });
+    if (id !== null) ids.add(id);
+  }
+  return [...ids];
+}
+
+/**
+ * **AGENT ID → ITS NAME *AND* ITS COLOUR for a page of messages, in ONE read** (2026-10-12 — the
+ * inbound banner's colour, Samuel).
+ *
+ * ⚠ **IT REPLACES {@link agentNamesFor} ON THE MESSAGE HYDRATE PATH ONLY**, and the name half is
+ * byte-identical in behaviour (`repository-agent-facets.ts › agentNameAndColor` keeps
+ * `agentDisplayNames`' blank-name rule). `agentNamesFor` stays for its other callers — the account
+ * status read and the workspace hold — which want names alone and must not pay for a wider
+ * projection.
+ * ⚠ **ONE READ, NOT TWO**, because this is the hot path: every channel page and every long-poll
+ * tick lands here, and a second query for the colour would also be a second chance to disagree
+ * about one agent inside one rendered row.
+ * ⚠ A PURELY HUMAN PAGE STILL COSTS NOTHING — no agent ids, no query.
+ */
+export async function agentFacesFor(
+  workspaceIds: readonly string[],
+  rows: readonly {
+    author_kind: string;
+    client_msg_id: string | null;
+    metadata: unknown;
+  }[]
+): Promise<{ names: Map<string, string>; colors: Map<string, string> }> {
+  const ids = authorAgentIdsOf(rows);
+  if (ids.length === 0) return { names: new Map(), colors: new Map() };
+  return repoAgentFacets.agentNameAndColor([...new Set(workspaceIds)], ids);
+}
+
 export async function profilesById(
   userIds: string[]
 ): Promise<Map<string, ProfileRef>> {
@@ -252,15 +306,19 @@ export async function hydrateMessages(
   const authorIds = rows
     .map((r) => r.author_user_id)
     .filter((id): id is string => id !== null);
-  const [profiles, agentNames] = await Promise.all([
+  const [profiles, faces] = await Promise.all([
     profilesById(authorIds),
-    agentNamesFor([workspaceId], rows),
+    // ⚠ THE PAIR IN ONE READ since 2026-10-12 — see `agentFacesFor`. The colour is what the
+    // agent stream's inbound banner paints with, and it has to arrive on the same row as the
+    // name or the two reads can disagree about one agent.
+    agentFacesFor([workspaceId], rows),
   ]);
   return rows.map((row) =>
     mapMessageRow(
       row,
       row.author_user_id ? profiles.get(row.author_user_id) : undefined,
-      agentNames
+      faces.names,
+      faces.colors
     )
   );
 }

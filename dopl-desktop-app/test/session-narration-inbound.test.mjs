@@ -167,6 +167,27 @@ test("the agent's own name rides ONLY beside `authorKind: 'agent'`, flattened an
   assert.equal(long.senderAgentName.length, CAP);
 });
 
+test("the agent's COLOUR rides the same gate, unvalidated here on purpose", () => {
+  // ⚠ MAIN DOES NOT OWN THE PALETTE: the key crosses as the server wrote it and
+  // `channels/lib/agent-colors.ts › agentColorOrNull` is the ONE membership test, at the item
+  // boundary. Two validators would be two chances to disagree about one agent's colour — so this
+  // arm's job is the GATE (kind + presence) and the BOUND, not the vocabulary.
+  assert.equal(
+    inbound({ authorKind: "agent", authorAgentColor: "agent-03" }).senderColor,
+    "agent-03"
+  );
+  assert.equal(
+    inbound({ authorKind: "agent", authorAgentColor: "agent-99" }).senderColor,
+    "agent-99",
+    "an unknown key is passed through for the renderer to narrow, not dropped here"
+  );
+  // A human's frame carries none, whatever was handed in — the kind gate, as for the name.
+  assert.equal("senderColor" in inbound({ authorKind: "user", authorAgentColor: "agent-03" }), false);
+  assert.equal("senderColor" in inbound({ authorAgentColor: "agent-03" }), false);
+  // And absent stays absent rather than becoming an empty string.
+  assert.equal("senderColor" in inbound({ authorKind: "agent" }), false);
+});
+
 // ── 4. THE LAUNCH DOOR ───────────────────────────────────────────────────────────────
 
 test("`noteLaunchMessage` appends ONE inbound frame for the message that launched the session", () => {
@@ -192,10 +213,12 @@ test("the launch frame carries the author facts too, or the woken agent's own ca
     authorName: "Sam Wang's agent",
     authorKind: "agent",
     authorAgentName: "Cleanup Orchestrator",
+    authorAgentColor: "agent-07",
   });
   const [frame] = m.ringFor(s);
   assert.equal(frame.authorKind, "agent");
   assert.equal(frame.senderAgentName, "Cleanup Orchestrator");
+  assert.equal(frame.senderColor, "agent-07");
   // A human-triggered launch is the other half, and carries no agent name.
   const h = { key: "c:t:a4" };
   m.noteLaunchMessage(h, { message: "take #917", authorName: "Sam Wang", authorKind: "user" });

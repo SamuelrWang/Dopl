@@ -46,6 +46,7 @@ export { frameLane, type StreamLane } from "./agent-stream-lanes";
    every importer that reads it from this path, but `StreamItem` is where it was USED here and that
    now lives in `agent-stream-item.ts`. */
 import { frameLane } from "./agent-stream-lanes";
+import { agentColorOrNull } from "../lib/agent-colors";
 
 /**
  * ⚠ THE TOOL-RUN GROUPING LIVES IN `agent-stream-groups.ts`, and this file stays its import
@@ -299,6 +300,16 @@ export function buildAgentStream({
     const wasHeld = lane === "sent" && framePending(entry);
     if (lane === "sent" && !held && !wasHeld && hasTranscript) return;
     const request = held ? (pendingByBody.get(echo) ?? null) : null;
+    // THE ARRIVING AGENT'S COLOUR, NARROWED HERE AND NOWHERE ELSE. ⚠ `agentColorOrNull` is the ONE
+    // membership test (`lib/agent-colors.ts`): the key crossed a TEXT column and a peer's machine,
+    // so a seventeenth key from a newer server becomes ABSENT at this single boundary rather than
+    // reaching a `var(--agent-color-…)` that resolves to nothing and paints an INVISIBLE banner.
+    // ⚠ Lane- AND kind-gated like the name beside it: a colour may not ride a row whose face would
+    // read it as a person's.
+    const senderColor =
+      lane === "inbound" && entry.authorKind === "agent"
+        ? agentColorOrNull(entry.senderColor)
+        : null;
     items.push({
       key: `f:${entry.at}:${i}`,
       lane,
@@ -344,6 +355,12 @@ export function buildAgentStream({
       entry.senderAgentName.trim()
         ? { senderAgentName: entry.senderAgentName }
         : {}),
+      // THAT AGENT'S COLOUR, NARROWED HERE AND NOWHERE ELSE. ⚠ `agentColorOrNull` is the ONE
+      // membership test (`lib/agent-colors.ts`): the key crossed a TEXT column and a peer's
+      // machine, so a seventeenth key from a newer server must become ABSENT at this single
+      // boundary rather than reach a `var(--agent-color-…)` that resolves to nothing and paints an
+      // invisible banner. ⚠ Lane- AND kind-gated like the name beside it.
+      ...(senderColor ? { senderColor } : {}),
       ...(held
         ? { pending: true, requestId: request?.id ?? null, expired: isExpired(request, now) }
         : {}),

@@ -289,6 +289,7 @@ function StreamRow({
           fromOperator={item.fromOperator}
           authorKind={item.authorKind}
           senderAgentName={item.senderAgentName}
+          senderColor={item.senderColor}
           at={item.at}
         />
         {item.truncated === true && <TruncatedNote />}

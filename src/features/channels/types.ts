@@ -17,6 +17,10 @@
 // ⚠ IMPORTED, NOT RE-DECLARED: the info card's shape and its zod schema are ONE
 // statement (`./info-card.ts`); a second copy here is what drifts.
 import type { ChannelInfoCard } from "./info-card";
+// ⚠ IMPORTED FOR `ChannelMessage.authorAgentColor` (2026-10-12) AND RE-EXPORTED BELOW — one
+// symbol, one source. The barrel's re-export creates no local binding, which is why this line
+// is needed as well as that one.
+import type { AgentColorKey } from "./types-sessions";
 // ⚠ `ChannelAgentPosture` LEFT THIS IMPORT ON 2026-09-06 with the field it typed.
 import type { ChannelDelivery, ChannelWakeVerdict } from "./types-delivery";
 // ⚠ IMPORTED, NOT RE-DECLARED (2026-09-07), for `ChannelInfoCard`'s reason: the setting
@@ -285,6 +289,19 @@ export type ChannelMessage = {
    * ⚠ **PEER-TYPED** — nothing validates its charset, so every surface neutralizes it.
    */
   authorAgentName?: string | null;
+  /**
+   * **THE IDENTITY COLOUR OF THE AGENT THAT WROTE THIS ROW** — `channel_sessions.color`, joined at
+   * read time off the same one query as {@link ChannelMessage.authorAgentName} (2026-10-12).
+   *
+   * ⚠ **JOINED, NEVER STORED**, that field's rule: a colour is reassigned by the server and a copy
+   * on the row would stop agreeing. ⚠ **A KEY, NOT A COLOUR VALUE** — `lib/agent-colors.ts ›
+   * agentColorVar` is the only place a key becomes a `var()`, and no hex ever reaches a component.
+   * ⚠ **ABSENT, `null` AND AN UNKNOWN KEY ALL MEAN "NO COLOUR TO DRAW"**: an older server, a human
+   * author, an unresolved page, and a seventeenth live agent that runs uncoloured. The DTO narrows
+   * it through `agentColorOrNull`, so a surface either has one of the sixteen keys or degrades to
+   * its neutral face — it must never invent a hue.
+   */
+  authorAgentColor?: AgentColorKey | null;
   // ── THE DELIVERY KEYSTONE (2026-09-02, A9; `types-delivery.ts`) ─────────
   // ⚠ **OPTIONAL *AND* NULLABLE, AND BOTH MEAN "NOT ANSWERED HERE".** `undefined` is
   // what a message this tree BUILDS rather than READS carries; `null` is what

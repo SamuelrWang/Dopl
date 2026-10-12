@@ -181,6 +181,7 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
       // noteLaunchMessage`): `authorKind` beside it is what decides whether it is read at all,
       // and `null` is the ordinary absence for a human author or an unresolved page.
       authorAgentName: (m.authorKind === 'agent' && m.authorAgentName) || null,
+      authorAgentColor: (m.authorKind === 'agent' && m.authorAgentColor) || null,
       channelId: entry.channel.id, workspaceId: entry.workspaceId, taskId,
       workspaceSegment: entry.workspaceSegment || null, // the outbound bridge's nav target
     },

@@ -449,12 +449,13 @@ function feedLiveSession(entry, m, myUserId) {
       // ⚠ ONLY THE TWO KNOWN SPELLINGS, never coerced onto `'user'`: absent must read as the
       // neutral banner rather than paint a machine's words with a person's weight.
       ...(m.authorKind === 'agent' || m.authorKind === 'user' ? { authorKind: m.authorKind } : {}),
-      // AND, FOR AN AGENT, THE OPERATOR'S NAME FOR IT — joined server-side onto the row
-      // (`types.ts › ChannelMessage.authorAgentName`), so the banner can name `@the-agent` rather
-      // than `"<person>'s agent"`. ⚠ GATED ON THE KIND: a human's row carries no agent name, and a
-      // page that resolved none answers `null` — both are the ordinary absence, and the face falls
-      // back through the resolved label to the anonymous sentence, never to an id.
+      // AND, FOR AN AGENT, ITS NAME AND ITS COLOUR KEY — both joined server-side onto the row
+      // (`types.ts › ChannelMessage.authorAgentName` / `.authorAgentColor`), so the banner can name
+      // `@the-agent` and paint with the colour that agent already wears. ⚠ GATED ON THE KIND, and
+      // the colour rides as the KEY: `lib/agent-colors.ts` is the only place one becomes a `var()`
+      // and this machine does not own the palette.
       ...(m.authorKind === 'agent' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
+      ...(m.authorKind === 'agent' && m.authorAgentColor ? { authorAgentColor: m.authorAgentColor } : {}),
     });
     if (!ok) { ack(s, { refused: 1 }); continue; }
     fed += 1;

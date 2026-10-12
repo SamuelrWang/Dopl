@@ -36,7 +36,9 @@
 
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
+import { agentColorVar } from "../lib/agent-colors";
 import { agentNameHandle } from "../lib/agent-mentions";
+import type { AgentColorKey } from "../types";
 import { StreamProse } from "./agent-stream-prose";
 
 /**
@@ -156,6 +158,7 @@ export function InboundBox({
   fromOperator,
   authorKind,
   senderAgentName,
+  senderColor = null,
   at,
 }: {
   text: string;
@@ -184,6 +187,18 @@ export function InboundBox({
   /** The agent's own name when `authorKind` is `"agent"` — the banner names `@the-agent` with it
    *  ({@link inboundLabel}). ⚠ Peer-typed; neutralized as a text child like `sender`. */
   senderAgentName?: string | null;
+  /**
+   * **THE SENDING AGENT'S IDENTITY COLOUR** — the key its banner and edge are painted with
+   * (Samuel, 2026-10-12; `StreamItem.senderColor`, already narrowed to one of the sixteen).
+   *
+   * ⚠ **IT IS THE COLOUR THE READER HAS ALREADY BEEN TAUGHT**: the same key that agent's avatar,
+   * its transcript accent and its own posted banner wear (docs/specs/agent-colors.md item 5), so
+   * the card answers *which* agent wrote this without the reader parsing the label.
+   * ⚠ **`null` IS THE NEUTRAL FACE, NOT BLACK.** An uncoloured agent is legitimate — a
+   * seventeenth live agent in one room has no key — and black belongs to a HUMAN author here.
+   * ⚠ **THE PAINT ROUTE IS `lib/agent-colors.ts › agentColorVar` AND THERE IS NO SECOND ONE.**
+   */
+  senderColor?: AgentColorKey | null;
   /** Epoch ms. `0` means the stamp was unreadable: the tag drops rather than printing an epoch date
    *  at somebody (the sent box's rule). */
   at?: number;
@@ -191,10 +206,16 @@ export function InboundBox({
   const stamp = at ? formatChannelTimestamp(new Date(at).toISOString()) : "";
   /* ⚠ **THE KIND DECIDES THE WEIGHT, AND ONLY A KNOWN KIND DECIDES ANYTHING.** A human's message
      is the one arriving fact in this column that a PERSON authored, which is what the black face
-     says; an agent's wears its own colour in the commit that plumbs it. Everything else — an
-     unknown kind, an older main — keeps the neutral inset banner. */
+     says; an agent's wears the colour that agent already wears everywhere else. Everything else —
+     an unknown kind, an agent with no key — keeps the neutral inset banner.
+     ⚠ **AN AGENT IS NEVER PAINTED BLACK AS A FALLBACK.** Black is this surface's claim that a
+     PERSON wrote the words, so a colourless agent degrades to neutral rather than borrowing it. */
   const paint: InboundPaint =
-    authorKind === "user" ? { fill: "var(--surface-cta)", onFill: true } : null;
+    authorKind === "user"
+      ? { fill: "var(--surface-cta)", onFill: true }
+      : authorKind === "agent" && senderColor
+        ? { fill: agentColorVar(senderColor), onFill: true }
+        : null;
   return (
     <div
       /* ⚠ THE FULLER BORDER, LIKE THE INBOUND DIRECTED BOX AND FOR ITS REASON: within an
@@ -208,7 +229,9 @@ export function InboundBox({
       style={paint ? { borderColor: paint.fill } : undefined}
       data-stream-inbound
       /* The test vocabulary for "which weight did this card draw" — read, never styled on. */
-      data-stream-inbound-paint={paint ? "author" : "neutral"}
+      data-stream-inbound-paint={
+        paint ? (authorKind === "agent" ? "agent" : "human") : "neutral"
+      }
     >
       {/* ⚠ THE INSET FILL STAYS A CLASS AND THE AUTHOR'S FILL ARRIVES AS AN INLINE `style`, the
           sent box's arrangement exactly: the unpainted face is byte-identical to what shipped
