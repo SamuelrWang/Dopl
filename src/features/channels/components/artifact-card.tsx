@@ -84,6 +84,18 @@ const COLLAPSED_RUN_MAX_HEIGHT = `calc(${COLLAPSED_RUN_LINES} * 1.5em + 18px)`;
  * without opening anything, and the count beside it says honestly whether the
  * artifact is a solid run or a selection out of one.
  */
+/**
+ * ⚠ **THE SPAN STAYS ON GLOBAL `seq`, AND THAT IS A SCOPE BOUNDARY RATHER THAN AN
+ * OVERSIGHT** (2026-10-12, per-channel numbering B3). `firstSeq` / `lastSeq` are
+ * not read off the page — they are `min(seq)` / `max(seq)` over the WHOLE
+ * artifact, computed by the `channel_artifact_spans` RPC
+ * (`20261008120000_artifact_spans_rpc.sql`). Showing a per-channel span would
+ * mean teaching that RPC to aggregate `channel_seq`, i.e. a second migration, and
+ * the first one is still held. ⚠ So the card can legitimately print a
+ * per-channel number on each MEMBER and a global span in its header at the same
+ * time — ugly, and strictly better than a span whose two numbers come from
+ * different namespaces. Fold it into the release change, not here.
+ */
 export function artifactSpanLabel(
   count: number,
   firstSeq: number,
@@ -146,7 +158,15 @@ function FoldedRun({ members }: { members: ArtifactMember[] }) {
             <div key={member.id} data-artifact-member={member.seq} className="min-w-0">
               <p className="flex items-center gap-1.5 px-3 pt-1.5 text-micro text-text-muted">
                 <span className="min-w-0 truncate">{member.authorLabel}</span>
-                <span className="shrink-0 opacity-75">#{member.seq}</span>
+              {/* ⚠ THE PER-CHANNEL NUMBER WHEN THE ROW HAS ONE, ELSE `seq`.
+                  This is the only place the web UI prints a message number at
+                  all, so it is the only face that moves in this branch. The
+                  fallback is not defensive padding: the migration that fills
+                  `channelSeq` is HELD, so TODAY every row takes the `seq` arm and
+                  the card is byte-identical to before. */}
+                <span className="shrink-0 opacity-75">
+                  #{member.channelSeq ?? member.seq}
+                </span>
                 <span className="ml-auto shrink-0">{member.time}</span>
               </p>
               {/* ⚠ MARKDOWN, LIKE EVERY OTHER MESSAGE FACE (Samuel, 2026-08-31).

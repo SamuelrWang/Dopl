@@ -358,3 +358,74 @@ describe("entries → rows", () => {
     expect(out).toEqual(rows);
   });
 });
+
+/**
+ * THE NUMBER THE CARD PRINTS (2026-10-12, per-channel numbering B3).
+ *
+ * ⚠ **THIS IS THE ONLY PLACE THE WEB UI PRINTS A MESSAGE NUMBER AT ALL** — the
+ * transcript prints none — so it is the whole web-visible surface of the change,
+ * and the fallback is the half that matters today: the migration filling
+ * `channelSeq` is HELD, so every row still takes the `seq` arm and the card is
+ * byte-identical to before. The MEMBERS fixture above carries no `channelSeq`,
+ * which means every other case in this file is already a fallback test.
+ */
+describe("the member number", () => {
+  it("🔒 falls back to the global seq when the row has no channel number", () => {
+    // Today's shape, and an older desktop's shape: the key is absent entirely.
+    card();
+    expect(screen.getByText("#2")).toBeTruthy();
+    expect(screen.getByText("#3")).toBeTruthy();
+  });
+
+  it("prints the per-channel number once the row has one", () => {
+    card({
+      members: [
+        { id: "m-2", seq: 4228, channelSeq: 2421, authorLabel: "Dana", time: "09:01", body: "First." },
+      ],
+    });
+    expect(screen.getByText("#2421")).toBeTruthy();
+    // ⚠ AND NOT THE GLOBAL ONE. A card showing both would put two namespaces on
+    // one row, which is the hazard the whole design exists to avoid.
+    expect(screen.queryByText("#4228")).toBeNull();
+  });
+
+  it("🔒 treats an explicit null like an absent field", () => {
+    card({
+      members: [
+        { id: "m-2", seq: 7, channelSeq: null, authorLabel: "Dana", time: "09:01", body: "First." },
+      ],
+    });
+    expect(screen.getByText("#7")).toBeTruthy();
+  });
+
+  it("🔒 carries channelSeq through the view model", () => {
+    const messages = [
+      { ...message(3, "a-1"), channelSeq: 12 },
+      { ...message(2, "a-1"), channelSeq: 11 },
+    ];
+    const row = artifactRowFor(folded("a-1", 2, 2, 3), messages, INDEX, fmt);
+    expect(row.members.map((m) => m.channelSeq)).toEqual([11, 12]);
+  });
+
+  it("🔒 orders members on seq even when NO row has a channel number", () => {
+    // ⚠ **THIS CASE EXISTS BECAUSE THE OBVIOUS VERSION OF IT PROVED NOTHING.**
+    // Written first with channelSeq 11,12 against seq 2,3 — the two orders
+    // agreed, so sorting by either passed and a mutation that switched the sort
+    // to `channelSeq` stayed green. Today EVERY row is null (the migration is
+    // held), so a `channelSeq` sort collapses to insertion order and nothing
+    // says so. Input is therefore reversed and carries no channel number at all.
+    const messages = [message(3, "a-1"), message(2, "a-1")];
+    const row = artifactRowFor(folded("a-1", 2, 2, 3), messages, INDEX, fmt);
+    expect(row.members.map((m) => m.seq)).toEqual([2, 3]);
+    expect(row.members.map((m) => m.channelSeq)).toEqual([null, null]);
+  });
+
+  it("🔒 the SPAN stays on global seq — a deliberate scope boundary", () => {
+    // `firstSeq`/`lastSeq` are `min(seq)`/`max(seq)` over the WHOLE artifact from
+    // the `channel_artifact_spans` RPC, not off the page. Per-channel spans need
+    // that RPC to aggregate `channel_seq`, i.e. a second migration. Pinned so the
+    // mismatch is a recorded decision rather than a bug someone discovers.
+    expect(artifactSpanLabel(2, 2, 3)).toBe("2 messages · #2–#3");
+    expect(artifactSpanLabel(1, 2, 2)).toBe("1 message · #2");
+  });
+});

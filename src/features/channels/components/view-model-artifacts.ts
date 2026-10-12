@@ -38,6 +38,15 @@ import { labelFor, type AuthorIndex } from "./view-model";
 export interface ArtifactMember {
   id: string;
   seq: number;
+  /**
+   * The per-channel number to SHOW instead of `seq`, when the row has one.
+   *
+   * ⚠ **`null` UNTIL THE HELD MIGRATION LANDS** (`20261122120000`), so the card
+   * falls back to `seq` and reads exactly as it does today. `seq` above stays
+   * because it is the ORDER and the citation key — the sort and the span are
+   * both on it, and only the printed face moves.
+   */
+  channelSeq?: number | null;
   authorLabel: string;
   time: string;
   body: string;
@@ -106,7 +115,12 @@ function membersOf(
     .sort((a, b) => a.seq - b.seq)
     .map((message) => ({
       id: message.id,
+      // ⚠ THE SORT ABOVE STAYS ON `seq`, DELIBERATELY: it is the authoritative
+      // arrival order and it is never null, whereas `channelSeq` is null on every
+      // row until the held migration is applied. Ordering by a column that is
+      // uniformly null would silently fall back to insertion order.
       seq: message.seq,
+      channelSeq: message.channelSeq ?? null,
       authorLabel: labelFor(message, index),
       time: formatTime(message.createdAt),
       body: message.body,
