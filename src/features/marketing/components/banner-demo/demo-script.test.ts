@@ -30,8 +30,15 @@ import { fileURLToPath } from "node:url";
 import { isAgentColorKey } from "@/features/channels/lib/agent-colors";
 import {
   MENTIONS_METADATA_KEY,
+  mentionSlug,
   resolveMentions,
 } from "@/features/channels/lib/mentions";
+import {
+  addressableAgents,
+  agentIdHandle,
+  buildAgentMentionIndex,
+  resolveAgentHandle,
+} from "@/features/channels/lib/agent-mentions";
 import type { ChannelMessage } from "@/features/channels/types";
 import {
   AGENT_IDS,
@@ -132,6 +139,44 @@ describe("2. every agent has its own colour", () => {
   it("gives no two agents the same key", () => {
     const keys = entries.map(([, e]) => e.color);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+/**
+ * **AGENT @-HANDLES, WHICH THE NEW SCENARIO LEANS ON** (Samuel, 2026-10-12: the agents
+ * should tag and answer ONE ANOTHER, not just report to the channel).
+ *
+ * ⚠ **AGENT TAGS ARE A SEPARATE NAMESPACE FROM MEMBER TAGS AND NEVER REACH
+ * `metadata.mentionedUserIds`** (`message-markdown-context.ts › BodyContext.agentHandles`:
+ * "it decides TINT ONLY"). So the item 3 plumbing above does nothing for them, and
+ * whether an agent tag draws a pill is decided entirely by what is in `index.agents`.
+ *
+ * ⚠ **THIS SCENE PUTS ALL THREE AGENTS IN THAT INDEX**, so all three handles resolve —
+ * including two that belong to OTHER members. Worth knowing before the copy lands:
+ * `buildAgentMentionIndex`'s header describes an index built from one machine's own feed,
+ * where a peer's agent has no entry and cannot be tinted. The transcript builds it from
+ * the author index instead (`message-markdown.tsx:126`), which carries peer agents for
+ * attribution, so the pills are real here. Flagged rather than assumed.
+ */
+describe("agent handles resolve in this scene, so agent-to-agent tags can pill", () => {
+  const index = buildAgentMentionIndex(addressableAgents(AGENT_INDEX));
+
+  it("resolves every agent by its slugged display name", () => {
+    for (const [agentId, entry] of AGENT_INDEX) {
+      const handle = mentionSlug(entry.displayName ?? "");
+      expect(handle, `${agentId} has no sluggable name`).not.toBe("");
+      expect(resolveAgentHandle(handle, index), `@${handle}`).toBe(agentId);
+    }
+  });
+
+  it("resolves every agent by its id handle too", () => {
+    for (const agentId of AGENT_INDEX.keys()) {
+      expect(resolveAgentHandle(agentIdHandle(agentId), index)).toBe(agentId);
+    }
+  });
+
+  it("resolves nothing for a name no agent answers to", () => {
+    expect(resolveAgentHandle("nobody-at-all", index)).toBeNull();
   });
 });
 
