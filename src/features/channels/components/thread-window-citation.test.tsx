@@ -20,9 +20,13 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { CHANNEL_ID, ME, PEER, member, message, thread, WS } from "./test-fixtures";
 import { FLASH_TINT } from "./authored-row";
+
+/** ⚠ Mirrors `message-pane.tsx`'s private constant: the flash window this suite
+ *  has to step past to make a second ask observable. */
+const FLASH_MS = 1600;
 
 const { live } = vi.hoisted(() => ({ live: vi.fn(() => ({ gate: {} })) }));
 
@@ -146,15 +150,40 @@ describe("a citation in the pop-out", () => {
     expect(tinted("m-older")).toBe(true);
   });
 
-  it("🔒 asking TWICE asks twice — the nonce discipline survives the local signal", () => {
-    // The pop-out holds its own `scrollTarget` because `use-channels-selection.ts`
-    // is not mounted here. Same shape, and this is the property that shape is for.
-    mount();
-    const pill = screen.getByRole("button", { name: "Go to message #11" });
-    fireEvent.click(pill);
-    scrollIntoView.mockReset();
-    fireEvent.click(pill);
-    expect(scrollIntoView).toHaveBeenCalled();
+  it("🔒 asking TWICE asks twice — and the second ask TINTS AGAIN", () => {
+    /**
+     * ⚠ **THE TINT IS WHAT BITES HERE, AND ASSERTING THE SCROLL ALONE DID NOT —
+     * WHICH IS REVIEW 35'S LESSON ARRIVING A SECOND TIME.** The pane scrolls
+     * whenever its `scrollTarget` object changes, but it only FLASHES while
+     * `scrollTarget.nonce !== spentNonce` (`message-pane.tsx`). So a local signal
+     * that handed out a FIXED nonce would still move the transcript on every
+     * click while silently losing the highlight from the second one onward — and
+     * I measured exactly that: this case passed the fixed-nonce mutation until
+     * the tint was asserted.
+     *
+     * ⚠ **THE FIRST FLASH HAS TO EXPIRE FIRST**, or the tint from click one is
+     * still on screen and the assertion proves nothing. Spending the nonce is
+     * what makes the second ask a real ask.
+     */
+    vi.useFakeTimers();
+    try {
+      mount();
+      const pill = screen.getByRole("button", { name: "Go to message #11" });
+      fireEvent.click(pill);
+      expect(tinted("m-older")).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(FLASH_MS + 50);
+      });
+      expect(tinted("m-older"), "the flash must expire before the second ask").toBe(
+        false
+      );
+      scrollIntoView.mockReset();
+      fireEvent.click(pill);
+      expect(scrollIntoView).toHaveBeenCalled();
+      expect(tinted("m-older")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("🔒 pills a SINGLE-DIGIT citation, which only an allowlist can", () => {
