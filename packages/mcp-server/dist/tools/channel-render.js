@@ -25,6 +25,7 @@ exports.formatMemberLine = formatMemberLine;
 exports.groupByChannel = groupByChannel;
 const call_ref_js_1 = require("../call-ref.js");
 const channel_facts_1 = require("./channel-facts");
+const channel_numbering_1 = require("./channel-numbering");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
 // ⚠ **WHO WROTE IT AND WHO IT REACHED IS `channel-render-identity.ts`** (§1
@@ -186,7 +187,11 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null)
     // ⚠ THE MARK GOES LAST AMONG THE TAGS AND BEFORE THE TIMESTAMP, so it reads
     // as the line's verdict rather than as another attribute of the addressing.
     // `via glasses (Even G2)`: the member's device, so a reply can fit it (`channel-source.ts`).
-    const head = `**#${m.seq}** ${author}${(0, channel_source_1.sourceTag)(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
+    // ⚠ **`#` IS THE PER-CHANNEL NUMBER, `seq` IS THE CURSOR** — `channel-numbering
+    // .ts` is the only thing that decides which, and the `since seq …` / `cursor=…`
+    // lines elsewhere in this module are deliberately NOT routed through it. Today
+    // every row falls back to `seq`, so this line is byte-identical to before.
+    const head = `**#${(0, channel_numbering_1.channelNoOf)(m)}** ${author}${(0, channel_source_1.sourceTag)(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
     return `- ${head}${clipBody(m, ref, clip)}`;
 }
 /**

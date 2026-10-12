@@ -26,6 +26,7 @@ exports.sessionSlotRef = sessionSlotRef;
 exports.threadTagOf = threadTagOf;
 exports.threadLegend = threadLegend;
 const call_ref_js_1 = require("../call-ref.js");
+const channel_numbering_1 = require("./channel-numbering");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
 /** Tell for an id that neutralized to nothing — empty backticks read as a glitch. */
@@ -120,7 +121,15 @@ function threadTagOf(m, anyTagged) {
     if (!id)
         return anyTagged ? ` · no thread` : "";
     const label = isFirstClassThreadId(id) ? "thread" : "ad-hoc";
-    return ` · ${label} ${(0, channel_shared_1.inlineOr)(shortRef(id), exports.UNREADABLE_ID)}`;
+    // ⚠ **THE PER-THREAD COUNT RIDES THE TAG THAT ALREADY EXISTS**, which is why
+    // this needed no new parameter and no new scope flag: the tag is already drawn
+    // per message wherever a threaded row appears, so `#3` shows in a channel read
+    // and in a thread-scoped read alike. ⚠ OMITTED, never `#0` or `#null`, when the
+    // row has no number — which is every row until the held migration is applied,
+    // so this line is byte-identical to before today.
+    const no = (0, channel_numbering_1.threadNoOf)(m);
+    const count = no === null ? "" : ` #${no}`;
+    return ` · ${label} ${(0, channel_shared_1.inlineOr)(shortRef(id), exports.UNREADABLE_ID)}${count}`;
 }
 /**
  * Expands the short tags into full ids so a reader can act on one. Scales with
