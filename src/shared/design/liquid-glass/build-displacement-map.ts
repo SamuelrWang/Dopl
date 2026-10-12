@@ -10,7 +10,15 @@ const BOOST = 0.8;
 
 const clamp255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 
-export type DisplacementMapParams = {
+/**
+ * ⚠ NOT EXPORTED, deliberately (2026-10-12, X01): this is the shape of ONE
+ * argument of `buildDisplacementMap`, not a piece of the design kit's API.
+ * `liquid-glass.tsx` imports the function and nothing else, and no barrel
+ * re-exports this module. A caller that needs the shape should take it from
+ * the function — `Parameters<typeof buildDisplacementMap>[3]` — so there is
+ * never a second name for it to drift from.
+ */
+type DisplacementMapParams = {
   /** Corner radius (px). */
   radius: number;
   /** Rim half-width of the refraction ring (= `splay`). */

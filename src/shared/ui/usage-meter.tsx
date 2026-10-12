@@ -10,6 +10,12 @@ import { cn } from "@/shared/lib/utils";
  * `h-1.5 rounded-full transition-[width]` fill with an inline width %.
  * Tokens only — no hex, no raw px.
  */
+/**
+ * ⚠ EXPORTED WITH NO READER TODAY, AND THAT IS A DECISION (2026-10-12, X01):
+ * it is `UsageMeter`'s own prop shape, i.e. kit API. All 7 importing files
+ * (9 render sites, measured at this head) pass props inline rather than naming
+ * the type, which is why a reader grep comes back empty. Keep it exported.
+ */
 export interface UsageMeterProps {
   /**
    * The noun to the left of the `used / limit` pair.
