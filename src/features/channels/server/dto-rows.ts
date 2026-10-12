@@ -153,6 +153,21 @@ export type ChannelMessageRow = {
   metadata: unknown;
   client_msg_id: string | null;
   created_at: string;
+  // ── THE TWO NUMBERS (held migration `20261121120000`) ───────────────────
+  // ⚠ **OPTIONAL BECAUSE THE COLUMNS DO NOT EXIST YET, AND THAT IS THE POINT.**
+  // The migration that adds them is HELD (`supabase/migrations-held/`), so until
+  // Samuel applies it these are absent from every row, `CHANNEL_MESSAGE_COLS`
+  // deliberately does not name them, and every reader falls back to `seq`.
+  //
+  // ⚠ **`channel_seq` IS AN IDENTITY, `thread_seq` IS A COUNT.** `channel_seq`
+  // is NOT NULL in the schema and is still optional HERE — a page read taken
+  // before the migration lands has no such field at all, which is a different
+  // state from "null". `thread_seq` is genuinely nullable: a main-room row
+  // belongs to no thread.
+  //
+  // ⚠ **BIGINT CROSSES AS `number | string`** — `mapMessageRow` normalizes.
+  channel_seq?: number | string | null;
+  thread_seq?: number | string | null;
   // ── THE DELIVERY KEYSTONE (20260912120000) ──────────────────────────────
   // ⚠ NULL IS "NOT ANSWERED HERE", NEVER "NOBODY" AND NEVER "NO". A row written
   // before the resolver carries NULL on all five, and `mapMessageRow` passes

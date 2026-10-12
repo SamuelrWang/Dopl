@@ -58,6 +58,26 @@ export type {
 } from "./dto-rows";
 export { CHANNEL_MESSAGE_COLS, CHANNEL_TASK_ACTIVITY_COLS } from "./dto-rows";
 
+/**
+ * A `BIGINT` as it crosses PostgREST — `number`, `string`, or absent.
+ *
+ * ⚠ **ABSENT AND `NULL` BOTH BECOME `null`**, which is the rule the delivery
+ * keystone below already follows in so many words: an ABSENT column (the
+ * migration is not applied) is the same answer to a caller as a NULL one. The
+ * numbering columns are added by a HELD migration
+ * (`supabase/migrations-held/20261122120000`), so until Samuel applies it this
+ * returns `null` on every row and every reader falls back to `seq`.
+ *
+ * ⚠ A deliberate local twin of `collab-dto.ts › bigintOrNull`, which is
+ * module-private there. Four lines, and exporting it would couple two mappers
+ * that have no other reason to know about each other.
+ */
+function bigintOrNull(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -212,6 +232,21 @@ export function mapMessageRow(
     metadata: isRecord(row.metadata) ? row.metadata : {},
     clientMsgId: row.client_msg_id,
     createdAt: row.created_at,
+    // ⚠ **THE TWO DISPLAY NUMBERS, AND `seq` ABOVE IS UNCHANGED.** `channelSeq`
+    // is the stable per-channel identity a person cites; `threadSeq` is the
+    // dense per-thread count. `seq` keeps every mechanical job it has — cursor,
+    // watermark, consent key, artifact member — and this mapper is the ONE place
+    // all three cross into a DTO.
+    //
+    // ⚠ **`null` UNTIL THE HELD MIGRATION IS APPLIED, BY DESIGN.**
+    // `CHANNEL_MESSAGE_COLS` deliberately does not name these columns yet (it
+    // names columns explicitly, so asking for one the database lacks is a
+    // PostgREST 42703 on every page read), which means PostgREST does not return
+    // them and `bigintOrNull` answers `null`. Every renderer therefore falls
+    // back to `seq` and the product behaves exactly as it does today. Both halves
+    // move in the commit that releases the migration.
+    channelSeq: bigintOrNull(row.channel_seq),
+    threadSeq: bigintOrNull(row.thread_seq),
     authorName: profile?.display_name || profile?.email || null,
     authorAvatarUrl: profile?.avatar_url ?? null,
     // ⚠ THE ONE PARSER decides WHICH agent wrote the row (`lib/agent-post-stamp

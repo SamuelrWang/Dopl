@@ -131,6 +131,25 @@ export interface ChannelMessage {
   id: string;
   /** Monotonic cursor — `read`/`await` return messages with a higher seq. */
   seq: number;
+  /**
+   * The per-channel number a person cites — `#12` in this room.
+   *
+   * ⚠ **NOT A CURSOR.** `seq` is table-wide (one counter across every channel of
+   * every workspace) and is the only thing `since=` accepts. This is a display
+   * identity: assigned at insert, never moved, gappy after a delete.
+   *
+   * ⚠ **OPTIONAL, AND A MISS IS `null`** — an older server, or a payload cached
+   * before the numbering migration was applied, carries no such field. Fall back
+   * to `seq`.
+   */
+  channelSeq?: number | null;
+  /**
+   * The per-thread count — `#1, #2, #3` inside one exchange.
+   *
+   * ⚠ `null` is a real state: the message belongs to no thread. Optional for the
+   * same reason as {@link ChannelMessage.channelSeq}.
+   */
+  threadSeq?: number | null;
   channelId: string;
   authorUserId: string | null;
   authorKind: ChannelAuthorKind;

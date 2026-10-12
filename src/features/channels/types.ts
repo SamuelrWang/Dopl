@@ -267,6 +267,29 @@ export type ChannelMessage = {
   id: string;
   /** Monotonic cursor — read / await paginate on `seq`. */
   seq: number;
+  /**
+   * **THE PER-CHANNEL NUMBER A PERSON CITES — `#12` IN THIS ROOM** (held
+   * migration `20261122120000`).
+   *
+   * ⚠ **AN IDENTITY, NOT A COUNT** — assigned at insert, never moved, gappy after
+   * a delete. Not a count of what is on screen either: the channel view drops
+   * lifecycle kinds and folds a thread into one card. {@link threadSeq} is the count.
+   * ⚠ **NEVER PASS IT TO `since=`.** `seq` above is unchanged and stays the
+   * table-wide cursor the account-wide read and workspace hold rest on.
+   * ⚠ **ABSENT AND `null` BOTH MEAN "NOT ANSWERED HERE"** — the migration is HELD,
+   * so every row reads `null` today and every renderer falls back to `seq`.
+   */
+  channelSeq?: number | null;
+  /**
+   * **THE PER-THREAD COUNT — `#1, #2, #3` INSIDE ONE EXCHANGE** (same migration).
+   *
+   * ⚠ **`null` IS A REAL STATE**: the row is in no thread. Only `metadata.taskId`
+   * earns one, and that tag is write-once, so this cannot go stale.
+   * ⚠ **THIS IS THE ONE THAT READS AS 1, 2, 3** — a thread-scoped read hides
+   * nothing and never folds (`service-artifacts-fold.ts › readNamesMessages`).
+   * Threads are small: median 2, max 103 (production, 2026-10-12).
+   */
+  threadSeq?: number | null;
   channelId: string;
   authorUserId: string | null;
   authorKind: MessageAuthorKind;
