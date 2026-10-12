@@ -86,6 +86,23 @@ export interface Channel {
 }
 import type { ChannelDelivery, ChannelWakeVerdict } from "./delivery-types.js";
 export type { ChannelDelivery, ChannelWakeVerdict };
+/**
+ * ONE RESOLVED CITATION on a message (grammar B).
+ *
+ * A citation is structured, not parsed: the author named the message it was
+ * citing in a field on the send, and the server turned that into a row id before
+ * storing it. Nothing reads a number out of prose to decide where one points.
+ */
+export interface ChannelMessageCite {
+    /** The cited message. ⚠ THE ONLY FIELD NAVIGATION SHOULD USE. */
+    messageId: string;
+    /** The cited row's table-wide `seq`. */
+    seq: number;
+    /** Its per-channel number, when the server has one. */
+    no?: number | null;
+    /** The thread it belongs to, when it is in one. */
+    thread?: string | null;
+}
 export interface ChannelMessage {
     id: string;
     /** Monotonic cursor — `read`/`await` return messages with a higher seq. */
@@ -109,6 +126,20 @@ export interface ChannelMessage {
      * same reason as {@link ChannelMessage.channelSeq}.
      */
     threadSeq?: number | null;
+    /**
+     * What this message cited, resolved by the server at write time.
+     *
+     * ⚠ **THREE STATES, AND `null` IS NOT `[]`.** `null` or absent means the row
+     * was not written under the structured-citation rule (an older row, or an older
+     * server) — read its prose `#NNNN` as a global `seq`, as clients always have.
+     * `[]` means it WAS written under the rule and cited nothing, so a number in
+     * its body is just a number. A populated list is the only case where a number
+     * in the body is a reference, and only for the entries named here.
+     *
+     * ⚠ `messageId` is the pointer; `no` and `seq` are the face. Navigate by the
+     * id — the numbers can mean different things in different rooms, the id cannot.
+     */
+    cites?: ChannelMessageCite[] | null;
     channelId: string;
     authorUserId: string | null;
     authorKind: ChannelAuthorKind;
@@ -201,98 +232,14 @@ export interface ChannelCreateInput {
     /** Peer's user id — required, and only used, when `direct` is true. */
     memberUserId?: string;
 }
-/**
- * One titled, mode-tagged exchange; transcript rides on `channel_messages`
- * (`metadata.taskId` = ChannelThread.id — wire key keeps the storage name).
- */
-export interface ChannelThread {
-    id: string;
-    channelId: string;
-    workspaceId: string;
-    title: string;
-    /** ⚠ LEGACY, UNREAD — see {@link ThreadStatus}. Four fields, one story. */
-    status: ThreadStatus;
-    outcome: ThreadOutcome | null;
-    mode: ThreadMode;
-    createdBy: string;
-    targetUserId: string | null;
-    createdAt: string;
-    updatedAt: string;
-    closedAt: string | null;
-    outcomeSummary: string | null;
-    /**
-     * When the thread last saw real activity — the newest message tagged for it,
-     * or its own `createdAt` when nobody has posted into it. ⚠ NOT `updatedAt`,
-     * which moves only when the ROW is patched.
-     *
-     * ⚠ ABSENT means THIS READ DID NOT DERIVE IT (`get_thread` loads one row and
-     * does not), never "no activity". Only the thread LIST carries it, and the
-     * list is ORDERED by it.
-     */
-    lastActivityAt?: string;
-}
-/**
- * One page of a channel's threads: the rows, most recently active first, plus
- * whether the server's ceiling clipped them.
- *
- * ⚠ `truncated` exists because threads never leave the list, so the read is
- * bounded and a clipped page that renders like an exhausted one asserts
- * something the read never established (INVARIANTS §9). Surface it; a caller
- * that drops it is claiming these are all of them.
- */
-export interface ChannelThreadPage {
-    threads: ChannelThread[];
-    truncated: boolean;
-}
 import type { ChannelSessionStateOwn } from "./session-types.js";
 export type { ChannelSessionState, ChannelSessionStateOwn, ChannelSessionsPage, SessionDetailKey, } from "./session-types.js";
-export interface ChannelThreadCreateInput {
-    title: string;
-    mode?: ThreadMode;
-    body: string;
-    toUserId?: string;
-    intent?: MessageIntent;
-    /**
-     * Idempotency key — re-sent create_thread with same id returns the existing
-     * thread instead of double-creating it (and double-spawning the responder's
-     * window). Mirrors `ChannelMessageInput.clientMsgId`.
-     */
-    clientMsgId?: string;
-    /**
-     * SPAWN-WITH-HANDOFF. Set by an EXTERNAL agent (Claude Desktop / Claude Code
-     * over MCP): the session driving this thread opens ON THE OPERATOR'S MACHINE
-     * instead of staying with the external session that created it. Absent/false
-     * → an external create opens nothing there. Server stamps it onto the opening
-     * message's reserved `metadata.handoff`, which the desktop reads.
-     */
-    handoff?: boolean;
-}
 /**
- * `createChannelThread` result: thread + `openingSeq`, the seq of the opening
- * request message the server posted — exactly the cursor the requester arms
- * `await` on. ⚠ Guessing it via `read limit=1` races the peer answering in
- * between: the "newest message" is then the reply, so the await starts one past
- * it and never sees what already arrived.
- *
- * `null` only for the idempotent short-circuit returning a thread created by
- * SOMEONE ELSE (no opening message).
+ * **THE THREAD SHAPES LIVE IN `channel-thread-types.ts`** (2026-10-12, the 500-line
+ * split) AND ARE RE-EXPORTED HERE VERBATIM: every caller already imports them
+ * from this module, so the barrel is their public name and no importer moved.
  */
-export interface ChannelThreadCreated {
-    thread: ChannelThread;
-    openingSeq: number | null;
-}
-/**
- * ⚠ TWO RESULT SHAPES ENDED HERE with thread closing (wiring plan Phase 4,
- * 2026-08-18): `ChannelThreadClosed` (thread + `echoSeq`, the seq of the
- * `task_finished` / `task_failed` marker a close posted) and
- * `ChannelThreadCloseProposed` (thread + `markerSeq` + the proposed outcome).
- *
- * The rule they both carried is live on {@link ChannelThreadCreated.openingSeq}
- * and is the reason they existed at all: **a write that also posts a message
- * hands its seq BACK.** Guessing one (last known seq + 1) once armed a hold past
- * a peer reply already in the channel and the wait never returned. `null` means
- * look it up, never "one past the last seq you saw".
- */
+export type { ChannelThread, ChannelThreadPage, ChannelThreadCreateInput, ChannelThreadCreated, } from "./channel-thread-types.js";
 export interface ChannelMessageInput extends ChannelEscalationFields {
     body: string;
     kind?: ChannelMessageKind;
