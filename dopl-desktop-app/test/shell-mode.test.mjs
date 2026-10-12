@@ -22,22 +22,16 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { between, fnOf, orderOf } from "./helpers/source-probe.mjs";
+// ⚠ THE LOADER IS SHARED WITH `shell-mode-channel-nav.test.mjs` (split 2026-10-12 at the §2
+// cap). Two copies of it would be two statements about shell-mode's dependency set.
+import { HERE, SHELL, INDEX, DEEP_LINK, loadShell } from "./helpers/shell-mode-harness.mjs";
 
 const require = createRequire(import.meta.url);
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const SHELL = M("shell-mode.js");
-const INDEX = M("index.js");
-// The deep-link half moved out of index.js when the `dopl://open` verb joined
-// the auth handoff and the file hit the 500-line cap. The properties pinned
-// below are unchanged; only the file holding them is.
-const DEEP_LINK = M("deep-link.js");
 
 const { resumeWatchTarget } = new Function(
   `${between(SHELL, "// ─── BEGIN SHELL-MODE-PURE", "// ─── END SHELL-MODE-PURE", "shell-mode pure block")}
@@ -78,23 +72,6 @@ test("createShellWindow is the ONE factory, and the gate is its only branch", ()
 });
 
 // ── THE SHELL IS BOUND AS AN APP WINDOW (wiring plan Phase 10, 2026-08-18) ──
-
-/** The real module, evaluated with a stub `require` — it has no module-scope dependencies. */
-function loadShell() {
-  const stub = (id) => {
-    if (id === "./update-required-window") {
-      return {
-        createUpdateRequiredWindow: () => ({ id: "update-screen", on() {}, show() {} }),
-        closeUpdateRequiredWindow: () => {},
-      };
-    }
-    if (id === "./deep-link-target") return { isSafeSegment: () => true };
-    throw new Error("unexpected require: " + id);
-  };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", SHELL)(stub, mod, mod.exports);
-  return mod.exports;
-}
 
 function shellHelpers({ blocked = false } = {}) {
   const registered = [];
@@ -274,80 +251,6 @@ test("navigation goes over the bridge, and nothing else", () => {
   assert.ok(!/guard\.load|appOrigin/.test(chan), "the remote URL load must be gone");
 });
 
-// ── PHASE 9: the notification lands ON the channel ──────────────────────────
-
-test("a clicked notification navigates to the CHANNEL, not just the page", () => {
-  // The "windowing inverts" ruling's focus-the-app half. The mechanism (show
-  // the window, push a route) already existed — what was missing was the
-  // channel, which every caller's `entry` had carried the whole time.
-  const chan = fnOf(SHELL, "navigateToChannels");
-  assert.match(chan, /function navigateToChannels\(segment, channelId, threadId, seq\)/);
-  assert.match(chan, /deps\.showMainWindow\(\)/, "the window comes up either way");
-  // A usable channel id deepens the route; anything else degrades to the page —
-  // and a usable THREAD id (2026-08-20) deepens it once more, as the `?thread=`
-  // SELECTION the channels page already reads. Same one segment rule for all three.
-  assert.match(chan, /if \(!isSafeSegment\(channelId\)\) return navigateTo\(page\);/);
-  // ⚠ **TWO SELECTIONS NOW, BUILT AS A LIST** (2026-09-20): `?thread=` and
-  // `?seq=`, the second so a clicked MENTION banner scrolls to the message it was
-  // about. The thread still goes through `isSafeSegment`; the seq is DIGITS,
-  // checked numerically rather than as a segment, because it is a bigint on the
-  // wire and `isSafeSegment` would be the wrong question about it.
-  assert.match(chan, /if \(isSafeSegment\(threadId\)\) params\.push\(`thread=\$\{threadId\}`\);/);
-  assert.match(
-    chan,
-    /if \(Number\.isSafeInteger\(Number\(seq\)\) && Number\(seq\) > 0\) params\.push\(`seq=\$\{Number\(seq\)\}`\);/,
-    "a seq reaching a URL must be a validated number, never caller text"
-  );
-  assert.match(chan, /const suffix = params\.length \? `\?\$\{params\.join\('&'\)\}` : '';/);
-  assert.match(chan, /navigateTo\(`\$\{page\}\/\$\{channelId\}\$\{suffix\}`\)/);
-  // The page is ONE named string, which is what made the Phase 12 cutover's
-  // rename an edit rather than a grep: `channels-v2` → `channels`, 2026-08-18.
-  assert.match(SHELL, /const CHANNELS_PAGE = 'channels';/);
-  // The retired route may be NAMED as history in a comment; it may not survive
-  // as a string this file could navigate to.
-  assert.ok(!/'channels-v2'/.test(SHELL), "the retired v2 route must not survive as a value");
-});
-
-test("both interpolated values pass the ONE segment rule, and it is not a local copy", () => {
-  // A channel id arrives on a server DTO and ends up inside a router path.
-  // INVARIANTS §11's rule is `deep-link-target.js`'s, and a second regex in
-  // this file would be a second answer to it — the drift the export exists to
-  // prevent. So: no character class here, and the check is required lazily so
-  // shell-mode keeps its module-scope dependency freedom.
-  const chan = fnOf(SHELL, "navigateToChannels");
-  assert.match(chan, /const \{ isSafeSegment \} = require\('\.\/deep-link-target'\);/);
-  assert.match(chan, /if \(!isSafeSegment\(segment\)\) return;/, "the segment is checked too");
-  assert.ok(
-    !/\[A-Za-z0-9\]|SLUG_RE|test\(channelId\)/.test(SHELL),
-    "shell-mode must not carry its own segment regex"
-  );
-  // …and the rule really is exported, so the require above resolves.
-  const target = require(join(HERE, "..", "main", "deep-link-target.js"));
-  assert.equal(typeof target.isSafeSegment, "function");
-  assert.equal(target.isSafeSegment("7f3a9c2e-1b4d-4e8a-9c1f-2d5b6a7c8e90"), true);
-  assert.equal(target.isSafeSegment("../etc"), false);
-  assert.equal(target.isSafeSegment(null), false);
-});
-
-test("the notification seam hands the channel over, and never invents one", () => {
-  // `targeting-window.js › openChannelForEntry` is the ONE seam all three
-  // notification producers reach (the inbound request, the silent FYI, the
-  // passive task-reply notice), which is why the destination is one channel
-  // route rather than a per-kind fork.
-  const TW = M("targeting-window.js");
-  const fn = fnOf(TW, "openChannelForEntry");
-  // ⚠ FOUR ARGUMENTS SINCE 2026-09-20 — the SEQ joined the thread so a clicked
-  // mention banner lands ON the message, not merely in the room. Both optionals
-  // are still the CALLER's claim or nothing: `|| null`, never a fabricated value.
-  assert.match(
-    fn,
-    /handlers\.openChannel\(\s*entry\.workspaceSegment,\s*\(entry\.channel && entry\.channel\.id\) \|\| null,\s*\(opts && opts\.threadId\) \|\| null,\s*\(opts && opts\.seq\) \|\| null\s*\)/,
-    "an entry with no channel must degrade to the page, never to a fabricated id — and the thread and seq are the CALLER's claim or nothing"
-  );
-  assert.match(fn, /if \(!handlers\.openChannel \|\| !entry \|\| !entry\.workspaceSegment\) return;/);
-  // index.js still wires this seam to the shell helper that grew the parameter.
-  assert.match(INDEX, /openChannel: navigateToChannels/);
-});
 
 test("the menu's Home routes the SPA to boot", () => {
   const fn = fnOf(INDEX, "loadApp");

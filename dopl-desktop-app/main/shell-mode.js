@@ -84,6 +84,36 @@ function makeShellHelpers(deps) {
     }
   }
 
+  /**
+   * ⚠ A CLICKED NOTIFICATION ROUTINELY ARRIVES AT A WINDOW THAT IS STILL LOADING, AND A BARE
+   * `navigateTo` LOSES THE ROUTE WHEN IT DOES (Samuel, 2026-10-12: *"clicking a mention
+   * notification brings Dopl into focus but leaves it on the overview page"*).
+   *
+   * Closing the window DESTROYS it while the app stays in the tray, so the common case for a
+   * background mention is the COLD one: `showMainWindow` → `createShellWindow` →
+   * `spa-window.js › createSpaWindow` → `loadFile`, which is asynchronous. `navigateTo` is a
+   * `webContents.send` and a send to a renderer that has not yet subscribed
+   * (`apps/desktop-ui/src/app.tsx › bridge.onNavigate`, a React effect) is dropped on the floor
+   * with NO error — so the SPA booted `/` → `BootPage` → `/{segment}` → the index redirect to
+   * `WORKSPACE_HOME_PATH` (`routes.tsx:74`, `'overview'`). The window came up, focused, on the
+   * overview page, exactly as reported, and nothing anywhere said the route had been lost.
+   *
+   * ⚠ ONE ANSWER TO "PUSH A ROUTE AT A COLD WINDOW", AND IT IS `deep-link.js › pushRoute` —
+   * the deep link has always had this problem (the link is what LAUNCHED the app) and that
+   * function is where it was solved: send once the document has loaded, then once more after
+   * the mount gap, because `did-finish-load` is the DOCUMENT's event and the subscription is a
+   * React effect a tick behind it. A second copy of that reasoning here would be a second
+   * answer for the two to drift over. Required LAZILY (the `deep-link-target` idiom below) so
+   * this file keeps its module-scope dependency freedom; a re-send is free, because navigating
+   * to where you already are is a no-op.
+   */
+  function pushWhenReady(path) {
+    return require('./deep-link').pushRoute(
+      { getMainWindow: deps.getMainWindow, navigateTo, diag: deps.diag },
+      path
+    );
+  }
+
   // Feature B: a clicked channel notification opens the app and navigates to
   // that workspace's Channels page, over the bridge (GAP-16's other half).
   //
@@ -106,7 +136,7 @@ function makeShellHelpers(deps) {
     const { isSafeSegment } = require('./deep-link-target');
     if (!isSafeSegment(segment)) return;
     const page = `/${segment}/${CHANNELS_PAGE}`;
-    if (!isSafeSegment(channelId)) return navigateTo(page);
+    if (!isSafeSegment(channelId)) return pushWhenReady(page);
     // `?thread=` is a SELECTION the channels page already reads (Phase 10); a
     // notification about a THREAD lands on the thread (Samuel, 2026-08-20).
     // ⚠ `?seq=` IS A SELECTION LIKE `?thread=`, NOT A ROUTE — the channels page
@@ -118,7 +148,7 @@ function makeShellHelpers(deps) {
     if (isSafeSegment(threadId)) params.push(`thread=${threadId}`);
     if (Number.isSafeInteger(Number(seq)) && Number(seq) > 0) params.push(`seq=${Number(seq)}`);
     const suffix = params.length ? `?${params.join('&')}` : '';
-    navigateTo(`${page}/${channelId}${suffix}`);
+    pushWhenReady(`${page}/${channelId}${suffix}`);
   }
 
   // 🔒 REVEAL, NEVER RE-ROUTE (Samuel, 2026-09-29): the three "open the app" doors (dock `activate`, tray
