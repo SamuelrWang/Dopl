@@ -228,6 +228,21 @@ export const CHANNEL_FANOUT_MAX_ADDRESSEES = 25;
  */
 export const CHANNEL_SEND_MAX_RECIPIENTS = 10;
 
+/**
+ * **HOW MANY MESSAGES ONE POST MAY CITE** (grammar B, 2026-10-12).
+ *
+ * ⚠ **IT BOUNDS A SERVER-SIDE RESOLUTION, NOT A STRING.** Every entry is looked
+ * up before the row is written, so the cap is the cost of the write: unbounded,
+ * a single send could ask the server to resolve a thousand numbers. Twenty is far
+ * past any honest citation — a post citing twenty messages is a summary, and a
+ * summary's references belong in its body.
+ *
+ * ⚠ **NOT `CHANNEL_SEND_MAX_RECIPIENTS` (10) AND NOT COUPLED TO IT.** That one
+ * bounds who a message REACHES, which costs a wake each; this bounds what it
+ * POINTS AT, which costs a lookup each. Two different costs, so two numbers.
+ */
+export const CHANNEL_CITES_MAX = 20;
+
 /** Default page size for a message read when `limit` is omitted. */
 export const DEFAULT_MESSAGE_LIMIT = 100;
 

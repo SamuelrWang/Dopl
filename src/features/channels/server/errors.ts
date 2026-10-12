@@ -280,3 +280,51 @@ export class LaunchIdentityAmbiguousError extends ChannelError {
     );
   }
 }
+
+/**
+ * **A CITATION NAMED A MESSAGE THIS CHANNEL DOES NOT HOLD** (grammar B, 2026-10-12).
+ *
+ * ⚠ **THE SEND IS REFUSED RATHER THAN THE CITATION DROPPED, AND THAT IS THE
+ * DELIBERATE HALF.** A dropped citation is a reference the author believes
+ * landed: the post is stored, reads back as prose, and the one thing it was
+ * pointing at is gone with nothing saying so. The nearest precedent cuts the
+ * other way on purpose — `taskId` IS silently stripped when it is not the
+ * poster's exchange, because a mistagged post is still a post worth keeping.
+ * A citation is not decoration; it is the message's argument.
+ *
+ * ⚠ **IT NAMES THE ENTRY**, because a post may carry up to
+ * `CHANNEL_CITES_MAX` of them and "one of your citations is wrong" is not
+ * actionable.
+ */
+export class ChannelCiteUnresolvedError extends ChannelError {
+  constructor(
+    public readonly entry: { no?: number; seq?: number; thread?: string }
+  ) {
+    const named =
+      entry.no !== undefined ? `no=${entry.no}` : `seq=${entry.seq}`;
+    const scoped = entry.thread ? ` in thread ${entry.thread}` : "";
+    super(
+      `Citation ${named}${scoped} names no message in this channel. ` +
+        `Cite a message you can read in this channel, or drop the entry.`
+    );
+  }
+}
+
+/**
+ * **A CITATION USED `no` BEFORE THE PER-CHANNEL NUMBERS EXIST.**
+ *
+ * ⚠ **AN EXPLICIT REFUSAL, NOT A SILENT FALLBACK TO `seq`.** The two namespaces
+ * disagree by the gap between a channel's own count and the table's, so quietly
+ * treating `no=12` as `seq=12` would resolve — to the wrong message, in some
+ * other room, with a pill confidently pointing at it. The column arrives with
+ * `supabase/migrations-held/20261122120000`; until it is applied the honest
+ * answer is that this namespace is not live yet.
+ */
+export class ChannelCiteNumberUnavailableError extends ChannelError {
+  constructor(public readonly no: number) {
+    super(
+      `Citation no=${no} uses per-channel numbering, which is not available yet ` +
+        `(the numbering migration is written but not applied). Cite by \`seq\` instead.`
+    );
+  }
+}
