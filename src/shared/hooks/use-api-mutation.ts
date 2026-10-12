@@ -64,7 +64,7 @@ type ApiQueryParams = ApiRequestOpts["query"];
  * TanStack's array-prefix rule, so `apiPathKey(path)` patches every workspace /
  * query-param variant of a resource in one entry.
  */
-export interface CachePatch {
+interface CachePatch {
   key: QueryKey;
   update: (cache: unknown) => unknown;
 }
@@ -129,7 +129,7 @@ export interface UseApiMutationConfig<TDraft, TData> {
 }
 
 /** What `onMutate` hands `onError` so a failure can put the cache back. */
-export interface MutationRollback {
+interface MutationRollback {
   snapshots: Array<[QueryKey, unknown]>;
 }
 
@@ -254,7 +254,7 @@ export function useApiMutation<TDraft, TData>(
   return useApiMutationWith<TDraft, TData>(apiRequest, config);
 }
 
-export interface RefetchGate {
+interface RefetchGate {
   /** A realtime change arrived: refetch now, or defer past the current write. */
   signal: () => void;
   /** Hand to `settleWith` so a write holds the deferred refetch open. */

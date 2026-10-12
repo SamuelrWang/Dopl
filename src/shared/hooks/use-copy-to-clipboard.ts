@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const RESET_MS = 1500;
 
-export interface UseCopyToClipboardResult {
+interface UseCopyToClipboardResult {
   /** True while any target is in its post-copy flash. */
   copied: boolean;
   /** The id passed to `copy` — for surfaces with several copy targets. */

@@ -25,7 +25,7 @@
  * does not resolve.
  */
 
-export interface PersistedScope {
+interface PersistedScope {
   /** Whose memory. Undefined ⇒ an `anon` bucket, never another user's. */
   userId: string | undefined;
   /** Which workspace; null for account-wide state (/home has no workspace). */
@@ -34,7 +34,7 @@ export interface PersistedScope {
   key?: string;
 }
 
-export interface PersistedStateSpec<T> {
+interface PersistedStateSpec<T> {
   /** Stable name, part of the storage key (`dopl.<name>:…`). Never rename casually. */
   name: string;
   /** Bump when the stored shape changes; `decode` gets the old version to migrate. */
@@ -57,7 +57,7 @@ export interface PersistedStateSpec<T> {
   requireUser?: boolean;
 }
 
-export interface PersistedState<T> {
+interface PersistedState<T> {
   read(scope: PersistedScope): T;
   write(scope: PersistedScope, value: T): void;
   /** Read-modify-write. Return the same object to skip the write. */
