@@ -16,6 +16,7 @@ import { DisplayCard } from "./display-card";
 import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
 import { MessageMarkdown, TextOnlyLinks, bodyContextOf } from "./message-markdown";
+import { MessageCiteChips } from "./message-cite-chips";
 import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import { messageTags } from "../lib/recipient-tags";
@@ -272,6 +273,8 @@ function Message({
     >
       {/* The whole body at once: markdown blocks (fences, lists) span lines. */}
       {body}
+      {/* ⚠ AFTER the body, because it is about what the body did NOT say. */}
+      <MessageCiteChips cites={row.cites} body={row.body} onJumpToSeq={onJumpToSeq} />
       {row.source && <DevicePill source={row.source} />}
     </AuthoredRow>
   );

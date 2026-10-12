@@ -75,8 +75,20 @@ function renderBody(
   return { onJumpToSeq };
 }
 
+/**
+ * The IN-BODY pills only.
+ *
+ * ⚠ **CHIPS ARE EXCLUDED BY ATTRIBUTE, NOT BY NAME.** `message-cite-chips.tsx`
+ * renders the citations a body never mentioned, and it gives them the SAME
+ * accessible name on purpose — both controls say "go to message" to a screen
+ * reader. So they are indistinguishable by role and name, and a helper that
+ * matched on name alone counted a chip as a pill: that is exactly what happened
+ * when the chip row landed, and two correct refusals here went red.
+ */
 function pills(): HTMLElement[] {
-  return screen.queryAllByRole("button", { name: /Go to message/ });
+  return screen
+    .queryAllByRole("button", { name: /Go to message/ })
+    .filter((el) => !el.hasAttribute("data-cite-chip"));
 }
 
 /** The rendered row's whole text — the body is split into leaves either way. */

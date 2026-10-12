@@ -36,7 +36,7 @@ import type { BodyContext } from "./message-markdown-context";
  * press the app expresses everywhere — and `tabular-nums`, so a column of
  * citations does not jitter.
  */
-const PILL =
+export const CITE_PILL =
   "mx-0.5 inline-flex items-center rounded-full bg-bg-inset px-1.5 py-px align-baseline text-micro tabular-nums text-text-secondary transition-transform duration-150 hover:bg-surface-raised-1 hover:text-text-primary active:translate-y-px motion-reduce:transition-none";
 
 /**
@@ -113,7 +113,7 @@ function CitedRefText({
             type="button"
             onClick={() => jump(cite.seq)}
             aria-label={`Go to message ${raw.replace(/^seq /i, "#")}`}
-            className={cn(PILL, "cursor-pointer")}
+            className={cn(CITE_PILL, "cursor-pointer")}
           >
             {raw}
           </button>
@@ -152,7 +152,7 @@ function LegacyRefText({ text, ctx }: { text: string; ctx: BodyContext }) {
             // to a screen reader, and the one thing a reader cannot see here is
             // that it navigates.
             aria-label={`Go to message ${seq}`}
-            className={cn(PILL, "cursor-pointer")}
+            className={cn(CITE_PILL, "cursor-pointer")}
           >
             {raw}
           </button>

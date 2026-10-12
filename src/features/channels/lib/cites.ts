@@ -38,6 +38,11 @@
  * draws a message.
  */
 
+import {
+  MESSAGE_REF_TOKEN_ANY_RE,
+  messageRefNumber,
+} from "./message-refs";
+
 /** `metadata.cites` — the resolved citations, server-written. */
 export const CITES_METADATA_KEY = "cites";
 
@@ -126,4 +131,43 @@ export function findCite(
     cites.find((c) => c.seq === n) ??
     null
   );
+}
+
+/** What a citation is LABELLED with: its per-channel number when there is one. */
+export function citeLabel(cite: ResolvedCite): string {
+  return `#${cite.no ?? cite.seq}`;
+}
+
+/**
+ * **THE CITATIONS THIS BODY NEVER MENTIONS** — what a chip row has to show
+ * (2026-10-12).
+ *
+ * ⚠ **A CITED MESSAGE WITH NO AFFORDANCE IS THE HOLE GRAMMAR B OPENS.** Under the
+ * old rule a reference existed only if the author typed the number, so there was
+ * nothing to miss. Now the field is the reference: an agent can cite three
+ * messages and write "as discussed above", and without this the reader is told
+ * nothing and can reach nothing.
+ *
+ * ⚠ **CODE IS NOT PROSE, AND THE TIE IS BROKEN TOWARD REACHABLE.** Fenced blocks
+ * and inline spans are removed before scanning, because the body renderer does
+ * not draw pills inside them — so a number that appears ONLY in a code sample is
+ * not an affordance, and counting it as one would leave that citation with no way
+ * in. The cost of the other error is a chip beside a pill that says the same
+ * thing, which is redundant rather than broken.
+ *
+ * ⚠ **IT MATCHES THROUGH `findCite`, NOT BY NUMBER**, so the chip row and the
+ * pills can never disagree about what counts as mentioned: one rule, asked twice.
+ */
+export function citesNotInBody(
+  cites: readonly ResolvedCite[],
+  body: string
+): ResolvedCite[] {
+  const prose = body.replace(/```[\s\S]*?```/g, " ").replace(/`[^`\n]*`/g, " ");
+  const named = new Set<string>();
+  for (const token of prose.match(MESSAGE_REF_TOKEN_ANY_RE) ?? []) {
+    const n = messageRefNumber(token);
+    const hit = n === null ? null : findCite(cites, n);
+    if (hit !== null) named.add(hit.messageId);
+  }
+  return cites.filter((c) => !named.has(c.messageId));
 }
