@@ -24,6 +24,7 @@ import {
   REAL_SAFE,
   loadDeepLink,
   loadShell,
+  makeClock,
 } from "./helpers/shell-mode-harness.mjs";
 
 const require = createRequire(import.meta.url);
@@ -87,7 +88,7 @@ test("a clicked notification navigates to the CHANNEL, not just the page", () =>
  * @param {{loading?: boolean, existing?: boolean}} o `loading` models a window whose document has
  *   not finished loading, which is every freshly built one.
  */
-function navCtx({ loading = false, existing = true } = {}) {
+function navCtx({ loading = false, existing = true, deepLink = null } = {}) {
   const sent = [];
   /** `did-finish-load` subscribers, so a test can let the document finish. */
   const onceHandlers = [];
@@ -105,7 +106,7 @@ function navCtx({ loading = false, existing = true } = {}) {
   let mainWindow = existing ? makeWin(loading) : null;
   // ⚠ THE REAL SEGMENT RULE here too, so `null` really is rejected and a route below can never
   // read `?thread=null` as a pass.
-  const helpers = loadShell(REAL_SAFE).makeShellHelpers({
+  const helpers = loadShell(REAL_SAFE, deepLink).makeShellHelpers({
     getMainWindow: () => mainWindow,
     setMainWindow: (w) => { mainWindow = w; },
     // The real factory kicks off an async load, so a window it just built IS loading.
@@ -144,6 +145,40 @@ test("…and the same holds for a window that exists but is still loading", () =
   assert.deepEqual(ctx.sent, []);
   ctx.finishLoad();
   assert.deepEqual(ctx.sent, [`/${SEG}/channels/${CHAN}?thread=thr-9&seq=42`]);
+});
+
+test("the cold push is sent TWICE — once on load, once after the mount gap", () => {
+  // 🔒 REVIEW 34's GAP. Deleting `deep-link.js`'s `setTimeout(..., MOUNT_GAP_MS)` re-send left
+  // this suite 8/8 green while INVARIANTS §11 claimed both sends were pinned. The second send is
+  // not belt-and-braces: `did-finish-load` is the DOCUMENT's event and `bridge.onNavigate` is a
+  // React effect a tick or so behind it, so the FIRST send can still land before anyone is
+  // listening. One send is the original bug with a smaller window.
+  //
+  // ⚠ THE CLOCK IS A CLOSURE PARAMETER, not a patched global: this case owns the timer queue for
+  // its own `deep-link` instance and leaks nothing into the others.
+  const clock = makeClock();
+  const ctx = navCtx({ existing: false, deepLink: loadDeepLink({ timer: clock.setTimeout }) });
+  const route = `/${SEG}/channels/${CHAN}?seq=1759`;
+
+  ctx.helpers.navigateToChannels(SEG, CHAN, null, 1759);
+  assert.deepEqual(ctx.sent, [], "nothing before the document is up");
+
+  ctx.finishLoad();
+  // Assert the first send BEFORE touching the clock, so a regression fails here and not later.
+  assert.deepEqual(ctx.sent, [route], "the load send");
+  // CONTROL: a case that advances a clock must first prove a timer was scheduled at all,
+  // otherwise it would pass against a module that schedules nothing.
+  assert.equal(clock.pending(), 1, "the re-send really was scheduled");
+  const [gap] = clock.delays();
+  assert.ok(gap > 0, `the re-send must be DELAYED, got ${gap}ms`);
+
+  // Just short of the gap: still one. This is what makes "after the mount gap" mean something.
+  assert.equal(clock.advance(gap - 1), 0, "nothing is due yet");
+  assert.deepEqual(ctx.sent, [route], "still only the load send");
+
+  assert.equal(clock.advance(gap), 1, "the re-send fires");
+  assert.deepEqual(ctx.sent, [route, route], "EXACTLY twice, same route both times");
+  assert.equal(clock.pending(), 0, "and it does not reschedule itself");
 });
 
 test("a WARM window is pushed immediately — the fix must not delay the ordinary click", () => {
