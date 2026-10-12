@@ -167,21 +167,41 @@ function deliver(workspaceId, row) {
 /** Workspaces logged as push-DOWN; the line is edge-triggered. */
 const pollDegraded = new Set();
 
-async function pollWorkspace(wsId) {
+// ⚠ THE BACKSTOP'S TIMING (2026-10-11, measured: KB codebase-cleanup sectors/D08 §Backlog). Done
+// serially, one slow GET (15s timeout) delayed every later workspace: with 21 armed, the 9th GET
+// started at 120s = `LAUNCH_DIRECTIVE_TTL_MS`, so a dropped frame there could expire unseen. So the
+// GETs run at most POLL_CONCURRENCY at once; `handle()` still runs one row at a time, in workspace
+// order then row order, exactly as before (a spawn is never raced against another spawn).
+const POLL_CONCURRENCY = 4;
+
+/** One workspace's pending rows; [] on any failure (the backstop is best-effort by construction). */
+async function fetchPending(wsId) {
   try {
     const res = await apiFetch(wire.ROUTES.pending, {
       method: 'GET', workspaceId: wsId, timeoutMs: HTTP_TIMEOUT_MS, noStore: true,
     });
-    if (!res || !res.ok) return;
+    if (!res || !res.ok) return [];
     const body = await res.json().catch(() => null);
     const rows = (body && (body.directives || body.rows)) || [];
-    if (!Array.isArray(rows)) return;
-    for (const row of rows) await handle(row, wsId);
-  } catch (_err) { /* the backstop is best-effort by construction */ }
+    return Array.isArray(rows) ? rows : [];
+  } catch (_err) { return []; }
 }
 
-async function poll() {
-  if (!armed) return;
+/** One promise per workspace, in list order; at most `limit` GETs in flight at once. */
+function fetchAllBounded(list, limit) {
+  const slots = list.map(() => { let resolve; const p = new Promise((r) => { resolve = r; }); return { p, resolve }; });
+  let next = 0;
+  async function worker() {
+    while (next < list.length) {
+      const i = next++;
+      slots[i].resolve(await fetchPending(list[i]));
+    }
+  }
+  for (let k = 0; k < Math.min(limit, list.length); k++) void worker();
+  return slots.map((x) => x.p);
+}
+
+async function runPass() {
   const list = (deps.workspaces && deps.workspaces()) || [];
   for (const wsId of list) {
     const healthy = isHealthy(wsId);
@@ -192,8 +212,25 @@ async function poll() {
       pollDegraded.delete(wsId);
       diag('launch-directives: push recovered for', wsId, '— the poll is a reconcile again');
     }
-    await pollWorkspace(wsId);
   }
+  const pending = fetchAllBounded(list, POLL_CONCURRENCY);
+  for (let i = 0; i < list.length; i++) {
+    const rows = await pending[i];
+    // As before: a throw stops THIS workspace's remaining rows, never the pass.
+    try { for (const row of rows) await handle(row, list[i]); } catch (_err) { /* best-effort */ }
+  }
+}
+
+// SINGLE-FLIGHT: a tick that lands while a pass is still running joins it instead of starting a
+// second one (the interval is 60s; a slow pass used to overlap the next tick).
+let passInFlight = null;
+
+function poll() {
+  if (!armed) return Promise.resolve();
+  if (passInFlight) return passInFlight;
+  const pass = runPass().finally(() => { if (passInFlight === pass) passInFlight = null; });
+  passInFlight = pass;
+  return pass;
 }
 
 /** An unreadable health signal reads as down (only the log line depends on it). */
@@ -239,6 +276,7 @@ function refresh() {
 function stop() {
   armed = false;
   pollDegraded.clear();
+  passInFlight = null; // a stale pass never answers the next start's poll
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   decided.clear();
   inflight.clear();
