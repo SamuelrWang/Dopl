@@ -69,6 +69,7 @@ import {
 import type { AuthorIndex } from "./view-model";
 // ⚠ SPLIT ON THE 500-LINE CAP (2026-09-05): the shared shape and the mention leaf.
 import type { BodyContext } from "./message-markdown-context";
+import type { MessageCites } from "../lib/cites";
 import { MentionText } from "./message-markdown-mentions";
 import { normalizePipeTables } from "./message-markdown-tables";
 
@@ -98,6 +99,8 @@ export interface BodyContextInput {
   newestSeq?: number | null;
   /** Jump the transcript to a cited message. ⚠ ABSENT = citations stay plain text. */
   onJumpToSeq?: (seq: number) => void;
+  /** The row's resolved citations — three states, see {@link BodyContext.cites}. */
+  cites?: MessageCites;
 }
 
 /**
@@ -114,6 +117,7 @@ export function bodyContextOf({
   textClassName = "",
   newestSeq = null,
   onJumpToSeq,
+  cites,
 }: BodyContextInput): BodyContext {
   return {
     handles: buildMentionIndex([...index.byId.values()]),
@@ -130,6 +134,10 @@ export function bodyContextOf({
     text: textClassName,
     newestSeq,
     onJumpToSeq,
+    // ⚠ PASSED THROUGH, NEVER DERIVED: the DTO decided the state from the stamp
+    // (`server/dto-cites.ts`), and a component re-reading `metadata.cites` would
+    // be the second reader of a peer-typed key.
+    cites,
   };
 }
 

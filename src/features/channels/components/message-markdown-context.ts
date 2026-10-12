@@ -9,6 +9,7 @@
 import type { buildMentionIndex } from "../lib/mentions";
 import type { AgentMentionIndex } from "../lib/agent-mentions";
 import type { AuthorIndex } from "./view-model";
+import type { MessageCites } from "../lib/cites";
 
 /** What every leaf and block needs: the roster, whether this row tags me, and
  *  the caller's two class halves (rules 4 and 5). */
@@ -36,4 +37,12 @@ export interface BodyContext {
    * pill that cannot navigate must not look like it can.
    */
   onJumpToSeq?: (seq: number) => void;
+  /**
+   * **WHAT THIS MESSAGE CITED — AND WHETHER IT WAS WRITTEN UNDER THE RULE**
+   * (grammar B). Three states: `null`/absent is a legacy row (prose `#NNNN`
+   * pills), `[]` is "written under the rule, cited nothing" (no pills at all),
+   * a list is the allowlist. ⚠ PER MESSAGE, never per pane — `bodyContextOf`
+   * runs for each row, and a shared ctx would lend one row another's citations.
+   */
+  cites?: MessageCites;
 }

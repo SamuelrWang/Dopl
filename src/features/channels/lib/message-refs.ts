@@ -53,6 +53,42 @@ export function messageRefSeq(token: string): number | null {
 }
 
 /**
+ * **THE SAME TOKEN WITHOUT THE TWO-DIGIT FLOOR** — for a body whose citations
+ * the SERVER has already named (grammar B, Samuel's card #4401, 2026-10-12).
+ *
+ * ⚠ **THE FLOOR WAS A GUESS, AND THE ALLOWLIST REPLACED THE NEED TO GUESS.**
+ * `#1` is refused above because a one-digit number in prose is a rank or a list
+ * item and the renderer had no way to know better — "my #1 priority" became a
+ * dead pill. When a message carries a resolved citation list, the question is no
+ * longer "does this look like a reference" but "is this number one the author
+ * actually cited", which is a lookup. So `#7` is a live pill here and `#1` in a
+ * body that cited nothing is plain text — which is the behaviour the floor was
+ * approximating, done exactly.
+ *
+ * ⚠ **EVERY OTHER REFUSAL IS KEPT VERBATIM**: no letter or `#` before the hash
+ * (so `#fff`, `##2` and a markdown heading cannot open one), no word character
+ * or decimal tail after the digits (so `#17.59` is a version, not a citation).
+ * Only the `{2,}` quantifier differs, because only the floor was a guess.
+ */
+export const MESSAGE_REF_TOKEN_ANY_RE =
+  /((?<![\w#])#\d+(?!\w|\.\d)|(?<![\w])seq \d+(?!\w|\.\d))/gi;
+
+/**
+ * The number a token names at ANY digit length, or `null`.
+ *
+ * ⚠ **"NUMBER", NOT "SEQ", AND THE NAME IS THE POINT.** In an allowlisted body
+ * the digits may be a per-channel number or a table-wide `seq` — the author's
+ * spelling, matched against both by `lib/cites.ts › findCite`. Calling it a seq
+ * here would re-introduce the namespace question this grammar deleted.
+ */
+export function messageRefNumber(token: string): number | null {
+  const m = /^(?:#|seq )(\d+)$/i.exec(token.trim());
+  if (m === null) return null;
+  const n = Number(m[1]);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/**
  * **IS THIS SEQ SOMETHING THIS CHANNEL COULD HOLD** — the second gate.
  *
  * ⚠ **`newestSeq` IS THE CEILING AND IT IS THE WHOLE POINT.** `seq` is
