@@ -247,6 +247,9 @@ function Message({
       // Passed through, never decided here: `isCitableSeq` checks against the pane's ceiling.
       newestSeq={newestSeq}
       onJumpToSeq={onJumpToSeq}
+      // ⚠ PER ROW, and that is the point: the allowlist belongs to THIS message.
+      // A ctx built once for the pane would lend one row another's citations.
+      cites={row.cites}
     />
   );
   return (
