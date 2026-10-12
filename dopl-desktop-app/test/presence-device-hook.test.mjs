@@ -98,13 +98,20 @@ test("sleep() never waits on the device hook (suspend stays fire-and-forget)", a
   assert.equal(await h.presence.sleep("suspend"), "ok");
 });
 
-test("quit-guard races listener.stop()'s promise inside FLUSH_DEADLINE_MS (unchanged 1500ms)", () => {
+test("quit-guard BOUNDS listener.stop()'s promise by FLUSH_DEADLINE_MS (unchanged 1500ms)", () => {
   const { readFileSync } = require("node:fs");
   const Q = readFileSync(new URL("../main/quit-guard.js", import.meta.url), "utf8");
   const L = readFileSync(new URL("../main/channel-listener.js", import.meta.url), "utf8");
   assert.match(Q, /const FLUSH_DEADLINE_MS = 1500;/);
   assert.match(Q, /awayPost = deps\.listener\.stop\(\)/);
-  assert.match(Q, /awayPost \|\| Promise\.resolve\(\)/);
+  // ⚠ 2026-10-12: the away post is now bounded BY NAME beside the end notice and the state push
+  // rather than `allSettled`-ed with one of them (`quit-guard.js › teardown`). It still shares
+  // the SAME FLUSH_DEADLINE_MS, which is the property this test exists for; the `awayPost ||
+  // Promise.resolve()` guard is gone because `withDeadline(Promise.resolve(null))` already
+  // resolves immediately for a listener that returned nothing.
+  assert.match(Q, /bound\(\(\) => awayPost, 'away post'\)/);
+  assert.match(Q, /withDeadline\(\s*\n?\s*Promise\.resolve\(p\)/,
+    "every one of the three is bounded through F-700's primitive, not a hand-rolled race");
   assert.match(L, /const away = presence\.stop\(\);[\s\S]*?return away;/);
 });
 
