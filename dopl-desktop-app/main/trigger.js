@@ -19,7 +19,7 @@ const { profileLabel, profileHint } = require('./tool-profiles');
 // same banner underneath (`notification-route.js › raiseActionable`).
 // The shared passive-mention copy. ⚠ No cycle: task-notify requires targeting + the route, never
 // this module.
-const { mentionNotice } = require('./task-notify');
+const { mentionNotice, mentionAuthorLabel } = require('./task-notify');
 const { postCourtesy } = require('./channel-post');
 const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
 const outcomes = require('./trigger-outcomes');
@@ -37,7 +37,7 @@ function taskIdFor(entry, m) {
  * A mention (the 'fyi' verdict, `targeting.mentionsMe`): a silent banner, never a spawn. Its click
  * lands on the message (thread + seq), which `use-message-jump.ts` scrolls to.
  */
-function sendFyi(entry, m) {
+function sendFyi(entry, m, myUserId) {
   // The Notifications tab's switch for this event (mention / decision / direct message). Mutes the
   // BANNER only: the Tags inbox and the thread still hold the message.
   if (!notificationPrefs.allowsMessage(m, entry)) {
@@ -47,7 +47,12 @@ function sendFyi(entry, m) {
   // ⚠ ONE BUILDER, TWO CALL SITES. A tag inside a thread reaches `task-notify.js` instead of
   // here (classify ranks 'task-reply' above 'fyi'), and both must read the same, so the copy
   // lives in `task-notify.js › mentionNotice` — pure, and tested without electron.
-  const notice = mentionNotice(m, entry.channel.name, io.displayNameFor(m.authorUserId));
+  // ⚠ THE AUTHOR LABEL IS BUILT FROM THE MESSAGE, not from the author id alone. An agent posts
+  // under its operator's `author_user_id`, so `displayNameFor` alone credited a PERSON for a
+  // machine's words — "Samuel Wang mentioned you" for his own agent's post (Samuel, 2026-10-12).
+  // `myUserId` is what separates my agent from a peer's; it comes from the listener, which has
+  // already resolved it for `classify` (`listener-messages.js › dispatchMessage`).
+  const notice = mentionNotice(m, entry.channel.name, mentionAuthorLabel(m, io.displayNameFor(m.authorUserId), myUserId));
   // ⚠ ROUTED, NOT RAISED DIRECTLY (Samuel's spec, 2026-10-09). `mention` and `decision` are both
   // "Mac + popup", which resolves to ONE surface at raise time — the toast while Dopl is in
   // front, the OS banner while it is away (`notification-route.js`). This call site no longer
