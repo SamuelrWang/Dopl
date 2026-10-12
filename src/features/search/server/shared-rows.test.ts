@@ -42,6 +42,9 @@ const caller = (over: Partial<SearchCaller> = {}): SearchCaller => ({
     [WS, "member"],
     [WS_TOO, "member"],
   ]),
+  // Unlocked unless a case says otherwise; the locked grant arm is pinned end to end in
+  // `fence.test.ts` ("a grant reaches a locked credential only from inside its lock").
+  lock: null,
   ...over,
 });
 

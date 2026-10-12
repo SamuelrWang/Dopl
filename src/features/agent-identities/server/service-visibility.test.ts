@@ -9,6 +9,9 @@ import { meetsMinRole } from "@/features/workspaces/types";
 vi.mock("@/shared/tenancy/resource-grant-reach", async (orig) =>
   (await import("./service-writes-fixtures")).noGrantsMock(orig)
 );
+vi.mock("@/shared/tenancy/resolve-resource", async (orig) =>
+  (await import("./service-writes-fixtures")).credentialLockMock(orig)
+);
 vi.mock("./repository", async () => (await import("./service-writes-fixtures")).repoMock());
 
 import * as repo from "./repository";

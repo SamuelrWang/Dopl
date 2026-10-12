@@ -26,8 +26,19 @@ vi.mock("@/shared/tenancy/resource-grant-reach", async (importOriginal) => ({
   grantedResourceIds: vi.fn(async () => new Set<string>()),
 }));
 
+// Every context here is container-LOCKED, so `baseGrantsFor` now asks `credentialLockFor` for the
+// lock set before its grant read (Batch 11) — one real query, `findHomeSpaceId`. It answers NO home
+// space, so the lock is the container alone and no case's outcome moves.
 vi.mock("@/shared/supabase/admin", () => ({
-  supabaseAdmin: () => ({ __marker: "admin-client" }),
+  supabaseAdmin: () => {
+    const query: Record<string, unknown> = {};
+    Object.assign(query, {
+      select: () => query,
+      eq: () => query,
+      maybeSingle: async () => ({ data: null, error: null }),
+    });
+    return { __marker: "admin-client", from: () => query };
+  },
 }));
 
 vi.mock("./repository-audience", () => ({

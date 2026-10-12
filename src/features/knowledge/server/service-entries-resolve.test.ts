@@ -29,6 +29,9 @@ vi.mock("./service-audience", () => ({
 }));
 vi.mock("@/shared/tenancy/resolve-resource", () => ({
   resolveResource: vi.fn(async () => null),
+  // `null` = UNLOCKED, which every context here is: `baseGrantsFor` asks for the credential lock
+  // before its grant read (Batch 11), and this file's cases turn on the matrix, not the lock.
+  credentialLockFor: vi.fn(async () => null),
 }));
 
 import * as repo from "./repository";

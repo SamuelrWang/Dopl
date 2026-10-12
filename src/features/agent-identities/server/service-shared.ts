@@ -93,17 +93,32 @@ const EMPTY_SHARE_CTX: IdentityShareCtx = {
   grantedIds: NO_GRANTS,
 };
 
+/**
+ * The identity rows lent to a scope the caller is in, {@link needsGrantArm}-narrowed.
+ * ⚠ WITH THE LOCK (Batch 11, #3610 class): a locked credential reaches a grant only through a scope
+ * inside its lock, so an identity that lives in the locked container but is lent only to a scope
+ * outside it is not seen. Unlocked: the same 3-argument call as before, and no home-space probe.
+ */
+async function identityGrantsFor(
+  ctx: AgentIdentityContext,
+  rows: readonly AgentIdentity[]
+): Promise<GrantedResourceIds> {
+  const ids = rows.filter((t) => needsGrantArm(ctx, t)).map((t) => t.id);
+  // Before `credentialLockFor`: nothing to ask about costs no query (`grantedResourceIds` agrees).
+  if (ids.length === 0) return NO_GRANTS;
+  const lock = await credentialLockFor(ctx);
+  return lock
+    ? grantedResourceIds(ctx.userId, "agent_identity", ids, { lock })
+    : grantedResourceIds(ctx.userId, "agent_identity", ids);
+}
+
 export async function shareCtxForIdentities(
   ctx: AgentIdentityContext,
   rows: AgentIdentity[]
 ): Promise<IdentityShareCtx> {
   const teamScoped = rows.filter((t) => t.visibility === "team");
   // The grant read runs even with no team-scoped row: a lent row is usually `private`.
-  const grantedIds = await grantedResourceIds(
-    ctx.userId,
-    "agent_identity",
-    rows.filter((t) => needsGrantArm(ctx, t)).map((t) => t.id)
-  );
+  const grantedIds = await identityGrantsFor(ctx, rows);
   if (teamScoped.length === 0) {
     return grantedIds === NO_GRANTS
       ? EMPTY_SHARE_CTX
