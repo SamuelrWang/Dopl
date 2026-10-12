@@ -5,6 +5,7 @@ import {
   NO_GRANTS,
   type GrantedResourceIds,
 } from "@/shared/tenancy/resource-grant-reach";
+import { credentialLockFor } from "@/shared/tenancy/resolve-resource";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type {
   AgentIdentity,
@@ -257,7 +258,13 @@ export async function resolveVisibleKnowledgeBases(
     needsTeams
       ? repo.listTeamIdsForUser(ctx.workspaceId, ctx.userId)
       : Promise.resolve([]),
-    grantedResourceIds(ctx.userId, "knowledge_base", [...grantableIds]),
+    // ⚠ WITH THE LOCK (Batch 11): a token locked to A must not read, through an identity lent
+    // into A, a base whose only grant is to a scope outside its lock (`credentialLockFor`).
+    credentialLockFor(ctx).then((lock) =>
+      lock
+        ? grantedResourceIds(ctx.userId, "knowledge_base", [...grantableIds], { lock })
+        : grantedResourceIds(ctx.userId, "knowledge_base", [...grantableIds])
+    ),
   ]);
   const grantedTeamsByBase = new Map<string, string[]>();
   for (const g of grants) {
