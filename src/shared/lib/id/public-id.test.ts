@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PUBLIC_ID_LENGTH, generatePublicId } from "./public-id";
+import { PUBLIC_ID_LENGTH } from "./constants";
+import { generatePublicId } from "./public-id";
 
 describe("generatePublicId", () => {
   it("returns a 12-character string", () => {

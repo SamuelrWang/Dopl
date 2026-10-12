@@ -2,8 +2,6 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { PUBLIC_ID_LENGTH } from "./constants";
 
-export { PUBLIC_ID_LENGTH };
-
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 /**
