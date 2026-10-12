@@ -5,6 +5,14 @@ import { Building2, Check, Lock, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Popover } from "./popover-menu";
 
+/**
+ * ⚠ EXPORTED WITH NO READER TODAY, AND THAT IS A DECISION (2026-10-12, X01).
+ * `ShareScope` and `ShareScopeTeamsState` below are the `scope` and `teams`
+ * PROP SHAPES of the two components this file exports, so they are kit API:
+ * every caller currently passes a literal or its own feature-local scope type
+ * (`chats/scope.ts › ChatScope`, `skills/scope.ts › SkillScope`), which is why
+ * a reader grep comes back empty. Keep them exported.
+ */
 export type ShareScope = "private" | "team" | "workspace";
 
 type ShareScopeTeam = {
