@@ -295,6 +295,53 @@ describe("4. the agent view is fed an inbound lane", () => {
     expect(senders.some((s) => agents.has(s ?? ""))).toBe(true);
   });
 
+  /**
+   * **THE PAINT CARRIER** (@received-banner-color's shape, 2026-10-12). The fields do not
+   * exist on `DesktopNarrationEntry` on this branch yet, so these read through a cast and
+   * assert the SHAPE only.
+   *
+   * ⚠ **AFTER THAT BRANCH MERGES, THESE BECOME THE PAINT ASSERTION**: render the lane and
+   * check `data-stream-inbound-paint` is `human` for the member's post and `agent` for each
+   * agent's. Until then this is the strongest thing available, and it is worth having —
+   * without it the three fields are write-only and nothing would notice a typo in a key.
+   */
+  describe("the banner's paint carrier", () => {
+    const inbound = entries.filter((e) => e.lane === "inbound");
+    /** The fields land with the banner branch; read through a cast until they do. */
+    const carrier = (entry: (typeof inbound)[number]) =>
+      entry as unknown as {
+        authorKind?: string;
+        senderAgentName?: string;
+        senderColor?: string;
+      };
+
+    it("says whether every arrival came from a member or an agent", () => {
+      expect(inbound.length).toBeGreaterThan(0);
+      for (const entry of inbound) {
+        expect(["user", "agent"]).toContain(carrier(entry).authorKind);
+      }
+    });
+
+    it("carries a name and a bank colour on an agent's arrival", () => {
+      const fromAgents = inbound.filter((e) => carrier(e).authorKind === "agent");
+      expect(fromAgents.length).toBeGreaterThan(0);
+      for (const entry of fromAgents) {
+        const { senderAgentName, senderColor } = carrier(entry);
+        expect((senderAgentName ?? "").trim()).not.toBe("");
+        expect(isAgentColorKey(senderColor), `${senderColor}`).toBe(true);
+      }
+    });
+
+    it("omits both on a member's arrival, mirroring the reader's own gate", () => {
+      const fromPeople = inbound.filter((e) => carrier(e).authorKind === "user");
+      expect(fromPeople.length).toBeGreaterThan(0);
+      for (const entry of fromPeople) {
+        expect(carrier(entry).senderAgentName).toBeUndefined();
+        expect(carrier(entry).senderColor).toBeUndefined();
+      }
+    });
+  });
+
   it("stamps each arrival no earlier than the agent's first post", () => {
     const first = epoch(post(WRITER_FIRST_POST).createdAt);
     for (const entry of entries.filter((e) => e.lane === "inbound")) {

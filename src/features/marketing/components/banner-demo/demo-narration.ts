@@ -67,7 +67,7 @@ const inbound = (
   messageId: string,
   secondsAgo: number,
 ): { step: StepId; entry: DesktopNarrationEntry } => {
-  const { message, agentId } = citedMessage(messageId);
+  const { message, agentId, agentColor } = citedMessage(messageId);
   // An agent's post is captioned with the AGENT's name; a member's with their own.
   const senderName = agentId
     ? AGENT_INDEX.get(agentId)?.displayName
@@ -75,6 +75,7 @@ const inbound = (
   if (!senderName) {
     throw new Error(`banner demo: no sender name for inbound ${messageId}`);
   }
+  const fromAgent = agentId !== null;
   return {
     step,
     entry: {
@@ -83,6 +84,29 @@ const inbound = (
       lane: "inbound",
       text: message.body,
       senderName,
+      /**
+       * 🔴 **THE BANNER'S PAINT CARRIER, WRITTEN AHEAD OF THE FIELDS EXISTING**
+       * (@received-banner-color's shape, confirmed 2026-10-12; committed on
+       * `ui/received-banner-color`, which is NOT merged yet).
+       *
+       * ⚠ **INERT TODAY AND THAT IS THE POINT.** `DesktopNarrationEntry` on this branch
+       * has no `authorKind`, `senderAgentName` or `senderColor`, so nothing reads these
+       * and the banner renders exactly as it does now. Writing them here means the
+       * human-versus-agent colouring arrives with the MERGE rather than with a follow-up
+       * edit, and that the demo is one of the things proving the new fields work.
+       *
+       * ⚠ **THE `as` CAST IS WHAT ADMITS THEM**, and it was already here for the lane
+       * fields. ⚠ When the branch lands, DELETE THE CAST: the compiler should be the thing
+       * that checks this shape, and until the cast goes it is not.
+       *
+       * ⚠ **THE GATE IS MIRRORED, NOT RE-DECIDED.** The reader drops `senderAgentName` and
+       * `senderColor` unless `authorKind === "agent"`, so this omits them on a member's
+       * post rather than sending values it knows will be discarded.
+       */
+      authorKind: fromAgent ? "agent" : "user",
+      ...(fromAgent
+        ? { senderAgentName: senderName, senderColor: agentColor ?? undefined }
+        : {}),
     } as DesktopNarrationEntry,
   };
 };
