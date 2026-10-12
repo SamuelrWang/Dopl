@@ -90,6 +90,10 @@ export function ChannelsComposer({
   const launch = useAgentLaunch();
   // The toolbar glyph's own nonce, summed with `newThreadSignal`.
   const [threadDialogNonce, setThreadDialogNonce] = useState(0);
+  // ⚠ A MIRROR OF THE DIALOG'S OWN `open`, for the glyph's face only (item 4, 2026-10-12). The
+  // dialog still owns the state and reports it (`new-thread-dialog.tsx › onOpenChange`); nothing
+  // here may open or close it, which is what keeps the nonce the single way in.
+  const [threadOpen, setThreadOpen] = useState(false);
   const { send, fanOutThreads, pending } = useThreadWrites({
     workspaceId,
     currentUserId,
@@ -212,7 +216,11 @@ export function ChannelsComposer({
             onToggleLaunch={launch.toggle}
             // Closes the launch form so two forms never stand at once.
             onNewThread={() => { launch.close(); setThreadDialogNonce((n) => n + 1); }}
+            threadOpen={threadOpen}
             onMention={() => { mentions.openFromButton(); draftRef.current?.focus(); }}
+            // ⚠ THE SAME FACT THE POPOVER ITSELF RENDERS ON (`mentions.query !== null`, the
+            // condition above), so the glyph cannot disagree with the list it opened.
+            mentionOpen={mentions.query !== null}
             dictation={dictation}
             hasContent={body.length > 0}
             onClear={clear}
@@ -251,6 +259,7 @@ export function ChannelsComposer({
             members={members}
             currentUserId={currentUserId}
             onCreate={fanOutThreads.mutate}
+            onOpenChange={setThreadOpen}
           />
         </div>
       </div>

@@ -41,7 +41,7 @@
  * a changed prop" idiom) because `react-hooks/set-state-in-effect` is an error here.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePersistentDraft } from "@/shared/hooks/use-persistent-draft";
 import { stashPendingSend, writeDraft } from "@/shared/lib/draft-store";
 import { FormDialog, FormSection, UnderlineField } from "@/shared/ui/form-dialog";
@@ -66,6 +66,7 @@ export function NewThreadDialog({
   members,
   currentUserId,
   onCreate,
+  onOpenChange,
 }: {
   /** Nonced ask to OPEN. ⚠ THE SUM OF BOTH OPENERS (`composer.tsx`): the Threads tab's "New
    *  thread" and the composer toolbar's own glyph. Each increment is one request; `0` is nobody
@@ -79,8 +80,31 @@ export function NewThreadDialog({
   /** The fan-out write. ⚠ The dialog hands over a FINISHED draft — it does not know, and must not
    *  learn, that the caller's mutation is optimistic. */
   onCreate: (draft: FanOutThreadsDraft) => void;
+  /**
+   * **THIS FORM IS OPEN / IS CLOSED, told to the composer so its glyph can wear the open
+   * face** (Samuel, 2026-10-12, item 4).
+   *
+   * ⚠ **THE STATE DOES NOT MOVE, IT IS ONLY REPORTED.** `open` stays this component's,
+   * which is the whole point of `signal` being a nonce — *"a counter, so the dialog owns
+   * its open state"* — and lifting it would give the toolbar a second opinion about
+   * whether a form is up, next to the one that actually renders it.
+   * ⚠ **IT IS ANNOUNCED FROM AN EFFECT, NEVER FROM THE RENDER THAT OPENS IT.** The
+   * `signal !== seen` branch below sets `open` DURING RENDER (the adjust-state-on-prop-change
+   * form), and calling a parent's setter from there is the "cannot update a component while
+   * rendering a different component" error. One commit later is invisible on a face.
+   */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // ⚠ THROUGH A REF so an inline arrow from the caller does not make `open`'s announcement
+  // depend on the caller's render (`use-dictation.ts › phrase` is the same idiom).
+  const report = useRef(onOpenChange);
+  useEffect(() => {
+    report.current = onOpenChange;
+  });
+  useEffect(() => {
+    report.current?.(open);
+  }, [open]);
   // Title, description and the addressees taken off are ONE draft (`lib/draft-store.ts`), kept
   // across navigation, reload and restart until the thread is created or the form discarded.
   const draft = usePersistentDraft({ userId: currentUserId }, `new-thread:${channelId}`);
