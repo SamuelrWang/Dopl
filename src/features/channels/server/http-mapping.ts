@@ -4,6 +4,8 @@ import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChannelAddresseeNotMemberError,
   ChannelAddresseeUntaggedError,
+  ChannelCiteNumberUnavailableError,
+  ChannelCiteUnresolvedError,
   ChannelAgentHandleAmbiguousError,
   ChannelChatAddressedError,
   ChannelDecisionRequiredError,
@@ -73,6 +75,16 @@ function mapChannelError(err: unknown): HttpError | null {
   // Its own code: the address resolved fine, the BODY is what needs fixing.
   if (err instanceof ChannelAddresseeUntaggedError) {
     return new HttpError(400, "CHANNEL_ADDRESSEE_UNTAGGED", err.message);
+  }
+  // ⚠ 400 AND NOTHING WRITTEN, like the recipient lane above: a citation that
+  // names no message is an input to fix, not a row to store with a dead pointer.
+  if (err instanceof ChannelCiteUnresolvedError) {
+    return new HttpError(400, "CHANNEL_CITE_UNRESOLVED", err.message);
+  }
+  // Its own code: the entry is well-formed, the NAMESPACE is not live yet, so a
+  // caller can tell "fix your number" from "use the other field".
+  if (err instanceof ChannelCiteNumberUnavailableError) {
+    return new HttpError(400, "CHANNEL_CITE_NO_UNAVAILABLE", err.message);
   }
   if (err instanceof ChannelTaskNotInChannelError) {
     return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);

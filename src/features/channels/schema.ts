@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { ChannelInfoCardSchema } from "./info-card";
 import { MessageIntentSchema } from "./schema-intent";
+import { CitesInputSchema } from "./schema-cites";
 import { DisplayInputSchema } from "@/features/display/core/input";
 import {
   ChannelEscalationAnswerSchema,
@@ -207,6 +208,20 @@ export const ChannelMessageCreateSchema = z.object({
    *  — docs/specs/unified-display.md. `body` is its text fallback. With a `choice` block the
    *  server also stamps the decision index (`metadata.escalation`). */
   display: DisplayInputSchema.optional(),
+  /**
+   * **THE MESSAGES THIS POST CITES** (grammar B, Samuel's card #4401, 2026-10-12).
+   *
+   * ⚠ **THE FIELD IS WHAT MAKES A CITATION A LINK — PROSE NEVER IS.** A `#12`
+   * typed into a body is text; a `#12` named here is resolved at write time and
+   * stored as a message id. That is the ruling, and it is also what removes the
+   * cutover: nothing downstream has to decide which namespace a digit meant.
+   * `lib/cites.ts` carries the vocabulary; `schema-cites.ts` the validation.
+   *
+   * ⚠ **STRIPPED FROM CALLER `metadata` AND RE-STAMPED FROM HERE** — the
+   * `mentionedUserIds` rule. A settable `metadata.cites` would let a post point a
+   * reader at a row the server never checked it could see.
+   */
+  cites: CitesInputSchema.optional(),
 }).refine((input) => !(input.escalation && input.display), {
   // ⚠ The server derives each from the other (spec §3.1); both at once is two answers to one question.
   error: "Send `escalation` or `display`, not both: the server derives the other.",
