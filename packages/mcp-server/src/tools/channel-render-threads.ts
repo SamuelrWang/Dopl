@@ -18,6 +18,7 @@
 
 import { callRef } from "../call-ref.js";
 import type { ChannelMessage } from "@dopl/client";
+import { threadNoOf } from "./channel-numbering";
 import { inlineOr, metaString, neutralizeInline } from "./channel-shared";
 import { UUID_RE } from "./narration";
 
@@ -125,7 +126,15 @@ export function threadTagOf(
   const id = threadIdOf(m);
   if (!id) return anyTagged ? ` · no thread` : "";
   const label = isFirstClassThreadId(id) ? "thread" : "ad-hoc";
-  return ` · ${label} ${inlineOr(shortRef(id), UNREADABLE_ID)}`;
+  // ⚠ **THE PER-THREAD COUNT RIDES THE TAG THAT ALREADY EXISTS**, which is why
+  // this needed no new parameter and no new scope flag: the tag is already drawn
+  // per message wherever a threaded row appears, so `#3` shows in a channel read
+  // and in a thread-scoped read alike. ⚠ OMITTED, never `#0` or `#null`, when the
+  // row has no number — which is every row until the held migration is applied,
+  // so this line is byte-identical to before today.
+  const no = threadNoOf(m);
+  const count = no === null ? "" : ` #${no}`;
+  return ` · ${label} ${inlineOr(shortRef(id), UNREADABLE_ID)}${count}`;
 }
 
 /**

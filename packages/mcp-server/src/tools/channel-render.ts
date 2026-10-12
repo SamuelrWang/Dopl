@@ -23,6 +23,7 @@ import type {
   ChannelThread,
 } from "@dopl/client";
 import { deliveryFact } from "./channel-facts";
+import { channelNoOf } from "./channel-numbering";
 import { inlineOr, neutralizeInline } from "./channel-shared";
 import { NO_NAME } from "./narration";
 // ⚠ **WHO WROTE IT AND WHO IT REACHED IS `channel-render-identity.ts`** (§1
@@ -217,7 +218,11 @@ function formatMessage(
   // ⚠ THE MARK GOES LAST AMONG THE TAGS AND BEFORE THE TIMESTAMP, so it reads
   // as the line's verdict rather than as another attribute of the addressing.
   // `via glasses (Even G2)`: the member's device, so a reply can fit it (`channel-source.ts`).
-  const head = `**#${m.seq}** ${author}${sourceTag(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
+  // ⚠ **`#` IS THE PER-CHANNEL NUMBER, `seq` IS THE CURSOR** — `channel-numbering
+  // .ts` is the only thing that decides which, and the `since seq …` / `cursor=…`
+  // lines elsewhere in this module are deliberately NOT routed through it. Today
+  // every row falls back to `seq`, so this line is byte-identical to before.
+  const head = `**#${channelNoOf(m)}** ${author}${sourceTag(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
   return `- ${head}${clipBody(m, ref, clip)}`;
 }
 
