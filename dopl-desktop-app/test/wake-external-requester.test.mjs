@@ -106,7 +106,11 @@ test("the post-classify branch is plain: trigger, fyi, task-reply, and no route 
   // is the thing worth keeping: NOTHING may sit between the verdict and the action, because a
   // route there can divert a message classify already decided.
   assert.match(LISTENER, /if \(verdict === 'trigger'\) return trigger\.handleTrigger\(entry, m\);/);
-  assert.match(LISTENER, /if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m\);/);
+  // ⚠ `myUserId` JOINED THE CALL (2026-10-12) so the mention banner can tell MY agent from a
+  // PEER's (`task-notify.js › mentionAuthorLabel`). It is passed, never consulted here: the
+  // branch is still plain, which is the whole of what this pin protects. Same shape as the
+  // 'task-reply' arm below, which has carried `myUserId` all along.
+  assert.match(LISTENER, /if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m, myUserId\);/);
   assert.ok(!/maybeReopenAddressedThread/.test(LISTENER), "no post-classify route survives");
 });
 

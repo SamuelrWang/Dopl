@@ -55,6 +55,45 @@ function mentionNotice(m, channelName, authorName) {
 }
 
 /**
+ * WHO THE MENTION BANNER CREDITS: the agent when an agent wrote it, the member when a person did.
+ *
+ * 🔒 **AN AGENT'S MENTION USED TO READ AS ITS OPERATOR'S** (Samuel, 2026-10-12: the banner said
+ * *"Samuel Wang mentioned you"* for a post one of his OWN agents wrote). Both banner sites passed
+ * `io.displayNameFor(m.authorUserId)` and nothing else, and **AN AGENT POSTS UNDER ITS OPERATOR'S
+ * `author_user_id`** (server `service-writes.ts` — `author_user_id: ctx.userId` for every author
+ * kind), so that name can only ever be the ACCOUNT's.
+ *
+ * ⚠ `authorKind` IS THE DISCRIMINATOR — the same one, for the same reason, as the silent
+ * self-mention fixed at `targeting.js:162`: the author id cannot tell a person from their agent.
+ * The agent's name rides the wire already (`dto.ts › mapMessageRow` joins `authorAgentName`
+ * workspace-wide, so a PEER's agent resolves too) and `room-roster.js:161` already reads it.
+ *
+ * The four shapes, and why:
+ *   mine, named      → `Cleanup Orchestrator`        — Samuel's spec: name the agent, plainly.
+ *   mine, unnameable → `your agent`                  — NEVER my member name; that is the bug.
+ *   peer, named      → `Dana's agent Prober`         — an agent name alone would not say whose.
+ *   peer, unnameable → `Dana's agent`                — what `session-dispatch.js › authorLabel` says.
+ * With neither half known it is `an agent`, and an unresolved operator id falls toward the PEER
+ * phrasing, which is wrong-but-honest rather than wrong-and-silent.
+ *
+ * Pure, and a plain `function` declaration with no braces inside its strings/comments/regex, for
+ * the same reason `mentionNotice` is one: test/task-notify.test.mjs slices and evaluates it
+ * verbatim, without Electron. The agent name is operator-set text landing in an OS notification
+ * body, so it is stripped of line breaks and capped the way `room-roster.js › authorHandle` caps it.
+ */
+function mentionAuthorLabel(m, personName, myUserId) {
+  const person = String(personName || '').trim();
+  if (!m || m.authorKind !== 'agent') return person;
+  const agent = String(m.authorAgentName || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80);
+  const mine = !!myUserId && String(m.authorUserId || '') === String(myUserId);
+  if (mine) return agent || 'your agent';
+  // The name cache missed this member. The agent's own name still beats 'an agent', and it is
+  // the one case where a peer's agent reads like a bare name — honest, since whose is unknown.
+  if (!person) return agent || 'an agent';
+  return agent ? person + "'s agent " + agent : person + "'s agent";
+}
+
+/**
  * A REPLY IN MY THREAD. Samuel's spec (2026-10-09) turns this off: neither a human's nor an
  * agent's reply raises anything for being a reply.
  *
@@ -77,7 +116,15 @@ function notifyTaskReply(entry, m, myUserId) {
   // ⚠ Routed as `mention`, the same event id and the same builder `sendFyi` uses, so a tag reads
   // identically whether it landed in a thread or in the room. `raise` runs the operator's switch,
   // so Mentions governs this too.
-  const notice = mentionNotice(m, entry && entry.channel && entry.channel.name, io.displayNameFor(m && m.authorUserId));
+  // ⚠ THE LABEL IS BUILT FROM THE MESSAGE, not from the author id alone: an agent posts under its
+  // operator's `author_user_id`, so `displayNameFor` is only the ACCOUNT half — see
+  // `mentionAuthorLabel` for the rest. A tag in my own thread is the OWN-AGENT case by definition
+  // on this path, so getting it wrong here is precisely what Samuel saw.
+  const notice = mentionNotice(
+    m,
+    entry && entry.channel && entry.channel.name,
+    mentionAuthorLabel(m, io.displayNameFor(m && m.authorUserId), myUserId)
+  );
   const went = notificationRoute.raise('mention', {
     title: notice.title,
     body: notice.body,
@@ -107,4 +154,5 @@ function notifyTaskReply(entry, m, myUserId) {
 module.exports = {
   notifyTaskReply,
   mentionNotice,
+  mentionAuthorLabel,
 };

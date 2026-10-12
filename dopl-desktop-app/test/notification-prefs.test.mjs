@@ -195,7 +195,10 @@ test("approval can never be switched off, whatever the server says", async () =>
  */
 test("the mention banner site asks the gate before showing anything", () => {
   const src = (f) => readFileSync(join(MAIN, f), "utf8");
-  assert.match(src("trigger.js"), /function sendFyi\(entry, m\) \{[\s\S]{0,300}?if \(!notificationPrefs\.allowsMessage\(m, entry\)\)/);
+  // ⚠ ARITY GREW (2026-10-12): `myUserId` rides in so the banner can tell MY agent from a PEER's
+  // (`task-notify.js › mentionAuthorLabel`). What this pin is ABOUT is unchanged — the gate is
+  // still the first thing the site does — so it matches the gate, not the parameter list.
+  assert.match(src("trigger.js"), /function sendFyi\(entry, m, myUserId\) \{[\s\S]{0,300}?if \(!notificationPrefs\.allowsMessage\(m, entry\)\)/);
 });
 
 test("and the route gates every event it raises, whoever calls it", () => {

@@ -71,7 +71,10 @@ async function dispatchMessage(entry, m, myUserId) {
   // Deleted with the window (F-228): every 'trigger' now reaches `handleTrigger`, which is what
   // the route fell through to on every miss anyway.
   if (verdict === 'trigger') return trigger.handleTrigger(entry, m);
-  if (verdict === 'fyi') trigger.sendFyi(entry, m);
+  // ⚠ `myUserId` RIDES ALONG so the banner can tell MY agent from a PEER's: an agent posts under
+  // its operator's `author_user_id`, so the author id alone cannot (`task-notify.js ›
+  // mentionAuthorLabel`). Nothing is decided here — the verdict still reaches the action directly.
+  if (verdict === 'fyi') trigger.sendFyi(entry, m, myUserId);
   // A reply in one of MY interactive tasks: passive notify only — no consent row, no watcher
   // record, no spawn. ⚠ AND SINCE 2026-08-18 (wiring plan Phase 7) ONLY WHEN IT @-TAGS ME.
   // The verdict itself is unchanged and must stay so: it is a ROUTING statement — "this reply
