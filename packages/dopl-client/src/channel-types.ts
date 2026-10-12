@@ -291,51 +291,6 @@ export interface ChannelCreateInput {
   memberUserId?: string;
 }
 
-/**
- * One titled, mode-tagged exchange; transcript rides on `channel_messages`
- * (`metadata.taskId` = ChannelThread.id — wire key keeps the storage name).
- */
-export interface ChannelThread {
-  id: string;
-  channelId: string;
-  workspaceId: string;
-  title: string;
-  /** ⚠ LEGACY, UNREAD — see {@link ThreadStatus}. Four fields, one story. */
-  status: ThreadStatus;
-  outcome: ThreadOutcome | null;
-  mode: ThreadMode;
-  createdBy: string;
-  targetUserId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  closedAt: string | null;
-  outcomeSummary: string | null;
-  /**
-   * When the thread last saw real activity — the newest message tagged for it,
-   * or its own `createdAt` when nobody has posted into it. ⚠ NOT `updatedAt`,
-   * which moves only when the ROW is patched.
-   *
-   * ⚠ ABSENT means THIS READ DID NOT DERIVE IT (`get_thread` loads one row and
-   * does not), never "no activity". Only the thread LIST carries it, and the
-   * list is ORDERED by it.
-   */
-  lastActivityAt?: string;
-}
-
-/**
- * One page of a channel's threads: the rows, most recently active first, plus
- * whether the server's ceiling clipped them.
- *
- * ⚠ `truncated` exists because threads never leave the list, so the read is
- * bounded and a clipped page that renders like an exhausted one asserts
- * something the read never established (INVARIANTS §9). Surface it; a caller
- * that drops it is claiming these are all of them.
- */
-export interface ChannelThreadPage {
-  threads: ChannelThread[];
-  truncated: boolean;
-}
-
 // ⚠ THE SESSION PROJECTION LIVES IN `session-types.ts` (§1 split, 2026-09-02),
 // re-exported here so this file stays the channels barrel and there is no second
 // import path to a symbol — the arrangement `session-health-types.ts` already has
@@ -351,55 +306,17 @@ export type {
   SessionDetailKey,
 } from "./session-types.js";
 
-export interface ChannelThreadCreateInput {
-  title: string;
-  mode?: ThreadMode;
-  body: string;
-  toUserId?: string; // omitted: the opener's thread alone, and its opener wakes nobody
-  intent?: MessageIntent; // "chat" opens it as a record; refused with toUserId
-  /**
-   * Idempotency key — re-sent create_thread with same id returns the existing
-   * thread instead of double-creating it (and double-spawning the responder's
-   * window). Mirrors `ChannelMessageInput.clientMsgId`.
-   */
-  clientMsgId?: string;
-  /**
-   * SPAWN-WITH-HANDOFF. Set by an EXTERNAL agent (Claude Desktop / Claude Code
-   * over MCP): the session driving this thread opens ON THE OPERATOR'S MACHINE
-   * instead of staying with the external session that created it. Absent/false
-   * → an external create opens nothing there. Server stamps it onto the opening
-   * message's reserved `metadata.handoff`, which the desktop reads.
-   */
-  handoff?: boolean;
-}
-
 /**
- * `createChannelThread` result: thread + `openingSeq`, the seq of the opening
- * request message the server posted — exactly the cursor the requester arms
- * `await` on. ⚠ Guessing it via `read limit=1` races the peer answering in
- * between: the "newest message" is then the reply, so the await starts one past
- * it and never sees what already arrived.
- *
- * `null` only for the idempotent short-circuit returning a thread created by
- * SOMEONE ELSE (no opening message).
+ * **THE THREAD SHAPES LIVE IN `channel-thread-types.ts`** (2026-10-12, the 500-line
+ * split) AND ARE RE-EXPORTED HERE VERBATIM: every caller already imports them
+ * from this module, so the barrel is their public name and no importer moved.
  */
-export interface ChannelThreadCreated {
-  thread: ChannelThread;
-  openingSeq: number | null;
-}
-
-/**
- * ⚠ TWO RESULT SHAPES ENDED HERE with thread closing (wiring plan Phase 4,
- * 2026-08-18): `ChannelThreadClosed` (thread + `echoSeq`, the seq of the
- * `task_finished` / `task_failed` marker a close posted) and
- * `ChannelThreadCloseProposed` (thread + `markerSeq` + the proposed outcome).
- *
- * The rule they both carried is live on {@link ChannelThreadCreated.openingSeq}
- * and is the reason they existed at all: **a write that also posts a message
- * hands its seq BACK.** Guessing one (last known seq + 1) once armed a hold past
- * a peer reply already in the channel and the wait never returned. `null` means
- * look it up, never "one past the last seq you saw".
- */
+export type {
+  ChannelThread,
+  ChannelThreadPage,
+  ChannelThreadCreateInput,
+  ChannelThreadCreated,
+} from "./channel-thread-types.js";
 
 export interface ChannelMessageInput extends ChannelEscalationFields {
   body: string;
