@@ -6,7 +6,7 @@
  * the thread dialog calls it — one `channel_tasks` row per addressee (INVARIANTS §5).
  */
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import { cn } from "@/shared/lib/utils";
 import { COMPOSER_BOTTOM, ComposerInputRow } from "./composer-input";
@@ -23,6 +23,11 @@ import { LaunchAgentDialog } from "./launch-agent-dialog";
 import { useAgentLaunch } from "./use-agent-launch";
 import { useAutoGrow } from "./use-auto-grow";
 import { useDictation } from "./use-dictation";
+import {
+  dictationSpanAt,
+  insertDictation,
+  type DictationSpan,
+} from "./dictation/insert-text";
 import { useThreadWrites } from "../hooks/use-thread-writes";
 import { newClientMsgId } from "../lib/optimistic-cache";
 import { messageLanded } from "../client/api";
@@ -114,13 +119,60 @@ export function ChannelsComposer({
     <ComposerTint text={value} members={members} sessions={liveAgents} />
   );
 
-  // Append-only, via a functional update so a phrase landing mid-typing keeps what was typed since.
-  const dictation = useDictation((text) =>
-    setDraft((prev) => {
-      const kept = prev.replace(/\s+$/, "");
-      return kept.length === 0 ? text : `${kept} ${text}`;
-    })
-  );
+  /**
+   * **DICTATION TYPES INTO THE BOX, AT THE CARET, AS IT IS HEARD** (Samuel, 2026-10-12, item 2).
+   *
+   * 🔴 **IT WAS APPEND-TO-THE-END-ON-FINAL AND BOTH HALVES OF THAT ARE GONE.** The old callback
+   * took finished phrases only and pushed each one onto the tail of the draft after stripping
+   * trailing space, so nothing appeared until the engine closed a phrase and when it did it
+   * appeared at the far end, wherever the operator was actually writing.
+   *
+   * ⚠ **THE ARITHMETIC IS NOT HERE.** `dictation/insert-text.ts › insertDictation` owns the
+   * separator, the in-place replacement and the commit, and it is pure. This closure is the
+   * three refs that pure function needs and nothing else.
+   * ⚠ **`setDraft` TAKES A VALUE, NEVER AN UPDATER, AND THAT IS DELIBERATE.** The span and the
+   * mirror below have to be written when the phrase arrives, and React may invoke a functional
+   * updater twice (`composer-launch.test.tsx` pins exactly that defect for the launch panel), so
+   * an updater that moved the anchor would advance it twice under StrictMode and write the phrase
+   * beside itself.
+   * ⚠ **`latest` IS WRITTEN SYNCHRONOUSLY HERE, which is what makes two phrases in one tick
+   * compose.** The engine's events are async callbacks, so reading `draft` out of this closure
+   * would read whatever the last RENDER saw — correct for the first phrase of a tick and one
+   * phrase stale for the second.
+   */
+  const dictationSpan = useRef<DictationSpan | null>(null);
+  const dictationCaret = useRef<number | null>(null);
+  const latest = useRef(draft);
+  // Typing updates the mirror: every render, so the next phrase inserts into what is really there.
+  useEffect(() => {
+    latest.current = draft;
+  });
+  const dictation = useDictation((text, final) => {
+    const before = latest.current;
+    // ⚠ THE ANCHOR IS THE CARET, TAKEN ON THE FIRST PHRASE OF A SESSION rather than on the click:
+    // a click that the engine's probe then refuses would have moved nothing, and the textarea
+    // keeps its selection while the mic button holds focus.
+    const span =
+      dictationSpan.current ?? dictationSpanAt(draftRef.current?.selectionStart ?? before.length);
+    const edit = insertDictation(before, span, text, final);
+    dictationSpan.current = edit.span;
+    dictationCaret.current = edit.caret;
+    latest.current = edit.text;
+    setDraft(edit.text);
+  });
+  // ⚠ A SESSION'S ANCHOR DIES WITH THE SESSION. Without this the next dictation would resume at
+  // the end of the last one, wherever the caret has been since.
+  useEffect(() => {
+    if (!dictation.listening) dictationSpan.current = null;
+  }, [dictation.listening]);
+  // ⚠ AFTER the value lands, so the caret sits past the dictated words "as if typed" — a
+  // controlled textarea's selection is reset by the render that changes its value.
+  useEffect(() => {
+    const at = dictationCaret.current;
+    if (at === null) return;
+    dictationCaret.current = null;
+    draftRef.current?.setSelectionRange(at, at);
+  }, [draft]);
 
   const body = draft.trim();
   // A disabled send still says why (INVARIANTS §8, rule 4).

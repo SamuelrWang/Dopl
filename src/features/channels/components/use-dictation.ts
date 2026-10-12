@@ -13,12 +13,20 @@
  * ⚠ **RED MEANS LISTENING OR A FAULT, AND ONLY THE ENGINE MAY SAY LISTENING.** `listening` is set
  * from the engine's start event, never optimistically on the click.
  *
- * ⚠ **EVERY STOP KEEPS THE TEXT.** Finished phrases are APPENDED through `onPhrase`; a stop for any
+ * ⚠ **EVERY STOP KEEPS THE TEXT.** Phrases reach the draft through `onPhrase`; a stop for any
  * reason (second click, window going away, the 60s cap, a fault) leaves them in the box, and a
  * phrase still only partial when the session ends is committed rather than dropped.
  *
- * ⚠ **PARTIALS ARE A PREVIEW, NOT DRAFT TEXT.** They re-word themselves as speech continues, so
- * they ride `partial` (the toolbar shows it beside the mic) and only finals touch the draft.
+ * 🔴 **PARTIALS ARE DRAFT TEXT NOW, AND THAT REVERSES THE 2026-09-04 RULE** (Samuel, 2026-10-12:
+ * *"text collects LEFT of the mic and only enters the input when dictation ends. Make it stream
+ * into the input live, as if typed"*). They used to ride a `partial` field that the toolbar drew
+ * beside the mic, and only finals touched the box — so nothing appeared until the engine decided
+ * a phrase was over, and when it did it appeared at the END of the draft rather than at the
+ * caret. **Both halves of that are gone**: `partial` is off this interface, the preview beside
+ * the mic with it, and every phrase is handed over with a `final` flag.
+ * ⚠ **THE HOOK STILL HOLDS NO DRAFT AND DECIDES NO PLACEMENT.** It reports what the engine said
+ * and whether the engine is done saying it; where the words land is
+ * `dictation/insert-text.ts › insertDictation`, pure and separately tested.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -50,10 +58,15 @@ export interface Dictation {
   error: string | null;
   /** What to do about `error`, or null. The tooltip's second line. */
   hint: string | null;
-  /** The phrase being spoken, not yet final. "" when none. */
-  partial: string;
   toggle: () => void;
 }
+
+/**
+ * One phrase from the engine. ⚠ **`final` IS THE WHOLE DIFFERENCE AND THE CALLER NEEDS IT**: an
+ * interim is the same words re-heard and must overwrite the last one, a final is settled and the
+ * next phrase goes after it (`dictation/insert-text.ts`).
+ */
+export type DictationPhrase = (text: string, final: boolean) => void;
 
 /** A string key for the engine choice, so the snapshot is stable across renders. */
 function engineKey(): string {
@@ -85,10 +98,10 @@ function whenReady(
 }
 
 /**
- * @param onPhrase Called with each FINISHED phrase, trimmed and never empty. The caller owns where
- * it lands; this hook holds no copy of the draft.
+ * @param onPhrase Called with EVERY phrase the engine reports, interim or final, as the engine
+ * words it. The caller owns where it lands; this hook holds no copy of the draft.
  */
-export function useDictation(onPhrase: (text: string) => void): Dictation {
+export function useDictation(onPhrase: DictationPhrase): Dictation {
   // ⚠ READ THROUGH `useSyncExternalStore` (a hydration rule): the server snapshot is "none", the
   // client's is the real choice, so both ends render the same markup first.
   const key = useSyncExternalStore(
@@ -100,7 +113,6 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
 
   const [listening, setListening] = useState(false);
   const [fault, setFault] = useState<DictationFault | null>(null);
-  const [partial, setPartial] = useState("");
   /** The live session's token. Handlers check identity against it, so a late event from an
    *  ended session can never touch the next one's state. */
   const session = useRef<Live | null>(null);
@@ -114,9 +126,16 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
     phrase.current = onPhrase;
   });
 
-  const deliver = useCallback((text: string) => {
+  /**
+   * ⚠ **AN EMPTY FINAL IS STILL DROPPED, AN EMPTY INTERIM IS NOT.** The end-of-session commit
+   * below delivers whatever interim was outstanding, which is `""` whenever the last event was
+   * already a final — and a `final` of `""` would advance the caller's anchor for nothing. An
+   * empty INTERIM is a retraction and has to be passed on, or the box keeps words the engine
+   * has taken back (`dictation/insert-text.ts` erases the span for it).
+   */
+  const deliverFinal = useCallback((text: string) => {
     const trimmed = text.trim();
-    if (trimmed.length > 0) phrase.current(trimmed);
+    if (trimmed.length > 0) phrase.current(trimmed, true);
   }, []);
 
   /** Idempotent and safe from any state: the click, three events and unmount all call it. */
@@ -134,7 +153,6 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
   const begin = useCallback(() => {
     if (!engine) return;
     pendingPartial.current = "";
-    setPartial("");
     const me: Live = { handle: null, ended: false, stopAsked: false };
     session.current = me;
     const isMine = () => session.current === me && !me.ended;
@@ -147,13 +165,13 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
       onPartial: (text) => {
         if (!isMine()) return;
         pendingPartial.current = text;
-        setPartial(text.trim());
+        // ⚠ STRAIGHT TO THE DRAFT, as an interim: the caller replaces the last one in place.
+        phrase.current(text.trim(), false);
       },
       onFinal: (text) => {
         if (!isMine()) return;
         pendingPartial.current = "";
-        setPartial("");
-        deliver(text);
+        deliverFinal(text);
       },
       onFault: (f) => {
         if (isMine()) setFault(f);
@@ -161,15 +179,16 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
       onEnd: () => {
         if (!isMine()) return;
         me.ended = true;
-        // A phrase still partial at the end is the operator's words: keep them.
-        deliver(pendingPartial.current);
+        // A phrase still partial at the end is the operator's words: COMMIT them. The characters
+        // are already in the draft from that interim, so this rewrites them where they stand and
+        // settles the span (`insert-text.ts › insertDictation`, the final arm).
+        deliverFinal(pendingPartial.current);
         pendingPartial.current = "";
         session.current = null;
         if (timer.current !== null) {
           clearTimeout(timer.current);
           timer.current = null;
         }
-        setPartial("");
         setListening(false);
       },
     });
@@ -179,7 +198,7 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
       return;
     }
     timer.current = setTimeout(stop, DICTATION_MAX_MS);
-  }, [engine, deliver, stop]);
+  }, [engine, deliverFinal, stop]);
 
   const start = useCallback(() => {
     if (!engine || session.current !== null || starting.current) return;
@@ -250,7 +269,6 @@ export function useDictation(onPhrase: (text: string) => void): Dictation {
     listening,
     error: fault?.reason ?? null,
     hint: fault?.fix ?? null,
-    partial,
     toggle,
   };
 }

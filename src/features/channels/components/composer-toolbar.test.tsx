@@ -130,6 +130,22 @@ function engineError(code: string) {
   });
 }
 
+/**
+ * One `onresult` from the browser engine. ⚠ **THE LIST IS CUMULATIVE AND `resultIndex` IS
+ * LOAD-BEARING** (`dictation/web-engine.ts`), so this builds the real shape — a `resultIndex` of
+ * 0 over a one-result list, which is what a session's current phrase looks like.
+ */
+function engineSays(text: string, isFinal: boolean) {
+  act(() => {
+    FakeRecognition.last?.onresult?.({
+      resultIndex: 0,
+      results: { length: 1, 0: { length: 1, isFinal, 0: { transcript: text } } },
+    });
+  });
+}
+
+const messageBox = () => screen.getByLabelText("Message") as HTMLTextAreaElement;
+
 describe("the recipient tag sits ABOVE the card, outside it, hard left", () => {
   it("is not inside the bordered card element", () => {
     // ⚠ THE CARD IS `.raised-tab` — the bordered box (`composer.tsx`'s own note says the 1px
@@ -300,5 +316,113 @@ describe("a failed dictation SAYS SO instead of blinking", () => {
     fireEvent.click(btn("Dictate"));
     engineError("aborted");
     expect(btn("Dictate")).toBeTruthy();
+  });
+});
+
+/**
+ * **DICTATION TYPES INTO THE BOX, LIVE** (Samuel, 2026-10-12, item 2: *"text collects LEFT of the
+ * mic and only enters the input when dictation ends. Make it stream into the input live, as if
+ * typed"*).
+ *
+ * ⚠ **THIS IS THE WIRING, NOT THE ARITHMETIC.** Where a phrase lands is
+ * `dictation/insert-text.test.ts` — pure, seventeen cases, no engine. What can only break HERE is
+ * the composer's three refs: the anchor taken off the textarea's own caret, the mirror that lets
+ * two phrases in one tick compose, and the reset that stops a second dictation resuming at the
+ * end of the first. So every case below drives the REAL engine events through the REAL composer
+ * and reads the textarea.
+ *
+ * ⚠ **AND THE PREVIEW'S ABSENCE IS ASSERTED, because deleting a caption leaves no error.** The
+ * words used to appear beside the mic and only there; a change that inserted live AND kept the
+ * caption would pass every other case in this file while showing the operator everything twice.
+ */
+describe("dictation streams into the input", () => {
+  it("shows an INTERIM phrase in the box immediately", () => {
+    mount();
+    fireEvent.click(btn("Dictate"));
+    engineSays("hello wor", false);
+    // ⚠ THE OLD BEHAVIOUR WAS AN EMPTY BOX until the engine closed the phrase.
+    expect(messageBox().value).toBe("hello wor");
+  });
+
+  it("replaces the interim IN PLACE as the engine re-words it", () => {
+    mount();
+    fireEvent.click(btn("Dictate"));
+    engineSays("hello wor", false);
+    engineSays("hello world", false);
+    expect(messageBox().value).toBe("hello world");
+  });
+
+  it("writes AT THE CARET and keeps the text after it", () => {
+    mount();
+    fireEvent.change(messageBox(), { target: { value: "ping  — thanks" } });
+    // ⚠ THE CARET IS THE TEXTAREA'S OWN, read when the first phrase arrives: the mic button holds
+    // focus by then, and a textarea keeps its selection.
+    messageBox().setSelectionRange(5, 5);
+    fireEvent.click(btn("Dictate"));
+    engineSays("now", true);
+    expect(messageBox().value).toBe("ping now — thanks");
+  });
+
+  it("leaves the caret after the dictated words, as if typed", () => {
+    // ⚠ **THE TEXT AFTER THE CARET IS WHAT MAKES THIS A TEST.** A value change puts a textarea's
+    // caret at the END of the new value by default, so dictating into the TAIL of a draft reads
+    // as "the caret followed the words" whether anything placed it or not — measured: this case
+    // passed with `setSelectionRange` removed until the trailing " — thanks" was added.
+    mount();
+    fireEvent.change(messageBox(), { target: { value: "ping  — thanks" } });
+    messageBox().setSelectionRange(5, 5);
+    fireEvent.click(btn("Dictate"));
+    engineSays("now", false);
+    expect(messageBox().value).toBe("ping now — thanks");
+    expect(messageBox().selectionStart).toBe(8);
+  });
+
+  it("keeps words typed BEFORE the mic was opened", () => {
+    mount();
+    fireEvent.change(messageBox(), { target: { value: "note" } });
+    fireEvent.click(btn("Dictate"));
+    engineSays("and this", true);
+    expect(messageBox().value).toBe("note and this");
+  });
+
+  it("commits the outstanding interim when the session ends", () => {
+    // ⚠ NO SECOND COPY. The characters are already in the box from the interim, so a commit that
+    // appended would read "and more and more" — the most common way to end a dictation.
+    mount();
+    fireEvent.click(btn("Dictate"));
+    engineSays("and more", false);
+    act(() => {
+      FakeRecognition.last?.onend?.();
+    });
+    expect(messageBox().value).toBe("and more");
+  });
+
+  it("starts the NEXT dictation at the caret, not after the last one", () => {
+    // ⚠ THE REF RESET THIS PINS: a span that outlived its session would anchor phrase two to the
+    // end of phrase one wherever the operator had moved since.
+    mount();
+    fireEvent.click(btn("Dictate"));
+    engineSays("second", true);
+    act(() => {
+      FakeRecognition.last?.onend?.();
+    });
+    expect(messageBox().value).toBe("second");
+
+    messageBox().setSelectionRange(0, 0);
+    fireEvent.click(btn("Dictate"));
+    engineSays("first", true);
+    expect(messageBox().value).toBe("firstsecond");
+  });
+
+  it("no longer previews the phrase beside the mic", () => {
+    mount();
+    fireEvent.click(btn("Dictate"));
+    engineSays("hello wor", false);
+    const row = btn("Send").parentElement as HTMLElement;
+    // ⚠ The box has the words; the row must not also carry a caption of them.
+    expect(messageBox().value).toBe("hello wor");
+    expect(row.querySelector("[aria-live]")).toBeNull();
+    const captions = [...row.querySelectorAll("span")].map((s) => s.textContent);
+    expect(captions).not.toContain("hello wor");
   });
 });

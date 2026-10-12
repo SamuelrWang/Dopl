@@ -137,16 +137,13 @@ export function ComposerToolbar({
           Discard
         </button>
       )}
-      {/* The phrase being spoken, before it is final: a preview only, never draft text. */}
-      {dictation.listening && dictation.partial && (
-        <span
-          aria-live="polite"
-          className="min-w-0 max-w-[40%] truncate text-small text-text-secondary"
-          title={dictation.partial}
-        >
-          {dictation.partial}
-        </span>
-      )}
+      {/* 🔴 **THE PARTIAL PREVIEW IS GONE FROM HERE, AND THAT IS THE RULING** (Samuel,
+          2026-10-12: *"text collects LEFT of the mic and only enters the input when dictation
+          ends. Make it stream into the input live"*). A `max-w-[40%]` truncated caption sat in
+          this slot showing the phrase being spoken. ⚠ **IT IS NOT MOVED, IT IS RETIRED**: the
+          words are in the box as they are heard now (`dictation/insert-text.ts`), so a second
+          copy of them beside the mic would be the same fact twice — and the clipped one would
+          be the worse of the two to read. */}
       {/* Absent where a browser has no engine; always present on the desktop, where an unavailable
           engine still says why. Red = capturing or a fault: the reason is the accessible name, the
           tooltip adds what to do about it (`dictation/faults.ts`). */}

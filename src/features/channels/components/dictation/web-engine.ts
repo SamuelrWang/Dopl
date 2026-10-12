@@ -3,7 +3,11 @@
  * shared interface. Moved here from `../use-dictation.ts` on 2026-10-08; the rules it kept:
  *
  * ⚠ THE AUDIO GOES TO THE BROWSER VENDOR'S SERVICE, by a path this app neither opens nor controls.
- * ⚠ FINAL RESULTS DRIVE THE DRAFT; interim results only feed the live preview (`onPartial`).
+ * ⚠ BOTH KINDS OF RESULT DRIVE THE DRAFT SINCE 2026-10-12 — `onPartial` streams into the box and
+ *   `onFinal` settles it (`../use-dictation.ts`, `insert-text.ts`). This said *"final results
+ *   drive the draft; interim results only feed the live preview"*, which was the rule the live
+ *   insertion replaced. ⚠ THE ENGINE ITSELF DID NOT CHANGE: it still reports `onFinal` then
+ *   `onPartial` on every event, and the trailing empty partial is a no-op at the far end.
  * ⚠ `resultIndex` IS LOAD-BEARING: the result list is cumulative for the whole session.
  * ⚠ NOT IN `lib.dom.d.ts`, so the shapes are declared locally and minimally.
  */
