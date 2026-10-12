@@ -1,4 +1,8 @@
-import { transportFailure } from "@/shared/api/api-envelope";
+import {
+  normalizeFetchResponse,
+  requestHeaders,
+  transportFailure,
+} from "@/shared/api/api-envelope";
 import { getBridge, type BridgeResponse } from "./dopl-bridge";
 
 /**
@@ -30,35 +34,22 @@ export interface TransportRequest {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 async function fetchTransport(req: TransportRequest): Promise<BridgeResponse> {
-  const headers: Record<string, string> = {};
-  if (req.workspaceId) headers["x-workspace-id"] = req.workspaceId;
-  if (req.body !== undefined) headers["content-type"] = "application/json";
-  if (req.expectedUpdatedAt) headers["x-updated-at"] = req.expectedUpdatedAt;
-
   let res: Response;
   try {
     res = await fetch(API_BASE_URL + req.path, {
       method: req.method,
-      headers,
+      headers: requestHeaders(req),
       body: req.body !== undefined ? JSON.stringify(req.body) : undefined,
       // Cross-origin dev needs the cookie sent explicitly; same-origin keeps the
-      // stricter default.
+      // stricter default. ⚠ The one request field the two transports disagree
+      // on, and the reason `requestHeaders` does not own it.
       credentials: API_BASE_URL ? "include" : "same-origin",
       signal: req.signal,
     });
   } catch (err) {
     throw transportFailure(err, req.signal);
   }
-
-  if (res.status === 204) {
-    return { status: res.status, statusText: res.statusText, hasBody: false };
-  }
-  try {
-    const body = await res.json();
-    return { status: res.status, statusText: res.statusText, hasBody: true, body };
-  } catch {
-    return { status: res.status, statusText: res.statusText, hasBody: false };
-  }
+  return normalizeFetchResponse(res);
 }
 
 /**

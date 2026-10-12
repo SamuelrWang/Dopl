@@ -87,6 +87,29 @@ export interface ApiRequestOpts {
   signal?: AbortSignal;
 }
 
+/**
+ * The request headers BOTH fetch transports send, and the only place they are
+ * spelled.
+ *
+ * ⚠ A HEADER ADDED HERE MUST ALSO BECOME A BRIDGE OPT (`api-client.ts`'s IPC
+ * branch, `api-transport.ts › ipcTransport`): main reconstructs every header
+ * from the structured opts, so a header that exists only on the fetch side
+ * silently will not exist in the desktop app.
+ *
+ * ⚠ `credentials` is deliberately NOT here — it is the one request field the two
+ * transports legitimately disagree on (same-origin on web, `include` for
+ * cross-origin dev against `VITE_API_BASE_URL`).
+ */
+export function requestHeaders(
+  opts: Pick<ApiRequestOpts, "workspaceId" | "body" | "expectedUpdatedAt">
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
+  if (opts.body !== undefined) headers["content-type"] = "application/json";
+  if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
+  return headers;
+}
+
 /** Appends `opts.query` to `path`, dropping `undefined` values. */
 export function withQuery(
   path: string,
@@ -110,6 +133,37 @@ export interface RawApiResponse {
   statusText: string;
   hasBody: boolean;
   body?: unknown;
+}
+
+/**
+ * A `fetch` answer in {@link RawApiResponse} shape — the fetch half of the
+ * normalization, shared by both transports.
+ *
+ * ⚠ TWO ANSWERS ARE "NO BODY", and the decoder depends on the distinction being
+ * erased here rather than per transport: a 204 (nothing to read) and a body that
+ * would not parse as JSON. The decoder turns either into `undefined` on a 2xx or
+ * a `statusText` `ApiError` on a non-2xx.
+ *
+ * ⚠ The body is read EXACTLY ONCE. `res.json()` consumes the stream, so this
+ * must not be called twice on one `Response`, and the decoder never re-reads.
+ */
+export async function normalizeFetchResponse(
+  res: Response
+): Promise<RawApiResponse> {
+  if (res.status === 204) {
+    return { status: res.status, statusText: res.statusText, hasBody: false };
+  }
+  try {
+    const body = await res.json();
+    return {
+      status: res.status,
+      statusText: res.statusText,
+      hasBody: true,
+      body,
+    };
+  } catch {
+    return { status: res.status, statusText: res.statusText, hasBody: false };
+  }
 }
 
 /** Turn a transport answer into the resolved value, or throw `ApiError`. */

@@ -10639,11 +10639,11 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 ### F-763 — the browser `fetch` transports read a body cut off mid-stream as "no body" (2026-09-23)
 
-- Location: `src/shared/api/api-client.ts › readJsonBody` and `apps/desktop-ui/src/lib/api-transport.ts › fetchTransport` (the web client and the SPA's dev-in-browser transport).
+- Location: `src/shared/api/api-envelope.ts › normalizeFetchResponse` — ONE reader as of 2026-10-12 (cleanup/x03). It was two hand-copied ones: a private helper inside `src/shared/api/api-client.ts` (deleted) and the tail of `apps/desktop-ui/src/lib/api-transport.ts › fetchTransport`. Both now call the shared normalizer, which carries the behaviour below verbatim.
 - Found during: the fetch-failed recovery (`fix/fetch-failed-recovery`), which made the desktop bridge answer a mid-body socket failure as `NETWORK_UNAVAILABLE` (`dopl-desktop-app/main/ui-bridge.js › performApiRequest`).
-- **The effect.** Both catch every `res.json()` throw as a non-JSON body, so a 2xx whose stream dies resolves as `undefined` data instead of a `NetworkError`. The packaged app no longer takes this path; the web app still does.
-- Proposed resolution: rethrow through `api-envelope.ts › transportFailure` when the read throws a network-class error (not a `SyntaxError`), in both readers.
-- Status: OPEN (low).
+- **The effect.** It catches every `res.json()` throw as a non-JSON body, so a 2xx whose stream dies resolves as `undefined` data instead of a `NetworkError`. The packaged app no longer takes this path; the web app still does.
+- Proposed resolution: rethrow through `api-envelope.ts › transportFailure` when the read throws a network-class error (not a `SyntaxError`). ⚠ Now a ONE-SITE fix rather than two, and the twin suites (`src/shared/api/transport-contract.test.ts`, `apps/desktop-ui/src/lib/transport-contract.test.ts`) pin today's "unparseable is no body" answer on both clients — so whoever takes this must change those two cases deliberately, not discover them.
+- Status: OPEN (low). ⚠ The dedupe did NOT fix it; it only moved it to one place.
 
 ### F-770 — Devices follow-ups: glasses outside `GET /api/devices`, cooperative sign-out on Remove, an unread grants route (2026-09-28)
 

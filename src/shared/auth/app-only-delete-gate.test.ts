@@ -227,16 +227,21 @@ const GATED: Array<{
   {
     refusedOps: ["dopl_chats.delete"],
     file: "chats/[chatId]/route.ts",
-    url: "http://localhost/api/chats/c-1",
-    params: { chatId: "c-1" },
+    // ⚠ A REAL UUID, not a `c-1` placeholder: `chat-route.ts › requireChatId`
+    // 404s a malformed id before the handler runs (chats.id is a UUID column, so
+    // a non-UUID used to reach Postgres as a 22P02 → 500 + a system_events row).
+    // This row is about the AUTH fence, so the id must get past the shape check.
+    url: "http://localhost/api/chats/9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
+    params: { chatId: "9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d" },
     handler: deleteChatRoute as unknown as Handler,
     service: () => vi.mocked(chatService.deleteChat),
   },
   {
     refusedOps: ["dopl_chats.delete_folder"],
     file: "chats/folders/[folderId]/route.ts",
-    url: "http://localhost/api/chats/folders/cf-1",
-    params: { folderId: "cf-1" },
+    // ⚠ A REAL UUID — same reason as the chat row above (`requireFolderId`).
+    url: "http://localhost/api/chats/folders/7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+    params: { folderId: "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d" },
     handler: deleteChatFolder as unknown as Handler,
     service: () => vi.mocked(chatService.deleteFolderForUser),
   },

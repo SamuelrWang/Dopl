@@ -16,8 +16,9 @@ import { HttpError } from "@/shared/lib/http-error";
  *
  * ⚠ Do NOT "fix" that by calling `logSystemEvent` here: it pulls
  * `@/shared/supabase/admin`, which THROWS at module evaluation on a missing
- * `NEXT_PUBLIC_SUPABASE_URL`, into a helper ~84 route modules import. The wiring
- * belongs with the routes that own their auth wrapper.
+ * `NEXT_PUBLIC_SUPABASE_URL`, into a helper 64 route modules under `src/app`
+ * import (71 importers in all, measured 2026-10-12). The wiring belongs with
+ * the routes that own their auth wrapper.
  */
 export function toHttpErrorResponse(
   source: string,

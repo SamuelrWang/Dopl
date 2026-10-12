@@ -71,7 +71,9 @@ export function requireTaskId(
  * channel's container (when the caller is a channel member) instead of the caller's home space,
  * where the channel is "not found" (every decision card outside the home space failed that way).
  * An explicit header or key lock still wins; a slug, a non-member or an unknown id derive nothing.
- * ⚠ `channel-route-workspace.test.ts` pins every channel route on it.
+ * ⚠ `workspace-derivation-coverage.test.ts` pins every channel route on it: it asserts each
+ * `withWorkspaceAuth` call under `/api/channels/[channelId]/**` names `workspaceFromParams:
+ * channelWorkspace`, so a new channel route cannot quietly reopen the bug.
  */
 export async function channelWorkspace(
   params: Record<string, string> | undefined,
