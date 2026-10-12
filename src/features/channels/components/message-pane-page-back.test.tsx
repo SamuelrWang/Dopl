@@ -62,8 +62,23 @@ import { indexMembers } from "./view-model";
 import { channelRows, threadRows } from "./view-model-rows";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { CHANNEL_ID, ME, member, message, thread } from "./test-fixtures";
+import { FLASH_TINT } from "./authored-row";
 
 const scrollIntoView = vi.fn();
+
+/**
+ * **IS THE TARGET ROW TINTED RIGHT NOW** — the half `scrollIntoView` cannot see.
+ *
+ * ⚠ **THE FLASH WAS ENTIRELY UNPINNED UNTIL REVIEW 35**, and the proof is brutal:
+ * `const flashId = null;` passed 4,069 tests across the channels feature. Every
+ * case here asserted that the transcript MOVED and none that the reader can see
+ * WHERE it landed — which is half of what Samuel asked for ("scrolls to **and
+ * highlights** it").
+ */
+function tinted(messageId: string): boolean {
+  const row = document.querySelector(`[data-message-id="${messageId}"]`);
+  return row !== null && row.className.includes(FLASH_TINT);
+}
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = scrollIntoView;
@@ -179,6 +194,20 @@ function PagedPane({
  * assertion failing for a reason that has nothing to do with the code under
  * test. Stepping with a flush per step is what lets the cascade actually run.
  */
+/**
+ * **WHEN THE HUNT LANDS, AND WHY IT IS FOUR PAGES AND NOT FIVE.**
+ *
+ * With 25 messages and a page of 5, the oldest loaded seq walks 21 → 16 → 11 → 6
+ * → 1, so the FOURTH page is the one that brings seq 1 in: t = 8s, not 10s. The
+ * thread fixture (20 / 4) walks 17 → 13 → 9 → 5 → 1 and lands on the same tick.
+ *
+ * ⚠ **THE TINT MUST BE ASSERTED AT THIS MOMENT AND NOWHERE LATER.** `FLASH_MS` is
+ * 1,600ms, so the tint is on screen from 8.0s to 9.6s and then correctly gone —
+ * asserting it after `advance(SETTLE_MS * 7)` would go RED ON CORRECT CODE, which
+ * is the trap Review 35 pointed at.
+ */
+const LANDING_MS = SETTLE_MS * 4;
+
 async function advance(ms: number, step = SETTLE_MS / 2) {
   for (let elapsed = 0; elapsed < ms; elapsed += step) {
     await act(async () => {
@@ -196,10 +225,11 @@ describe("a citation older than the loaded page", () => {
         pageSize={5}
       />
     );
-    // Five pages at SETTLE_MS, plus slack.
-    await advance(SETTLE_MS * 6);
+    // The pill's path: a `seq:<n>` sentinel, channel view.
+    await advance(LANDING_MS);
     expect(scrollIntoView).toHaveBeenCalled();
     expect(screen.getByText("line 1")).toBeTruthy();
+    expect(tinted("m-1")).toBe(true);
   });
 
   it("🔒 shows NO notice while the hunt is in flight", async () => {
@@ -231,8 +261,19 @@ describe("a citation older than the loaded page", () => {
         pageSize={5}
       />
     );
-    await advance(SETTLE_MS * 7);
+    // ⚠ **THE TINT IS THE ASSERTION THAT MAKES THIS TEST BITE.** Review 35: with
+    // the `hunting` guard removed the scroll STILL fires, so `scrollIntoView`
+    // alone stayed green — the nonce is spent mid-hunt, `live` goes false, and
+    // what is actually lost is `flashId`. The reader is moved somewhere and given
+    // nothing to show them which row they were sent to.
+    await advance(LANDING_MS);
     expect(scrollIntoView).toHaveBeenCalled();
+    expect(tinted("m-1")).toBe(true);
+
+    // And the tint is transient by design: past the flash window it is gone.
+    // Asserting the line above down here is the false red Review 35 warned of.
+    await advance(SETTLE_MS * 3);
+    expect(tinted("m-1")).toBe(false);
     expect(screen.queryByText(SCROLL_TARGET_MISSING_NOTE)).toBeNull();
   });
 
@@ -245,14 +286,25 @@ describe("a citation older than the loaded page", () => {
         inThread
       />
     );
-    await advance(SETTLE_MS * 6);
+    // The flash in a THREAD view — the second of the two views Review 35 asked
+    // for. Lands on the same tick: 17 → 13 → 9 → 5 → 1 is four pages.
+    await advance(LANDING_MS);
     expect(scrollIntoView).toHaveBeenCalled();
     expect(screen.getByText("line 2")).toBeTruthy();
+    expect(tinted("m-2")).toBe(true);
     expect(screen.queryByText(SCROLL_TARGET_MISSING_NOTE)).toBeNull();
   });
 
-  it("🔒 hunts a REAL message id too — the Mentions row's case", async () => {
-    // A mention row jumps by id, with no seq to read. Same hunt, same landing.
+  it("🔒 hunts a REAL message id too — the Mentions row's case, and flashes it", async () => {
+    // A mention row jumps by id, with no seq to read. Same hunt, same landing,
+    // same tint — the second of the two distinguishable caller shapes.
+    //
+    // ⚠ **THE THIRD CALLER NEEDS NO CASE HERE, AND SAYING WHY IS BETTER THAN
+    // FAKING ONE.** A notification's `initialSeq` is turned into a scroll target
+    // by `use-message-jump.ts` BEFORE the pane sees it, so at this boundary it is
+    // byte-for-byte the sentinel case above. `use-message-jump.test.ts` owns the
+    // `initialSeq` → `seq:<n>` mapping; duplicating it here would assert the
+    // harness, not the product.
     render(
       <PagedPane
         target={{ messageId: "m-3", nonce: 1 }}
@@ -260,9 +312,10 @@ describe("a citation older than the loaded page", () => {
         pageSize={5}
       />
     );
-    await advance(SETTLE_MS * 6);
+    await advance(LANDING_MS);
     expect(scrollIntoView).toHaveBeenCalled();
     expect(screen.getByText("line 3")).toBeTruthy();
+    expect(tinted("m-3")).toBe(true);
   });
 });
 
