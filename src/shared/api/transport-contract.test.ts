@@ -112,11 +112,15 @@ describe("normalizeFetchResponse", () => {
 
 describe("api-client fetch branch sends the shared contract", () => {
   it("puts requestHeaders on the wire and normalizes the answer", async () => {
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
-      status: 200,
-      statusText: "OK",
-      json: async () => ({ hello: "world" }),
-    }));
+    const seen: { url: string; init: RequestInit }[] = [];
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      seen.push({ url, init });
+      return {
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ hello: "world" }),
+      };
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const out = await apiRequest<{ hello: string }>("/api/thing", {
@@ -124,19 +128,23 @@ describe("api-client fetch branch sends the shared contract", () => {
       workspaceId: "ws-9",
       body: { a: 1 },
       expectedUpdatedAt: "2026-10-12T00:00:00Z",
+      query: { limit: 20, skip: undefined },
     });
 
     expect(out).toEqual({ hello: "world" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const init = fetchMock.mock.calls[0]?.[1] ?? {};
+    expect(seen).toHaveLength(1);
+    // `withQuery` drops the undefined param.
+    expect(seen[0].url).toBe("/api/thing?limit=20");
+    expect(seen[0].init.method).toBe("PATCH");
+    expect(seen[0].init.body).toBe(JSON.stringify({ a: 1 }));
     // ⚠ A LITERAL, never `requestHeaders(…)`: comparing the wire against the
     // helper under test compares it with itself and survives its own mutation.
-    expect(init.headers).toEqual({
+    expect(seen[0].init.headers).toEqual({
       "x-workspace-id": "ws-9",
       "content-type": "application/json",
       "x-updated-at": "2026-10-12T00:00:00Z",
     });
-    expect(init.credentials).toBe("same-origin");
+    expect(seen[0].init.credentials).toBe("same-origin");
   });
 
   it("a 204 resolves undefined and never reads the body", async () => {

@@ -26,20 +26,34 @@ function noBridge(): void {
   Reflect.deleteProperty(window, "dopl");
 }
 
+/** Stub `fetch` and record every `(url, init)` the transport handed it. */
+function stubFetch(answer: () => unknown): { url: string; init: RequestInit }[] {
+  const seen: { url: string; init: RequestInit }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init: RequestInit) => {
+      seen.push({ url, init });
+      return answer();
+    })
+  );
+  return seen;
+}
+
+const okJson = (body: unknown) => () => ({
+  status: 200,
+  statusText: "OK",
+  json: async () => body,
+});
+
 afterEach(() => {
   Reflect.deleteProperty(window, "dopl");
   vi.unstubAllGlobals();
 });
 
 describe("fetchTransport sends the shared headers", () => {
-  it("every header requestHeaders would build reaches fetch", async () => {
+  it("every header the shared builder makes reaches fetch", async () => {
     noBridge();
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
-      status: 200,
-      statusText: "OK",
-      json: async () => ({ ok: true }),
-    }));
-    vi.stubGlobal("fetch", fetchMock);
+    const seen = stubFetch(okJson({ ok: true }));
 
     await sendRequest({
       path: "/api/skills?limit=20",
@@ -49,45 +63,33 @@ describe("fetchTransport sends the shared headers", () => {
       expectedUpdatedAt: "2026-10-12T00:00:00Z",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const init = fetchMock.mock.calls[0]?.[1] ?? {};
-    expect(init.headers).toEqual({
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe("/api/skills?limit=20");
+    expect(seen[0].init.headers).toEqual({
       "x-workspace-id": "ws-7",
       "content-type": "application/json",
       "x-updated-at": "2026-10-12T00:00:00Z",
     });
     // The field the two transports legitimately disagree on.
-    expect(init.credentials).toBe("same-origin");
+    expect(seen[0].init.credentials).toBe("same-origin");
   });
 
   it("content-type keys off body PRESENCE, so an explicit null still sends it", async () => {
     noBridge();
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
-      status: 200,
-      statusText: "OK",
-      json: async () => ({}),
-    }));
-    vi.stubGlobal("fetch", fetchMock);
+    const seen = stubFetch(okJson({}));
 
     await sendRequest({ path: "/api/thing", method: "POST", body: null });
 
-    expect((fetchMock.mock.calls[0]?.[1] ?? {}).headers).toEqual({
-      "content-type": "application/json",
-    });
+    expect(seen[0].init.headers).toEqual({ "content-type": "application/json" });
   });
 
   it("asks for no headers when the request carries none", async () => {
     noBridge();
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
-      status: 200,
-      statusText: "OK",
-      json: async () => ({}),
-    }));
-    vi.stubGlobal("fetch", fetchMock);
+    const seen = stubFetch(okJson({}));
 
     await sendRequest({ path: "/api/boot", method: "GET" });
 
-    expect((fetchMock.mock.calls[0]?.[1] ?? {}).headers).toEqual({});
+    expect(seen[0].init.headers).toEqual({});
   });
 });
 
