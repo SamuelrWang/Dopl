@@ -1,6 +1,6 @@
 /**
  * 🔒 **`memberCounts` BOTH ARMS: THE EXACT RPC, AND THE WALK WHEN IT IS ABSENT**
- * (cleanup C13, branch cleanup/c13-tally; migration
+ * (cleanup C13, branch fix/c13-tally-r; migration
  * `20261121120000_channel_member_tally_rpc.sql`).
  *
  * The RPC answers first and exactly, never `truncated`. When the function is not

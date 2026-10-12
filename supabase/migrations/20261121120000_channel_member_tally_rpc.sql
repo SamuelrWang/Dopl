@@ -1,7 +1,8 @@
 -- ============================================================================
 -- channel_member_tally — MEMBER COUNTS PER CHANNEL, COUNTED BY POSTGRES
 -- (Release Review 2026-10-11 › Deferred #2; cleanup C13, branch
--- cleanup/c13-tally, NOT FOR MERGE until Samuel says go)
+-- fix/c13-tally-r — Samuel approved the merge 2026-10-12. The CODE merges; this
+-- FILE is still written-not-applied, per the standing gate below.)
 -- ============================================================================
 --
 -- ⚠ **WRITTEN, NOT APPLIED** — this directory's standing gate. Deploy state is a
