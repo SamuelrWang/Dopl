@@ -27,7 +27,7 @@
  * params and hands them down as plain props.
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MessageSquareOff } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { TranscriptSkeleton } from "@/shared/ui/skeleton";
@@ -41,7 +41,8 @@ import { liveAgentsFromKey, liveAgentsKey } from "../lib/live-agents";
 import { agentColorVar } from "../lib/agent-colors";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
-import { ChannelsMessagePane } from "./message-pane";
+import { ChannelsMessagePane, type ScrollTarget } from "./message-pane";
+import { useMessageJump } from "./use-message-jump";
 import { useChannelsLive } from "./live";
 import { indexMembers } from "./view-model";
 import { threadRows } from "./view-model-rows";
@@ -200,6 +201,37 @@ export function ChannelsThreadWindow({
 
   useWindowTitle(thread?.title ?? null);
 
+  /**
+   * 🔒 **THE CITATION JUMP, IN THE POP-OUT — ONE MECHANISM, A LOCAL SIGNAL**
+   * (grammar B, 2026-10-12).
+   *
+   * ⚠ **THIS WINDOW USED TO HAND NO `onJumpToSeq` AT ALL**, so every citation in
+   * it rendered as plain text by the absent-not-disabled rule — correct while
+   * nothing could move the transcript, and a dead end once a pill became the only
+   * way a reader reaches a cited message. Under grammar B that is the whole
+   * affordance, and a pop-out is where one exchange is read most closely.
+   *
+   * ⚠ **THE RESOLVER AND THE LANDING ARE THE SHARED ONES** — `useMessageJump`
+   * (which owns `citationScrollTargetId` and the `seq:<n>` miss sentinel) and
+   * `message-pane.tsx`'s landing, including the page-back hunt. Only the SIGNAL is
+   * local, and it has to be: the nonced `scrollTarget` lives in
+   * `use-channels-selection.ts`, which belongs to the main surface's two columns
+   * and is not mounted here. Same shape, same nonce discipline — asking twice
+   * must ask twice.
+   *
+   * ⚠ **ABOVE THE EARLY RETURNS, DELIBERATELY.** Both branches below return before
+   * the pane renders, and a hook called after them would be a conditional hook.
+   */
+  const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
+  const jumpToSeq = useMessageJump({
+    rows,
+    // A pop-out IS one exchange, so the thread never changes under the jump.
+    openThreadId: thread?.id ?? null,
+    channelId,
+    jumpToMessage: (_threadId, messageId) =>
+      setScrollTarget((prev) => ({ messageId, nonce: (prev?.nonce ?? 0) + 1 })),
+  });
+
   // ⚠ The thread list has to have LANDED before "no such thread" is an honest
   // answer.
   if (threadsLoading) {
@@ -240,7 +272,8 @@ export function ChannelsThreadWindow({
         outboundAsk={thread ? (outboundByThread.get(thread.id) ?? null) : null}
         outboundBusy={consentBusy}
         onDecideOutbound={decideOutbound}
-        scrollTarget={null}
+        scrollTarget={scrollTarget}
+        onJumpToSeq={jumpToSeq}
         // ⚠ THE SAME POLL THIS WINDOW ALREADY MAKES for the peer-activity row, UNIONED with this
         // machine's own feed (2026-09-13 — see `liveAgents` above), so the pop-out's composer
         // offers the same @-chips the main pane does (2026-09-02, slice B10).

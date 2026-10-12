@@ -33,7 +33,7 @@ export interface BodyContext {
   /**
    * **JUMP THE TRANSCRIPT TO A CITED MESSAGE.** ⚠ ABSENT MAKES A CITATION PLAIN
    * TEXT, which is the same absent-not-disabled rule the attribution pill follows:
-   * a host with no transcript to move (the pop-out, a digest) hands none, and a
+   * a host with no transcript to move (a digest, a preview lane) hands none, and a
    * pill that cannot navigate must not look like it can.
    */
   onJumpToSeq?: (seq: number) => void;
