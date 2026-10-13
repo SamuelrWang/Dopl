@@ -323,19 +323,46 @@ for (const [which, script] of Object.entries(COPIES)) {
     assert.equal(r.onDisk, 'dc1.EMPTY-_7\n');
   });
 
-  test(`[${which}] a malformed page cursor degrades to the fallback, never fatally`, () => {
-    // ⚠ Ignored rather than fatal, deliberately: persisting `str(whatever)` would
-    // feed junk back as the next `since`, and failing the hold would turn one bad
-    // field into an outage. The row-seq fallback is always valid.
+  test(`[${which}] an INTEGER page cursor is honoured as well`, () => {
+    // ⚠ A server may emit a plain integer cursor to a caller it has not promised
+    // tokens to, and the field should still win over a locally derived one: it
+    // is the server's own count of what this page covered, which can legitimately
+    // be AHEAD of the highest row returned (filtered rows, caps).
     const r = hold(script, {
       file: '4461\n',
       page:
-        '{"cursor":{"nope":1},"messages":[{"seq":5,"body":"hi",' +
+        '{"cursor":9000,"messages":[{"seq":5,"body":"hi",' +
         '"authorUserId":"peer","channelSlug":"general"}]}',
     });
-    assert.equal(r.onDisk, '5\n');
-    assert.equal(r.status, 0);
+    assert.equal(r.onDisk, '9000\n');
   });
+
+  // ⚠ **THESE TWO CASES EXIST BECAUSE A MUTATION SURVIVED.** Making a malformed
+  // field fatal left 35/35 green — the mutation had landed on a `bool` guard that
+  // nothing exercised, and the guard turned out to be redundant anyway (the regex
+  // already rejects `"True"`). So the guard is gone and the behaviour it claimed
+  // is asserted here instead, which is the stronger arrangement: the property is
+  // pinned no matter which line implements it.
+  for (const [label, value] of [
+    ['an object', '{"nope":1}'],
+    ['a bool', 'true'],
+    ['a string that is not a cursor', '"not a cursor"'],
+    ['null', 'null'],
+  ]) {
+    test(`[${which}] a page cursor that is ${label} degrades to the fallback, never fatally`, () => {
+      // Ignored rather than fatal, deliberately: persisting `str(whatever)` would
+      // feed junk back as the next `since`, and failing the hold would turn one
+      // bad field into an outage. The row-seq fallback is always valid.
+      const r = hold(script, {
+        file: '4461\n',
+        page:
+          `{"cursor":${value},"messages":[{"seq":5,"body":"hi",` +
+          '"authorUserId":"peer","channelSlug":"general"}]}',
+      });
+      assert.equal(r.onDisk, '5\n');
+      assert.equal(r.status, 0);
+    });
+  }
 
   test(`[${which}] 🔒 the strips-no-characters promise the header makes is kept`, () => {
     // ⚠ An ABSENCE over the whole file, because the old line is one convenient

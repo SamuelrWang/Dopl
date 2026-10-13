@@ -222,10 +222,11 @@ messages = page.get("messages") or []
 # list, and the field above is how this one stops needing it.
 CURSOR_RE = re.compile(r"^(?:[0-9]+|[A-Za-z0-9]+\.[A-Za-z0-9_=-]+)$")
 page_cursor = page.get("cursor")
-# A bool IS an int in python; it is not a cursor.
-if isinstance(page_cursor, bool):
-    page_cursor = None
-elif isinstance(page_cursor, int):
+# An integer field is honoured too -- a server may well emit one of those to a
+# caller it has not promised tokens to. ⚠ A bool is an int in python, so True
+# arrives here and becomes "True", which the pattern below then rejects: the
+# REGEX is what makes every non-cursor shape safe, not a list of type checks.
+if isinstance(page_cursor, int):
     page_cursor = str(page_cursor)
 if not (isinstance(page_cursor, str) and CURSOR_RE.match(page_cursor)):
     # ⚠ A field of an unexpected SHAPE is ignored rather than fatal: persisting
