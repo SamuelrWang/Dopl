@@ -54,19 +54,34 @@ afterEach(() => {
 });
 
 describe("a token hides the number — the reason this exists", () => {
-  it("🔒 the seq appears NOWHERE in the token, in any obvious encoding", () => {
+  it("🔒 the seq appears NOWHERE in the token — three needles, three wrong codecs", () => {
+    /**
+     * ⚠ **THE HEX NEEDLE THIS REPLACES WAS FLAKY AND WEAK AT ONCE** (Review 40,
+     * measured): `(4461).toString(16)` is `"116d"`, four hex characters in a
+     * 72-character hex haystack, so it FALSE-REDS about **1 run in 984** (1,016
+     * collisions in 1,000,000 random 36-byte buffers, measured locally) — and it
+     * would not have caught `base64url(String(seq))` either.
+     *
+     * Each needle below catches a DIFFERENT wrong implementation, which is why all
+     * three stay:
+     *   • the raw string in the token → a signed-but-plaintext cursor (`4461.<mac>`)
+     *   • `utf8` / `latin1` of the decoded body → `base64url(String(seq))`
+     *   • the 8-byte BIG-ENDIAN plaintext → a codec that encodes the real payload
+     *     without encrypting it (ECB, XOR, or no cipher at all)
+     *
+     * The 8-byte needle cannot collide by chance in any run that matters: it is
+     * 2^64 wide, against 2^16 for the four hex characters it replaces.
+     */
     const seq = 4461;
     const token = encodeCursor(seq, CHANNEL, USER);
-    const body = token.slice(CURSOR_PREFIX.length);
+    const body = Buffer.from(token.slice(CURSOR_PREFIX.length), "base64url");
+    const plainBE8 = Buffer.alloc(8);
+    plainBE8.writeBigUInt64BE(BigInt(seq));
+
     expect(token).not.toContain(String(seq));
-    // The forms a curious reader would actually try.
-    expect(Buffer.from(body, "base64url").toString("utf8")).not.toContain(String(seq));
-    expect(Buffer.from(body, "base64url").toString("hex")).not.toContain(
-      seq.toString(16),
-    );
-    expect(Buffer.from(body, "base64url").toString("latin1")).not.toContain(
-      String(seq),
-    );
+    expect(body.toString("utf8")).not.toContain(String(seq));
+    expect(body.toString("latin1")).not.toContain(String(seq));
+    expect(body.includes(plainBE8)).toBe(false);
   });
 
   it("🔒 the SAME seq encodes differently every time", () => {
