@@ -74,7 +74,10 @@ const COPIES = {
  * Claude CLI's config for a bearer token, and nothing here may touch the
  * operator's own. `DOPL_TOKEN` is set, so that path is not taken at all.
  */
-function hold(script, { file, since } = {}) {
+const ONE_HIT =
+  '{"messages":[{"seq":5,"body":"hi","authorUserId":"peer","channelSlug":"general"}]}';
+
+function hold(script, { file, since, page = ONE_HIT } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dopl-wait-cursor-'));
   const log = path.join(dir, 'curl.argv');
   const bin = path.join(dir, 'bin');
@@ -84,8 +87,7 @@ function hold(script, { file, since } = {}) {
     `#!/bin/sh\n` +
       `if [ -s '${log}' ]; then exit 7; fi\n` +
       `for a in "$@"; do printf '%s\\n' "$a" >> '${log}'; done\n` +
-      `printf '%s' '{"messages":[{"seq":5,"body":"hi",` +
-      `"authorUserId":"peer","channelSlug":"general"}]}'\n`,
+      `cat <<'JSON_EOF'\n${page}\nJSON_EOF\n`,
     { mode: 0o755 },
   );
 
@@ -108,6 +110,7 @@ function hold(script, { file, since } = {}) {
   return {
     status: res.status,
     stderr: res.stderr ?? '',
+    stdout: res.stdout ?? '',
     url,
     /**
      * The header VALUES the script passed, in order. ⚠ Taken from the recorded
@@ -277,6 +280,61 @@ for (const [which, script] of Object.entries(COPIES)) {
     assert.ok(
       hold(script, { since: 'dc1.AbC-_123' }).headers.includes('X-Dopl-Cursor: opaque-1'),
     );
+  });
+
+  test(`[${which}] 🔒 a page-level cursor from the server is persisted VERBATIM`, () => {
+    // ⚠ **THE OTHER HALF OF THE `X-Dopl-Cursor` PROMISE.** Advertising that this
+    // client returns a cursor unchanged is worth nothing if the client then
+    // computes its own instead — and it did: the next cursor came from
+    // `max(row seq)`, so a token the server sent would have been ignored and an
+    // integer sent back in its place. Reading the field means the day the server
+    // starts emitting one, THIS script already consumes it, with no second
+    // desktop release — and the desktop is the slowest thing here to update.
+    const r = hold(script, {
+      file: '4461\n',
+      page:
+        '{"cursor":"dc1.ZZtop-_99","messages":[{"seq":5,"body":"hi",' +
+        '"authorUserId":"peer","channelSlug":"general"}]}',
+    });
+    assert.equal(r.onDisk, 'dc1.ZZtop-_99\n');
+    assert.notEqual(r.onDisk, '5\n', 'the row seq was persisted over the page cursor');
+    assert.equal(r.status, 0);
+  });
+
+  test(`[${which}] with no page cursor, the row-seq fallback is exactly as before`, () => {
+    // ⚠ THE CASE THAT MUST NOT MOVE. Nothing emits the field today, so this is
+    // what every real run does, and the change has to be invisible until a
+    // server opts in.
+    const r = hold(script, { file: '4461\n' });
+    assert.equal(r.onDisk, '5\n');
+    assert.equal(r.status, 0);
+  });
+
+  test(`[${which}] 🔒 a page cursor is persisted even when the page has NO messages`, () => {
+    // ⚠ A cursor the server moved must be recorded even on an empty page, or the
+    // next hold re-asks from behind it — and on a busy workspace that is a hold
+    // that keeps being handed traffic it has already seen. The script writes it
+    // and holds again; the stub refuses a second request, so the thing to assert
+    // is the FILE, not the exit code.
+    const r = hold(script, {
+      file: '4461\n',
+      page: '{"cursor":"dc1.EMPTY-_7","messages":[]}',
+    });
+    assert.equal(r.onDisk, 'dc1.EMPTY-_7\n');
+  });
+
+  test(`[${which}] a malformed page cursor degrades to the fallback, never fatally`, () => {
+    // ⚠ Ignored rather than fatal, deliberately: persisting `str(whatever)` would
+    // feed junk back as the next `since`, and failing the hold would turn one bad
+    // field into an outage. The row-seq fallback is always valid.
+    const r = hold(script, {
+      file: '4461\n',
+      page:
+        '{"cursor":{"nope":1},"messages":[{"seq":5,"body":"hi",' +
+        '"authorUserId":"peer","channelSlug":"general"}]}',
+    });
+    assert.equal(r.onDisk, '5\n');
+    assert.equal(r.status, 0);
   });
 
   test(`[${which}] 🔒 the strips-no-characters promise the header makes is kept`, () => {

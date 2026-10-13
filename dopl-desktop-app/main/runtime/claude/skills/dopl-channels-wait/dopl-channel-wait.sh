@@ -195,7 +195,7 @@ writeCursor() {
 # on stdin, so a heredoc and a piped response body cannot both be there — the
 # first version of this script had both and read every reply as unparseable.
 FILTER='
-import json, sys
+import json, re, sys
 
 to = sys.argv[1].strip()
 channels = {c.strip().lower() for c in sys.argv[2].split() if c.strip()}
@@ -207,11 +207,44 @@ except Exception:
     raise SystemExit(0)
 
 messages = page.get("messages") or []
-if not messages:
-    print("NONE")
-    raise SystemExit(0)
 
-cursor = max(int(m.get("seq", 0)) for m in messages)
+# ⚠ THE CURSOR THE SERVER SENDS WINS WHENEVER IT SENDS ONE, and it is carried
+# VERBATIM. This is the other half of the X-Dopl-Cursor promise: advertising that
+# this client returns a cursor unchanged is worth nothing if the client then
+# computes its own instead. Reading the field here means the day the server
+# starts emitting one, THIS script already consumes it -- no second desktop
+# release, which is the slowest step in the system.
+#
+# ⚠ Without the field, the fallback is what the script has always done: the
+# highest row seq on the page. That is a derived cursor and it only works because
+# seq is published on each row -- which makes this a third client of row seq,
+# alongside the desktop listener and the web hook. That is why it is on the B7
+# list, and the field above is how this one stops needing it.
+CURSOR_RE = re.compile(r"^(?:[0-9]+|[A-Za-z0-9]+\.[A-Za-z0-9_=-]+)$")
+page_cursor = page.get("cursor")
+# A bool IS an int in python; it is not a cursor.
+if isinstance(page_cursor, bool):
+    page_cursor = None
+elif isinstance(page_cursor, int):
+    page_cursor = str(page_cursor)
+if not (isinstance(page_cursor, str) and CURSOR_RE.match(page_cursor)):
+    # ⚠ A field of an unexpected SHAPE is ignored rather than fatal: persisting
+    # str(whatever) would feed junk back as the next since, and failing the hold
+    # would make a malformed field an outage. The row-seq fallback is always
+    # valid, so degrade to it.
+    page_cursor = None
+
+if page_cursor is None:
+    if not messages:
+        print("NONE")
+        raise SystemExit(0)
+    cursor = str(max(int(m.get("seq", 0)) for m in messages))
+else:
+    # ⚠ Even with NO messages: a cursor the server moved must be persisted, or
+    # the next hold re-asks from behind it. This leaves as WAIT rather than NONE
+    # precisely because WAIT already means "advance past it and hold again" --
+    # the one path that writes the cursor without ending the wait.
+    cursor = page_cursor
 
 def matches(m):
     if channels:
@@ -224,7 +257,7 @@ def matches(m):
 
 hit = next((m for m in messages if matches(m)), None)
 if hit is None:
-    print("WAIT %d" % cursor)
+    print("WAIT %s" % cursor)
     raise SystemExit(0)
 
 # ONE LINE. A background task is read by its status and its last line; a page of
