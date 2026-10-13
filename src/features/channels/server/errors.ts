@@ -346,9 +346,9 @@ export class ChannelCiteNumberUnavailableError extends ChannelError {
 export class ChannelCursorUndecodableError extends ChannelError {
   constructor() {
     super(
-      "That cursor cannot be read by this server. Re-establish one with an " +
-        "unscoped read of this channel, then hold from the highest seq below " +
-        "which you have seen everything.",
+      "That cursor cannot be read by this server. Re-establish WITHOUT a cursor: " +
+        "read this channel unscoped, then hold from the highest seq below which " +
+        "you have seen everything in it.",
     );
   }
 }
