@@ -118,7 +118,7 @@ describe("a body's size and fingerprint read the same on a write and a read", ()
 
 // ── S45 — a sibling agent is named as one ───────────────────────────────────
 
-describe("a SIBLING agent renders `for you` (S45)", () => {
+describe("a SIBLING agent renders `(yours)` (S45; was `for you — YOUR OWN agent` until W3)", () => {
   const agentMsg = (authorUserId: string | null): ChannelMessage =>
     ({
       authorKind: "agent",
@@ -131,7 +131,7 @@ describe("a SIBLING agent renders `for you` (S45)", () => {
   it("says so when the author IS the reader's own account", () => {
     const view: MemberView = { selfUserId: ME, names: new Map() };
     const out = formatAuthor(agentMsg(ME), view);
-    expect(out).toContain("for you");
+    expect(out).toContain("(yours)");
     // ⚠ The handle is neutralized before it is spliced — this asserts the
     // rendered form, not the raw name.
     expect(out).toContain("picker-fix");
@@ -143,7 +143,7 @@ describe("a SIBLING agent renders `for you` (S45)", () => {
     const view: MemberView = { selfUserId: "22222222-2222-2222-2222-222222222222", names: new Map() };
     const out = formatAuthor(agentMsg(ME), view);
     expect(out).toContain("Samuel Wang");
-    expect(out).not.toContain("for you");
+    expect(out).not.toContain("(yours)");
   });
 
   it("falls back to the old rendering when the caller is UNRESOLVED", () => {
@@ -155,7 +155,7 @@ describe("a SIBLING agent renders `for you` (S45)", () => {
 
   it("never claims a sibling on a NULL author id", () => {
     const view: MemberView = { selfUserId: null, names: new Map() };
-    expect(formatAuthor(agentMsg(null), view)).not.toContain("for you");
+    expect(formatAuthor(agentMsg(null), view)).not.toContain("(yours)");
   });
 });
 

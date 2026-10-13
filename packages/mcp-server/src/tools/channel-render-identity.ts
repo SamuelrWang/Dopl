@@ -124,7 +124,7 @@ export function formatAuthor(m: ChannelMessage, view: MemberView = NO_MEMBER_VIE
     // ⚠ **`for you` REPLACES THE OPERATOR CLAUSE, IT DOES NOT JOIN IT.** The
     // operator IS the reader here, so `for you (Samuel Wang (<id>))` would be
     // the same fact twice and the id is already on every other row of the page.
-    if (mine) return `${label} for you — YOUR OWN agent`;
+    if (mine) return `${label} (yours)`;
     return who ? `${label} for ${who}` : (handle ? label : "an agent");
   }
   return who ? `member ${who}` : "a member";
@@ -178,8 +178,7 @@ function isOutsideSession(m: ChannelMessage): boolean {
  * `for <operator> (<user id>)`, the half the author does not control.
  */
 function agentHandleOf(m: ChannelMessage): string | null {
-  const named = m.authorAgentName ? neutralizeInline(m.authorAgentName) : null;
-  if (named) return `@${named}`;
+  if (m.authorAgentName) return nameHandle(m.authorAgentName);
   const session = sessionIdOf(m);
   const tail = session ? sessionTail(session) : null;
   return tail ? `@agent-${inlineOr(tail, UNREADABLE_ID)}` : null;
@@ -300,8 +299,21 @@ export function agentNamesFromMessages(messages: ChannelMessage[]): Map<string, 
  */
 function agentRef(agentId: string, view: MemberView): string {
   const name = view.agentNames?.get(agentId);
-  const safe = name ? neutralizeInline(name) : null;
-  return safe ? `@${safe}` : `@agent-${inlineOr(agentId, UNREADABLE_ID)}`;
+  return name ? nameHandle(name) : `@agent-${inlineOr(agentId, UNREADABLE_ID)}`;
+}
+
+/**
+ * **AN AGENT'S NAME AS THE HANDLE A READER TYPES BACK** (Context Economy W3, 2026-10-13): lowercase,
+ * whitespace runs to `-`, the web's one slugger (`src/features/channels/lib/mentions.ts ›
+ * mentionSlug`, which this package cannot import), so "Picker Fix" renders `@picker-fix`, the tag
+ * `to=` and a body mention resolve. ⚠ ONLY A PLAIN `[a-z0-9-]` SLUG IS PRINTED BARE: anything else
+ * (punctuation, non-ASCII, a backtick) keeps the neutralized code span it always had, because the
+ * line head is server narration and the name is peer-typed. A narrower test than the web's
+ * `retypable`, never a wider one, so a bare handle printed here is always one the resolver takes.
+ */
+export function nameHandle(name: string): string {
+  const slug = name.trim().toLowerCase().replace(/\s+/g, "-");
+  return /^[a-z0-9][a-z0-9-]*$/.test(slug) ? `@${slug}` : `@${neutralizeInline(name)}`;
 }
 
 /**

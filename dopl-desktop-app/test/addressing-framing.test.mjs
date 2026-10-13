@@ -93,7 +93,7 @@ test("the identity block is the id, its BOUNDARY, and how to address a peer", ()
     // session of this same operator, and `outside session` marks the operator's own external
     // MCP connection, whose reply handle is the group tag rather than the author's own name.
     // A rule about a label the transcript does not carry would be worse than no rule.
-    "\"for you\" on an agent line means YOUR operator's agent; another name means another member's.",
+    "\"(yours)\" on an agent line means YOUR operator's agent; \"for <name>\" means another member's.",
     "\"outside session\" is your operator's own coding session: address it @desktop, in full detail.",
   ]);
 });
