@@ -13,7 +13,6 @@ const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
 const { packaging } = require('./packaging');
-const { pickOf } = require('../selection-vocabulary');
 const { profileEntryFrom } = require('../contract');
 
 // Electron-free at load: `client.js` (dynamic ESM import), `launch-spec.js` (electron) and
@@ -125,11 +124,7 @@ const runtime = {
   // No synchronous roster key: a READY catalog is kept for the process.
   // `models.persist: false` (descriptor): Cursor keeps no last-live answers.
   buildIdentity() { return null; },
-  // Picks pass as given (the funnel already refused an unknown one on the live catalog).
-  modelArg(value) {
-    const v = pickOf(value);
-    return { ok: true, arg: v, id: v, reason: '' };
-  },
+  modelArg(value) { return models.modelArg(value); },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },

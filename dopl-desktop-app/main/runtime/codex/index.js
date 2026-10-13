@@ -12,7 +12,6 @@ const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
 const { packaging } = require('./packaging');
-const { pickOf } = require('../selection-vocabulary');
 const identity = require('./identity');
 const requiredShape = require('./required-shape');
 const { profileEntryFrom } = require('../contract');
@@ -156,11 +155,7 @@ const runtime = {
     if (!found.ok) throw new Error(found.reason || 'no Codex build on this Mac');
     return require('./shape').describe(found.path);
   },
-  // Picks pass as given (the funnel already refused an unknown one on the live catalog).
-  modelArg(value) {
-    const v = pickOf(value);
-    return { ok: true, arg: v, id: v, reason: '' };
-  },
+  modelArg(value) { return models.modelArg(value); },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },

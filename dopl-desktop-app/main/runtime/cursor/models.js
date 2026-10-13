@@ -3,6 +3,7 @@
 // empty roster WITH a reason (`model-catalog.js` reads that as `unavailable`).
 
 const client = require('./client');
+const { pickOf } = require('../selection-vocabulary');
 
 const LIST_TIMEOUT_MS = 8000;
 
@@ -103,4 +104,11 @@ const descriptor = {
   dimensionOptions: null,
 };
 
-module.exports = { models, descriptor };
+/** A pick → the launch argument `{ ok, arg, id, reason }`. Picks pass as given (the funnel already refused an
+ *  unknown one on the live catalog). */
+function modelArg(value) {
+  const v = pickOf(value);
+  return { ok: true, arg: v, id: v, reason: '' };
+}
+
+module.exports = { models, modelArg, descriptor };

@@ -62,6 +62,7 @@ export const loadCatalog = (store) =>
 export function loadCodexModels(client) {
   return evalFile(join(MAIN, "runtime", "codex", "models.js"), (id) => {
     if (id === "./client") return client;
+    if (id === "../selection-vocabulary") return requireMain(join(MAIN, "runtime", "selection-vocabulary.js")); // pure (`› modelArg`)
     if (id === "./config-home") return { isolatedEnv: (env) => env };
     if (id === "../cli-spawn") return requireMain(join(MAIN, "runtime", "cli-spawn.js"));
     if (id === "../../app-version") return { appVersion: () => "" };
