@@ -31,7 +31,6 @@ function defaultDeps() {
       try { return String((require('./loader').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
     },
     probe: roster.probe,
-    observeShape: roster.observeShape,
     // The catalog's models now (the one cache), for SYNCHRONOUS launch resolution. Lazy: the registry
     // requires this module. Never throws; [] before any read.
     catalogModels: () => {
@@ -146,16 +145,6 @@ function launchArg(value) {
   return PICK_RE.test(v) ? v : resolveLaunchModel('').arg;
 }
 
-/** The pairing new launches run (bundled SDK + the ACTIVE CLI), as it describes itself — turn-free
- *  (`roster.js › observeShape`). `runtime.shape()`; checked against `descriptor.requiredShape`. */
-async function shape() {
-  const sdk = await deps.loadSdk();
-  const options = { env: deps.env() };
-  const bin = deps.bin();
-  if (bin) options.pathToClaudeCodeExecutable = bin;
-  return deps.observeShape({ sdk, options });
-}
-
 /** `inject` swaps the dependencies (tests); there is no cache to drop. */
 function inject(overrides) { deps = Object.assign(defaultDeps(), overrides || {}); }
 
@@ -179,6 +168,6 @@ const descriptor = {
 function catalogModels() { return deps.catalogModels(); }
 
 module.exports = {
-  models, shape, buildIdentity, resolveLaunchModel, launchArg, catalogModels, inject,
+  models, buildIdentity, resolveLaunchModel, launchArg, catalogModels, inject,
   descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };

@@ -88,8 +88,6 @@ const PENDING = {
     },
     missing: {
       "client.js": "Phase 1.6 (loader.js)",
-      "required-shape.js": "Phase 1.1 (inline in index.js)",
-      "shape.js": "Phase 1.1 (models.js › shape)",
       "identity.js": "Phase 1.2 (models.js › buildIdentity)",
       "login.js": "Phase 4: the flow is core main/claude-auth.js (core-vocabulary DEFERRED)",
     },
