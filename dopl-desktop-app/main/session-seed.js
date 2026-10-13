@@ -17,8 +17,10 @@ const { withSourceNote } = require('./message-source');
  * `reply` is the ready call back to the author (`replyFor`), omitted when the message names another agent. It
  * is the turn's LAST line, below the fence (still our voice: the body cannot forge a fence line): measured
  * 2026-09-25, an agent that read tools first dropped the instruction when it sat above the message.
+ * `catchUpSeq` (`session-gate.js › enqueue`): the seq through which this run holds every thread message;
+ * named, the turn tells the agent to re-read with `since=` rather than page the whole thread (W2).
  */
-function frameContinuation(nonce, message, authorName, addressing, authorNote, set, reply, source) {
+function frameContinuation(nonce, message, authorName, addressing, authorNote, set, reply, source, catchUpSeq) {
   const begin = `BEGIN-REQUEST-${nonce}`;
   const end = `END-REQUEST-${nonce}`;
   const body = stripFence(message, begin, end);
@@ -37,8 +39,20 @@ function frameContinuation(nonce, message, authorName, addressing, authorNote, s
     begin,
     body,
     end,
+    ...(Number.isFinite(catchUpSeq) ? [`You hold this thread through seq ${catchUpSeq}; to catch up, read it with since=${catchUpSeq}, not in full.`] : []),
     ...(forOther ? [] : [`Answer IN THE CHANNEL, never in your final text${answer}.${decision ? ` A choice only a person can make goes on a decision card: ${decision}.` : ''}`]),
   ].join('\n');
+}
+
+/**
+ * THE THREAD CATCH-UP MARK a new session starts with (Context Economy W2, 2026-10-12): `through` is
+ * the seq up to which the run holds every message on its thread, advanced by `session-gate.js ›
+ * enqueue` and frozen by `session-dispatch.js › markGap`. Only a FRESH THREAD run gets one: a resumed
+ * run may have missed messages while this machine was not routing (and `session-boot.js` builds its
+ * revived sessions without one), so it never names a `since=` and its agent reads in full.
+ */
+function initialCatchUp(spec) {
+  return spec && spec.taskId && !spec.resumeSdkId ? { through: null, gap: false } : null;
 }
 
 // The reply call for one inbound turn, addressed from the SESSION's own slot (a thread reply carries `thread`,
@@ -239,6 +253,7 @@ function frameDirectedTurn(nonce, text, set) {
 
 module.exports = {
   discoveryFor,
+  initialCatchUp,
   frameContinuation,
   replyFor,
   addressingLines,

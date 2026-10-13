@@ -153,7 +153,7 @@ function runEffect(s, eff) {
       break;
     case 'pushInbound':
       noteSiblings(s);
-      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source))));
+      if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source, eff.catchUpSeq))));
       break;
     case 'interruptQuery':
       // The interrupted turn still ends with a `result`; the direction it was answering lapses (P4-08).
@@ -314,6 +314,7 @@ async function startSession(spec, rt) {
     idleTimer: null,
     settled: false,
     lastInboundSeq: Number.isFinite(Number(spec.triggerSeq)) ? Number(spec.triggerSeq) : null,
+    catchUp: io.initialCatchUp(spec), // the wake's `since=` mark (`session-seed.js › initialCatchUp`)
     // Own posts' client_msg_ids: the fan-out's self-filter (bounded in session-dispatch).
     ownPostIds: new Set(),
     // Rehydrated with slack so a resume never re-mints an id the server holds (idempotency discards it).

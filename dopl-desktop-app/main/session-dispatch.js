@@ -373,6 +373,8 @@ function mayWake(m, myUserId) {
 }
 
 const fromMe = (m, myUserId) => !!myUserId && String(m.authorUserId) === String(myUserId); // my account; blank matches nothing
+// A thread message this run was NOT handed freezes its `since=` mark (`session-gate.js › enqueue`, W2).
+const markGap = (s) => { if (s && s.catchUp) s.catchUp.gap = true; };
 
 function feedLiveSession(entry, m, myUserId) {
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
@@ -421,12 +423,12 @@ function feedLiveSession(entry, m, myUserId) {
     const named = plan.ids.indexOf(String(s.agentId || '')) !== -1;
     // ⚠ NOT A REFUSAL AND NOT A HOLD. Nothing was aimed at this session, so nothing was
     // declined — filing a `refused` receipt here would report a decision the machine never made.
-    if (!named && !plan.context) { skipped += 1; continue; }
+    if (!named && !plan.context) { skipped += 1; markGap(s); continue; }
     // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. FRAMING ONLY — the
     // wake key is `wake` below.
     const addressing = addressingFor(s.agentId, plan.ids);
     const wake = named && wakeAllowed;
-    if (!mayFeed(s, wake)) { held += 1; ack(s, { held: 1 }); continue; }
+    if (!mayFeed(s, wake)) { held += 1; markGap(s); ack(s, { held: 1 }); continue; }
     const wasDormant = dormant(s);
     const ok = sessionEngine.feedInbound({
       channelId: entry.channel.id,
@@ -457,7 +459,7 @@ function feedLiveSession(entry, m, myUserId) {
       ...(m.authorKind === 'agent' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
       ...(m.authorKind === 'agent' && m.authorAgentColor ? { authorAgentColor: m.authorAgentColor } : {}),
     });
-    if (!ok) { ack(s, { refused: 1 }); continue; }
+    if (!ok) { markGap(s); ack(s, { refused: 1 }); continue; }
     fed += 1;
     // ⚠ `wake` ALONE DOES NOT MEAN "STARTED": an ADDRESSED session already running carries
     // `wake: true` too (it is what `session-gate.js` stamps `lastWakeSeq` on). Different news,

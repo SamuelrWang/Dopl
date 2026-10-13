@@ -261,6 +261,7 @@ module.exports = {
   makePushIterator,
   userMessage,
   frameContinuation: seed.frameContinuation,
+  initialCatchUp: seed.initialCatchUp,
   replyFor: seed.replyFor,
   noteGatedBody: seed.noteGatedBody,
   withSeed: seed.withSeed,

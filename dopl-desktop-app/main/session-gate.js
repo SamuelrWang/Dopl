@@ -58,6 +58,17 @@ function enqueue(s, a) {
   // fetched window contains it; recording it keeps it out of the seed, since it rides its own
   // fenced continuation.
   io.noteGatedBody(s, a.message);
+  // THE THREAD CATCH-UP MARK (Context Economy W2, 2026-10-12): the highest seq through which this run
+  // has been handed EVERY message on its thread, so its next re-read can pass `since=` instead of paging
+  // the whole thread again. Advanced only here, the one delivery point, and only while unbroken:
+  // `session-dispatch.js › feedLiveSession` sets `gap` for any thread message this run was NOT given,
+  // and the mark then stays where it was (a smaller `since` re-reads more, never less). Plain data on
+  // `s`, no free var, so every harness that slices this block runs it unchanged.
+  const mark = s.catchUp;
+  if (mark && mark.gap !== true && typeof a.seq === 'number' && Number.isFinite(a.seq)) {
+    mark.through = mark.through == null ? a.seq : Math.max(mark.through, a.seq);
+  }
+  const catchUpSeq = mark && mark.through != null ? mark.through : null;
   // `addressing` (the @agent-id verdict for THIS reader) and `authorNote` (one line of OUR narration
   // about the author, null when the start card already named them) are FRAMING, never a gate.
   deps.dispatch(s, {
@@ -72,6 +83,7 @@ function enqueue(s, a) {
     ...(a.authorAgentName ? { authorAgentName: a.authorAgentName } : {}),
     ...(a.authorAgentColor ? { authorAgentColor: a.authorAgentColor } : {}),
     ...(a.source ? { source: a.source } : {}), // the member's device (message-source.js)
+    ...(catchUpSeq != null ? { catchUpSeq: catchUpSeq } : {}), // the wake's `since=` (above)
   });
   return true;
 }
