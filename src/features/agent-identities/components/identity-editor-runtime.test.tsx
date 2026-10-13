@@ -52,7 +52,7 @@ afterEach(cleanup);
 describe("the Model row is the identity runtime's roster", () => {
   it("offers only Default while no runtime is chosen — no borrowed catalog", async () => {
     await open();
-    expect(tabLabels("Runtime")).toEqual(["Any", "Claude Code", "Codex", "Cursor"]);
+    expect(tabLabels("Runtime")).toEqual(["Any", "Claude Code", "Codex", "Cursor", "Muse"]);
     expect(tabLabels("Model")).toEqual(["Default"]);
   });
 

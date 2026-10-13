@@ -69,7 +69,8 @@ export type LaunchToolMode =
   | "ask" | "full" // levels; `auto` is also a level (Claude's word, same meaning)
   | "manual" | "accept_edits" | "auto" | "bypass" // claude
   | "untrusted" | "granular" | "on-request" | "never" // codex
-  | "allowlist" | "auto-review" | "run-everything"; // cursor
+  | "allowlist" | "auto-review" | "run-everything" // cursor
+  | "promptUnmatched" | "onRequest" | "allowAll"; // muse
 
 /** What the machine echoes as applied: always a runtime's own word, never a level. */
 export type LaunchAppliedToolMode = Exclude<LaunchToolMode, "ask" | "full">;

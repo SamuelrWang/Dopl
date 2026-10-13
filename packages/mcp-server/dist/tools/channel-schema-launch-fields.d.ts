@@ -23,6 +23,9 @@ export declare const GRANULAR_POSTURE_FIELD: z.ZodOptional<z.ZodObject<{
         allowlist: "allowlist";
         "auto-review": "auto-review";
         "run-everything": "run-everything";
+        promptUnmatched: "promptUnmatched";
+        onRequest: "onRequest";
+        allowAll: "allowAll";
     }>>;
     messages: z.ZodOptional<z.ZodEnum<{
         ask: "ask";
@@ -74,6 +77,9 @@ export declare const LAUNCH_INPUT_FIELDS: {
             allowlist: "allowlist";
             "auto-review": "auto-review";
             "run-everything": "run-everything";
+            promptUnmatched: "promptUnmatched";
+            onRequest: "onRequest";
+            allowAll: "allowAll";
         }>>;
         messages: z.ZodOptional<z.ZodEnum<{
             ask: "ask";

@@ -46,6 +46,9 @@ export declare const CHANNEL_INPUT_SHAPE: {
             allowlist: "allowlist";
             "auto-review": "auto-review";
             "run-everything": "run-everything";
+            promptUnmatched: "promptUnmatched";
+            onRequest: "onRequest";
+            allowAll: "allowAll";
         }>>;
         messages: z.ZodOptional<z.ZodEnum<{
             ask: "ask";
