@@ -10680,3 +10680,32 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Cannot tell whether a trace ever records session MCP headers (e.g. only on some failure path). The home is `0700` and owner-only, so the exposure would be same-user only — the same class as the operator's own Muse credential file.
 - Fix: a live smoke with a real Dopl token on a reachable server, then walk `data/muse/local-tracing` for it; if headers ever land there, find Muse's trace-level knob or pass the bearer through an env-expanded stdio wrapper instead.
 - Status: OPEN.
+
+### F-774 — The MCP posture.tools enum grows with every runtime, and the schema budget ratchet refuses it (2026-10-13)
+
+- Location: `packages/mcp-server/src/tools/channel-schema-launch-fields.ts › POSTURE_WORDS` (every runtime's tool words, required there by `dopl-desktop-app/test/runtime-vocab-cross-tree.test.mjs`); `packages/mcp-server/src/tools/channel-schema.ts › SCHEMA_MAX_CHARS`; `packages/mcp-server/src/tool-budget.test.ts`.
+- Found during: the Grok adapter. Measured on branch `runtime/muse-scaffold` (re-derive: `cd packages/mcp-server && npx vitest run src/tools/channel-schema-budget.test.ts src/tool-budget.test.ts`): `tool-budget.test.ts` was ALREADY red before Grok and its numbers do not move with Grok's words (`dopl_channel` 9436 > ceiling 9360, served-per-connection 50475 > 50399 — cause not traced here); Grok's three words turn `channel-schema-budget.test.ts` red (9180 > 9155; it was exactly at its ceiling with Muse's). The ratchet's message says "do not raise the number", but the words are a closed vocabulary the cross-tree suite REQUIRES in the enum — no doctrine move removes them.
+- Fix (Samuel to rule): either raise both ceilings by the measured size of each new runtime's words in the same change (a vocabulary cost, not prose), or narrow the MCP enum to the three levels + a pattern and drop the per-word check from the cross-tree suite (the desktop already validates against the resolved runtime).
+- Status: OPEN — both suites red on this branch; neither ceiling was raised.
+
+### F-775 — `grok agent` deletes `$GROK_HOME/requirements.toml` at `initialize`; whether it applied it first is unmeasured (2026-10-13)
+
+- Location: `dopl-desktop-app/main/runtime/grok/config-home.js › REQUIREMENTS_TOML`, `› writeConfig`.
+- Found during: the Grok live tier (grok 1.0.52): the file Dopl writes is gone after `initialize` (`config.toml` stays). `grok inspect --json` with the file present shows its pins enforced (`projectMcpServers` off, `mcpServerAllowlist: name:dopl_session`), but inspect is a different process. Dopl rewrites it before every spawn, so a later process always sees it at start.
+- What still holds, measured: a project `.mcp.json` in a folder Dopl never trusts starts NO server under `grok agent`, file or no file — folder trust is the fence actually observed; the ask rule lives in `config.toml`, which Grok keeps.
+- Fix: smoke S16 (`docs/specs/grok-runtime.md` §10) — a trusted-folder `.mcp.json` in a throwaway home, with and without the file, to learn whether the agent applies `requirements.toml` before deleting it; if not, move the pins to a layer Grok keeps (`managed_config.toml` is refused as ambient today).
+- Status: OPEN.
+
+### F-776 — This worktree's `node_modules` is the main checkout's, so `@dopl/contracts` typechecks against master (2026-10-13)
+
+- Location: `/Users/samuelwang/Downloads/sie-runtime-muse/node_modules` → symlink to `setup-intelligence-engine/node_modules`, whose `@dopl/contracts` links `../../packages/contracts` IN THE MAIN CHECKOUT.
+- Found during: the Grok cross-tree change. `npx tsc --noEmit` at the root and `npm --prefix packages/mcp-server run build` report `"promptUnmatched"` / `"default"` not assignable to `LaunchToolMode` — master's contracts, not this branch's. With `@dopl/contracts` mapped to `./packages/contracts/src` (a throwaway tsconfig `paths` override) the root typecheck is clean. The `dist/` emit is unaffected (tsc still emits).
+- Fix: worktrees for a branch that touches `packages/contracts` get their own `npm install` (or a `paths` mapping), else every typecheck there is against the wrong source.
+- Status: OPEN (environment).
+
+### F-777 — An operator's Deny on a parked Grok call ends the whole turn (2026-10-13)
+
+- Location: `dopl-desktop-app/main/runtime/grok/approval.js › makeApprovalDriver` (`onPermission`).
+- Found during: the Grok adapter. A verdict the gate SETTLES is answered in the PreToolUse hook, where `deny` fails only that tool; a verdict that waits for the operator can only be answered in `session/request_permission`, whose `reject_once` cancels the turn (`stopReason: "cancelled"`, `PermissionRejected` — measured, `smoke-s2`). The hook cannot wait for a person: it fails OPEN on timeout.
+- Fix: measure whether a hook reply can be deferred past its timeout safely, or whether Grok offers a per-call reject that continues the turn (smoke S11); until then the operator's Deny stops the agent's turn, which fails closed.
+- Status: OPEN.

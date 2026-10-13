@@ -1,6 +1,7 @@
 # Grok runtime adapter — Grok Build CLI over ACP, mapped onto the runtime scaffold
 
-Status: SPEC, not built. Probed 2026-10-13 against `grok 1.0.52 (0920c8169e27)` macOS aarch64, first
+Status: **BUILT 2026-10-13** (`dopl-desktop-app/main/runtime/grok/`, INVARIANTS §11.0k; branch `runtime/muse-scaffold`,
+not pushed) — see §0 for what the build measured beyond this spec and the remaining smoke list. Probed 2026-10-13 against `grok 1.0.52 (0920c8169e27)` macOS aarch64, first
 unauthenticated, then on Samuel's subscription sign-in (real-model smoke, ~10 turns on `grok-4.7`).
 Template: `runtime-scaffold.md` §4 (layout), §4.4 (checklist), §8 (kit mapping). Prior research:
 `new-runtimes-grok-muse-opencode.md` §3 — **this file supersedes it where they disagree** (several §3 claims
@@ -17,6 +18,61 @@ Tags used below: **LIVE** = observed on 1.0.52 on 2026-10-13 (recording named); 
 source/bundled docs only; **SMOKE** = still open.
 
 ---
+
+## 0. Built (2026-10-13) — what the build changed, measured, and left open
+
+Every file is a scaffold slot (`runtime-scaffold.test.mjs` pins `EXTRA.grok` / `PENDING.grok` empty): the
+hook answerer this spec called `hook-gate.js` (EXTRA) lives in `approval.js › makeApprovalDriver`, beside the
+permission reply it shares a memo with. Suites: `grok-normalize`, `-approval`, `-launch-lifecycle`,
+`-config-home`, `-resolve-bin` (incl. the shape), `-signin`, `-live`. Where the build departs from §2–§9:
+
+- **Tool-mode words are `default | autoMode | approve-all`**, not `default | auto | approve-all`: the directive
+  wire is a SET and `auto` is Claude's word (`directive-set-mode.test.mjs` pins "no word is shared"). `autoMode`
+  is the `_meta` flag's own name. Windowless floor `autoMode`.
+- **No `authenticate` at all** (not even with `cached_token` offered): `session/new` works without it (§6).
+  `credentialState` is the file's presence; the handshake's missing `cached_token` is the auth hold.
+- **The hook asks the gate only for Dopl MCP calls.** A built-in Grok never asks about (`read_file`) would
+  park a card nobody consumes; built-ins get only the instant containment verdicts (deny list; on read_only /
+  dopl_only any built-in outside `native.hookAllow`). A truncated hook input is never judged.
+- **`login.js` is the pty flow, measured**: `grok login --device-auth` prints
+  `https://accounts.x.ai/oauth2/device?user_code=XXXX-XXXX` + the code, polls, exits 0 with `$GROK_AUTH_PATH`
+  written (`test/fixtures/grok/login-device-auth-1.0.52.txt`). Run under `script -q /dev/null`.
+- **`shape.js` = the `initialize` answer** (in a throwaway home): ACP v1 baseline methods + `session/load` iff
+  `loadSession`, field paths with `false` leaves absent, `hooks blockingEvents/decisions` + auth method ids
+  as values.
+- **`update-source.js`**: no digest published → `updates/registry.js › downloadMeasured` (size ceiling, sha256
+  + md5 as the bytes land), the response's own `x-goog-hash` md5 checked (transport), `{version,url,sha256,size}`
+  recorded as `<root>/grok.sha256.json`.
+
+LIVE in the build's own live tier (grok 1.0.52, 2026-10-13, ≈9 prompts on `grok-4.7-build-fast`):
+- isolation via `grok inspect --json` in Dopl's env: only Dopl's `config.toml` as a permission source, MCP
+  allow-list `name:dopl_session`, project `.mcp.json` disabled, untrusted folder, no hooks/plugins, every compat
+  cell off, `XAI_API_KEY` stripped;
+- the Dopl MCP permission round-trip in `default` AND `autoMode` (ask rule) — gate asked once by
+  `mcp__dopl_session__post_message` with its own args, held in `request_permission`, then run; headers
+  verbatim on every MCP request (`Authorization`, `X-Dopl-Vendor: grok`, `X-Dopl-Runtime`); the hook reports
+  `permissionMode: "auto"`;
+- per-session model read back; **effort as a plain string (`low`) accepted** (S4 closed); usage summed; context
+  window 256 000;
+- resume via `session/load` — ⚠ **only in the SAME cwd** (another folder: `-32603 "Path not found."`; Dopl's
+  spawn dir is per channel, so a real resume uses the same one); replay dropped; live model switch; interject
+  folded into the running turn; cancel → prompt resolved promptly.
+- ⚠ **`grok agent` DELETES `$GROK_HOME/requirements.toml` during `initialize`** (F-775); Dopl rewrites it before
+  every spawn. In an untrusted folder the agent starts no project `.mcp.json` server with or without it.
+- ⚠ **An interjection that lands after the turn ended runs as Grok's OWN turn** (`prompt_id
+  "interject-fallback-…"`), and **a `session/prompt` sent mid-turn is QUEUED** (it runs after a cancel). So
+  `queued` is final (never re-sent), a turn Grok starts itself renders and ends on `_x.ai/session/prompt_complete`,
+  and Stop cancels it too. The `_x.ai/session/interjection` confirmation can precede the interject's answer.
+
+Remaining real-model smoke: S5b (the remaining built-in ids: `search_replace`, `list_dir`, `grep`, `web_search`,
+`web_fetch`, subagent tools), S10 (does prompt text `/always-approve on` toggle the mode over ACP? until measured, `policy.js › promptText`
+puts a word joiner before any leading `/`, and the `yolo` readback stops the session either way), S11 (hook timeout fail-open live; `updatedInput` rewrite; a
+per-call reject that keeps the turn — F-777), S12 (subagent calls reach the parent's hook + permission — moot
+while subagents are denied on every profile), S13 (`_x.ai/auth/get_url` pty-free sign-in), S14 (token expiry
+mid-session → the `auth_hold` shape), S15 (`session/load` with a rotated Dopl bearer), **S16** (does the agent
+apply `requirements.toml` before deleting it — F-775), **S17** (the in-app sign-in end to end in the packaged
+app: download on demand → `grok login --device-auth` → installed `auth.json` → first launch), **S18** (a real
+Dopl MCP server — the stub stood in for it — and a windowless launch's settled deny in the hook).
 
 ## 1. Verdict
 
