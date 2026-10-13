@@ -35,7 +35,7 @@ const MAIN = join(HERE, "..", "main");
 const require_ = createRequire(import.meta.url);
 
 const registry = require_(join(MAIN, "runtime/index.js"));
-const modelTable = require_(join(MAIN, "runtime/claude/model-table.js"));
+const claudeUsage = require_(join(MAIN, "runtime/claude/usage.js"));
 const codexNormalize = require_(join(MAIN, "runtime/codex/normalize.js"));
 const claudeNormalize = require_(join(MAIN, "runtime/claude/normalize.js"));
 const events = require_(join(MAIN, "runtime/events.js"));
@@ -135,7 +135,7 @@ test("the OTHER runtime's cache convention is additive, and the two are never re
   // ⚠ WHY THIS IS A DESCRIPTOR FIELD AND NOT A SHARED HELPER. `cache_read_input_tokens` IS a term
   // beside the input on Claude and `cachedInputTokens` is NOT on Codex; a single "read the cache
   // field" path would have to be wrong for one of them. Each normalizer owns its own arithmetic.
-  assert.equal(modelTable.promptTokens({
+  assert.equal(claudeUsage.promptTokens({
     input_tokens: 1000, cache_read_input_tokens: 500, cache_creation_input_tokens: 100,
   }), 1600, "Claude's occupancy SUMS the cache terms — the opposite convention, declared apart");
 });
@@ -214,5 +214,5 @@ test("no runtime guesses a window from a model's NAME: Claude's comes only from 
   for (const id of ["claude-sonnet-4-6[1m]", "claude-opus-6", "gpt-5-codex", "borg-3-turbo", ""]) {
     assert.equal(claudeNormalize.windowFor(fresh, id), null, id);
   }
-  assert.equal(modelTable.contextWindowFor, undefined, "the table export is gone");
+  assert.equal(claudeUsage.contextWindowFor, undefined, "the table export is gone");
 });

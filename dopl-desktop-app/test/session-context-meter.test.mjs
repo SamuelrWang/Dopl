@@ -35,7 +35,7 @@ import { loadReducer } from "./_reducer-block.mjs";
 
 const require = createRequire(import.meta.url);
 
-const model = require("../main/runtime/claude/model-table.js");
+const model = require("../main/runtime/claude/usage.js");
 const { initialSessionState, sessionReducer } = loadReducer();
 
 // ── 1. the denominator is LEARNED from the CLI's own reports (2026-10-08) ───

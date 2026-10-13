@@ -4,7 +4,7 @@
 
 const events = require('../events');
 const io = require('../../session-io');
-const modelTable = require('./model-table');
+const usageReaders = require('./usage');
 const { readCount } = require('../sdk-shape');
 const costRates = require('./cost-rates');
 const launchContract = require('./launch-contract');
@@ -146,7 +146,7 @@ function normalize(msg, ctx) {
     // A subagent's messages render but never meter: a delegated run has its own window.
     if (msg.type === 'assistant' && msg.parent_tool_use_id == null) {
       const m = msg.message || {};
-      const tokens = modelTable.promptTokens(m.usage);
+      const tokens = usageReaders.promptTokens(m.usage);
       const model = typeof m.model === 'string' && m.model ? m.model : null; // mid-session switch
       // The window is the one the CLI reported for this model (null until it has).
       if (tokens > 0 || model) out.push(events.context(tokens, model, windowFor(context.windows, model)));
@@ -171,7 +171,7 @@ function normalize(msg, ctx) {
       out.push(events.shapeDrift('result.modelUsage.contextWindow', 'a result reported model usage without a context window'));
     }
     // Cumulative for this QUERY (a resumed query restarts it); core takes the delta. No cost is read.
-    out.push(events.result(modelTable.sessionTokens(msg.usage), main));
+    out.push(events.result(usageReaders.sessionTokens(msg.usage), main));
     return out;
   }
 

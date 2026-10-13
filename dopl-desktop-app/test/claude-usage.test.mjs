@@ -1,4 +1,4 @@
-// CLAUDE CODE'S FROZEN MODEL TABLE (`main/runtime/claude/model-table.js`) and the model a session
+// CLAUDE CODE'S USAGE READERS (`main/runtime/claude/usage.js`, the frozen model table's old home) and the model a session
 // carries: the table stands alone, the fallback id is pinned to its web twin, the launch spec
 // spends the pick on every spawn shape and re-coerces it, and the durable record round-trips it.
 // Drives the shipped code (helpers/source-probe fnOf) with fakes.
@@ -15,7 +15,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
-const model = require("../main/runtime/claude/model-table.js");
+const model = require("../main/runtime/claude/usage.js");
 const CLAUDE_MODELS = require("../main/runtime/claude/models.js");
 // U10 (2026-09-21): `baseRecord`'s two new free vars — the runtime REGISTRY (for the session's own
 // descriptor) and the runtime-truth projection. Required, never faked: neither pulls electron.
@@ -40,9 +40,9 @@ const JUNK = ["", " ", null, undefined, 0, 1, true, {}, [], "Opus", "opus ", "so
 // ── 0. the frozen table stands alone ─────────────────────────────────────────
 
 test("the window/usage table evaluates standalone, with nothing in scope but itself", () => {
-  const SRC = M("runtime/claude/model-table.js");
+  const SRC = M("runtime/claude/usage.js");
   assert.ok(!/require\(|electron|process\./.test(SRC), "the module reaches nothing");
-  const pure = new Function(`${sentinelBlock(SRC, "CLAUDE-MODEL-TABLE")}
+  const pure = new Function(`${sentinelBlock(SRC, "CLAUDE-USAGE")}
     return { promptTokens };`)();
   assert.equal(pure.promptTokens({ input_tokens: 1, cache_read_input_tokens: 2 }), 3);
 });

@@ -84,7 +84,6 @@ const PENDING = {
   claude: {
     present: {
       "loader.js": "Phase 1.4–1.6 → client.js (MCP entry → mcp.js, bin → resolve-bin.js, deny rules → tools.js)",
-      "model-table.js": "Phase 1.3 → usage.js",
     },
     missing: {
       "client.js": "Phase 1.6 (loader.js)",

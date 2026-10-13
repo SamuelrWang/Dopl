@@ -3,7 +3,7 @@
 // live (`models.js`), a no-pick launch sends no model so the CLI runs its own default, and every window is
 // the one the CLI reports on a `result` (`normalize.js › learnWindows`). Requires nothing.
 
-// ─── BEGIN CLAUDE-MODEL-TABLE (pure; unit-tested via source extraction) ───────────
+// ─── BEGIN CLAUDE-USAGE (pure; unit-tested via source extraction) ───────────
 
 // A usage field as a count: missing or junk reads 0, never NaN.
 function count(v) {
@@ -26,7 +26,7 @@ function sessionTokens(usage) {
     + count(u.cache_read_input_tokens) + count(u.cache_creation_input_tokens);
 }
 
-// ─── END CLAUDE-MODEL-TABLE ───────────────────────────────────────────────────────
+// ─── END CLAUDE-USAGE ───────────────────────────────────────────────────────
 
 module.exports = {
   promptTokens,
