@@ -10663,3 +10663,20 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - The test that claims to enforce it is VACUOUS: `core-vocabulary.test.mjs › walk` already keeps only `.js` entries, so the loop asserting "every entry ends in `.js`" can never fail. A `.mjs` file added under `main/runtime/` would pass it.
 - Cannot tell which side is wrong: either the rule means "every CODE file" (doc fix + make the test walk all files and allow-list asset extensions) or the assets belong outside `main/runtime/` (code fix: move the skill bundle and the seed). Samuel decides.
 - Status: OPEN.
+
+### F-772 — Muse's `context.foreign_personal_skills=false` is accepted by `muse serve` but does not hide foreign skills (2026-10-13)
+
+- Location: `dopl-desktop-app/main/runtime/muse/client.js › SERVE_SETTINGS`; `muse/config-home.js` (the private HOME that actually fences).
+- Found during: the Muse adapter build (branch `runtime/muse-scaffold`), live against muse 1.4.7-R6101.1 with the echo provider.
+- Measured: with `HOME` holding `.claude/skills/<x>/SKILL.md` and `.codex/skills/<y>/SKILL.md`, `skill/list` on a fresh session lists BOTH (`source: "user"`) whether `-c context.foreign_personal_skills` is `true` or `false`; the key is accepted (an unknown key refuses the run, exit 2), a wrong JSON type refuses it (exit 3). MSP-REFERENCE / Meta's SDK docs say the setting turns those roots off. Either serve ignores it, or it governs prompt injection and not the catalog — cannot tell without a real model turn.
+- Not a hole in Dopl today: every Dopl spawn runs with `HOME` and `XDG_*` in Dopl's private home, which holds no `.claude`/`.codex`/`.agents` (a launch with one is refused), and `test/muse-live.test.mjs` proves an operator skill is invisible through Dopl's env. The setting is kept as belt-and-braces.
+- Fix: re-measure on the next Muse release (`MUSE_LIVE_BIN=… node --test test/muse-live.test.mjs` plus the skill/list probe with the toggle); drop the setting if it never takes, or ask Meta.
+- Status: OPEN.
+
+### F-773 — One `muse serve` local trace log matched a dummy MCP bearer once; not reproduced (2026-10-13)
+
+- Location: `<private home>/data/muse/local-tracing/bootstrap/cli-*.log` (Muse's own local traces; `TBH_DISABLE_TELEMETRY=1` stops upload, not local tracing); `dopl-desktop-app/main/runtime/muse/mcp.js › buildDoplServerEntry` (the bearer rides `session/start.config.mcpServers.*.headers`).
+- Found during: the Muse adapter smoke. A `grep -rl "Bearer zzz"` over the sandbox data dir listed one bootstrap trace after a probe that sent a required MCP server with that dummy header to an unreachable URL; the file had rotated out (21-file cap) before it could be read. A repeat with a unique canary bearer, same failing config, found the canary NOWHERE on disk (full walk of the home).
+- Cannot tell whether a trace ever records session MCP headers (e.g. only on some failure path). The home is `0700` and owner-only, so the exposure would be same-user only — the same class as the operator's own Muse credential file.
+- Fix: a live smoke with a real Dopl token on a reachable server, then walk `data/muse/local-tracing` for it; if headers ever land there, find Muse's trace-level knob or pass the bearer through an env-expanded stdio wrapper instead.
+- Status: OPEN.

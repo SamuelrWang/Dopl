@@ -1,6 +1,6 @@
 # New runtimes: Grok Build, Muse Code, OpenCode
 
-Status: SPEC, not started. Research date 2026-10-13 (all vendor versions/counts measured that day). Nothing installed or run; every vendor claim
+Status: SPEC; **Muse BUILT 2026-10-13 (§4.0)**, Grok and OpenCode not started. Research date 2026-10-13 (all vendor versions/counts measured that day). Nothing installed or run; every vendor claim
 below is from source/docs reading and the "smoke" items are the open ones.
 
 ## 0. TL;DR
@@ -151,6 +151,58 @@ Smoke S7; if they load, mitigate by `HOME` override for the child (like OpenCode
 fence (Codex pattern).
 
 ## 4. Muse Code adapter (`main/runtime/muse/`)
+
+### 4.0 Status (2026-10-13): BUILT on the runtime scaffold — INVARIANTS §11.0j is the rule, this is the evidence
+
+Built against muse 1.4.7-R6101.1 (darwin arm64) with Meta's `echo` provider (no model, no account). Auth ruling
+(Samuel, 2026-10-13): the user's Muse SUBSCRIPTION via Muse's own device-code sign-in into a Dopl-owned home —
+no API key; `META_API_KEY` is stripped from every child (it "always takes priority over the account login").
+
+**Verified live (echo, `test/muse-live.test.mjs` + the probes recorded under `test/fixtures/muse/live-*.ndjson`):**
+- `serve --help`: no approval flag (approval mode is wire-selected); `--provider echo|meta|local`, `--contributor-mode`,
+  `--disable-write`, `--disable-shell`, `--trust-workspace`, `-c KEY=JSON` (unknown key → exit 2, wrong type → exit 3).
+- `-c` keys accepted: `context.foreign_personal_skills`, `run.reminder_roster.agents`, `run.workflow_trigger_mode`,
+  `tools.web_fetch.enabled`, `tools.web_search.mode`, `tools.artifact.enabled`; `permissions.default_profile` is
+  REFUSED on serve ("permission-profile selection is wire surface").
+- Handshake: `requestedCapabilities: ['sessionMcp']` + `experimentalApi: true` → both granted; `museHome` lands inside
+  Dopl's private home; `schema.version` 1, stable fingerprint `sha256:6de32db0…`.
+- `session/start` echoes `approvalMode.mode` and `permissionState { profileId, reviewerAuthority }`; profiles listed by
+  `permissionProfile/list`: `:read-only`, `:ask-me` (human), `:auto-review` (AI judge), `:unrestricted`. Dopl sends
+  `:ask-me`/`:read-only` only and refuses any echo whose reviewer is not `human`.
+- Echo turn: `turn/start` ack (`disposition: started`) → `turn/started` → `item/*` (`agentMessage`) →
+  `session/tokenUsage` → `turn/completed`; with `run.reminder_roster.agents=[]` no `reminderChild` items.
+- `turn/steer` racing a finished turn → `-32030 already_terminal`; Dopl sends `turn/start { ifBusy: 'steer' }` instead
+  (a second push during an echo turn was QUEUED — echo turns finish in ~200 ms, too fast to observe a real steer).
+- `turn/interrupt` on a finished turn answers `accepted` at once (bounded anyway).
+- A `required` session MCP server that cannot start: the session opens, the turn fails `configError "Required MCP server
+  \`dopl_session\` failed during startup"` — Dopl renders "Dopl's tools did not connect".
+- Isolation: an operator `~/.claude/skills` skill is invisible through Dopl's env (private HOME); the operator's
+  `META_API_KEY` does not reach the child (`account/read` ≠ `envKey`). ⚠ The `foreign_personal_skills` toggle itself
+  does NOT hide those skills in `skill/list` (F-772).
+- Sign-in: `account/loginStart { type: 'deviceCode' }` → `{ verificationUrl: https://auth.meta.com/oauth/device/?code=…,
+  userCode }`; `account/loginCancel` → `loginCompleted { outcome: 'cancelled' }` (no login completed).
+- Channel `https://api.meta.ai/muse-code/channels/muse-stable` is `state: public`; the manifest names each build with
+  sha256 + size; the arm64 build is signed by Meta's team `V9WTTPBFK9` (strict Developer ID check passes).
+- `muse schema generate-json-schema --experimental` → the Shape; the measured build covers every `requiredShape` tier.
+
+**Still needs a REAL-MODEL smoke (Samuel's Muse login; none of these can be shown with echo):**
+1. MCP approval subjects under each mode: does a Dopl MCP write (`dopl_channel` post) raise `approval/requested` with
+   `subject.kind: "tool"` and `toolName: "mcp__dopl_session__dopl_channel"` under `promptUnmatched` AND `onRequest`
+   (Axis B depends on it; `allowAll` is sent as `onRequest` for exactly this reason).
+2. AI judge off: under `:ask-me`, every Dopl approval reaches Dopl (`approval/resolved.resolvedBy` never `llmJudge`).
+3. Read-only MCP skip: Dopl's `readOnlyHint` tools run without an approval under `onRequest` (expected, harmless).
+4. Token carry on resume: is `session/tokenUsage.cumulative` continued after host restart + `session/resume`? Until
+   measured `usageResetsOnResume` stays `'unverified'` and resume is refused.
+5. Reasoning stream: do `reasoning` items carry `summary[]` for the Meta model (`thinking` events)?
+6. `authRequired`: does a revoked/expired account login end a turn with `error.kind: "authRequired"` (→ auth hold), or
+   exit 3 at spawn? Also: the account-login credential FILE name under the file backend (`config/muse/auth.json` is read
+   from the binary's own text, not yet observed after a granted login).
+7. Real model ids, `contextLimit`, `reasoningEffortVariants` from `model/list` signed in; `session/contextUsage`
+   `windowTokens` vs `contextLimit`; whether MCP tools are deferred behind a search verb (`prose.toolSearchVerb`).
+8. A real mid-turn steer (`disposition: 'steered'`) and Stop during a tool call (`terminal: 'cancelled'`).
+9. Local trace logs never carry the session MCP `Authorization` header (F-773).
+
+The table and notes below are the pre-build plan, kept for the record.
 
 `muse serve` = Muse Session Protocol, JSON-RPC 2.0/stdio, `initialize`/`initialized` handshake —
 structurally Codex app-server. Schema: `muse schema`, `meta-models/muse-code-sdk/schema/msp/msp.d.ts`.

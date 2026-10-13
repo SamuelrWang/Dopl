@@ -1,7 +1,7 @@
 # Runtime adapter scaffold — one structure for every SDK
 
 Status (2026-10-13, branch `runtime/muse-scaffold`, local commits, unpushed): **Phase 0 DONE, Phase 1 DONE**
-(§0 below), **Phase 2 DONE** (§0b — K1–K11 + the `modelArg` dedupe); Phase 3 (Muse) and Phase 4 NOT STARTED.
+(§0 below), **Phase 2 DONE** (§0b — K1–K11 + the `modelArg` dedupe); **Phase 3 (Muse) BUILT** (§8, INVARIANTS §11.0j — zero census exceptions); Phase 4 NOT STARTED.
 **How a new adapter maps onto the kit: §8.** §1–§3 are the AUDIT SNAPSHOT taken before Phase 1 and still use
 the old file names (`loader.js`, `server-requests.js`, `model-table.js`, `proc-config.js`, `catalog.js`) and
 the old symbol homes; §0/§0b map them to today's. Every count carries its date; re-derive with the command,
@@ -538,6 +538,9 @@ the kit holds no vendor word (enforced: `runtime-scaffold.test.mjs` › kit test
 | `models.js › modelArg` | `model-arg.js › passThroughModelArg` | nothing — when picks ARE launch ids; write your own when it maps aliases (Claude's `resolveLaunchModel`) |
 | `launch-spec.js` env | `../cli-spawn.js › scrubbedEnv` | its prefix + permission-knob regexes; its env names in `INHERITED_CREDENTIAL_ENV` (§3) |
 
+**Muse — BUILT 2026-10-13 (`main/runtime/muse/`, INVARIANTS §11.0j), as mapped below, with these measured differences.** Files (21 @ 2026-10-13, `ls dopl-desktop-app/main/runtime/muse`): the 11 REQUIRED + `identity`, `required-shape`, `shape`, `protocol`, `login`, `update-source` (all GATED, all declared) + `launch-handle`, `resolve-bin`, `config-home`, `policy` (OPTIONAL). No vendor-only file: `runtime-scaffold.test.mjs` pins `EXTRA.muse` / `PENDING.muse` empty. Where the plan below was not followed literally: `resolve-bin.js` passes `bundledCandidate: () => null` and a `launcherVendor` for Meta's bash launcher (`.muse-version` → `muse-bin-<v>`); `config-home.js` was needed (smoke M2 showed `~/.config/muse`, `~/.claude/skills` reach the child — F-772); `update-source.js` EXISTS (Meta's channel publishes sha256 + size; the updater gained source-supplied `latest`/`fetchInto` and `onDemand`, §11.0); the per-launch readback lives in `policy.js › assertSessionTook` (the `Session` echo), so no `launch-verify.js`; Axis B is not `makeHeldGate` called from a server-request handler but `approval.js › makeApprovalDriver` (receipt `{}` + an `approval/decide` COMMAND) over `makeHeldGate` (no options); `models.js` uses `passThroughModelArg` (picks are `modelId`s). Suites: `muse-normalize`, `-approval`, `-launch-lifecycle`, `-config-home`, `-resolve-bin`, `-signin`, `-shape`, `-live` (MUSE_LIVE_BIN).
+
+The plan as written before the build (kept):
 For Muse (`muse serve`, JSON-RPC 2.0 over stdio) that is: `client.js` = `stdio-rpc` + `probe-bin`;
 `resolve-bin.js` = `bin-resolve` (`delivery: 'path'`, no bundle until the licence allows one → a
 `bundledCandidate` that answers `null`); `config-home.js` = `private-home` if smoke M2 shows ambient config;
