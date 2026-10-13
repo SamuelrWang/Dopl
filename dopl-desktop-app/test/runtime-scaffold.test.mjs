@@ -200,6 +200,7 @@ test("(e) descriptor keys come in the canonical order", () => {
 const KIT = {
   "frame-queue.js": "K2 — push/pull frame queue + bounded interrupt (from codex/launch-handle.js)",
   "auth-shape.js": "K5 — the refused-credential pattern + authShaped(text, extraRe?) (from codex/cursor normalize.js)",
+  "run-handle.js": "K3 — the handle shape { iterator, next, interrupt, close } over adapter callbacks",
   "usage.js": "K4 — readCount (from sdk-shape.js), tokensFrom over per-adapter key lists, the total carry",
 };
 

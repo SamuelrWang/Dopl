@@ -1,7 +1,8 @@
-// The run handle a Codex launch returns. The frame queue and the interrupt bound are vendor-neutral and
-// live in `../kit/frame-queue.js` (runtime scaffold K2, 2026-10-13).
+// The run handle a Codex launch returns: this vendor's interrupt and close POLICY over the kit's handle
+// shape (`../kit/run-handle.js`, K3) and its frame queue + interrupt bound (`../kit/frame-queue.js`, K2).
 
 const { boundedInterrupt } = require('../kit/frame-queue');
+const { runHandle } = require('../kit/run-handle');
 
 // ── HANDLE ───────────────────────────────────────────────────────────────────────────────────
 // Returned synchronously: an await between "the child exists" and "the session points at it" is the
@@ -9,9 +10,8 @@ const { boundedInterrupt } = require('../kit/frame-queue');
 // `turn/interrupt` on an already-interrupted turn never answers (codex-cli 0.155.1) — hence the bound.
 
 function handleFor(link, frames, threadIdOf, turnIdOf) {
-  return {
-    [Symbol.asyncIterator]() { return frames[Symbol.asyncIterator](); },
-    next() { return frames.next(); },
+  return runHandle({
+    frames,
     /** Dopl's only way to stop a running turn (`session-engine.js › runEffect` `interruptQuery`). */
     interrupt() {
       const conn = link.conn;
@@ -34,7 +34,7 @@ function handleFor(link, frames, threadIdOf, turnIdOf) {
       frames.close();
       if (link.conn) link.conn.close();
     },
-  };
+  });
 }
 
 module.exports = { handleFor };
