@@ -12,6 +12,17 @@
  * numbers happened to agree, a published, documented, forwarded field would have
  * been unreachable from the modern surface and no test would have mentioned it.
  *
+ * ⚠ **AND THE ONE GATE THAT DID FIRE WOULD HAVE TALKED THE NEXT PERSON INTO
+ * KEEPING THE BUG.** Measured by dropping `cites` from the manifest and the
+ * granular text on this branch: two files fail — this one (two assertions) and
+ * `tool-budget.test.ts` (one). But the budget's failure says *"the granular served
+ * surface shrank below its ceiling — lower the ceiling to the measured size in the
+ * same commit — that is how the win gets banked"*. It reports a SAVING. Follow that
+ * instruction and the ceiling drops, the suite goes green, and the unreachable
+ * param is now blessed and permanent. A gate whose remediation advice cements the
+ * defect is worse than no gate, because it converts a bug into a banked win — which
+ * is why this file says the thing the budget cannot: a param went missing.
+ *
  * ⚠ **MEASURED THROUGH A REAL `listTools()` ON BOTH SETS, NOT THROUGH THE
  * MANIFEST.** The manifest is exactly where such a drift lives, so reading it as
  * the source of truth would ask the suspect to vouch for itself. What a client is
