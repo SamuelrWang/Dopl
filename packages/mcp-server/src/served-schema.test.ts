@@ -45,6 +45,7 @@ describe("slimListedSchemas on a bare server", () => {
     expect(props.m).toEqual({ type: "integer" });
     // A regex that is NOT a uuid artifact is a real rule and stays.
     expect(props.slug.pattern).toBe("^[a-z]+$");
+    expect((await client.listTools()).tools[0].inputSchema).not.toHaveProperty("$schema");
   });
 
   it("still refuses a malformed uuid and accepts a real one: validation is the zod schema, not the listing", async () => {
@@ -82,6 +83,15 @@ describe("the shipped granular surface", () => {
     expect(all).toContain('"format":"uuid"');
     expect(all).not.toContain("[89abAB]");
     expect(all).not.toContain(String(Number.MAX_SAFE_INTEGER));
+  });
+
+  it("serves no $schema, and nothing whose meaning depends on the dialect", async () => {
+    const tools = await granularTools();
+    for (const t of tools) expect(t.inputSchema, t.name).not.toHaveProperty("$schema");
+    const all = JSON.stringify(tools.map((t) => t.inputSchema));
+    for (const key of ['"$ref"', '"definitions"', '"$defs"', '"items":[', '"prefixItems"', '"additionalItems"', '"dependencies"']) {
+      expect(all, key).not.toContain(key);
+    }
   });
 
   it("publishes posture.tools as the three levels on both posture-taking tools", async () => {

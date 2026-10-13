@@ -9,6 +9,7 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
  *   • `maximum: Number.MAX_SAFE_INTEGER` / `minimum: Number.MIN_SAFE_INTEGER` — zod's `.int()` bound,
  *     not a product limit.
  * Validation is untouched: the SDK parses arguments against the registered zod schema, never this copy.
+ * {@link slimListedSchemas} also drops the root `$schema` (see there).
  */
 export function slimSchema(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(slimSchema);
@@ -25,7 +26,19 @@ export function slimSchema(node: unknown): unknown {
 }
 
 /**
- * Serve every listed tool's `inputSchema` through {@link slimSchema}. Call before the first
+ * The root `"$schema": "http://json-schema.org/draft-07/schema#"` the converter stamps on every tool
+ * (~52 chars × 40). Absent, MCP reads 2020-12; nothing listed differs between the two dialects (no
+ * `$ref`, `definitions` or tuple `items`), which `served-schema.test.ts` asserts on the shipped surface.
+ */
+function withoutDialect(schema: unknown): unknown {
+  if (schema === null || typeof schema !== "object" || Array.isArray(schema)) return schema;
+  const rest = { ...(schema as Record<string, unknown>) };
+  delete rest.$schema;
+  return rest;
+}
+
+/**
+ * Serve every listed tool's `inputSchema` through {@link slimSchema} and {@link withoutDialect}. Call before the first
  * registration, like `unlisted-tools.ts › unlistTools`: `McpServer` installs its list handler through
  * `server.setRequestHandler` on the first `registerTool`, and this wraps exactly that handler.
  * Pinned in `served-schema.test.ts`.
@@ -44,7 +57,7 @@ export function slimListedSchemas(server: McpServer): void {
             return {
               ...listed,
               tools: listed.tools.map((t) =>
-                t.inputSchema === undefined ? t : { ...t, inputSchema: slimSchema(t.inputSchema) },
+                t.inputSchema === undefined ? t : { ...t, inputSchema: withoutDialect(slimSchema(t.inputSchema)) },
               ),
             };
           }
