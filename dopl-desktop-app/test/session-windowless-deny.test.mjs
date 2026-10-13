@@ -25,98 +25,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+// ⚠ THE LOADER IS SHARED WITH `session-windowless-open.test.mjs` (split 2026-10-12 at the cap).
+import { load, session, timers, REQ, flush } from "./helpers/session-windowless-harness.mjs";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(HERE, "..", "main", "session-windowless.js"), "utf8");
-
-function load(consentOver = {}, targetingOver = null) {
-  const notices = [];
-  const posts = []; // T25: the ONE task_progress a first denial writes into the channel
-  const diags = [];
-  const rows = [];
-  const banners = []; // notifyToolGate captures — { channelName, tool, onAllow, onOpen }
-  const stamps = []; // session-permissions bookkeeping — ["auto"|"timeout", requestId]
-  const consent = {
-    createConsentRequest: async (workspaceId, row) => { rows.push({ workspaceId, ...row }); return null; },
-    notifyOutbound: () => {},
-    // The banner is "shown" and handed back as a fake Notification the TTL can close.
-    notifyToolGate: (args) => { banners.push(args); return { close: () => {} }; },
-    submitDecision: async () => {},
-    pollStatus: async () => null,
-    ...consentOver,
-  };
-  const stubRequire = (id) => {
-    // 2026-10-09 (Samuel's spec): the denial notice is POPUP ONLY now and goes through the route
-    // as `tool_blocked`, not through `channel-post.notifyLocal`. Captured here in the same
-    // `notices` array, so every assertion below still reads the operator-facing copy.
-    if (id === "./notification-route") {
-      return {
-        raise: (eventId, spec) => {
-          notices.push({ eventId, title: spec && spec.title, body: spec && spec.body });
-          return "popup";
-        },
-      };
-    }
-    if (id === "./channel-post") {
-      return {
-        // T25. The real signature is (entry, m, kind, taskId, extra, bodyText, opts).
-        postTaskEvent: async (entry, m, kind, taskId, extra, bodyText, opts) => {
-          posts.push({ entry, m, kind, taskId, extra, bodyText, opts });
-          return true;
-        },
-      };
-    }
-    if (id === "./consent") return consent;
-    if (id === "./targeting") return targetingOver || { openChannelForEntry: () => {} };
-    if (id === "./session-permissions") {
-      return {
-        noteAutoDenied: (s, rid) => stamps.push(["auto", rid]),
-        noteGateTimeout: (s, rid) => stamps.push(["timeout", rid]),
-      };
-    }
-    if (id === "./diag") return { diag: (...p) => diags.push(p.join(" ")) };
-    throw new Error(`unexpected require: ${id}`);
-  };
-  const mod = { exports: {} };
-  new Function("require", "module", "exports", "setTimeout", SRC)(
-    stubRequire, mod, mod.exports, timers.set
-  );
-  return { ...mod.exports, notices, posts, diags, rows, banners, stamps };
-}
-
-// ⚠ A HAND-ROLLED TIMER SHIM rather than node:test's mock timers: the module is evaluated via
-// `new Function`, so injecting `setTimeout` as a parameter is exact — no global swapping, no
-// interference with the runner's own timers, and `sleep()`'s real setTimeout is untouched
-// because only the injected name reaches the module body.
-const timers = (() => {
-  let queue = [];
-  return {
-    set: (fn, ms) => { const t = { fn, ms, unref: () => {} }; queue.push(t); return t; },
-    fire: () => { const q = queue; queue = []; q.forEach((t) => t.fn()); },
-    pending: () => queue.length,
-    reset: () => { queue = []; },
-  };
-})();
-
-/** A windowless session with one pending permission, as the engine holds it. */
-function session(over = {}) {
-  return {
-    windowless: true,
-    channelId: "chan-1",
-    taskId: "task-1",
-    workspaceId: "ws-1",
-    settled: false,
-    pendingPermissions: new Map([["req-1", {}]]),
-    context: { channelName: "Website" },
-    ...over,
-  };
-}
-
-const REQ = { type: "permission_request", requestId: "req-1", name: "Bash" };
-const flush = () => new Promise((r) => setImmediate(r));
 
 test("a gated tool is HELD, not denied — the banner is the surface", async () => {
   timers.reset();
@@ -387,35 +298,4 @@ test("T25: the DENY is dispatched before the notice runs — visibility never de
   m.claimGate(s, REQ, (rid, d) => decisions.push([rid, d]));
   await flush();
   assert.deepEqual(decisions, [["req-1", "deny"]]);
-});
-
-// ── THE BANNERS' OPEN ACTION (cleanup d05: one `openThread` behind both banners) ──
-// Both the tool-gate banner and the outbound banner open THIS session's thread, and a throwing
-// navigation must never escape into the notification callback.
-test("both banners' open action opens this session's thread, and navigation failure is swallowed", async () => {
-  timers.reset();
-  const opened = [];
-  const outbound = [];
-  const nav = { openChannelForEntry: (entry, opts) => opened.push({ entry, opts }) };
-  const m = load({
-    createConsentRequest: async () => ({ rowId: "row-9", status: "pending" }),
-    notifyOutbound: (args) => outbound.push(args),
-    pollStatus: async () => "allowed",
-  }, nav);
-  const s = session({ context: { channelName: "Website", workspaceSegment: "acme" },
-    pendingPermissions: new Map([["req-1", {}], ["req-2", {}]]) });
-  m.claimGate(s, REQ, () => {});
-  m.claimGate(s, { type: "outbound_gate", requestId: "req-2", text: "hi" }, () => {});
-  await flush(); await flush();
-  assert.equal(m.banners.length, 1, "the tool banner exists");
-  assert.equal(outbound.length, 1, "the outbound banner exists");
-  m.banners[0].onOpen();
-  outbound[0].onOpen();
-  const want = { entry: { channel: { id: "chan-1", name: "Website" }, workspaceId: "ws-1", workspaceSegment: "acme" },
-    opts: { threadId: "task-1" } };
-  assert.deepEqual(opened, [want, want]);
-  nav.openChannelForEntry = () => { throw new Error("window gone"); };
-  assert.doesNotThrow(() => m.banners[0].onOpen());
-  assert.doesNotThrow(() => outbound[0].onOpen());
-  timers.reset();
 });
