@@ -109,7 +109,7 @@ test("every adapter's VENDOR word is one the server recognizes (no shared module
   const recognized = /const RECOGNIZED_VENDORS: readonly string\[\] = \[([\s\S]*?)\];/.exec(SHARED);
   assert.ok(recognized, "the server's recognized-vendor list moved — re-pin this");
   const words = new Set(Array.from(SHARED.matchAll(/export const ([A-Z]+_VENDOR) = "([^"]+)";/g)).map((m) => m[2]));
-  for (const id of ["claude", "codex", "cursor", "muse"]) {
+  for (const id of ["claude", "codex", "cursor", "muse", "grok"]) {
     const hit = /'X-Dopl-Vendor': '([^']+)'/.exec(M(`runtime/${id}/mcp.js`));
     assert.ok(hit, `${id}/mcp.js sends no vendor header`);
     assert.ok(words.has(hit[1]), `${id} sends vendor "${hit[1]}", which runtime-header.ts does not declare`);
@@ -121,7 +121,7 @@ test("...and the CUSTODY enum did NOT grow a vendor word", () => {
   // on BOTH sides of the join: the server's recognized set, and the membership test in main.
   const serverRuntimes = /const RECOGNIZED: readonly string\[\] = \[([\s\S]*?)\];/.exec(SHARED);
   assert.ok(serverRuntimes, "the server's recognized-runtime list moved — re-pin this");
-  for (const vendor of ["claude", "codex", "cursor", "muse"]) {
+  for (const vendor of ["claude", "codex", "cursor", "muse", "grok"]) {
     assert.ok(!serverRuntimes[1].includes(vendor),
       `'${vendor}' is a VENDOR and must never be a recognized RUNTIME value`);
   }

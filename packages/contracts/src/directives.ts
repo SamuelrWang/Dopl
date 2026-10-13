@@ -70,7 +70,8 @@ export type LaunchToolMode =
   | "manual" | "accept_edits" | "auto" | "bypass" // claude
   | "untrusted" | "granular" | "on-request" | "never" // codex
   | "allowlist" | "auto-review" | "run-everything" // cursor
-  | "promptUnmatched" | "onRequest" | "allowAll"; // muse
+  | "promptUnmatched" | "onRequest" | "allowAll" // muse
+  | "default" | "autoMode" | "approve-all"; // grok
 
 /** What the machine echoes as applied: always a runtime's own word, never a level. */
 export type LaunchAppliedToolMode = Exclude<LaunchToolMode, "ask" | "full">;

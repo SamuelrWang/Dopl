@@ -57,9 +57,9 @@ describe("the mode vocabularies", () => {
   // A CHECK narrower than the wire would refuse a legal request at rest; `applied` is a runtime's
   // own word only (the machine never echoes a level).
   it("the latest tool-mode CHECKs admit exactly the wire union (applied: the runtime words)", () => {
-    // The CHECKs were last re-created for Muse's words; `applied_setting` still lives in the levels migration.
+    // The CHECKs were last re-created for Grok's words; `applied_setting` still lives in the levels migration.
     const sql = readSource(
-      repoFile("supabase/migrations/20261122120000_channel_launch_directives_muse_tool_words.sql"),
+      repoFile("supabase/migrations/20261123120000_channel_launch_directives_grok_tool_words.sql"),
     );
     const levels = readSource(
       repoFile("supabase/migrations/20261024120000_channel_launch_directives_permission_levels.sql"),

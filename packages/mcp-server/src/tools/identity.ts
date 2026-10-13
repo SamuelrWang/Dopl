@@ -32,12 +32,15 @@ export const CLAUDE_VENDOR = "claude";
 export const CODEX_VENDOR = "codex";
 /** Muse defers nothing behind a named search verb Dopl has measured, so it gets the neutral wording. */
 export const MUSE_VENDOR = "muse";
+/** Grok defers MCP tools behind `search_tool` (measured, grok 1.0.52) and calls them through `use_tool`. */
+export const GROK_VENDOR = "grok";
 
 /** The loader a deferred tool is fetched with, in the caller's own client; unknown vendor → neutral. */
 export function toolLoaderFor(vendor: string | null | undefined): string {
   if (vendor === CLAUDE_VENDOR) return "ToolSearch";
   if (vendor === CODEX_VENDOR) return "tool_search";
   if (vendor === MUSE_VENDOR) return "your client's tool search";
+  if (vendor === GROK_VENDOR) return "search_tool";
   return "your client's tool search";
 }
 

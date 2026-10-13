@@ -72,7 +72,7 @@ test("WIRE: Axis A is the levels plus the UNION of every runtime's own words; Ax
   const req = await import("node:module").then((m) => m.createRequire(import.meta.url));
   const profiles = req(new URL("../main/session-profiles.js", import.meta.url).pathname);
   assert.deepEqual(wire.MESSAGE_MODES, profiles.MESSAGE_MODES);
-  const union = ["claude", "codex", "cursor", "muse"].flatMap((r) => runtimeToolModes(r));
+  const union = ["claude", "codex", "cursor", "muse", "grok"].flatMap((r) => runtimeToolModes(r));
   const levels = req(new URL("../main/runtime/permission-level.js", import.meta.url).pathname).LEVELS;
   assert.deepEqual([...wire.TOOL_MODES].sort(), [...new Set([...levels, ...union])].sort());
   assert.deepEqual([...wire.APPLIED_TOOL_MODES].sort(), [...union].sort(), "applied is always a runtime's own word");

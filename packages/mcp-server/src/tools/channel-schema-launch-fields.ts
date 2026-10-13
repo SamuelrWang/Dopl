@@ -17,6 +17,7 @@ const POSTURE_WORDS = {
     "untrusted", "granular", "on-request", "never",
     "allowlist", "auto-review", "run-everything",
     "promptUnmatched", "onRequest", "allowAll",
+    "default", "autoMode", "approve-all",
   ]),
 };
 

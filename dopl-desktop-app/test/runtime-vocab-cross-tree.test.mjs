@@ -15,7 +15,7 @@ const ROOT = join(HERE, "..", "..");
 const require = createRequire(import.meta.url);
 const read = (rel) => readFileSync(join(ROOT, rel), "utf8");
 
-const RUNTIMES = ["claude", "codex", "cursor", "muse"];
+const RUNTIMES = ["claude", "codex", "cursor", "muse", "grok"];
 const wordsOf = (id) => require(join(HERE, "..", "main", "runtime", id, "index.js")).descriptor.toolMode.options.map((o) => o.value);
 
 /** The quoted strings inside the first `[...]` after `<key>:` in a TS source. */
