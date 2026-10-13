@@ -8,6 +8,7 @@ const tools = require('./tools');
 const axisB = require('./axis-b');
 const approval = require('./approval');
 const models = require('./models');
+const identity = require('./identity');
 const mcp = require('./mcp');
 const credential = require('./credential');
 const { packaging } = require('./packaging');
@@ -122,7 +123,8 @@ const runtime = {
   axisAAllows(mode, toolName) { return tools.toolModeAllows(mode, toolName); },
 
   models() { return models.models(); },
-  buildIdentity() { return models.buildIdentity(); },
+  // The binary new launches run + its version + the account (`identity.js`) → core's build key.
+  buildIdentity() { return identity.buildIdentity(); },
   // The pairing describes itself (`shape.js`, turn-free).
   shape() { return require('./shape').describe(); },
   modelArg(value) { return models.resolveLaunchModel(value); },

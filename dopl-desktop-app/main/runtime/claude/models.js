@@ -24,12 +24,6 @@ function defaultDeps() {
     credentialSource: () => {
       try { return String(require('./credential').credentialState().source || 'none'); } catch (_) { return 'none'; }
     },
-    // Whose roster this is (cross-review M2): a one-way per-sign-in fingerprint, never the token or its source.
-    account: () => require('./credential').accountFingerprint(),
-    // The ACTIVE binary's version (a verified download or the bundle), so a switch moves the key.
-    sdkVersion: () => {
-      try { return String((require('./loader').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
-    },
     probe: roster.probe,
     // The catalog's models now (the one cache), for SYNCHRONOUS launch resolution. Lazy: the registry
     // requires this module. Never throws; [] before any read.
@@ -47,19 +41,6 @@ function defaultDeps() {
   };
 }
 let deps = defaultDeps();
-
-/** The build new launches run, for core's key (`roster-key.js`): binary, SDK version, credential source. */
-function buildIdentity() {
-  let bin = null;
-  try { bin = deps.bin() || null; } catch (_) { bin = null; }
-  let version = null;
-  try { version = deps.sdkVersion() || null; } catch (_) { version = null; }
-  // ⚠ NOT `credentialSource()` (a word like "dopl-token", the same for every account): with no fingerprint the
-  // persisted roster is a labels-only stand-in (`model-catalog.js › persistedCatalog`).
-  let account = null;
-  try { account = deps.account() || null; } catch (_) { account = null; }
-  return { path: bin, version, account };
-}
 
 // A downloaded build's first handshake may wait out macOS's first-exec scan, so a failed probe on one is
 // retried once with this budget before the build is rejected.
@@ -168,6 +149,6 @@ const descriptor = {
 function catalogModels() { return deps.catalogModels(); }
 
 module.exports = {
-  models, buildIdentity, resolveLaunchModel, launchArg, catalogModels, inject,
+  models, resolveLaunchModel, launchArg, catalogModels, inject,
   descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };

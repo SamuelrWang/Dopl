@@ -169,7 +169,7 @@ test("claude roster: a download that fails twice is rejected and the roster come
     assert.deepEqual(seen, [planted.bin, planted.bin, planted.bundled.path]);
     assert.equal(planted.loader.resolveClaudeExecutable(), planted.bundled.path, "new launches run the bundle");
     // 2026-10-08: core files the roster under the build key (`roster-key.js`); the adapter names the build.
-    assert.equal(models.buildIdentity().path, planted.bundled.path, "keyed by what launches run now");
+    assert.equal(require(join(MAIN, "runtime", "claude", "identity.js")).buildIdentity().path, planted.bundled.path, "keyed by what launches run now");
     // The bundle failing is NOT a reason to reject anything, and is not retried: it is a rejection the
     // catalog renders (no shipped table answers any more).
     seen.length = 0;

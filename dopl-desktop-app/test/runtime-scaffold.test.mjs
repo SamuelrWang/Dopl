@@ -88,7 +88,6 @@ const PENDING = {
     },
     missing: {
       "client.js": "Phase 1.6 (loader.js)",
-      "identity.js": "Phase 1.2 (models.js › buildIdentity)",
       "login.js": "Phase 4: the flow is core main/claude-auth.js (core-vocabulary DEFERRED)",
     },
     checks: { windowlessFloor: "Phase 1.10" },
