@@ -1,5 +1,5 @@
 // THE BINARY A CLAUDE LAUNCH RUNS — the bundled `claude` (asar-unpacked), or a verified download newer
-// than it (`../updates/index.js`). Reached lazily by every caller (`loader.js`, `identity.js`,
+// than it (`../updates/index.js`). Reached lazily by every caller (`client.js`, `identity.js`,
 // `models.js`, `shape.js`, `launch-spec.js`, core's `claude-auth.js`).
 //
 // ⚠ asar rewrite: the 256 MB `claude` Mach-O cannot exec from inside the read-only app.asar and

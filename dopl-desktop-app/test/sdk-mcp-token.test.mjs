@@ -44,7 +44,7 @@ import { deviceTokenWorld, freshRecord, MCP_URL as CURRENT_MCP_URL, SPAWN_JSON }
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
-const LOADER = readFileSync(M(join("runtime", "claude", "loader.js")), "utf8");
+const LOADER = readFileSync(M(join("runtime", "claude", "client.js")), "utf8");
 // The session's MCP entry (`buildMcpServers`, `clientTimeoutMs`) moved to the adapter's `mcp.js` (2026-10-13).
 const MCP = readFileSync(M(join("runtime", "claude", "mcp.js")), "utf8");
 const CONFIG = readFileSync(M("mcp-config.js"), "utf8");
@@ -256,7 +256,7 @@ test("L8: mcp-config OWNS the number and the loader's entry is the only one that
   // (280_000 vs a moved server cap). There is now only ONE entry — the spawn-config file that
   // was the second one is deleted — so the rule is simply: the constant lives here, is exported,
   // and no numeric literal reappears downstream.
-  // ⚠ 2026-08-31: the loader is `main/runtime/claude/loader.js` and reaches the owner through
+  // ⚠ 2026-08-31: the loader is `main/runtime/claude/client.js` and reaches the owner through
   // `../../`; 2026-10-13 the entry moved to `main/runtime/claude/mcp.js`. The rule is unchanged.
   assert.equal(typeof SHIPPED_TIMEOUT_MS, "number", "it is exported for the loader");
   assert.match(codeOf(MCP), /timeout: clientTimeoutMs\(\),/, "the entry reads it, never a literal");

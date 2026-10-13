@@ -11,7 +11,7 @@
 // ⚠ THE SDK IS PUBLIC BETA, so every reader in this adapter is tolerant and the whole surface sits
 // behind this one module: an API move is a change here, not everywhere.
 // ⚠ THE SINGLE MODULE THAT IMPORTS THE SDK — the same contract
-// `runtime/claude/loader.js` and `runtime/codex/client.js` hold.
+// `runtime/claude/client.js` and `runtime/codex/client.js` hold.
 // ⚠ DELIVERY IS `path` (`packaging.js`): this release ships neither the SDK nor `cursor-agent`, so
 // `probe()` refuses for real and its reason must be readable by an operator.
 

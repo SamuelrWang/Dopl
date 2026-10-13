@@ -83,10 +83,8 @@ const EXTRA = {
 const PENDING = {
   claude: {
     present: {
-      "loader.js": "Phase 1.4–1.6 → client.js (MCP entry → mcp.js, bin → resolve-bin.js, deny rules → tools.js)",
     },
     missing: {
-      "client.js": "Phase 1.6 (loader.js)",
       "login.js": "Phase 4: the flow is core main/claude-auth.js (core-vocabulary DEFERRED)",
     },
     checks: { windowlessFloor: "Phase 1.10" },

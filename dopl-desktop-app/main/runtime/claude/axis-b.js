@@ -84,7 +84,7 @@ function applyRename(target, value) {
 // for the id the operator knows.
 function makeAgentOpsServer(s) {
   let sdk = null;
-  try { sdk = require('./loader').peekSdk(); } catch (_) { sdk = null; }
+  try { sdk = require('./client').peekSdk(); } catch (_) { sdk = null; }
   if (!sdk || typeof sdk.createSdkMcpServer !== 'function' || typeof sdk.tool !== 'function') return null;
   let z = null;
   try { z = require('zod').z; } catch (_) { z = null; }

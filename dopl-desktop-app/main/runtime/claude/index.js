@@ -1,7 +1,7 @@
 // THE CLAUDE ADAPTER — the descriptor (pure data) and the runtime (the behaviour).
 //
 // Electron-free at load: `session-profiles.js` asks this registry for every gate decision and is
-// evaluated standalone, so `loader.js` (electron) is lazy, and so are `launch-spec.js` /
+// evaluated standalone, so `client.js` (the SDK import) is lazy, and so are `launch-spec.js` /
 // `normalize.js` (`normalize → session-io → session-profiles` would close a require cycle).
 
 const tools = require('./tools');
@@ -15,7 +15,7 @@ const { packaging } = require('./packaging');
 const requiredShape = require('./required-shape');
 const { profileEntryFrom } = require('../contract');
 
-const platform = () => require('./loader');
+const platform = () => require('./client');
 const launchSpec = () => require('./launch-spec');
 const normalizer = () => require('./normalize');
 

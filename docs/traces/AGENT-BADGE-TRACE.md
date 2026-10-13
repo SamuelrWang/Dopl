@@ -184,7 +184,7 @@ known session arrives with the session erased.
 
 1. `dopl-desktop-app/main/listener-io.js:200-222` — accept `opts.sessionId` in `sendOnce` and set
    `headers['X-Dopl-Session-Id'] = sessionId` when it matches the existing shape check already
-   spelled at `runtime/claude/loader.js:249` (`/^[A-Za-z0-9:._-]{1,128}$/`). Reuse that constant
+   spelled at `runtime/claude/mcp.js:249` (`/^[A-Za-z0-9:._-]{1,128}$/`). Reuse that constant
    rather than minting a third copy.
 2. `dopl-desktop-app/main/channel-post.js:48-76` — thread `opts.sessionId` through `postTaskEvent`
    into the `apiFetch` call.

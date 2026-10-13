@@ -13,9 +13,9 @@ const PKG = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`
 
 /** The bundled SDK and a credentialed, scrubbed env for driving a CANDIDATE binary (lazy: electron-free at load). */
 async function driverFor(candidateBin) {
-  const loader = require('./loader');
-  const sdk = await loader.getSdk();
-  const env = require('./credential').withCredential(loader.buildScrubbedEnv());
+  const client = require('./client');
+  const sdk = await client.getSdk();
+  const env = require('./credential').withCredential(client.buildScrubbedEnv());
   return { sdk, options: { env, pathToClaudeCodeExecutable: candidateBin } };
 }
 

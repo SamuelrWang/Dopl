@@ -182,7 +182,7 @@ test("the CLI's connect budget is RAISED on every spawn, by env, because there i
   // exactly ONE mcp flag, `--mcp-config`. `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` are other clocks.
   assert.equal(mcpConnect.CLI_CONNECT_TIMEOUT_ENV, "MCP_CONNECT_TIMEOUT_MS");
   assert.ok(mcpConnect.CLI_CONNECT_TIMEOUT_MS > 5000, "raising it is the whole point");
-  assert.match(readMain("runtime", "claude", "loader.js"),
+  assert.match(readMain("runtime", "claude", "client.js"),
     /out\[mcpConnect\.CLI_CONNECT_TIMEOUT_ENV\] = String\(mcpConnect\.CLI_CONNECT_TIMEOUT_MS\)/,
     "the scrubbed env stopped setting the connect budget");
 });

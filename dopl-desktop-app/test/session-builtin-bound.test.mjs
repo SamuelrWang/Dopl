@@ -151,7 +151,7 @@ const shippedNum = (src, name) => {
 
 const DEPS = {
   tools: TOOLS,
-  loader: {
+  client: {
     buildScrubbedEnv: () => ({}),
   },
   // The binary and the userData read are `resolve-bin.js` / `launch-spec.js › userDataDir` since

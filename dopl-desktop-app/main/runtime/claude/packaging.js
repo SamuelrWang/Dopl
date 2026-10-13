@@ -16,7 +16,7 @@
 //
 // ⚠ `versionPin` IS THE PROTOCOL THIS ADAPTER WAS BUILT AGAINST, and it is a CLAIM about what was
 // measured — the tool tables, the deferral behaviour, the per-server timeout clamp and the
-// permission-mode semantics in `loader.js` and `tools.js` were all read off this build. A skew is
+// permission-mode semantics in `client.js` and `tools.js` were all read off this build. A skew is
 // not automatically a break, but it is the first thing to check when one appears. It pins the
 // BUNDLE; a download is admitted by its own protocol description (`update-source.js › probeShape`).
 

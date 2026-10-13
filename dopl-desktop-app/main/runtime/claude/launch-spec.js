@@ -7,7 +7,7 @@
 //   `includePartialMessages: false`  the outbound card shows the exact final bytes a post sends,
 //                                    and no input-rewriting hook is ever set.
 
-const loader = require('./loader');
+const client = require('./client');
 const mcp = require('./mcp');
 const resolveBin = require('./resolve-bin');
 const tools = require('./tools');
@@ -54,7 +54,7 @@ function buildOptions(s, dispatch) {
     settingSources: [],
     permissionMode: 'default',
     // Permission knobs and inherited credentials scrubbed; Dopl's own token is the one credential.
-    env: credential.withCredential(loader.buildScrubbedEnv()),
+    env: credential.withCredential(client.buildScrubbedEnv()),
     // `diag` is injected so the gate bridge stays electron-free.
     canUseTool: axisB.makeCanUseTool(s, dispatch, diag),
     abortController: s.abortController,
@@ -119,7 +119,7 @@ function buildLaunchSpec(request) {
 /** Start a run. SYNCHRONOUS by contract: core assigns the handle at once, and an await between "the
  *  child exists" and "something points at it" is the two-children bug. */
 function start(spec) {
-  const sdk = loader.peekSdk();
+  const sdk = client.peekSdk();
   // A push the CLI folds into the running turn joins that turn (`fold.js`, P4-05).
   const watch = fold.makeFoldWatch((text) => sessionDirected.steerJoined(spec.session, text));
   const q = sdk.query({ prompt: watch.stamp(spec.prompt), options: spec.options });

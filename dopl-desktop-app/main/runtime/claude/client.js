@@ -1,4 +1,5 @@
-// Claude Agent SDK loader — the CLAUDE ADAPTER's platform half.
+// THE CLAUDE CLIENT — the Agent SDK import and the child env: the CLAUDE ADAPTER's platform half
+// (`loader.js` until 2026-10-13).
 //
 // Core never requires this module; it asks `main/runtime/index.js` instead.
 //

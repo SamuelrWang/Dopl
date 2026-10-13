@@ -3,7 +3,7 @@
 // (`model-catalog.js`) is the one cache, persisted per build key (`roster-key.js`), and a read that fails
 // is a rejection the catalog renders (`stale` over held models, else `unavailable`). A model id typed into
 // this build could only go stale; with no pick the CLI runs its OWN default (no `--model` is sent).
-// Electron-free at load: the loader and the credential probe are reached lazily (`defaultDeps`),
+// Electron-free at load: the client and the credential probe are reached lazily (`defaultDeps`),
 // because `session-profiles.js` reaches this adapter through the registry and is evaluated standalone.
 
 const roster = require('./roster');
@@ -18,9 +18,9 @@ const PICK_RE = new RegExp(PICK_PATTERN);
 // Injectable for the suite.
 function defaultDeps() {
   return {
-    loadSdk: () => require('./loader').getSdk(),
+    loadSdk: () => require('./client').getSdk(),
     bin: () => require('./resolve-bin').resolveClaudeExecutable(),
-    env: () => require('./credential').withCredential(require('./loader').buildScrubbedEnv()),
+    env: () => require('./credential').withCredential(require('./client').buildScrubbedEnv()),
     credentialSource: () => {
       try { return String(require('./credential').credentialState().source || 'none'); } catch (_) { return 'none'; }
     },

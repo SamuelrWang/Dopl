@@ -217,7 +217,7 @@ test("the credential-path rules are added at LAUNCH, not in the profile table", 
   assert.ok(rules.includes("Read(/tmp/userData/**)"), "the app's own store is fenced");
   assert.ok(rules.includes("Read(**/.cursor/**)"), "…and this runtime's own config directory");
   // ⚠ PATH TOOLS ONLY. A `Shell(<path>)` entry would match a COMMAND BASE and deny nothing while
-  // reading as coverage — the same trap `runtime/claude/loader.js` records for `Bash`.
+  // reading as coverage — the same trap `runtime/claude/tools.js` records for `Bash`.
   for (const rule of rules) assert.match(rule, /^(Read|Write)\(/);
 });
 
