@@ -21,8 +21,8 @@
 // AND THE KIT (`main/runtime/kit/`, docs/specs/runtime-scaffold.md §3 + §8): the vendor-neutral machinery
 // an adapter builds on. Every kit module is declared in `KIT` below (no undeclared file, no row without a
 // file); each is `.js`, names no vendor ANYWHERE in its text (comments included — `core-vocabulary`
-// exempts the whole runtime tree, so this is the kit's own scan), requires no electron and no adapter
-// directory, and nothing outside `main/runtime/` requires it.
+// exempts the whole runtime tree, so this is the kit's own scan), requires no electron AT LOAD and no
+// adapter directory, and nothing outside `main/runtime/` requires it.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -202,6 +202,7 @@ const KIT = {
   "frame-queue.js": "K2 — push/pull frame queue + bounded interrupt (from codex/launch-handle.js)",
   "auth-shape.js": "K5 — the refused-credential pattern + authShaped(text, extraRe?) (from codex/cursor normalize.js)",
   "stdio-rpc.js": "K1 — JSON-RPC 2.0 over a child's stdio: framing, correlation, held server requests, close-vs-exit",
+  "private-home.js": "K8 — owner-only (0700) home, 0600 moved-in credential, symlink removal (from codex/config-home.js)",
   "run-handle.js": "K3 — the handle shape { iterator, next, interrupt, close } over adapter callbacks",
   "usage.js": "K4 — readCount (from sdk-shape.js), tokensFrom over per-adapter key lists, the total carry",
 };
@@ -232,7 +233,9 @@ test("kit: no module names a vendor, requires electron, or reaches into an adapt
         assert.ok(!re.test(line), `kit/${f}:${i + 1} names a vendor (${re}) — the kit is vendor-neutral: ${line.trim()}`);
       }
     });
-    assert.ok(!/require\(\s*['"]electron['"]\s*\)/.test(text), `kit/${f} requires electron`);
+    // No electron AT LOAD: a top-level (unindented) require is refused; a lazy one inside a function
+    // body (`private-home.js › appUserData`, with a plain-Node fallback) is the allowed shape.
+    assert.ok(!/^\S.*require\(\s*['"]electron['"]\s*\)/m.test(text), `kit/${f} requires electron at load`);
     for (const id of adapterIds) {
       assert.ok(!new RegExp(`require\\(\\s*['"]\\.\\./${id}/`).test(text), `kit/${f} requires the ${id} adapter`);
     }
