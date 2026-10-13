@@ -63,7 +63,7 @@ describe("the shipped granular surface", () => {
     id: "11111111-1111-1111-1111-111111111111", ownerId: "owner", name: "Alpha", slug: "alpha",
     publicId: "pub-1", description: null, role: "owner" as const, createdAt: "x", updatedAt: "x",
   };
-  async function granularTools() {
+  async function granularClient() {
     const r = (v: unknown) => async () => v;
     const stub = {
       listWorkspaces: r({ workspaces: [WS] }), getWorkspaceId: () => null, setWorkspaceId: () => {},
@@ -73,7 +73,10 @@ describe("the shipped granular surface", () => {
       toolSet: "granular", directory: [WS], workspace: WS, role: "owner",
       workspaceSource: "sole membership", scopes: ["dopl.read", "dopl.write"],
     } as Parameters<typeof createServer>[1]);
-    return (await (await connect(server)).listTools()).tools;
+    return connect(server);
+  }
+  async function granularTools() {
+    return (await (await granularClient()).listTools()).tools;
   }
 
   it("serves no uuid regex and no MAX_SAFE_INTEGER anywhere, and still serves uuid formats", async () => {
@@ -102,6 +105,32 @@ describe("the shipped granular surface", () => {
       const posture = (t!.inputSchema.properties as Record<string, { properties: Record<string, { enum: string[] }> }>).posture;
       expect(posture.properties.tools.enum).toEqual(["ask", "auto", "full"]);
     }
+  });
+
+  it("keeps a REAL bound: dopl_read_channel `limit` still lists its maximum 200 (only MAX_SAFE_INTEGER goes)", async () => {
+    const t = (await granularTools()).find((x) => x.name === "dopl_read_channel");
+    expect(t).toBeDefined();
+    const limit = (t!.inputSchema.properties as Record<string, Record<string, unknown>>).limit;
+    expect(limit.maximum).toBe(200);
+  });
+
+  it("the REGISTERED dopl_launch_agent accepts all 13 tool words, and refuses an unknown one at validation", async () => {
+    const WORDS = [
+      "ask", "auto", "full", "manual", "accept_edits", "bypass", "untrusted", "granular",
+      "on-request", "never", "allowlist", "auto-review", "run-everything",
+    ];
+    const legacy = (CHANNEL_INPUT_SHAPE as Record<string, z.ZodType>).posture as unknown as {
+      unwrap: () => { shape: { tools: { unwrap: () => { options: string[] } } } };
+    };
+    expect([...legacy.unwrap().shape.tools.unwrap().options].sort()).toEqual([...WORDS].sort());
+    const client = await granularClient();
+    const call = async (word: string) =>
+      JSON.stringify(
+        await client.callTool({ name: "dopl_launch_agent", arguments: { channel: "general", name: "Probe Agent", posture: { tools: word } } }),
+      );
+    const refused = await call("yolo");
+    expect(refused).toMatch(/Input validation error/);
+    for (const word of WORDS) expect(await call(word), word).not.toMatch(/Input validation error/);
   });
 
   it("still accepts every runtime word for posture.tools, granular and legacy (only the listing narrowed)", () => {
