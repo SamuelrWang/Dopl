@@ -101,7 +101,7 @@ async function launch(a) {
     return { skipped: 'no-sdk', detail: shapeRefusal };
   }
   // NEVER RUN A MUTE AGENT, AND SAY SO BEFORE "started" (2026-10-10). A session with no Dopl bearer gets NO
-  // `dopl` MCP server (`loader.js › buildMcpServers` returns {}) and `mcp-connect-guard.js` ends it
+  // `dopl` MCP server (`runtime/claude/mcp.js › buildMcpServers` returns {}) and `mcp-connect-guard.js` ends it
   // `mcp-unreachable` — after `session-launch-op.js` has already answered the clicking human `{ ok: true }`.
   // That guard is the backstop; this is the same ruling where it can still be read. Before `startSession`, so
   // there is nothing to roll back, and it covers all three lanes because all three go mute identically.

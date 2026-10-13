@@ -807,7 +807,7 @@ COMMIT;
 - Status: open (residual (c))
 
 ### F-113: One agent handle, several concurrent sessions — the stamp names a SLOT, not a run
-- Location: `dopl-desktop-app/main/runtime/claude/loader.js › buildMcpServers` (the only surviving spawn-config builder). ⚠ **This entry was anchored on `spawnConfigBody` / `writeSpawnConfig` in `mcp-config.js`, and BOTH WERE DELETED 2026-08-26** (F-080 (i)) — residual (a) below is therefore about a path that no longer exists, and is re-stated as history.
+- Location: `dopl-desktop-app/main/runtime/claude/mcp.js › buildMcpServers` (the only surviving spawn-config builder). ⚠ **This entry was anchored on `spawnConfigBody` / `writeSpawnConfig` in `mcp-config.js`, and BOTH WERE DELETED 2026-08-26** (F-080 (i)) — residual (a) below is therefore about a path that no longer exists, and is re-stated as history.
 - Found during: the 2026-08-01 two-agent live run
 - Severity: smell (the wire-identity gap itself is closed)
 - **Rewritten down to the residuals 2026-08-08; both re-verified, and the rollback did not touch either — the stamp is server-side and slot-keyed.**

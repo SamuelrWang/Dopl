@@ -88,7 +88,7 @@ test("only a Use my tools spawn can take the full login", () => {
   const spec = readFileSync(join(MAIN, "runtime", "claude", "launch-spec.js"), "utf8");
   assert.equal(/withFullLogin/.test(spec), false, "the ordinary spawn path never asks for it");
   const users = ["runtime/claude/operator-tools.js", "runtime/claude/credential.js"];
-  for (const f of ["runtime/claude/launch-spec.js", "runtime/claude/loader.js", "session-query.js", "session-park.js"]) {
+  for (const f of ["runtime/claude/launch-spec.js", "runtime/claude/loader.js", "runtime/claude/mcp.js", "session-query.js", "session-park.js"]) {
     assert.equal(/withFullLogin\(/.test(readFileSync(join(MAIN, f), "utf8")), false, f);
   }
   assert.match(readFileSync(join(MAIN, users[0]), "utf8"), /withFullLogin\(out\.env\);/);

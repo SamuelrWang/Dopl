@@ -34,7 +34,7 @@ import { normalizeProfile, KNOWN_PROFILES } from "../main/tool-profiles.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const LOADER = M(join("runtime", "claude", "loader.js"));
+const LOADER = M(join("runtime", "claude", "mcp.js"));
 const SPEC = M(join("runtime", "claude", "launch-spec.js"));
 
 // The SERVER's own modules — the other two ends of this contract.
@@ -56,7 +56,7 @@ const SERVER_HEADER = (() => {
 })();
 const DESKTOP_HEADER = (() => {
   const m = /const TOOL_PROFILE_HEADER = '([^']+)';/.exec(LOADER);
-  assert.ok(m, "loader.js must define TOOL_PROFILE_HEADER as a single quoted literal");
+  assert.ok(m, "mcp.js must define TOOL_PROFILE_HEADER as a single quoted literal");
   return m[1];
 })();
 
@@ -176,13 +176,13 @@ test("an entry with no headers object gains one rather than throwing", () => {
 test("the launch spec stamps it after building the servers, beside the session stamp", () => {
   assert.match(
     SPEC,
-    /loader\.withToolProfileStamp\(options\.mcpServers, s\.profile\);/,
+    /mcp\.withToolProfileStamp\(options\.mcpServers, s\.profile\);/,
     "buildOptions must stamp this run's profile onto the dopl entry"
   );
   orderOf(
     SPEC,
-    "mcpServers: loader.buildMcpServers(",
-    "loader.withToolProfileStamp(",
+    "mcpServers: mcp.buildMcpServers(",
+    "mcp.withToolProfileStamp(",
     "launch-spec"
   );
 });

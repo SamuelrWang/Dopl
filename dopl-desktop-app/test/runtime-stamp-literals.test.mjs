@@ -76,7 +76,7 @@ test("the SESSION stamp's literal matches the server's too, on the one spawn pat
   // server still recognizes that string.
   const serverSession = /export const DESKTOP_SESSION_RUNTIME = "([^"]+)";/.exec(SHARED);
   assert.ok(serverSession, "the server's constant moved — this join needs re-pinning");
-  for (const file of ["runtime/claude/loader.js"]) {
+  for (const file of ["runtime/claude/mcp.js"]) {
     const src = M(file);
     const hit = /'X-Dopl-Runtime': '([^']+)',/.exec(src);
     assert.ok(hit, `${file} no longer sends the runtime header at all`);
@@ -96,7 +96,7 @@ test("the VENDOR stamp is a SECOND header, and its literal matches the server's"
   const serverClaude = /export const CLAUDE_VENDOR = "([^"]+)";/.exec(SHARED);
   assert.ok(serverVendorHeader && serverClaude,
     "the server's vendor constants moved — this join needs re-pinning");
-  const src = M("runtime/claude/loader.js");
+  const src = M("runtime/claude/mcp.js");
   const hit = /'X-Dopl-Vendor': '([^']+)',/.exec(src);
   assert.ok(hit, "sdk-loader.js no longer sends the vendor header at all");
   assert.equal(hit[1], serverClaude[1],

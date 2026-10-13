@@ -29,7 +29,7 @@
 // re-running the launch and ending the session visibly are `main/mcp-connect-guard.js`'s, which is
 // the module allowed to hold the engine's handles.
 
-// The key `runtime/claude/loader.js › buildMcpServers` mounts the Dopl server under, and the
+// The key `runtime/claude/mcp.js › buildMcpServers` mounts the Dopl server under, and the
 // `name` the CLI therefore reports. ⚠ ONE SPELLING: the tool prefix agents see
 // (`mcp__dopl__dopl_channel`) is this word, and a rename is a two-file change, not a one-file one.
 const DOPL_SERVER_KEY = 'dopl';

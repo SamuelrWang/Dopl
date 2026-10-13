@@ -131,7 +131,7 @@ test("WIRE PIN: the launch spec passes the PROFILE'S list through and mounts the
     "the two verbs are declared in the profile table now, not appended at launch");
   // Mounted beside the dopl entry; the dopl literal itself stays byte-identical (sdk-grant
   // pins it), so the container lock and the workspace pin cannot be disturbed by this mount.
-  assert.match(opts, /mcpServers: loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
+  assert.match(opts, /mcpServers: mcp\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
   assert.match(opts, /options\.mcpServers\[agentOps\.SERVER_KEY\] = agentOpsServer/);
   assert.match(opts, /const agentOpsServer = axisB\.makeAgentOpsServer\(s\);/);
 });

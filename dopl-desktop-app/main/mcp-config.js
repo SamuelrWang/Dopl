@@ -10,13 +10,13 @@
 // That file is the OPERATOR's — it holds their `oauthAccount` block — and `timeout` also LOWERS
 // the hard tool-call ceiling (~27.8h -> the value) for their own terminal `claude` sessions.
 // /api/mcp streams (c2f6a7e), so a long `op=await` hold is no longer 60s of silence. The fix
-// belongs only on the entry we own: `runtime/claude/loader.js`'s in-memory server, inside this process.
+// belongs only on the entry we own: `runtime/claude/mcp.js`'s in-memory server, inside this process.
 //
 // ⚠ The token value NEVER hits logs/diag, and as of 2026-08-26 it never hits a file THIS APP
 // WRITES either. It is stored safeStorage-encrypted (`mcp-device-token.js`) and passed as a
 // `claude mcp add` header argv (mcp-cli-add.js), where the CLI — not this process — owns it.
 // ⚠ The safeStorage cache is the ONLY source the SESSION path uses: `deviceTokenForSpawn()`
-// hands `runtime/claude/loader.js › buildMcpServers` the bearer in memory. Step 3 is now the ONLY step that
+// hands `runtime/claude/mcp.js › buildMcpServers` the bearer in memory. Step 3 is now the ONLY step that
 // serves the CLI path (manual `claude` runs); there is no headless spawn path left to serve.
 
 const fs = require('fs');
@@ -37,7 +37,7 @@ const lifecycle = require('./mcp-device-token-lifecycle');
 const { ensureDeviceToken, spawnConfigPath } = lifecycle;
 
 // ⚠ THE ONE DEFINITION of the per-server call abort every Dopl MCP entry this app builds must
-// carry. `runtime/claude/loader.js`'s in-memory entry is the only such entry left, and it IMPORTS this constant
+// carry. `runtime/claude/mcp.js`'s in-memory entry is the only such entry left, and it IMPORTS this constant
 // rather than restating it — restating is exactly how the two drifted the last time (a stale
 // copy of this number against a server cap that had moved). ⚠ The old literal must not reappear
 // in EITHER module, prose included; mcp-client-timeout.test.mjs bans it by value.
@@ -159,7 +159,7 @@ async function ensureMcpConfigInner() {
       // "dopl entry present/unknown — leaving alone".
       //
       // ⚠ THE SDK SESSION PATH WAS NEVER AFFECTED and that is why this hid for so long:
-      // `runtime/claude/loader.js › buildMcpServers` builds its entry in memory off the compiled-in
+      // `runtime/claude/mcp.js › buildMcpServers` builds its entry in memory off the compiled-in
       // MCP_URL. (A third surface, the spawn-config FILE, self-healed by whole-body comparison;
       // it is gone — see `removeSpawnConfig`.) This CLI entry is now the ONE Dopl MCP surface
       // that lives outside this process, and origin repair is the only thing that keeps it live.
@@ -203,5 +203,5 @@ module.exports = {
   onDeviceTokenMinted, // device-registry.js: re-mint → link on the next beat
   clearDeviceToken: lifecycle.clearDeviceToken, // S2: sign-out teardown, LOCAL (auth-state.signOut)
   revokeDeviceToken: lifecycle.revokeDeviceToken, // F-085: sign-out teardown, SERVER-side (auth-state.signOut)
-  MCP_CLIENT_TIMEOUT_MS, // Q9: ONE definition — runtime/claude/loader.js reads it from here
+  MCP_CLIENT_TIMEOUT_MS, // Q9: ONE definition — runtime/claude/mcp.js reads it from here
 };

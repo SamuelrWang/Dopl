@@ -57,7 +57,7 @@ const { GRANULAR_READ_TOOLS, GRANULAR_SAFE_TOOLS, withGranularOffer } = doplTool
 // disallowedTools (hard-denied, never offered). `doplToolsPolicy` -> the profile's intended
 // dopl surface in bare names (null => all). ⚠ ON THIS RUNTIME IT IS NOT SENT: the CLI's
 // per-server `tools` field is a permission policy and a list of names drops the whole server
-// (`loader.js › buildMcpServers`, pinned by `test/mcp-server-tools-policy.test.mjs`), so the
+// (`mcp.js › buildMcpServers`, pinned by `test/mcp-server-tools-policy.test.mjs`), so the
 // dopl bound here is `disallowedTools` plus the gate. Codex and Cursor do send theirs.
 //
 // ⚠ `dopl_channel` is in NEITHER preApproved NOR disallowedTools on ANY profile, so it REACHES

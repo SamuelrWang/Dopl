@@ -11,7 +11,7 @@
 // one caller and `obtainDeviceToken` exactly one, so there was no second minting path:
 //
 //   no external CLI  ->  no device token, ever
-//                    ->  `loader.js › buildMcpServers` returns {} (no bearer)
+//                    ->  `runtime/claude/mcp.js › buildMcpServers` returns {} (no bearer)
 //                    ->  the child's init reports no `dopl` server
 //                    ->  `mcp-connect.js › doplStatus` reads `missing`
 //                    ->  `mcp-connect-guard.js` ends the session `mcp-unreachable`
@@ -51,7 +51,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 
 const LAUNCH = M("session-launch.js");
-const LOADER = M("runtime/claude/loader.js");
+const LOADER = M("runtime/claude/mcp.js");
 
 // ── the pre-flight, real, over a faked credential layer ──────────────────────
 // `delivery-path.js` requires `./mcp-config`, `./auth` and `./diag` LAZILY (inside its functions),

@@ -3,7 +3,7 @@
 //
 // ⚠ WHY THIS IS A FIRST-CLASS DESCRIPTOR FIELD AND NOT AN ASSUMPTION. Axis B — whether a message
 // crosses between machines — is DOPL'S plane, but it has no enforcement point of its own:
-//   1. The Dopl MCP server is REMOTE HTTP (`loader.js › buildMcpServers` returns
+//   1. The Dopl MCP server is REMOTE HTTP (`mcp.js › buildMcpServers` returns
 //      `{ dopl: { type: 'http', … } }`). The desktop main process is NOT in the call path of a
 //      channel call.
 //   2. The only thing between the model and that endpoint is the HELD CALLBACK below, which the

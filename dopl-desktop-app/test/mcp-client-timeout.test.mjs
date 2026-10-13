@@ -27,7 +27,7 @@ import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const CONFIG = M("mcp-config.js");
-const LOADER = M("runtime/claude/loader.js");
+const LOADER = M("runtime/claude/mcp.js");
 
 const BUDGET = readFileSync(
   join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-hold-budget.ts"),

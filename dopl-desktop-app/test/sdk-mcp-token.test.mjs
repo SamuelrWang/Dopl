@@ -43,6 +43,8 @@ import { deviceTokenWorld, freshRecord, MCP_URL as CURRENT_MCP_URL, SPAWN_JSON }
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => join(HERE, "..", "main", p);
 const LOADER = readFileSync(M(join("runtime", "claude", "loader.js")), "utf8");
+// The session's MCP entry (`buildMcpServers`, `clientTimeoutMs`) moved to the adapter's `mcp.js` (2026-10-13).
+const MCP = readFileSync(M(join("runtime", "claude", "mcp.js")), "utf8");
 const CONFIG = readFileSync(M("mcp-config.js"), "utf8");
 const LIFECYCLE = readFileSync(M("mcp-device-token-lifecycle.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
@@ -60,7 +62,7 @@ const slice = (src, from, to, what) => {
 
 // ── C1: buildMcpServers takes the bearer from the injected accessor, never a file ──
 
-const MCP_BLOCK = codeOf(fnOf(LOADER, "buildMcpServers"));
+const MCP_BLOCK = codeOf(fnOf(MCP, "buildMcpServers"));
 const MCP_URL = "https://dopl.test/api/mcp";
 
 function buildServers(token, policy = null, workspaceId = "") {
@@ -79,9 +81,9 @@ test("C1: the bearer is the safeStorage-held token, injected in memory", () => {
 test("C1: buildMcpServers reads NO file at all — the whole loader is fs-free", () => {
   // The strongest available pin: sdk-loader no longer requires fs, so there is no
   // readFileSync for a spawn to reach, whatever the slice happens to contain today.
-  assert.ok(!/require\('fs'\)/.test(LOADER), "sdk-loader must not require fs");
+  assert.ok(!/require\('fs'\)/.test(LOADER + MCP), "sdk-loader and the MCP module must not require fs");
   assert.ok(!/mcp-spawn\.json/.test(MCP_BLOCK), "no spawn-config path in the builder");
-  assert.ok(!/readFileSync/.test(LOADER), "no file read on the session path");
+  assert.ok(!/readFileSync/.test(LOADER + MCP), "no file read on the session path");
   // 🔒 THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) widened this line: a session spawned into a
   // SHARED link container presents a CHILD credential locked to that workspace, and every other
   // session falls back to the device token exactly as before. What this assertion still pins is
@@ -258,16 +260,16 @@ test("L8: mcp-config OWNS the number and the loader's entry is the only one that
   // was the second one is deleted — so the rule is simply: the constant lives here, is exported,
   // and no numeric literal reappears downstream.
   // ⚠ 2026-08-31: the loader is `main/runtime/claude/loader.js` and reaches the owner through
-  // `../../`. The rule is unchanged; only the depth is.
+  // `../../`; 2026-10-13 the entry moved to `main/runtime/claude/mcp.js`. The rule is unchanged.
   assert.equal(typeof SHIPPED_TIMEOUT_MS, "number", "it is exported for the loader");
-  assert.match(codeOf(LOADER), /timeout: clientTimeoutMs\(\),/, "the loader reads it, never a literal");
+  assert.match(codeOf(MCP), /timeout: clientTimeoutMs\(\),/, "the entry reads it, never a literal");
   assert.match(
-    fnOf(LOADER, "clientTimeoutMs"),
+    fnOf(MCP, "clientTimeoutMs"),
     /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
     "…from mcp-config, the one owner"
   );
   assert.ok(
-    !/timeout: \d[\d_]*,/.test(codeOf(LOADER)),
+    !/timeout: \d[\d_]*,/.test(codeOf(LOADER) + codeOf(MCP)),
     "no numeric timeout literal may reappear in sdk-loader"
   );
   assert.ok(SHIPPED_TIMEOUT_MS > 60_000, "or the client's own 60s floor wins and the key is inert");
@@ -334,5 +336,5 @@ test("C1: the token is never written to disk in plaintext — by ANY path in thi
   // the only persistence left is the safeStorage-encrypted electron-store, and the only other
   // place the bearer is spelled is an execFile argv (mcp-cli-add.js), which is not a file.
   assert.equal(typeof deviceTokenWorld().config.deviceTokenForSpawn, "function", "the accessor exists");
-  assert.ok(!/spawnToken/.test(LOADER), "sdk-loader keeps no copy of its own");
+  assert.ok(!/spawnToken/.test(LOADER + MCP), "sdk-loader keeps no copy of its own");
 });

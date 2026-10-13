@@ -43,7 +43,7 @@ prime("electron-store", FakeStore);
 
 // ⚠ A DEVICE TOKEN, SEEDED (2026-10-10, device-token-fix). `session-launch.js › launch` now refuses
 // before `startSession` when this machine has no Dopl bearer, because a session without one gets no
-// `dopl` MCP server at all (`loader.js › buildMcpServers` returns {}) and dies `mcp-unreachable`
+// `dopl` MCP server at all (`runtime/claude/mcp.js › buildMcpServers` returns {}) and dies `mcp-unreachable`
 // after the launch was reported started. Every case in this harness is about a machine that CAN
 // launch, so the credential is part of the environment it fakes — exactly like the store and the
 // network above it. ⚠ `safeStorage.isEncryptionAvailable()` is false here, so `mcp-config.js ›

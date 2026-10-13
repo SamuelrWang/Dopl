@@ -206,7 +206,7 @@ test("🔒 the launch spec passes the session bearer into buildMcpServers", () =
   const query = readFileSync(M("runtime/claude/launch-spec.js"), "utf8");
   assert.match(
     query,
-    /loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\)/,
+    /mcp\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\)/,
     "dropping the third argument silently reverts every locked session to the device token"
   );
 });

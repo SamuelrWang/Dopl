@@ -153,15 +153,18 @@ const DEPS = {
   tools: TOOLS,
   loader: {
     buildSecretPathDenyRules: () => ["Read(~/.claude*)"],
-    buildMcpServers: () => ({ dopl: {} }),
     buildScrubbedEnv: () => ({}),
+    resolveClaudeExecutable: () => "",
+  },
+  // The session MCP entry is `mcp.js`'s since 2026-10-13 (scaffold Phase 1.4).
+  mcp: {
+    buildMcpServers: () => ({ dopl: {} }),
     withSessionStamp: () => {},
     // ⚠ A3's `X-Dopl-Tool-Profile` stamp (2026-09-02) — a no-op here on purpose:
     // `session-tool-profile.test.mjs` owns what the header carries, and this
     // harness is about the built-in BOUND. The stub exists so the assembly runs.
     withToolProfileStamp: () => {},
     withToolSetStamp: () => {},
-    resolveClaudeExecutable: () => "",
   },
   axisB: { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
   agentOps: { SERVER_KEY: "dopl_agents" },

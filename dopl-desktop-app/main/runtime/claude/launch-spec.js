@@ -8,6 +8,7 @@
 //                                    and no input-rewriting hook is ever set.
 
 const loader = require('./loader');
+const mcp = require('./mcp');
 const tools = require('./tools');
 const axisB = require('./axis-b');
 const agentOps = require('../../agent-self-ops');
@@ -42,7 +43,7 @@ function buildOptions(s, dispatch) {
     // `sessionBearer(s)`: the container-locked child credential minted at spawn for a shared link
     // container ('' otherwise). It replaces the device token and is what refuses other workspaces
     // server-side; `X-Workspace-Id` is only a hint. Read, not minted: this function is synchronous.
-    mcpServers: loader.buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
+    mcpServers: mcp.buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
     settingSources: [],
     permissionMode: 'default',
     // Permission knobs and inherited credentials scrubbed; Dopl's own token is the one credential.
@@ -54,10 +55,10 @@ function buildOptions(s, dispatch) {
     maxTurns: SESSION_MAX_TURNS,
   };
   // This run's slot key (X-Dopl-Session-Id → the server's `metadata.session_id`): a label, not a lock.
-  loader.withSessionStamp(options.mcpServers, store.slotKey(s));
+  mcp.withSessionStamp(options.mcpServers, store.slotKey(s));
   // This run's profile (X-Dopl-Tool-Profile): the server may only narrow the surface; it grants nothing.
-  loader.withToolProfileStamp(options.mcpServers, s.profile);
-  loader.withToolSetStamp(options.mcpServers, s.doplToolSet);
+  mcp.withToolProfileStamp(options.mcpServers, s.profile);
+  mcp.withToolSetStamp(options.mcpServers, s.doplToolSet);
   // The in-process rename/end server, beside the dopl entry; null mounts nothing (never breaks a spawn).
   const agentOpsServer = axisB.makeAgentOpsServer(s);
   if (agentOpsServer) options.mcpServers[agentOps.SERVER_KEY] = agentOpsServer;

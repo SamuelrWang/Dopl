@@ -112,22 +112,25 @@ const SHIPPED_MAX_TURNS = shippedNum(SPEC, "SESSION_MAX_TURNS");
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   const fake = new Function(
-    "tools", "channelDirs", "loader", "credential", "axisB", "diag",
+    "tools", "channelDirs", "loader", "mcp", "credential", "axisB", "diag",
     "store", "models", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
     { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
     { sessionSpawnDir: () => "/tmp" },
     {
       buildSecretPathDenyRules: () => [],
-      buildMcpServers: () => ({}),
       buildScrubbedEnv: () => ({}),
+      resolveClaudeExecutable: () => null,
+    },
+    // The session MCP entry is `mcp.js`'s since 2026-10-13 (scaffold Phase 1.4).
+    {
+      buildMcpServers: () => ({}),
       withSessionStamp: () => {},
       // The per-run ROLE stamp (2026-09-02). Inert here like the session stamp beside it —
       // this file is about the MODEL — but the assembly calls it, and a fake missing a
       // function the one assembly point invokes fails every test in the file at once.
       withToolProfileStamp: () => {},
       withToolSetStamp: () => {},
-      resolveClaudeExecutable: () => null,
     },
     { withCredential: (e) => e },
     // agent-self-ops (2026-08-31): no server in this harness — the real builder answers null

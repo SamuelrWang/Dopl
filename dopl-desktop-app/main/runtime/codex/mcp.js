@@ -18,7 +18,7 @@ function shellEnvironmentPolicy() {
   return { exclude: SHELL_ENV_EXCLUDE.slice() };
 }
 
-// Same as Claude's (`claude/loader.js › withToolProfileStamp`): the server may only narrow (CX-12).
+// Same as Claude's (`claude/mcp.js › withToolProfileStamp`): the server may only narrow (CX-12).
 const TOOL_PROFILE_HEADER = 'X-Dopl-Tool-Profile';
 
 // Custody, not vendor: `desktop-session` is compared literally (`main/targeting.js › DESKTOP_RUNTIMES`);

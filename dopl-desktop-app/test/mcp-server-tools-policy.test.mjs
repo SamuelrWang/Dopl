@@ -36,7 +36,7 @@ import { fnOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "loader.js"), "utf8");
+const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "mcp.js"), "utf8");
 const SDK_DTS = readFileSync(
   join(HERE, "..", "node_modules", "@anthropic-ai", "claude-agent-sdk", "sdk.d.ts"), "utf8"
 );
