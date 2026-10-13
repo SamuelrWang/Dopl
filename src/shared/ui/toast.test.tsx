@@ -89,13 +89,28 @@ describe("toast > onBodyClick", () => {
     expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Dismiss"]);
   });
 
-  it("the black line takes no click target — that face carries no controls by design", () => {
+  it("a forced invert + handler still renders the BLACK LINE, with nothing to click", () => {
+    // ⚠ RENAMED AND STRENGTHENED (Review 41, finding 2). It used to be called "the black line
+    // takes no click target", which claimed to pin the `variant === "invert" ? undefined : …`
+    // strip in `toast()` — and did not: deleting that strip left this suite 6/6 green, measured.
+    //
+    // ⚠ AND THAT STRIP CANNOT BE PINNED FROM THE DOM AT ALL, which is worth saying so nobody
+    // re-adds a guard that cannot bite. The invert BRANCH returns before any click wiring
+    // exists, so whether `onBodyClick` was stored or stripped has no observable difference. The
+    // strip is normalization, consistent with the `description` and `action` lines beside it;
+    // the BRANCH is the actual guarantee, and the branch is what this now asserts.
     const onBodyClick = vi.fn();
     render(<ToastHost />);
-    // `invert` options do not accept it; a caller that forces one past the type must be ignored.
+    // `invert` options do not accept a handler; a caller that forces one past the type must not
+    // be promoted to the clickable card.
     act(() => {
       (toast as (o: unknown) => void)({ title: "Saved", variant: "invert", onBodyClick });
     });
+
+    // The black face, not the card: one line, no controls of any kind — not even Dismiss.
+    expect(screen.getByText("Saved")).toBeTruthy();
+    expect(screen.queryAllByRole("button")).toEqual([]);
+    expect(card().className).not.toContain("cursor-pointer");
     act(() => { card().click(); });
     expect(onBodyClick).not.toHaveBeenCalled();
   });
