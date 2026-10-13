@@ -9,6 +9,7 @@
 
 const loader = require('./loader');
 const mcp = require('./mcp');
+const resolveBin = require('./resolve-bin');
 const tools = require('./tools');
 const axisB = require('./axis-b');
 const agentOps = require('../../agent-self-ops');
@@ -29,6 +30,12 @@ const { diag } = require('../../diag');
 // cannot fire in an ordinary session; one number on every spawn shape, so a park cannot shed it.
 const SESSION_MAX_TURNS = 8000;
 
+// userData for the credential-path deny rules (`tools.js › buildSecretPathDenyRules`), or '' with no
+// app yet (a harness) — the home rules still apply. Read at launch, as Cursor's launch spec does.
+function userDataDir() {
+  try { return require('electron').app.getPath('userData'); } catch (_) { return ''; }
+}
+
 function buildOptions(s, dispatch) {
   const cfg = tools.buildSessionToolConfig(s.profile);
   const options = {
@@ -39,7 +46,7 @@ function buildOptions(s, dispatch) {
     allowedTools: cfg.preApproved,
     // Hard-deny plus the credential-path rules: a shadowed read never reaches the gate, so only this
     // layer fences userData and the CLI's own config directory.
-    disallowedTools: cfg.disallowedTools.concat(loader.buildSecretPathDenyRules()),
+    disallowedTools: cfg.disallowedTools.concat(tools.buildSecretPathDenyRules(userDataDir())),
     // `sessionBearer(s)`: the container-locked child credential minted at spawn for a shared link
     // container ('' otherwise). It replaces the device token and is what refuses other workspaces
     // server-side; `X-Workspace-Id` is only a hint. Read, not minted: this function is synchronous.
@@ -69,7 +76,7 @@ function buildOptions(s, dispatch) {
   options.tools = Array.isArray(cfg.builtinTools) ? cfg.builtinTools.slice() : [];
   // "Use my tools" (`main/operator-tools.js › launchScope`): loaded at spawn, judged per turn by the gate.
   if (s.operatorTools) operatorTools.withOperatorTools(options);
-  const bin = loader.resolveClaudeExecutable();
+  const bin = resolveBin.resolveClaudeExecutable();
   if (bin) options.pathToClaudeCodeExecutable = bin;
   // The row's own launch value on the live roster; absent is the runtime default (`models.js › launchArg`).
   const model = models.launchArg(s.model);

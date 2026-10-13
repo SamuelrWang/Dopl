@@ -56,7 +56,7 @@ module.exports = {
   tag: 'latest',
   versionOf: (v) => v,
   bundledVersion: () => {
-    const bundled = require('./loader').bundledClaude();
+    const bundled = require('./resolve-bin').bundledClaude();
     return bundled ? bundled.version : null;
   },
   binary: (root) => path.join(root, 'claude'),

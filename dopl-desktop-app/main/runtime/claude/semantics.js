@@ -12,7 +12,7 @@
 //         auto-allowed case) still returns nothing. A build that widens either is refused.
 //   DENY  a `disallowedTools` path rule (`Read(<dir>/**)`) blocks a PRE-APPROVED tool on that path.
 //         Pre-approved tools never reach the gate, so for them the rule is the ONLY fence (credential
-//         paths, `loader.js › buildSecretPathDenyRules`).
+//         paths, `tools.js › buildSecretPathDenyRules`).
 // It costs four short model turns, so it runs where a new build is admitted (`updates/index.js ›
 // semanticGate`, before `active.json` moves) and in the opt-in live contract tier — never per launch.
 // It only ever touches a throwaway directory it creates and deletes; the "secret" is a random token.
@@ -126,7 +126,7 @@ async function probeDeny(o) {
       tools: ['Read'],
       // Pre-approved, as Dopl's profiles pre-approve Read: the deny rule is the only fence here.
       allowedTools: ['Read'],
-      // The CLI's absolute-path spelling (`//` + path), exactly as `loader.js › buildSecretPathDenyRules`.
+      // The CLI's absolute-path spelling (`//` + path), exactly as `tools.js › buildSecretPathDenyRules`.
       disallowedTools: [`Read(//${dir.replace(/^\/+/, '')}/**)`],
       cwd: o.cwd,
     }), `Use the Read tool to read the file ${file} and reply with its exact contents.`, o.timeoutMs);

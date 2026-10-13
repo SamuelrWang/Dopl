@@ -3870,7 +3870,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
      credential is the only one they can reach. `dopl-desktop-app/main/mcp-config.js ›
      writeSpawnConfig` wrote the operator's **UNLOCKED 90-day device token in plaintext** to
      `userData/mcp-spawn.json` on every signed-in launch, and
-     `main/runtime/claude/loader.js › buildSecretPathDenyRules` denied that path only for
+     `main/runtime/claude/tools.js › buildSecretPathDenyRules` denied that path only for
      `SECRET_TOOLS = ['Read','Grep','Glob']` — **`Bash` is not on that list**, and `full`'s deny set
      does not cover it. One `cat` and the session holds an unlocked credential: B1 voided for the
      rest of the session, and layer A with it (the audience ceiling only fires on
@@ -10570,7 +10570,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 - Location: `dopl-desktop-app/main/runtime/codex/operator-tools.js › nativesOn`,
   `dopl-desktop-app/main/runtime/claude/operator-tools.js › withOperatorTools`,
-  `dopl-desktop-app/main/runtime/claude/loader.js › buildSecretPathDenyRules`.
+  `dopl-desktop-app/main/runtime/claude/tools.js › buildSecretPathDenyRules`.
 - Found during: the "Use my tools" build (INVARIANTS §11 "USE MY TOOLS").
 - (a) A Codex session launched into a PRIVATE channel lifts the native fences (sub-agents, goals,
   sleep, memories, apps, plugins, skills). A peer joining mid-session drops every operator MCP call at

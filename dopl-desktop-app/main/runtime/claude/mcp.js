@@ -40,7 +40,7 @@ const cliAdd = () => require('../../mcp-cli-add');
 // ⚠ THAT FILE IS GONE (2026-08-26): `mcp-config.js › removeSpawnConfig` deletes it on every
 // signed-in launch and nothing writes it, so it no longer "survives for the CLI path" — the
 // headless spawner that read it was deleted 2026-08-20, and manual `claude` runs use the CLI's
-// own user-scope entry. buildSecretPathDenyRules below still fences userData for the encrypted
+// own user-scope entry. `tools.js › buildSecretPathDenyRules` still fences userData for the encrypted
 // electron-store, but it is no longer the thing standing between an agent and this credential —
 // see removeSpawnConfig for why a `Bash` rule could never have been that thing.
 function doplBearer() {

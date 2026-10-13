@@ -156,7 +156,7 @@ async function runFullLoginFlow(bin) {
 // external CLI. The loader pulls `electron.app`, so a throw means "no bundled binary".
 async function resolveClaudeBin() {
   try {
-    const bundled = require('./runtime/claude/loader').resolveClaudeExecutable();
+    const bundled = require('./runtime/claude/resolve-bin').resolveClaudeExecutable();
     if (bundled) return bundled;
   } catch (err) {
     diag('claude signin: bundled binary unresolved', err && err.message);

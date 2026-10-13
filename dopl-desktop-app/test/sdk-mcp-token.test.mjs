@@ -37,10 +37,12 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { createRequire } from "node:module";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 import { deviceTokenWorld, freshRecord, MCP_URL as CURRENT_MCP_URL, SPAWN_JSON } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
 const LOADER = readFileSync(M(join("runtime", "claude", "loader.js")), "utf8");
 // The session's MCP entry (`buildMcpServers`, `clientTimeoutMs`) moved to the adapter's `mcp.js` (2026-10-13).
@@ -105,15 +107,10 @@ test("C2: the url is ALWAYS the compiled-in MCP_URL — nothing off disk can ste
 
 // ── C1: the tool-BOUND credential deny (a pre-approved read never reaches the gate) ──
 
-const DENY_BLOCK = between(LOADER, "const SECRET_TOOLS =", "function buildSecretPathDenyRules(", "deny rules") +
-  fnOf(LOADER, "buildSecretPathDenyRules");
-
-function denyRules(userData) {
-  return new Function(
-    "app",
-    `${DENY_BLOCK}\n return buildSecretPathDenyRules();`
-  )({ getPath: () => userData });
-}
+// 2026-10-13 (scaffold Phase 1.5): the rules are `claude/tools.js › buildSecretPathDenyRules`, electron-free —
+// userData is passed in by the launch spec (`launch-spec.js › userDataDir`), so the REAL table runs here.
+const CLAUDE_TOOLS = require(M(join("runtime", "claude", "tools.js")));
+const denyRules = (userData) => CLAUDE_TOOLS.buildSecretPathDenyRules(userData);
 
 test("C1: Read/Grep/Glob are denied over userData and ~/.claude* on every profile", () => {
   const rules = denyRules("/Users/sam/Library/Application Support/Dopl");
@@ -129,9 +126,9 @@ test("C1: Read/Grep/Glob are denied over userData and ~/.claude* on every profil
 });
 
 test("C1: an unavailable userData path still leaves the home rules in force (fail useful)", () => {
-  const rules = new Function("app", `${DENY_BLOCK}\n return buildSecretPathDenyRules();`)({
-    getPath: () => { throw new Error("no app"); },
-  });
+  // No app (a harness): the launch spec's `userDataDir` answers '' and only the home rules remain.
+  assert.match(fnOf(SPEC, "userDataDir"), /catch \(_\) \{ return ''; \}/, "an unreadable userData answers ''");
+  const rules = denyRules("");
   assert.deepEqual(rules.filter((r) => r.startsWith("Read")), ["Read(~/.claude*)", "Read(~/.claude/**)"]);
 });
 
@@ -141,7 +138,7 @@ test("C1: the launch spec really concatenates them onto the profile's hard-deny"
   // reason it is pinned: a pre-approved read is SHADOWED past the gate, so only this tool-bound
   // layer can fence the credential directories.
   const opts = slice(SPEC, "function buildOptions(s, dispatch) {", "function buildLaunchSpec(", "buildOptions");
-  assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(loader\.buildSecretPathDenyRules\(\)\),/);
+  assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(tools\.buildSecretPathDenyRules\(userDataDir\(\)\)\),/);
   // ...and that every profile therefore gets them: it is the ONE assembly path
   // (session-park resumes and recreated shells call deps.buildLaunchSpec).
   assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, acquireRuntime, buildLaunchSpec/);

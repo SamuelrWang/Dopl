@@ -219,7 +219,7 @@ test("checkNow joins a check already running for the same runtime", async () => 
 });
 
 test("resolveClaudeExecutable runs a newer verified download, else the bundle", () => {
-  const loader = require(join(MAIN, "runtime", "claude", "loader.js"));
+  const loader = require(join(MAIN, "runtime", "claude", "resolve-bin.js"));
   const bundled = loader.bundledClaude();
   if (!bundled) {
     console.log("      ℹ no bundled Claude platform package here — case skipped");

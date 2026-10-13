@@ -6,7 +6,7 @@
 // the desktop shipped, and the reasons are measurable, not preferences:
 //   - `dopl-desktop-app/package.json › build.asarUnpack` carries exactly two globs, both the
 //     Claude agent SDK, because the platform binary CANNOT EXEC from inside the read-only
-//     `app.asar` and `codesign` cannot sign a file inside it (`loader.js`'s header).
+//     `app.asar` and `codesign` cannot sign a file inside it (`resolve-bin.js`'s header).
 //   - `build.mac.hardenedRuntime: true` + `entitlements.mac.plist` + `afterSign: scripts/notarize.js`
 //     are what make that unpacked binary launchable on a sealed Mac at all.
 // A second runtime answering `bundled` inherits every one of those lines and adds its own

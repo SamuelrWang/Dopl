@@ -1,14 +1,14 @@
 // THE BUILD NEW CLAUDE LAUNCHES RUN — `{ path, version, account }` for core's key (`../roster-key.js`):
 // the ACTIVE binary (a verified download, else the bundle), its version, and whose roster it is.
-// Electron-free at load: the loader and the credential are reached lazily (`defaultDeps`).
+// Electron-free at load: the resolver and the credential are reached lazily (`defaultDeps`).
 
 // Injectable for the suite.
 function defaultDeps() {
   return {
-    bin: () => require('./loader').resolveClaudeExecutable(),
+    bin: () => require('./resolve-bin').resolveClaudeExecutable(),
     // The ACTIVE binary's version (a verified download or the bundle), so a switch moves the key.
     sdkVersion: () => {
-      try { return String((require('./loader').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
+      try { return String((require('./resolve-bin').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
     },
     // Whose roster this is (cross-review M2): a one-way per-sign-in fingerprint, never the token or its source.
     account: () => require('./credential').accountFingerprint(),

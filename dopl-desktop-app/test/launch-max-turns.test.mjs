@@ -62,16 +62,12 @@ const SESSION_MAX_TURNS = shipped(SPEC, "SESSION_MAX_TURNS");
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   return new Function(
-    "tools", "channelDirs", "loader", "mcp", "credential", "axisB", "diag",
+    "tools", "channelDirs", "loader", "mcp", "resolveBin", "userDataDir", "credential", "axisB", "diag",
     "store", "models", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
-    { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
+    { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }), buildSecretPathDenyRules: () => [] },
     { sessionSpawnDir: () => "/tmp" },
-    {
-      buildSecretPathDenyRules: () => [],
-      buildScrubbedEnv: () => ({}),
-      resolveClaudeExecutable: () => null,
-    },
+    { buildScrubbedEnv: () => ({}) },
     // The session MCP entry is `mcp.js`'s since 2026-10-13 (scaffold Phase 1.4).
     {
       buildMcpServers: () => ({}),
@@ -81,6 +77,8 @@ function assembled(s) {
       withToolProfileStamp: () => {},
       withToolSetStamp: () => {},
     },
+    { resolveClaudeExecutable: () => null },
+    () => "",
     { withCredential: (e) => e },
     { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
     () => {},

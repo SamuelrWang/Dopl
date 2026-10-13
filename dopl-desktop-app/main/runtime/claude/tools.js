@@ -334,7 +334,35 @@ function floorWindowlessTool(mode) {
 
 // ─── END CLAUDE TOOL TABLE ───
 
+// ── THE CREDENTIAL-PATH DENY RULES ───────────────────────────────────────────────────────────
+//
+// ⚠ Tool-BOUND half of the same fix as `mcp.js › doplBearer`. A pre-approved tool never reaches grantDecision, so this
+// deny must ride options.disallowedTools (the SDK's rule layer). Fences the two credential
+// directories: userData (the safeStorage-encrypted electron-store; mcp-spawn.json USED to live
+// here and no longer exists) and ~/.claude* (CLI config + keychain-adjacent state). Rules are
+// gitignore-style: an absolute path takes the `//` filesystem-root prefix, `~/` is home. Applied
+// to EVERY profile, because every profile pre-approves the local reads. `Read` is load-bearing;
+// Grep/Glob are belt. `userDataDir` is passed in (`launch-spec.js › userDataDir`), so this table
+// stays electron-free; none (no app yet — a harness) leaves the home rules in force.
+// ⚠ THE LIST IS PATH-TOOLS ONLY, AND `Bash` CANNOT JOIN IT — not an oversight. Claude Code's
+// `Bash` rules match COMMAND STRINGS (`Bash(npm run build)`, `Bash(git *)`), so a generated
+// `Bash(//Users/…/**)` would match no command and deny nothing while reading as coverage. The
+// answer for a secret Bash can reach is to not put the secret on disk; see
+// `mcp-config.js › removeSpawnConfig`.
+const SECRET_TOOLS = ['Read', 'Grep', 'Glob'];
+const SECRET_HOME_PATHS = ['~/.claude*', '~/.claude/**'];
+function buildSecretPathDenyRules(userDataDir) {
+  const paths = SECRET_HOME_PATHS.slice();
+  if (userDataDir) paths.unshift('//' + String(userDataDir).replace(/^\/+/, '') + '/**');
+  const rules = [];
+  for (const tool of SECRET_TOOLS) {
+    for (const p of paths) rules.push(`${tool}(${p})`);
+  }
+  return rules;
+}
+
 module.exports = {
+  buildSecretPathDenyRules,
   shortDoplName,
   buildSessionToolConfig,
   TOOL_MODES, EDIT_TOOLS, ESCALATION_TOOLS, BYPASS_READS, AUTO_TOOLS, BYPASS_TOOLS,

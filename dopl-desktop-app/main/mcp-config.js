@@ -63,7 +63,7 @@ const MCP_CLIENT_TIMEOUT_MS = 290_000;
 // machine holding that credential on disk for up to 90 more days, so the ensure path DELETES the
 // file instead: the token sheds on the next signed-in launch, without a sign-out.
 //
-// ⚠ WHY DELETED RATHER THAN FENCED — the fence that looked available is not one. `runtime/claude/loader.js`'s
+// ⚠ WHY DELETED RATHER THAN FENCED — the fence that looked available is not one. `runtime/claude/tools.js`'s
 // `buildSecretPathDenyRules` denies userData to SECRET_TOOLS = Read/Grep/Glob; `Bash` is NOT on
 // that list, so one `cat` of this path lifted the credential. ADDING `'Bash'` WOULD BE THEATRE:
 // Claude Code permission rules for `Bash` match COMMAND STRINGS, not filesystem path globs.

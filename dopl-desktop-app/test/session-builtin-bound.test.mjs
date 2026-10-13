@@ -152,10 +152,12 @@ const shippedNum = (src, name) => {
 const DEPS = {
   tools: TOOLS,
   loader: {
-    buildSecretPathDenyRules: () => ["Read(~/.claude*)"],
     buildScrubbedEnv: () => ({}),
-    resolveClaudeExecutable: () => "",
   },
+  // The binary and the userData read are `resolve-bin.js` / `launch-spec.js › userDataDir` since
+  // 2026-10-13 (scaffold Phase 1.5); the deny rules are the real `tools.js`'s.
+  resolveBin: { resolveClaudeExecutable: () => "" },
+  userDataDir: () => "",
   // The session MCP entry is `mcp.js`'s since 2026-10-13 (scaffold Phase 1.4).
   mcp: {
     buildMcpServers: () => ({ dopl: {} }),

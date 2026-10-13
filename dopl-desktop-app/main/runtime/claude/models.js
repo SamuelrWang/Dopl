@@ -19,7 +19,7 @@ const PICK_RE = new RegExp(PICK_PATTERN);
 function defaultDeps() {
   return {
     loadSdk: () => require('./loader').getSdk(),
-    bin: () => require('./loader').resolveClaudeExecutable(),
+    bin: () => require('./resolve-bin').resolveClaudeExecutable(),
     env: () => require('./credential').withCredential(require('./loader').buildScrubbedEnv()),
     credentialSource: () => {
       try { return String(require('./credential').credentialState().source || 'none'); } catch (_) { return 'none'; }
