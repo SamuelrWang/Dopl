@@ -20,8 +20,8 @@ import {
   CURSOR_PREFIX,
   cursorScopeKey,
   cursorTokensAvailable,
-  decodeCursor,
-  encodeCursor,
+  decodeChannelCursor,
+  encodeChannelCursor,
   isCursorToken,
   type CursorScope,
 } from "./cursor-codec";
@@ -73,7 +73,7 @@ describe("a token hides the number — the reason this exists", () => {
      * 2^64 wide, against 2^16 for the four hex characters it replaces.
      */
     const seq = 4461;
-    const token = encodeCursor(seq, CHANNEL, USER);
+    const token = encodeChannelCursor(seq, CHANNEL, USER);
     const body = Buffer.from(token.slice(CURSOR_PREFIX.length), "base64url");
     const plainBE8 = Buffer.alloc(8);
     plainBE8.writeBigUInt64BE(BigInt(seq));
@@ -87,17 +87,17 @@ describe("a token hides the number — the reason this exists", () => {
   it("🔒 the SAME seq encodes differently every time", () => {
     // A deterministic token would let a reader test two cursors for equality and
     // recover the ordering — and ordering is most of what the integer leaked.
-    const a = encodeCursor(4461, CHANNEL, USER);
-    const b = encodeCursor(4461, CHANNEL, USER);
+    const a = encodeChannelCursor(4461, CHANNEL, USER);
+    const b = encodeChannelCursor(4461, CHANNEL, USER);
     expect(a).not.toBe(b);
-    expect(decodeCursor(a, CHANNEL, USER)).toBe(4461);
-    expect(decodeCursor(b, CHANNEL, USER)).toBe(4461);
+    expect(decodeChannelCursor(a, CHANNEL, USER)).toBe(4461);
+    expect(decodeChannelCursor(b, CHANNEL, USER)).toBe(4461);
   });
 
   it("🔒 two ADJACENT seqs give tokens of identical length and no shared tail", () => {
     // Length or a common suffix would order them without decoding.
-    const a = encodeCursor(4461, CHANNEL, USER);
-    const b = encodeCursor(4462, CHANNEL, USER);
+    const a = encodeChannelCursor(4461, CHANNEL, USER);
+    const b = encodeChannelCursor(4462, CHANNEL, USER);
     expect(a.length).toBe(b.length);
     expect(a.slice(-8)).not.toBe(b.slice(-8));
   });
@@ -106,8 +106,8 @@ describe("a token hides the number — the reason this exists", () => {
 describe("round trip", () => {
   it("carries every seq a BIGINT column can hand us", () => {
     for (const seq of [0, 1, 2, 999, 4461, 1_000_000, Number.MAX_SAFE_INTEGER]) {
-      const token = encodeCursor(seq, CHANNEL, USER);
-      expect(decodeCursor(token, CHANNEL, USER), String(seq)).toBe(seq);
+      const token = encodeChannelCursor(seq, CHANNEL, USER);
+      expect(decodeChannelCursor(token, CHANNEL, USER), String(seq)).toBe(seq);
     }
   });
 
@@ -118,13 +118,23 @@ describe("round trip", () => {
       "workspace:ws-1",
     );
     for (const scope of [CHANNEL, ACCOUNT, { kind: "workspace", workspaceId: "ws-1" } as const]) {
-      expect(decodeCursor(encodeCursor(7, scope, USER), scope, USER)).toBe(7);
+      expect(decodeChannelCursor(encodeChannelCursor(7, scope, USER), scope, USER)).toBe(7);
+    }
+  });
+
+  it("🔒 the token is exactly 52 chars — the wire cost, pinned", () => {
+    // 4 (`dc1.`) + 48 for 36 base64url bytes (12 iv + 8 ct + 16 tag). Pinned
+    // because the cursor rides result lines that are themselves budgeted
+    // (`WAITING_LINE_MAX_CHARS = 160`, and the write result's `hold=since:<seq>`),
+    // so a payload change is a budget change and must be noticed here first.
+    for (const seq of [0, 1, 4461, Number.MAX_SAFE_INTEGER]) {
+      expect(encodeChannelCursor(seq, CHANNEL, USER)).toHaveLength(52);
     }
   });
 
   it("the prefix is stable, and tells a token from a legacy integer", () => {
-    expect(encodeCursor(1, CHANNEL, USER).startsWith("dc1.")).toBe(true);
-    expect(isCursorToken(encodeCursor(1, CHANNEL, USER))).toBe(true);
+    expect(encodeChannelCursor(1, CHANNEL, USER).startsWith("dc1.")).toBe(true);
+    expect(isCursorToken(encodeChannelCursor(1, CHANNEL, USER))).toBe(true);
     for (const legacy of ["0", "4461", "", "none", "-1"]) {
       expect(isCursorToken(legacy), legacy).toBe(false);
     }
@@ -132,7 +142,7 @@ describe("round trip", () => {
 
   it("refuses to encode something that is not a cursor", () => {
     for (const bad of [-1, 1.5, NaN, Infinity, 2 ** 53]) {
-      expect(() => encodeCursor(bad, CHANNEL, USER), String(bad)).toThrow();
+      expect(() => encodeChannelCursor(bad, CHANNEL, USER), String(bad)).toThrow();
     }
   });
 });
@@ -144,54 +154,54 @@ describe("every refusal is the SAME refusal", () => {
   };
 
   it("🔒 a cursor minted for ANOTHER READER", () => {
-    const token = encodeCursor(4461, CHANNEL, USER);
-    expectRefusal(() => decodeCursor(token, CHANNEL, PEER));
+    const token = encodeChannelCursor(4461, CHANNEL, USER);
+    expectRefusal(() => decodeChannelCursor(token, CHANNEL, PEER));
   });
 
   it("🔒 a cursor minted for ANOTHER SCOPE — a channel cursor is not an account one", () => {
-    const token = encodeCursor(4461, CHANNEL, USER);
-    expectRefusal(() => decodeCursor(token, ACCOUNT, USER));
+    const token = encodeChannelCursor(4461, CHANNEL, USER);
+    expectRefusal(() => decodeChannelCursor(token, ACCOUNT, USER));
     expectRefusal(() =>
-      decodeCursor(token, { kind: "channel", channelId: "chan-2" }, USER),
+      decodeChannelCursor(token, { kind: "channel", channelId: "chan-2" }, USER),
     );
   });
 
   it("🔒 a cursor minted under a RETIRED KEY", () => {
-    const token = encodeCursor(4461, CHANNEL, USER);
+    const token = encodeChannelCursor(4461, CHANNEL, USER);
     vi.stubEnv("DOPL_CURSOR_KEY", KEY_B);
-    expectRefusal(() => decodeCursor(token, CHANNEL, USER));
+    expectRefusal(() => decodeChannelCursor(token, CHANNEL, USER));
   });
 
   it("🔒 a TAMPERED token", () => {
-    const token = encodeCursor(4461, CHANNEL, USER);
+    const token = encodeChannelCursor(4461, CHANNEL, USER);
     const body = Buffer.from(token.slice(CURSOR_PREFIX.length), "base64url");
     body[body.length - 1] ^= 0xff; // flip the tag
     expectRefusal(() =>
-      decodeCursor(CURSOR_PREFIX + body.toString("base64url"), CHANNEL, USER),
+      decodeChannelCursor(CURSOR_PREFIX + body.toString("base64url"), CHANNEL, USER),
     );
     const mid = Buffer.from(token.slice(CURSOR_PREFIX.length), "base64url");
     mid[14] ^= 0x01; // flip the ciphertext
     expectRefusal(() =>
-      decodeCursor(CURSOR_PREFIX + mid.toString("base64url"), CHANNEL, USER),
+      decodeChannelCursor(CURSOR_PREFIX + mid.toString("base64url"), CHANNEL, USER),
     );
   });
 
   it("🔒 a TRUNCATED or overlong token", () => {
-    const token = encodeCursor(4461, CHANNEL, USER);
-    expectRefusal(() => decodeCursor(token.slice(0, token.length - 4), CHANNEL, USER));
-    expectRefusal(() => decodeCursor(token + "AAAA", CHANNEL, USER));
+    const token = encodeChannelCursor(4461, CHANNEL, USER);
+    expectRefusal(() => decodeChannelCursor(token.slice(0, token.length - 4), CHANNEL, USER));
+    expectRefusal(() => decodeChannelCursor(token + "AAAA", CHANNEL, USER));
   });
 
   it("🔒 something that is not a token at all", () => {
     for (const junk of ["", "4461", "dc1.", "dc1.!!!!", "dc2.AAAA", "null"]) {
-      expectRefusal(() => decodeCursor(junk, CHANNEL, USER));
+      expectRefusal(() => decodeChannelCursor(junk, CHANNEL, USER));
     }
   });
 
   it("🔒 and with NO KEY configured, every token is undecodable", () => {
-    const token = encodeCursor(4461, CHANNEL, USER);
+    const token = encodeChannelCursor(4461, CHANNEL, USER);
     vi.stubEnv("DOPL_CURSOR_KEY", "");
-    expectRefusal(() => decodeCursor(token, CHANNEL, USER));
+    expectRefusal(() => decodeChannelCursor(token, CHANNEL, USER));
   });
 });
 
@@ -199,14 +209,14 @@ describe("the key, and the one dev fallback (ASK 12)", () => {
   it("accepts the key as base64 OR hex", () => {
     const hex = randomBytes(32).toString("hex");
     vi.stubEnv("DOPL_CURSOR_KEY", hex);
-    expect(decodeCursor(encodeCursor(9, CHANNEL, USER), CHANNEL, USER)).toBe(9);
+    expect(decodeChannelCursor(encodeChannelCursor(9, CHANNEL, USER), CHANNEL, USER)).toBe(9);
   });
 
   it("🔒 a key of the WRONG LENGTH is no key — not a truncated one", () => {
     vi.stubEnv("DOPL_CURSOR_KEY", Buffer.alloc(16).toString("base64"));
     vi.stubEnv("NODE_ENV", "development");
     expect(cursorTokensAvailable()).toBe(false);
-    expect(() => encodeCursor(1, CHANNEL, USER)).toThrow(/not configured/);
+    expect(() => encodeChannelCursor(1, CHANNEL, USER)).toThrow(/not configured/);
   });
 
   it("dev with no key falls back — tokens are simply unavailable", () => {

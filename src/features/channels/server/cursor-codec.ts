@@ -40,6 +40,14 @@ import { ChannelCursorUndecodableError } from "./errors";
  * one thing this feature must not do first.
  */
 
+/**
+ * ⚠ **`encodeChannelCursor` / `decodeChannelCursor`, NOT `encodeCursor`** (Review
+ * 40): `src/features/revisions/server/service.ts:213` already exports an
+ * `encodeCursor`, and two same-named cursor codecs in one tree is how an import
+ * lands on the wrong one — a revisions cursor and a channel cursor are not even
+ * the same shape.
+ */
+
 /** Current format + key id. A new key means a new prefix, never a silent swap. */
 export const CURSOR_PREFIX = "dc1.";
 
@@ -123,7 +131,7 @@ export function cursorTokensAvailable(): boolean {
  * nicety: a deterministic token would let a reader match two cursors for equality
  * and recover the ordering — and ordering is most of what the integer leaked.
  */
-export function encodeCursor(
+export function encodeChannelCursor(
   seq: number,
   scope: CursorScope,
   userId: string,
@@ -160,7 +168,7 @@ export function encodeCursor(
  * truncated, tampered, or not a token at all — because distinguishing them for the
  * caller would narrow the token for an attacker.
  */
-export function decodeCursor(
+export function decodeChannelCursor(
   token: string,
   scope: CursorScope,
   userId: string,
@@ -168,12 +176,12 @@ export function decodeCursor(
   const key = cursorKey();
   if (key === null) throw new ChannelCursorUndecodableError();
   if (!isCursorToken(token)) throw new ChannelCursorUndecodableError();
-  let raw: Buffer;
-  try {
-    raw = Buffer.from(token.slice(CURSOR_PREFIX.length), "base64url");
-  } catch {
-    throw new ChannelCursorUndecodableError();
-  }
+  // ⚠ **NO try/catch HERE, AND THE REASON IS MEASURED** (Review 40):
+  // `Buffer.from("!!!!", "base64url")` does NOT throw — it returns a zero-length
+  // buffer, silently dropping anything it cannot decode. The length check below is
+  // what actually rejects junk, so a catch around this line was dead code pretending
+  // to be a guard.
+  const raw = Buffer.from(token.slice(CURSOR_PREFIX.length), "base64url");
   if (raw.length !== IV_BYTES + SEQ_BYTES + 16) {
     throw new ChannelCursorUndecodableError();
   }
