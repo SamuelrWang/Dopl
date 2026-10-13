@@ -21,6 +21,13 @@
  * is the arrangement the exemption list itself calls a real split — `channel.ts`,
  * `client-channels.ts` and `index.ts` all still import these from
  * `./channel-types.js`.
+ *
+ * ⚠ **AND THE SPLIT IS SURFACE-NEUTRAL, BUT THE WAVE IT LANDED IN IS NOT**
+ * (Review 37). Moving these four names added and removed nothing: the same
+ * identifiers are exported from the same module path as before. Grammar B DID add
+ * one new export in the same wave — `ChannelMessageCite`, beside
+ * `ChannelMessage.cites` — so the package's export set grew by exactly one name.
+ * Saying the surface is unchanged would be wrong by that one.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 /**

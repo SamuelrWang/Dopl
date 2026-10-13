@@ -25,6 +25,15 @@
  * back as "not a member" instead of the 400 that lists the live handles.
  */
 import type { ChannelMessageInput, DoplClient } from "@dopl/client";
+/** `cites` ON THE WIRE — by NUMBER, never by id. ⚠ Declared, not imported: the
+ *  SDK source has the field and its committed `dist` does not yet. */
+type CitesOnWire = {
+    cites?: Array<{
+        no?: number;
+        seq?: number;
+        thread?: string;
+    }>;
+};
 import { type ToolResponse } from "./respond";
 import { type FactValue } from "./channel-facts";
 /**
@@ -125,6 +134,9 @@ interface PostOptions {
     summary?: string;
     /** A thread id — threads this post under that thread's card (server-validated). */
     thread?: string;
+    /** THE MESSAGES THIS POST CITES (grammar B). ⚠ Each entry becomes a message id
+     *  at the write or the send is REFUSED, so a stored citation is never dead. */
+    cites?: CitesOnWire["cites"];
     /**
      * Caller's OBSERVED runtime stamp (`CallerIdentity.runtime`). Changes nothing
      * this op does — only what the result may claim about waiting for the reply.

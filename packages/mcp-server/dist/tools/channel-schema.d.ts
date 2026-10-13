@@ -126,5 +126,10 @@ export declare const CHANNEL_INPUT_SHAPE: {
     }>>;
     thread: z.ZodOptional<z.ZodString>;
     summary: z.ZodOptional<z.ZodString>;
+    cites: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        no: z.ZodOptional<z.ZodNumber>;
+        seq: z.ZodOptional<z.ZodNumber>;
+        thread: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>>;
     client_msg_id: z.ZodOptional<z.ZodString>;
 };

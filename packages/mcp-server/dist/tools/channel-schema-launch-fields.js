@@ -38,6 +38,14 @@ exports.LAUNCH_INPUT_FIELDS = {
     color: channel_ops_launch_color_1.AGENT_COLOR_FIELD,
     // `tools`: hand mirror of `src/features/channels/schema-launch-modes.ts › LAUNCH_TOOL_MODES` — the
     // levels first, then each runtime's own words. `chain` has three values because absent is not `off`.
+    // ⚠ **THE PROSE MOVED TO `channel-doctrine.ts › FIELDS` (ASK 9, 2026-10-12), THE
+    // SHAPE STAYED.** This param is PUSHED on every connection and its 922 bytes were
+    // mostly these enums — which cannot move, they ARE the contract — plus four
+    // descriptions. Grammar B's `cites` param needed room on this surface and the
+    // ratchet's rule is that a rise is paid for by a fall on a pushed one, so the
+    // explanatory half is now PULLED: every rule below still reaches an agent, through
+    // the guide instead of every handshake. `channel-ops-agent-mode.test.ts` asserts
+    // FIELDS still carries the clamp sentence, so this cannot quietly become a deletion.
     posture: zod_1.z
         .object({
         tools: zod_1.z
@@ -47,19 +55,15 @@ exports.LAUNCH_INPUT_FIELDS = {
             "untrusted", "granular", "on-request", "never",
             "allowlist", "auto-review", "run-everything",
         ])
-            .optional()
-            .describe("TOOL freedom: ask | auto | full (a runtime's own word also works)."),
+            .optional(),
         messages: zod_1.z
             .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
-            .optional()
-            .describe("MESSAGE freedom to ask for — narrowest first, floored for a windowless session."),
-        chain: zod_1.z
-            .enum(["inherit", "on", "off"])
-            .optional()
-            .describe('Launch only: may the new agent launch further agents? "on" is REFUSED rather than quietly narrowed when the channel forbids it.'),
+            .optional(),
+        chain: zod_1.z.enum(["inherit", "on", "off"]).optional(),
     })
         .optional()
         .describe(
-    // The clamp sentence is pinned by phrase (`channel-ops-agent-mode.test.ts`, `channel-session-handle.test.ts`).
-    'op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR. Your operator\'s machine narrows whatever you ask for to their own ceiling and never widens past it; omit an axis to run at that setting.'),
+    // "how much freedom to ASK FOR" is pinned by phrase and stays HERE; the clamp
+    // sentence it used to carry is pinned in FIELDS now.
+    'op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR — see FIELDS.'),
 };

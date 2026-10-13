@@ -190,20 +190,31 @@ async function opPost(client, channelRef, body, opts = {}) {
         ? { ...(opts.metadata ?? {}), taskId: opts.thread }
         : opts.metadata;
     let message;
+    // ⚠ **AN INTERSECTION, NOT A CAST, AND THE REASON IS THE COMMITTED `dist`.** This
+    // package type-checks against `@dopl/client`'s BUILT output, which does not carry
+    // `cites` until the merge owner rebuilds it — the same stale-`dist` boundary the
+    // numbering wave crossed with `NumberedMessage`. An `as` would silence the gap;
+    // widening the local type keeps every other field checked and makes the extra one
+    // explicit, and it simply becomes redundant once `dist` catches up.
+    const input = {
+        body,
+        kind: opts.kind,
+        metadata,
+        clientMsgId: opts.clientMsgId,
+        // ⚠ THE UNION FIELD, NOT `toUserId`. One recipient, one resolver, one
+        // refusal — see this module's header.
+        to: opts.to,
+        summary: opts.summary,
+        // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
+        intent: opts.intent,
+        // ⚠ FORWARDED, NEVER DROPPED: a param an MCP client can see is a param a model
+        // will try, and a silently-ignored citation is the same shape of failure as a
+        // silently-dropped address (`channel-addressing-rule.test.ts`).
+        cites: opts.cites,
+        escalation: opts.escalation,
+    };
     try {
-        message = await client.postChannelMessage(ch.id, {
-            body,
-            kind: opts.kind,
-            metadata,
-            clientMsgId: opts.clientMsgId,
-            // ⚠ THE UNION FIELD, NOT `toUserId`. One recipient, one resolver, one
-            // refusal — see this module's header.
-            to: opts.to,
-            summary: opts.summary,
-            // ⚠ Omitted on every ordinary post, so no existing wire shape moved.
-            intent: opts.intent,
-            escalation: opts.escalation,
-        });
+        message = await client.postChannelMessage(ch.id, input);
     }
     catch (e) {
         // ⚠ Map 400s off the CODE, never off which params happened to be set —
