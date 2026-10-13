@@ -104,14 +104,14 @@ function run(d) {
   const exit = new Promise((r) => { exited = r; });
   let closeCode = () => {};
   let unQuit = () => {};
-  const timer = setTimeout(() => { void end({ ok: false, reason: 'timeout' }); }, d.timeoutMs);
-  if (timer.unref) timer.unref();
+  // Armed once the binary is in hand: a first-time download (~360 MB) is not the operator's login time.
+  let timer = null;
 
   async function end(result, opts) {
     if (s.settled) return outcome;
     s.settled = true;
     const immediate = !!(opts && opts.immediate);
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     unQuit();
     closeCode();
     if (s.waiter) s.waiter({ outcome: 'cancelled' });
@@ -140,6 +140,8 @@ function run(d) {
     unQuit = d.onQuit(() => { void end({ ok: false, reason: 'quit' }, { immediate: true }); }) || (() => {});
     const bin = await d.bin();
     if (s.settled) return;
+    timer = setTimeout(() => { void end({ ok: false, reason: 'timeout' }); }, d.timeoutMs);
+    if (timer.unref) timer.unref();
     const home = configHome.loginEnv(configHome.buildScrubbedEnv(), d.userDataRoot);
     s.conn = d.connect({
       bin, args: d.serveArgs(), env: home.env, onNotification,

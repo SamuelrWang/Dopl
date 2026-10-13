@@ -57,7 +57,11 @@ describe("the mode vocabularies", () => {
   // A CHECK narrower than the wire would refuse a legal request at rest; `applied` is a runtime's
   // own word only (the machine never echoes a level).
   it("the latest tool-mode CHECKs admit exactly the wire union (applied: the runtime words)", () => {
+    // The CHECKs were last re-created for Muse's words; `applied_setting` still lives in the levels migration.
     const sql = readSource(
+      repoFile("supabase/migrations/20261122120000_channel_launch_directives_muse_tool_words.sql"),
+    );
+    const levels = readSource(
       repoFile("supabase/migrations/20261024120000_channel_launch_directives_permission_levels.sql"),
     );
     const union = Object.values(LAUNCH_TOOL_MODES_BY_RUNTIME).flat();
@@ -67,7 +71,7 @@ describe("the mode vocabularies", () => {
       const words = [...m![1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
       expect(words.sort(), col).toEqual(col === "applied_tool_mode" ? [...union].sort() : [...LAUNCH_TOOL_MODES].sort());
     }
-    expect(sql).toContain(`applied_setting ~ '${LAUNCH_SETTING_RE.source}'`);
+    expect(levels).toContain(`applied_setting ~ '${LAUNCH_SETTING_RE.source}'`);
   });
 
   it("a launch and a re-posture accept a Codex word, and refuse a word no runtime has", () => {
