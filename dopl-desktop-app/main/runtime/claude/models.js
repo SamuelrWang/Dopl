@@ -43,8 +43,9 @@ function defaultDeps() {
 let deps = defaultDeps();
 
 // A downloaded build's first handshake may wait out macOS's first-exec scan, so a failed probe on one is
-// retried once with this budget before the build is rejected.
-const DOWNLOAD_RETRY_TIMEOUT_MS = 60000;
+// retried once with this budget before the build is rejected — the kit's one number
+// (`../kit/probe-bin.js`, shared since 2026-10-13; this adapter's probe is a roster read, not `--version`).
+const { DOWNLOAD_RETRY_TIMEOUT_MS } = require('../kit/probe-bin');
 
 /** `{ rows, moved }` from the binary new launches run. A download that fails twice is rejected and the rows
  *  come from what launches run after that (the last good build or the bundle), `moved` — never "no runtime". */

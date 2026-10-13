@@ -1,73 +1,35 @@
 // JSON-RPC 2.0 client for `codex app-server` over stdio. app-server, not the SDK or `codex exec`
 // (both fix policy at launch): only it sends approvals as server->client requests that block the turn.
 
-const { execFile } = require('child_process');
 const stdioRpc = require('../kit/stdio-rpc');
+const probeBin = require('../kit/probe-bin');
 const resolveBin = require('./resolve-bin');
 const protocol = require('./protocol');
 const { AUTH_STORE_ARGS } = require('./config-home');
 
 // ── BINARY ───────────────────────────────────────────────────────────────────────────────────
+// The `--version` probe, its downloaded-build retry and the updater's reject loop are the kit's
+// (`../kit/probe-bin.js`, runtime scaffold K10); this adapter supplies the resolver, the version read,
+// the build-key note and its update source — each looked up at CALL time, as before.
 
 // The name is for messages; `spawn` gets `resolve-bin.js`'s path (a Finder launch has launchd's PATH).
 const BIN = resolveBin.BIN_NAME;
-// Bounded: `available()` awaits the probe on the spawn path, and a hung `codex` must read as absent.
-const PROBE_TIMEOUT_MS = 5000;
 
-// A downloaded build's first exec may wait out macOS's first-exec scan, so a failed probe on one is retried
-// once with this budget before the build is rejected (`../updates/index.js › reject`).
-const DOWNLOAD_RETRY_TIMEOUT_MS = 60000;
-
-/** One `--version` run of the resolved `found` → the probe's answer. Never rejects. */
-function probeAt(found, timeoutMs) {
-  return new Promise((resolve) => {
-    const finish = (value) => resolve(Object.assign({ path: found.path, source: found.source }, value));
-    try {
-      execFile(found.path, ['--version'], { timeout: timeoutMs }, (err, stdout) => {
-        if (err) {
-          finish({
-            ok: false,
-            reason: err.killed
-              ? `\`${found.path}\` did not answer \`${BIN} --version\` within ${timeoutMs}ms — Dopl cannot start a Codex session on this Mac.`
-              : `\`${found.path}\` could not answer \`${BIN} --version\`: ${(err && err.message) || err}`,
-            version: null,
-          });
-          return;
-        }
-        const version = String(stdout || '').trim() || null;
-        // Only readability is checked here: whether this build speaks the protocol Dopl reads is the shape
-        // gate's question (`shape.js` + `../sdk-shape.js`), answered from the build's own schema — never a
-        // version range. The answer is recorded for the build key (`identity.js`).
-        const read = protocol.versionGate(version);
-        if (read.ok) require('./identity').noteVersion(found.path, version);
-        finish({ ok: read.ok, reason: read.reason, version });
-      });
-    } catch (err) {
-      finish({ ok: false, reason: `\`${found.path}\` could not be started: ${(err && err.message) || err}`, version: null });
-    }
-  });
-}
+const prober = probeBin.makeProber({
+  binName: BIN,
+  label: 'Codex',
+  resolve: () => resolveBin.resolveCodexBin(),
+  versionGate: (version) => protocol.versionGate(version),
+  onReadable: (file, version) => require('./identity').noteVersion(file, version),
+  updateSource: () => require('./update-source'),
+});
 
 /**
  * Is there a usable `codex`? `{ ok, reason, version, path, source }`; `reason` is for the operator.
  * ⚠ A DOWNLOAD THAT FAILS IS RETRIED ONCE, LONGER, THEN REJECTED, AND THE ANSWER IS WHAT LAUNCHES RUN AFTER
  * THAT (the last good build or the bundle), never "no Codex" on account of an update. `o` is for tests.
  */
-async function probe(o) {
-  const timeoutMs = (o && o.timeoutMs) || PROBE_TIMEOUT_MS;
-  const retryMs = (o && o.retryTimeoutMs) || DOWNLOAD_RETRY_TIMEOUT_MS;
-  // The resolver's reason (missing vs untrusted) is readable; an `execFile` errno is not.
-  const found = resolveBin.resolveCodexBin();
-  if (!found.ok) return { ok: false, reason: found.reason, version: null, path: null, source: null };
-  const gate = await probeAt(found, timeoutMs);
-  if (gate.ok || found.source !== 'downloaded') return gate;
-  const again = await probeAt(found, retryMs);
-  if (again.ok) return again;
-  // `reject` repoints the updater and its `onSwitch` drops resolve-bin's cached hit, so the next resolve is
-  // a different binary; each rejection retires one download, so this ends at the bundle.
-  if (!require('../updates').reject(require('./update-source'), found.path)) return again;
-  return probe(o);
-}
+const probe = (o) => prober.probe(o);
 
 // ── CONNECTION ───────────────────────────────────────────────────────────────────────────────
 // The transport is the kit's (`../kit/stdio-rpc.js`, runtime scaffold K1): framing, correlation, the
@@ -119,7 +81,7 @@ function initializeParams(version) {
 }
 
 module.exports = {
-  probe, connect, initializeParams, DOWNLOAD_RETRY_TIMEOUT_MS,
+  probe, connect, initializeParams, DOWNLOAD_RETRY_TIMEOUT_MS: probeBin.DOWNLOAD_RETRY_TIMEOUT_MS,
   REQUIRED_METHODS: protocol.REQUIRED_METHODS,
   SUPPORTED_CLI: protocol.SUPPORTED_CLI,
   versionGate: protocol.versionGate,

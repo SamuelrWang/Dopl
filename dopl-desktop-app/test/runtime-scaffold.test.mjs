@@ -202,6 +202,7 @@ const KIT = {
   "frame-queue.js": "K2 — push/pull frame queue + bounded interrupt (from codex/launch-handle.js)",
   "auth-shape.js": "K5 — the refused-credential pattern + authShaped(text, extraRe?) (from codex/cursor normalize.js)",
   "stdio-rpc.js": "K1 — JSON-RPC 2.0 over a child's stdio: framing, correlation, held server requests, close-vs-exit",
+  "probe-bin.js": "K10 — the --version probe, downloaded-build retry, updater reject loop (from codex/client.js)",
   "private-home.js": "K8 — owner-only (0700) home, 0600 moved-in credential, symlink removal (from codex/config-home.js)",
   "run-handle.js": "K3 — the handle shape { iterator, next, interrupt, close } over adapter callbacks",
   "usage.js": "K4 — readCount (from sdk-shape.js), tokensFrom over per-adapter key lists, the total carry",
