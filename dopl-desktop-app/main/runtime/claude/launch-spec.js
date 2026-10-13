@@ -21,7 +21,7 @@ const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const fold = require('./fold');
 const launchContract = require('./launch-contract');
-const { readCount } = require('../sdk-shape');
+const { readCount } = require('../kit/usage');
 const operatorTools = require('./operator-tools');
 const { diag } = require('../../diag');
 

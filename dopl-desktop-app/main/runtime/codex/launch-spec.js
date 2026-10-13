@@ -21,6 +21,7 @@ const mcpReady = require('./mcp-ready');
 const normalizer = require('./normalize');
 const { handleFor } = require('./launch-handle');
 const { makeFrameQueue, boundedInterrupt } = require('../kit/frame-queue');
+const kitUsage = require('../kit/usage');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionCredential = require('../../session-credential');
@@ -213,8 +214,8 @@ function start(spec) {
   let selectedModel = null;
   let latestUsage = null;
   // `total` is cumulative per thread and continues across `thread/resume`; an interrupted turn gets
-  // no usage update, so the last total is carried (CX-02).
-  let lastTotal = null;
+  // no usage update, so the last total is carried (CX-02, `kit/usage.js › makeUsageCarry`).
+  const usageCarry = kitUsage.makeUsageCarry();
   const failedTurns = new Set();
 
   // A failed turn becomes the synthetic error frame (auth → hold, else a visible line; CX-04).
@@ -253,7 +254,7 @@ function start(spec) {
     if (method === 'thread/tokenUsage/updated') {
       latestUsage = (params.tokenUsage && typeof params.tokenUsage === 'object')
         ? params.tokenUsage : null;
-      if (latestUsage && latestUsage.total) lastTotal = latestUsage.total;
+      usageCarry.observe(latestUsage && latestUsage.total);
       return;
     }
     if (method === 'error') {
@@ -266,7 +267,7 @@ function start(spec) {
       const terminalTurn = turn.id ? String(turn.id) : null;
       if (turn.status === 'failed') pushTurnError(terminalTurn, turn.error);
       const enriched = Object.assign({}, params, {
-        usage: latestUsage && latestUsage.total ? latestUsage.total : lastTotal,
+        usage: usageCarry.forTurn(latestUsage && latestUsage.total),
         promptUsage: latestUsage && latestUsage.last ? latestUsage.last : null,
         // A sibling of `last`/`total`; absent stays `null` (never a 0 denominator).
         contextWindow: latestUsage ? latestUsage.modelContextWindow : null,

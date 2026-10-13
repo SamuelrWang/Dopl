@@ -5,7 +5,7 @@
 const events = require('../events');
 const io = require('../../session-io');
 const usageReaders = require('./usage');
-const { readCount } = require('../sdk-shape');
+const { readCount } = require('../kit/usage');
 const costRates = require('./cost-rates');
 const launchContract = require('./launch-contract');
 

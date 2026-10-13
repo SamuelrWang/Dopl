@@ -337,16 +337,6 @@ function forgetDrift() { drift.clear(); }
 /** Tests only. */
 function injectDiag(fn) { diagFn = typeof fn === 'function' ? fn : null; }
 
-/** A count read off a vendor frame: a finite number ≥ 0, else NULL — never 0 for "not there". */
-function readCount(obj, ...pathParts) {
-  let cur = obj;
-  for (const p of pathParts) {
-    if (cur == null || typeof cur !== 'object') return null;
-    cur = cur[p];
-  }
-  return typeof cur === 'number' && Number.isFinite(cur) && cur >= 0 ? cur : null;
-}
-
 module.exports = {
   TIERS,
   UNRECOGNISED_REQUEST_PREFIX,
@@ -369,6 +359,5 @@ module.exports = {
   driftReport,
   forgetDrift,
   injectDiag,
-  readCount,
   _backoffMs: backoffMs,
 };

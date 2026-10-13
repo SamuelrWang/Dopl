@@ -5,7 +5,7 @@
 // No price is written here, and no model id: with nothing learned yet, the answer is "none" (the CLI's
 // own default runs). Persisted in the shared last-live store (`live-store.js`, kind `rates`).
 
-const { readCount } = require('../sdk-shape');
+const { readCount } = require('../kit/usage');
 
 const KEY = 'all'; // rates are a property of the account's models, not of one CLI build
 const rates = new Map(); // id → { usd, tokens }

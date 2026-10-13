@@ -107,20 +107,15 @@ function windowFrom(params) {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null; // null, never a 0 window
 }
 
-const { readCount } = require('../sdk-shape');
+const kitUsage = require('../kit/usage');
 
 // `{ prompt, session }` — window occupancy and the turn's token total. NULL, never 0, for what could not
 // be read (2026-10-08): a renamed field must read as UNKNOWN, or core resets the baseline to zero and
-// bills the next total twice. `cachedInputTokens` is a subset of `inputTokens` (measured: total = input
-// + output), so never added.
-function tokensFrom(usage) {
-  if (!usage || typeof usage !== 'object') return { prompt: null, session: null };
-  const input = readCount(usage, 'inputTokens');
-  const output = readCount(usage, 'outputTokens');
-  const total = readCount(usage, 'totalTokens');
-  const sum = input !== null && output !== null ? input + output : null;
-  return { prompt: input, session: total !== null ? total : sum };
-}
+// bills the next total twice (`kit/usage.js › tokensFrom`). `cachedInputTokens` is a subset of
+// `inputTokens` (measured: total = input + output), so no `cached` keys: never added.
+const USAGE_KEYS = Object.freeze({ input: ['inputTokens'], output: ['outputTokens'], total: ['totalTokens'] });
+
+const tokensFrom = (usage) => kitUsage.tokensFrom(usage, USAGE_KEYS);
 
 // ── RENDER ───────────────────────────────────────────────────────────────────────────────────
 // An unclassified completed item still renders a plain tool card (a later CLI's new item must not
