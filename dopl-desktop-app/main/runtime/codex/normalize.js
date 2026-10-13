@@ -4,6 +4,7 @@
 
 const events = require('../events');
 const io = require('../../session-io');
+const authShape = require('../kit/auth-shape');
 
 // ── SYNTHETIC FRAMES ─────────────────────────────────────────────────────────────────────────
 // `launch-spec.js` mints THREAD_STARTED (Dopl's own, `dopl/`-namespaced: handle + model into core) and
@@ -15,11 +16,8 @@ const UNKNOWN_REQUEST = 'dopl/unknownRequest';
 const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────────────────────
-// A pattern, not a sentence. Over-matching is the safe direction: a false positive parks the session
-// and offers sign-in; a false negative renders a dead-end bubble.
-const AUTH_SHAPED_RE = /\b(401|403)\b|unauthor(?:ised|ized)|not\s+logged\s+in|log\s*in\s+required|login\s+required|authentication\s+(?:failed|required)|invalid\s+(?:api\s+)?(?:key|token)|expired\s+(?:credential|token)/i;
-
-const isAuthShaped = (text) => AUTH_SHAPED_RE.test(String(text == null ? '' : text));
+// The shared pattern (`kit/auth-shape.js`; over-matching is the safe direction), no vendor additions.
+const isAuthShaped = (text) => authShape.authShaped(text);
 
 // The server's own turn-error class (`codexErrorInfo`): `unauthorized`, or an HTTP variant with 401/403.
 function unauthorizedInfo(info) {

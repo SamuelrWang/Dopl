@@ -199,6 +199,7 @@ test("(e) descriptor keys come in the canonical order", () => {
 // Every module under `main/runtime/kit/`, with the scaffold step that extracted it (2026-10-13).
 const KIT = {
   "frame-queue.js": "K2 — push/pull frame queue + bounded interrupt (from codex/launch-handle.js)",
+  "auth-shape.js": "K5 — the refused-credential pattern + authShaped(text, extraRe?) (from codex/cursor normalize.js)",
   "usage.js": "K4 — readCount (from sdk-shape.js), tokensFrom over per-adapter key lists, the total carry",
 };
 

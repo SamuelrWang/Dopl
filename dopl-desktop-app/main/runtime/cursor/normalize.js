@@ -5,6 +5,7 @@
 const events = require('../events');
 const io = require('../../session-io');
 const kitUsage = require('../kit/usage');
+const authShape = require('../kit/auth-shape');
 
 // Synthetic frames (namespaced `dopl/`, never protocol) that `launch-spec.js` mints for facts outside
 // the stream: the agent handle (`Agent.create()`'s result) and each turn's usage (`run.usage`).
@@ -13,10 +14,10 @@ const TURN_COMPLETED = 'dopl/turnCompleted';
 const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
 // A pattern, unverified: the signed-out error text is undocumented. Over-matching is the safe
-// direction (a false positive parks the session recoverably; a false negative is a dead end).
-const AUTH_SHAPED_RE = /\b(401|403)\b|unauthor(?:ised|ized)|not\s+logged\s+in|log\s*in\s+required|login\s+required|authentication\s+(?:failed|required)|invalid\s+(?:api\s+)?(?:key|token)|expired\s+(?:credential|token)|CURSOR_API_KEY/i;
-
-const isAuthShaped = (text) => AUTH_SHAPED_RE.test(String(text == null ? '' : text));
+// direction (a false positive parks the session recoverably; a false negative is a dead end). The
+// shared pattern (`kit/auth-shape.js`) plus this vendor's key name.
+const VENDOR_AUTH_RE = /CURSOR_API_KEY/i;
+const isAuthShaped = (text) => authShape.authShaped(text, VENDOR_AUTH_RE);
 
 
 /** The human text on an event, under any of the spellings one might carry it. */
