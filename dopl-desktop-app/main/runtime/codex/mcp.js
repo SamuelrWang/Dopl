@@ -6,6 +6,7 @@ const { normalizeProfile, DOPL_CHANNEL_TOOL } = require('../../tool-profiles');
 const { DOPL_READ_TOOLS, GRANULAR_READ_TOOLS } = require('../../session-dopl-tools');
 const { shortDoplName } = require('./tools');
 const { toolSetHeaders } = require('../../mcp-connect');
+const doplMcp = require('../kit/dopl-mcp');
 
 // Values ride the child's env; only these NAMES appear in the entry, never the bearer in argv.
 const BEARER_ENV = 'DOPL_MCP_TOKEN';
@@ -45,22 +46,13 @@ const TOOL_APPROVAL_MODES = Object.freeze(Object.fromEntries(
   DOPL_READ_TOOLS.concat(GRANULAR_READ_TOOLS).map((t) => [shortDoplName(t), 'approve']),
 ));
 
+// Lazy (`kit/dopl-mcp.js`): `mcp-config` pulls auth, and an unwired harness must read "no token", never
+// throw. This adapter falls back to 60s when mcp-config cannot load (kept as it was, 2026-10-13).
 function clientTimeoutSec() {
-  // Lazy: `mcp-config` pulls auth, and an unwired harness must read "no token", never throw.
-  try {
-    return Math.max(1, Math.ceil(require('../../mcp-config').MCP_CLIENT_TIMEOUT_MS / 1000));
-  } catch (_) {
-    return 60;
-  }
+  return Math.max(1, Math.ceil(doplMcp.clientTimeoutMs({ fallbackMs: 60000 }) / 1000));
 }
 
-function doplBearer() {
-  try {
-    return require('../../mcp-config').deviceTokenForSpawn() || '';
-  } catch (_) {
-    return '';
-  }
-}
+const doplBearer = () => doplMcp.doplBearer();
 
 // URL is the compiled-in `MCP_URL`; bearer and pins ride env var NAMES (`bearer_token_env_var`,
 // `env_http_headers`), never argv. `prompt` asks on every Axis-A mode only because Dopl never sends native

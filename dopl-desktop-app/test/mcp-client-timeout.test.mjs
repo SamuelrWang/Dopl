@@ -28,6 +28,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
 const CONFIG = M("mcp-config.js");
 const LOADER = M("runtime/claude/mcp.js");
+// The read itself is the adapter kit's since 2026-10-13 (runtime scaffold K6); the entry still calls it.
+const KIT = M("runtime/kit/dopl-mcp.js");
 
 const BUDGET = readFileSync(
   join(HERE, "..", "..", "packages", "mcp-server", "src", "tools", "channel-hold-budget.ts"),
@@ -107,13 +109,15 @@ test("the ONE entry this app owns reads the constant — no second literal", () 
   assert.match(codeOf(CONFIG), /MCP_CLIENT_TIMEOUT_MS = [\d_]+;/, "mcp-config still owns the number");
   assert.match(codeOf(CONFIG), /module\.exports = \{[^}]*\bMCP_CLIENT_TIMEOUT_MS,/, "exported for sdk-loader");
   assert.match(codeOf(LOADER), /timeout: clientTimeoutMs\(\),/);
+  assert.match(codeOf(LOADER), /const clientTimeoutMs = \(\) => doplMcp\.clientTimeoutMs\(\);/,
+    "the loader delegates to the kit — with NO fallback, as before the move");
   assert.match(
-    fnOf(LOADER, "clientTimeoutMs"),
+    fnOf(KIT, "clientTimeoutMs"),
     /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
-    "the loader imports it from mcp-config rather than restating it"
+    "the kit imports it from mcp-config rather than restating it"
   );
   assert.ok(
-    !/\b280_000\b/.test(codeOf(CONFIG) + codeOf(LOADER)),
+    !/\b280_000\b/.test(codeOf(CONFIG) + codeOf(LOADER) + codeOf(KIT)),
     "the old literal must not survive in either module's code"
   );
 });

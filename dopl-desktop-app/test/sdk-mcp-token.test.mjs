@@ -47,6 +47,8 @@ const M = (p) => join(HERE, "..", "main", p);
 const LOADER = readFileSync(M(join("runtime", "claude", "client.js")), "utf8");
 // The session's MCP entry (`buildMcpServers`, `clientTimeoutMs`) moved to the adapter's `mcp.js` (2026-10-13).
 const MCP = readFileSync(M(join("runtime", "claude", "mcp.js")), "utf8");
+// The bearer + timeout READS are the adapter kit's since 2026-10-13 (runtime scaffold K6).
+const KIT = readFileSync(M(join("runtime", "kit", "dopl-mcp.js")), "utf8");
 const CONFIG = readFileSync(M("mcp-config.js"), "utf8");
 const LIFECYCLE = readFileSync(M("mcp-device-token-lifecycle.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
@@ -260,8 +262,10 @@ test("L8: mcp-config OWNS the number and the loader's entry is the only one that
   // `../../`; 2026-10-13 the entry moved to `main/runtime/claude/mcp.js`. The rule is unchanged.
   assert.equal(typeof SHIPPED_TIMEOUT_MS, "number", "it is exported for the loader");
   assert.match(codeOf(MCP), /timeout: clientTimeoutMs\(\),/, "the entry reads it, never a literal");
+  assert.match(codeOf(MCP), /const clientTimeoutMs = \(\) => doplMcp\.clientTimeoutMs\(\);/,
+    "…through the kit, with no fallback on this adapter");
   assert.match(
-    fnOf(MCP, "clientTimeoutMs"),
+    fnOf(KIT, "clientTimeoutMs"),
     /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
     "…from mcp-config, the one owner"
   );

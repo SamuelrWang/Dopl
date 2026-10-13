@@ -16,6 +16,7 @@
 const { MCP_URL } = require('../../config');
 // The two-shape body reader (JSON or SSE) and the tool-set header are core's (`mcp-connect.js`).
 const { parseSse, readBody, toolSetHeaders } = require('../../mcp-connect');
+const doplMcp = require('../kit/dopl-mcp');
 
 // ⚠ CUSTODY, NOT VENDOR — two headers, two facts. `desktop-session` ("the desktop spawned this") is
 // compared by strict equality / membership (`identity.ts › runtimeWord`, `channel-wake-guidance.ts`,
@@ -32,22 +33,11 @@ const RUNTIME_HEADERS = {
 // is echoed on every later request, so a negotiated-down server is followed.
 const PROTOCOL_VERSION = '2025-11-25';
 
-function clientTimeoutMs() {
-  // Lazy: `mcp-config` pulls auth, and an unwired harness must read as "no token", never throw.
-  try {
-    return require('../../mcp-config').MCP_CLIENT_TIMEOUT_MS;
-  } catch (_) {
-    return 60000;
-  }
-}
+// Lazy (`kit/dopl-mcp.js`): `mcp-config` pulls auth, and an unwired harness must read as "no token",
+// never throw. This adapter falls back to 60s when mcp-config cannot load (kept as it was, 2026-10-13).
+const clientTimeoutMs = () => doplMcp.clientTimeoutMs({ fallbackMs: 60000 });
 
-function doplBearer() {
-  try {
-    return require('../../mcp-config').deviceTokenForSpawn() || '';
-  } catch (_) {
-    return '';
-  }
-}
+const doplBearer = () => doplMcp.doplBearer();
 
 /**
  * The per-session wiring an in-process call carries.

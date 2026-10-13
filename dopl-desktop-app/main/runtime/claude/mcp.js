@@ -29,6 +29,8 @@ const { normalizeProfile } = require('../../tool-profiles');
 // DMP-013: the tool-set header. Pure module, no electron.
 const mcpConnect = require('../../mcp-connect');
 
+const doplMcp = require('../kit/dopl-mcp');
+
 const cliAdd = () => require('../../mcp-cli-add');
 
 // ── SESSION TRANSPORT: the in-memory entry every spawn carries ───────────────────────────────
@@ -43,23 +45,15 @@ const cliAdd = () => require('../../mcp-cli-add');
 // own user-scope entry. `tools.js › buildSecretPathDenyRules` still fences userData for the encrypted
 // electron-store, but it is no longer the thing standing between an agent and this credential —
 // see removeSpawnConfig for why a `Bash` rule could never have been that thing.
-function doplBearer() {
-  // ⚠ Lazy require: mcp-config pulls in auth/session-spawner, and an unwired harness (or a
-  // pre-sign-in launch) must read as "no token", never throw into a launch.
-  try {
-    return require('../../mcp-config').deviceTokenForSpawn() || '';
-  } catch (_) {
-    return '';
-  }
-}
+// ⚠ Lazy require inside the kit: mcp-config pulls in auth/session-spawner, and an unwired harness (or
+// a pre-sign-in launch) must read as "no token", never throw into a launch (`kit/dopl-mcp.js`).
+const doplBearer = () => doplMcp.doplBearer();
 
 // ⚠ ONE DEFINITION of the per-server call timeout: mcp-config owns the number and derives it
-// from the server's await budget. Never restate the literal here — the entry below is the only
-// Dopl MCP entry this process builds, and it drifted once already by restating it. Lazy like
-// doplBearer, and only reached after it proved mcp-config loads.
-function clientTimeoutMs() {
-  return require('../../mcp-config').MCP_CLIENT_TIMEOUT_MS;
-}
+// from the server's await budget (`kit/dopl-mcp.js › clientTimeoutMs` reads it). Never restate the
+// literal here — it drifted once already by restating it. NO FALLBACK on this adapter (kept as it
+// was, 2026-10-13): only reached after doplBearer proved mcp-config loads, so a failure throws.
+const clientTimeoutMs = () => doplMcp.clientTimeoutMs();
 
 // The in-memory mcpServers object (replaces the --mcp-config file).
 // ⚠ `doplToolsPolicy` is ACCEPTED AND DELIBERATELY NOT FORWARDED AS `server.tools` — see the
