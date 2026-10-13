@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { acceptChannelCursor } from "@/features/channels/server/cursor-accept";
 import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
@@ -87,7 +88,13 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     channelId = await resolveReadableChannelId(ctx, requireChannelId(auth.params));
 
     const result = await awaitNewMessages(ctx, channelId, {
-      since,
+      // ⚠ Decoded AFTER `resolveReadableChannelId`: the token is bound to the
+      // resolved channel id, not to whichever spelling (slug or id) the caller used.
+      since: acceptChannelCursor(
+        since,
+        { kind: "channel", channelId },
+        ctx.userId,
+      ),
       deadline,
       excludeAuthor,
       signal: request.signal,

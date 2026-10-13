@@ -12,6 +12,7 @@ import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
 import { mapAgentRow } from "./agents-dto";
 import { mapMemberRow, mapTaskRow } from "./dto";
 import * as repo from "./repository";
+import { acceptChannelCursor } from "./cursor-accept";
 import * as repoAgents from "./repository-agents";
 import * as repoMessages from "./repository-messages";
 import * as repoTasks from "./repository-tasks";
@@ -170,10 +171,26 @@ async function readMessagePage(
   ctx: ChannelContext,
   ref: string,
   query: MessageReadQuery
-): Promise<{ channelId: string; messages: ChannelMessage[]; hasMore: boolean }> {
+): Promise<{
+  channelId: string;
+  messages: ChannelMessage[];
+  hasMore: boolean;
+  /** The DECODED cursor — so the fold below compares the same number the page did. */
+  since: number | undefined;
+}> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
+  // ⚠ **THIS IS THIS PATH'S EDGE, AND IT IS HERE RATHER THAN IN THE ROUTE FOR ONE
+  // REASON** (B6-2): a cursor token is bound to the RESOLVED channel id, and the
+  // route holds only a `ref` — a slug or an id. Decoding there would either bind
+  // the token to whichever spelling the caller used, or resolve the channel twice.
+  // One line later than the other surfaces, still before any repository runs.
+  const since = acceptChannelCursor(
+    query.since,
+    { kind: "channel", channelId: channel.id },
+    ctx.userId,
+  );
   const fetched = await repoMessages.listMessages(channel.id, {
-    since: query.since,
+    since,
     before: query.before,
     limit: query.limit,
     threadId: query.thread,
@@ -223,7 +240,7 @@ async function readMessagePage(
       detach(() => repo.updateLastRead(channel.id, ctx.userId, newest));
     }
   }
-  return { channelId: channel.id, messages, hasMore };
+  return { channelId: channel.id, messages, hasMore, since };
 }
 
 /**
@@ -262,9 +279,9 @@ export async function readTranscript(
   entries: ChannelReadEntry[] | null;
   hasMore: boolean;
 }> {
-  const { channelId, messages, hasMore } = await readMessagePage(ctx, ref, query);
+  const { channelId, messages, hasMore, since } = await readMessagePage(ctx, ref, query);
   const entries = await foldPage(channelId, messages, {
-    since: query.since,
+    since,
     before: query.before,
     thread: query.thread,
   });

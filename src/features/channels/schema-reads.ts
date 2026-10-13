@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CURSOR_PREFIX } from "./lib/cursor-format";
 import {
   DEFAULT_MESSAGE_LIMIT,
   MAX_AWAIT_TIMEOUT_MS,
@@ -16,6 +17,44 @@ import {
  * both key on `seq`. A cursor rule changed in one and not the other is the bug this
  * file exists to make visible.
  */
+
+/**
+ * **A CURSOR ON THE WIRE: A LEGACY INTEGER *OR* AN OPAQUE TOKEN** (B6-2,
+ * 2026-10-12).
+ *
+ * ⚠ **BOTH FORMS, AND THE INTEGER HAS NO SUNSET DATE.** Every client derives its
+ * own cursor from `message.seq` on the rows it was handed — the desktop listener
+ * (`channel-listener.js:95`), the web hook (`use-channel-messages.ts`) — so
+ * integers keep arriving until those are released AND adopted. Dating a cutover in
+ * advance is how an installed desktop breaks (B6 plan §3).
+ *
+ * ⚠ **THE TOKEN ARM IS NOT COERCED AND NOT DECODED HERE.** This file is imported
+ * by a browser hook, so it cannot reach the `server-only` codec; it only
+ * RECOGNISES the shape. `server/cursor-accept.ts` is the one place a token becomes
+ * a number, at the edge, where the reader and the scope are known — both of which
+ * are required to decrypt it.
+ *
+ * ⚠ **WHAT MATTERS IS THAT THE STRING ARM IS PREFIX-BOUND — NOT THE ORDER.** I
+ * claimed order mattered here; it does not, and a reviewer proved it by swapping
+ * the arms and running the suite green (36/36). The two arms are disjoint either
+ * way: `z.coerce.number()` turns a token into `NaN` and `.int()` refuses it, and
+ * `startsWith` refuses a numeric string. Writing the numeric arm first is a
+ * readability choice, nothing more.
+ *
+ * Measured both orderings over `"4461"`, a `dc1.` token, `"none"`, `""`, `"0x10"`,
+ * `" "`, `"-1"`, `"1.5"`: identical results for all eight, so this correction is
+ * verified rather than merely conceded.
+ *
+ * The load-bearing half is `z.string().startsWith(CURSOR_PREFIX)`. A bare
+ * `z.string()` would accept any junk as a cursor and defer the failure to decode
+ * time, where it reads as a TAMPERED TOKEN rather than a malformed request — the
+ * wrong diagnosis, and a 400 whose remedy ("re-establish without a cursor")
+ * misdirects a caller whose real problem is that it sent `"none"`.
+ */
+const CursorParam = z.union([
+  z.coerce.number().int().nonnegative(),
+  z.string().startsWith(CURSOR_PREFIX),
+]);
 
 /**
  * `?since=<seq>&before=<seq>&limit=<n<=200>&thread=<taskId>` for a message read.
@@ -41,7 +80,7 @@ import {
  */
 export const MessageReadQuerySchema = z
   .object({
-    since: z.coerce.number().int().nonnegative().optional(),
+    since: CursorParam.optional(),
     before: z.coerce.number().int().positive().optional(),
     limit: z.coerce
       .number()
@@ -72,7 +111,7 @@ export type MessageReadQuery = z.infer<typeof MessageReadQuerySchema>;
  * observation); MCP await passes the caller's own id so its posts cannot pop its hold.
  */
 export const AwaitQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative().optional(),
+  since: CursorParam.optional(),
   timeoutMs: z.coerce
     .number()
     .int()
@@ -96,7 +135,7 @@ export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
  */
 export const AccountStatusQuerySchema = z
   .object({
-    since: z.coerce.number().int().nonnegative().optional(),
+    since: CursorParam.optional(),
     view: z.enum(["full", "sessions"]).optional().default("full"),
   })
   // ⚠ **`view="sessions"` WITH A `since` IS REFUSED, NOT IGNORED (2026-09-02).** That
@@ -120,7 +159,7 @@ export type AccountStatusQuery = z.infer<typeof AccountStatusQuerySchema>;
  * bounded to ONE channel.
  */
 export const AccountMessagesQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative(),
+  since: CursorParam,
   limit: z.coerce
     .number()
     .int()

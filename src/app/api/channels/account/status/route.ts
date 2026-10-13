@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { acceptChannelCursor } from "@/features/channels/server/cursor-accept";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseQuery } from "@/shared/api/parse-json";
 import { toChannelErrorResponse } from "@/shared/api/channel-route";
@@ -51,7 +52,9 @@ async function handleGet(
       ["since", "view"]
     );
     const status = await getAccountStatus(userId, {
-      since,
+      // ⚠ ACCOUNT scope, as the messages read beside it: one cursor across every
+      // channel of every workspace, and the scope is enforced by the AAD.
+      since: acceptChannelCursor(since, { kind: "account" }, userId),
       view,
       // 🔒 B1's ceiling (R3): nothing upstream applies the lock.
       lockedWorkspaceId: apiKeyWorkspaceId ?? null,

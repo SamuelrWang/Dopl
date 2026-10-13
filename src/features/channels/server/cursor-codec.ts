@@ -3,6 +3,7 @@ import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { ChannelCursorUndecodableError } from "./errors";
+import { CURSOR_PREFIX, isCursorToken } from "../lib/cursor-format";
 
 /**
  * **THE OPAQUE CURSOR CODEC** (B6, Samuel's card #4469 option 1, 2026-10-12).
@@ -48,8 +49,14 @@ import { ChannelCursorUndecodableError } from "./errors";
  * the same shape.
  */
 
-/** Current format + key id. A new key means a new prefix, never a silent swap. */
-export const CURSOR_PREFIX = "dc1.";
+/**
+ * ⚠ **THE FORMAT MOVED TO `lib/cursor-format.ts` AND IS RE-EXPORTED HERE** (B6-2):
+ * `schema-reads.ts` must recognise a token to accept one, and that file is
+ * imported by a browser hook, so it cannot reach this `server-only` module. The
+ * seam is the secret — format shared, key and crypto here. Re-exported so no
+ * existing importer moved.
+ */
+export { CURSOR_PREFIX, isCursorToken };
 
 /** `seq` is a Postgres BIGINT; eight bytes is exact and shorter than any text form. */
 const SEQ_BYTES = 8;
@@ -77,14 +84,6 @@ export function cursorScopeKey(scope: CursorScope): string {
   }
 }
 
-/**
- * **IS THIS A TOKEN OR A LEGACY INTEGER?** The prefix makes the discrimination
- * total and local, which is what lets every accepting surface take both forms
- * without guessing (B6-2).
- */
-export function isCursorToken(value: string): boolean {
-  return value.startsWith(CURSOR_PREFIX);
-}
 
 /**
  * The 32-byte key, or `null` when none is configured.
