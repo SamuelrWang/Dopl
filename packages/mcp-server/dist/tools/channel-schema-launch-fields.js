@@ -4,9 +4,43 @@
  * schema stays byte-stable (`channel-schema-budget.test.ts` and `tool-budget.test.ts` fail both ways).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LAUNCH_INPUT_FIELDS = void 0;
+exports.LAUNCH_INPUT_FIELDS = exports.GRANULAR_POSTURE_FIELD = void 0;
 const zod_1 = require("zod");
 const channel_ops_launch_color_1 = require("./channel-ops-launch-color");
+/**
+ * `posture.tools`: the three levels first, then each runtime's own words. All are accepted. Kept as
+ * `tools: z.enum([` — `dopl-desktop-app/test/runtime-vocab-cross-tree.test.mjs` reads it by that text.
+ */
+const POSTURE_WORDS = {
+    tools: zod_1.z.enum([
+        "ask", "auto", "full",
+        "manual", "accept_edits", "bypass",
+        "untrusted", "granular", "on-request", "never",
+        "allowlist", "auto-review", "run-everything",
+    ]),
+};
+/** One builder, so the legacy and granular `posture` validate identically and differ only in what they LIST. */
+function postureField(tools) {
+    return zod_1.z
+        .object({
+        tools: tools.optional(),
+        messages: zod_1.z
+            .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
+            .optional(),
+        chain: zod_1.z.enum(["inherit", "on", "off"]).optional(),
+    })
+        .optional()
+        .describe(
+    // "how much freedom to ASK FOR" is pinned by phrase and stays HERE; the clamp
+    // sentence it used to carry is pinned in FIELDS now.
+    'op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR — see FIELDS.');
+}
+/**
+ * The granular `posture` (Context Economy W1, 2026-10-12): the listing publishes only the three
+ * levels; every runtime word is still ACCEPTED (the enum validates) and the doctrine's FIELDS names
+ * them. The legacy field above is unchanged (`legacy-surface.test.ts`, DMP-013).
+ */
+exports.GRANULAR_POSTURE_FIELD = postureField(POSTURE_WORDS.tools.meta({ enum: ["ask", "auto", "full"] }));
 exports.LAUNCH_INPUT_FIELDS = {
     model: zod_1.z
         .string()
@@ -46,24 +80,5 @@ exports.LAUNCH_INPUT_FIELDS = {
     // explanatory half is now PULLED: every rule below still reaches an agent, through
     // the guide instead of every handshake. `channel-ops-agent-mode.test.ts` asserts
     // FIELDS still carries the clamp sentence, so this cannot quietly become a deletion.
-    posture: zod_1.z
-        .object({
-        tools: zod_1.z
-            .enum([
-            "ask", "auto", "full",
-            "manual", "accept_edits", "bypass",
-            "untrusted", "granular", "on-request", "never",
-            "allowlist", "auto-review", "run-everything",
-        ])
-            .optional(),
-        messages: zod_1.z
-            .enum(["ask", "auto_inbound", "auto_outbound", "auto_both"])
-            .optional(),
-        chain: zod_1.z.enum(["inherit", "on", "off"]).optional(),
-    })
-        .optional()
-        .describe(
-    // "how much freedom to ASK FOR" is pinned by phrase and stays HERE; the clamp
-    // sentence it used to carry is pinned in FIELDS now.
-    'op="manage" action="launch" / action="posture" (optional): how much freedom to ASK FOR — see FIELDS.'),
+    posture: postureField(POSTURE_WORDS.tools),
 };

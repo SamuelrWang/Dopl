@@ -3,6 +3,39 @@
  * schema stays byte-stable (`channel-schema-budget.test.ts` and `tool-budget.test.ts` fail both ways).
  */
 import { z } from "zod";
+/**
+ * The granular `posture` (Context Economy W1, 2026-10-12): the listing publishes only the three
+ * levels; every runtime word is still ACCEPTED (the enum validates) and the doctrine's FIELDS names
+ * them. The legacy field above is unchanged (`legacy-surface.test.ts`, DMP-013).
+ */
+export declare const GRANULAR_POSTURE_FIELD: z.ZodOptional<z.ZodObject<{
+    tools: z.ZodOptional<z.ZodEnum<{
+        granular: "granular";
+        full: "full";
+        ask: "ask";
+        manual: "manual";
+        accept_edits: "accept_edits";
+        auto: "auto";
+        bypass: "bypass";
+        untrusted: "untrusted";
+        "on-request": "on-request";
+        never: "never";
+        allowlist: "allowlist";
+        "auto-review": "auto-review";
+        "run-everything": "run-everything";
+    }>>;
+    messages: z.ZodOptional<z.ZodEnum<{
+        ask: "ask";
+        auto_inbound: "auto_inbound";
+        auto_outbound: "auto_outbound";
+        auto_both: "auto_both";
+    }>>;
+    chain: z.ZodOptional<z.ZodEnum<{
+        on: "on";
+        off: "off";
+        inherit: "inherit";
+    }>>;
+}, z.core.$strip>>;
 export declare const LAUNCH_INPUT_FIELDS: {
     model: z.ZodOptional<z.ZodString>;
     /** A free string on purpose: the desktop registry decides membership. Separate from `model`; neither is derived from the other. */

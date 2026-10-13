@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHANNEL_TEXT = exports.CHANNEL_DESCRIPTION_MAX_CHARS = void 0;
 const zod_1 = require("zod");
 const display_doctrine_js_1 = require("./tools/display-doctrine.js");
+const channel_schema_launch_fields_js_1 = require("./tools/channel-schema-launch-fields.js");
 /** The channel PATCH/POST routes' `topic` cap (`src/features/channels/schema.ts › ChannelTopicSchema`). */
 exports.CHANNEL_DESCRIPTION_MAX_CHARS = 2000;
 /** Carried past the legacy schema, whose `summary` caps at a notification's 200. */
@@ -125,19 +126,21 @@ exports.CHANNEL_TEXT = {
             runtime: "Runtime, e.g. claude or codex; omitted, the channel's. Refused, never swapped, if unavailable.",
             identity: "Identity id, or a name in this channel's container; omitted, a blank agent.",
             color: "Colour marker; omitted, the most distinct.",
-            posture: "Freedom to ask for; omit an axis to run at the operator's setting.",
+            posture: "Freedom to ask for; omit an axis to run at the operator's setting. tools also takes a runtime's own word.",
         },
         required: ["channel", "name"],
+        types: { posture: channel_schema_launch_fields_js_1.GRANULAR_POSTURE_FIELD },
     },
     dopl_manage_session: {
         description: 'One of YOUR running agents in a channel: action="direct" a private message, "rename", "posture" re-ask its freedom, "end" stop it.',
         params: {
             to: "Your agent: `@agent-<id>`, never a handle.",
             name: `action="rename": ${AGENT_NAME} "" clears it.`,
-            posture: 'action="posture": tools and/or messages freedom to ask for.',
+            posture: 'action="posture": tools and/or messages freedom to ask for; tools also takes a runtime\'s own word.',
             body: 'action="direct": the private message.',
         },
         required: ["channel", "to"],
+        types: { posture: channel_schema_launch_fields_js_1.GRANULAR_POSTURE_FIELD },
     },
     dopl_manage_artifact: {
         description: 'Fold a run of channel messages into one card (action="create"), add or remove one message, or dissolve it. Nothing is edited or deleted; dissolve restores the messages.',

@@ -42,6 +42,7 @@ const registrar_js_1 = require("./registrar.js");
 const meta_tools_js_1 = require("./meta-tools.js");
 const resources_js_1 = require("./resources.js");
 const unlisted_tools_js_1 = require("./unlisted-tools.js");
+const served_schema_js_1 = require("./served-schema.js");
 const tool_manifest_js_1 = require("./tool-manifest.js");
 const workspace_directory_js_1 = require("./workspace-directory.js");
 const version_js_1 = require("./version.js");
@@ -127,6 +128,9 @@ function createServer(client, options = {}) {
     // Before any registration: it filters the list handler the first registerTool installs.
     const toolSet = options.toolSet ?? "legacy";
     (0, unlisted_tools_js_1.unlistTools)(server, (0, tool_manifest_js_1.unlistedFor)(toolSet));
+    // Granular only: the legacy surface is pinned byte for byte (`legacy-surface.test.ts`, DMP-013).
+    if (toolSet === "granular")
+        (0, served_schema_js_1.slimListedSchemas)(server);
     // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
     // `dopl_channel(op="help")`) rather than description prose, so an agent pays
     // for it when it asks and never on connection. See `resources.ts`.
