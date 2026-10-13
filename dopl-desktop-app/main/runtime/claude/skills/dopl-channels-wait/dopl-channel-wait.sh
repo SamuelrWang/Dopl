@@ -249,9 +249,25 @@ while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   # --fail-with-body: a non-2xx exits non-zero AND still prints the body, so a
   # 401/403/400 is reported with the server's own reason rather than a bare
   # status. -sS keeps the meter off stdout and leaves real errors on stderr.
+  # ⚠ **A CAPABILITY HINT, NEVER AN AUTHORIZATION SIGNAL** — the rule
+# `shared/auth/runtime-header.ts` sets for every `X-Dopl-*` header, and it holds
+# here for the same reason: a missing one costs a cheaper cursor, never a
+# delivery, and nothing may gate access on it. Anyone can send it; all they get
+# for lying is a cursor they cannot read.
+#
+# ⚠ **`X-Dopl-Cursor` IS A PROMISE, AND IT IS THE PRECONDITION B6-3 WAITS ON.**
+  # It says: this client reads and returns a cursor CHARACTER FOR CHARACTER, so
+  # you may hand it an opaque one. Only a copy of this script with the verbatim
+  # read can send it, which makes "is the fixed script running?" a property of
+  # the REQUEST rather than a guess about which release is installed — and that
+  # distinction is load-bearing, because `skill-install.js` skips an install it
+  # finds `foreign` or `edited`, so a digit-stripping copy can outlive any number
+  # of releases. A request without this header keeps getting integers forever,
+  # which is the correct answer for one.
   BODY=$(curl -sS --fail-with-body \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "X-Workspace-Id: ${CONTAINER}" \
+    -H "X-Dopl-Cursor: opaque-1" \
     -H "Accept: application/json" \
     "${BASE_URL%/}/api/channels/await?${QUERY}")
   STATUS=$?

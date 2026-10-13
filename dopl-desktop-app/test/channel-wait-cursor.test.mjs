@@ -21,8 +21,15 @@
 //
 // ⚠ **IT DRIVES THE REAL SCRIPT, BOTH COPIES, WITH A STUB `curl` ON PATH.** The
 // assertion is what the script ASKED THE SERVER FOR — the `since=` it put in
-// its own URL — because that is the only place the mangling was observable. No
-// network, no server, no seam added to the script for the test's benefit.
+// its own URL, and the headers it passed — because that is the only place the
+// mangling was observable. No network, no server, no seam added to the script
+// for the test's benefit.
+//
+// RED-BEFORE, measured against the pre-fix script by checking the two copies and
+// SKILL.md out at 7aa490a8 and running this file as it stands: **15 of 21 fail,
+// 6 pass.** (The commit that introduced this file says 14 — that was the count
+// before the version-gate case was added, and it is wrong. The measured number
+// lives here, where it can be re-derived, rather than only in a commit message.)
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -102,6 +109,12 @@ function hold(script, { file, since } = {}) {
     status: res.status,
     stderr: res.stderr ?? '',
     url,
+    /**
+     * The header VALUES the script passed, in order. ⚠ Taken from the recorded
+     * argv rather than parsed out of a formatted string, so a header can only
+     * appear here if `curl` was actually handed it.
+     */
+    headers: argv.filter((a) => /^[A-Za-z-]+: /.test(a)),
     /** The `since=` the script actually sent, or null if it never asked. */
     requested: /[?&]since=([^&]*)/.exec(url)?.[1] ?? null,
     onDisk: cursorFile && fs.existsSync(cursorFile)
@@ -172,6 +185,24 @@ for (const [which, script] of Object.entries(COPIES)) {
     assert.equal(hold(script, { since: 'dc1.AbC-_123' }).requested, 'dc1.AbC-_123');
   });
 
+  test(`[${which}] 🔒 a malformed --since is refused, and the value is NOT echoed`, () => {
+    // ⚠ **THE SECOND HALF IS THE POINT, AND IT WAS UNASSERTED.** The refusal
+    // deliberately does not quote the value back: `--since "$DOPL_TOKEN"` is a
+    // plausible typo, and a message that echoed its argument would put a bearer
+    // token on stderr — into the operator's terminal, their shell's scrollback,
+    // and whatever captures a background task's output. This script's entire
+    // posture is that no secret is ever echoed or passed as an argument, and a
+    // helpful-looking `--since 'xyz' is not a cursor` would quietly break it.
+    const r = hold(script, { since: 'junk-7-7' });
+    assert.equal(r.status, 2);
+    assert.equal(r.requested, null, 'no request may be made on an unreadable cursor');
+    assert.ok(
+      !r.stderr.includes('junk-7-7'),
+      `the refusal echoed its own argument: ${r.stderr}`,
+    );
+    assert.match(r.stderr, /--since is not a cursor/);
+  });
+
   test(`[${which}] 🔒 a malformed cursor file is REFUSED, never repaired`, () => {
     // ⚠ The sharp edge of the old line: this file has no cursor in it at all,
     // and `tr -dc '0-9'` INVENTED one — `77` — which the script then held from.
@@ -221,7 +252,34 @@ for (const [which, script] of Object.entries(COPIES)) {
     assert.equal(hold(script, { file: 'dc2.AAAA\n' }).requested, 'dc2.AAAA');
   });
 
-  test(`[${which}] 🔒 the script strips no characters from any cursor, anywhere`, () => {
+  test(`[${which}] 🔒 every request advertises that this client handles opaque cursors`, () => {
+    // ⚠ **THIS HEADER IS THE CHECKABLE PRECONDITION FOR B6-3**, which is why it
+    // ships in the same release as the verbatim read rather than with the thing
+    // that needs it. "Has the fixed script been adopted?" has no answer a server
+    // can act on: `skill-install.js` skips an install it finds `foreign` or
+    // `edited` (:142, :144), so a digit-stripping copy can outlive any number of
+    // releases and no version number anywhere would say so. A header turns that
+    // into a property of the REQUEST — only a copy that reads verbatim sends it,
+    // so a server can emit an opaque cursor to exactly those callers and keep
+    // handing integers to everyone else.
+    const r = hold(script, { file: '4461\n' });
+    assert.ok(
+      r.headers.includes('X-Dopl-Cursor: opaque-1'),
+      `the capability header was not sent: ${JSON.stringify(r.headers)}`,
+    );
+  });
+
+  test(`[${which}] 🔒 and it advertises it even when sending a legacy integer`, () => {
+    // ⚠ It describes the CLIENT, not the cursor in hand. A script that only
+    // advertised once it already held a token could never be given its first
+    // one — the negotiation would deadlock on itself.
+    assert.ok(hold(script, { since: '4461' }).headers.includes('X-Dopl-Cursor: opaque-1'));
+    assert.ok(
+      hold(script, { since: 'dc1.AbC-_123' }).headers.includes('X-Dopl-Cursor: opaque-1'),
+    );
+  });
+
+  test(`[${which}] 🔒 the strips-no-characters promise the header makes is kept`, () => {
     // ⚠ An ABSENCE over the whole file, because the old line is one convenient
     // edit from coming back — and the next place it would land is `writeCursor`
     // or the `--since` arm rather than the file read.
