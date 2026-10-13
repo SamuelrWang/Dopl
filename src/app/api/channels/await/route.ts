@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { acceptChannelCursor } from "@/features/channels/server/cursor-accept";
 import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
@@ -75,7 +76,13 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
 
     const ctx = buildChannelContext(auth);
     const result = await awaitWorkspaceMessages(ctx, {
-      since,
+      // ⚠ A WORKSPACE-scoped cursor: this hold spans every channel of the
+      // workspace, so a channel-scoped token must NOT decode here (and does not).
+      since: acceptChannelCursor(
+        since,
+        { kind: "workspace", workspaceId: ctx.workspaceId },
+        ctx.userId,
+      ),
       deadline,
       excludeAuthor,
       signal: request.signal,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CURSOR_PREFIX } from "./lib/cursor-format";
 import {
   DEFAULT_MESSAGE_LIMIT,
   MAX_AWAIT_TIMEOUT_MS,
@@ -16,6 +17,35 @@ import {
  * both key on `seq`. A cursor rule changed in one and not the other is the bug this
  * file exists to make visible.
  */
+
+/**
+ * **A CURSOR ON THE WIRE: A LEGACY INTEGER *OR* AN OPAQUE TOKEN** (B6-2,
+ * 2026-10-12).
+ *
+ * ⚠ **BOTH FORMS, AND THE INTEGER HAS NO SUNSET DATE.** Every client derives its
+ * own cursor from `message.seq` on the rows it was handed — the desktop listener
+ * (`channel-listener.js:95`), the web hook (`use-channel-messages.ts`) — so
+ * integers keep arriving until those are released AND adopted. Dating a cutover in
+ * advance is how an installed desktop breaks (B6 plan §3).
+ *
+ * ⚠ **THE TOKEN ARM IS NOT COERCED AND NOT DECODED HERE.** This file is imported
+ * by a browser hook, so it cannot reach the `server-only` codec; it only
+ * RECOGNISES the shape. `server/cursor-accept.ts` is the one place a token becomes
+ * a number, at the edge, where the reader and the scope are known — both of which
+ * are required to decrypt it.
+ *
+ * ⚠ **ORDER MATTERS IN THIS UNION.** The numeric arm is first because
+ * `z.coerce.number()` turns a token into `NaN`, which `.int()` then refuses, so a
+ * token falls through to the string arm. Reversing them would let a numeric string
+ * match `startsWith` never, which is harmless — but the comment is here because the
+ * NEXT edit is the dangerous one: a bare `z.string()` second arm would accept any
+ * junk as a cursor and defer the failure to decode time, where it reads as a
+ * tampered token rather than a malformed request.
+ */
+const CursorParam = z.union([
+  z.coerce.number().int().nonnegative(),
+  z.string().startsWith(CURSOR_PREFIX),
+]);
 
 /**
  * `?since=<seq>&before=<seq>&limit=<n<=200>&thread=<taskId>` for a message read.
@@ -41,7 +71,7 @@ import {
  */
 export const MessageReadQuerySchema = z
   .object({
-    since: z.coerce.number().int().nonnegative().optional(),
+    since: CursorParam.optional(),
     before: z.coerce.number().int().positive().optional(),
     limit: z.coerce
       .number()
@@ -72,7 +102,7 @@ export type MessageReadQuery = z.infer<typeof MessageReadQuerySchema>;
  * observation); MCP await passes the caller's own id so its posts cannot pop its hold.
  */
 export const AwaitQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative().optional(),
+  since: CursorParam.optional(),
   timeoutMs: z.coerce
     .number()
     .int()
@@ -96,7 +126,7 @@ export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
  */
 export const AccountStatusQuerySchema = z
   .object({
-    since: z.coerce.number().int().nonnegative().optional(),
+    since: CursorParam.optional(),
     view: z.enum(["full", "sessions"]).optional().default("full"),
   })
   // ⚠ **`view="sessions"` WITH A `since` IS REFUSED, NOT IGNORED (2026-09-02).** That
@@ -120,7 +150,7 @@ export type AccountStatusQuery = z.infer<typeof AccountStatusQuerySchema>;
  * bounded to ONE channel.
  */
 export const AccountMessagesQuerySchema = z.object({
-  since: z.coerce.number().int().nonnegative(),
+  since: CursorParam,
   limit: z.coerce
     .number()
     .int()

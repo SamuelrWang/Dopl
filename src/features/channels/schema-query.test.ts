@@ -20,6 +20,7 @@ import {
   MessageReadQuerySchema,
   AccountStatusQuerySchema,
   AwaitQuerySchema,
+  AccountMessagesQuerySchema,
   ConsentListQuerySchema,
   SessionStateQuerySchema,
 } from "./schema";
@@ -173,5 +174,76 @@ describe("SessionStateQuerySchema", () => {
         ConsentListQuerySchema.safeParse(arg).success
       );
     }
+  });
+});
+
+/**
+ * **BOTH CURSOR FORMS SURVIVE ZOD** (B6-2, 2026-10-12).
+ *
+ * ⚠ **THIS IS WHERE THE OLD COERCION WOULD HAVE EATEN A TOKEN.** `since` was
+ * `z.coerce.number()`, and `z.coerce.number()("dc1.AbC")` is `NaN` — which
+ * `.int()` then rejects, so a tokened request would have 400'd at the schema with
+ * "expected number". The union keeps the numeric arm FIRST for exactly that
+ * reason: a token fails the number arm and falls through to the string arm.
+ *
+ * ⚠ **AND THE STRING ARM IS PREFIX-BOUND, NOT `z.string()`.** A bare string arm
+ * would accept any junk as a cursor and defer the failure to decode time, where it
+ * reads as a tampered token rather than a malformed request.
+ */
+describe("the cursor param takes an integer OR an opaque token (B6-2)", () => {
+  const TOKEN = `dc1.${"A".repeat(48)}`;
+
+  it("🔒 the legacy integer still parses, as a number, from a string param", () => {
+    expect(MessageReadQuerySchema.parse({ since: "42" }).since).toBe(42);
+    expect(MessageReadQuerySchema.parse({ since: 42 }).since).toBe(42);
+    expect(MessageReadQuerySchema.parse({ since: "0" }).since).toBe(0);
+  });
+
+  it("🔒 a token parses through UNTOUCHED — not coerced, not decoded here", () => {
+    expect(MessageReadQuerySchema.parse({ since: TOKEN }).since).toBe(TOKEN);
+  });
+
+  it("🔒 junk is still refused at the schema, not deferred to the decoder", () => {
+    for (const bad of ["-1", "1.5", "12abc", "none", "dc2.AAAA"]) {
+      expect(() => MessageReadQuerySchema.parse({ since: bad }), bad).toThrow();
+    }
+  });
+
+  it("⚠ PRE-EXISTING: empty, whitespace and hex `since` values COERCE, measured", () => {
+    /**
+     * ⚠ **NOT INTRODUCED BY B6-2 — `z.coerce.number()` HAS ALWAYS DONE THIS**, and
+     * the numeric arm of the union keeps the behaviour deliberately so no live
+     * client changes. Measured 2026-10-12, and recorded because the first of these
+     * is the same hazard the token arm explicitly refuses:
+     *
+     *   • `?since=` (empty)      → **0** — "from the beginning", i.e. RE-DELIVER
+     *     EVERY MESSAGE. On a hold that is the exact failure ASK 11 rules out for
+     *     an undecodable token, reachable here by dropping a value from a query
+     *     string rather than by sending a bad one.
+     *   • `?since=%20` (space)   → **0** — same.
+     *   • `?since=0x10`          → **16** — a hex-looking cursor silently becomes a
+     *     different number.
+     *
+     * Left as is on purpose: changing a live accept surface's parsing is a
+     * behaviour change beyond B6-2, which is additive by construction. Flagged to
+     * the orchestrator instead, and pinned here so the next edit to this union
+     * cannot change it by accident in either direction.
+     */
+    expect(MessageReadQuerySchema.parse({ since: "" }).since).toBe(0);
+    expect(MessageReadQuerySchema.parse({ since: " " }).since).toBe(0);
+    expect(MessageReadQuerySchema.parse({ since: "0x10" }).since).toBe(16);
+  });
+
+  it("🔒 all four cursor-accepting schemas take both forms", () => {
+    expect(AwaitQuerySchema.parse({ since: TOKEN }).since).toBe(TOKEN);
+    expect(AwaitQuerySchema.parse({ since: "9" }).since).toBe(9);
+    expect(AccountStatusQuerySchema.parse({ since: TOKEN }).since).toBe(TOKEN);
+    expect(AccountStatusQuerySchema.parse({ since: "9" }).since).toBe(9);
+    // ⚠ The account read's `since` is REQUIRED, so the union is the same but its
+    // ABSENCE is an error — a different assertion, and the one that would catch a
+    // future edit making the cursor optional there.
+    expect(AccountMessagesQuerySchema.parse({ since: TOKEN }).since).toBe(TOKEN);
+    expect(AccountMessagesQuerySchema.parse({ since: "9" }).since).toBe(9);
+    expect(() => AccountMessagesQuerySchema.parse({})).toThrow();
   });
 });

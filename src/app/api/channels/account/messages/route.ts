@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { acceptChannelCursor } from "@/features/channels/server/cursor-accept";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseQuery } from "@/shared/api/parse-json";
 import { toChannelErrorResponse } from "@/shared/api/channel-route";
@@ -40,7 +41,11 @@ async function handleGet(
       ["since", "limit"]
     );
     const page = await readAccountMessages(userId, {
-      since,
+      // ⚠ **ACCOUNT scope: ONE cursor across every channel of every workspace.**
+      // A channel- or workspace-scoped token must not decode here, and does not —
+      // the scope is part of the AAD, so the binding is enforced by the cipher
+      // rather than by a check someone can forget.
+      since: acceptChannelCursor(since, { kind: "account" }, userId),
       limit,
       // 🔒 B1's CEILING (R3). `withUserAuth` is the only wrapper here — nothing
       // upstream applies the lock — so a container-locked credential would
