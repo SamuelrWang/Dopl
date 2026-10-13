@@ -10654,3 +10654,12 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - (c) `GET /api/oauth/grants` and `DELETE /api/oauth/grants/{id}` have no UI caller since the Agents panel moved to `/api/oauth/apps`. Keep them or delete them (Samuel).
 - (d) The review asked `profileOffersGlasses` to honor `readToolSetClaim`. Not done: the tool-set claim only renames `dopl_*` tools and never removes one, and the glasses tools are the same in every set, so the argument could not change the answer (`core/mcp/exposure.ts` says so). Add it if a tool set ever drops the glasses tools.
 - Status: OPEN — (a), (c), (d); (b) resolved.
+
+### F-771 — "every file under `main/runtime/**` is `.js`" vs the non-code files that live there (2026-10-13)
+
+- Location: docs/INVARIANTS.md §11.0 (the "Every file under `main/runtime/**` must be `.js`" sentence); `dopl-desktop-app/test/core-vocabulary.test.mjs` (the ".js" loop in its runtime-tree case); the files `main/runtime/claude/skills/dopl-channels-wait/SKILL.md`, `…/dopl-channel-wait.sh`, `main/runtime/model-preferences.seed.json`.
+- Found during: the runtime scaffold audit (`docs/specs/runtime-scaffold.md` §6 item 7, branch `runtime/muse-scaffold`).
+- The rule's stated reason is the 500-line cap (`main/**/*.js` in `eslint.config.js`): a `.mjs`/`.ts` file there would be uncapped. Three non-`.js` files are in the tree today (`find dopl-desktop-app/main/runtime -type f ! -name '*.js'` @ 2026-10-13: 3). They are ASSETS, not code, so the cap's argument does not reach them — but the rule as written forbids them.
+- The test that claims to enforce it is VACUOUS: `core-vocabulary.test.mjs › walk` already keeps only `.js` entries, so the loop asserting "every entry ends in `.js`" can never fail. A `.mjs` file added under `main/runtime/` would pass it.
+- Cannot tell which side is wrong: either the rule means "every CODE file" (doc fix + make the test walk all files and allow-list asset extensions) or the assets belong outside `main/runtime/` (code fix: move the skill bundle and the seed). Samuel decides.
+- Status: OPEN.
