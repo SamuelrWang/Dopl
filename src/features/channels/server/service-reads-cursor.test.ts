@@ -138,3 +138,42 @@ describe("the messages read decodes its cursor before the repository", () => {
     expect(vi.mocked(repoMessages.listMessages)).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * B6-4: the messages read is the one accept surface inside the service, so the
+ * route hands it the caller's `X-Dopl-Cursor` capability. In-process callers
+ * pass nothing and must log `unknown`, never `no`.
+ */
+describe("the messages read counts its cursor form (B6-4)", () => {
+  function cursorLines(spy: ReturnType<typeof vi.spyOn>): string[] {
+    return spy.mock.calls
+      .map((c: unknown[]) => String(c[0]))
+      .filter((l: string) => l.startsWith("[cursor-form]"));
+  }
+
+  it("🔒 logs the capability the route passed in, as yes / no", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await readTranscript(ctx, "general", { since: 4461 } as never, true);
+      await readTranscript(ctx, "general", { since: 4461 } as never, false);
+      expect(cursorLines(spy)).toEqual([
+        "[cursor-form] surface=messages-read form=integer advertised=yes",
+        "[cursor-form] surface=messages-read form=integer advertised=no",
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("🔒 an in-process caller with no capability logs `unknown`", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await readTranscript(ctx, "general", {} as never);
+      expect(cursorLines(spy)).toEqual([
+        "[cursor-form] surface=messages-read form=absent advertised=unknown",
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

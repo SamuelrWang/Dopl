@@ -3,6 +3,7 @@ import "server-only";
 import { isCursorToken } from "../lib/cursor-format";
 import { ChannelCursorUndecodableError } from "./errors";
 import { decodeChannelCursor, type CursorScope } from "./cursor-codec";
+import { logCursorForm, type CursorTelemetry } from "./cursor-telemetry";
 
 /**
  * **THE ONE PLACE A CURSOR BECOMES A NUMBER** (B6-2, 2026-10-12).
@@ -27,22 +28,39 @@ import { decodeChannelCursor, type CursorScope } from "./cursor-codec";
  * `Number(value)` fallback precisely because the next caller may not come through
  * zod. A silent `Number("12abc") → NaN` reaching `gt("seq", NaN)` is the shape of
  * bug this whole lane exists to avoid.
+ *
+ * ⚠ **`telemetry` IS REQUIRED, NOT OPTIONAL** (B6-4). It names the surface, which
+ * is the one thing this function cannot work out for itself — two surfaces share
+ * the account scope and two more share the channel scope. Making it required
+ * means a NEW accept site cannot silently drop out of the measurement: it is a
+ * compile error, not a quietly missing row. That is deliberately a stronger
+ * guarantee than a text scan for call sites, which is the other way this could
+ * have been enforced.
  */
 export function acceptChannelCursor(
   value: string | number,
   scope: CursorScope,
   userId: string,
+  telemetry: CursorTelemetry,
 ): number;
 export function acceptChannelCursor(
   value: string | number | undefined,
   scope: CursorScope,
   userId: string,
+  telemetry: CursorTelemetry,
 ): number | undefined;
 export function acceptChannelCursor(
   value: string | number | undefined,
   scope: CursorScope,
   userId: string,
+  telemetry: CursorTelemetry,
 ): number | undefined {
+  // ⚠ **COUNTED FIRST, AND UNCONDITIONALLY** (B6-4). Before the refusal below,
+  // so a cursor this server cannot read is counted as `other` rather than
+  // vanishing into a throw — the refusal rate is a signal, not noise. And before
+  // the early return, so `absent` is counted too: without the denominator,
+  // "integers are down 40%" could just as easily mean traffic is.
+  logCursorForm(value, telemetry);
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
   if (!isCursorToken(value)) throw new ChannelCursorUndecodableError();

@@ -28,6 +28,7 @@ const CHANNEL: CursorScope = { kind: "channel", channelId: "chan-1" };
 const OTHER: CursorScope = { kind: "channel", channelId: "chan-2" };
 const WORKSPACE: CursorScope = { kind: "workspace", workspaceId: "ws-1" };
 const ACCOUNT: CursorScope = { kind: "account" };
+const T = { surface: "channel-await" as const, advertised: false };
 
 beforeEach(() => {
   vi.stubEnv("DOPL_CURSOR_KEY", randomBytes(32).toString("base64"));
@@ -39,7 +40,7 @@ afterEach(() => {
 describe("a legacy integer still works, unchanged", () => {
   it("🔒 passes a number straight through — every client sends one today", () => {
     for (const seq of [0, 1, 4461, Number.MAX_SAFE_INTEGER]) {
-      expect(acceptChannelCursor(seq, CHANNEL, USER)).toBe(seq);
+      expect(acceptChannelCursor(seq, CHANNEL, USER, T)).toBe(seq);
     }
   });
 
@@ -47,30 +48,30 @@ describe("a legacy integer still works, unchanged", () => {
     // Dev, CI, and any deploy mid-rollout. If this needed a key, B6-2 would be a
     // breaking change rather than an additive one.
     vi.stubEnv("DOPL_CURSOR_KEY", "");
-    expect(acceptChannelCursor(4461, CHANNEL, USER)).toBe(4461);
+    expect(acceptChannelCursor(4461, CHANNEL, USER, T)).toBe(4461);
   });
 
   it("absent stays absent — `undefined` is not zero", () => {
-    expect(acceptChannelCursor(undefined, CHANNEL, USER)).toBeUndefined();
+    expect(acceptChannelCursor(undefined, CHANNEL, USER, T)).toBeUndefined();
   });
 });
 
 describe("a token decodes, at the scope it was minted for", () => {
   it("round-trips through the accept layer", () => {
     const token = encodeChannelCursor(4461, CHANNEL, USER);
-    expect(acceptChannelCursor(token, CHANNEL, USER)).toBe(4461);
+    expect(acceptChannelCursor(token, CHANNEL, USER, T)).toBe(4461);
   });
 
   it("every scope kind", () => {
     for (const scope of [CHANNEL, WORKSPACE, ACCOUNT]) {
       const token = encodeChannelCursor(7, scope, USER);
-      expect(acceptChannelCursor(token, scope, USER)).toBe(7);
+      expect(acceptChannelCursor(token, scope, USER, T)).toBe(7);
     }
   });
 
   it("🔒 a CHANNEL token is refused by another channel", () => {
     const token = encodeChannelCursor(4461, CHANNEL, USER);
-    expect(() => acceptChannelCursor(token, OTHER, USER)).toThrow(
+    expect(() => acceptChannelCursor(token, OTHER, USER, T)).toThrow(
       ChannelCursorUndecodableError,
     );
   });
@@ -79,24 +80,24 @@ describe("a token decodes, at the scope it was minted for", () => {
     // The transposition the integer always allowed: one number was valid in every
     // space that accepted a cursor.
     const token = encodeChannelCursor(4461, CHANNEL, USER);
-    expect(() => acceptChannelCursor(token, WORKSPACE, USER)).toThrow(
+    expect(() => acceptChannelCursor(token, WORKSPACE, USER, T)).toThrow(
       ChannelCursorUndecodableError,
     );
-    expect(() => acceptChannelCursor(token, ACCOUNT, USER)).toThrow(
+    expect(() => acceptChannelCursor(token, ACCOUNT, USER, T)).toThrow(
       ChannelCursorUndecodableError,
     );
   });
 
   it("🔒 and an ACCOUNT token is refused by a single channel", () => {
     const token = encodeChannelCursor(4461, ACCOUNT, USER);
-    expect(() => acceptChannelCursor(token, CHANNEL, USER)).toThrow(
+    expect(() => acceptChannelCursor(token, CHANNEL, USER, T)).toThrow(
       ChannelCursorUndecodableError,
     );
   });
 
   it("🔒 another reader's token is refused — a cursor is not portable", () => {
     const token = encodeChannelCursor(4461, CHANNEL, USER);
-    expect(() => acceptChannelCursor(token, CHANNEL, PEER)).toThrow(
+    expect(() => acceptChannelCursor(token, CHANNEL, PEER, T)).toThrow(
       ChannelCursorUndecodableError,
     );
   });
@@ -110,14 +111,14 @@ describe("a string that is not a token is REFUSED, never parsed", () => {
     // bug this lane exists to avoid.
     for (const junk of ["12abc", "4461", "", "none", "null", "dc2.AAAA"]) {
       expect(
-        () => acceptChannelCursor(junk, CHANNEL, USER),
+        () => acceptChannelCursor(junk, CHANNEL, USER, T),
         junk,
       ).toThrow(ChannelCursorUndecodableError);
     }
   });
 
   it("🔒 and the refusal carries the remedy, so a caller can act on it", () => {
-    expect(() => acceptChannelCursor("nope", CHANNEL, USER)).toThrow(
+    expect(() => acceptChannelCursor("nope", CHANNEL, USER, T)).toThrow(
       /without a cursor/i,
     );
   });

@@ -11,6 +11,7 @@ import {
   readTranscript,
 } from "@/features/channels/server/service";
 import { withMessageSource } from "@/features/channels/server/message-source";
+import { cursorCapability } from "@/features/channels/server/cursor-telemetry";
 import {
   ChannelMessageCreateSchema,
   MessageReadQuerySchema,
@@ -42,7 +43,8 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
     const { messages, entries, hasMore } = await readTranscript(
       ctx,
       requireChannelId(auth.params),
-      query
+      query,
+      cursorCapability(request.headers)
     );
     return NextResponse.json(
       entries === null ? { messages, hasMore } : { messages, entries, hasMore }

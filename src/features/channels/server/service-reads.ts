@@ -170,7 +170,8 @@ function detach(work: () => Promise<unknown> | unknown): void {
 async function readMessagePage(
   ctx: ChannelContext,
   ref: string,
-  query: MessageReadQuery
+  query: MessageReadQuery,
+  cursorAdvertised?: boolean
 ): Promise<{
   channelId: string;
   messages: ChannelMessage[];
@@ -188,6 +189,10 @@ async function readMessagePage(
     query.since,
     { kind: "channel", channelId: channel.id },
     ctx.userId,
+    // B6-4: the HTTP route passes the caller's `X-Dopl-Cursor` capability in.
+    // In-process callers (glasses, `readMessages`) pass nothing, which logs as
+    // `unknown`, never `no`: "nobody looked" is not "the caller did not send it".
+    { surface: "messages-read", advertised: cursorAdvertised },
   );
   const fetched = await repoMessages.listMessages(channel.id, {
     since,
@@ -273,13 +278,20 @@ async function readMessagePage(
 export async function readTranscript(
   ctx: ChannelContext,
   ref: string,
-  query: MessageReadQuery
+  query: MessageReadQuery,
+  /** B6-4 telemetry only: did the HTTP caller send `X-Dopl-Cursor`? Never a gate. */
+  cursorAdvertised?: boolean
 ): Promise<{
   messages: ChannelMessage[];
   entries: ChannelReadEntry[] | null;
   hasMore: boolean;
 }> {
-  const { channelId, messages, hasMore, since } = await readMessagePage(ctx, ref, query);
+  const { channelId, messages, hasMore, since } = await readMessagePage(
+    ctx,
+    ref,
+    query,
+    cursorAdvertised
+  );
   const entries = await foldPage(channelId, messages, {
     since,
     before: query.before,
