@@ -89,7 +89,7 @@ test("the identity block is the id, its BOUNDARY, and how to address a peer", ()
     "ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).",
     "Names are unique among live agents, so a tag reaches exactly one.",
     // ⚠ **THE READING HALF (2026-09-18, A2/S45).** Each of these names a label the MCP read
-    // really prints (`channel-render-identity.ts › formatAuthor`): `for you` marks a SIBLING
+    // really prints (`channel-render-identity.ts › formatAuthor`): `(yours)` (was `for you` until W3) marks a SIBLING
     // session of this same operator, and `outside session` marks the operator's own external
     // MCP connection, whose reply handle is the group tag rather than the author's own name.
     // A rule about a label the transcript does not carry would be worse than no rule.
@@ -147,7 +147,7 @@ test("…and it stays cheap: the whole block is under 460 characters", () => {
   // so the next sentence still has to be argued for, which is the property the 60 had.
   // ⚠ **300 → 460 ON 2026-09-18 (A2/S45), AND HERE IS THE ARGUMENT.** Two lines were added, 188
   // chars, and each names a label the MCP read really prints
-  // (`channel-render-identity.ts › formatAuthor`): `for you` marks a SIBLING — another session
+  // (`channel-render-identity.ts › formatAuthor`): `(yours)` (was `for you` until W3) marks a SIBLING — another session
   // this same operator launched — and `outside session` marks the operator's own external MCP
   // connection, whose reply handle is a group tag rather than the author's name. The first four
   // lines are how this agent WRITES an address; these are how it READS one, and without them the

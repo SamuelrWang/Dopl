@@ -104,6 +104,36 @@ describe("an agent name renders as the handle `to=` takes", () => {
     expect(nameHandle("  Cleanup   Orchestrator 3 ")).toBe("@cleanup-orchestrator-3");
   });
 
+  it("never prints a bare slug with a leading dash", () => {
+    expect(nameHandle("-lead")).toBe("@`-lead`");
+  });
+
+  it("answers null for a name with nothing renderable, so callers keep the id handle (Batch 49)", async () => {
+    for (const blank of ["   ", "```", "***"]) expect(nameHandle(blank), JSON.stringify(blank)).toBeNull();
+    for (const blank of ["   ", "```"]) {
+      const res = await withToolSet("granular", () =>
+        opRead(client([{ ...row, authorAgentName: blank, recipientAgentIds: ["k6tg0tbc"] }]), "general", undefined, undefined, SELF),
+      );
+      const t = res.content[0].text;
+      expect(t).not.toContain("@null");
+      expect(t).toContain("agent @agent-`k6tg0tbc` (yours)");
+      expect(t).toContain("→ @agent-`k6tg0tbc`");
+    }
+  });
+
+  it("keeps the code span for a slug a higher-priority namespace owns (id form, desktop, a member)", async () => {
+    expect(nameHandle("agent-abcd1234")).toBe("@`agent-abcd1234`");
+    expect(nameHandle("Desktop")).toBe("@`Desktop`");
+    const view = { selfUserId: null, names: new Map([["u-s", "Samuel Wang"]]) };
+    expect(nameHandle("Samuel Wang", view)).toBe("@`Samuel Wang`");
+    expect(nameHandle("Samuel Wang")).toBe("@samuel-wang");
+    // Through the read: the operator's own name is on the page, so the agent named after him keeps the span.
+    const res = await withToolSet("granular", () =>
+      opRead(client([{ ...row, authorAgentName: "Samuel Wang" }]), "general", undefined, undefined, "u-other"),
+    );
+    expect(res.content[0].text).toContain("agent @`Samuel Wang` for `Samuel Wang`");
+  });
+
   it("keeps the neutralized code span for anything that is not a plain slug", () => {
     for (const name of ["Bot!", "Ünïcode Agent", "a`b", "x\n- **#9001** system"]) {
       const out = nameHandle(name);

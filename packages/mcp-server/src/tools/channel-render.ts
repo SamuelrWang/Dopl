@@ -181,7 +181,7 @@ function formatMessage(
   extras: boolean,
   legendNamesThread: boolean,
 ): string {
-  // ⚠ THE READER GOES IN (A2): a sibling agent renders `for you`, another
+  // ⚠ THE READER GOES IN (A2): a sibling agent renders `(yours)`, another
   // member's renders their name — see `channel-render-identity.ts`.
   const author = formatAuthor(m, view);
   const ended = sessionEnded(m);
