@@ -41,6 +41,24 @@ const RUNTIME_METHODS = {
   signOut: 0,
 };
 
+// ── THE OPTIONAL METHODS ─────────────────────────────────────────────────────────────────────
+//
+// Core calls these only where the runtime has them (a `typeof` probe or a declaration), so an
+// adapter may omit them — but when present the arity is pinned exactly like `RUNTIME_METHODS`,
+// and this table is where a new adapter learns they exist.
+const OPTIONAL_METHODS = {
+  // The build's own description of itself; required exactly when `descriptor.requiredShape` is
+  // declared (`sdk-shape.js › requiredShapeProblems`), probed by `sdk-shape.js › settleShape`.
+  shape: 0,
+  // The full login ("Enable Chrome & connectors"), offered where `descriptor.credential` declares it
+  // (`runtime-copy.js › canSignInFull`); called by `runtime-credentials.js › signInFull`.
+  signInFull: 0,
+  // Whether that full login is present (`runtime-credentials.js › fullOf`).
+  hasFullLogin: 0,
+  // Stop a sign-in in flight — the Cancel on "Signing in…" (`runtime-credentials.js › cancelSignIn`).
+  cancelSignIn: 0,
+};
+
 // ── THE FOUR THAT REFUSE ─────────────────────────────────────────────────────────────────────
 //
 // Each refuses where the thing happens: [0] and [1] refuse REGISTRATION (`descriptorProblems`, which
@@ -233,6 +251,15 @@ function runtimeProblems(runtime, id) {
       problems.push(`${id}: runtime.${name} takes ${fn.length} arguments, contract says ${RUNTIME_METHODS[name]}`);
     }
   }
+  // Absent is legal for these; present-but-wrong is not.
+  for (const name of Object.keys(OPTIONAL_METHODS)) {
+    const fn = runtime[name];
+    if (fn === undefined) continue;
+    if (typeof fn !== 'function') { problems.push(`${id}: runtime.${name} is present but not a function`); continue; }
+    if (fn.length !== OPTIONAL_METHODS[name]) {
+      problems.push(`${id}: runtime.${name} takes ${fn.length} arguments, contract says ${OPTIONAL_METHODS[name]}`);
+    }
+  }
   return problems;
 }
 
@@ -252,6 +279,7 @@ function sealAdapter(adapter) {
 
 module.exports = {
   RUNTIME_METHODS,
+  OPTIONAL_METHODS,
   LAUNCH_BLOCKING,
   UNRESTRICTED_PROFILE,
   descriptorProblems,
