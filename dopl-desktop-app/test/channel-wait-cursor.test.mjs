@@ -348,6 +348,10 @@ for (const [which, script] of Object.entries(COPIES)) {
     ['a bool', 'true'],
     ['a string that is not a cursor', '"not a cursor"'],
     ['null', 'null'],
+    // Python `$` matches before a trailing newline, so `match` + `$` let these
+    // through and persisted the newline into the cursor file (Review 43 #4590 f1).
+    ['a token with a trailing newline', '"dc1.abc\\n"'],
+    ['an integer string with a trailing newline', '"42\\n"'],
   ]) {
     test(`[${which}] a page cursor that is ${label} degrades to the fallback, never fatally`, () => {
       // Ignored rather than fatal, deliberately: persisting `str(whatever)` would

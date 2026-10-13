@@ -59,6 +59,10 @@ describe("cursorCapability", () => {
     expect(cursorCapability(new Headers({ "X-Dopl-Cursor": "opaque-1" }))).toBe(true);
     expect(cursorCapability(new Headers({ "x-dopl-cursor": "opaque-1" }))).toBe(true);
     expect(cursorCapability(new Headers({ "X-Dopl-Cursor": "opaque-2" }))).toBe(false);
+    // The VALUE is case-sensitive (only the header NAME folds): a client that
+    // upper-cases it has not made the promise the exact string carries.
+    expect(cursorCapability(new Headers({ "X-Dopl-Cursor": "OPAQUE-1" }))).toBe(false);
+    expect(cursorCapability(new Headers({ "X-Dopl-Cursor": "Opaque-1" }))).toBe(false);
     expect(cursorCapability(new Headers({ "X-Dopl-Cursor": "" }))).toBe(false);
     expect(cursorCapability(new Headers())).toBe(false);
   });

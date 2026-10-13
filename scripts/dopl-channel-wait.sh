@@ -220,7 +220,9 @@ messages = page.get("messages") or []
 # seq is published on each row -- which makes this a third client of row seq,
 # alongside the desktop listener and the web hook. That is why it is on the B7
 # list, and the field above is how this one stops needing it.
-CURSOR_RE = re.compile(r"^(?:[0-9]+|[A-Za-z0-9]+\.[A-Za-z0-9_=-]+)$")
+# fullmatch, not match + `$`: in Python `$` also matches BEFORE a trailing
+# newline, so `"dc1.abc\n"` passed and the newline was persisted with it.
+CURSOR_RE = re.compile(r"[0-9]+|[A-Za-z0-9]+\.[A-Za-z0-9_=-]+")
 page_cursor = page.get("cursor")
 # An integer field is honoured too -- a server may well emit one of those to a
 # caller it has not promised tokens to. ⚠ A bool is an int in python, so True
@@ -228,7 +230,7 @@ page_cursor = page.get("cursor")
 # REGEX is what makes every non-cursor shape safe, not a list of type checks.
 if isinstance(page_cursor, int):
     page_cursor = str(page_cursor)
-if not (isinstance(page_cursor, str) and CURSOR_RE.match(page_cursor)):
+if not (isinstance(page_cursor, str) and CURSOR_RE.fullmatch(page_cursor)):
     # ⚠ A field of an unexpected SHAPE is ignored rather than fatal: persisting
     # str(whatever) would feed junk back as the next since, and failing the hold
     # would make a malformed field an outage. The row-seq fallback is always
@@ -284,12 +286,12 @@ while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   # 401/403/400 is reported with the server's own reason rather than a bare
   # status. -sS keeps the meter off stdout and leaves real errors on stderr.
   # ⚠ **A CAPABILITY HINT, NEVER AN AUTHORIZATION SIGNAL** — the rule
-# `shared/auth/runtime-header.ts` sets for every `X-Dopl-*` header, and it holds
-# here for the same reason: a missing one costs a cheaper cursor, never a
-# delivery, and nothing may gate access on it. Anyone can send it; all they get
-# for lying is a cursor they cannot read.
-#
-# ⚠ **`X-Dopl-Cursor` IS A PROMISE, AND IT IS THE PRECONDITION B6-3 WAITS ON.**
+  # `shared/auth/runtime-header.ts` sets for every `X-Dopl-*` header, and it holds
+  # here for the same reason: a missing one costs a cheaper cursor, never a
+  # delivery, and nothing may gate access on it. Anyone can send it; all they get
+  # for lying is a cursor they cannot read.
+  #
+  # ⚠ **`X-Dopl-Cursor` IS A PROMISE, AND IT IS THE PRECONDITION B6-3 WAITS ON.**
   # It says: this client reads and returns a cursor CHARACTER FOR CHARACTER, so
   # you may hand it an opaque one. Only a copy of this script with the verbatim
   # read can send it, which makes "is the fixed script running?" a property of
