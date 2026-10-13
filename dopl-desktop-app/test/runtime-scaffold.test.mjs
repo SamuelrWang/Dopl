@@ -87,12 +87,12 @@ const PENDING = {
     missing: {
       "login.js": "Phase 4: the flow is core main/claude-auth.js (core-vocabulary DEFERRED)",
     },
-    checks: { windowlessFloor: "Phase 1.10" },
+    checks: {},
   },
   codex: {
     present: {},
     missing: {},
-    checks: { keyOrder: "Phase 1.10" },
+    checks: {},
   },
   cursor: { present: {}, missing: {}, checks: {} },
 };

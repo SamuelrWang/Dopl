@@ -28,10 +28,6 @@ const descriptor = {
   id: 'codex',
   label: 'Codex',
 
-  // What Dopl reads from Codex, tiered; checked against each build's own schema (`shape.js`) at launch
-  // and before the updater adopts a build (`../sdk-shape.js`).
-  requiredShape,
-
   session: {
     resume: true, // `thread/resume`
     // No `fork`: Codex HAS `thread/fork`, but this adapter sends it nowhere — a capability is claimed only where Dopl drives it.
@@ -106,6 +102,9 @@ const descriptor = {
   },
 
   models: models.descriptor,
+  // What Dopl reads from Codex, tiered; checked against each build's own schema (`shape.js`) at launch
+  // and before the updater adopts a build (`../sdk-shape.js`).
+  requiredShape,
   mcp: mcp.descriptor,
   credential: credential.descriptor,
 

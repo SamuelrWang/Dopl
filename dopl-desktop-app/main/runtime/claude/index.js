@@ -53,7 +53,7 @@ const descriptor = {
     // The operator's Ask / Auto / Full in this runtime's words (`permission-level.js`).
     levels: { ask: { tools: 'manual' }, auto: { tools: 'auto' }, full: { tools: 'bypass' } },
     // The mode an unattended session floors to (a windowless session has no gate surface).
-    windowlessFloor: 'auto',
+    windowlessFloor: tools.WINDOWLESS_FLOOR,
     // null, not {}: no second containment axis, so the UI renders nothing there.
     secondaryAxis: null,
     freeform: null,

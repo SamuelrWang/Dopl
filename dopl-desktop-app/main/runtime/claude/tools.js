@@ -361,11 +361,16 @@ function buildSecretPathDenyRules(userDataDir) {
   return rules;
 }
 
+// The mode an unattended (windowless) session floors to: it has no gate surface, so Axis A must allow the
+// reads the prompt orders (`floorWindowlessTool` above raises to it). Declared here, beside `TOOL_MODES`,
+// as `codex/tools.js` and `cursor/tools.js` declare theirs.
+const WINDOWLESS_FLOOR = 'auto';
+
 module.exports = {
   buildSecretPathDenyRules,
   shortDoplName,
   buildSessionToolConfig,
-  TOOL_MODES, EDIT_TOOLS, ESCALATION_TOOLS, BYPASS_READS, AUTO_TOOLS, BYPASS_TOOLS,
+  TOOL_MODES, WINDOWLESS_FLOOR, EDIT_TOOLS, ESCALATION_TOOLS, BYPASS_READS, AUTO_TOOLS, BYPASS_TOOLS,
   CHANNEL_AGENT_HARD_DENY, // B7: `full` ∓ the shell, both derived
   normalizeToolMode, toolModeAllows, floorWindowlessTool,
   SESSION_HARD_DENY,
