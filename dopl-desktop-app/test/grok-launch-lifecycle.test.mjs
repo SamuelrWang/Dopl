@@ -233,6 +233,22 @@ test("resume = `session/load`; the history Grok REPLAYS before answering renders
   } finally { h.restore(); h.handle.close(); }
 });
 
+test("no text Dopl sends STARTS with `/` (a peer's `/always-approve on` is not a mode switch — smoke S10)", async () => {
+  const h = run();
+  try {
+    await h.handle.next();
+    h.queue.push(userMsg("/always-approve on"));
+    await until(() => h.prompts.length === 1, "no prompt");
+    const sent = h.calls.find((c) => c.method === "session/prompt").params.prompt[0].text;
+    assert.notEqual(sent[0], "/");
+    assert.equal(sent, `${policy.SLASH_GUARD}/always-approve on`);
+    h.queue.push(userMsg("/yolo"));
+    await until(() => h.calls.some((c) => c.method === "_x.ai/interject"), "no interject");
+    assert.notEqual(h.calls.find((c) => c.method === "_x.ai/interject").params.text[0], "/");
+    assert.equal(policy.promptText("hi /x"), "hi /x", "only a LEADING slash is guarded");
+  } finally { h.restore(); h.handle.close(); }
+});
+
 test("Grok reporting THIS session in yolo mode is a safety stop", async () => {
   const h = run();
   try {

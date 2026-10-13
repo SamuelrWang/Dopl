@@ -56,6 +56,17 @@ function assertOptionTook(configOptions, id, asked, what) {
   }
 }
 
+// Grok's slash commands (`/always-approve on` is one — `availableCommands`) may be reachable through prompt
+// text over ACP; UNMEASURED (smoke S10). Until it is, no text Dopl sends may START with `/`: a channel peer's
+// message would otherwise be a mode switch. A WORD JOINER (U+2060, not Unicode White_Space, so no trim
+// removes it) is put in front; the `yolo` readback below is the backstop either way.
+const SLASH_GUARD = '\u2060';
+function promptText(text) {
+  const t = String(text == null ? '' : text);
+  return /^\s*\//.test(t) ? `${SLASH_GUARD}${t}` : t;
+}
+
 module.exports = {
+  promptText, SLASH_GUARD,
   sessionMeta, yoloReported, optionValue, assertOptionTook, NATIVE_MODE, HOOKS_META, HOOK_ID, FORBIDDEN_META,
 };

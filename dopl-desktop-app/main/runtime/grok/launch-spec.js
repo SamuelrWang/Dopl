@@ -209,7 +209,7 @@ function start(spec) {
     link.pending += 1;
     let done;
     link.turnDone = new Promise((r) => { done = r; });
-    link.conn.request('session/prompt', { sessionId: link.sessionId, prompt: [{ type: 'text', text }] })
+    link.conn.request('session/prompt', { sessionId: link.sessionId, prompt: [{ type: 'text', text: policy.promptText(text) }] })
       .then((r) => endPrompt(r, null), (err) => endPrompt(null, err))
       .finally(done);
   }
@@ -220,7 +220,7 @@ function start(spec) {
   async function steer(text) {
     let status = '';
     try {
-      const r = obj(await link.conn.request('_x.ai/interject', { sessionId: link.sessionId, text }));
+      const r = obj(await link.conn.request('_x.ai/interject', { sessionId: link.sessionId, text: policy.promptText(text) }));
       status = str(obj(r.result).status) || str(r.status);
     } catch (err) {
       log('grok: interject refused —', (err && err.message) || err);
