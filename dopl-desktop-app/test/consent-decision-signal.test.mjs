@@ -348,10 +348,28 @@ test("EVERY decision site calls submitDecision, and none still calls patchDecisi
   // signal to report. ⚠ THE CENSUS IS NOW ONE FILE, and that is exactly when a census is most
   // worth keeping: a SECOND surface reappearing is the event this case exists to catch.
   // The WINDOWLESS outbound gate — the surface that replaced the pre-consent window's
-  // Accept / Deny, and now also the outbound REVIEW the headless lane used to raise. Its Send
-  // carries the channel name; its cancel path (the tool call this row was gating is gone)
-  // passes none, deliberately: nobody is waiting on that copy.
-  assert.match(WL, /void consent\.submitDecision\(s\.workspaceId, rowId, 'allow', \{ channelName \}\)/);
+  // Accept / Deny, and now also the outbound REVIEW the headless lane used to raise.
+  //
+  // ⚠ THE SEND GREW `onOpen` ON 2026-10-12 (Samuel: keep the "decision not recorded" pop-up
+  // clickable). `consent.js › notifyDecisionFailed` forwards it as the notice's click, and
+  // nothing supplied one before — so that pop-up parked no handle and was a dead card. Both
+  // fields are named here because dropping EITHER changes what the operator gets when a
+  // decision vanishes: the channel name is the copy, the handler is the way back.
+  // Its cancel path (the tool call this row was gating is gone) still passes NEITHER,
+  // deliberately: nobody is waiting on that copy and there is nothing to decide again.
+  // ⚠ WHITESPACE-TOLERANT, because the call is multi-line now and a formatter must not be able
+  // to turn this census red. The BEHAVIOUR behind both is pinned in
+  // test/session-windowless-open.test.mjs ("the operator's Allow carries a way back" / "…and the
+  // housekeeping cancel carries NONE, deliberately"), which is what actually bites.
+  assert.match(
+    WL,
+    // ⚠ `[^}]` NOT `[\s\S]`, AND THAT IS NOT A STYLE CHOICE. The lazy any-character form I wrote
+    // first matched ACROSS the closing brace and found the `onOpen:` on the `notifyOutbound`
+    // call below, so deleting the real one left this GREEN — measured. A probe that walks out of
+    // the thing it is describing is the "gate that prints green after it stopped checking".
+    /consent\.submitDecision\(s\.workspaceId, rowId, 'allow', \{[^}]*channelName,[^}]*onOpen:[^}]*\}\)/,
+    "the Send carries the channel name AND the failed-decision pop-up's way back"
+  );
   assert.match(WL, /void consent\.submitDecision\(s\.workspaceId, rowId, 'deny', \{\}\)/);
 
   for (const f of readdirSync(MAIN).filter((f) => f.endsWith(".js"))) {

@@ -381,7 +381,19 @@ async function bridgeOutbound(s, payload, decide) {
     // The notification's SEND action decides immediately; the body CLICK only
     // navigates — to the THREAD, where the send box is (Samuel, 2026-08-20).
     onSend: () => {
-      void consent.submitDecision(s.workspaceId, rowId, 'allow', { channelName });
+      // 🔒 ⚠ `onOpen` IS THE FAILED DECISION'S WAY BACK (Samuel, 2026-10-12: keep the "decision
+      // not recorded" pop-up clickable). If this PATCH does not land, `consent.js ›
+      // notifyDecisionFailed` raises a notice whose copy says *"the request is still waiting:
+      // open Pending Requests to decide it again"* — and it forwards whatever arrives here as
+      // the click. Nothing supplied one, so `onClick` was always undefined: no handle was
+      // parked and the in-app pop-up was a DEAD CARD, the same defect the mention toast had,
+      // surviving one layer up at the call site.
+      // ⚠ THE SAME `openThread` BOTH BANNERS ALREADY USE, not a second navigation: it lands on
+      // this session's channel AND thread, which is where the decision is made again.
+      void consent.submitDecision(s.workspaceId, rowId, 'allow', {
+        channelName,
+        onOpen: () => openThread(s, channelName),
+      });
     },
     onOpen: () => openThread(s, channelName),
   });
@@ -406,6 +418,12 @@ async function watchRow(s, rowId, requestId, decide) {
       // The tool call this row was gating is gone (park deny-closed it, or the
       // session ended). A row left `pending` would take a Send that posts
       // NOTHING — cancel it so the surface tells the truth. Best-effort.
+      // ⚠ NO `onOpen` HERE, AND THAT IS DELIBERATE (Samuel, 2026-10-12, alongside making the
+      // operator's own failed decision clickable). This is HOUSEKEEPING: the tool call the row
+      // was gating is already gone, so the operator never made this decision and has nothing to
+      // "decide again" — a click offering to reopen the thread would point at a request that no
+      // longer exists. The notice stays honest and unclickable. Pinned by "…and the housekeeping
+      // cancel carries NONE, deliberately" in test/session-windowless-deny.test.mjs.
       void consent.submitDecision(s.workspaceId, rowId, 'deny', {});
       return;
     }
