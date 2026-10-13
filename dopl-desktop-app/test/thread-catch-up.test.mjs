@@ -65,7 +65,7 @@ function machine(s) {
   // The dispatch roster holds THIS session object, so the gap it marks is the one the gate reads.
   const send = (msg, over = {}) => {
     const h = dispatchHarness({ agents: [Object.assign(s, agent(A1), { key: "k" })], ...over });
-    h.feedLiveSession({ channel: { id: CH, name: "Ops" }, workspaceId: WS }, msg, ME);
+    h.feedLiveSession({ channel: { id: CH, name: "Ops" }, workspaceId: WS }, msg, "me" in over ? over.me : ME);
     // A refusal is the feed answering false: the recorder saw the call, nothing was delivered.
     if (over.feedInboundReturn === false) return;
     for (const call of h.calls.feedInbound) g.feedInbound({ ...call, agentId: A1 });
@@ -109,6 +109,39 @@ test("a message HELD (dormant, not woken) or REFUSED by the feed is a gap too", 
     m.send(toThread(12));
     assert.deepEqual(m.pushed.map(sinceOf), [10, 10]);
   }
+});
+
+// Batch 47 finding 1: the identity return sits BEFORE the fan-out, so it must gap the runs too.
+test("a thread message dropped because this machine cannot say who it is is a gap", () => {
+  const m = machine(session());
+  m.send(toThread(10));
+  m.send(toThread(11), { me: null }); // no operator id: fails closed, nothing is fed
+  m.send(toThread(12));
+  assert.equal(m.pushed.length, 2, "message 11 never reached the agent");
+  assert.deepEqual(m.pushed.map(sinceOf), [10, 10]);
+});
+
+// Batch 47 finding 2, Samuel's ruling (#4622, card #4619 option 1): a peer's MILESTONE (or any
+// non-message row) is never fed, so it is a gap — the since= named afterwards stays BELOW it and a
+// `since=N` re-read returns it. The run's OWN milestone is not one: it wrote it.
+test("a peer's milestone is a gap: since= stays below it, so the re-read returns it", () => {
+  const s = session();
+  const m = machine(s);
+  m.send(toThread(10));
+  m.send(verdictMsg("thread", { seq: 11, kind: "task_progress", body: "step landed" }));
+  m.send(toThread(12));
+  assert.equal(m.pushed.length, 2, "the milestone is not fed");
+  const since = sinceOf(m.pushed[1]);
+  assert.ok(since < 11, `since=${since} must sit below the milestone`);
+});
+
+test("the run's OWN milestone is not a gap", () => {
+  const s = session();
+  const m = machine(s);
+  m.send(toThread(10));
+  m.send(verdictMsg("thread", { seq: 11, kind: "task_progress", body: "mine", metadata: { session_id: "k" } }));
+  m.send(toThread(12));
+  assert.deepEqual(m.pushed.map(sinceOf), [10, 12]);
 });
 
 test("a gap before anything was delivered names no since= at all", () => {

@@ -384,17 +384,18 @@ function feedLiveSession(entry, m, myUserId) {
   // a `task_progress` MILESTONE (feeding those spends one peer turn per milestone, on a stream
   // the product tells agents to post freely). Widening it also un-does the loop brake where a
   // loop is cheapest to start.
-  if (!m || m.kind !== 'message') return false;
+  if (!m) return false;
+  const live = sessionEngine.liveOnThread({ channelId: entry.channel.id, taskId: targeting.firstClassTaskId(m) });
+  // A thread row these returns never hand over gaps every live run but its author (W2; Samuel #4622: milestones too).
+  const unhanded = () => { for (const s of live) if (!wroteIt(s, m) && !authoredBySession(s, m)) markGap(s); return false; };
+  if (m.kind !== 'message') return unhanded();
   // ⚠ IDENTITY IS STILL REQUIRED AND STILL FAILS CLOSED. A machine that cannot say who it is has
   // no business deciding which of its agents a message is for — and since the narrowing it is
   // read for a second reason: a MEMBER recipient is routed by comparing against it.
-  if (!myUserId) return false;
+  if (!myUserId) return unhanded();
   // ⚠ AN AUTHOR-LESS POST FAILS CLOSED. A row with no author is a system row, nobody spoke, and
   // `authorLabel` would credit the words to nothing.
   if (!m.authorUserId) return false;
-  const taskId = targeting.firstClassTaskId(m);
-  const thread = { channelId: entry.channel.id, taskId: taskId };
-  const live = sessionEngine.liveOnThread(thread);
   if (!live.length) return false;
   const liveIds = live.map((s) => String(s.agentId || ''));
   const plan = planFor(m, liveIds, myUserId);
@@ -432,7 +433,7 @@ function feedLiveSession(entry, m, myUserId) {
     const wasDormant = dormant(s);
     const ok = sessionEngine.feedInbound({
       channelId: entry.channel.id,
-      taskId: taskId,
+      taskId: targeting.firstClassTaskId(m),
       agentId: s.agentId,
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
