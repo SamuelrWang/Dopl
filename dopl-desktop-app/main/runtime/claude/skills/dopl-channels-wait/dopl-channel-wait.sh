@@ -125,8 +125,63 @@ fi
 [ -n "$TOKEN" ] || die "dopl-channel-wait: no token. Set DOPL_TOKEN, or connect the Dopl MCP server so the CLI config carries one. (Never pass a token as an argument.)"
 
 # ── The cursor: the file, then --since. One of them must answer. ─────────────
+#
+# ⚠ **A CURSOR IS AN OPAQUE HANDLE: RECOGNISE IT OR REFUSE IT, NEVER REPAIR
+# IT.** This read used to be `tr -dc '0-9'` — keep the digits, drop the rest —
+# which is invisible against the integer cursors everything sends today and
+# silently wrong against anything else: an opaque `dc1.AbC-_123` became `1123`,
+# a perfectly valid seq pointing somewhere nobody chose, and a file with no
+# cursor in it at all became whatever digits it happened to contain. The hold
+# then ran from that, replaying or skipping messages without a word.
+#
+# ⚠ **AND THE REPAIR HAD TO SHIP FIRST.** This script lives inside the desktop
+# app, so a session only gets this version once a release carrying it is
+# installed — which is why no server hands out an opaque cursor until one is.
+#
+# One notion of "a cursor", two call sites (`--since` and the file). Surrounding
+# whitespace is forgiven because the file may be hand-written; it is the only
+# thing ever discarded, and the match EXTRACTS rather than edits.
+#
+# ⚠ Deliberately permissive about the prefix, which is also the key id: a
+# rotation mints `dc2.…`, and a script that whitelisted today's prefix would
+# have to be released again in lockstep with the server. The server is the
+# authority on which cursors it can read and answers one it cannot with a 400
+# and its own reason, which `--fail-with-body` puts on stderr.
+CURSOR_RE='^[[:space:]]*([0-9]+|[A-Za-z0-9]+\.[A-Za-z0-9_=-]+)[[:space:]]*$'
+cursorOrEmpty() {
+  if [[ "$1" =~ $CURSOR_RE ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  fi
+}
+
+if [ -n "$SINCE" ]; then
+  # ⚠ The value is NOT echoed back on refusal. A mistyped `--since "$DOPL_TOKEN"`
+  # would otherwise print a bearer token to stderr, and this script's whole
+  # posture is that no secret is ever echoed or passed as an argument.
+  SINCE=$(cursorOrEmpty "$SINCE")
+  [ -n "$SINCE" ] || die "dopl-channel-wait: --since is not a cursor. Pass the integer seq you last saw, or a cursor token exactly as the server gave it to you."
+fi
+
 if [ -z "$SINCE" ] && [ -n "$CURSOR_FILE" ] && [ -r "$CURSOR_FILE" ]; then
-  SINCE=$(tr -dc '0-9' < "$CURSOR_FILE")
+  # One line, the trailing newline stripped and nothing else. `|| true` because
+  # a file written without a trailing newline still holds a cursor, and `read`
+  # reports EOF for it.
+  CURSOR_LINE=""
+  IFS= read -r CURSOR_LINE < "$CURSOR_FILE" || true
+  SINCE=$(cursorOrEmpty "$CURSOR_LINE")
+  if [ -z "$SINCE" ] && [ -n "$CURSOR_LINE" ]; then
+    # ⚠ **REFUSED, AND THE FILE IS LEFT EXACTLY AS IT IS** — never rewritten, so
+    # an operator can see what went wrong, and a cursor in a format this copy of
+    # the script is too old to recognise survives meeting it. An old script
+    # against a new cursor must be inert, not lossy.
+    #
+    # ⚠ Dropping the cursor and holding anyway is NOT the safe fallback it looks
+    # like: a workspace hold with no cursor answers with the newest N across
+    # every channel (`repository-await-workspace.ts ›
+    # listWorkspaceMessagesAfter`) — a firehose of already-seen messages read as
+    # new. Hence a refusal that carries the remedy instead.
+    die "dopl-channel-wait: the cursor file $CURSOR_FILE does not hold a cursor. Re-establish WITHOUT one: read the channel unscoped, then pass the highest seq below which you have seen everything as --since. The file has NOT been changed."
+  fi
 fi
 [ -n "$SINCE" ] || die "dopl-channel-wait: no cursor. Pass --since <seq>, or --cursor-file pointing at a file that holds one."
 
