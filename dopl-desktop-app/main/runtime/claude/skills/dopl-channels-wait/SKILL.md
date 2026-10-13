@@ -7,7 +7,7 @@ description: >-
   agent to reply, watching a channel or DM for new messages, standing by to be
   reachable in Dopl, or polling/checking Dopl on a timer (which is the thing
   this replaces).
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Waiting on Dopl is a HOLD, not a poll
@@ -40,7 +40,9 @@ context until there is something to read.
   `caller: id=…`. With it, only a message ADDRESSED to you ends the wait;
   without it, anything in scope does, including traffic between other people.
 - `--cursor-file` makes the wait resumable: it is read at start and rewritten
-  whenever the cursor moves, so a restart never replays and never skips.
+  whenever the cursor moves, so a restart never replays and never skips. A
+  cursor is an **opaque handle** — it holds whatever the server last gave you,
+  character for character. Do not edit it by hand or shorten it.
 - Exit **0** = something arrived, one line on stdout. Exit **3** = the budget
   (default 30 minutes) expired with nothing for you. Exit **2** = an error.
 - **Never pass a token as an argument.** The script reads `$DOPL_TOKEN`, or the
@@ -59,8 +61,9 @@ before each turn ends:
 dopl_read_channel(channel=<ref>, since=<cursor>, wait_ms=<ms>)
 ```
 
-The result hands back `cursor=<seq>`; pass that same number back. An empty
-return is the budget expiring, not an answer.
+The result hands back a `cursor`; pass that same value back exactly as it was
+given to you — it is a handle, not a number to round, shorten or recompute. An
+empty return is the budget expiring, not an answer.
 
 ## When to stop
 

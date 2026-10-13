@@ -125,8 +125,63 @@ fi
 [ -n "$TOKEN" ] || die "dopl-channel-wait: no token. Set DOPL_TOKEN, or connect the Dopl MCP server so the CLI config carries one. (Never pass a token as an argument.)"
 
 # ── The cursor: the file, then --since. One of them must answer. ─────────────
+#
+# ⚠ **A CURSOR IS AN OPAQUE HANDLE: RECOGNISE IT OR REFUSE IT, NEVER REPAIR
+# IT.** This read used to be `tr -dc '0-9'` — keep the digits, drop the rest —
+# which is invisible against the integer cursors everything sends today and
+# silently wrong against anything else: an opaque `dc1.AbC-_123` became `1123`,
+# a perfectly valid seq pointing somewhere nobody chose, and a file with no
+# cursor in it at all became whatever digits it happened to contain. The hold
+# then ran from that, replaying or skipping messages without a word.
+#
+# ⚠ **AND THE REPAIR HAD TO SHIP FIRST.** This script lives inside the desktop
+# app, so a session only gets this version once a release carrying it is
+# installed — which is why no server hands out an opaque cursor until one is.
+#
+# One notion of "a cursor", two call sites (`--since` and the file). Surrounding
+# whitespace is forgiven because the file may be hand-written; it is the only
+# thing ever discarded, and the match EXTRACTS rather than edits.
+#
+# ⚠ Deliberately permissive about the prefix, which is also the key id: a
+# rotation mints `dc2.…`, and a script that whitelisted today's prefix would
+# have to be released again in lockstep with the server. The server is the
+# authority on which cursors it can read and answers one it cannot with a 400
+# and its own reason, which `--fail-with-body` puts on stderr.
+CURSOR_RE='^[[:space:]]*([0-9]+|[A-Za-z0-9]+\.[A-Za-z0-9_=-]+)[[:space:]]*$'
+cursorOrEmpty() {
+  if [[ "$1" =~ $CURSOR_RE ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  fi
+}
+
+if [ -n "$SINCE" ]; then
+  # ⚠ The value is NOT echoed back on refusal. A mistyped `--since "$DOPL_TOKEN"`
+  # would otherwise print a bearer token to stderr, and this script's whole
+  # posture is that no secret is ever echoed or passed as an argument.
+  SINCE=$(cursorOrEmpty "$SINCE")
+  [ -n "$SINCE" ] || die "dopl-channel-wait: --since is not a cursor. Pass the integer seq you last saw, or a cursor token exactly as the server gave it to you."
+fi
+
 if [ -z "$SINCE" ] && [ -n "$CURSOR_FILE" ] && [ -r "$CURSOR_FILE" ]; then
-  SINCE=$(tr -dc '0-9' < "$CURSOR_FILE")
+  # One line, the trailing newline stripped and nothing else. `|| true` because
+  # a file written without a trailing newline still holds a cursor, and `read`
+  # reports EOF for it.
+  CURSOR_LINE=""
+  IFS= read -r CURSOR_LINE < "$CURSOR_FILE" || true
+  SINCE=$(cursorOrEmpty "$CURSOR_LINE")
+  if [ -z "$SINCE" ] && [ -n "$CURSOR_LINE" ]; then
+    # ⚠ **REFUSED, AND THE FILE IS LEFT EXACTLY AS IT IS** — never rewritten, so
+    # an operator can see what went wrong, and a cursor in a format this copy of
+    # the script is too old to recognise survives meeting it. An old script
+    # against a new cursor must be inert, not lossy.
+    #
+    # ⚠ Dropping the cursor and holding anyway is NOT the safe fallback it looks
+    # like: a workspace hold with no cursor answers with the newest N across
+    # every channel (`repository-await-workspace.ts ›
+    # listWorkspaceMessagesAfter`) — a firehose of already-seen messages read as
+    # new. Hence a refusal that carries the remedy instead.
+    die "dopl-channel-wait: the cursor file $CURSOR_FILE does not hold a cursor. Re-establish WITHOUT one: read the channel unscoped, then pass the highest seq below which you have seen everything as --since. The file has NOT been changed."
+  fi
 fi
 [ -n "$SINCE" ] || die "dopl-channel-wait: no cursor. Pass --since <seq>, or --cursor-file pointing at a file that holds one."
 
@@ -140,7 +195,7 @@ writeCursor() {
 # on stdin, so a heredoc and a piped response body cannot both be there — the
 # first version of this script had both and read every reply as unparseable.
 FILTER='
-import json, sys
+import json, re, sys
 
 to = sys.argv[1].strip()
 channels = {c.strip().lower() for c in sys.argv[2].split() if c.strip()}
@@ -152,11 +207,45 @@ except Exception:
     raise SystemExit(0)
 
 messages = page.get("messages") or []
-if not messages:
-    print("NONE")
-    raise SystemExit(0)
 
-cursor = max(int(m.get("seq", 0)) for m in messages)
+# ⚠ THE CURSOR THE SERVER SENDS WINS WHENEVER IT SENDS ONE, and it is carried
+# VERBATIM. This is the other half of the X-Dopl-Cursor promise: advertising that
+# this client returns a cursor unchanged is worth nothing if the client then
+# computes its own instead. Reading the field here means the day the server
+# starts emitting one, THIS script already consumes it -- no second desktop
+# release, which is the slowest step in the system.
+#
+# ⚠ Without the field, the fallback is what the script has always done: the
+# highest row seq on the page. That is a derived cursor and it only works because
+# seq is published on each row -- which makes this a third client of row seq,
+# alongside the desktop listener and the web hook. That is why it is on the B7
+# list, and the field above is how this one stops needing it.
+CURSOR_RE = re.compile(r"^(?:[0-9]+|[A-Za-z0-9]+\.[A-Za-z0-9_=-]+)$")
+page_cursor = page.get("cursor")
+# An integer field is honoured too -- a server may well emit one of those to a
+# caller it has not promised tokens to. ⚠ A bool is an int in python, so True
+# arrives here and becomes "True", which the pattern below then rejects: the
+# REGEX is what makes every non-cursor shape safe, not a list of type checks.
+if isinstance(page_cursor, int):
+    page_cursor = str(page_cursor)
+if not (isinstance(page_cursor, str) and CURSOR_RE.match(page_cursor)):
+    # ⚠ A field of an unexpected SHAPE is ignored rather than fatal: persisting
+    # str(whatever) would feed junk back as the next since, and failing the hold
+    # would make a malformed field an outage. The row-seq fallback is always
+    # valid, so degrade to it.
+    page_cursor = None
+
+if page_cursor is None:
+    if not messages:
+        print("NONE")
+        raise SystemExit(0)
+    cursor = str(max(int(m.get("seq", 0)) for m in messages))
+else:
+    # ⚠ Even with NO messages: a cursor the server moved must be persisted, or
+    # the next hold re-asks from behind it. This leaves as WAIT rather than NONE
+    # precisely because WAIT already means "advance past it and hold again" --
+    # the one path that writes the cursor without ending the wait.
+    cursor = page_cursor
 
 def matches(m):
     if channels:
@@ -169,7 +258,7 @@ def matches(m):
 
 hit = next((m for m in messages if matches(m)), None)
 if hit is None:
-    print("WAIT %d" % cursor)
+    print("WAIT %s" % cursor)
     raise SystemExit(0)
 
 # ONE LINE. A background task is read by its status and its last line; a page of
@@ -194,9 +283,25 @@ while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   # --fail-with-body: a non-2xx exits non-zero AND still prints the body, so a
   # 401/403/400 is reported with the server's own reason rather than a bare
   # status. -sS keeps the meter off stdout and leaves real errors on stderr.
+  # ⚠ **A CAPABILITY HINT, NEVER AN AUTHORIZATION SIGNAL** — the rule
+# `shared/auth/runtime-header.ts` sets for every `X-Dopl-*` header, and it holds
+# here for the same reason: a missing one costs a cheaper cursor, never a
+# delivery, and nothing may gate access on it. Anyone can send it; all they get
+# for lying is a cursor they cannot read.
+#
+# ⚠ **`X-Dopl-Cursor` IS A PROMISE, AND IT IS THE PRECONDITION B6-3 WAITS ON.**
+  # It says: this client reads and returns a cursor CHARACTER FOR CHARACTER, so
+  # you may hand it an opaque one. Only a copy of this script with the verbatim
+  # read can send it, which makes "is the fixed script running?" a property of
+  # the REQUEST rather than a guess about which release is installed — and that
+  # distinction is load-bearing, because `skill-install.js` skips an install it
+  # finds `foreign` or `edited`, so a digit-stripping copy can outlive any number
+  # of releases. A request without this header keeps getting integers forever,
+  # which is the correct answer for one.
   BODY=$(curl -sS --fail-with-body \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "X-Workspace-Id: ${CONTAINER}" \
+    -H "X-Dopl-Cursor: opaque-1" \
     -H "Accept: application/json" \
     "${BASE_URL%/}/api/channels/await?${QUERY}")
   STATUS=$?
