@@ -116,7 +116,7 @@ function activeFor(source) {
   return active && newer(active.version, source.bundledVersion()) ? active : null;
 }
 
-// A resolver may hand back the canonical path (`codex/resolve-bin.js › inspectCandidate`).
+// A resolver may hand back the canonical path (`kit/bin-resolve.js › inspectCandidate`).
 function samePath(a, b) {
   try { return fs.realpathSync(a) === fs.realpathSync(b); } catch (_) { return a === b; }
 }

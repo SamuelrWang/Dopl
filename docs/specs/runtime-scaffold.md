@@ -1,9 +1,11 @@
 # Runtime adapter scaffold — one structure for every SDK
 
 Status (2026-10-13, branch `runtime/muse-scaffold`, local commits, unpushed): **Phase 0 DONE, Phase 1 DONE**
-(§0 below); Phase 2 (kit), Phase 3 (Muse) and Phase 4 NOT STARTED. §1–§3 are the AUDIT SNAPSHOT taken before
-Phase 1 and still use the old file names (`loader.js`, `server-requests.js`, `model-table.js`, `proc-config.js`,
-`catalog.js`); §0 maps them to today's. Every count carries its date; re-derive with the command, never quote it.
+(§0 below), **Phase 2 DONE** (§0b — K1–K11 + the `modelArg` dedupe); Phase 3 (Muse) and Phase 4 NOT STARTED.
+**How a new adapter maps onto the kit: §8.** §1–§3 are the AUDIT SNAPSHOT taken before Phase 1 and still use
+the old file names (`loader.js`, `server-requests.js`, `model-table.js`, `proc-config.js`, `catalog.js`) and
+the old symbol homes; §0/§0b map them to today's. Every count carries its date; re-derive with the command,
+never quote it.
 
 ## 0. Phase 0 / Phase 1 — what landed (2026-10-13)
 
@@ -48,6 +50,33 @@ Gates run per step (targeted, serialized with `lockf`): the conformance set (`ru
 `main-require-paths`, `main-exports-defined`, `module-split-identity`, `runtime-scaffold`) + every non-live suite
 naming the adapter's tree (`git grep -l 'runtime/<id>\|"runtime", "<id>"' test`), desktop eslint on touched
 files, `node scripts/check-doc-refs.mjs`; 1.10 also the two SPA vitest files.
+
+
+## 0b. Phase 2 — the kit (2026-10-13)
+
+`main/runtime/kit/` (ruling D3). One commit per item, lowest risk first; each a verbatim move + parameterisation,
+adapters re-pointed, tests importing a moved symbol re-pointed to the kit (no re-export shims left behind).
+
+| Item | Commit | Kit module | What moved / what stayed |
+|---|---|---|---|
+| K2 | `30052006` | `frame-queue.js` | `makeFrameQueue`, `boundedInterrupt`, `INTERRUPT_TIMEOUT_MS` from `codex/launch-handle.js`; `codex/launch-spec.js`'s two test-only re-exports dropped. Also lands the kit census + scans in `runtime-scaffold.test.mjs`. |
+| K4 | `d05a76d0` | `usage.js` | `readCount` from `sdk-shape.js` (Claude's three readers re-point); Codex + Cursor `tokensFrom` = one body over per-adapter key lists (Codex: no `cached` keys — subset; Cursor: `cached` keys — additive); Codex's `lastTotal` → `makeUsageCarry`. |
+| K5 | `ef1eef3f` | `auth-shape.js` | the shared pattern; Cursor passes `/CURSOR_API_KEY/i` as `extraRe`. |
+| K3 | `aed90c2c` | `run-handle.js` | `runHandle({ frames, interrupt, close })`; Codex `launch-handle.js › handleFor` and Cursor `launch-spec.js › start` keep their interrupt/close POLICY as the callbacks. |
+| K1 | `efe073f3` | `stdio-rpc.js` | `codex/client.js › connect`'s body; `label` (`'codex app-server'`) + `errorFallback` (`'app-server error'`) keep every log/error string byte-identical. Codex's `connect` keeps its signature (binary resolve, `app-server` + `AUTH_STORE_ARGS`). |
+| K6 | `bf1988d4` | `dopl-mcp.js` | `doplBearer`, `clientTimeoutMs({ fallbackMs? })`. **Narrower than §3's row, deliberately:** the header/stamp literals (`X-Dopl-Runtime: desktop-session`, `X-Dopl-Vendor`, `X-Dopl-Tool-Profile`, `X-Dopl-Session-Id`, `SESSION_ID_RE`) stay in each `mcp.js`, because `runtime-stamp-literals`, `session-id-stamp`, `tool-profile-stamp` and siblings pin them IN THOSE FILES against the server's source — moving them is a test-join redesign, not a move. **The timeout fallback is kept per adapter, not unified** (§3 noted the split): Claude passes none (an unloadable `mcp-config` throws), Codex/Cursor pass 60000. Pinned in `mcp-client-timeout` + `sdk-mcp-token`. |
+| K7 | `e2064d17` | (`held-gate.js`, extended in place) | `makeHeldGate(s, dispatch, log, { isClosed?, denyWithoutDispatch? })`; Cursor's `makeGate` is a one-line wrapper; no options = the old path. |
+| K8 | `34fa8471` | `private-home.js` | `appUserData`, `privateHome(name, root)`, `ownerOnlyDir`, `freshDir`, `removeDir`, `hasEntry`, `ownedFile` (symlink removed), `removeFile`, `installFile` (0600, rename). Codex keeps names, ambient-config set, trust-table retirement, refusal. |
+| K10 | `8ac7d50a` | `probe-bin.js` | `makeProber({ binName, label, resolve, versionGate, onReadable, updateSource })` = `codex/client.js › probe`/`probeAt` + the reject loop; Claude's duplicate `DOWNLOAD_RETRY_TIMEOUT_MS` reads the kit's. |
+| K9 | `62a13c9e` | `bin-resolve.js` | `inspectCandidate`, `writableByOthers`, `expandHome`, `nodeNeighbours`, `WELL_KNOWN`, `resolveWith` + hit cache, byte-for-byte (whitespace-insensitive diff: only the vendor facts became `makeResolver` config). Resolution on the dev Mac identical before/after. `WELL_KNOWN` is not a parameter (no adapter needs another list yet). |
+| — | `0176fe39` | `model-arg.js` | the identical Codex/Cursor pass-through `modelArg`. |
+| K11 | `7cbcc9be` | (`contract.js`) | Phase 0 (`OPTIONAL_METHODS`). |
+
+Not done, by design: `toolMode.options` still lives in each `index.js` (pinned equal to `TOOL_MODES`, §0);
+`held-gate.js` was not moved into `kit/` (K7 says extend in place); `cli-spawn.js` cannot move (core's
+`main/claude-auth.js` requires it). Gates per item: the item's row in §5 + the conformance set + every non-live
+suite naming the touched adapter(s); K1/K9/K10 also ran the live `codex-app-server-contract` tier
+(`CODEX_APP_SERVER_LIVE=1`, no model turns).
 
 ---
 
@@ -486,3 +515,33 @@ Answered 2026-10-13: 1 = rename (D1, done); 2 = yes, with the bullet rewritten (
 3. Kit location: new `main/runtime/kit/` (recommended) or flat files beside `cli-spawn.js` / `held-gate.js`?
 4. Order: do Phase 0–1 before Muse and Phase 2 alongside Muse (Muse is the second consumer that justifies
    K1–K3, K8–K10), or all of Phase 2 first? Recommend: 0 → 1 → 2.1–2.4 → Muse → rest of 2.
+
+---
+
+## 8. How a new adapter uses the kit — the mapping guide (2026-10-13)
+
+The slot table (§4.1) says WHICH FILE does each job; this says which kit module the file is built on, so a new
+SDK is "fill in the vendor facts", not "copy Codex". Everything in the right-hand column is the ADAPTER'S —
+the kit holds no vendor word (enforced: `runtime-scaffold.test.mjs` › kit tests).
+
+| Adapter slot (file) | Kit module | The adapter passes / keeps |
+|---|---|---|
+| `client.js` — transport (if the vendor is a JSON-RPC process over stdio) | `stdio-rpc.js › connect` | the resolved binary path, argv (subcommand + its own flags), env, cwd, `label`, the `onServerRequest` held callback (from `launch-spec.js` → `approval.js`), `onNotification`, `onExit` |
+| `client.js` — `probe()` behind `available()` | `probe-bin.js › makeProber` | `binName`, `label`, `resolve` (its `resolve-bin.js`), `versionGate` (its `protocol.js`), `onReadable` (its `identity.js`), `updateSource` (its `update-source.js`) |
+| `resolve-bin.js` | `bin-resolve.js › makeResolver` | `binName`, `overrideEnv` (`DOPL_<ID>_BIN`), `label`, `bundledCandidate`, optional `launcherVendor`, its own `require.resolve`, `downloaded()` from `../updates` |
+| `config-home.js` | `private-home.js` | the home NAME(s), the vendor's home env vars, which file names are ambient config, the refusal sentence, any vendor-specific retirement (Codex's trust table) |
+| `launch-handle.js` / `launch-spec.js › start` | `frame-queue.js` + `run-handle.js` | the frame pump (notifications → `frames.push`), the INTERRUPT policy (what to send, when not to; wrap a request in `boundedInterrupt` if the vendor can leave it unanswered), the CLOSE policy |
+| `normalize.js` — usage | `usage.js › tokensFrom`, `readCount`, `makeUsageCarry` | its key lists `{ input, cached?, output, total }` (pass `cached` only if the vendor's cache figure is ADDITIVE — measure it), whether its total is cumulative (then carry it) |
+| `normalize.js` — auth | `auth-shape.js › authShaped` | its own extra spellings (`extraRe`), plus any structured unauthorized signal its frames carry |
+| `axis-b.js` — the held callback | `../held-gate.js › makeHeldGate` | options only if it needs them: `isClosed` (a close latch), `denyWithoutDispatch` (in-process tools with no surface) |
+| `mcp.js` — the session entry | `dopl-mcp.js › doplBearer`, `clientTimeoutMs` | the WIRE PLACEMENT (header object / env-var names / fetch headers), the stamp literals (`X-Dopl-Runtime: desktop-session`, its `X-Dopl-Vendor` word — which must also land in `src/shared/auth/runtime-header.ts`), and its timeout fallback choice |
+| `models.js › modelArg` | `model-arg.js › passThroughModelArg` | nothing — when picks ARE launch ids; write your own when it maps aliases (Claude's `resolveLaunchModel`) |
+| `launch-spec.js` env | `../cli-spawn.js › scrubbedEnv` | its prefix + permission-knob regexes; its env names in `INHERITED_CREDENTIAL_ENV` (§3) |
+
+For Muse (`muse serve`, JSON-RPC 2.0 over stdio) that is: `client.js` = `stdio-rpc` + `probe-bin`;
+`resolve-bin.js` = `bin-resolve` (`delivery: 'path'`, no bundle until the licence allows one → a
+`bundledCandidate` that answers `null`); `config-home.js` = `private-home` if smoke M2 shows ambient config;
+`launch-handle.js` = `frame-queue` + `run-handle`; `normalize.js` = `usage` + `auth-shape` over Muse's own
+measured field names; `axis-b.js` = `makeHeldGate` (no options); `mcp.js` = `dopl-mcp`; `models.js` =
+`passThroughModelArg` unless smoke shows aliases. The vendor judgement — protocol method names, measured
+frames, fences, sentences — is all that remains to write.
