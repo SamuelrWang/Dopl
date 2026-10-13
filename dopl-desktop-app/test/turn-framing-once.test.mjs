@@ -93,3 +93,27 @@ test("fed channel turns: the reply call in full once, then the imperative alone;
   // No memo (any caller that passes none): every turn is the full form, as before W5.
   assert.match(seed.frameContinuation("n1", "hi", "Dave", null, null, "granular", "CALL-A").split("\n").pop(), /: CALL-A\./);
 });
+
+// ── The first turn: lifecycle prose a GRANULAR session cannot act on ──────────────────────────
+const { buildFencedTurn } = require(join(HERE, "..", "main", "prompt-framing.js"));
+const ctx = (toolSet) => ({
+  channelName: "Ops", channelId: "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd",
+  workspaceId: "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee", taskId: "cccccccc-3333-4ddd-8eee-ffffffffffff",
+  scope: "thread", toolSet,
+});
+
+test("a granular first turn drops the task_* refusals its send tool cannot even form, and keeps the rest", () => {
+  for (const side of ["requester", "responder"]) {
+    const g = buildFencedTurn({ side, message: "x", nonce: "n5", context: ctx("granular") }).replace(/\s+/g, " ");
+    const l = buildFencedTurn({ side, message: "x", nonce: "n5", context: ctx("legacy") }).replace(/\s+/g, " ");
+    assert.doesNotMatch(g, /STORAGE words/, side);
+    assert.doesNotMatch(g, /NEVER put prose into a task_started/, side);
+    assert.match(g, /LIFECYCLE MARKERS, not messages/, `${side}: it still learns what those rows are`);
+    assert.match(g, /EVERY ANSWER IS POSTED, YOUR FINAL ANSWER INCLUDED/, `${side}: the prose invariant stays`);
+    assert.match(g, /leave it that way\./, side);
+    // Legacy keeps every word (its send tool still takes a free kind).
+    assert.match(l, /STORAGE words/, side);
+    assert.match(l, /NEVER put prose into a task_started, task_finished or task_failed post/, side);
+    assert.ok(g.length < l.length, side);
+  }
+});

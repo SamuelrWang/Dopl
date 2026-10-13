@@ -17,6 +17,8 @@ const VOCAB_TERMS = [
   '  side has its own session. A session pauses and resumes; a thread does not. You never',
   '  see the other member\'s session, only the messages it sends.',
   '- The tool ARGUMENT that names this thread is `thread=<id>`. Say "thread" in what you write.',
+];
+const VOCAB_TASK_NAMES = [
   '- The `task_` names are STORAGE words, not a menu. "task_started" / "task_finished" /',
   '  "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session.',
   '  They are not yours to post and the server refuses them from you. What is yours: an',
@@ -52,22 +54,39 @@ const VOCAB_TAGS = [
   '  message in that person\'s Tags inbox, which is what your operator watches instead of',
   '  reading every message. It is not an address and it starts no agent.',
 ];
-const VOCABULARY = [...VOCAB_TERMS, ...VOCAB_CHANNEL_POSTS, ...VOCAB_TAGS];
-const MAIN_ROOM_VOCABULARY = [...VOCAB_TERMS, ...VOCAB_TAGS];
+const VOCABULARY = [...VOCAB_TERMS, ...VOCAB_TASK_NAMES, ...VOCAB_CHANNEL_POSTS, ...VOCAB_TAGS];
+const MAIN_ROOM_VOCABULARY = [...VOCAB_TERMS, ...VOCAB_TASK_NAMES, ...VOCAB_TAGS];
+// Context Economy W5 (2026-10-13): a GRANULAR session's send tool publishes no task_* kind (its `kind`
+// is message | milestone | record), so the paragraph refusing them to it, and PROSE_RULE's tail, teach
+// a mistake it cannot make. It still READS those rows, so one line says what they are.
+const GRANULAR_TASK_NAMES = [
+  '- task_started / task_finished / task_failed rows in a read are the runtime\'s LIFECYCLE MARKERS, not messages.',
+];
+function vocabularyFor(set, standby) {
+  if (set !== 'granular') return standby ? MAIN_ROOM_VOCABULARY : VOCABULARY;
+  return [...VOCAB_TERMS, ...GRANULAR_TASK_NAMES, ...(standby ? [] : VOCAB_CHANNEL_POSTS), ...VOCAB_TAGS];
+}
 
 // The failure mode, not a style rule: `kind` defaults to message, and a lifecycle kind's body is not
 // rendered on the peer's card. Stated on every delivery branch (the section an agent re-reads).
 // ⚠ NARROWED 2026-10-08: it read "every substantive word is an ordinary message", which agents
 // took as "never a decision card" (KB "Decision Card Adoption Audit"). Its target is lifecycle kinds.
-const PROSE_RULE = [
+const PROSE_RULE_HEAD = [
   `EVERY ANSWER IS POSTED, YOUR FINAL ANSWER INCLUDED: as a message, or as a decision card or a`,
   `display when that is what it is (the ways to post are listed above). A message sets no kind,`,
+];
+const PROSE_RULE = [
+  ...PROSE_RULE_HEAD,
   `and that is correct: leave it that way. NEVER put prose`,
   `into a task_started, task_finished or task_failed post. Those are lifecycle markers, the`,
   `server refuses them from you, and their body is not shown on the other member's thread`,
   `card at all, so an answer written into one is delivered nowhere. If it is meant to be`,
   `read, send it as a message.`,
 ];
+// The granular tail (W5, see GRANULAR_TASK_NAMES): the head and "leave it that way" stay.
+function proseRuleFor(set) {
+  return set === 'granular' ? [...PROSE_RULE_HEAD, `and that is correct: leave it that way.`] : PROSE_RULE;
+}
 
 // Standing framing, said once (Samuel, 2026-08-21): a default an explicit ask for depth beats.
 const CONCISION = [
@@ -156,4 +175,4 @@ const LANE_USE = {
   display: 'structure: status, a list, a table, or a choice that is not a decision.',
 };
 
-module.exports = { LANE_USE, THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
+module.exports = { LANE_USE, THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, vocabularyFor, proseRuleFor, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING };
