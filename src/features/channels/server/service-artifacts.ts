@@ -1,7 +1,7 @@
 import "server-only";
 import type { ChannelArtifact, ChannelMessage } from "../types";
 import type { ArtifactActionInput } from "../schema-artifacts";
-import { ChannelError } from "./errors-base";
+import { ArtifactNotFoundError } from "./errors";
 import { ChannelForbiddenError } from "./errors";
 import { mapArtifactRow } from "./dto";
 import * as repoArtifacts from "./repository-artifacts";
@@ -43,13 +43,14 @@ import {
  * paths is reached.
  */
 
-/** The artifact ref did not resolve INSIDE this channel. ⚠ Never leaks whether
- *  it exists elsewhere — ids are not probeable across rooms. */
-export class ArtifactNotFoundError extends ChannelError {
-  constructor(public readonly ref: string) {
-    super(`Artifact not found: ${ref}`);
-  }
-}
+/**
+ * ⚠ **THE CLASS MOVED TO `errors.ts` AND IS RE-EXPORTED HERE** (Review 40
+ * quick-check, 2026-10-12). Declared in this file it was invisible to
+ * `http-mapping-completeness.test.ts`, which enumerates `errors.ts` — so it had no
+ * mapping arm and a GET for an unknown artifact id returned **500** in production.
+ * Re-exported under its original name so no importer moved.
+ */
+export { ArtifactNotFoundError };
 
 /**
  * WHAT A CREATE ACTUALLY DID.

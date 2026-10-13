@@ -12,7 +12,12 @@
  *
  * ⚠ **IT ENUMERATES THE MODULE RATHER THAN LISTING NAMES**, so the NEXT error
  * class is covered the day it is written and nobody has to remember this file.
- * `errors.ts` re-exports `errors-recipient.ts`, so one module is the whole set.
+ * `errors.ts` re-exports `errors-recipient.ts`, so that module is the whole set —
+ * ⚠ **BUT "THE WHOLE SET" WAS A CLAIM ABOUT THE MODULE, NOT ABOUT THE TREE, AND
+ * THAT IS EXACTLY WHERE IT FAILED.** `ArtifactNotFoundError` was declared in
+ * `service-artifacts.ts` and never re-exported here, so this gate could not see it
+ * and it mapped to 500 live. The second describe block below closes that: no
+ * subclass may be declared outside `errors*.ts` at all.
  *
  * ⚠ **AND IT FAILS CLOSED.** A gate that enumerates nothing passes over
  * everything, which is how a scan-based test rots into decoration: the floor below
@@ -20,6 +25,8 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 import { ChannelError } from "./errors-base";
 import { toChannelErrorResponse } from "./http-mapping";
@@ -62,7 +69,8 @@ function construct(Cls: ErrorCtor): Error | null {
   return null;
 }
 
-/** Measured 2026-10-12: 36 exported `ChannelError` subclasses in this module. */
+/** Measured 2026-10-12: **37** exported `ChannelError` subclasses in this module
+ *  (36, plus `ArtifactNotFoundError` moved in from `service-artifacts.ts`). */
 const KNOWN_CLASS_FLOOR = 30;
 
 /**
@@ -124,5 +132,60 @@ describe("mapChannelError covers the module", () => {
     const err = new errors.ChannelCursorUndecodableError();
     expect(err.message).toMatch(/without a cursor/i);
     expect(err.message).toMatch(/unscoped/i);
+  });
+});
+
+/**
+ * **NO `ChannelError` SUBCLASS MAY LIVE OUTSIDE `errors*.ts`** (Review 40
+ * quick-check, 2026-10-12).
+ *
+ * ⚠ **THE ENUMERATION ABOVE IS ONLY AS COMPLETE AS THE MODULE IT READS, AND THAT
+ * WAS THE HOLE.** `ArtifactNotFoundError` was declared in `service-artifacts.ts`
+ * and never re-exported by `errors.ts`, so the gate above could not see it — and
+ * it mapped to **500 in production**: a GET for an unknown artifact id returned a
+ * server error, inviting a retry that can never succeed. The reviewer found it
+ * THROUGH the gate, by noticing what the gate could not reach.
+ *
+ * So the gate now has a second half: the class must be declared where the
+ * enumeration can find it. A future stray fails HERE, by filename, before it can
+ * fail silently as a 500.
+ *
+ * ⚠ **COMMENT-STRIPPED AND FAIL-CLOSED.** `extends ChannelError` appears in
+ * docblocks (including this one), so a raw scan would red on a clean tree; and a
+ * scan that matched nothing would pass over everything, so the floor below refuses
+ * a run that found no declarations at all.
+ */
+describe("every ChannelError subclass is declared where the gate can see it", () => {
+  const ALLOWED = /^src\/features\/channels\/server\/errors(-[a-z]+)?\.ts$/;
+
+  /** Comments out, code in — a `//` or `*` line naming the class is prose. */
+  const stripComments = (source: string): string =>
+    source
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .map((line) => line.replace(/\/\/.*$/, ""))
+      .join("\n");
+
+  const files = execFileSync("git", ["ls-files", "src"], { encoding: "utf8" })
+    .split("\n")
+    .filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"))
+    .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"));
+
+  const declaring = files.filter((f) =>
+    /\bextends\s+ChannelError\b/.test(stripComments(readFileSync(f, "utf8"))),
+  );
+
+  it("🔒 the scan found real declarations — a scan over nothing passes everything", () => {
+    expect(files.length).toBeGreaterThan(200);
+    expect(declaring.length).toBeGreaterThan(0);
+  });
+
+  it("🔒 and every one of them is an `errors*.ts`", () => {
+    expect(
+      declaring.filter((f) => !ALLOWED.test(f)),
+      "a `ChannelError` subclass declared outside `errors*.ts` is invisible to the " +
+        "enumeration above, so it maps to 500 and nothing says so. Move the class " +
+        "into `errors.ts` and re-export it from where it lived, so no importer moves.",
+    ).toEqual([]);
   });
 });
