@@ -5844,7 +5844,7 @@ not to pick a side. Two candidate fixes, both real work:
 for VENDOR NAMES and one platform's API SHAPES (`sdk.query`, `canUseTool`, `permissionMode`). A
 field name that a platform happens to share with core reads as neither.
 
-- ⚠ **2026-09-23: `wrapGate` AND ITS MODULE ARE DELETED** (the w3-left leftovers pass — dead since P4-12, when the engine's quiet emit lost its last receiver), and the Codex wire translation moved to `main/runtime/codex/server-requests.js › answer`. The held callback is the shared `main/runtime/held-gate.js › makeHeldGate` on all three runtimes (`› settledVerdict` is the one allow/deny shape). The contract itself is still undeclared: it now stands on `session-permissions.js › resolvePerm`, `session-outbound-tag.js` and `session-gate-bridge.js` reading `verdict.behavior`. Status: open (declare it in `runtime/contract.js`).
+- ⚠ **2026-09-23: `wrapGate` AND ITS MODULE ARE DELETED** (the w3-left leftovers pass — dead since P4-12, when the engine's quiet emit lost its last receiver), and the Codex wire translation moved to `main/runtime/codex/approval.js › answer`. The held callback is the shared `main/runtime/held-gate.js › makeHeldGate` on all three runtimes (`› settledVerdict` is the one allow/deny shape). The contract itself is still undeclared: it now stands on `session-permissions.js › resolvePerm`, `session-outbound-tag.js` and `session-gate-bridge.js` reading `verdict.behavior`. Status: open (declare it in `runtime/contract.js`).
 
 ### F-383 — three desktop files are over the 500-line cap AT HEAD, so `npm run lint` in the desktop job is red on master (2026-08-31)
 
@@ -6101,7 +6101,7 @@ surface warns, design §3.2); what is lost is the main-process record when the e
 
 ### F-389 — an adapter comment cited a test file that has never existed (2026-08-31, port wave D)
 
-The Codex approval module (approval.js, deleted 2026-09-23; its live half is `main/runtime/codex/server-requests.js`) claimed that a suite named codex-approval.test.mjs (spelled out
+The Codex approval module (the first approval.js, deleted 2026-09-23; its live half, then named server-requests, is `main/runtime/codex/approval.js` since 2026-10-13) claimed that a suite named codex-approval.test.mjs (spelled out
 rather than cited, because the whole point is that the path resolves to nothing and
 `scripts/check-doc-refs.mjs` would refuse a citation of it) *"pins that no verdict, however wide,
 produces the other word"* — the guarantee that `acceptForSession` is a declared

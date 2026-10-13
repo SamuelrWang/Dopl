@@ -82,8 +82,7 @@ const EXTRA = {
 // Migration exceptions @ 2026-10-13 (docs/specs/runtime-scaffold.md §5). Each must still hold.
 const PENDING = {
   claude: {
-    present: {
-    },
+    present: {},
     missing: {
       "login.js": "Phase 4: the flow is core main/claude-auth.js (core-vocabulary DEFERRED)",
     },
@@ -91,11 +90,10 @@ const PENDING = {
   },
   codex: {
     present: {
-      "server-requests.js": "Phase 1.7 → approval.js",
       "catalog.js": "Phase 1.8 → delegation-fence.js",
       "proc-config.js": "Phase 1.8 → launch-verify.js",
     },
-    missing: { "approval.js": "Phase 1.7 (server-requests.js)" },
+    missing: {},
     checks: { keyOrder: "Phase 1.10" },
   },
   cursor: { present: {}, missing: {}, checks: {} },

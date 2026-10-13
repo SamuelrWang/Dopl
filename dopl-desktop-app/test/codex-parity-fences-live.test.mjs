@@ -31,7 +31,7 @@ const launchSpec = require(join(CODEX, 'launch-spec.js'));
 const policy = require(join(CODEX, 'policy.js'));
 const catalog = require(join(CODEX, 'catalog.js'));
 const skillsFence = require(join(CODEX, 'skills-fence.js'));
-const serverRequests = require(join(CODEX, 'server-requests.js'));
+const serverRequests = require(join(CODEX, 'approval.js'));
 const resolveBin = require(join(CODEX, 'resolve-bin.js'));
 const profiles = require(join(HERE, '..', 'main', 'session-profiles.js'));
 

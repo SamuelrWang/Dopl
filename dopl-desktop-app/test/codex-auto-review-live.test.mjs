@@ -19,7 +19,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
-const serverRequests = require(join(CODEX, 'server-requests.js'));
+const serverRequests = require(join(CODEX, 'approval.js'));
 const policy = require(join(CODEX, 'policy.js'));
 const GATE = announceGate(liveGate());
 

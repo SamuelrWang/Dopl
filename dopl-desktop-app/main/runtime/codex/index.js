@@ -7,7 +7,7 @@
 const tools = require('./tools');
 const policy = require('./policy');
 const axisB = require('./axis-b');
-const serverRequests = require('./server-requests');
+const approval = require('./approval');
 const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
@@ -47,7 +47,7 @@ const descriptor = {
   },
 
   axisB: axisB.descriptor,
-  approval: serverRequests.descriptor,
+  approval: approval.descriptor,
 
   toolMode: {
     // `approval_policy`'s own values, narrowest first; `granular` sits second (`tools.js › TOOL_MODES`).
@@ -139,7 +139,7 @@ const runtime = {
   resume(spec, priorHandle) { return launchSpec().resume(spec, priorHandle); },
   normalize(msg, ctx) { return normalizer().normalize(msg, ctx); },
 
-  answerApproval(_request, verdict) { return serverRequests.decisionReply(verdict); },
+  answerApproval(_request, verdict) { return approval.decisionReply(verdict); },
   // `axisB.inputRewrite` is null here: no route carries a rewritten input.
   stampOutbound(_input, _tag) { return null; },
   axisBTools(session) { return axisB.axisBTools(session); },

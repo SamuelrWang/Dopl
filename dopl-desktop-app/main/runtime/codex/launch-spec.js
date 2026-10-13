@@ -6,7 +6,7 @@ const path = require('path');
 const client = require('./client');
 const tools = require('./tools');
 const axisB = require('./axis-b');
-const serverRequests = require('./server-requests');
+const approval = require('./approval');
 const configHome = require('./config-home');
 const policy = require('./policy');
 const catalog = require('./catalog');
@@ -176,13 +176,13 @@ function sameDir(a, b) {
   return real(a) === real(b);
 }
 
-// Server requests → the held gate (core `{ behavior }` verdicts, F-382); `server-requests.js › answer`
+// Server requests → the held gate (core `{ behavior }` verdicts, F-382); `approval.js › answer`
 // translates to Codex's wire words. `updatedInput` is dropped: Codex's reply has no slot for it.
 function makeApprovalHandler(s, dispatch, operatorServers, onUnknown, replyFor) {
   const gate = axisB.makeCanUseTool(s, dispatch, diag);
   return async function onServerRequest(msg) {
     const params = msg && msg.params ? msg.params : {};
-    return serverRequests.answer(msg, async (name, input) => {
+    return approval.answer(msg, async (name, input) => {
       const verdict = await gate(name, input, {
         requestId: String(msg.id),
         toolUseID: params.itemId || null,

@@ -1,3 +1,4 @@
+// The Codex approval translator (`main/runtime/codex/approval.js`, named server-requests.js until 2026-10-13).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -7,7 +8,7 @@ import { dirname, join } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
-const requests = require(join(CODEX, "server-requests.js"));
+const requests = require(join(CODEX, "approval.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const profiles = require(join(HERE, "..", "main", "session-profiles.js"));
 

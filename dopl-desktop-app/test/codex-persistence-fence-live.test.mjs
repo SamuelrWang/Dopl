@@ -31,7 +31,7 @@ const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
 const catalog = require(join(CODEX, 'catalog.js'));
 const configHome = require(join(CODEX, 'config-home.js'));
-const serverRequests = require(join(CODEX, 'server-requests.js'));
+const serverRequests = require(join(CODEX, 'approval.js'));
 const resolveBin = require(join(CODEX, 'resolve-bin.js'));
 
 const GATE = announceGate(liveGate());

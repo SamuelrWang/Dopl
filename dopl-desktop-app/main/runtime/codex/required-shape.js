@@ -32,7 +32,7 @@ module.exports = Object.freeze({
       'config/read': ['config'],
     },
     requests: {
-      // `server-requests.js` answers these by name; a rename would route them to the unknown path.
+      // `approval.js` answers these by name; a rename would route them to the unknown path.
       'item/commandExecution/requestApproval': ['command', 'cwd', 'reason'],
       'item/fileChange/requestApproval': ['grantRoot', 'reason'],
       'item/permissions/requestApproval': ['permissions'],

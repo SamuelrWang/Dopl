@@ -41,7 +41,7 @@ const { DOPL_READ_TOOLS, DOPL_WRITE_TOOLS } = require(M("session-dopl-tools.js")
 const { DOPL_SAFE_TOOLS } = require(M("tool-profiles.js"));
 const { DOPL_READ_OPS, isDoplReadOpCall } = require(M("dopl-read-ops.js"));
 const codexMcp = require(M("runtime", "codex", "mcp.js"));
-const codexRequests = require(M("runtime", "codex", "server-requests.js"));
+const codexRequests = require(M("runtime", "codex", "approval.js"));
 
 const SERVER = join(HERE, "..", "..", "packages", "mcp-server", "src");
 // ⚠ A MISSING SERVER TREE IS A FAILURE, NOT A SKIP — a guard that quietly stops guarding is the bug.

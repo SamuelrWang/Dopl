@@ -32,13 +32,13 @@ const STARTUP_TIMEOUT_SEC = 10;
 
 const CHANNEL_TOOL = shortDoplName(DOPL_CHANNEL_TOOL);
 
-// The one definition: `launch-spec.js` mounts under it and `server-requests.js` matches `serverName` to it.
+// The one definition: `launch-spec.js` mounts under it and `approval.js` matches `serverName` to it.
 const SERVER_KEY = 'dopl';
 
 // Every Dopl call asks (`prompt`) so Dopl's gate judges it per op, as on every runtime; a tool Dopl does not
 // know yet asks too. Only the whole-tool reads never ask (`approve`, the one never-ask mode — `auto` asks,
 // measured): the gate allows them in every mode, and they keep working against a server whose tools carry no
-// `title` (`server-requests.js › doplElicitation` refuses an ask it cannot name). The granular whole-tool reads
+// `title` (`approval.js › doplElicitation` refuses an ask it cannot name). The granular whole-tool reads
 // (DMP-013) are derived from the server's table by read class, never listed.
 const DEFAULT_TOOL_APPROVAL_MODE = 'prompt';
 const TOOL_APPROVAL_MODES = Object.freeze(Object.fromEntries(

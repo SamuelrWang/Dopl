@@ -3,7 +3,7 @@
 // Dopl's MCP server is remote HTTP and no posture crosses the wire, so Axis B needs a held callback.
 // A Dopl call's approval arrives as `mcpServer/elicitation/request`, which blocks the turn on Dopl's
 // answer and carries the tool's title and the call's arguments (`_meta.tool_title` / `tool_params`);
-// `server-requests.js` names it and hands it to the gate below.
+// `approval.js` names it and hands it to the gate below.
 
 /** The held approval callback the launch spec wires; answers core's `{ behavior }` (F-382). */
 const makeCanUseTool = require('../held-gate').makeHeldGate;

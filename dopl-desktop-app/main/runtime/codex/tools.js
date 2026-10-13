@@ -15,7 +15,7 @@ function shortDoplName(full) {
   return String(full).replace(/^mcp__dopl__/, '');
 }
 
-// Codex gates action categories, not named built-ins; `server-requests.js › REQUEST_NAMES` maps onto these.
+// Codex gates action categories, not named built-ins; `approval.js › REQUEST_NAMES` maps onto these.
 const COMMAND_ITEM = 'commandExecution'; // item/commandExecution/requestApproval — the shell
 const FILE_ITEM = 'fileChange'; //          item/fileChange/requestApproval    — a write
 

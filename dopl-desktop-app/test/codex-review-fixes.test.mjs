@@ -23,7 +23,7 @@ test("gate: an unrecognised request is DENIED on a restricted profile and never 
     "a standing grant never pre-approves a request type Dopl cannot describe");
   assert.equal(grantDecision({ runtime: "codex", profile: "full", toolName, toolMode: "never" }), "gate",
     "even at Full access an unnamed request is ASKED (Codex's Axis A names no such row)");
-  const serverRequests = require(join(MAIN, "runtime", "codex", "server-requests.js"));
+  const serverRequests = require(join(MAIN, "runtime", "codex", "approval.js"));
   assert.equal(serverRequests.UNKNOWN_PREFIX, UNRECOGNISED_REQUEST_PREFIX, "Codex names it with the shared prefix");
 });
 
@@ -98,9 +98,9 @@ test("family: a version tie never falls to roster order", () => {
 });
 
 // ── Hollow (review): the generic reply builder agrees with the MEASURED schema for every hand-written reply ──
-test("replies: replyFromSchema on the measured 0.155.1 schema = the replies server-requests.js hand-writes", () => {
+test("replies: replyFromSchema on the measured 0.155.1 schema = the replies approval.js hand-writes", () => {
   const fixture = require("./fixtures/codex-shape.json");
-  const sr = require(join(MAIN, "runtime", "codex", "server-requests.js"));
+  const sr = require(join(MAIN, "runtime", "codex", "approval.js"));
   assert.equal(fixture.measured, true);
   for (const m of ["item/commandExecution/requestApproval", "item/fileChange/requestApproval"]) {
     assert.deepEqual(fixture.replies[m], { accept: sr.decisionReply("allow"), decline: sr.decisionReply("deny") }, m);

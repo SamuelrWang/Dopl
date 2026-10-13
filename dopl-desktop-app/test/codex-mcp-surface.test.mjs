@@ -47,7 +47,7 @@ const require = createRequire(import.meta.url);
 const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
 const configHome = require(join(CODEX, 'config-home.js'));
-const serverRequests = require(join(CODEX, 'server-requests.js'));
+const serverRequests = require(join(CODEX, 'approval.js'));
 const { canonicalDoplName } = require(join(HERE, '..', 'main', 'mcp-tool-names.js'));
 
 const GATE = announceGate(liveGate());
@@ -228,7 +228,7 @@ describe('the captured approval payloads for a command and a file change', () =>
     // from `CommandExecutionRequestApprovalParams.json`. It offers `accept`, an
     // `acceptWithExecpolicyAmendment` object and `cancel` — and NOT `decline`, although `decline`
     // is what Dopl sends and what the live capture shows working (`status: 'declined'`, turn
-    // continues). It also never offers `acceptForSession`, so `server-requests.js`'s standing refusal to
+    // continues). It also never offers `acceptForSession`, so `approval.js`'s standing refusal to
     // send that word costs nothing here.
     assert.equal(p.availableDecisions.includes('decline'), false);
     assert.equal(p.availableDecisions.includes('acceptForSession'), false);
