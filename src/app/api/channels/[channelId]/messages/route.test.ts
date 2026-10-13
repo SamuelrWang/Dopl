@@ -106,7 +106,9 @@ describe("GET /api/channels/[channelId]/messages", () => {
     expect(readMock).toHaveBeenCalledWith(
       expect.anything(),
       "c-1",
-      expect.objectContaining({ thread: "t-9" })
+      expect.objectContaining({ thread: "t-9" }),
+      // B6-4: no `X-Dopl-Cursor` sent, so the capability is `false` (telemetry only).
+      false
     );
   });
 
@@ -125,7 +127,8 @@ describe("GET /api/channels/[channelId]/messages", () => {
       // ⚠ BOTH cursors, or the service cannot tell a window (which names a
       // message) from a plain cursor (which does not) — the one distinction
       // `readNamesMessages` turns on.
-      expect.objectContaining({ since: 10, before: 40, limit: 25 })
+      expect.objectContaining({ since: 10, before: 40, limit: 25 }),
+      false
     );
   });
 

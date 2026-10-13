@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { acceptChannelCursor } from "@/features/channels/server/cursor-accept";
+import { cursorCapability } from "@/features/channels/server/cursor-telemetry";
 import {
   withWorkspaceAuth,
   type WorkspaceAuthContext,
@@ -82,6 +83,10 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
         since,
         { kind: "workspace", workspaceId: ctx.workspaceId },
         ctx.userId,
+        {
+          surface: "workspace-await",
+          advertised: cursorCapability(request.headers),
+        },
       ),
       deadline,
       excludeAuthor,
