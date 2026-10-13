@@ -215,10 +215,34 @@ function raise(eventId, spec) {
       // is a body and the title-only one when there is not.
       const payload = { eventId: eventId, title: spec.title, kind: 'incoming' };
       if (spec.body) payload.body = spec.body;
+      // 🔒 ⚠ THE CLICK TARGET RIDES ALONG TOO (2026-10-12, Samuel's ruling on #4358 opt 1: the
+      // whole in-app pop-up is clickable and jumps to the message). Until then this line dropped
+      // `spec.onClick` on the floor, so while Dopl was IN FRONT a mention toast was a DEAD CARD:
+      // the banner's navigation existed and the toast's did not. Same bug, other surface.
+      //
+      // ⚠ `openId` WITHOUT `actionLabel`, AND THAT IS THE WHOLE RULING IN ONE LINE. The renderer
+      // already keys both the 4s life and the plain face on `openId && actionLabel`
+      // (`incoming-toasts.tsx › lifeOf`, `› show`), so omitting the label keeps PLAIN_MS and the
+      // single slot BY CONSTRUCTION rather than by a new branch: no button, no 15s hold, a burst
+      // of mentions still 4s each.
+      //
+      // ⚠ IT IS THE SAME HANDLE MAP THE ACTIONABLE TOAST USES, kind 'open', deliberately — that
+      // map's header argues 'open' is navigation-only and a stale or forged handle is harmless by
+      // construction, which is exactly this case. A second registry for "the plain one" would be
+      // a second mechanism for a solved problem, and a second thing to sweep.
+      // ⚠ ONLY WHEN THERE IS SOMETHING TO RUN. `registerOpen` parks an absent closure on purpose
+      // for the actionable toast (its press must answer FALSE, not a silent success), but a PLAIN
+      // card has no button to explain itself — a handle with nothing behind it would just be a
+      // clickable card that does nothing, which is the bug this fixes.
+      const openId = typeof spec.onClick === 'function' ? actions.registerOpen(spec.onClick) : null;
+      if (openId) payload.openId = openId;
       // ⚠ A toast with no window to land in is a DROPPED notification: fall back to the banner
       // rather than lose the fact (the "popup only" case with the app closed, which the spec did
       // not contemplate). A window that exists but has not acked HOLDS it, same banner on timeout.
-      if (deliverToast(payload, () => macBanner(spec)) === 'none') {
+      // ⚠ THE HANDLE IS DROPPED ON EVERY PATH THAT DOES NOT SHOW THIS TOAST, so a banner fallback
+      // never leaves a closure parked for a card nobody will ever see.
+      if (deliverToast(payload, () => { actions.dropOpen(openId); macBanner(spec); }) === 'none') {
+        actions.dropOpen(openId);
         return macBanner(spec) ? 'mac' : 'none';
       }
       return 'popup';
@@ -230,160 +254,20 @@ function raise(eventId, spec) {
   }
 }
 
-// ─── THE ACTIONABLE HALF ─────────────────────────────────────────────────────────────────────
+// ─── THE ACTIONABLE HALF LIVES IN `notification-route-actions.js` ───────────────────────────
 //
-// Three events carry ONE BUTTON THAT ANSWERS THEM (`notify-action.js`): `peer_ask` launches an
-// agent, `draft_reply` sends a drafted post, `approval` allows a held tool. Samuel's spec marks
-// all three "Mac + popup", and the naive reading — swap the banner for a toast while Dopl is in
-// front — is REFUSED here for two reasons found in the code:
-//
-//   1. A TOAST AUTO-DISMISSES (`toast.tsx`, one slot, ~4s) and dismiss decides nothing. So a
-//      missed toast is a refused tool, and a 4-second window to answer an approval is a
-//      downgrade from a banner that persists, not an addition.
-//   2. `session-windowless.js:293` treats a FALSY notification as "the TRUE no-surface case" and
-//      DENIES the held tool immediately. A focused path that returned nothing would silently
-//      auto-deny every gated tool while the operator sat in Dopl.
-//
-// So (Samuel, 2026-10-09):
-//   `approval`            → THE BANNER, ALWAYS, focused or not. It is the only ask surface there
-//                           is (no in-app tool-gate UI exists) and its return feeds that
-//                           auto-deny contract.
-//   `peer_ask`/`draft_reply` → banner when away; when focused, a toast whose button only ever
-//                           NAVIGATES to the surface that already answers it (the thread's send
-//                           box, the launch control). The decision never moves into the toast,
-//                           which is also `notify-action.js`'s own rule: the body click
-//                           navigates, it never decides.
-
-/**
- * Pending closures a focused toast can ask main to run, keyed by an opaque handle.
- *
- * ⚠ TWO KINDS, AND THE DISTINCTION IS THE WHOLE SAFETY ARGUMENT.
- *   'open'   — NAVIGATION. Opens a surface the operator already has. A stale or forged handle is
- *              harmless by construction, which is why `peer_ask` and `draft_reply` may use it
- *              while their decisions ("Launch agent", "Send") stay on the banner.
- *   'resume' — RESUMES THE OPERATOR'S OWN PARKED SESSION (`session_resume`). This one DOES act,
- *              and may because it is not a consent decision: it starts the operator's own agent
- *              exactly as the New Agent button does, no auto-deny contract sits behind it, and
- *              ignoring it leaves the session parked — precisely today's behaviour, so a missed
- *              toast decides nothing. NOT a precedent for "Send" or "Allow" in a toast: those
- *              answer somebody else's pending request, and a 4-second window to answer one is
- *              the thing the spec refused.
- */
-const pendingOpens = new Map();
-let nextOpenId = 1;
-// A toast the operator never pressed is not a leak worth keeping: drop the closure after this.
-const OPEN_TTL_MS = 120000;
-// ⚠ A STICKY TOAST OUTLIVES THAT BY A DAY (`incoming-toasts.tsx › STICKY_MS` = 24h). Sweeping its
-// closure at 120s left "Resume" on screen as a DEAD BUTTON, with the renderer's `.catch(()=>{})`
-// hiding the miss. So a sticky entry gets a ceiling the toast cannot outlive — still a ceiling,
-// because an unbounded map is a shape this tree has been bitten by.
-const STICKY_OPEN_TTL_MS = 25 * 60 * 60 * 1000;
-/** Truthy, and NOT a Notification: what a toast-raised actionable event answers. */
-const TOAST_RAISED = { surface: 'popup' };
-/**
- * Truthy, and NOT a Notification: the operator MUTED this event, so no surface was raised.
- * ⚠ DISTINCT FROM `null` ("no surface exists at all") — `trigger.js › handleTrigger` reads that
- * difference to decide whether a peer's ask may be consumed.
- */
-const MUTED = { surface: 'none', muted: true };
-
-function sweepOpens(now) {
-  const ttlOf = (e) => (e.sticky === true ? STICKY_OPEN_TTL_MS : OPEN_TTL_MS);
-  for (const [id, e] of pendingOpens) if (now - e.at > ttlOf(e)) pendingOpens.delete(id);
-}
-
-/**
- * Runs the `onOpen` a focused toast was raised with. ⚠ NAVIGATION ONLY — it can open a channel
- * the operator already has and nothing else, so a stale or forged id is harmless by construction.
- * One-shot: the entry is dropped first, so a double press cannot run it twice.
- * @returns {boolean} whether an entry was found.
- */
-function openFromToast(openId) {
-  // The renderer's "my toast layer is mounted" ack rides this op — see `TOAST_READY_ID`.
-  if (openId === TOAST_READY_ID) {
-    noteRendererReady();
-    return true;
-  }
-  sweepOpens(Date.now());
-  const entry = pendingOpens.get(openId);
-  if (!entry) return false;
-  pendingOpens.delete(openId);
-  // ⚠ AN "Open" THAT CANNOT OPEN ANYTHING IS NOT `{ ok: true }`. A handle whose closure was never
-  // given (or was lost to a shape change) used to answer success, so a button that did nothing
-  // reported that it had worked. A closure that RUNS and throws still counts: it was there.
-  if (typeof entry.fn !== 'function') return false;
-  try {
-    entry.fn();
-  } catch (err) {
-    diag('notification route: toast open failed —', (err && err.message) || 'error');
-  }
-  return true;
-}
-
-/**
- * Raises an event that carries an affirmative button.
- *
- * @param {string} eventId a registry id
- * @param {{title: string, body: string, actionText: string, onAffirm?: () => void,
- *          onOpen?: () => void, bannerAlways?: boolean}} spec
- * @returns {object|null} the Notification when a banner was raised, `TOAST_RAISED` when a toast
- *   was, `MUTED` when the operator silenced the event, `null` ONLY when no surface exists.
- *   ⚠ CALLERS MAY TEST THIS FOR TRUTHINESS AND ONE OF THEM DENIES A TOOL ON FALSY — never return
- *   null merely because Dopl is focused, and never because a switch is off.
- */
-function raiseActionable(eventId, spec) {
-  try {
-    if (!spec || !spec.title) return null;
-    const surface = prefs.SURFACE[eventId];
-    if (!surface) return null;
-    // ⚠ `approval` is LOCKED ON in the registry, so this can never mute the tool gate. If a
-    // future edit unlocks it, muting it would start auto-denying held tools — which is why
-    // test/notification-route.test.mjs pins the lock and this contract together.
-    // ⚠ AND MUTED IS NOT `null`. Null made a muted `peer_ask` indistinguishable from a platform
-    // that can raise nothing, and `handleTrigger` must tell them apart: a mute silences the
-    // surface and nothing else, a true no-surface means the ask is seen by nobody. Truthy either
-    // way, so no caller can read a mute as "no surface exists".
-    if (!prefs.allowsIn(prefs.getPrefs(), eventId)) return MUTED;
-
-    const banner = () => require('./notify-action').buildActionNotification({
-      title: spec.title,
-      body: spec.body,
-      actionText: spec.actionText,
-      onAffirm: spec.onAffirm,
-      onOpen: spec.onOpen,
-    });
-
-    if (spec.bannerAlways === true || surface !== 'both' || !isAppFocused()) return banner();
-
-    // Focused: a toast that navigates. No `onAffirm` crosses, by construction.
-    const id = 'open-' + String(nextOpenId++);
-    sweepOpens(Date.now());
-    pendingOpens.set(id, { fn: spec.onOpen, at: Date.now() });
-    // No window took it, so there is no popup — fall back to the banner rather than ask nobody.
-    // A window that has not acked yet gets it HELD, with the same banner as the timeout fallback.
-    const went = deliverToast({
-      eventId: eventId,
-      title: spec.title,
-      body: spec.body,
-      openId: id,
-      actionLabel: 'Open',
-      kind: 'incoming',
-    }, () => { pendingOpens.delete(id); banner(); });
-    if (went === 'none') { pendingOpens.delete(id); return banner(); }
-    return TOAST_RAISED;
-  } catch (err) {
-    diag('notification route: actionable raise failed —', (err && err.message) || 'error');
-    // ⚠ Last resort is the BANNER, never null: a caller may read null as "no surface exists".
-    try {
-      return require('./notify-action').buildActionNotification({
-        title: spec && spec.title, body: spec && spec.body, actionText: spec && spec.actionText,
-        onAffirm: spec && spec.onAffirm, onOpen: spec && spec.onOpen,
-      });
-    } catch (_) {
-      return null;
-    }
-  }
-}
+// ⚠ MOVED 2026-10-12, at the 500-line cap, when the plain mention toast grew a click target. The
+// seam is the one this header already drew. Everything it exported is RE-EXPORTED below, so no
+// caller changed: `trigger.js`, `consent.js`, `session-windowless.js` and the IPC op all still
+// name `notification-route`. ⚠ IT IS BUILT HERE, ONCE — the handle map is per-instance, and two
+// instances would be two maps with the renderer able to reach only one of them.
+const actions = require('./notification-route-actions').create({
+  isAppFocused: () => isAppFocused(),
+  deliverToast: (payload, fallback) => deliverToast(payload, fallback),
+  noteRendererReady: () => noteRendererReady(),
+  toastReadyId: TOAST_READY_ID,
+});
+const { TOAST_RAISED, MUTED } = require('./notification-route-actions');
 
 // ─── COALESCING ───────────────────────────────────────────────────────────────────────────────
 //
@@ -455,11 +339,9 @@ function raiseResumeOffer(spec) {
       (macBanner({ title: spec.title, body: spec.body, onClick: spec.onResume }) ? 'mac' : 'none');
     // Starting hidden in the tray must not lose the offer, and must not pretend it was shown.
     if (!hasVisibleWindow()) return toBanner();
-    const id = 'resume-' + String(nextOpenId++);
-    sweepOpens(Date.now());
     // ⚠ `sticky` HERE TOO, not only in the payload: the sweep's 120s default would otherwise drop
     // this closure while the 24h toast still showed its button.
-    pendingOpens.set(id, { fn: spec.onResume, at: Date.now(), sticky: true });
+    const id = actions.registerOpen(spec.onResume, { prefix: 'resume', sticky: true });
     const went = deliverToast({
       eventId: 'session_resume',
       title: spec.title,
@@ -469,8 +351,8 @@ function raiseResumeOffer(spec) {
       // The renderer keeps this one on screen until it is answered or dismissed.
       sticky: true,
       kind: 'incoming',
-    }, () => { pendingOpens.delete(id); toBanner(); });
-    if (went === 'none') { pendingOpens.delete(id); return toBanner(); }
+    }, () => { actions.dropOpen(id); toBanner(); });
+    if (went === 'none') { actions.dropOpen(id); return toBanner(); }
     return 'popup';
   } catch (err) {
     diag('notification route: resume offer failed —', (err && err.message) || 'error');
@@ -492,6 +374,10 @@ module.exports = {
   pushToast,
   noteRendererReady,
   raise,
-  raiseActionable,
-  openFromToast,
+  // Re-exported from the actionable half (`TOAST_RAISED` / `MUTED` are named above, where they
+  // always were) — see its header for why the split is a factory and why there is one instance.
+  raiseActionable: (eventId, spec) => actions.raiseActionable(eventId, spec),
+  openFromToast: (openId) => actions.openFromToast(openId),
+  /** Parked-closure count. ⚠ The growth guard reads this; nothing in `main/` does. */
+  pendingOpenCount: () => actions.pendingCount(),
 };

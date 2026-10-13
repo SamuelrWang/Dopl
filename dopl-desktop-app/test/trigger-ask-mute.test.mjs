@@ -124,8 +124,17 @@ test("MUTED is the route's own sentinel, not a shape trigger.js guesses at", () 
   const src = readFileSync(join(MAIN, "trigger.js"), "utf8");
   // Identity, not duck-typing: a `raised.muted` check would pass for any object carrying the key.
   assert.match(src, /raised === notificationRoute\.MUTED/);
-  const route = readFileSync(join(MAIN, "notification-route.js"), "utf8");
+  // ⚠ THE SENTINEL MOVED WITH THE ACTIONABLE HALF (2026-10-12, split at the 500-line cap), and
+  // the source probe that stood here moved with it — repointed at the file that DECLARES it,
+  // never at the barrel, because `notification-route.js` re-exports the name and a probe over
+  // the re-export would pass on a module that had stopped returning it.
+  const route = readFileSync(join(MAIN, "notification-route-actions.js"), "utf8");
   assert.match(route, /if \(!prefs\.allowsIn\(prefs\.getPrefs\(\), eventId\)\) return MUTED;/);
+  // ⚠ THE IDENTITY ACROSS THE RE-EXPORT is not something a regex can say, and it is the thing
+  // `raised === notificationRoute.MUTED` depends on. It is pinned BEHAVIOURALLY, over the real
+  // modules, by notification-route-actions.test.mjs › "a muted actionable event raises nothing —
+  // but it is MUTED, never null", which compares the route's own export against what a muted
+  // raise returns. Two names for one object, or that case goes red.
 });
 
 test("no agent runtime still defers before any notification is raised", async () => {
