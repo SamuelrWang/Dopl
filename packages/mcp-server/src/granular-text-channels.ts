@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { ToolText } from "./granular-text.js";
 import { BLOCKS_PARAM_DOC } from "./tools/display-doctrine.js";
+import { GRANULAR_POSTURE_FIELD } from "./tools/channel-schema-launch-fields.js";
 
 /** The channel PATCH/POST routes' `topic` cap (`src/features/channels/schema.ts › ChannelTopicSchema`). */
 export const CHANNEL_DESCRIPTION_MAX_CHARS = 2000;
@@ -140,9 +141,10 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
       runtime: "Runtime, e.g. claude or codex; omitted, the channel's. Refused, never swapped, if unavailable.",
       identity: "Identity id, or a name in this channel's container; omitted, a blank agent.",
       color: "Colour marker; omitted, the most distinct.",
-      posture: "Freedom to ask for; omit an axis to run at the operator's setting.",
+      posture: "Freedom to ask for; omit an axis to run at the operator's setting. tools also takes a runtime's own word.",
     },
     required: ["channel", "name"],
+    types: { posture: GRANULAR_POSTURE_FIELD },
   },
   dopl_manage_session: {
     description:
@@ -150,10 +152,11 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
     params: {
       to: "Your agent: `@agent-<id>`, never a handle.",
       name: `action="rename": ${AGENT_NAME} "" clears it.`,
-      posture: 'action="posture": tools and/or messages freedom to ask for.',
+      posture: 'action="posture": tools and/or messages freedom to ask for; tools also takes a runtime\'s own word.',
       body: 'action="direct": the private message.',
     },
     required: ["channel", "to"],
+    types: { posture: GRANULAR_POSTURE_FIELD },
   },
   dopl_manage_artifact: {
     description:

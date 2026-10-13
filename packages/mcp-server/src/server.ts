@@ -46,6 +46,7 @@ import { createToolRegistrars } from "./registrar.js";
 import { registerWorkspaceMetaTools } from "./meta-tools.js";
 import { registerResources } from "./resources.js";
 import { unlistTools } from "./unlisted-tools.js";
+import { slimListedSchemas } from "./served-schema.js";
 import {
   GRANULAR_TOOLS,
   TOOL_SETS,
@@ -258,6 +259,8 @@ export function createServer(
   // Before any registration: it filters the list handler the first registerTool installs.
   const toolSet = options.toolSet ?? "legacy";
   unlistTools(server, unlistedFor(toolSet));
+  // Granular only: the legacy surface is pinned byte for byte (`legacy-surface.test.ts`, DMP-013).
+  if (toolSet === "granular") slimListedSchemas(server);
 
   // ⚠ PULLED, NOT PUSHED. The channels doctrine is a resource (and
   // `dopl_channel(op="help")`) rather than description prose, so an agent pays
