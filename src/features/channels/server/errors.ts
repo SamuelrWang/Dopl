@@ -328,3 +328,27 @@ export class ChannelCiteNumberUnavailableError extends ChannelError {
     );
   }
 }
+
+/**
+ * **A CURSOR THIS SERVER CANNOT DECODE** (B6, ASK 11 ruled 2026-10-12).
+ *
+ * ⚠ **IT REFUSES; IT NEVER RESETS TO ZERO.** Treating an unreadable cursor as "from
+ * the beginning" would re-deliver history as new — an agent re-answering messages
+ * it had already answered — which is the one failure a notification path cannot
+ * have. The caller re-establishes from an unscoped read instead, which is what the
+ * read result already tells them to do when a cursor is unusable.
+ *
+ * ⚠ **ONE MESSAGE FOR EVERY CAUSE**, deliberately: wrong key, retired key, wrong
+ * scope, wrong reader, truncated, tampered, or not a token at all. Telling the
+ * caller WHICH would narrow the token for whoever is probing it, and no caller can
+ * act on the difference — the remedy is identical.
+ */
+export class ChannelCursorUndecodableError extends ChannelError {
+  constructor() {
+    super(
+      "That cursor cannot be read by this server. Re-establish one with an " +
+        "unscoped read of this channel, then hold from the highest seq below " +
+        "which you have seen everything.",
+    );
+  }
+}
