@@ -4,7 +4,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { opLaunchAgent } from "./channel-ops-launch";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
-import { DOCTRINE_SECTIONS } from "./channel-doctrine";
+import { DOCTRINE_SECTIONS, doctrineSection } from "./channel-doctrine";
+import { withToolSet } from "../call-ref";
 import {
   created,
   launchClient as client,
@@ -167,7 +168,16 @@ describe("each runtime's own tool words", () => {
     const tools = posture.unwrap().shape.tools;
     expect(tools.unwrap().options.slice(0, 3)).toEqual(["ask", "auto", "full"]);
     expect(tools.unwrap().options).toEqual(expect.arrayContaining(["on-request", "never", "run-everything"]));
-    expect(tools.description).toContain("ask | auto | full");
+    // ⚠ **THE LEVELS ARE PUBLISHED BY THE ENUM, AND EXPLAINED BY THE PULLED
+    // DOCTRINE** (ASK 9, channel seq #4461, 2026-10-12). This line used to read
+    // `tools.description`; that describe is gone, because grammar B's `cites` param
+    // needed room on the PUSHED schema and the ratchet pays for a rise there with a
+    // fall — so `posture`'s explanatory prose moved to `channel-doctrine.ts › FIELDS`.
+    // The ORDER above is the "publishes them first" half and is shape, so it is
+    // untouched; this is the prose half, now asserted where the prose lives.
+    // `channel-doctrine-moved-prose.test.ts` holds the pair in both directions (in
+    // FIELDS, and NOT still pushed) for both tool sets.
+    expect(withToolSet("legacy", () => doctrineSection("fields"))).toContain("ask | auto | full");
     expect(DOCTRINE_SECTIONS.manage).toContain("ask | auto | full, RUN IN THE AGENT'S RUNTIME'S OWN SETTINGS");
   });
 

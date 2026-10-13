@@ -345,6 +345,14 @@ export interface ChannelMessageInput extends ChannelEscalationFields {
   /** One-line intent (<=200 chars) surfaced in the receiver's notification. */
   summary?: string;
   /**
+   * The messages this one CITES — their numbers become links in it, and a `#N`
+   * merely typed in the body does not. Per entry give exactly ONE of `no` (the
+   * per-channel number) or `seq` (table-wide). The server resolves each at the
+   * write and REFUSES the send if one names no message you can read in this
+   * channel, so a stored citation is never dead. Max 20.
+   */
+  cites?: Array<{ no?: number; seq?: number; thread?: string }>;
+  /**
    * Whether this post may reach anybody's agent. Absent = `request`.
    *
    *  - `request` — DM auto-address fires (a post into a direct channel with no

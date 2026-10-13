@@ -96,6 +96,23 @@ export const CHANNEL_INPUT_SHAPE = {
       'The one-line intent. ALWAYS set it on op="send" — it becomes the notification the receiving member sees; on kind="decision" it is the QUESTION the card asks, on op="rooms" action="open"/"update" it is the description, and on op="artifact" it is what the folded run was about.',
     ),
 
+  // A REFERENCE IS A FIELD, NOT PROSE (grammar B): the rule and the namespaces are
+  // in the pulled `channel-doctrine.ts › FIELDS`; this stays the shape plus the
+  // one sentence a model needs to not type `#N` and expect a link.
+  cites: z
+    .array(
+      z.object({
+        no: z.number().int().positive().optional(),
+        seq: z.number().int().positive().optional(),
+        thread: z.string().optional(),
+      }),
+    )
+    .max(20)
+    .optional()
+    .describe(
+      'op="send" (optional): the messages this one CITES — their numbers become links; a #N you merely type does not. Give ONE of `no` (this room) or `seq` (table-wide) per entry.',
+    ),
+
   // Both routes dedupe per-author (`channel_messages` and `channel_tasks`).
   client_msg_id: z
     .string()

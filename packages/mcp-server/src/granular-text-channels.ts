@@ -51,6 +51,9 @@ export const CHANNEL_TEXT: Readonly<Record<string, ToolText>> = {
       kind: '"message" (default), "milestone" (needs thread) or "record".',
       thread: 'Thread id, or "new" to open one titled by summary (needs to unless a record).',
       summary: "One-line intent: the notification recipients see.",
+      // ⚠ SHORT ON PURPOSE: this is PUSHED on every granular connection, and the rule
+      // (namespaces, the refusals, `seq` now / `no` later) is in the pulled FIELDS.
+      cites: "Messages this one cites, so their numbers link; a typed #N does not. ONE of `no` (this room) or `seq` per entry.",
     },
     required: ["channel", "body"],
     types: { kind: sendKind },

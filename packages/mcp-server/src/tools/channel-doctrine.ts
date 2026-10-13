@@ -101,10 +101,11 @@ A HOME CHANNEL IS NOT A WORKSPACE DM: it lives in its own hidden container, so e
 const fields = () => `THE ARGUMENTS THAT CARRY A RULE:
 OMITTING \`channel\` IS A WIDER READ, not a default one — ${callRef("channel.read", {}, { form: "op" })} and ${callRef("channel.status", {}, { form: "op" })} then answer for every channel you are in, across every workspace and home container.
 ONE CURSOR SPACE, ONE \`since\` — \`seq\` is table-wide, so one cursor covers every channel.
+\`cites\` MAKES A REFERENCE AND A TYPED NUMBER DOES NOT: list the messages a send points at and their numbers become links in it; a \`#N\` you merely type is text. Per entry give ONE of \`no\` (this room's number) or \`seq\` (table-wide) — \`seq\` today, \`no\` once the numbering migration lands. Each is resolved AT THE WRITE and the send is REFUSED when one names no message you can read in THIS channel, so a stored citation is never dead and cross-channel is refused.
 CHOOSING \`kind\`: "record" when nobody need act or know now — IN DOUBT, ADDRESS SOMEONE.
 \`artifact\` NAMES A CARD, NOT A MESSAGE: an artifact folds messages into ONE named card.
 \`client_msg_id\` IS WHAT MAKES A RETRY SAFE; the dedupe is PER-AUTHOR.
-\`posture.chain\` NAMES ITS THREE STATES because "absent" is not "off": "inherit" takes the operator's setting, which may be ON.
+\`posture\` IS A REQUEST, NEVER A SETTING: your operator's machine narrows whatever you ask for to their own ceiling and never widens past it, so pass what you need and read back what was TAKEN. Omit an axis to leave it at that setting; passing one axis and omitting the other is normal. \`tools\` is ask | auto | full, and a runtime's own word (bypass, accept_edits, allowlist…) also works; \`messages\` is ask | auto_inbound | auto_outbound | auto_both, narrowest first and floored for a windowless session. \`posture.chain\` NAMES ITS THREE STATES because "absent" is not "off": "inherit" takes the operator's setting, which may be ON, and on LAUNCH "on" is REFUSED outright rather than quietly narrowed when the channel forbids chaining.
 \`color\` IS A MARKER, NEVER A STATUS — how a reader tells two agents apart; a red agent is not a failing one. The sixteen keys are UNIQUE PER CHANNEL ACROSS ALL MEMBERS, so another member's agent may hold the one you name: a 409 listing what is free, NOTHING FILED — re-issue with the SAME \`client_msg_id\`. A key returns to the bank when its agent ENDS; a room with all sixteen out runs UNCOLOURED.`;
 
 /** The one line that rides every answer this tool returns. */

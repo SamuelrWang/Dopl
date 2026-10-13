@@ -6,8 +6,9 @@ import { describe, it, expect, vi } from "vitest";
 import type { DoplClient, LaunchDirective } from "@dopl/client";
 import { opSetAgentMode } from "./channel-ops-agent-mode";
 import { factsLine, postureFacts } from "./channel-facts";
-import { channelDoctrine } from "./channel-doctrine";
+import { channelDoctrine, doctrineSection } from "./channel-doctrine";
 import { CHANNEL_INPUT_SHAPE } from "./channel-schema";
+import { withToolSet } from "../call-ref";
 import {
   AGENT,
   DIRECTIVE_ID,
@@ -43,7 +44,16 @@ describe('manage action="posture" — the ASK, never the SET', () => {
     expect(text).toContain("asked=bypass/auto_both");
     expect(text).toContain('posture="not reported"');
     expect(ARG_PROSE).toContain("how much freedom to ASK FOR");
-    expect(ARG_PROSE).toContain(
+    // ⚠ **THE CLAMP SENTENCE MOVED TO THE PULLED DOCTRINE** (ASK 9, channel seq
+    // #4461, 2026-10-12): grammar B's `cites` param needed room on the PUSHED
+    // schema, and the ratchet's rule is that a rise there is paid for by a fall —
+    // so `posture`'s explanatory prose went to `channel-doctrine.ts › FIELDS`
+    // (922 → 473 served) and the rule now reaches an agent through the guide.
+    // ⚠ **ASSERTED, NOT DELETED, AND IN BOTH DIRECTIONS**: it must be in FIELDS and
+    // it must NOT still be pushed, or nothing was actually paid.
+    // `channel-doctrine-moved-prose.test.ts` owns that pair for both tool sets;
+    // this line keeps the rule tied to the op whose result depends on it.
+    expect(withToolSet("legacy", () => doctrineSection("fields"))).toContain(
       "narrows whatever you ask for to their own ceiling and never widens past it",
     );
   });
