@@ -18,10 +18,16 @@ import {
 // +54 (2026-09-25): `posture.tools` names the permission levels and the runtime words behind them.
 // +13/+31 (2026-09-28, unified display): CHOOSING names dopl_show for structure; paid by the pushed
 // `dopl_send_message.display` param (-469) leaving the granular schema.
-// +973 (2026-10-12, grammar B — approved by @cleanup-orchestrator-2, ASK 9, channel seq #4461):
+// **CEILING +973, CONTENT +1,068, AND THE 95-CHAR DIFFERENCE IS PRE-EXISTING HEADROOM ABSORBED**
+// (2026-10-12, grammar B — approved by @cleanup-orchestrator-2, ASK 9, channel seq #4461).
 // FIELDS gained the `cites` rule (+461: a typed `#N` is not a link, cite via the field, `seq` today
 // and `no` after the numbering migration, cross-channel and unresolvable both refused) and the
-// `posture` EXPLANATORY PROSE (+607) that used to be pushed on every connection.
+// `posture` EXPLANATORY PROSE (+607) that used to be pushed on every connection. 461 + 607 = 1,068.
+// ⚠ **THE RAISE IS THE SMALLER NUMBER, AND READING IT AS THE COST IS THE TRAP.** The ceiling moved
+// 973 because 95 chars of headroom already sat between the old ceiling and the old content; that
+// slack is now spent. Anyone pricing the NEXT line of doctrine against "+973" would under-count by
+// 95 and find the gate red with nothing left to absorb it — this file's own standing instruction is
+// to re-derive, and the content figure is the one to re-derive against.
 // ⚠ **PAID FOR ON THE PUSHED SURFACE, WHICH IS THE WHOLE RULE ABOVE.** `posture` went 922 → 473 in
 // the served schema (-449), so `cites` (444) landed with `SCHEMA_MAX_CHARS` UNTOUCHED: 9,110 → 9,114
 // against a 9,155 ceiling. Bytes moved from the surface every agent pays for on every handshake to
