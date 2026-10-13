@@ -85,4 +85,35 @@ async function downloadVerified(url, dest, expect, fetchImpl) {
   }
 }
 
-module.exports = { latest, download, downloadVerified, REGISTRY };
+/**
+ * A SOURCE-SUPPLIED artifact whose vendor publishes NO digest (`<adapter>/update-source.js › fetchInto`):
+ * stream `url` to `dest` under a size ceiling, hashing every byte → `{ sha256, md5, size, headers }` for the
+ * source to RECORD and to check against any transport digest the response carried. Nothing here is a vendor
+ * proof — with no published digest the code signature (`verify.js`) is the only one.
+ */
+async function downloadMeasured(url, dest, limits, fetchImpl) {
+  const maxSize = limits && Number.isInteger(limits.maxSize) && limits.maxSize > 0 ? limits.maxSize : 0;
+  if (!maxSize) throw new Error('no size ceiling for an unmanifested download');
+  const res = await fetchImpl(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+  if (!res.ok || !res.body) throw new Error(`the download answered ${res.status}`);
+  const sha = crypto.createHash('sha256');
+  const md5 = crypto.createHash('md5');
+  let size = 0;
+  await pipeline(
+    Readable.fromWeb(res.body),
+    async function* digest(source) {
+      for await (const chunk of source) {
+        size += chunk.length;
+        if (size > maxSize) throw new Error('the download is larger than any build Dopl accepts');
+        sha.update(chunk);
+        md5.update(chunk);
+        yield chunk;
+      }
+    },
+    fs.createWriteStream(dest, { mode: 0o600 }),
+  ).catch((err) => { fs.rmSync(dest, { force: true }); throw err; });
+  const header = (name) => (res.headers && typeof res.headers.get === 'function' ? res.headers.get(name) : null);
+  return { sha256: sha.digest('hex'), md5: md5.digest('base64'), size, headers: { 'x-goog-hash': header('x-goog-hash') } };
+}
+
+module.exports = { latest, download, downloadVerified, downloadMeasured, REGISTRY };

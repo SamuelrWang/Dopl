@@ -8,7 +8,8 @@ function rewriteAsarUnpacked(p) {
 
 // Every model-vendor credential the runtime CLIs read from their environment (claude 2.1.220, codex-cli
 // 0.155.1, muse 1.4.7 — `META_API_KEY` "always takes priority over the account login"; `MODEL_API_KEY`
-// named by the Muse adapter ruling, 2026-10-13), and the one var that moves Claude's credential STORE. An inherited one never reaches a child:
+// named by the Muse adapter ruling, 2026-10-13; grok 1.0.52 — `XAI_API_KEY` and `GROK_CODE_XAI_API_KEY` both in
+// the binary, an API key that would replace the subscription sign-in), and the one var that moves Claude's credential STORE. An inherited one never reaches a child:
 // each adapter sets only Dopl's own.
 const INHERITED_CREDENTIAL_ENV = new Set([
   'ANTHROPIC_API_KEY',
@@ -23,6 +24,8 @@ const INHERITED_CREDENTIAL_ENV = new Set([
   'CODEX_ACCESS_TOKEN',
   'META_API_KEY',
   'MODEL_API_KEY',
+  'XAI_API_KEY',
+  'GROK_CODE_XAI_API_KEY',
 ]);
 
 /**

@@ -23,13 +23,17 @@ register(require('./claude'));
 register(require('./codex'));
 register(require('./cursor'));
 register(require('./muse'));
+register(require('./grok'));
 
 const DEFAULT_ID = REGISTRY.keys().next().value;
 
 // The runtimes whose bundled CLI also tracks its vendor's newest build (`updates/index.js`). The updater is
 // required lazily: it logs through `diag`, which pulls electron, and this registry must not.
-// Muse's source is ON DEMAND (never bundled, never fetched unasked — `muse/update-source.js`).
-const UPDATE_SOURCES = [require('./claude/update-source'), require('./codex/update-source'), require('./muse/update-source')];
+// Muse's and Grok's sources are ON DEMAND (never bundled, never fetched unasked — `<id>/update-source.js`).
+const UPDATE_SOURCES = [
+  require('./claude/update-source'), require('./codex/update-source'), require('./muse/update-source'),
+  require('./grok/update-source'),
+];
 const updates = () => require('./updates');
 
 /** Start the background update checks (app start; never awaited by a launch). */

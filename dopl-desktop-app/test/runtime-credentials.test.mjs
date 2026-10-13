@@ -106,6 +106,7 @@ test("only the runtimes Dopl signs in from the app are listed, by their own labe
     { runtimeId: "claude", label: "Claude Code", state: "not-connected", prompt: false, full: "off" },
     { runtimeId: "codex", label: "Codex", state: "connected", prompt: false },
     { runtimeId: "muse", label: "Muse", state: "not-connected", prompt: false },
+    { runtimeId: "grok", label: "Grok", state: "not-connected", prompt: false },
   ], "Cursor declares no in-app sign-in, so it has no row; only Claude offers the full login");
   assert.deepEqual(await w.mod.list(), w.rows(), "the read and the push are one answer");
 });
@@ -258,7 +259,7 @@ test("a Dopl sign-out drops every runtime's own credential, clears the prompts, 
   assert.equal(await w.mod.signOutAll(), true);
   await settle();
   assert.deepEqual(w.rows().map((r) => [r.runtimeId, r.state, r.prompt]),
-    [["claude", "not-connected", false], ["codex", "not-connected", false], ["muse", "not-connected", false]]);
+    [["claude", "not-connected", false], ["codex", "not-connected", false], ["muse", "not-connected", false], ["grok", "not-connected", false]]);
   assert.equal(await world({ signOuts: { codex: false } }).mod.signOutAll(), false);
   assert.equal(await world({ signOuts: { claude: new Error("EACCES") } }).mod.signOutAll(), false);
 });

@@ -86,6 +86,8 @@ const EXTRA = {
   cursor: {},
   // The first adapter built ON the scaffold (2026-10-13): every file is a canonical slot — no vendor-only file.
   muse: {},
+  // The second (2026-10-13): the PreToolUse hook answerer lives in the approval slot, not an extra file.
+  grok: {},
 };
 
 // Migration exceptions @ 2026-10-13 (docs/specs/runtime-scaffold.md §5). Each must still hold.
@@ -104,6 +106,7 @@ const PENDING = {
   },
   cursor: { present: {}, missing: {}, checks: {} },
   muse: { present: {}, missing: {}, checks: {} },
+  grok: { present: {}, missing: {}, checks: {} },
 };
 
 const KEY_ORDER = [
@@ -114,9 +117,11 @@ const KEY_ORDER = [
 const filesOf = (id) => readdirSync(join(RUNTIME_DIR, id)).filter((f) => !f.startsWith("."));
 const pending = (id) => PENDING[id] || { present: {}, missing: {}, checks: {} };
 
-test("muse, the first adapter built on the scaffold, carries NO census exception of any kind", () => {
-  assert.deepEqual(EXTRA.muse, {}, "a vendor-only file in muse/ — fit it to a slot instead");
-  assert.deepEqual(PENDING.muse, { present: {}, missing: {}, checks: {} }, "a pending exception in muse/");
+test("muse and grok, the adapters built on the scaffold, carry NO census exception of any kind", () => {
+  for (const id of ["muse", "grok"]) {
+    assert.deepEqual(EXTRA[id], {}, `a vendor-only file in ${id}/ — fit it to a slot instead`);
+    assert.deepEqual(PENDING[id], { present: {}, missing: {}, checks: {} }, `a pending exception in ${id}/`);
+  }
 });
 
 test("every registered adapter has a census row, and no row names an unregistered one", () => {
