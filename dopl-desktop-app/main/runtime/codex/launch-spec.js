@@ -19,7 +19,8 @@ const resolveBin = require('./resolve-bin');
 const mcp = require('./mcp');
 const mcpReady = require('./mcp-ready');
 const normalizer = require('./normalize');
-const { makeFrameQueue, boundedInterrupt, handleFor } = require('./launch-handle');
+const { handleFor } = require('./launch-handle');
+const { makeFrameQueue, boundedInterrupt } = require('../kit/frame-queue');
 const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionCredential = require('../../session-credential');
@@ -419,6 +420,6 @@ const appVersion = () => require('../../app-version').appVersion();
 
 module.exports = {
   buildLaunchSpec, start, resume,
-  buildScrubbedEnv, nativePair, approvalPolicy, makeFrameQueue,
-  assertPolicyTook: policy.assertPolicyTook, boundedInterrupt,
+  buildScrubbedEnv, nativePair, approvalPolicy,
+  assertPolicyTook: policy.assertPolicyTook,
 };

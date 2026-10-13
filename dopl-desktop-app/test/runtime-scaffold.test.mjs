@@ -17,13 +17,19 @@
 //   (e) the descriptor's keys come in the canonical order.
 // Exceptions while the migration runs ride `PENDING`, dated; each row must still be TRUE, so a step
 // that lands deletes its row in the same change.
+//
+// AND THE KIT (`main/runtime/kit/`, docs/specs/runtime-scaffold.md §3 + §8): the vendor-neutral machinery
+// an adapter builds on. Every kit module is declared in `KIT` below (no undeclared file, no row without a
+// file); each is `.js`, names no vendor ANYWHERE in its text (comments included — `core-vocabulary`
+// exempts the whole runtime tree, so this is the kit's own scan), requires no electron and no adapter
+// directory, and nothing outside `main/runtime/` requires it.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_DIR = join(HERE, "..", "main", "runtime");
@@ -187,4 +193,59 @@ test("(e) descriptor keys come in the canonical order", () => {
     }
     assert.deepEqual(keys, expected, `${descriptor.id}: descriptor key order`);
   }
+});
+
+// ── THE KIT ───────────────────────────────────────────────────────────────────────────────────
+// Every module under `main/runtime/kit/`, with the scaffold step that extracted it (2026-10-13).
+const KIT = {
+  "frame-queue.js": "K2 — push/pull frame queue + bounded interrupt (from codex/launch-handle.js)",
+};
+
+const KIT_DIR = join(RUNTIME_DIR, "kit");
+// The vendor vocabulary (core-vocabulary's FORBIDDEN set) plus the vendors named by the runtime specs.
+const KIT_FORBIDDEN = [
+  /anthropic/i, /claude/i, /\bcodex\b/i, /\bcursor\b/i, /openai/i, /\bgrok\b/i, /\bmuse\b/i,
+  /sdk\.query/, /canUseTool/, /permissionMode/, /app-server/i,
+];
+
+test("kit: every module is declared, every declared module exists, and all are .js", () => {
+  const have = readdirSync(KIT_DIR).filter((f) => !f.startsWith("."));
+  for (const f of have) {
+    assert.ok(statSync(join(KIT_DIR, f)).isFile(), `kit/${f} is a directory — the kit is flat`);
+    assert.ok(f.endsWith(".js"), `kit/${f} is not .js — it would be uncapped`);
+    assert.ok(KIT[f], `kit/${f} is undeclared — add a KIT row (and INVARIANTS §11.0i) or move it`);
+  }
+  for (const f of Object.keys(KIT)) assert.ok(have.includes(f), `KIT row ${f} names a file that is gone`);
+});
+
+test("kit: no module names a vendor, requires electron, or reaches into an adapter", () => {
+  const adapterIds = ADAPTERS.map(({ descriptor }) => descriptor.id);
+  for (const f of Object.keys(KIT)) {
+    const text = readFileSync(join(KIT_DIR, f), "utf8");
+    text.split("\n").forEach((line, i) => {
+      for (const re of KIT_FORBIDDEN) {
+        assert.ok(!re.test(line), `kit/${f}:${i + 1} names a vendor (${re}) — the kit is vendor-neutral: ${line.trim()}`);
+      }
+    });
+    assert.ok(!/require\(\s*['"]electron['"]\s*\)/.test(text), `kit/${f} requires electron`);
+    for (const id of adapterIds) {
+      assert.ok(!new RegExp(`require\\(\\s*['"]\\.\\./${id}/`).test(text), `kit/${f} requires the ${id} adapter`);
+    }
+    // Loads standalone: a plain require in a plain Node test is the proof it needs no electron at load.
+    assert.doesNotThrow(() => require(join(KIT_DIR, f)), `kit/${f} does not load standalone`);
+  }
+});
+
+test("kit: nothing outside main/runtime/ requires it — core never builds on adapter machinery", () => {
+  const MAIN = join(RUNTIME_DIR, "..");
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) { if (p !== RUNTIME_DIR && e.name !== "node_modules") walk(p); continue; }
+      if (e.name.endsWith(".js") && /runtime\/kit\//.test(readFileSync(p, "utf8"))) offenders.push(relative(MAIN, p));
+    }
+  };
+  walk(MAIN);
+  assert.deepEqual(offenders, [], "core requires the adapter kit");
 });
