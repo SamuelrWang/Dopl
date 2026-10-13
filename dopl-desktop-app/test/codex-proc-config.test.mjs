@@ -1,4 +1,4 @@
-// DOPL'S RESTRICTIONS RIDE ARGV AND ARE READ BACK (`proc-config.js`, 2026-10-08). Tier 1 pins the split,
+// DOPL'S RESTRICTIONS RIDE ARGV AND ARE READ BACK (`launch-verify.js`, proc-config.js until 2026-10-13; 2026-10-08). Tier 1 pins the split,
 // the TOML, the no-secret rule and the comparison; the LIVE tier (`CODEX_APP_SERVER_LIVE=1`, zero quota:
 // no thread, no turn) spawns the real build with Dopl's real restrictions and proves `config/read` reads
 // every one back — and that a value that did NOT take is refused.
@@ -15,7 +15,7 @@ import { client, liveGate, announceGate, skipLive, withAppServer } from "./_code
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const require = createRequire(import.meta.url);
-const procConfig = require(join(CODEX, "proc-config.js"));
+const procConfig = require(join(CODEX, "launch-verify.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const GATE = announceGate(liveGate());

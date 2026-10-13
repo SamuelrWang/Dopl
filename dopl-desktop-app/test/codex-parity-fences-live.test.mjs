@@ -3,7 +3,7 @@
 // ⚠ THE MODEL IS A SCRIPTED STAND-IN; EVERYTHING ELSE IS REAL. A stub Responses provider plays the
 // model deterministically (the `codex-mcp-discovery.test.mjs` technique), so what is measured is
 // the app-server's own policy engine, sandbox, tool catalog, skills loader and sub-agent runtime,
-// fed the config Dopl's REAL assembly builds (`launch-spec.js › buildLaunchSpec`, `catalog.js`,
+// fed the config Dopl's REAL assembly builds (`launch-spec.js › buildLaunchSpec`, `delegation-fence.js`,
 // `skills-fence.js`) — at zero quota. Unit pins are in `codex-parity-fences.test.mjs`.
 //
 //   1  `never` → granular: nothing but the channel call behaves differently, and it now REACHES the gate
@@ -29,7 +29,7 @@ const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
 const launchSpec = require(join(CODEX, 'launch-spec.js'));
 const policy = require(join(CODEX, 'policy.js'));
-const catalog = require(join(CODEX, 'catalog.js'));
+const catalog = require(join(CODEX, 'delegation-fence.js'));
 const skillsFence = require(join(CODEX, 'skills-fence.js'));
 const serverRequests = require(join(CODEX, 'approval.js'));
 const resolveBin = require(join(CODEX, 'resolve-bin.js'));

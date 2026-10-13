@@ -34,7 +34,7 @@ const { floorWindowlessMessage } = require_(join(MAIN, "session-profiles.js"));
 const io = require_(join(MAIN, "session-io.js"));
 const client = require_(join(CODEX, "client.js"));
 const launchSpec = require_(join(CODEX, "launch-spec.js"));
-const catalog = require_(join(CODEX, "catalog.js"));
+const catalog = require_(join(CODEX, "delegation-fence.js"));
 const { normalize } = require_(join(CODEX, "normalize.js"));
 
 const WS = "11111111-2222-3333-4444-555555555555";

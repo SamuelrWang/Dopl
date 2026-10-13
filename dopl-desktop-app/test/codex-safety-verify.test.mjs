@@ -19,7 +19,7 @@ const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const require = createRequire(import.meta.url);
 const policy = require(join(CODEX, "policy.js"));
 const fenceVerify = require(join(CODEX, "fence-verify.js"));
-const catalog = require(join(CODEX, "catalog.js"));
+const catalog = require(join(CODEX, "delegation-fence.js"));
 const normalizer = require(join(CODEX, "normalize.js"));
 const tools = require(join(CODEX, "tools.js"));
 

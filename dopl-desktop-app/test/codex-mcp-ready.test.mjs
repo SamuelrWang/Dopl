@@ -11,7 +11,7 @@ import { threadEcho, configEcho } from "./helpers/codex-echo.mjs";
 const require = createRequire(import.meta.url);
 const CODEX = join(import.meta.dirname, "..", "main", "runtime", "codex");
 const client = require(join(CODEX, "client.js"));
-const catalog = require(join(CODEX, "catalog.js"));
+const catalog = require(join(CODEX, "delegation-fence.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const mcpReady = require(join(CODEX, "mcp-ready.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
@@ -342,13 +342,13 @@ test("doplConfigured reads the entry the launch sends", () => {
 });
 
 // ⚠ 2026-10-11 (F-7xx, the "Codex agents will not start" regression): Dopl's own entry rides ARGV
-// (`proc-config.js`, so `config/read` can prove the restriction took) while the operator's servers stay
+// (`launch-verify.js`, so `config/read` can prove the restriction took) while the operator's servers stay
 // on `thread/start.config`. But Codex's thread-level `mcp_servers` REPLACES the process-level table
 // rather than merging into it (MEASURED, codex-cli 0.162.1) — so one operator server silently wiped
 // Dopl's own entry, Codex never reported a `dopl` startup status, and the wait above could only ever end
 // on its bound: "no answer in time", and no turn. The operator's table must therefore carry Dopl's entry
 // too. `test/codex-operator-tools.test.mjs` owns the rest of "Use my tools".
-// The operator's header is the operator's and may hold a token, so it must stay off argv (`proc-config.js`).
+// The operator's header is the operator's and may hold a token, so it must stay off argv (`launch-verify.js`).
 const OPERATOR_SECRET = "operator-bearer-must-never-reach-argv";
 const OPERATOR = {
   supabase: {
@@ -369,13 +369,13 @@ test("REGRESSION: an operator server does not evict Dopl's own entry from the co
       "thread-level mcp_servers REPLACES the process-level table: Dopl's entry must ride along in it");
     assert.equal(mounted.supabase.default_tools_approval_mode, "prompt", "the operator's entry is untouched");
     assert.equal(mounted.dopl.url, WIRED.config.mcp_servers.dopl.url, "and it is Dopl's own entry, verbatim");
-    // Unchanged: the entry is STILL on argv, so `proc-config.js › assertRestrictionsTook` keeps proving it
+    // Unchanged: the entry is STILL on argv, so `launch-verify.js › assertRestrictionsTook` keeps proving it
     // took (this harness answers `config/read` out of argv, so a dropped flag would fail the launch).
     const flag = h.argv().find((a) => typeof a === "string" && a.startsWith("mcp_servers="));
     assert.ok(flag, "Dopl's own entry left argv, so its restriction could no longer be read back");
     assert.match(flag, /"dopl"/, "and argv still names Dopl's server");
     // Riding along on the thread must not have put the operator's server — or its header — on argv,
-    // which `ps` can read (`proc-config.js › assertNoSecret` covers only Dopl's own bearer).
+    // which `ps` can read (`launch-verify.js › assertNoSecret` covers only Dopl's own bearer).
     assert.equal(flag.includes("supabase"), false, "the operator's server leaked onto argv");
     assert.equal(h.argv().join(" ").includes(OPERATOR_SECRET), false, "the operator's bearer leaked onto argv");
   } finally { h.handle.close(); h.restore(); }

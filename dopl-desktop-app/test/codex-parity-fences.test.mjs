@@ -1,7 +1,7 @@
 // CODEX PARITY FENCES (2026-09-22) — the three Claude-lane decisions ported, pinned without a CLI.
 //
 //   1. the operator's `never` is SENT as a narrower `granular` (`policy.js`)
-//   2. native delegation is off on every launch (`tools.js` features + `catalog.js`)
+//   2. native delegation is off on every launch (`tools.js` features + `delegation-fence.js`)
 //   3. no skill catalogue reaches the agent (`skills-fence.js`)
 //
 // The wire behaviour behind each is measured in `codex-parity-fences-live.test.mjs`.
@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const launchSpec = require(join(CODEX, "launch-spec.js"));
 const policy = require(join(CODEX, "policy.js"));
-const catalog = require(join(CODEX, "catalog.js"));
+const catalog = require(join(CODEX, "delegation-fence.js"));
 const skills = require(join(CODEX, "skills-fence.js"));
 const tools = require(join(CODEX, "tools.js"));
 const descriptor = require(join(CODEX, "index.js")).descriptor;

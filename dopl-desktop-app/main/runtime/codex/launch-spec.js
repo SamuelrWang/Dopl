@@ -9,10 +9,10 @@ const axisB = require('./axis-b');
 const approval = require('./approval');
 const configHome = require('./config-home');
 const policy = require('./policy');
-const catalog = require('./catalog');
+const delegationFence = require('./delegation-fence');
 const fenceVerify = require('./fence-verify');
 const models = require('./models');
-const procConfig = require('./proc-config');
+const launchVerify = require('./launch-verify');
 const skillsFence = require('./skills-fence');
 const operatorTools = require('./operator-tools');
 const resolveBin = require('./resolve-bin');
@@ -295,9 +295,9 @@ function start(spec) {
     // Dopl's private CODEX_HOME). Dopl's own entry wins a name clash.
     const mine = s.operatorTools ? await operatorTools.operatorServers(bin, buildScrubbedEnv(), log) : {};
     const config = (spec.threadStart && spec.threadStart.config) || {};
-    // Dopl's restrictions ride argv and are READ BACK before any thread starts (`proc-config.js`); only the
+    // Dopl's restrictions ride argv and are READ BACK before any thread starts (`launch-verify.js`); only the
     // operator's own servers stay on the thread (their headers are the operator's, not for argv).
-    const { proc, thread: threadConfig } = procConfig.split(config);
+    const { proc, thread: threadConfig } = launchVerify.split(config);
     // ⚠ A thread-level `mcp_servers` REPLACES the process-level (argv) table outright — it does not merge
     // into it (MEASURED, codex-cli 0.162.1). So the moment the operator contributes one server, Dopl's own
     // entry must ride along INSIDE that table or it is simply gone: no `dopl` startup status, the first
@@ -316,12 +316,12 @@ function start(spec) {
     if (threadStart.model) threadStart.model = await settledLaunchModel(spec.session && spec.session.model, threadStart.model);
     if (Object.keys(threadConfig).length) threadStart.config = threadConfig;
     else delete threadStart.config;
-    const procArgs = procConfig.argsFor(proc);
-    procConfig.assertNoSecret(procArgs, env[mcp.BEARER_ENV]);
-    // Delegation fence (`catalog.js`): `model_catalog_json` works only as process config (`-c` argv);
+    const procArgs = launchVerify.argsFor(proc);
+    launchVerify.assertNoSecret(procArgs, env[mcp.BEARER_ENV]);
+    // Delegation fence (`delegation-fence.js`): `model_catalog_json` works only as process config (`-c` argv);
     // the same key in `thread/start.config` is ignored. No catalog fails the launch. Lifted with the
     // other native fences in a private channel.
-    const fenced = spec.natives ? null : await catalog.writeDelegationFreeCatalog(env.CODEX_HOME, {
+    const fenced = spec.natives ? null : await delegationFence.writeDelegationFreeCatalog(env.CODEX_HOME, {
       bin, env, model: (spec.threadStart && spec.threadStart.model) || '',
     });
     // The thread's feature fence, verified against THIS build's own feature list before anything spawns:
@@ -330,7 +330,7 @@ function start(spec) {
     if (link.closed) return;
     const conn = client.connect({
       bin,
-      args: (spec.args || []).concat(fenced ? catalog.catalogArgs(fenced) : [], procArgs),
+      args: (spec.args || []).concat(fenced ? delegationFence.catalogArgs(fenced) : [], procArgs),
       env,
       cwd: spec.cwd,
       log,
@@ -349,7 +349,7 @@ function start(spec) {
     await conn.request('initialize', client.initializeParams(appVersion()));
     conn.notify('initialized');
     // Every restriction, read back off the running child; anything not in effect refuses the session.
-    await procConfig.assertRestrictionsTook(conn, proc, spec.cwd);
+    await launchVerify.assertRestrictionsTook(conn, proc, spec.cwd);
     const method = spec.resumeThreadId ? 'thread/resume' : 'thread/start';
     const params = spec.resumeThreadId
       ? Object.assign({ threadId: spec.resumeThreadId, cwd: spec.cwd }, threadStart)

@@ -58,7 +58,7 @@ function axisAAllows(mode, toolName) {
 // other Dopl call must reach the gate.
 // `dopl_only` has no web here (network is a sandbox property, `sandbox_approval` denied) — deliberate.
 // Thread `features` fence, every profile: `apps`/`plugins` off — `codex_apps` mounts from the operator's
-// ChatGPT auth; `multi_agent` off (delegation fence; code-mode models are fenced by `catalog.js`).
+// ChatGPT auth; `multi_agent` off (delegation fence; code-mode models are fenced by `delegation-fence.js`).
 const ACCOUNT_FENCE = Object.freeze({ apps: false, plugins: false, multi_agent: false });
 
 // goals/sleep_tool/memories/hooks off on every profile: later work is a visible Dopl agent and waiting is a

@@ -28,7 +28,7 @@ module.exports = Object.freeze({
       // `policy.js › assertThreadTook` reads every one of these back before a session runs.
       'thread/start': POLICY_ECHO.concat(SANDBOX_ECHO),
       'thread/resume': POLICY_ECHO.concat(SANDBOX_ECHO),
-      // `proc-config.js › assertRestrictionsTook` reads the effective config.
+      // `launch-verify.js › assertRestrictionsTook` reads the effective config.
       'config/read': ['config'],
     },
     requests: {

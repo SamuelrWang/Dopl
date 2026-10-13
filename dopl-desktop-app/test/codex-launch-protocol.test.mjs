@@ -101,7 +101,7 @@ test("start drives the measured v2 thread/turn state machine", async () => {
       model: "gpt-6-astra",
     });
 
-    // 🔒 THE DELEGATION FENCE RIDES ARGV ON EVERY START (`catalog.js`), pointing into the private home.
+    // 🔒 THE DELEGATION FENCE RIDES ARGV ON EVERY START (`delegation-fence.js`), pointing into the private home.
     const at = hooks.args.indexOf("-c");
     assert.ok(at !== -1 && /^model_catalog_json=".*dopl-model-catalog\.json"$/.test(hooks.args[at + 1]), JSON.stringify(hooks.args));
     assert.ok(hooks.args[at + 1].includes(hooks.env.CODEX_HOME), "the catalog lives in the isolated CODEX_HOME");

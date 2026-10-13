@@ -75,6 +75,7 @@ const EXTRA = {
     "mcp-ready.js": "first turn waits for Dopl's MCP",
     "fence-verify.js": "build-verify: `features list` check",
     "skills-fence.js": "vendor fence: skills directory",
+    "delegation-fence.js": "vendor fence: delegation, via a delegation-free model catalog (catalog.js until 2026-10-13)",
   },
   cursor: {},
 };
@@ -89,10 +90,7 @@ const PENDING = {
     checks: { windowlessFloor: "Phase 1.10" },
   },
   codex: {
-    present: {
-      "catalog.js": "Phase 1.8 → delegation-fence.js",
-      "proc-config.js": "Phase 1.8 → launch-verify.js",
-    },
+    present: {},
     missing: {},
     checks: { keyOrder: "Phase 1.10" },
   },

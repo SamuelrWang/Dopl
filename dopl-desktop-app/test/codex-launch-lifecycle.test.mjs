@@ -16,7 +16,7 @@ import { threadEcho, configEcho } from "./helpers/codex-echo.mjs";
 const require = createRequire(import.meta.url);
 const CODEX = join(import.meta.dirname, "..", "main", "runtime", "codex");
 const client = require(join(CODEX, "client.js"));
-const catalog = require(join(CODEX, "catalog.js"));
+const catalog = require(join(CODEX, "delegation-fence.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
 const { normalize } = require(join(CODEX, "normalize.js"));
 const io = require("../main/session-io.js");
