@@ -199,6 +199,7 @@ test("(e) descriptor keys come in the canonical order", () => {
 // Every module under `main/runtime/kit/`, with the scaffold step that extracted it (2026-10-13).
 const KIT = {
   "dopl-mcp.js": "K6 — doplBearer + clientTimeoutMs (per-adapter fallback option), read from core mcp-config",
+  "bin-resolve.js": "K9 — candidate inspection, search order, hit cache (verbatim from codex/resolve-bin.js; security-sensitive)",
   "frame-queue.js": "K2 — push/pull frame queue + bounded interrupt (from codex/launch-handle.js)",
   "auth-shape.js": "K5 — the refused-credential pattern + authShaped(text, extraRe?) (from codex/cursor normalize.js)",
   "stdio-rpc.js": "K1 — JSON-RPC 2.0 over a child's stdio: framing, correlation, held server requests, close-vs-exit",
