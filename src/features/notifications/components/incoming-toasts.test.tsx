@@ -198,6 +198,47 @@ describe("IncomingToasts > an actionable event raised while Dopl is in front", (
     }
   });
 
+  it("a TITLE-ONLY push with a handle takes the default card, not the black line", async () => {
+    // ⚠ THE ONE VISUAL CHANGE THIS FIX MAKES (Review 41, finding 1). A title-only push used to
+    // take `variant: "invert"` — the small black line — unconditionally. That face carries NO
+    // controls by design, so a handle on it would be an invisible click target: the reader would
+    // have no way to know the line was clickable, and the card is the face that reads as one.
+    // So the condition is `body || handle`, and this is the case that pins the `|| handle` half.
+    const { push, openFromToast } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({ eventId: "mention", title: "Design", openId: "open-11" });
+
+    expect(await screen.findByText("Design")).toBeTruthy();
+    // The default card has a Dismiss control; the black line has none at all. That difference is
+    // the cheapest honest way to tell the two faces apart from the outside.
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
+    // …and still no Open button: the card is the control, which is the ruling.
+    expect(screen.queryByRole("button", { name: "Open" })).toBeNull();
+
+    screen.getByText("Design").click();
+    await waitFor(() => expect(openFromToast).toHaveBeenCalledWith("open-11"));
+  });
+
+  it("…while a title-only push with NO handle is still the black line", async () => {
+    // The CONTROL for the case above: without it, that one would pass against a component that
+    // had simply stopped using the invert face at all.
+    const { push } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({ eventId: "agent_started", title: "An agent started" });
+    expect(await screen.findByText("An agent started")).toBeTruthy();
+    expect(screen.queryAllByRole("button")).toEqual([]);
+  });
+
   it("a mention with no handle is an ordinary card — nothing to click, nothing parked", async () => {
     const { push, openFromToast } = installBridge();
     render(
