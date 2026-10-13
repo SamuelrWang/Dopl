@@ -30,7 +30,7 @@ const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
 const SINCE = /read it with since=(\d+), not in full\./;
 
-const ENGINE_PUSH = "io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source, eff.catchUpSeq))";
+const ENGINE_PUSH = "io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source, eff.catchUpSeq, s))";
 test("the engine's pushInbound is the expression this file drives", () => {
   assert.ok(read("session-engine.js").includes(ENGINE_PUSH));
 });
