@@ -108,11 +108,34 @@ export function IncomingToasts() {
         });
         return;
       }
+      /**
+       * 🔒 **THE PLAIN CARD IS CLICKABLE WHEN IT CARRIES A HANDLE** (Samuel, 2026-10-12, #4358
+       * opt 1). A `mention` pushed while Dopl is in front used to render a card with nothing to
+       * click, while the OS banner for the same event navigated to the message — so being at
+       * your desk was the one state in which the notification could not be followed.
+       *
+       * ⚠ **`openId` WITHOUT `actionLabel` IS THE WHOLE DISTINCTION**, and the two branches above
+       * already honour it: `lifeOf` gives this PLAIN_MS and `show` gives it the plain face. So a
+       * burst of mentions is still 4s each and the single slot is untouched — no button, no 15s
+       * hold. Nothing here special-cases the mention event; the shape of the push decides.
+       * ⚠ **THE SAME ONE-SHOT OP AS THE BUTTON**, so a press after the card is gone is a no-op on
+       * both sides: main drops the entry before running it, and the card has unmounted anyway.
+       */
+      const onBodyClick = t.openId
+        ? () => {
+            void getSpaBridge()?.notifications?.openFromToast?.(t.openId!)?.catch(() => {});
+          }
+        : undefined;
       // ⚠ THE FACE FOLLOWS THE COPY. `variant: "invert"` is the small black line and renders the
       // TITLE ONLY, so a push that carries a body (a mention's detail, `decision_failed`'s
       // recovery sentence, `tool_blocked`'s reason) takes the default card, which shows both.
-      if (t.body) toast({ title: t.title, description: t.body, durationMs: PLAIN_MS });
-      else toast({ title: t.title, variant: "invert" });
+      // ⚠ A title-only push with a handle takes the DEFAULT card too, not the black line: that
+      // face carries no controls by design, so a click target on it would be invisible.
+      if (t.body || onBodyClick) {
+        toast({ title: t.title, description: t.body || undefined, onBodyClick, durationMs: PLAIN_MS });
+      } else {
+        toast({ title: t.title, variant: "invert" });
+      }
     }
 
     function drain() {

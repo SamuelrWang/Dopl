@@ -46,6 +46,8 @@ function loadActionable(o = {}) {
     // both module instances — and so `requestAttention` is observable here too rather than
     // throwing into `macBanner`'s best-effort catch.
     if (id === "./notify-action") return ctx.notifyAction;
+    // ⚠ THE REAL actionable half, over the harness's stub (split out of the route 2026-10-12).
+    if (id === "./notification-route-actions") return ctx.actions;
     throw new Error(`unexpected require: ${id}`);
   });
   if (o.rendererUnready !== true) mod.noteRendererReady();

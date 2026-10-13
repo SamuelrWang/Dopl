@@ -106,11 +106,36 @@ export function load(o = {}) {
     buildActionNotification: (spec) => { built.push(spec); return { banner: true, spec }; },
   };
 
+  // ⚠ THE REAL ACTIONABLE HALF, not a double (split out of the route 2026-10-12 at the cap).
+  // Faking it would make every `raiseActionable` / `openFromToast` case below vacuous, and the
+  // handle map it owns is shared state the route reaches through — so it is loaded over the SAME
+  // stubs and handed to the route, which builds its one instance from it.
+  //
+  // ⚠ THE CLOCK IS A SEAM, defaulted to the real one. `clock()` lets a growth test run time past
+  // `OPEN_TTL_MS` and watch the sweep reclaim, which is the only thing bounding that map now that
+  // a PLAIN mention toast parks a handle too.
+  let fakeNow = null;
+  const actionsSrc = readFileSync(join(MAIN, "notification-route-actions.js"), "utf8");
+  const actionsMod = evalModule(actionsSrc, (id) => {
+    if (id === "./notification-prefs") return prefs;
+    if (id === "./notify-action") return notifyAction;
+    if (id === "./diag") return { diag: (...a) => logs.push(a.join(" ")) };
+    throw new Error(`unexpected require: ${id}`);
+  });
+  const actions = {
+    ...actionsMod,
+    create: (seams) => actionsMod.create({
+      ...seams,
+      now: () => (fakeNow === null ? Date.now() : fakeNow),
+    }),
+  };
+
   const src = readFileSync(join(MAIN, "notification-route.js"), "utf8");
   const mod = evalModule(src, (id) => {
     if (id === "electron") return electron;
     if (id === "./notification-prefs") return prefs;
     if (id === "./notify-action") return notifyAction;
+    if (id === "./notification-route-actions") return actions;
     if (id === "./diag") return { diag: (...a) => logs.push(a.join(" ")) };
     throw new Error(`unexpected require: ${id}`);
   });
@@ -122,9 +147,14 @@ export function load(o = {}) {
 
   return {
     mod, prefs, record, notifyAction, counts,
+    // The actionable half's stub, so a suite building a SECOND route instance answers the same
+    // require with the same real module (and the same clock seam).
+    actions,
     windows: sent, toasts, banners, built, logs, revealed: () => shown,
     /** The renderer's ack, over the same op the real one rides. */
     ack: () => mod.openFromToast(mod.TOAST_READY_ID),
+    /** Move the handle map's clock. `null` hands it back to the real one. */
+    setNow: (ms) => { fakeNow = ms; },
   };
 }
 

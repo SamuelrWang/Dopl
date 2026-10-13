@@ -148,6 +148,70 @@ describe("IncomingToasts > an actionable event raised while Dopl is in front", (
     await waitFor(() => expect(openFromToast).toHaveBeenCalledWith("open-1"));
   });
 
+  /**
+   * 🔒 **THE PLAIN MENTION CARD IS THE CONTROL ITSELF** (Samuel, 2026-10-12, #4358 opt 1:
+   * *"whole in-app mention pop-up clickable, jumps to the message"*, 4s dismiss KEPT, no button).
+   *
+   * ⚠ **`openId` WITH NO `actionLabel` IS THE SHAPE**, and it is what keeps the 4s life and the
+   * single slot: `lifeOf` and `show` both key on `openId && actionLabel`. These cases assert the
+   * ABSENCE of a button as hard as the presence of the click.
+   */
+  it("a mention push with a handle and NO label is clickable, with no button added", async () => {
+    const { push, openFromToast } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({ eventId: "mention", title: "Design", body: "Ada mentioned you: ship it", openId: "open-7" });
+
+    expect(await screen.findByText("Design")).toBeTruthy();
+    // No "Open", and none of the decisive verbs either.
+    for (const label of ["Open", "Launch agent", "Send", "Allow"]) {
+      expect(screen.queryByRole("button", { name: label })).toBeNull();
+    }
+    screen.getByText("Ada mentioned you: ship it").click();
+    await waitFor(() => expect(openFromToast).toHaveBeenCalledWith("open-7"));
+  });
+
+  it("…and it still dismisses in 4s, so a burst of mentions is unchanged", async () => {
+    vi.useFakeTimers();
+    try {
+      const { push } = installBridge();
+      render(
+        <>
+          <IncomingToasts />
+          <ToastHost />
+        </>
+      );
+      act(() => { push({ eventId: "mention", title: "first", openId: "open-8" }); });
+      expect(screen.queryByText("first")).toBeTruthy();
+      // ⚠ 15s would be the ACTIONABLE life — the promotion the ruling refused. Assert it is gone
+      // by 4s, and that the NEXT mention takes the slot immediately after.
+      act(() => { vi.advanceTimersByTime(4001); });
+      expect(screen.queryByText("first")).toBeNull();
+      act(() => { push({ eventId: "mention", title: "second", openId: "open-9" }); });
+      expect(screen.queryByText("second")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a mention with no handle is an ordinary card — nothing to click, nothing parked", async () => {
+    const { push, openFromToast } = installBridge();
+    render(
+      <>
+        <IncomingToasts />
+        <ToastHost />
+      </>
+    );
+    push({ eventId: "mention", title: "Design", body: "no navigation given" });
+    const body = await screen.findByText("no navigation given");
+    body.click();
+    expect(openFromToast).not.toHaveBeenCalledWith(expect.stringMatching(/^open-/));
+  });
+
   it("stays silent when the bridge cannot open, rather than claiming it did", async () => {
     const { push } = installBridge();
     (globalThis as { dopl?: { notifications?: { openFromToast?: unknown } } }).dopl!.notifications!

@@ -13,6 +13,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { evalModule, MAIN } from "./helpers/module-sandbox.mjs";
 import { load } from "./_notification-route-harness.mjs";
+// The TTL the growth guard runs time past — read from the module, never retyped as a number.
+import { createRequire as _cr } from "node:module";
+const { OPEN_TTL_MS } = _cr(import.meta.url)("../main/notification-route-actions.js");
 
 /**
  * Loads the route over fakes.
@@ -88,6 +91,16 @@ test("unreadable focus routes to the banner, not to silence", async () => {
     }
     if (id === "./notification-prefs") return prefs;
     if (id === "./diag") return { diag: () => {} };
+    // ⚠ THE REAL actionable half (split out of the route 2026-10-12). Built over the same prefs,
+    // not faked: the route constructs its one instance from this at module scope, so a stub that
+    // answered nothing would simply crash the load.
+    if (id === "./notification-route-actions") {
+      return evalModule(readFileSync(join(MAIN, "notification-route-actions.js"), "utf8"), (sub) => {
+        if (sub === "./notification-prefs") return prefs;
+        if (sub === "./diag") return { diag: () => {} };
+        throw new Error(`unexpected require: ${sub}`);
+      });
+    }
     throw new Error(`unexpected require: ${id}`);
   });
   await prefs.refresh(true);
@@ -282,3 +295,82 @@ test("a window that goes away forgets the ack: the next one starts unmounted", a
   assert.equal(ctx.toasts.length, 1, "⚠ a stale ack must not vouch for a renderer that just booted");
 });
 
+
+// ── THE PLAIN TOAST CARRIES ITS CLICK TARGET (Samuel, 2026-10-12, #4358 opt 1) ───────────────
+//
+// 🔒 *"Whole in-app mention pop-up clickable, jumps to the message"*, with the 4s dismiss KEPT
+// and no Open button. Until this, `raise` dropped `spec.onClick` on the floor: while Dopl was IN
+// FRONT a mention toast was a dead card, while the OS banner for the same event navigated. Being
+// at your desk was the one state in which the notification could not be followed.
+//
+// ⚠ THE SHAPE IS THE RULING. `openId` WITHOUT `actionLabel` is what keeps the renderer on its
+// plain 4s path (`incoming-toasts.tsx › lifeOf`, `› show`), so these assert the ABSENCE of the
+// label as hard as the presence of the handle.
+
+test("a focused mention's toast carries a handle, and NO actionLabel", async () => {
+  const opened = [];
+  const { mod, prefs, toasts } = load({ focused: true });
+  await prefs.refresh(true);
+  assert.equal(mod.raise("mention", {
+    title: "Design", body: "Ada mentioned you: ship it", onClick: () => opened.push("jumped"),
+  }), "popup");
+
+  const p = toasts[0].payload;
+  // ⚠ EQUALITY, not a spot-check: an `actionLabel` creeping in here is the 15s promotion Samuel
+  // refused, and `kind: 'incoming'` is the yield contract the queue reads.
+  assert.deepEqual(Object.keys(p).sort(), ["body", "eventId", "kind", "openId", "title"]);
+  assert.equal(p.actionLabel, undefined, "a button here is the promotion the ruling refused");
+  assert.equal(p.kind, "incoming");
+  assert.ok(typeof p.openId === "string" && p.openId.length > 0, "a usable handle");
+
+  // The handle runs the route's own navigation, once, and is then spent.
+  assert.equal(mod.openFromToast(p.openId), true);
+  assert.deepEqual(opened, ["jumped"]);
+  assert.equal(mod.openFromToast(p.openId), false, "one-shot: a press after dismiss is a no-op");
+  assert.deepEqual(opened, ["jumped"], "…and it did not run twice");
+});
+
+test("no onClick, no handle — a clickable card that does nothing is the bug, not the fix", async () => {
+  const { mod, prefs, toasts } = load({ focused: true });
+  await prefs.refresh(true);
+  mod.raise("mention", { title: "Design", body: "no navigation given" });
+  assert.equal(toasts[0].payload.openId, undefined);
+  assert.equal(mod.pendingOpenCount(), 0, "nothing parked for a toast that cannot navigate");
+});
+
+test("the banner fallback drops the handle rather than parking it for a card nobody sees", async () => {
+  // No window at all: `deliverToast` answers 'none' and the OS banner takes the event. A handle
+  // left behind here would be a closure held for 120s against a toast that was never shown.
+  const { mod, prefs, banners } = load({ focused: true, windows: 0 });
+  await prefs.refresh(true);
+  assert.equal(mod.raise("mention", { title: "Design", onClick: () => {} }), "mac");
+  assert.equal(banners.length, 1);
+  assert.equal(mod.pendingOpenCount(), 0, "the parked closure was reclaimed, not leaked");
+});
+
+test("GROWTH GUARD: a burst of mention toasts is bounded, and the sweep returns it to baseline", async () => {
+  // ⚠ THE COST OF THE RULING, AND THE THING THAT PAYS IT. A plain mention toast now parks a
+  // handle whether or not anybody presses it, so the arrival rate is the MENTION rate, not the
+  // ask rate. Nothing reclaims an unpressed entry except the TTL sweep that runs on every
+  // register — so the ceiling is "what arrives inside one TTL", and this proves it IS a ceiling.
+  const { mod, prefs, setNow } = load({ focused: true });
+  await prefs.refresh(true);
+  const base = mod.pendingOpenCount();
+  assert.equal(base, 0, "baseline");
+
+  const T0 = 1_000_000;
+  setNow(T0);
+  const N = 25;
+  for (let i = 0; i < N; i++) mod.raise("mention", { title: `m${i}`, onClick: () => {} });
+  assert.equal(mod.pendingOpenCount(), N, "the burst really is held — otherwise the sweep below proves nothing");
+
+  // Still inside the TTL: nothing may be reclaimed yet, or the guard would pass for the wrong reason.
+  setNow(T0 + OPEN_TTL_MS);
+  mod.raise("mention", { title: "inside the window", onClick: () => {} });
+  assert.equal(mod.pendingOpenCount(), N + 1, "a sweep at exactly the TTL must not evict");
+
+  // Past it: the next register sweeps, and only the newcomer survives.
+  setNow(T0 + OPEN_TTL_MS * 2 + 1);
+  mod.raise("mention", { title: "after the window", onClick: () => {} });
+  assert.equal(mod.pendingOpenCount(), 1, "back to baseline + the one that just arrived");
+});
