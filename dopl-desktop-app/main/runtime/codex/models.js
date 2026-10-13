@@ -3,7 +3,7 @@
 // throws into a picker; a failure carries a `reason` (`model-catalog.js`: `unavailable`, not "no models").
 
 const client = require('./client');
-const { pickOf } = require('../selection-vocabulary');
+const { passThroughModelArg } = require('../kit/model-arg');
 const configHome = require('./config-home');
 const cliSpawn = require('../cli-spawn');
 
@@ -192,11 +192,8 @@ const descriptor = {
 };
 
 /** A pick → the launch argument `{ ok, arg, id, reason }`. Picks pass as given (the funnel already refused an
- *  unknown one on the live catalog). */
-function modelArg(value) {
-  const v = pickOf(value);
-  return { ok: true, arg: v, id: v, reason: '' };
-}
+ *  unknown one on the live catalog) — the shared pass-through, `../kit/model-arg.js`. */
+const modelArg = passThroughModelArg;
 
 module.exports = {
   models, modelArg, descriptor, entryFrom, rosterFrom, DIMENSION, LIST_TIMEOUT_MS, MAX_PAGES,
