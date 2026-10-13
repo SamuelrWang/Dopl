@@ -34,13 +34,22 @@ import {
  * a number, at the edge, where the reader and the scope are known — both of which
  * are required to decrypt it.
  *
- * ⚠ **ORDER MATTERS IN THIS UNION.** The numeric arm is first because
- * `z.coerce.number()` turns a token into `NaN`, which `.int()` then refuses, so a
- * token falls through to the string arm. Reversing them would let a numeric string
- * match `startsWith` never, which is harmless — but the comment is here because the
- * NEXT edit is the dangerous one: a bare `z.string()` second arm would accept any
- * junk as a cursor and defer the failure to decode time, where it reads as a
- * tampered token rather than a malformed request.
+ * ⚠ **WHAT MATTERS IS THAT THE STRING ARM IS PREFIX-BOUND — NOT THE ORDER.** I
+ * claimed order mattered here; it does not, and a reviewer proved it by swapping
+ * the arms and running the suite green (36/36). The two arms are disjoint either
+ * way: `z.coerce.number()` turns a token into `NaN` and `.int()` refuses it, and
+ * `startsWith` refuses a numeric string. Writing the numeric arm first is a
+ * readability choice, nothing more.
+ *
+ * Measured both orderings over `"4461"`, a `dc1.` token, `"none"`, `""`, `"0x10"`,
+ * `" "`, `"-1"`, `"1.5"`: identical results for all eight, so this correction is
+ * verified rather than merely conceded.
+ *
+ * The load-bearing half is `z.string().startsWith(CURSOR_PREFIX)`. A bare
+ * `z.string()` would accept any junk as a cursor and defer the failure to decode
+ * time, where it reads as a TAMPERED TOKEN rather than a malformed request — the
+ * wrong diagnosis, and a 400 whose remedy ("re-establish without a cursor")
+ * misdirects a caller whose real problem is that it sent `"none"`.
  */
 const CursorParam = z.union([
   z.coerce.number().int().nonnegative(),

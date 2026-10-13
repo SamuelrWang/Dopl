@@ -69,13 +69,22 @@ function construct(Cls: ErrorCtor): Error | null {
   return null;
 }
 
-/** Measured 2026-10-12: **37** exported `ChannelError` subclasses in this module
- *  (36, plus `ArtifactNotFoundError` moved in from `service-artifacts.ts`). */
+/**
+ * Measured 2026-10-12 by running this file's own enumeration: **38** exported
+ * `ChannelError` subclasses reachable through this module — its own, plus the
+ * re-exported `errors-recipient.ts`, plus `ArtifactNotFoundError` moved in from
+ * `service-artifacts.ts`.
+ *
+ * ⚠ **I WROTE 37 HERE AND IT WAS NEVER MEASURED** — it was 36 inferred from a
+ * grep plus one for the class I had just moved, and the grep missed the
+ * re-export. The floor below is what actually fails closed; a number in a
+ * comment protects nothing, so the only thing it can be is honest.
+ */
 const KNOWN_CLASS_FLOOR = 30;
 
 /**
- * ⚠ **NO TYPE PREDICATE HERE, DELIBERATELY.** `typeof errors` is a union of 36
- * concrete class types, and a predicate narrowing to a generic
+ * ⚠ **NO TYPE PREDICATE HERE, DELIBERATELY.** `typeof errors` is a union of the
+ * module's concrete class types, and a predicate narrowing to a generic
  * `new (...args: unknown[]) => Error` is not assignable to it — `tsc` refuses,
  * while vitest runs it happily. (It did: this file was green and the typecheck
  * red at the same time, for the second time in this branch.) Mapping to the

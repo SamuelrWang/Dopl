@@ -107,21 +107,17 @@ afterEach(() => {
 });
 
 describe("the messages read decodes its cursor before the repository", () => {
-  it("🔒 a TOKEN arrives at the repository as a NUMBER", async () => {
+  it("🔒 a TOKEN arrives at the repository as a NUMBER, for a channel addressed by SLUG", async () => {
+    // ⚠ Both halves in one case, because they are one case: `"general"` is a
+    // SLUG, and the token is minted for the RESOLVED id. That it decodes at all
+    // here is the reason this path decodes inside the service rather than at the
+    // route — the route holds only a ref, and binding the token to the ref would
+    // have made a slug-addressed read undecodable.
+    //
+    // (This was two tests that differed by the seq they encoded. One is enough.)
     const token = encodeChannelCursor(4461, { kind: "channel", channelId: CHANNEL }, USER);
     await readTranscript(ctx, "general", { since: token } as never);
     expect(sinceAtRepository()).toBe(4461);
-  });
-
-  it("🔒 and it is bound to the RESOLVED channel, not to the ref the caller used", () => {
-    // The reason this path decodes in the service: the route holds only a ref.
-    // A token minted for the resolved id must work when the caller addresses the
-    // channel by SLUG — this is that case, and it is why binding to the ref would
-    // have been wrong.
-    const token = encodeChannelCursor(99, { kind: "channel", channelId: CHANNEL }, USER);
-    return readTranscript(ctx, "general", { since: token } as never).then(() => {
-      expect(sinceAtRepository()).toBe(99);
-    });
   });
 
   it("a legacy integer still arrives unchanged", async () => {
