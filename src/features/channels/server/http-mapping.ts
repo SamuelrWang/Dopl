@@ -5,6 +5,8 @@ import {
   ChannelAddresseeNotMemberError,
   ChannelAddresseeUntaggedError,
   ChannelCiteNumberUnavailableError,
+  ArtifactNotFoundError,
+  ChannelCursorUndecodableError,
   ChannelCiteUnresolvedError,
   ChannelAgentHandleAmbiguousError,
   ChannelChatAddressedError,
@@ -184,6 +186,23 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelInfoCardTooLargeError) {
     return new HttpError(413, "INFO_CARD_TOO_LARGE", err.message);
+  }
+  // ⚠ **400, NOT A FALLTHROUGH TO 500** (Review 40). An unreadable cursor is a bad
+  // INPUT the caller can fix, and it had no arm here at all — so it reached the
+  // generic handler as a 500, which is the one status a client is entitled to RETRY.
+  // Retrying an undecodable cursor cannot ever succeed, so the loop would be
+  // indefinite and silent. Its own code, so a caller can tell it from a malformed
+  // body and act on the remedy the message carries.
+  // ⚠ **404, MATCHING ITS SIBLINGS** (`ChannelNotFoundError`, `TaskNotFoundError`).
+  // It had no arm at all until 2026-10-12, so a GET for an unknown artifact id
+  // answered 500 — a retryable status for a request that can never succeed. The
+  // message never says whether the id exists in another channel: ids are not
+  // probeable across rooms.
+  if (err instanceof ArtifactNotFoundError) {
+    return new HttpError(404, "ARTIFACT_NOT_FOUND", err.message);
+  }
+  if (err instanceof ChannelCursorUndecodableError) {
+    return new HttpError(400, "CHANNEL_CURSOR_UNDECODABLE", err.message);
   }
   return null;
 }

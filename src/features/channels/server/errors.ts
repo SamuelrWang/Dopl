@@ -328,3 +328,46 @@ export class ChannelCiteNumberUnavailableError extends ChannelError {
     );
   }
 }
+
+/**
+ * **A CURSOR THIS SERVER CANNOT DECODE** (B6, ASK 11 ruled 2026-10-12).
+ *
+ * ⚠ **IT REFUSES; IT NEVER RESETS TO ZERO.** Treating an unreadable cursor as "from
+ * the beginning" would re-deliver history as new — an agent re-answering messages
+ * it had already answered — which is the one failure a notification path cannot
+ * have. The caller re-establishes from an unscoped read instead, which is what the
+ * read result already tells them to do when a cursor is unusable.
+ *
+ * ⚠ **ONE MESSAGE FOR EVERY CAUSE**, deliberately: wrong key, retired key, wrong
+ * scope, wrong reader, truncated, tampered, or not a token at all. Telling the
+ * caller WHICH would narrow the token for whoever is probing it, and no caller can
+ * act on the difference — the remedy is identical.
+ */
+export class ChannelCursorUndecodableError extends ChannelError {
+  constructor() {
+    super(
+      "That cursor cannot be read by this server. Re-establish WITHOUT a cursor: " +
+        "read this channel unscoped, then hold from the highest seq below which " +
+        "you have seen everything in it.",
+    );
+  }
+}
+
+/**
+ * **AN ARTIFACT REF THAT DID NOT RESOLVE INSIDE THIS CHANNEL.**
+ *
+ * ⚠ **NEVER LEAKS WHETHER IT EXISTS ELSEWHERE** — artifact ids are not probeable
+ * across rooms, so "not here" and "not anywhere" are the same answer.
+ *
+ * ⚠ **IT LIVED IN `service-artifacts.ts` UNTIL 2026-10-12, AND THAT COST A 500.**
+ * `http-mapping-completeness.test.ts` enumerates THIS module, so a subclass
+ * declared elsewhere was invisible to it: this one had no arm in
+ * `mapChannelError` and a GET for an unknown artifact id answered 500 — a status a
+ * client may retry, for a request that can never succeed. Declared here now, and
+ * re-exported from `service-artifacts.ts` so no importer moved.
+ */
+export class ArtifactNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Artifact not found: ${ref}`);
+  }
+}
