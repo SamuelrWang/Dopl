@@ -1,7 +1,8 @@
 # Grok runtime adapter — Grok Build CLI over ACP, mapped onto the runtime scaffold
 
 Status: **BUILT 2026-10-13** (`dopl-desktop-app/main/runtime/grok/`, INVARIANTS §11.0k; branch `runtime/muse-scaffold`,
-not pushed) — see §0 for what the build measured beyond this spec and the remaining smoke list. Probed 2026-10-13 against `grok 1.0.52 (0920c8169e27)` macOS aarch64, first
+not pushed) — see §0 for what the build measured beyond this spec and the remaining smoke list. Sandbox/binary
+smoke S5b–S16 run **2026-10-14** (branch `runtime/grok-smoke`, §0). Probed 2026-10-13 against `grok 1.0.52 (0920c8169e27)` macOS aarch64, first
 unauthenticated, then on Samuel's subscription sign-in (real-model smoke, ~10 turns on `grok-4.7`).
 Template: `runtime-scaffold.md` §4 (layout), §4.4 (checklist), §8 (kit mapping). Prior research:
 `new-runtimes-grok-muse-opencode.md` §3 — **this file supersedes it where they disagree** (several §3 claims
@@ -64,15 +65,45 @@ LIVE in the build's own live tier (grok 1.0.52, 2026-10-13, ≈9 prompts on `gro
   `queued` is final (never re-sent), a turn Grok starts itself renders and ends on `_x.ai/session/prompt_complete`,
   and Stop cancels it too. The `_x.ai/session/interjection` confirmation can precede the interject's answer.
 
-Remaining real-model smoke: S5b (the remaining built-in ids: `search_replace`, `list_dir`, `grep`, `web_search`,
-`web_fetch`, subagent tools), S10 (does prompt text `/always-approve on` toggle the mode over ACP? until measured, `policy.js › promptText`
-puts a word joiner before any leading `/`, and the `yolo` readback stops the session either way), S11 (hook timeout fail-open live; `updatedInput` rewrite; a
-per-call reject that keeps the turn — F-777), S12 (subagent calls reach the parent's hook + permission — moot
-while subagents are denied on every profile), S13 (`_x.ai/auth/get_url` pty-free sign-in), S14 (token expiry
-mid-session → the `auth_hold` shape), S15 (`session/load` with a rotated Dopl bearer), **S16** (does the agent
-apply `requirements.toml` before deleting it — F-775), **S17** (the in-app sign-in end to end in the packaged
-app: download on demand → `grok login --device-auth` → installed `auth.json` → first launch), **S18** (a real
-Dopl MCP server — the stub stood in for it — and a windowless launch's settled deny in the hook).
+**Sandbox/binary smoke, 2026-10-14** (grok 1.0.52, branch `runtime/grok-smoke`, ≈18 real turns on
+`grok-4.7-build-fast`; redacted recordings in `dopl-desktop-app/test/fixtures/grok/smoke-s5b-*`, `-s5c-*`,
+`-s10-*`, `-s11-*`; the probe drivers were throwaway scripts in the session scratchpad):
+- **S5b — LIVE.** Hook `toolName` / rawInput: `list_dir {target_directory}`, `grep {pattern, path}`,
+  `search_replace {file_path, old_string, new_string}` (asks in `default`; permission rawInput `variant:
+  "SearchReplace"` + `replace_all`), `web_fetch {url}` (`read_only: true` yet ASKS), `spawn_subagent
+  {description, prompt, background}` — every id as `tools.js` assumed. ⚠ **`web_search` ran on xAI's BACKEND**
+  (`tool_call` id `ws_…`, rawInput `{variant:"WebSearch", backend:true}`) with **no hook** — a restricted
+  profile's deny could not hold. Fix: `config.toml [features] backend_tools = false` → `web_search {query}` is
+  the client tool, through the hook (deny fails that call; allowed, it answers — S5c/S5d). Subagent tools beyond
+  `spawn_subagent` not exercised (denied on every profile).
+- **S10 — LIVE: a prompt `/always-approve on` DOES toggle always-approve over ACP** (no model call; the next
+  `search_replace` ran with no permission request), and `_x.ai/sessions/changed` still said `yolo: false`. With
+  the word joiner it went to the model as chat and nothing changed. Kept the joiner (now also before leading
+  zero-width characters) and added the readback that sees it: the hook's `permissionMode` read
+  `bypassPermissions`; anything but `default`/`auto` is denied and the session stopped (F-778).
+- **S11 — LIVE.** Fail-open at the group timeout (3 s group, reply held 9 s → the call ran). A reply held 40 s
+  under the 600 s group then `deny` → only that call failed, turn `end_turn`. `updatedInput` in a reply is
+  IGNORED (output unchanged). Permission options are only `allow_once`/`reject_once`/`allow_always`; a
+  `cancelled` outcome ends the turn (`PermissionCancelled`). ⇒ F-777 fixed by holding the hook (§3).
+- **S12** — moot (subagents denied on every profile; the hook denied `spawn_subagent` live).
+- **S13 — shape recorded.** `_x.ai/auth/get_url {}` (signed out) → `{auth_url: null, external_provider: false,
+  mode: null}`; `x.ai/auth/get_url` (no underscore) → `-32601`. It READS a flow already started — by
+  `authenticate`, which Dopl never calls (browser OAuth that never answers) — so `signIn` stays the pty
+  `grok login --device-auth`. No sign-in was started.
+- **S14 — not possible copy-free.** A bogus `auth.json` in a probe home is not offered as `cached_token`
+  (two shapes tried), and an external auth provider is a different path (`grok.com` with
+  `_meta.external_provider`); both stop at `session/new` with the already-mapped `-32000 "Authentication
+  required"`. True mid-session expiry needs Samuel's own `auth.json` changed — not done.
+- **S15 — LIVE, no guard needed.** `session/load` in a new process with a rotated bearer (`tok-A` → `tok-B`):
+  every MCP request of the resumed session (`server/discover`, `initialize`, `GET`, `tools/list`, `tools/call`)
+  carried `tok-B`; none carried `tok-A`.
+- **S16 — LIVE: `requirements.toml` IS applied before `grok agent` deletes it** (F-775 resolved). Folder trust
+  off (`GROK_FOLDER_TRUST=0`): a project `.mcp.json` http server started without the file and not with it.
+  `[features] managed_config = false` does not stop the deletion.
+
+Still open: **S17** (the in-app sign-in end to end in the packaged app: download on demand → `grok login
+--device-auth` → installed `auth.json` → first launch) and **S18** (a real Dopl MCP server — the stub stood in
+for it — and a windowless launch's settled deny in the hook) — run separately (screenshot checks).
 
 ## 1. Verdict
 
@@ -146,13 +177,15 @@ Hence the split (the client hook is advertised in `initialize._meta["x.ai/hooks"
    Reply `{decision:"continue"|"deny", systemMessage}`.
    **It fails OPEN** on timeout (default 30 s, per-group max 600 s), transport error, malformed reply, or
    `decision:"ask"` (SRC `xai-grok-shell/src/session/acp_session/hooks.rs › fail_open`). So the hook answers
-   only what is decided synchronously: hard-deny, containment `denyList`, and a SETTLED gate verdict
-   (allow → `continue`, deny → `deny` with the gate's sentence, turn continues). A parked verdict →
-   `continue` and remember `toolUseId`.
+   containment (hard-deny, `denyList`) at once, and for a Dopl MCP call WAITS on the gate up to
+   `policy.HOOK_HOLD_MS` (570 s, under the 600 s group timeout): allow → `continue`, deny (settled or the
+   operator's) → `deny` with the sentence, turn continues (LIVE S11: a reply held 40 s was honoured, F-777).
+   Still parked at the hold → `continue` and remember `toolUseId`. A hook `permissionMode` other than
+   `default`/`auto` (`bypassPermissions` after a slash-command switch, LIVE S10) → deny + stop the session.
 2. `session/request_permission` (no timeout, ACP) is where a PARKED decision waits for the operator. Its
    `toolCall.toolCallId` equals the hook's `toolUseId` (LIVE), so a call the hook already settled is answered
    `allow_once` at once without re-asking the gate.
-`opScoped: true`; `inputRewrite: null` (source mentions an `updatedInput` hook field — SMOKE before relying).
+`opScoped: true`; `inputRewrite: null` (a client-hook reply's `updatedInput` is IGNORED — LIVE S11, 2026-10-14).
 Fallback not needed: `x.ai/mcp/sdk` (`_meta["x.ai/mcp/sdk"]: true`) in-process tools remain an option if a
 later build stops prompting.
 
@@ -224,11 +257,13 @@ new session. Read-only built-ins never prompt in any mode (`read_file`, `list_di
 (hook) concern, not an approval one.
 
 **Built-in tool ids** (for deny lists): LIVE — `run_terminal_command` (kind `execute`), `read_file` (`read`,
-read_only), `write` (kind `write`, namespace `opencode`), `search_tool`, `use_tool` (MCP dispatch). SRC/docs —
-`search_replace`, `write_file`, `list_dir`, `grep`, `web_search`, `web_fetch`, `spawn_subagent`,
+read_only), `write` (kind `write`, namespace `opencode`), `search_tool`, `use_tool` (MCP dispatch); LIVE
+2026-10-14 (S5b) — `list_dir` (`list`), `grep` (`search`), `search_replace` (`edit`, asks), `web_fetch`
+(`web_fetch`, read_only but ASKS), `web_search` (client tool only with `[features] backend_tools = false` — the
+backend variant never reaches the hook), `spawn_subagent` (`task`). SRC/docs — `write_file`,
 `send_subagent_message`, `get_command_or_subagent_output`, `kill_command_or_subagent`, `todo_write`,
-`ask_user_question`, `exit_plan_mode`, `task_complete`. **SMOKE S5b**: exercise edit/list/grep/web/subagent once
-to confirm the remaining ids (the hook payload's `toolName` is the id to match).
+`ask_user_question`, `exit_plan_mode`, `task_complete`. `echo`/`sleep` shell commands never ask in `default`
+(Grok's safe-command list), so a shell `echo` is no permission probe.
 
 ## 6. Credential — the subscription, Dopl-owned
 
@@ -250,7 +285,9 @@ Dopl-private file; env keys stripped. Facts:
 - `signIn` (`login.js`): pty `grok login --device-auth` with HOME/GROK_HOME/GROK_AUTH_PATH = a throwaway login
   home; scrape the verification URL + code; on exit 0 install that `auth.json` into the private home with
   `private-home.js › installFile` (0600), exactly the Muse flow. ACP also has `_x.ai/auth/get_url` /
-  `_x.ai/auth/submit_code` (SRC `15-agent-mode.md`) — a pty-free alternative, SMOKE.
+  `_x.ai/auth/submit_code` (SRC `15-agent-mode.md`); LIVE S13: signed out, `get_url` answers `{auth_url:null,
+  external_provider:false, mode:null}` — it reads a flow `authenticate` started, so it is not a pty-free
+  replacement while Dopl never calls `authenticate`.
 - `signOut`: `grok logout` under the same env, then remove the file.
 - Refresh: Grok refreshes the OIDC token in place and re-reads `auth.json` on change (SRC) → the file must stay
   writable by the child.
@@ -298,9 +335,9 @@ env -i PATH=/usr/bin:/bin HOME=$SB/login-home GROK_HOME=$SB/login-home/.grok \
 `GROK_HOME` is honoured (LIVE: with `HOME≠GROK_HOME` nothing was written under HOME). A failed `session/new`
 still creates a session dir (orphan, LIVE) — harmless in a private home. Private `config.toml` +
 `requirements.toml` as Dopl writes them: `g4-inspect-dopl-config.json`, `g4-inspect-dopl-requirements.json`.
-Open: does a prompt text `/always-approve on` toggle the mode over ACP (`availableCommands` lists it), and does
-the requirements lock stop that? **SMOKE S10** — until measured, `normalize`/prompt framing must never send a
-prompt that starts with `/`.
+⚠ A prompt text `/always-approve on` DOES toggle the mode over ACP (LIVE S10, 2026-10-14; the requirements
+lock did not stop it, and the `yolo` readback stays false) — prompt framing never sends a prompt that starts
+with `/` (word joiner, LIVE-verified), and the hook's `permissionMode` readback stops a session that switched.
 
 ## 9. Cross-tree edits (same list as Muse, scaffold §4.4)
 
@@ -331,10 +368,8 @@ true**; cancel = `session/cancel` NOTIFICATION → prompt resolves immediately `
 REJECTED (`-32602 untagged enum`); send the plain string (SMOKE: confirm `value:"low"` is accepted). The
 `-m` flag on `grok agent` did not take (session reported `grok-4.7`) → always set the model per session.
 
-Open: S5b remaining tool ids; S10 slash-command mode toggle; S11 hook timeout behaviour live (fail-open at
-`timeout`) and whether a hook reply can rewrite input; S12 subagent tool calls reach the parent's hook +
-permission; S13 `_x.ai/auth/get_url` device flow without a pty; S14 behaviour when the token expires
-mid-session (`auth_hold` shape); S15 `session/load` with a different `mcpServers` bearer (rotated Dopl token).
+Done 2026-10-14: S5b, S10, S11, S13 (shape), S15, S16 — results in §0. S12 moot; S14 not possible without
+touching the operator's `auth.json`. Open: S17, S18 (packaged app, run separately).
 
 ## 11. Effort vs Muse
 
