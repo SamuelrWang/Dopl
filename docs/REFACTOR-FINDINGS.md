@@ -103,7 +103,7 @@ done | grep -oE 'F-[0-9]{3}' | sort -u | tail -1
 
 **Pruned 2026-08-11 (fourth pass) — the resolved-in-place sweep. 105 entries in, 91 out.** Scope: every entry carrying RESOLVED / ✅ / "closed" in its title or status line was re-verified **against the working tree on disk** — greps for the named symbols and files, never the entry's own text, never another entry, never a commit message. Strict numeric order survives; the entry template is unchanged. No code was touched and no `git` state was changed. **Where a claim was about PRODUCTION rather than about code, it was settled with read-only introspection against the live project** (`pg_constraint`, `pg_indexes`, `pg_proc`, `pg_publication_tables`, `schema_migrations`) — see the near-miss below for why that was not optional.
 
-- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `channels/components/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (`service-tasks-lifecycle.ts`, `service-writes-metadata-markers.ts`, `updateTaskIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `runtime/claude/loader.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from the v1 members tab AND the settings members section; ⚠ both files were themselves DELETED 2026-08-30 under the drift ledger's ASK-1 ruling, so the citations are dropped rather than repointed), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
+- **Deleted as RESOLVED (12):** **F-067** (three-valued `DECISION_OK`/`SETTLED`/`FAILED` at `main/consent.js:149-169`; `submitDecision` at `:213` is the sole entry point and all four call sites use it), **F-156** (both blocks — all six migrations on disk and applied; the USING-INDEX-not-FULL rationale and the "must stay after `20260807110000`" ordering constraint have a permanent home in that migration's own header, `:64-90` and `:142-168`), **F-167** (both blocks — `20260708120001` / `20260708150001` renamed on disk, and F-169's two-sided diff confirmed the remote history records both), **F-168** (`narration.isForeignAuthored` at `:109`, both surface-scoped headers, both read ops, 16-test file present — the essentials inlined into F-101 so the reference does not dangle), **F-171** (route on the `channel_tasks_stale` RPC, `excludeAuthorFilter`, `insertMessage`; its last open step was `CRON_SECRET`, now done — the surviving operational item moved to F-133), **F-173** (`is_direct` branch at the service; **the routed dialog copy landed verbatim** — `channel-pane.tsx`, since deleted at the v2 cutover 2026-08-18; the copy moved to `channels/components/channel-manage.tsx`), **F-174** (`revalidateAutoAllow` on all three consume paths in `consent-service.ts`; `UNRESOLVED_TOOL_PROFILE = "read_only"`), **F-176** (`service-tasks-lifecycle.ts`, `service-writes-metadata-markers.ts`, `updateTaskIfStatus` all present; its one "open" bullet was explicitly *left alone as correct guidance*, not debt), **F-179** (the `server.tools` assignment is gone — `runtime/claude/mcp.js:216` records where it stood — and `alwaysLoad: true` survives at `:190`), **F-183** (see the refutation note below), **F-186** (both props gone from the v1 members tab AND the settings members section; ⚠ both files were themselves DELETED 2026-08-30 under the drift ledger's ASK-1 ruling, so the citations are dropped rather than repointed), **F-188** (`workspaceId` is a required field on `ConsentListOpts`, `repository-collab.ts:91`, filtered at `:105`).
 - **⚠⚠ THE MOST IMPORTANT THING THIS PASS PRODUCED IS A NEAR-MISS, NOT A REFUTATION — AND THE STALE SOURCE WAS THE WORKING TREE ITSELF.** This pass came within one edit of writing a loud, confident, **false** refutation into this header. It had drafted: *"F-099's ✅ is wrong, the charset CHECKs are not in production."* **They are in production.** The reasoning that produced the error is worth more than the entry:
   - Three prior prunes established the rule **"verify against the working tree on disk, not against entries or commit messages."** This pass followed it. `supabase/migrations/20260808150000_replay_hardening_wave_20260731.sql` **opens with `-- UNAPPLIED. DO NOT run without reading this header.` and repeats `-- NOT APPLIED. This is a repo file only.` at `:76`.** That is a primary source, on disk, in the file that owns the DDL — and it is **stale**, because a migration header is authored *before* the apply and nothing on earth updates it afterwards. `docs/LAUNCH-READINESS-ROADMAP.md:5` says the same thing and is stale for the same reason.
   - What caught it was an accident: F-102's status line disagreed. Chasing that disagreement into `pg_constraint` gave ground truth — **`profiles_display_name_check` present, `channels_name_check` present *in its charset-bounded form* (not the loose length-only inline one), `channels_topic_check` present, all 14 `*_charset_check` present, `channel_agents_engaged_idx` dropped, `supabase_realtime` at exactly 17 tables, and local files 157 = history rows 157 with zero local-only and zero remote-only.** Everything the 2026-07-31 wave was supposed to do is live, via the replay migration, applied 2026-08-09.
@@ -547,7 +547,7 @@ The SPA suite was absent from the previous baseline entirely, which is its own s
     - ⚠ **AND ITS PROPOSED FIX SHAPE WAS WRONG — recorded because the next round would otherwise implement it.** It read *"thread `extraDenyRules` … into `buildRestrictionArgs` + `writeScopedSettings`, and emit `--disallowedTools` for `full` too"*. That closes the `Read` door and **not the `Bash` one**, which is the door that matters: Claude Code `Bash(...)` permission rules match COMMAND patterns, never path globs, so no deny rule of that family can fence a path against a shell. **A deny rule that cannot fire is worse than none, because it reads as coverage.**
     - **What was done instead:** stop writing the file. Nothing in the app had read it since `runForChannel` (then in `session-spawner.js`) — the headless `claude -p` executor — was deleted 2026-08-20; the SDK path takes the bearer in memory from `mcp-config.js › deviceTokenForSpawn` (safeStorage) and manual `claude` runs are served by the user-scope CLI entry `ensureMcpConfig` adds. `removeSpawnConfig()` runs where the write used to, so existing installs shed the token. Mutation-verified in `dopl-desktop-app/test/sdk-mcp-token.test.mjs` (9 mutations).
     - ⚠ **Residuals (iii) and (iv) below are the same CLASS and are still open**, and F-329 residual #3 is the audience-ceiling consequence of it.
-  - **(ii) PARTIAL — the rules now NAME Grep/Glob but enforcement is still unproven.** `main/runtime/claude/loader.js:104` `SECRET_TOOLS = ['Read','Grep','Glob']`, applied at `:117`; the docblock at `:101-103` still concedes "an unrecognized rule is a harmless no-op on this CLI". SDK path only (`main/session-query.js:43`), not the CLI/headless spawn.
+  - **(ii) PARTIAL — the rules now NAME Grep/Glob but enforcement is still unproven.** `main/runtime/claude/tools.js:104` `SECRET_TOOLS = ['Read','Grep','Glob']`, applied at `:117`; the docblock at `:101-103` still concedes "an unrecognized rule is a harmless no-op on this CLI". SDK path only (`main/session-query.js:43`), not the CLI/headless spawn.
   - **(iii) STILL OPEN — a permissive tool mode can read the credential dirs via the shell.** `Bash` is in `SESSION_GATED_WORK_TOOLS` (`main/session-profiles.js:94`), so under `full` + `bypass` (`BYPASS_TOOLS` at `:348`) it auto-runs, and the deny rules cover only Read/Grep/Glob.
   - **(iv) STILL OPEN — safeStorage-unavailable fallback.** `main/mcp-config.js:47` `DT_KEY_PLAIN`, written unencrypted at `:193`, read at `:207`.
 - Proposed resolution: defer; do the headless deny-rule threading with the next spawner pass. **(i) is the one with a real blast radius — it is the 90-day device token in cleartext behind a tool the operator may have pre-approved.**
@@ -645,7 +645,7 @@ COMMIT;
 | `src/features/channels/lib/group-thread.ts` 819 | **428** | `-markers` 176 · `-render` 162 · `-types` 131 · `-draft` 127; the grouping state machine kept WHOLE per §2's reducer carve-out, all public names re-exported so no importer changed |
 
 - **`src/shared/auth/mcp-oauth.ts` is 498 and deliberately NOT exempted** — unchanged, two lines of headroom. Its stale "sits at EXACTLY 500" comment has been corrected in `eslint.config.mjs`.
-- **THE DESKTOP CLUSTER GOT WORSE WHILE THE WEB TREE GOT BETTER — FOUR files at exactly 500 now, not three:** `main/ui-sync.js`, `main/session-profiles.js`, `main/session-engine.js`, and **`main/session-reducer.js`, which this entry recorded at 496 and is at the cap** — plus `test/session-chrome.test.mjs` at 500. **A file at 500 cannot absorb a COMMENT**, so all five need a split before they can be *documented*. That is not hypothetical: the `doplToolsPolicy` correction (F-179) belonged in `session-profiles.js` and had to be written in `runtime/claude/loader.js` instead. The desktop config has the same rule at the same severity and **no exemptions at all**; only `renderer/app/**` is ignored. The one over-cap file in either tree is `renderer/session/session.css` at 1064, which nothing lints.
+- **THE DESKTOP CLUSTER GOT WORSE WHILE THE WEB TREE GOT BETTER — FOUR files at exactly 500 now, not three:** `main/ui-sync.js`, `main/session-profiles.js`, `main/session-engine.js`, and **`main/session-reducer.js`, which this entry recorded at 496 and is at the cap** — plus `test/session-chrome.test.mjs` at 500. **A file at 500 cannot absorb a COMMENT**, so all five need a split before they can be *documented*. That is not hypothetical: the `doplToolsPolicy` correction (F-179) belonged in `session-profiles.js` and had to be written in `runtime/claude/mcp.js` instead. The desktop config has the same rule at the same severity and **no exemptions at all**; only `renderer/app/**` is ignored. The one over-cap file in either tree is `renderer/session/session.css` at 1064, which nothing lints.
 - **⚠ A NUMBER THIS ENTRY PUBLISHED WAS UNREPRODUCIBLE.** It said `test/ui-sync-tables.test.mjs` "is 496 … four lines from the cap". **It is 359** (248 at HEAD, so it did grow — but 496 was never a measurement). A number nobody can reproduce is worse than none: it retires a file from the reader's watch list while looking like diligence. Also corrected against a full re-measure: `main/channel-listener.js` is **493** not 494, and **`main/consent-watcher.js` at 492 was missing from every previous band**. Separately, **eight `test/*.mjs` files sit within eleven lines of the cap** (499 down to 489) and not one had been named here.
 - **The extraction-then-drift pattern, re-measured:** `main/targeting.js` 395 → **424**, `main/trigger.js` 394 → **439**, `main/session-reducer.js` 496 → **500**. An extraction buys headroom; it does not buy a habit.
 - Proposed resolution: refactor the list one file at a time, outside a hardening round. **The web tree just proved this works when a wave actually does it** — `server.ts`, this entry's standing "first, on reach" pick, went 1045 → 227. Consider making the exemption a size CEILING rather than an off switch. **DO NOT ADD TO THE EXEMPTION LIST — split the file instead.**
@@ -807,7 +807,7 @@ COMMIT;
 - Status: open (residual (c))
 
 ### F-113: One agent handle, several concurrent sessions — the stamp names a SLOT, not a run
-- Location: `dopl-desktop-app/main/runtime/claude/loader.js › buildMcpServers` (the only surviving spawn-config builder). ⚠ **This entry was anchored on `spawnConfigBody` / `writeSpawnConfig` in `mcp-config.js`, and BOTH WERE DELETED 2026-08-26** (F-080 (i)) — residual (a) below is therefore about a path that no longer exists, and is re-stated as history.
+- Location: `dopl-desktop-app/main/runtime/claude/mcp.js › buildMcpServers` (the only surviving spawn-config builder). ⚠ **This entry was anchored on `spawnConfigBody` / `writeSpawnConfig` in `mcp-config.js`, and BOTH WERE DELETED 2026-08-26** (F-080 (i)) — residual (a) below is therefore about a path that no longer exists, and is re-stated as history.
 - Found during: the 2026-08-01 two-agent live run
 - Severity: smell (the wire-identity gap itself is closed)
 - **Rewritten down to the residuals 2026-08-08; both re-verified, and the rollback did not touch either — the stamp is server-side and slot-keyed.**
@@ -836,13 +836,13 @@ COMMIT;
 - Status: open (residual (a))
 
 ### F-116: The F1–F7 review round — three surviving residuals
-- Location: `packages/mcp-server/src/tools/channel-render.ts:299`; `packages/dopl-client/src/channel.ts:188`; `src/app/api/mcp/route.ts:82,89` and `dopl-desktop-app/main/runtime/claude/loader.js:181,231`
+- Location: `packages/mcp-server/src/tools/channel-render.ts:299`; `packages/dopl-client/src/channel.ts:188`; `src/app/api/mcp/route.ts:82,89` and `dopl-desktop-app/main/runtime/claude/mcp.js:181,231`
 - Found during: the adversarial review over the F1–F7 wave (2026-08-01)
 - Severity: smell
 - **Rewritten 2026-08-08. Two residuals no longer apply** ((a) the milestone-cadence release note — the lane that delivered milestones is deleted; (c) the `to_agents` 64-cap measurement — `toAgent`/`toAgents` are `z.never()`). Three re-verified:
   - **(b) `· no thread` prints on a page whose only tags are ad-hoc.** `anyThreaded = messages.some((m) => threadIdOf(m) !== undefined)` counts ANY tag, and `threadTagOf` then prints `· no thread`. Cosmetic; rename to `· untagged` if that file is touched.
   - **(d) `@dopl/client.postMessage` returns `{ threadClosed: false }` where a malformed empty 2xx body once returned `undefined`.** Unreachable (the transport throws on non-2xx first); recorded against the docblock's strict-additivity claim, not as a defect.
-  - **(e) `session_id` and `appVersion` never co-occur on one row, so the forensic join is still missing.** `/api/mcp/route.ts` reads only `readRuntimeHeader` (`:82`) and `readSessionIdHeader` (`:89`) and forwards no version; `runtime/claude/loader.js` sets `X-Dopl-Runtime` (`:181`) and `X-Dopl-Session-Id` (`:231`) and no version header. The plumbing exists elsewhere (`src/shared/auth/app-version-header.ts:50`, read at `with-workspace-auth.ts:218`, sent by `main/app-version.js:25`), so this is a wire change on two surfaces, not a guard. **Confirmed real in prod rows during the 2026-08-02 incident**: SDK-lane posts carry `session_id` + `runtime` and no `appVersion`; lifecycle posts carry `appVersion` and no `session_id`.
+  - **(e) `session_id` and `appVersion` never co-occur on one row, so the forensic join is still missing.** `/api/mcp/route.ts` reads only `readRuntimeHeader` (`:82`) and `readSessionIdHeader` (`:89`) and forwards no version; `runtime/claude/mcp.js` sets `X-Dopl-Runtime` (`:181`) and `X-Dopl-Session-Id` (`:231`) and no version header. The plumbing exists elsewhere (`src/shared/auth/app-version-header.ts:50`, read at `with-workspace-auth.ts:218`, sent by `main/app-version.js:25`), so this is a wire change on two surfaces, not a guard. **Confirmed real in prod rows during the 2026-08-02 incident**: SDK-lane posts carry `session_id` + `runtime` and no `appVersion`; lifecycle posts carry `appVersion` and no `session_id`.
 - Status: open (residuals)
 
 ### F-118: ATTENDED HANDOFF — five residuals, every one a consequence of "resolve locally, decide nothing on the server" — ✅ RESOLVED 2026-08-30
@@ -1112,12 +1112,12 @@ COMMIT;
 ## F-177 — `full` means full: the one surviving conditional
 
 - Status: open (one conditional follow-up; the round itself is resolved and deleted — git remembers)
-- Found during: the two spawn lanes disagreeing about `full` (2026-08-08). Full statement of the rules is in [ENGINEERING.md §18, "`full` MEANS FULL"](ENGINEERING.md). Verified on disk 2026-08-11: `main/session-profiles.js:99` is literally `const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();` and `main/runtime/claude/loader.js:190` carries `alwaysLoad: true` on the dopl MCP entry.
+- Found during: the two spawn lanes disagreeing about `full` (2026-08-08). Full statement of the rules is in [ENGINEERING.md §18, "`full` MEANS FULL"](ENGINEERING.md). Verified on disk 2026-08-11: `main/session-profiles.js:99` is literally `const SESSION_HARD_DENY = UNIVERSAL_HARD_DENY.slice();` and `main/runtime/claude/mcp.js:190` carries `alwaysLoad: true` on the dopl MCP entry.
 - Severity: smell (a conditional, not a defect)
 
 - **`alwaysLoad` was added to the SDK lane only.** The headless `--mcp-config` file (`main/mcp-config.js`) is compared as exact bytes, and headless `full` is already documented as MCP-limited (no `--allowedTools` means non-pre-approved tools auto-deny with no TTY), so the field buys nothing there today. **Add it if the headless lane ever pre-approves dopl tools under `full`.**
 - **A note that is NOT debt, kept because it is the argument someone will re-open:** an approved `Task`/`Agent` is an approval of everything the subagent then does — it does not inherit this session's `canUseTool` bound. That was FIX H3's case for the old split, and F-177 answered it with the operator's click rather than with the tool table, because the same session can already run `Bash`. If it ever needs a stronger answer, the place is an `AgentDefinition` with its own `disallowedTools`, not a return to the split.
-- **DELETED AS STALE 2026-08-11 — this entry's third open item.** It read: *"`buildMcpServers` passes `doplToolsPolicy` as an array of STRINGS, while the SDK types `McpHttpServerConfig.tools` as `McpServerToolPolicy[]` … if the string form is ignored at runtime, that layer is inert and should be re-shaped."* **The field is no longer sent at all** — F-179 established that the string form was not ignored, it caused the CLI to drop the whole server entry, and the assignment was removed (`runtime/claude/loader.js:216` now records where it stood). The item describes code that does not exist.
+- **DELETED AS STALE 2026-08-11 — this entry's third open item.** It read: *"`buildMcpServers` passes `doplToolsPolicy` as an array of STRINGS, while the SDK types `McpHttpServerConfig.tools` as `McpServerToolPolicy[]` … if the string form is ignored at runtime, that layer is inert and should be re-shaped."* **The field is no longer sent at all** — F-179 established that the string form was not ignored, it caused the CLI to drop the whole server entry, and the assignment was removed (`runtime/claude/mcp.js:216` now records where it stood). The item describes code that does not exist.
 - Proposed resolution: defer — conditional on the headless lane changing.
 
 ---
@@ -2074,7 +2074,7 @@ The nine were Slack, Figma, Dopl, Attio, Notion, Granola, Google Drive, Google C
 
 **RESOLVED — R1 (suppress at the process boundary) + R3a (framing belt). R3b deferred.**
 
-- **R1: `runtime/claude/loader.js › buildScrubbedEnv` sets `ENABLE_CLAUDEAI_MCP_SERVERS='0'`,** written **last and unconditionally** so an inherited `=1` in the parent env cannot re-admit the lane (the name does not match `PERMISSION_ENV_RE`, so it would otherwise copy straight through the scrub loop). Exported as `CLAUDEAI_MCP_ENV` / `CLAUDEAI_MCP_OFF` so the value has one definition.
+- **R1: `runtime/claude/client.js › buildScrubbedEnv` sets `ENABLE_CLAUDEAI_MCP_SERVERS='0'`,** written **last and unconditionally** so an inherited `=1` in the parent env cannot re-admit the lane (the name does not match `PERMISSION_ENV_RE`, so it would otherwise copy straight through the scrub loop). Exported as `CLAUDEAI_MCP_ENV` / `CLAUDEAI_MCP_OFF` so the value has one definition.
 - ⚠ **POLARITY WAS INFERRED FROM MINIFIED CODE AND THEN VERIFIED TWICE, WHICH IS THE ONLY REASON IT IS TRUSTED.** Statically: the eligibility chain is `if (su(process.env.ENABLE_CLAUDEAI_MCP_SERVERS) || <setting>) return {}`, and `su` is `e === undefined ? false : typeof e === 'boolean' ? !e : ['0','false','no','off'].includes(String(e).toLowerCase().trim())` — i.e. **"explicitly set FALSY"**, so a var named `ENABLE_` *disables*. Empirically: the table above. ⚠ **`''` IS A SILENT NO-OP** — `su('')` is false, so *clearing* this var re-admits nine servers and nothing errors. That trap is a test case, not a comment.
 - **R3a: `prompt-framing-text.js › LANE_EXCLUSIVITY`**, spread into `prompt-framing.js › firstActions` so it rides **both sides**: `mcp__dopl__dopl_channel` is the only path off this machine, and no other `mcp__` server (Slack, Gmail, Drive, anything that is not `mcp__dopl__`) is this session's lane. ⚠ **It went in the TEXT module, not the assembly module, because that is the seam that file's own header declares** — fixed text with nothing interpolated — and because `prompt-framing.js` was at 499 of the cap. Two rules it had to clear: no em dash (`prompt-framing.test.mjs` scans every line naming `dopl_channel`) and no `task=`.
 - ⚠ **NEITHER HALF IS THE CONTAINMENT, and the entry says so where it cannot be skimmed past.** Execution was never reachable: connector tools are unclassified, `AUTO_TOOLS`/`BYPASS_TOOLS` are positive allow-lists, so `grantDecision` gates them and a windowless session denies — all 12 profile × mode cells pinned by `session-tool-name-prefix.test.mjs`. **What this removes is the OFFERED SURFACE:** an inventory of the operator's connected accounts sitting in a prompt that can be auto-sent, and its per-turn token cost across every live session.
@@ -3601,7 +3601,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   `kind='link'` container; the read side is closed by `src/shared/auth/with-workspace-auth.ts`
   (viewer+ default now rejects guest) and RLS (`is_workspace_member(...,'viewer')` false for a
   guest), plus channel payloads carrying no KB. The pinning seam if it is ever forbidden is
-  `dopl-desktop-app/main/runtime/claude/loader.js` (which tools a home-channel agent loads).
+  `dopl-desktop-app/main/runtime/claude/mcp.js` (which tools a home-channel agent loads).
 - Found during: **guest-role M1, 2026-08-25** — Samuel's Q5 ruling ("accept the residual for MVP").
 - Severity: **smell / accepted-for-MVP** — no READ exposure to the guest at any layer (API is
   viewer+ → guest 403; RLS denies; the channel carries no KB), so nothing leaks. What is filed is
@@ -3609,7 +3609,7 @@ sort -n | tail -1` → **F-316** on 2026-08-25, so the next free was F-317. Re-r
   relationship the guest can never read back. Harmless for the read direction F-319 is about, but a
   latent oddity (orphaned, guest-invisible KB accreting inside a two-person container).
 - Proposed resolution: **defer, per Samuel's Q5.** If the product later wants home-channel agents to
-  never author container KB at all, that is a separate `runtime/claude/loader.js` tool-pinning change, not a
+  never author container KB at all, that is a separate `runtime/claude/mcp.js` tool-pinning change, not a
   server fence.
 - ✅ **THE READ DIRECTION IS NOW CLOSED, AND THE RESIDUAL IS AUTHORING ALONE (Home Knowledge Panels
   M5, 2026-08-26).** This entry recorded an ASYMMETRY whose read half was closed only by the guest's
@@ -3870,7 +3870,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
      credential is the only one they can reach. `dopl-desktop-app/main/mcp-config.js ›
      writeSpawnConfig` wrote the operator's **UNLOCKED 90-day device token in plaintext** to
      `userData/mcp-spawn.json` on every signed-in launch, and
-     `main/runtime/claude/loader.js › buildSecretPathDenyRules` denied that path only for
+     `main/runtime/claude/tools.js › buildSecretPathDenyRules` denied that path only for
      `SECRET_TOOLS = ['Read','Grep','Glob']` — **`Bash` is not on that list**, and `full`'s deny set
      does not cover it. One `cat` and the session holds an unlocked credential: B1 voided for the
      rest of the session, and layer A with it (the audience ceiling only fires on
@@ -5844,7 +5844,7 @@ not to pick a side. Two candidate fixes, both real work:
 for VENDOR NAMES and one platform's API SHAPES (`sdk.query`, `canUseTool`, `permissionMode`). A
 field name that a platform happens to share with core reads as neither.
 
-- ⚠ **2026-09-23: `wrapGate` AND ITS MODULE ARE DELETED** (the w3-left leftovers pass — dead since P4-12, when the engine's quiet emit lost its last receiver), and the Codex wire translation moved to `main/runtime/codex/server-requests.js › answer`. The held callback is the shared `main/runtime/held-gate.js › makeHeldGate` on all three runtimes (`› settledVerdict` is the one allow/deny shape). The contract itself is still undeclared: it now stands on `session-permissions.js › resolvePerm`, `session-outbound-tag.js` and `session-gate-bridge.js` reading `verdict.behavior`. Status: open (declare it in `runtime/contract.js`).
+- ⚠ **2026-09-23: `wrapGate` AND ITS MODULE ARE DELETED** (the w3-left leftovers pass — dead since P4-12, when the engine's quiet emit lost its last receiver), and the Codex wire translation moved to `main/runtime/codex/approval.js › answer`. The held callback is the shared `main/runtime/held-gate.js › makeHeldGate` on all three runtimes (`› settledVerdict` is the one allow/deny shape). The contract itself is still undeclared: it now stands on `session-permissions.js › resolvePerm`, `session-outbound-tag.js` and `session-gate-bridge.js` reading `verdict.behavior`. Status: open (declare it in `runtime/contract.js`).
 
 ### F-383 — three desktop files are over the 500-line cap AT HEAD, so `npm run lint` in the desktop job is red on master (2026-08-31)
 
@@ -5941,7 +5941,7 @@ Status: **re-scoped 2026-10-02 (docs audit).** `descriptor.ambientFences` / `env
 
 `descriptor.ambientFences.envDeny` exists because "ambient config that survives the scrub can flip
 the gate", and both other adapters populate it: they hand a SCRUBBED environment to a CHILD PROCESS
-(`runtime/claude/loader.js › buildScrubbedEnv`, `runtime/codex/launch-spec.js › buildScrubbedEnv`).
+(`runtime/claude/client.js › buildScrubbedEnv`, `runtime/codex/launch-spec.js › buildScrubbedEnv`).
 
 **The Cursor adapter has no child process.** `@cursor/sdk` local mode runs IN THE ELECTRON MAIN
 PROCESS and reads `process.env` directly, so a "scrub" would mean mutating Dopl's own environment —
@@ -6101,7 +6101,7 @@ surface warns, design §3.2); what is lost is the main-process record when the e
 
 ### F-389 — an adapter comment cited a test file that has never existed (2026-08-31, port wave D)
 
-The Codex approval module (approval.js, deleted 2026-09-23; its live half is `main/runtime/codex/server-requests.js`) claimed that a suite named codex-approval.test.mjs (spelled out
+The Codex approval module (the first approval.js, deleted 2026-09-23; its live half, then named server-requests, is `main/runtime/codex/approval.js` since 2026-10-13) claimed that a suite named codex-approval.test.mjs (spelled out
 rather than cited, because the whole point is that the path resolves to nothing and
 `scripts/check-doc-refs.mjs` would refuse a citation of it) *"pins that no verdict, however wide,
 produces the other word"* — the guarantee that `acceptForSession` is a declared
@@ -8934,7 +8934,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   2. **PRE-FLIGHT.** `session-query.js › startQuery` POSTs an MCP `initialize` to `MCP_URL` with a
      25s budget before every spawn, so the desktop pays the route's compile instead of the child.
      ⚠ It cannot fail a launch: every outcome (401, 500, throw, timeout) resolves to a word for the log.
-  3. **THE CLI KNOB, RAISED.** `runtime/claude/loader.js › buildScrubbedEnv` sets
+  3. **THE CLI KNOB, RAISED.** `runtime/claude/client.js › buildScrubbedEnv` sets
      `MCP_CONNECT_TIMEOUT_MS=30000`, last and unconditionally, on `ENABLE_CLAUDEAI_MCP_SERVERS`'s rule.
   4. **SURFACED.** A local-only `diag` sentence on the session projection
      (`session-metrics.js › metrics` live, `session-summary.js › endedSummary` frozen, via
@@ -10545,7 +10545,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 ### F-760 — two stale comments survived the comment skeleton (2026-09-23)
 
-- Location: `dopl-desktop-app/main/session-private.js › channelMessageMode`'s docblock ("COERCED BY THE STORE, NOT HERE" still names the deleted `normalizePreset`; the store validates through `launch-selection.js › patchRejections` / `› legacyPreset` now), and the header of the unapplied `supabase/migrations/20261021120000_agent_identities_runtime.sql`, which names the deleted core session-model module as the home of the Claude aliases (they are `main/runtime/claude/model-table.js`'s now).
+- Location: `dopl-desktop-app/main/session-private.js › channelMessageMode`'s docblock ("COERCED BY THE STORE, NOT HERE" still names the deleted `normalizePreset`; the store validates through `launch-selection.js › patchRejections` / `› legacyPreset` now), and the header of the unapplied `supabase/migrations/20261021120000_agent_identities_runtime.sql`, which names the deleted core session-model module as the home of the Claude aliases (they moved to the Claude adapter's model table, itself deleted 2026-10-08).
 - Found during: the 2026-09-23 docs pass, re-grepping every deleted symbol after the w3-left merge.
 - Proposed resolution: repoint both comments (the migration is unapplied, so its header can still change before release).
 - Status: RESOLVED (2026-09-23, release integration: both comments repointed before 20261021 was applied).
@@ -10570,7 +10570,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 - Location: `dopl-desktop-app/main/runtime/codex/operator-tools.js › nativesOn`,
   `dopl-desktop-app/main/runtime/claude/operator-tools.js › withOperatorTools`,
-  `dopl-desktop-app/main/runtime/claude/loader.js › buildSecretPathDenyRules`.
+  `dopl-desktop-app/main/runtime/claude/tools.js › buildSecretPathDenyRules`.
 - Found during: the "Use my tools" build (INVARIANTS §11 "USE MY TOOLS").
 - (a) A Codex session launched into a PRIVATE channel lifts the native fences (sub-agents, goals,
   sleep, memories, apps, plugins, skills). A peer joining mid-session drops every operator MCP call at
@@ -10654,3 +10654,60 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - (c) `GET /api/oauth/grants` and `DELETE /api/oauth/grants/{id}` have no UI caller since the Agents panel moved to `/api/oauth/apps`. Keep them or delete them (Samuel).
 - (d) The review asked `profileOffersGlasses` to honor `readToolSetClaim`. Not done: the tool-set claim only renames `dopl_*` tools and never removes one, and the glasses tools are the same in every set, so the argument could not change the answer (`core/mcp/exposure.ts` says so). Add it if a tool set ever drops the glasses tools.
 - Status: OPEN — (a), (c), (d); (b) resolved.
+
+### F-771 — "every file under `main/runtime/**` is `.js`" vs the non-code files that live there (2026-10-13)
+
+- Location: docs/INVARIANTS.md §11.0 (the "Every file under `main/runtime/**` must be `.js`" sentence); `dopl-desktop-app/test/core-vocabulary.test.mjs` (the ".js" loop in its runtime-tree case); the files `main/runtime/claude/skills/dopl-channels-wait/SKILL.md`, `…/dopl-channel-wait.sh`, `main/runtime/model-preferences.seed.json`.
+- Found during: the runtime scaffold audit (`docs/specs/runtime-scaffold.md` §6 item 7, branch `runtime/muse-scaffold`).
+- The rule's stated reason is the 500-line cap (`main/**/*.js` in `eslint.config.js`): a `.mjs`/`.ts` file there would be uncapped. Three non-`.js` files are in the tree today (`find dopl-desktop-app/main/runtime -type f ! -name '*.js'` @ 2026-10-13: 3). They are ASSETS, not code, so the cap's argument does not reach them — but the rule as written forbids them.
+- The test that claims to enforce it is VACUOUS: `core-vocabulary.test.mjs › walk` already keeps only `.js` entries, so the loop asserting "every entry ends in `.js`" can never fail. A `.mjs` file added under `main/runtime/` would pass it.
+- Cannot tell which side is wrong: either the rule means "every CODE file" (doc fix + make the test walk all files and allow-list asset extensions) or the assets belong outside `main/runtime/` (code fix: move the skill bundle and the seed). Samuel decides.
+- Status: OPEN.
+
+### F-772 — Muse's `context.foreign_personal_skills=false` is accepted by `muse serve` but does not hide foreign skills (2026-10-13)
+
+- Location: `dopl-desktop-app/main/runtime/muse/client.js › SERVE_SETTINGS`; `muse/config-home.js` (the private HOME that actually fences).
+- Found during: the Muse adapter build (branch `runtime/muse-scaffold`), live against muse 1.4.7-R6101.1 with the echo provider.
+- Measured: with `HOME` holding `.claude/skills/<x>/SKILL.md` and `.codex/skills/<y>/SKILL.md`, `skill/list` on a fresh session lists BOTH (`source: "user"`) whether `-c context.foreign_personal_skills` is `true` or `false`; the key is accepted (an unknown key refuses the run, exit 2), a wrong JSON type refuses it (exit 3). MSP-REFERENCE / Meta's SDK docs say the setting turns those roots off. Either serve ignores it, or it governs prompt injection and not the catalog — cannot tell without a real model turn.
+- Not a hole in Dopl today: every Dopl spawn runs with `HOME` and `XDG_*` in Dopl's private home, which holds no `.claude`/`.codex`/`.agents` (a launch with one is refused), and `test/muse-live.test.mjs` proves an operator skill is invisible through Dopl's env. The setting is kept as belt-and-braces.
+- Fix: re-measure on the next Muse release (`MUSE_LIVE_BIN=… node --test test/muse-live.test.mjs` plus the skill/list probe with the toggle); drop the setting if it never takes, or ask Meta.
+- Status: OPEN.
+
+### F-773 — One `muse serve` local trace log matched a dummy MCP bearer once; not reproduced (2026-10-13)
+
+- Location: `<private home>/data/muse/local-tracing/bootstrap/cli-*.log` (Muse's own local traces; `TBH_DISABLE_TELEMETRY=1` stops upload, not local tracing); `dopl-desktop-app/main/runtime/muse/mcp.js › buildDoplServerEntry` (the bearer rides `session/start.config.mcpServers.*.headers`).
+- Found during: the Muse adapter smoke. A `grep -rl "Bearer zzz"` over the sandbox data dir listed one bootstrap trace after a probe that sent a required MCP server with that dummy header to an unreachable URL; the file had rotated out (21-file cap) before it could be read. A repeat with a unique canary bearer, same failing config, found the canary NOWHERE on disk (full walk of the home).
+- Cannot tell whether a trace ever records session MCP headers (e.g. only on some failure path). The home is `0700` and owner-only, so the exposure would be same-user only — the same class as the operator's own Muse credential file.
+- Fix: a live smoke with a real Dopl token on a reachable server, then walk `data/muse/local-tracing` for it; if headers ever land there, find Muse's trace-level knob or pass the bearer through an env-expanded stdio wrapper instead.
+- Status: OPEN.
+
+### F-774 — The MCP posture.tools enum grows with every runtime, and the schema budget ratchet refuses it (2026-10-13)
+
+- Location: `packages/mcp-server/src/tools/channel-schema-launch-fields.ts › POSTURE_WORDS` (every runtime's tool words, required there by `dopl-desktop-app/test/runtime-vocab-cross-tree.test.mjs`); `packages/mcp-server/src/tools/channel-schema.ts › SCHEMA_MAX_CHARS`; `packages/mcp-server/src/tool-budget.test.ts`.
+- Found during: the Grok adapter. Measured on branch `runtime/muse-scaffold` (re-derive: `cd packages/mcp-server && npx vitest run src/tools/channel-schema-budget.test.ts src/tool-budget.test.ts`): `tool-budget.test.ts` was ALREADY red before Grok and its numbers do not move with Grok's words (`dopl_channel` 9436 > ceiling 9360, served-per-connection 50475 > 50399 — cause not traced here); Grok's three words turn `channel-schema-budget.test.ts` red (9180 > 9155; it was exactly at its ceiling with Muse's). The ratchet's message says "do not raise the number", but the words are a closed vocabulary the cross-tree suite REQUIRES in the enum — no doctrine move removes them.
+- Fix (Samuel to rule): either raise both ceilings by the measured size of each new runtime's words in the same change (a vocabulary cost, not prose), or narrow the MCP enum to the three levels + a pattern and drop the per-word check from the cross-tree suite (the desktop already validates against the resolved runtime).
+- Correction (re-measured 2026-10-13, word lines removed one runtime at a time): BOTH reds are the new runtime words, and master (`c01f639f`) is green on both suites. Served `dopl_channel` schema without Muse/Grok words 9104 (`channel-schema-budget`) / 9360 (`tool-budget`); Muse adds +41 (9145 / 9401 — inside the 9155 schema headroom, over the exact 9360 ratchet, so `tool-budget` went red with Muse, not before it); Grok adds +35 (9180 / 9436). Served total 50399 → 50475 (+76).
+- Ruling (Samuel, 2026-10-13, verbatim): "yeah that's fine we can raise." — raise the ceilings by each new runtime's measured words; the enum stays per-word.
+- Status: RESOLVED (commit on `runtime/muse-scaffold`, `fix(mcp): raise schema budgets for Muse + Grok tool words (F-774)`): `SCHEMA_MAX_CHARS` 9155 → 9180, `SCHEMA_CEILINGS.dopl_channel` 9360 → 9436, `SERVED_TOTAL_CEILING` 50399 → 50475. Every future runtime pays its words the same way, in the same change, citing this ruling.
+
+### F-775 — `grok agent` deletes `$GROK_HOME/requirements.toml` at `initialize`; whether it applied it first is unmeasured (2026-10-13)
+
+- Location: `dopl-desktop-app/main/runtime/grok/config-home.js › REQUIREMENTS_TOML`, `› writeConfig`.
+- Found during: the Grok live tier (grok 1.0.52): the file Dopl writes is gone after `initialize` (`config.toml` stays). `grok inspect --json` with the file present shows its pins enforced (`projectMcpServers` off, `mcpServerAllowlist: name:dopl_session`), but inspect is a different process. Dopl rewrites it before every spawn, so a later process always sees it at start.
+- What still holds, measured: a project `.mcp.json` in a folder Dopl never trusts starts NO server under `grok agent`, file or no file — folder trust is the fence actually observed; the ask rule lives in `config.toml`, which Grok keeps.
+- Fix: smoke S16 (`docs/specs/grok-runtime.md` §10) — a trusted-folder `.mcp.json` in a throwaway home, with and without the file, to learn whether the agent applies `requirements.toml` before deleting it; if not, move the pins to a layer Grok keeps (`managed_config.toml` is refused as ambient today).
+- Status: OPEN.
+
+### F-776 — This worktree's `node_modules` is the main checkout's, so `@dopl/contracts` typechecks against master (2026-10-13)
+
+- Location: `/Users/samuelwang/Downloads/sie-runtime-muse/node_modules` → symlink to `setup-intelligence-engine/node_modules`, whose `@dopl/contracts` links `../../packages/contracts` IN THE MAIN CHECKOUT.
+- Found during: the Grok cross-tree change. `npx tsc --noEmit` at the root and `npm --prefix packages/mcp-server run build` report `"promptUnmatched"` / `"default"` not assignable to `LaunchToolMode` — master's contracts, not this branch's. With `@dopl/contracts` mapped to `./packages/contracts/src` (a throwaway tsconfig `paths` override) the root typecheck is clean. The `dist/` emit is unaffected (tsc still emits).
+- Fix: worktrees for a branch that touches `packages/contracts` get their own `npm install` (or a `paths` mapping), else every typecheck there is against the wrong source.
+- Status: OPEN (environment).
+
+### F-777 — An operator's Deny on a parked Grok call ends the whole turn (2026-10-13)
+
+- Location: `dopl-desktop-app/main/runtime/grok/approval.js › makeApprovalDriver` (`onPermission`).
+- Found during: the Grok adapter. A verdict the gate SETTLES is answered in the PreToolUse hook, where `deny` fails only that tool; a verdict that waits for the operator can only be answered in `session/request_permission`, whose `reject_once` cancels the turn (`stopReason: "cancelled"`, `PermissionRejected` — measured, `smoke-s2`). The hook cannot wait for a person: it fails OPEN on timeout.
+- Fix: measure whether a hook reply can be deferred past its timeout safely, or whether Grok offers a per-call reject that continues the turn (smoke S11); until then the operator's Deny stops the agent's turn, which fails closed.
+- Status: OPEN.

@@ -24,8 +24,8 @@
 //
 // HOW TO FIX A FAILURE. Not by moving the token into a comment. Either the code belongs in an
 // adapter (move it), or it is asking a question core is allowed to ask — in which case ask it
-// through `main/runtime/index.js`, which answers with a descriptor field or one of the sixteen
-// contract methods and names no vendor.
+// through `main/runtime/index.js`, which answers with a descriptor field or one of the
+// `contract.js › RUNTIME_METHODS` (or, where present, `OPTIONAL_METHODS`) and names no vendor.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

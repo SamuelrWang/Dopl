@@ -7,7 +7,9 @@
 //   `includePartialMessages: false`  the outbound card shows the exact final bytes a post sends,
 //                                    and no input-rewriting hook is ever set.
 
-const loader = require('./loader');
+const client = require('./client');
+const mcp = require('./mcp');
+const resolveBin = require('./resolve-bin');
 const tools = require('./tools');
 const axisB = require('./axis-b');
 const agentOps = require('../../agent-self-ops');
@@ -19,7 +21,7 @@ const sessionCredential = require('../../session-credential');
 const sessionDirected = require('../../session-directed');
 const fold = require('./fold');
 const launchContract = require('./launch-contract');
-const { readCount } = require('../sdk-shape');
+const { readCount } = require('../kit/usage');
 const operatorTools = require('./operator-tools');
 const { diag } = require('../../diag');
 
@@ -27,6 +29,12 @@ const { diag } = require('../../diag');
 // (deleted by ruling), not per profile, not settable. 8000 = 40 × the old 200-turn default, so it
 // cannot fire in an ordinary session; one number on every spawn shape, so a park cannot shed it.
 const SESSION_MAX_TURNS = 8000;
+
+// userData for the credential-path deny rules (`tools.js › buildSecretPathDenyRules`), or '' with no
+// app yet (a harness) — the home rules still apply. Read at launch, as Cursor's launch spec does.
+function userDataDir() {
+  try { return require('electron').app.getPath('userData'); } catch (_) { return ''; }
+}
 
 function buildOptions(s, dispatch) {
   const cfg = tools.buildSessionToolConfig(s.profile);
@@ -38,15 +46,15 @@ function buildOptions(s, dispatch) {
     allowedTools: cfg.preApproved,
     // Hard-deny plus the credential-path rules: a shadowed read never reaches the gate, so only this
     // layer fences userData and the CLI's own config directory.
-    disallowedTools: cfg.disallowedTools.concat(loader.buildSecretPathDenyRules()),
+    disallowedTools: cfg.disallowedTools.concat(tools.buildSecretPathDenyRules(userDataDir())),
     // `sessionBearer(s)`: the container-locked child credential minted at spawn for a shared link
     // container ('' otherwise). It replaces the device token and is what refuses other workspaces
     // server-side; `X-Workspace-Id` is only a hint. Read, not minted: this function is synchronous.
-    mcpServers: loader.buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
+    mcpServers: mcp.buildMcpServers(cfg.doplToolsPolicy, s.workspaceId, sessionCredential.sessionBearer(s)),
     settingSources: [],
     permissionMode: 'default',
     // Permission knobs and inherited credentials scrubbed; Dopl's own token is the one credential.
-    env: credential.withCredential(loader.buildScrubbedEnv()),
+    env: credential.withCredential(client.buildScrubbedEnv()),
     // `diag` is injected so the gate bridge stays electron-free.
     canUseTool: axisB.makeCanUseTool(s, dispatch, diag),
     abortController: s.abortController,
@@ -54,10 +62,10 @@ function buildOptions(s, dispatch) {
     maxTurns: SESSION_MAX_TURNS,
   };
   // This run's slot key (X-Dopl-Session-Id → the server's `metadata.session_id`): a label, not a lock.
-  loader.withSessionStamp(options.mcpServers, store.slotKey(s));
+  mcp.withSessionStamp(options.mcpServers, store.slotKey(s));
   // This run's profile (X-Dopl-Tool-Profile): the server may only narrow the surface; it grants nothing.
-  loader.withToolProfileStamp(options.mcpServers, s.profile);
-  loader.withToolSetStamp(options.mcpServers, s.doplToolSet);
+  mcp.withToolProfileStamp(options.mcpServers, s.profile);
+  mcp.withToolSetStamp(options.mcpServers, s.doplToolSet);
   // The in-process rename/end server, beside the dopl entry; null mounts nothing (never breaks a spawn).
   const agentOpsServer = axisB.makeAgentOpsServer(s);
   if (agentOpsServer) options.mcpServers[agentOps.SERVER_KEY] = agentOpsServer;
@@ -68,7 +76,7 @@ function buildOptions(s, dispatch) {
   options.tools = Array.isArray(cfg.builtinTools) ? cfg.builtinTools.slice() : [];
   // "Use my tools" (`main/operator-tools.js › launchScope`): loaded at spawn, judged per turn by the gate.
   if (s.operatorTools) operatorTools.withOperatorTools(options);
-  const bin = loader.resolveClaudeExecutable();
+  const bin = resolveBin.resolveClaudeExecutable();
   if (bin) options.pathToClaudeCodeExecutable = bin;
   // The row's own launch value on the live roster; absent is the runtime default (`models.js › launchArg`).
   const model = models.launchArg(s.model);
@@ -111,7 +119,7 @@ function buildLaunchSpec(request) {
 /** Start a run. SYNCHRONOUS by contract: core assigns the handle at once, and an await between "the
  *  child exists" and "something points at it" is the two-children bug. */
 function start(spec) {
-  const sdk = loader.peekSdk();
+  const sdk = client.peekSdk();
   // A push the CLI folds into the running turn joins that turn (`fold.js`, P4-05).
   const watch = fold.makeFoldWatch((text) => sessionDirected.steerJoined(spec.session, text));
   const q = sdk.query({ prompt: watch.stamp(spec.prompt), options: spec.options });

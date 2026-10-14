@@ -23,7 +23,7 @@ const profiles = require(join(MAIN, "session-profiles.js"));
 const registry = require(join(MAIN, "runtime", "index.js"));
 const capability = require(join(MAIN, "runtime", "capability.js"));
 const tools = require(join(CODEX, "tools.js"));
-const serverRequests = require(join(CODEX, "server-requests.js"));
+const serverRequests = require(join(CODEX, "approval.js"));
 const mcp = require(join(CODEX, "mcp.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
 // ⚠ READ-ONLY HERE: the packaging pin is compared against `SUPPORTED_CLI`, which client.js owns.
@@ -197,7 +197,7 @@ test("a Dopl allow answers `accept`, and NOTHING ever answers `acceptForSession`
   assert.equal(decide({ toolName: CHANNEL, input: { op: "send", body: "hi" }, allowForTask: [key] }), "allow");
   assert.deepEqual(serverRequests.decisionReply("allow"), { decision: "accept" });
   // The source itself: every mention of the word is an argument in a comment, never a value.
-  const src = readFileSync(join(CODEX, "server-requests.js"), "utf8");
+  const src = readFileSync(join(CODEX, "approval.js"), "utf8");
   for (const line of src.split("\n")) {
     if (!line.includes("acceptForSession")) continue;
     assert.match(line.trim(), /^(\/\/|\*)/, `a CODE line names acceptForSession: ${line.trim()}`);
@@ -205,7 +205,7 @@ test("a Dopl allow answers `accept`, and NOTHING ever answers `acceptForSession`
 });
 
 test("THE MOUNT KEY AND THE ELICITATION'S SERVER COMPARISON ARE ONE CONSTANT", () => {
-  // 🔒 ⚠ THE JOIN THE WHOLE ALLOW PATH TURNS ON. `server-requests.js` opens the Dopl elicitation's
+  // 🔒 ⚠ THE JOIN THE WHOLE ALLOW PATH TURNS ON. `approval.js` opens the Dopl elicitation's
   // path on `serverName === mcp.SERVER_KEY`; `launch-spec.js` mounts the entry under a key. If
   // those were two literals, a rename could move the mount without moving the comparison — which
   // closes the channel silently, or (worse) leaves the old word available for something else to

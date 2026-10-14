@@ -40,6 +40,7 @@ import {
 const GATE = announceGate(liveGate());
 const require = createRequire(import.meta.url);
 const launchSpec = require('../main/runtime/codex/launch-spec.js');
+const { boundedInterrupt } = require('../main/runtime/kit/frame-queue.js');
 const normalize = require('../main/runtime/codex/normalize.js');
 
 // ⚠ A FRESH DIRECTORY PER RUN, NEVER THE REPO. `cwd` is the thread's captured working directory
@@ -152,7 +153,7 @@ describe('live: steer and interrupt target the ACTIVE turn, and only the active 
         },
       );
       // 🔒 ⚠ **BUT A SECOND `turn/interrupt` ANSWERS NOTHING AT ALL — NOT A RESULT, NOT AN ERROR.**
-      // This is the asymmetry that pays for `launch-handle.js › boundedInterrupt`. Steer rejects
+      // This is the asymmetry that pays for `kit/frame-queue.js › boundedInterrupt`. Steer rejects
       // cleanly in every dead-turn state, and an interrupt aimed at a turn that ended NORMALLY
       // rejects with the same `-32600`; only an interrupt aimed at an ALREADY-INTERRUPTED turn
       // just sits there. An unbounded `handle.interrupt()` would hand its caller a promise that
@@ -170,7 +171,7 @@ describe('live: steer and interrupt target the ACTIVE turn, and only the active 
       );
       second.catch(() => {}); // the request stays outstanding until the child dies; do not warn
       // ⚠ AND THE ADAPTER'S OWN VERB IS BOUNDED, so the same call through Dopl always settles.
-      await launchSpec.boundedInterrupt(conn.request('turn/interrupt', { threadId, turnId }));
+      await boundedInterrupt(conn.request('turn/interrupt', { threadId, turnId }));
     }
   });
 });

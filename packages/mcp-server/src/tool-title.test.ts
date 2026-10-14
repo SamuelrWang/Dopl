@@ -1,7 +1,7 @@
 /**
  * Every served tool's `title` is its own name. Codex copies a tool's `title` into its approval
  * request as `_meta.tool_title` — the request carries no other per-tool identity — and the desktop
- * refuses a Dopl approval it cannot name (`dopl-desktop-app/main/runtime/codex/server-requests.js ›
+ * refuses a Dopl approval it cannot name (`dopl-desktop-app/main/runtime/codex/approval.js ›
  * doplElicitation`). A tool served without it cannot be approved on Codex at all.
  *
  * Measured as served (real `createServer`, real transport), both registration paths included.

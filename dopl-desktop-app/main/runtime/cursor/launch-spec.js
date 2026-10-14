@@ -16,6 +16,7 @@ const channelDirs = require('../../channel-dirs');
 const store = require('../../session-store');
 const sessionCredential = require('../../session-credential');
 const capability = require('../capability');
+const { runHandle } = require('../kit/run-handle');
 const { diag } = require('../../diag');
 
 // Cursor's own default for a `full` session with no sandbox pick.
@@ -137,9 +138,8 @@ function start(spec) {
   const live = { agent: null };
   spec.conn = spec.wiring.usable ? mcp.connect(spec.wiring, appVersion()) : null;
   const iter = frames(spec, live);
-  return {
-    [Symbol.asyncIterator]() { return iter; },
-    next() { return iter.next(); },
+  return runHandle({
+    frames: iter,
     /** No interrupt exists on this runtime (the ship gate): log it rather than no-op silently
      *  (`abandon_timeout` also fires this). The tool surface stays open — that latch is `close()`'s. */
     interrupt() {
@@ -153,7 +153,7 @@ function start(spec) {
       try { if (live.agent && typeof live.agent[Symbol.asyncDispose] === 'function') live.agent[Symbol.asyncDispose](); } catch (_) { /* best effort */ }
       try { iter.return(); } catch (_) { /* best effort */ }
     },
-  };
+  });
 }
 
 /** Resume a parked conversation — refused while `usageResetsOnResume` is unmeasured; the adapter

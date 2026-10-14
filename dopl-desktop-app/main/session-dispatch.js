@@ -373,6 +373,8 @@ function mayWake(m, myUserId) {
 }
 
 const fromMe = (m, myUserId) => !!myUserId && String(m.authorUserId) === String(myUserId); // my account; blank matches nothing
+// A thread message this run was NOT handed freezes its `since=` mark (`session-gate.js › enqueue`, W2).
+const markGap = (s) => { if (s && s.catchUp) s.catchUp.gap = true; };
 
 function feedLiveSession(entry, m, myUserId) {
   // ⚠ THE kind FILTER IS THE LAST WORD ON THIS MACHINE — a non-'message' post reaches no
@@ -382,17 +384,18 @@ function feedLiveSession(entry, m, myUserId) {
   // a `task_progress` MILESTONE (feeding those spends one peer turn per milestone, on a stream
   // the product tells agents to post freely). Widening it also un-does the loop brake where a
   // loop is cheapest to start.
-  if (!m || m.kind !== 'message') return false;
+  if (!m) return false;
+  const live = sessionEngine.liveOnThread({ channelId: entry.channel.id, taskId: targeting.firstClassTaskId(m) });
+  // A thread row these returns never hand over gaps every live run but its author (W2; Samuel #4622: milestones too).
+  const unhanded = () => { for (const s of live) if (!wroteIt(s, m) && !authoredBySession(s, m)) markGap(s); return false; };
+  if (m.kind !== 'message') return unhanded();
   // ⚠ IDENTITY IS STILL REQUIRED AND STILL FAILS CLOSED. A machine that cannot say who it is has
   // no business deciding which of its agents a message is for — and since the narrowing it is
   // read for a second reason: a MEMBER recipient is routed by comparing against it.
-  if (!myUserId) return false;
+  if (!myUserId) return unhanded();
   // ⚠ AN AUTHOR-LESS POST FAILS CLOSED. A row with no author is a system row, nobody spoke, and
   // `authorLabel` would credit the words to nothing.
   if (!m.authorUserId) return false;
-  const taskId = targeting.firstClassTaskId(m);
-  const thread = { channelId: entry.channel.id, taskId: taskId };
-  const live = sessionEngine.liveOnThread(thread);
   if (!live.length) return false;
   const liveIds = live.map((s) => String(s.agentId || ''));
   const plan = planFor(m, liveIds, myUserId);
@@ -421,16 +424,16 @@ function feedLiveSession(entry, m, myUserId) {
     const named = plan.ids.indexOf(String(s.agentId || '')) !== -1;
     // ⚠ NOT A REFUSAL AND NOT A HOLD. Nothing was aimed at this session, so nothing was
     // declined — filing a `refused` receipt here would report a decision the machine never made.
-    if (!named && !plan.context) { skipped += 1; continue; }
+    if (!named && !plan.context) { skipped += 1; markGap(s); continue; }
     // ruling 5: parsed here, consumed by `session-seed.frameContinuation`. FRAMING ONLY — the
     // wake key is `wake` below.
     const addressing = addressingFor(s.agentId, plan.ids);
     const wake = named && wakeAllowed;
-    if (!mayFeed(s, wake)) { held += 1; ack(s, { held: 1 }); continue; }
+    if (!mayFeed(s, wake)) { held += 1; markGap(s); ack(s, { held: 1 }); continue; }
     const wasDormant = dormant(s);
     const ok = sessionEngine.feedInbound({
       channelId: entry.channel.id,
-      taskId: taskId,
+      taskId: targeting.firstClassTaskId(m),
       agentId: s.agentId,
       message: m.body,
       seq: m.seq, // the turn's seq — the windowless outbound bridge's thread join
@@ -457,7 +460,7 @@ function feedLiveSession(entry, m, myUserId) {
       ...(m.authorKind === 'agent' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
       ...(m.authorKind === 'agent' && m.authorAgentColor ? { authorAgentColor: m.authorAgentColor } : {}),
     });
-    if (!ok) { ack(s, { refused: 1 }); continue; }
+    if (!ok) { markGap(s); ack(s, { refused: 1 }); continue; }
     fed += 1;
     // ⚠ `wake` ALONE DOES NOT MEAN "STARTED": an ADDRESSED session already running carries
     // `wake: true` too (it is what `session-gate.js` stamps `lastWakeSeq` on). Different news,

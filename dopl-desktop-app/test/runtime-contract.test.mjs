@@ -297,6 +297,33 @@ test("every runtime implements every contract method, at the declared arity", ()
   assert.throws(() => contract.sealAdapter(short), /normalize takes 1 arguments/);
 });
 
+test("an OPTIONAL method is checked at its declared arity WHEN PRESENT, and absent is legal", () => {
+  let seen = 0;
+  for (const { descriptor, runtime } of ADAPTERS) {
+    for (const [name, arity] of Object.entries(contract.OPTIONAL_METHODS)) {
+      if (runtime[name] === undefined) continue;
+      seen += 1;
+      assert.equal(typeof runtime[name], "function", `${descriptor.id}.${name}`);
+      assert.equal(runtime[name].length, arity, `${descriptor.id}.${name} arity`);
+    }
+  }
+  assert.ok(seen > 0, "no shipped adapter carries an optional method — the loop above is vacuous");
+  // Core calls none of these outside the table (a method core probes must be declared here).
+  for (const name of Object.keys(contract.OPTIONAL_METHODS)) {
+    assert.ok(!(name in contract.RUNTIME_METHODS), `${name} is both required and optional`);
+  }
+  const wrong = clone(ADAPTERS[0]);
+  wrong.runtime = { ...ADAPTERS[0].runtime, cancelSignIn: (why) => why };
+  assert.throws(() => contract.sealAdapter(wrong), /cancelSignIn takes 1 arguments/);
+  const notFn = clone(ADAPTERS[0]);
+  notFn.runtime = { ...ADAPTERS[0].runtime, hasFullLogin: true };
+  assert.throws(() => contract.sealAdapter(notFn), /hasFullLogin is present but not a function/);
+  const absent = clone(ADAPTERS[0]);
+  absent.runtime = { ...ADAPTERS[0].runtime };
+  for (const name of ["signInFull", "hasFullLogin", "cancelSignIn"]) delete absent.runtime[name];
+  assert.deepEqual(contract.runtimeProblems(absent.runtime, "x"), []);
+});
+
 test("the id is the SAME word on the descriptor, the runtime and the wire", () => {
   // ⚠ THREE COPIES WITH NO SHARED MODULE ACROSS THE LAST HOP: the header literal is read by a
   // regex in `runtime-stamp-literals.test.mjs` (it must stay a literal), and core stamps

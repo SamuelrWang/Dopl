@@ -7,7 +7,7 @@
  * Caps hand-mirror the route zod (`src/features/channels/schema.ts`); `.trim()` only where it trims.
  */
 import { z } from "zod";
-export declare const SCHEMA_MAX_CHARS = 9155;
+export declare const SCHEMA_MAX_CHARS = 9180;
 export declare const PARAM_DESCRIPTION_MAX_CHARS = 400;
 export declare const CHANNEL_INPUT_SHAPE: {
     model: z.ZodOptional<z.ZodString>;
@@ -46,6 +46,12 @@ export declare const CHANNEL_INPUT_SHAPE: {
             allowlist: "allowlist";
             "auto-review": "auto-review";
             "run-everything": "run-everything";
+            default: "default";
+            promptUnmatched: "promptUnmatched";
+            onRequest: "onRequest";
+            allowAll: "allowAll";
+            autoMode: "autoMode";
+            "approve-all": "approve-all";
         }>>;
         messages: z.ZodOptional<z.ZodEnum<{
             ask: "ask";

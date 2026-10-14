@@ -62,22 +62,23 @@ const SESSION_MAX_TURNS = shipped(SPEC, "SESSION_MAX_TURNS");
 function assembled(s) {
   const src = `${fnOf(SPEC, "buildOptions")}\n return buildOptions;`;
   return new Function(
-    "tools", "channelDirs", "loader", "credential", "axisB", "diag",
+    "tools", "channelDirs", "client", "mcp", "resolveBin", "userDataDir", "credential", "axisB", "diag",
     "store", "models", "sessionCredential", "agentOps", "SESSION_MAX_TURNS", src
   )(
-    { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }) },
+    { buildSessionToolConfig: () => ({ preApproved: [], disallowedTools: [], doplToolsPolicy: "full", builtinTools: [] }), buildSecretPathDenyRules: () => [] },
     { sessionSpawnDir: () => "/tmp" },
+    { buildScrubbedEnv: () => ({}) },
+    // The session MCP entry is `mcp.js`'s since 2026-10-13 (scaffold Phase 1.4).
     {
-      buildSecretPathDenyRules: () => [],
       buildMcpServers: () => ({}),
-      buildScrubbedEnv: () => ({}),
       withSessionStamp: () => {},
       // ⚠ A3's `X-Dopl-Tool-Profile` stamp (2026-09-02), stubbed: this suite is
       // about the turn brake. `session-tool-profile.test.mjs` owns the header.
       withToolProfileStamp: () => {},
       withToolSetStamp: () => {},
-      resolveClaudeExecutable: () => null,
     },
+    { resolveClaudeExecutable: () => null },
+    () => "",
     { withCredential: (e) => e },
     { makeCanUseTool: () => () => {}, makeAgentOpsServer: () => null },
     () => {},

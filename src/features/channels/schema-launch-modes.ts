@@ -7,6 +7,8 @@ export const LAUNCH_TOOL_MODES_BY_RUNTIME = {
   claude: ["manual", "accept_edits", "auto", "bypass"],
   codex: ["untrusted", "granular", "on-request", "never"],
   cursor: ["allowlist", "auto-review", "run-everything"],
+  muse: ["promptUnmatched", "onRequest", "allowAll"],
+  grok: ["default", "autoMode", "approve-all"],
 } as const;
 
 /** The permission levels, narrowest first; the desktop applies one in the launch runtime's own
@@ -18,6 +20,8 @@ export const LAUNCH_APPLIED_TOOL_MODES = [
   ...LAUNCH_TOOL_MODES_BY_RUNTIME.claude,
   ...LAUNCH_TOOL_MODES_BY_RUNTIME.codex,
   ...LAUNCH_TOOL_MODES_BY_RUNTIME.cursor,
+  ...LAUNCH_TOOL_MODES_BY_RUNTIME.muse,
+  ...LAUNCH_TOOL_MODES_BY_RUNTIME.grok,
 ] as const;
 
 /** The union a request and the column CHECKs accept: a set, not an order. The levels' `auto` is

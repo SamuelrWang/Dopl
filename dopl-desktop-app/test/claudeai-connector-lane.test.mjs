@@ -62,7 +62,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
 
-const LOADER = read("runtime/claude/loader.js");
+const LOADER = read("runtime/claude/client.js");
+const MCP = read("runtime/claude/mcp.js");
 // ⚠ 2026-08-31 (runtime-adapter port): the OPTION ASSEMBLY is the runtime adapter's — one
 // platform's option vocabulary is that platform's to own. What this pins is unchanged.
 const QUERY = read("runtime/claude/launch-spec.js");
@@ -161,7 +162,7 @@ test("the scrub drops permission knobs AND every inherited credential; the base 
 // else in the option set re-opens the lane. These are the joins.
 
 test("the env that reaches query() is the SCRUBBED one, through the one assembly point", () => {
-  assert.match(QUERY, /env: credential\.withCredential\(loader\.buildScrubbedEnv\(\)\)/,
+  assert.match(QUERY, /env: credential\.withCredential\(client\.buildScrubbedEnv\(\)\)/,
     "the launch spec must build options.env from buildScrubbedEnv — nothing else");
   const opts = QUERY.slice(QUERY.indexOf("function buildOptions("));
   const body = opts.slice(0, opts.indexOf("\nfunction ", 1));
@@ -184,8 +185,8 @@ test("withCredential ADDS Dopl's token to the same env object, and adds nothing 
 });
 
 test("the option set names exactly one MCP server, and no connector lane among them", () => {
-  assert.match(LOADER, /return \{ dopl: server \};/, "buildMcpServers ships one entry");
-  assert.equal(/claude_ai/i.test(LOADER.replace(/^\/\/.*$/gm, "")), false,
+  assert.match(MCP, /return \{ dopl: server \};/, "buildMcpServers ships one entry");
+  assert.equal(/claude_ai/i.test((LOADER + MCP).replace(/^\/\/.*$/gm, "")), false,
     "no connector server is constructed in code (comments may name the lane)");
 });
 
@@ -199,7 +200,7 @@ test("`settingSources: []` is still pinned", () => {
 test("`--strict-mcp-config` has NOT crept in as a second answer", () => {
   // Considered and rejected: it hard-errors on enterprise machines carrying managed-mcp.json.
   // If it ever lands, this case is where the trade gets re-argued.
-  for (const [name, src] of [["runtime/claude/launch-spec.js", QUERY], ["runtime/claude/loader.js", LOADER]]) {
+  for (const [name, src] of [["runtime/claude/launch-spec.js", QUERY], ["runtime/claude/client.js", LOADER], ["runtime/claude/mcp.js", MCP]]) {
     const code = src.replace(/^\s*\/\/.*$/gm, "");
     assert.equal(/strictMcpConfig/.test(code), false, `${name}: strictMcpConfig option`);
   }

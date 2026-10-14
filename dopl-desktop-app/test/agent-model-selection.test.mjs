@@ -31,7 +31,7 @@ const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MAIN = join(HERE, "..", "main");
 const read = (f) => readFileSync(join(MAIN, f), "utf8");
-const model = require(join(MAIN, "runtime", "claude", "model-table.js"));
+const model = require(join(MAIN, "runtime", "claude", "usage.js"));
 // U10 (2026-09-21): `setModelByTask`'s new free vars. REAL, never stubbed — `main/runtime/index.js`
 // is electron-free by contract, so the live-switch refusal is asked of the SHIPPED descriptors.
 const RUNTIME_REGISTRY = require(join(MAIN, "runtime/index.js"));

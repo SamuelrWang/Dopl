@@ -7,12 +7,11 @@
 const tools = require('./tools');
 const policy = require('./policy');
 const axisB = require('./axis-b');
-const serverRequests = require('./server-requests');
+const approval = require('./approval');
 const models = require('./models');
 const mcp = require('./mcp');
 const credential = require('./credential');
 const { packaging } = require('./packaging');
-const { pickOf } = require('../selection-vocabulary');
 const identity = require('./identity');
 const requiredShape = require('./required-shape');
 const { profileEntryFrom } = require('../contract');
@@ -29,10 +28,6 @@ const descriptor = {
   id: 'codex',
   label: 'Codex',
 
-  // What Dopl reads from Codex, tiered; checked against each build's own schema (`shape.js`) at launch
-  // and before the updater adopts a build (`../sdk-shape.js`).
-  requiredShape,
-
   session: {
     resume: true, // `thread/resume`
     // No `fork`: Codex HAS `thread/fork`, but this adapter sends it nowhere — a capability is claimed only where Dopl drives it.
@@ -47,7 +42,7 @@ const descriptor = {
   },
 
   axisB: axisB.descriptor,
-  approval: serverRequests.descriptor,
+  approval: approval.descriptor,
 
   toolMode: {
     // `approval_policy`'s own values, narrowest first; `granular` sits second (`tools.js › TOOL_MODES`).
@@ -107,6 +102,9 @@ const descriptor = {
   },
 
   models: models.descriptor,
+  // What Dopl reads from Codex, tiered; checked against each build's own schema (`shape.js`) at launch
+  // and before the updater adopts a build (`../sdk-shape.js`).
+  requiredShape,
   mcp: mcp.descriptor,
   credential: credential.descriptor,
 
@@ -139,7 +137,7 @@ const runtime = {
   resume(spec, priorHandle) { return launchSpec().resume(spec, priorHandle); },
   normalize(msg, ctx) { return normalizer().normalize(msg, ctx); },
 
-  answerApproval(_request, verdict) { return serverRequests.decisionReply(verdict); },
+  answerApproval(_request, verdict) { return approval.decisionReply(verdict); },
   // `axisB.inputRewrite` is null here: no route carries a rewritten input.
   stampOutbound(_input, _tag) { return null; },
   axisBTools(session) { return axisB.axisBTools(session); },
@@ -156,11 +154,7 @@ const runtime = {
     if (!found.ok) throw new Error(found.reason || 'no Codex build on this Mac');
     return require('./shape').describe(found.path);
   },
-  // Picks pass as given (the funnel already refused an unknown one on the live catalog).
-  modelArg(value) {
-    const v = pickOf(value);
-    return { ok: true, arg: v, id: v, reason: '' };
-  },
+  modelArg(value) { return models.modelArg(value); },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },
   credentialState() { return credential.credentialState(); },

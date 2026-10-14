@@ -239,7 +239,7 @@ test("grantDecision tolerates missing args and unknown profiles (fail closed to 
 // fakes. The bearer comes from mcp-config's safeStorage cache and the url is always the compiled-in
 // MCP_URL; the credential-path story itself is pinned in test/sdk-mcp-token.test.mjs.
 
-const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "loader.js"), "utf8");
+const LOADER = readFileSync(join(HERE, "..", "main", "runtime", "claude", "mcp.js"), "utf8");
 const MCP_BLOCK = codeOf(fnOf(LOADER, "buildMcpServers"));
 assert.ok(MCP_BLOCK.includes("return { dopl: server };"), "buildMcpServers slice missing/incomplete");
 
@@ -365,7 +365,7 @@ test("the launch spec passes the SESSION's workspace, so every session query is 
   // THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child credential for a
   // session spawned into a SHARED link container, '' for every other session. Pinned INTO this
   // literal because dropping the argument silently reverts every locked session to the device token.
-  assert.match(opts, /mcpServers: loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
+  assert.match(opts, /mcpServers: mcp\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
   // A parked resume and a recreated shell assemble the spec through this SAME function
   // (session-park calls deps.buildLaunchSpec), so they are pinned by construction.
   assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, acquireRuntime, buildLaunchSpec/);

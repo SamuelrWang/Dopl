@@ -172,8 +172,8 @@ function firstActions(side, ctx) {
       `- Your SECOND action is to read the exchange you are joining: ${doplTool(set, 'channel.read')}`,
       `  with ${doplArgs(set, 'channel.read', `channel "${channelId}", container "${workspaceId}", thread "${taskId}"`)}.`,
       `  That read is filtered to this one thread. You start with none of its earlier messages`,
-      `  in context, so read it before you write anything, and read it again whenever you need`,
-      `  to know what has been said since.`
+      `  in context, so read it before you write anything. To catch up later, pass the since=`,
+      `  a turn names (or the highest seq you have read) instead of reading it in full again.`
     );
   }
   return lines;

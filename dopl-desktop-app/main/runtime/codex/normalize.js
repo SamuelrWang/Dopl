@@ -4,22 +4,20 @@
 
 const events = require('../events');
 const io = require('../../session-io');
+const authShape = require('../kit/auth-shape');
 
 // ── SYNTHETIC FRAMES ─────────────────────────────────────────────────────────────────────────
 // `launch-spec.js` mints THREAD_STARTED (Dopl's own, `dopl/`-namespaced: handle + model into core) and
 // the turn-failure and MCP-startup error frames; core mints the rejection one.
 const THREAD_STARTED = 'dopl/threadStarted';
-// Dopl's own: a server request Dopl did not recognise (`server-requests.js › unknownAnswer`) — told to the
+// Dopl's own: a server request Dopl did not recognise (`approval.js › unknownAnswer`) — told to the
 // session through the shared drift ledger, once.
 const UNKNOWN_REQUEST = 'dopl/unknownRequest';
 const ERROR_MESSAGE_TYPE = events.ERROR_FRAME;
 
 // ── AUTH ─────────────────────────────────────────────────────────────────────────────────────
-// A pattern, not a sentence. Over-matching is the safe direction: a false positive parks the session
-// and offers sign-in; a false negative renders a dead-end bubble.
-const AUTH_SHAPED_RE = /\b(401|403)\b|unauthor(?:ised|ized)|not\s+logged\s+in|log\s*in\s+required|login\s+required|authentication\s+(?:failed|required)|invalid\s+(?:api\s+)?(?:key|token)|expired\s+(?:credential|token)/i;
-
-const isAuthShaped = (text) => AUTH_SHAPED_RE.test(String(text == null ? '' : text));
+// The shared pattern (`kit/auth-shape.js`; over-matching is the safe direction), no vendor additions.
+const isAuthShaped = (text) => authShape.authShaped(text);
 
 // The server's own turn-error class (`codexErrorInfo`): `unauthorized`, or an HTTP variant with 401/403.
 function unauthorizedInfo(info) {
@@ -107,20 +105,15 @@ function windowFrom(params) {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null; // null, never a 0 window
 }
 
-const { readCount } = require('../sdk-shape');
+const kitUsage = require('../kit/usage');
 
 // `{ prompt, session }` — window occupancy and the turn's token total. NULL, never 0, for what could not
 // be read (2026-10-08): a renamed field must read as UNKNOWN, or core resets the baseline to zero and
-// bills the next total twice. `cachedInputTokens` is a subset of `inputTokens` (measured: total = input
-// + output), so never added.
-function tokensFrom(usage) {
-  if (!usage || typeof usage !== 'object') return { prompt: null, session: null };
-  const input = readCount(usage, 'inputTokens');
-  const output = readCount(usage, 'outputTokens');
-  const total = readCount(usage, 'totalTokens');
-  const sum = input !== null && output !== null ? input + output : null;
-  return { prompt: input, session: total !== null ? total : sum };
-}
+// bills the next total twice (`kit/usage.js › tokensFrom`). `cachedInputTokens` is a subset of
+// `inputTokens` (measured: total = input + output), so no `cached` keys: never added.
+const USAGE_KEYS = Object.freeze({ input: ['inputTokens'], output: ['outputTokens'], total: ['totalTokens'] });
+
+const tokensFrom = (usage) => kitUsage.tokensFrom(usage, USAGE_KEYS);
 
 // ── RENDER ───────────────────────────────────────────────────────────────────────────────────
 // An unclassified completed item still renders a plain tool card (a later CLI's new item must not

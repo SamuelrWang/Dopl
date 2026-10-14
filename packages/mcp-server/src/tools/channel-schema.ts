@@ -17,7 +17,7 @@ import { HOLD_CAP_MS } from "./channel-hold-budget";
 
 import { CHANNEL_OPS, CHANNEL_ACTION_NAMES, unknownOpRefusal } from "./channel-vocab";
 
-export const SCHEMA_MAX_CHARS = 9_155; // Re-derive through `channel-schema-budget.test.ts`, never quote.
+export const SCHEMA_MAX_CHARS = 9_180; // +25 over 9,155 (2026-10-13, F-774): runtime tool words in `channel-schema-launch-fields.ts › POSTURE_WORDS` — Muse +41 (9,104 → 9,145, absorbed by headroom) and Grok +35. A closed vocabulary the cross-tree suite requires, not prose. The test's "do not raise" stands; this raise IS ruled (Samuel 2026-10-13: raise per new runtime). Re-derive through `channel-schema-budget.test.ts`, never quote.
 
 export const PARAM_DESCRIPTION_MAX_CHARS = 400; // Per-`.describe()` cap.
 

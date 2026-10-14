@@ -58,7 +58,7 @@ function operatorServers(bin, env, log) {
   });
 }
 
-/** The server names whose tool-call approvals are the operator's (`server-requests.js`). */
+/** The server names whose tool-call approvals are the operator's (`approval.js`). */
 function approvalServers(servers, natives) {
   const names = new Set(Object.keys(servers));
   if (natives === true) names.add(APPS_SERVER);

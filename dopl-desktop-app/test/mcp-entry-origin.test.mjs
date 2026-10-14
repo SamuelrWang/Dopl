@@ -20,7 +20,7 @@
 // reading the user-scope entry rather than our own two, called a dead endpoint indefinitely.
 //
 // ⚠ WHAT WAS **NOT** BROKEN, because it is the reason this hid: the SDK SESSION path never reads
-// this entry. `sdk-loader.js › buildMcpServers` builds its entry in memory off the compiled-in
+// this entry. `runtime/claude/mcp.js › buildMcpServers` builds its entry in memory off the compiled-in
 // MCP_URL every spawn. (A third surface, the on-disk spawn config, self-healed by whole-body
 // comparison; S3 deleted it outright — `mcp-config.js › removeSpawnConfig`, 2026-08-26, which
 // is why the ensure sequence below now reads `removeSpawnConfig` where it read

@@ -4,7 +4,7 @@
 // counter) arrived anonymous and rendered as a bare "Agent" (2026-09-15, docs/traces/
 // AGENT-BADGE-TRACE.md). Their `client_msg_id`s cannot carry the post stamp, and the server
 // re-stamps `metadata.session_id` from this HEADER alone. A spawned session's own posts already
-// had it (`loader.js › withSessionStamp`); this gives main's posts about it the same.
+// had it (`runtime/claude/mcp.js › withSessionStamp`); this gives main's posts about it the same.
 //
 // Shaped like `app-version.js`: a rule, a header name, and a `{}`-or-`{header}` helper the caller
 // SPREADS, so an absent value is never sent as a blank header.
@@ -16,7 +16,7 @@
 // that is all it does.
 
 // ⚠ THE SHAPE IS THE SERVER'S, MIRRORED (`src/shared/auth/session-header.ts › SESSION_ID_RE`)
-// and identical to `runtime/claude/loader.js › withSessionStamp`'s copy: id characters only, no
+// and identical to `runtime/claude/mcp.js › withSessionStamp`'s copy: id characters only, no
 // whitespace, <=128. The narrowness is not tidiness — the value is echoed into the LINE HEAD of
 // another member's transcript, outside the untrusted-body framing, so a newline in it could
 // close the rendered line and forge a fresh one.

@@ -13,7 +13,7 @@
 // reports `permissionMode: "default"`, `tools` = exactly the `tools` bound (deny-listed names absent),
 // and no MCP server Dopl did not configure. Pure.
 // ⚠ RE-MEASURED 2026-10-09 (claude 2.1.287 / 2.1.295 / 2.1.296, identical): the 10-08 run had NO credential,
-// so no Dopl server was configured (`loader.js › buildMcpServers` returns {}) and the gap below never showed.
+// so no Dopl server was configured (`mcp.js › buildMcpServers` returns {}) and the gap below never showed.
 // `init` reports some bound names under ANOTHER SPELLING (`REPORTED_AS`): it canonicalizes legacy names, and
 // still reports `Agent` as `Task`. The resource pair is offered only while a CONNECTED server publishes
 // resources — Dopl's own always does (`packages/mcp-server/src/resources.ts`) — so every signed-in `full` /

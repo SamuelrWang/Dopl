@@ -55,9 +55,9 @@ test("CX-03: every launch hides the Dopl bearer (and its pins) from shell comman
 });
 
 test("CX-12: the Codex Dopl entry is stamped X-Dopl-Tool-Profile exactly as Claude's is", () => {
-  const loader = readFileSync(join(MAIN, "runtime", "claude", "loader.js"), "utf8");
+  const loader = readFileSync(join(MAIN, "runtime", "claude", "mcp.js"), "utf8");
   const claudeHeader = /const TOOL_PROFILE_HEADER = '([^']+)';/.exec(loader);
-  assert.ok(claudeHeader, "loader.js › TOOL_PROFILE_HEADER moved — re-pin this parity");
+  assert.ok(claudeHeader, "claude/mcp.js › TOOL_PROFILE_HEADER moved — re-pin this parity");
   assert.equal(mcp.TOOL_PROFILE_HEADER, claudeHeader[1], "one header name on both runtimes");
   const serverSrc = readFileSync(join(MAIN, "..", "..", "src", "shared", "auth", "tool-profile-header.ts"), "utf8");
   const server = /TOOL_PROFILE_HEADER = "([^"]+)";/.exec(serverSrc);

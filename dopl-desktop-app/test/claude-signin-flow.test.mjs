@@ -49,7 +49,7 @@ function world({ bundled = "/bundle/claude", env = { PATH: "/bin" } } = {}) {
       setFullLogin: (on) => { calls.full.push(on); return true; },
     },
     "./diag": { diag: (...a) => calls.diag.push(a.join(" ")) },
-    "./runtime/claude/loader": { resolveClaudeExecutable: () => bundled },
+    "./runtime/claude/resolve-bin": { resolveClaudeExecutable: () => bundled },
   };
   const auth = evalModule(SRC, (id) => {
     if (Object.hasOwn(stubs, id)) return stubs[id];

@@ -17,7 +17,7 @@ const channel_schema_rooms_fields_1 = require("./channel-schema-rooms-fields");
 const channel_schema_decision_fields_1 = require("./channel-schema-decision-fields");
 const channel_hold_budget_1 = require("./channel-hold-budget");
 const channel_vocab_1 = require("./channel-vocab");
-exports.SCHEMA_MAX_CHARS = 9_155; // Re-derive through `channel-schema-budget.test.ts`, never quote.
+exports.SCHEMA_MAX_CHARS = 9_180; // +25 over 9,155 (2026-10-13, F-774): runtime tool words in `channel-schema-launch-fields.ts › POSTURE_WORDS` — Muse +41 (9,104 → 9,145, absorbed by headroom) and Grok +35. A closed vocabulary the cross-tree suite requires, not prose. The test's "do not raise" stands; this raise IS ruled (Samuel 2026-10-13: raise per new runtime). Re-derive through `channel-schema-budget.test.ts`, never quote.
 exports.PARAM_DESCRIPTION_MAX_CHARS = 400; // Per-`.describe()` cap.
 exports.CHANNEL_INPUT_SHAPE = {
     // Inert, not refused, on ops other than read/status: a 400 teaches agents to stop passing it.

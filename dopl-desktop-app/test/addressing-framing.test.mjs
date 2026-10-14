@@ -367,8 +367,9 @@ test("the thread read keeps its imperative and loses the false exclusivity", () 
     assert.ok(!/only way to see what has already been said/.test(out), `the exclusivity is back: ${out}`);
     assert.ok(!/it is the only way/.test(out), "…in any wording");
     assert.match(out, /read it before you write anything/, "the imperative survives");
-    assert.match(out, /read it again whenever you need to know what has been said since/,
-      "and the read is repeatable, not one-shot");
+    // W2 (2026-10-12): still repeatable, but incremental — the catch-up read names `since=`.
+    assert.match(out, /To catch up later, pass the since= a turn names \(or the highest seq you have read\) instead of reading it in full again/,
+      "and the read is repeatable, incrementally, not one-shot");
     assert.match(out, /none of its earlier messages/, "the reason a fresh spawn needs it at all");
   }
 });
