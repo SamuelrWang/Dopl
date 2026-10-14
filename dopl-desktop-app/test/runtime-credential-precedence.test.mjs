@@ -79,11 +79,15 @@ test("Codex: the operator's own auth.json and inherited keys never count; Dopl's
   } finally { w.done(); }
 });
 
-test("the strip list is the one shared builder's, and it covers every credential either CLI reads", () => {
+// Dopl-owned runtime credentials ruling (Samuel 2026-09-24): agents run on Dopl's credentials only,
+// so every vendor key each registered CLI reads is stripped. Muse (META_API_KEY, MODEL_API_KEY — Muse
+// adapter ruling 2026-10-13) and Grok (XAI_API_KEY, GROK_CODE_XAI_API_KEY) joined Claude and Codex.
+test("the strip list is the one shared builder's, and it covers every credential each CLI reads", () => {
   assert.deepEqual([...cliSpawn.INHERITED_CREDENTIAL_ENV].sort(), [
     "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR", "CLAUDE_CODE_OAUTH_REFRESH_TOKEN",
     "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR", "CLAUDE_SECURESTORAGE_CONFIG_DIR",
-    "CODEX_ACCESS_TOKEN", "CODEX_API_KEY", "OPENAI_API_KEY",
+    "CODEX_ACCESS_TOKEN", "CODEX_API_KEY", "GROK_CODE_XAI_API_KEY", "META_API_KEY", "MODEL_API_KEY",
+    "OPENAI_API_KEY", "XAI_API_KEY",
   ]);
   const kept = cliSpawn.scrubbedEnv({ PATH: "/bin", HOME: "/h", ANTHROPIC_BASE_URL: "https://x", ...INHERITED });
   assert.deepEqual(kept, { PATH: "/bin", HOME: "/h", ANTHROPIC_BASE_URL: "https://x" });
