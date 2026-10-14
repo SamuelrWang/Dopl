@@ -1,6 +1,6 @@
 # Legal launch checklist — Services Agreement + Privacy Policy
 
-Drafted 2026-10-14 from a code inventory of master `7b7f676e`. Drafts: [SERVICES-AGREEMENT.md](SERVICES-AGREEMENT.md), [PRIVACY.md](PRIVACY.md).
+Drafted 2026-10-14 (rewritten same day in Natural-NSA style: "Dopl" third person, defined "You") from a code inventory of master `7b7f676e`. Drafts: [SERVICES-AGREEMENT.md](SERVICES-AGREEMENT.md), [PRIVACY.md](PRIVACY.md).
 
 ## Blockers — the documents are not true until these are done
 

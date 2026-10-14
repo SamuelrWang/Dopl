@@ -1,574 +1,802 @@
+<!--
+DRAFTING NOTE — DELETE BEFORE PUBLISHING.
+This draft is a starting point, not a substitute for advice from a qualified attorney. Have counsel review it
+before publishing, particularly Section 5 (Agents) and Section 18 (Limitations on Liability), because the
+Services let AI agents act on users' computers and accounts and because Dopl is offered by an individual.
+Open items: docs/legal/LEGAL-CHECKLIST.md.
+-->
+
 # Dopl Services Agreement
 
-**Last updated:** October 14, 2026
-**Effective date:** [EFFECTIVE_DATE — the date this version is published at usedopl.com/terms]
+Last updated: October 14, 2026
 
-## At a glance
+This Services Agreement ("**Agreement**") is between you or the entity you represent ("**You**") and Dopl, and governs Your access to and use of the Services. The Agreement is effective when You first access or use the Services (the "**Effective Date**") and continues until terminated (the "**Term**"). Capitalized terms not defined inline are defined in Appendix 1 (Definitions).
 
-| Topic | Summary |
-|---|---|
-| Who you are agreeing with | Samuel Wang, doing business as Dopl, San Francisco, California |
-| What we provide | Dopl — shared workspaces where people and their AI agents work together: channels, knowledge bases, skills, an ontology, a desktop app that runs agents on your Mac, an MCP server, and a smart-glasses integration |
-| Who can use it | People 18 and older |
-| Your AI agents | Agents run on your own computer, under your own AI-provider accounts (for example Claude, Codex, Grok). **You are responsible for what your agents do**, including the approval level you choose for them |
-| What you create | You own your content. You give us a limited licence so we can store it and show it to the people you share it with |
-| AI training | We do not train AI models on your content |
-| Plans | Free plans with monthly credits. Pro is US$8.99/month; Team is US$8.99 per member per month. Paid plans **renew automatically every month** until you cancel in Billing |
-| Refunds | Generally none, except where the law requires them |
-| Disputes | Informal resolution first, then individual arbitration (AAA) in San Francisco. Small-claims court stays available. **You can opt out of arbitration within 30 days** |
-| Contact | build@usedopl.com |
-
-*This summary is for convenience only. The full agreement below controls.*
+**IMPORTANT: SECTION 21 REQUIRES MOST DISPUTES TO BE RESOLVED BY BINDING INDIVIDUAL ARBITRATION AND WAIVES CLASS ACTIONS AND JURY TRIALS. YOU MAY OPT OUT OF ARBITRATION WITHIN 30 DAYS UNDER SECTION 21.9. SECTION 12 DESCRIBES AUTOMATICALLY RENEWING PLANS.**
 
 ---
 
-## 1. Agreement to these terms
+## 1. Services
 
-This Services Agreement (the **"Agreement"**) is a binding contract between you and **Samuel Wang, an individual doing business as Dopl** (**"Dopl,"** **"we,"** **"us,"** or **"our"**). It governs your use of Dopl, including the website at usedopl.com, the web app, the Dopl desktop app for macOS, the Dopl MCP server, the Dopl glasses integration, and any related software, content, and services we make available (together, the **"Service"**).
+### 1.1. Acceptance of Agreement
 
-**Please read this Agreement carefully.** It includes important provisions about how disputes are resolved. [Section 23](#23-binding-individual-arbitration) requires most disputes to be resolved by binding individual arbitration, and [Section 24](#24-class-action-waiver-and-jury-trial-waiver) waives your right to take part in class actions and jury trials. **You can opt out of arbitration within 30 days of first accepting this Agreement** — see [Section 25](#25-30-day-opt-out-of-arbitration).
+By creating a Dopl Account, signing in, or otherwise accessing or using the Services, You agree to the Agreement. If You do not agree, You must not use the Services.
 
-You accept this Agreement when you create an account, sign in, or otherwise use the Service. **If you do not agree, do not use the Service.**
+### 1.2. Services
 
-If you use the Service on behalf of a company or other organisation (for example, by creating or paying for a Team workspace), you confirm that you have authority to bind that organisation, and "**you**" means both you and that organisation.
+The Services consist of Workspaces, Channels, knowledge bases, skills, an ontology, saved chats, the Desktop App, the Dopl MCP Server, the Glasses integration, the Dopl website, and any related features Dopl makes available.
+
+### 1.3. Support
+
+Dopl will provide reasonable support by email for issues relating to Your Dopl Account and Your use of the Services.
+
+### 1.4. Preview Services
+
+Dopl may make a Preview Service available to You. Preview Services may be incomplete, unstable, or contain errors, and may be changed or discontinued at any time. Your use of a Preview Service is at Your own risk.
+
+### 1.5. Changes to the Services
+
+Dopl may add, modify, or remove features of the Services at any time. If Dopl removes a core feature of a paid Plan, You may cancel that Plan and, where Law requires, receive a pro-rata refund of prepaid Fees for the unused portion of the billing period.
+
+### 1.6. Desktop App Updates
+
+The Desktop App checks for and installs updates automatically and may download and update the AI runtimes it uses. Dopl may stop supporting earlier versions of the Desktop App, and features may be unavailable on unsupported versions.
 
 ---
 
-## 2. Who we are
+## 2. Eligibility; Dopl Account
 
-> **Samuel Wang, doing business as Dopl**
+### 2.1. Age
+
+You must be at least 18 years old to use the Services.
+
+### 2.2. Account Registration
+
+To use the Services, You must register a Dopl Account using accurate, complete, and up-to-date information, either with an email address and password or through Google or GitHub sign-in.
+
+### 2.3. Account Security
+
+You must keep Your Dopl Account credentials confidential and secure, and You must notify Dopl immediately at build@usedopl.com of any unauthorized access to Your Dopl Account. Dopl is not liable for Losses caused by Your failure to secure Your Dopl Account or credentials.
+
+### 2.4. Organizations
+
+If You use the Services on behalf of an organization, including by creating or paying for a Team Workspace, the organization is bound by the Agreement and "You" refers to both You and that organization.
+
+### 2.5. Guest Access
+
+Dopl may offer temporary guest access to the Services, such as the Playground, without registration. Dopl deletes guest accounts and their Content automatically after a short period. The Agreement applies to guest access.
+
+### 2.6. Account Deletion
+
+You may delete Your Dopl Account at any time through Your account settings. Deletion is permanent and cancels any Plan You pay for. If You own a Workspace that has other Members, You must transfer ownership of that Workspace or remove its other Members before deleting Your Dopl Account.
+
+---
+
+## 3. Restrictions
+
+### 3.1. Conduct
+
+You must not (and must not attempt to), directly or through an Agent:
+
+(a) violate Law or any third party's rights, including IP Rights, privacy rights, and publicity rights;
+
+(b) upload, store, or share child sexual abuse material. Dopl reports apparent child sexual abuse material to the National Center for Missing & Exploited Children and to law enforcement;
+
+(c) harass, threaten, defame, stalk, or impersonate any person;
+
+(d) upload or distribute malware or other harmful code;
+
+(e) access any account, Workspace, Channel, system, or data without authorization;
+
+(f) process another person's personal information without a lawful basis, or disclose highly sensitive personal information (such as government identification numbers, financial account numbers, or health records) to persons not entitled to receive it;
+
+(g) commit fraud, launder money, or finance terrorism;
+
+(h) send spam or other unsolicited bulk communications;
+
+(i) misrepresent Your identity or affiliation; or
+
+(j) use the Services where their failure could reasonably be expected to lead to death, personal injury, or serious environmental or property damage.
+
+### 3.2. Product
+
+You must not (and must not attempt to):
+
+(a) interfere with the operation of the Services or other users' use of the Services;
+
+(b) reverse engineer, decompile, or disassemble any part of the Dopl Technology, except to the extent Law permits despite this restriction;
+
+(c) access any non-public component of the Dopl Technology, or access the Services by automated means other than through the Desktop App, the Dopl MCP Server, or another interface Dopl provides for that purpose;
+
+(d) circumvent any security, authentication, Credit, rate-limit, or access-control feature of the Services;
+
+(e) create multiple Dopl Accounts to obtain additional free Credits or to evade a suspension or termination;
+
+(f) build a product that competes with the Services, or copy the features, design, or content of the Services; or
+
+(g) copy, reproduce, resell, sublicense, or distribute any part of the Services or Dopl Technology without Dopl's prior written authorization.
+
+### 3.3. Prohibited AI Uses
+
+You must not (and must not attempt to) use an Agent or any AI feature of the Services to:
+
+(a) generate content that sexualizes minors;
+
+(b) incite violence or make credible threats;
+
+(c) create malware, attack systems, or evade the security or moderation systems of other services;
+
+(d) interfere with elections or mislead voters;
+
+(e) engage in any practice prohibited by the EU AI Act, including social scoring, untargeted scraping of facial images, or biometric categorization to infer sensitive characteristics;
+
+(f) make decisions with legal or similarly significant effects on individuals, including decisions about employment, credit, housing, insurance, or access to healthcare, without meaningful human review; or
+
+(g) violate the terms or usage policies of the applicable AI Provider.
+
+---
+
+## 4. Representations and Warranties
+
+### 4.1. Representations
+
+You represent as of the Effective Date that:
+
+(a) You are at least 18 years old;
+
+(b) You have full power and authority to enter into the Agreement and, if applicable, to bind the organization You represent;
+
+(c) You are not located in a country or region subject to comprehensive U.S. sanctions and are not on any U.S. government list of prohibited or restricted parties; and
+
+(d) the information You provide to register Your Dopl Account is accurate and complete.
+
+### 4.2. Warranties
+
+You warrant during the Term that:
+
+(a) You will keep Your Dopl Account information accurate and up to date;
+
+(b) You have, and will maintain, all rights, licenses, and consents necessary to provide Your Content to Dopl and to grant the licenses in the Agreement;
+
+(c) You will maintain a valid account with, and comply with the terms of, each AI Provider You use with the Services; and
+
+(d) You will use the Services only in compliance with Law and the Agreement.
+
+---
+
+## 5. Roles; Agents; AI Providers
+
+### 5.1. Members
+
+The owner of a Workspace is responsible for the Workspace, its settings, and the Members the owner or Workspace Admins invite. Workspace owners and Workspace Admins may invite and remove Members, assign roles, manage Channels and settings, view Content in the Workspace, and, for a Team Workspace, manage billing. You are responsible for Your own actions and Content in each Workspace You join.
+
+### 5.2. Your Agents
+
+You, and not Dopl, are responsible for each Agent You launch or connect to the Services, and for every action each Agent takes, whether on Your computer, in the Services, or in any Third-Party Service. You are liable for any Losses or Third-Party Losses Your Agent causes, including where Your Agent acts in an unintended, erroneous, negligent, or malicious manner, and whether or not You approved the specific action.
+
+### 5.3. Agent Settings
+
+Agents may read and write files, run shell commands, browse the web, control a browser, use tools installed on Your computer, post in Channels, and create, edit, or delete Content, depending on the Agent Settings You select. You, and not Dopl, are responsible for selecting Agent Settings appropriate to each task, reviewing actions before approving them, maintaining backups of Your data, and granting Agents only the access they require.
+
+### 5.4. AI Providers
+
+Agents run on Your computer and use models supplied by AI Providers through accounts You hold with those AI Providers. Dopl does not provide those models. Your use of each AI Provider is governed by Your agreement with that AI Provider, and You are responsible for all fees that AI Provider charges. Dopl is not responsible for the availability, outputs, fees, or data practices of any AI Provider, or for any change an AI Provider makes to its service or to the means by which the Services connect to it.
+
+### 5.5. Connected Clients
+
+If You authorize a Connected Client to access the Dopl MCP Server, the Connected Client may access Your Content with Your permissions, and Content it accesses is governed by the terms of that Connected Client. You may revoke a Connected Client's access at any time.
+
+### 5.6. Shared Spaces
+
+In a Shared Space, Agents launched by other Members may read Your Content, and Your Agents may read Content of other Members. Content read by an Agent is transmitted to the AI Provider that Agent uses. Content supplied by other Members is untrusted and may contain instructions intended to manipulate an Agent. You, and not Dopl, are responsible for the Agents You permit in a Shared Space and the access You grant them.
+
+### 5.7. Dopl's Right to Intervene
+
+Dopl may delay, block, or stop any Agent, Connected Client, or action that Dopl reasonably believes violates Law or the Agreement, threatens the security or operation of the Services, or exceeds applicable Credits or rate limits. Dopl is not responsible for any resulting Losses.
+
+### 5.8. AI Output
+
+As between You and Dopl, You own the inputs You provide to Agents and AI features of the Services and the Output generated for You, to the extent ownership is available under Law. Dopl makes no representation that any Output is protected by copyright. **OUTPUT MAY BE INACCURATE, INCOMPLETE, OR OFFENSIVE. YOU ARE RESPONSIBLE FOR EVALUATING OUTPUT BEFORE RELYING ON IT. OUTPUT IS NOT PROFESSIONAL ADVICE AND MUST NOT BE THE SOLE BASIS FOR ANY MEDICAL, LEGAL, FINANCIAL, EMPLOYMENT, OR SAFETY DECISION.**
+
+---
+
+## 6. Content
+
+### 6.1. Ownership
+
+You and Your licensors retain all IP Rights in Your Content. Nothing in the Agreement transfers ownership of Your Content to Dopl.
+
+### 6.2. License Grant (Content)
+
+You grant to Dopl a worldwide, non-exclusive, royalty-free license to host, store, copy, process, index, transmit, display, and format Your Content solely as necessary to provide, secure, and support the Services for You and for the persons with whom You share Your Content, and to comply with Law. Dopl may sublicense these rights to its subcontractors solely for those purposes. This license ends when Your Content is deleted from the Services, except for copies retained by persons with whom You shared it, copies in backups for a limited period, and copies that Law requires Dopl to retain.
+
+### 6.3. Sharing
+
+Content You add to a Shared Space, mark as public within a Workspace, or share through an invitation or link is available to the Members and Agents of that Shared Space according to its settings. Workspace icons and thumbnails are stored at public web addresses accessible to anyone with the address. Content You add to a Workspace may remain in that Workspace after You leave it or are removed from it.
+
+### 6.4. Third-Party Materials
+
+If Your Content includes Third-Party Materials, You must obtain all rights, licenses, and consents necessary for Dopl to use that Content as the Agreement permits.
+
+### 6.5. Moderation
+
+Dopl does not review all Content and is not obligated to do so. Dopl may remove or restrict access to any Content that Dopl reasonably believes violates Law or the Agreement. You are responsible for Your Content, including Content Your Agents create.
+
+### 6.6. No Model Training
+
+Dopl will not use Your Content, or inputs to or Output of Agents, to train artificial intelligence models, and will not permit Dopl's subcontractors to use them for that purpose. The training practices of each AI Provider You use are governed by Your agreement with that AI Provider.
+
+### 6.7. Your Copies
+
+You are responsible for maintaining copies of Content that is important to You. Dopl is not obligated to retain Content except as required by Law, the Privacy Policy, and to provide the Services.
+
+---
+
+## 7. Confidentiality
+
+### 7.1. General
+
+Each party may receive the other party's Confidential Information in connection with the Services. The receiving party will use the disclosing party's Confidential Information only to provide or use the Services, will protect it with at least the degree of care it uses for its own similar information (and no less than reasonable care), and will not disclose it except to employees, contractors, and professional advisors who need to know it and are bound by confidentiality obligations at least as protective as this Section 7.
+
+### 7.2. Your Content
+
+Dopl will treat Your Content as Your Confidential Information, except to the extent You share it with other persons through the Services.
+
+### 7.3. Required Disclosures
+
+The receiving party may disclose Confidential Information to the extent Law, a subpoena, or a court order requires, after giving the disclosing party prompt notice where Law permits.
+
+### 7.4. Exclusions
+
+Confidential Information excludes information that the receiving party can demonstrate:
+
+(a) is or becomes publicly available without breach of the Agreement;
+
+(b) the receiving party lawfully knew before receiving it in connection with the Services;
+
+(c) the receiving party independently develops without use of the Confidential Information; or
+
+(d) the receiving party lawfully receives from a third party without restriction.
+
+---
+
+## 8. Data Security and Privacy
+
+### 8.1. Privacy Policy
+
+The Privacy Policy describes how Dopl collects, uses, discloses, and protects personal information in connection with the Services.
+
+### 8.2. Controls
+
+Dopl will maintain commercially reasonable administrative, technical, and physical safeguards designed to protect Content in Dopl's possession or control against unauthorized access, modification, loss, and disclosure.
+
+### 8.3. Credentials Stored on Your Device
+
+The Desktop App stores the credentials You use to sign in to AI Providers on Your computer. You are responsible for the security of Your computer and of those credentials.
+
+### 8.4. Third-Party Personal Information
+
+If You provide personal information of other persons to the Services, You are responsible for providing any required notices to, and obtaining any required consents from, those persons.
+
+---
+
+## 9. Dopl Data
+
+### 9.1. Use of Dopl Data
+
+You must use Dopl Data only as the Agreement permits.
+
+### 9.2. Model Training
+
+You must not use Dopl Data to create, train, or improve any artificial intelligence model, agent, or system, or any product that competes with the Services. This Section 9.2 does not restrict Your use of Your Content or Output.
+
+---
+
+## 10. Intellectual Property
+
+### 10.1. Dopl's IP Rights
+
+Dopl and its licensors hold all IP Rights in the Dopl Technology and Dopl Data.
+
+### 10.2. License Grant (Dopl Technology)
+
+Subject to the Agreement, Dopl grants You a limited, worldwide, royalty-free, non-exclusive, non-transferable, non-sublicensable, revocable license during the Term to access and use the Dopl Technology, and to install and run the Desktop App on computers You own or control, solely for Your personal or internal business purposes and in compliance with Law and the Agreement.
+
+### 10.3. License Exclusions
+
+The license in Section 10.2 does not permit You to, and You must not (and must not enable others to):
+
+(a) modify, adapt, translate, or create derivative works of the Dopl Technology; or
+
+(b) rent, lease, lend, sell, share, redistribute, or sublicense any part of the Dopl Technology, unless Dopl authorizes it in writing.
+
+### 10.4. Open Source
+
+The Dopl Technology includes open source software. Where the license for an open source component grants rights that conflict with the Agreement, that license governs that component.
+
+### 10.5. Reservation of Rights
+
+Nothing in the Agreement assigns or transfers any IP Rights to the other party. All rights not expressly granted in the Agreement are reserved.
+
+### 10.6. Feedback
+
+If You provide Dopl with suggestions or feedback regarding the Services ("**Feedback**"), You grant to Dopl a worldwide, perpetual, irrevocable, royalty-free license to use and exploit the Feedback for any purpose without compensation or attribution. Feedback excludes Your Content.
+
+---
+
+## 11. Publicity
+
+### 11.1. Dopl's Use of Your Marks
+
+If You use the Services on behalf of an organization, Dopl may identify that organization as a user of the Services, including by displaying its name and Marks on Dopl's website and in Dopl's sales and marketing materials. You may withdraw this permission at any time by notice to build@usedopl.com, after which Dopl will stop new uses within a reasonable period.
+
+### 11.2. Your Use of Dopl's Marks
+
+You may use Dopl's name and Marks only to accurately refer to the Services, and You must comply with any brand guidelines and removal request Dopl provides. All goodwill arising from use of a party's Marks benefits that party.
+
+---
+
+## 12. Plans; Credits; Fees
+
+### 12.1. Plans
+
+| Plan | Fee | Billing period | Monthly Credits |
+|---|---|---|---|
+| Free (Home) | US$0 | — | 500 for the Home Workspace |
+| Pro (Home) | **US$8.99 per month** | Monthly; renews automatically | 5,000 for the Home Workspace |
+| Free (Workspace) | US$0 | — | 100 per Member |
+| Team (Workspace) | **US$8.99 per Seat per month** | Monthly; renews automatically | 5,000 per Member |
+
+Paid Plans also include increased knowledge storage. Fees are stated in U.S. dollars and exclude Taxes. If the terms shown at checkout differ from this table, the terms You accepted at checkout govern Your Plan.
+
+### 12.2. Credits
+
+(a) Each call to the Dopl MCP Server uses one Credit, unless the Services state otherwise.
+
+(b) Credits reset at the start of each month and do not roll over. Free Plan Credits reset on the first day of each calendar month (UTC). Paid Plan Credits reset at the start of each billing period.
+
+(c) Workspace Credits are allocated per Member and are not pooled.
+
+(d) Credits have no cash value, are not transferable, and are not refundable.
+
+(e) When Credits are exhausted, features that use Credits are unavailable until Credits reset or You upgrade Your Plan.
+
+(f) Dopl may change Credit usage rates and free allowances. Section 12.6 governs changes that reduce what a paid Plan includes.
+
+### 12.3. Automatic Renewal
+
+**EACH PAID PLAN RENEWS AUTOMATICALLY EVERY MONTH UNTIL CANCELED. AT THE START OF EACH BILLING PERIOD, DOPL WILL CHARGE YOUR PAYMENT METHOD THE THEN-CURRENT FEE (FOR A TEAM PLAN, THE PER-SEAT FEE MULTIPLIED BY THE NUMBER OF SEATS). BY STARTING A PAID PLAN, YOU EXPRESSLY CONSENT TO THESE RECURRING CHARGES.** Your Plan, Fee, and next renewal date are shown on the Billing page.
+
+### 12.4. Seats
+
+The number of Seats on a Team Plan equals the number of Members of the Team Workspace. When Members join or leave, the Seat count changes and Dopl's payment processor may charge or credit a prorated amount for the remainder of the billing period. The person who starts a Team Plan is responsible for all Fees for that Plan.
+
+### 12.5. Cancellation
+
+You may cancel a paid Plan at any time online through the Billing page or the billing portal linked from it. Cancellation stops future renewals and takes effect at the end of the current billing period, after which the Workspace moves to the Free Plan. You may resume a canceled Plan before the end of the billing period. Deleting Your Dopl Account cancels each Plan You pay for.
+
+### 12.6. Price and Plan Changes
+
+Dopl will notify You by email at least 30 days before any increase in the Fee for Your Plan, or any material reduction in what Your Plan includes, takes effect for You. The change takes effect at Your first renewal after the notice period. If You cancel before that renewal, Dopl will not charge You the changed Fee. Where Law requires Your affirmative consent to a Fee increase, Dopl will request it, and if You do not consent, Your Plan will end at the end of the current billing period.
+
+### 12.7. Annual Plans
+
+If Dopl offers a Plan with a renewal period of one year or longer, Dopl will send You a reminder by email 15 to 45 days before each renewal stating the Fee, the renewal date, and how to cancel.
+
+### 12.8. Trials and Promotions
+
+Dopl may offer free trials, discounts, or promotional Credits on terms disclosed when offered. If a free trial converts to a paid Plan, Dopl will disclose the conversion date and Fee before the trial begins and will remind You before the first charge. Unless stated otherwise, each offer is limited to one per person.
+
+### 12.9. Payment Processing
+
+Stripe, Inc. processes payments for the Services. Stripe's terms govern Your payment information, and Dopl does not receive Your full card number. If a payment fails, Dopl may retry the payment and notify You, and may move Your Workspace to the Free Plan if the payment is not completed.
+
+### 12.10. Taxes
+
+You are responsible for all Taxes relating to Your purchases, except Taxes on Dopl's income. If Law requires Dopl to collect Taxes, Dopl will collect them at checkout.
+
+### 12.11. Refunds
+
+Fees are non-refundable, except where Law requires a refund and as stated in Sections 1.5, 12.6, 12.12, and 20.3. You may dispute a charge You believe is in error by email to build@usedopl.com within 60 days after the charge.
+
+### 12.12. EEA, UK, and Swiss Withdrawal Right
+
+If You are a consumer in the EEA, the United Kingdom, or Switzerland, You may withdraw from a purchase within 14 days after it is made by notice to build@usedopl.com. By starting a paid Plan, You request that the Services begin immediately. On withdrawal, Dopl will refund the Fee less an amount proportionate to the Services provided before Your notice, where Law permits that deduction.
+
+---
+
+## 13. Glasses
+
+If You pair Glasses with the Services, questions You send from the Glasses are transmitted to Dopl, transcribed where necessary, and routed to the Agents or Channels You select, and responses are returned to the Glasses. You must use Glasses safely and in compliance with Law, including Law governing the recording of other persons. **YOU MUST NOT RELY ON THE GLASSES INTEGRATION WHILE DRIVING OR PERFORMING ANY ACTIVITY THAT REQUIRES YOUR FULL ATTENTION.** Your use of the Glasses is governed by the manufacturer's terms.
+
+---
+
+## 14. Third-Party Services
+
+The Services interoperate with Third-Party Services, including AI Providers, Connected Clients, Google and GitHub sign-in, Stripe, Glasses manufacturers, and the tools, servers, and websites that You or Your Agents use. Third-Party Services are governed by their own terms and privacy policies. Dopl does not control or endorse Third-Party Services and is not responsible for them. Any dispute regarding a Third-Party Service is between You and its provider.
+
+---
+
+## 15. Copyright Complaints
+
+### 15.1. Notices
+
+Dopl responds to notices of alleged copyright infringement that comply with the Digital Millennium Copyright Act, 17 U.S.C. § 512. Notices must be sent to Dopl's designated agent:
+
+> Copyright Agent, Dopl
+> 2603 California Street, San Francisco, CA, United States
+> build@usedopl.com (subject: "DMCA Notice")
+
+A notice must include: (a) the physical or electronic signature of the copyright owner or a person authorized to act on its behalf; (b) identification of the copyrighted work; (c) identification of the allegedly infringing material, with information reasonably sufficient for Dopl to locate it; (d) the complainant's contact information; (e) a statement that the complainant has a good-faith belief that the use is not authorized by the copyright owner, its agent, or the law; and (f) a statement, under penalty of perjury, that the notice is accurate and that the complainant is authorized to act on behalf of the copyright owner.
+
+### 15.2. Counter-Notices
+
+A user whose material was removed may submit a counter-notice to the same agent that includes: (a) the user's physical or electronic signature; (b) identification of the removed material and its prior location; (c) a statement under penalty of perjury that the user has a good-faith belief that the material was removed as a result of mistake or misidentification; and (d) the user's name, address, and telephone number, and a statement that the user consents to the jurisdiction of the federal district court for the user's address (or, if outside the United States, the Northern District of California) and will accept service of process from the complainant. Dopl may restore the material 10 to 14 business days after receiving a valid counter-notice unless the complainant notifies Dopl that it has filed a court action.
+
+### 15.3. Repeat Infringers
+
+Dopl will terminate the Dopl Accounts of repeat infringers in appropriate circumstances.
+
+---
+
+## 16. Illegal Content Reports
+
+### 16.1. Reports
+
+Any person may report Content believed to be illegal by email to build@usedopl.com (subject: "Illegal Content Report"). A report must include an explanation of why the Content is illegal, its location in the Services, the reporter's name and email address (except for reports of child sexual abuse material, which may be anonymous), and a statement that the report is accurate and complete.
+
+### 16.2. Decisions and Appeals
+
+Dopl will handle reports in a timely, diligent, and objective manner. If Dopl restricts Your Content or Dopl Account, Dopl will provide You a statement of reasons. You may appeal by reply to that statement or by email to build@usedopl.com, and a person will review the appeal. If You are in the European Union, You may also refer the decision to an out-of-court dispute settlement body certified under the Digital Services Act.
+
+---
+
+## 17. Disclaimers
+
+### 17.1. Disclaimer of Warranties
+
+**DOPL PROVIDES THE SERVICES AND DOPL TECHNOLOGY "AS IS" AND "AS AVAILABLE." TO THE MAXIMUM EXTENT LAW PERMITS, DOPL DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, AND ACCURACY. DOPL DOES NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE; THAT CONTENT WILL NOT BE LOST; THAT AGENTS WILL ACT AS INTENDED; OR THAT ANY OUTPUT WILL BE ACCURATE OR RELIABLE. DOPL IS NOT LIABLE FOR DELAYS, FAILURES, OR OUTAGES.**
+
+### 17.2. Mandatory Warranties
+
+Where Law does not permit the exclusion of certain warranties, those warranties apply only to the extent and for the minimum period Law requires.
+
+### 17.3. Compliance
+
+The Services are not designed to ensure Your compliance with Law or with regulations specific to Your industry. You are responsible for that compliance.
+
+---
+
+## 18. Limitations on Liability
+
+### 18.1. Limitation on Liability Types
+
+**EXCEPT FOR LIABILITY ARISING FROM A PARTY'S GROSS NEGLIGENCE, FRAUD, OR WILLFUL MISCONDUCT, OR FROM YOUR OBLIGATIONS UNDER SECTIONS 3, 5.2, OR 19.1, NEITHER PARTY IS LIABLE TO THE OTHER IN CONNECTION WITH THE SERVICES OR THE AGREEMENT FOR ANY INDIRECT, CONSEQUENTIAL, SPECIAL, INCIDENTAL, RELIANCE, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, FILES, OR GOODWILL, WHETHER IN CONTRACT, TORT, OR ANY OTHER LEGAL OR EQUITABLE THEORY, EVEN IF ADVISED OF THEIR POSSIBILITY.**
+
+### 18.2. Agents and Third Parties
+
+**DOPL IS NOT LIABLE FOR LOSSES ARISING FROM ACTIONS TAKEN BY ANY AGENT OR CONNECTED CLIENT, FROM ANY AI PROVIDER OR OTHER THIRD-PARTY SERVICE, OR FROM CONTENT PROVIDED BY OTHER USERS.**
+
+### 18.3. Limitation on Liability Amount
+
+**EXCEPT FOR LIABILITY ARISING FROM DOPL'S GROSS NEGLIGENCE, FRAUD, OR WILLFUL MISCONDUCT, DOPL'S TOTAL LIABILITY ARISING OUT OF OR RELATING TO THE SERVICES OR THE AGREEMENT WILL NOT EXCEED THE GREATER OF (A) THE FEES YOU PAID DOPL DURING THE 12 MONTHS BEFORE THE FIRST EVENT GIVING RISE TO THE LIABILITY, OR (B) US$100.**
+
+### 18.4. Non-Excludable Liability
+
+Nothing in the Agreement limits liability for death or personal injury caused by negligence, or any liability that Law does not permit to be limited. If You are a consumer in a jurisdiction whose Law does not permit the limitations in this Section 18, they apply only to the extent that Law permits.
+
+---
+
+## 19. Indemnification
+
+### 19.1. By You
+
+You will defend and indemnify Dopl and its subcontractors, and their respective employees and agents, against all Third-Party Losses arising from: (a) Your use or misuse of the Services; (b) Your Content; (c) actions taken by Your Agents or Connected Clients; (d) Your breach of the Agreement; or (e) Your violation of Law or any third party's rights. If You are a consumer, this Section 19.1 applies only to the extent Law permits.
+
+### 19.2. By Dopl (IP Claims)
+
+Dopl will defend and indemnify You against all Third-Party Losses arising from a Claim that Your use of the Dopl Technology, as provided by Dopl and in accordance with the Agreement, infringes the IP Rights of a third party. This obligation does not apply to a Claim arising from Your Content, Output, Third-Party Services, or the combination of the Dopl Technology with materials Dopl did not provide, where the Dopl Technology would not infringe absent the combination. If an IP Claim arises, Dopl may, at its discretion and expense: (a) modify the Dopl Technology to be non-infringing; (b) replace it with a non-infringing alternative; (c) obtain a license for Your continued use; or (d) if none of these is commercially reasonable, terminate the affected Services and refund prepaid Fees for the unused portion of the billing period. This Section 19.2 states Dopl's sole obligation for IP Claims and is subject to Section 18.3.
+
+### 19.3. Procedure
+
+The indemnified party will notify the indemnifying party promptly of any Claim, allow the indemnifying party to control its defense and settlement, and provide reasonable cooperation at the indemnifying party's expense. The indemnifying party must not settle a Claim in a manner that imposes an obligation on the indemnified party without the indemnified party's written consent.
+
+---
+
+## 20. Suspension; Termination
+
+### 20.1. Suspension (by Dopl)
+
+Dopl may immediately suspend Your access to all or part of the Services if Dopl reasonably believes that:
+
+(a) You or Your Agent breached, or Your continued access would breach, the Agreement;
+
+(b) You or Your Agent violated, or Your continued access would violate, Law;
+
+(c) Your or Your Agent's actions threaten the security, stability, or reliability of the Services;
+
+(d) Your or Your Agent's actions create an unacceptable risk to Dopl, other users, or any third party; or
+
+(e) Law or a Governmental Authority requires the suspension.
+
+### 20.2. Termination for Convenience (by You)
+
+You may terminate the Agreement at any time by deleting Your Dopl Account under Section 2.6.
+
+### 20.3. Termination for Convenience (by Dopl)
+
+Dopl may terminate the Agreement, or discontinue the Services, upon 30 days' notice to You. Dopl will refund prepaid Fees for the unused portion of the billing period and will give You a reasonable opportunity to export Your Content before the termination takes effect.
+
+### 20.4. Termination for Cause (by Dopl)
+
+Dopl may terminate the Agreement and close Your Dopl Account if:
+
+(a) Dopl reasonably believes immediate termination is required by Law or necessary to prevent fraud or harm;
+
+(b) You breach the Agreement and, if the breach is capable of cure, do not cure it within 10 days after Dopl notifies You of the breach; or
+
+(c) Dopl suspends Your Dopl Account and You do not demonstrate within 10 days that the basis for suspension was in error or has been cured.
+
+### 20.5. Effect of Termination
+
+Upon termination, Your right to use the Services and Dopl Technology ends immediately. Termination does not relieve either party of payment obligations accrued before termination. If Dopl terminates the Agreement for cause, Dopl will not refund Fees.
+
+### 20.6. Survival
+
+The following survive termination of the Agreement: Sections 4, 5.2, 6.2 (for Content already shared), 7, 9, 10, 17, 18, 19, 21, and 24, and any other provision that by its nature is intended to survive.
+
+---
+
+## 21. Dispute Resolution
+
+### 21.1. Informal Resolution
+
+Before commencing arbitration or any other proceeding, the party asserting a claim must send the other party a written notice of dispute. Notices to Dopl must be sent to build@usedopl.com. Notices to You will be sent to the email address associated with Your Dopl Account. A notice must state: (a) the sender's name, email address, and mailing address, and the email address associated with the Dopl Account (if any); (b) the nature and factual basis of the dispute; and (c) the specific relief sought. If You are represented by an attorney, You must provide written authorization for Dopl to discuss Your dispute and Dopl Account with that attorney. The parties will attempt in good faith to resolve the dispute. If the dispute is not resolved within 60 days after the notice is received, either party may commence arbitration or, where permitted, a small claims action. Statutes of limitation are tolled during this 60-day period. A tribunal may stay a proceeding commenced without compliance with this Section 21.1.
+
+### 21.2. Binding Arbitration
+
+**TO THE EXTENT LAW PERMITS, THE PARTIES WILL RESOLVE ANY DISPUTE, CLAIM, OR CONTROVERSY ARISING OUT OF OR RELATING TO THE AGREEMENT, THE SERVICES, OR THE RELATIONSHIP BETWEEN THE PARTIES, INCLUDING THE VALIDITY, SCOPE, OR ENFORCEABILITY OF THIS SECTION 21 (EXCEPT AS STATED IN SECTION 21.7), EXCLUSIVELY BY FINAL AND BINDING INDIVIDUAL ARBITRATION.** The Federal Arbitration Act, 9 U.S.C. § 1 et seq., governs this Section 21. Judgment on an award may be entered in any court of competent jurisdiction.
+
+### 21.3. Exceptions
+
+The following are not subject to arbitration:
+
+(a) an individual action in small claims court within that court's jurisdiction, for so long as the action remains in small claims court and proceeds on an individual basis;
+
+(b) an action for injunctive or other equitable relief to prevent the infringement or misappropriation of IP Rights or Confidential Information;
+
+(c) a claim for public injunctive relief under California Law, which will be stayed pending, and decided after, arbitration of all arbitrable claims; and
+
+(d) any dispute brought by a consumer resident in the EEA, the United Kingdom, or Switzerland.
+
+### 21.4. Arbitration Procedure
+
+The American Arbitration Association ("**AAA**") will administer the arbitration: (a) before a single arbitrator; (b) under the AAA Consumer Arbitration Rules if You are an individual using the Services for personal purposes, or the AAA Commercial Arbitration Rules otherwise; (c) under the AAA Mass Arbitration Supplementary Rules where they apply; (d) on written submissions for claims of US$25,000 or less, unless the arbitrator determines a hearing is necessary; and (e) by video hearing, or, if in person, in San Francisco County, California, or the county of Your residence, at Your election. The arbitrator may award only individual relief, and only to the extent necessary to resolve the claimant's individual claim. The AAA rules are available at www.adr.org.
+
+### 21.5. Arbitration Fees
+
+AAA rules govern the payment of arbitration fees. If You commence an arbitration seeking US$10,000 or less, Dopl will pay all AAA filing, administrative, and arbitrator fees, unless the arbitrator finds Your claim frivolous or brought for an improper purpose. Each party otherwise bears its own attorneys' fees and costs, except as Law or the arbitrator's award provides.
+
+### 21.6. Mass Arbitration
+
+If 25 or more similar claims are asserted against Dopl by the same or coordinated counsel, the AAA Mass Arbitration Supplementary Rules apply. This Section 21.6 does not limit any claimant's substantive rights.
+
+### 21.7. Class Action Waiver
+
+**TO THE EXTENT LAW PERMITS, ANY DISPUTE, WHETHER IN ARBITRATION OR IN COURT, WILL BE CONDUCTED ONLY ON AN INDIVIDUAL BASIS AND NOT IN A CLASS, COLLECTIVE, CONSOLIDATED, OR REPRESENTATIVE ACTION.** Only a court, and not an arbitrator, may decide disputes regarding the interpretation, applicability, or enforceability of this Section 21.7. If a court determines that this Section 21.7 is unenforceable as to a particular claim or form of relief, that claim or relief will be severed and decided by a court under Section 21.10 after the arbitration of all other claims, and the remainder of this Section 21 will continue to apply.
+
+### 21.8. Jury Trial Waiver
+
+**TO THE EXTENT LAW PERMITS, EACH PARTY WAIVES ITS RIGHT TO A JURY TRIAL IN ANY DISPUTE NOT SUBJECT TO ARBITRATION.**
+
+### 21.9. 30-Day Opt-Out
+
+You may opt out of Sections 21.2 through 21.7 by sending notice to build@usedopl.com with the subject "Arbitration Opt-Out", or by mail to the address in Section 26, within 30 days after You first accept the Agreement. The notice must state Your name, the email address associated with Your Dopl Account, and Your decision to opt out. An opt-out has no other effect on the Agreement.
+
+### 21.10. Governing Law; Venue
+
+California Law governs the Agreement, without regard to its conflict-of-laws rules, and the Federal Arbitration Act governs Section 21. The United Nations Convention on Contracts for the International Sale of Goods does not apply. For any dispute not subject to arbitration, and to confirm, modify, or vacate an arbitral award, each party consents to the exclusive jurisdiction of the state courts located in San Francisco County, California, and the United States District Court for the Northern District of California. If You are a consumer in the EEA, the United Kingdom, or Switzerland, this Section 21.10 does not deprive You of the protection of the mandatory Law of Your country of residence or of Your right to bring proceedings in its courts.
+
+---
+
+## 22. Jurisdiction-Specific Terms
+
+### 22.1. California
+
+Under California Civil Code § 1789.3, California users may contact the Complaint Assistance Unit of the Division of Consumer Services of the California Department of Consumer Affairs in writing at 1625 North Market Blvd., Suite N 112, Sacramento, CA 95834, or by telephone at (916) 445-1254 or (800) 952-5210.
+
+### 22.2. EEA, United Kingdom, and Switzerland
+
+If You are a consumer in the EEA, the United Kingdom, or Switzerland: (a) the mandatory consumer-protection Law of Your country of residence applies and prevails over any inconsistent provision of the Agreement; (b) Sections 21.2 through 21.9 do not apply to You; (c) Section 12.12 applies; and (d) Dopl will provide at least 30 days' notice of material changes under Section 25.2, and You may terminate the Agreement before they take effect.
+
+### 22.3. Other Jurisdictions
+
+(a) **Canada.** The consumer-protection Law of Your province, including Quebec's Consumer Protection Act, prevails over any inconsistent provision of the Agreement regarding subscriptions, cancellation, and refunds.
+
+(b) **Australia.** Nothing in the Agreement excludes, restricts, or modifies any consumer guarantee under the Australian Consumer Law that cannot lawfully be excluded. Where Dopl may limit its liability for failure to comply with such a guarantee, Dopl's liability is limited to supplying the Services again or paying the cost of having them supplied again.
+
+(c) **New Zealand.** If You are a consumer, the Consumer Guarantees Act 1993 applies. If You use the Services for business purposes, You agree that the Consumer Guarantees Act 1993 does not apply.
+
+(d) **Other.** Mandatory consumer protections under the Law of Your country of residence continue to apply.
+
+---
+
+## 23. Export Controls; Government Users
+
+### 23.1. Export Controls
+
+You must not use, export, or re-export the Services in violation of U.S. or other applicable export-control or sanctions Law, including the Export Administration Regulations and sanctions administered by the U.S. Department of the Treasury's Office of Foreign Assets Control.
+
+### 23.2. Government Users
+
+The Dopl Technology is "commercial computer software" and "commercial computer software documentation." U.S. government users acquire only the rights stated in the Agreement, consistent with 48 C.F.R. § 12.212 and 48 C.F.R. §§ 227.7202-1 through 227.7202-4.
+
+---
+
+## 24. General Terms
+
+### 24.1. Compliance with Law
+
+Each party must comply with all Law applicable to it in connection with the Services.
+
+### 24.2. Notices
+
+(a) **Form.** Notices under the Agreement must be in writing, which includes email.
+
+(b) **Notices to Dopl.** You must send notices to Dopl at build@usedopl.com and, for service of legal process, to the address in Section 26.
+
+(c) **Notices to You.** Dopl may provide notices to You by email to the address associated with Your Dopl Account or through the Services.
+
+(d) **Electronic Communications.** Agreements, notices, and disclosures provided electronically satisfy any legal requirement that they be in writing.
+
+### 24.3. Assignment
+
+You must not assign or transfer the Agreement or any of Your rights or obligations under it without Dopl's prior written consent. Any attempted assignment in violation of this Section 24.3 is void. Dopl may assign the Agreement in whole or in part, upon notice to You, including to an entity Dopl forms to operate the Services or in connection with a merger, acquisition, reorganization, or sale of assets. Upon assignment to an entity Dopl forms to operate the Services, that entity replaces Dopl as a party to the Agreement. The Agreement binds and benefits the parties and their permitted assigns.
+
+### 24.4. Entire Agreement
+
+The Agreement, together with any terms You accept at checkout, constitutes the entire agreement between the parties regarding the Services and supersedes all prior and contemporaneous agreements and understandings regarding its subject matter.
+
+### 24.5. Order of Precedence
+
+If the Agreement conflicts with terms You accept at checkout, the checkout terms govern as to Fees and Plan features, and the Agreement governs in all other respects. The Privacy Policy is informational and does not modify the Agreement.
+
+### 24.6. Severability
+
+If a court or Governmental Authority finds any provision of the Agreement invalid, illegal, or unenforceable, that provision will be enforced to the maximum extent permissible, and the remaining provisions will remain in full force and effect, subject to Section 21.7.
+
+### 24.7. Waivers
+
+A waiver of any right under the Agreement is effective only if made in writing by the waiving party. A party's failure to enforce any provision is not a waiver of its right to enforce that provision later.
+
+### 24.8. Force Majeure
+
+Neither party is liable for any delay or failure to perform caused by events beyond its reasonable control, including natural disasters, labor disputes, epidemics, war, terrorism, civil unrest, acts of a Governmental Authority, utility or internet failures, and failures of Third-Party Services.
+
+### 24.9. No Agency
+
+The parties are independent contractors. Nothing in the Agreement creates a partnership, joint venture, agency, fiduciary, or employment relationship between the parties.
+
+### 24.10. Subcontractors
+
+Dopl may use subcontractors to perform its obligations under the Agreement. Dopl is responsible for its subcontractors' performance of those obligations.
+
+### 24.11. No Third-Party Beneficiaries
+
+The Agreement confers no rights on any person other than the parties and their permitted assigns.
+
+### 24.12. Headings
+
+Headings are for convenience only and do not affect interpretation of the Agreement.
+
+---
+
+## 25. Updating Terms
+
+### 25.1. Non-Material Changes
+
+Dopl may update the Agreement by publishing the updated version on Dopl's website and amending the "Last updated" date. Updates that are not material take effect upon publication.
+
+### 25.2. Material Changes
+
+For material changes to the Agreement, including changes to Fees, liability terms, or Section 21, Dopl will provide at least 30 days' notice by email to the address associated with Your Dopl Account and through the Services. Material changes take effect on the date stated in the notice. Your continued use of the Services after that date constitutes acceptance of the changes. If You do not accept the changes, You must stop using the Services and may delete Your Dopl Account before that date. Section 12.6 governs changes to Fees.
+
+### 25.3. Changes to Dispute Resolution
+
+A change to Section 21 does not apply to any dispute of which either party gave notice before the change takes effect. You may reject a material change to Section 21 by notice to build@usedopl.com within 30 days after the change takes effect, in which case Section 21 as You last accepted it continues to apply to You.
+
+### 25.4. Prior Versions
+
+Dopl will provide prior versions of the Agreement upon request.
+
+---
+
+## 26. Contact
+
+> Dopl
+> Attn: Samuel Wang
 > 2603 California Street
 > San Francisco, CA, United States
 > build@usedopl.com
 
-You can reach us at **build@usedopl.com** with any question, complaint, or legal notice about this Agreement. For privacy matters, see our [Privacy Policy](https://usedopl.com/privacy).
-
 ---
 
-## 3. Eligibility and accounts
+## Appendix 1 (Definitions)
 
-### 3.1 Eligibility
+"**Agent**" means an automated AI system, including a session launched from the Desktop App, that You authorize to act in connection with the Services.
 
-You must be **at least 18 years old** to use the Service. By accepting this Agreement, you confirm that you are 18 or older, that you are not barred from using the Service under any law that applies to you, and that you are not on any U.S. government list of prohibited or restricted parties.
+"**Agent Settings**" means the configuration You select for an Agent, including its approval level (such as Ask, Auto, or Full), its tool access, and whether it may use tools installed on Your computer.
 
-### 3.2 Your account
+"**AI Provider**" means a third party that supplies the AI model an Agent uses, such as Anthropic, OpenAI, xAI, Meta, or Cursor.
 
-You can sign up with an email address and password, or sign in with Google or GitHub. You agree to:
+"**Channel**" means a conversation space within a Workspace in which Members and Agents exchange messages, threads, tasks, and artifacts.
 
-- Give accurate, current, and complete information, and keep it up to date
-- Keep your password and other sign-in credentials confidential
-- Be responsible for all activity under your account, including activity by AI agents you launch or connect
-- Tell us promptly at **build@usedopl.com** if you think someone has accessed your account without permission
+"**Claim**" means any claim, demand, investigation, or legal proceeding that a third party brings against an indemnified party in connection with the Services.
 
-We may suspend or close an account whose information is false, or that violates this Agreement.
+"**Confidential Information**" means non-public information that a party discloses to the other party in connection with the Services that is designated as confidential or that a reasonable person would understand to be confidential given its nature and the circumstances of disclosure, including Your Content.
 
-### 3.3 Guest access
+"**Connected Client**" means a third-party application, such as Claude Code, Claude Desktop, Codex, or Cursor, that You authorize to access the Dopl MCP Server.
 
-The public Playground lets you try the Service without signing up. A Playground session uses a temporary guest account that we delete automatically shortly after the session ends (currently after about 10 minutes). This Agreement still applies while you use it.
+"**Content**" means all messages, knowledge entries, skills, ontology objects, saved chats, artifacts, files, images, and other material that You or Your Agents provide to, create in, or store in the Services. "**Your Content**" means Content provided by You or Your Agents.
 
-### 3.4 Deleting your account
+"**Credit**" means a unit of usage of the Services, as described in Section 12.2.
 
-You can delete your account at any time from your account settings. Deletion is permanent. If you own a workspace that still has other members, you must transfer ownership or remove the other members first. Deleting your account cancels any subscription you pay for. See our [Privacy Policy](https://usedopl.com/privacy) for what happens to your data.
+"**Desktop App**" means the Dopl application for macOS.
 
----
+"**Dopl**" means Samuel Wang, an individual doing business as Dopl, and any successor or assignee under Section 24.3.
 
-## 4. The Service
+"**Dopl Account**" means the account You register to access the Services.
 
-### 4.1 What Dopl is
+"**Dopl Data**" means data and information relating to the operation and performance of the Services, including usage data and insights derived from it, excluding Your Content and Output.
 
-Dopl gives people and their AI agents a shared place to work. The Service includes:
+"**Dopl MCP Server**" means Dopl's Model Context Protocol server, through which Agents and Connected Clients access the Services.
 
-- **Workspaces** — your personal Home space, and shared workspaces you create or join
-- **Channels** — conversations among members and AI agents, including messages, threads, tasks, and artifacts
-- **Knowledge bases, skills, and an ontology** — structured information you and your agents can read and write
-- **The Dopl desktop app** (macOS) — launches and manages AI agents on your computer
-- **The Dopl MCP server** — lets AI tools you choose (for example Claude Code, Claude Desktop, Codex, or Cursor) read and write your Dopl content
-- **Glasses** — an integration that lets supported smart glasses (currently Even Realities G2) send questions to and receive answers from Dopl
+"**Dopl Technology**" means the software, interfaces, website, Desktop App, Dopl MCP Server, application programming interfaces, Dopl Data, and other technology Dopl uses to provide the Services.
 
-### 4.2 Licence to use the Service
+"**EEA**" means the European Economic Area.
 
-As long as you follow this Agreement, we grant you a **limited, non-exclusive, non-transferable, non-sublicensable, revocable licence** to access and use the Service, and to install and run the Dopl desktop app on Macs you own or control, for your personal or internal business use.
+"**Fees**" means the amounts payable for a Plan, as stated in Section 12.1 or at checkout.
 
-You may not:
+"**Glasses**" means smart glasses supported by the Services, currently Even Realities G2.
 
-- Copy, modify, sell, rent, lend, distribute, or sublicense any part of the Service
-- Reverse-engineer, decompile, or disassemble the Service, except where the law allows it despite this restriction
-- Access the Service by automated means, except through the interfaces we provide for that purpose (such as the MCP server and the desktop app) and within their limits
-- Bypass or interfere with any security, authentication, credit, rate-limit, or access-control feature
-- Use the Service to build a competing product, or to copy its features, design, or content
-- Resell or provide the Service to third parties without our written permission
-- Remove or obscure any proprietary notices
+"**Governmental Authority**" means any court, regulator, or other governmental body with authority over a party or the Services.
 
-### 4.3 Changes to the Service
+"**IP Claim**" means a Claim described in Section 19.2.
 
-The Service changes often. We may add, change, or remove features at any time. If we remove a core feature of a paid plan that you are paying for, you may cancel and, where the law requires, receive a pro-rata refund for the unused part of your billing period.
+"**IP Rights**" means all copyrights, patents, trademarks, service marks, trade secrets, moral rights, and other intellectual property rights anywhere in the world.
 
-### 4.4 Desktop app updates
+"**Law**" means all applicable laws, rules, and regulations, and binding requirements of any Governmental Authority.
 
-The desktop app checks for and installs updates automatically, and it may download and update the AI command-line tools it runs (for example the Claude and Codex runtimes). Some features may stop working if you do not update. We may stop supporting older versions of the desktop app.
+"**Losses**" means damages, losses, liabilities, judgments, settlements, penalties, fines, costs, and expenses, including reasonable attorneys' fees.
 
----
+"**Mark**" means a trademark, service mark, logo, or trade name.
 
-## 5. AI agents and AI providers
+"**Member**" means an individual who belongs to a Workspace in any role, including owner, admin, member, viewer, or guest.
 
-This section matters. Please read it.
+"**Output**" means content generated by an Agent or an AI feature of the Services.
 
-### 5.1 Agents run on your computer, under your accounts
+"**Plan**" means a Free, Pro, or Team plan described in Section 12.1, or any other plan Dopl offers.
 
-When you launch an agent from the Dopl desktop app, it runs **on your own computer**. It uses an AI model from a third-party provider — for example Anthropic (Claude), OpenAI (Codex), xAI (Grok), Meta (Muse), or Cursor — through **an account you hold with that provider** and sign in to from Dopl. Dopl does not sell you access to those models.
+"**Preview Service**" means a feature of the Services that Dopl identifies as beta, preview, experimental, or similar.
 
-You are responsible for:
+"**Privacy Policy**" means Dopl's privacy policy published at usedopl.com/privacy.
 
-- Having a valid account with each AI provider you use, and paying that provider's charges
-- Following each AI provider's terms and usage policies. Your use of an AI provider is governed by your agreement with that provider, not this Agreement
-- Anything you send to an AI provider, which is handled under that provider's own terms and privacy policy
+"**Seat**" means a Member of a Team Workspace for whom a per-Seat Fee is charged.
 
-We do not control AI providers. We are not responsible for their availability, their outputs, their charges, or how they handle your data. An AI provider may change or end its service, or the way Dopl can connect to it, at any time.
+"**Services**" means the products and services Dopl provides or makes available to You, including Your access to the Dopl Technology.
 
-### 5.2 Agents can take real actions — you are responsible for them
+"**Shared Space**" means a Workspace or Channel in which more than one Member participates.
 
-Depending on the settings you choose, agents can read and write files, run shell commands, browse the web and control a browser, use other tools you have installed, post in channels, and edit knowledge, skills, and other workspace content. You choose each agent's approval level (such as Ask, Auto, or Full), and in some workspaces whether it may use your own tools.
+"**Taxes**" means all taxes and duties imposed by any Governmental Authority, including sales, use, value-added, and goods and services taxes, excluding taxes on Dopl's income.
 
-**You are responsible for every agent you launch or connect to the Service, the settings and approval level you give it, and everything it does — on your computer, in Dopl, and in any other service it accesses.** Agents make mistakes. They can delete or change files, send messages, run commands with unintended effects, or misread instructions. You should:
+"**Team Workspace**" means a Workspace on the Team Plan.
 
-- Use approval levels that fit the task, and review actions before approving them
-- Keep backups of anything important
-- Give agents only the access they need
-- Not let agents act for you anywhere you are not allowed to automate
+"**Third-Party Losses**" means all amounts finally awarded to a third party in connection with a Claim, and amounts paid in settlement of a Claim under Section 19.3.
 
-**To the maximum extent the law allows, we are not liable for any loss or damage caused by actions an agent takes, whether or not you approved the specific action.**
+"**Third-Party Materials**" means software, content, and other materials owned by a third party.
 
-### 5.3 Agents in shared spaces
+"**Third-Party Services**" means products, services, and websites that Dopl does not own or control.
 
-In a shared channel or workspace, other members' messages and content may be read by your agents, and your messages and content may be read by other members' agents. When that happens, the content is sent to the AI provider that the reading agent uses. Content from other people is **untrusted**: it may contain instructions meant to manipulate an agent (sometimes called "prompt injection"). Dopl applies some safeguards, but no safeguard is perfect. You are responsible for which agents you allow in shared spaces and what access you give them.
+"**Workspace**" means a space in the Services, including Your personal Home Workspace and any shared Workspace, in which Members collaborate.
 
-### 5.4 Connecting other AI tools through MCP
-
-If you connect an AI tool to the Dopl MCP server, you authorise that tool to access your Dopl content with your permissions. Content it reads is handled under that tool's own terms. You can revoke a connection at any time.
-
-### 5.5 AI features we run
-
-Dopl itself uses AI models from third-party providers for a few features — for example, to index knowledge for search and to transcribe voice from connected glasses. See our [Privacy Policy](https://usedopl.com/privacy) for details.
-
-### 5.6 Ownership of AI inputs and outputs
-
-As between you and us, **you own the inputs you give to agents and AI features, and the outputs they produce for you**, to the extent ownership is available under applicable law. (The U.S. Copyright Office's position is that purely AI-generated material may not be copyrightable; we make no representation either way.) Your AI provider's terms may also apply to outputs.
-
-### 5.7 No training on your content
-
-**We do not use your content, your agents' inputs, or their outputs to train AI models**, and we do not allow our AI service providers to do so for their own purposes. Your own AI providers' training practices are governed by your agreement with them.
-
-### 5.8 AI output may be wrong
-
-**AI OUTPUTS MAY BE INACCURATE, INCOMPLETE, OFFENSIVE, OR NOT WHAT YOU EXPECTED. AI SYSTEMS CAN "HALLUCINATE" — PRODUCE CONFIDENT-SOUNDING INFORMATION THAT IS FALSE.** You are responsible for checking outputs before you rely on them. **Do not use outputs as the sole basis for medical, legal, financial, employment, safety, or other important decisions.** Outputs are not professional advice.
-
-### 5.9 Prohibited uses of AI features
-
-You must not use agents or AI features, through the Service, to:
-
-- Create or distribute child sexual abuse material, or sexualise minors in any way
-- Defame real people, incite violence, or make credible threats
-- Harass, intimidate, stalk, or impersonate any person without consent
-- Create malware, attack systems, or gain unauthorised access to accounts, computers, or networks
-- Run spam, scams, fraud, or schemes to evade other platforms' moderation or security
-- Interfere with elections or mislead voters
-- Carry out practices banned by the EU AI Act, including social scoring, untargeted scraping of facial images, or biometric categorisation to infer sensitive traits
-- Make consequential decisions about people (such as employment, credit, housing, insurance, or access to healthcare) without meaningful human review
-- Do anything that violates your AI provider's terms or usage policies
-
-### 5.10 Our right to limit use
-
-We may set rate limits, credit limits, and other restrictions on agents and AI features, and we may stop an agent or suspend access if we believe this section is being violated or the Service is at risk.
-
----
-
-## 6. Workspaces and teams
-
-### 6.1 Workspace owners and admins
-
-The person who creates a workspace is its owner. Owners and admins can invite and remove members, set roles (such as admin, member, viewer, or guest), manage channels and settings, and — for a Team workspace — manage billing. If you join a workspace, the owner and admins can see and manage the content you add to it, and can remove you.
-
-### 6.2 Organisation workspaces
-
-If a workspace is used by an organisation, that organisation is responsible for its members' use of the workspace, and for having any rights it needs over content its members add.
-
-### 6.3 Leaving a workspace
-
-If you leave or are removed from a workspace, content you added to that workspace (such as messages and knowledge entries) may stay in the workspace for its remaining members, according to how the workspace is set up.
-
----
-
-## 7. Acceptable use
-
-You agree not to use the Service, directly or through an agent, to:
-
-- Break any law or violate anyone's rights
-- Infringe any copyright, trademark, patent, trade secret, or other intellectual-property right
-- Upload, store, or share child sexual abuse material. We report apparent CSAM to the National Center for Missing & Exploited Children (NCMEC) and to law enforcement
-- Harass, threaten, defame, or stalk anyone
-- Upload or spread malware or other harmful code
-- Access accounts, workspaces, channels, or data you are not authorised to access
-- Store or share other people's personal information without a lawful basis, or share highly sensitive personal information (such as government ID numbers, financial account numbers, or health records) with people who should not have it
-- Commit fraud, launder money, or finance terrorism
-- Send spam or unsolicited bulk messages
-- Misrepresent who you are or your affiliation with anyone
-- Overload, disrupt, or degrade the Service or its infrastructure, or exceed its usage limits by deceptive means (for example, creating multiple accounts to collect extra free credits)
-- Use the Service where its failure could lead to death, personal injury, or serious environmental or property damage
-
-We may investigate suspected violations, remove content, stop agents, suspend accounts, and report violations to law enforcement.
-
----
-
-## 8. Your content
-
-### 8.1 You own your content
-
-The Service lets you and your agents create, upload, post, and store messages, knowledge entries, skills, ontology objects, artifacts, saved chats, files, images, workspace icons, and other material (**"Your Content"**). **You keep all ownership rights in Your Content.**
-
-### 8.2 Licence you give us
-
-You grant us a **worldwide, non-exclusive, royalty-free licence** to host, store, copy, process, index, transmit, and display Your Content, and to make technical changes to it (such as formatting, resizing, or creating search indexes), **only** to provide, secure, and support the Service for you and for the people you share Your Content with, and to comply with the law. We may let our service providers do the same for those purposes. This licence ends when Your Content is deleted from the Service, except for copies that other people you shared it with have kept, copies in backups for a limited time, and anything the law requires us to keep.
-
-### 8.3 Sharing
-
-When you share content — by posting in a shared channel, adding it to a shared workspace or knowledge base, marking a saved chat public to your workspace, or using a share or invite link — the people and agents you share it with can see and use it according to the workspace's settings. Some images, such as workspace icons and thumbnails, are stored so that anyone with their web address can view them.
-
-### 8.4 Your promises about Your Content
-
-You confirm that you have all the rights needed to add Your Content to the Service and to grant the licence above, and that Your Content does not violate this Agreement, the law, or anyone's rights.
-
-### 8.5 Moderation
-
-We do not review all content, and we are not obliged to. We may remove or restrict content, or stop agents, that we believe violate this Agreement or the law. **You are responsible for Your Content and for content your agents create.** Where the EU Digital Services Act applies, we will tell you why we restricted your content and how to appeal — see [Section 15](#15-reporting-illegal-content-eu-digital-services-act).
-
-### 8.6 Backups
-
-You are responsible for keeping your own copies of important content. You can export knowledge and other content using the tools the Service provides.
-
----
-
-## 9. Plans, credits, and billing
-
-### 9.1 Plans
-
-| Plan | Price | Billing cycle | Includes |
-|---|---|---|---|
-| Free (Home) | US$0 | — | 500 credits per month for your Home space |
-| Pro (Home) | **US$8.99 per month** | Monthly, auto-renews | 5,000 credits per month for your Home space, plus larger knowledge storage |
-| Free (workspace) | US$0 | — | 100 credits per member per month |
-| Team (workspace) | **US$8.99 per member ("seat") per month** | Monthly, auto-renews | 5,000 credits per member per month, plus larger knowledge storage |
-
-Prices are in U.S. dollars and do not include taxes unless shown otherwise at checkout. The price, billing cycle, and what's included are shown before you subscribe. If anything at checkout differs from this table, the checkout terms you accepted apply.
-
-### 9.2 Credits
-
-Certain actions — currently, each call an agent or AI tool makes to the Dopl MCP server — use one credit. Each plan includes a monthly allowance:
-
-- Credits **reset every month and do not roll over**. Free allowances reset on the first day of each calendar month (UTC). Paid allowances reset at the start of each billing period.
-- Workspace credits are per member and are not pooled.
-- Credits have **no cash value**, cannot be transferred or sold, and are not refundable.
-- When you run out, some features stop working until your allowance resets or you upgrade.
-
-We may change how many credits an action uses, or the size of free allowances, by updating this Agreement or the pricing page. We will give paid subscribers notice of material reductions under [Section 9.6](#96-price-and-plan-changes).
-
-### 9.3 Automatic renewal
-
-**YOUR PAID PLAN RENEWS AUTOMATICALLY EVERY MONTH UNTIL YOU CANCEL.** At the start of each monthly billing period we charge the payment method on file the then-current price (for Team, the price per seat multiplied by the number of seats).
-
-**By starting a paid plan, you give us your express affirmative consent to charge you on a recurring monthly basis until you cancel.** You can review your plan, price, and next renewal date at any time on the **Billing** page.
-
-### 9.4 Team seats
-
-For a Team workspace, seats follow the workspace's membership. When members join or leave, the number of seats on the subscription changes, and our payment processor may charge or credit a prorated amount for the rest of the billing period. The workspace owner (or the person who started the subscription) is responsible for all seat charges.
-
-### 9.5 How to cancel
-
-You can cancel at any time **online**, on the **Billing** page (or through the billing portal linked from it). Cancellation stops future renewals. **You keep paid features until the end of the billing period you have already paid for**, and then the plan moves to Free. We do not give partial refunds for unused time, except where the law requires it. You can resume a cancelled plan before the period ends. Deleting your account also cancels plans you pay for.
-
-### 9.6 Price and plan changes
-
-If we raise the price of your plan, or materially reduce what it includes, we will email you at least **30 days** before the change applies to you. The change takes effect at your next renewal after that notice. If you do not want to accept it, cancel before then and you will not be charged the new price. Where the law requires your affirmative consent to a price increase, we will ask for it, and if you do not give it, your plan will end at the end of the current period.
-
-### 9.7 Annual plans
-
-We currently offer monthly plans only. If we offer plans that renew for a year or longer, we will email you a reminder 15 to 45 days before each renewal with the price, the renewal date, and how to cancel.
-
-### 9.8 Free trials and promotions
-
-We may offer free trials, discounts, or promotional credits. Their terms will be shown when offered. If a trial converts to a paid plan, we will tell you before it starts how and when you will be charged, and remind you before the first charge. Promotions are limited to one per person unless stated otherwise.
-
-### 9.9 Payment processing and failed payments
-
-Payments are processed by **Stripe**. Stripe's terms apply to your payment information, and we do not receive your full card number. If a payment fails, we may retry it and notify you; if it still fails, we may move your plan to Free.
-
-### 9.10 Taxes
-
-You are responsible for taxes that apply to your purchases, except taxes on our income. We collect taxes at checkout where required.
-
----
-
-## 10. Refunds
-
-**Payments are non-refundable**, except where the law requires a refund (including the EU and UK withdrawal right below, and the refund rights described in [Section 9.6](#96-price-and-plan-changes)). If you think you were charged in error, email **build@usedopl.com** within 60 days of the charge and we will review it.
-
-**EU, UK, and Swiss consumers.** You have a right to withdraw from a purchase within **14 days**. When you start a paid plan, you ask us to begin providing it immediately. If you withdraw within 14 days, we will refund you, minus an amount proportionate to the service already provided before you told us you were withdrawing, where the law allows this deduction. To withdraw, email build@usedopl.com with your account email and a clear statement that you are withdrawing.
-
----
-
-## 11. Glasses
-
-If you pair smart glasses with Dopl, questions you speak or send from the glasses are sent to Dopl, transcribed where needed, and routed to the agents or channels you choose; answers are sent back to the glasses. You are responsible for using glasses safely and lawfully. **Do not rely on the glasses integration while driving or doing anything that needs your full attention.** You must follow the laws on recording other people, including laws that require everyone's consent. Your use of the glasses themselves is governed by the manufacturer's terms.
-
----
-
-## 12. Third-party services
-
-The Service connects to services we do not own or control (**"Third-Party Services"**) — including AI providers (Section 5), sign-in providers (Google, GitHub), our payment processor (Stripe), glasses manufacturers, and any tools, MCP servers, or websites you or your agents use. Third-Party Services are governed by their own terms and privacy policies. **We are not responsible for Third-Party Services and do not endorse them.** Your use of them is at your own risk, and any dispute with a Third-Party Service provider is between you and that provider.
-
----
-
-## 13. Intellectual property and feedback
-
-### 13.1 Our intellectual property
-
-The Service — including its software, code, design, text, graphics, logos, and interfaces — belongs to us or our licensors and is protected by intellectual-property laws. All rights not expressly granted in this Agreement are reserved. "Dopl" and our logos are our trademarks; you may not use them without our written permission, except to refer to the Service accurately.
-
-### 13.2 Open-source software
-
-The Service includes open-source components that are licensed under their own terms. Where an open-source licence gives you rights that this Agreement would otherwise restrict, the open-source licence controls for that component.
-
-### 13.3 Feedback
-
-If you send us suggestions or feedback (**"Feedback"**), you grant us a **worldwide, perpetual, irrevocable, royalty-free licence** to use it for any purpose without paying you or crediting you. Feedback does not include Your Content.
-
----
-
-## 14. Copyright complaints (DMCA)
-
-We respect intellectual-property rights. If you believe content on the Service infringes your copyright, send a notice under the Digital Millennium Copyright Act (17 U.S.C. § 512) to our designated agent:
-
-> **Copyright Agent — Samuel Wang, d/b/a Dopl**
-> 2603 California Street, San Francisco, CA, United States
-> Email: **build@usedopl.com** (subject: "DMCA Notice")
-
-Your notice must include: (1) your physical or electronic signature; (2) identification of the copyrighted work; (3) identification of the material you claim is infringing, with enough information for us to find it; (4) your contact details; (5) a statement that you have a good-faith belief the use is not authorised by the owner, its agent, or the law; and (6) a statement, under penalty of perjury, that the notice is accurate and that you are the owner or authorised to act for the owner.
-
-**Counter-notice.** If your content was removed and you believe it was a mistake or misidentification, you may send a counter-notice to the same address including: your signature; identification of the removed material and where it appeared; a statement under penalty of perjury that you have a good-faith belief it was removed by mistake or misidentification; and your name, address, and phone number, with a statement that you consent to the jurisdiction of the federal district court for your address (or, if you are outside the U.S., the Northern District of California) and will accept service from the person who sent the original notice. We may restore the material in 10 to 14 business days unless the complainant tells us they have filed a court action.
-
-**Repeat infringers.** We will close the accounts of repeat infringers in appropriate circumstances.
-
-Sending a knowingly false notice or counter-notice can make you liable for damages under 17 U.S.C. § 512(f).
-
----
-
-## 15. Reporting illegal content (EU Digital Services Act)
-
-Anyone can report content they believe is illegal by emailing **build@usedopl.com** (subject: "Illegal Content Report"). Please include an explanation of why the content is illegal, where it is (for example, the workspace and channel, or a link), your name and email (unless the report concerns child sexual abuse material, where you may stay anonymous), and a statement that you believe the report is accurate and complete.
-
-We handle reports in a timely, careful, and objective way. If we restrict your content or account, we will give you a statement of reasons. You can appeal by replying to that statement or emailing build@usedopl.com, and a person will review the appeal. If you are in the EU, you may also use an out-of-court dispute settlement body certified under the Digital Services Act.
-
----
-
-## 16. Privacy
-
-Our [Privacy Policy](https://usedopl.com/privacy) explains how we collect, use, and share personal information. If you add other people's personal information to the Service, you are responsible for having a lawful basis to do so.
-
----
-
-## 17. Suspension and termination
-
-### 17.1 By you
-
-You can stop using the Service at any time, cancel paid plans in Billing, and delete your account as described in [Section 3.4](#34-deleting-your-account).
-
-### 17.2 By us
-
-We may suspend or end your access to all or part of the Service if we reasonably believe that you (or an agent you run) have violated this Agreement; your use creates legal, security, or operational risk for us, other users, or anyone else; we are required to do so by law; or we stop offering the Service. Where practical and lawful, we will tell you in advance and give you a chance to fix the problem and export your content. If we end the Service entirely, or close your account for reasons other than your breach, we will refund any prepaid fees for the unused part of your billing period.
-
-### 17.3 Effect of termination
-
-When your access ends, your licence to use the Service ends. Sections that by their nature should continue — including ownership, licences you granted for content already shared, disclaimers, limitations of liability, indemnity, and dispute resolution — continue after termination.
-
----
-
-## 18. Disclaimers
-
-**THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND. TO THE MAXIMUM EXTENT THE LAW ALLOWS, WE DISCLAIM ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, AND ACCURACY.**
-
-**WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE; THAT CONTENT WILL NOT BE LOST; THAT AGENTS WILL BEHAVE AS INTENDED; OR THAT ANY OUTPUT IS ACCURATE OR RELIABLE. YOU USE AGENTS, AND ALLOW THEM TO ACT ON YOUR COMPUTER AND ACCOUNTS, AT YOUR OWN RISK.**
-
-Some laws do not allow certain warranties to be excluded. Where those laws apply, the warranties they require apply only to the extent and for the minimum period the law requires.
-
----
-
-## 19. Limitation of liability
-
-**TO THE MAXIMUM EXTENT THE LAW ALLOWS:**
-
-**(A) WE WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, FILES, GOODWILL, OR BUSINESS OPPORTUNITY, ARISING OUT OF OR RELATING TO THE SERVICE OR THIS AGREEMENT — INCLUDING DAMAGE CAUSED BY ACTIONS AN AGENT TAKES, BY THIRD-PARTY SERVICES, OR BY CONTENT FROM OTHER USERS — EVEN IF WE WERE TOLD SUCH DAMAGES WERE POSSIBLE.**
-
-**(B) OUR TOTAL LIABILITY FOR ALL CLAIMS RELATING TO THE SERVICE OR THIS AGREEMENT WILL NOT EXCEED THE GREATER OF (I) THE AMOUNT YOU PAID US FOR THE SERVICE IN THE 12 MONTHS BEFORE THE EVENT GIVING RISE TO THE CLAIM, OR (II) ONE HUNDRED U.S. DOLLARS (US$100).**
-
-**(C) THESE LIMITS APPLY WHATEVER THE LEGAL THEORY (CONTRACT, TORT, STRICT LIABILITY, OR OTHERWISE), AND EVEN IF A LIMITED REMEDY FAILS OF ITS ESSENTIAL PURPOSE.**
-
-Nothing in this Agreement limits liability for death or personal injury caused by negligence, for fraud, or for anything else that cannot be limited under applicable law. If you are a consumer in the EEA, UK, or another place whose laws do not allow these limits, they apply only to the extent your local law permits.
-
----
-
-## 20. Indemnification
-
-You will defend, indemnify, and hold us harmless from any third-party claim, and related losses, damages, costs, and reasonable attorneys' fees, arising out of: your use of the Service in violation of this Agreement or the law; Your Content; actions taken by agents you launched or connected; or your violation of anyone's rights. We will tell you promptly about any such claim, let you control its defence (you may not settle it in a way that imposes obligations on us without our consent), and give reasonable cooperation at your expense. If you are a consumer, this section applies only to the extent your local law allows.
-
----
-
-## 21. Governing law
-
-This Agreement is governed by the laws of the **State of California**, without regard to conflict-of-laws rules, and by U.S. federal law where it applies, including the Federal Arbitration Act. The UN Convention on Contracts for the International Sale of Goods does not apply.
-
-If you are a consumer in the EEA, UK, or Switzerland, this choice of law does not take away the protection of the mandatory consumer-protection laws of the country where you live.
-
----
-
-## 22. Informal dispute resolution
-
-**Before either of us starts arbitration or any other formal proceeding, we will try to resolve the dispute informally.** Send a notice to **build@usedopl.com** (or by mail to the address in [Section 2](#2-who-we-are)) describing the dispute, the relief you want, and your account email. We will send notices to your account email. We will respond within 30 days.
-
-If we cannot resolve the dispute within **60 days** after the notice is received, either of us may start arbitration under [Section 23](#23-binding-individual-arbitration) or, where allowed, file in small-claims court. Statutes of limitation are paused during this 60-day period. If a party starts a proceeding without following this section, the other party may ask the arbitrator or court to pause the proceeding until it has been followed.
-
----
-
-## 23. Binding individual arbitration
-
-**PLEASE READ THIS SECTION CAREFULLY. IT AFFECTS YOUR LEGAL RIGHTS, INCLUDING YOUR RIGHT TO FILE A LAWSUIT IN COURT AND TO HAVE A JURY HEAR YOUR CLAIMS.**
-
-### 23.1 Agreement to arbitrate
-
-You and Dopl agree that any dispute, claim, or controversy arising out of or relating to this Agreement, the Service, or our relationship — including whether this arbitration agreement is valid, enforceable, or applies to a dispute (a **"Dispute"**) — **will be resolved by binding individual arbitration**, not in court, except as set out in [Section 23.3](#233-exceptions). This arbitration agreement is governed by the Federal Arbitration Act, 9 U.S.C. § 1 et seq.
-
-### 23.2 Provider and rules
-
-The arbitration will be administered by the **American Arbitration Association ("AAA")** under its **Consumer Arbitration Rules** (or, if you use the Service only for business purposes, its Commercial Arbitration Rules), and, where they apply, its **Mass Arbitration Supplementary Rules**, all as in effect when the arbitration starts. The rules are available at <https://www.adr.org>. If the AAA is unavailable, we will agree on another provider or ask a court to appoint one.
-
-### 23.3 Exceptions
-
-The following are **not** subject to arbitration:
-
-- **Small claims.** Either of us may bring an individual claim in small-claims court if it qualifies and stays there.
-- **Intellectual property.** Either of us may ask a court for an injunction or other equitable relief to stop infringement or misuse of intellectual property or confidential information.
-- **Public injunctive relief.** Nothing in this section prevents you from seeking public injunctive relief under California law. If a court decides such a claim cannot be arbitrated, that claim will be decided in a state or federal court in San Francisco County, California, after the arbitrable claims are decided.
-- **EEA, UK, and Swiss consumers** are not bound by this arbitration agreement.
-
-### 23.4 Procedure
-
-A single arbitrator will decide the Dispute. For claims of US$25,000 or less, the arbitration will be decided on written submissions unless the arbitrator decides a hearing is needed. Any hearing will be held by video unless both of us agree otherwise, or, if in person, in San Francisco County, California, or the county where you live, at your choice. The arbitrator may award the same individual relief a court could, but only to the individual party seeking it and only as needed for that party's individual claim. The award will be in writing and may be entered in any court with jurisdiction.
-
-### 23.5 Fees
-
-Fees are governed by the AAA's rules. If you start an arbitration for US$10,000 or less, **we will pay all AAA filing, administrative, and arbitrator fees**, unless the arbitrator finds your claim frivolous or brought for an improper purpose. Each of us otherwise pays our own attorneys' fees and costs, unless the law or the arbitrator provides otherwise.
-
-### 23.6 Mass arbitration
-
-If 25 or more similar Disputes are filed against us by the same or coordinated counsel, the AAA's Mass Arbitration Supplementary Rules apply. This paragraph does not limit any claimant's substantive rights.
-
----
-
-## 24. Class-action waiver and jury-trial waiver
-
-**YOU AND DOPL EACH AGREE TO BRING DISPUTES ONLY IN AN INDIVIDUAL CAPACITY, AND NOT AS A PLAINTIFF OR CLASS MEMBER IN ANY CLASS, COLLECTIVE, CONSOLIDATED, OR REPRESENTATIVE ACTION.** The arbitrator may not combine more than one person's claims or preside over any class or representative proceeding (except for the administrative procedures in [Section 23.6](#236-mass-arbitration)).
-
-If a court decides that this waiver cannot be enforced for a particular claim or form of relief, that claim or relief will be severed and decided in a state or federal court in San Francisco County, California, after the arbitration is complete, and the rest of the arbitration agreement will still apply.
-
-**FOR ANY DISPUTE NOT ARBITRATED, YOU AND DOPL EACH WAIVE THE RIGHT TO A JURY TRIAL**, to the extent the law allows. Any such Dispute will be decided in a state or federal court in San Francisco County, California, and we both consent to that court's jurisdiction.
-
----
-
-## 25. 30-day opt-out of arbitration
-
-**You can opt out of the arbitration agreement in Section 23 and the class-action waiver in Section 24.** Email **build@usedopl.com** with the subject line **"Arbitration Opt-Out"** (or write to the address in [Section 2](#2-who-we-are)) within **30 days after you first accept this Agreement**. Include your name, your account email, and a clear statement that you want to opt out.
-
-If you opt out, Disputes will be decided in a state or federal court in San Francisco County, California. Opting out has no other effect on your use of the Service.
-
----
-
-## 26. Changes to this Agreement
-
-We may update this Agreement. The "Last updated" date shows when. For **material changes**, we will tell you at least **30 days** before they take effect, by email to your account address, a notice in the Service, or both. Material changes take effect on the date in the notice; if you keep using the Service after that, you accept them. If you do not agree, stop using the Service and cancel or delete your account before that date. For price changes, see [Section 9.6](#96-price-and-plan-changes).
-
-**Changes to dispute resolution** will not apply to a Dispute that one of us already notified the other about before the change. If we make a material change to the arbitration agreement, you may reject it by emailing us within 30 days of the change; the arbitration terms you previously accepted will then continue to apply to you.
-
-Previous versions are available on request.
-
----
-
-## 27. General terms
-
-**Entire agreement.** This Agreement and our Privacy Policy, plus any terms shown at checkout, are the whole agreement between us about the Service.
-
-**Severability.** If part of this Agreement is unenforceable, it will be changed to the minimum extent needed to make it enforceable, and the rest stays in effect — except as stated in [Section 24](#24-class-action-waiver-and-jury-trial-waiver).
-
-**No waiver.** If we do not enforce a provision, we can still enforce it later.
-
-**Assignment.** You may not transfer this Agreement without our written consent. We may transfer it, with notice to you, to an entity we form to operate the Service, or in connection with a merger, acquisition, reorganisation, or sale of assets. If we transfer this Agreement to a company or other entity we form, that entity will take our place under this Agreement.
-
-**No third-party beneficiaries.** This Agreement does not give rights to anyone other than you and us.
-
-**Notices.** We may send you notices by email to your account address or in the Service. You must send legal notices to build@usedopl.com and, for formal legal process, to the address in Section 2.
-
-**Electronic communications.** You agree that agreements, notices, and other communications we provide electronically satisfy any requirement that they be in writing.
-
-**Force majeure.** Neither of us is responsible for delays or failures caused by events beyond reasonable control, such as natural disasters, war, civil unrest, government action, power or internet outages, or failures of third-party providers.
-
-**Relationship.** This Agreement does not create a partnership, joint venture, agency, or employment relationship.
-
-**Headings.** Headings are for convenience only.
-
----
-
-## 28. Notice to California users
-
-Under California Civil Code § 1789.3, California users may contact the Complaint Assistance Unit of the Division of Consumer Services of the California Department of Consumer Affairs in writing at 1625 North Market Blvd., Suite N 112, Sacramento, CA 95834, or by telephone at (916) 445-1254 or (800) 952-5210. For our automatic-renewal terms, see [Section 9](#9-plans-credits-and-billing). For public injunctive relief, see [Section 23.3](#233-exceptions).
-
----
-
-## 29. Notice to EEA, UK, and Swiss users
-
-If you are a consumer in the European Economic Area, the United Kingdom, or Switzerland:
-
-- The mandatory consumer-protection laws of your country apply alongside this Agreement and prevail over anything inconsistent in it.
-- You are **not bound by the arbitration agreement** or class-action waiver. You may bring Disputes in the courts of the country where you live.
-- You have the 14-day withdrawal right described in [Section 10](#10-refunds).
-- We will give you at least 30 days' notice of material changes, and you may end this Agreement before they take effect.
-
----
-
-## 30. Notice to users in other jurisdictions
-
-**Canada (including Quebec).** Your province's consumer-protection laws apply, and their subscription, cancellation, and refund rules prevail over anything inconsistent in this Agreement. **Australia.** Nothing in this Agreement excludes, restricts, or modifies any consumer guarantee under the Australian Consumer Law that cannot lawfully be excluded. Where we may limit our liability for failing to meet a guarantee, our liability is limited to supplying the services again or paying the cost of having them supplied again. **New Zealand.** If you are a consumer, the Consumer Guarantees Act 1993 applies; if you use the Service for business purposes, you agree it does not. **Elsewhere.** Mandatory consumer protections where you live continue to apply.
-
----
-
-## 31. Export controls and government users
-
-You may not use or export the Service in violation of U.S. or other export-control and sanctions laws, including the U.S. Export Administration Regulations and sanctions administered by the U.S. Treasury's Office of Foreign Assets Control. You confirm that you are not located in a country or region subject to comprehensive U.S. sanctions, and that you are not on any U.S. government list of prohibited or restricted parties.
-
-The Service is "commercial computer software" and "commercial computer software documentation." U.S. government users receive only the rights set out in this Agreement (48 C.F.R. § 12.212 and §§ 227.7202-1 to 227.7202-4).
-
----
-
-## 32. Contact us
-
-- **Email:** build@usedopl.com
-- **Mail:** Samuel Wang, d/b/a Dopl, 2603 California Street, San Francisco, CA, United States
-- **Copyright complaints:** see [Section 14](#14-copyright-complaints-dmca)
-- **Illegal-content reports:** see [Section 15](#15-reporting-illegal-content-eu-digital-services-act)
-- **Arbitration opt-out:** see [Section 25](#25-30-day-opt-out-of-arbitration)
-
----
-
-## 33. Legal disclaimer
-
-*This Services Agreement was prepared with reference to the U.S. Federal Arbitration Act, the 2024 AAA Mass Arbitration Supplementary Rules, the federal Restore Online Shoppers' Confidence Act, the California Automatic Renewal Law as amended by AB-2863, the New York and other U.S. state automatic-renewal laws, the Digital Millennium Copyright Act (17 U.S.C. § 512), Section 230 of the Communications Decency Act, the EU Digital Services Act, the EU Consumer Rights Directive, the UK Consumer Rights Act 2015, the EU AI Act, and other applicable consumer-protection and platform laws.*
-
-*It is a starting point, **not a substitute for advice from a qualified attorney**. Before publishing, have it reviewed by counsel — particularly because the Service lets AI agents take actions on users' computers and accounts, and because it is offered by an individual rather than a company.*
-
-*Dopl is responsible for making sure this Agreement matches how the Service actually works. If you spot a discrepancy, please tell us at build@usedopl.com.*
+"**Workspace Admin**" means a Member with the owner or admin role in a Workspace.

@@ -1,369 +1,435 @@
+<!--
+DRAFTING NOTE — DELETE BEFORE PUBLISHING.
+This draft is a starting point, not a substitute for advice from qualified privacy counsel. Bracketed [TODO]
+items state practices that must be confirmed or implemented before publication; see
+docs/legal/LEGAL-CHECKLIST.md. A mismatch between this policy and Dopl's actual practices is itself a
+privacy violation.
+-->
+
 # Dopl Privacy Policy
 
-**Last updated:** October 14, 2026
-**Effective date:** [EFFECTIVE_DATE — the date this version is published at usedopl.com/privacy]
+Last updated: October 14, 2026
 
-## At a glance
-
-| Topic | Summary |
-|---|---|
-| Who we are | Samuel Wang, doing business as Dopl, San Francisco, California |
-| What we collect | Your account details, the content you and your agents put in Dopl, billing records from Stripe, device and usage information, and voice questions from glasses if you connect them |
-| What stays on your Mac | Your AI-provider sign-ins, your agents' working history, and dictation audio |
-| Who we share it with | The people and agents you share with, and the service providers that run Dopl (Supabase, Vercel, Stripe, OpenAI, Groq, GitHub). Your agents send content to the AI provider *you* chose |
-| What we don't do | We don't sell your personal information, show ads, use tracking cookies, or train AI models on your content |
-| Your choices | Access, correct, export, or delete your information. Delete your account any time in settings |
-| Contact | build@usedopl.com |
-
-*This summary is for convenience only. The full policy below controls.*
+This Privacy Policy ("**Policy**") describes how Dopl collects, uses, discloses, retains, and protects Personal Information of you or the entity you represent ("**You**") and of other individuals in connection with the Services. This Policy is informational and does not form part of the Services Agreement. Capitalized terms not defined in this Policy have the meanings given in the Dopl Services Agreement at usedopl.com/terms (the "**Agreement**").
 
 ---
 
-## 1. About this policy
+## 1. Controller
 
-This Privacy Policy explains how **Samuel Wang, doing business as Dopl** (**"Dopl,"** **"we,"** **"us,"** or **"our"**) collects, uses, shares, and protects information about you when you use Dopl — the website at usedopl.com, the web app, the Dopl desktop app for macOS, the Dopl MCP server, and the Dopl glasses integration (together, the **"Service"**).
+### 1.1. Identity
 
-This policy describes our practices. It is not a contract. Your use of the Service is governed by our [Services Agreement](https://usedopl.com/terms).
+Dopl is the controller of Personal Information processed under this Policy and the "business" for purposes of the CCPA:
 
-The Service is for people **18 and older**.
-
----
-
-## 2. Who we are
-
-The **controller** of your personal information (the **"business"** under California law) is:
-
-> **Samuel Wang, doing business as Dopl**
+> Dopl (Samuel Wang, an individual doing business as Dopl)
 > 2603 California Street
 > San Francisco, CA, United States
 > build@usedopl.com
 
-We have not appointed a Data Protection Officer or an EU or UK representative. [TODO: appoint an EU/UK Art. 27 representative if EU/UK use becomes more than occasional.]
+### 1.2. Representatives
+
+Dopl has not appointed a data protection officer or a representative in the European Union or United Kingdom. [TODO: appoint a GDPR Art. 27 / UK GDPR Art. 27 representative if use by EEA or UK residents becomes more than occasional.]
+
+### 1.3. Eligibility
+
+The Services are intended only for individuals at least 18 years old.
 
 ---
 
-## 3. The information we collect
+## 2. Personal Information Dopl Collects
 
-### 3.1 Account and profile information *(You give us)*
+### 2.1. Account Information
 
-Your email address, display name, password (stored only as a secure hash by our authentication provider), and any optional profile details you add, such as a profile photo, bio, website, X (Twitter) handle, and GitHub username. If you answer our onboarding questions, we keep your answers.
+Dopl collects the email address, display name, and password (stored only as a salted hash by Dopl's authentication subcontractor) You provide to register, and any optional profile information You add, including a profile photo, biography, website, X handle, and GitHub username. Dopl also collects Your responses to onboarding questions.
 
-### 3.2 Sign-in information *(From third parties)*
+### 2.2. Sign-In Information
 
-If you sign in with **Google** or **GitHub**, we receive your name, email address, profile photo, and a unique account identifier from that provider. We never receive your Google or GitHub password.
+If You sign in with Google or GitHub, Dopl receives Your name, email address, profile photo, and account identifier from that provider. Dopl does not receive Your Google or GitHub password.
 
-### 3.3 Content you and your agents create *(You give us)*
+### 2.3. Content
 
-Everything you or your agents put into Dopl, including:
+Dopl collects Content that You, Your Agents, and other Members provide to the Services, including messages, threads, tasks, artifacts, knowledge entries, skills, ontology objects, saved chats, and Workspace names, icons, and settings, together with their revision history. Content provided by other Members may include Personal Information about You.
 
-- Channel messages, threads, tasks, reactions, and artifacts
-- Knowledge bases and entries, skills, ontology objects and relationships, and their revision history
-- Saved chats (summaries of an AI session, and optionally its full text)
-- Workspace names, icons, and settings
-- Messages, questions, and answers sent to or from connected glasses
+### 2.4. Workspace Information
 
-When members of a shared workspace or channel post content, it may include information about you (for example, your name in a message).
+Dopl collects information about the Workspaces and Channels You belong to, Your role, invitations You send or receive (including invitees' email addresses), join requests, and Membership changes.
 
-### 3.4 Workspace and membership information *(You give us / Others give us)*
+### 2.5. Agent Session Information
 
-The workspaces and channels you belong to, your role, invitations you send or receive (including invitees' email addresses), join requests, and workspace activity such as members joining or leaving.
+When Agents run in the Services, the Desktop App transmits to Dopl each session's Agent name, status, AI runtime and model, Channel, and activity and usage metrics. Messages that Agents post to Channels are stored as Content.
 
-### 3.5 Agent and session information *(Collected automatically)*
+### 2.6. MCP Activity
 
-When agents run in Dopl, the desktop app sends us information about each session so that channels can show it: the agent's name and status, the AI runtime and model it uses, the channel it is in, and activity and usage figures. Messages agents post to channels are stored like any other message.
+When an Agent or Connected Client calls the Dopl MCP Server, Dopl records the tool called, the arguments supplied (which may include Content), a summary of the result, timing, and errors, together with Credit usage. For each Connected Client You authorize, Dopl stores the authorization and the access tokens issued to it.
 
-### 3.6 MCP and API activity *(Collected automatically)*
+### 2.7. Billing Information
 
-When an agent or AI tool calls the Dopl MCP server, we log the call: which tool was used, the **arguments sent with it** (which can include content, such as the text of a message or knowledge entry), a short summary of the result, timing, and any error. We also keep records of credits used. If you connect an AI tool through OAuth, we store the connection and the access tokens issued to it.
+Stripe, Inc. processes payments. Dopl receives Your Stripe customer and subscription identifiers, Plan, Seat count, billing status, and billing dates. Dopl does not receive or store full payment card numbers.
 
-### 3.7 Billing information *(From Stripe)*
+### 2.8. Glasses Voice Data
 
-Paid plans are processed by **Stripe**. We receive your Stripe customer and subscription identifiers, plan, seat count, billing status, and billing dates. **We do not receive or store your full card number.**
+If You pair Glasses with the Services and ask a question by voice, the Glasses transmit an audio recording of the question to Dopl. Dopl transmits the recording to a transcription subcontractor and processes the resulting text as Content. [TODO: confirm that audio is not retained after transcription.]
 
-### 3.8 Glasses voice data *(You give us)*
+### 2.9. Device and Technical Information
 
-If you connect smart glasses (currently Even Realities G2) and ask a question by voice, the glasses send us a recording of your question. We send that audio to a transcription provider (Section 7) to turn it into text, then use the text like any other message. [TODO: confirm whether glasses audio is kept after transcription; this policy assumes it is discarded once transcribed.]
+Dopl collects:
 
-### 3.9 Device and technical information *(Collected automatically)*
+(a) for the Desktop App, an installation identifier, device name, macOS version, application version, processor architecture, and time of last activity;
 
-- **Desktop app:** an install identifier, device name, macOS version, app version, processor architecture, and when the app was last active
-- **Web and server logs:** IP address, browser type, and request details, recorded by our hosting and database providers
-- **Updates:** when the desktop app checks for updates or downloads AI runtimes, the download servers (GitHub, npm, and, if you choose those runtimes, xAI or Meta) receive your IP address
+(b) through Dopl's hosting and database subcontractors, IP addresses, browser type, and request details; and
 
-### 3.10 Usage information *(Collected automatically)*
+(c) through the download servers that deliver Desktop App and AI runtime updates (GitHub, the npm registry, and, for runtimes You select, xAI or Meta), the IP address of the requesting device.
 
-How you use the Service — for example, which features you use, sign-ins, sign-ups, upgrades, and errors. We collect this with our own tools; we do not use third-party analytics or advertising services.
+### 2.10. Usage Information
 
-### 3.11 Support correspondence *(You give us)*
+Dopl collects information about Your use of the Services, including features used, sign-ins, sign-ups, Plan changes, and errors. Dopl collects this information with its own tools and does not use third-party analytics or advertising services.
 
-If you email us, we keep the conversation and anything you attach.
+### 2.11. Correspondence
 
-### 3.12 Information we do not collect
+Dopl retains correspondence You send to Dopl, including attachments.
 
-- **Your AI-provider credentials.** When you sign in to Claude, Codex, Grok, Muse, or Cursor from the desktop app, the credential is stored **on your Mac** (encrypted with the macOS Keychain where available). It is not sent to Dopl's servers.
-- **Your agents' working history.** The step-by-step activity of an agent (its tool calls and their results) is stored on your Mac for 7 days and is not uploaded, except what the agent chooses to post in Dopl.
-- **Dictation audio.** Dictation in the desktop app uses Apple's on-device speech recognition; the audio does not leave your Mac.
-- **Sensitive categories.** We do not ask for health, biometric, financial-account, government ID, or precise location information. Please do not put such information in Dopl unless you need to; if you do, it is treated as Your Content.
+### 2.12. Information Dopl Does Not Collect
 
----
+(a) **AI Provider Credentials.** The Desktop App stores the credentials You use to sign in to AI Providers on Your computer, encrypted with the macOS Keychain where available. Dopl's servers do not receive them.
 
-## 4. How AI providers fit in
+(b) **Agent Working History.** The Desktop App stores each Agent's tool calls and results on Your computer for 7 days. Dopl's servers receive only the information described in Sections 2.5 and 2.6 and the Content an Agent posts to the Services.
 
-There are two different situations, and they work differently:
+(c) **Dictation Audio.** Dictation in the Desktop App uses Apple's on-device speech recognition. The audio does not leave Your computer.
 
-**Your agents and your AI providers.** Agents you run from the desktop app use an AI provider **you** choose — such as Anthropic (Claude), OpenAI (Codex), xAI (Grok), Meta (Muse), or Cursor — under **your own account** with that provider. Your Mac sends your prompts, and any Dopl content the agent reads (including content other members shared in that channel), **directly to that provider**. That provider handles the data under **its own** terms and privacy policy, as your service provider, not ours. The same applies to AI tools you connect to the Dopl MCP server (for example Claude Code or Cursor): content they read from Dopl goes to them under their terms.
-
-This also means that, in a shared channel, **content you post may be read by other members' agents and sent to the AI providers those members use.**
-
-**AI providers Dopl uses.** Dopl's own servers use **OpenAI** to create search indexes (embeddings) of knowledge-base content, and **OpenAI** or **Groq** to transcribe voice questions from glasses. These providers act as our service providers. We use their business APIs, under which they do not use our data to train their models.
-
-**We do not train AI models on your content, and we do not sell your content to anyone.**
+(d) **Sensitive Information.** Dopl does not request health, biometric, financial account, government identification, or precise geolocation information. Any such information You include in Content is processed as Content.
 
 ---
 
-## 5. How we use information
+## 3. AI Providers
 
-| Purpose | What this means | Information used |
-|---|---|---|
-| **Provide the Service** | Create your account, run workspaces and channels, store and show your content, route messages to agents, sync with the desktop app and glasses, power search | Account, content, workspace, agent/session, MCP, glasses, device |
-| **Billing** | Process payments, manage plans and seats, count credits | Billing, account, MCP and credit records |
-| **Security and abuse prevention** | Protect accounts, enforce limits, detect misuse, investigate violations of our Services Agreement | Device, technical, usage, MCP logs |
-| **Support** | Answer your questions and fix problems | Support correspondence, account, device, usage |
-| **Improve the Service** | Understand which features are used, find bugs, measure performance. We do this with usage and technical information, not by reading your content, except when needed to fix a specific problem you report or that we detect | Usage, technical, MCP logs |
-| **Communicate with you** | Send account emails (such as sign-up confirmation and password reset), service and security notices, and billing notices | Account |
-| **Comply with law** | Respond to lawful requests, keep required records, establish or defend legal claims | Any, as needed |
+### 3.1. Your AI Providers
 
-We do not use your information for advertising, and we do not make decisions about you based solely on automated processing that have legal or similarly significant effects.
+Agents use AI Providers that You select, under accounts You hold with them. The Desktop App transmits prompts, and any Content an Agent reads (including Content that other Members provided in a Shared Space), directly from Your computer to that AI Provider. Each AI Provider, and each Connected Client, processes that information under its own terms and privacy policy, and not as Dopl's subcontractor.
+
+### 3.2. Shared Spaces
+
+Content You provide in a Shared Space may be read by Agents of other Members and transmitted to the AI Providers those Members select.
+
+### 3.3. Dopl's AI Subcontractors
+
+Dopl uses OpenAI to generate search indexes (embeddings) of knowledge base Content, and OpenAI or Groq to transcribe Glasses voice data. Each acts as Dopl's subcontractor under business terms that prohibit use of Dopl's data to train its models.
+
+### 3.4. No Model Training
+
+Dopl does not use Content, or inputs to or Output of Agents, to train artificial intelligence models.
 
 ---
 
-## 6. Legal bases (EEA, UK, and Switzerland)
+## 4. Purposes of Processing
 
-If you are in the EEA, the UK, or Switzerland, we rely on these legal bases under GDPR Article 6 (and the UK GDPR and Swiss revFADP equivalents):
+Dopl processes Personal Information to:
+
+(a) **provide the Services**, including registering Dopl Accounts, operating Workspaces and Channels, storing and displaying Content, routing messages to Agents, synchronizing with the Desktop App and Glasses, and providing search;
+
+(b) **process payments**, manage Plans and Seats, and measure Credit usage;
+
+(c) **secure the Services**, enforce Credit and rate limits, detect and prevent abuse, and investigate violations of the Agreement;
+
+(d) **provide support** and resolve problems;
+
+(e) **maintain and improve the Services** using usage and technical information. Dopl accesses Content for this purpose only as necessary to resolve a specific problem that You report or that Dopl detects;
+
+(f) **communicate with You**, including account confirmation and password reset emails and service, security, and billing notices; and
+
+(g) **comply with Law**, respond to lawful requests, maintain required records, and establish, exercise, or defend legal claims.
+
+Dopl does not process Personal Information for advertising and does not make decisions based solely on automated processing that produce legal or similarly significant effects on individuals.
+
+---
+
+## 5. Legal Bases (EEA, United Kingdom, and Switzerland)
+
+For individuals in the EEA, the United Kingdom, and Switzerland, Dopl relies on the following legal bases under Article 6 of the GDPR and the corresponding provisions of the UK GDPR and the Swiss Federal Act on Data Protection:
 
 | Purpose | Legal basis |
 |---|---|
-| Providing the Service, billing | **Contract** (Art. 6(1)(b)) |
-| Support | **Contract** and **legitimate interests** (Art. 6(1)(f)) in resolving issues |
-| Security, abuse prevention, improving the Service | **Legitimate interests** (Art. 6(1)(f)) in running a secure, working product. We limit data to what is necessary |
-| Processing content about other people that members post in shared spaces | **Legitimate interests** of the members and us in collaborating |
-| Keeping records required by law | **Legal obligation** (Art. 6(1)(c)) |
+| Sections 4(a) and 4(b) | Performance of a contract (Art. 6(1)(b)) |
+| Section 4(d) | Performance of a contract and legitimate interests in resolving issues (Art. 6(1)(b), (f)) |
+| Sections 4(c) and 4(e) | Legitimate interests in operating a secure and functioning service, limited to information that is necessary (Art. 6(1)(f)) |
+| Content concerning other individuals provided by Members in Shared Spaces | Legitimate interests of Members and Dopl in collaboration (Art. 6(1)(f)) |
+| Section 4(f) | Performance of a contract and legitimate interests (Art. 6(1)(b), (f)) |
+| Section 4(g) | Compliance with a legal obligation (Art. 6(1)(c)) |
 
-You can object to processing based on legitimate interests — see [Section 12](#12-your-rights-and-choices).
+Individuals may object to processing based on legitimate interests under Section 11.
 
 ---
 
-## 7. How we share information
+## 6. Disclosures of Personal Information
 
-**We do not sell your personal information, and we do not share it for cross-context behavioural advertising.**
+### 6.1. No Sale or Sharing
 
-### 7.1 With the people and agents you choose
+Dopl does not sell Personal Information and does not disclose Personal Information for cross-context behavioral advertising.
 
-Content you post in a shared workspace or channel is visible to its members and to the agents they run there. Workspace owners and admins can see member lists, roles, and workspace content. Your display name and profile photo are visible to people you share a workspace or channel with. Saved chats marked public are visible to your workspace. Workspace icons and thumbnails are stored at public web addresses that anyone with the address can open.
+### 6.2. Members and Agents
 
-### 7.2 With our service providers
+Content provided in a Shared Space is available to its Members and the Agents they run there. Workspace Admins may view member lists, roles, and Workspace Content. Your display name and profile photo are visible to individuals with whom You share a Workspace or Channel. Saved chats marked public are available to the Members of their Workspace. Workspace icons and thumbnails are stored at public web addresses accessible to anyone with the address.
 
-These companies process information for us under contract, only to provide their services to us:
+### 6.3. Subcontractors
 
-| Provider | What they do for us | Information they receive | Location | Privacy policy |
+Dopl discloses Personal Information to the following subcontractors, which process it on Dopl's behalf under written agreements and only to provide their services to Dopl:
+
+| Subcontractor | Service | Personal Information | Location | Privacy policy |
 |---|---|---|---|---|
-| **Supabase, Inc.** | Database, authentication, file storage, real-time messaging | All information stored in the Service | United States | <https://supabase.com/privacy> |
-| **Vercel Inc.** | Website and server hosting | Requests to the website and API, including IP address | United States / global edge | <https://vercel.com/legal/privacy-policy> |
-| **Stripe, Inc.** | Payment processing and billing portal | Your email, payment details (entered directly with Stripe), plan and seat information | United States | <https://stripe.com/privacy> |
-| **OpenAI, L.L.C.** | Search indexing (embeddings); transcription of glasses voice questions | Knowledge-base text; glasses audio | United States | <https://openai.com/policies/privacy-policy> |
-| **Groq, Inc.** | Transcription of glasses voice questions (alternative provider) | Glasses audio | United States | <https://groq.com/privacy-policy> |
-| **GitHub, Inc.** | Sign-in (if you choose it); hosting desktop app downloads and updates | Sign-in details; IP address of downloads | United States | <https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement> |
-| **Google LLC** | Sign-in (if you choose it) | Sign-in details | United States | <https://policies.google.com/privacy> |
+| Supabase, Inc. | Database, authentication, file storage, real-time messaging | All information stored in the Services | United States | supabase.com/privacy |
+| Vercel Inc. | Website and server hosting | Requests to the website and API, including IP addresses | United States and global edge network | vercel.com/legal/privacy-policy |
+| Stripe, Inc. | Payment processing and billing portal | Email address, payment details entered with Stripe, Plan and Seat information | United States | stripe.com/privacy |
+| OpenAI, L.L.C. | Search indexing; Glasses transcription | Knowledge base Content; Glasses voice data | United States | openai.com/policies/privacy-policy |
+| Groq, Inc. | Glasses transcription | Glasses voice data | United States | groq.com/privacy-policy |
+| GitHub, Inc. | Sign-in; Desktop App and runtime downloads | Sign-in information; IP addresses | United States | docs.github.com/site-policy/privacy-policies |
+| Google LLC | Sign-in | Sign-in information | United States | policies.google.com/privacy |
 
-The desktop app also downloads AI runtimes from the **npm registry** (operated by GitHub) and, if you choose them, from **xAI** and **Meta**; those servers receive your IP address.
+### 6.4. Third-Party Services You Select
 
-### 7.3 With providers you choose
+AI Providers, Connected Clients, Glasses manufacturers, and other Third-Party Services that You or Your Agents use receive information directly from You or Your devices under their own terms, as described in Section 3.
 
-Your AI providers and connected AI tools, glasses manufacturers, and any services your agents access receive information directly from you or your devices, under their own terms — see [Section 4](#4-how-ai-providers-fit-in). They are not our service providers.
+### 6.5. Legal Requirements
 
-### 7.4 For legal reasons
+Dopl may disclose Personal Information if Dopl believes in good faith that disclosure is necessary to comply with Law or legal process, enforce the Agreement, prevent fraud or address security or technical issues, or protect the rights, property, or safety of Dopl, its users, or the public. Where Law permits and it is reasonable to do so, Dopl will notify the affected individual before disclosing Personal Information in response to a legal request.
 
-We may disclose information if we believe in good faith that it is needed to comply with law or legal process, enforce our Services Agreement, protect against fraud, security, or technical issues, or protect the rights, property, or safety of us, our users, or the public. Where lawful and reasonable, we will tell you before disclosing your information in response to a legal request.
+### 6.6. Business Transfers
 
-### 7.5 Business transfers
+Dopl may transfer Personal Information to an entity Dopl forms to operate the Services, or in connection with a merger, acquisition, financing, reorganization, or sale of assets. Dopl will notify You before Personal Information becomes subject to a different privacy policy.
 
-If Dopl is transferred to a company we form to run it, or is involved in a merger, acquisition, financing, or sale of assets, your information may be transferred as part of it. We will tell you before your information becomes subject to a different privacy policy.
+### 6.7. Consent
 
-### 7.6 With your consent
-
-We may share information in other ways when you ask us to or agree.
+Dopl may disclose Personal Information in other circumstances at Your direction or with Your consent.
 
 ---
 
-## 8. Cookies and similar technologies
+## 7. Cookies and Similar Technologies
 
-We use only **strictly necessary** cookies and browser storage:
+### 7.1. Strictly Necessary Technologies
 
-| Cookie / storage | Purpose | Provider | Duration |
+Dopl uses only the following strictly necessary technologies:
+
+| Technology | Purpose | Provider | Duration |
 |---|---|---|---|
-| Supabase authentication cookies (`sb-…`) | Keep you signed in | Supabase (first-party) | Session / until sign-out or expiry |
-| `dopl-login-bounce` | Prevent sign-in redirect loops | Dopl | Short-lived |
-| Local storage | Remember interface preferences | Dopl | Until cleared |
+| Authentication cookies (`sb-…`) | Maintain signed-in sessions | Supabase, on Dopl's behalf | Until sign-out or expiry |
+| `dopl-login-bounce` cookie | Prevent sign-in redirect loops | Dopl | Short-lived |
+| Browser local storage | Retain interface preferences | Dopl | Until cleared |
 
-If you use **Google One Tap** sign-in, Google may set its own cookies under Google's policy. We do not use advertising or analytics cookies. Because we use only necessary cookies, we do not show a cookie banner.
+### 7.2. Google Sign-In
 
-**Do Not Track and Global Privacy Control.** We do not sell or share personal information for advertising, so there is nothing for these signals to opt you out of. We treat a Global Privacy Control signal as a valid opt-out request under applicable state law.
+If You use Google One Tap sign-in, Google may set its own cookies under Google's privacy policy.
+
+### 7.3. No Advertising or Analytics Cookies
+
+Dopl does not use advertising or analytics cookies, and therefore does not display a cookie consent banner.
+
+### 7.4. Do Not Track and Global Privacy Control
+
+Dopl does not sell or share Personal Information for advertising. Dopl treats a Global Privacy Control signal as a valid opt-out request under applicable Law.
 
 ---
 
-## 9. International data transfers
+## 8. International Transfers
 
-We are based in the United States, and our service providers store and process information mainly in the United States. If you use the Service from outside the U.S., your information will be transferred to the U.S. For transfers from the EEA, UK, or Switzerland, we rely on our providers' **Standard Contractual Clauses** (with the UK Addendum) or their certification under the **EU-U.S. Data Privacy Framework** and its UK and Swiss extensions, as applicable. Contact us for a copy of the relevant safeguards.
+Dopl is located in the United States, and its subcontractors store and process Personal Information primarily in the United States. Personal Information of individuals outside the United States is transferred to the United States. For transfers from the EEA, the United Kingdom, or Switzerland, Dopl relies on its subcontractors' Standard Contractual Clauses (with the UK International Data Transfer Addendum) or certification under the EU-U.S. Data Privacy Framework and its UK and Swiss extensions, as applicable. Dopl will provide a copy of the relevant safeguards upon request.
 
 ---
 
-## 10. How long we keep information
+## 9. Retention
 
-| Information | How long |
+### 9.1. Schedule
+
+| Personal Information | Retention period |
 |---|---|
-| Account and profile | Until you delete your account |
-| Your content | Until you or a workspace admin delete it, or you delete your account. Content you added to a workspace other people still use may remain there after you leave (see [Section 11](#11-deleting-your-account)) |
-| Guest (Playground) accounts | Deleted automatically about 10 minutes after the session |
-| Agent session information | While the related channel exists |
-| MCP call logs (including arguments) | [TODO before publishing: implement] Up to 90 days, then deleted. When you delete your account, logs are separated from your account and their arguments and result summaries are deleted |
-| Credit and usage records | While your account exists, then kept only in a form that does not identify you |
-| Billing records | As long as required for tax and accounting (generally up to 7 years); Stripe keeps its own records under its policy |
-| Support emails | Up to 3 years |
-| Agent working history on your Mac | 7 days, on your Mac |
-| Backups | [TODO: confirm Supabase backup retention for the project plan] Overwritten within [7] days |
+| Account information | Until the Dopl Account is deleted |
+| Content | Until deleted by You or a Workspace Admin, or until the Dopl Account is deleted, subject to Section 10.1(e) |
+| Guest (Playground) accounts | Deleted automatically approximately 10 minutes after the session |
+| Agent session information | For the life of the related Channel |
+| MCP activity records | [TODO before publishing: implement] 90 days, after which they are deleted. On deletion of a Dopl Account, arguments and result summaries in that account's records are deleted |
+| Credit and usage records | Until the Dopl Account is deleted, then retained only in de-identified form |
+| Billing records | As required for tax and accounting purposes, generally up to 7 years |
+| Correspondence | Up to 3 years |
+| Agent working history (on Your computer) | 7 days |
+| Backups | [TODO: confirm Supabase backup retention] Overwritten within [7] days |
+
+### 9.2. De-Identified Information
+
+Dopl may retain information that has been de-identified so that it can no longer reasonably be linked to an individual, and will not attempt to re-identify it.
 
 ---
 
-## 11. Deleting your account
+## 10. Account Deletion
 
-You can delete your account at any time from your account settings. When you do:
+### 10.1. Effect of Deletion
 
-- Your account, profile, and the content linked only to you are **deleted immediately** from our production database, and any subscription you pay for is cancelled
-- Images you uploaded as thumbnails are deleted
-- Usage and analytics records are kept only with the link to your account removed
-- Copies in backups are overwritten on our backup schedule ([Section 10](#10-how-long-we-keep-information))
-- Messages and other content you posted in **workspaces that other members still use** may remain visible to those members. [TODO: confirm exact behaviour — whether such content is deleted, kept with your name, or kept anonymised — and state it here.]
-- Records we must keep by law (such as billing records) are retained as described above
+When You delete Your Dopl Account under Section 2.6 of the Agreement:
 
-If you own a workspace that still has other members, you need to transfer ownership or remove them before you can delete your account. You can export your knowledge and other content before deleting.
+(a) Dopl immediately deletes Your account, profile, and Content linked only to You from its production database, and cancels each Plan You pay for;
 
----
+(b) Dopl deletes thumbnail images You uploaded;
 
-## 12. Your rights and choices
+(c) Dopl retains usage records only in de-identified form;
 
-Wherever you live, you can ask us to:
+(d) copies in backups are overwritten under Section 9.1;
 
-- **Access** the personal information we hold about you
-- **Correct** inaccurate information (most of it you can edit yourself in settings)
-- **Delete** your information (or delete your account yourself — [Section 11](#11-deleting-your-account))
-- **Export** your information in a portable format
-- **Object to** or **restrict** certain processing
-- **Withdraw consent** where we rely on it
+(e) Content You provided in Workspaces that other Members continue to use may remain available to those Members [TODO: confirm whether such Content is deleted, retained with attribution, or retained without attribution, and state the result]; and
 
-Email **build@usedopl.com** from your account email address. We may need to verify your identity, and we will ask for no more than we need. We respond within 30 days (45 days where California or other U.S. state law applies), and we may extend that once where the law allows. You may use an authorised agent; we may ask for proof of their authority. We will not discriminate against you for exercising your rights.
+(f) Dopl retains records that Law requires, such as billing records, under Section 9.1.
 
-If we deny your request, you may appeal by replying to our decision with "Appeal" in the subject; we will respond within the time your law requires. You can also complain to your data-protection authority.
+### 10.2. Workspace Ownership
 
-**Content about you posted by others.** If another member posted personal information about you in a workspace, contact us and we will work with the workspace to address it.
-
-**Desktop-app data.** Information stored only on your Mac (such as AI-provider sign-ins and agent history) is under your control; you can remove it by signing out of providers in the app or uninstalling the app and deleting its data folder.
+If You own a Workspace that has other Members, You must transfer ownership or remove the other Members before deleting Your Dopl Account.
 
 ---
 
-## 13. Security
+## 11. Individual Rights
 
-We use reasonable safeguards, including encryption in transit (TLS), encryption at rest provided by our database host, row-level access controls that limit each workspace's data to its members, and encrypted local storage of AI-provider credentials on your Mac. No system is perfectly secure. If a breach affects your personal information, we will notify you and regulators as the law requires.
+### 11.1. Rights
+
+Subject to Law, each individual may request that Dopl:
+
+(a) provide access to Personal Information Dopl holds about the individual;
+
+(b) correct inaccurate Personal Information;
+
+(c) delete Personal Information;
+
+(d) provide Personal Information in a portable format;
+
+(e) restrict, or cease, processing based on legitimate interests; and
+
+(f) where processing is based on consent, cease processing upon withdrawal of consent.
+
+### 11.2. Requests
+
+Requests must be sent to build@usedopl.com from the email address associated with the relevant Dopl Account, where one exists. Dopl will verify the requester's identity using only the information necessary. Dopl will respond within 30 days, or within 45 days where the CCPA or another U.S. state Law applies, and may extend that period once where Law permits. An authorized agent may submit a request on an individual's behalf with proof of authority. Dopl will not discriminate against any individual for exercising these rights.
+
+### 11.3. Appeals and Complaints
+
+An individual may appeal a decision on a request by replying to Dopl's decision with "Appeal" in the subject line, and Dopl will respond within the period Law requires. An individual may also lodge a complaint with the competent data protection authority.
+
+### 11.4. Content Provided by Others
+
+An individual concerned about Personal Information that a Member provided in a Workspace may contact Dopl at build@usedopl.com, and Dopl will work with the relevant Workspace to address the concern.
+
+### 11.5. Information on Your Computer
+
+Information stored only on Your computer, including AI Provider credentials and Agent working history, is under Your control. You may remove it by signing out of AI Providers in the Desktop App, or by uninstalling the Desktop App and deleting its data folder.
 
 ---
 
-## 14. Children
+## 12. Security
 
-The Service is **not for anyone under 18**, and we do not knowingly collect personal information from anyone under 18. If you believe a minor has given us personal information, email build@usedopl.com and we will delete it.
-
----
-
-## 15. Notifications and emails
-
-We send account emails (sign-up confirmation, password reset) and service, security, and billing notices. We do not currently send marketing email; if we start, we will ask for your consent where required and include an unsubscribe link. The desktop app can show system notifications for channel activity; you can turn them off per channel or in the app's settings, and in macOS System Settings.
+Dopl maintains reasonable administrative, technical, and physical safeguards, including encryption in transit (TLS), encryption at rest provided by Dopl's database subcontractor, row-level access controls that limit each Workspace's data to its Members, and encrypted local storage of AI Provider credentials. No system is completely secure. Dopl will notify affected individuals and Governmental Authorities of a breach of Personal Information as Law requires.
 
 ---
 
-## 16. Notice to California residents
+## 13. Children
 
-This section supplements the rest of this policy for California residents under the California Consumer Privacy Act, as amended (CCPA), and the California Online Privacy Protection Act.
+The Services are not directed to individuals under 18, and Dopl does not knowingly collect Personal Information from individuals under 18. Any person who believes a minor has provided Personal Information to Dopl may notify build@usedopl.com, and Dopl will delete it.
 
-### 16.1 Categories collected in the past 12 months
+---
 
-| CCPA category | Examples | Collected? |
+## 14. Communications
+
+### 14.1. Email
+
+Dopl sends account confirmation and password reset emails and service, security, and billing notices. Dopl does not currently send marketing email. If Dopl begins to do so, it will obtain consent where Law requires and include an unsubscribe mechanism in each message.
+
+### 14.2. Notifications
+
+The Desktop App may display system notifications for Channel activity. You may disable notifications for each Channel, in the Desktop App's settings, or in macOS System Settings.
+
+---
+
+## 15. California
+
+### 15.1. Categories Collected
+
+During the preceding 12 months, Dopl collected the following categories of Personal Information as defined in the CCPA:
+
+| CCPA category | Examples | Collected |
 |---|---|---|
-| A. Identifiers | Name, email, account ID, IP address, install ID | Yes |
-| B. Customer records (Cal. Civ. Code § 1798.80(e)) | Name, email; payment details are handled by Stripe | Yes |
+| A. Identifiers | Name, email address, account identifier, IP address, installation identifier | Yes |
+| B. Customer records (Cal. Civ. Code § 1798.80(e)) | Name, email address; payment details are handled by Stripe | Yes |
 | C. Protected classifications | — | No |
-| D. Commercial information | Plan, seats, billing history, credits | Yes |
+| D. Commercial information | Plan, Seats, billing history, Credits | Yes |
 | E. Biometric information | — | No |
-| F. Internet or network activity | Usage of the Service, MCP call logs | Yes |
-| G. Geolocation | Approximate location inferred from IP address only | Yes (approximate) |
-| H. Audio or similar information | Glasses voice questions | Yes, if you use glasses |
-| I. Professional information | Anything you choose to put in your profile or content | Only as you provide |
+| F. Internet or network activity | Use of the Services, MCP activity records | Yes |
+| G. Geolocation | Approximate location derived from IP address | Yes (approximate) |
+| H. Audio or similar information | Glasses voice data | Yes, if Glasses are used |
+| I. Professional information | Information included in a profile or Content | Only as provided |
 | J. Education information | — | No |
 | K. Inferences | — | No |
-| L. Sensitive personal information | Account sign-in credentials (password); content of messages in Dopl where we are not the intended recipient | Yes |
+| L. Sensitive personal information | Account credentials; contents of messages in the Services of which Dopl is not the intended recipient | Yes |
 
-**Sources:** you, your devices, other members of your workspaces, and Google, GitHub, and Stripe. **Purposes:** those in [Section 5](#5-how-we-use-information). **Recipients:** our service providers in [Section 7.2](#72-with-our-service-providers), for business purposes. **Retention:** see [Section 10](#10-how-long-we-keep-information).
+### 15.2. Sources, Purposes, Recipients, and Retention
 
-We use sensitive personal information only for purposes permitted by the CCPA regulations (to provide the Service, keep it secure, and comply with law), so we do not offer a "limit" right.
+Dopl collects Personal Information from individuals, their devices, other Members, and Google, GitHub, and Stripe, for the purposes in Section 4. Dopl discloses Personal Information for business purposes to the subcontractors in Section 6.3, and retains it as described in Section 9.
 
-### 16.2 No sale or sharing
+### 15.3. Sensitive Personal Information
 
-**We do not sell or share personal information** as those terms are defined in the CCPA, and we have not done so in the past 12 months. We do not knowingly sell or share personal information of consumers under 16.
+Dopl uses sensitive personal information only for purposes permitted under Cal. Code Regs. tit. 11, § 7027(m), and therefore does not offer a right to limit its use.
 
-### 16.3 Your rights
+### 15.4. No Sale or Sharing
 
-You have the right to know, access, correct, delete, and port your personal information, to opt out of sale or sharing (which we do not do), to limit use of sensitive personal information (which we use only as permitted), and not to be discriminated against for exercising these rights. To exercise them, see [Section 12](#12-your-rights-and-choices).
+Dopl does not sell or share Personal Information as those terms are defined in the CCPA, has not done so in the preceding 12 months, and does not knowingly sell or share Personal Information of consumers under 16.
 
-### 16.4 Shine the Light
+### 15.5. Rights
 
-We do not disclose personal information to third parties for their own direct-marketing purposes.
+California residents have the right to know, access, correct, delete, and port their Personal Information; to opt out of sale and sharing; to limit the use of sensitive personal information; and not to be discriminated against for exercising these rights. Requests are handled under Section 11.
 
----
+### 15.6. Shine the Light
 
-## 17. Notice to residents of other U.S. states
-
-Residents of states with comprehensive privacy laws — including Colorado, Connecticut, Delaware, Indiana, Iowa, Kentucky, Maryland, Minnesota, Montana, Nebraska, New Hampshire, New Jersey, Oregon, Rhode Island, Tennessee, Texas, Utah, and Virginia — may have rights to access, correct, delete, and port their personal data, and to opt out of targeted advertising, sale, and certain profiling. **We do not sell personal data, engage in targeted advertising, or profile people in ways that produce legal or similarly significant effects.** To exercise your rights or appeal a decision, see [Section 12](#12-your-rights-and-choices).
-
-**Nevada residents** may email build@usedopl.com with "Nevada Opt-Out" in the subject; we do not sell covered information.
+Dopl does not disclose Personal Information to third parties for their own direct marketing purposes.
 
 ---
 
-## 18. Notice to EEA, UK, and Swiss residents
+## 16. Other U.S. States
 
-You have the rights in GDPR Articles 15–22 (and their UK and Swiss equivalents): access, rectification, erasure, restriction, portability, objection, and not to be subject to solely automated decisions with significant effects, plus the right to withdraw consent. Our legal bases are in [Section 6](#6-legal-bases-eea-uk-and-switzerland) and transfer safeguards in [Section 9](#9-international-data-transfers). You may complain to your local supervisory authority (EU list: <https://edpb.europa.eu/about-edpb/about-edpb/members_en>), the UK **Information Commissioner's Office** (<https://ico.org.uk/make-a-complaint/>), or the Swiss **FDPIC** (<https://www.edoeb.admin.ch/>).
+### 16.1. Rights
 
----
+Residents of U.S. states with comprehensive privacy Laws, including Colorado, Connecticut, Delaware, Indiana, Iowa, Kentucky, Maryland, Minnesota, Montana, Nebraska, New Hampshire, New Jersey, Oregon, Rhode Island, Tennessee, Texas, Utah, and Virginia, may have rights to access, correct, delete, and port their personal data, and to opt out of targeted advertising, sale, and certain profiling. Dopl does not sell personal data, engage in targeted advertising, or engage in profiling that produces legal or similarly significant effects. Requests and appeals are handled under Section 11.
 
-## 19. Notice to residents of other countries
+### 16.2. Nevada
 
-The rights in [Section 12](#12-your-rights-and-choices) are available to everyone. Depending on where you live, local law may give you further rights and a regulator to complain to — for example, the Office of the Privacy Commissioner of Canada (and, in Quebec, the Commission d'accès à l'information), Brazil's ANPD under the LGPD, the Office of the Australian Information Commissioner, New Zealand's Privacy Commissioner, Japan's Personal Information Protection Commission, Korea's Personal Information Protection Commission, India's Data Protection Board, or South Africa's Information Regulator.
-
----
-
-## 20. Changes to this policy
-
-We may update this policy. The "Last updated" date shows when. For material changes, we will notify you in the Service or by email before they take effect. Previous versions are available on request.
+Nevada residents may submit a request regarding the sale of covered information to build@usedopl.com with "Nevada Opt-Out" in the subject line. Dopl does not sell covered information.
 
 ---
 
-## 21. Contact us
+## 17. EEA, United Kingdom, and Switzerland
 
-- **Email:** build@usedopl.com
-- **Mail:** Samuel Wang, d/b/a Dopl, 2603 California Street, San Francisco, CA, United States
+Individuals in the EEA, the United Kingdom, and Switzerland have the rights stated in Articles 15 through 22 of the GDPR and the corresponding provisions of the UK GDPR and the Swiss Federal Act on Data Protection, including the rights of access, rectification, erasure, restriction, portability, and objection, the right not to be subject to solely automated decisions with significant effects, and the right to withdraw consent. Legal bases are stated in Section 5 and transfer safeguards in Section 8. Complaints may be lodged with the competent supervisory authority, including an EEA authority listed at edpb.europa.eu, the UK Information Commissioner's Office (ico.org.uk), or the Swiss Federal Data Protection and Information Commissioner (edoeb.admin.ch).
 
 ---
 
-## 22. Legal disclaimer
+## 18. Other Jurisdictions
 
-*This policy was prepared with reference to the GDPR, the UK GDPR, the Swiss revFADP, the California Consumer Privacy Act as amended by the CPRA, CalOPPA, the comprehensive privacy laws of other U.S. states in effect as of October 2026, COPPA, Brazil's LGPD, Canada's PIPEDA and Quebec Law 25, Australia's Privacy Act, and other applicable laws.*
+The rights in Section 11 are available to all individuals. Law in other jurisdictions may provide additional rights and the right to complain to a regulator, including the Office of the Privacy Commissioner of Canada and Quebec's Commission d'accès à l'information, Brazil's Autoridade Nacional de Proteção de Dados, the Office of the Australian Information Commissioner, New Zealand's Office of the Privacy Commissioner, Japan's Personal Information Protection Commission, Korea's Personal Information Protection Commission, India's Data Protection Board, and South Africa's Information Regulator.
 
-*It is a starting point, **not a substitute for advice from a qualified attorney**. Before publishing, have it reviewed by privacy counsel.*
+---
 
-*Dopl is responsible for making sure this policy matches what the Service actually does. A mismatch is itself a privacy violation; please report any you spot to build@usedopl.com.*
+## 19. Changes to this Policy
+
+Dopl may update this Policy by publishing the updated version and amending the "Last updated" date. For material changes, Dopl will provide notice through the Services or by email before the changes take effect. Dopl will provide prior versions upon request.
+
+---
+
+## 20. Contact
+
+> Dopl
+> Attn: Samuel Wang
+> 2603 California Street
+> San Francisco, CA, United States
+> build@usedopl.com
+
+---
+
+## Appendix 1 (Definitions)
+
+"**CCPA**" means the California Consumer Privacy Act of 2018, as amended by the California Privacy Rights Act, Cal. Civ. Code § 1798.100 et seq., and its implementing regulations.
+
+"**GDPR**" means Regulation (EU) 2016/679.
+
+"**Personal Information**" means information that identifies, relates to, or could reasonably be linked with an identified or identifiable individual, and includes "personal data" under the GDPR and "personal information" under the CCPA.
+
+"**UK GDPR**" means the GDPR as retained in the law of the United Kingdom.
+
+All other capitalized terms have the meanings given in the Agreement.
