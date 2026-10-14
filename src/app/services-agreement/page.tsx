@@ -10,5 +10,5 @@ export const metadata = {
 export const dynamic = "force-static";
 
 export default function ServicesAgreementPage() {
-  return <LegalPage doc={loadLegalDoc("services-agreement")} current="/services-agreement" />;
+  return <LegalPage doc={loadLegalDoc("services-agreement")} />;
 }

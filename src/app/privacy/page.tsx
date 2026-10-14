@@ -9,5 +9,5 @@ export const metadata = {
 export const dynamic = "force-static";
 
 export default function PrivacyPage() {
-  return <LegalPage doc={loadLegalDoc("privacy")} current="/privacy" />;
+  return <LegalPage doc={loadLegalDoc("privacy")} />;
 }

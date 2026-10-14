@@ -5,7 +5,7 @@
  * visitors (both are PUBLIC_ROUTES). `/terms` is a 308 to `/services-agreement`.
  *
  * Pins: titles, one h1, every section/subsection/table/address of the .md in order,
- * the DRAFTING NOTE never rendered, contents links that resolve, the top bar, the
+ * the DRAFTING NOTE never rendered, contents links that resolve, the brand-only nav, the
  * white page (no `mosaic-bg`, no `FlushGrid`, no frame colour), and the redirect.
  */
 import { readFileSync } from "node:fs";
@@ -55,7 +55,6 @@ const PAGES = [
     file: "SERVICES-AGREEMENT.md",
     metaTitle: "Services Agreement — Dopl",
     h1: "Dopl Services Agreement",
-    other: "/privacy",
   },
   {
     route: "/privacy",
@@ -65,11 +64,10 @@ const PAGES = [
     file: "PRIVACY.md",
     metaTitle: "Privacy Policy — Dopl",
     h1: "Dopl Privacy Policy",
-    other: "/services-agreement",
   },
 ] as const;
 
-describe.each(PAGES)("$route", ({ route, Page, meta, dynamic, file, metaTitle, h1, other }) => {
+describe.each(PAGES)("$route", ({ Page, meta, dynamic, file, metaTitle, h1 }) => {
   const md = source(file);
   const d = doc(renderToStaticMarkup(<Page />));
   const article = d.querySelector("article")!;
@@ -127,11 +125,16 @@ describe.each(PAGES)("$route", ({ route, Page, meta, dynamic, file, metaTitle, h
     expect(article.querySelectorAll("p.legal-clause").length).toBeGreaterThan(5);
   });
 
-  it("has a top bar: logo to the landing page and both legal pages", () => {
-    const bar = d.querySelector("header")!;
-    expect(bar.querySelector('a[href="/"]')!.getAttribute("aria-label")).toBe("Dopl");
-    expect(bar.querySelector(`a[href="${route}"]`)!.getAttribute("aria-current")).toBe("page");
-    expect(bar.querySelector(`a[href="${other}"]`)!.getAttribute("aria-current")).toBeNull();
+  it("has the landing's brand-only nav: logo to `/`, no legal switcher", () => {
+    const bar = d.querySelector("header.lp-nav")!;
+    const logo = bar.querySelector(".lp-nav-left > a.lp-brand")!;
+    expect(logo.getAttribute("href")).toBe("/");
+    expect(logo.getAttribute("aria-label")).toBe("Dopl");
+    expect(logo.querySelector(".lp-brand-word")!.textContent).toBe("Dopl");
+    expect(bar.querySelectorAll("a")).toHaveLength(1);
+    expect(bar.querySelector("nav")).toBeNull();
+    expect(bar.querySelector('a[href="/services-agreement"], a[href="/privacy"]')).toBeNull();
+    expect(d.querySelector("[aria-current]")).toBeNull();
     expect(d.querySelector('a[href="/login"]')).toBeNull();
   });
 });

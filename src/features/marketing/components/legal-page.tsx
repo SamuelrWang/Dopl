@@ -1,19 +1,9 @@
 import "@/features/marketing/marketing.css";
 import "@/features/marketing/legal/legal.css";
 
-import Link from "next/link";
-
 import { LegalMarkdown } from "../legal/legal-markdown";
 import type { LegalDoc } from "../legal/parse-legal-markdown";
 import { Logo } from "./logo";
-
-/** The two legal pages, in the order the top bar lists them. */
-export const LEGAL_PAGES = [
-  { href: "/services-agreement", label: "Services Agreement" },
-  { href: "/privacy", label: "Privacy Policy" },
-] as const;
-
-export type LegalHref = (typeof LEGAL_PAGES)[number]["href"];
 
 /**
  * Shared chrome for the static legal pages (`/services-agreement`, `/privacy`). Server
@@ -24,23 +14,15 @@ export type LegalHref = (typeof LEGAL_PAGES)[number]["href"];
  * `shared/layout/layout-shell.tsx › LayoutShell`, which also renders these routes bare
  * (no `mosaic-bg`, no `FlushGrid`, no dark `<main>`). Nothing blue sits underneath.
  */
-export function LegalPage({ doc, current }: { doc: LegalDoc; current: LegalHref }) {
+export function LegalPage({ doc }: { doc: LegalDoc }) {
   return (
     <div className="legal">
-      <header className="legal-bar">
-        <div className="legal-bar-inner">
+      {/* The landing/pricing nav's brand block — same `.lp-nav` / `.lp-nav-left` classes and
+          `<Logo />`, so the mark + wordmark sit in the top-left exactly as on every other
+          marketing page. Only the brand: the legal pages carry no links, CTA, search or menu. */}
+      <header className="lp-nav">
+        <div className="lp-nav-left">
           <Logo />
-          <nav aria-label="Legal" className="legal-bar-links">
-            {LEGAL_PAGES.map((page) => (
-              <Link
-                key={page.href}
-                href={page.href}
-                aria-current={page.href === current ? "page" : undefined}
-              >
-                {page.label}
-              </Link>
-            ))}
-          </nav>
         </div>
       </header>
 
