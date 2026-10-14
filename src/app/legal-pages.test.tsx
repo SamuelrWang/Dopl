@@ -102,6 +102,10 @@ describe.each(PAGES)("$route", ({ route, Page, meta, dynamic, file, metaTitle, h
     expect(article.querySelector("h2")!.id).toMatch(/^1-[a-z-]+$/);
     const toc = Array.from(d.querySelectorAll('nav[aria-label="Contents"] a'));
     expect(toc.length).toBe(headings(md, "##").length);
+    // One sidebar box beside the text: the contents nav sits in an <aside>, not the body.
+    const nav = d.querySelector('nav[aria-label="Contents"]')!;
+    expect(nav.parentElement!.matches("aside.legal-side")).toBe(true);
+    expect(nav.closest(".legal-doc-body")).toBeNull();
     const ids = new Set(Array.from(d.querySelectorAll("[id]")).map((el) => el.id));
     expect(ids.size).toBe(d.querySelectorAll("[id]").length);
     for (const a of Array.from(d.querySelectorAll('a[href^="#"]'))) {
@@ -138,10 +142,10 @@ describe("content fidelity", () => {
     expect(d.body.textContent).toContain("[TODO: appoint a GDPR Art. 27");
   });
 
-  it("sets the all-caps arbitration notice as a notice", () => {
+  it("sets the all-caps warranty disclaimer as a notice", () => {
     const d = doc(renderToStaticMarkup(<ServicesAgreementPage />));
     const notice = d.querySelector("p.legal-notice")!;
-    expect(notice.textContent).toMatch(/^IMPORTANT: SECTION 21 REQUIRES/);
+    expect(notice.textContent).toMatch(/^THE SERVICES AND DOPL TECHNOLOGY ARE PROVIDED "AS IS"/);
   });
 
   it("refuses markdown it cannot render rather than printing it", () => {

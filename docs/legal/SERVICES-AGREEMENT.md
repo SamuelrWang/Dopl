@@ -12,8 +12,6 @@ Last updated: October 14, 2026
 
 This Services Agreement (the "**Agreement**") sets out the terms on which Dopl provides the Services to the individual or organization accepting it ("**You**"). The Agreement binds You from the date You first use the Services (the "**Effective Date**") and remains in force until either party ends it under Section 20 (the "**Term**"). Appendix 1 (Definitions) defines capitalized terms that are not defined where they first appear.
 
-**IMPORTANT: SECTION 21 REQUIRES MOST DISPUTES TO BE RESOLVED BY BINDING INDIVIDUAL ARBITRATION AND WAIVES CLASS ACTIONS AND JURY TRIALS. YOU MAY OPT OUT OF ARBITRATION WITHIN 30 DAYS UNDER SECTION 21.9. SECTION 12 DESCRIBES AUTOMATICALLY RENEWING PLANS.**
-
 ---
 
 ## 1. Services

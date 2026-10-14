@@ -29,6 +29,10 @@ body.legal-active {
   --legal-gutter: 16px;
   --legal-measure: 720px;
   --legal-bar-h: 60px;
+  --legal-side-w: 240px;
+  --legal-side-gap: 48px;
+  /* Room below the top bar for the sticky contents box. */
+  --legal-sticky-top: calc(var(--legal-bar-h) + 24px);
 
   min-height: 100vh;
   width: 100%;
@@ -223,11 +227,14 @@ body.legal-active {
 }
 
 /* ── Table of contents ───────────────────────────────────────────────── */
+/* Narrow screens: one box under the title, in the flow. From 1024px it is a
+   sticky sidebar to the right of the text (see the layout block below). */
 .legal-toc {
   margin: 32px 0 8px;
   padding: 18px 22px;
   border: 1px solid var(--border-default);
   border-radius: 12px;
+  background: #ffffff;
 }
 
 .legal-doc .legal-toc-title {
@@ -254,14 +261,66 @@ body.legal-active {
   text-decoration: underline;
 }
 
-@media (min-width: 640px) {
+/* ── Desktop: text left, sticky contents right ───────────────────────── */
+@media (min-width: 1024px) {
+  .legal-bar-inner {
+    max-width: calc(
+      var(--legal-measure) + var(--legal-side-gap) + var(--legal-side-w) + 2 * var(--legal-gutter)
+    );
+  }
+
+  .legal-doc {
+    display: grid;
+    grid-template-columns: minmax(0, var(--legal-measure)) var(--legal-side-w);
+    grid-template-areas:
+      "head side"
+      "body side";
+    grid-template-rows: auto 1fr;
+    column-gap: var(--legal-side-gap);
+    max-width: calc(var(--legal-measure) + var(--legal-side-gap) + var(--legal-side-w));
+  }
+
+  .legal-doc-head {
+    grid-area: head;
+  }
+
+  .legal-doc-body {
+    grid-area: body;
+    min-width: 0;
+  }
+
+  .legal-side {
+    grid-area: side;
+    min-width: 0;
+  }
+
+  .legal-toc {
+    position: sticky;
+    top: var(--legal-sticky-top);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - var(--legal-sticky-top) - 24px);
+    margin: 0;
+    padding: 16px 0 12px;
+  }
+
+  /* The title stays put; only the list scrolls. */
+  .legal-doc .legal-toc-title {
+    flex: none;
+    padding: 0 18px;
+  }
+
   .legal-toc ol {
-    columns: 2;
-    column-gap: 28px;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    line-height: 1.5;
   }
 
   .legal-toc li {
-    break-inside: avoid;
+    padding: 4px 0;
   }
 }
 

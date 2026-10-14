@@ -46,23 +46,30 @@ export function LegalPage({ doc, current }: { doc: LegalDoc; current: LegalHref 
 
       <main className="legal-main">
         <article className="legal-doc">
-          <h1>{doc.title}</h1>
-          {doc.updated && <p className="legal-updated">Last updated: {doc.updated}</p>}
+          <div className="legal-doc-head">
+            <h1>{doc.title}</h1>
+            {doc.updated && <p className="legal-updated">Last updated: {doc.updated}</p>}
+          </div>
 
+          {/* Desktop: a sticky sidebar to the right of the text. Narrow: sits under the title. */}
           {doc.sections.length > 0 && (
-            <nav aria-label="Contents" className="legal-toc">
-              <p className="legal-toc-title">Contents</p>
-              <ol>
-                {doc.sections.map((section) => (
-                  <li key={section.id}>
-                    <a href={`#${section.id}`}>{section.text}</a>
-                  </li>
-                ))}
-              </ol>
-            </nav>
+            <aside className="legal-side">
+              <nav aria-label="Contents" className="legal-toc">
+                <p className="legal-toc-title">Contents</p>
+                <ol>
+                  {doc.sections.map((section) => (
+                    <li key={section.id}>
+                      <a href={`#${section.id}`}>{section.text}</a>
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+            </aside>
           )}
 
-          <LegalMarkdown blocks={doc.blocks} />
+          <div className="legal-doc-body">
+            <LegalMarkdown blocks={doc.blocks} />
+          </div>
         </article>
       </main>
     </div>
