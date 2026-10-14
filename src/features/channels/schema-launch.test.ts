@@ -59,7 +59,7 @@ describe("the mode vocabularies", () => {
   it("the latest tool-mode CHECKs admit exactly the wire union (applied: the runtime words)", () => {
     // The CHECKs were last re-created for Grok's words; `applied_setting` still lives in the levels migration.
     const sql = readSource(
-      repoFile("supabase/migrations/20261123120000_channel_launch_directives_grok_tool_words.sql"),
+      repoFile("supabase/migrations/20261125120000_channel_launch_directives_grok_tool_words.sql"),
     );
     const levels = readSource(
       repoFile("supabase/migrations/20261024120000_channel_launch_directives_permission_levels.sql"),
