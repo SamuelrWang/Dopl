@@ -86,7 +86,7 @@ describe("marketing.css never depends on a token globals.css would drop", () => 
     // declared NOWHERE in globals.css is out of scope here and is not a defect: the six
     // `--lp-*` scrub vars are written at runtime by `use-banner-scrub.ts`
     // (`scene.style.setProperty`) and carry `var(…, fallback)`, and `--font-playfair` comes
-    // from next/font in `app/layout.tsx:32` with a `, Georgia, serif` fallback. Flagging those
+    // from next/font in `app/layout.tsx` (`playfairDisplay`) with a `, Georgia, serif` fallback. Flagging those
     // would make this case noise, and noise is how a guard gets muted.
     const orphans: string[] = [];
     for (const token of referenced(MARKETING_CODE)) {

@@ -146,7 +146,7 @@
   --font-sans: var(--font-app), system-ui, -apple-system, "Segoe UI",
     sans-serif;
   /* ⚠ INTENTIONAL DEVIATION from globals.css, which uses
-     `var(--font-geist-mono)` from `next/font/google` (src/app/layout.tsx). A
+     `var(--font-geist-mono)` from `next/font/local` (src/app/layout.tsx). A
      Vite SPA has no next/font, and the SPA is system-fonts-only on purpose
      (CSP `font-src 'self'`, offline-safe). Do NOT "fix" this back. */
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
