@@ -23,10 +23,10 @@ export declare const GRANULAR_POSTURE_FIELD: z.ZodOptional<z.ZodObject<{
         allowlist: "allowlist";
         "auto-review": "auto-review";
         "run-everything": "run-everything";
-        default: "default";
         promptUnmatched: "promptUnmatched";
         onRequest: "onRequest";
         allowAll: "allowAll";
+        default: "default";
         autoMode: "autoMode";
         "approve-all": "approve-all";
     }>>;
@@ -80,10 +80,10 @@ export declare const LAUNCH_INPUT_FIELDS: {
             allowlist: "allowlist";
             "auto-review": "auto-review";
             "run-everything": "run-everything";
-            default: "default";
             promptUnmatched: "promptUnmatched";
             onRequest: "onRequest";
             allowAll: "allowAll";
+            default: "default";
             autoMode: "autoMode";
             "approve-all": "approve-all";
         }>>;
