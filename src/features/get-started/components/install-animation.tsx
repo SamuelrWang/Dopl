@@ -13,6 +13,11 @@
  * a hand (a shallow arc, decelerating onto its targets) instead of a point
  * sliding down a wire; a single translate track cannot curve.
  *
+ * ⚠ The window IS the glass's white card — inset by the slot's
+ * `--glass-card-inset`, sized by the glass, never by this markup — and the
+ * drawing rides a fixed-size `.gs-stage` scaled to the body. See the
+ * stylesheet's header.
+ *
  * Decorative: `aria-hidden`, every fact restated in the numbered steps.
  */
 
@@ -33,33 +38,35 @@ export function InstallAnimation() {
         </div>
 
         <div className="gs-dmg-body">
-          <div className="gs-well gs-well--app">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={APP_ICON} alt="" className="gs-app-icon" draggable={false} />
-            <span className="gs-well-label">Dopl</span>
-          </div>
-
-          <ArrowIcon />
-
-          <div className="gs-well gs-well--apps">
-            <FolderIcon />
-            <span className="gs-well-label">Applications</span>
-            <span className="gs-check">
-              <CheckIcon />
-            </span>
-          </div>
-
-          {/* Translucent copy of the app icon that makes the trip. */}
-          <div className="gs-ghost-y">
-            <div className="gs-ghost-x">
+          <div className="gs-stage">
+            <div className="gs-well gs-well--app">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={APP_ICON} alt="" className="gs-ghost" draggable={false} />
+              <img src={APP_ICON} alt="" className="gs-app-icon" draggable={false} />
+              <span className="gs-well-label">Dopl</span>
             </div>
-          </div>
 
-          <div className="gs-cursor-y">
-            <div className="gs-cursor-x">
-              <CursorIcon />
+            <ArrowIcon />
+
+            <div className="gs-well gs-well--apps">
+              <FolderIcon />
+              <span className="gs-well-label">Applications</span>
+              <span className="gs-check">
+                <CheckIcon />
+              </span>
+            </div>
+
+            {/* Translucent copy of the app icon that makes the trip. */}
+            <div className="gs-ghost-y">
+              <div className="gs-ghost-x">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={APP_ICON} alt="" className="gs-ghost" draggable={false} />
+              </div>
+            </div>
+
+            <div className="gs-cursor-y">
+              <div className="gs-cursor-x">
+                <CursorIcon />
+              </div>
             </div>
           </div>
         </div>

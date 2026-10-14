@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { LiquidGlass } from "@/shared/design";
 import {
-  CARD_EASE, CARD_IN_MS, CARD_OUT_MS, CARD_SWAP_SLACK_MS,
+  CARD_EASE, CARD_IN_MS, CARD_INSET, CARD_OUT_MS, CARD_SWAP_SLACK_MS,
   GLASS_HEIGHT, GLASS_MIN_H, GLASS_MS, GLASS_RADIUS,
   GLASS_RIM_BAND, GLASS_RIM_BLUR, GLASS_SHADOW_LAYERS, GLASS_SHADOW_PAD,
   GLASS_SIDE_INSET, GLASS_TOP,
@@ -248,8 +248,14 @@ export function AuthBannerPanel({
             {/* Portal target — a PAGE may project content onto the glass (the
                 get-started install animation does) while the layout, and therefore
                 the banner + glass, persists across auth-group navigations. Empty on
-                every other surface, including the desktop SPA. */}
-            <div id={AUTH_GLASS_SLOT_ID} style={{ width: "100%", height: "100%" }} />
+                every other surface, including the desktop SPA.
+                `--glass-card-inset` hands a portaled page the white card's
+                margin, so a panel it paints (/get-started's Finder window) is
+                the card's size — the same constant `cardPath` draws with. */}
+            <div
+              id={AUTH_GLASS_SLOT_ID}
+              style={{ width: "100%", height: "100%", "--glass-card-inset": `${CARD_INSET}px` } as CSSProperties}
+            />
 
             {/* THE WHITE CARD. Empty for now; content comes later. It is sized
                 from the SOLID part of the pose, so it can never sit over the

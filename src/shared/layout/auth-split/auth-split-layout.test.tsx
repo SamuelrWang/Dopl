@@ -30,6 +30,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, act } from "@testing-library/react";
 
 import { AuthSplitLayout } from "./auth-split-layout";
+import { CARD_INSET } from "./auth-glass-geometry";
 
 /**
  * The measure effect reads `getBoundingClientRect()` and BAILS on a pane narrower than 2px
@@ -113,6 +114,19 @@ describe("the white card is onboarding's, not every auth surface's", () => {
     );
     // The card used to paint OVER this node. Removing the card must not remove the slot.
     expect(container.querySelector("#auth-glass-slot")).not.toBeNull();
+  });
+
+  it("🔒 …and it publishes the card's inset, so /get-started's panel is the card's size", () => {
+    withMeasuredPane();
+    const { container } = render(
+      <AuthSplitLayout>
+        <form />
+      </AuthSplitLayout>
+    );
+    // `install-animation.css › .gs-dmg` insets by this var (Samuel 2026-10-14: "uniform to the
+    // size of the other white panels"). It must be the constant `cardPath` draws with, not a copy.
+    const slot = container.querySelector<HTMLElement>("#auth-glass-slot")!;
+    expect(slot.style.getPropertyValue("--glass-card-inset")).toBe(`${CARD_INSET}px`);
   });
 
   // ⚠ ALL THREE POSES, `"default"` INCLUDED. Onboarding's step 3 is pose `"default"` by design,

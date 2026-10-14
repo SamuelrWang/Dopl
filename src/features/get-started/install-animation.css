@@ -19,29 +19,34 @@
    not collapse them into one translate track — a single track moves on a
    straight line and reads as a machine.
 
-   ⚠ Coordinates are px in a fixed 400×250 stage, centred in the glass and
-   clipped by it if the panel runs narrow (the split layout hides the whole
-   right pane below md, so the exposure is a band of mid widths). Keep new
-   positions inside the stage. */
+   ⚠ THE WINDOW IS THE GLASS'S WHITE CARD, size and all (Samuel 2026-10-14:
+   "uniform to the size of the other white panels in glass panel"). It is
+   inset by `--glass-card-inset` — published on the glass slot from the SAME
+   `CARD_INSET` the onboarding card's mask is drawn with
+   (`shared/layout/auth-split/auth-glass-geometry.ts`) — and wears the card's
+   `--glass-card-*` radius, fill and shadow. Never re-type those numbers here.
+
+   ⚠ Coordinates are px in a fixed 400×144 STAGE (`.gs-stage`), centred in
+   the window body and scaled to fit it — the body's size follows the glass,
+   so the drawing scales rather than clipping. Keep new positions inside the
+   stage; the cursor's entry/exit legs deliberately leave it. */
 
 .gs-glass-pad {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
   overflow: hidden;
 }
 
 /* The white panel IS the Finder window. */
 .gs-dmg {
-  position: relative;
-  width: min(400px, 92%);
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.14),
-    0 10px 22px rgba(8, 10, 15, 0.28),
-    0 30px 60px rgba(8, 10, 15, 0.3);
+  position: absolute;
+  inset: var(--glass-card-inset);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--glass-card-radius);
+  background: var(--glass-card-fill);
+  /* `drop-shadow`, like the card: the token is in drop-shadow's grammar. */
+  filter: drop-shadow(var(--glass-card-shadow));
   overflow: hidden;
   animation: loginFadeIn 0.5s ease-out 0.15s both;
 }
@@ -52,6 +57,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  flex: none;
   height: 38px;
   padding: 0 12px;
   background: linear-gradient(#fafafa, #f0f0f0);
@@ -85,15 +91,35 @@
   color: #4a4a4a;
 }
 
-/* Body: icon → Applications, the canonical DMG layout. */
+/* Body: icon → Applications, the canonical DMG layout. Takes whatever the
+   card leaves under the titlebar; a SIZE container so the stage can scale. */
 .gs-dmg-body {
   position: relative;
-  height: 212px;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  overflow: hidden;
   background: #fbfbfd;
+}
+
+/* The drawing, at its design size, scaled to fit the body (contain).
+   ⚠ `tan(atan2(a, b))` IS a / b AS A NUMBER — CSS cannot divide a length by a
+   length, and `scale()` takes a number. No JS: the clock below stays the only
+   moving part. A browser without it keeps the first declaration (scale 1,
+   clipped by the body), i.e. the old fixed-size drawing. */
+.gs-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 400px;
+  height: 144px;
+  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%)
+    scale(min(tan(atan2(100cqw, 400px)), tan(atan2(100cqh, 144px))));
 }
 .gs-well {
   position: absolute;
-  top: 46px;
+  top: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -126,7 +152,7 @@
 .gs-arrow {
   position: absolute;
   left: 50%;
-  top: 84px;
+  top: 58px;
   width: 56px;
   transform: translateX(-50%);
   color: #b8b8bd;
@@ -156,7 +182,7 @@
 .gs-cursor-y {
   position: absolute;
   left: 94px; /* app icon centre x */
-  top: 85px; /* app icon centre y */
+  top: 59px; /* app icon centre y */
   width: 0;
   height: 0;
 }
@@ -245,9 +271,17 @@
     transform: translateY(150px);
   }
 }
-/* Press dip + fade-out on exit. */
+/* Fade-in on the way in, press dip, fade-out on exit. ⚠ The fade-in is
+   load-bearing: the body's aspect follows the glass, and in a tall, narrow
+   body the start point (260, 170 off the icon) can land INSIDE the window —
+   without it the cursor would sit there, parked, through the rest beat. */
 @keyframes gs-cursor-life {
   0%,
+  16% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  21%,
   30% {
     opacity: 1;
     transform: scale(1);
