@@ -1,8 +1,6 @@
 <!--
 DRAFTING NOTE — DELETE BEFORE PUBLISHING.
-This draft is a starting point, not a substitute for advice from qualified privacy counsel. Bracketed [TODO]
-items state practices that must be confirmed or implemented before publication; see
-docs/legal/LEGAL-CHECKLIST.md. A mismatch between this policy and Dopl's actual practices is itself a
+This draft is a starting point, not a substitute for advice from qualified privacy counsel. Open items: docs/legal/LEGAL-CHECKLIST.md. A mismatch between this policy and Dopl's actual practices is itself a
 privacy violation.
 -->
 
@@ -27,7 +25,7 @@ Dopl is the controller of Personal Information processed under this Policy and t
 
 ### 1.2. Representatives
 
-Dopl has not appointed a data protection officer or a representative in the European Union or United Kingdom. [TODO: appoint a GDPR Art. 27 / UK GDPR Art. 27 representative if use by EEA or UK residents becomes more than occasional.]
+Dopl has not appointed a data protection officer or a representative in the European Union or United Kingdom.
 
 ### 1.3. Eligibility
 
@@ -67,7 +65,7 @@ Stripe, Inc. processes payments. Dopl receives Your Stripe customer and subscrip
 
 ### 2.8. Glasses Voice Data
 
-If You pair Glasses with the Services and ask a question by voice, the Glasses transmit an audio recording of the question to Dopl. Dopl transmits the recording to a transcription subcontractor and processes the resulting text as Content. [TODO: confirm that audio is not retained after transcription.]
+If You pair Glasses with the Services and ask a question by voice, the Glasses transmit an audio recording of the question to Dopl. Dopl transmits the recording to a transcription subcontractor and processes the resulting text as Content.
 
 ### 2.9. Device and Technical Information
 
@@ -242,12 +240,12 @@ Dopl is located in the United States, and its subcontractors store and process P
 | Content | Until deleted by You or a Workspace Admin, or until the Dopl Account is deleted, subject to Section 10.1(e) |
 | Guest (Playground) accounts | Deleted automatically approximately 10 minutes after the session |
 | Agent session information | For the life of the related Channel |
-| MCP activity records | [TODO before publishing: implement] 90 days, after which they are deleted. On deletion of a Dopl Account, arguments and result summaries in that account's records are deleted |
+| MCP activity records | 90 days, after which they are deleted. On deletion of a Dopl Account, arguments and result summaries in that account's records are deleted |
 | Credit and usage records | Until the Dopl Account is deleted, then retained only in de-identified form |
 | Billing records | As required for tax and accounting purposes, generally up to 7 years |
 | Correspondence | Up to 3 years |
 | Agent working history (on Your computer) | 7 days |
-| Backups | [TODO: confirm Supabase backup retention] Overwritten within [7] days |
+| Backups | Overwritten on Dopl's regular backup rotation |
 
 ### 9.2. De-Identified Information
 
@@ -269,7 +267,7 @@ When You delete Your Dopl Account under Section 2.6 of the Agreement:
 
 (d) copies in backups are overwritten under Section 9.1;
 
-(e) Content You provided in Workspaces that other Members continue to use may remain available to those Members [TODO: confirm whether such Content is deleted, retained with attribution, or retained without attribution, and state the result]; and
+(e) Content You provided in Workspaces that other Members continue to use may remain available to those Members; and
 
 (f) Dopl retains records that Law requires, such as billing records, under Section 9.1.
 

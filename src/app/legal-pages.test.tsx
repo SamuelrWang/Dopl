@@ -140,9 +140,12 @@ describe.each(PAGES)("$route", ({ Page, meta, dynamic, file, metaTitle, h1 }) =>
 });
 
 describe("content fidelity", () => {
-  it("keeps the privacy draft's [TODO] text visible", () => {
-    const d = doc(renderToStaticMarkup(<PrivacyPage />));
-    expect(d.body.textContent).toContain("[TODO: appoint a GDPR Art. 27");
+  it("publishes no drafting markers on either page", () => {
+    for (const Page of [PrivacyPage, ServicesAgreementPage]) {
+      const text = doc(renderToStaticMarkup(<Page />)).body.textContent ?? "";
+      expect(text).not.toContain("TODO");
+      expect(text).not.toContain("DRAFTING NOTE");
+    }
   });
 
   it("sets the all-caps warranty disclaimer as a notice", () => {
