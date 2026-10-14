@@ -43,6 +43,7 @@ const WEB_ONLY_ROOTS = new Set([
   'pricing',
   'canvas',
   'terms',
+  'services-agreement',
   'privacy',
   'join',
   'invite',
