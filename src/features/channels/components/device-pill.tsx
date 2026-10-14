@@ -16,10 +16,14 @@ import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import type { MessageSource } from "../lib/message-device";
 import { AgentPill } from "./agent-bits";
 
+/** ⚠ `w-fit`: the pill sits in `authored-row.tsx`'s body column, a flex column
+ *  that STRETCHES its children on someone else's (left) message, so the pill
+ *  ran the full message width there (Samuel 2026-10-14, the landing demo).
+ *  Own messages align `items-end` and never showed it. */
 export function DevicePill({ source }: { source: MessageSource }) {
   const liveName = useDeviceName(source.kind, source.deviceId);
   return (
-    <AgentPill className="inline-flex max-w-[16rem] items-center gap-1">
+    <AgentPill className="inline-flex w-fit max-w-[16rem] items-center gap-1">
       <DeviceKindIcon kind={source.kind} size={11} strokeWidth={2} className="shrink-0" />
       <span className="truncate">{liveName ?? source.label}</span>
     </AgentPill>

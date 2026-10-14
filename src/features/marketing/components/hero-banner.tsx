@@ -59,7 +59,7 @@ export function HeroBanner() {
               public/ asset, width-driven box. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/img/landscape-banner.jpg"
+            src="/img/landscape-valley-v2.jpg"
             alt=""
             className="lp-banner-img"
             draggable={false}
@@ -74,11 +74,19 @@ export function HeroBanner() {
               radius={18}
               staticMap={mode === "scrub"}
               className="lp-banner-glass-card"
+              // Onboarding's edge + hover tilt (Samuel 2026-10-13). The tilt
+              // lives on the glass's own layers, so it composes with the
+              // scrub, which only ever writes this WRAPPER's box.
+              edge="rim"
+              tilt
+              // The demo window is a SIBLING drawn over the glass; it reads
+              // `--glass-tilt-shared` off this wrapper so it tilts as one.
+              shareTilt
             >
               <NotificationCard />
 
               {/* Click ripple. ⚠ Must stay inside the card — LiquidGlass's
-                  `overflow-hidden` is what clips it. Engine writes its centre
+                  content layer is what clips it (`edge="rim"` clips there). Engine writes its centre
                   and fires it by class (use-banner-scrub). */}
               <span className="lp-banner-ripple" ref={rippleRef} aria-hidden="true" />
             </LiquidGlass>
