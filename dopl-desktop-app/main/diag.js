@@ -15,10 +15,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+// electron is loaded on first CALL, not at require: pure modules that import diag (room-roster)
+// stay loadable without the Electron binary (`npm ci --ignore-scripts`, the desktop test suite).
 
 function diag(...parts) {
   try {
+    const { app } = require('electron');
     const f = path.join(app.getPath('userData'), 'listener.log');
     try {
       const st = fs.statSync(f);

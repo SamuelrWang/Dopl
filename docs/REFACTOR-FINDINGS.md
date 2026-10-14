@@ -10711,3 +10711,11 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Found during: the Grok adapter. A verdict the gate SETTLES is answered in the PreToolUse hook, where `deny` fails only that tool; a verdict that waits for the operator can only be answered in `session/request_permission`, whose `reject_once` cancels the turn (`stopReason: "cancelled"`, `PermissionRejected` — measured, `smoke-s2`). The hook cannot wait for a person: it fails OPEN on timeout.
 - Fix: measure whether a hook reply can be deferred past its timeout safely, or whether Grok offers a per-call reject that continues the turn (smoke S11); until then the operator's Deny stops the agent's turn, which fails closed.
 - Status: OPEN.
+
+### F-778 — The desktop suite auto-downloads Electron per test process, and parallel downloads race (2026-10-14)
+
+- Location: the `electron` package's own entry module (43.2.0; it calls `getElectronPath()` at require time) and every desktop test whose module graph does a real `require('electron')`.
+- Found during: the 1.42.0 full gate. CI installs with `npm ci --ignore-scripts` ("skips the Electron binary download this suite never uses", `.github/workflows/ci.yml`), but electron 43 downloads the binary on first `require` when `path.txt` is missing. One `npm test` from a clean install printed `Downloading Electron binary...` 11 times (measured 2026-10-14); concurrent extracts fail with `failed to create directory … File exists (os error 17)`, which failed `test/agent-ended-is-dead.test.mjs` once. Pre-existing on `c01f639f` (same electron, same tests); CI on master has been green, so it is a race, not a constant red.
+- Fixed in part: `main/diag.js` now loads electron on first call, so pure modules that import it (`room-roster.js`) no longer pull the binary — the trigger that failed.
+- Fix: find the remaining real-electron loads (re-derive: run the suite from `npm ci --ignore-scripts` and count `Downloading Electron binary`) and stub or defer each, or set `ELECTRON_OVERRIDE_DIST_PATH` for the test run; then the CI comment is true.
+- Status: OPEN.
