@@ -45,7 +45,7 @@ body.legal-active {
 
 /* ── Document ────────────────────────────────────────────────────────── */
 .legal-main {
-  padding: 48px var(--legal-gutter) 96px;
+  padding: 8px var(--legal-gutter) 96px;
 }
 
 .legal-doc {
@@ -278,7 +278,7 @@ body.legal-active {
 /* Phones. */
 @media (max-width: 420px) {
   .legal-main {
-    padding-top: 32px;
+    padding-top: 8px;
   }
 
   .legal-doc h1 {
