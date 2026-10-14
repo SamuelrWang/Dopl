@@ -29,6 +29,9 @@ const MAIN = join(HERE, "..", "main");
 const require = createRequire(import.meta.url);
 const roster = require("../main/runtime/claude/roster.js");
 const models = require("../main/runtime/claude/models.js");
+const identity = require("../main/runtime/claude/identity.js");
+// The roster (`models.js`) and the build key (`identity.js`) read one set of fakes.
+const inject = (over) => { models.inject(over); identity.inject(over); };
 
 // ⚠ MEASURED 2026-09-22 on this Mac (SDK 0.3.220, signed in, Max) — `roster.js`'s header.
 const MEASURED = [
@@ -47,7 +50,7 @@ function fakeCli(rows, over = {}) {
   // 2026-10-08: the adapter keeps no roster; the CATALOG holds the last live read. Here that is the last
   // rows a probe answered, so launch resolution sees what a real catalog would.
   let last = null;
-  models.inject({
+  inject({
     loadSdk: async () => ({}), bin: () => "/fake/claude", env: () => ({}),
     credentialSource: () => credential, sdkVersion: () => "0.3.220",
     probe: async () => { calls.probes += 1; if (over.fail) throw new Error(over.fail); last = typeof rows === "function" ? rows() : rows; return last; },
@@ -55,7 +58,7 @@ function fakeCli(rows, over = {}) {
   });
   return { calls, signIn: (next) => { credential = next; } };
 }
-const adapter = () => ({ descriptor: DESCRIPTOR, runtime: { models: () => models.models(), buildIdentity: () => models.buildIdentity() } });
+const adapter = () => ({ descriptor: DESCRIPTOR, runtime: { models: () => models.models(), buildIdentity: () => identity.buildIdentity() } });
 
 // ── 1 + 2. THE MEASURED ROWS, AND A MODEL NOBODY HARDCODED ───────────────────────────────────
 
@@ -83,7 +86,7 @@ test("🔒 a model this build has never heard of APPEARS as an option — labell
     assert.equal(entry.label, "Opus 6 (1M context)", "named by the CLI, never hidden");
     assert.equal(catalog.modelRefusal(c, "claude-opus-6[1m]", "Claude Code"), null, "and a launch naming it is not refused");
     assert.deepEqual(models.resolveLaunchModel("claude-opus-6[1m]"), { ok: true, arg: "claude-opus-6[1m]", id: "claude-opus-6[1m]", reason: "" });
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 // ⚠ MEASURED 2026-10-08 on runtime 0.3.293 (signed in): the CLI lists its current aliases AND its
@@ -112,7 +115,7 @@ test("🔒 the CLI's OLDER models are hidden, not dropped: the picker offers the
     assert.deepEqual(models.resolveLaunchModel(""), { ok: true, arg: "", id: "claude-opus-5-5", reason: "" }, "no pick: no model sent, the CLI's default labelled");
     const c = loadCatalog().catalogFromRoster("claude", DESCRIPTOR, await models.models());
     assert.equal(c.models.find((m) => m.id === "claude-opus-4-7").label, "Opus 4.7", "a hidden row still labels a card");
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 test("a pinned row is offered when no alias supersedes it (an older CLI's only Fable, a newer Opus)", () => {
@@ -131,7 +134,7 @@ test("a FAILED read rejects with the cause; the catalog renders it, and no table
     const c = catalog.snapshot(adapter());
     assert.equal(c.status, "unavailable", "no models it could not read, and it says why");
     assert.match(c.reason, /spawn ENOENT/);
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 // ── 4. NO ADAPTER CACHE: THE CATALOG IS THE ONE ──────────────────────────────────────────────
@@ -145,13 +148,13 @@ test("signed out, nothing is probed (the operator's own login would answer); sig
     assert.equal((await models.models()).models.length, 2);
     await models.models();
     assert.equal(cli.calls.probes, 2, "the adapter keeps nothing; `model-catalog.js` decides when to read");
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 test("a READY catalog re-reads on the next LOOK when the key moves (an upgrade), without a timer", async () => {
   const cli = fakeCli(MEASURED.slice(3));
   let version = "0.3.220";
-  models.inject({
+  inject({
     loadSdk: async () => ({}), bin: () => "/fake/claude", env: () => ({}),
     credentialSource: () => "dopl-token", sdkVersion: () => version,
     probe: async () => { cli.calls.probes += 1; return MEASURED.slice(3); },
@@ -163,7 +166,7 @@ test("a READY catalog re-reads on the next LOOK when the key moves (an upgrade),
     version = "0.3.221";
     catalog.snapshot(adapter()); await settle(); await settle();
     assert.equal(cli.calls.probes, 2, "the moved key re-read without a timer or an invalidation hook");
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 // ── 5. A PICK LAUNCHES AS THE ROW IT NAMES; UNKNOWN IS REFUSED ───────────────────────────────
@@ -184,7 +187,7 @@ test("resolution: ids, legacy ids, aliases and undated spellings all find their 
     assert.match(bad.reason, /does not offer the model "claude-fable-5-1".*Opus \(1M context\), Fable, Sonnet, Haiku/);
     assert.equal(models.launchArg("claude-opus-4-5"), "claude-opus-4-5", "a resumed session's own id is sent as itself");
     assert.equal(models.launchArg("opus --print"), "", "what could not BE an id never reaches argv");
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 test("RC-01: before any roster read, a pick launches as ITSELF — never a short row, never a table", async () => {
@@ -197,7 +200,7 @@ test("RC-01: before any roster read, a pick launches as ITSELF — never a short
     assert.equal(models.resolveLaunchModel("claude-opus-5[1m]").ok, true, "unread is not refused");
     assert.equal(models.launchArg(""), "", "no pick: no model sent, the CLI runs its own default");
     assert.equal(models.launchArg("opus --print"), "", "what could not BE an id never reaches argv");
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 test("🔒 NEVER CLAIM A MODEL THE LAUNCH WILL NOT RUN: the `default` row and the live no-pick model disagree → neutral", async () => {
@@ -214,7 +217,7 @@ test("🔒 NEVER CLAIM A MODEL THE LAUNCH WILL NOT RUN: the `default` row and th
   try {
     await models.models();
     assert.deepEqual(models.resolveLaunchModel(""), { ok: true, arg: "", id: "", reason: "" }, "no pick claims no model");
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 test("🔒 the CLI renames EVERY alias: a no-pick launch still launches, on the CLI's own default", async () => {
@@ -231,7 +234,7 @@ test("🔒 the CLI renames EVERY alias: a no-pick launch still launches, on the 
     assert.equal(models.launchArg(""), "", "no `--model`: the CLI picks");
     assert.equal(models.launchArg("claude-mu-7"), "fast", "a pick launches as its row's own value");
     assert.equal(models.resolveLaunchModel("claude-sonnet-5").ok, false, "a pick the read roster lacks is refused, not swapped");
-  } finally { models.inject(); }
+  } finally { inject(); }
 });
 
 test("🔒 no runtime borrows another's roster: each catalog refuses the other's ids", () => {
@@ -305,10 +308,10 @@ test("buildIdentity's account is the per-sign-in fingerprint, never 'dopl-token'
   const credential = require("../main/runtime/claude/credential.js");
   const ids = [];
   for (const account of ["fp-account-a", "fp-account-b", null]) {
-    models.inject({ bin: () => "/fake/claude", sdkVersion: () => "0.3.293", credentialSource: () => "dopl-token", account: () => account });
-    ids.push(models.buildIdentity().account);
+    inject({ bin: () => "/fake/claude", sdkVersion: () => "0.3.293", credentialSource: () => "dopl-token", account: () => account });
+    ids.push(identity.buildIdentity().account);
   }
-  models.inject();
+  inject();
   assert.deepEqual(ids, ["fp-account-a", "fp-account-b", null], "the source word never stands in for an account");
   assert.equal(typeof credential.accountFingerprint, "function");
 });

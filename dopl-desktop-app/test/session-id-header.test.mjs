@@ -8,7 +8,7 @@
 //   • the `client_msg_id` is `task_progress-<channelUUID>-<seq>`, which the anchored stamp
 //     pattern (`src/features/channels/lib/agent-post-stamp.ts`) deliberately refuses, and
 //   • `listener-io.js` set no session header, while a SPAWNED session gets one for free from a
-//     seam main does not use (`runtime/claude/launch-spec.js` → `loader.js › withSessionStamp`).
+//     seam main does not use (`runtime/claude/launch-spec.js` → `runtime/claude/mcp.js › withSessionStamp`).
 //
 // The server strips any caller-supplied `metadata.session_id` and re-stamps the reserved key
 // ONLY from this header, so both doors were shut: `authorAgentIdOf` answered null, the

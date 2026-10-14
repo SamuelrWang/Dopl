@@ -31,7 +31,7 @@ import { fnOf, orderOf, codeOf } from "./helpers/source-probe.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const M = (p) => readFileSync(join(HERE, "..", "main", p), "utf8");
-const LOADER = M(join("runtime", "claude", "loader.js"));
+const LOADER = M(join("runtime", "claude", "mcp.js"));
 const SPEC = M(join("runtime", "claude", "launch-spec.js"));
 // The two modules that own the device token (cleanup D04 split the lifecycle out of mcp-config).
 const CONFIG = M("mcp-config.js") + "\n" + M("mcp-device-token-lifecycle.js");
@@ -51,7 +51,7 @@ function reSourceOf(src, what) {
   assert.ok(m, `${what} must define SESSION_ID_RE`);
   return m[1];
 }
-const DESKTOP_RE_SRC = reSourceOf(LOADER, "runtime/claude/loader.js");
+const DESKTOP_RE_SRC = reSourceOf(LOADER, "runtime/claude/mcp.js");
 const SERVER_RE_SRC = reSourceOf(SERVER, "session-header.ts");
 // The live regex the SERVER narrows with, compiled from its own source.
 const SERVER_RE = new Function(`return ${SERVER_RE_SRC};`)();
@@ -281,21 +281,21 @@ test("the launch spec stamps the assembled mcpServers with store.slotKey(s)", ()
   // The stamp names the REGISTRY SLOT this run occupies — `store.slotKey` is the one
   // definition of that (channel, agent) / (channel, thread) arithmetic. Rebuilding the
   // value by hand here is the bug FIX N1 already fixed one file over.
-  assert.match(opts, /loader\.withSessionStamp\(options\.mcpServers, store\.slotKey\(s\)\);/);
+  assert.match(opts, /mcp\.withSessionStamp\(options\.mcpServers, store\.slotKey\(s\)\);/);
   // The builder literal two other suites source-scan is untouched, and the stamp is
   // applied AFTER it — stamping a not-yet-built object would be a silent no-op.
   // 🔒 THE THIRD ARGUMENT IS THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) — the child
   // credential for a session spawned into a SHARED link container, '' for every other
   // session. It is pinned INTO this literal rather than beside it because dropping the
   // argument silently reverts every locked session to the operator's device token.
-  assert.match(opts, /mcpServers: loader\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
+  assert.match(opts, /mcpServers: mcp\.buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId, sessionCredential\.sessionBearer\(s\)\),/);
   assert.ok(
-    orderOf(opts, "mcpServers: loader.buildMcpServers(", "loader.withSessionStamp(", "buildOptions"),
+    orderOf(opts, "mcpServers: mcp.buildMcpServers(", "mcp.withSessionStamp(", "buildOptions"),
     "the entry must exist before it can be stamped"
   );
   // …and the two modules are really joined: the import and the export.
-  assert.match(SPEC, /^const loader = require\('\.\/loader'\);$/m);
-  assert.match(codeOf(LOADER), /^module\.exports = \{[^}]*\bwithSessionStamp,/m, "exported from the one platform-facing module");
+  assert.match(SPEC, /^const mcp = require\('\.\/mcp'\);$/m);
+  assert.match(codeOf(LOADER), /^module\.exports = \{[^}]*\bwithSessionStamp,/m, "exported from the adapter's MCP module");
 });
 
 test("the per-session stamp NEVER reaches the shared, on-disk spawn config", () => {

@@ -81,9 +81,9 @@ test("every runtime's entry carries the header for granular, and nothing at all 
     assert.equal(cursorMcp.buildWiring("ws", "tok", "slot", set).headers["X-Dopl-Tool-Set"], want, `cursor ${set}`);
   }
   // Claude's loader needs electron at load; its stamp is pinned by source and by the shared helper.
-  const loader = readFileSync(M("runtime", "claude", "loader.js"), "utf8");
+  const loader = readFileSync(M("runtime", "claude", "mcp.js"), "utf8");
   assert.match(loader, /function withToolSetStamp\(servers, toolSet\) \{[\s\S]*?mcpConnect\.toolSetHeaders\(toolSet\)/);
-  assert.match(readFileSync(M("runtime", "claude", "launch-spec.js"), "utf8"), /loader\.withToolSetStamp\(options\.mcpServers, s\.doplToolSet\);/);
+  assert.match(readFileSync(M("runtime", "claude", "launch-spec.js"), "utf8"), /mcp\.withToolSetStamp\(options\.mcpServers, s\.doplToolSet\);/);
 });
 
 test("a session is stamped before its first turn, and only ever moves back to the default", () => {

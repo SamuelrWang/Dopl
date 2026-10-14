@@ -109,7 +109,7 @@ test("install: a --version that times out once is retried longer before the buil
 
 /** A planted download for the Claude roster read: `{ src, bin }` with `active.json` pointing at it. */
 function plantClaude(version) {
-  const loader = require(join(MAIN, "runtime", "claude", "loader.js"));
+  const loader = require(join(MAIN, "runtime", "claude", "resolve-bin.js"));
   const bundled = loader.bundledClaude();
   if (!bundled) return null;
   const [major, minor, patch] = bundled.version.split(".").map(Number);
@@ -169,7 +169,7 @@ test("claude roster: a download that fails twice is rejected and the roster come
     assert.deepEqual(seen, [planted.bin, planted.bin, planted.bundled.path]);
     assert.equal(planted.loader.resolveClaudeExecutable(), planted.bundled.path, "new launches run the bundle");
     // 2026-10-08: core files the roster under the build key (`roster-key.js`); the adapter names the build.
-    assert.equal(models.buildIdentity().path, planted.bundled.path, "keyed by what launches run now");
+    assert.equal(require(join(MAIN, "runtime", "claude", "identity.js")).buildIdentity().path, planted.bundled.path, "keyed by what launches run now");
     // The bundle failing is NOT a reason to reject anything, and is not retried: it is a rejection the
     // catalog renders (no shipped table answers any more).
     seen.length = 0;
@@ -239,7 +239,7 @@ test("credentials never ride the binary's identity: env token for sessions, and 
   // The full login lives in a Keychain item the CLI reads and writes through `/usr/bin/security` subprocesses,
   // so the item's ACL trusts Apple's `security` tool, not the CLI's path or signature: a new build reads it
   // with no prompt. Pinned on the bundled binary so an SDK bump that moves to a native Keychain API fails here.
-  const loader = require(join(MAIN, "runtime", "claude", "loader.js"));
+  const loader = require(join(MAIN, "runtime", "claude", "resolve-bin.js"));
   const bundled = loader.bundledClaude();
   if (!bundled) { t.skip("no bundled Claude platform package here"); return; }
   const bytes = readFileSync(bundled.path);

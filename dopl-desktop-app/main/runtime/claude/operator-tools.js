@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const { NATIVE_BUILTINS } = require('../../tool-profiles');
 const { isDoplServer } = require('../../operator-tools');
-const { CLAUDEAI_MCP_ENV } = require('./loader');
+const { CLAUDEAI_MCP_ENV } = require('./client');
 const { withFullLogin } = require('./credential');
 const { diag } = require('../../diag');
 

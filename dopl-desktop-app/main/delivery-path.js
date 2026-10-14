@@ -6,7 +6,7 @@
 //
 //   WILL A SESSION LAUNCHED RIGHT NOW GET THE `dopl` MCP SERVER AT ALL?
 //
-// It will not without a bearer. `loader.js › buildMcpServers` returns `{}` when there is no
+// It will not without a bearer. `runtime/claude/mcp.js › buildMcpServers` returns `{}` when there is no
 // token (`if (!token) return {}`), the child's init message then reports no `dopl` server,
 // `mcp-connect.js › doplStatus` reads that as `missing`, and `mcp-connect-guard.js` ends the
 // session `mcp-unreachable` — one retry later, and LONG after `session-launch-op.js` answered

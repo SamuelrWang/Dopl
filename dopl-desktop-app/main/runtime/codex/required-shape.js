@@ -28,11 +28,11 @@ module.exports = Object.freeze({
       // `policy.js › assertThreadTook` reads every one of these back before a session runs.
       'thread/start': POLICY_ECHO.concat(SANDBOX_ECHO),
       'thread/resume': POLICY_ECHO.concat(SANDBOX_ECHO),
-      // `proc-config.js › assertRestrictionsTook` reads the effective config.
+      // `launch-verify.js › assertRestrictionsTook` reads the effective config.
       'config/read': ['config'],
     },
     requests: {
-      // `server-requests.js` answers these by name; a rename would route them to the unknown path.
+      // `approval.js` answers these by name; a rename would route them to the unknown path.
       'item/commandExecution/requestApproval': ['command', 'cwd', 'reason'],
       'item/fileChange/requestApproval': ['grantRoot', 'reason'],
       'item/permissions/requestApproval': ['permissions'],

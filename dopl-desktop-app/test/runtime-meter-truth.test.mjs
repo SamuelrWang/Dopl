@@ -35,10 +35,11 @@ const MAIN = join(HERE, "..", "main");
 const require_ = createRequire(import.meta.url);
 
 const registry = require_(join(MAIN, "runtime/index.js"));
-const modelTable = require_(join(MAIN, "runtime/claude/model-table.js"));
+const claudeUsage = require_(join(MAIN, "runtime/claude/usage.js"));
 const codexNormalize = require_(join(MAIN, "runtime/codex/normalize.js"));
 const claudeNormalize = require_(join(MAIN, "runtime/claude/normalize.js"));
 const events = require_(join(MAIN, "runtime/events.js"));
+const kitUsage = require_(join(MAIN, "runtime/kit/usage.js"));
 
 // The SHIPPED projection, sliced with its free var injected — `session-metrics.js`'s own
 // PURE-block idiom, so what is under test is the code that runs and not a restatement of it.
@@ -135,7 +136,7 @@ test("the OTHER runtime's cache convention is additive, and the two are never re
   // ⚠ WHY THIS IS A DESCRIPTOR FIELD AND NOT A SHARED HELPER. `cache_read_input_tokens` IS a term
   // beside the input on Claude and `cachedInputTokens` is NOT on Codex; a single "read the cache
   // field" path would have to be wrong for one of them. Each normalizer owns its own arithmetic.
-  assert.equal(modelTable.promptTokens({
+  assert.equal(claudeUsage.promptTokens({
     input_tokens: 1000, cache_read_input_tokens: 500, cache_creation_input_tokens: 100,
   }), 1600, "Claude's occupancy SUMS the cache terms — the opposite convention, declared apart");
 });
@@ -214,5 +215,34 @@ test("no runtime guesses a window from a model's NAME: Claude's comes only from 
   for (const id of ["claude-sonnet-4-6[1m]", "claude-opus-6", "gpt-5-codex", "borg-3-turbo", ""]) {
     assert.equal(claudeNormalize.windowFor(fresh, id), null, id);
   }
-  assert.equal(modelTable.contextWindowFor, undefined, "the table export is gone");
+  assert.equal(claudeUsage.contextWindowFor, undefined, "the table export is gone");
+});
+
+// ── THE KIT'S READERS (runtime scaffold K4) ─────────────────────────────────────────────────
+
+test("kit readCount: absent, non-number, negative and NaN are NULL — never 0", () => {
+  const u = { total: { input: 5, zero: 0, neg: -1, nan: NaN, str: "7" } };
+  assert.equal(kitUsage.readCount(u, "total", "input"), 5);
+  assert.equal(kitUsage.readCount(u, "total", "zero"), 0, "a reported zero is a zero");
+  for (const k of ["neg", "nan", "str", "renamed"]) assert.equal(kitUsage.readCount(u, "total", k), null, k);
+  assert.equal(kitUsage.readCount(null, "total"), null);
+  assert.equal(kitUsage.readCount(u, "missing", "deep", "path"), null);
+});
+
+test("kit tokensFrom: unreadable is NULL, cached is added only when the adapter passes cached keys", () => {
+  const keys = { input: ["in"], output: ["out"], total: ["tot"] };
+  assert.deepEqual(kitUsage.tokensFrom(null, keys), { prompt: null, session: null });
+  assert.deepEqual(kitUsage.tokensFrom({ renamed: 5 }, keys), { prompt: null, session: null });
+  assert.deepEqual(kitUsage.tokensFrom({ in: 10, out: 2, c: 4 }, keys), { prompt: 10, session: 12 });
+  assert.deepEqual(kitUsage.tokensFrom({ in: 10, out: 2, c: 4 }, { ...keys, cached: ["c"] }), { prompt: 14, session: 16 });
+  assert.deepEqual(kitUsage.tokensFrom({ in: 10, out: 2, tot: 99 }, keys), { prompt: 10, session: 99 }, "the vendor's total wins");
+});
+
+test("kit usage carry: a turn with no update carries the last total; none seen is NULL, not 0", () => {
+  const carry = kitUsage.makeUsageCarry();
+  assert.equal(carry.forTurn(null), null);
+  carry.observe(null);
+  carry.observe({ totalTokens: 7 });
+  assert.deepEqual(carry.forTurn(null), { totalTokens: 7 });
+  assert.deepEqual(carry.forTurn({ totalTokens: 9 }), { totalTokens: 9 });
 });

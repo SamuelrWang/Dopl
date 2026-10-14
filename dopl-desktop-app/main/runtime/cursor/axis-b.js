@@ -24,11 +24,10 @@
 
 const crypto = require('crypto');
 // ⚠ THE BRIDGE IS LAZY — A LOAD-ORDER CONTRACT: `session-gate-bridge.js` → `session-profiles.js` →
-// `main/runtime/index.js`; a top-level require closes the loop and hands the gate a half-initialised
-// module whose exports are `undefined` when it asks for a deny list.
-const bridge = () => require('../../session-gate-bridge');
+// `main/runtime/index.js`; a top-level require closes the loop. `../held-gate.js` holds that lazy
+// require now (runtime scaffold K7, 2026-10-13).
 const approval = require('./approval');
-const { settledVerdict } = require('../held-gate');
+const { makeHeldGate } = require('../held-gate');
 const { canonicalDoplName } = require('../../mcp-tool-names');
 
 // ── THE CLOSE LATCH ──────────────────────────────────────────────────────────────────────────
@@ -59,19 +58,11 @@ const isClosed = (s) => !!(s && typeof s === 'object' && CLOSED.has(s));
  * ⚠ NO DISPATCH => DENY: `decision.park` paints its card through the engine's dispatch; with none,
  * there is no surface to ask on.
  */
+// The shared held gate (`../held-gate.js › makeHeldGate`) with this adapter's two options: the close
+// latch and no-dispatch ⇒ deny. A settled allow carries the forced thread tag as `updatedInput`;
+// `execute()` applies it below.
 function makeGate(s, dispatch, log) {
-  return function gateCall(name, input, opts) {
-    if (isClosed(s)) {
-      return Promise.resolve({ behavior: 'deny', message: 'This session has ended.' });
-    }
-    const decision = bridge().gateCall(s, name, input, opts, dispatch, log);
-    // The allow carries the forced thread tag as `updatedInput`; `execute()` applies it below.
-    if (decision.settled) return Promise.resolve(settledVerdict(decision));
-    if (typeof dispatch !== 'function') {
-      return Promise.resolve({ behavior: 'deny', message: 'This session has no surface to ask on.' });
-    }
-    return new Promise((resolve) => decision.park(resolve));
-  };
+  return makeHeldGate(s, dispatch, log, { isClosed, denyWithoutDispatch: true });
 }
 
 // ── THE CALL ID ──────────────────────────────────────────────────────────────────────────────

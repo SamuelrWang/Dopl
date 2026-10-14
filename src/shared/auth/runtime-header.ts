@@ -126,16 +126,24 @@ export const CLAUDE_VENDOR = "claude";
 export const CODEX_VENDOR = "codex";
 /** Anysphere's Cursor agent. */
 export const CURSOR_VENDOR = "cursor";
+/** Meta's Muse Code (`dopl-desktop-app/main/runtime/muse/mcp.js › RUNTIME_HEADERS`). */
+export const MUSE_VENDOR = "muse";
+/** xAI's Grok Build CLI (`dopl-desktop-app/main/runtime/grok/mcp.js › RUNTIME_HEADERS`). */
+export const GROK_VENDOR = "grok";
 
 export type DoplVendor =
   | typeof CLAUDE_VENDOR
   | typeof CODEX_VENDOR
-  | typeof CURSOR_VENDOR;
+  | typeof CURSOR_VENDOR
+  | typeof MUSE_VENDOR
+  | typeof GROK_VENDOR;
 
 const RECOGNIZED_VENDORS: readonly string[] = [
   CLAUDE_VENDOR,
   CODEX_VENDOR,
   CURSOR_VENDOR,
+  MUSE_VENDOR,
+  GROK_VENDOR,
 ];
 
 /**

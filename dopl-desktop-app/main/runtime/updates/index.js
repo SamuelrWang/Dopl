@@ -116,7 +116,7 @@ function activeFor(source) {
   return active && newer(active.version, source.bundledVersion()) ? active : null;
 }
 
-// A resolver may hand back the canonical path (`codex/resolve-bin.js › inspectCandidate`).
+// A resolver may hand back the canonical path (`kit/bin-resolve.js › inspectCandidate`).
 function samePath(a, b) {
   try { return fs.realpathSync(a) === fs.realpathSync(b); } catch (_) { return a === b; }
 }
@@ -131,12 +131,11 @@ async function install(source, meta, version) {
   const s = diskStore();
   const staging = s.stage(source.id);
   try {
-    const tgz = path.join(staging, 'package.tgz');
-    await registry.download(meta, tgz, deps.fetchImpl);
-    // bsdtar refuses absolute and `..` member paths by default; npm packs everything under `package/`.
-    const untar = await deps.run(TAR, ['-xzf', tgz, '-C', staging]);
-    if (untar.code !== 0) throw new Error('the package did not unpack');
-    const root = path.join(staging, 'package');
+    const root = typeof source.fetchInto === 'function'
+      // A vendor publishing outside npm fetches its own artifact into `<staging>/package` (verified there
+      // against its manifest's digest and size) and answers that root.
+      ? await source.fetchInto(meta, staging, deps.fetchImpl)
+      : await npmPackage(meta, staging);
     const bin = source.binary(root);
     await verify.signatures(root, bin, source.teamId, deps.run);
     await verify.answersVersion(bin, deps.run);
@@ -146,6 +145,16 @@ async function install(source, meta, version) {
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/** The npm path: the tarball, sha512-checked, unpacked under `<staging>/package`. */
+async function npmPackage(meta, staging) {
+  const tgz = path.join(staging, 'package.tgz');
+  await registry.download(meta, tgz, deps.fetchImpl);
+  // bsdtar refuses absolute and `..` member paths by default; npm packs everything under `package/`.
+  const untar = await deps.run(TAR, ['-xzf', tgz, '-C', staging]);
+  if (untar.code !== 0) throw new Error('the package did not unpack');
+  return path.join(staging, 'package');
 }
 
 /** A candidate refused by the SHAPE gate. The verdict is a property of the build AND of what this Dopl
@@ -238,14 +247,22 @@ class SemanticUnrun extends Error {}
 // probe is real model turns on the operator's account). A newer version starts over.
 const MAX_SEMANTIC_ATTEMPTS = 3;
 
-/** One check for one runtime → the outcome word (also the diag line). Never rejects. */
-async function check(source) {
+/** One check for one runtime → the outcome word (also the diag line). Never rejects. `opts.install`: the
+ *  operator asked for this runtime, so an ON-DEMAND source (`source.onDemand`, nothing bundled) installs. */
+async function check(source, opts) {
   if (!source.pkg) return 'unsupported';
   // No way to read a candidate's protocol = no way to vouch for it: the bundle stays.
   if (typeof source.probeShape !== 'function' || !deps.requiredShape(source.id)) return 'unsupported';
+  // ⚠ AN ON-DEMAND RUNTIME IS NEVER FETCHED UNASKED: with nothing installed, the background sweep leaves it
+  // alone — only the operator's own request (`opts.install`) downloads it. Once installed it updates like any.
+  if (source.onDemand === true && !(opts && opts.install) && !activeFor(source) && !source.bundledVersion()) {
+    return 'not-installed';
+  }
   let version = null;
   try {
-    const meta = await registry.latest(source.pkg, source.tag, deps.fetchImpl);
+    const meta = typeof source.latest === 'function'
+      ? await source.latest(deps.fetchImpl)
+      : await registry.latest(source.pkg, source.tag, deps.fetchImpl);
     version = source.versionOf(meta.version);
     const s = diskStore();
     const record = s.read(source.id);
@@ -309,18 +326,22 @@ async function check(source) {
   }
 }
 
-/** Check now (the outdated-runtime error path); joins a check already running for this runtime. */
-function checkNow(runtimeId) {
+/** Check now (the outdated-runtime error path); joins a check already running for this runtime.
+ *  `opts.install` (an on-demand runtime the operator asked for) runs after any plain check in flight. */
+function checkNow(runtimeId, opts) {
   const source = sources.get(runtimeId);
   if (!source) return Promise.resolve('unsupported');
-  if (!inflight.has(runtimeId)) {
-    const run = pruning.then(() => check(source)).then((outcome) => {
+  const install = !!(opts && opts.install);
+  const key = install ? `${runtimeId}#install` : runtimeId;
+  if (!inflight.has(key)) {
+    const before = install && inflight.has(runtimeId) ? inflight.get(runtimeId) : Promise.resolve();
+    const run = pruning.then(() => before).then(() => check(source, { install })).then((outcome) => {
       outcomes.set(runtimeId, outcome);
       return outcome;
     });
-    inflight.set(runtimeId, run.finally(() => inflight.delete(runtimeId)));
+    inflight.set(key, run.finally(() => inflight.delete(key)));
   }
-  return inflight.get(runtimeId);
+  return inflight.get(key);
 }
 
 /** The last finished check's outcome word for this runtime, or null when none has finished. */

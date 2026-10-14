@@ -23,7 +23,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const normalize = require(join(CODEX, "normalize.js"));
-const client = require(join(CODEX, "client.js"));
+const stdioRpc = require(join(CODEX, "..", "kit", "stdio-rpc.js"));
 
 const CTX = { channelId: "chan-1", peerName: "Ada", peerId: "peer-1" };
 const types = (out) => out.map((e) => e.type);
@@ -287,7 +287,7 @@ test("the JSON-RPC line framing survives split chunks, and drops nothing it rece
   // and a single line can be large. Splitting on `\n` and parsing per line is what the protocol
   // specifies; a reader that assumed one chunk per frame would silently lose events under load.
   const seen = [];
-  const feed = client.makeLineReader((line) => seen.push(line));
+  const feed = stdioRpc.makeLineReader((line) => seen.push(line));
   feed('{"a":1}\n{"b":');
   assert.deepEqual(seen, ['{"a":1}'], "a half-line is buffered, never emitted");
   feed('2}\n\n  \n{"c":3}\n');

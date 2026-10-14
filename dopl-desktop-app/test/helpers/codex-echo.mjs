@@ -24,7 +24,7 @@ export function threadEcho(params) {
 
 /** What `config/read` answers for a child spawned with Dopl's `-c key=<toml>` argv: those values, as the
  *  real server reports its `sessionFlags` layer (measured 0.155.1). Parses only the TOML subset
- *  `proc-config.js › toml` writes. */
+ *  `launch-verify.js › toml` writes. */
 export function configEcho(args) {
   const config = {};
   const a = Array.isArray(args) ? args : [];

@@ -3,7 +3,7 @@
 // (`model-catalog.js`) is the one cache, persisted per build key (`roster-key.js`), and a read that fails
 // is a rejection the catalog renders (`stale` over held models, else `unavailable`). A model id typed into
 // this build could only go stale; with no pick the CLI runs its OWN default (no `--model` is sent).
-// Electron-free at load: the loader and the credential probe are reached lazily (`defaultDeps`),
+// Electron-free at load: the client and the credential probe are reached lazily (`defaultDeps`),
 // because `session-profiles.js` reaches this adapter through the registry and is evaluated standalone.
 
 const roster = require('./roster');
@@ -18,20 +18,13 @@ const PICK_RE = new RegExp(PICK_PATTERN);
 // Injectable for the suite.
 function defaultDeps() {
   return {
-    loadSdk: () => require('./loader').getSdk(),
-    bin: () => require('./loader').resolveClaudeExecutable(),
-    env: () => require('./credential').withCredential(require('./loader').buildScrubbedEnv()),
+    loadSdk: () => require('./client').getSdk(),
+    bin: () => require('./resolve-bin').resolveClaudeExecutable(),
+    env: () => require('./credential').withCredential(require('./client').buildScrubbedEnv()),
     credentialSource: () => {
       try { return String(require('./credential').credentialState().source || 'none'); } catch (_) { return 'none'; }
     },
-    // Whose roster this is (cross-review M2): a one-way per-sign-in fingerprint, never the token or its source.
-    account: () => require('./credential').accountFingerprint(),
-    // The ACTIVE binary's version (a verified download or the bundle), so a switch moves the key.
-    sdkVersion: () => {
-      try { return String((require('./loader').claudeRuntime() || {}).version || '?'); } catch (_) { return '?'; }
-    },
     probe: roster.probe,
-    observeShape: roster.observeShape,
     // The catalog's models now (the one cache), for SYNCHRONOUS launch resolution. Lazy: the registry
     // requires this module. Never throws; [] before any read.
     catalogModels: () => {
@@ -49,22 +42,10 @@ function defaultDeps() {
 }
 let deps = defaultDeps();
 
-/** The build new launches run, for core's key (`roster-key.js`): binary, SDK version, credential source. */
-function buildIdentity() {
-  let bin = null;
-  try { bin = deps.bin() || null; } catch (_) { bin = null; }
-  let version = null;
-  try { version = deps.sdkVersion() || null; } catch (_) { version = null; }
-  // ⚠ NOT `credentialSource()` (a word like "dopl-token", the same for every account): with no fingerprint the
-  // persisted roster is a labels-only stand-in (`model-catalog.js › persistedCatalog`).
-  let account = null;
-  try { account = deps.account() || null; } catch (_) { account = null; }
-  return { path: bin, version, account };
-}
-
 // A downloaded build's first handshake may wait out macOS's first-exec scan, so a failed probe on one is
-// retried once with this budget before the build is rejected.
-const DOWNLOAD_RETRY_TIMEOUT_MS = 60000;
+// retried once with this budget before the build is rejected — the kit's one number
+// (`../kit/probe-bin.js`, shared since 2026-10-13; this adapter's probe is a roster read, not `--version`).
+const { DOWNLOAD_RETRY_TIMEOUT_MS } = require('../kit/probe-bin');
 
 /** `{ rows, moved }` from the binary new launches run. A download that fails twice is rejected and the rows
  *  come from what launches run after that (the last good build or the bundle), `moved` — never "no runtime". */
@@ -146,16 +127,6 @@ function launchArg(value) {
   return PICK_RE.test(v) ? v : resolveLaunchModel('').arg;
 }
 
-/** The pairing new launches run (bundled SDK + the ACTIVE CLI), as it describes itself — turn-free
- *  (`roster.js › observeShape`). `runtime.shape()`; checked against `descriptor.requiredShape`. */
-async function shape() {
-  const sdk = await deps.loadSdk();
-  const options = { env: deps.env() };
-  const bin = deps.bin();
-  if (bin) options.pathToClaudeCodeExecutable = bin;
-  return deps.observeShape({ sdk, options });
-}
-
 /** `inject` swaps the dependencies (tests); there is no cache to drop. */
 function inject(overrides) { deps = Object.assign(defaultDeps(), overrides || {}); }
 
@@ -179,6 +150,6 @@ const descriptor = {
 function catalogModels() { return deps.catalogModels(); }
 
 module.exports = {
-  models, shape, buildIdentity, resolveLaunchModel, launchArg, catalogModels, inject,
+  models, resolveLaunchModel, launchArg, catalogModels, inject,
   descriptor, PICK_PATTERN, DOWNLOAD_RETRY_TIMEOUT_MS,
 };

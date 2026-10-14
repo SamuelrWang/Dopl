@@ -38,7 +38,7 @@ test("codex: the descriptor's requiredShape IS required-shape.js, and the runtim
 });
 
 test("codex: replies to server requests come from the build's OWN response schema", () => {
-  // Measured from the 0.155.1 schema bundle (the shapes `server-requests.js` hand-writes today).
+  // Measured from the 0.155.1 schema bundle (the shapes `approval.js` hand-writes today).
   const enumReply = (key, values) => ({ schema: { type: "object", required: [key], properties: { [key]: { enum: values } } }, defs: {} });
   assert.deepEqual(shape.replyFromSchema(enumReply("decision", ["accept", "acceptForSession", "decline", "cancel"]), "accept"), { decision: "accept" });
   assert.deepEqual(shape.replyFromSchema(enumReply("action", ["accept", "decline", "cancel"]), "decline"), { action: "decline" });

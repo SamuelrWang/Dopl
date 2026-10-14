@@ -62,7 +62,7 @@ describe("a desktop with NO runtime key renders no runtime row at all", () => {
 describe("the runtime picker", () => {
   it("offers Default plus every registered adapter, by the PLATFORM's own label", () => {
     withRuntime("");
-    expect(openMenu(screen.getByLabelText(RUNTIME_ROW))).toEqual(["Default", "Claude Code", "Codex", "Cursor"]);
+    expect(openMenu(screen.getByLabelText(RUNTIME_ROW))).toEqual(["Default", "Claude Code", "Codex", "Cursor", "Muse", "Grok"]);
   });
 
   it("writes the pick on the `runtime` key alone", () => {
@@ -105,12 +105,14 @@ describe("Details: each runtime's own reading of its level, from main", () => {
     expect(screen.queryByLabelText("Permissions by runtime")).toBeNull();
   });
 
-  it("Full names bypass, never/danger-full-access and run-everything, each in its own words", () => {
+  it("Full names bypass, never/danger-full-access, run-everything, allowAll and approve-all, each in its own words", () => {
     withRuntime("", { level: "full" });
     expect(details()).toEqual([
       "Claude Code · Bypassbypass",
       "Codex · Full accessnever/danger-full-access",
       "Cursor · Run Everythingrun-everything",
+      "Muse · Allow allallowAll",
+      "Grok · Approve allapprove-all",
     ]);
   });
 

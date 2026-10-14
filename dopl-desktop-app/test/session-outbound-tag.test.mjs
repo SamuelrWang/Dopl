@@ -265,7 +265,7 @@ test("the decision is made BEFORE the tag can influence anything", () => {
 
 test("a conflicting thread id is logged, and the log is injected (session-io stays electron-free)", () => {
   const fn = fnOf(BRIDGE, "gateCall");
-  assert.match(fnOf(M("runtime/held-gate.js"), "makeHeldGate"), /function makeHeldGate\(s, dispatch, log\)/);
+  assert.match(fnOf(M("runtime/held-gate.js"), "makeHeldGate"), /function makeHeldGate\(s, dispatch, log, options\)/);
   assert.match(AXIS_B, /const makeCanUseTool = require\('\.\.\/held-gate'\)\.makeHeldGate;/);
   assert.match(fn, /tag\.action === 'conflict' && typeof log === 'function'/, "guarded, never assumed");
   assert.ok(!/require\('\.\/diag'\)/.test(IO), "diag requires electron; this file must not");

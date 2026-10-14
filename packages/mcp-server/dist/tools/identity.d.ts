@@ -26,6 +26,10 @@ export declare const DESKTOP_SESSION_RUNTIME = "desktop-session";
  */
 export declare const CLAUDE_VENDOR = "claude";
 export declare const CODEX_VENDOR = "codex";
+/** Muse defers nothing behind a named search verb Dopl has measured, so it gets the neutral wording. */
+export declare const MUSE_VENDOR = "muse";
+/** Grok defers MCP tools behind `search_tool` (measured, grok 1.0.52) and calls them through `use_tool`. */
+export declare const GROK_VENDOR = "grok";
 /** The loader a deferred tool is fetched with, in the caller's own client; unknown vendor → neutral. */
 export declare function toolLoaderFor(vendor: string | null | undefined): string;
 /** How the presented credential was obtained. Mirrors `McpCredential.kind`. */

@@ -3,7 +3,7 @@
 // ⚠ THE MODEL IS A SCRIPTED STAND-IN; EVERYTHING ELSE IS REAL (the `codex-parity-fences-live`
 // technique): a stub Responses provider FORCES each call, so what is measured is the app-server's
 // own tool registry, goal loop, memory pipeline, hook engine and `notify`, fed the thread config
-// Dopl's REAL assembly builds (`launch-spec.js › buildLaunchSpec` + `catalog.js`) — at zero quota.
+// Dopl's REAL assembly builds (`launch-spec.js › buildLaunchSpec` + `delegation-fence.js`) — at zero quota.
 // Every fence is proven BOTH ways: the control (Dopl's spec minus that one key) shows the surface
 // live, and Dopl's spec shows it gone. Unit pins: `codex-launch-fences.test.mjs`.
 //
@@ -29,9 +29,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const CODEX = join(HERE, '..', 'main', 'runtime', 'codex');
 const mcp = require(join(CODEX, 'mcp.js'));
-const catalog = require(join(CODEX, 'catalog.js'));
+const catalog = require(join(CODEX, 'delegation-fence.js'));
 const configHome = require(join(CODEX, 'config-home.js'));
-const serverRequests = require(join(CODEX, 'server-requests.js'));
+const serverRequests = require(join(CODEX, 'approval.js'));
 const resolveBin = require(join(CODEX, 'resolve-bin.js'));
 
 const GATE = announceGate(liveGate());

@@ -80,7 +80,7 @@ function strictInput<S extends ZodRawShape>(shape: S, tool: string): z.ZodObject
  * The registration config every path publishes. `title` is the tool's own name because Codex copies a
  * tool's `title` into its approval request as `_meta.tool_title`, the only per-tool identity that
  * request carries — the desktop names the call by it (`dopl-desktop-app/main/runtime/codex/
- * server-requests.js › doplElicitation`). Pinned in `tool-title.test.ts` and `granular.test.ts`.
+ * approval.js › doplElicitation`). Pinned in `tool-title.test.ts` and `granular.test.ts`.
  */
 function toolConfig(name: string, description: string, inputSchema: z.ZodObject) {
   return { title: name, description, inputSchema };

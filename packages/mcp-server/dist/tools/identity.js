@@ -15,7 +15,7 @@
  * one that knows it cannot tell.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
+exports.LOCUS_NOTE = exports.UNKNOWN_CALLER = exports.GROK_VENDOR = exports.MUSE_VENDOR = exports.CODEX_VENDOR = exports.CLAUDE_VENDOR = exports.DESKTOP_SESSION_RUNTIME = void 0;
 exports.toolLoaderFor = toolLoaderFor;
 exports.isDesktopRuntime = isDesktopRuntime;
 exports.isDesktopRun = isDesktopRun;
@@ -37,12 +37,20 @@ exports.DESKTOP_SESSION_RUNTIME = "desktop-session";
  */
 exports.CLAUDE_VENDOR = "claude";
 exports.CODEX_VENDOR = "codex";
+/** Muse defers nothing behind a named search verb Dopl has measured, so it gets the neutral wording. */
+exports.MUSE_VENDOR = "muse";
+/** Grok defers MCP tools behind `search_tool` (measured, grok 1.0.52) and calls them through `use_tool`. */
+exports.GROK_VENDOR = "grok";
 /** The loader a deferred tool is fetched with, in the caller's own client; unknown vendor → neutral. */
 function toolLoaderFor(vendor) {
     if (vendor === exports.CLAUDE_VENDOR)
         return "ToolSearch";
     if (vendor === exports.CODEX_VENDOR)
         return "tool_search";
+    if (vendor === exports.MUSE_VENDOR)
+        return "your client's tool search";
+    if (vendor === exports.GROK_VENDOR)
+        return "search_tool";
     return "your client's tool search";
 }
 /** No identity at all — the shape every test-constructed server gets by default. */

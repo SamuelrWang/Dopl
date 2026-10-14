@@ -101,7 +101,7 @@ const THREAD_TAG = [
   `there as a brand new request and starts a second agent run against your own reply.`,
 ];
 
-// A belt over the claude.ai account-connector MCP lane (F-268): `runtime/claude/loader.js › buildScrubbedEnv`
+// A belt over the claude.ai account-connector MCP lane (F-268): `runtime/claude/client.js › buildScrubbedEnv`
 // suppresses it at the process boundary; this holds if that ever fails. Not containment — connector
 // tools are unclassified, so the gate holds them.
 const LANE_EXCLUSIVITY = [

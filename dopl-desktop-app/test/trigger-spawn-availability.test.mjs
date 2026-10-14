@@ -7,7 +7,7 @@
 // and `claudeAvailable` answers ONE question: is there an EXTERNAL `claude` on
 // PATH (`claude-resolve.resolveClaude` = `probeStaticPath()` || `probeLoginShell()`).
 // The binary a SESSION runs is not that one — it ships INSIDE the app bundle
-// (`sdk-loader.resolveClaudeExecutable`, asar-unpacked and signed), which is what
+// (`runtime/claude/resolve-bin.js › resolveClaudeExecutable`, asar-unpacked and signed), which is what
 // `session-auth-detect.js` already says in its header.
 //
 // So on any machine whose owner never separately installed the Claude Code CLI —

@@ -126,14 +126,8 @@ test("requiredShapeProblems: a declaration needs tiers only, something in them, 
   );
 });
 
-test("readCount: absent, non-number, negative and NaN are NULL — never 0", () => {
-  const u = { total: { input: 5, zero: 0, neg: -1, nan: NaN, str: "7" } };
-  assert.equal(sdkShape.readCount(u, "total", "input"), 5);
-  assert.equal(sdkShape.readCount(u, "total", "zero"), 0, "a reported zero is a zero");
-  for (const k of ["neg", "nan", "str", "renamed"]) assert.equal(sdkShape.readCount(u, "total", k), null, k);
-  assert.equal(sdkShape.readCount(null, "total"), null);
-  assert.equal(sdkShape.readCount(u, "missing", "deep", "path"), null);
-});
+
+// readCount moved to kit/usage.js (runtime scaffold K4); its case is in runtime-meter-truth.test.mjs.
 
 // ── settleShape / launchShapeRefusal ────────────────────────────────────────────────────────
 

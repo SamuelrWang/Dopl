@@ -341,7 +341,7 @@ test("the engine injects its OWN denyPending + teardown (the hold assembles no q
   // The assembly is the runtime adapter's (`runtime/claude/launch-spec.js`): Dopl's token rides the
   // SAME scrubbed base every spawn uses.
   assert.match(readFileSync(M("runtime/claude/launch-spec.js"), "utf8"),
-    /env: credential\.withCredential\(loader\.buildScrubbedEnv\(\)\)/,
+    /env: credential\.withCredential\(client\.buildScrubbedEnv\(\)\)/,
     "and Dopl's token reaches the spawn env through the SAME scrubbed base");
 });
 

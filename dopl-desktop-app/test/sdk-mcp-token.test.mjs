@@ -37,12 +37,18 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { between, codeOf, fnOf } from "./helpers/source-probe.mjs";
+import { createRequire } from "node:module";
+import { codeOf, fnOf } from "./helpers/source-probe.mjs";
 import { deviceTokenWorld, freshRecord, MCP_URL as CURRENT_MCP_URL, SPAWN_JSON } from "./_device-token-harness.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 const M = (p) => join(HERE, "..", "main", p);
-const LOADER = readFileSync(M(join("runtime", "claude", "loader.js")), "utf8");
+const LOADER = readFileSync(M(join("runtime", "claude", "client.js")), "utf8");
+// The session's MCP entry (`buildMcpServers`, `clientTimeoutMs`) moved to the adapter's `mcp.js` (2026-10-13).
+const MCP = readFileSync(M(join("runtime", "claude", "mcp.js")), "utf8");
+// The bearer + timeout READS are the adapter kit's since 2026-10-13 (runtime scaffold K6).
+const KIT = readFileSync(M(join("runtime", "kit", "dopl-mcp.js")), "utf8");
 const CONFIG = readFileSync(M("mcp-config.js"), "utf8");
 const LIFECYCLE = readFileSync(M("mcp-device-token-lifecycle.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
@@ -60,7 +66,7 @@ const slice = (src, from, to, what) => {
 
 // ── C1: buildMcpServers takes the bearer from the injected accessor, never a file ──
 
-const MCP_BLOCK = codeOf(fnOf(LOADER, "buildMcpServers"));
+const MCP_BLOCK = codeOf(fnOf(MCP, "buildMcpServers"));
 const MCP_URL = "https://dopl.test/api/mcp";
 
 function buildServers(token, policy = null, workspaceId = "") {
@@ -79,9 +85,9 @@ test("C1: the bearer is the safeStorage-held token, injected in memory", () => {
 test("C1: buildMcpServers reads NO file at all — the whole loader is fs-free", () => {
   // The strongest available pin: sdk-loader no longer requires fs, so there is no
   // readFileSync for a spawn to reach, whatever the slice happens to contain today.
-  assert.ok(!/require\('fs'\)/.test(LOADER), "sdk-loader must not require fs");
+  assert.ok(!/require\('fs'\)/.test(LOADER + MCP), "sdk-loader and the MCP module must not require fs");
   assert.ok(!/mcp-spawn\.json/.test(MCP_BLOCK), "no spawn-config path in the builder");
-  assert.ok(!/readFileSync/.test(LOADER), "no file read on the session path");
+  assert.ok(!/readFileSync/.test(LOADER + MCP), "no file read on the session path");
   // 🔒 THE CONTAINER LOCK (2026-08-26, plan §4.4 B1) widened this line: a session spawned into a
   // SHARED link container presents a CHILD credential locked to that workspace, and every other
   // session falls back to the device token exactly as before. What this assertion still pins is
@@ -103,15 +109,10 @@ test("C2: the url is ALWAYS the compiled-in MCP_URL — nothing off disk can ste
 
 // ── C1: the tool-BOUND credential deny (a pre-approved read never reaches the gate) ──
 
-const DENY_BLOCK = between(LOADER, "const SECRET_TOOLS =", "function buildSecretPathDenyRules(", "deny rules") +
-  fnOf(LOADER, "buildSecretPathDenyRules");
-
-function denyRules(userData) {
-  return new Function(
-    "app",
-    `${DENY_BLOCK}\n return buildSecretPathDenyRules();`
-  )({ getPath: () => userData });
-}
+// 2026-10-13 (scaffold Phase 1.5): the rules are `claude/tools.js › buildSecretPathDenyRules`, electron-free —
+// userData is passed in by the launch spec (`launch-spec.js › userDataDir`), so the REAL table runs here.
+const CLAUDE_TOOLS = require(M(join("runtime", "claude", "tools.js")));
+const denyRules = (userData) => CLAUDE_TOOLS.buildSecretPathDenyRules(userData);
 
 test("C1: Read/Grep/Glob are denied over userData and ~/.claude* on every profile", () => {
   const rules = denyRules("/Users/sam/Library/Application Support/Dopl");
@@ -127,9 +128,9 @@ test("C1: Read/Grep/Glob are denied over userData and ~/.claude* on every profil
 });
 
 test("C1: an unavailable userData path still leaves the home rules in force (fail useful)", () => {
-  const rules = new Function("app", `${DENY_BLOCK}\n return buildSecretPathDenyRules();`)({
-    getPath: () => { throw new Error("no app"); },
-  });
+  // No app (a harness): the launch spec's `userDataDir` answers '' and only the home rules remain.
+  assert.match(fnOf(SPEC, "userDataDir"), /catch \(_\) \{ return ''; \}/, "an unreadable userData answers ''");
+  const rules = denyRules("");
   assert.deepEqual(rules.filter((r) => r.startsWith("Read")), ["Read(~/.claude*)", "Read(~/.claude/**)"]);
 });
 
@@ -139,7 +140,7 @@ test("C1: the launch spec really concatenates them onto the profile's hard-deny"
   // reason it is pinned: a pre-approved read is SHADOWED past the gate, so only this tool-bound
   // layer can fence the credential directories.
   const opts = slice(SPEC, "function buildOptions(s, dispatch) {", "function buildLaunchSpec(", "buildOptions");
-  assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(loader\.buildSecretPathDenyRules\(\)\),/);
+  assert.match(opts, /disallowedTools: cfg\.disallowedTools\.concat\(tools\.buildSecretPathDenyRules\(userDataDir\(\)\)\),/);
   // ...and that every profile therefore gets them: it is the ONE assembly path
   // (session-park resumes and recreated shells call deps.buildLaunchSpec).
   assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, acquireRuntime, buildLaunchSpec/);
@@ -257,17 +258,19 @@ test("L8: mcp-config OWNS the number and the loader's entry is the only one that
   // (280_000 vs a moved server cap). There is now only ONE entry — the spawn-config file that
   // was the second one is deleted — so the rule is simply: the constant lives here, is exported,
   // and no numeric literal reappears downstream.
-  // ⚠ 2026-08-31: the loader is `main/runtime/claude/loader.js` and reaches the owner through
-  // `../../`. The rule is unchanged; only the depth is.
+  // ⚠ 2026-08-31: the loader is `main/runtime/claude/client.js` and reaches the owner through
+  // `../../`; 2026-10-13 the entry moved to `main/runtime/claude/mcp.js`. The rule is unchanged.
   assert.equal(typeof SHIPPED_TIMEOUT_MS, "number", "it is exported for the loader");
-  assert.match(codeOf(LOADER), /timeout: clientTimeoutMs\(\),/, "the loader reads it, never a literal");
+  assert.match(codeOf(MCP), /timeout: clientTimeoutMs\(\),/, "the entry reads it, never a literal");
+  assert.match(codeOf(MCP), /const clientTimeoutMs = \(\) => doplMcp\.clientTimeoutMs\(\);/,
+    "…through the kit, with no fallback on this adapter");
   assert.match(
-    fnOf(LOADER, "clientTimeoutMs"),
+    fnOf(KIT, "clientTimeoutMs"),
     /require\('\.\.\/\.\.\/mcp-config'\)\.MCP_CLIENT_TIMEOUT_MS/,
     "…from mcp-config, the one owner"
   );
   assert.ok(
-    !/timeout: \d[\d_]*,/.test(codeOf(LOADER)),
+    !/timeout: \d[\d_]*,/.test(codeOf(LOADER) + codeOf(MCP)),
     "no numeric timeout literal may reappear in sdk-loader"
   );
   assert.ok(SHIPPED_TIMEOUT_MS > 60_000, "or the client's own 60s floor wins and the key is inert");
@@ -334,5 +337,5 @@ test("C1: the token is never written to disk in plaintext — by ANY path in thi
   // the only persistence left is the safeStorage-encrypted electron-store, and the only other
   // place the bearer is spelled is an execFile argv (mcp-cli-add.js), which is not a file.
   assert.equal(typeof deviceTokenWorld().config.deviceTokenForSpawn, "function", "the accessor exists");
-  assert.ok(!/spawnToken/.test(LOADER), "sdk-loader keeps no copy of its own");
+  assert.ok(!/spawnToken/.test(LOADER + MCP), "sdk-loader keeps no copy of its own");
 });

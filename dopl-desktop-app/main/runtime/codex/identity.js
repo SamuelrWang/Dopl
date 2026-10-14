@@ -23,7 +23,7 @@ function normalize(text) {
   return v ? v.join('.') : null;
 }
 
-/** Record what a file answered to `--version` (`client.js › probeAt`). */
+/** Record what a file answered to `--version` (`../kit/probe-bin.js › makeProber › probeAt`, via `client.js › probe`). */
 function noteVersion(file, versionText) {
   const v = normalize(versionText);
   const stamp = stampOf(file);

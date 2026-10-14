@@ -76,7 +76,7 @@ test("the SESSION stamp's literal matches the server's too, on the one spawn pat
   // server still recognizes that string.
   const serverSession = /export const DESKTOP_SESSION_RUNTIME = "([^"]+)";/.exec(SHARED);
   assert.ok(serverSession, "the server's constant moved — this join needs re-pinning");
-  for (const file of ["runtime/claude/loader.js"]) {
+  for (const file of ["runtime/claude/mcp.js"]) {
     const src = M(file);
     const hit = /'X-Dopl-Runtime': '([^']+)',/.exec(src);
     assert.ok(hit, `${file} no longer sends the runtime header at all`);
@@ -96,7 +96,7 @@ test("the VENDOR stamp is a SECOND header, and its literal matches the server's"
   const serverClaude = /export const CLAUDE_VENDOR = "([^"]+)";/.exec(SHARED);
   assert.ok(serverVendorHeader && serverClaude,
     "the server's vendor constants moved — this join needs re-pinning");
-  const src = M("runtime/claude/loader.js");
+  const src = M("runtime/claude/mcp.js");
   const hit = /'X-Dopl-Vendor': '([^']+)',/.exec(src);
   assert.ok(hit, "sdk-loader.js no longer sends the vendor header at all");
   assert.equal(hit[1], serverClaude[1],
@@ -105,12 +105,23 @@ test("the VENDOR stamp is a SECOND header, and its literal matches the server's"
     "main sends a vendor header name the server does not read");
 });
 
+test("every adapter's VENDOR word is one the server recognizes (no shared module; this is the join)", () => {
+  const recognized = /const RECOGNIZED_VENDORS: readonly string\[\] = \[([\s\S]*?)\];/.exec(SHARED);
+  assert.ok(recognized, "the server's recognized-vendor list moved — re-pin this");
+  const words = new Set(Array.from(SHARED.matchAll(/export const ([A-Z]+_VENDOR) = "([^"]+)";/g)).map((m) => m[2]));
+  for (const id of ["claude", "codex", "cursor", "muse", "grok"]) {
+    const hit = /'X-Dopl-Vendor': '([^']+)'/.exec(M(`runtime/${id}/mcp.js`));
+    assert.ok(hit, `${id}/mcp.js sends no vendor header`);
+    assert.ok(words.has(hit[1]), `${id} sends vendor "${hit[1]}", which runtime-header.ts does not declare`);
+  }
+});
+
 test("...and the CUSTODY enum did NOT grow a vendor word", () => {
   // The whole reason step 1 is a second dimension rather than three more enum members. Asserted
   // on BOTH sides of the join: the server's recognized set, and the membership test in main.
   const serverRuntimes = /const RECOGNIZED: readonly string\[\] = \[([\s\S]*?)\];/.exec(SHARED);
   assert.ok(serverRuntimes, "the server's recognized-runtime list moved — re-pin this");
-  for (const vendor of ["claude", "codex", "cursor"]) {
+  for (const vendor of ["claude", "codex", "cursor", "muse", "grok"]) {
     assert.ok(!serverRuntimes[1].includes(vendor),
       `'${vendor}' is a VENDOR and must never be a recognized RUNTIME value`);
   }

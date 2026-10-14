@@ -25,6 +25,7 @@ const require = createRequire(import.meta.url);
 const CODEX = join(HERE, "..", "main", "runtime", "codex");
 const client = require(join(CODEX, "client.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
+const frameQueue = require(join(CODEX, "..", "kit", "frame-queue.js"));
 
 // The LIVE case uses the shared gates: `CODEX_APP_SERVER_LIVE=1` for the app-server, plus
 // `CODEX_LIVE_TURN=1` because it spends a real model turn. Both skip loudly.
@@ -46,12 +47,12 @@ async function* prompts() {
 }
 
 test("an intentional close stays clean, while an unexpected app-server exit fails the stream", async () => {
-  const clean = launchSpec.makeFrameQueue();
+  const clean = frameQueue.makeFrameQueue();
   clean.close();
   clean.fail(new Error("late child exit"));
   assert.deepEqual(await clean.next(), { value: undefined, done: true });
 
-  const crashed = launchSpec.makeFrameQueue();
+  const crashed = frameQueue.makeFrameQueue();
   crashed.fail(new Error("unexpected child exit"));
   await assert.rejects(crashed.next(), /unexpected child exit/);
 });
@@ -101,7 +102,7 @@ test("start drives the measured v2 thread/turn state machine", async () => {
       model: "gpt-6-astra",
     });
 
-    // 🔒 THE DELEGATION FENCE RIDES ARGV ON EVERY START (`catalog.js`), pointing into the private home.
+    // 🔒 THE DELEGATION FENCE RIDES ARGV ON EVERY START (`delegation-fence.js`), pointing into the private home.
     const at = hooks.args.indexOf("-c");
     assert.ok(at !== -1 && /^model_catalog_json=".*dopl-model-catalog\.json"$/.test(hooks.args[at + 1]), JSON.stringify(hooks.args));
     assert.ok(hooks.args[at + 1].includes(hooks.env.CODEX_HOME), "the catalog lives in the isolated CODEX_HOME");

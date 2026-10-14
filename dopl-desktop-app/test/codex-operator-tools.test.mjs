@@ -21,7 +21,7 @@ require.cache[listener] = { id: listener, filename: listener, loaded: true, chil
   exports: { watchedChannel: (id) => (id ? { id, memberCount: room.memberCount } : null) } };
 
 const ops = require(join(CODEX, "operator-tools.js"));
-const requests = require(join(CODEX, "server-requests.js"));
+const requests = require(join(CODEX, "approval.js"));
 const launchSpec = require(join(CODEX, "launch-spec.js"));
 
 const STDIO = { name: "node_repl", enabled: true, startup_timeout_sec: 120, tool_timeout_sec: null,

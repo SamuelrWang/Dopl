@@ -38,6 +38,8 @@ const APPLIED_TOOL_MODES = [
   'manual', 'accept_edits', 'auto', 'bypass', // claude
   'untrusted', 'granular', 'on-request', 'never', // codex
   'allowlist', 'auto-review', 'run-everything', // cursor
+  'promptUnmatched', 'onRequest', 'allowAll', // muse
+  'default', 'autoMode', 'approve-all', // grok
 ];
 // Axis A as ASKED: a permission level (`runtime/permission-level.js › LEVELS`; `auto` is also a
 // Claude word) or a runtime's own word. Mirrors `schema-launch-modes.ts › LAUNCH_TOOL_MODES` and

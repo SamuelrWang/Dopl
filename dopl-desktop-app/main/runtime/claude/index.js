@@ -1,19 +1,21 @@
 // THE CLAUDE ADAPTER — the descriptor (pure data) and the runtime (the behaviour).
 //
 // Electron-free at load: `session-profiles.js` asks this registry for every gate decision and is
-// evaluated standalone, so `loader.js` (electron) is lazy, and so are `launch-spec.js` /
+// evaluated standalone, so `client.js` (the SDK import) is lazy, and so are `launch-spec.js` /
 // `normalize.js` (`normalize → session-io → session-profiles` would close a require cycle).
 
 const tools = require('./tools');
 const axisB = require('./axis-b');
 const approval = require('./approval');
 const models = require('./models');
+const identity = require('./identity');
 const mcp = require('./mcp');
 const credential = require('./credential');
 const { packaging } = require('./packaging');
+const requiredShape = require('./required-shape');
 const { profileEntryFrom } = require('../contract');
 
-const platform = () => require('./loader');
+const platform = () => require('./client');
 const launchSpec = () => require('./launch-spec');
 const normalizer = () => require('./normalize');
 
@@ -51,7 +53,7 @@ const descriptor = {
     // The operator's Ask / Auto / Full in this runtime's words (`permission-level.js`).
     levels: { ask: { tools: 'manual' }, auto: { tools: 'auto' }, full: { tools: 'bypass' } },
     // The mode an unattended session floors to (a windowless session has no gate surface).
-    windowlessFloor: 'auto',
+    windowlessFloor: tools.WINDOWLESS_FLOOR,
     // null, not {}: no second containment axis, so the UI renders nothing there.
     secondaryAxis: null,
     freeform: null,
@@ -80,23 +82,8 @@ const descriptor = {
 
   models: models.descriptor,
 
-  // ⚠ ONLY WHAT DOPL READS from the pairing (bundled SDK JS + the active CLI), tiered by what a gap costs
-  // (`sdk-shape.js`), and observable turn-free (`roster.js › observeShape`). Per-message fields (init's
-  // permission mode and tools) are checked on every launch instead (`launch-contract.js`).
-  // ⚠ NO `safety` TIER HERE (cross-review LOW, 2026-10-08): `query`/`interrupt` are the BUNDLED SDK's own
-  // exports and methods, so on a CLI update they could never be missing (a tautology); they are `core`.
-  // The CLI's safety is checked where it can fail: every launch's init (`launch-contract.js`) and every
-  // candidate build's live semantics (`semantics.js`).
-  requiredShape: {
-    // No `query` = nothing runs; no `interrupt` = Stop cannot stop an agent; the roster and a live switch.
-    core: {
-      exports: ['query'],
-      methods: ['interrupt', 'supportedModels', 'setModel'],
-      results: { supportedModels: ['value', 'displayName'] },
-    },
-    // Labels and the in-process agent-ops server (`axis-b.js` mounts nothing without them).
-    cosmetic: { exports: ['createSdkMcpServer', 'tool'], results: { supportedModels: ['resolvedModel'] } },
-  },
+  // What Dopl reads from the pairing, tiered (`required-shape.js`); checked against `shape.js`.
+  requiredShape,
   mcp: mcp.descriptor,
   credential: credential.descriptor,
 
@@ -136,8 +123,10 @@ const runtime = {
   axisAAllows(mode, toolName) { return tools.toolModeAllows(mode, toolName); },
 
   models() { return models.models(); },
-  buildIdentity() { return models.buildIdentity(); },
-  shape() { return models.shape(); },
+  // The binary new launches run + its version + the account (`identity.js`) → core's build key.
+  buildIdentity() { return identity.buildIdentity(); },
+  // The pairing describes itself (`shape.js`, turn-free).
+  shape() { return require('./shape').describe(); },
   modelArg(value) { return models.resolveLaunchModel(value); },
   registerMcp(cfg) { return mcp.registerMcp(cfg); },
   probeMcp() { return mcp.probeMcp(); },
