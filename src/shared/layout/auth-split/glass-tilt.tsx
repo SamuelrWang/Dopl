@@ -62,6 +62,8 @@ export function useGlassTilt(refs: GlassTiltRefs, enabled: boolean): void {
 export function usePrefersReducedMotion(): boolean {
   const [still, setStill] = useState(false);
   useEffect(() => {
+    // No matchMedia (jsdom): motion on, like a default browser.
+    if (typeof window.matchMedia !== "function") return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => setStill(mq.matches);
     sync();

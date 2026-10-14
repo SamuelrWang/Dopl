@@ -61,6 +61,9 @@ export type CastShadow = (shadow: HTMLElement, rx: number, ry: number, mag: numb
 function useTiltCapable(): boolean {
   const [ok, setOk] = useState(false);
   useEffect(() => {
+    // No matchMedia (jsdom, very old engines): no tilt, rather than a throw
+    // that takes the whole surface down with it.
+    if (typeof window.matchMedia !== "function") return;
     const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => setOk(fine.matches && !calm.matches);
