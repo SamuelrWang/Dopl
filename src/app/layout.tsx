@@ -1,44 +1,86 @@
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk, Geist_Mono, Space_Grotesk, JetBrains_Mono, Newsreader, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { QueryProvider } from "@/shared/api/query-provider";
 import { LayoutShell } from "@/shared/layout/layout-shell";
 import { ToastHost } from "@/shared/ui/toast";
 
-const geistSans = Hanken_Grotesk({
+/*
+ * Self-hosted, never fetched at build time. These were `next/font/google`, and Turbopack 16.2.x
+ * fails the build whenever Google answers a family's CSS with a `fonts.gstatic.com/l/font?kit=…&skey=…`
+ * URL: the `&` survives into the internal font-file request and splits its one-entry query
+ * ("next/font/google queries have exactly one entry"). Google's answer varies by request, so the
+ * build failed intermittently on Vercel and never locally. Files + licenses: `./fonts/README.md`.
+ *
+ * Each family is Google's LATIN subset of its variable font — the one file Google served for every
+ * weight below — declared once per weight/style exactly as Google's CSS declared it, so the
+ * `--font-*` names, weights, styles, `display: swap` and the metric-adjusted fallback face
+ * (Arial; Times New Roman for the serif) are what `next/font/google` emitted.
+ */
+// next/font/local options must be literals (the compiler reads them statically) — no helper.
+const geistSans = localFont({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  src: [
+    { path: "./fonts/hanken-grotesk-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/hanken-grotesk-latin.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/hanken-grotesk-latin.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/hanken-grotesk-latin.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
+  src: [
+    { path: "./fonts/geist-mono-latin.woff2", weight: "100 900", style: "normal" },
+  ],
+  display: "swap",
 });
 
-const spaceGrotesk = Space_Grotesk({
+const spaceGrotesk = localFont({
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  src: [
+    { path: "./fonts/space-grotesk-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/space-grotesk-latin.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/space-grotesk-latin.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/space-grotesk-latin.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const jetbrainsMono = localFont({
   variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
+  src: [
+    { path: "./fonts/jetbrains-mono-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/jetbrains-mono-latin.woff2", weight: "500", style: "normal" },
+  ],
+  display: "swap",
 });
 
-const playfairDisplay = Newsreader({
+const playfairDisplay = localFont({
   variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
+  src: [
+    { path: "./fonts/newsreader-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/newsreader-latin.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/newsreader-latin.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/newsreader-italic-latin.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/newsreader-italic-latin.woff2", weight: "500", style: "italic" },
+    { path: "./fonts/newsreader-italic-latin.woff2", weight: "600", style: "italic" },
+  ],
+  display: "swap",
+  adjustFontFallback: "Times New Roman",
 });
 
-const inter = Inter({
+const inter = localFont({
   variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  src: [
+    { path: "./fonts/inter-latin.woff2", weight: "300", style: "normal" },
+    { path: "./fonts/inter-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/inter-latin.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/inter-latin.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/inter-latin.woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
 });
 
 // metadataBase: relative OpenGraph/Twitter image paths must resolve absolute or link previews
