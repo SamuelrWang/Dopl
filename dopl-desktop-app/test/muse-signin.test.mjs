@@ -2,7 +2,7 @@
 // measured live on 1.4.7: `verificationUrl` on auth.meta.com + `userCode`; `account/loginCancel` →
 // `loginCompleted {outcome:"cancelled"}`), in a throwaway home, installed as Dopl's `auth.json` on success.
 
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,6 +11,13 @@ import { m, fakeConn, INIT, until } from "./_muse-harness.mjs";
 
 const login = m("login.js");
 const home = m("config-home.js");
+
+// login.js unrefs its own timers so a pending login never holds the app open (the real `muse serve` child
+// does); the fake conn has no child, so on Node 22 the runner sees an empty event loop mid-await and
+// cancels the file. One referenced handle holds it.
+let hold;
+before(() => { hold = setInterval(() => {}, 1000); });
+after(() => clearInterval(hold));
 
 function flow(o = {}) {
   const root = mkdtempSync(join(tmpdir(), "dopl-muse-signin-"));
