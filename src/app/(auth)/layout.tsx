@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AuthSplitLayout } from "@/shared/layout/auth-split";
+import { AuthShell } from "./auth-shell";
 
 /**
  * Shared chrome for the auth entry routes (`/authenticate` the page, `/login` +
@@ -18,7 +18,8 @@ import { AuthSplitLayout } from "@/shared/layout/auth-split";
  * back/forward, deep links and modifier-clicks, which DO navigate.)
  */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <AuthSplitLayout brand={<WebBrand />}>{children}</AuthSplitLayout>;
+  // `AuthShell` decides the login card by route (`./auth-shell.tsx`).
+  return <AuthShell brand={<WebBrand />}>{children}</AuthShell>;
 }
 
 /** Brand lockup, auth page upper-left. ⚠ Must stay in sync with

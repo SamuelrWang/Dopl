@@ -9,7 +9,7 @@ interface WorkspaceNameStepProps {
 }
 
 /**
- * Onboarding step 3 — name the caller's HOME SPACE (+ optional description).
+ * Onboarding step 4 — name the caller's HOME SPACE (+ optional description).
  * Auth-3D kit, not the token surface, matching steps 1-2. Blank name keeps the
  * server's "Home" fallback (`onboarding/server/service.ts ›
  * HOME_SPACE_DEFAULT_NAME`).
@@ -41,7 +41,7 @@ export function WorkspaceNameStep({ submitting, onSubmit }: WorkspaceNameStepPro
   return (
     <div>
       <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
-        Name your home space
+        Name Your Workspace
       </h2>
 
       <div className="mt-7 space-y-5">

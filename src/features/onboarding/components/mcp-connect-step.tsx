@@ -44,9 +44,6 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
       <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
         Connect Your Agent
       </h2>
-      <p className="mt-2.5 text-[14px] leading-relaxed text-[#9a9a9a]">
-        Your agent reaches your workspaces through the Dopl MCP server.
-      </p>
 
       {/* Server details + the paste-to-connect prompt */}
       <div className="mt-7 space-y-4">

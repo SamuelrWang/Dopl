@@ -51,9 +51,6 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
       <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
         About You
       </h2>
-      <p className="mt-2.5 text-[14px] leading-relaxed text-[#9a9a9a]">
-        Dopl works whether you&apos;re flying solo or building with a whole team.
-      </p>
 
       {/* Identity */}
       <div className="mt-8">

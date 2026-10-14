@@ -8,4 +8,6 @@ export interface OnboardingStatus {
   surveyCompleted: boolean;
 }
 
-export type OnboardingStep = "survey" | "connect" | "workspace";
+/** Survey → MCP connect → bring your agent (runtime sign-in) → name the home
+ *  space. `agents` was inserted as step 3 on 2026-10-13 (Samuel). */
+export type OnboardingStep = "survey" | "connect" | "agents" | "workspace";

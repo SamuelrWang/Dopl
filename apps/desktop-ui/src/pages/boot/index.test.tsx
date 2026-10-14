@@ -26,9 +26,19 @@ const passwordSignIn = vi.hoisted(() => vi.fn((): Promise<BridgeOpResult> => Pro
 
 // Right pane is decorative and untested here: collapse to a passthrough.
 vi.mock("@/shared/layout/auth-split", () => ({
-  AuthSplitLayout: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="auth-split">{children}</div>
+  AuthSplitLayout: ({
+    children,
+    cornerBrand,
+  }: {
+    children: React.ReactNode;
+    cornerBrand?: React.ReactNode;
+  }) => (
+    <div data-testid="auth-split">
+      {cornerBrand}
+      {children}
+    </div>
   ),
+  BrandLockup: () => <span>Dopl</span>,
 }));
 
 
@@ -130,7 +140,8 @@ describe("boot page", () => {
     expect(screen.queryByText(/sign-in link/i)).toBeNull();
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeInTheDocument();
-    expect(screen.getByAltText("Dopl")).toBeInTheDocument();
+    // The lockup moved from inside the form to the layout's corner.
+    expect(screen.getByText("Dopl")).toBeInTheDocument();
 
     expect(apiRequest).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
