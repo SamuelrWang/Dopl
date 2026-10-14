@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 // arrives as a TYPE import, so that edge is erased and the only runtime import
 // is this file → the panel.
 import { AuthBannerPanel } from "./auth-banner-panel";
+import type { GlassCardContent } from "./glass-card-content";
 import type { AuthGlassPose } from "./auth-glass-geometry";
 
 /** ⚠ WEB-only path (served from `public/`). Not usable in the packaged
@@ -22,6 +23,10 @@ export function AuthSplitLayout({
   brand,
   bannerSrc = WEB_BANNER_SRC,
   glassPose,
+  glassEnterFrom,
+  cornerBrand,
+  glassCardContent,
+  glassCardKey,
 }: {
   children: ReactNode;
   /**
@@ -49,6 +54,26 @@ export function AuthSplitLayout({
    * `StaticImageData` object, Vite → bare URL string).
    */
   bannerSrc?: string;
+  /** The glass mounts in this pose and slides into `glassPose` — onboarding
+   *  opening where the login screen left it. See `AuthBannerPanel` › enterFrom. */
+  glassEnterFrom?: AuthGlassPose;
+  /**
+   * Pinned to the split's own top-left corner, mirroring the banner's
+   * top-right one: same inset from the top and the side (the container's
+   * padding), so the lockup and the image frame the page as a pair. The
+   * desktop signed-out screen and every onboarding step pass the SAME
+   * lockup here, so it stays put while the pages change (Samuel 2026-10-13).
+   * Distinct from `brand`, which the web pins to the viewport like the
+   * landing nav.
+   */
+  cornerBrand?: ReactNode;
+  /** Content ON the glass's white card, keyed by pose — onboarding only (it
+   *  needs `glassPose`; a plain surface has no card). See
+   *  `AuthBannerPanel` › GlassCardContent. */
+  glassCardContent?: GlassCardContent;
+  /** Which card this is when two views share a pose (login and step 4 are
+   *  both `"default"`). See `AuthBannerPanel` › cardKey. */
+  glassCardKey?: string;
 }) {
   return (
     // Same fixed white surface, deliberately NOT shared (each differs): `app/auth/desktop-handoff/page.tsx`, `app/link/[token]/page.tsx`.
@@ -82,7 +107,15 @@ export function AuthSplitLayout({
           {brand}
         </div>
       )}
-      <div className="mx-auto flex h-full max-w-[1500px] items-stretch gap-10 p-6 md:p-10">
+      <div className="relative mx-auto flex h-full max-w-[1500px] items-stretch gap-10 p-6 md:p-10">
+        {cornerBrand && (
+          // Same inset as the container padding (p-6 / md:p-10), i.e. the
+          // banner's top-right corner, mirrored. `h-8` = the mark's height,
+          // so the lockup's centre line sits on the banner's top edge + 16.
+          <div className="absolute left-6 top-6 z-10 flex h-8 items-center md:left-10 md:top-10">
+            {cornerBrand}
+          </div>
+        )}
         {/* ⚠ THE PADDING IS INLINE STYLE AND ONBOARDING-ONLY, and both halves
             were learned by measuring rather than reasoning.
             INLINE because this file's geometry must be: Tailwind's scan does
@@ -105,9 +138,13 @@ export function AuthSplitLayout({
         <div
           className="flex-[4] overflow-y-auto"
           style={
-            glassPose
-              ? { paddingTop: 28, paddingBottom: 28, scrollPaddingBottom: 28 }
-              : undefined
+            // A corner lockup needs the column to clear it (32px mark + gap);
+            // symmetric so the content's centre stays on the same pixel.
+            cornerBrand
+              ? { paddingTop: 56, paddingBottom: 56, scrollPaddingBottom: 56 }
+              : glassPose
+                ? { paddingTop: 28, paddingBottom: 28, scrollPaddingBottom: 28 }
+                : undefined
           }
         >
           <div className="flex min-h-full items-center justify-center">{children}</div>
@@ -128,6 +165,9 @@ export function AuthSplitLayout({
             src={bannerSrc}
             pose={glassPose ?? "default"}
             card={glassPose !== undefined}
+            enterFrom={glassEnterFrom}
+            cardContent={glassCardContent}
+            cardKey={glassCardKey}
           />
         </div>
       </div>
