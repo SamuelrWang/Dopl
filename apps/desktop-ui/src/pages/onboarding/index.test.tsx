@@ -25,6 +25,7 @@ vi.mock("@/shared/layout/auth-split", () => ({
   AuthSplitLayout: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="auth-split">{children}</div>
   ),
+  BrandLockup: () => null,
 }));
 
 const apiRequest = vi.hoisted(() => vi.fn());
@@ -155,12 +156,43 @@ describe("onboarding page", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
   });
 
+  it("step 3 signs Claude in over the runtime bridge and shows a runtime already signed in", async () => {
+    type Row = RuntimeCredentialStatus;
+    const row = (runtimeId: string, label: string, state: Row["state"]): Row => ({ runtimeId, label, state, prompt: false });
+    const signIn = vi.fn().mockResolvedValue({ ok: true });
+    installBridge({
+      apiRequest,
+      appOrigin: "https://www.usedopl.com",
+      runtimeAuth: {
+        signIn,
+        status: () => Promise.resolve({ runtimes: [row("claude", "Claude Code", "not-connected"), row("codex", "Codex", "connected")] }),
+        onStatus: () => () => {},
+        dismissPrompt: vi.fn(),
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByText("Connected");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByText("Bring Your Agent");
+    expect(await screen.findByRole("button", { name: /Signed in to ChatGPT/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Sign in to Claude/ }));
+    await waitFor(() => expect(signIn).toHaveBeenCalledWith("claude"));
+    // Not gated on sign-in.
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+
   it("names the workspace, completes, and lands on the returned path", async () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText("Connected");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    // Step 3, Bring Your Agent — optional, so Continue is never gated.
+    await screen.findByText("Bring Your Agent");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     const nameField = await screen.findByLabelText("Name");
@@ -201,6 +233,9 @@ describe("onboarding page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText("Connected");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    // Step 3, Bring Your Agent — optional, so Continue is never gated.
+    await screen.findByText("Bring Your Agent");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish" }));
 

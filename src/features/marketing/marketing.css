@@ -585,6 +585,14 @@
 .lp-banner-notif {
   display: flex;
   height: 92px;
+  /* ⚠ PINNED AT THE SEAT while the glass grows (Samuel 2026-10-14: the text
+     slid and re-wrapped as the card expanded). The box grows LEFT and DOWN, so
+     content laid out in it followed its left edge and its widening width.
+     The engine writes the seat's width and the box's drift from the seat
+     (use-banner-scrub.ts › render); the translate undoes the drift, so only
+     opacity changes. Unset (static / reduced): plain full-width layout. */
+  width: var(--lp-notif-w, auto);
+  transform: translate3d(var(--lp-notif-dx, 0px), var(--lp-notif-dy, 0px), 0);
   align-items: center;
   gap: 12px;
   padding: 0 15px;
@@ -705,6 +713,10 @@
      half-transparent by a scroll that stops mid-band. */
   transition: opacity 320ms ease;
   pointer-events: none;
+  /* Tilts with the glass beneath it: LiquidGlass publishes its hover tilt on
+     this wrapper (`shareTilt`). Concentric with the glass (equal inset), so
+     the same rotation about its own centre keeps it on the glass's plane. */
+  transform: var(--glass-tilt-shared, none);
 }
 .lp-banner-scene[data-mode="reduced"] .lp-banner-demo-slot {
   opacity: 1;

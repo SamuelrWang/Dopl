@@ -148,17 +148,11 @@ export function LoginFormCore({
         </div>
       )}
 
-      {/* Must match `features/marketing/marketing.css` › .lp-mp-heading. Face
-          inherited: `AuthSplitLayout` scopes landing grotesk. */}
-      <h2
-        className="text-[#181818]"
-        style={{
-          fontWeight: 400,
-          fontSize: "clamp(23px, 2.5vw, 37px)",
-          lineHeight: 1.04,
-          letterSpacing: "-0.03em",
-        }}
-      >
+      {/* Same heading as every onboarding step (`features/onboarding/
+          components/survey-step.tsx` › SurveyStep), so sign-in → onboarding
+          reads as one flow (Samuel 2026-10-13). Was the landing's
+          `.lp-mp-heading`. Face inherited: `AuthSplitLayout` scopes it. */}
+      <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
         {title}
       </h2>
 

@@ -107,6 +107,11 @@ export function OntologySection() {
               radius={20}
               staticMap={glassMode === "scrub"}
               className="lp-ont-glass-card"
+              // Onboarding's edge + hover tilt (Samuel 2026-10-13). The tilt
+              // lives on the glass's own layers, so it composes with the
+              // scrub, which only ever writes this WRAPPER's box.
+              edge="rim"
+              tilt
             >
               <div
                 id="lp-ont-panel"

@@ -8,10 +8,11 @@
  * leaves the notch's vertices sitting collinear on the straight edge. Never
  * "optimize" a degenerate command away — that is exactly the snap this avoids.
  *
- * Both bites exist in every pose: `topDepth` carries the top-right cutout,
- * `botDepth` the bottom-left one. Moving the bite from one to the other is two
- * depths crossing, which is what reads as a morph. The split positions stay
- * fixed per shape so only the depths interpolate.
+ * All THREE bites exist in every pose: `topDepth` carries the top-right
+ * cutout, `botDepth` the bottom-left one, `leftDepth` the top-left one (the
+ * vertical pose's, 2026-10-13). Moving the bite from one to another is depths
+ * crossing, which is what reads as a morph. The split positions stay fixed per
+ * shape so only the depths interpolate.
  */
 
 export interface PanelShape {
@@ -23,6 +24,10 @@ export interface PanelShape {
   botDepth: number;
   /** x where the bottom bite ends; the bite runs from the left edge to here. */
   botSplit: number;
+  /** Top-left bite depth, px (down from the top edge). 0 = no bite. */
+  leftDepth?: number;
+  /** x where the top-left bite ends; the bite runs from the left edge to here. */
+  leftSplit?: number;
 }
 
 export interface PanelShapeOpts {
@@ -50,7 +55,8 @@ export interface PanelShapeOpts {
 /**
  * SVG path data for the panel outline in a `w × h` box.
  *
- * Clockwise from just past the top-left corner.
+ * Clockwise from just past the top-left bite's wall (which, at depth 0, is a
+ * point on the straight top edge).
  *
  * ⚠ `inset` shrinks THE SOLID REGION, which is not the same as subtracting
  * from every number. A bite is a hole in the solid, so its surfaces move the
@@ -85,53 +91,98 @@ export function panelPath(
   // Depth is inset-invariant on purpose — see the note above.
   const dT = Math.max(0, shape.topDepth);
   const dB = Math.max(0, shape.botDepth);
+  const dL = Math.max(0, shape.leftDepth ?? 0);
 
   // The bite's wall moves INTO the solid, away from the bite: left for the
   // top-right bite, right for the bottom-left one.
-  const sx = clamp(shape.topSplit - inset, x0 + r, x1 - r);
+  const sxSplit = clamp(shape.topSplit - inset, x0 + r, x1 - r);
   const bx = clamp(shape.botSplit + inset, x0 + r, x1 - r);
+  // The top-left bite's wall moves right, into the solid; never past the
+  // top-right bite's wall while THAT bite is open.
+  const lx = clamp((shape.leftSplit ?? 0) + inset, x0 + r, dT > 0 ? sxSplit : x1 - r);
 
   const tTop = y0 + dT; // the top bite's floor
   const tBot = y1 - dB; // the bottom bite's ceiling
+  const lFloor = y0 + dL; // the top-left bite's floor
 
-  // Convex corner shrinks with the inset, concave grows. BOTH are capped at
-  // half the bite's depth, so at depth 0 they collapse to 0 together and the
-  // bite's four commands land collinear on the straight edge, drawing nothing.
-  const tConvex = notchCorner(notchRadius - grow, dT, (sx - x0 - r) / 2, (x1 - sx - r) / 2);
-  const tConcave = notchCorner(notchRadius + grow, dT, (sx - x0 - r) / 2, (x1 - sx - r) / 2);
-  const bConvex = notchCorner(notchRadius - grow, dB, (x1 - bx - r) / 2, (bx - x0 - r) / 2);
-  const bConcave = notchCorner(notchRadius + grow, dB, (x1 - bx - r) / 2, (bx - x0 - r) / 2);
+  // Convex corner shrinks with the inset, concave grows. Each corner is an
+  // ELLIPSE: its WIDTH keeps the full notch radius (capped only by the runs it
+  // turns through), its HEIGHT is capped at half the bite's depth. So as a
+  // bite closes, the two corners flatten into a long, soft ramp instead of
+  // shrinking into a tiny hard step. ⚠ Capping BOTH axes at depth/2 — the
+  // first cut — made the last few px of a closing bite read as two straight
+  // edges joined by a jog (Samuel 2026-10-13, page 2 → 3). At depth 0 the
+  // height is 0, so the commands still land collinear on the straight edge.
+  //
+  // Top-left: its run along the top edge reaches the top-right bite's wall
+  // while that bite is open, else the far corner. ⚠ Capping it at the
+  // top-right SPLIT even when that bite is closed starved the corners in the
+  // narrow vertical box: the white card's split sits ~3px from its top-left
+  // wall there, which rendered its bite corners at 1.5px and 4.7px instead of
+  // 14 (Samuel 2026-10-13, "too sharply rounded").
+  const lRunA = ((dT > 0 ? sxSplit : x1 - r) - lx) / 2;
+  const lRunB = (lx - x0 - r) / 2;
+  const lConvex = notchCorner(notchRadius - grow, dL, lRunA, lRunB);
+  const lConcave = notchCorner(notchRadius + grow, dL, lRunA, lRunB);
+  // A CLOSED top-right bite is only collinear points on the top edge; it
+  // parks just right of the top-left corner (never behind it, which would
+  // fold the edge back on itself) with zero-width corners. Open, it sits at
+  // its split and its runs stop at the top-left wall, so the two convex
+  // corners on the shared edge can never cross.
+  const sx = dT > 0 ? sxSplit : clamp(Math.max(sxSplit, lx + lConvex.x), x0 + r, x1 - r);
+  const tRunA = dT > 0 ? Math.min((sx - x0 - r) / 2, (sx - lx) / 2) : 0;
+  const tRunB = (x1 - sx - r) / 2;
+  const bRunA = (x1 - bx - r) / 2;
+  const bRunB = (bx - x0 - r) / 2;
+  const tConvex = notchCorner(notchRadius - grow, dT, tRunA, tRunB);
+  const tConcave = notchCorner(notchRadius + grow, dT, tRunA, tRunB);
+  const bConvex = notchCorner(notchRadius - grow, dB, bRunA, bRunB);
+  const bConcave = notchCorner(notchRadius + grow, dB, bRunA, bRunB);
 
   return [
-    `M ${n(x0 + r)},${n(y0)}`,
+    `M ${n(lx + lConvex.x)},${n(y0)}`,
     // top edge, up to the bite
-    `L ${n(sx - tConvex)},${n(y0)}`,
-    `Q ${n(sx)},${n(y0)} ${n(sx)},${n(y0 + tConvex)}`,
+    `L ${n(sx - tConvex.x)},${n(y0)}`,
+    `Q ${n(sx)},${n(y0)} ${n(sx)},${n(y0 + tConvex.y)}`,
     // down the bite's wall, then along its floor
-    `L ${n(sx)},${n(tTop - tConcave)}`,
-    `Q ${n(sx)},${n(tTop)} ${n(sx + tConcave)},${n(tTop)}`,
+    `L ${n(sx)},${n(tTop - tConcave.y)}`,
+    `Q ${n(sx)},${n(tTop)} ${n(sx + tConcave.x)},${n(tTop)}`,
     `L ${n(x1 - r)},${n(tTop)}`,
     // top-right corner — rounded in every pose, bitten or not
     `Q ${n(x1)},${n(tTop)} ${n(x1)},${n(tTop + r)}`,
     `L ${n(x1)},${n(y1 - r)}`,
     `Q ${n(x1)},${n(y1)} ${n(x1 - r)},${n(y1)}`,
     // bottom edge leftward, into the bottom bite
-    `L ${n(bx + bConvex)},${n(y1)}`,
-    `Q ${n(bx)},${n(y1)} ${n(bx)},${n(y1 - bConvex)}`,
-    `L ${n(bx)},${n(tBot + bConcave)}`,
-    `Q ${n(bx)},${n(tBot)} ${n(bx - bConcave)},${n(tBot)}`,
+    `L ${n(bx + bConvex.x)},${n(y1)}`,
+    `Q ${n(bx)},${n(y1)} ${n(bx)},${n(y1 - bConvex.y)}`,
+    `L ${n(bx)},${n(tBot + bConcave.y)}`,
+    `Q ${n(bx)},${n(tBot)} ${n(bx - bConcave.x)},${n(tBot)}`,
     `L ${n(x0 + r)},${n(tBot)}`,
     `Q ${n(x0)},${n(tBot)} ${n(x0)},${n(tBot - r)}`,
-    `L ${n(x0)},${n(y0 + r)}`,
-    `Q ${n(x0)},${n(y0)} ${n(x0 + r)},${n(y0)}`,
+    // up the left edge to the top-left bite's floor — the panel's own
+    // top-left corner, which sits ON that floor when the bite is open
+    `L ${n(x0)},${n(lFloor + r)}`,
+    `Q ${n(x0)},${n(lFloor)} ${n(x0 + r)},${n(lFloor)}`,
+    // along the floor, up the wall, back onto the top edge
+    `L ${n(lx - lConcave.x)},${n(lFloor)}`,
+    `Q ${n(lx)},${n(lFloor)} ${n(lx)},${n(lFloor - lConcave.y)}`,
+    `L ${n(lx)},${n(y0 + lConvex.y)}`,
+    `Q ${n(lx)},${n(y0)} ${n(lx + lConvex.x)},${n(y0)}`,
     "Z",
   ].join(" ");
 }
 
-/** A bite corner: never more than half the bite's depth (so it vanishes with
- *  the bite), nor more than half either run it turns through. */
-function notchCorner(want: number, depth: number, runBefore: number, runAfter: number): number {
-  return Math.max(0, Math.min(want, depth / 2, runBefore, runAfter));
+/** A bite corner's two radii: `x` along the edge, never more than half
+ *  either run it turns through; `y` down the wall, additionally never more
+ *  than half the bite's depth, so it vanishes with the bite. */
+function notchCorner(
+  want: number,
+  depth: number,
+  runBefore: number,
+  runAfter: number
+): { x: number; y: number } {
+  const x = Math.max(0, Math.min(want, runBefore, runAfter));
+  return { x, y: Math.min(x, Math.max(0, depth / 2)) };
 }
 
 function clamp(v: number, lo: number, hi: number): number {

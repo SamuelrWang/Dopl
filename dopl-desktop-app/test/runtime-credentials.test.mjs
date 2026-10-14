@@ -74,6 +74,15 @@ test("a sign-in that took shows the window and takes focus from the browser, wit
   assert.equal(w.notes.length, 0, "no notification: the row turning Connected is the signal");
 });
 
+test("both runtimes come to the front on success; a Dopl already in front is left alone", async () => {
+  const away = world({ signIns: { codex: { ok: true } } });
+  await away.mod.signIn("codex");
+  assert.deepEqual([away.shown, away.focus], [[true], [{ steal: true }]], "Codex too, not only Claude");
+  const here = world({ focused: true, signIns: { claude: { ok: true } } });
+  await here.mod.signIn("claude");
+  assert.deepEqual([here.shown, here.focus], [[], []], "already focused: no show, no steal");
+});
+
 // ── CANCEL ON "SIGNING IN…" ──────────────────────────────────────────────────────────────────
 
 test("Cancel stops the runtime's flow; the row leaves signing-in once the flow answers", async () => {

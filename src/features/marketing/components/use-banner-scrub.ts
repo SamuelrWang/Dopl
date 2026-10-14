@@ -214,6 +214,12 @@ export function useBannerScrub() {
         "--lp-notif-opacity",
         `${1 - ramp(p, NOTIF_FADE_START, NOTIF_FADE_END)}`,
       );
+      // Pin the card's contents at the seat: its width, and the box's drift
+      // away from the seat undone (see `.lp-banner-notif` in marketing.css).
+      const seat = notifBox(W, H);
+      scene.style.setProperty("--lp-notif-w", `${seat.w}px`);
+      scene.style.setProperty("--lp-notif-dx", `${seat.x - box.x}px`);
+      scene.style.setProperty("--lp-notif-dy", `${seat.y - box.y}px`);
       // 0 or 1 only — the CSS transition is the fade. See SLOT_SHOW_AT.
       const slotNext = slotShown ? p > SLOT_HIDE_AT : p >= SLOT_SHOW_AT;
       if (slotNext !== slotShown || slotFirst) {
@@ -277,6 +283,9 @@ export function useBannerScrub() {
       ripple?.classList.remove("is-firing");
       scene.style.removeProperty("--lp-cursor-opacity");
       scene.style.removeProperty("--lp-notif-opacity");
+      scene.style.removeProperty("--lp-notif-w");
+      scene.style.removeProperty("--lp-notif-dx");
+      scene.style.removeProperty("--lp-notif-dy");
       scene.style.removeProperty("--lp-slot-opacity");
     };
   }, [mode]);

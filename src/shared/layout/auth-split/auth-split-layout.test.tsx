@@ -27,7 +27,7 @@
 // `py-7` round shipped.
 
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, act } from "@testing-library/react";
 
 import { AuthSplitLayout } from "./auth-split-layout";
 
@@ -165,5 +165,65 @@ describe("the footer padding is onboarding's, inline, and symmetric", () => {
     // centre stays on the same pixel. `paddingBottom` alone would lift every form 14px.
     expect(col.style.paddingTop).toBe(col.style.paddingBottom);
     expect(col.style.scrollPaddingBottom).toBe("28px");
+  });
+});
+
+describe("the card's content fades WITH the card, on one opacity", () => {
+  // Samuel 2026-10-13: the content outlasted the white card on every step change. The card and
+  // its content were sibling layers with two copies of one fade; now one wrapper owns the fade
+  // and neither child may carry an opacity or transition of its own.
+  it("🔒 card + content share one faded wrapper; the children carry no fade", () => {
+    withMeasuredPane();
+    const { container } = render(
+      <AuthSplitLayout
+        glassPose="lowered-top-notch"
+        glassCardContent={{ "lowered-top-notch": () => <span data-testid="on-card">hi</span> }}
+      >
+        <form />
+      </AuthSplitLayout>
+    );
+    const card = cardIn(container)!;
+    const wrap = card.parentElement!;
+    expect(wrap.hasAttribute("data-glass-card-fade")).toBe(true);
+    expect(wrap.querySelector('[data-testid="on-card"]')).not.toBeNull();
+    expect(wrap.style.transition).toContain("opacity");
+    for (const child of Array.from(wrap.children) as HTMLElement[]) {
+      expect(child.style.opacity).toBe("");
+      expect(child.style.transition).toBe("");
+    }
+  });
+});
+
+describe("two cards on one pose hand off by key", () => {
+  // The login card and step 4 are both pose "default" (Samuel 2026-10-13). A new key must fade
+  // the OLD content out, then swap, then fade in — never paint the next card's content early.
+  it("🔒 a new glassCardKey keeps the old content through the fade-out, then swaps", () => {
+    vi.useFakeTimers();
+    try {
+      withMeasuredPane();
+      const view = (key: string, label: string) => (
+        <AuthSplitLayout
+          glassPose="default"
+          glassCardKey={key}
+          glassCardContent={{ default: () => <span data-testid="face">{label}</span> }}
+        >
+          <form />
+        </AuthSplitLayout>
+      );
+      const { container, rerender } = render(view("login", "LOGIN"));
+      const face = () => container.querySelector('[data-testid="face"]')?.textContent;
+      const wrap = () => container.querySelector<HTMLElement>("[data-glass-card-fade]")!;
+      expect(face()).toBe("LOGIN");
+      rerender(view("workspace", "STEP4"));
+      expect(face()).toBe("LOGIN");
+      expect(wrap().style.opacity).toBe("0");
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(face()).toBe("STEP4");
+      expect(wrap().style.opacity).toBe("1");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

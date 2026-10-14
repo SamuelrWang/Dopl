@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { LiquidGlass } from "@/shared/design";
-import { panelPath } from "./panel-shape";
 import {
-  CARD_EASE, CARD_IN_MS, CARD_OUT_MS,
-  GLASS_EASE, GLASS_HEIGHT, GLASS_MIN_H, GLASS_MS, GLASS_NOTCH_RADIUS, GLASS_RADIUS,
-  GLASS_RIM_BAND, GLASS_RIM_BITE, GLASS_RIM_BLUR, GLASS_SHADOW_LAYERS, GLASS_SHADOW_PAD,
+  CARD_EASE, CARD_IN_MS, CARD_OUT_MS, CARD_SWAP_SLACK_MS,
+  GLASS_HEIGHT, GLASS_MIN_H, GLASS_MS, GLASS_RADIUS,
+  GLASS_RIM_BAND, GLASS_RIM_BLUR, GLASS_SHADOW_LAYERS, GLASS_SHADOW_PAD,
   GLASS_SIDE_INSET, GLASS_TOP,
-  cardPath, easeInOutCubic, glassShape, poseDepths,
+  cardPath, cardRegions,
   type AuthGlassPose,
 } from "./auth-glass-geometry";
+import { useGlassMorph } from "./glass-morph";
+import type { GlassCardContent } from "./glass-card-content";
+import { GlassSheen, PaneClip, useGlassTilt, usePrefersReducedMotion } from "./glass-tilt";
 
 /**
  * The auth split's right pane. Split out of `./auth-split-layout.tsx`
@@ -40,14 +42,34 @@ export function AuthBannerPanel({
   src,
   pose,
   card,
+  enterFrom,
+  cardContent,
+  cardKey,
 }: {
   src: string;
   pose: AuthGlassPose;
+  /** Onboarding only, and only with `card`. See {@link GlassCardContent}. */
+  cardContent?: GlassCardContent;
   /** Onboarding only — see the call site. `false` on every plain auth surface. */
   card: boolean;
+  /**
+   * Mount in THIS pose, then slide into `pose` with the normal hand-off —
+   * onboarding opening where the login screen's glass left off (Samuel
+   * 2026-10-13). Read once, at mount. Omitted: mount already in `pose`.
+   */
+  enterFrom?: AuthGlassPose;
+  /**
+   * WHICH card this is, when two views share a pose — the login card and
+   * step 4 are both `"default"`. A new key runs the same hand-off as a new
+   * pose (fade out, swap, fade in), minus the glass move, and the OLD content
+   * keeps the card while it fades. Omitted: the pose is the key.
+   */
+  cardKey?: string;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const shadowRef = useRef<HTMLDivElement>(null);
+  const sheenRef = useRef<HTMLDivElement>(null);
   const still = usePrefersReducedMotion();
 
   /**
@@ -55,25 +77,49 @@ export function AuthBannerPanel({
    * fade-out. That lag is the whole sequence: the card is already gone before
    * the glass is allowed to move, so nothing rides along with it.
    */
-  const [movePose, setMovePose] = useState<AuthGlassPose>(pose);
-  const [cardShown, setCardShown] = useState(true);
+  const [movePose, setMovePose] = useState<AuthGlassPose>(enterFrom ?? pose);
+  const [cardShown, setCardShown] = useState(enterFrom === undefined);
+  // The card being SHOWN: its key and content map, which lag the requested
+  // ones exactly as `movePose` lags `pose` (see `cardKey`).
+  const key = cardKey ?? pose;
+  const [held, setHeld] = useState({ key, content: cardContent });
+  const latest = useRef(cardContent);
   useEffect(() => {
-    if (movePose === pose) return;
-    if (still) {
+    latest.current = cardContent;
+  });
+  useEffect(() => {
+    const moving = movePose !== pose;
+    if (!moving && held.key === key) {
+      // Settled — but a mount that named `enterFrom === pose` starts hidden.
+      if (!cardShown) {
+        const t = setTimeout(() => setCardShown(true), 0);
+        return () => clearTimeout(t);
+      }
+      return;
+    }
+    const swap = () => {
       setMovePose(pose);
+      setHeld({ key, content: latest.current });
+    };
+    if (still) {
+      swap();
       return;
     }
     setCardShown(false);
-    const toMove = setTimeout(() => setMovePose(pose), CARD_OUT_MS);
-    const toShow = setTimeout(() => setCardShown(true), CARD_OUT_MS + GLASS_MS);
+    // `CARD_SWAP_SLACK_MS`: this timer can be armed a frame before the fade's
+    // first style recalc, and the swap must land at opacity 0 — never with
+    // the next step's content or outline faintly on the moving glass.
+    const out = CARD_OUT_MS + CARD_SWAP_SLACK_MS;
+    const toMove = setTimeout(swap, out);
+    const toShow = setTimeout(() => setCardShown(true), out + (moving ? GLASS_MS : 0));
     return () => {
       clearTimeout(toMove);
       clearTimeout(toShow);
     };
-    // `movePose` is read, not tracked: re-running on it would restart the
-    // hand-off halfway and the card would flash mid-slide.
+    // `movePose`/`held`/`cardShown` are read, not tracked: re-running on them
+    // would restart the hand-off halfway and the card would flash mid-slide.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pose, still]);
+  }, [pose, key, still]);
 
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const ids = {
@@ -85,153 +131,66 @@ export function AuthBannerPanel({
     card: `acm-${uid}`,
   };
 
-  // Every mask path is written IMPERATIVELY, never from JSX: the morph runs
-  // frame by frame and React re-rendering `d` would fight it. These all carry
-  // the SAME notched outline, so one string per frame feeds the lot.
+  // The mask paths the morph writes each frame (`./glass-morph.ts`).
   const paths = useRef<(SVGPathElement | null)[]>([]);
   const keep = (i: number) => (el: SVGPathElement | null) => {
     paths.current[i] = el;
   };
-  // ⚠ THE SHADOW'S KNOCKOUT IS THE ONE PATH THAT IS **NOT** THE OUTLINE — it is
-  // the un-bitten rounded rect, so it gets its own ref and its own `d`.
-  // Knocking out the OUTLINE instead leaves the bite counting as "outside the
-  // shape", and the panel then casts its own drop shadow down into its own
-  // cutout: a grey wash over the sharp photo in the bite, plus a dark band
-  // just inside the glass above it, because the refraction samples whatever
-  // sits behind it and the shadow was sitting there (Samuel #3069).
+  // The shadow's knockout is the BITTEN outline, so the cutout gets the same
+  // soft shadow as every other edge outside the glass (a knockout of the
+  // un-bitten rect left the cutout a pale ghost of the rectangle, Samuel
+  // 2026-10-13). The shadow renders ABOVE `LiquidGlass`, out of its backdrop,
+  // so the refraction cannot sample it (#3069's dark band).
   const knockout = useRef<SVGPathElement | null>(null);
-  /** Knocks everything OUTSIDE the outline off the rim band — the mask region
-   *  as a rect, then the outline, `evenodd`. */
+  /** Knocks everything OUTSIDE the outline off the rim band. */
   const rimClip = useRef<SVGPathElement | null>(null);
-  const depths = useRef({ top: 0, bot: 0 });
+  const [morphTargets] = useState(() => ({ pane: paneRef, group: groupRef, paths, knockout, rimClip }));
+  const { pane: paneSize, box } = useGlassMorph(morphTargets, movePose, still);
 
-  // The outline is absolute px inside the glass box, so it has to be measured.
-  // Measuring the PANE (not the glass) keeps LiquidGlass's own ref free and
-  // survives the glass being clipped to nothing mid-morph.
-  useEffect(() => {
-    const el = paneRef.current;
-    if (!el) return;
-    const read = () => {
-      const r = el.getBoundingClientRect();
-      const w = r.width * (1 - GLASS_SIDE_INSET * 2);
-      const h = Math.max(GLASS_MIN_H, r.height * GLASS_HEIGHT);
-      if (w < 2 || h < 2) return;
-      setBox((prev) =>
-        prev && Math.abs(prev.w - w) < 0.5 && Math.abs(prev.h - h) < 0.5 ? prev : { w, h }
-      );
-    };
-    read();
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // THE MORPH. A mask cannot be CSS-transitioned the way a clip path can, so
-  // the outline is interpolated here and written to the mask paths each
-  // frame. Only the depths move; the splits are pose-invariant, so top-right
-  // → bottom-left is two depths crossing and the point count never changes.
-  // The slide (`top`) stays on a CSS transition with the matching curve.
-  useLayoutEffect(() => {
-    if (!box) return;
-    const to = poseDepths(movePose, box.h);
-    const from = { ...depths.current };
-    // ⚠ WHEN BOTH BITES MOVE, THEY TAKE TURNS — the one closing owns the first
-    // half, the one opening the second. Running them together is what made the
-    // slide read as a double outline: at mid-flight BOTH were half open, so the
-    // panel wore a top-right notch AND a bottom-left notch at once and the rim
-    // traced both (Samuel #3098B, caught on frame captures at 430ms and 650ms).
-    // The three mask layers were already in lockstep — 0 of 134 frames
-    // disagreed — so this was never a clock split; the shape itself was wrong.
-    const bothMove = from.top !== to.top && from.bot !== to.bot;
-    const phase = (t: number, a: number, b: number) => {
-      if (!bothMove) return easeInOutCubic(t);
-      const p = b < a ? t / 0.5 : (t - 0.5) / 0.5; // close first, then open
-      return easeInOutCubic(Math.min(1, Math.max(0, p)));
-    };
-    const paint = (t: number) => {
-      depths.current = {
-        top: from.top + (to.top - from.top) * phase(t, from.top, to.top),
-        bot: from.bot + (to.bot - from.bot) * phase(t, from.bot, to.bot),
-      };
-      const d = panelPath(
-        box.w,
-        box.h,
-        glassShape(box.w, depths.current.top, depths.current.bot),
-        { radius: GLASS_RADIUS, notchRadius: GLASS_NOTCH_RADIUS }
-      );
-      // The panel's un-bitten footprint: the rim strokes it, and the shadow
-      // knocks it out.
-      const dRect = panelPath(box.w, box.h, glassShape(box.w, 0, 0), {
-        radius: GLASS_RADIUS,
-        notchRadius: GLASS_NOTCH_RADIUS,
-      });
-      // ⚠ THE RIM STROKES THE FULL OUTLINE, CUTOUT EDGES INCLUDED. It briefly
-      // stroked the un-bitten rect instead, to take the glow off the cutout
-      // (#3112) — Samuel reversed that the same evening and asked for the glow
-      // back, so the band follows every edge again. What stays from that round
-      // is the thinner profile (band 4 / blur 2.6, closer to the glint it
-      // imitates) and the knockout's inward bite, which together are why the
-      // glow no longer reads as a hard white stroke on a bright backdrop.
-      for (const p of paths.current) p?.setAttribute("d", d);
-      // Un-bitten footprint: shadow lives strictly OUTSIDE the panel's own
-      // rectangle, never inside the cutout.
-      knockout.current?.setAttribute("d", dRect);
-      // The mask region as a rect, then the outline: `evenodd` leaves exactly
-      // the OUTSIDE, which is what the rim band must lose.
-      //
-      // ⚠ THE OUTLINE HERE IS INSET BY A HAIR, ON PURPOSE. Knocking out with
-      // the exact outline leaves the knockout's own ANTIALIASED edge sitting
-      // on top of the brightest part of the blurred band, and the partial
-      // coverage survives as a one-pixel white fringe on the OUTSIDE of the
-      // bite — the rim line Samuel could still see on page 2 (#3112) after the
-      // nested-mask fix. A column probe across the bite ceiling missed it; a
-      // full-region pixel diff found 245 pixels, peaking at the concave
-      // corner where the blur piles up. Pulling the knockout `GLASS_RIM_BITE`
-      // INTO the solid puts that fringe inside the glass, where the band
-      // already is, and costs the band about a pixel of its ~3.5px width.
-      rimClip.current?.setAttribute(
-        "d",
-        `M0,0 H${box.w} V${box.h} H0 Z ${panelPath(
-          box.w,
-          box.h,
-          glassShape(box.w, depths.current.top, depths.current.bot),
-          { radius: GLASS_RADIUS, notchRadius: GLASS_NOTCH_RADIUS, inset: GLASS_RIM_BITE }
-        )}`
-      );
-    };
-    if (still) {
-      paint(1);
-      return;
-    }
-    paint(0);
-    let raf = 0;
-    const t0 = performance.now();
-    const step = (now: number) => {
-      const t = Math.min(1, (now - t0) / GLASS_MS);
-      paint(t);
-      if (t < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [movePose, box, still]);
-
-  // Pose-driven, not outline-driven: the cross-fade has to START when the
-  // morph does. A pose with no bite keeps the original glint and box-shadow,
-  // so it stays indistinguishable from the panel before any of this.
-  const shaped = movePose !== "default";
   const masked = box !== null;
-  // Mask regions, in the masked element's own px.
-  const mw = box?.w ?? 0;
-  const mh = box?.h ?? 0;
-  const transition = still
+  /**
+   * ⚠ THE SHAPE-FOLLOWING EDGE IS ON IN EVERY POSE, the plain rect included.
+   * LiquidGlass's unshaped treatment (inset glint + rect box-shadow) is a
+   * wider, whiter bevel than the rim, so the plain-rect pose wore a visibly
+   * brighter edge than the bitten ones (Samuel 2026-10-13, page 3 + login);
+   * and because it draws the full rectangle blind to the mask, every swap
+   * between the two drew a rectangle border over an open cutout. One
+   * treatment for every pose ends both. `masked` only gates the first frame,
+   * before the outline has been measured.
+   */
+  const shaped = masked;
+  // Mask regions, in the masked element's own px: the PANE's size, which no
+  // box ever exceeds, so one region holds every frame of a box-changing morph.
+  const mw = paneSize?.w ?? 0;
+  const mh = paneSize?.h ?? 0;
+  // The card's visibility, shared by the card and anything painted on it.
+  // `movePose === pose` too: the render that CHANGES the pose (or first turns
+  // `card` on, coming from login) runs before the effect hides the card, and
+  // would flash it a frame.
+  const settledKey = held.key === key;
+  const cardOn = cardShown && movePose === pose && settledKey;
+  // ⚠ KEYED ON `cardOn`, NOT `cardShown`. The render that changes the pose
+  // turns `cardOn` off while `cardShown` is still true, so keying on
+  // `cardShown` started the fade-OUT with CARD_IN_MS (400) — and a running
+  // transition keeps its duration when the string changes a render later.
+  // The glass then moved at 300 with the content still at ~8% (measured
+  // 2026-10-13: `getAnimations()` read `opacity 400ms` on a fade-out).
+  const cardFade = still
     ? undefined
-    : `top ${GLASS_MS}ms ${GLASS_EASE}, opacity ${GLASS_MS}ms ${GLASS_EASE}, ` +
-      `box-shadow ${GLASS_MS}ms ${GLASS_EASE}`;
+    : `opacity ${cardOn ? CARD_IN_MS : CARD_OUT_MS}ms ${CARD_EASE}`;
+  // The settled card reads the LIVE map (a re-render may hand a new one); a
+  // card on its way out keeps the map it was shown with.
+  const renderContent = card && box ? (settledKey ? cardContent : held.content)?.[movePose] : undefined;
+  // Hover tilt: onboarding's card surfaces only, and only while no hand-off
+  // is in flight (`./glass-tilt.tsx` owns the pointer + capability gates).
+  useGlassTilt(
+    { pane: paneRef, group: groupRef, shadow: shadowRef, sheen: sheenRef },
+    card && masked && cardOn
+  );
 
   return (
     <div
-      ref={paneRef}
-      className="relative h-full w-full overflow-hidden rounded-[32px] bg-[#060A0F]"
+      className="relative h-full w-full rounded-[32px] bg-[#060A0F]"
       style={{
         boxShadow:
           "0 6px 16px rgba(8,10,15,0.28), " +
@@ -239,214 +198,249 @@ export function AuthBannerPanel({
           "0 1px 0 rgba(255,255,255,0.6)",
       }}
     >
-      {/* Decorative (empty alt) — form column carries the meaning. ⚠ Plain
-          <img>, never next/image: Vite compiles this file too and has no Next
-          runtime to serve an optimized image. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt=""
-        draggable={false}
-        className="h-full w-full object-cover object-center"
-      />
+      {/* Rounded by a clip-path, never overflow-hidden — see `PaneClip`. */}
+      <PaneClip paneRef={paneRef}>
+        {/* Decorative (empty alt) — form column carries the meaning. ⚠ Plain
+            <img>, never next/image: Vite compiles this file too and has no Next
+            runtime to serve an optimized image. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt=""
+          draggable={false}
+          className="h-full w-full object-cover object-center"
+        />
 
-      {/* ⚠ Geometry is INLINE STYLE, not utility classes, and must stay that
-          way: Tailwind's scan does not reliably emit this file's arbitrary
-          values for every route chain (measured 2026-08-17 — `top-[32%]` /
-          `min-h-[220px]` absent from every built stylesheet), and when the
-          classes are missing the glass drops into static flow below the
-          full-height image and the panel's overflow clips it to nothing. */}
-      <div
-        style={{
-          position: "absolute",
-          left: `${GLASS_SIDE_INSET * 100}%`,
-          right: `${GLASS_SIDE_INSET * 100}%`,
-          top: `${GLASS_TOP[movePose] * 100}%`,
-          height: `${GLASS_HEIGHT * 100}%`,
-          minHeight: GLASS_MIN_H,
-          transition,
-        }}
-      >
-        {/* Shape-following drop shadow, BEHIND the glass and OUTSIDE it: the
-            glass root clips its own overflow, and a box-shadow there can only
-            ever be a rectangle. Its mask paints the blurred outline and then
-            knocks the outline back out, so the shadow exists only beyond the
-            edge and never darkens the glass it sits under. Fades out with
-            `shaped` so a plain pose keeps the original box-shadow instead. */}
-        {masked && (
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              inset: -GLASS_SHADOW_PAD,
-              background: "rgba(8,10,15,0.5)",
-              mask: `url(#${ids.shadow})`,
-              WebkitMask: `url(#${ids.shadow})`,
-              opacity: shaped ? 1 : 0,
-              transition,
-            }}
-          />
-        )}
-
-        <LiquidGlass
-          radius={GLASS_RADIUS}
-          maskUrl={masked ? `url(#${ids.glass})` : undefined}
-          rimMaskUrl={masked ? `url(#${ids.rim})` : undefined}
-          shaped={shaped}
-          shapeTransition={transition}
-          style={{ position: "absolute", inset: 0 }}
+        {/* ⚠ Geometry is INLINE STYLE, not utility classes, and must stay that
+            way: Tailwind's scan does not reliably emit this file's arbitrary
+            values for every route chain (measured 2026-08-17 — `top-[32%]` /
+            `min-h-[220px]` absent from every built stylesheet), and when the
+            classes are missing the glass drops into static flow below the
+            full-height image and the panel's overflow clips it to nothing. */}
+        <div
+          ref={groupRef}
+          // Until the pane is measured, the historical percentages; after,
+          // `useGlassMorph` writes the box in px every frame (it moves size
+          // too for the vertical pose), so React renders no geometry at all.
+          style={
+            paneSize
+              ? { position: "absolute" }
+              : {
+                  position: "absolute",
+                  left: `${GLASS_SIDE_INSET * 100}%`,
+                  right: `${GLASS_SIDE_INSET * 100}%`,
+                  top: `${(movePose === "vertical-left-top-notch" ? 0.32 : GLASS_TOP[movePose]) * 100}%`,
+                  height: `${GLASS_HEIGHT * 100}%`,
+                  minHeight: GLASS_MIN_H,
+                }
+          }
         >
-          {/* Portal target — a PAGE may project content onto the glass (the
-              get-started install animation does) while the layout, and therefore
-              the banner + glass, persists across auth-group navigations. Empty on
-              every other surface, including the desktop SPA. */}
-          <div id={AUTH_GLASS_SLOT_ID} style={{ width: "100%", height: "100%" }} />
+          <LiquidGlass
+            radius={GLASS_RADIUS}
+            maskUrl={masked ? `url(#${ids.glass})` : undefined}
+            rimMaskUrl={masked ? `url(#${ids.rim})` : undefined}
+            shaped={shaped}
+            // Mid-flight the box changes size every frame; rebuilding the
+            // refraction map per frame would pop. Stretch it, rebuild on landing.
+            freezeMap={!cardShown && !still}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            {/* Portal target — a PAGE may project content onto the glass (the
+                get-started install animation does) while the layout, and therefore
+                the banner + glass, persists across auth-group navigations. Empty on
+                every other surface, including the desktop SPA. */}
+            <div id={AUTH_GLASS_SLOT_ID} style={{ width: "100%", height: "100%" }} />
 
-          {/* THE WHITE CARD. Empty for now; content comes later. It is sized
-              from the SOLID part of the pose, so it can never sit over the
-              bite, and it never animates its own position — it is simply
-              absent while the glass moves. Wears the landing page's panel
-              recipe through `--glass-card-*`, not a copy of its values.
-              ⚠ `card &&` IS LOAD-BEARING, AND `masked` ALONE WAS A BUG. This
-              read `{masked && (`, and `masked` only means "the pane has been
-              measured" — true on every surface — so an opaque #ffffff card
-              painted on /login, /signup, /authenticate, /oauth/authorize and
-              the desktop signed-out screen, contradicting this file's own
-              contract that a surface naming no pose is untouched. Worst on
-              /get-started, whose install animation is portaled into the slot
-              ABOVE: the card is a later absolutely-positioned sibling in the
-              same stacking context, so it covered all but a 34px frame of it.
-              ⚠ Do NOT gate this on `shaped` instead: onboarding's step 3 is
-              pose `"default"` BY DESIGN and must keep its card, so `shaped`
-              (pose !== default) would strip it from the one step that looks
-              like a plain surface and is not. */}
-          {masked && card && (
+            {/* THE WHITE CARD. Empty for now; content comes later. It is sized
+                from the SOLID part of the pose, so it can never sit over the
+                bite, and it never animates its own position — it is simply
+                absent while the glass moves. Wears the landing page's panel
+                recipe through `--glass-card-*`, not a copy of its values.
+                ⚠ `card &&` IS LOAD-BEARING, AND `masked` ALONE WAS A BUG. This
+                read `{masked && (`, and `masked` only means "the pane has been
+                measured" — true on every surface — so an opaque #ffffff card
+                painted on /login, /signup, /authenticate, /oauth/authorize and
+                the desktop signed-out screen, contradicting this file's own
+                contract that a surface naming no pose is untouched. Worst on
+                /get-started, whose install animation is portaled into the slot
+                ABOVE: the card is a later absolutely-positioned sibling in the
+                same stacking context, so it covered all but a 34px frame of it.
+                ⚠ Do NOT gate this on `shaped` instead: onboarding's step 3 is
+                pose `"default"` BY DESIGN and must keep its card, so `shaped`
+                (pose !== default) would strip it from the one step that looks
+                like a plain surface and is not. */}
+            {masked && card && (
+              // ⚠ ONE OPACITY FOR THE CARD AND EVERYTHING ON IT. The card and
+              // its content used to be two sibling layers, each with its own
+              // copy of this fade — identical numbers, two animations, two
+              // compositor layers — and Samuel watched the content outlast
+              // the card on every step change (2026-10-13): the white card
+              // washed into the pale glass while the dark content kept its
+              // contrast and still sat there, "random elements on the glass
+              // panel". Now the fade lives on THIS wrapper only, so the card
+              // and its content are flattened into one image and faded as one;
+              // neither child carries an opacity or transition of its own.
+              <div
+                data-glass-card-fade=""
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  opacity: cardOn ? 1 : 0,
+                  transition: cardFade,
+                  pointerEvents: "none",
+                }}
+              >
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    // Masked to an inset copy of THIS pose's outline, bite and
+                    // all. No morph needed: the card is invisible for the whole
+                    // flight, so it only ever shows a settled pose.
+                    mask: `url(#${ids.card})`,
+                    WebkitMask: `url(#${ids.card})`,
+                    background: "var(--glass-card-fill)",
+                    // ⚠ `drop-shadow`, NOT `box-shadow`: a box-shadow is drawn on
+                    // the border box and the mask then cuts it away, so a masked
+                    // card would lose its shadow entirely. `drop-shadow` is
+                    // computed from the masked alpha, so it follows the bite.
+                    // The token's value is already in drop-shadow's grammar.
+                    filter: "drop-shadow(var(--glass-card-shadow))",
+                  }}
+                />
+
+                {/* ON THE CARD — a later sibling so it paints above the card.
+                    Not masked (and outside the card's drop-shadow filter):
+                    renderers place themselves inside `cardRegions`, which never
+                    cross the card's outline. */}
+                {renderContent && box && (
+                  <div style={{ position: "absolute", inset: 0 }}>
+                    {renderContent({
+                      regions: cardRegions(movePose, box.w, box.h),
+                      active: cardOn,
+                      still,
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </LiquidGlass>
+
+          {/* The tilt's sheen — see `GlassSheen`. */}
+          {masked && card && <GlassSheen sheenRef={sheenRef} maskId={ids.glass} />}
+
+          {/* Shape-following drop shadow, OUTSIDE the glass: the glass root
+              clips its own overflow, and a box-shadow there can only ever be a
+              rectangle. Its mask paints the blurred outline and then knocks the
+              bitten outline back out, so the shadow exists only beyond the edge
+              — the cutout included — and never darkens the glass. ⚠ AFTER
+              `LiquidGlass` IN DOM ORDER, ON PURPOSE: painted above the glass it
+              is not part of the glass's backdrop, so the refraction cannot pull
+              it into the panel (see `knockout`). Off when `shaped` is, so a
+              plain pose keeps the original box-shadow instead. */}
+          {masked && (
             <div
+              ref={shadowRef}
               aria-hidden
               style={{
                 position: "absolute",
-                inset: 0,
-                // Masked to an inset copy of THIS pose's outline, bite and
-                // all. No morph needed: the card is invisible for the whole
-                // flight, so it only ever shows a settled pose.
-                mask: `url(#${ids.card})`,
-                WebkitMask: `url(#${ids.card})`,
-                background: "var(--glass-card-fill)",
-                // ⚠ `drop-shadow`, NOT `box-shadow`: a box-shadow is drawn on
-                // the border box and the mask then cuts it away, so a masked
-                // card would lose its shadow entirely. `drop-shadow` is
-                // computed from the masked alpha, so it follows the bite.
-                // The token's value is already in drop-shadow's grammar.
-                filter: "drop-shadow(var(--glass-card-shadow))",
-                opacity: cardShown ? 1 : 0,
-                transition: still
-                  ? undefined
-                  : `opacity ${cardShown ? CARD_IN_MS : CARD_OUT_MS}ms ${CARD_EASE}`,
+                inset: -GLASS_SHADOW_PAD,
+                background: "rgba(8,10,15,0.5)",
+                mask: `url(#${ids.shadow})`,
+                WebkitMask: `url(#${ids.shadow})`,
+                opacity: shaped ? 1 : 0,
+                pointerEvents: "none",
               }}
             />
           )}
-        </LiquidGlass>
-      </div>
+        </div>
 
-      {/* The masks. `userSpaceOnUse` means these coordinates are px in the
-          masked element's own box, which is why the glass and rim masks share
-          one outline while the shadow's is shifted by its padding. */}
-      <svg aria-hidden width="0" height="0" style={{ position: "absolute" }}>
-        <defs>
-          <filter id={ids.rimBlur} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation={GLASS_RIM_BLUR} />
-          </filter>
-          {GLASS_SHADOW_LAYERS.map((l, i) => (
-            <filter
-              key={i}
-              id={`${ids.shadowBlur}-${i}`}
-              x="-50%"
-              y="-50%"
-              width="200%"
-              height="200%"
-            >
-              <feGaussianBlur stdDeviation={l.std} />
+        {/* The masks. `userSpaceOnUse` means these coordinates are px in the
+            masked element's own box, which is why the glass and rim masks share
+            one outline while the shadow's is shifted by its padding. */}
+        <svg aria-hidden width="0" height="0" style={{ position: "absolute" }}>
+          <defs>
+            <filter id={ids.rimBlur} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation={GLASS_RIM_BLUR} />
             </filter>
-          ))}
+            {GLASS_SHADOW_LAYERS.map((l, i) => (
+              <filter
+                key={i}
+                id={`${ids.shadowBlur}-${i}`}
+                x="-50%"
+                y="-50%"
+                width="200%"
+                height="200%"
+              >
+                <feGaussianBlur stdDeviation={l.std} />
+              </filter>
+            ))}
 
-          {/* ⚠ THE REGION IS EXPLICIT ON EVERY MASK. With
-              `maskUnits="userSpaceOnUse"` the default region is still
-              -10%/120%, and a percentage resolves against THIS `<svg>`, which
-              is 0×0 — so the region collapses and the mask hides the element
-              outright. That is a blank panel, not a subtle bug. */}
-          <mask id={ids.glass} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
-            <path ref={keep(0)} fill="#fff" />
-          </mask>
+            {/* ⚠ THE REGION IS EXPLICIT ON EVERY MASK. With
+                `maskUnits="userSpaceOnUse"` the default region is still
+                -10%/120%, and a percentage resolves against THIS `<svg>`, which
+                is 0×0 — so the region collapses and the mask hides the element
+                outright. That is a blank panel, not a subtle bug. */}
+            <mask id={ids.glass} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
+              <path ref={keep(0)} fill="#fff" />
+            </mask>
 
-          {/* The card's outline. Driven by React, not the morph loop: it is
-              one settled pose at a time, never an in-between. */}
-          <mask id={ids.card} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
-            <path d={box ? cardPath(movePose, mw, mh) : undefined} fill="#fff" />
-          </mask>
+            {/* The card's outline. Driven by React, not the morph loop: it is
+                one settled pose at a time, never an in-between. */}
+            <mask id={ids.card} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
+              <path d={box ? cardPath(movePose, box.w, box.h) : undefined} fill="#fff" />
+            </mask>
 
-          {/* A blurred band ON the outline, trimmed to the inside of the
-              shape: the soft inward bevel, following every edge the bite
-              makes. */}
-          {/* ⚠ THE OUTSIDE IS KNOCKED OUT WITH AN `evenodd` PATH, NOT WITH A
-              NESTED `<g mask="url(#glass)">`. The nested reference is not
-              honoured here — the band rendered its OUTER half too, which drew
-              a faint white line across the cutout where there is no glass at
-              all (Samuel #3098A, proved by hiding this layer). Same primitive
-              the shadow's knockout already uses, and that one works. */}
-          <mask id={ids.rim} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
-            <path
-              ref={keep(1)}
-              fill="none"
-              stroke="#fff"
-              strokeWidth={GLASS_RIM_BAND}
-              filter={`url(#${ids.rimBlur})`}
-            />
-            <path ref={rimClip} fillRule="evenodd" fill="#000" />
-          </mask>
+            {/* A blurred band ON the outline, trimmed to the inside of the
+                shape: the soft inward bevel, following every edge the bite
+                makes. */}
+            {/* ⚠ THE OUTSIDE IS KNOCKED OUT WITH AN `evenodd` PATH, NOT WITH A
+                NESTED `<g mask="url(#glass)">`. The nested reference is not
+                honoured here — the band rendered its OUTER half too, which drew
+                a faint white line across the cutout where there is no glass at
+                all (Samuel #3098A, proved by hiding this layer). Same primitive
+                the shadow's knockout already uses, and that one works. */}
+            <mask id={ids.rim} maskUnits="userSpaceOnUse" x="0" y="0" width={mw} height={mh}>
+              <path
+                ref={keep(1)}
+                fill="none"
+                stroke="#fff"
+                strokeWidth={GLASS_RIM_BAND}
+                filter={`url(#${ids.rimBlur})`}
+              />
+              <path ref={rimClip} fillRule="evenodd" fill="#000" />
+            </mask>
 
-          <mask
-            id={ids.shadow}
-            maskUnits="userSpaceOnUse"
-            x="0"
-            y="0"
-            width={mw + GLASS_SHADOW_PAD * 2}
-            height={mh + GLASS_SHADOW_PAD * 2}
-          >
-            <g transform={`translate(${GLASS_SHADOW_PAD},${GLASS_SHADOW_PAD})`}>
-              {GLASS_SHADOW_LAYERS.map((l, i) => (
-                <path
-                  key={i}
-                  ref={keep(2 + i)}
-                  fill="#fff"
-                  fillOpacity={l.alpha}
-                  filter={`url(#${ids.shadowBlur}-${i})`}
-                  transform={`translate(0,${l.dy})`}
-                />
-              ))}
-              {/* Knocks the panel's WHOLE rectangle back out — the bite
-                  included. See the `knockout` ref for why that is the rect and
-                  not the outline. */}
-              <path ref={knockout} fill="#000" />
-            </g>
-          </mask>
-        </defs>
-      </svg>
+            <mask
+              id={ids.shadow}
+              maskUnits="userSpaceOnUse"
+              x="0"
+              y="0"
+              width={mw + GLASS_SHADOW_PAD * 2}
+              height={mh + GLASS_SHADOW_PAD * 2}
+            >
+              <g transform={`translate(${GLASS_SHADOW_PAD},${GLASS_SHADOW_PAD})`}>
+                {GLASS_SHADOW_LAYERS.map((l, i) => (
+                  <path
+                    key={i}
+                    ref={keep(2 + i)}
+                    fill="#fff"
+                    fillOpacity={l.alpha}
+                    filter={`url(#${ids.shadowBlur}-${i})`}
+                    transform={`translate(0,${l.dy})`}
+                  />
+                ))}
+                {/* Knocks the bitten outline back out, so the cutout keeps its
+                    shadow. See the `knockout` ref. */}
+                <path ref={knockout} fill="#000" />
+              </g>
+            </mask>
+          </defs>
+        </svg>
+      </PaneClip>
     </div>
   );
-}
-
-/** `prefers-reduced-motion: reduce` → the panel still changes pose, it just
- *  arrives there instantly (no transition at all, so no clip-path tween). */
-function usePrefersReducedMotion(): boolean {
-  const [still, setStill] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setStill(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-  return still;
 }
 
 /** Where `GlassSlot` portals land — one AuthSplitLayout per document, so a

@@ -189,6 +189,11 @@ export function ConnectSection() {
               radius={18}
               staticMap={glassMode === "scrub"}
               className="lp-connect-glass"
+              // Onboarding's edge + hover tilt (Samuel 2026-10-13). The tilt
+              // lives on the glass's own layers, so it composes with the
+              // scrub, which only ever writes this WRAPPER's box.
+              edge="rim"
+              tilt
             >
               <div className="lp-connect-glass-pad">
                 <div
