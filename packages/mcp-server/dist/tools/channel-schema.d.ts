@@ -46,10 +46,10 @@ export declare const CHANNEL_INPUT_SHAPE: {
             allowlist: "allowlist";
             "auto-review": "auto-review";
             "run-everything": "run-everything";
-            default: "default";
             promptUnmatched: "promptUnmatched";
             onRequest: "onRequest";
             allowAll: "allowAll";
+            default: "default";
             autoMode: "autoMode";
             "approve-all": "approve-all";
         }>>;
