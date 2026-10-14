@@ -44,6 +44,9 @@ const check = (name: RegExp) => screen.getByRole("button", { name }).querySelect
 describe.each([
   ["claude", "Claude"],
   ["codex", "ChatGPT"],
+  // Real runtimes since the runtime scaffold (wired 2026-10-14): same flow.
+  ["muse", "Muse"],
+  ["grok", "Grok"],
 ])("%s", (id, label) => {
   it("flips to a green 'Signed in' when main pushes connected", async () => {
     let answer: (v: { ok: boolean }) => void = () => {};
@@ -99,6 +102,20 @@ it("a flow that ends without a credential (timeout) says so; a double click star
   expect(b.signIn).toHaveBeenCalledTimes(1);
   await act(async () => answer({ ok: false }));
   expect(screen.getByRole("status").textContent).toContain("Claude sign-in didn");
+});
+
+it("a failed Muse or Grok sign-in names that runtime", async () => {
+  for (const [id, label] of [["muse", "Muse"], ["grok", "Grok"]] as const) {
+    let answer: (v: { ok: boolean }) => void = () => {};
+    const b = bridge({ signIn: vi.fn().mockReturnValue(new Promise((r) => (answer = r))) });
+    step();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: `Sign in to ${label}` }));
+    expect(b.signIn).toHaveBeenCalledWith(id);
+    await act(async () => answer({ ok: false }));
+    expect(screen.getByRole("status").textContent).toContain(`${label} sign-in didn`);
+    cleanup();
+  }
 });
 
 it("preview: the fake sign-in shows the same green check", () => {
