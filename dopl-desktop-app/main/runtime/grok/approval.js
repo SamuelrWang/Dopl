@@ -3,20 +3,30 @@
 // 1. `_x.ai/hooks/run` (PreToolUse, registered per session, `policy.js › HOOKS_META`) arrives for EVERY tool
 //    before Grok's own permission rules, in every mode, read-only tools included, with `use_tool` already
 //    resolved (`toolName: "dopl_session__post_message"`) — LIVE. Reply `{ decision: "continue" | "deny",
-//    systemMessage }`; a deny fails only that tool and the turn goes on. It FAILS OPEN on timeout, so it
-//    answers only what is decided now: the containment deny list (and, on a restricted profile, any built-in
-//    Dopl has not classified), and — for a Dopl MCP call — a gate verdict the gate SETTLED without asking.
+//    systemMessage }`; a deny fails only that tool and the turn goes on. It FAILS OPEN at the group's
+//    `timeout` (LIVE, S11: a 3 s group, a reply held 9 s → the call ran), and Grok honours a reply held up to
+//    that bound (LIVE, S11: held 40 s under the 600 s group, then `deny` → only that call failed, the turn went
+//    on). So it answers the containment deny list (and, on a restricted profile, any built-in Dopl has not
+//    classified) at once, and — for a Dopl MCP call — WAITS for the gate up to `policy.HOOK_HOLD_MS`: an
+//    operator's Deny inside that window fails only that call (F-777). A reply's `updatedInput` is ignored
+//    (LIVE, S11) — Dopl never rewrites. The payload's `permissionMode` is Grok's mode readback: a session
+//    reported `bypassPermissions` (LIVE, S10: what a `/always-approve on` prompt switches to, while the
+//    `yolo` flag stays false) is refused and stopped.
 // 2. `session/request_permission` (ACP, no timeout) is where a PARKED verdict waits for the operator. Its
 //    `toolCall.toolCallId` equals the hook's `toolUseId` (LIVE), so a call the hook already started is
 //    answered from the same gate promise — the gate is asked ONCE per call (it mints the outbound tag).
 //    Reply `{ outcome: { outcome: "selected", optionId } }`, a ONCE-scoped option only (never `allow_always`:
 //    a remembered grant would satisfy the ask rule on a ledger Dopl cannot read). ⚠ `reject_once` ENDS THE
-//    WHOLE TURN (`stopReason: "cancelled"`, `PermissionRejected` — LIVE, `smoke-s2`).
+//    WHOLE TURN (`stopReason: "cancelled"`, `PermissionRejected` — LIVE, `smoke-s2`), and so does a
+//    `cancelled` outcome (`PermissionCancelled`, LIVE, S11); there is no per-call reject option (offered:
+//    `allow_once`, `reject_once`, `allow_always`). Only a verdict still parked when the hook's hold ran out
+//    reaches here undecided.
 // Fails closed everywhere: an unreadable request is denied; a gate that throws is a deny.
 
 const { canonicalDoplName } = require('../../mcp-tool-names');
 const tools = require('./tools');
 const protocol = require('./protocol');
+const policy = require('./policy');
 
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const str = (v) => (typeof v === 'string' ? v : '');
@@ -82,25 +92,38 @@ const asVerdict = (v) => {
   return { behavior: 'deny', message: (v && typeof v === 'object' && typeof v.message === 'string' && v.message) || '' };
 };
 
-/** `p` settled within this macrotask → `{ settled: true, verdict }`, else `{ settled: false }`. */
-function settledNow(p) {
+/** `p` settled within `ms` → `{ settled: true, verdict }`; `stop` resolved first → `{ cancelled: true }`;
+ *  else `{ settled: false }`. */
+function settledWithin(p, ms, stop) {
   return new Promise((resolve) => {
     let done = false;
-    const take = (value) => { if (!done) { done = true; resolve(value); } };
+    let timer = null;
+    const take = (value) => { if (!done) { done = true; if (timer) clearTimeout(timer); resolve(value); } };
     p.then((v) => take({ settled: true, verdict: v }), () => take({ settled: true, verdict: asVerdict(null) }));
-    setImmediate(() => take({ settled: false }));
+    if (stop) stop.then(() => take({ cancelled: true }));
+    if (ms > 0) timer = setTimeout(() => take({ settled: false }), ms);
+    else setImmediate(() => take({ settled: false }));
   });
 }
+
+// The modes a Dopl session may report in the hook (`permissionMode`): Grok's `default` (Ask, Full) and `auto`
+// (Auto) — LIVE. Anything else (`bypassPermissions` after a `/always-approve on`, LIVE S10) means Grok is no
+// longer asking what Dopl's ask rule needs it to ask.
+const EXPECTED_MODES = Object.freeze(['default', 'auto']);
 
 /**
  * The approval driver for one session. `o`:
  *   `gate(name, input, meta)` → Promise of core's `{ behavior, message }` (or `'allow'|'deny'`);
  *   `cfg` → this session's tool config (`tools.buildSessionToolConfig`);
- *   `onUnknown(method)` → show a server request Dopl does not know;  `log`.
+ *   `onUnknown(method)` → show a server request Dopl does not know;
+ *   `onUnsafe(text)` → stop a session Grok reports in a mode Dopl never chose;
+ *   `hookHoldMs` → how long the hook waits on a parked verdict (default `policy.HOOK_HOLD_MS`);  `log`.
  * Returns `{ onServerRequest(msg), cancelPending(), wasUnasked(toolCallId), endTurn() }`.
  */
 function makeApprovalDriver(o) {
   const log = typeof o.log === 'function' ? o.log : () => {};
+  const holdMs = Number.isFinite(o.hookHoldMs) ? o.hookHoldMs : policy.HOOK_HOLD_MS;
+  let unsafeSaid = false;
   const memos = new Map(); // toolCallId → Promise<verdict>, started by the hook for a Dopl MCP call
   const parked = new Set(); // ids the hook left waiting on the operator, not yet asked by Grok
   // An interrupt answers every permission reply still waiting as `cancelled`; a fresh latch per interrupt.
@@ -118,6 +141,13 @@ function makeApprovalDriver(o) {
   }
 
   async function onHook(params) {
+    const mode = obj(params).permissionMode;
+    if (typeof mode === 'string' && EXPECTED_MODES.indexOf(mode) === -1) {
+      const why = `Grok reported its permission mode as \`${mode}\` — refusing a session that would not run under `
+        + 'the restrictions the operator chose.';
+      if (!unsafeSaid && typeof o.onUnsafe === 'function') { unsafeSaid = true; o.onUnsafe(why); }
+      return { decision: 'deny', systemMessage: why };
+    }
     const call = hookCallOf(params);
     const contained = hookVerdict(call.name, o.cfg);
     if (contained) return { decision: 'deny', systemMessage: contained };
@@ -127,7 +157,11 @@ function makeApprovalDriver(o) {
     const id = str(obj(params).toolUseId);
     const p = ask(id, call.name, call.input);
     if (id) memos.set(id, p);
-    const now = await settledNow(p);
+    // Held for the operator up to the hold (below the group timeout, which would fail OPEN): a Deny inside it
+    // fails only this call (F-777). Past it, `continue` — the permission request (no timeout) waits on the
+    // same promise, and a Deny there ends the turn (fails closed).
+    const now = await settledWithin(p, holdMs, cancelGen.promise);
+    if (now.cancelled) { if (id) memos.delete(id); return { decision: 'deny', systemMessage: 'The turn was stopped.' }; }
     if (!now.settled) { if (id) parked.add(id); return { decision: 'continue' }; }
     if (now.verdict.behavior === 'allow') return { decision: 'continue' };
     if (id) memos.delete(id);
@@ -181,5 +215,6 @@ const descriptor = {
 };
 
 module.exports = {
-  makeApprovalDriver, gateCallOf, hookCallOf, hookVerdict, optionFor, asVerdict, settledNow, descriptor, rpcError,
+  makeApprovalDriver, gateCallOf, hookCallOf, hookVerdict, optionFor, asVerdict, settledWithin, descriptor, rpcError,
+  EXPECTED_MODES,
 };

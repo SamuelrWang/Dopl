@@ -10,7 +10,8 @@
 // isolation (`grok inspect`: only Dopl's config, project `.mcp.json` blocked, XAI_API_KEY stripped, private
 // HOME), a Dopl-like MCP tool's permission round-trip in Grok's `default` AND `autoMode` (the ask rule), the
 // headers on the wire, per-session model + plain-string effort, usage + the 256k window, resume (no replay),
-// a live model switch, interject (steer) and cancel. ≈4 prompts on `grok-4.7-build-fast`.
+// a live model switch, interject (steer) and cancel, and (F-777) an operator Deny held in the hook failing only
+// that call. ≈5 prompts on `grok-4.7-build-fast`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -182,6 +183,24 @@ test("`autoMode` + the ask rule: the classifier still hands a Dopl MCP call to D
     assert.ok(sp.asked.some((a) => a.name === "mcp__dopl_session__post_message"), "the gate saw it");
     assert.ok(live.requests.some((r) => r.method === "session/request_permission" && /post_message/.test(JSON.stringify(r.params))), "held under autoMode (ask rule)");
     assert.ok(live.requests.some((r) => r.method === "_x.ai/hooks/run" && r.params.permissionMode === "auto"), "the hook reports Grok's own auto mode");
+  } finally { h.close(); live.restore(); stub.server.close(); }
+});
+
+test("F-777: an operator's Deny on a PARKED Dopl call (held in the hook) fails only that call — the turn goes on", { skip, timeout: 200000 }, async () => {
+  const stub = await stubServer();
+  const live = liveConnect();
+  const sp = spec(stub, { verdict: () => later({ behavior: "deny", message: "The operator denied this call." }, 2500) });
+  const h = launchSpec.start(sp);
+  try {
+    await collect(h, (evs) => evs.some((e) => e.type === "launched"), 60000);
+    sp.prompt.push(userMsg("Call the dopl_session post_message tool with text 'live-deny'. If it is denied, reply with the single word NOTED."));
+    const evs = await collect(h, (e) => !!resultOf(e));
+    assert.ok(sp.asked.some((a) => a.name === "mcp__dopl_session__post_message"), "the gate was asked");
+    assert.ok(!stub.seen.some((s) => s.rpc && s.rpc.method === "tools/call" && s.rpc.params.name === "post_message"), "the post never ran");
+    assert.ok(!live.requests.some((r) => r.method === "session/request_permission" && /post_message/.test(JSON.stringify(r.params))), "answered in the hook, never in a permission request");
+    const done = live.notes.filter((n) => n.method === "_x.ai/session/prompt_complete").pop();
+    assert.equal(done && done.params.stopReason, "end_turn", "not a cancelled turn (contrast reject_once → PermissionRejected)");
+    assert.match(said(evs), /NOTED/i, "the model carried on after the denial");
   } finally { h.close(); live.restore(); stub.server.close(); }
 });
 
