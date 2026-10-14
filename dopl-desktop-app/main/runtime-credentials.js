@@ -127,8 +127,10 @@ function dismissPrompt(runtimeId) {
 }
 
 // A sign-in that took brings Dopl to the front by itself (Samuel, 2026-09-29): the operator finished in the
-// browser, and the app, whose row now reads "Connected", is where they go next. No notification.
+// browser, and the app, whose row now reads "Connected", is where they go next. No notification. Every runtime
+// (`runFlow` is shared). A Dopl window already in front is left alone: nothing to take focus back from.
 function bringToFront() {
+  try { if (require('electron').BrowserWindow.getFocusedWindow()) return; } catch (_) { /* no electron (tests) */ }
   try { host.showWindow(); } catch (err) { diag('runtime credentials: show failed —', err && err.message); }
   try { require('electron').app.focus({ steal: true }); } catch (_) { /* no app (tests) */ }
 }
