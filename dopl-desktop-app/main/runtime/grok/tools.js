@@ -17,7 +17,11 @@ function shortDoplName(full) {
 
 // ── GROK'S BUILT-IN TOOL IDS ────────────────────────────────────────────────────────────────
 // LIVE on 1.0.52 (2026-10-13, `smoke-s1..s3`): `run_terminal_command`, `read_file`, `write`, `search_tool`,
-// `use_tool`. The rest are read in xAI's docs (`22-permissions-and-safety.md`) — smoke S5b confirms them.
+// `use_tool`; (2026-10-14, `smoke-s5b`/`-s5c`) `list_dir {target_directory}`, `grep {pattern, path}`,
+// `search_replace {file_path, old_string, new_string}` (asks in `default`), `web_fetch {url}` (asks — it is
+// read_only yet prompts), `web_search {query}` (client tool only with `backend_tools = false`, `config-home.js`),
+// `spawn_subagent {description, prompt, background}` — each the hook's `toolName`. The rest are read in xAI's
+// docs (`22-permissions-and-safety.md`).
 // `use_tool` is the MCP dispatcher: the hook and the permission request both name the RESOLVED tool
 // (`dopl_session__post_message`), so `use_tool` itself is never a gate question.
 const SHELL_TOOLS = Object.freeze(['run_terminal_command', 'kill_command_or_subagent']);

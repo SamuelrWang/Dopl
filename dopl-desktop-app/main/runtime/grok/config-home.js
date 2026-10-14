@@ -58,12 +58,17 @@ function rootsOf(dir) {
 // = false` removes the "always allow" option (a remembered grant would satisfy the ask rule). The marketplace
 // markers are the ones Grok itself writes after its first-run plugin install, so a fresh Dopl home never
 // clones xAI's plugin marketplace (SMOKE: no plugin installed in the live tier's home).
+// `backend_tools = false` is CONTAINMENT: with backend tools on, `web_search` runs server-side inside the
+// model call and never reaches the PreToolUse hook (LIVE 1.0.52, S5b: no hook, a `ws_…` call id, rawInput
+// `{variant:"WebSearch", backend:true}`), so a restricted profile's deny could not hold. Off, it is the client
+// tool: the hook sees `web_search {query}`, a deny fails only that call, and an allowed search still answers
+// (LIVE, S5c).
 const ASK_RULE = `MCPTool(${SERVER_KEY}__*)`;
 const compat = (vendor, keys) => [`[compat.${vendor}]`].concat(keys.map((k) => `${k} = false`)).join('\n');
 const CONFIG_TOML = [
   '# Written by Dopl on every launch of a Dopl session; edits here are replaced.',
   '[cli]\nauto_update = false\nuse_leader = false',
-  '[features]\ntelemetry = false',
+  '[features]\ntelemetry = false\nbackend_tools = false',
   '[ui]\nremember_tool_approvals = false',
   `[permission]\nask = [${JSON.stringify(ASK_RULE)}]`,
   compat('claude', ['skills', 'rules', 'agents', 'mcps', 'hooks', 'sessions']),
@@ -76,9 +81,10 @@ const CONFIG_TOML = [
 // server, only Dopl's own (LIVE via `grok inspect`: a project `.mcp.json` server → `disabledReason: "not in
 // allowedMcpServers"`), and the bypass lock (it does NOT stop `_meta.yoloMode` — LIVE — which is why Dopl never
 // sends that). ⚠ `grok agent` DELETES `$GROK_HOME/requirements.toml` during `initialize` (LIVE 1.0.52,
-// 2026-10-13) — so it is rewritten before EVERY spawn, and whether that process applied it before deleting is
-// UNMEASURED (grok-runtime.md smoke S16). The project-MCP fence that is measured on the agent is folder trust:
-// in a folder Dopl never trusts, `grok agent` starts no project `.mcp.json` server at all, file or no file.
+// 2026-10-13; `[features] managed_config = false` does not stop it) — so it is rewritten before EVERY spawn.
+// It IS applied first (LIVE, S16, 2026-10-14): with folder trust switched off so the pins are the only fence,
+// a project `.mcp.json` http server started WITHOUT the file and did not start WITH it (F-775 closed). Folder
+// trust is the second fence: Dopl never trusts a folder.
 const REQUIREMENTS_TOML = [
   '# Written by Dopl on every launch of a Dopl session; edits here are replaced.',
   'enable_all_project_mcp_servers = false',
