@@ -5,3 +5,4 @@ export { BrandLockup } from "./brand-lockup";
 export { AUTH_GLASS_SLOT_ID } from "./auth-banner-panel";
 export type { GlassCardContent, GlassCardContext } from "./glass-card-content";
 export type { AuthGlassPose } from "./auth-glass-geometry";
+export { stripFontSize } from "./auth-glass-geometry";
