@@ -33,27 +33,49 @@ const NON_WORKSPACE_ROOTS = new Set([
   "onboarding",
   "pricing",
   "privacy",
-  "terms",
+  "services-agreement",
   "settings",
   "workspaces",
 ]);
 
+/** The legal pages: white, bare, never the frame colour. `/terms` is not here —
+ *  it is a `next.config.ts › redirects` 308 to `/services-agreement`. */
+export const LEGAL_ROUTES: ReadonlySet<string> = new Set(["/services-agreement", "/privacy"]);
+
 /**
  * Legacy chrome shell — dresses only non-workspace pages (login, pricing,
- * /workspaces, /settings, admin, invite, oauth, legal) in the dark
- * centered-column look. Marketing landing passes through bare; any other
- * top-level route renders bare on the app frame (see `NON_WORKSPACE_ROOTS`).
+ * /workspaces, /settings, admin, invite, oauth) in the dark centered-column
+ * look. Marketing landing passes through bare; any other top-level route
+ * renders bare on the app frame (see `NON_WORKSPACE_ROOTS`).
+ *
+ * ⚠ THE LEGAL PAGES ARE WHITE, AND NOTHING DARK IS PAINTED UNDER THEM
+ * (Samuel, 2026-10-14): `LEGAL_ROUTES` get `legal-active` (white, declared in
+ * `features/marketing/legal/legal.css`), never `mosaic-bg`, no inline frame
+ * colour, and no `FlushGrid`/`<main>` wrapper. Keep in sync with the
+ * pre-hydration script in `src/app/layout.tsx`, which does the same before
+ * first paint.
  */
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
   const isPricing = pathname === "/pricing";
   const isNoChrome = isLanding || isPricing;
+  const isLegal = LEGAL_ROUTES.has(pathname);
   const segments = pathname.split("/").filter(Boolean);
   const isAppShellRoute =
     segments.length >= 1 && !NON_WORKSPACE_ROOTS.has(segments[0]);
 
   useEffect(() => {
+    if (isLegal) {
+      document.body.classList.remove("mosaic-bg");
+      document.body.classList.remove("landing-active");
+      document.body.classList.add("legal-active");
+      document.body.style.backgroundColor = "";
+      return () => {
+        document.body.classList.remove("legal-active");
+        document.body.classList.add("mosaic-bg");
+      };
+    }
     if (isNoChrome) {
       document.body.classList.remove("mosaic-bg");
       document.body.classList.add("landing-active");
@@ -77,9 +99,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       document.body.classList.add("mosaic-bg");
       document.body.style.backgroundColor = "";
     };
-  }, [isNoChrome, isAppShellRoute]);
+  }, [isLegal, isNoChrome, isAppShellRoute]);
 
-  if (isNoChrome || isAppShellRoute) {
+  if (isLegal || isNoChrome || isAppShellRoute) {
     return <>{children}</>;
   }
 

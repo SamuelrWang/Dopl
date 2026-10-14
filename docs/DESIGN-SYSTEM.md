@@ -26,7 +26,10 @@ section were deleted, so this is the v2-only tree's number and not a leftover.
 "Currently wired" is a claim about the KIT, so re-derive it rather than
 inheriting it: `grep -rln 'StandardDialog\|RAISED_INPUT' src apps`.
 Exempt: marketing pages and auth + onboarding (their own glass/3D
-kit). The F-022 legacy Button/Dialog primitives are retired (deleted
+kit). The legal pages (`/services-agreement`, `/privacy`) count as marketing:
+`features/marketing/legal/legal.css` takes the app's font and colour tokens
+(`--font-app`, `--text-*`, `--border-*`) but sets reading sizes above the app
+scale (15px prose) on the landing's literal white ground. The F-022 legacy Button/Dialog primitives are retired (deleted
 2026-07-17). Every new page starts on this system.
 
 🔒 **ANYTHING CLICKABLE SHOWS THE HAND — DO NOT ADD `cursor-pointer` TO A NEW

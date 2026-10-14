@@ -4,8 +4,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useLoginCore, type LoginActions, type LoginMode } from "../hooks/use-login-core";
 import { PasswordRequirements } from "./password-requirements";
 
-/** ToS/Privacy link shape. Web wraps `next/link`; desktop SPA opens system
- *  browser — `file://` document cannot navigate to `/terms`. */
+/** Services Agreement/Privacy link shape. Web wraps `next/link`; desktop SPA
+ *  opens system browser — `file://` document cannot navigate to
+ *  `/services-agreement`. */
 type LegalLinkProps = { href: string; className?: string; children: ReactNode };
 type LegalLinkComponent = (props: LegalLinkProps) => ReactNode;
 
@@ -281,7 +282,7 @@ export function LoginFormCore({
 
       <p className="mt-7 text-[12px] leading-relaxed text-[#9a9a9a]">
         By continuing, you agree to our{" "}
-        <LegalLink href="/terms" className="text-[#181818] underline">Terms of Service</LegalLink> and{" "}
+        <LegalLink href="/services-agreement" className="text-[#181818] underline">Services Agreement</LegalLink> and{" "}
         <LegalLink href="/privacy" className="text-[#181818] underline">Privacy Policy</LegalLink>.
       </p>
       </div>

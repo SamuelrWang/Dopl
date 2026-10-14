@@ -32,7 +32,9 @@ export const PUBLIC_ROUTES = [
   // the session gate (same rationale as the billing webhook above) or the
   // middleware 401s them before their own auth runs — so the jobs never fire.
   "/api/cron/",
-  "/terms",
+  // The Services Agreement (`/terms` until 2026-10-14 — that path is a
+  // `next.config.ts › redirects` 308 now, answered before the proxy runs).
+  "/services-agreement",
   "/privacy",
   "/pricing",
   // The landing page's Download button: resolves the newest notarized mac build

@@ -1,73 +1,70 @@
+import "@/features/marketing/marketing.css";
+import "@/features/marketing/legal/legal.css";
+
 import Link from "next/link";
-import type { ReactNode } from "react";
 
-/** Shared chrome for the static legal pages (/privacy, /terms). Server component. */
-export function LegalPage({ title, children }: { title: string; children: ReactNode }) {
+import { LegalMarkdown } from "../legal/legal-markdown";
+import type { LegalDoc } from "../legal/parse-legal-markdown";
+import { Logo } from "./logo";
+
+/** The two legal pages, in the order the top bar lists them. */
+export const LEGAL_PAGES = [
+  { href: "/services-agreement", label: "Services Agreement" },
+  { href: "/privacy", label: "Privacy Policy" },
+] as const;
+
+export type LegalHref = (typeof LEGAL_PAGES)[number]["href"];
+
+/**
+ * Shared chrome for the static legal pages (`/services-agreement`, `/privacy`). Server
+ * component. The body comes from `docs/legal/*.md` via `loadLegalDoc` — never hand-copied.
+ *
+ * ⚠ WHITE PAGE, NOT A WHITE CARD. The surface is `body.legal-active` (`legal.css`),
+ * applied before first paint by `src/app/layout.tsx`'s inline script and kept by
+ * `shared/layout/layout-shell.tsx › LayoutShell`, which also renders these routes bare
+ * (no `mosaic-bg`, no `FlushGrid`, no dark `<main>`). Nothing blue sits underneath.
+ */
+export function LegalPage({ doc, current }: { doc: LegalDoc; current: LegalHref }) {
   return (
-    <div
-      className="min-h-screen px-6 py-16 flex justify-center relative z-10"
-      style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
-    >
-      <div className="w-full max-w-2xl">
-        <Link
-          href="/login"
-          className="inline-block mb-10 font-mono text-[10px] uppercase tracking-wider text-white/40 hover:text-white transition-colors"
-        >
-          &larr; Back
-        </Link>
+    <div className="legal">
+      <header className="legal-bar">
+        <div className="legal-bar-inner">
+          <Logo />
+          <nav aria-label="Legal" className="legal-bar-links">
+            {LEGAL_PAGES.map((page) => (
+              <Link
+                key={page.href}
+                href={page.href}
+                aria-current={page.href === current ? "page" : undefined}
+              >
+                {page.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </header>
 
-        <h1
-          className="text-2xl font-bold mb-2"
-          style={{
-            fontFamily: "var(--font-playfair), 'Playfair Display', serif",
-            fontStyle: "italic",
-            color: "white",
-          }}
-        >
-          {title}
-        </h1>
-        <p className="font-mono text-[10px] uppercase tracking-wider text-white/40 mb-12">
-          Last updated: April 2026
-        </p>
+      <main className="legal-main">
+        <article className="legal-doc">
+          <h1>{doc.title}</h1>
+          {doc.updated && <p className="legal-updated">Last updated: {doc.updated}</p>}
 
-        <div className="space-y-10 text-[14px] leading-relaxed text-white/70">{children}</div>
-      </div>
-    </div>
-  );
-}
+          {doc.sections.length > 0 && (
+            <nav aria-label="Contents" className="legal-toc">
+              <p className="legal-toc-title">Contents</p>
+              <ol>
+                {doc.sections.map((section) => (
+                  <li key={section.id}>
+                    <a href={`#${section.id}`}>{section.text}</a>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
 
-/** One numbered section: `title` is the full heading, e.g. "3. User Accounts". */
-export function LegalSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section>
-      <h2 className="font-mono text-[11px] uppercase tracking-wider text-white/90 mb-3">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-export function LegalSubheading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="font-mono text-[10px] uppercase tracking-wider text-white/60 mt-4 mb-2">
-      {children}
-    </h3>
-  );
-}
-
-/** Postal + email block closing both pages' Contact section. */
-export function LegalContactAddress() {
-  return (
-    <div className="mt-3 font-mono text-[12px] text-white/50 space-y-1">
-      <p>Dopl</p>
-      <p>2603 California Street</p>
-      <p>San Francisco, CA</p>
-      <p>
-        <a href="mailto:build@usedopl.com" className="text-white/70 hover:text-white transition-colors">
-          build@usedopl.com
-        </a>
-      </p>
+          <LegalMarkdown blocks={doc.blocks} />
+        </article>
+      </main>
     </div>
   );
 }

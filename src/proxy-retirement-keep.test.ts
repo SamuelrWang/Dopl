@@ -94,6 +94,9 @@ const KEEP = [
   `/billing/${SEGMENT}`,
   `/billing/${SEGMENT}?billing=upgrade`,
   "/pricing",
+  "/services-agreement",
+  // 308s to /services-agreement before the proxy runs (next.config.ts); still
+  // reserved, so the retirement map must never claim it.
   "/terms",
   "/privacy",
   "/download",
@@ -143,7 +146,7 @@ describe("the KEEP list is untouched with the flag ON", () => {
     "/",
     "/login",
     "/pricing",
-    "/terms",
+    "/services-agreement",
     "/privacy",
     "/download",
     "/join/tok_x",

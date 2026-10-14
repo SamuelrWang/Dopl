@@ -143,7 +143,9 @@ export default function RootLayout({
             routes so the grid pattern never flashes. Inline scripts in
             <body> are render-blocking, so this runs before the browser
             paints body's class-driven background. Must stay in sync with
-            isNoChrome in layout-shell.tsx.
+            isNoChrome and LEGAL_ROUTES in layout-shell.tsx — the legal pages
+            (/services-agreement, /privacy) get `legal-active`, a white body,
+            so the frame colour is never painted under them.
 
             🔒 ⚠ **IF YOU ARE HERE BECAUSE OF *"Encountered a script tag while
             rendering React component. Scripts inside React components are never
@@ -169,7 +171,7 @@ export default function RootLayout({
             drive-by. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}else if(p==='/services-agreement'||p==='/privacy'){document.body.classList.remove('mosaic-bg');document.body.classList.add('legal-active');}}catch(e){}})();`,
           }}
         />
         <QueryProvider>
