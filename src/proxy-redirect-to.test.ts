@@ -279,7 +279,7 @@ describe("the desktop and OAuth flows are untouched", () => {
     "/auth/callback?code=abc&desktop=1&state=n1",
     "/oauth/authorize?client_id=x&state=y",
     "/invite/SomeSignedToken",
-    "/terms",
+    "/services-agreement",
     "/privacy",
     "/pricing",
   ])("%s passes through signed out, untouched", async (path) => {

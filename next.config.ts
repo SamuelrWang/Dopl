@@ -26,6 +26,24 @@ const nextConfig: NextConfig = {
     "@modelcontextprotocol/sdk",
   ],
   /**
+   * The legal pages render `docs/legal/*.md` (`features/marketing/legal/load-legal-doc.ts`).
+   * They are `force-static`, so the read happens at build; this traces the two files into
+   * the route bundles anyway, so an on-demand render could never find them missing.
+   */
+  outputFileTracingIncludes: {
+    "/services-agreement": ["./docs/legal/SERVICES-AGREEMENT.md"],
+    "/privacy": ["./docs/legal/PRIVACY.md"],
+  },
+  /**
+   * `/terms` WAS the terms page until 2026-10-14; it is now the Services Agreement at
+   * `/services-agreement`. `permanent: true` is a 308, so every old link, bookmark and
+   * the desktop builds already in the wild keep landing on the agreement. Config-level
+   * redirects run BEFORE `src/proxy.ts`, so `/terms` needs no proxy or public-route entry.
+   */
+  async redirects() {
+    return [{ source: "/terms", destination: "/services-agreement", permanent: true }];
+  },
+  /**
    * Serve OAuth/MCP discovery metadata at its spec path. A normal API route
    * (/api/oauth-protected-resource) backs it, rewritten from the well-known
    * path to sidestep Next's dot-directory routing ambiguity. Stage 3 adds the
@@ -54,7 +72,7 @@ const nextConfig: NextConfig = {
    * LANDED FIRST. `getClaims()` can rotate the Supabase session cookie onto the
    * response, and a `Set-Cookie` overrides any shared-cache directive — a
    * `s-maxage` on a proxy-matched path is a promise the runtime can revoke on any
-   * given request. `/pricing`, `/privacy`, `/terms` and `/favicons/*` are excluded
+   * given request. `/pricing`, `/privacy`, `/services-agreement` and `/favicons/*` are excluded
    * from the matcher now, so nothing in this list can acquire a `Set-Cookie`.
    *
    * `/` IS DELIBERATELY ABSENT even though it is the highest-traffic prerendered
@@ -82,7 +100,10 @@ const nextConfig: NextConfig = {
     return [
       { source: "/pricing", headers: [{ key: "Cache-Control", value: html }] },
       { source: "/privacy", headers: [{ key: "Cache-Control", value: html }] },
-      { source: "/terms", headers: [{ key: "Cache-Control", value: html }] },
+      {
+        source: "/services-agreement",
+        headers: [{ key: "Cache-Control", value: html }],
+      },
       {
         source: "/favicons/:path*",
         headers: [{ key: "Cache-Control", value: asset }],

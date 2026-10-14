@@ -2,7 +2,11 @@
    Landing page. ⚠ Page-scoped — the app never loads this file.
    ───────────────────────────────────────────────────────────────────── */
 
-.lp {
+/* Tokens are shared with the legal pages (`.legal`, components/legal-page.tsx),
+   which render the same `.lp-nav` brand block and need `--gutter`/`--ink` to
+   place it identically. Values live here only. */
+.lp,
+.legal {
   /* ⚠ Do NOT swap in a different grotesque. Helvetica is the reference face,
      Arial the metric-compatible fallback; the shapes (double-story a/g, cut
      terminals) must read as Helvetica. */
@@ -15,7 +19,9 @@
      is scoped to the Multiplayer scene. Decelerating, never past 1. */
   --lp-reveal-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --gutter: clamp(20px, 4vw, 56px);
+}
 
+.lp {
   min-height: 100vh;
   width: 100%;
   background: #ffffff;
