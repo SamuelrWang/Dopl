@@ -99,7 +99,10 @@ const RESERVED_TOP_LEVEL = new Set([
   "privacy",
   // KEEP by accident otherwise (`parseSegment` rejects a dashless single
   // segment); named explicitly so it's a rule, not an accident.
+  "services-agreement",
   "signup",
+  // `/terms` — a 308 to `/services-agreement` since 2026-10-14
+  // (`next.config.ts › redirects`); still reserved so old links keep working.
   "terms",
 ]);
 

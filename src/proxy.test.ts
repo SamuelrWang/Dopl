@@ -260,7 +260,7 @@ describe("pages", () => {
     "/auth/callback?code=abc",
     "/auth/desktop-start",
     "/auth/desktop-handoff",
-    "/terms",
+    "/services-agreement",
     "/privacy",
     "/pricing",
     "/invite/SomeSignedToken",
@@ -273,13 +273,14 @@ describe("pages", () => {
   });
 
   // THE BEHAVIOUR HALF OF THE P0-4 MATCHER ARGUMENT (2026-08-07). `pricing|privacy|terms`
-  // were added to the matcher's negative lookahead as UNANCHORED prefixes, so they also
-  // exclude `/pricing/enterprise`, `/termsfoo` and friends. That is safe by construction
+  // (`terms` → `services-agreement` on 2026-10-14) were added to the matcher's negative
+  // lookahead as UNANCHORED prefixes, so they also exclude `/pricing/enterprise`,
+  // `/services-agreementfoo` and friends. That is safe by construction
   // rather than by luck — `PUBLIC_ROUTES` matches with `pathname.startsWith`, so those
   // paths were ALREADY getting an unconditional passthrough — and this is the proof of
   // the premise rather than the assertion of it. If a real gated route is ever added
   // under one of those prefixes, this fails before the matcher can silently exempt it.
-  it.each(["/pricing/enterprise", "/termsfoo", "/privacy-policy"])(
+  it.each(["/pricing/enterprise", "/services-agreementfoo", "/privacy-policy"])(
     "%s is an unconditional passthrough in BOTH session states",
     async (path) => {
       expect((await proxy(req(path))).status).toBe(200);

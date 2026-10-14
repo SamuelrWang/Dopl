@@ -398,9 +398,11 @@ export async function proxy(request: NextRequest) {
  * landing visit (`robots.txt`/`sitemap.xml` unserveable too) — `.*\.ico$` now subsumes that
  * root-only alternative. `/` STAYS MATCHED: its only work here is the signed-in bounce at
  * `:268`, which cannot move client-side without baking `isWebsiteRetired()` into HTML.
+ * ⚠ 2026-10-14: `terms` became `services-agreement` (the Services Agreement's slug); `/terms`
+ * is a `next.config.ts › redirects` 308 now, and config redirects run before this proxy.
  */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicons/|pricing|privacy|terms|api/mcp|api/oauth|api/version|api/cron/|api/billing/webhook|\\.well-known/oauth-|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml|woff2?|mp3)$).*)",
+    "/((?!_next/static|_next/image|favicons/|pricing|privacy|services-agreement|api/mcp|api/oauth|api/version|api/cron/|api/billing/webhook|\\.well-known/oauth-|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml|woff2?|mp3)$).*)",
   ],
 };

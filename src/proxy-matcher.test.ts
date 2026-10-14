@@ -79,7 +79,7 @@ describe("the marketing and legal pages no longer pay for the claims read", () =
   // THE PROXY BODY STILL ANSWERS THEM CORRECTLY, and `proxy.test.ts` still proves it.
   // Same defence-in-depth shape as SELF_AUTH_ROUTES: if this matcher is ever widened
   // back, the verdict must not change with it.
-  it.each(["/pricing", "/privacy", "/terms"])("%s never reaches the proxy", (path) => {
+  it.each(["/pricing", "/privacy", "/services-agreement"])("%s never reaches the proxy", (path) => {
     expect(re.test(path)).toBe(false);
   });
 
@@ -88,7 +88,7 @@ describe("the marketing and legal pages no longer pay for the claims read", () =
   // these newly exclude was ALREADY getting the identical unconditional passthrough
   // out of the proxy body. The companion behaviour proof — that `proxy()` really does
   // return a bare 200 for these, in both session states — lives in `proxy.test.ts`.
-  it.each(["/pricing/enterprise", "/termsfoo", "/privacy-policy"])(
+  it.each(["/pricing/enterprise", "/services-agreementfoo", "/privacy-policy"])(
     "%s is excluded, and was already an unconditional passthrough",
     (path) => {
       expect(re.test(path)).toBe(false);

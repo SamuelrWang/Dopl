@@ -59,11 +59,14 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "onboarding",
   "pricing",
   "privacy",
+  // The Services Agreement page (2026-10-14).
+  "services-agreement",
   "settings",
   // Re-added 2026-08-13, on the condition S-13 set when it removed this: the
   // public signup page landed (`src/app/(auth)/signup/page.tsx`), so a workspace
   // slugged "signup" would now be silently shadowed by it.
   "signup",
+  // `/terms` 308s to `/services-agreement` (`next.config.ts › redirects`).
   "terms",
   "welcome",
   "workspaces",

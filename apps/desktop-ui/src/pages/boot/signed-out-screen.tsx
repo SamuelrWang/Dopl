@@ -121,11 +121,11 @@ export function SignedOutScreen() {
         defaultMode="signin"
         // No `brand`: the lockup is the layout's `cornerBrand` above.
         legalLink={({ href, className, children }) => (
-          // `file:///terms` would 404; the public site owns these pages.
+          // `file:///services-agreement` would 404; the public site owns these pages.
           <button
             type="button"
             className={className}
-            // The public site owns /terms and /privacy — one shared helper
+            // The public site owns /services-agreement and /privacy — one shared helper
             // decides how a link leaves this app (bridge, else window.open).
             onClick={() => openInBrowser(href)}
           >
