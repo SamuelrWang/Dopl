@@ -194,7 +194,10 @@ function messageByTask(a) {
     // Read BEFORE the dispatch (it moves activity to working). `priority: 'next'` queues or joins the running
     // turn rather than interrupting it.
     const inFlight = privateTurn.turnInFlight(s.state);
-    const framed = (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text, s.doplToolSet);
+    // W5: the full private-turn contract once per kind per session, then the short form.
+    const kind = directed ? 'directed' : 'operator';
+    const seen = !!(s.privateFramed && s.privateFramed[kind]);
+    const framed = (directed ? framing.frameDirectedTurn : framing.frameOperatorTurn)(s.nonce, text, s.doplToolSet, seen);
     deps.dispatch(s, {
       type: 'steer',
       text: framed,
@@ -204,6 +207,7 @@ function messageByTask(a) {
       directed: !!directed, senderAgentId: (directed && directed.senderAgentId) || null,
       priority: 'next',
     });
+    s.privateFramed = { ...(s.privateFramed || {}), [kind]: true };
     // AFTER the dispatch (F-372): a wake resets both windows. `framed` lets a joined push pay its turn back.
     privateTurn.openPrivateTurn(s, inFlight, framed);
     if (directed) directedTurn.armAndOpen(s, directed, inFlight, framed);
