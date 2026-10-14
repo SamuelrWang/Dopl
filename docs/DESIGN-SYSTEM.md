@@ -86,6 +86,22 @@ name came DOWN in weight (`font-semibold` → the constant's `font-medium`) in t
 change, deliberately; in a thread the crumb's channel half takes the size and keeps
 its own muted resting ink.
 
+### Font files — self-hosted, never fetched at build time (2026-10-14)
+
+The web's six webfonts are `next/font/local` over woff2 files committed in `src/app/fonts/`
+(sources, bytes and the OFL 1.1 notice in its `README.md` and `OFL.txt`), loaded in
+`src/app/layout.tsx` and exposed ONLY as variables on `<body>`: `--font-geist-sans` (Hanken
+Grotesk), `--font-geist-mono` (Geist Mono), `--font-display` (Space Grotesk), `--font-mono`
+(JetBrains Mono), `--font-playfair` (Newsreader, normal + italic) and `--font-inter` (Inter).
+Each is Google's **latin** subset of the variable font; text outside latin renders in the
+metric-adjusted fallback face (Arial, or Times New Roman for Newsreader). ⚠ **DO NOT GO BACK TO
+`next/font/google`** — on Next 16.2.2 / Turbopack it fails the production build whenever Google's
+CSS answers with a `fonts.gstatic.com/l/font?kit=…&skey=…` URL (*"next/font/google queries have
+exactly one entr[y]"*), which Google does for some requests and not others; master failed on
+Vercel that way on 2026-10-14 while passing locally. A new weight or style is a new `src` entry
+over the same file; a new family is a new file + a README row. The desktop SPA loads no webfont
+at all (system stacks in `apps/desktop-ui/src/styles/tokens.css`) and shares none of this.
+
 ## Color tokens
 
 Utilities generated from `@theme` (values live in `:root`):
