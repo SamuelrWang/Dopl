@@ -6,6 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,6 +23,24 @@ async function connect(server: McpServer): Promise<Client> {
   const client = new Client({ name: "served-schema-probe", version: "0.0.0" });
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
   return client;
+}
+
+/** The launch lane's tool words as the web contract declares them: the levels plus every runtime's
+ *  own words, a set. Read as text (the package cannot import the app), same as `granular.test.ts`. */
+function launchToolWordsFromContract(): string[] {
+  const src = readFileSync(path.resolve(process.cwd(), "../../src/features/channels/schema-launch-modes.ts"), "utf8");
+  const block = (name: string, open: string, close: string) => {
+    const start = src.indexOf(`export const ${name} = ${open}`);
+    if (start < 0) throw new Error(`schema-launch-modes.ts: ${name} not found`);
+    return src.slice(start, src.indexOf(close, start));
+  };
+  const words = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  return [
+    ...new Set([
+      ...words(block("LAUNCH_PERMISSION_LEVELS", "[", "]")),
+      ...words(block("LAUNCH_TOOL_MODES_BY_RUNTIME", "{", "} as const")),
+    ]),
+  ];
 }
 
 const UUID = "11111111-1111-4111-8111-111111111111";
@@ -114,11 +134,11 @@ describe("the shipped granular surface", () => {
     expect(limit.maximum).toBe(200);
   });
 
-  it("the REGISTERED dopl_launch_agent accepts all 13 tool words, and refuses an unknown one at validation", async () => {
-    const WORDS = [
-      "ask", "auto", "full", "manual", "accept_edits", "bypass", "untrusted", "granular",
-      "on-request", "never", "allowlist", "auto-review", "run-everything",
-    ];
+  it("the REGISTERED dopl_launch_agent accepts every launch tool word, and refuses an unknown one at validation", async () => {
+    // Derived from the web contract (`src/features/channels/schema-launch-modes.ts`), not hand-listed,
+    // so a new runtime's words are checked here without editing this test.
+    const WORDS = launchToolWordsFromContract();
+    expect(WORDS.length).toBeGreaterThan(3);
     const legacy = (CHANNEL_INPUT_SHAPE as Record<string, z.ZodType>).posture as unknown as {
       unwrap: () => { shape: { tools: { unwrap: () => { options: string[] } } } };
     };
