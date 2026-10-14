@@ -147,8 +147,8 @@ function outsideMark(relevance) {
         return " · likely for you";
     return "";
 }
-function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null) {
-    // ⚠ THE READER GOES IN (A2): a sibling agent renders `for you`, another
+function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance, extras, legendNamesThread) {
+    // ⚠ THE READER GOES IN (A2): a sibling agent renders `(yours)`, another
     // member's renders their name — see `channel-render-identity.ts`.
     const author = (0, channel_render_identity_1.formatAuthor)(m, view);
     const ended = sessionEnded(m);
@@ -160,18 +160,18 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null)
     // ⚠ Tag lands in the line HEAD — neither indented as a body nor covered by
     // the untrusted header. 7 chars ("\n- **#9") starts a forged message row, so
     // it must stay neutralized.
-    const threadTag = (0, channel_render_threads_1.threadTagOf)(m, anyThreaded);
+    const threadTag = legendNamesThread ? "" : (0, channel_render_threads_1.threadTagOf)(m, anyThreaded);
     // ⚠ NOT `shortRef` — that is the THREAD helper and renders a legacy pair-slot
     // tail as `seq 345`, borrowing thread vocabulary for a session identity that
     // does not exist.
-    // ⚠ `concise` DROPS THE SESSION TAG AND THE TIMESTAMP AND NOTHING ELSE, and
+    // ⚠ ONLY `detailed` CARRIES THE SESSION TAG AND THE TIMESTAMP (`extras`, W3), and
     // the line is drawn where it is on purpose: those two answer "which of my
     // workers wrote this, and when", which a reader scanning a transcript for
     // CONTENT is not asking. The seq, the author, the kind, the thread, the
     // addressee and the BODY are what the page is for and none of them moves —
     // see `response-size.ts`, where that guarantee is the reason the knob is
     // usable at all.
-    const session = terse ? null : (0, channel_render_identity_1.sessionIdOf)(m);
+    const session = extras ? (0, channel_render_identity_1.sessionIdOf)(m) : null;
     const sessionTag = session
         ? ` · session ${(0, channel_shared_1.inlineOr)((0, channel_render_threads_1.sessionSlotRef)((0, channel_render_identity_1.sessionTail)(session)), channel_render_threads_1.UNREADABLE_ID)}`
         : "";
@@ -191,7 +191,7 @@ function formatMessage(m, anyThreaded, view, ref, clip, terse, relevance = null)
     // .ts` is the only thing that decides which, and the `since seq …` / `cursor=…`
     // lines elsewhere in this module are deliberately NOT routed through it. Today
     // every row falls back to `seq`, so this line is byte-identical to before.
-    const head = `**#${(0, channel_numbering_1.channelNoOf)(m)}** ${author}${(0, channel_source_1.sourceTag)(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${terse ? "" : ` · ${m.createdAt}`}`;
+    const head = `**#${(0, channel_numbering_1.channelNoOf)(m)}** ${author}${(0, channel_source_1.sourceTag)(m)}${sessionTag}${kindTag}${threadTag}${memberTag}${deliveryTag}${outsideMark(relevance)}${extras ? ` · ${m.createdAt}` : ""}`;
     return `- ${head}${clipBody(m, ref, clip)}`;
 }
 /**
@@ -223,13 +223,25 @@ outside = false) {
     const anyThreaded = messages.some((m) => (0, channel_render_threads_1.threadIdOf)(m) !== undefined);
     const clip = messages.length > 1;
     const terse = (0, response_size_1.isConcise)(format);
+    // ⚠ **THE SESSION TAG AND THE TIMESTAMP ARE `detailed`'S, ASKED FOR BY NAME** (Context Economy
+    // W3, 2026-10-13). A granular call that names no format gets the short head: seq, author,
+    // kind, thread, addressee, delivery. Nothing an agent acts on moves. A LEGACY call keeps
+    // `detailed` as its default, which is what its published `response_format` text promises
+    // (`response-size.ts`; the legacy surface is pinned, DMP-013).
+    const extras = format === "detailed" || (format === undefined && (0, call_ref_js_1.activeToolSet)() === "legacy");
+    // ⚠ ONE THREAD ON THE WHOLE PAGE, NAMED ONCE (W3): on that short head the per-line tag only
+    // repeats the legend below, which this render keeps. Never when any row carries a per-thread
+    // number (the tag is where it rides), and never on `concise` (no legend) or `detailed`.
+    const firstThread = messages.length > 0 ? (0, channel_render_threads_1.threadIdOf)(messages[0]) : undefined;
+    const legendNamesThread = !extras && !terse && firstThread !== undefined &&
+        messages.every((m) => (0, channel_render_threads_1.threadIdOf)(m) === firstThread && (0, channel_numbering_1.threadNoOf)(m) === null);
     // ⚠ ONE PASS FOR THE WHOLE PAGE — class (ii) is positional (see
     // `channel-desktop-tag.ts › outsideRelevance`), so it cannot be decided per
     // line. Skipped entirely when the caller is not an outside session.
     const relevance = outside
         ? (0, channel_desktop_tag_1.outsideRelevance)(messages, selfUserId)
         : new Map();
-    const lines = messages.map((m) => formatMessage(m, anyThreaded, view, ref, clip, terse, relevance.get(m.id) ?? null));
+    const lines = messages.map((m) => formatMessage(m, anyThreaded, view, ref, clip, terse, relevance.get(m.id) ?? null, extras, legendNamesThread));
     // ⚠ The LEGEND is standing teaching about the id shapes, identical on every
     // page — metadata by the definition `response-size.ts` sets, so `concise`
     // drops it. A body never does.

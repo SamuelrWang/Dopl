@@ -25,6 +25,7 @@ exports.addresseeOf = addresseeOf;
 exports.memberRef = memberRef;
 exports.namesFromMessages = namesFromMessages;
 exports.agentNamesFromMessages = agentNamesFromMessages;
+exports.nameHandle = nameHandle;
 exports.addressTag = addressTag;
 exports.sessionTail = sessionTail;
 const channel_shared_1 = require("./channel-shared");
@@ -37,7 +38,7 @@ const channel_desktop_tag_1 = require("./channel-desktop-tag");
  * never bare name — reader treats counterparty as another member's agent.
  *
  * ⚠ **IT TAKES THE READER SINCE 2026-09-18 (A2/S45), AND THAT IS WHAT LETS IT
- * SAY `for you`.** A label built from the MESSAGE ALONE can name an operator
+ * SAY `(yours)`** (`for you` until W3, 2026-10-13). A label built from the MESSAGE ALONE can name an operator
  * and never say whether that operator is the reader's own, so a sibling worker
  * launched by the same person and a stranger's agent rendered identically —
  * and an agent deciding whether to answer, escalate or ignore was reading the
@@ -76,7 +77,7 @@ function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
     if (m.authorKind === "system")
         return id ? `system ${id}` : "system";
     const named = m.authorName ? (0, channel_shared_1.neutralizeInline)(m.authorName) : null;
-    // ⚠ **`for you` IS AN ASSERTION ABOUT THE READER, SO IT IS MADE OFF THE
+    // ⚠ **`(yours)` IS AN ASSERTION ABOUT THE READER, SO IT IS MADE OFF THE
     // IMMUTABLE ID AND NOTHING ELSE** — the same half `memberRef` matches on, and
     // never the name.
     // ⚠ **BOTH SIDES MUST BE PRESENT** (batch D): a null `authorUserId` on a row
@@ -122,13 +123,13 @@ function formatAuthor(m, view = exports.NO_MEMBER_VIEW) {
         return mine ? `${label} — reply ${channel_desktop_tag_1.DESKTOP_HANDLE_TAG}` : label;
     }
     if (m.authorKind === "agent") {
-        const handle = agentHandleOf(m);
+        const handle = agentHandleOf(m, view);
         const label = handle ? `agent ${handle}` : "agent";
-        // ⚠ **`for you` REPLACES THE OPERATOR CLAUSE, IT DOES NOT JOIN IT.** The
-        // operator IS the reader here, so `for you (Samuel Wang (<id>))` would be
+        // ⚠ **`(yours)` REPLACES THE OPERATOR CLAUSE, IT DOES NOT JOIN IT.** The
+        // operator IS the reader here, so `(yours) for Samuel Wang (<id>)` would be
         // the same fact twice and the id is already on every other row of the page.
         if (mine)
-            return `${label} for you — YOUR OWN agent`;
+            return `${label} (yours)`;
         return who ? `${label} for ${who}` : (handle ? label : "an agent");
     }
     return who ? `member ${who}` : "a member";
@@ -179,10 +180,10 @@ function isOutsideSession(m) {
  * ⚠ **AND IT IS NOT AN ASSERTED IDENTITY ON ITS OWN**: the label still carries
  * `for <operator> (<user id>)`, the half the author does not control.
  */
-function agentHandleOf(m) {
-    const named = m.authorAgentName ? (0, channel_shared_1.neutralizeInline)(m.authorAgentName) : null;
+function agentHandleOf(m, view) {
+    const named = m.authorAgentName ? nameHandle(m.authorAgentName, view) : null;
     if (named)
-        return `@${named}`;
+        return named;
     const session = sessionIdOf(m);
     const tail = session ? sessionTail(session) : null;
     return tail ? `@agent-${(0, channel_shared_1.inlineOr)(tail, channel_render_threads_1.UNREADABLE_ID)}` : null;
@@ -276,8 +277,37 @@ function agentNamesFromMessages(messages) {
  */
 function agentRef(agentId, view) {
     const name = view.agentNames?.get(agentId);
-    const safe = name ? (0, channel_shared_1.neutralizeInline)(name) : null;
-    return safe ? `@${safe}` : `@agent-${(0, channel_shared_1.inlineOr)(agentId, channel_render_threads_1.UNREADABLE_ID)}`;
+    return (name ? nameHandle(name, view) : null) ?? `@agent-${(0, channel_shared_1.inlineOr)(agentId, channel_render_threads_1.UNREADABLE_ID)}`;
+}
+/**
+ * **AN AGENT'S NAME AS THE HANDLE A READER TYPES BACK** (Context Economy W3, 2026-10-13): lowercase,
+ * whitespace runs to `-`, the web's one slugger (`src/features/channels/lib/mentions.ts ›
+ * mentionSlug`, which this package cannot import), so "Picker Fix" renders `@picker-fix`, the tag
+ * `to=` and a body mention resolve. ⚠ ONLY A PLAIN `[a-z0-9-]` SLUG IS PRINTED BARE: anything else
+ * (punctuation, non-ASCII, a backtick) keeps the neutralized code span it always had, because the
+ * line head is server narration and the name is peer-typed.
+ * ⚠ **AND NEVER A SLUG A HIGHER-PRIORITY NAMESPACE OWNS** (Batch 49): the web resolver tries id
+ * forms, then members, then agents (`agent-mentions.ts`), so a bare `@agent-…`, `@desktop` or a
+ * member's own slug (an agent named "Samuel Wang") would reach somebody else. Those keep the span.
+ * Members are the ones this page names (`view.names`): a member it never heard of cannot be checked.
+ * ⚠ **`null` WHEN NOTHING RENDERABLE IS LEFT** (blank or punctuation-only: `neutralizeInline` is
+ * null), so each caller keeps its own fallback, the `@agent-<id>` handle.
+ */
+function nameHandle(name, view = exports.NO_MEMBER_VIEW) {
+    const slug = name.trim().toLowerCase().replace(/\s+/g, "-");
+    if (/^[a-z0-9][a-z0-9-]*$/.test(slug) && !slugIsTaken(slug, view))
+        return `@${slug}`;
+    const safe = (0, channel_shared_1.neutralizeInline)(name);
+    return safe ? `@${safe}` : null;
+}
+function slugIsTaken(slug, view) {
+    if (slug.startsWith("agent-") || slug === "desktop")
+        return true;
+    for (const member of view.names.values()) {
+        if (member.trim().toLowerCase().replace(/\s+/g, "-") === slug)
+            return true;
+    }
+    return false;
 }
 /**
  * **WHY THE SERVER PICKED THIS AGENT** — `metadata.wake_reason`, when nobody was
