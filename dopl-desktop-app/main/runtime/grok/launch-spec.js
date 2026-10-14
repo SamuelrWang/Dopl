@@ -113,6 +113,8 @@ function start(spec) {
     gate: typeof spec.gate === 'function' ? spec.gate : gateFor(s, spec.dispatch),
     cfg: spec.cfg || tools.buildSessionToolConfig(s && s.profile),
     onUnknown: (method) => frames.push({ method: normalizer.UNKNOWN_REQUEST, params: { method } }),
+    // The hook's mode readback (`permissionMode`) — the one that sees a slash-command mode switch (S10).
+    onUnsafe: (text) => unsafe(text),
     log,
   });
   link.driver = driver;

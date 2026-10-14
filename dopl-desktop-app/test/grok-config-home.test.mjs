@@ -40,6 +40,8 @@ test("Dopl's config.toml carries the ask rule for its MCP server; requirements.t
   assert.match(cfg, /auto_update = false/);
   assert.match(cfg, /use_leader = false/);
   assert.doesNotMatch(cfg, /yolo|always_approve/i);
+  // Containment: backend tools off, so `web_search` is the client tool the PreToolUse hook sees (LIVE S5b/S5c).
+  assert.match(cfg, /\[features\]\ntelemetry = false\nbackend_tools = false/);
   assert.match(req, /enable_all_project_mcp_servers = false/);
   assert.match(req, /\[\[allowed_mcp_servers\]\]\nserver_name = "dopl_session"/);
   assert.equal((req.match(/server_name/g) || []).length, 1);
