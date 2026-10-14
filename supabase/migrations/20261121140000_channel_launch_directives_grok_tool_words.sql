@@ -6,7 +6,7 @@
 -- (`grok/tools.js › TOOL_MODES`). A directive may ask one, and a machine
 -- launching Grok echoes one in `applied_tool_mode`, so every tool-word CHECK
 -- gains them. Everything else is
--- `20261124120000_channel_launch_directives_muse_tool_words.sql`, unchanged.
+-- `20261121130000_channel_launch_directives_muse_tool_words.sql`, unchanged.
 --
 -- Mirrors (suite-pinned by `dopl-desktop-app/test/runtime-vocab-cross-tree.test.mjs`):
 -- `src/features/channels/schema-launch-modes.ts › LAUNCH_TOOL_MODES_BY_RUNTIME.grok`,
