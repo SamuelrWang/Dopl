@@ -70,6 +70,12 @@ body.legal-active {
   color: var(--text-tertiary);
 }
 
+/* Room between the title block and the first paragraph. Padding, not margin, so it
+   cannot collapse into the paragraph's own margin (the head and body are separate grid items). */
+.legal-doc-head {
+  padding-bottom: 32px;
+}
+
 .legal-doc h2 {
   margin: 48px 0 12px;
   font-size: 21px;
