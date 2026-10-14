@@ -7,12 +7,15 @@
 
       0–16%   rest
      16–30%   cursor flies in from the lower right, decelerating onto the icon
-     30–34%   press (cursor dips, icon presses)
-     34–56%   drag: ghost + cursor arc to Applications
-     56–62%   drop: ghost lands in the folder, folder receives it (bounce)
-     60–72%   green check pops; cursor drifts away and fades
-     72–90%   hold on the finished state
-     90–100%  everything fades back to rest
+     30–34%   press: icon darkens + dips (Finder's selected look), cursor dips
+     34–54%   drag: the translucent copy lifts and rides WITH the cursor to
+              Applications (one pair of movers — see `.gs-hand-*`)
+     47–58%   folder darkens as the drop target while the copy is over it
+     58–62%   release: copy shrinks into the folder, folder bounces, icon
+              un-selects
+     61–66%   green check pops; cursor drifts away and fades (62–74%)
+     74–90%   hold on the finished state
+     90–100%  check fades back to rest
 
    ⚠ Curved, natural motion comes from SPLIT AXES: X and Y are separate
    keyframe tracks on nested wrappers with different easings per segment. Do
@@ -99,7 +102,9 @@
   min-height: 0;
   container-type: size;
   overflow: hidden;
-  background: #fbfbfd;
+  /* Finder's window gray (Samuel's reference DMG), under the white titlebar:
+     the icons' drop shadows need a ground to fall on. */
+  background: #ececec;
 }
 
 /* The drawing, at its design size, scaled to fit the body (contain).
@@ -132,16 +137,30 @@
 .gs-well--apps {
   right: 34px;
 }
+
+/* Both icons sit ON the window with the soft drop a macOS DMG icon casts.
+   `drop-shadow`, so it follows the artwork's alpha, not its box. Restated
+   inside the reaction keyframes below (a `filter` keyframe replaces the whole
+   list) — via this var, so the recipe is typed once. */
+.gs-dmg {
+  --gs-icon-shadow: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2));
+}
 .gs-app-icon {
   width: 78px;
   height: 78px;
   border-radius: 17px;
+  filter: var(--gs-icon-shadow) brightness(1);
   animation: gs-app-press var(--gs-t) linear infinite;
 }
+/* The real folder art carries its own transparent margin (it fills ~90% of
+   its square), so it is drawn at 92px to read the same size as the 78px app
+   tile — and pulled in by the overshoot vertically so both labels share a
+   baseline and both icons share a centre (y 59). */
 .gs-folder-icon {
-  width: 84px;
-  height: 70px;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
+  width: 92px;
+  height: 92px;
+  margin: -7px 0;
+  filter: var(--gs-icon-shadow) brightness(1);
   animation: gs-folder-receive var(--gs-t) linear infinite;
 }
 .gs-well-label {
@@ -149,13 +168,15 @@
   font-weight: 500;
   color: #3c3c3c;
 }
+/* Between the icons, centred on their shared centre line (y 59). */
 .gs-arrow {
   position: absolute;
   left: 50%;
-  top: 58px;
-  width: 56px;
+  top: 42px;
+  width: 70px;
+  height: 34px;
   transform: translateX(-50%);
-  color: #b8b8bd;
+  color: #a3a3a8;
 }
 
 /* Check badge on the folder, macOS-green. */
@@ -174,18 +195,23 @@
   animation: gs-check-pop var(--gs-t) linear infinite;
 }
 
-/* ── The travellers ──────────────────────────────────────────────────────
-   Ghost and cursor share waypoint GEOMETRY but not easings — the ghost is
-   carried (steady), the hand leads (decelerating into each stop). Both sit at
-   the app icon's centre at rest; the cursor tip meets the icon there. */
-.gs-ghost-y,
-.gs-cursor-y {
+/* ── The hand ────────────────────────────────────────────────────────────
+   ONE pair of movers carries the pointer AND the copy it drags. The movers'
+   origin is the app icon's centre; the pointer's TIP sits on that origin
+   (`DemoCursorGlyph`), and the copy is centred on it — so at the press the copy
+   sits exactly over the original, and wherever the tip goes the copy goes. */
+.gs-hand-y {
   position: absolute;
   left: 94px; /* app icon centre x */
   top: 59px; /* app icon centre y */
   width: 0;
   height: 0;
+  animation: gs-hand-y var(--gs-t) linear infinite;
 }
+.gs-hand-x {
+  animation: gs-hand-x var(--gs-t) linear infinite;
+}
+/* macOS's drag image: the icon at reduced opacity under the pointer. */
 .gs-ghost {
   position: absolute;
   left: -39px;
@@ -193,38 +219,22 @@
   width: 78px;
   height: 78px;
   border-radius: 17px;
+  filter: var(--gs-icon-shadow);
   opacity: 0;
-}
-.gs-cursor {
-  position: absolute;
-  width: 17px;
-  height: 24px;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
-}
-
-.gs-cursor-x {
-  animation: gs-cursor-x var(--gs-t) linear infinite;
-}
-.gs-cursor-y {
-  animation: gs-cursor-y var(--gs-t) linear infinite;
-}
-.gs-cursor {
-  animation: gs-cursor-life var(--gs-t) linear infinite;
-}
-.gs-ghost-x {
-  animation: gs-ghost-x var(--gs-t) linear infinite;
-}
-.gs-ghost-y {
-  animation: gs-ghost-y var(--gs-t) linear infinite;
-}
-.gs-ghost {
   animation: gs-ghost-life var(--gs-t) linear infinite;
 }
+.gs-pointer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0; /* the tip — a press dips toward it, never off it */
+  animation: gs-pointer-life var(--gs-t) linear infinite;
+}
 
-/* X waypoints. 212 = distance app centre → folder centre. The cursor starts
-   beyond the window's lower-right and lands ON the icon with a long
-   deceleration; the exit drifts right and down. */
-@keyframes gs-cursor-x {
+/* X waypoints. 212 = app centre → folder centre. The pointer starts beyond
+   the window's lower-right and lands ON the icon with a long deceleration;
+   the exit drifts right and down. */
+@keyframes gs-hand-x {
   0%,
   16% {
     transform: translateX(260px);
@@ -235,7 +245,7 @@
     transform: translateX(0);
     animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
   }
-  56%,
+  54%,
   62% {
     transform: translateX(212px);
     animation-timing-function: ease-in;
@@ -245,7 +255,7 @@
     transform: translateX(300px);
   }
 }
-@keyframes gs-cursor-y {
+@keyframes gs-hand-y {
   0%,
   16% {
     transform: translateY(170px);
@@ -257,11 +267,11 @@
     animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
   }
   /* The arc's crest: the hand lifts mid-drag rather than tracking level. */
-  45% {
+  44% {
     transform: translateY(-16px);
     animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
   }
-  56%,
+  54%,
   62% {
     transform: translateY(0);
     animation-timing-function: ease-in;
@@ -274,114 +284,108 @@
 /* Fade-in on the way in, press dip, fade-out on exit. ⚠ The fade-in is
    load-bearing: the body's aspect follows the glass, and in a tall, narrow
    body the start point (260, 170 off the icon) can land INSIDE the window —
-   without it the cursor would sit there, parked, through the rest beat. */
-@keyframes gs-cursor-life {
+   without it the pointer would sit there, parked, through the rest beat. */
+@keyframes gs-pointer-life {
   0%,
   16% {
     opacity: 0;
     transform: scale(1);
   }
   21%,
-  30% {
+  31% {
     opacity: 1;
     transform: scale(1);
   }
   32% {
-    transform: scale(0.86);
+    transform: scale(0.88);
   }
-  34%,
-  56% {
+  34% {
     transform: scale(1);
   }
-  62% {
+  64% {
     opacity: 1;
   }
   72%,
   100% {
     opacity: 0;
+    transform: scale(1);
   }
 }
-
-/* Ghost: appears at the press, is CARRIED (flatter easing than the hand),
-   shrinks slightly into the folder at the drop, gone until next lap. */
-@keyframes gs-ghost-x {
-  0%,
-  34% {
-    transform: translateX(0);
-    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
-  }
-  56%,
-  100% {
-    transform: translateX(212px);
-  }
-}
-@keyframes gs-ghost-y {
-  0%,
-  34% {
-    transform: translateY(0);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
-  }
-  45% {
-    transform: translateY(-16px);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
-  }
-  56%,
-  100% {
-    transform: translateY(0);
-  }
-}
+/* The copy: lifts as the drag starts, is carried at drag-image opacity,
+   holds over the folder, and on release shrinks into it. */
 @keyframes gs-ghost-life {
   0%,
-  33% {
+  33.5% {
     opacity: 0;
     transform: scale(1);
   }
-  35%,
-  56% {
-    opacity: 0.75;
+  35.5%,
+  58% {
+    opacity: 0.6;
     transform: scale(1);
   }
-  60% {
+  62% {
     opacity: 0;
-    transform: scale(0.42);
+    transform: scale(0.35);
   }
   100% {
     opacity: 0;
+    transform: scale(0.35);
   }
 }
 
-/* The stationary pieces' reactions. */
+/* The stationary pieces' reactions. Pressed/selected = Finder's darkened
+   icon; it stays selected for the length of the drag. */
 @keyframes gs-app-press {
   0%,
-  30%,
-  34%,
-  100% {
+  30.5% {
     transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(1);
   }
   32% {
     transform: scale(0.96);
+    filter: var(--gs-icon-shadow) brightness(0.72);
   }
-}
-@keyframes gs-folder-receive {
-  0%,
-  56% {
+  34%,
+  58% {
     transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(0.72);
   }
-  59% {
-    transform: scale(1.1);
-  }
-  62%,
+  61%,
   100% {
     transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(1);
+  }
+}
+/* Drop target: darkens while the copy is over it, bounces on receipt. */
+@keyframes gs-folder-receive {
+  0%,
+  47% {
+    transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(1);
+  }
+  49.5%,
+  58% {
+    transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(0.72);
+  }
+  60.5% {
+    transform: scale(1.07);
+    filter: var(--gs-icon-shadow) brightness(1);
+  }
+  63%,
+  100% {
+    transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(1);
   }
 }
 @keyframes gs-check-pop {
   0%,
-  58% {
+  61% {
     opacity: 0;
     transform: scale(0.4);
   }
-  63%,
+  66%,
   88% {
     opacity: 1;
     transform: scale(1);
@@ -399,17 +403,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gs-dmg *,
-  .gs-app-icon,
-  .gs-folder-icon {
+  .gs-dmg * {
     animation: none !important;
   }
-  /* Rest state, plus the outcome: the check shown, travellers hidden. */
+  /* Rest state, plus the outcome: the check shown, the hand hidden. */
   .gs-check {
     opacity: 1;
   }
-  .gs-cursor,
-  .gs-ghost {
+  .gs-hand-y {
     display: none;
   }
 }

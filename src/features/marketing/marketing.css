@@ -3283,7 +3283,8 @@
   left: 0;
   z-index: 50;
   opacity: 0;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+  /* No filter here: the drop shadow rides the glyph itself
+     (`components/demo-cursor.tsx › DemoCursorGlyph`), shared with /get-started. */
   transition:
     transform 1050ms cubic-bezier(0.3, 0.7, 0.25, 1),
     opacity 300ms ease;

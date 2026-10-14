@@ -1,17 +1,23 @@
 /**
- * The install, drawn: a macOS DMG Finder window — Dopl icon, Applications
- * alias — with a cursor that picks the icon up and drags it across. Loops with
- * a long beat of rest.
+ * The install, drawn: a macOS DMG Finder window — Dopl icon, a dashed block
+ * arrow, the Applications alias — with a cursor that presses the icon, drags a
+ * translucent copy of it onto the folder and lets go. Loops with a long beat of
+ * rest.
  *
  * ⚠ TIMELINE LIVES IN THE STYLESHEET (`install-animation.css`), not here —
  * every node below is static with a class, and every keyframe track shares one
  * `--gs-t` clock so they cannot drift. No JS on the main thread during the
  * download.
  *
- * ⚠ The cursor and ghost each ride TWO nested wrappers — an X mover inside a Y
- * mover — with different easings per axis. That is what makes the drag read as
- * a hand (a shallow arc, decelerating onto its targets) instead of a point
- * sliding down a wire; a single translate track cannot curve.
+ * ⚠ THE DRAGGED COPY RIDES INSIDE THE HAND (Samuel, 2026-10-14: "It doesn't
+ * actually drag the actual icon"). `.gs-ghost` is a CHILD of the same two
+ * movers as the cursor (`.gs-hand-y` > `.gs-hand-x`), so cursor and copy share
+ * one transform at every frame BY CONSTRUCTION — never give the copy its own
+ * translate tracks again; two tracks with matched percentages still drift
+ * apart the moment their easings differ.
+ *
+ * ⚠ The movers are an X track inside a Y track with different easings per
+ * axis — that is what makes the drag an arc, not a point sliding down a wire.
  *
  * ⚠ The window IS the glass's white card — inset by the slot's
  * `--glass-card-inset`, sized by the glass, never by this markup — and the
@@ -21,8 +27,13 @@
  * Decorative: `aria-hidden`, every fact restated in the numbered steps.
  */
 
-/** Only real asset in the drawing — same mark the dock shows. */
+import { DemoCursorGlyph } from "@/features/marketing/components/demo-cursor";
+
+/** Same mark the dock shows. */
 const APP_ICON = "/favicons/android-chrome-512x512.png";
+/** THE REAL macOS Applications folder — extracted from this platform's own
+ *  `CoreTypes.bundle › ApplicationsFolderIcon.icns`, 256px webp. */
+const APPS_FOLDER_ICON = "/img/get-started/applications-folder.webp";
 
 export function InstallAnimation() {
   return (
@@ -48,24 +59,23 @@ export function InstallAnimation() {
             <ArrowIcon />
 
             <div className="gs-well gs-well--apps">
-              <FolderIcon />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={APPS_FOLDER_ICON} alt="" className="gs-folder-icon" draggable={false} />
               <span className="gs-well-label">Applications</span>
               <span className="gs-check">
                 <CheckIcon />
               </span>
             </div>
 
-            {/* Translucent copy of the app icon that makes the trip. */}
-            <div className="gs-ghost-y">
-              <div className="gs-ghost-x">
+            {/* The hand: cursor + the translucent copy it carries, on ONE pair
+                of movers. The copy is first so the pointer paints over it. */}
+            <div className="gs-hand-y">
+              <div className="gs-hand-x">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={APP_ICON} alt="" className="gs-ghost" draggable={false} />
-              </div>
-            </div>
-
-            <div className="gs-cursor-y">
-              <div className="gs-cursor-x">
-                <CursorIcon />
+                <div className="gs-pointer">
+                  <DemoCursorGlyph />
+                </div>
               </div>
             </div>
           </div>
@@ -75,49 +85,19 @@ export function InstallAnimation() {
   );
 }
 
-/** The real macOS arrow: black body, white outline, tip at the svg origin so
- *  the movers' translate IS the tip position. */
-function CursorIcon() {
-  return (
-    <svg className="gs-cursor" viewBox="0 0 17 24" aria-hidden="true">
-      <path
-        d="M1 1v17.4l4.6-4.2 2.8 6.5 3.1-1.3-2.8-6.4 6.2-.6L1 1Z"
-        fill="#0b0b0c"
-        stroke="#ffffff"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
+/** Hollow block arrow, dashed — the "drag this way" mark DMGs draw between the
+ *  app and the alias. Not a system asset (every DMG draws its own); this one is
+ *  ours. viewBox is 1:1 with stage px. */
 function ArrowIcon() {
   return (
-    <svg
-      className="gs-arrow"
-      viewBox="0 0 62 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 8h52" strokeDasharray="4 5" />
-      <path d="m50 3 6 5-6 5" />
-    </svg>
-  );
-}
-
-/** Applications alias — macOS-blue folder. */
-function FolderIcon() {
-  return (
-    <svg className="gs-folder-icon" viewBox="0 0 24 20" aria-hidden="true">
+    <svg className="gs-arrow" viewBox="0 0 70 34" fill="none" aria-hidden="true">
       <path
-        d="M1 3.6A2.6 2.6 0 0 1 3.6 1h5.2c.69 0 1.35.27 1.84.76L12.2 3.2h8.2A2.6 2.6 0 0 1 23 5.8v1.6H1V3.6Z"
-        fill="#3f9bf4"
+        d="M1.5 11.5H44V2l24.5 15L44 32v-9.5H1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="4 3"
+        strokeLinejoin="round"
       />
-      <path d="M1 7.4h22v9A2.6 2.6 0 0 1 20.4 19H3.6A2.6 2.6 0 0 1 1 16.4v-9Z" fill="#5eaef7" />
     </svg>
   );
 }
