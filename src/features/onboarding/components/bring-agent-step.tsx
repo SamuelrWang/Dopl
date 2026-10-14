@@ -11,7 +11,8 @@ import {
 
 /**
  * Step 3, "Bring Your Agent" (Samuel 2026-10-13): sign Dopl's own runtimes
- * in — Claude (Claude Code) and ChatGPT (Codex) — with the SAME bridge flow
+ * in — Claude (Claude Code), ChatGPT (Codex), Muse and Grok (real runtimes
+ * since the runtime scaffold; wired 2026-10-14) — with the SAME bridge flow
  * the channel surfaces use (`channels/components/runtime-signin.ts`): the
  * desktop runs the provider's sign-in, and no credential crosses the bridge.
  * Each button reflects the runtime's live state from `runtimeAuth.status`.
@@ -27,12 +28,12 @@ import {
  * `previewOnly` never touches the bridge: a click flips a fake "Signed in".
  */
 
-type RuntimeId = "claude" | "codex";
+/** The runtime registry's ids (`dopl-desktop-app/main/runtime/*`). */
+type RuntimeId = "claude" | "codex" | "muse" | "grok";
+const RUNTIMES: readonly RuntimeId[] = ["claude", "codex", "muse", "grok"];
 const DOUBLE_CLICK_MS = 600;
-/** Muse and Grok have no Dopl runtime yet: their buttons sign in only in
- *  preview, and are inert in the app until a runtime exists for them. */
-type ButtonId = RuntimeId | "muse" | "grok";
-const isRuntime = (id: ButtonId): id is RuntimeId => id === "claude" || id === "codex";
+/** What a failure message calls each runtime. */
+const LABEL: Record<RuntimeId, string> = { claude: "Claude", codex: "ChatGPT", muse: "Muse", grok: "Grok" };
 
 export function BringAgentStep({
   previewOnly,
@@ -55,7 +56,7 @@ export function BringAgentStep({
 }) {
   const live = useRuntimeCredentials();
   const [can] = useState(() => !previewOnly && canSignInToRuntime());
-  const [fake, setFake] = useState<Record<ButtonId, boolean>>({
+  const [fake, setFake] = useState<Record<RuntimeId, boolean>>({
     claude: false,
     codex: false,
     muse: false,
@@ -77,24 +78,20 @@ export function BringAgentStep({
     };
   }, []);
 
-  const signedIn = (id: ButtonId) =>
-    previewOnly
-      ? fake[id]
-      : isRuntime(id) && live.find((r) => r.runtimeId === id)?.state === "connected";
+  const signedIn = (id: RuntimeId) =>
+    previewOnly ? fake[id] : live.find((r) => r.runtimeId === id)?.state === "connected";
 
   // Busy from this click, or from main's row (a flow started before this step mounted).
-  const busyFor = (id: ButtonId) =>
-    !previewOnly &&
-    isRuntime(id) &&
-    (busy === id || live.find((r) => r.runtimeId === id)?.state === "signing-in");
-  const anyBusy = busy !== null || (["claude", "codex"] as const).some(busyFor);
+  const busyFor = (id: RuntimeId) =>
+    !previewOnly && (busy === id || live.find((r) => r.runtimeId === id)?.state === "signing-in");
+  const anyBusy = busy !== null || RUNTIMES.some(busyFor);
 
-  const signIn = (id: ButtonId) => {
+  const signIn = (id: RuntimeId) => {
     if (previewOnly) {
       setFake((f) => ({ ...f, [id]: !f[id] }));
       return;
     }
-    if (!isRuntime(id) || !can) return;
+    if (!can) return;
     if (busyFor(id)) {
       if (Date.now() - startedAt.current < DOUBLE_CLICK_MS) return;
       cancelled.current = true;
@@ -115,7 +112,8 @@ export function BringAgentStep({
     });
   };
 
-  const button = (id: ButtonId, label: string, icon: ReactNode) => {
+  const button = (id: RuntimeId, icon: ReactNode) => {
+    const label = LABEL[id];
     const on = signedIn(id);
     const mine = busyFor(id);
     const cancellable = mine && canCancelRuntimeSignIn();
@@ -124,7 +122,7 @@ export function BringAgentStep({
         type="button"
         onClick={() => signIn(id)}
         disabled={
-          (!previewOnly && (!can || !isRuntime(id))) ||
+          (!previewOnly && !can) ||
           (anyBusy && !cancellable) ||
           (on && !previewOnly)
         }
@@ -148,14 +146,14 @@ export function BringAgentStep({
       </h2>
 
       <div className="mt-7 space-y-3">
-        {button("claude", "Claude", <Mark src={claudeLogo} />)}
-        {button("codex", "ChatGPT", <Mark src={chatgptLogo} />)}
-        {button("muse", "Muse", <Mark src={museLogo} />)}
-        {button("grok", "Grok", <Mark src={grokLogo} />)}
+        {button("claude", <Mark src={claudeLogo} />)}
+        {button("codex", <Mark src={chatgptLogo} />)}
+        {button("muse", <Mark src={museLogo} />)}
+        {button("grok", <Mark src={grokLogo} />)}
       </div>
       {failed && (
         <p role="status" className="mt-2 text-[12px] leading-relaxed text-[#C0392B]">
-          {failed === "claude" ? "Claude" : "ChatGPT"} sign-in didn&apos;t finish. Try again.
+          {LABEL[failed]} sign-in didn&apos;t finish. Try again.
         </p>
       )}
       {!previewOnly && !can && (
