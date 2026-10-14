@@ -10,7 +10,7 @@ Open items: docs/legal/LEGAL-CHECKLIST.md.
 
 Last updated: October 14, 2026
 
-This Services Agreement ("**Agreement**") is between you or the entity you represent ("**You**") and Dopl, and governs Your access to and use of the Services. The Agreement is effective when You first access or use the Services (the "**Effective Date**") and continues until terminated (the "**Term**"). Capitalized terms not defined inline are defined in Appendix 1 (Definitions).
+This Services Agreement (the "**Agreement**") sets out the terms on which Dopl provides the Services to the individual or organization accepting it ("**You**"). The Agreement binds You from the date You first use the Services (the "**Effective Date**") and remains in force until either party ends it under Section 20 (the "**Term**"). Appendix 1 (Definitions) defines capitalized terms that are not defined where they first appear.
 
 **IMPORTANT: SECTION 21 REQUIRES MOST DISPUTES TO BE RESOLVED BY BINDING INDIVIDUAL ARBITRATION AND WAIVES CLASS ACTIONS AND JURY TRIALS. YOU MAY OPT OUT OF ARBITRATION WITHIN 30 DAYS UNDER SECTION 21.9. SECTION 12 DESCRIBES AUTOMATICALLY RENEWING PLANS.**
 
@@ -20,7 +20,7 @@ This Services Agreement ("**Agreement**") is between you or the entity you repre
 
 ### 1.1. Acceptance of Agreement
 
-By creating a Dopl Account, signing in, or otherwise accessing or using the Services, You agree to the Agreement. If You do not agree, You must not use the Services.
+You accept the Agreement by creating a Dopl Account, signing in, or using any part of the Services. Anyone who does not accept the Agreement has no right to use the Services.
 
 ### 1.2. Services
 
@@ -32,7 +32,7 @@ Dopl will provide reasonable support by email for issues relating to Your Dopl A
 
 ### 1.4. Preview Services
 
-Dopl may make a Preview Service available to You. Preview Services may be incomplete, unstable, or contain errors, and may be changed or discontinued at any time. Your use of a Preview Service is at Your own risk.
+Some features are offered as Preview Services. A Preview Service is unfinished, can behave unpredictably, and can change or disappear without notice. You use each Preview Service at Your own risk.
 
 ### 1.5. Changes to the Services
 
@@ -48,11 +48,11 @@ The Desktop App checks for and installs updates automatically and may download a
 
 ### 2.1. Age
 
-You must be at least 18 years old to use the Services.
+The Services are available only to individuals aged 18 or older.
 
 ### 2.2. Account Registration
 
-To use the Services, You must register a Dopl Account using accurate, complete, and up-to-date information, either with an email address and password or through Google or GitHub sign-in.
+Use of the Services requires a Dopl Account, registered with an email address and password or through Google or GitHub sign-in. Your registration details must be truthful and current.
 
 ### 2.3. Account Security
 
@@ -76,7 +76,7 @@ You may delete Your Dopl Account at any time through Your account settings. Dele
 
 ### 3.1. Conduct
 
-You must not (and must not attempt to), directly or through an Agent:
+You will not, and will not try to, directly or through an Agent:
 
 (a) violate Law or any third party's rights, including IP Rights, privacy rights, and publicity rights;
 
@@ -98,15 +98,15 @@ You must not (and must not attempt to), directly or through an Agent:
 
 (j) use the Services where their failure could reasonably be expected to lead to death, personal injury, or serious environmental or property damage.
 
-### 3.2. Product
+### 3.2. Technical Restrictions
 
-You must not (and must not attempt to):
+You will not, and will not try to:
 
 (a) interfere with the operation of the Services or other users' use of the Services;
 
 (b) reverse engineer, decompile, or disassemble any part of the Dopl Technology, except to the extent Law permits despite this restriction;
 
-(c) access any non-public component of the Dopl Technology, or access the Services by automated means other than through the Desktop App, the Dopl MCP Server, or another interface Dopl provides for that purpose;
+(c) reach parts of the Dopl Technology that Dopl has not made public, or use automated means to reach the Services other than through the Desktop App, the Dopl MCP Server, or another interface Dopl provides for that purpose;
 
 (d) circumvent any security, authentication, Credit, rate-limit, or access-control feature of the Services;
 
@@ -118,7 +118,7 @@ You must not (and must not attempt to):
 
 ### 3.3. Prohibited AI Uses
 
-You must not (and must not attempt to) use an Agent or any AI feature of the Services to:
+You will not, and will not try to, use an Agent or any AI feature of the Services to:
 
 (a) generate content that sexualizes minors;
 
@@ -138,9 +138,9 @@ You must not (and must not attempt to) use an Agent or any AI feature of the Ser
 
 ## 4. Representations and Warranties
 
-### 4.1. Representations
+### 4.1. Statements at Signing
 
-You represent as of the Effective Date that:
+On the Effective Date, You represent that:
 
 (a) You are at least 18 years old;
 
@@ -150,9 +150,9 @@ You represent as of the Effective Date that:
 
 (d) the information You provide to register Your Dopl Account is accurate and complete.
 
-### 4.2. Warranties
+### 4.2. Ongoing Commitments
 
-You warrant during the Term that:
+Throughout the Term, You warrant that:
 
 (a) You will keep Your Dopl Account information accurate and up to date;
 
@@ -172,7 +172,7 @@ The owner of a Workspace is responsible for the Workspace, its settings, and the
 
 ### 5.2. Your Agents
 
-You, and not Dopl, are responsible for each Agent You launch or connect to the Services, and for every action each Agent takes, whether on Your computer, in the Services, or in any Third-Party Service. You are liable for any Losses or Third-Party Losses Your Agent causes, including where Your Agent acts in an unintended, erroneous, negligent, or malicious manner, and whether or not You approved the specific action.
+You, and not Dopl, are responsible for each Agent You launch or connect to the Services, and for every action each Agent takes, whether on Your computer, in the Services, or in any Third-Party Service. You bear all Losses and Third-Party Losses that result from an Agent's conduct, even if the Agent behaves erroneously, carelessly, maliciously, or other than as You intended, and even if You did not approve the specific action.
 
 ### 5.3. Agent Settings
 
@@ -206,7 +206,7 @@ As between You and Dopl, You own the inputs You provide to Agents and AI feature
 
 You and Your licensors retain all IP Rights in Your Content. Nothing in the Agreement transfers ownership of Your Content to Dopl.
 
-### 6.2. License Grant (Content)
+### 6.2. Permission to Use Your Content
 
 You grant to Dopl a worldwide, non-exclusive, royalty-free license to host, store, copy, process, index, transmit, display, and format Your Content solely as necessary to provide, secure, and support the Services for You and for the persons with whom You share Your Content, and to comply with Law. Dopl may sublicense these rights to its subcontractors solely for those purposes. This license ends when Your Content is deleted from the Services, except for copies retained by persons with whom You shared it, copies in backups for a limited period, and copies that Law requires Dopl to retain.
 
@@ -236,7 +236,7 @@ You are responsible for maintaining copies of Content that is important to You. 
 
 ### 7.1. General
 
-Each party may receive the other party's Confidential Information in connection with the Services. The receiving party will use the disclosing party's Confidential Information only to provide or use the Services, will protect it with at least the degree of care it uses for its own similar information (and no less than reasonable care), and will not disclose it except to employees, contractors, and professional advisors who need to know it and are bound by confidentiality obligations at least as protective as this Section 7.
+Through the Services, each party may obtain Confidential Information of the other. A party that obtains Confidential Information will use it solely for providing or using the Services, will safeguard it with reasonable care and no less care than it gives its own information of a similar kind, and will share it only with its personnel, contractors, and advisors who require it for that purpose and who have agreed to keep it confidential on terms no less protective than this Section 7.
 
 ### 7.2. Your Content
 
@@ -244,19 +244,19 @@ Dopl will treat Your Content as Your Confidential Information, except to the ext
 
 ### 7.3. Required Disclosures
 
-The receiving party may disclose Confidential Information to the extent Law, a subpoena, or a court order requires, after giving the disclosing party prompt notice where Law permits.
+The receiving party may disclose Confidential Information where Law or legal process compels the disclosure, after giving the disclosing party prompt notice where Law permits.
 
 ### 7.4. Exclusions
 
-Confidential Information excludes information that the receiving party can demonstrate:
+This Section 7 does not apply to information that the party holding it shows:
 
-(a) is or becomes publicly available without breach of the Agreement;
+(a) has entered the public domain other than through a breach of the Agreement;
 
-(b) the receiving party lawfully knew before receiving it in connection with the Services;
+(b) was lawfully in its possession before it obtained the information through the Services;
 
-(c) the receiving party independently develops without use of the Confidential Information; or
+(c) was created by it independently, without reference to the other party's Confidential Information; or
 
-(d) the receiving party lawfully receives from a third party without restriction.
+(d) was lawfully provided to it by a third party free of any confidentiality restriction.
 
 ---
 
@@ -268,7 +268,7 @@ The Privacy Policy describes how Dopl collects, uses, discloses, and protects pe
 
 ### 8.2. Controls
 
-Dopl will maintain commercially reasonable administrative, technical, and physical safeguards designed to protect Content in Dopl's possession or control against unauthorized access, modification, loss, and disclosure.
+Dopl will keep in place reasonable organizational, technical, and physical security measures intended to protect Content it holds from loss and from access, alteration, or disclosure that Dopl has not authorized.
 
 ### 8.3. Credentials Stored on Your Device
 
@@ -298,25 +298,25 @@ You must not use Dopl Data to create, train, or improve any artificial intellige
 
 Dopl and its licensors hold all IP Rights in the Dopl Technology and Dopl Data.
 
-### 10.2. License Grant (Dopl Technology)
+### 10.2. Your License
 
-Subject to the Agreement, Dopl grants You a limited, worldwide, royalty-free, non-exclusive, non-transferable, non-sublicensable, revocable license during the Term to access and use the Dopl Technology, and to install and run the Desktop App on computers You own or control, solely for Your personal or internal business purposes and in compliance with Law and the Agreement.
+For the Term, and on condition that You comply with the Agreement, Dopl permits You, on a non-exclusive basis, without charge beyond applicable Fees, and without any right to transfer or sublicense, to access and use the Dopl Technology, and to install and run the Desktop App on computers You own or control, solely for Your personal or internal business purposes. Dopl may revoke this permission under Section 20.
 
-### 10.3. License Exclusions
+### 10.3. Limits on Your License
 
-The license in Section 10.2 does not permit You to, and You must not (and must not enable others to):
+Without Dopl's written permission, You will not, and will not help anyone else to:
 
-(a) modify, adapt, translate, or create derivative works of the Dopl Technology; or
+(a) alter the Dopl Technology or produce works derived from it; or
 
-(b) rent, lease, lend, sell, share, redistribute, or sublicense any part of the Dopl Technology, unless Dopl authorizes it in writing.
+(b) sell, rent, lend, or otherwise make any part of the Dopl Technology available to others.
 
 ### 10.4. Open Source
 
 The Dopl Technology includes open source software. Where the license for an open source component grants rights that conflict with the Agreement, that license governs that component.
 
-### 10.5. Reservation of Rights
+### 10.5. No Transfer of Ownership
 
-Nothing in the Agreement assigns or transfers any IP Rights to the other party. All rights not expressly granted in the Agreement are reserved.
+The Agreement does not transfer ownership of any IP Rights from one party to the other. Each party keeps every right the Agreement does not expressly grant.
 
 ### 10.6. Feedback
 
@@ -330,7 +330,7 @@ If You provide Dopl with suggestions or feedback regarding the Services ("**Feed
 
 If You use the Services on behalf of an organization, Dopl may identify that organization as a user of the Services, including by displaying its name and Marks on Dopl's website and in Dopl's sales and marketing materials. You may withdraw this permission at any time by notice to build@usedopl.com, after which Dopl will stop new uses within a reasonable period.
 
-### 11.2. Your Use of Dopl's Marks
+### 11.2. Dopl's Marks
 
 You may use Dopl's name and Marks only to accurately refer to the Services, and You must comply with any brand guidelines and removal request Dopl provides. All goodwill arising from use of a party's Marks benefits that party.
 
@@ -455,7 +455,7 @@ Dopl will handle reports in a timely, diligent, and objective manner. If Dopl re
 
 ### 17.1. Disclaimer of Warranties
 
-**DOPL PROVIDES THE SERVICES AND DOPL TECHNOLOGY "AS IS" AND "AS AVAILABLE." TO THE MAXIMUM EXTENT LAW PERMITS, DOPL DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, AND ACCURACY. DOPL DOES NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE; THAT CONTENT WILL NOT BE LOST; THAT AGENTS WILL ACT AS INTENDED; OR THAT ANY OUTPUT WILL BE ACCURATE OR RELIABLE. DOPL IS NOT LIABLE FOR DELAYS, FAILURES, OR OUTAGES.**
+**THE SERVICES AND DOPL TECHNOLOGY ARE PROVIDED "AS IS" AND "AS AVAILABLE." TO THE MAXIMUM EXTENT LAW PERMITS, DOPL DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, AND ACCURACY. DOPL DOES NOT WARRANT THAT THE SERVICES WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE; THAT CONTENT WILL NOT BE LOST; THAT AGENTS WILL ACT AS INTENDED; OR THAT ANY OUTPUT WILL BE ACCURATE OR RELIABLE. DOPL IS NOT RESPONSIBLE FOR INTERRUPTIONS OR DOWNTIME OF THE SERVICES.**
 
 ### 17.2. Mandatory Warranties
 
@@ -463,23 +463,23 @@ Where Law does not permit the exclusion of certain warranties, those warranties 
 
 ### 17.3. Compliance
 
-The Services are not designed to ensure Your compliance with Law or with regulations specific to Your industry. You are responsible for that compliance.
+You remain solely responsible for meeting the legal and regulatory obligations that apply to You and Your industry. Use of the Services does not satisfy those obligations on Your behalf.
 
 ---
 
 ## 18. Limitations on Liability
 
-### 18.1. Limitation on Liability Types
+### 18.1. Excluded Damages
 
-**EXCEPT FOR LIABILITY ARISING FROM A PARTY'S GROSS NEGLIGENCE, FRAUD, OR WILLFUL MISCONDUCT, OR FROM YOUR OBLIGATIONS UNDER SECTIONS 3, 5.2, OR 19.1, NEITHER PARTY IS LIABLE TO THE OTHER IN CONNECTION WITH THE SERVICES OR THE AGREEMENT FOR ANY INDIRECT, CONSEQUENTIAL, SPECIAL, INCIDENTAL, RELIANCE, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, FILES, OR GOODWILL, WHETHER IN CONTRACT, TORT, OR ANY OTHER LEGAL OR EQUITABLE THEORY, EVEN IF ADVISED OF THEIR POSSIBILITY.**
+**EXCEPT FOR LIABILITY ARISING FROM A PARTY'S GROSS NEGLIGENCE, FRAUD, OR WILLFUL MISCONDUCT, OR FROM YOUR OBLIGATIONS UNDER SECTIONS 3, 5.2, OR 19.1, NEITHER PARTY WILL BE RESPONSIBLE TO THE OTHER, UNDER OR IN CONNECTION WITH THE AGREEMENT, FOR ANY INDIRECT, CONSEQUENTIAL, SPECIAL, INCIDENTAL, RELIANCE, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, FILES, OR GOODWILL, WHETHER IN CONTRACT, TORT, OR ANY OTHER LEGAL OR EQUITABLE THEORY, EVEN IF ADVISED OF THEIR POSSIBILITY.**
 
 ### 18.2. Agents and Third Parties
 
 **DOPL IS NOT LIABLE FOR LOSSES ARISING FROM ACTIONS TAKEN BY ANY AGENT OR CONNECTED CLIENT, FROM ANY AI PROVIDER OR OTHER THIRD-PARTY SERVICE, OR FROM CONTENT PROVIDED BY OTHER USERS.**
 
-### 18.3. Limitation on Liability Amount
+### 18.3. Liability Cap
 
-**EXCEPT FOR LIABILITY ARISING FROM DOPL'S GROSS NEGLIGENCE, FRAUD, OR WILLFUL MISCONDUCT, DOPL'S TOTAL LIABILITY ARISING OUT OF OR RELATING TO THE SERVICES OR THE AGREEMENT WILL NOT EXCEED THE GREATER OF (A) THE FEES YOU PAID DOPL DURING THE 12 MONTHS BEFORE THE FIRST EVENT GIVING RISE TO THE LIABILITY, OR (B) US$100.**
+**EXCEPT FOR LIABILITY ARISING FROM DOPL'S GROSS NEGLIGENCE, FRAUD, OR WILLFUL MISCONDUCT, THE MOST DOPL WILL OWE FOR ALL CLAIMS CONNECTED WITH THE SERVICES OR THE AGREEMENT, IN TOTAL, IS THE GREATER OF (A) THE FEES YOU PAID DOPL IN THE 12 MONTHS PRECEDING THE EARLIEST EVENT ON WHICH ANY SUCH CLAIM IS BASED, OR (B) US$100.**
 
 ### 18.4. Non-Excludable Liability
 
@@ -505,41 +505,41 @@ The indemnified party will notify the indemnifying party promptly of any Claim, 
 
 ## 20. Suspension; Termination
 
-### 20.1. Suspension (by Dopl)
+### 20.1. Suspension
 
-Dopl may immediately suspend Your access to all or part of the Services if Dopl reasonably believes that:
+Dopl may, without prior notice, suspend Your access to all or part of the Services if Dopl reasonably believes that:
 
 (a) You or Your Agent breached, or Your continued access would breach, the Agreement;
 
 (b) You or Your Agent violated, or Your continued access would violate, Law;
 
-(c) Your or Your Agent's actions threaten the security, stability, or reliability of the Services;
+(c) Your or Your Agent's actions put the security or operation of the Services at risk;
 
 (d) Your or Your Agent's actions create an unacceptable risk to Dopl, other users, or any third party; or
 
 (e) Law or a Governmental Authority requires the suspension.
 
-### 20.2. Termination for Convenience (by You)
+### 20.2. Ending the Agreement (You)
 
 You may terminate the Agreement at any time by deleting Your Dopl Account under Section 2.6.
 
-### 20.3. Termination for Convenience (by Dopl)
+### 20.3. Ending the Agreement (Dopl)
 
 Dopl may terminate the Agreement, or discontinue the Services, upon 30 days' notice to You. Dopl will refund prepaid Fees for the unused portion of the billing period and will give You a reasonable opportunity to export Your Content before the termination takes effect.
 
-### 20.4. Termination for Cause (by Dopl)
+### 20.4. Ending the Agreement for Breach
 
-Dopl may terminate the Agreement and close Your Dopl Account if:
+Dopl may end the Agreement and close Your Dopl Account when:
 
-(a) Dopl reasonably believes immediate termination is required by Law or necessary to prevent fraud or harm;
+(a) Dopl reasonably concludes that closing the account at once is legally required or is needed to stop fraud or harm;
 
-(b) You breach the Agreement and, if the breach is capable of cure, do not cure it within 10 days after Dopl notifies You of the breach; or
+(b) Dopl has given You notice of a breach of the Agreement and You have not remedied a remediable breach within 10 days of that notice; or
 
-(c) Dopl suspends Your Dopl Account and You do not demonstrate within 10 days that the basis for suspension was in error or has been cured.
+(c) Your Dopl Account has been suspended for 10 days and You have not shown that the suspension was unfounded or that its cause has been remedied.
 
 ### 20.5. Effect of Termination
 
-Upon termination, Your right to use the Services and Dopl Technology ends immediately. Termination does not relieve either party of payment obligations accrued before termination. If Dopl terminates the Agreement for cause, Dopl will not refund Fees.
+When the Agreement ends, Your permission to use the Services and Dopl Technology ends with it. Amounts that became payable before the Agreement ended remain payable. If Dopl terminates the Agreement for cause, Dopl will not refund Fees.
 
 ### 20.6. Survival
 
@@ -551,17 +551,17 @@ The following survive termination of the Agreement: Sections 4, 5.2, 6.2 (for Co
 
 ### 21.1. Informal Resolution
 
-Before commencing arbitration or any other proceeding, the party asserting a claim must send the other party a written notice of dispute. Notices to Dopl must be sent to build@usedopl.com. Notices to You will be sent to the email address associated with Your Dopl Account. A notice must state: (a) the sender's name, email address, and mailing address, and the email address associated with the Dopl Account (if any); (b) the nature and factual basis of the dispute; and (c) the specific relief sought. If You are represented by an attorney, You must provide written authorization for Dopl to discuss Your dispute and Dopl Account with that attorney. The parties will attempt in good faith to resolve the dispute. If the dispute is not resolved within 60 days after the notice is received, either party may commence arbitration or, where permitted, a small claims action. Statutes of limitation are tolled during this 60-day period. A tribunal may stay a proceeding commenced without compliance with this Section 21.1.
+Before commencing arbitration or any other proceeding, the party asserting a claim must send the other party a written notice of dispute. Dopl receives these notices at build@usedopl.com, and sends them to the email address on Your Dopl Account. Each notice must give: (a) the sender's name, email address, and mailing address, and the email address associated with the Dopl Account (if any); (b) the nature and factual basis of the dispute; and (c) the specific relief sought. If You are represented by an attorney, You must provide written authorization for Dopl to discuss Your dispute and Dopl Account with that attorney. The parties will attempt in good faith to resolve the dispute. If the parties have not settled the dispute 60 days after the notice arrives, either party may commence arbitration or, where permitted, a small claims action. Statutes of limitation are tolled during this 60-day period. A tribunal may stay a proceeding commenced without compliance with this Section 21.1.
 
 ### 21.2. Binding Arbitration
 
-**TO THE EXTENT LAW PERMITS, THE PARTIES WILL RESOLVE ANY DISPUTE, CLAIM, OR CONTROVERSY ARISING OUT OF OR RELATING TO THE AGREEMENT, THE SERVICES, OR THE RELATIONSHIP BETWEEN THE PARTIES, INCLUDING THE VALIDITY, SCOPE, OR ENFORCEABILITY OF THIS SECTION 21 (EXCEPT AS STATED IN SECTION 21.7), EXCLUSIVELY BY FINAL AND BINDING INDIVIDUAL ARBITRATION.** The Federal Arbitration Act, 9 U.S.C. § 1 et seq., governs this Section 21. Judgment on an award may be entered in any court of competent jurisdiction.
+**AS FAR AS LAW ALLOWS, EVERY DISPUTE BETWEEN THE PARTIES CONCERNING THE AGREEMENT, THE SERVICES, OR THEIR RELATIONSHIP, INCLUDING THE VALIDITY, SCOPE, OR ENFORCEABILITY OF THIS SECTION 21 (EXCEPT AS STATED IN SECTION 21.7), WILL BE DECIDED ONLY THROUGH FINAL, BINDING ARBITRATION OF INDIVIDUAL CLAIMS.** The Federal Arbitration Act, 9 U.S.C. § 1 et seq., governs this Section 21. Any court with jurisdiction may enter judgment on the arbitrator's award.
 
 ### 21.3. Exceptions
 
 The following are not subject to arbitration:
 
-(a) an individual action in small claims court within that court's jurisdiction, for so long as the action remains in small claims court and proceeds on an individual basis;
+(a) an individual claim filed in a small claims court that has jurisdiction over it, unless the claim is transferred or appealed to another court;
 
 (b) an action for injunctive or other equitable relief to prevent the infringement or misappropriation of IP Rights or Confidential Information;
 
@@ -571,7 +571,7 @@ The following are not subject to arbitration:
 
 ### 21.4. Arbitration Procedure
 
-The American Arbitration Association ("**AAA**") will administer the arbitration: (a) before a single arbitrator; (b) under the AAA Consumer Arbitration Rules if You are an individual using the Services for personal purposes, or the AAA Commercial Arbitration Rules otherwise; (c) under the AAA Mass Arbitration Supplementary Rules where they apply; (d) on written submissions for claims of US$25,000 or less, unless the arbitrator determines a hearing is necessary; and (e) by video hearing, or, if in person, in San Francisco County, California, or the county of Your residence, at Your election. The arbitrator may award only individual relief, and only to the extent necessary to resolve the claimant's individual claim. The AAA rules are available at www.adr.org.
+The American Arbitration Association ("**AAA**") will administer the arbitration: (a) before a single arbitrator; (b) applying the AAA Consumer Arbitration Rules to personal use of the Services by an individual, and the AAA Commercial Arbitration Rules to all other use; (c) under the AAA Mass Arbitration Supplementary Rules where they apply; (d) on written submissions for claims of US$25,000 or less, unless the arbitrator determines a hearing is necessary; and (e) by video hearing, or, if in person, in San Francisco County, California, or the county of Your residence, at Your election. The arbitrator may award only individual relief, and only to the extent necessary to resolve the claimant's individual claim. The AAA rules are available at www.adr.org.
 
 ### 21.5. Arbitration Fees
 
@@ -583,7 +583,7 @@ If 25 or more similar claims are asserted against Dopl by the same or coordinate
 
 ### 21.7. Class Action Waiver
 
-**TO THE EXTENT LAW PERMITS, ANY DISPUTE, WHETHER IN ARBITRATION OR IN COURT, WILL BE CONDUCTED ONLY ON AN INDIVIDUAL BASIS AND NOT IN A CLASS, COLLECTIVE, CONSOLIDATED, OR REPRESENTATIVE ACTION.** Only a court, and not an arbitrator, may decide disputes regarding the interpretation, applicability, or enforceability of this Section 21.7. If a court determines that this Section 21.7 is unenforceable as to a particular claim or form of relief, that claim or relief will be severed and decided by a court under Section 21.10 after the arbitration of all other claims, and the remainder of this Section 21 will continue to apply.
+**AS FAR AS LAW ALLOWS, EACH PARTY MAY PURSUE CLAIMS AGAINST THE OTHER ONLY IN ITS OWN NAME, AND NOT AS A REPRESENTATIVE OR MEMBER OF ANY CLASS, COLLECTIVE, OR CONSOLIDATED PROCEEDING, IN ARBITRATION OR IN COURT.** Whether this Section 21.7 is valid, applies, or can be enforced is a question for a court, not an arbitrator. If a court determines that this Section 21.7 is unenforceable as to a particular claim or form of relief, that claim or relief will be severed and decided by a court under Section 21.10 after the arbitration of all other claims, and the remainder of this Section 21 will continue to apply.
 
 ### 21.8. Jury Trial Waiver
 
@@ -595,7 +595,7 @@ You may opt out of Sections 21.2 through 21.7 by sending notice to build@usedopl
 
 ### 21.10. Governing Law; Venue
 
-California Law governs the Agreement, without regard to its conflict-of-laws rules, and the Federal Arbitration Act governs Section 21. The United Nations Convention on Contracts for the International Sale of Goods does not apply. For any dispute not subject to arbitration, and to confirm, modify, or vacate an arbitral award, each party consents to the exclusive jurisdiction of the state courts located in San Francisco County, California, and the United States District Court for the Northern District of California. If You are a consumer in the EEA, the United Kingdom, or Switzerland, this Section 21.10 does not deprive You of the protection of the mandatory Law of Your country of residence or of Your right to bring proceedings in its courts.
+California Law governs the Agreement, without regard to its conflict-of-laws rules, and the Federal Arbitration Act governs Section 21. The United Nations Convention on Contracts for the International Sale of Goods does not apply. For any dispute not subject to arbitration, and to confirm, modify, or vacate an arbitral award, the parties submit exclusively to the state courts sitting in San Francisco County, California, and the federal court for the Northern District of California. If You are a consumer in the EEA, the United Kingdom, or Switzerland, this Section 21.10 does not deprive You of the protection of the mandatory Law of Your country of residence or of Your right to bring proceedings in its courts.
 
 ---
 
@@ -637,7 +637,7 @@ The Dopl Technology is "commercial computer software" and "commercial computer s
 
 ### 24.1. Compliance with Law
 
-Each party must comply with all Law applicable to it in connection with the Services.
+In performing the Agreement, each party will obey the Law that applies to it.
 
 ### 24.2. Notices
 
@@ -655,7 +655,7 @@ You must not assign or transfer the Agreement or any of Your rights or obligatio
 
 ### 24.4. Entire Agreement
 
-The Agreement, together with any terms You accept at checkout, constitutes the entire agreement between the parties regarding the Services and supersedes all prior and contemporaneous agreements and understandings regarding its subject matter.
+The Agreement and any checkout terms You accept are the complete statement of the parties' agreement about the Services, and replace any earlier or concurrent agreement or understanding about the Services.
 
 ### 24.5. Order of Precedence
 
@@ -663,7 +663,7 @@ If the Agreement conflicts with terms You accept at checkout, the checkout terms
 
 ### 24.6. Severability
 
-If a court or Governmental Authority finds any provision of the Agreement invalid, illegal, or unenforceable, that provision will be enforced to the maximum extent permissible, and the remaining provisions will remain in full force and effect, subject to Section 21.7.
+A provision of the Agreement that a court or Governmental Authority holds unenforceable will be applied as far as it lawfully can be, and the remaining provisions will remain in full force and effect, subject to Section 21.7.
 
 ### 24.7. Waivers
 
@@ -679,7 +679,7 @@ The parties are independent contractors. Nothing in the Agreement creates a part
 
 ### 24.10. Subcontractors
 
-Dopl may use subcontractors to perform its obligations under the Agreement. Dopl is responsible for its subcontractors' performance of those obligations.
+Dopl may engage subcontractors to help provide the Services, and Dopl remains answerable for the work they perform for it.
 
 ### 24.11. No Third-Party Beneficiaries
 
@@ -695,7 +695,7 @@ Headings are for convenience only and do not affect interpretation of the Agreem
 
 ### 25.1. Non-Material Changes
 
-Dopl may update the Agreement by publishing the updated version on Dopl's website and amending the "Last updated" date. Updates that are not material take effect upon publication.
+Dopl may update the Agreement by posting the revised version at usedopl.com/terms with a new "Last updated" date. Updates that are not material take effect upon publication.
 
 ### 25.2. Material Changes
 
@@ -731,9 +731,9 @@ Dopl will provide prior versions of the Agreement upon request.
 
 "**Channel**" means a conversation space within a Workspace in which Members and Agents exchange messages, threads, tasks, and artifacts.
 
-"**Claim**" means any claim, demand, investigation, or legal proceeding that a third party brings against an indemnified party in connection with the Services.
+"**Claim**" means a demand, lawsuit, investigation, or other proceeding brought by a third party against a party entitled to indemnity under Section 19.
 
-"**Confidential Information**" means non-public information that a party discloses to the other party in connection with the Services that is designated as confidential or that a reasonable person would understand to be confidential given its nature and the circumstances of disclosure, including Your Content.
+"**Confidential Information**" means non-public information one party obtains from the other through the Services that is marked confidential or that a reasonable person would treat as confidential, including Your Content.
 
 "**Connected Client**" means a third-party application, such as Claude Code, Claude Desktop, Codex, or Cursor, that You authorize to access the Dopl MCP Server.
 
@@ -763,11 +763,11 @@ Dopl will provide prior versions of the Agreement upon request.
 
 "**IP Claim**" means a Claim described in Section 19.2.
 
-"**IP Rights**" means all copyrights, patents, trademarks, service marks, trade secrets, moral rights, and other intellectual property rights anywhere in the world.
+"**IP Rights**" means patent, copyright, trademark, trade secret, moral, and every other intellectual property right in any country.
 
 "**Law**" means all applicable laws, rules, and regulations, and binding requirements of any Governmental Authority.
 
-"**Losses**" means damages, losses, liabilities, judgments, settlements, penalties, fines, costs, and expenses, including reasonable attorneys' fees.
+"**Losses**" means any harm, damage, liability, award, settlement, fine, penalty, cost, or expense, including reasonable legal fees.
 
 "**Mark**" means a trademark, service mark, logo, or trade name.
 
@@ -783,15 +783,15 @@ Dopl will provide prior versions of the Agreement upon request.
 
 "**Seat**" means a Member of a Team Workspace for whom a per-Seat Fee is charged.
 
-"**Services**" means the products and services Dopl provides or makes available to You, including Your access to the Dopl Technology.
+"**Services**" means everything Dopl offers under the Agreement, including access to the Dopl Technology.
 
 "**Shared Space**" means a Workspace or Channel in which more than one Member participates.
 
-"**Taxes**" means all taxes and duties imposed by any Governmental Authority, including sales, use, value-added, and goods and services taxes, excluding taxes on Dopl's income.
+"**Taxes**" means sales, use, value-added, goods and services, and similar taxes and duties levied by a Governmental Authority, other than taxes on Dopl's income.
 
 "**Team Workspace**" means a Workspace on the Team Plan.
 
-"**Third-Party Losses**" means all amounts finally awarded to a third party in connection with a Claim, and amounts paid in settlement of a Claim under Section 19.3.
+"**Third-Party Losses**" means amounts a final judgment or award requires to be paid to a third party on a Claim, and amounts paid to settle a Claim under Section 19.3.
 
 "**Third-Party Materials**" means software, content, and other materials owned by a third party.
 
