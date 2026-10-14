@@ -695,7 +695,7 @@ Headings are for convenience only and do not affect interpretation of the Agreem
 
 ### 25.1. Non-Material Changes
 
-Dopl may update the Agreement by posting the revised version at usedopl.com/terms with a new "Last updated" date. Updates that are not material take effect upon publication.
+Dopl may update the Agreement by posting the revised version at usedopl.com/services-agreement with a new "Last updated" date. Updates that are not material take effect upon publication.
 
 ### 25.2. Material Changes
 

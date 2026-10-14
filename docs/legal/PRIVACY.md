@@ -10,7 +10,7 @@ privacy violation.
 
 Last updated: October 14, 2026
 
-This Privacy Policy ("**Policy**") describes how Dopl collects, uses, discloses, retains, and protects Personal Information of you or the entity you represent ("**You**") and of other individuals in connection with the Services. This Policy is informational and does not form part of the Services Agreement. Capitalized terms not defined in this Policy have the meanings given in the Dopl Services Agreement at usedopl.com/terms (the "**Agreement**").
+This Privacy Policy ("**Policy**") describes how Dopl collects, uses, discloses, retains, and protects Personal Information of you or the entity you represent ("**You**") and of other individuals in connection with the Services. This Policy is informational and does not form part of the Services Agreement. Capitalized terms not defined in this Policy have the meanings given in the Dopl Services Agreement at usedopl.com/services-agreement (the "**Agreement**").
 
 ---
 
