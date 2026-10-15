@@ -16,7 +16,7 @@
      47–58%   folder darkens as the drop target while the icon is over it
      57.5–62% drop: icon shrinks into the folder, folder bounces, cursor taps
      61–66%   green check pops; cursor drifts away and fades (62–74%)
-     32–35.5% its home's dotted silhouette fades in (`.gs-app-slot`)
+     32–35.5% its home's dashed silhouette fades in (`.gs-app-slot`)
      62–77%   the icon's home is empty (it was installed) — the silhouette
               stays; it fades out 77–83% as the icon returns onto it
      76%      drag movers snap home while icon and cursor are both invisible
@@ -188,9 +188,15 @@
   box-sizing: border-box;
   border-radius: 22.5%;
   background: rgba(0, 0, 0, 0.06);
-  border: 1.5px dotted #a3a3a8;
+  color: #a3a3a8; /* the arrow's stroke colour */
   opacity: 0;
   animation: gs-slot-life var(--gs-t) linear infinite;
+}
+.gs-app-slot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 /* The real folder art carries its own transparent margin (it fills ~90% of
    its square), so it is drawn at 92px to read the same size as the 78px app

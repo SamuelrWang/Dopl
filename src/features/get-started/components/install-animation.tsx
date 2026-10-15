@@ -64,7 +64,23 @@ export function InstallAnimation() {
                 (Samuel 2026-10-15) — a shape, never a second icon. */}
             <div className="gs-well gs-well--app">
               <span className="gs-app-home">
-                <span className="gs-app-slot" />
+                {/* The outline is an SVG stroke, not a CSS border: `dashed` cannot set
+                    a dash length, and this must match the arrow's 1.5px "4 3" dash. */}
+                <span className="gs-app-slot">
+                  <svg viewBox="0 0 78 78" aria-hidden="true">
+                    <rect
+                      x="0.75"
+                      y="0.75"
+                      width="76.5"
+                      height="76.5"
+                      rx="17.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeDasharray="4 3"
+                    />
+                  </svg>
+                </span>
               </span>
               <span className="gs-well-label">Dopl</span>
             </div>

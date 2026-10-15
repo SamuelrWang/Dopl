@@ -101,7 +101,9 @@ describe("InstallAnimation", () => {
     // The home holds only the silhouette slot — an empty shape, no art.
     const home = well?.querySelector(".gs-app-home");
     expect(Array.from(home?.children ?? []).map((k) => k.className)).toEqual(["gs-app-slot"]);
-    expect(home?.querySelector(".gs-app-slot")?.childElementCount).toBe(0);
+    // The slot holds only its dashed outline (an SVG) — no icon art.
+    const slot = home?.querySelector(".gs-app-slot");
+    expect(Array.from(slot?.children ?? []).map((k) => k.tagName.toLowerCase())).toEqual(["svg"]);
     expect(well?.querySelector(".gs-well-label")?.textContent).toBe("Dopl");
   });
 
@@ -137,7 +139,7 @@ describe("InstallAnimation", () => {
     expect(CSS).toMatch(/--gs-app-depth-lifted:/);
   });
 
-  it("leaves a light-gray dotted silhouette in the icon's home while it is away", () => {
+  it("leaves a light-gray dashed silhouette in the icon's home while it is away", () => {
     const { container } = render(<InstallAnimation />);
     const slot = container.querySelector(".gs-well--app > .gs-app-home > .gs-app-slot");
     expect(slot).not.toBeNull();
@@ -147,7 +149,14 @@ describe("InstallAnimation", () => {
     expect(well).toBeLessThan(stage.findIndex((k) => k.classList.contains("gs-drag-y")));
     const rules = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
     const rule = /\.gs-app-slot\s*\{([^}]*)\}/.exec(rules)?.[1] ?? "";
-    expect(rule).toMatch(/border: 1\.5px dotted /);
+    // Dashed exactly like the arrow: same stroke width, dash pattern and colour.
+    const outline = slot!.querySelector("svg rect")!;
+    const arrow = container.querySelector("svg.gs-arrow path, .gs-arrow path, .gs-arrow rect")!;
+    expect(outline.getAttribute("stroke-width")).toBe(arrow.getAttribute("stroke-width"));
+    expect(outline.getAttribute("stroke-dasharray")).toBe(arrow.getAttribute("stroke-dasharray"));
+    expect(outline.getAttribute("stroke")).toBe("currentColor");
+    expect(rule).toMatch(/color: #a3a3a8;/);
+    expect(rule).not.toMatch(/border:/);
     expect(rule).toMatch(/background: rgba\(0, 0, 0, 0\.06\)/);
     expect(rule).toMatch(/border-radius: 22\.5%/);
     expect(rule).toMatch(/opacity: 0;/);
