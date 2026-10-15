@@ -241,3 +241,108 @@ describe("two cards on one pose hand off by key", () => {
     }
   });
 });
+
+describe("the hover tilt is opted into, never on by default", () => {
+  // Samuel 2026-10-14: /get-started's glass + white panel tilt like the other glass. The opt-in
+  // is the PORTAL — a page projecting content into the slot — because the (auth) layout persists
+  // across the group and the page cannot hand it a prop. Login, signup, /authenticate,
+  // /oauth/authorize and the desktop signed-out screen leave the slot empty and must stay flat.
+
+  /** A tilt-capable desktop: hover + fine pointer, motion allowed. */
+  function withTiltCapable() {
+    withMeasuredPane();
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes("hover"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }),
+    });
+    // Frames run only when `frames()` flushes them — a synchronous rAF recurses through the
+    // morph loop, which re-arms itself every frame.
+    // The hook measures the group by its LAYOUT box (offset*), which jsdom leaves at 0.
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600);
+    frameQueue = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      frameQueue.push(cb);
+      return frameQueue.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+  }
+  let frameQueue: FrameRequestCallback[] = [];
+  function frames(n = 3) {
+    act(() => {
+      for (let i = 0; i < n; i++) {
+        const q = frameQueue;
+        frameQueue = [];
+        q.forEach((cb) => cb(performance.now() + i * 16));
+      }
+    });
+  }
+
+  const slotIn = (root: HTMLElement) => root.querySelector<HTMLElement>("#auth-glass-slot")!;
+  const sheenIn = (root: HTMLElement) => root.querySelector("[data-glass-sheen]");
+
+  function hover(root: HTMLElement) {
+    // The pane (`PaneClip`) is the one with the rounded clip-path; it owns the listener.
+    const pane = root.querySelector<HTMLElement>('[style*="clip-path"]')!;
+    const e = new Event("pointermove", { bubbles: true }) as Event & Record<string, unknown>;
+    Object.assign(e, { pointerType: "mouse", clientX: 600, clientY: 450 });
+    act(() => {
+      pane.dispatchEvent(e);
+    });
+    frames();
+  }
+
+  const tilted = (root: HTMLElement) =>
+    Array.from(root.querySelectorAll<HTMLElement>("div")).some((d) =>
+      d.style.getPropertyValue("--glass-tilt").includes("rotate")
+    );
+
+  it("🔒 a plain auth surface (no pose, empty slot) has no sheen and does not tilt", () => {
+    withTiltCapable();
+    const { container } = render(
+      <AuthSplitLayout>
+        <form />
+      </AuthSplitLayout>
+    );
+    expect(sheenIn(container)).toBeNull();
+    hover(container);
+    expect(tilted(container)).toBe(false);
+  });
+
+  it("🔒 a filled glass slot (/get-started's portal) turns the sheen and the tilt on", async () => {
+    withTiltCapable();
+    const { container } = render(
+      <AuthSplitLayout>
+        <form />
+      </AuthSplitLayout>
+    );
+    await act(async () => {
+      const panel = document.createElement("div");
+      panel.className = "gs-glass-pad";
+      slotIn(container).appendChild(panel);
+      await Promise.resolve();
+    });
+    expect(sheenIn(container)).not.toBeNull();
+    hover(container);
+    expect(tilted(container)).toBe(true);
+    // Still a plain surface otherwise: the opt-in does not hand get-started the onboarding card.
+    expect(cardIn(container)).toBeNull();
+  });
+
+  it("🔒 …and the slot's content sits INSIDE a layer that reads `--glass-tilt` (one object)", () => {
+    withTiltCapable();
+    const { container } = render(
+      <AuthSplitLayout>
+        <form />
+      </AuthSplitLayout>
+    );
+    const layer = slotIn(container).parentElement!;
+    expect(layer.style.transform).toBe("var(--glass-tilt, none)");
+  });
+});

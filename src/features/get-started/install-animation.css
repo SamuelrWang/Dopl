@@ -29,6 +29,15 @@
    (`shared/layout/auth-split/auth-glass-geometry.ts`) — and wears the card's
    `--glass-card-*` radius, fill and shadow. Never re-type those numbers here.
 
+   ⚠ THE WINDOW TILTS WITH THE GLASS, AND NOTHING HERE MAY TILT IT. The slot
+   it is portaled into sits inside `LiquidGlass`'s content layer, which wears
+   `transform: var(--glass-tilt)` (`shared/design/liquid-glass/liquid-glass.tsx`
+   › LAYER_TILT), so the window, the stage and everything on it already move
+   as one object with the glass. Writing `var(--glass-tilt)` on any node below
+   would apply the tilt twice. The hover tilt itself is switched on BY the
+   portal: a filled slot is the panel's opt-in (`auth-banner-panel.tsx` ›
+   slotFilled).
+
    ⚠ Coordinates are px in a fixed 400×144 STAGE (`.gs-stage`), centred in
    the window body and scaled to fit it — the body's size follows the glass,
    so the drawing scales rather than clipping. Keep new positions inside the
@@ -172,9 +181,9 @@
 .gs-arrow {
   position: absolute;
   left: 50%;
-  top: 42px;
-  width: 70px;
-  height: 34px;
+  top: 33px; /* 59 − 52/2 */
+  width: 64px;
+  height: 52px;
   transform: translateX(-50%);
   color: #a3a3a8;
 }

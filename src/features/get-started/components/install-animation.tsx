@@ -45,7 +45,7 @@ export function InstallAnimation() {
             <i className="gs-light gs-light--min" />
             <i className="gs-light gs-light--zoom" />
           </span>
-          <span className="gs-dmg-title">Dopl</span>
+          <span className="gs-dmg-title">Dopl Installer</span>
         </div>
 
         <div className="gs-dmg-body">
@@ -87,12 +87,14 @@ export function InstallAnimation() {
 
 /** Hollow block arrow, dashed — the "drag this way" mark DMGs draw between the
  *  app and the alias. Not a system asset (every DMG draws its own); this one is
- *  ours. viewBox is 1:1 with stage px. */
+ *  ours. viewBox is 1:1 with stage px. 64×52 (~1.2:1, the reference DMGs'
+ *  proportion — Samuel 2026-10-14: the 70×34 one was "too narrow"): a 22px
+ *  shaft, a 48px-tall head, centred on y 26. */
 function ArrowIcon() {
   return (
-    <svg className="gs-arrow" viewBox="0 0 70 34" fill="none" aria-hidden="true">
+    <svg className="gs-arrow" viewBox="0 0 64 52" fill="none" aria-hidden="true">
       <path
-        d="M1.5 11.5H44V2l24.5 15L44 32v-9.5H1.5Z"
+        d="M1.5 15H36V2l26.5 24L36 50V37H1.5Z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeDasharray="4 3"

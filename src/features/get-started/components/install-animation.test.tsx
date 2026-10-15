@@ -45,6 +45,28 @@ describe("InstallAnimation", () => {
     expect(container.querySelector(".gs-arrow")?.getAttribute("fill")).toBe("none");
   });
 
+  it("titles the window \"Dopl Installer\" (Samuel 2026-10-14)", () => {
+    const { container } = render(<InstallAnimation />);
+    expect(container.querySelector(".gs-dmg-title")?.textContent).toBe("Dopl Installer");
+  });
+
+  it("draws the arrow TALL (~1.2:1, not the old flat 70×34), centred on the icons' line", () => {
+    const { container } = render(<InstallAnimation />);
+    expect(container.querySelector(".gs-arrow")?.getAttribute("viewBox")).toBe("0 0 64 52");
+    const rule = /\.gs-arrow\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    const px = (prop: string) => Number(new RegExp(`${prop}:\\s*(-?[\\d.]+)px`).exec(rule)?.[1]);
+    expect(px("width")).toBe(64);
+    expect(px("height")).toBe(52);
+    // Centre on y 59 — the app tile's and the folder's shared centre line.
+    expect(px("top") + px("height") / 2).toBe(59);
+    expect(container.querySelector(".gs-arrow path")?.getAttribute("stroke-width")).toBe("1.5");
+  });
+
+  it("never applies the glass tilt itself (it rides the glass's content layer)", () => {
+    const rules = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(rules).not.toMatch(/--glass-tilt/);
+  });
+
   it("renders the landing demo's shared pointer", () => {
     const { container } = render(<InstallAnimation />);
     const { container: shared } = render(<DemoCursorGlyph />);

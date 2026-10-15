@@ -74,6 +74,27 @@ export function usePrefersReducedMotion(): boolean {
 }
 
 /**
+ * True while `slotRef`'s element has children — i.e. a PAGE has portaled
+ * something onto the glass (/get-started's install window). That is the
+ * get-started surface's tilt opt-in: the layout persists across the auth group
+ * and the page cannot hand it a prop, but the portal itself is an explicit,
+ * page-owned act. Every other surface leaves the slot empty, so stays flat.
+ */
+export function useSlotFilled(slotRef: RefObject<HTMLElement | null>): boolean {
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    const el = slotRef.current;
+    if (!el) return;
+    const sync = () => setFilled(el.childElementCount > 0);
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(el, { childList: true });
+    return () => mo.disconnect();
+  }, [slotRef]);
+  return filled;
+}
+
+/**
  * The tilt's specular sheen, ON the glass. Masked to the glass outline from a
  * SIBLING of `LiquidGlass`, so no ancestor of the backdrop layer gains a mask
  * (that would make it a backdrop root and flatten the refraction). Painted by
@@ -90,6 +111,7 @@ export function GlassSheen({
     <div
       ref={sheenRef}
       aria-hidden
+      data-glass-sheen=""
       style={{
         position: "absolute",
         inset: 0,
