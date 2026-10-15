@@ -192,7 +192,6 @@ export function AppShellLayout() {
               workspaces={workspaces}
               activeWorkspacePublicId={parseSegment(routed)?.publicId ?? null}
               onNavigate={(path) => navigate(path)}
-              onCreateWorkspace={() => setCreateWsOpen(true)}
             />
           ) : undefined
         }
@@ -234,7 +233,6 @@ export function AppShellLayout() {
           workspaces={workspaces}
           activeWorkspacePublicId={workspace.publicId}
           onNavigate={(path) => navigate(path)}
-          onCreateWorkspace={() => setCreateWsOpen(true)}
         />
         <div className={styles.surface}>
           {/* ⚠ ONE PANEL, AND THE SIDEBAR IS A REGION OF IT (Samuel, 2026-08-30:

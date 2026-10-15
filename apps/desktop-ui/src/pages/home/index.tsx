@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/shared/lib/utils";
-import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
 import { isStandardWorkspace } from "@/features/workspaces/types";
-import { workspaceSegment } from "@/features/workspaces/url";
 import { Crossfade } from "@/shared/ui/crossfade";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import { useAccountChannels } from "@/features/channels/hooks/use-channels";
@@ -36,7 +34,6 @@ import { homeMemory, homeScope } from "./home-memory";
  */
 export default function HomePage() {
   const navigate = useNavigate();
-  const [createWsOpen, setCreateWsOpen] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
   // `undefined` = not chosen since /home mounted, so this device's memory
   // (`./home-memory.ts`) decides; read through `selectedId` / `tab` below.
@@ -141,7 +138,6 @@ export default function HomePage() {
           workspaces={workspacesQuery.data ?? []}
           activeWorkspacePublicId={null}
           onNavigate={(path) => navigate(path)}
-          onCreateWorkspace={() => setCreateWsOpen(true)}
         />
         <div className={shell.surface}>
           {/* The base panel carries header + list; the record pane sits on it. The bg utility
@@ -219,16 +215,6 @@ export default function HomePage() {
           setTab("channels");
         }}
       />
-
-      <CreateWorkspaceDialogCore
-        open={createWsOpen}
-        onOpenChange={setCreateWsOpen}
-        onCreated={(created) => {
-          void workspacesQuery.refetch();
-          navigate(`/${workspaceSegment(created)}`);
-        }}
-      />
-
     </div>
   );
 }

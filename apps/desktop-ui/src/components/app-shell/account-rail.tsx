@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Plus } from "lucide-react";
+import { RequestWorkspaceAccessDialog } from "@/features/workspaces/components/request-workspace-access-dialog";
 import { WorkspaceGlyph } from "@/shared/layout/app-shell/workspace-switcher-core";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
@@ -16,7 +18,8 @@ export interface AccountRailProps {
   /** publicId of the open workspace; null when Home is the active surface. */
   activeWorkspacePublicId: string | null;
   onNavigate: (path: string) => void;
-  onCreateWorkspace: () => void;
+  // ⚠ No `onCreateWorkspace` since 2026-10-15: the create tile is GATED and opens
+  // the request-access popup this rail owns (see the tile below).
   // ⚠ No `className`/backdrop prop: `.rail` paints `--home-frame` at the source, so
   // both mounts get one slab. A backdrop prop is how the rail and the shell drifted.
 }
@@ -33,10 +36,11 @@ export function AccountRail({
   workspaces,
   activeWorkspacePublicId,
   onNavigate,
-  onCreateWorkspace,
 }: AccountRailProps) {
   const isHome = activeWorkspacePublicId === null;
+  const [gateOpen, setGateOpen] = useState(false);
   return (
+    <>
     <nav className={styles.rail} aria-label="Account">
       <button
         type="button"
@@ -75,15 +79,22 @@ export function AccountRail({
         })}
       </div>
 
+      {/* 🔒 GATED (Samuel, 2026-10-15): team workspaces are invite-only for now, so
+          this tile opens the request-access popup, not the create form. The DASHED
+          rounded square is the "not yet yours" face: same ink and stroke as the +. */}
       <button
         type="button"
-        title="Create workspace"
-        aria-label="Create workspace"
+        title="New workspace"
+        aria-label="New workspace"
         className={styles.tile}
-        onClick={onCreateWorkspace}
+        onClick={() => setGateOpen(true)}
       >
-        <Plus size={18} strokeWidth={1.8} />
+        <span className={styles.createOutline}>
+          <Plus size={18} strokeWidth={1.8} />
+        </span>
       </button>
     </nav>
+    <RequestWorkspaceAccessDialog open={gateOpen} onOpenChange={setGateOpen} />
+    </>
   );
 }
