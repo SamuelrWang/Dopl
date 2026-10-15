@@ -21,7 +21,7 @@ import {
   MENTIONS_METADATA_KEY,
   resolveMentions,
 } from "@/features/channels/lib/mentions";
-import { reached, type StepId } from "./demo-steps";
+import { at, reached, type StepId } from "./demo-steps";
 import {
   AGENT_COLORS,
   AGENT_IDS,
@@ -373,6 +373,20 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
 
 export function messagesAt(step: number): ChannelMessage[] {
   return SCRIPT.filter((s) => reached(step, s.step)).map((s) => s.message);
+}
+
+/**
+ * The HUMAN post landing ON this beat, if any — the one the scene types out
+ * word by word (`typed-reveal.ts`). Agent and system posts arrive whole.
+ */
+export function typedMessageAt(step: number): ChannelMessage | null {
+  const hit = SCRIPT.find(
+    (s) =>
+      at(step, s.step) &&
+      s.message.authorKind === "user" &&
+      s.message.kind === "message",
+  );
+  return hit?.message ?? null;
 }
 
 /**

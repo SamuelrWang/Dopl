@@ -11,13 +11,19 @@ import type { DemoDrive } from "./demo-drive";
  */
 const SCROLL_STEPS = STEPS.slice(0, stepIndex("hold") + 1);
 const SCROLL_TOTAL = SCROLL_STEPS.reduce((t, s) => t + s.dur, 0);
-function stepAtProgress(q: number): number {
+/** Step under progress `q`, and how far through that step (0→1), quantised to
+ *  FRAC_STEPS so a scroll frame that moves nothing visible sets no state. */
+const FRAC_STEPS = 40;
+function stepAtProgress(q: number): { step: number; frac: number } {
+  const pos = q * SCROLL_TOTAL;
   let acc = 0;
   for (let i = 0; i < SCROLL_STEPS.length; i++) {
-    acc += SCROLL_STEPS[i].dur;
-    if (q * SCROLL_TOTAL < acc) return i;
+    const dur = SCROLL_STEPS[i].dur;
+    if (pos < acc + dur)
+      return { step: i, frac: Math.round(((pos - acc) / dur) * FRAC_STEPS) / FRAC_STEPS };
+    acc += dur;
   }
-  return SCROLL_STEPS.length - 1;
+  return { step: SCROLL_STEPS.length - 1, frac: 1 };
 }
 /** ms per beat while the shown step catches up with the scroll target. Every
  *  beat is visited (never skipped) so the scripted clicks still fire. */
@@ -45,6 +51,8 @@ export function useDemoTimeline(drive: DemoDrive = "time") {
   const [playing, setPlaying] = useState(false);
   /** Scroll drive only: the step the scroll position asks for. */
   const [target, setTarget] = useState(0);
+  /** Scroll drive only: how far through the TARGET step the scroll sits. */
+  const [targetFrac, setTargetFrac] = useState(0);
   /** Scroll drive only: +1 forward, -1 reversing. Clicks fire forward only. */
   const [dir, setDir] = useState<1 | -1>(1);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -101,7 +109,9 @@ export function useDemoTimeline(drive: DemoDrive = "time") {
         const q = parseFloat(
           getComputedStyle(slot).getPropertyValue("--lp-demo-progress"),
         );
-        setTarget(stepAtProgress(Number.isFinite(q) ? q : 0));
+        const at = stepAtProgress(Number.isFinite(q) ? q : 0);
+        setTarget(at.step);
+        setTargetFrac(at.frac);
         return;
       }
       // The custom property is the TARGET; computed opacity lags mid-fade.
@@ -140,5 +150,20 @@ export function useDemoTimeline(drive: DemoDrive = "time") {
     };
   }, [drive]);
 
-  return { step, run, dir, rootRef };
+  /**
+   * Scroll drive: progress through the SHOWN step. While catching up, a step
+   * being walked past forward is whole (1) and one walked past backward is at
+   * its start (0); on the target it is the scroll's own position. `null` in
+   * time drive, where the step's own clock owns it (typed-reveal.ts).
+   */
+  const frac =
+    drive !== "scroll"
+      ? null
+      : step === target
+        ? targetFrac
+        : step < target
+          ? 1
+          : 0;
+
+  return { step, run, dir, frac, rootRef };
 }

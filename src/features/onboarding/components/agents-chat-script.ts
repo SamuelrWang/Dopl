@@ -1,3 +1,5 @@
+import { splitWords } from "@/shared/ui/chat-reveal";
+
 /**
  * Step 3's glass-card chat, the SCRIPT half: who is in the channel, what they
  * say, and the frame-by-frame timeline that plays it. Pure data + one pure
@@ -82,10 +84,7 @@ export const SCRIPT: ChatItem[] = [
 /** A message's words, each tagged with the mention it belongs to (if any). */
 export function tokens(parts: Part[]): { w: string; mention?: CastId }[] {
   return parts.flatMap((p) =>
-    p.text
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((w) => ({ w, mention: p.mention }))
+    splitWords(p.text).map((w) => ({ w, mention: p.mention }))
   );
 }
 

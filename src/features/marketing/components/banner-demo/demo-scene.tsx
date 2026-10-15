@@ -49,8 +49,10 @@ import {
 import {
   messagesAt,
   threadsAt,
+  typedMessageAt,
 } from "./demo-transcript";
-import { narrationAt } from "./demo-narration";
+import { narrationAt, typedDmAt } from "./demo-narration";
+import { revealBody } from "./typed-reveal";
 import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
 import {
@@ -83,6 +85,7 @@ export function DemoScene({
   thread = null,
   onOpenThread = NOOP,
   onExitThread = NOOP,
+  typedWords,
 }: {
   step: number;
   /** Bumped per loop so the info column's tab state resets on every replay. */
@@ -104,9 +107,32 @@ export function DemoScene({
   onOpenThread?: () => void;
   /** The breadcrumb's channel crumb fires this — the way back out. */
   onExitThread?: () => void;
+  /**
+   * Words shown of the human line landing on this step (`typed-reveal.ts`);
+   * absent shows it whole (tests, reduced motion).
+   */
+  typedWords?: number;
 }) {
   const [qc] = useState(() => new QueryClient());
-  const messages = useMemo(() => messagesAt(step), [step]);
+  // The typed line is cut in the DATA, so the real transcript renders it as is.
+  const messages = useMemo(() => {
+    const all = messagesAt(step);
+    const typed = typedWords === undefined ? null : typedMessageAt(step);
+    if (!typed) return all;
+    return all.map((m) =>
+      m.id === typed.id ? { ...m, body: revealBody(m.body, typedWords ?? 0) } : m
+    );
+  }, [step, typedWords]);
+  const narration = useMemo(() => {
+    const all = narrationAt(step);
+    const typed = typedWords === undefined ? null : typedDmAt(step);
+    if (!typed) return all;
+    return all.map((e) =>
+      e === typed && e.text
+        ? { ...e, text: revealBody(e.text, typedWords ?? 0) }
+        : e
+    );
+  }, [step, typedWords]);
   const index = useMemo(
     () => indexMembers(MEMBERS, CURRENT_USER_ID, AGENT_INDEX),
     []
@@ -285,7 +311,7 @@ export function DemoScene({
                   <DemoAgentView
                     open={agentOpen}
                     agent={MY_SESSION}
-                    entries={narrationAt(step)}
+                    entries={narration}
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}
                     viewer={VIEWER}
