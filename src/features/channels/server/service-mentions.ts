@@ -5,6 +5,8 @@ import {
 } from "../constants";
 import type { ChannelMention, MessageAuthorKind } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
+import { memberHandlesOf } from "../lib/mentions";
+import { mentionSnippetOf } from "../lib/mention-snippet";
 import * as repoMentions from "./repository-mentions";
 import * as repoSessions from "./repository-agent-facets";
 import {
@@ -28,13 +30,12 @@ import {
  * above, which is the presence/sidebar-window shape (INVARIANTS §7).
  */
 
-/** Snippet = the body's leading run, clipped, whitespace collapsed. ⚠ Clipped
- *  by CHARACTERS, and an ellipsis is appended only when something was dropped —
- *  a row that ends in "…" is a claim that there is more. */
-function snippetOf(body: string): string {
-  const flat = body.replace(/\s+/g, " ").trim();
-  if (flat.length <= MENTION_SNIPPET_MAX_CHARS) return flat;
-  return `${flat.slice(0, MENTION_SNIPPET_MAX_CHARS).trimEnd()}…`;
+/** Snippet = the body, whitespace collapsed, clipped by CHARACTERS, WINDOWED around
+ *  the viewer's own tag when that tag sits too far in for the row's two lines
+ *  (`lib/mention-snippet.ts`). ⚠ An ellipsis at either end is appended only when
+ *  something was dropped there — a row that ends in "…" is a claim that there is more. */
+function snippetOf(body: string, viewerHandles: ReadonlySet<string>): string {
+  return mentionSnippetOf(body, viewerHandles, MENTION_SNIPPET_MAX_CHARS);
 }
 
 /** `metadata.taskId` off a stored row — the navigate target. Same three-line
@@ -106,13 +107,27 @@ export async function listMyChannelMentions(
       channel.id,
       rows.map((row) => row.id)
     ),
-    profilesById(
-      rows
+    // ⚠ THE VIEWER RIDES THE SAME PROFILE READ: their handles are what each snippet
+    // windows around (`lib/mention-snippet.ts`). One extra id, still bounded by the page.
+    profilesById([
+      ctx.userId,
+      ...rows
         .map((row) => row.author_user_id)
-        .filter((id): id is string => id !== null)
-    ),
+        .filter((id): id is string => id !== null),
+    ]),
     repoSessions.agentFacets([channel.workspace_id], agentIds),
   ]);
+
+  const viewer = profiles.get(ctx.userId);
+  const viewerHandles = new Set(
+    memberHandlesOf([
+      {
+        userId: ctx.userId,
+        displayName: viewer?.display_name ?? null,
+        email: viewer?.email ?? null,
+      },
+    ])
+  );
 
   const mentions = rows.map((row): ChannelMention => {
     const profile = row.author_user_id
@@ -142,7 +157,7 @@ export async function listMyChannelMentions(
       // in one room runs UNCOLOURED (`lib/agent-colors.ts`), so a renderer must
       // degrade rather than invent a hue.
       authorAgentColor: (facet?.color ?? null) as ChannelMention["authorAgentColor"],
-      snippet: snippetOf(row.body),
+      snippet: snippetOf(row.body, viewerHandles),
       createdAt: row.created_at,
       read: read.has(row.id),
     };
