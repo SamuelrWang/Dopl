@@ -1,20 +1,24 @@
 /**
  * The install, drawn: a macOS DMG Finder window — Dopl icon, a dashed block
- * arrow, the Applications alias — with a cursor that presses the icon, drags a
- * translucent copy of it onto the folder and lets go. Loops with a long beat of
- * rest.
+ * arrow, the Applications alias — with a cursor that clicks the Dopl icon,
+ * PICKS IT UP, carries it onto the folder and drops it in. Loops with a long
+ * beat of rest.
  *
  * ⚠ TIMELINE LIVES IN THE STYLESHEET (`install-animation.css`), not here —
  * every node below is static with a class, and every keyframe track shares one
  * `--gs-t` clock so they cannot drift. No JS on the main thread during the
  * download.
  *
- * ⚠ THE DRAGGED COPY RIDES INSIDE THE HAND (Samuel, 2026-10-14: "It doesn't
- * actually drag the actual icon"). `.gs-ghost` is a CHILD of the same two
- * movers as the cursor (`.gs-hand-y` > `.gs-hand-x`), so cursor and copy share
- * one transform at every frame BY CONSTRUCTION — never give the copy its own
- * translate tracks again; two tracks with matched percentages still drift
- * apart the moment their easings differ.
+ * ⚠ THE DRAGGED THING IS THE ICON ITSELF (Samuel, 2026-10-14: "the logo
+ * doesn't move … I want it to look like it clicks … that should pick up the
+ * logo"). There is ONE Dopl icon and no copy: at rest it sits in its well, and
+ * it lives inside the DRAG movers (`.gs-drag-y` > `.gs-drag-x`), which are
+ * zero except while it is carried. The pointer rides the SAME drag movers plus
+ * its own APPROACH movers (`.gs-hand-y` > `.gs-hand-x`) for the fly-in and the
+ * exit — and the approach tracks are exactly zero for the whole carry. So
+ * during the drag, pointer and icon share one transform BY CONSTRUCTION. A
+ * translucent copy on the hand while the original stayed put read as "the
+ * logo doesn't move" — never bring a second icon back.
  *
  * ⚠ The movers are an X track inside a Y track with different easings per
  * axis — that is what makes the drag an arc, not a point sliding down a wire.
@@ -27,6 +31,7 @@
  * Decorative: `aria-hidden`, every fact restated in the numbered steps.
  */
 
+import type { CSSProperties } from "react";
 import { DemoCursorGlyph } from "@/features/marketing/components/demo-cursor";
 
 /** Same mark the dock shows. */
@@ -35,9 +40,12 @@ const APP_ICON = "/favicons/android-chrome-512x512.png";
  *  `CoreTypes.bundle › ApplicationsFolderIcon.icns`, 256px webp. */
 const APPS_FOLDER_ICON = "/img/get-started/applications-folder.webp";
 
+/** The glint's mask: the icon's own alpha, so the sheen is exactly its squircle. */
+const ICON_MASK = { "--gs-app-mask": `url(${APP_ICON})` } as CSSProperties;
+
 export function InstallAnimation() {
   return (
-    <div className="gs-glass-pad" aria-hidden="true">
+    <div className="gs-glass-pad" aria-hidden="true" style={ICON_MASK}>
       <div className="gs-dmg">
         <div className="gs-dmg-bar">
           <span className="gs-lights">
@@ -50,9 +58,10 @@ export function InstallAnimation() {
 
         <div className="gs-dmg-body">
           <div className="gs-stage">
+            {/* The icon's home: an EMPTY spot (the icon itself is in the
+                movers below) so the label keeps its place under it. */}
             <div className="gs-well gs-well--app">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={APP_ICON} alt="" className="gs-app-icon" draggable={false} />
+              <span className="gs-app-home" />
               <span className="gs-well-label">Dopl</span>
             </div>
 
@@ -67,14 +76,23 @@ export function InstallAnimation() {
               </span>
             </div>
 
-            {/* The hand: cursor + the translucent copy it carries, on ONE pair
-                of movers. The copy is first so the pointer paints over it. */}
-            <div className="gs-hand-y">
-              <div className="gs-hand-x">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={APP_ICON} alt="" className="gs-ghost" draggable={false} />
-                <div className="gs-pointer">
-                  <DemoCursorGlyph />
+            {/* The drag: the Dopl icon ITSELF and the pointer on ONE pair of
+                movers. The icon is first so the pointer paints over it; both
+                come after the wells so they paint over the arrow and folder. */}
+            <div className="gs-drag-y">
+              <div className="gs-drag-x">
+                <div className="gs-carry">
+                  <span className="gs-contact" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={APP_ICON} alt="" className="gs-app-icon" draggable={false} />
+                  <span className="gs-glint" />
+                </div>
+                <div className="gs-hand-y">
+                  <div className="gs-hand-x">
+                    <div className="gs-pointer">
+                      <DemoCursorGlyph />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

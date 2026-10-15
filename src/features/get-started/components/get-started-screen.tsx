@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { DOWNLOAD_URL } from "@/features/marketing/constants";
 import { AUTH_GLASS_SLOT_ID } from "@/shared/layout/auth-split";
+import { GlassSlot } from "./glass-slot";
 import { InstallAnimation } from "./install-animation";
 
 export interface GetStartedScreenProps {
@@ -73,7 +73,7 @@ export function GetStartedScreen({
         )}
       </div>
 
-      <GlassSlot>
+      <GlassSlot id={AUTH_GLASS_SLOT_ID}>
         <InstallAnimation />
       </GlassSlot>
 
@@ -89,19 +89,6 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
       <span className="gs-step-body">{children}</span>
     </li>
   );
-}
-
-/** Portal children onto the layout's glass panel (client-only DOM). rAF keeps
- *  the setState out of the effect body (react-hooks/set-state-in-effect). */
-function GlassSlot({ children }: { children: ReactNode }) {
-  const [target, setTarget] = useState<Element | null>(null);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      setTarget(document.getElementById(AUTH_GLASS_SLOT_ID));
-    });
-    return () => cancelAnimationFrame(frame);
-  }, []);
-  return target ? createPortal(children, target) : null;
 }
 
 /**

@@ -6,9 +6,11 @@
  * 1. the REAL Applications folder art, not a hand-drawn folder;
  * 2. the hollow dashed BLOCK arrow, not a dashed line;
  * 3. the landing demo's pointer, rendered from the one shared component;
- * 4. the dragged copy rides INSIDE the cursor's movers — "you literally just see
- *    the cursor move … it doesn't actually drag the actual icon" was a copy on
- *    its own translate tracks that could (and did) part from the hand.
+ * 4. the drag carries THE ICON ITSELF on the cursor's movers — first a copy on
+ *    its own tracks parted from the hand, then a translucent copy on the hand
+ *    while the original stayed put read as "the logo doesn't move" (Samuel
+ *    2026-10-14). One Dopl icon, no copy, nothing static left in the well;
+ * 5. the icon reads as 3D: contact shadow, two-layer depth, a masked glint.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -73,14 +75,63 @@ describe("InstallAnimation", () => {
     expect(container.querySelector(".gs-pointer")?.innerHTML).toBe(shared.innerHTML);
   });
 
-  it("carries the dragged copy and the pointer on ONE pair of movers", () => {
+  it("carries THE ICON ITSELF and the pointer on ONE pair of drag movers", () => {
     const { container } = render(<InstallAnimation />);
-    const mover = container.querySelector(".gs-hand-y > .gs-hand-x");
-    expect(mover?.querySelector(":scope > .gs-ghost")).not.toBeNull();
-    expect(mover?.querySelector(":scope > .gs-pointer")).not.toBeNull();
-    // The copy must not grow its own travel tracks back.
-    expect(CSS).not.toMatch(/gs-ghost-[xy]/);
-    expect(CSS).not.toMatch(/\.gs-ghost\s*\{[^}]*translate/);
+    const mover = container.querySelector(".gs-drag-y > .gs-drag-x");
+    const carry = mover?.querySelector(":scope > .gs-carry");
+    expect(carry?.querySelector(":scope > img.gs-app-icon")).not.toBeNull();
+    // The pointer rides the same drag mover, under its own approach movers.
+    expect(mover?.querySelector(":scope > .gs-hand-y > .gs-hand-x > .gs-pointer")).not.toBeNull();
+    // Icon before the pointer → the pointer paints over the icon; the drag after
+    // both wells → the icon paints over the arrow and the folder while carried.
+    const kids = Array.from(mover!.children);
+    expect(kids.indexOf(carry!)).toBeLessThan(kids.findIndex((k) => k.classList.contains("gs-hand-y")));
+    const stage = Array.from(container.querySelector(".gs-stage")!.children);
+    const drag = stage.findIndex((k) => k.classList.contains("gs-drag-y"));
+    expect(drag).toBe(stage.length - 1);
+  });
+
+  it("draws exactly ONE Dopl icon — no copy, and nothing static left in the well", () => {
+    const { container } = render(<InstallAnimation />);
+    const icons = container.querySelectorAll('img[src="/favicons/android-chrome-512x512.png"]');
+    expect(icons).toHaveLength(1);
+    expect(container.querySelector(".gs-ghost")).toBeNull();
+    const well = container.querySelector(".gs-well--app");
+    expect(well?.querySelector("img")).toBeNull();
+    expect(well?.querySelector(".gs-app-home")?.childElementCount).toBe(0);
+    expect(well?.querySelector(".gs-well-label")?.textContent).toBe("Dopl");
+  });
+
+  it("moves the icon ONLY through the shared drag movers, opaque while carried", () => {
+    const rules = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    // No translate on the icon's own nodes: its position IS the movers'.
+    for (const sel of ["gs-carry", "gs-app-icon"]) {
+      expect(rules).not.toMatch(new RegExp(`\\.${sel}\\s*\\{[^}]*translate`));
+    }
+    const life = /@keyframes gs-carry-life\s*\{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+    expect(life).not.toMatch(/translate/);
+    // Held (35.5–57.5%): full opacity, lifted.
+    expect(life).toMatch(/35\.5%,\s*57\.5%\s*\{\s*opacity: 1;\s*transform: scale\(1\.06\)/);
+    // The approach tracks are zero for the whole carry (30–62%), so pointer and
+    // icon share a transform by construction.
+    for (const axis of ["x", "y"]) {
+      const kf = new RegExp(`@keyframes gs-hand-${axis}\\s*\\{[\\s\\S]*?30%,\\s*62%\\s*\\{\\s*transform: translate${axis.toUpperCase()}\\(0\\)`);
+      expect(rules).toMatch(kf);
+    }
+  });
+
+  it("gives the icon depth: contact shadow under it and a glint masked to its shape", () => {
+    const { container } = render(<InstallAnimation />);
+    const carry = container.querySelector(".gs-carry")!;
+    const kids = Array.from(carry.children).map((k) => k.className);
+    // Contact shadow BEHIND the artwork, glint ON it.
+    expect(kids).toEqual(["gs-contact", "gs-app-icon", "gs-glint"]);
+    const pad = container.querySelector<HTMLElement>(".gs-glass-pad");
+    expect(pad?.style.getPropertyValue("--gs-app-mask")).toBe("url(/favicons/android-chrome-512x512.png)");
+    const glint = /\.gs-glint\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    expect(glint).toMatch(/(^|\s)mask: var\(--gs-app-mask\)/);
+    expect(CSS).toMatch(/\.gs-glint::before\s*\{[^}]*animation: gs-glint-sweep/);
+    expect(CSS).toMatch(/--gs-app-depth-lifted:/);
   });
 
   it("hides the hand and shows the outcome under reduced motion", () => {
@@ -88,5 +139,8 @@ describe("InstallAnimation", () => {
     expect(block).toMatch(/\.gs-dmg \*\s*\{\s*animation: none !important;/);
     expect(block).toMatch(/\.gs-hand-y\s*\{\s*display: none;/);
     expect(block).toMatch(/\.gs-check\s*\{\s*opacity: 1;/);
+    // The icon stays (its movers rest at zero) and the glint rests OFF the icon.
+    expect(block).not.toMatch(/\.gs-(drag|carry|app-icon)/);
+    expect(CSS).toMatch(/\.gs-glint::before\s*\{[^}]*transform: translateX\(-120%\)/);
   });
 });
