@@ -148,7 +148,7 @@ const SOURCE = {
   samuelMac: {
     kind: "computer",
     device_id: "demo-dev-samuel",
-    label: "Samuel's MacBook Pro",
+    label: "Daniel's MacBook Pro",
     platform: "macos",
   },
   // He answers the orchestrator's question out loud while the private chat is open.
@@ -216,7 +216,7 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
   ),
   // 2. Each person launches their own orchestrator.
   msg("launch-1", null, "Grace launched Debt Triage from an identity", 6, systemLine),
-  msg("launch-2", null, "Samuel launched Cleanup Planner from an identity", 6, systemLine),
+  msg("launch-2", null, "Daniel launched Cleanup Planner from an identity", 6, systemLine),
   msg("launch-3", null, "Anthony launched Backlog Scout from an identity", 6, systemLine),
   // 3. The orchestrators go and look at the stack.
   msg(
@@ -245,7 +245,7 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
   msg(
     "split-2",
     U.grace,
-    "Works for me. @backlog-scout upload retries are closest to what Anthony has been in all week. @Samuel teardown is yours",
+    "Works for me. @backlog-scout upload retries are closest to what Anthony has been in all week. @Daniel teardown is yours",
     4,
     agentPost(AGENT_IDS.triage, 2),
   ),
@@ -358,7 +358,7 @@ const SCRIPT: ReadonlyArray<{ step: StepId; message: ChannelMessage }> = [
   msg(
     "concurrent-3",
     U.grace,
-    "@Samuel do you want the flake fix behind a flag or straight in?",
+    "@Daniel do you want the flake fix behind a flag or straight in?",
     0,
     agentPost(AGENT_IDS.triage, 5),
   ),

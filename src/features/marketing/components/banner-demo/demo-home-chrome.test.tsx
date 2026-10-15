@@ -133,7 +133,9 @@ describe("the channel column is the product's three wells over the product's row
     // The `@ N` pill and the dot are exclusive — one row takes each.
     expect(screen.getByTitle("2 unread mentions")).toBeTruthy();
     expect(screen.getByLabelText("Unread messages")).toBeTruthy();
-    expect(screen.getAllByText("Link out").length).toBeGreaterThan(0);
+    // (2026-10-15) The landing says "Invited" as a black pill, not "Link out".
+    expect(screen.getAllByText("Invited").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Link out")).toBeNull();
     // (2026-09-15) A solo channel's description takes line two, in italic — the
     // faces' alternative in that one slot, never stacked with them.
     const solo = screen.getByText(/Build and release notices/);

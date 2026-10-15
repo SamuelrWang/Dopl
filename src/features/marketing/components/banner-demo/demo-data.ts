@@ -29,7 +29,7 @@ export const U = {
 
 /** `public/` paths, which `useBridgedImageSrc` returns verbatim on the web. */
 export const FACE = {
-  [U.samuel]: "/img/avatars/sam.jpg",
+  [U.samuel]: "/img/avatars/daniel.jpg",
   [U.grace]: "/img/avatars/grace.jpg",
   [U.anthony]: "/img/avatars/anthony.jpg",
 } as const;
@@ -68,7 +68,7 @@ function member(
 }
 
 export const MEMBERS: ChannelMember[] = [
-  member(U.samuel, "Samuel Wang", "srwang@usc.edu", true),
+  member(U.samuel, "Daniel Ortiz", "daniel@vermillion.io", true),
   member(U.grace, "Grace Okafor", "grace@vermillion.io"),
   member(U.anthony, "Anthony Reyes", "anthony@lattice.build"),
 ];
@@ -249,7 +249,11 @@ const [
   TEARDOWN_COLOR,
   NOTICE_COLOR,
   WAKE_COLOR,
-] = launchOrderColors(6);
+  PRIOR_COLOR,
+] = launchOrderColors(7);
+
+/** The older, off-script agent behind the inbox's prior mention (`demo-info-data.ts`). */
+export const PRIOR_AGENT_COLOR = PRIOR_COLOR;
 
 export const AGENT_COLORS = {
   [AGENT_IDS.triage]: TRIAGE_COLOR,
