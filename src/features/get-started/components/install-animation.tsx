@@ -59,9 +59,13 @@ export function InstallAnimation() {
         <div className="gs-dmg-body">
           <div className="gs-stage">
             {/* The icon's home: an EMPTY spot (the icon itself is in the
-                movers below) so the label keeps its place under it. */}
+                movers below) so the label keeps its place under it. The slot
+                is the dotted silhouette left behind while the icon is away
+                (Samuel 2026-10-15) — a shape, never a second icon. */}
             <div className="gs-well gs-well--app">
-              <span className="gs-app-home" />
+              <span className="gs-app-home">
+                <span className="gs-app-slot" />
+              </span>
               <span className="gs-well-label">Dopl</span>
             </div>
 

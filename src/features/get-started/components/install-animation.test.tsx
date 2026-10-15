@@ -98,7 +98,10 @@ describe("InstallAnimation", () => {
     expect(container.querySelector(".gs-ghost")).toBeNull();
     const well = container.querySelector(".gs-well--app");
     expect(well?.querySelector("img")).toBeNull();
-    expect(well?.querySelector(".gs-app-home")?.childElementCount).toBe(0);
+    // The home holds only the silhouette slot — an empty shape, no art.
+    const home = well?.querySelector(".gs-app-home");
+    expect(Array.from(home?.children ?? []).map((k) => k.className)).toEqual(["gs-app-slot"]);
+    expect(home?.querySelector(".gs-app-slot")?.childElementCount).toBe(0);
     expect(well?.querySelector(".gs-well-label")?.textContent).toBe("Dopl");
   });
 
@@ -132,6 +135,33 @@ describe("InstallAnimation", () => {
     expect(glint).toMatch(/(^|\s)mask: var\(--gs-app-mask\)/);
     expect(CSS).toMatch(/\.gs-glint::before\s*\{[^}]*animation: gs-glint-sweep/);
     expect(CSS).toMatch(/--gs-app-depth-lifted:/);
+  });
+
+  it("leaves a light-gray dotted silhouette in the icon's home while it is away", () => {
+    const { container } = render(<InstallAnimation />);
+    const slot = container.querySelector(".gs-well--app > .gs-app-home > .gs-app-slot");
+    expect(slot).not.toBeNull();
+    // Under the carried icon: the wells paint before the drag movers.
+    const stage = Array.from(container.querySelector(".gs-stage")!.children);
+    const well = stage.findIndex((k) => k.classList.contains("gs-well--app"));
+    expect(well).toBeLessThan(stage.findIndex((k) => k.classList.contains("gs-drag-y")));
+    const rules = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = /\.gs-app-slot\s*\{([^}]*)\}/.exec(rules)?.[1] ?? "";
+    expect(rule).toMatch(/border: 1\.5px dotted /);
+    expect(rule).toMatch(/background: rgba\(0, 0, 0, 0\.06\)/);
+    expect(rule).toMatch(/border-radius: 22\.5%/);
+    expect(rule).toMatch(/opacity: 0;/);
+    expect(rule).toMatch(/animation: gs-slot-life var\(--gs-t\)/);
+    // Hidden at rest, in as the icon lifts (32–35.5%), out as it returns (77–83%).
+    const life = /@keyframes gs-slot-life\s*\{([\s\S]*?)\n\}/.exec(rules)?.[1] ?? "";
+    expect(life).toMatch(/0%,\s*32%\s*\{\s*opacity: 0;/);
+    expect(life).toMatch(/35\.5%,\s*77%\s*\{\s*opacity: 1;/);
+    expect(life).toMatch(/83%,\s*100%\s*\{\s*opacity: 0;/);
+    // The icon's own lift and return use the same beats.
+    expect(rules).toMatch(/@keyframes gs-carry-life[\s\S]*?35\.5%,\s*57\.5%[\s\S]*?77\.01%[\s\S]*?83%,\s*100%/);
+    // Reduced motion: the icon rests on top, no silhouette.
+    const block = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(block).toMatch(/\.gs-app-slot\s*\{\s*display: none;/);
   });
 
   it("hides the hand and shows the outcome under reduced motion", () => {
