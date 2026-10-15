@@ -22,7 +22,7 @@ import type { ChannelMessage } from "@dopl/client";
  * never bare name — reader treats counterparty as another member's agent.
  *
  * ⚠ **IT TAKES THE READER SINCE 2026-09-18 (A2/S45), AND THAT IS WHAT LETS IT
- * SAY `for you`.** A label built from the MESSAGE ALONE can name an operator
+ * SAY `(yours)`** (`for you` until W3, 2026-10-13). A label built from the MESSAGE ALONE can name an operator
  * and never say whether that operator is the reader's own, so a sibling worker
  * launched by the same person and a stranger's agent rendered identically —
  * and an agent deciding whether to answer, escalate or ignore was reading the
@@ -125,6 +125,21 @@ export declare function namesFromMessages(messages: ChannelMessage[]): Map<strin
  * handle that never stops working.
  */
 export declare function agentNamesFromMessages(messages: ChannelMessage[]): Map<string, string>;
+/**
+ * **AN AGENT'S NAME AS THE HANDLE A READER TYPES BACK** (Context Economy W3, 2026-10-13): lowercase,
+ * whitespace runs to `-`, the web's one slugger (`src/features/channels/lib/mentions.ts ›
+ * mentionSlug`, which this package cannot import), so "Picker Fix" renders `@picker-fix`, the tag
+ * `to=` and a body mention resolve. ⚠ ONLY A PLAIN `[a-z0-9-]` SLUG IS PRINTED BARE: anything else
+ * (punctuation, non-ASCII, a backtick) keeps the neutralized code span it always had, because the
+ * line head is server narration and the name is peer-typed.
+ * ⚠ **AND NEVER A SLUG A HIGHER-PRIORITY NAMESPACE OWNS** (Batch 49): the web resolver tries id
+ * forms, then members, then agents (`agent-mentions.ts`), so a bare `@agent-…`, `@desktop` or a
+ * member's own slug (an agent named "Samuel Wang") would reach somebody else. Those keep the span.
+ * Members are the ones this page names (`view.names`): a member it never heard of cannot be checked.
+ * ⚠ **`null` WHEN NOTHING RENDERABLE IS LEFT** (blank or punctuation-only: `neutralizeInline` is
+ * null), so each caller keeps its own fallback, the `@agent-<id>` handle.
+ */
+export declare function nameHandle(name: string, view?: MemberView): string | null;
 /**
  * **WHO THIS MESSAGE WAS FOR, OFF THE COLUMNS THAT DECIDED IT** (2026-09-04).
  *

@@ -55,7 +55,7 @@ function roomRosterLines(roster, set) {
 
 /**
  * The agent's own id line (read, never written in a message), how to tag an agent, and the legend for
- * the MCP read's `for you` / `outside session` labels (`channel-render-identity.ts › formatAuthor`).
+ * the MCP read's `(yours)` / `outside session` labels (`channel-render-identity.ts › formatAuthor`).
  */
 function agentSelfFraming(ctx) {
   const c = ctx || {};
@@ -67,7 +67,7 @@ function agentSelfFraming(ctx) {
     `THE ID IS INTERNAL: read it, never write it in a message.`,
     `ADDRESS AN AGENT BY ITS NAME, as a tag: lower case, spaces as dashes (@bug-reviewer).`,
     `Names are unique among live agents, so a tag reaches exactly one.`,
-    `"for you" on an agent line means YOUR operator's agent; another name means another member's.`,
+    `"(yours)" on an agent line means YOUR operator's agent; "for <name>" means another member's.`,
     `"outside session" is your operator's own coding session: address it @desktop, in full detail.`,
     ...roomRosterLines(c.roster, c.toolSet),
   ];

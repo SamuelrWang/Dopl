@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cardPath, cardRegions, glassBox, glassShape, poseDepths, type CardRect } from "./auth-glass-geometry";
+import {
+  STRIP_BLOCK,
+  cardPath,
+  cardRegions,
+  glassBox,
+  glassShape,
+  poseDepths,
+  stripFontSize,
+  type CardRect,
+} from "./auth-glass-geometry";
 import { panelPath } from "./panel-shape";
 
 /** The split is `w × 2/3`, which is not exact in floating point. */
@@ -88,7 +97,11 @@ describe("vertical-left-top-notch", () => {
     expect(side!.y).toBe(34);
     expect(side!.h).toBeCloseTo(d, 6);
     expect(side!.x + side!.w).toBeCloseTo(270 - 34, 6);
-    // Square, so step 3's square text block sits with equal gaps all round.
-    expect(side!.h).toBeCloseTo(side!.w, 6);
+    // Exactly the 3-line text block plus the same gap above/below as left/right
+    // (Samuel 2026-10-14), so the strip is shorter than it is wide.
+    const fs = stripFontSize(side!.w);
+    const sideGap = (side!.w - STRIP_BLOCK.w * fs) / 2;
+    expect(side!.h).toBeCloseTo(STRIP_BLOCK.h * fs + sideGap * 2, 6);
+    expect(side!.h).toBeLessThan(side!.w);
   });
 });

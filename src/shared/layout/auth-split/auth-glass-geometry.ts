@@ -192,25 +192,45 @@ export function cardPath(pose: AuthGlassPose, w: number, h: number): string {
 }
 
 /**
+ * Step 3's strip text block, in font sizes: three set lines, "Launch and /
+ * orchestrate / from Dopl." (Charter italic, lineHeight 1.22, measured
+ * 2026-10-14: 4.858 × 3.659), the side gap as a fraction of the strip width,
+ * and the font cap shared with step 1's strip. ONE source: the geometry
+ * derives the bite depth from it and `onboarding/components/agents-showcase.tsx
+ * › StripLine` sizes the font from it.
+ */
+export const STRIP_BLOCK = { w: 4.86, h: 3.66, gap: 0.12, minFs: 10, maxFs: 22 } as const;
+
+/** The strip text's font size for a strip `stripW` wide (width-bound, capped). */
+export function stripFontSize(stripW: number): number {
+  const gap = stripW * STRIP_BLOCK.gap;
+  return Math.max(STRIP_BLOCK.minFs, Math.min(STRIP_BLOCK.maxFs, (stripW - gap * 2) / STRIP_BLOCK.w));
+}
+
+/**
  * Bite depths the pose is heading for, in a `w × h` box.
  *
- * ⚠ THE VERTICAL POSE'S DEPTH IS THE CARD STRIP'S WIDTH. The strip beside its
- * bite (`cardRegions` › side) runs from the bite's wall + `CARD_INSET` to the
- * card's right edge, and is exactly as tall as the bite is deep — so this
- * depth makes that strip SQUARE at every window size. Step 3's line in it is
- * four set lines whose block is square too (Charter italic, measured: 4.86 ×
- * 4.88 font sizes), so a font sized off the strip's width leaves the SAME gap
- * on all four sides (Samuel 2026-10-13: "the top and bottom border around the
- * text is the same as the left and right"). A fixed fraction of the height
- * (0.25, then) left the strip ~40px taller than wide at some windows.
+ * ⚠ THE VERTICAL POSE'S DEPTH IS THE STRIP'S TEXT BLOCK PLUS THE SAME GAP
+ * ABOVE AND BELOW AS LEFT AND RIGHT. The strip beside its bite (`cardRegions`
+ * › side) runs from the bite's wall + `CARD_INSET` to the card's right edge,
+ * and is exactly as tall as the bite is deep. Its text is sized off the
+ * strip's WIDTH (`stripFontSize`), leaving a side gap of (strip − block·fs)/2;
+ * the depth is the block's height plus twice that gap, so the white space is
+ * equal on all four sides (Samuel 2026-10-13). It was the strip width (a
+ * square strip) while the line was four lines and its block square; at three
+ * lines (Samuel 2026-10-14) the bite is a line shallower and the solid part
+ * below grows into it.
  */
 export function poseDepths(pose: AuthGlassPose, w: number, h: number): BiteDepths {
   const d = h * GLASS_NOTCH_DEPTH;
   const strip = w * (1 - GLASS_NOTCH_DEPTH) - CARD_INSET * 2;
+  const fs = stripFontSize(strip);
+  const side = (strip - STRIP_BLOCK.w * fs) / 2;
+  const vertical = STRIP_BLOCK.h * fs + side * 2;
   return {
     top: pose === "lowered-top-notch" ? d : 0,
     bot: pose === "raised-bottom-notch" ? d : 0,
-    left: pose === "vertical-left-top-notch" ? Math.max(0, Math.min(strip, h / 2)) : 0,
+    left: pose === "vertical-left-top-notch" ? Math.max(0, Math.min(vertical, h / 2)) : 0,
   };
 }
 

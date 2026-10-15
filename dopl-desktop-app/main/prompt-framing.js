@@ -5,7 +5,7 @@
 // (`prompt-profile-drift.test.mjs`), and tools are named fully qualified (`mcp__dopl__dopl_channel`)
 // because a bare name sends an agent searching.
 
-const { LANE_USE, THREAD_TAG, VOCABULARY, MAIN_ROOM_VOCABULARY, PROSE_RULE, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
+const { LANE_USE, THREAD_TAG, vocabularyFor, proseRuleFor, CONCISION, LANE_EXCLUSIVITY, OPERATOR_TOOLS_LANE, REPLY_ROUTING, HOME_SPACE_KNOWLEDGE_CONFIDENTIALITY, ADDRESSING } = require('./prompt-framing-text');
 
 // `sanitizeName` is re-exported below: `session-seed.js` reaches it as `framing.sanitizeName`.
 const { sanitizeName, idToken, stripFence } = require('./prompt-sanitize');
@@ -203,7 +203,7 @@ function deliverySection(side, ctx) {
     `like ${doplOp(set, 'channel.rooms.list')} is unnecessary here, costs a turn, and can fail on this connection.`,
     ...(thread ? THREAD_TAG : []),
   ];
-  return [...how, reach, ...PROSE_RULE, ...ADDRESSING, ...REPLY_ROUTING];
+  return [...how, reach, ...proseRuleFor(set), ...ADDRESSING, ...REPLY_ROUTING];
 }
 
 // The opt-in one-line milestone marker, only when the profile can post; a milestone carries no content
@@ -257,7 +257,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
       ``,
       ...channelScopeFraming(ctx),
       ``,
-      ...(standby ? MAIN_ROOM_VOCABULARY : VOCABULARY),
+      ...vocabularyFor(ctx.toolSet, standby),
       ``,
       ...CONCISION,
       ``,
@@ -291,7 +291,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
     ``,
     ...channelScopeFraming(ctx),
     ``,
-    ...VOCABULARY,
+    ...vocabularyFor(ctx.toolSet, false),
     ``,
     ...CONCISION,
     ``,

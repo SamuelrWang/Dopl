@@ -174,6 +174,11 @@ outside = false) {
     const card = scope ? await threadHeader(client, ref, scope, selfUserId) : [];
     if (messages.length === 0) {
         const sinceNote = since !== undefined ? ` after seq ${since}` : "";
+        // ⚠ A CATCH-UP READ (`since=`, W2) ON A THREAD WHOSE CARD RESOLVED is not a wrong id: nothing new
+        // is its ordinary answer, so the "check the id" paragraph is for a cardless id or no `since` (W3).
+        if (scope && since !== undefined && card.length > 0) {
+            return (0, respond_1.ok)([...card, `No new messages on this thread after seq ${since}.`, (0, channel_wake_guidance_1.waitingLine)((0, channel_wake_guidance_1.channelHoldCall)(ref, since), since)].join("\n"));
+        }
         if (scope) {
             return (0, respond_1.ok)([
                 ...card,

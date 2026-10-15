@@ -153,9 +153,9 @@ describe("an agent author is named by the name its operator gave it", () => {
       ...over,
     });
 
-  it("renders `@<display name>` beside the operator it acts for", async () => {
+  it("renders the display name as its typeable handle (`@mobile-main`, W3) beside the operator it acts for", async () => {
     const line = await lineOf([agentRow({ authorAgentName: "Mobile Main" })]);
-    expect(line).toContain("agent @`Mobile Main` for `Samuel Wang` (`u-a`)");
+    expect(line).toContain("agent @mobile-main for `Samuel Wang` (`u-a`)");
   });
 
   it("falls back to the `agent-<id>` handle, which is never recycled", async () => {
@@ -190,7 +190,7 @@ describe("an agent author is named by the name its operator gave it", () => {
         "general",
       )
     ).content[0].text;
-    expect(text).toContain("→ @`Mobile Main`");
+    expect(text).toContain("→ @mobile-main");
   });
 });
 
@@ -227,9 +227,9 @@ describe("who asked — sibling, stranger's agent, or an outside session", () =>
     return text.split("\n").filter((l: string) => l.startsWith("- **#"))[0];
   };
 
-  it("a SIBLING agent — same operator as the reader — renders `for you`", async () => {
+  it("a SIBLING agent — same operator as the reader — renders `(yours)`", async () => {
     const line = await readerLine({ ...AGENT, authorUserId: SELF });
-    expect(line).toContain("agent @`Bug Reviewer` for you");
+    expect(line).toContain("agent @bug-reviewer (yours)");
     // ⚠ The uuid is NOT printed for the reader's own account: `you` is the
     // answer to the question the id was being looked up to answer.
     expect(line).not.toContain(`for \`Samuel Wang\` (\`${SELF}\`)`);
@@ -238,9 +238,9 @@ describe("who asked — sibling, stranger's agent, or an outside session", () =>
   it("ANOTHER member's agent still renders their name and immutable id", async () => {
     const line = await readerLine({ ...AGENT, authorUserId: OPERATOR });
     expect(line).toContain(
-      `agent @\`Bug Reviewer\` for \`Samuel Wang\` (\`${OPERATOR}\`)`,
+      `agent @bug-reviewer for \`Samuel Wang\` (\`${OPERATOR}\`)`,
     );
-    expect(line).not.toContain("for you");
+    expect(line).not.toContain("(yours)");
   });
 
   it("a member's own line still names them, and `you` when it is the reader", async () => {

@@ -30,7 +30,7 @@ const SAM = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 const ASK = "@discord-outreach Are you able to take control of my computer right now?";
 
 // The engine's own expression, restated once and pinned to the source below.
-const ENGINE_PUSH = "io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source, eff.catchUpSeq))";
+const ENGINE_PUSH = "io.withSeed(s, io.frameContinuation(s.nonce, eff.message, eff.authorName, eff.addressing, eff.authorNote, s.doplToolSet, io.replyFor(s, eff.replyTo), eff.source, eff.catchUpSeq, s))";
 test("the engine's pushInbound is the expression this file drives", () => {
   assert.ok(read("session-engine.js").includes(ENGINE_PUSH));
 });

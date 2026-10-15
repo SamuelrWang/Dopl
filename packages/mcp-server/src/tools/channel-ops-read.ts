@@ -205,6 +205,11 @@ export async function opRead(
   const card = scope ? await threadHeader(client, ref, scope, selfUserId) : [];
   if (messages.length === 0) {
     const sinceNote = since !== undefined ? ` after seq ${since}` : "";
+    // ⚠ A CATCH-UP READ (`since=`, W2) ON A THREAD WHOSE CARD RESOLVED is not a wrong id: nothing new
+    // is its ordinary answer, so the "check the id" paragraph is for a cardless id or no `since` (W3).
+    if (scope && since !== undefined && card.length > 0) {
+      return ok([...card, `No new messages on this thread after seq ${since}.`, waitingLine(channelHoldCall(ref, since), since)].join("\n"));
+    }
     if (scope) {
       return ok(
         [

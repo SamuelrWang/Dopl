@@ -6,6 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,6 +23,24 @@ async function connect(server: McpServer): Promise<Client> {
   const client = new Client({ name: "served-schema-probe", version: "0.0.0" });
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
   return client;
+}
+
+/** The launch lane's tool words as the web contract declares them: the levels plus every runtime's
+ *  own words, a set. Read as text (the package cannot import the app), same as `granular.test.ts`. */
+function launchToolWordsFromContract(): string[] {
+  const src = readFileSync(path.resolve(process.cwd(), "../../src/features/channels/schema-launch-modes.ts"), "utf8");
+  const block = (name: string, open: string, close: string) => {
+    const start = src.indexOf(`export const ${name} = ${open}`);
+    if (start < 0) throw new Error(`schema-launch-modes.ts: ${name} not found`);
+    return src.slice(start, src.indexOf(close, start));
+  };
+  const words = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  return [
+    ...new Set([
+      ...words(block("LAUNCH_PERMISSION_LEVELS", "[", "]")),
+      ...words(block("LAUNCH_TOOL_MODES_BY_RUNTIME", "{", "} as const")),
+    ]),
+  ];
 }
 
 const UUID = "11111111-1111-4111-8111-111111111111";
@@ -63,7 +83,7 @@ describe("the shipped granular surface", () => {
     id: "11111111-1111-1111-1111-111111111111", ownerId: "owner", name: "Alpha", slug: "alpha",
     publicId: "pub-1", description: null, role: "owner" as const, createdAt: "x", updatedAt: "x",
   };
-  async function granularTools() {
+  async function granularClient() {
     const r = (v: unknown) => async () => v;
     const stub = {
       listWorkspaces: r({ workspaces: [WS] }), getWorkspaceId: () => null, setWorkspaceId: () => {},
@@ -73,7 +93,10 @@ describe("the shipped granular surface", () => {
       toolSet: "granular", directory: [WS], workspace: WS, role: "owner",
       workspaceSource: "sole membership", scopes: ["dopl.read", "dopl.write"],
     } as Parameters<typeof createServer>[1]);
-    return (await (await connect(server)).listTools()).tools;
+    return connect(server);
+  }
+  async function granularTools() {
+    return (await (await granularClient()).listTools()).tools;
   }
 
   it("serves no uuid regex and no MAX_SAFE_INTEGER anywhere, and still serves uuid formats", async () => {
@@ -102,6 +125,32 @@ describe("the shipped granular surface", () => {
       const posture = (t!.inputSchema.properties as Record<string, { properties: Record<string, { enum: string[] }> }>).posture;
       expect(posture.properties.tools.enum).toEqual(["ask", "auto", "full"]);
     }
+  });
+
+  it("keeps a REAL bound: dopl_read_channel `limit` still lists its maximum 200 (only MAX_SAFE_INTEGER goes)", async () => {
+    const t = (await granularTools()).find((x) => x.name === "dopl_read_channel");
+    expect(t).toBeDefined();
+    const limit = (t!.inputSchema.properties as Record<string, Record<string, unknown>>).limit;
+    expect(limit.maximum).toBe(200);
+  });
+
+  it("the REGISTERED dopl_launch_agent accepts every launch tool word, and refuses an unknown one at validation", async () => {
+    // Derived from the web contract (`src/features/channels/schema-launch-modes.ts`), not hand-listed,
+    // so a new runtime's words are checked here without editing this test.
+    const WORDS = launchToolWordsFromContract();
+    expect(WORDS.length).toBeGreaterThan(3);
+    const legacy = (CHANNEL_INPUT_SHAPE as Record<string, z.ZodType>).posture as unknown as {
+      unwrap: () => { shape: { tools: { unwrap: () => { options: string[] } } } };
+    };
+    expect([...legacy.unwrap().shape.tools.unwrap().options].sort()).toEqual([...WORDS].sort());
+    const client = await granularClient();
+    const call = async (word: string) =>
+      JSON.stringify(
+        await client.callTool({ name: "dopl_launch_agent", arguments: { channel: "general", name: "Probe Agent", posture: { tools: word } } }),
+      );
+    const refused = await call("yolo");
+    expect(refused).toMatch(/Input validation error/);
+    for (const word of WORDS) expect(await call(word), word).not.toMatch(/Input validation error/);
   });
 
   it("still accepts every runtime word for posture.tools, granular and legacy (only the listing narrowed)", () => {

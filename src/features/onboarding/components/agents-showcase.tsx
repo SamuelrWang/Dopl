@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { GlassCardContext } from "@/shared/layout/auth-split";
+import { stripFontSize, type GlassCardContext } from "@/shared/layout/auth-split";
 import {
   SCRIPT,
   agentsFinalFrame,
@@ -34,9 +34,7 @@ const LINE = (
     <br />
     <Blue>orchestrate</Blue>
     <br />
-    your agents
-    <br />
-    inside Dopl.
+    from Dopl.
   </>
 );
 
@@ -128,24 +126,15 @@ export function AgentsShowcase({
 }
 
 /**
- * The line, in step 1's voice: the wordmark's italic serif, four set lines.
- * Sized off the strip's WIDTH: the block is `BLOCK_W` font sizes wide and
- * `BLOCK_H` tall (Charter italic at this tracking and leading, measured
- * 2026-10-13), so a font of (width − 2·gap) / BLOCK_W leaves `gap` left and
- * right (more, equally, once capped) — and, because the geometry makes this strip SQUARE
- * (`auth-glass-geometry.ts › poseDepths`), the same gap above and below. The
- * block is centred both ways; its lines stay left-aligned inside it.
+ * The line, in step 1's voice: the wordmark's italic serif, three set lines.
+ * Sized off the strip's WIDTH (`auth-glass-geometry.ts › stripFontSize`, from
+ * the block's measured size `STRIP_BLOCK`), so the gap left and right is equal;
+ * the geometry makes the strip exactly the block plus that gap tall
+ * (`› poseDepths`), so the same gap sits above and below. Centred both ways;
+ * its lines stay left-aligned inside the block.
  */
-const BLOCK_W = 4.86;
-const BLOCK_H = 4.88;
-const GAP = 0.12;
-
 function StripLine({ rect }: { rect: { x: number; y: number; w: number; h: number } }) {
-  const gap = rect.w * GAP;
-  // Capped at step 1's 22px so the two strips speak at one size; past the cap
-  // the gaps simply grow — still equal all round, the strip and block being
-  // square.
-  const fs = Math.max(10, Math.min(22, (rect.w - gap * 2) / BLOCK_W, (rect.h - gap * 2) / BLOCK_H));
+  const fs = stripFontSize(rect.w);
   return (
     <p
       style={{
