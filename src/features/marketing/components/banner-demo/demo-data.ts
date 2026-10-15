@@ -30,7 +30,7 @@ export const U = {
 /** `public/` paths, which `useBridgedImageSrc` returns verbatim on the web. */
 export const FACE = {
   [U.samuel]: "/img/avatars/daniel.jpg",
-  [U.grace]: "/img/avatars/grace.jpg",
+  [U.grace]: "/img/avatars/grace-v2.jpg",
   [U.anthony]: "/img/avatars/anthony.jpg",
 } as const;
 
