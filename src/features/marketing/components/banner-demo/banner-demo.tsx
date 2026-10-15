@@ -23,6 +23,7 @@ import { CANVAS_H, CANVAS_W, at, reached } from "./demo-steps";
 import { CHANNEL_NAME, OPEN_THREAD } from "./demo-data";
 import { DemoScene } from "./demo-scene";
 import { useDemoTimeline } from "./use-demo-timeline";
+import { readDemoDrive } from "./demo-drive";
 
 type Cursor = { x: number; y: number; shown: boolean; instant: boolean };
 
@@ -39,7 +40,11 @@ function findButton(
 }
 
 export function BannerDemo() {
-  const { step, run, rootRef } = useDemoTimeline();
+  // Client-only component (`ssr: false` in hero-banner.tsx), so reading the URL
+  // in the initializer is safe.
+  const [drive] = useState(readDemoDrive);
+  const scroll = drive === "scroll";
+  const { step, run, dir, rootRef } = useDemoTimeline(drive);
   const canvasRef = useRef<HTMLDivElement>(null);
   /** The record pane, and the cursor's search root — NOT the canvas. The /home
    *  header also carries a button labelled "Agents" (the surface selector), and
@@ -60,10 +65,13 @@ export function BannerDemo() {
    * boolean is what makes the loop reset free: at `step = 0` both reads are false.
    */
   const [agentClicked, setAgentClicked] = useState(false);
-  const agentOpen = agentClicked && reached(step, "click-agent");
+  // Scroll drive: the step alone decides, so scrolling back up reopens/closes
+  // the thread and agent view exactly where it should (the click flags latch
+  // one way and the crumb click clears `threadClicked` for good).
+  const agentOpen = (scroll || agentClicked) && reached(step, "click-agent");
   const [threadClicked, setThreadClicked] = useState(false);
   const threadOpen =
-    threadClicked && reached(step, "click-thread") && !reached(step, "click-crumb");
+    (scroll || threadClicked) && reached(step, "click-thread") && !reached(step, "click-crumb");
 
   const [cursor, setCursor] = useState<Cursor>({
     x: CANVAS_W + 40,
@@ -168,6 +176,9 @@ export function BannerDemo() {
         at(step, "click-agent") ||
         at(step, "click-crumb")
       ) {
+        // Reversing through a click beat: no press, the step already says
+        // what the scene shows.
+        if (scroll && dir < 0) return;
         const { x, y } = cursorPos.current;
         setRipple((r) => ({ x, y, n: r.n + 1 }));
         const el = target();
@@ -194,7 +205,7 @@ export function BannerDemo() {
       window.clearTimeout(t);
       cancelAnimationFrame(raf);
     };
-  }, [step]);
+  }, [step, scroll, dir]);
 
   const resetting = at(step, "reset-fade");
 

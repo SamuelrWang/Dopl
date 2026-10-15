@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createBannerHum } from "../banner-hum";
 import { clamp01, ease, easeOut, lerp, ramp } from "../motion";
+import {
+  DEMO_SCROLL_VH,
+  INTRO_SCROLL_VH,
+  readDemoDrive,
+  type DemoDrive,
+} from "./banner-demo/demo-drive";
 
 /**
  * Scroll-scrub engine for the pinned banner scene. Markup: hero-banner.tsx;
@@ -135,6 +141,8 @@ function clickDip(p: number): number {
 export function useBannerScrub() {
   // SSR + no-JS land on `static`; only ever upgraded client-side after mount.
   const [mode, setMode] = useState<BannerMode>("static");
+  // `time` until mount so SSR and first paint agree; see banner-demo/demo-drive.
+  const [drive, setDrive] = useState<DemoDrive>("time");
   const sceneRef = useRef<HTMLDivElement>(null);
   const pictureRef = useRef<HTMLDivElement>(null);
   const glassRef = useRef<HTMLDivElement>(null);
@@ -144,8 +152,10 @@ export function useBannerScrub() {
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     const narrow = window.matchMedia(`(max-width: ${MIN_SCRUB_WIDTH - 1}px)`);
-    const pick = () =>
+    const pick = () => {
       setMode(reduced.matches ? "reduced" : narrow.matches ? "static" : "scrub");
+      setDrive(readDemoDrive());
+    };
     pick();
     reduced.addEventListener("change", pick);
     narrow.addEventListener("change", pick);
@@ -185,7 +195,20 @@ export function useBannerScrub() {
       const sceneRect = scene.getBoundingClientRect();
       const pictureRect = picture.getBoundingClientRect();
       const range = sceneRect.height - window.innerHeight;
-      const p = range > 0 ? clamp01(-sceneRect.top / range) : 0;
+      // Scroll drive: the intro keeps its original range and the demo gets the
+      // rest of the (taller) track; `--lp-demo-progress` is what the demo's
+      // timeline reads (use-demo-timeline.ts). Time drive: unchanged.
+      let p: number;
+      if (drive === "scroll") {
+        const vh = window.innerHeight / 100;
+        const intro = INTRO_SCROLL_VH * vh;
+        const scrolled = -sceneRect.top;
+        p = clamp01(scrolled / intro);
+        const q = clamp01((scrolled - intro) / (DEMO_SCROLL_VH * vh));
+        scene.style.setProperty("--lp-demo-progress", q.toFixed(4));
+      } else {
+        p = range > 0 ? clamp01(-sceneRect.top / range) : 0;
+      }
 
       const W = pictureRect.width;
       const H = pictureRect.height;
@@ -287,8 +310,9 @@ export function useBannerScrub() {
       scene.style.removeProperty("--lp-notif-dx");
       scene.style.removeProperty("--lp-notif-dy");
       scene.style.removeProperty("--lp-slot-opacity");
+      scene.style.removeProperty("--lp-demo-progress");
     };
-  }, [mode]);
+  }, [mode, drive]);
 
-  return { mode, sceneRef, pictureRef, glassRef, cursorRef, rippleRef };
+  return { mode, drive, sceneRef, pictureRef, glassRef, cursorRef, rippleRef };
 }
