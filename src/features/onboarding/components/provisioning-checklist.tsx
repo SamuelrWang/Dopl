@@ -15,23 +15,28 @@ import { useEffect, useState } from "react";
  * glass/3D kit), and these match the sibling steps.
  */
 
-const STEPS = [
-  "Saving your setup",
-  "Naming your home space",
-  "Opening Dopl",
-] as const;
+/** `spaceName` = what the user typed on the naming step; blank → "your". */
+function stepsFor(spaceName?: string) {
+  const name = spaceName?.trim() || "your";
+  return [
+    "Saving your setup",
+    `Configuring ${name} space`,
+    "Entering Dopl",
+  ];
+}
 
 /** ~cadence of the two serial writes behind the call. */
 const STEP_MS = 850;
 
-export function ProvisioningChecklist() {
+export function ProvisioningChecklist({ spaceName }: { spaceName?: string } = {}) {
   const [active, setActive] = useState(0);
+  const STEPS = stepsFor(spaceName);
 
   useEffect(() => {
     if (active >= STEPS.length - 1) return;
     const id = setTimeout(() => setActive((i) => i + 1), STEP_MS);
     return () => clearTimeout(id);
-  }, [active]);
+  }, [active, STEPS.length]);
 
   return (
     <div
