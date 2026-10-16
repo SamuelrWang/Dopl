@@ -119,6 +119,10 @@ export function HeroBanner() {
               <path
                 d="M0.75 0.9 L0.75 15.2 L4.3 11.9 L6.4 16.8 L8.3 15.9 L6.3 11.1 L10.6 10.8 Z"
                 fill="#0b0b0c"
+                // White keyline, as the demo's own cursor wears (banner-demo.tsx),
+                // so the pointer is one shape end to end (Samuel, 2026-10-15).
+                stroke="#ffffff"
+                strokeWidth="1"
                 strokeLinejoin="round"
               />
             </svg>

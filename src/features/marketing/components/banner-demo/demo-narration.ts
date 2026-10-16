@@ -21,7 +21,7 @@ import {
 import {
   citedMessage,
 } from "./demo-transcript";
-import { reached, type StepId } from "./demo-steps";
+import { at, reached, type StepId } from "./demo-steps";
 
 const dm = (
   step: StepId,
@@ -151,3 +151,11 @@ export function narrationAt(step: number): DesktopNarrationEntry[] {
   return DM_SCRIPT.filter((s) => reached(step, s.step)).map((s) => s.entry);
 }
 
+
+/** The operator's own DM landing ON this beat, typed out like a channel post. */
+export function typedDmAt(step: number): DesktopNarrationEntry | null {
+  return (
+    DM_SCRIPT.find((s) => at(step, s.step) && s.entry.lane === "operator")
+      ?.entry ?? null
+  );
+}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
@@ -104,10 +105,14 @@ export function HomeChannelRow({
   row,
   selected,
   onSelect,
+  trailing,
 }: {
   row: HomeChannelRowFacts;
   selected: boolean;
   onSelect: () => void;
+  /** Optional extra mark at the far right of line two, after the `@ N` pill.
+   *  The app passes none; the landing demo uses it for its "Invited" pill. */
+  trailing?: ReactNode;
 }) {
   /**
    * 🔒 **THE CHANNEL'S DESCRIPTION IS THE SOLO ROW'S SECOND LINE (Samuel,
@@ -206,6 +211,7 @@ export function HomeChannelRow({
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {row.mentions === 0 && row.unread && <UnreadDot onDark={selected} />}
             <MentionBadge count={row.mentions} onDark={selected} />
+            {trailing}
           </span>
         </span>
       </span>

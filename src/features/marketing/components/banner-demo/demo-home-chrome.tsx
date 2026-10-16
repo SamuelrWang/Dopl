@@ -186,6 +186,7 @@ export function DemoChannelList({
             row={row}
             selected={row.id === selectedId}
             onSelect={NOOP}
+            trailing={row.invited ? <InvitedPill /> : undefined}
           />
         ),
       })),
@@ -205,6 +206,19 @@ export function DemoChannelList({
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * "Invited" in the `@ N` pill's own face (`home-card-marks.tsx › MentionBadge`,
+ * light row): black fill, white micro text, same height and radius, so the two
+ * marks read as one family in the same corner.
+ */
+function InvitedPill() {
+  return (
+    <span className="flex h-[18px] shrink-0 items-center rounded-full bg-surface-cta px-1.5 text-micro font-medium text-text-on-cta">
+      Invited
+    </span>
   );
 }
 

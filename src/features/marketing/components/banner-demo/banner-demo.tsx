@@ -23,6 +23,24 @@ import { CANVAS_H, CANVAS_W, at, reached } from "./demo-steps";
 import { CHANNEL_NAME, OPEN_THREAD } from "./demo-data";
 import { DemoScene } from "./demo-scene";
 import { useDemoTimeline } from "./use-demo-timeline";
+import { typedMessageAt } from "./demo-transcript";
+import { typedDmAt } from "./demo-narration";
+import { useTypedWords } from "./typed-reveal";
+import {
+  CHAT_REVEAL_KEYFRAMES,
+  CHAT_ROW_ANIMATION,
+} from "@/shared/ui/chat-reveal";
+
+/**
+ * Rows that arrive whole (agents, system lines) fade and slide in, onboarding
+ * step 3's row motion (`@/shared/ui/chat-reveal`). Plays on MOUNT, so a row
+ * appears smoothly however the step got there; scrolling back unmounts it.
+ * Human lines get it too (as in onboarding), then type word by word on top.
+ */
+const ROW_REVEAL_CSS = `${CHAT_REVEAL_KEYFRAMES}
+@media (prefers-reduced-motion: no-preference) {
+  .lp-demo-record [data-message-id] { animation: ${CHAT_ROW_ANIMATION}; }
+}`;
 
 type Cursor = { x: number; y: number; shown: boolean; instant: boolean };
 
@@ -40,6 +58,8 @@ function findButton(
 
 export function BannerDemo() {
   const { step, run, rootRef } = useDemoTimeline();
+  const typedText = typedMessageAt(step)?.body ?? typedDmAt(step)?.text ?? null;
+  const typedWords = useTypedWords(step, typedText);
   const canvasRef = useRef<HTMLDivElement>(null);
   /** The record pane, and the cursor's search root — NOT the canvas. The /home
    *  header also carries a button labelled "Agents" (the surface selector), and
@@ -200,6 +220,7 @@ export function BannerDemo() {
 
   return (
     <div className="lp-demo" ref={rootRef} aria-hidden="true">
+      <style>{ROW_REVEAL_CSS}</style>
       <div
         className={`lp-demo-canvas${resetting ? " is-resetting" : ""}`}
         ref={canvasRef}
@@ -217,6 +238,7 @@ export function BannerDemo() {
           thread={threadOpen ? OPEN_THREAD : null}
           onOpenThread={() => setThreadClicked(true)}
           onExitThread={() => setThreadClicked(false)}
+          typedWords={typedWords}
         />
 
         <div

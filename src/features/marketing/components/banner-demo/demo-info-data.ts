@@ -16,7 +16,11 @@ import {
   AGENT_INDEX,
   CHANNEL_ID,
   FACE,
+  MEMBERS,
   NOW_MS,
+  PRIOR_AGENT_COLOR,
+  U,
+  minsAgo,
 } from "./demo-data";
 import {
   citedMessage,
@@ -47,7 +51,30 @@ import { reached, type StepId } from "./demo-steps";
  * server does, so cutting it here is both honest and un-driftable.
  */
 const SNIPPET_MAX = 90;
+/**
+ * The viewer's own tag. (2026-10-15, Samuel) The row clamps to two lines, so a tag
+ * past the cut left a mention preview that never showed the mention.
+ */
+const VIEWER_TAG = `@${(MEMBERS.find((m) => m.userId === U.samuel)?.displayName ?? "").split(" ")[0]}`;
+/** Characters of lead-in kept before an off-screen tag when the window slides. */
+const LEAD_IN = 28;
+/** The visible start of a two-line clamp, roughly: a tag later than this is cut. */
+const VISIBLE_CHARS = 60;
 function excerpt(body: string): string {
+  const tag = body.indexOf(VIEWER_TAG);
+  // The tag would sit past the clamp: window the body AROUND it instead, as
+  // "…words words @Name words words…", so the mention is on screen.
+  if (tag > VISIBLE_CHARS) {
+    const from = body.indexOf(" ", tag - LEAD_IN) + 1;
+    const rest = body.slice(from);
+    const cut = rest.length <= SNIPPET_MAX ? rest : rest.slice(0, SNIPPET_MAX);
+    const lastSpace = cut.lastIndexOf(" ");
+    const tail =
+      rest.length <= SNIPPET_MAX
+        ? cut
+        : `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+    return `…${tail}`;
+  }
   if (body.length <= SNIPPET_MAX) return body;
   const cut = body.slice(0, SNIPPET_MAX);
   const lastSpace = cut.lastIndexOf(" ");
@@ -93,11 +120,41 @@ function mention(
  * holds: his own agents' posts are authored under his account and the mention set
  * excludes the author, so they could never file a row here.
  */
+/**
+ * **A PRIOR EXCHANGE** (Samuel, 2026-10-15): the inbox opened empty ("No messages tag
+ * you in this channel yet"), which read as a brand-new channel. One older, read tag
+ * from an agent that never appears in the scene, about different work, sits there
+ * from the first frame.
+ *
+ * ⚠ **THE ONE ROW NOT CITING A SCRIPTED POST**, by design — the post predates the
+ * scene. `demo-script.test.ts` exempts it by this id.
+ */
+export const PRIOR_MENTION_ID = "demo-prior-1";
+const PRIOR_AGENT_ID = "demo-a-invoice";
+const PRIOR_MENTION: ChannelMention = {
+  messageId: PRIOR_MENTION_ID,
+  seq: 0,
+  channelId: CHANNEL_ID,
+  threadId: null,
+  authorUserId: U.anthony,
+  authorKind: "agent",
+  authorName: MEMBERS.find((m) => m.userId === U.anthony)?.displayName ?? null,
+  authorAvatarUrl: FACE[U.anthony as keyof typeof FACE] ?? null,
+  authorAgentId: PRIOR_AGENT_ID,
+  authorAgentName: "Invoice Reconciler",
+  authorAgentColor: PRIOR_AGENT_COLOR,
+  snippet: `${VIEWER_TAG} Q3 invoice export is reconciled. Three vendors still need your sign-off before Friday's close.`,
+  createdAt: minsAgo(60 * 26),
+  read: true,
+};
+
 const MENTION_SCRIPT: ReadonlyArray<{ step: StepId; mention: ChannelMention }> = [
   // `concurrent-3`, the orchestrator's question to him, still unread.
   mention("demo-m24", false),
   // `split-2`, where the orchestrators handed him the teardown work.
   mention("demo-m10", true),
+  // Before the scene: on screen from the first frame (see PRIOR_MENTION).
+  { step: "channel-base", mention: PRIOR_MENTION },
 ];
 
 /**

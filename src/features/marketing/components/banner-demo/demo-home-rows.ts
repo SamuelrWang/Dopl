@@ -39,6 +39,9 @@ import {
 export type HomeRowMock = HomeChannelRowFacts & {
   id: string;
   well: HomeChannelWellId;
+  /** Landing-only: an "Invited" pill at line two's far right, where the `@ N`
+   *  pill sits (Samuel, 2026-10-15), in place of the product's "Link out" chip. */
+  invited?: boolean;
 };
 
 /** The row the scene sits in — the channel the record pane plays.
@@ -53,9 +56,9 @@ export const HOME_ROW_ID = "rel:demo-ws-debt";
  */
 export const VIEWER: AvatarPerson = {
   userId: CURRENT_USER_ID,
-  email: "srwang@usc.edu",
-  displayName: "Samuel Wang",
-  avatarUrl: "/img/avatars/sam.jpg",
+  email: "daniel@vermillion.io",
+  displayName: "Daniel Ortiz",
+  avatarUrl: "/img/avatars/daniel.jpg",
 };
 
 /**
@@ -138,7 +141,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     well: "recent",
     name: "api-v2-migration",
     faces: [PEERS[1]],
-    linkOut: true,
+    invited: true,
     unread: true,
     at: minsAgo(60 * 5),
   },
@@ -156,7 +159,7 @@ const HOME_ROWS: ReadonlyArray<HomeRowMock> = [
     well: "earlier",
     name: "Mira Castellanos",
     faces: [],
-    linkOut: true,
+    invited: true,
     pending: true,
     pendingLine: "Not yet claimed",
     at: minsAgo(60 * 74),
