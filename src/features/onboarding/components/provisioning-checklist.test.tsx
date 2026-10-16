@@ -8,8 +8,13 @@ describe("ProvisioningChecklist", () => {
 
   it("names the real stages of the call it covers", () => {
     expect(html).toContain("Saving your setup");
-    expect(html).toContain("Naming your home space");
-    expect(html).toContain("Opening Dopl");
+    expect(html).toContain("Configuring your space");
+    expect(html).toContain("Entering Dopl");
+  });
+
+  it("names the space the user typed", () => {
+    const named = renderToStaticMarkup(<ProvisioningChecklist spaceName="Acme" />);
+    expect(named).toContain("Configuring Acme space");
   });
 
   it("does not spin", () => {
@@ -39,6 +44,6 @@ describe("onboarding flow", () => {
   });
 
   it("renders the checklist while finishing", () => {
-    expect(source).toContain("<ProvisioningChecklist />");
+    expect(source).toContain("<ProvisioningChecklist spaceName={spaceName} />");
   });
 });
