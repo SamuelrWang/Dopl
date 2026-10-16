@@ -1,0 +1,147 @@
+/* ── Devices — black band under the hero demo ──────────────────────────
+   Markup: components/devices-section.tsx + devices-track.tsx.
+   ⚠ Page-scoped like marketing.css (imported by the section itself). Its own
+   file so it never collides with edits to marketing.css; it reads that file's
+   `.lp` tokens (`--ink`, `--muted`, `--grotesk`, `--gutter`) by inheritance and
+   declares its on-dark tokens here.
+
+   Shape: full-bleed black band whose four corners round off where it meets the
+   white page, flattening into a straight edge across the middle.
+   Type ramp copied from Control (`.lp-ctl-*`). */
+
+.lp-dev {
+  --lp-dev-bg: var(--ink);
+  --lp-dev-fg: #ffffff;
+  --lp-dev-line: rgba(255, 255, 255, 0.14);
+  --lp-dev-slot: #1c1c1c;
+  --lp-dev-radius: clamp(28px, 4vw, 64px);
+
+  /* Full bleed out of `.lp-hero`'s side gutter. */
+  align-self: stretch;
+  margin: 120px calc(var(--gutter) * -1) 0;
+  padding: clamp(72px, 9vw, 128px) 0 clamp(40px, 5vw, 64px);
+  background: var(--lp-dev-bg);
+  color: var(--lp-dev-fg);
+  border-radius: var(--lp-dev-radius);
+  overflow: hidden;
+}
+
+.lp-dev-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  outline: none;
+}
+.lp-dev-track::-webkit-scrollbar {
+  display: none;
+}
+
+.lp-dev-panel {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 0 var(--gutter);
+}
+
+.lp-dev-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(40px, 6vw, 96px);
+  align-items: center;
+}
+
+.lp-dev-eyebrow {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.lp-dev-heading {
+  margin: 0 0 24px;
+  max-width: 11em;
+  font-family: var(--grotesk);
+  font-weight: 400;
+  font-size: clamp(23px, 2.5vw, 37px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--lp-dev-fg);
+}
+.lp-dev-line {
+  margin: 0;
+  font-size: 15.5px;
+  color: var(--muted);
+}
+
+/* Media slot. Positioned so `.lp-dev-overlay` can carry a Dopl interface
+   over the photo later. Aspect = the placeholder asset's (400 × 460). */
+.lp-dev-media {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  justify-self: end;
+  aspect-ratio: 400 / 460;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--lp-dev-slot);
+}
+.lp-dev-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lp-dev-placeholder {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--lp-dev-line);
+  border-radius: inherit;
+}
+.lp-dev-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lp-dev-nav {
+  max-width: 1280px;
+  margin: clamp(32px, 4vw, 56px) auto 0;
+  padding: 0 var(--gutter);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  box-sizing: content-box;
+}
+.lp-dev-arrow {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--lp-dev-line);
+  background: transparent;
+  color: var(--lp-dev-fg);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.lp-dev-arrow:hover {
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  .lp-dev {
+    margin-top: 90px;
+  }
+  .lp-dev-inner {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .lp-dev-media {
+    justify-self: stretch;
+    max-width: none;
+  }
+}
