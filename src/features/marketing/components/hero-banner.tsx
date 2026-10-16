@@ -48,16 +48,11 @@ const BannerDemo = dynamic(
 
 /** Markup only. Scroll maths, beats, mode selection: ./use-banner-scrub. */
 export function HeroBanner() {
-  const { mode, drive, sceneRef, pictureRef, glassRef, cursorRef, rippleRef } =
+  const { mode, sceneRef, pictureRef, glassRef, cursorRef, rippleRef } =
     useBannerScrub();
 
   return (
-    <div
-      className="lp-banner-scene"
-      data-mode={mode}
-      data-demo={drive}
-      ref={sceneRef}
-    >
+    <div className="lp-banner-scene" data-mode={mode} ref={sceneRef}>
       <div className="lp-banner-stage">
         <div className="lp-banner" ref={pictureRef}>
           {/* Decorative — glass card carries the copy. Plain <img>: static

@@ -523,11 +523,6 @@
   /* one viewport of pin + ~1.8 viewports of scrub range */
   height: 280vh;
 }
-/* Scroll-driven demo (experiment): the intro's 180vh range, then
-   DEMO_SCROLL_VH (banner-demo/demo-drive.ts) of demo range. Keep in step. */
-.lp-banner-scene[data-mode="scrub"][data-demo="scroll"] {
-  height: calc(280vh + 900vh);
-}
 
 .lp-banner-stage {
   display: flex;

@@ -2,32 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { STEPS, stepIndex } from "./demo-steps";
-import type { DemoDrive } from "./demo-drive";
-
-/**
- * Scroll drive: progress 0→1 maps onto the beats weighted by their `dur`, so a
- * long read gets a long stretch of scroll. `reset-fade` is excluded — there is
- * no loop; the end of the track parks on `hold`.
- */
-const SCROLL_STEPS = STEPS.slice(0, stepIndex("hold") + 1);
-const SCROLL_TOTAL = SCROLL_STEPS.reduce((t, s) => t + s.dur, 0);
-/** Step under progress `q`, and how far through that step (0→1), quantised to
- *  FRAC_STEPS so a scroll frame that moves nothing visible sets no state. */
-const FRAC_STEPS = 40;
-function stepAtProgress(q: number): { step: number; frac: number } {
-  const pos = q * SCROLL_TOTAL;
-  let acc = 0;
-  for (let i = 0; i < SCROLL_STEPS.length; i++) {
-    const dur = SCROLL_STEPS[i].dur;
-    if (pos < acc + dur)
-      return { step: i, frac: Math.round(((pos - acc) / dur) * FRAC_STEPS) / FRAC_STEPS };
-    acc += dur;
-  }
-  return { step: SCROLL_STEPS.length - 1, frac: 1 };
-}
-/** ms per beat while the shown step catches up with the scroll target. Every
- *  beat is visited (never skipped) so the scripted clicks still fire. */
-const CHASE_MS = 70;
 
 /**
  * Clock for the banner demo. Advances one integer `step` through STEPS on
@@ -45,44 +19,23 @@ const CHASE_MS = 70;
  * Under prefers-reduced-motion the scrub engine never runs, so no write arrives;
  * the tableau branch parks the timeline on `hold` and never starts the clock.
  */
-export function useDemoTimeline(drive: DemoDrive = "time") {
+export function useDemoTimeline() {
   const [step, setStep] = useState(0);
   const [run, setRun] = useState(0);
   const [playing, setPlaying] = useState(false);
-  /** Scroll drive only: the step the scroll position asks for. */
-  const [target, setTarget] = useState(0);
-  /** Scroll drive only: how far through the TARGET step the scroll sits. */
-  const [targetFrac, setTargetFrac] = useState(0);
-  /** Scroll drive only: +1 forward, -1 reversing. Clicks fire forward only. */
-  const [dir, setDir] = useState<1 | -1>(1);
   const rootRef = useRef<HTMLDivElement>(null);
   const timer = useRef<number>(0);
 
-  // Scroll drive: walk one beat at a time toward the target, either way.
-  useEffect(() => {
-    if (drive !== "scroll" || step === target) return;
-    timer.current = window.setTimeout(() => {
-      const next = step + (target > step ? 1 : -1);
-      setDir(target > step ? 1 : -1);
-      // Reversing below the Agents-tab click: the info column's tab is its own
-      // internal state, so remount it (and the pane) back to their defaults.
-      if (next < stepIndex("click-tab") && step >= stepIndex("click-tab"))
-        setRun((r) => r + 1);
-      setStep(next);
-    }, CHASE_MS);
-    return () => window.clearTimeout(timer.current);
-  }, [drive, step, target]);
-
   // Advance while playing. One timeout per step; loop past the end.
   useEffect(() => {
-    if (drive === "scroll" || !playing) return;
+    if (!playing) return;
     timer.current = window.setTimeout(() => {
       const wraps = step + 1 >= STEPS.length;
       if (wraps) setRun((r) => r + 1);
       setStep(wraps ? 0 : step + 1);
     }, STEPS[step].dur);
     return () => window.clearTimeout(timer.current);
-  }, [drive, playing, step]);
+  }, [playing, step]);
 
   // Slave play state to the slot's opacity flips.
   useEffect(() => {
@@ -102,16 +55,6 @@ export function useDemoTimeline(drive: DemoDrive = "time") {
         // Park on the full tableau; the clock never runs.
         setStep(stepIndex("hold"));
         setPlaying(false);
-        return;
-      }
-      if (drive === "scroll") {
-        // Scroll position is the clock: no play state, no loop, no reset.
-        const q = parseFloat(
-          getComputedStyle(slot).getPropertyValue("--lp-demo-progress"),
-        );
-        const at = stepAtProgress(Number.isFinite(q) ? q : 0);
-        setTarget(at.step);
-        setTargetFrac(at.frac);
         return;
       }
       // The custom property is the TARGET; computed opacity lags mid-fade.
@@ -148,22 +91,7 @@ export function useDemoTimeline(drive: DemoDrive = "time") {
       observer.disconnect();
       document.removeEventListener("visibilitychange", sync);
     };
-  }, [drive]);
+  }, []);
 
-  /**
-   * Scroll drive: progress through the SHOWN step. While catching up, a step
-   * being walked past forward is whole (1) and one walked past backward is at
-   * its start (0); on the target it is the scroll's own position. `null` in
-   * time drive, where the step's own clock owns it (typed-reveal.ts).
-   */
-  const frac =
-    drive !== "scroll"
-      ? null
-      : step === target
-        ? targetFrac
-        : step < target
-          ? 1
-          : 0;
-
-  return { step, run, dir, frac, rootRef };
+  return { step, run, rootRef };
 }
