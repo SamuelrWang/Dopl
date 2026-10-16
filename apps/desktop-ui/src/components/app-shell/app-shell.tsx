@@ -11,8 +11,7 @@ import { WorkspaceSwitcherCore } from "@/shared/layout/app-shell/workspace-switc
 import type { WorkspaceLike } from "@/shared/layout/app-shell/workspace-types";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
-import { CreateWorkspaceDialogCore } from "@/features/workspaces/components/create-workspace-dialog-core";
-import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
+import { RequestWorkspaceAccessDialog } from "@/features/workspaces/components/request-workspace-access-dialog";
 import { isStandardWorkspace } from "@/features/workspaces/types";
 import type { ChannelListPayload } from "@/features/channels/types";
 import { channelsPath } from "@/features/channels/client/query-keys";
@@ -294,14 +293,9 @@ export function AppShellLayout() {
         </div>
       </div>
 
-      <CreateWorkspaceDialogCore
-        open={createWsOpen}
-        onOpenChange={setCreateWsOpen}
-        onCreated={(created) => {
-          void workspacesQuery.refetch();
-          navigate(`/${canonicalSegment(created)}`);
-        }}
-      />
+      {/* 🔒 GATED (Samuel, 2026-10-15): the switcher's "Create workspace" opens the
+          same invite-only popup as the rail's create tile (`account-rail.tsx`). */}
+      <RequestWorkspaceAccessDialog open={createWsOpen} onOpenChange={setCreateWsOpen} />
 
       <SettingsModal
         open={settingsOpen}
