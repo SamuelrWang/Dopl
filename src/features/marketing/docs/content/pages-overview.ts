@@ -1,6 +1,6 @@
 import type { DocPage } from "./types";
 
-const SDK_EXAMPLE = `import { Dopl } from "@dopl/sdk"
+const SDK_EXAMPLE = `import { Dopl } from "@dopl/client"
 
 const dopl = new Dopl({ apiKey })
 await dopl.show(userId, blocks)
@@ -18,7 +18,7 @@ export const OVERVIEW_PAGES: DocPage[] = [
       { type: "h2", text: "Let your agent connect Dopl" },
       { type: "p", text: "Copy this instruction into your agent:" },
       {
-        type: "quote",
+        type: "prompt",
         text:
           "Connect yourself to Dopl by following [https://www.usedopl.com/skill.md](https://www.usedopl.com/skill.md). " +
           "Use [https://www.usedopl.com/llms.txt](https://www.usedopl.com/llms.txt) for documentation. Complete the setup " +
@@ -86,116 +86,9 @@ export const OVERVIEW_PAGES: DocPage[] = [
             blocks: [
               {
                 type: "p",
-                text: "If an MCP host operates Dopl for you, connect it to the hosted MCP server at `mcp.usedopl.com`. Pick your tool:",
+                text: "If an MCP host operates Dopl for you, connect it to the hosted MCP server at `https://www.usedopl.com/api/mcp`. Pick your tool:",
               },
-              {
-                type: "tabs",
-                tabs: [
-                  {
-                    label: "Everyday use",
-                    blocks: [
-                      {
-                        type: "accordions",
-                        items: [
-                          {
-                            title: "Claude",
-                            logo: "claude",
-                            blocks: [
-                              {
-                                type: "list",
-                                ordered: true,
-                                items: [
-                                  "In claude.ai or the Claude Desktop app, open **Settings → Connectors**.",
-                                  "Select **Add custom connector**: name `Dopl`, URL `https://mcp.usedopl.com`.",
-                                  "Select **Connect** and approve Dopl's authorization page.",
-                                ],
-                              },
-                            ],
-                          },
-                          {
-                            title: "ChatGPT",
-                            logo: "chatgpt",
-                            blocks: [
-                              {
-                                type: "list",
-                                ordered: true,
-                                items: [
-                                  "Open **Settings → Connectors** and turn on Developer mode.",
-                                  "Add a connector: name `Dopl`, MCP server URL `https://mcp.usedopl.com`, authentication OAuth.",
-                                  "Sign in with Dopl and approve the authorization page.",
-                                ],
-                              },
-                            ],
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                  {
-                    label: "For developers",
-                    blocks: [
-                      {
-                        type: "accordions",
-                        items: [
-                          {
-                            title: "Claude Code",
-                            logo: "claude",
-                            blocks: [
-                              {
-                                type: "code",
-                                tabs: [
-                                  {
-                                    label: "Terminal",
-                                    code: "claude mcp add --transport http dopl https://mcp.usedopl.com --scope user",
-                                  },
-                                ],
-                              },
-                            ],
-                          },
-                          {
-                            title: "Codex",
-                            logo: "codex",
-                            blocks: [
-                              {
-                                type: "code",
-                                tabs: [
-                                  { label: "Terminal", code: "codex mcp add dopl --url https://mcp.usedopl.com" },
-                                ],
-                              },
-                            ],
-                          },
-                          {
-                            title: "Cursor",
-                            logo: "cursor",
-                            blocks: [
-                              { type: "p", text: "Merge Dopl into `~/.cursor/mcp.json` and save:" },
-                              {
-                                type: "code",
-                                tabs: [
-                                  {
-                                    label: "mcp.json",
-                                    code: '{\n  "mcpServers": {\n    "dopl": {\n      "url": "https://mcp.usedopl.com"\n    }\n  }\n}',
-                                  },
-                                ],
-                              },
-                            ],
-                          },
-                          {
-                            title: "Agent key (API)",
-                            logo: "key",
-                            blocks: [
-                              {
-                                type: "p",
-                                text: "For headless agents that can't sign in with browser OAuth: issue an API key and send it as the bearer token to `mcp.usedopl.com` or the REST API.",
-                              },
-                            ],
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
+              { type: "connect" },
               {
                 type: "p",
                 text: "Using a host that is not listed? Any MCP-aware host with remote-server OAuth works.",
@@ -220,7 +113,7 @@ export const OVERVIEW_PAGES: DocPage[] = [
                       {
                         type: "code",
                         tabs: [
-                          { label: "TypeScript", code: "npm install @dopl/sdk" },
+                          { label: "TypeScript", code: "npm install @dopl/client" },
                           { label: "Python", code: "pip install dopl" },
                           { label: "CLI", code: "npm install -g @dopl/cli" },
                         ],

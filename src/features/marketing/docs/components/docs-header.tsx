@@ -54,19 +54,19 @@ export function DocsHeader({ tabs, entries }: { tabs: HeaderTab[]; entries: Sear
           <Logo />
         </div>
         <div className="docs-header-center">
-          <button type="button" className="docs-search-btn concave-field" onClick={() => setSearchOpen(true)}>
+          <button type="button" className="lp-btn lp-btn--3d-light docs-search-btn" onClick={() => setSearchOpen(true)}>
             <Search size={16} aria-hidden />
             <span className="docs-search-label">Search...</span>
             <kbd>⌘K</kbd>
           </button>
-          <button type="button" className="docs-assistant-btn auth-btn-3d-light" onClick={focusAsk}>
+          <button type="button" className="lp-btn lp-btn--3d-light docs-assistant-btn" onClick={focusAsk}>
             <Sparkles size={14} aria-hidden />
             <span>Ask Assistant</span>
             <kbd>⌘I</kbd>
           </button>
         </div>
         <div className="docs-header-end">
-          <Link href="/" className="docs-main-site">
+          <Link href="/" className="lp-ctl-secondary">
             Main site
           </Link>
         </div>

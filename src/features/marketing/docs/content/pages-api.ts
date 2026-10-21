@@ -86,12 +86,12 @@ export const API_PAGES: DocPage[] = [
       },
       { type: "h2", text: "Interfaces" },
       { type: "h3", text: "Hosted MCP" },
-      { type: "p", text: "Connect any MCP host to `https://mcp.usedopl.com`. Sign in with OAuth or an API key." },
+      { type: "p", text: "Connect any MCP host to `https://www.usedopl.com/api/mcp`. Sign in with OAuth or an API key." },
       { type: "h3", text: "SDKs" },
       {
         type: "code",
         tabs: [
-          { label: "TypeScript", code: "npm install @dopl/sdk" },
+          { label: "TypeScript", code: "npm install @dopl/client" },
           { label: "Python", code: "pip install dopl" },
         ],
       },

@@ -41,7 +41,7 @@ export function DocsPage({ page }: { page: DocPage }) {
   const entries = DOC_PAGES.map((p) => ({ title: p.title, group: p.group, href: docHref(p.slug) }));
 
   return (
-    <div className="docs">
+    <div className="lp docs">
       <DocsHeader tabs={headerTabs} entries={entries} />
 
       <div className="docs-body">
@@ -60,7 +60,7 @@ export function DocsPage({ page }: { page: DocPage }) {
             </details>
 
             <header className="docs-page-head">
-              <p className="docs-eyebrow">{page.group}</p>
+              <p className="lp-ctl-eyebrow docs-eyebrow">{page.group}</p>
               <div className="docs-title-row">
                 <h1>{page.title}</h1>
                 <CopyPageButton markdown={pageToMarkdown(page)} url={`${SITE}${docHref(page.slug)}`} />

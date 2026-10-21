@@ -19,8 +19,6 @@ export type DocIcon =
   | "notch"
   | "desktop";
 
-export type DocLogo = "claude" | "chatgpt" | "codex" | "cursor" | "key";
-
 export type HttpMethod = "GET" | "POST" | "DELETE";
 
 export interface CodeTab {
@@ -54,8 +52,10 @@ export type DocBlock =
       items: { icon: DocIcon; title: string; description: Rich; href: string }[];
     }
   | { type: "steps"; items: { title: string; blocks: DocBlock[] }[] }
-  | { type: "tabs"; tabs: { label: string; blocks: DocBlock[] }[] }
-  | { type: "accordions"; items: { title: string; logo?: DocLogo; blocks: DocBlock[] }[] }
+  /** A copyable instruction in a white window ("Copy this instruction into your agent"). */
+  | { type: "prompt"; text: Rich }
+  /** The Claude / Codex / Cursor / SDK connect window (`../components/docs-connect.tsx`). */
+  | { type: "connect" }
   | { type: "code"; tabs: CodeTab[] }
   | { type: "hero"; label: string; lines: string[] }
   | { type: "endpoint"; method: HttpMethod; path: string }

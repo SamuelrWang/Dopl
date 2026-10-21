@@ -1,3 +1,4 @@
+import { CONNECT_TABS } from "./connect";
 import { DOC_TABS } from "./nav";
 import { API_PAGES, CHANGELOG_PAGES } from "./pages-api";
 import { DEVICE_PAGES } from "./pages-devices";
@@ -5,7 +6,7 @@ import { OVERVIEW_PAGES } from "./pages-overview";
 import { USE_CASE_PAGES } from "./pages-use-cases";
 import type { DocBlock, DocPage, DocTab, NavLink } from "./types";
 
-export { DOC_TABS };
+export { CONNECT_TABS, DOC_TABS };
 export type * from "./types";
 
 /** The landing page of `/docs` (bare `/docs` 308s here — `next.config.ts › redirects`). */
@@ -88,10 +89,10 @@ function blockText(b: DocBlock): string[] {
       return b.items.map((c) => `- [${c.title}](${docHref(c.href)}): ${plain(c.description)}`);
     case "steps":
       return b.items.flatMap((s, i) => [`${i + 1}. ${s.title}`, ...s.blocks.flatMap(blockText)]);
-    case "tabs":
-      return b.tabs.flatMap((t) => [`**${t.label}**`, ...t.blocks.flatMap(blockText)]);
-    case "accordions":
-      return b.items.flatMap((a) => [`**${a.title}**`, ...a.blocks.flatMap(blockText)]);
+    case "prompt":
+      return [`> ${plain(b.text)}`];
+    case "connect":
+      return CONNECT_TABS.map((t) => `**${t.label}**: \`${t.command}\``);
     case "code":
       return b.tabs.map((t) => `\`\`\`${t.label}\n${t.code}\n\`\`\``);
     case "hero":
