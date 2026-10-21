@@ -24,8 +24,15 @@ export function SocialLinks() {
   return (
     <div className="docs-social">
       {LINKS.map((l) => (
-        <a key={l.label} href={l.href} target="_blank" rel="noreferrer" aria-label={l.label}>
-          <svg viewBox="0 0 19 19" width={20} height={20} aria-hidden>
+        <a
+          key={l.label}
+          href={l.href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={l.label}
+          className="auth-btn-3d-light"
+        >
+          <svg viewBox="0 0 19 19" width={16} height={16} aria-hidden>
             <path d={l.path} fill="currentColor" />
           </svg>
         </a>

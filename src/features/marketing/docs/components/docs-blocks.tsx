@@ -30,6 +30,12 @@ const ICONS: Record<DocIcon, LucideIcon> = {
   desktop: MonitorSmartphone,
 };
 
+/** One agent-bank hue per card / step, spaced round the wheel so neighbours never match. */
+const HUES = [11, 7, 1, 14, 4, 9, 16, 5];
+export function hue(i: number): string {
+  return `var(--agent-color-${String(HUES[i % HUES.length]).padStart(2, "0")})`;
+}
+
 /** Brand marks that ship in `public/img/onboarding/`; the rest are generic glyphs. */
 const LOGO_SRC: Partial<Record<DocLogo, string>> = {
   claude: "/img/onboarding/claude-logo.svg",
@@ -88,7 +94,7 @@ function Block({ block: b }: { block: DocBlock }) {
       return <h3 id={slugify(b.text)}>{b.text}</h3>;
     case "quote":
       return (
-        <blockquote>
+        <blockquote className="docs-bubble">
           <RichText text={b.text} />
         </blockquote>
       );
@@ -99,11 +105,13 @@ function Block({ block: b }: { block: DocBlock }) {
     case "cards":
       return (
         <div className="docs-cards">
-          {b.items.map((c) => {
+          {b.items.map((c, i) => {
             const Icon = ICONS[c.icon];
             return (
-              <Link key={c.title} href={docHref(c.href)} className="docs-card">
-                <Icon size={16} className="docs-card-icon" aria-hidden />
+              <Link key={c.title} href={docHref(c.href)} className="docs-card bento card-lift">
+                <span className="docs-card-icon" style={{ background: hue(i) }}>
+                  <Icon size={15} aria-hidden />
+                </span>
                 <span className="docs-card-title">{c.title}</span>
                 <span className="docs-card-desc">
                   <RichText text={c.description} />
@@ -119,7 +127,9 @@ function Block({ block: b }: { block: DocBlock }) {
           {b.items.map((s, i) => (
             <div key={s.title} className="docs-step">
               <div className="docs-step-line" aria-hidden />
-              <div className="docs-step-number">{i + 1}</div>
+              <div className="docs-step-number" style={{ borderColor: hue(i) }}>
+                {i + 1}
+              </div>
               <p className="docs-step-title">{s.title}</p>
               <div className="docs-step-content">
                 <DocBlocks blocks={s.blocks} />
@@ -139,7 +149,7 @@ function Block({ block: b }: { block: DocBlock }) {
       );
     case "accordions":
       return (
-        <div className="docs-accordions">
+        <div className="docs-accordions bento">
           {b.items.map((a) => (
             <details key={a.title} className="docs-accordion">
               <summary>
@@ -164,7 +174,7 @@ function Block({ block: b }: { block: DocBlock }) {
     case "hero":
       return (
         <div className="docs-hero">
-          <div className="docs-hero-card">
+          <div className="docs-hero-card bento">
             <span className="docs-hero-label">{b.label}</span>
             {b.lines.map((line, i) => (
               <span key={line} className={i === 0 ? "docs-hero-line-strong" : "docs-hero-line"}>
@@ -176,7 +186,7 @@ function Block({ block: b }: { block: DocBlock }) {
       );
     case "endpoint":
       return (
-        <div className="docs-endpoint">
+        <div className="docs-endpoint bento">
           <span className="docs-method" data-method={b.method}>
             {b.method}
           </span>
@@ -204,7 +214,7 @@ function Block({ block: b }: { block: DocBlock }) {
       );
     case "table":
       return (
-        <div className="docs-table-wrap">
+        <div className="docs-table-wrap bento">
           <table className="docs-table">
             <thead>
               <tr>

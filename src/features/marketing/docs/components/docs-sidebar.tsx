@@ -12,7 +12,7 @@ function Row({ link, slug }: { link: NavLink; slug: string }) {
   return (
     <Link
       href={docHref(link.slug)}
-      className="docs-nav-link"
+      className={active ? "docs-nav-link raised-tab" : "docs-nav-link"}
       data-active={active || undefined}
       aria-current={active ? "page" : undefined}
     >
