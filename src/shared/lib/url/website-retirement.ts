@@ -84,6 +84,7 @@ const RESERVED_TOP_LEVEL = new Set([
   // two-segment rule below happens to miss it); named explicitly so it's a
   // rule, and so a child segment that ever collides can't retire the route.
   "c",
+  "docs",
   "download",
   "favicon.ico",
   "get-started",

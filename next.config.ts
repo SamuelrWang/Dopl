@@ -41,7 +41,12 @@ const nextConfig: NextConfig = {
    * redirects run BEFORE `src/proxy.ts`, so `/terms` needs no proxy or public-route entry.
    */
   async redirects() {
-    return [{ source: "/terms", destination: "/services-agreement", permanent: true }];
+    return [
+      { source: "/terms", destination: "/services-agreement", permanent: true },
+      // The docs land on Start here; config redirects run before the proxy, so bare
+      // `/docs` needs no public-route entry (`/docs/` has one).
+      { source: "/docs", destination: "/docs/start-here", permanent: true },
+    ];
   },
   /**
    * Serve OAuth/MCP discovery metadata at its spec path. A normal API route

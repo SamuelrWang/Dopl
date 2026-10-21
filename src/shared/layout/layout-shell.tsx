@@ -21,6 +21,7 @@ const NON_WORKSPACE_ROOTS = new Set([
   // page as app chrome.
   "billing",
   "design",
+  "docs",
   // Post-auth download page. Draws its own full-viewport surface, but must be
   // listed or `isAppShellRoute` paints the app's dark rail behind it.
   "get-started",
@@ -42,6 +43,11 @@ const NON_WORKSPACE_ROOTS = new Set([
  *  it is a `next.config.ts › redirects` 308 to `/services-agreement`. */
 export const LEGAL_ROUTES: ReadonlySet<string> = new Set(["/services-agreement", "/privacy"]);
 
+/** The developer docs (`/docs/**`) wear the legal pages' white body too (2026-10-20). */
+export function isDocsPath(pathname: string): boolean {
+  return pathname === "/docs" || pathname.startsWith("/docs/");
+}
+
 /**
  * Legacy chrome shell — dresses only non-workspace pages (login, pricing,
  * /workspaces, /settings, admin, invite, oauth) in the dark centered-column
@@ -60,7 +66,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const isLanding = pathname === "/";
   const isPricing = pathname === "/pricing";
   const isNoChrome = isLanding || isPricing;
-  const isLegal = LEGAL_ROUTES.has(pathname);
+  const isLegal = LEGAL_ROUTES.has(pathname) || isDocsPath(pathname);
   const segments = pathname.split("/").filter(Boolean);
   const isAppShellRoute =
     segments.length >= 1 && !NON_WORKSPACE_ROOTS.has(segments[0]);
