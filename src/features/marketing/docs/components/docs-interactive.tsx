@@ -6,7 +6,6 @@ import { useState, type ReactNode } from "react";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SendButton } from "@/shared/ui/send-button";
 
 import type { CodeTab } from "../content/types";
@@ -25,16 +24,23 @@ export function CodeGroup({ tabs }: { tabs: CodeTab[] }) {
   const [active, setActive] = useState(0);
   const current = tabs[active] ?? tabs[0];
   return (
-    <div className="docs-code bento">
+    <div className="docs-code">
       <div className="docs-code-head">
-        <SegmentedControl
-          variant="track"
-          size="md"
-          ariaLabel="Code language"
-          options={tabs.map((t, i) => ({ key: String(i), label: t.label }))}
-          value={String(active)}
-          onChange={(k) => setActive(Number(k))}
-        />
+        <div className="docs-code-tabs" role="tablist">
+          {tabs.map((t, i) => (
+            <button
+              key={t.label}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              className="docs-code-tab"
+              data-active={i === active || undefined}
+              onClick={() => setActive(i)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <CopyButton text={current.code} size={14} label="Copy code" />
       </div>
       <pre className="docs-code-body">
@@ -49,14 +55,22 @@ export function DocsTabs({ labels, panels }: { labels: string[]; panels: ReactNo
   const [active, setActive] = useState(0);
   return (
     <div className="docs-tabs">
-      <SegmentedControl
-        className="docs-tabs-list"
-        size="lg"
-        weight="semibold"
-        options={labels.map((label, i) => ({ key: String(i), label }))}
-        value={String(active)}
-        onChange={(k) => setActive(Number(k))}
-      />
+      <ul className="docs-tabs-list" role="tablist">
+        {labels.map((label, i) => (
+          <li key={label}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              data-active={i === active || undefined}
+              className="docs-tabs-tab"
+              onClick={() => setActive(i)}
+            >
+              {label}
+            </button>
+          </li>
+        ))}
+      </ul>
       <div role="tabpanel">{panels[active]}</div>
     </div>
   );
@@ -69,7 +83,7 @@ export function CopyPageButton({ markdown, url }: { markdown: string; url: strin
   const ask = `Read ${url} so I can ask questions about it.`;
   return (
     <div className="docs-copy relative">
-      <div className="docs-copy-group auth-btn-3d-light rounded-full">
+      <div className="docs-copy-group auth-btn-3d-light">
         <button type="button" className="docs-copy-main" onClick={() => void copy(markdown)}>
           {copied ? <Check size={14} /> : <Copy size={14} />}
           <span>Copy</span>
@@ -126,7 +140,7 @@ export function PageFeedback() {
       <div className="docs-feedback-buttons">
         <button
           type="button"
-          className="docs-feedback-btn auth-btn-3d-light rounded-full"
+          className="docs-feedback-btn auth-btn-3d-light"
           aria-pressed={vote === "yes"}
           onClick={() => setVote("yes")}
         >
@@ -135,7 +149,7 @@ export function PageFeedback() {
         </button>
         <button
           type="button"
-          className="docs-feedback-btn auth-btn-3d-light rounded-full"
+          className="docs-feedback-btn auth-btn-3d-light"
           aria-pressed={vote === "no"}
           onClick={() => setVote("no")}
         >
@@ -159,7 +173,7 @@ export function AskBar() {
   return (
     <div className="docs-ask">
       <form
-        className="docs-ask-box bento"
+        className="docs-ask-box"
         onSubmit={(e) => {
           e.preventDefault();
           submit();

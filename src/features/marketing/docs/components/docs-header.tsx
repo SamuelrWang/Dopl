@@ -54,12 +54,12 @@ export function DocsHeader({ tabs, entries }: { tabs: HeaderTab[]; entries: Sear
           <Logo />
         </div>
         <div className="docs-header-center">
-          <button type="button" className="docs-search-btn seg-pill" onClick={() => setSearchOpen(true)}>
+          <button type="button" className="docs-search-btn concave-field" onClick={() => setSearchOpen(true)}>
             <Search size={16} aria-hidden />
             <span className="docs-search-label">Search...</span>
             <kbd>⌘K</kbd>
           </button>
-          <button type="button" className="docs-assistant-btn auth-btn-3d" onClick={focusAsk}>
+          <button type="button" className="docs-assistant-btn auth-btn-3d-light" onClick={focusAsk}>
             <Sparkles size={14} aria-hidden />
             <span>Ask Assistant</span>
             <kbd>⌘I</kbd>
@@ -72,18 +72,17 @@ export function DocsHeader({ tabs, entries }: { tabs: HeaderTab[]; entries: Sear
         </div>
       </div>
       <nav className="docs-header-tabs" aria-label="Sections">
-        <div className="seg-track">
-          {tabs.map((t) => (
-            <Link
-              key={t.href}
-              href={t.href}
-              className={t.active ? "docs-header-tab raised-tab" : "docs-header-tab"}
-              aria-current={t.active ? "page" : undefined}
-            >
-              {t.label}
-            </Link>
-          ))}
-        </div>
+        {tabs.map((t) => (
+          <Link
+            key={t.href}
+            href={t.href}
+            className="docs-header-tab"
+            data-active={t.active || undefined}
+            aria-current={t.active ? "page" : undefined}
+          >
+            {t.label}
+          </Link>
+        ))}
       </nav>
       {searchOpen && <SearchDialog entries={entries} onClose={() => setSearchOpen(false)} />}
     </header>
@@ -120,7 +119,7 @@ function SearchDialog({ entries, onClose }: { entries: SearchEntry[]; onClose: (
 
   return (
     <div className="docs-search-scrim">
-      <div ref={panel} className="docs-search-panel bento" role="dialog" aria-label="Search the docs">
+      <div ref={panel} className="docs-search-panel" role="dialog" aria-label="Search the docs">
         <div className="docs-search-field">
           <Search size={16} aria-hidden />
           <input
