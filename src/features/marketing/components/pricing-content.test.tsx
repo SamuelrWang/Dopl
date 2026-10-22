@@ -192,40 +192,57 @@ describe("the personal numbers, all of them interpolated", () => {
 
 /**
  * THE LAUNCH OFFER (2026-10-22, Samuel: "a 50% off badge for Pro and for Power
- * … show the full price crossed out"). It is bounded by `LAUNCH_PRICE_ENDS`, so
- * every assertion is conditioned on the same `launchOfferFor` the cards read:
- * live → badge + strike on Pro and Max; over → neither, anywhere.
+ * … show the full price crossed out"). Bounded by `LAUNCH_PRICE_ENDS`, and —
+ * since the review — decided in the BROWSER after mount (`useLaunchOffer`):
+ * /pricing is prerendered, so an offer in the server paint would outlive its
+ * end date and mismatch on hydration. The clock is faked (Date only) so both
+ * sides of the end date are pinned regardless of when the suite runs.
  */
 describe("the launch offer", () => {
-  const markup = paint();
-  const card = (scope: string, name: string) => {
-    const at = scope.indexOf(`>${name}</h3>`);
-    expect(at).toBeGreaterThan(-1);
-    return scope.slice(scope.lastIndexOf('<div class="lp-plan', at), at);
-  };
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-  it("replaces Popular with N% off on Pro and Max, and strikes the reference price", () => {
-    const personal = group(markup, "Personal");
-    for (const [plan, name] of [["pro", "Pro"], ["max", MAX_PLAN_NAME]] as const) {
-      const offer = launchOfferFor(plan);
-      const after = personal.slice(personal.indexOf(`>${name}</h3>`));
-      const top = card(personal, name);
-      if (offer) {
-        expect(top).toContain(`>${offer.percentOff}% off<`);
-        expect(top).not.toContain(">Popular<");
-        expect(after.split("</div>")[0] + after.split("</div>")[1]).toContain(
-          formatMoney(offer.wasPrice)
-        );
-      } else {
-        expect(top).toContain(">Popular<");
-      }
-    }
+  it("🔒 is NOT in the prerendered paint — no badge, no strike, no Popular on Pro/Max", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-01T12:00:00Z"));
+    const personal = group(paint(), "Personal");
+    expect(personal).not.toContain("% off");
+    expect(personal).not.toContain("lp-plan-price-was");
+    // Pro and Max never flash "Popular" before the client decides.
+    expect(personal).not.toContain(">Popular<");
+  });
+
+  it("shows N% off and the struck reference price on Pro and Max once mounted, while live", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-01T12:00:00Z"));
+    const { container } = render(tree());
+    const offer = launchOfferFor("max", new Date("2026-11-01T12:00:00Z"));
+    expect(offer).not.toBeNull();
+    await waitFor(() =>
+      expect(screen.getAllByText(`${offer!.percentOff}% off`)).toHaveLength(2)
+    );
+    const struck = [...container.querySelectorAll("s.lp-plan-price-was")].map(
+      (el) => el.textContent
+    );
+    expect(struck.join(" ")).toContain("$17.98");
+    expect(struck.join(" ")).toContain("$49.98");
+  });
+
+  it("🔒 drops the badge and the strike after the end date, with no deploy", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-01-02T12:00:00Z"));
+    const { container } = render(tree());
+    await screen.findAllByRole("button", { name: "Try today" });
+    expect(screen.queryByText(/% off/)).toBeNull();
+    expect(container.querySelectorAll("s.lp-plan-price-was")).toHaveLength(0);
   });
 
   it("keeps Popular on Team — it has no offer", () => {
-    expect(card(group(markup, "Workspaces"), "Team")).toContain(">Popular<");
-    expect(group(markup, "Workspaces")).not.toContain("% off");
-    expect(group(markup, "Workspaces")).not.toContain("lp-plan-price-was");
+    const workspaces = group(paint(), "Workspaces");
+    expect(workspaces).toContain(">Popular<");
+    expect(workspaces).not.toContain("% off");
+    expect(workspaces).not.toContain("lp-plan-price-was");
   });
 });
 

@@ -8,6 +8,8 @@ import {
 } from "@/features/billing/components/use-workspace-entitlements";
 import { useCancelPlan } from "@/features/billing/components/use-billing-account";
 import { PERSONAL_PLAN_NAMES } from "@/features/billing/plans";
+import { queuedSwitchCancelNote } from "@/features/billing/components/billing-cancel-plan";
+import { usePersonalPlanChange } from "@/features/billing/components/use-personal-plan-change";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { formatDate } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -73,6 +75,10 @@ function SubscriptionRow({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cancel = useCancelPlan(workspaceId);
+  const queued = usePersonalPlanChange(
+    workspaceId,
+    ent.containerKind === "home" && ent.isPaid && !ent.cancelAtPeriodEnd
+  );
 
   const endsOn = ent.subscription_period_end
     ? formatDate(ent.subscription_period_end)
@@ -137,8 +143,8 @@ function SubscriptionRow({
         title={`Cancel ${name}?`}
         description={
           endsOn
-            ? `Paid features stay on until ${endsOn}.`
-            : "Paid features stay on until the period ends."
+            ? `Paid features stay on until ${endsOn}.${queuedSwitchCancelNote(queued.scheduledPlan)}`
+            : `Paid features stay on until the period ends.${queuedSwitchCancelNote(queued.scheduledPlan)}`
         }
         confirmLabel="Cancel plan"
         cancelLabel="Keep"

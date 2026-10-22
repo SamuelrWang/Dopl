@@ -72,14 +72,25 @@ const paid = (
 
 const fetchSpy = vi.fn();
 
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
 beforeEach(() => {
   fetchSpy.mockReset();
-  fetchSpy.mockResolvedValue(
-    new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    })
-  );
+  // Routed by URL: the post-switch invalidation REFETCHES status, which must
+  // answer a real status body or the pane renders a half-shaped row.
+  fetchSpy.mockImplementation(async (url: unknown) => {
+    const u = String(url);
+    if (u.includes("/change-plan/preview")) return json({ amountDue: 1601, currency: "usd" });
+    if (u.includes(BILLING_STATUS_PATH)) return json(paid("max"));
+    if (u.includes(BILLING_CHANGE_PLAN_PATH) && !u.includes("preview")) {
+      return json({ ok: true, outcome: "upgraded", plan: "max", scheduledPlan: null, effectiveAt: null });
+    }
+    return json({});
+  });
   vi.stubGlobal("fetch", fetchSpy);
 });
 
@@ -137,9 +148,22 @@ describe("a FREE home space", () => {
 });
 
 describe("a PRO home space", () => {
-  it("upgrades to Max IN PLACE — a change-plan POST, never a checkout", async () => {
+  it("🔒 CONFIRMS the amount before charging — no POST until the payer agrees", async () => {
+    mount(paid("pro"));
+    fireEvent.click(screen.getByRole("button", { name: `Upgrade to ${MAX_PLAN_NAME} — $24.99/month` }));
+    // The amount is Stripe's preview, and the dialog says it is charged now.
+    expect(await screen.findByText(/You'll be charged \$16\.01 now/)).toBeTruthy();
+    expect(screen.getByText(/billing date moves to today/)).toBeTruthy();
+    expect(changePlanPosts()).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText(/You'll be charged/)).toBeNull());
+    expect(changePlanPosts()).toHaveLength(0);
+  });
+
+  it("upgrades to Max IN PLACE after the confirm — a change-plan POST, never a checkout", async () => {
     const onUpgrade = mount(paid("pro"));
     fireEvent.click(screen.getByRole("button", { name: `Upgrade to ${MAX_PLAN_NAME} — $24.99/month` }));
+    fireEvent.click(await screen.findByRole("button", { name: "Pay $16.01" }));
     await waitFor(() => expect(changePlanPosts()).toHaveLength(1));
     expect(JSON.parse(String((changePlanPosts()[0][1] as RequestInit).body))).toEqual({
       plan: "max",

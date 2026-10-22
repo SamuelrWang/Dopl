@@ -141,6 +141,38 @@ describe("on a home space", () => {
   });
 });
 
+describe("a PRO home space opening the upsell (2026-10-22 review)", () => {
+  const PRO_PAID: Status = {
+    ...PERSONAL_FREE,
+    plan: "pro",
+    status: "active",
+    has_stripe_customer: true,
+  };
+
+  it("offers Max in place instead of a dead end", async () => {
+    const html = await open(PRO_PAID);
+    expect(html).toContain("You're already on Pro.");
+    expect(html).toContain(`Upgrade to ${MAX_PLAN_NAME}`);
+    expect(html).not.toContain("Continue to checkout");
+  });
+
+  it("offers nothing more on Max", async () => {
+    const html = await open({ ...PRO_PAID, plan: "max" });
+    expect(html).toContain(`You're already on ${MAX_PLAN_NAME}.`);
+    expect(html).not.toContain(`Upgrade to ${MAX_PLAN_NAME}`);
+  });
+
+  it("offers no switch on an ending or past-due Pro plan", async () => {
+    expect(await open({ ...PRO_PAID, cancelAtPeriodEnd: true })).not.toContain(
+      `Upgrade to ${MAX_PLAN_NAME}`
+    );
+    cleanup();
+    expect(await open({ ...PRO_PAID, status: "past_due" })).not.toContain(
+      `Upgrade to ${MAX_PLAN_NAME}`
+    );
+  });
+});
+
 describe("on a standard workspace", () => {
   it("still sells Team, per seat, and never Pro", async () => {
     const html = await open(STANDARD_FREE);

@@ -22,7 +22,7 @@ import { checkoutAppearance } from "./checkout-appearance";
  * `@/shared/supabase/browser.ts`).
  */
 let stripePromise: ReturnType<typeof loadStripe> | null = null;
-function getStripePromise() {
+export function getStripePromise() {
   if (!stripePromise) {
     stripePromise = loadStripe(
       (typeof process !== "undefined" &&

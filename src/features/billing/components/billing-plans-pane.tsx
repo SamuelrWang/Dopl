@@ -8,6 +8,7 @@ import { BillingCancelPlan } from "./billing-cancel-plan";
 import { BillingInvoices } from "./billing-invoices";
 import { BillingPaymentMethod } from "./billing-payment-method";
 import { useBillingPortal } from "./use-billing-portal";
+import { usePersonalPlanChange } from "./use-personal-plan-change";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
@@ -45,6 +46,12 @@ export function BillingPlansPane({
   const portal = useBillingPortal(workspaceId);
   const canManage = meetsMinRole(role, "admin");
   const hasStripeAccount = canManage && ent.isPaid && ent.has_stripe_customer;
+  // Same args as the plans pane's read → one cache entry. The cancel dialog
+  // must say when it would clear a queued Max → Pro switch.
+  const queued = usePersonalPlanChange(
+    workspaceId,
+    hasStripeAccount && ent.containerKind === "home"
+  );
 
   return (
     <>
@@ -71,6 +78,7 @@ export function BillingPlansPane({
           workspaceId={workspaceId}
           cancelAtPeriodEnd={ent.cancelAtPeriodEnd}
           currentPeriodEnd={ent.subscription_period_end}
+          scheduledPlan={queued.scheduledPlan}
         />
       )}
 

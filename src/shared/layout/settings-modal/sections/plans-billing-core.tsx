@@ -17,9 +17,11 @@ import {
 import type { WalletKind } from "@/features/billing/credits";
 import {
   PERSONAL_PLAN_NAMES,
+  personalPlanRank,
   plansForKind,
   type PersonalPaidPlan,
 } from "@/features/billing/plans";
+import { useUpgradeConfirm } from "@/features/billing/components/upgrade-confirm-dialog";
 import { usePersonalPlanChange } from "@/features/billing/components/use-personal-plan-change";
 import { formatDate } from "@/shared/lib/format-time";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
@@ -111,12 +113,20 @@ export function PlansBillingCore({
     workspaceId,
     ent.containerKind === "home" && ent.isPaid && canManage
   );
+  const confirmUpgrade = useUpgradeConfirm(personal, () => void ent.refresh());
   const planChange = {
     scheduledPlan: personal.scheduledPlan,
     effectiveAt: personal.effectiveAt,
-    pending: personal.pending,
+    pending: personal.pending || confirmUpgrade.loading,
   };
+  // 🔒 AN UPGRADE CHARGES TODAY, SO IT IS CONFIRMED WITH THE AMOUNT FIRST
+  // (2026-10-22 review); a downgrade or "Keep …" charges nothing and runs as clicked.
   async function handleChangePlan(plan: PersonalPaidPlan) {
+    const current = ent.isPaid ? ent.personalPlan : null;
+    if (current && personalPlanRank(plan) > personalPlanRank(current)) {
+      await confirmUpgrade.request(plan);
+      return;
+    }
     if (await personal.change(plan)) await ent.refresh();
   }
   const plans = plansForKind(ent.containerKind);
@@ -244,6 +254,10 @@ export function PlansBillingCore({
         />
 
         {personal.error && <p className="px-1 text-caption text-danger">{personal.error}</p>}
+        {personal.notice && (
+          <p className="px-1 text-caption text-text-secondary">{personal.notice}</p>
+        )}
+        {confirmUpgrade.dialog}
         {portalError && <p className="px-1 text-caption text-danger">{portalError}</p>}
         {switchError && <p className="px-1 text-caption text-danger">{switchError}</p>}
       </SettingsPanel>

@@ -1,7 +1,9 @@
 "use client";
 
 import { PERSONAL_PLAN_NAMES } from "../plans";
-import { formatMoney, launchOfferFor, TEAM_SEAT_PRICE } from "../prices";
+import { formatMoney, launchOfferFor, MAX_PRICE, TEAM_SEAT_PRICE } from "../prices";
+import { useUpgradeConfirm } from "./upgrade-confirm-dialog";
+import { usePersonalPlanChange } from "./use-personal-plan-change";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
@@ -209,13 +211,23 @@ export function PlanOption({
  */
 export function AlreadyPaidNote({
   ent,
+  workspaceId,
   onClose,
 }: {
   ent: Ent;
+  workspaceId?: string;
   onClose: () => void;
 }) {
+  // A live, healthy PRO home space has one more tier to buy (2026-10-22
+  // review): offer it in place — the same confirmed switch the plan cards use.
+  const canGoMax =
+    ent.containerKind === "home" &&
+    ent.personalPlan === "pro" &&
+    !ent.isPastDue &&
+    !ent.cancelAtPeriodEnd;
   return (
     <div className="mt-5">
+      {canGoMax && <MaxUpsell workspaceId={workspaceId} onDone={onClose} />}
       <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
         {ent.containerKind === "home"
           ? `You're already on ${PERSONAL_PLAN_NAMES[ent.personalPlan ?? "pro"]}.`
@@ -224,6 +236,28 @@ export function AlreadyPaidNote({
             }.`}
       </p>
       <CloseButton onClose={onClose} />
+    </div>
+  );
+}
+
+function MaxUpsell({ workspaceId, onDone }: { workspaceId?: string; onDone: () => void }) {
+  const change = usePersonalPlanChange(workspaceId, true);
+  const confirm = useUpgradeConfirm(change, onDone);
+  return (
+    <div className="mb-3">
+      <PlanOption
+        title={PERSONAL_PLAN_NAMES.max}
+        priceLine={<PersonalPriceLine plan="max" price={MAX_PRICE} />}
+        pitch="The biggest credit allowance. Your new plan starts today."
+        cta={confirm.loading || change.pending ? "Checking…" : `Upgrade to ${PERSONAL_PLAN_NAMES.max}`}
+        highlight
+        canManageBilling
+        disabled={confirm.loading || change.pending}
+        onSelect={() => void confirm.request("max")}
+      />
+      {change.error && <p className="mt-2 text-caption text-danger">{change.error}</p>}
+      {change.notice && <p className="mt-2 text-caption text-text-secondary">{change.notice}</p>}
+      {confirm.dialog}
     </div>
   );
 }

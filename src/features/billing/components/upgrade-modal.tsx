@@ -157,6 +157,7 @@ export function UpgradeModal({
         ) : (
           <GenericUpsell
             ent={ent}
+            workspaceId={workspaceId}
             reason={reason}
             canManageBilling={canManageBilling}
             switching={switching}
@@ -272,6 +273,7 @@ function browserBillingUrl(plan: CheckoutPlan): string {
  */
 function GenericUpsell({
   ent,
+  workspaceId,
   reason,
   canManageBilling,
   switching,
@@ -281,6 +283,7 @@ function GenericUpsell({
   onClose,
 }: {
   ent: Ent;
+  workspaceId?: string;
   reason?: string;
   canManageBilling: boolean;
   switching: boolean;
@@ -326,7 +329,7 @@ function GenericUpsell({
       {ent.loading ? (
         <div className="bento mt-5 h-24 animate-pulse opacity-50" />
       ) : ent.isPaid ? (
-        <AlreadyPaidNote ent={ent} onClose={onClose} />
+        <AlreadyPaidNote ent={ent} workspaceId={workspaceId} onClose={onClose} />
       ) : (
         <>
           {switchError && (

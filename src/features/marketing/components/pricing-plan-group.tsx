@@ -1,9 +1,27 @@
+import { useEffect, useState } from "react";
 import type { PlanDef } from "@/features/billing/plans";
 import {
   formatMoney,
   launchOfferFor,
   TEAM_SEAT_PRICE,
+  type LaunchOffer,
 } from "@/features/billing/prices";
+
+/**
+ * The launch offer, decided IN THE BROWSER after mount (2026-10-22 review).
+ * `/pricing` is prerendered at build time, so an offer computed during render
+ * is frozen into the HTML: after `LAUNCH_PRICE_ENDS` the static page would keep
+ * the badge until the next deploy, and the client's own answer would then
+ * disagree with it (a hydration mismatch). The server paint carries no badge
+ * and no strike; the client adds them while the offer is live.
+ */
+export function useLaunchOffer(planId: string): LaunchOffer | null {
+  const [offer, setOffer] = useState<LaunchOffer | null>(null);
+  useEffect(() => {
+    setOffer(launchOfferFor(planId));
+  }, [planId]);
+  return offer;
+}
 
 /**
  * One /pricing product group: its plan cards and its own comparison table.
@@ -56,7 +74,10 @@ function PlanCard({ plan, ...group }: GroupProps & { plan: PlanDef }) {
   // only while `prices.ts › launchOfferFor` says the bounded launch offer is
   // live — read at render, so it drops on its end date with no deploy. Team has
   // no offer and keeps "Popular".
-  const offer = launchOfferFor(plan.id);
+  const offer = useLaunchOffer(plan.id);
+  // No "Popular" on a card that HAS a launch reference price, even before the
+  // client has decided — the badge would flash "Popular" then swap.
+  const offerable = plan.id === "pro" || plan.id === "max";
 
   return (
     <div className={`lp-plan${popular ? " lp-plan--popular" : ""}`}>
@@ -64,7 +85,7 @@ function PlanCard({ plan, ...group }: GroupProps & { plan: PlanDef }) {
         {offer ? (
           <span className="lp-plan-badge">{offer.percentOff}% off</span>
         ) : (
-          popular && <span className="lp-plan-badge">Popular</span>
+          popular && !offerable && <span className="lp-plan-badge">Popular</span>
         )}
       </div>
 
