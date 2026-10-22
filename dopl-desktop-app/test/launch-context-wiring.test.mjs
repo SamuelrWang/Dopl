@@ -28,7 +28,10 @@ const WATCHED = { id: CHANNEL, name: "Ops", toolProfile: "channel_agent", member
 const listenerPath = require_.resolve(M("channel-listener.js"));
 require_.cache[listenerPath] = {
   id: listenerPath, filename: listenerPath, loaded: true, children: [], paths: [],
-  exports: { watchedChannel: (id) => (id === CHANNEL ? WATCHED : null) },
+  exports: {
+    watchedChannel: (id) => (id === CHANNEL ? WATCHED : null),
+    channelForLaunch: async (id) => (id === CHANNEL ? WATCHED : null),
+  },
 };
 
 // The roster's two server reads. The OPERATOR is on both — as a member and as the owner of an agent

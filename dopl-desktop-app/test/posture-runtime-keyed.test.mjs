@@ -171,7 +171,12 @@ test("X-02: the button lane starts a dialog-picked Codex agent on the level in C
   const stub = (id) => {
     if (id === "./channel-prefs") return prefs;
     if (id === "./session-engine") return { launchRequesterSession: async (spec) => { launches.push(spec); return { agentId: "ag", sessionId: "s" }; } };
-    if (id === "./channel-listener") return { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) };
+    if (id === "./channel-listener") {
+      return {
+        watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }),
+        channelForLaunch: async () => ({ channel: { myAgentToolProfile: "full" } }),
+      };
+    }
     if (id === "./targeting") return { resolveLaunchToolProfile: () => "full" };
     if (id === "./runtime/launch-default") {
       return { ...LD, resolveLaunchRuntime: (a) => LD.resolveLaunchRuntime(a, { registry: fakeRegistry(), channelRuntime: require(M("channel-runtime.js")) }) };

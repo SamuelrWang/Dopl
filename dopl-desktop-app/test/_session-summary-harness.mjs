@@ -47,6 +47,8 @@ const { heldGatesFor } = req(join(MAIN, "session-held-gates.js"));
 const { pickOf } = req(join(MAIN, "runtime", "selection-vocabulary.js"));
 // The effective-permission reading (2026-09-25). Injected REAL: the registry is electron-free at load.
 const { describePermission } = req(join(MAIN, "runtime", "index.js"));
+// The tool profile's label (2026-10-22). Injected REAL: `tool-profiles.js` takes no requires.
+const { profileLabel } = req(join(MAIN, "tool-profiles.js"));
 
 // Through `module.exports`, not END: the push wiring after the pure block is evaluated too.
 const BLOCK = between(SRC, "// ─── BEGIN SESSION-SUMMARY-PURE", "module.exports = {");
@@ -97,6 +99,7 @@ export function load() {
     "diag",
     "pickOf",
     "describePermission",
+    "profileLabel",
     `${BLOCK}\n return { ${EXPORTED.join(", ")} };`
   )(
     metricOrNull, metrics, noteEvent, detailFor, endReasonFor, displayNameFor, descriptionForAgent,
@@ -104,7 +107,8 @@ export function load() {
     PILL_STATES, ACTIVITY_PILL, PILL_ENDED, pillState, queryTornDown, listeningState,
     (...parts) => logged.push(parts.join(" ")),
     pickOf,
-    describePermission
+    describePermission,
+    profileLabel
   );
   const spaWindow = {
     destroyed: false,
@@ -186,6 +190,8 @@ export function session(over = {}) {
     win: fakeWindow(),
     state: { phase: "running", activity: "working", parked: false },
     context: { channelName: "general", taskTitle: "Ship the thing" },
+    // The spawn-time tool profile (`session-launch.js` passes `profile`); labelled on the wire.
+    profile: "dopl_only",
     // ── THE AGENT-VIEW MEASUREMENTS (wiring plan Phase 5, 2026-08-18) ──────────────
     // Defaulted to MEASURED values so the shape cases see the widened row; the absence cases
     // override them to undefined, which is what an unmeasured session and an older engine look like.

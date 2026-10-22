@@ -356,6 +356,11 @@ export function agentPermissionLabel(session: DesktopSessionSummary): string | n
   return p && p.runtime && p.label ? `${p.runtime} · ${p.label}` : null;
 }
 
+/** The session's spawn-time tool profile (`Read-only`, `Full-access`, …), or `null` when this desktop reported none. */
+export function agentProfileLabel(session: DesktopSessionSummary): string | null {
+  return session.profileLabel?.trim() || null;
+}
+
 /** WHERE AN AGENT IS ON NO THREAD (Samuel, 2026-08-27). ⚠ It read "no thread title" — a MISSING
  *  FIELD, where the truth is a PLACE: a channel-level agent is on the ROOM on purpose
  *  (`agents-controls.ts`: `taskId: null`). ⚠ ONE STATEMENT; THREE callers each spelled it out — the third (`agents-tab-cards.tsx › AgentCard`) was missed by the 2026-08-27 wave and converted 2026-08-28, so the card and the panel it opens no longer disagree. */

@@ -71,6 +71,7 @@ import {
   agentKey,
   agentLiveness,
   agentPermissionLabel,
+  agentProfileLabel,
   agentRunningModel,
   postDestination,
   parseAgentPostStamp,
@@ -423,6 +424,7 @@ export function AgentPanelHeader({
   const { catalogs } = useChannelLaunchPosture(agent.channelId);
   const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
   const permissionLabel = agentPermissionLabel(agent);
+  const profileLabel = agentProfileLabel(agent);
   return (
     <header className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
       <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
@@ -450,6 +452,9 @@ export function AgentPanelHeader({
             <span className="shrink-0 text-text-muted" title={agent.permission?.setting}>
               · {permissionLabel}
             </span>
+          )}
+          {profileLabel && (
+            <span className="shrink-0 text-text-muted">· {profileLabel}</span>
           )}
         </span>
       </span>

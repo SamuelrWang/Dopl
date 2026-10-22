@@ -60,6 +60,8 @@ export interface DesktopSessionSummary {
    * (`never/danger-full-access`). Local only; `null` when ended, absent from an older desktop.
    */
   permission?: { runtime: string; level: string; label: string; setting: string } | null;
+  /** The spawn-time tool profile's label (`main/tool-profiles.js › profileLabel`); null/absent = not reported. */
+  profileLabel?: string | null;
   messageMode?: "ask" | "auto_inbound" | "auto_outbound" | "auto_both" | null;
   /**
    * The runtime stamped at spawn, never re-chosen: running-agent surfaces read this runtime's

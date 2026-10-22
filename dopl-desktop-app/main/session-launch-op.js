@@ -34,9 +34,10 @@ async function launchFromButton(payload) {
   const channelPrefs = require('./channel-prefs');
   const targeting = require('./targeting');
   const listener = require('./channel-listener');
-  // Containment comes from MAIN's watched-channel DTO, never the payload, and before the identity is even
-  // fetched: an identity widens prompt content only (INVARIANTS §5A). Narrowed for a shared room (F-510).
-  const toolProfile = targeting.resolveLaunchToolProfile(listener.watchedChannel(p.channelId));
+  // Containment comes from MAIN's channel DTO (watched, else fetched by id: a launch before reconcile reached
+  // this channel), never the payload, and before the identity is even fetched: an identity widens prompt
+  // content only (INVARIANTS §5A). Narrowed for a shared room (F-510).
+  const toolProfile = targeting.resolveLaunchToolProfile(await listener.channelForLaunch(p.channelId));
   const workspaceId = typeof p.workspaceId === 'string' ? p.workspaceId : null;
 
   // The sheet's ephemeral overrides (model, field values), narrowed by main — the only validator of this

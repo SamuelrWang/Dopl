@@ -283,6 +283,24 @@ function watchedChannel(channelId) {
   return (loops.get(String(channelId || '')) || {}).channel || null;
 }
 
+// The channel DTO a LAUNCH reads its tool profile from: the watched copy, else (a launch that beat reconcile
+// to this channel; reconcile walks workspaces serially after a restart) the server's own row for it. Null
+// only when neither answers, and the caller fails closed (`normalizeProfile`). Every launch lane asks here.
+async function channelForLaunch(channelId) {
+  const watched = watchedChannel(channelId);
+  if (watched) return watched;
+  const id = String(channelId || '');
+  if (!id) return null;
+  let fetched = null;
+  try { fetched = await io.fetchChannel(id); } catch (err) { diag('channelForLaunch: fetch threw', err && err.message); }
+  if (fetched && fetched.id === id) {
+    diag('channelForLaunch:', id.slice(0, 8), 'not watched yet, using the fetched DTO');
+    return fetched;
+  }
+  diag('channelForLaunch:', id.slice(0, 8), 'not watched and not fetched, failing closed');
+  return null;
+}
+
 // Notification click handlers (from index.js), owned by targeting.js.
 function setHandlers(h) {
   targeting.setHandlers(h);
@@ -360,4 +378,4 @@ function stop() {
   return away; // quit-guard races it inside its own flush deadline
 }
 
-module.exports = { start, stop, restart, wake, status, setHandlers, listWatchedChannels, watchedChannel };
+module.exports = { start, stop, restart, wake, status, setHandlers, listWatchedChannels, watchedChannel, channelForLaunch };

@@ -58,6 +58,8 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // The EFFECTIVE permission (2026-09-25), read off the same state: no tool word fails closed to
       // the default runtime's Ask, stated in its own words.
       permission: { runtime: "Claude Code", level: "ask", label: "Ask each time", setting: "" },
+      // The spawn-time tool profile, in `tool-profiles.js › profileLabel`'s words (2026-10-22).
+      profileLabel: "Dopl-only",
       messageMode: "ask",
       // `model` (2026-08-22, Samuel's model-selection ruling), and the fixture shows the
       // PRECEDENCE: the SDK's own reported id (`s.liveModel`) beats the operator's pick, because

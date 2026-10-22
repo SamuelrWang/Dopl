@@ -24,7 +24,10 @@ export function bootLaunchOp({ apiFetch, prefs = {}, answer = { agentId: "ag-1",
     ...realDeps(),
     "./diag": { diag: () => {} },
     "./identity-resolve": resolve,
-    "./channel-listener": { watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }) },
+    "./channel-listener": {
+      watchedChannel: () => ({ channel: { myAgentToolProfile: "full" } }),
+      channelForLaunch: async () => ({ channel: { myAgentToolProfile: "full" } }),
+    },
     // A constant profile; `channel-agent-profile.test.mjs` drives the real containment rule.
     "./targeting": { resolveToolProfile: () => "full", resolveLaunchToolProfile: () => "full" },
     "./channel-prefs": {
