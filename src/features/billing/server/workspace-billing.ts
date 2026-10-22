@@ -13,7 +13,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  */
 
 /** Mirrors `workspace_billing_plan_check` in the database
- *  (`20261130120000_workspace_billing_plan_max.sql`) and `../plans.ts › PlanId`.
+ *  (`20261121170000_workspace_billing_plan_max.sql`) and `../plans.ts › PlanId`.
  *  A value this union has and the CHECK lacks is a `23514` raised inside the
  *  Stripe webhook, which Stripe then retries forever. */
 export type WorkspaceBillingPlan = "free" | "solo" | "team" | "pro" | "max";

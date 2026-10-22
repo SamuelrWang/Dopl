@@ -30,7 +30,7 @@ import type { WorkspaceKind } from "@/features/workspaces/types";
  * `kind='home'`, `solo` retired and sold nowhere, `free` = no live
  * subscription on either.
  * Mirrored by `workspace_billing_plan_check`
- * (`20261122120000_workspace_billing_plan_max.sql`): a value here the CHECK
+ * (`20261121170000_workspace_billing_plan_max.sql`): a value here the CHECK
  * lacks is a `23514` inside the Stripe webhook, which retries forever.
  */
 export type PlanId = "free" | "solo" | "team" | "pro" | "max";

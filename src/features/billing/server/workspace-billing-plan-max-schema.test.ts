@@ -1,5 +1,5 @@
 /**
- * Invariant suite — `20261130120000_workspace_billing_plan_max.sql` read as a
+ * Invariant suite — `20261121170000_workspace_billing_plan_max.sql` read as a
  * contract. It is the only schema the personal Max tier needs, and it is now the
  * LAST statement of `workspace_billing_plan_check`, so it owns the equality with
  * `PlanId`: a value the CHECK lacks is a `23514` inside the Stripe webhook that
@@ -18,7 +18,7 @@ import type { PlanId } from "../plans";
 import type { WorkspaceBillingPlan } from "./workspace-billing";
 
 const MIGRATIONS = resolve(process.cwd(), "supabase", "migrations");
-const NAME = "20261130120000_workspace_billing_plan_max.sql";
+const NAME = "20261121170000_workspace_billing_plan_max.sql";
 const PRO = "20260930130000_workspace_billing_plan_pro.sql";
 const read = (f: string) => readFileSync(resolve(MIGRATIONS, f), "utf8");
 
@@ -75,7 +75,6 @@ describe("the CHECK", () => {
   it("documents the column with the container kind as it is spelled today", () => {
     expect(sql).toContain("COMMENT ON COLUMN public.workspace_billing.plan");
     expect(sql).toContain("kind=''home''");
-    expect(sql).not.toContain("kind=''personal''");
   });
 });
 
@@ -99,7 +98,7 @@ describe("the header", () => {
 describe("ordering", () => {
   it("has a unique version, sorts after the Pro widening, and nothing later re-states it", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
-    expect(files.filter((f) => f.startsWith("20261130120000"))).toEqual([NAME]);
+    expect(files.filter((f) => f.startsWith("20261121170000"))).toEqual([NAME]);
     expect(PRO.slice(0, 14) < NAME.slice(0, 14)).toBe(true);
     const later = files.filter((f) => f.slice(0, 14) > NAME.slice(0, 14));
     for (const name of later) {

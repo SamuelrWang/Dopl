@@ -20,7 +20,7 @@ import type { WorkspaceBillingPlan } from "./workspace-billing";
 const MIGRATIONS = resolve(process.cwd(), "supabase", "migrations");
 const NAME = "20260930130000_workspace_billing_plan_pro.sql";
 const TAXONOMY_V2 = "20260719000000_workspace_billing_plan_taxonomy_v2.sql";
-const MAX_SUCCESSOR = "20261130120000_workspace_billing_plan_max.sql";
+const MAX_SUCCESSOR = "20261121170000_workspace_billing_plan_max.sql";
 const read = (f: string) => readFileSync(resolve(MIGRATIONS, f), "utf8");
 
 const raw = read(NAME);
@@ -55,7 +55,7 @@ describe("the CHECK", () => {
   });
 
   it("🔒 the CHECK's value set is the TypeScript taxonomy minus `max`", () => {
-    // ⚠ SUPERSEDED 2026-10-22: `20261130120000_workspace_billing_plan_max.sql`
+    // ⚠ SUPERSEDED 2026-10-22: `20261121170000_workspace_billing_plan_max.sql`
     // re-states this constraint with a fifth value, and THAT file's suite
     // (`workspace-billing-plan-max-schema.test.ts`) now owns the equality with
     // `PlanId`. This one pins that the historical file admitted exactly the
