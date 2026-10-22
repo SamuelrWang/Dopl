@@ -11,6 +11,7 @@ import {
   type StripeCheckoutValue,
 } from "@stripe/react-stripe-js/checkout";
 import { Skeleton } from "@/shared/ui/skeleton";
+import { PERSONAL_PLAN_NAMES } from "../plans";
 import type { CheckoutPlan } from "../url";
 import { checkoutAppearance } from "./checkout-appearance";
 
@@ -194,7 +195,8 @@ function CheckoutPaymentForm({ plan }: { plan: CheckoutPlan }) {
  */
 const CHECKOUT_PLAN_NAME: Record<CheckoutPlan, string> = {
   team: "Team",
-  pro: "Pro",
+  pro: PERSONAL_PLAN_NAMES.pro,
+  max: PERSONAL_PLAN_NAMES.max,
 };
 
 /**

@@ -66,6 +66,30 @@ export function getPersonalProPriceId(): string | null {
 }
 
 /**
+ * Flat personal Max price — $24.99/month on a `kind='home'` container
+ * (2026-10-22). Null when unset, and every SELLING path fails closed on that
+ * with an error naming `STRIPE_PERSONAL_MAX_PRICE_ID` — Max is never minted on
+ * another line's price. Recognition (`derivePlan`) treats unset as
+ * "inconclusive", exactly like the other price envs.
+ */
+export function getPersonalMaxPriceId(): string | null {
+  return process.env.STRIPE_PERSONAL_MAX_PRICE_ID || null;
+}
+
+/** The Stripe price a personal paid plan is sold on, or null when its env is
+ *  unset in this environment. */
+export function personalPlanPriceId(plan: "pro" | "max"): string | null {
+  return plan === "max" ? getPersonalMaxPriceId() : getPersonalProPriceId();
+}
+
+/** The env var behind `personalPlanPriceId(plan)` — for the fail-closed error. */
+export function personalPlanPriceEnv(plan: "pro" | "max"): string {
+  return plan === "max"
+    ? "STRIPE_PERSONAL_MAX_PRICE_ID"
+    : "STRIPE_PERSONAL_PRO_PRICE_ID";
+}
+
+/**
  * The previous per-seat Team price ($7.99), recognition only and optional.
  * Nothing mints against it, but a subscription whose price this env does not name
  * falls through `selectSeatItem` to `items[0]` and out of `derivePlan`'s price arm
@@ -93,6 +117,7 @@ export function selectSeatItem(
   for (const priceId of [
     getSeatPriceId(),
     getLegacySeatPriceId(),
+    getPersonalMaxPriceId(),
     getPersonalProPriceId(),
     getSoloPriceId(),
   ]) {
@@ -108,13 +133,14 @@ export interface WorkspaceCheckoutArgs {
    *  caller's `kind='home'` container for `pro`. Same column either way, which
    *  is why personal Pro needs no second Stripe pipeline. */
   workspaceId: string;
-  /** `"team"` or `"pro"` (2026-09-08). The retired Solo plan cannot be minted:
+  /** `"team"`, `"pro"` (2026-09-08) or `"max"` (2026-10-22). The retired Solo
+   *  plan cannot be minted:
    *  `POST /api/billing/checkout` answers 400 `PLAN_RETIRED`, and
    *  `PLAN_NOT_FOR_CONTAINER` when a plan meets the wrong container kind. This
    *  narrowing is the second lock. */
-  plan: "team" | "pro";
-  /** Team seat quantity (= active member count). Ignored for `pro`, which is flat
-   *  at quantity 1. */
+  plan: "team" | "pro" | "max";
+  /** Team seat quantity (= active member count). Ignored for `pro` and `max`,
+   *  which are flat at quantity 1. */
   quantity: number;
   email: string;
   stripeCustomerId?: string | null;
@@ -126,7 +152,8 @@ export interface WorkspaceCheckoutArgs {
 /**
  * Container-scoped subscription checkout: `team` buys `STRIPE_PRO_SEAT_PRICE_ID`
  * at `max(1, quantity)` seats (env name predates the Team rename), `pro` buys
- * `STRIPE_PERSONAL_PRO_PRICE_ID` at quantity 1.
+ * `STRIPE_PERSONAL_PRO_PRICE_ID` and `max` `STRIPE_PERSONAL_MAX_PRICE_ID`, both
+ * at quantity 1.
  *
  * Stamps `{ workspace_id, plan }` into both session and subscription metadata so
  * the webhook can route the subscription back and derive the plan even where the
@@ -145,17 +172,17 @@ export async function createWorkspaceCheckoutSession(
 ): Promise<string> {
   const stripe = getStripe();
 
-  const priceId =
-    args.plan === "pro" ? getPersonalProPriceId() : getSeatPriceId();
+  const personal = args.plan === "team" ? null : args.plan;
+  const priceId = personal ? personalPlanPriceId(personal) : getSeatPriceId();
   if (!priceId) {
     throw new Error(
-      args.plan === "pro"
-        ? "Personal Pro price not configured. Set STRIPE_PERSONAL_PRO_PRICE_ID in env."
+      personal
+        ? `Personal ${personal} price not configured. Set ${personalPlanPriceEnv(personal)} in env.`
         : "Per-seat Team price not configured. Set STRIPE_PRO_SEAT_PRICE_ID in env."
     );
   }
 
-  const quantity = args.plan === "pro" ? 1 : Math.max(1, args.quantity);
+  const quantity = personal ? 1 : Math.max(1, args.quantity);
   const metadata = { workspace_id: args.workspaceId, plan: args.plan };
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     ui_mode: "elements",

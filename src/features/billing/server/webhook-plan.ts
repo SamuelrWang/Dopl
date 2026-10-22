@@ -5,9 +5,10 @@ import {
   isStandardWorkspace,
   type WorkspaceKind,
 } from "@/features/workspaces/types";
-import type { PlanId } from "../plans";
+import { isPersonalPaidPlan, type PlanId } from "../plans";
 import {
   getLegacySeatPriceId,
+  getPersonalMaxPriceId,
   getPersonalProPriceId,
   getSeatPriceId,
   getSoloPriceId,
@@ -28,13 +29,26 @@ import {
  * The arms, in the order they are asked:
  *   • CURRENT per-seat Team price, or the LEGACY $7.99 seat price → `team`: a
  *     legacy seat sub is a Team sub, its price moved and its plan did not.
- *   • Personal Pro price → `pro` (2026-09-08).
+ *   • Personal Max price → `max` (2026-10-22), then personal Pro → `pro`
+ *     (2026-09-08). Max is asked first only because a sub mid-swap could in
+ *     principle carry both lines, and the bigger tier is the one being sold.
  *   • Flat Solo price → `solo`. Legacy-only (2026-09-07, spec A6), but every
  *     live Solo sub still sends events here and dropping the arm would re-plan a
  *     paying Solo workspace as Team on its next invoice event.
  *
  * The `team` default is deliberately not `pro`: every unstamped unknown-price
  * subscription that can reach it predates `pro`.
+ *
+ * 🔒 **`max` IS NEVER GRANTED BY METADATA ALONE WHILE ITS PRICE ENV IS SET
+ * (2026-10-22).** Metadata is a fallback for an environment that cannot tell —
+ * the price envs unset. Where `STRIPE_PERSONAL_MAX_PRICE_ID` IS set and the item
+ * price is not it, a `plan: "max"` stamp is stale or hand-edited (a Max → Pro
+ * schedule phase that lost its metadata, a dashboard edit), and honouring it
+ * would hand the 20,000 allowance to a subscription Stripe bills at another
+ * price. Such a sub falls through to the `team` default, which
+ * `reportPlanContainerMismatch` logs on a home space and which entitles a home
+ * space's wallet to nothing more than the free figure
+ * (`credits.ts › personalCreditsForPlan`).
  */
 export function derivePlan(subscription: Stripe.Subscription): PlanId {
   const priceIds = (subscription.items?.data ?? [])
@@ -43,10 +57,12 @@ export function derivePlan(subscription: Stripe.Subscription): PlanId {
   const has = (priceId: string | null) => !!priceId && priceIds.includes(priceId);
 
   if (has(getSeatPriceId()) || has(getLegacySeatPriceId())) return "team";
+  if (has(getPersonalMaxPriceId())) return "max";
   if (has(getPersonalProPriceId())) return "pro";
   if (has(getSoloPriceId())) return "solo";
 
   const metaPlan = subscription.metadata?.plan;
+  if (metaPlan === "max") return getPersonalMaxPriceId() ? "team" : "max";
   if (metaPlan === "team" || metaPlan === "pro" || metaPlan === "solo") {
     return metaPlan;
   }
@@ -54,12 +70,12 @@ export function derivePlan(subscription: Stripe.Subscription): PlanId {
 }
 
 /**
- * Does this plan belong on this container's KIND? `pro` is sold only on a
- * `kind='home'` container and `team` only on a standard workspace
+ * Does this plan belong on this container's KIND? `pro` and `max` are sold only
+ * on a `kind='home'` container and `team` only on a standard workspace
  * (spec §11.1); `solo` and `free` are legacy/absent and constrain nothing.
  */
 function planFitsKind(plan: PlanId, kind: WorkspaceKind | undefined): boolean {
-  if (plan === "pro") return kind === "home";
+  if (isPersonalPaidPlan(plan)) return kind === "home";
   // The positive predicate (§4A, F-295), never `kind !== "home"` — a
   // fourth kind must not become sellable by the act of being named.
   if (plan === "team") return isStandardWorkspace({ kind });
@@ -81,7 +97,7 @@ export async function reportPlanContainerMismatch(
   workspaceId: string,
   plan: PlanId
 ): Promise<void> {
-  if (plan !== "pro" && plan !== "team") return;
+  if (!isPersonalPaidPlan(plan) && plan !== "team") return;
   const workspace = await findWorkspaceById(workspaceId);
   if (!workspace || planFitsKind(plan, workspace.kind)) return;
   console.error(

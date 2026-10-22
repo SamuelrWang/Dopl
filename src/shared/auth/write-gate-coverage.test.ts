@@ -227,6 +227,10 @@ describe("H-3 write-gate coverage", () => {
         "auth/mcp-device-token/route.ts",
         // Cancel writes on our own route (no Stripe-hosted click-through).
         "billing/cancel/route.ts",
+        // POST switches a live personal subscription Pro ⇄ Max in place
+        // (2026-10-22) — a charge today on an upgrade. GET (the queued switch
+        // the pane shows) stays ungated; it decides nothing.
+        "billing/change-plan/route.ts",
         "billing/checkout/route.ts",
         // The consent gate keeps a HUMAN in the loop. PATCH records the
         // operator's Send / Cancel on their OWN agent's drafted reply; reachable

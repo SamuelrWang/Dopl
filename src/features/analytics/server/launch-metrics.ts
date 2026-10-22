@@ -30,12 +30,16 @@ const SOLO_MONTHLY_USD = 5.99;
 const TEAM_SEAT_MONTHLY_USD = 8.99;
 const LEGACY_TEAM_SEAT_MONTHLY_USD = 7.99;
 const PRO_MONTHLY_USD = 8.99;
+/** Personal Max, flat (2026-10-22). Same rule as Pro: it joined the `.in("plan",
+ *  …)` filter in the same edit, or Max revenue reads as zero. */
+const MAX_MONTHLY_USD = 24.99;
 
 /** Monthly charge for one paid billing row, from its plan and the price Stripe
  *  is actually billing it on. */
 function monthlyUsd(row: PaidBillingRow): number {
   if (row.plan === "solo") return SOLO_MONTHLY_USD;
   if (row.plan === "pro") return PRO_MONTHLY_USD;
+  if (row.plan === "max") return MAX_MONTHLY_USD;
   const legacySeatPriceId = process.env.STRIPE_LEGACY_SEAT_PRICE_ID || null;
   const seatPrice =
     legacySeatPriceId && row.stripe_price_id === legacySeatPriceId
@@ -45,7 +49,7 @@ function monthlyUsd(row: PaidBillingRow): number {
 }
 
 interface PaidBillingRow {
-  plan: "solo" | "team" | "pro";
+  plan: "solo" | "team" | "pro" | "max";
   seat_count: number | null;
   stripe_price_id: string | null;
 }
@@ -74,7 +78,7 @@ export async function getLaunchMetrics(): Promise<LaunchMetrics> {
     supabase
       .from("workspace_billing")
       .select("plan, seat_count, stripe_price_id")
-      .in("plan", ["solo", "team", "pro"])
+      .in("plan", ["solo", "team", "pro", "max"])
       .in("status", ["active", "past_due"]),
   ]);
 

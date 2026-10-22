@@ -10,10 +10,12 @@ import {
 } from "../billing-account";
 import {
   getDefaultPaymentMethod,
+  getStripe,
   isStripeConfigured,
   listCustomerInvoices,
   setSubscriptionCancelAtPeriodEnd,
 } from "./stripe";
+import { releaseScheduleFor } from "./stripe-schedule";
 import {
   getWorkspaceBilling,
   upsertWorkspaceBilling,
@@ -130,6 +132,17 @@ export async function setWorkspaceCancelAtPeriodEnd(
     );
   }
 
+  // ⚠ A CANCEL SUPERSEDES A QUEUED MAX → PRO DOWNGRADE (2026-10-22). Stripe
+  // refuses a cancelation edit on a schedule-managed subscription, and a plan
+  // that is ending has no next phase to switch into, so the schedule is
+  // released first (`./plan-change.ts`). One extra read, on the cancel click
+  // only — never on resume, where a schedule cannot exist (a switch is refused
+  // while the plan is ending).
+  if (cancelAtPeriodEnd) {
+    await releaseScheduleFor(
+      await getStripe().subscriptions.retrieve(billing.stripeSubscriptionId)
+    );
+  }
   await setSubscriptionCancelAtPeriodEnd(
     billing.stripeSubscriptionId,
     cancelAtPeriodEnd

@@ -2,7 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { findSoleOwnedStandardWorkspace } from "@/features/workspaces/server/repository";
-import type { PlanId } from "../plans";
+import { isPersonalPaidPlan, type PlanId } from "../plans";
 import { getStripe, selectSeatItem } from "./stripe";
 import { derivePlan, reportPlanContainerMismatch } from "./webhook-plan";
 import { syncSeatQuantity } from "./seats";
@@ -46,7 +46,7 @@ export interface ProcessResult {
 /** The plans that bill. Listed rather than derived as the free plan's complement:
  *  a plan added to the taxonomy is not paid until somebody says so here. */
 function isPaidPlan(plan: PlanId | undefined): boolean {
-  return plan === "solo" || plan === "team" || plan === "pro";
+  return plan === "solo" || plan === "team" || isPersonalPaidPlan(plan);
 }
 
 /** Map a Stripe subscription status to our four-state billing status. */
@@ -136,10 +136,10 @@ function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
   const periodStart = subLevel.current_period_start ?? item?.current_period_start;
   const periodEnd = subLevel.current_period_end ?? item?.current_period_end;
   return {
-    // `pro` is flat — one container, one member, one price. Pinned so a
-    // hand-edited dashboard quantity cannot make a home space look
+    // `pro` and `max` are flat — one container, one member, one price. Pinned
+    // so a hand-edited dashboard quantity cannot make a home space look
     // multi-seat to `entitlements.ts`.
-    seatCount: plan === "pro" ? 1 : (item?.quantity ?? 1),
+    seatCount: isPersonalPaidPlan(plan) ? 1 : (item?.quantity ?? 1),
     stripePriceId: item?.price?.id ?? null,
     // Always written, never undefined: a resumed subscription must clear the
     // flag, and an omitted key leaves the old `true` standing.
@@ -314,8 +314,8 @@ async function handlePaymentFailed(
   if (!workspaceId) return;
   const billing = await getWorkspaceBilling(workspaceId);
   // Only a paid row can go past_due; a free/past_due state is nonsensical.
-  // `pro` joined the set 2026-09-08 — omitting it would skip dunning for personal
-  // Pro subscriptions entirely.
+  // `pro` joined the set 2026-09-08 and `max` 2026-10-22 — omitting either would
+  // skip dunning for that personal tier entirely.
   if (!billing || !isPaidPlan(billing.plan)) {
     console.warn(
       `[webhook] Ignoring invoice.payment_failed for workspace ${workspaceId}: plan is ${billing?.plan ?? "none"}, not a paid plan.`
