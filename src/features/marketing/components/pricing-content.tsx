@@ -7,6 +7,8 @@ import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import {
   FREE_CHATS_WINDOW_DAYS,
   FREE_MULTI_MEMBER_OBJECT_CAP,
+  isPersonalPaidPlan,
+  PERSONAL_PLAN_NAMES,
   PERSONAL_PLANS,
   WORKSPACE_PLANS,
   planNumber,
@@ -17,6 +19,7 @@ import {
 } from "@/features/billing/credits";
 import {
   formatMoney,
+  MAX_PRICE,
   PRO_PRICE,
   TEAM_SEAT_PRICE,
 } from "@/features/billing/prices";
@@ -36,20 +39,21 @@ type WorkspaceWireRow = { id: string; kind?: WorkspaceKind };
  * carries an explicit workspace id.
  *
  * 🔒 **TWO GROUPS SINCE 2026-09-08 (spec §11), BECAUSE THERE ARE TWO PRODUCTS.**
- * Personal (Free / Pro — one person's home space, flat) and Workspaces
+ * Personal (Free / Pro / Max — one person's home space, flat; Max 2026-10-22)
+ * and Workspaces
  * (Starter / Team — seats). They are separate sections with separate compare
  * tables and they are NEVER concatenated: `pro` is refused checkout on a
  * standard workspace and `team` on a home space (400
  * `PLAN_NOT_FOR_CONTAINER`), so one four-column list would offer two purchases
  * that answer 400.
  *
- * ⚠ **TWO TABLES RATHER THAN ONE FOUR-PLAN TABLE, AND THE REASON IS MOBILE.**
+ * ⚠ **TWO TABLES RATHER THAN ONE FIVE-PLAN TABLE, AND THE REASON IS MOBILE.**
  * `.lp-compare-table` carries `min-width: 560px` inside its own
- * `overflow-x: auto` scroller, so a 3-cell row (label + two plans) scrolls
- * inside the card and the PAGE never scrolls sideways. A five-cell row needs
- * roughly 900px and would put the reader on a horizontal drag to reach the last
- * price — on a page whose entire job is comparing prices. Two tables also match
- * the grouping the cards above them already state.
+ * `overflow-x: auto` scroller, so a 4-cell row (label + three plans) still
+ * fits it and the PAGE never scrolls sideways. A six-cell row would put the
+ * reader on a horizontal drag to reach the last price — on a page whose entire
+ * job is comparing prices. Two tables also match the grouping the cards above
+ * them already state.
  */
 
 /* ------------------------------ the groups ------------------------------ */
@@ -61,75 +65,78 @@ type WorkspaceWireRow = { id: string; kind?: WorkspaceKind };
  * PRICING MISREPRESENTATION that no test could see — a string is a string.
  * Interpolating deletes the duplicate rather than gating it.
  */
+/** ⚠ Cells are in `PERSONAL_PLANS` order — Free, Pro, Max. */
 const HOME_SPACE_ROWS: CompareRow[] = [
   {
     label: "Ontology objects",
-    // ⚠ Uncapped on BOTH: the object cap is a MULTI-member free rule
+    // ⚠ Uncapped on ALL: the object cap is a MULTI-member free rule
     // (`plans.ts › FREE_MULTI_MEMBER_OBJECT_CAP`) and a home space has
-    // one member by construction, so Pro sells no uncapping here.
-    left: { main: "Unlimited" },
-    right: { main: "Unlimited" },
+    // one member by construction, so no paid tier sells uncapping here.
+    cells: [{ main: "Unlimited" }, { main: "Unlimited" }, { main: "Unlimited" }],
   },
   {
     label: "Chat history",
-    left: { main: `${FREE_CHATS_WINDOW_DAYS} days` },
-    right: { main: "Full" },
+    cells: [{ main: `${FREE_CHATS_WINDOW_DAYS} days` }, { main: "Full" }, { main: "Full" }],
   },
   {
     // ⚠ SUB-LINE IS "per month", NOT "per member / month". A home space
     // has exactly one member, so "per member" would invite the reader to
     // multiply by a roster that cannot exist.
     label: "Credits",
-    left: { main: planNumber(PERSONAL_MONTHLY_CREDITS.free), sub: "per month" },
-    right: { main: planNumber(PERSONAL_MONTHLY_CREDITS.pro), sub: "per month" },
+    cells: [
+      { main: planNumber(PERSONAL_MONTHLY_CREDITS.free), sub: "per month" },
+      { main: planNumber(PERSONAL_MONTHLY_CREDITS.pro), sub: "per month" },
+      { main: planNumber(PERSONAL_MONTHLY_CREDITS.max), sub: "per month" },
+    ],
   },
   {
+    // The REAL prices. The launch strike lives on the cards, where its end
+    // date is enforced (`prices.ts › launchOfferFor`); the table states what
+    // is charged.
     label: "Price",
-    left: { main: "Free" },
-    right: { main: formatMoney(PRO_PRICE), sub: "/ month" },
+    cells: [
+      { main: "Free" },
+      { main: formatMoney(PRO_PRICE), sub: "/ month" },
+      { main: formatMoney(MAX_PRICE), sub: "/ month" },
+    ],
   },
 ];
 
 const WORKSPACE_ROWS: CompareRow[] = [
   {
     label: "Ontology objects",
-    left: {
-      main: "Unlimited",
-      sub: `${planNumber(FREE_MULTI_MEMBER_OBJECT_CAP)} with 2+ members`,
-    },
-    right: { main: "Unlimited" },
+    cells: [
+      {
+        main: "Unlimited",
+        sub: `${planNumber(FREE_MULTI_MEMBER_OBJECT_CAP)} with 2+ members`,
+      },
+      { main: "Unlimited" },
+    ],
   },
   {
     label: "Chat history",
-    left: { main: `${FREE_CHATS_WINDOW_DAYS} days` },
-    right: { main: "Full" },
+    cells: [{ main: `${FREE_CHATS_WINDOW_DAYS} days` }, { main: "Full" }],
   },
   {
     // ⚠ UNLIMITED ON BOTH, AND THAT IS THE RULING, NOT AN OVERSIGHT (Samuel:
     // "unlimited users in the workspace … each user gets a limited number of
     // credits"). Members are free; the ALLOWANCE is what the tier buys.
     label: "Members",
-    left: { main: "Unlimited" },
-    right: { main: "Unlimited" },
+    cells: [{ main: "Unlimited" }, { main: "Unlimited" }],
   },
   {
     // ⚠ THE SUB-LINE IS "per member": the allocation is fixed per person and NOT
     // pooled (`credits.ts › SEAT_MONTHLY_CREDITS`), so a bare figure beside
     // "Unlimited" members would read as a workspace pool.
     label: "Credits",
-    left: {
-      main: planNumber(SEAT_MONTHLY_CREDITS.free),
-      sub: "per member / month",
-    },
-    right: {
-      main: planNumber(SEAT_MONTHLY_CREDITS.team),
-      sub: "per member / month",
-    },
+    cells: [
+      { main: planNumber(SEAT_MONTHLY_CREDITS.free), sub: "per member / month" },
+      { main: planNumber(SEAT_MONTHLY_CREDITS.team), sub: "per member / month" },
+    ],
   },
   {
     label: "Price",
-    left: { main: "Free" },
-    right: { main: formatMoney(TEAM_SEAT_PRICE), sub: "/ seat / month" },
+    cells: [{ main: "Free" }, { main: formatMoney(TEAM_SEAT_PRICE), sub: "/ seat / month" }],
   },
 ];
 
@@ -138,6 +145,7 @@ const WORKSPACE_ROWS: CompareRow[] = [
 const PERSONAL_SUMMARY: Record<string, string> = {
   free: "Your own space, free forever.",
   pro: "More credits and your whole history, for one flat price.",
+  max: "The biggest credit allowance, for heavy daily use.",
 };
 const WORKSPACE_SUMMARY: Record<string, string> = {
   free: "Everything, free forever — caps only start when a second member joins.",
@@ -217,15 +225,17 @@ export function PricingContent() {
   }
 
   /**
-   * ⚠ **SEGMENT-LESS, WITH `plan=pro` — THAT PAIR IS THE PERSONAL FORWARD.**
-   * `/billing?billing=upgrade&plan=pro` is the one link that resolves the
+   * ⚠ **SEGMENT-LESS, WITH `plan=pro|max` — THAT PAIR IS THE PERSONAL FORWARD.**
+   * `/billing?billing=upgrade&plan=…` is the one link that resolves the
    * caller's own `kind='home'` container (`src/app/billing/page.tsx`); a
    * public page holds no segment for it, and every user has exactly one, so
-   * there is nothing to disambiguate.
+   * there is nothing to disambiguate. A caller already paying for the other
+   * tier lands on their plan cards, where the switch happens in place.
    */
-  function handleGoPro() {
+  function handleGoPersonal(planId: string) {
+    if (!isPersonalPaidPlan(planId)) return;
     requireUser(() =>
-      router.push(billingPath({ intent: "upgrade", plan: "pro" }))
+      router.push(billingPath({ intent: "upgrade", plan: planId }))
     );
   }
 
@@ -259,8 +269,10 @@ export function PricingContent() {
         plans={PERSONAL_PLANS}
         summary={PERSONAL_SUMMARY}
         rows={HOME_SPACE_ROWS}
-        subscribeLabel="Go Pro"
-        onSubscribe={handleGoPro}
+        subscribeLabel={(planId) =>
+          `Go ${isPersonalPaidPlan(planId) ? PERSONAL_PLAN_NAMES[planId] : ""}`.trim()
+        }
+        onSubscribe={handleGoPersonal}
         authChecked={authChecked}
         onGetStarted={handleGetStarted}
       />
@@ -270,7 +282,7 @@ export function PricingContent() {
         plans={WORKSPACE_PLANS}
         summary={WORKSPACE_SUMMARY}
         rows={WORKSPACE_ROWS}
-        subscribeLabel="Bring your team"
+        subscribeLabel={() => "Bring your team"}
         onSubscribe={handleSubscribe}
         authChecked={authChecked}
         onGetStarted={handleGetStarted}

@@ -11,7 +11,8 @@ import type { PlanId } from "./plans";
  */
 
 /**
- * The plans a checkout may be opened for — team and pro (2026-09-08, spec §11).
+ * The plans a checkout may be opened for — team and pro (2026-09-08, spec §11)
+ * and max (2026-10-22).
  * This type only says which plans have a price at all; which container may buy
  * one is fenced by `POST /api/billing/checkout` (400 `PLAN_NOT_FOR_CONTAINER`).
  * Retired `solo` is deliberately absent (2026-09-07, spec A6) and is a
@@ -24,7 +25,7 @@ import type { PlanId } from "./plans";
  * is renamed or retired in the taxonomy.
  */
 type PlanIdSubset<T extends PlanId> = T;
-export type CheckoutPlan = PlanIdSubset<"team" | "pro">;
+export type CheckoutPlan = PlanIdSubset<"team" | "pro" | "max">;
 
 /**
  * `?billing=` param. Values are verbatim-frozen — Stripe sessions and 402
@@ -37,7 +38,7 @@ export type CheckoutPlan = PlanIdSubset<"team" | "pro">;
  */
 export type BillingIntent = "upgrade" | "success" | "return";
 
-/** Segment-less `/billing` is legal — with `?plan=pro` it forwards to the
+/** Segment-less `/billing` is legal — with `?plan=pro` / `?plan=max` it forwards to the
  *  caller's home space, otherwise it forwards when they own exactly one
  *  standard workspace and asks them to pick when they do not
  *  (`src/app/billing/page.tsx`). */
@@ -124,8 +125,8 @@ export function parseBillingIntent(
 }
 
 /**
- * `?plan=` → a checkout to open on arrival. `team` and `pro` are the only
- * accepted values (`pro` added 2026-09-08): a stale `?plan=solo` link parses to
+ * `?plan=` → a checkout to open on arrival. `team`, `pro` and `max` are the only
+ * accepted values (`pro` added 2026-09-08, `max` 2026-10-22): a stale `?plan=solo` link parses to
  * `null`, so the payer lands on the plan list rather than in a checkout for a
  * price no longer sold.
  *
@@ -136,5 +137,5 @@ export function parseBillingIntent(
 export function parseCheckoutPlan(
   raw: string | null | undefined
 ): CheckoutPlan | null {
-  return raw === "team" || raw === "pro" ? raw : null;
+  return raw === "team" || raw === "pro" || raw === "max" ? raw : null;
 }

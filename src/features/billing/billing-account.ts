@@ -70,6 +70,9 @@ export interface CancelPlanResult {
   /** When access ends (or renews, after resume). Null when webhook never
    *  stamped a period end. */
   currentPeriodEnd: string | null;
+  /** A queued Max → Pro switch this cancel cleared (2026-10-22), or absent.
+   *  Resuming does not bring it back — choose the plan again. */
+  clearedScheduledPlan?: "pro" | "max";
 }
 
 /** 24 = two years monthly, still one Stripe page (no cursor, no pagination). */

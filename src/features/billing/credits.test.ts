@@ -34,10 +34,11 @@ describe("allowances", () => {
       solo: 5_000,
       team: 5_000,
       pro: 5_000,
+      max: 5_000,
     });
   });
 
-  it("🔒 carries a `pro` key that NO seat ever reads — it is there for the Record type", () => {
+  it("🔒 carries `pro` and `max` keys that NO seat ever reads — they are there for the Record type", () => {
     // `pro` is sold only on a `kind='home'` container, which has no seats.
     // The key exists so `Record<PlanId, number>` stays exhaustive and the next
     // plan id is a compile error rather than a silent `undefined`; the credits
@@ -46,6 +47,7 @@ describe("allowances", () => {
     expect(SEAT_MONTHLY_CREDITS.pro).toBe(5_000);
     expect(Object.keys(SEAT_MONTHLY_CREDITS).sort()).toEqual([
       "free",
+      "max",
       "pro",
       "solo",
       "team",
@@ -72,8 +74,9 @@ describe("allowances", () => {
     expect(seatCreditsForPlan("team")).toBe(SEAT_MONTHLY_CREDITS.team);
   });
 
-  it("pins the PERSONAL wallet allowance — TWO tiers (Samuel, 2026-09-08: 500 free / 5,000 Pro)", () => {
-    expect(PERSONAL_MONTHLY_CREDITS).toEqual({ free: 500, pro: 5_000 });
+  it("pins the PERSONAL wallet allowance — THREE tiers (500 free / 5,000 Pro / 20,000 Max)", () => {
+    // Pro: Samuel 2026-09-08. Max: Samuel 2026-10-22 ("20,000 credits a month").
+    expect(PERSONAL_MONTHLY_CREDITS).toEqual({ free: 500, pro: 5_000, max: 20_000 });
   });
 
   it("🔒 the personal allowance IS a plan lookup now — the home space has a plan", () => {
@@ -82,7 +85,7 @@ describe("allowances", () => {
     // tier was priced. A revert to the bare constant fails this and every
     // `.free`/`.pro` read in the tree.
     expect(typeof PERSONAL_MONTHLY_CREDITS).toBe("object");
-    expect(Object.keys(PERSONAL_MONTHLY_CREDITS).sort()).toEqual(["free", "pro"]);
+    expect(Object.keys(PERSONAL_MONTHLY_CREDITS).sort()).toEqual(["free", "max", "pro"]);
   });
 
   it("🔒 free PERSONAL (500) is NOT free SEAT (100) — different things, different numbers", () => {
@@ -104,9 +107,15 @@ describe("allowances", () => {
  * Pro row arrives as `free` and gets the free allowance.
  */
 describe("personalCreditsForPlan", () => {
-  it("gives a `pro` verdict 5,000 and a `free` verdict 500", () => {
+  it("gives a `max` verdict 20,000, a `pro` verdict 5,000 and a `free` verdict 500", () => {
+    expect(personalCreditsForPlan("max")).toBe(20_000);
     expect(personalCreditsForPlan("pro")).toBe(5_000);
     expect(personalCreditsForPlan("free")).toBe(500);
+  });
+
+  it("🔒 Max is NOT read as Pro — the two-tier ternary a third tier falls through", () => {
+    expect(personalCreditsForPlan("max")).not.toBe(personalCreditsForPlan("pro"));
+    expect(personalCreditsForPlan("max")).toBe(PERSONAL_MONTHLY_CREDITS.max);
   });
 
   it("🔒 answers FREE for a workspace plan that cannot be on a home space", () => {

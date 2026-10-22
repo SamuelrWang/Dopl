@@ -79,9 +79,14 @@ describe("MRR", () => {
     expect((await getLaunchMetrics()).mrr_usd).toBe(8.99);
   });
 
-  it("includes `pro` in the plan filter — a missing plan is silent lost revenue", async () => {
+  it("counts a personal Max row at its flat price, seat count ignored", async () => {
+    db.billingRows = [row({ plan: "max", seat_count: null })];
+    expect((await getLaunchMetrics()).mrr_usd).toBe(24.99);
+  });
+
+  it("includes `pro` and `max` in the plan filter — a missing plan is silent lost revenue", async () => {
     await getLaunchMetrics();
-    expect(db.planFilter).toEqual(["solo", "team", "pro"]);
+    expect(db.planFilter).toEqual(["solo", "team", "pro", "max"]);
   });
 
   it("still counts a legacy Solo row at $5.99", async () => {

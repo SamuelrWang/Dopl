@@ -2,8 +2,8 @@ import "server-only";
 import type Stripe from "stripe";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { findSoleOwnedStandardWorkspace } from "@/features/workspaces/server/repository";
-import type { PlanId } from "../plans";
-import { getStripe, selectSeatItem } from "./stripe";
+import { isPersonalPaidPlan, type PlanId } from "../plans";
+import { getStripe, retrieveFreshSubscription, selectSeatItem } from "./stripe";
 import { derivePlan, reportPlanContainerMismatch } from "./webhook-plan";
 import { syncSeatQuantity } from "./seats";
 import { getUserByStripeCustomer } from "./subscriptions";
@@ -46,7 +46,7 @@ export interface ProcessResult {
 /** The plans that bill. Listed rather than derived as the free plan's complement:
  *  a plan added to the taxonomy is not paid until somebody says so here. */
 function isPaidPlan(plan: PlanId | undefined): boolean {
-  return plan === "solo" || plan === "team" || plan === "pro";
+  return plan === "solo" || plan === "team" || isPersonalPaidPlan(plan);
 }
 
 /** Map a Stripe subscription status to our four-state billing status. */
@@ -136,10 +136,10 @@ function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
   const periodStart = subLevel.current_period_start ?? item?.current_period_start;
   const periodEnd = subLevel.current_period_end ?? item?.current_period_end;
   return {
-    // `pro` is flat — one container, one member, one price. Pinned so a
-    // hand-edited dashboard quantity cannot make a home space look
+    // `pro` and `max` are flat — one container, one member, one price. Pinned
+    // so a hand-edited dashboard quantity cannot make a home space look
     // multi-seat to `entitlements.ts`.
-    seatCount: plan === "pro" ? 1 : (item?.quantity ?? 1),
+    seatCount: isPersonalPaidPlan(plan) ? 1 : (item?.quantity ?? 1),
     stripePriceId: item?.price?.id ?? null,
     // Always written, never undefined: a resumed subscription must clear the
     // flag, and an omitted key leaves the old `true` standing.
@@ -160,14 +160,25 @@ function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
  * `<=` is deliberate: Stripe stamps `created` at 1s granularity, so `<` lets an
  * `updated(active)` sharing a `deleted` event's second durably resurrect a
  * canceled sub. Dropping a second legitimate update in that second is transient.
+ *
+ * ⚠ `sameSecondApplies` (2026-10-22 review) is for a patch built from a
+ * subscription RE-FETCHED at processing time (`stripe.ts ›
+ * retrieveFreshSubscription`): it is current, not a snapshot, so a same-second
+ * event must not be dropped — it is the one carrying the latest state — and the
+ * resurrection `<=` guards against cannot happen (a canceled sub re-fetches as
+ * canceled).
  */
 async function applyStripeEvent(
   workspaceId: string,
   eventCreated: number,
-  patch: WorkspaceBillingUpsert
+  patch: WorkspaceBillingUpsert,
+  sameSecondApplies = false
 ): Promise<"applied" | "stale"> {
   const watermark = await getStripeEventWatermark(workspaceId);
-  if (watermark !== null && eventCreated <= watermark) {
+  const stale =
+    watermark !== null &&
+    (sameSecondApplies ? eventCreated < watermark : eventCreated <= watermark);
+  if (stale) {
     console.warn(
       `[webhook] Stale event for workspace ${workspaceId} (created=${eventCreated} <= watermark=${watermark}); skipping.`
     );
@@ -181,9 +192,10 @@ async function applyStripeEvent(
 }
 
 async function handleSubscriptionUpsert(
-  subscription: Stripe.Subscription,
+  snapshot: Stripe.Subscription,
   eventCreated: number
 ): Promise<void> {
+  const { subscription, refetched } = await retrieveFreshSubscription(snapshot);
   const workspaceId = await resolveWorkspaceIdForSubscription(subscription);
   if (!workspaceId) return;
   const status = mapStatus(subscription.status);
@@ -207,7 +219,7 @@ async function handleSubscriptionUpsert(
       // also ignores the anchor on a free verdict, healing unreached rows.)
       currentPeriodStart: null,
       currentPeriodEnd: null,
-    });
+    }, refetched);
     return;
   }
 
@@ -228,7 +240,7 @@ async function handleSubscriptionUpsert(
     ...(fields.currentPeriodEnd
       ? { currentPeriodEnd: fields.currentPeriodEnd }
       : {}),
-  });
+  }, refetched);
 }
 
 async function handleCheckoutCompleted(
@@ -314,8 +326,8 @@ async function handlePaymentFailed(
   if (!workspaceId) return;
   const billing = await getWorkspaceBilling(workspaceId);
   // Only a paid row can go past_due; a free/past_due state is nonsensical.
-  // `pro` joined the set 2026-09-08 — omitting it would skip dunning for personal
-  // Pro subscriptions entirely.
+  // `pro` joined the set 2026-09-08 and `max` 2026-10-22 — omitting either would
+  // skip dunning for that personal tier entirely.
   if (!billing || !isPaidPlan(billing.plan)) {
     console.warn(
       `[webhook] Ignoring invoice.payment_failed for workspace ${workspaceId}: plan is ${billing?.plan ?? "none"}, not a paid plan.`

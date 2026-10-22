@@ -1,4 +1,5 @@
 import "server-only";
+import { isPersonalPaidPlan, PERSONAL_PLAN_NAMES } from "../plans";
 import { getStripe, isStripeConfigured, selectSeatItem } from "./stripe";
 import {
   countActiveMembers,
@@ -11,10 +12,10 @@ import {
  * count. Best-effort, after a member is added or removed.
  *
  * No-ops when: Stripe isn't configured (tests/preview — never touch the API);
- * no active Team subscription (legacy Solo and personal Pro are FLAT, quantity
- * always 1); or the seat count already matches (avoid proration churn).
+ * no active Team subscription (legacy Solo and personal Pro/Max are FLAT,
+ * quantity always 1); or the seat count already matches (avoid proration churn).
  *
- * A live flat plan (legacy Solo, or personal Pro since 2026-09-08) with 2+ active
+ * A live flat plan (legacy Solo, or personal Pro/Max since 2026-09-08/10-22) with 2+ active
  * members is an anomaly: the quantity is never resized — falling through to the
  * Team path would call `subscriptionItems.update` with a member count, a billed
  * proration against a subscription with no seat item — but it is warned about so
@@ -31,14 +32,16 @@ export async function syncSeatQuantity(workspaceId: string): Promise<void> {
   const live =
     billing.status === "active" || billing.status === "past_due";
 
-  // One arm for both flat plans: `solo` and `pro` are priced per subscription, not
-  // per seat, so neither has a quantity to true up.
-  const flat = billing.plan === "solo" || billing.plan === "pro";
+  // One arm for every flat plan: `solo`, `pro` and `max` are priced per
+  // subscription, not per seat, so none has a quantity to true up.
+  const flat = billing.plan === "solo" || isPersonalPaidPlan(billing.plan);
   if (flat && live && billing.stripeSubscriptionId) {
     const members = await countActiveMembers(workspaceId);
     if (members > 1) {
       const label =
-        billing.plan === "solo" ? "legacy Solo workspace" : "personal Pro container";
+        billing.plan === "solo"
+          ? "legacy Solo workspace"
+          : `personal ${isPersonalPaidPlan(billing.plan) ? PERSONAL_PLAN_NAMES[billing.plan] : billing.plan} container`;
       console.warn(
         `[seats] ${label} ${workspaceId} has ${members} active members; ` +
           `this plan is single-member and flat. Not resizing Stripe quantity ` +

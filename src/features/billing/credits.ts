@@ -46,35 +46,48 @@ export const SEAT_MONTHLY_CREDITS: Record<PlanId, number> = {
   // `Partial<Record<…>>` would delete the compile error that forces the next
   // plan id to declare its seat allowance here.
   pro: 5_000,
+  // Same posture as `pro` (2026-10-22): `max` is a home-space plan and never
+  // reaches a seat. The key exists because the `Record` type demands one.
+  max: 5_000,
 };
 
 /**
  * Monthly allowance on a user's personal wallet (their home space), by the
- * home space's entitled plan. Two tiers since 2026-09-08, superseding
+ * home space's entitled plan. Two tiers since 2026-09-08, three since
+ * 2026-10-22 (Max), superseding
  * spec assumption A5's bare `500`.
  *
- * Keyed `"free" | "pro"` rather than `PlanId` on purpose: a home space
- * can only ever be entitled to those two, so the narrow map makes "what does a
+ * Keyed `"free" | "pro" | "max"` rather than `PlanId` on purpose: a home space
+ * can only ever be entitled to those three (`max` since 2026-10-22), so the narrow map makes "what does a
  * `team` personal wallet get" unaskable. `personalCreditsForPlan` narrows a
  * verdict onto it.
  * 500 ≠ `SEAT_MONTHLY_CREDITS.free` (100) deliberately — a free personal wallet
  * is a whole home space, not one seat among many.
  */
-export const PERSONAL_MONTHLY_CREDITS: Record<"free" | "pro", number> = {
+export const PERSONAL_MONTHLY_CREDITS: Record<"free" | "pro" | "max", number> = {
   free: 500,
   pro: 5_000,
+  // 2026-10-22, Samuel: "a third tier at $24.99 … 20,000 credits a month".
+  max: 20_000,
 };
 
 /**
  * Personal allowance for an entitlement-resolved verdict — never raw
- * `workspace_billing.plan`. Anything but `pro` is free, `team`/`solo` included:
- * those cannot be a personal verdict, so fail to the small number rather than
- * handing a free home space the paid allowance on a bad row.
+ * `workspace_billing.plan`. Only `pro` and `max` are paid here; anything else is
+ * free, `team`/`solo` included: those cannot be a personal verdict, so fail to
+ * the small number rather than handing a free home space the paid allowance on
+ * a bad row. A `switch` with a default rather than a ternary (2026-10-22): the
+ * two-tier ternary is what a third tier silently falls through.
  */
 export function personalCreditsForPlan(verdict: PlanId): number {
-  return verdict === "pro"
-    ? PERSONAL_MONTHLY_CREDITS.pro
-    : PERSONAL_MONTHLY_CREDITS.free;
+  switch (verdict) {
+    case "max":
+      return PERSONAL_MONTHLY_CREDITS.max;
+    case "pro":
+      return PERSONAL_MONTHLY_CREDITS.pro;
+    default:
+      return PERSONAL_MONTHLY_CREDITS.free;
+  }
 }
 
 /**

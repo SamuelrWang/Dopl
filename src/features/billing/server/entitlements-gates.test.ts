@@ -167,6 +167,17 @@ describe("assertCanAddMember", () => {
    * A live pro container is single-member by construction; this is the belt on top
    * of the upstream braces (`workspaces/server/link-container-guard`).
    */
+  it("throws 402 PERSONAL_SINGLE_MEMBER for a live MAX container too (2026-10-22)", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "max", status: "active", seatCount: null })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await expect(assertCanAddMember(WS)).rejects.toMatchObject({
+      status: 402,
+      code: "PERSONAL_SINGLE_MEMBER",
+    });
+  });
+
   it("throws 402 PERSONAL_SINGLE_MEMBER for a live pro container", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue(
       billing({ plan: "pro", status: "active", seatCount: null })

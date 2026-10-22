@@ -50,12 +50,36 @@ vi.mock("@/shared/auth/with-workspace-auth", () => ({
 const stripeCalls = vi.hoisted(() => ({
   updated: null as { id: string; params: Record<string, unknown> } | null,
   canceledImmediately: false,
+  /** The subscription's schedule (a queued Max → Pro downgrade), or null. */
+  schedule: null as Record<string, unknown> | null,
+  released: [] as string[],
+  order: [] as string[],
+  /** Make the cancel-flag write throw (after any release). */
+  failCancel: false,
+  scheduleWrites: [] as string[],
 }));
 
 vi.mock("stripe", () => ({
   default: class FakeStripe {
     subscriptions = {
+      retrieve: async (id: string) => ({
+        id,
+        schedule: stripeCalls.schedule,
+        metadata: {},
+        items: {
+          data: [
+            {
+              id: "si_1",
+              price: { id: "price_max" },
+              current_period_start: 1_760_000_000,
+              current_period_end: 1_762_600_000,
+            },
+          ],
+        },
+      }),
       update: async (id: string, params: Record<string, unknown>) => {
+        stripeCalls.order.push("update");
+        if (stripeCalls.failCancel) throw new Error("stripe down");
         stripeCalls.updated = { id, params };
         return { id, cancel_at_period_end: params.cancel_at_period_end };
       },
@@ -64,13 +88,36 @@ vi.mock("stripe", () => ({
         return {};
       },
     };
+    subscriptionSchedules = {
+      create: async () => {
+        stripeCalls.scheduleWrites.push("create");
+        return {
+          id: "sub_sched_2",
+          status: "active",
+          current_phase: { start_date: 1_760_000_000, end_date: 1_762_600_000 },
+          phases: [],
+        };
+      },
+      update: async (id: string) => {
+        stripeCalls.scheduleWrites.push(`update:${id}`);
+        return { id, status: "active", phases: [] };
+      },
+      release: async (id: string) => {
+        stripeCalls.released.push(id);
+        stripeCalls.order.push("release");
+        return { id, status: "released" };
+      },
+    };
   },
 }));
 
 vi.mock("@/features/billing/server/workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   upsertWorkspaceBilling: vi.fn(),
+  claimWorkspaceCheckout: vi.fn(async () => true),
+  releaseWorkspaceCheckout: vi.fn(async () => undefined),
 }));
+vi.mock("@/features/workspaces/server/repository", () => ({ findWorkspaceById: vi.fn() }));
 
 import { POST } from "./route";
 import * as repo from "@/features/billing/server/workspace-billing";
@@ -107,6 +154,14 @@ beforeEach(() => {
   vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fake");
   stripeCalls.updated = null;
   stripeCalls.canceledImmediately = false;
+  stripeCalls.schedule = null;
+  stripeCalls.released = [];
+  stripeCalls.order = [];
+  stripeCalls.failCancel = false;
+  stripeCalls.scheduleWrites = [];
+  vi.stubEnv("STRIPE_PERSONAL_PRO_PRICE_ID", "price_pro");
+  vi.stubEnv("STRIPE_PERSONAL_MAX_PRICE_ID", "price_max");
+  mockRepo.claimWorkspaceCheckout.mockResolvedValue(true);
   mockRepo.getWorkspaceBilling.mockResolvedValue(billing());
   AUTH.workspaceId = "ws-1";
   AUTH.workspaceKind = "standard";
@@ -156,6 +211,76 @@ describe("cancelling", () => {
       cancelAtPeriodEnd: true,
       currentPeriodEnd: "2026-09-04T00:00:00.000Z",
     });
+  });
+});
+
+describe("a queued Max → Pro downgrade (2026-10-22)", () => {
+  const queued = (status = "active") => ({
+    id: "sub_sched_1",
+    status,
+    current_phase: { start_date: 1_760_000_000, end_date: 1_762_600_000 },
+    phases: [
+      { start_date: 1_760_000_000, end_date: 1_762_600_000, items: [{ price: "price_max" }] },
+      { start_date: 1_762_600_000, end_date: 1_765_200_000, items: [{ price: "price_pro" }] },
+    ],
+  });
+
+  it("🔒 is RELEASED before the cancel flag is set — Stripe refuses cancel edits on a scheduled sub", async () => {
+    stripeCalls.schedule = queued();
+    const res = await POST(request({}), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+    expect(stripeCalls.released).toEqual(["sub_sched_1"]);
+    expect(stripeCalls.order).toEqual(["release", "update"]);
+  });
+
+  it("answers NO cleared switch when none was queued", async () => {
+    const body = await (await POST(request({}), { params: Promise.resolve({}) })).json();
+    expect(body.clearedScheduledPlan).toBeUndefined();
+  });
+
+  it("answers the switch it cleared", async () => {
+    stripeCalls.schedule = queued();
+    const body = await (await POST(request({}), { params: Promise.resolve({}) })).json();
+    expect(body.clearedScheduledPlan).toBe("pro");
+  });
+
+  it("🔒 RE-QUEUES the downgrade when the cancel itself fails after the release", async () => {
+    stripeCalls.schedule = queued();
+    stripeCalls.failCancel = true;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await POST(request({}), { params: Promise.resolve({}) });
+    expect(res.status).toBe(500);
+    expect(stripeCalls.released).toEqual(["sub_sched_1"]);
+    expect(stripeCalls.scheduleWrites).toEqual(["create", "update:sub_sched_2"]);
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    err.mockRestore();
+  });
+
+  it("🔒 takes the billing claim, and 409s when a plan change holds it", async () => {
+    mockRepo.claimWorkspaceCheckout.mockResolvedValue(false);
+    const res = await POST(request({}), { params: Promise.resolve({}) });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("PLAN_CHANGE_IN_PROGRESS");
+    expect(stripeCalls.order).toEqual([]);
+    expect(mockRepo.releaseWorkspaceCheckout).not.toHaveBeenCalled();
+  });
+
+  it("releases the claim on every path", async () => {
+    await POST(request({}), { params: Promise.resolve({}) });
+    expect(mockRepo.releaseWorkspaceCheckout).toHaveBeenCalledWith("ws-1");
+  });
+
+  it("leaves a finished schedule alone", async () => {
+    stripeCalls.schedule = queued("released");
+    expect((await POST(request({}), { params: Promise.resolve({}) })).status).toBe(200);
+    expect(stripeCalls.released).toEqual([]);
+  });
+
+  it("never touches a schedule on RESUME", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(billing({ cancelAtPeriodEnd: true }));
+    stripeCalls.schedule = queued();
+    await POST(request({ resume: true }), { params: Promise.resolve({}) });
+    expect(stripeCalls.released).toEqual([]);
   });
 });
 

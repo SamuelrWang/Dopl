@@ -2855,6 +2855,11 @@
   gap: 20px;
   align-items: stretch;
 }
+/* Three cards for a three-plan group (Personal: Free / Pro / Max, 2026-10-22).
+   A MODIFIER, so the two-card Workspaces group keeps its two full columns. */
+.lp-plans--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
 
 .lp-plan {
   display: flex;
@@ -2913,6 +2918,14 @@
 .lp-plan-price-note {
   font-size: 14px;
   color: var(--muted);
+}
+/* The launch offer's struck reference price (`prices.ts › launchOfferFor`),
+   quieter than the real figure beside it. */
+.lp-plan-price-was {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: line-through;
 }
 /* min-height keeps the CTAs roughly aligned across cards. */
 .lp-plan-summary {

@@ -129,6 +129,9 @@ describe("what the page reads back off the URL", () => {
     // container may buy it is the checkout route's fence, not this parser's — a
     // URL is read before any workspace is resolved.
     expect(parseCheckoutPlan("pro")).toBe("pro");
+    // Personal Max (2026-10-22), same container rule as Pro.
+    expect(parseCheckoutPlan("max")).toBe("max");
+    expect(parseCheckoutPlan("MAX")).toBeNull();
     // "free" is a plan but not a checkout — no such price exists.
     expect(parseCheckoutPlan("free")).toBeNull();
     expect(parseCheckoutPlan("enterprise")).toBeNull();
