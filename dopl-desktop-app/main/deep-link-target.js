@@ -45,6 +45,7 @@ const WEB_ONLY_ROOTS = new Set([
   'terms',
   'services-agreement',
   'privacy',
+  'docs',
   'join',
   'invite',
   'admin',

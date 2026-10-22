@@ -133,8 +133,11 @@ export const CARD_EASE = "ease-out";
  *  swap to the next pose — see `auth-banner-panel.tsx` › AuthBannerPanel. */
 export const CARD_SWAP_SLACK_MS = 60;
 /** Even margin between the card's outline and the glass's, all the way round
- *  — including along the bite. */
-const CARD_INSET = 34;
+ *  — including along the bite. Exported because the glass slot publishes it
+ *  as `--glass-card-inset` (`auth-banner-panel.tsx`), so a page that paints
+ *  its own white panel there (/get-started) sits at the card's size without
+ *  re-typing the number. */
+export const CARD_INSET = 34;
 /** ⚠ KEEP IN SYNC with `--glass-card-radius` (globals.css + the desktop
  *  tokens mirror). The card is a MASK now, so `border-radius` no longer
  *  applies to it and the number has to exist in JS as well. */

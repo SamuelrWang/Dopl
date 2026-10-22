@@ -90,8 +90,16 @@ const CODER_POST = `agent-${AGENT_IDS.teardown}-1`;
 /** The brief that woke it, which its inbound banner carries. */
 const BRIEF_POST = `agent-${AGENT_IDS.planner}-3`;
 describe("1. the scripted cursor is one shape for the whole demo", () => {
-  const demo = source("banner-demo.tsx");
+  // The scene's pointer lives in the shared glyph since 2026-10-14 (/get-started's
+  // install drawing renders it too); the scene must render THAT, not a copy.
+  const demo = source("../demo-cursor.tsx");
   const banner = source("../hero-banner.tsx");
+
+  it("renders the shared glyph rather than its own copy", () => {
+    const scene = source("banner-demo.tsx");
+    expect(scene).toContain("<DemoCursorGlyph />");
+    expect(scene).not.toMatch(/d="M0\.75 0\.9/);
+  });
 
   /** The pointer path, read off the banner cursor so the two cannot be compared to a
    *  constant that has drifted from both. */

@@ -183,8 +183,8 @@ export function SiteNav() {
       <div className="lp-nav-center">
         <nav className="lp-links">
           {NAV_LINKS.map((label) =>
-            label === "Pricing" ? (
-              <Link key={label} href="/pricing">
+            label === "Pricing" || label === "Docs" ? (
+              <Link key={label} href={label === "Pricing" ? "/pricing" : "/docs"}>
                 {label}
               </Link>
             ) : (

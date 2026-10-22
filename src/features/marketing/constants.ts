@@ -2,7 +2,7 @@
 
 export const BRAND = "Dopl";
 
-export const NAV_LINKS = ["Product", "Services", "Career", "Pricing", "About"] as const;
+export const NAV_LINKS = ["Product", "Services", "Docs", "Pricing", "About"] as const;
 
 /**
  * Page has exactly ONE CTA. Funnel: Get Started → `/authenticate?mode=signup` → `/get-started`

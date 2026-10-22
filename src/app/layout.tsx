@@ -213,7 +213,7 @@ export default function RootLayout({
             drive-by. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}else if(p==='/services-agreement'||p==='/privacy'){document.body.classList.remove('mosaic-bg');document.body.classList.add('legal-active');}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}else if(p==='/services-agreement'||p==='/privacy'||p==='/docs'||p.indexOf('/docs/')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('legal-active');}}catch(e){}})();`,
           }}
         />
         <QueryProvider>

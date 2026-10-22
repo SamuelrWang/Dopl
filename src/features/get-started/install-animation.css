@@ -5,43 +5,66 @@
    ONE clock (`--gs-t`) for every track — the beats below are % of it, so a
    tempo change is one edit and nothing can drift:
 
-      0–16%   rest
+      0–6%    rest
+      6–13%   glint: one specular sweep across the Dopl icon
      16–30%   cursor flies in from the lower right, decelerating onto the icon
-     30–34%   press (cursor dips, icon presses)
-     34–56%   drag: ghost + cursor arc to Applications
-     56–62%   drop: ghost lands in the folder, folder receives it (bounce)
-     60–72%   green check pops; cursor drifts away and fades
-     72–90%   hold on the finished state
-     90–100%  everything fades back to rest
+     30–32%   click: cursor dips, icon presses down (darkens, 0.95)
+     32–35.5% pick-up: icon lifts (1.06, longer drop shadow, contact shadow
+              falls away) — the cursor is now holding it
+     34–54%   carry: the ICON ITSELF rides WITH the cursor to Applications
+              (one pair of drag movers — see `.gs-drag-*`)
+     47–58%   folder darkens as the drop target while the icon is over it
+     57.5–62% drop: icon shrinks into the folder, folder bounces, cursor taps
+     61–66%   green check pops; cursor drifts away and fades (62–74%)
+     32–35.5% its home's dashed silhouette fades in (`.gs-app-slot`)
+     62–77%   the icon's home is empty (it was installed) — the silhouette
+              stays; it fades out 77–83% as the icon returns onto it
+     76%      drag movers snap home while icon and cursor are both invisible
+     77–83%   the icon fades/scales back into its home for the next loop
+     88–100%  check fades back to rest
 
    ⚠ Curved, natural motion comes from SPLIT AXES: X and Y are separate
    keyframe tracks on nested wrappers with different easings per segment. Do
    not collapse them into one translate track — a single track moves on a
    straight line and reads as a machine.
 
-   ⚠ Coordinates are px in a fixed 400×250 stage, centred in the glass and
-   clipped by it if the panel runs narrow (the split layout hides the whole
-   right pane below md, so the exposure is a band of mid widths). Keep new
-   positions inside the stage. */
+   ⚠ THE WINDOW IS THE GLASS'S WHITE CARD, size and all (Samuel 2026-10-14:
+   "uniform to the size of the other white panels in glass panel"). It is
+   inset by `--glass-card-inset` — published on the glass slot from the SAME
+   `CARD_INSET` the onboarding card's mask is drawn with
+   (`shared/layout/auth-split/auth-glass-geometry.ts`) — and wears the card's
+   `--glass-card-*` radius, fill and shadow. Never re-type those numbers here.
+
+   ⚠ THE WINDOW TILTS WITH THE GLASS, AND NOTHING HERE MAY TILT IT. The slot
+   it is portaled into sits inside `LiquidGlass`'s content layer, which wears
+   `transform: var(--glass-tilt)` (`shared/design/liquid-glass/liquid-glass.tsx`
+   › LAYER_TILT), so the window, the stage and everything on it already move
+   as one object with the glass. Writing `var(--glass-tilt)` on any node below
+   would apply the tilt twice. The hover tilt itself is switched on BY the
+   portal: a filled slot is the panel's opt-in (`auth-banner-panel.tsx` ›
+   slotFilled).
+
+   ⚠ Coordinates are px in a fixed 400×144 STAGE (`.gs-stage`), centred in
+   the window body and scaled to fit it — the body's size follows the glass,
+   so the drawing scales rather than clipping. Keep new positions inside the
+   stage; the cursor's entry/exit legs deliberately leave it. */
 
 .gs-glass-pad {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
   overflow: hidden;
 }
 
 /* The white panel IS the Finder window. */
 .gs-dmg {
-  position: relative;
-  width: min(400px, 92%);
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.14),
-    0 10px 22px rgba(8, 10, 15, 0.28),
-    0 30px 60px rgba(8, 10, 15, 0.3);
+  position: absolute;
+  inset: var(--glass-card-inset);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--glass-card-radius);
+  background: var(--glass-card-fill);
+  /* `drop-shadow`, like the card: the token is in drop-shadow's grammar. */
+  filter: drop-shadow(var(--glass-card-shadow));
   overflow: hidden;
   animation: loginFadeIn 0.5s ease-out 0.15s both;
 }
@@ -52,6 +75,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  flex: none;
   height: 38px;
   padding: 0 12px;
   background: linear-gradient(#fafafa, #f0f0f0);
@@ -85,15 +109,37 @@
   color: #4a4a4a;
 }
 
-/* Body: icon → Applications, the canonical DMG layout. */
+/* Body: icon → Applications, the canonical DMG layout. Takes whatever the
+   card leaves under the titlebar; a SIZE container so the stage can scale. */
 .gs-dmg-body {
   position: relative;
-  height: 212px;
-  background: #fbfbfd;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  overflow: hidden;
+  /* Finder's window gray (Samuel's reference DMG), under the white titlebar:
+     the icons' drop shadows need a ground to fall on. */
+  background: #ececec;
+}
+
+/* The drawing, at its design size, scaled to fit the body (contain).
+   ⚠ `tan(atan2(a, b))` IS a / b AS A NUMBER — CSS cannot divide a length by a
+   length, and `scale()` takes a number. No JS: the clock below stays the only
+   moving part. A browser without it keeps the first declaration (scale 1,
+   clipped by the body), i.e. the old fixed-size drawing. */
+.gs-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 400px;
+  height: 144px;
+  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%)
+    scale(min(tan(atan2(100cqw, 400px)), tan(atan2(100cqh, 144px))));
 }
 .gs-well {
   position: absolute;
-  top: 46px;
+  top: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -106,16 +152,61 @@
 .gs-well--apps {
   right: 34px;
 }
-.gs-app-icon {
+
+/* Both icons sit ON the window with the soft drop a macOS DMG icon casts.
+   `drop-shadow`, so it follows the artwork's alpha, not its box. Restated
+   inside the reaction keyframes below (a `filter` keyframe replaces the whole
+   list) — via these vars, so each recipe is typed once.
+   The Dopl icon gets the deeper, two-layer recipe (a tight contact edge + a
+   soft ambient fall) — that, the contact ellipse under it and the glint are
+   what make it read as an object rather than a sticker (Samuel 2026-10-14:
+   "it just doesn't look 3D"). `-lifted` is the same light with the icon held
+   higher: the ambient layer drops further and spreads. */
+.gs-dmg {
+  --gs-icon-shadow: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2));
+  --gs-app-depth: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.28)) drop-shadow(0 5px 7px rgba(0, 0, 0, 0.2));
+  --gs-app-depth-lifted: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.2)) drop-shadow(0 14px 16px rgba(0, 0, 0, 0.28));
+}
+/* The icon's home in the well: empty space the label sits under. The icon
+   itself lives in the drag movers (`.gs-carry`) and is drawn over this spot
+   at rest. */
+.gs-app-home {
+  position: relative;
+  display: block;
   width: 78px;
   height: 78px;
-  border-radius: 17px;
-  animation: gs-app-press var(--gs-t) linear infinite;
 }
+/* The silhouette the icon leaves behind (Samuel 2026-10-15: "leave like a
+   gray box/silhouette of the logo in the same place light gray, and with like
+   a dotted borderline"). Same 78px footprint as the icon; 22.5% radius is the
+   art's own corner (its alpha reaches the edge 115px into the 512px square).
+   Hidden while the icon sits on it — see `gs-slot-life`. The well paints
+   before the drag movers, so the icon always covers it. */
+.gs-app-slot {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 22.5%;
+  background: rgba(0, 0, 0, 0.06);
+  color: #a3a3a8; /* the arrow's stroke colour */
+  opacity: 0;
+  animation: gs-slot-life var(--gs-t) linear infinite;
+}
+.gs-app-slot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/* The real folder art carries its own transparent margin (it fills ~90% of
+   its square), so it is drawn at 92px to read the same size as the 78px app
+   tile — and pulled in by the overshoot vertically so both labels share a
+   baseline and both icons share a centre (y 59). */
 .gs-folder-icon {
-  width: 84px;
-  height: 70px;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
+  width: 92px;
+  height: 92px;
+  margin: -7px 0;
+  filter: var(--gs-icon-shadow) brightness(1);
   animation: gs-folder-receive var(--gs-t) linear infinite;
 }
 .gs-well-label {
@@ -123,13 +214,15 @@
   font-weight: 500;
   color: #3c3c3c;
 }
+/* Between the icons, centred on their shared centre line (y 59). */
 .gs-arrow {
   position: absolute;
   left: 50%;
-  top: 84px;
-  width: 56px;
+  top: 33px; /* 59 − 52/2 */
+  width: 64px;
+  height: 52px;
   transform: translateX(-50%);
-  color: #b8b8bd;
+  color: #a3a3a8;
 }
 
 /* Check badge on the folder, macOS-green. */
@@ -148,94 +241,173 @@
   animation: gs-check-pop var(--gs-t) linear infinite;
 }
 
-/* ── The travellers ──────────────────────────────────────────────────────
-   Ghost and cursor share waypoint GEOMETRY but not easings — the ghost is
-   carried (steady), the hand leads (decelerating into each stop). Both sit at
-   the app icon's centre at rest; the cursor tip meets the icon there. */
-.gs-ghost-y,
-.gs-cursor-y {
+/* ── The drag ────────────────────────────────────────────────────────────
+   ONE pair of DRAG movers carries the Dopl icon AND the pointer. Their origin
+   is the GRAB POINT (102, 69) — 8px right of and 10px below the icon's centre
+   (94, 59), where a real hand would take hold — and they are exactly zero
+   except while the icon is carried, so at rest the icon sits in its well.
+   The pointer's TIP sits on the origin (`DemoCursorGlyph`); its fly-in and
+   exit come from its own APPROACH movers (`.gs-hand-*`), which are exactly
+   zero from 30% to 62%. So for the whole carry the tip and the icon share one
+   transform — not by matched numbers, by construction.
+
+   ⚠ Never give the icon its own translate tracks, and never put a second
+   (static or translucent) icon in the well — both have been tried, and both
+   read as "the logo doesn't move". */
+.gs-drag-y {
   position: absolute;
-  left: 94px; /* app icon centre x */
-  top: 85px; /* app icon centre y */
+  left: 102px; /* grab point x = icon centre 94 + 8 */
+  top: 69px; /* grab point y = icon centre 59 + 10 */
   width: 0;
   height: 0;
+  animation: gs-drag-y var(--gs-t) linear infinite;
 }
-.gs-ghost {
+.gs-drag-x {
+  animation: gs-drag-x var(--gs-t) linear infinite;
+}
+.gs-hand-y {
   position: absolute;
-  left: -39px;
-  top: -39px;
+  left: 0;
+  top: 0;
+  animation: gs-hand-y var(--gs-t) linear infinite;
+}
+.gs-hand-x {
+  animation: gs-hand-x var(--gs-t) linear infinite;
+}
+
+/* The icon, positioned so that with the movers at zero it covers its well's
+   home spot exactly (left 34 + (120 − 78)/2 = 55 → 55 − 102 = −47; top 20 −
+   69 = −49). Scales about the grab point, so lifting, pressing and dropping
+   never slide it out from under the tip. Opacity 1 while carried — Samuel
+   wants to see the logo move, not a ghost of it. */
+.gs-carry {
+  position: absolute;
+  left: -47px;
+  top: -49px;
   width: 78px;
   height: 78px;
-  border-radius: 17px;
-  opacity: 0;
+  transform-origin: 47px 49px;
+  animation: gs-carry-life var(--gs-t) linear infinite;
 }
-.gs-cursor {
+.gs-app-icon {
   position: absolute;
-  width: 17px;
-  height: 24px;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+  inset: 0;
+  width: 78px;
+  height: 78px;
+  filter: var(--gs-app-depth) brightness(1);
+  animation: gs-app-depth var(--gs-t) linear infinite;
+}
+/* Contact shadow: a soft ellipse where the icon meets the window, under the
+   artwork (earlier sibling). When the icon lifts it falls away and spreads. */
+.gs-contact {
+  position: absolute;
+  left: 11px;
+  top: 68px;
+  width: 56px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0));
+  filter: blur(1.5px);
+  opacity: 0.9;
+  animation: gs-contact-life var(--gs-t) linear infinite;
+}
+/* Glass on the icon: a faint top light at all times, plus one diagonal
+   specular sweep per loop (`::before`). Masked by the icon's OWN alpha
+   (`--gs-app-mask`, set on `.gs-glass-pad` from the same src), so neither can
+   spill past its rounded corners. */
+.gs-glint {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 42%);
+  -webkit-mask: var(--gs-app-mask) center / 100% 100% no-repeat;
+  mask: var(--gs-app-mask) center / 100% 100% no-repeat;
+}
+.gs-glint::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0) 32%,
+    rgba(255, 255, 255, 0.42) 48%,
+    rgba(255, 255, 255, 0.1) 54%,
+    rgba(255, 255, 255, 0) 64%
+  );
+  transform: translateX(-120%);
+  animation: gs-glint-sweep var(--gs-t) linear infinite;
+}
+.gs-pointer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0; /* the tip — a press dips toward it, never off it */
+  animation: gs-pointer-life var(--gs-t) linear infinite;
 }
 
-.gs-cursor-x {
-  animation: gs-cursor-x var(--gs-t) linear infinite;
+/* DRAG — X. 212 = app well → folder well. Zero until the pick-up; holds over
+   the folder through the drop and the cursor's exit; snaps home at 76% (a
+   step, while icon and pointer are both invisible). */
+@keyframes gs-drag-x {
+  0%,
+  34% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  54%,
+  75% {
+    transform: translateX(212px);
+    animation-timing-function: step-end;
+  }
+  76%,
+  100% {
+    transform: translateX(0);
+  }
 }
-.gs-cursor-y {
-  animation: gs-cursor-y var(--gs-t) linear infinite;
+/* DRAG — Y. The arc's crest: the icon lifts mid-carry rather than tracking
+   level (−12, kept inside the stage so the lifted icon is never clipped). */
+@keyframes gs-drag-y {
+  0%,
+  34% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  44% {
+    transform: translateY(-12px);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
+  }
+  54%,
+  100% {
+    transform: translateY(0);
+  }
 }
-.gs-cursor {
-  animation: gs-cursor-life var(--gs-t) linear infinite;
-}
-.gs-ghost-x {
-  animation: gs-ghost-x var(--gs-t) linear infinite;
-}
-.gs-ghost-y {
-  animation: gs-ghost-y var(--gs-t) linear infinite;
-}
-.gs-ghost {
-  animation: gs-ghost-life var(--gs-t) linear infinite;
-}
-
-/* X waypoints. 212 = distance app centre → folder centre. The cursor starts
-   beyond the window's lower-right and lands ON the icon with a long
-   deceleration; the exit drifts right and down. */
-@keyframes gs-cursor-x {
+/* APPROACH — the pointer alone. Starts beyond the window's lower right and
+   lands on the grab point with a long deceleration; exactly zero 30–62%; the
+   exit drifts right and down from the folder. */
+@keyframes gs-hand-x {
   0%,
   16% {
     transform: translateX(260px);
     animation-timing-function: cubic-bezier(0.16, 0.8, 0.3, 1);
   }
   30%,
-  34% {
-    transform: translateX(0);
-    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
-  }
-  56%,
   62% {
-    transform: translateX(212px);
+    transform: translateX(0);
     animation-timing-function: ease-in;
   }
   74%,
   100% {
-    transform: translateX(300px);
+    transform: translateX(88px);
   }
 }
-@keyframes gs-cursor-y {
+@keyframes gs-hand-y {
   0%,
   16% {
     transform: translateY(170px);
     animation-timing-function: cubic-bezier(0.3, 0.6, 0.35, 1);
   }
   30%,
-  34% {
-    transform: translateY(0);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
-  }
-  /* The arc's crest: the hand lifts mid-drag rather than tracking level. */
-  45% {
-    transform: translateY(-16px);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
-  }
-  56%,
   62% {
     transform: translateY(0);
     animation-timing-function: ease-in;
@@ -245,10 +417,19 @@
     transform: translateY(150px);
   }
 }
-/* Press dip + fade-out on exit. */
-@keyframes gs-cursor-life {
+/* Fade-in on the way in, the click dip, the release tap, fade-out on exit.
+   ⚠ The fade-in is load-bearing: the body's aspect follows the glass, and in
+   a tall, narrow body the start point (260, 170 off the icon) can land INSIDE
+   the window — without it the pointer would sit there, parked, through the
+   rest beat. */
+@keyframes gs-pointer-life {
   0%,
-  30% {
+  16% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  21%,
+  30.5% {
     opacity: 1;
     transform: scale(1);
   }
@@ -256,98 +437,159 @@
     transform: scale(0.86);
   }
   34%,
-  56% {
+  57.5% {
     transform: scale(1);
   }
-  62% {
+  59% {
+    transform: scale(0.88);
+  }
+  61% {
+    transform: scale(1);
+  }
+  64% {
     opacity: 1;
   }
   72%,
   100% {
     opacity: 0;
-  }
-}
-
-/* Ghost: appears at the press, is CARRIED (flatter easing than the hand),
-   shrinks slightly into the folder at the drop, gone until next lap. */
-@keyframes gs-ghost-x {
-  0%,
-  34% {
-    transform: translateX(0);
-    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
-  }
-  56%,
-  100% {
-    transform: translateX(212px);
-  }
-}
-@keyframes gs-ghost-y {
-  0%,
-  34% {
-    transform: translateY(0);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
-  }
-  45% {
-    transform: translateY(-16px);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.55, 1);
-  }
-  56%,
-  100% {
-    transform: translateY(0);
-  }
-}
-@keyframes gs-ghost-life {
-  0%,
-  33% {
-    opacity: 0;
     transform: scale(1);
   }
-  35%,
-  56% {
-    opacity: 0.75;
-    transform: scale(1);
-  }
-  60% {
-    opacity: 0;
-    transform: scale(0.42);
-  }
-  100% {
-    opacity: 0;
-  }
 }
-
-/* The stationary pieces' reactions. */
-@keyframes gs-app-press {
+/* The icon's life: rest → pressed → picked up (held big for the carry) →
+   dropped into the folder → absent → back home. */
+@keyframes gs-carry-life {
   0%,
-  30%,
-  34%,
-  100% {
+  30.5% {
+    opacity: 1;
     transform: scale(1);
   }
   32% {
-    transform: scale(0.96);
+    opacity: 1;
+    transform: scale(0.95);
   }
-}
-@keyframes gs-folder-receive {
-  0%,
-  56% {
+  35.5%,
+  57.5% {
+    opacity: 1;
+    transform: scale(1.06);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0);
+  }
+  62%,
+  77% {
+    opacity: 0;
+    transform: scale(0.3);
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  77.01% {
+    opacity: 0;
+    transform: scale(0.85);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  83%,
+  100% {
+    opacity: 1;
     transform: scale(1);
   }
-  59% {
-    transform: scale(1.1);
+}
+/* The slot: fades in as the icon lifts off it (32–35.5%), stays through the
+   carry, the drop and the empty-home beat, and fades out exactly as the icon
+   fades back onto it (77–83%) — the two cross, so there is never a flash of
+   bare window nor an outline under the resting icon. */
+@keyframes gs-slot-life {
+  0%,
+  32% {
+    opacity: 0;
+  }
+  35.5%,
+  77% {
+    opacity: 1;
+  }
+  83%,
+  100% {
+    opacity: 0;
+  }
+}
+/* Depth + the click: Finder darkens a pressed icon; held, its shadow is the
+   lifted recipe. */
+@keyframes gs-app-depth {
+  0%,
+  30.5% {
+    filter: var(--gs-app-depth) brightness(1);
+  }
+  32% {
+    filter: var(--gs-app-depth) brightness(0.78);
+  }
+  35.5%,
+  57.5% {
+    filter: var(--gs-app-depth-lifted) brightness(1);
   }
   62%,
   100% {
+    filter: var(--gs-app-depth) brightness(1);
+  }
+}
+@keyframes gs-contact-life {
+  0%,
+  30.5% {
+    opacity: 0.9;
+    transform: none;
+  }
+  32% {
+    opacity: 1;
+    transform: scale(0.94, 0.85);
+  }
+  35.5%,
+  57.5% {
+    opacity: 0.5;
+    transform: translateY(8px) scale(1.25, 1.2);
+  }
+  62%,
+  100% {
+    opacity: 0.9;
+    transform: none;
+  }
+}
+/* One sweep per loop, in the rest beat before the cursor arrives. */
+@keyframes gs-glint-sweep {
+  0%,
+  6% {
+    transform: translateX(-120%);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.35, 1);
+  }
+  13%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+/* Drop target: darkens while the icon is over it, bounces on receipt. */
+@keyframes gs-folder-receive {
+  0%,
+  47% {
     transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(1);
+  }
+  49.5%,
+  58% {
+    transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(0.72);
+  }
+  60.5% {
+    transform: scale(1.07);
+    filter: var(--gs-icon-shadow) brightness(1);
+  }
+  63%,
+  100% {
+    transform: scale(1);
+    filter: var(--gs-icon-shadow) brightness(1);
   }
 }
 @keyframes gs-check-pop {
   0%,
-  58% {
+  61% {
     opacity: 0;
     transform: scale(0.4);
   }
-  63%,
+  66%,
   88% {
     opacity: 1;
     transform: scale(1);
@@ -365,17 +607,20 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gs-dmg *,
-  .gs-app-icon,
-  .gs-folder-icon {
+  .gs-dmg * {
     animation: none !important;
   }
-  /* Rest state, plus the outcome: the check shown, travellers hidden. */
+  /* Rest state, plus the outcome: the icon home with its shadows (the drag
+     movers' resting transform is zero), the check shown, the pointer hidden,
+     no glint sweep (its resting position is off the icon). */
   .gs-check {
     opacity: 1;
   }
-  .gs-cursor,
-  .gs-ghost {
+  .gs-hand-y {
+    display: none;
+  }
+  /* The icon rests on its home: no silhouette. */
+  .gs-app-slot {
     display: none;
   }
 }

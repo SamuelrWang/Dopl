@@ -37,6 +37,10 @@ export const PUBLIC_ROUTES = [
   "/services-agreement",
   "/privacy",
   "/pricing",
+  // The developer docs (2026-10-20). `/docs/` WITH the slash, so a workspace segment that
+  // merely starts with "docs" is never public; bare `/docs` is a `next.config.ts › redirects`
+  // 308 to `/docs/start-here`, answered before the proxy runs.
+  "/docs/",
   // The landing page's Download button: resolves the newest notarized mac build
   // and 307s to GitHub (src/app/download/route.ts). A visitor with no account is
   // the entire audience — a session gate would bounce the download to /login.

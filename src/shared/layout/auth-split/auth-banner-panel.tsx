@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { LiquidGlass } from "@/shared/design";
 import {
-  CARD_EASE, CARD_IN_MS, CARD_OUT_MS, CARD_SWAP_SLACK_MS,
+  CARD_EASE, CARD_IN_MS, CARD_INSET, CARD_OUT_MS, CARD_SWAP_SLACK_MS,
   GLASS_HEIGHT, GLASS_MIN_H, GLASS_MS, GLASS_RADIUS,
   GLASS_RIM_BAND, GLASS_RIM_BLUR, GLASS_SHADOW_LAYERS, GLASS_SHADOW_PAD,
   GLASS_SIDE_INSET, GLASS_TOP,
@@ -12,7 +12,9 @@ import {
 } from "./auth-glass-geometry";
 import { useGlassMorph } from "./glass-morph";
 import type { GlassCardContent } from "./glass-card-content";
-import { GlassSheen, PaneClip, useGlassTilt, usePrefersReducedMotion } from "./glass-tilt";
+import {
+  GlassSheen, PaneClip, useGlassTilt, usePrefersReducedMotion, useSlotFilled,
+} from "./glass-tilt";
 
 /**
  * The auth split's right pane. Split out of `./auth-split-layout.tsx`
@@ -70,6 +72,7 @@ export function AuthBannerPanel({
   const groupRef = useRef<HTMLDivElement>(null);
   const shadowRef = useRef<HTMLDivElement>(null);
   const sheenRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
   const still = usePrefersReducedMotion();
 
   /**
@@ -181,11 +184,17 @@ export function AuthBannerPanel({
   // The settled card reads the LIVE map (a re-render may hand a new one); a
   // card on its way out keeps the map it was shown with.
   const renderContent = card && box ? (settledKey ? cardContent : held.content)?.[movePose] : undefined;
-  // Hover tilt: onboarding's card surfaces only, and only while no hand-off
-  // is in flight (`./glass-tilt.tsx` owns the pointer + capability gates).
+  // A page has portaled its own white panel onto the glass (/get-started).
+  const slotFilled = useSlotFilled(slotRef);
+  // Hover tilt: onboarding's card surfaces (only while no hand-off is in
+  // flight) and a filled glass slot — the slot's content rides the glass's
+  // content layer, so it tilts WITH the glass by construction. Plain auth
+  // surfaces (no card, empty slot) stay flat. `./glass-tilt.tsx` owns the
+  // pointer + capability + reduced-motion gates.
+  const tiltSurface = (card && cardOn) || slotFilled;
   useGlassTilt(
     { pane: paneRef, group: groupRef, shadow: shadowRef, sheen: sheenRef },
-    card && masked && cardOn
+    masked && tiltSurface
   );
 
   return (
@@ -248,8 +257,15 @@ export function AuthBannerPanel({
             {/* Portal target — a PAGE may project content onto the glass (the
                 get-started install animation does) while the layout, and therefore
                 the banner + glass, persists across auth-group navigations. Empty on
-                every other surface, including the desktop SPA. */}
-            <div id={AUTH_GLASS_SLOT_ID} style={{ width: "100%", height: "100%" }} />
+                every other surface, including the desktop SPA.
+                `--glass-card-inset` hands a portaled page the white card's
+                margin, so a panel it paints (/get-started's Finder window) is
+                the card's size — the same constant `cardPath` draws with. */}
+            <div
+              ref={slotRef}
+              id={AUTH_GLASS_SLOT_ID}
+              style={{ width: "100%", height: "100%", "--glass-card-inset": `${CARD_INSET}px` } as CSSProperties}
+            />
 
             {/* THE WHITE CARD. Empty for now; content comes later. It is sized
                 from the SOLID part of the pose, so it can never sit over the
@@ -328,7 +344,7 @@ export function AuthBannerPanel({
           </LiquidGlass>
 
           {/* The tilt's sheen — see `GlassSheen`. */}
-          {masked && card && <GlassSheen sheenRef={sheenRef} maskId={ids.glass} />}
+          {masked && (card || slotFilled) && <GlassSheen sheenRef={sheenRef} maskId={ids.glass} />}
 
           {/* Shape-following drop shadow, OUTSIDE the glass: the glass root
               clips its own overflow, and a box-shadow there can only ever be a
