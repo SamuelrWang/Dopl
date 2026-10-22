@@ -15,8 +15,9 @@ interface Props {
  * full — the same two cards the core picks for the container it was handed
  * (`plans.ts › plansForKind`, 2026-09-08): a STANDARD workspace gets Starter
  * (free, 100 credits per member per month) and Team ($8.99 per seat, 5,000 per
- * member) plus the legacy-Pro note; a `kind='home'` container gets Free
- * (500 credits a month) and **Pro** ($8.99 a month, 5,000). The copy lives in
+ * member) plus the legacy-Pro note; a `kind='home'` container gets Free,
+ * **Pro** and **Max** (2026-10-22). A live Pro ⇄ Max switch is a plain API call
+ * (`/api/billing/change-plan`) and runs here unchanged. The copy lives in
  * the shared core and this file adds no words of its own about plans. Only the
  * two Stripe-shaped actions differ, because the packaged CSP
  * (`script-src 'self'`, `connect-src 'none'`) refuses Stripe and all origins:
@@ -58,7 +59,7 @@ export function BillingPane({ workspaceSegment, workspaceId, role }: Props) {
       workspaceId={workspaceId}
       // The chosen plan rides to the browser, so the billing page opens on
       // that checkout instead of re-asking (`features/billing/url.ts`). ⚠ The
-      // plan is `team` OR `pro` since 2026-09-08 and `billingPath` already
+      // plan is `team`, `pro` or `max` (2026-09-08 / 10-22); `billingPath`
       // takes the union — the segment is whichever container's settings are
       // open, which is the container the core offered that plan for.
       onUpgrade={(plan) => openInBrowser(billingPath(workspaceSegment, plan))}

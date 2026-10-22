@@ -44,10 +44,9 @@ const { PricingContent } = await import("./pricing-content");
 const { PERSONAL_MONTHLY_CREDITS, SEAT_MONTHLY_CREDITS } = await import(
   "@/features/billing/credits"
 );
-const { planNumber } = await import("@/features/billing/plans");
-const { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } = await import(
-  "@/features/billing/prices"
-);
+const { MAX_PLAN_NAME, planNumber } = await import("@/features/billing/plans");
+const { formatMoney, launchOfferFor, MAX_PRICE, PRO_PRICE, TEAM_SEAT_PRICE } =
+  await import("@/features/billing/prices");
 const { billingPath } = await import("@/features/billing/url");
 const { WEB_POST_AUTH_LANDING } = await import("@/shared/lib/url/post-auth-landing");
 
@@ -99,16 +98,23 @@ describe("the two products", () => {
     expect(markup).toContain("Workspaces");
   });
 
-  it("gives each group two cards and no more", () => {
-    // Four cards total, two per group — never one four-column list.
-    expect(markup.match(/class="lp-plan(?: lp-plan--popular)?"/g)?.length).toBe(4);
+  it("gives Personal three cards and Workspaces two — never one five-column list", () => {
+    expect(markup.match(/class="lp-plan(?: lp-plan--popular)?"/g)?.length).toBe(5);
     expect(markup.split('<div class="lp-plan-group">').length - 1).toBe(2);
+    const cards = (scope: string) =>
+      scope.match(/class="lp-plan(?: lp-plan--popular)?"/g)?.length;
+    expect(cards(group(markup, "Personal"))).toBe(3);
+    expect(cards(group(markup, "Workspaces"))).toBe(2);
+    // The three-card grid is a modifier, so Workspaces keeps two full columns.
+    expect(group(markup, "Personal")).toContain('class="lp-plans lp-plans--3"');
+    expect(group(markup, "Workspaces")).toContain('class="lp-plans"');
   });
 
-  it("puts Free and Pro under Personal", () => {
+  it("puts Free, Pro and Max under Personal", () => {
     const personal = group(markup, "Personal");
     expect(personal).toContain(">Free<");
     expect(personal).toContain(">Pro<");
+    expect(personal).toContain(`>${MAX_PLAN_NAME}<`);
     // 🔒 The workspace plans never leak into this group: `team` on a personal
     // container answers 400 `PLAN_NOT_FOR_CONTAINER`.
     expect(personal).not.toContain("Starter");
@@ -121,6 +127,7 @@ describe("the two products", () => {
     expect(workspaces).toContain(">Starter<");
     expect(workspaces).toContain(">Team<");
     expect(workspaces).not.toContain(">Pro<");
+    expect(workspaces).not.toContain(`>${MAX_PLAN_NAME}<`);
   });
 
   it("still refuses to sell the retired Solo plan anywhere", () => {
@@ -130,14 +137,20 @@ describe("the two products", () => {
     expect(markup).not.toContain("Just you");
   });
 
-  it("gives each group its own two-plan comparison table", () => {
-    // 🔒 Two 3-cell tables, not one 5-cell table. `.lp-compare-table` has
-    // `min-width: 560px` inside its own `overflow-x: auto` scroller, so three
-    // cells fit and the PAGE never scrolls sideways; five would put the reader
-    // on a horizontal drag to reach the last price.
-    for (const title of ["Personal", "Workspaces"]) {
-      const header = group(paint(), title).split("<tbody>")[0];
-      expect(header.match(/<th scope="col"/g)?.length).toBe(3);
+  it("gives each group its own comparison table, one column per card", () => {
+    // 🔒 Two tables (4 + 3 cells), not one 6-cell table. `.lp-compare-table`
+    // has `min-width: 560px` inside its own `overflow-x: auto` scroller, so the
+    // PAGE never scrolls sideways.
+    const cols = (title: string) =>
+      group(paint(), title).split("<tbody>")[0].match(/<th scope="col"/g)?.length;
+    expect(cols("Personal")).toBe(4);
+    expect(cols("Workspaces")).toBe(3);
+    // Every body row carries one cell per plan — a short row would pair a
+    // figure with the wrong card.
+    for (const [title, n] of [["Personal", 3], ["Workspaces", 2]] as const) {
+      for (const row of group(paint(), title).split("<tbody>")[1].split("</tr>").slice(0, -1)) {
+        expect(row.match(/<td/g)?.length).toBe(n);
+      }
     }
   });
 });
@@ -152,14 +165,17 @@ describe("the personal numbers, all of them interpolated", () => {
     const row = compareRow(personal(), "Credits");
     expect(row).toContain(planNumber(PERSONAL_MONTHLY_CREDITS.free));
     expect(row).toContain(planNumber(PERSONAL_MONTHLY_CREDITS.pro));
-    expect(row.match(/per month/g)?.length).toBe(2);
+    expect(row).toContain(planNumber(PERSONAL_MONTHLY_CREDITS.max));
+    expect(row.match(/per month/g)?.length).toBe(3);
     expect(row).not.toContain("per member");
   });
 
-  it("prices Pro flat, from the constant", () => {
+  it("prices Pro and Max flat, from the constants — the REAL price, no strike", () => {
     const row = compareRow(personal(), "Price");
     expect(row).toContain("Free");
     expect(row).toContain(formatMoney(PRO_PRICE));
+    expect(row).toContain(formatMoney(MAX_PRICE));
+    expect(row).not.toMatch(/<s[\s>]/);
     expect(row).toContain("/ month");
     expect(row).not.toContain("/ seat");
   });
@@ -171,6 +187,45 @@ describe("the personal numbers, all of them interpolated", () => {
 
   it("has no members row — there is no roster to describe", () => {
     expect(personal()).not.toContain('<th scope="row">Members</th>');
+  });
+});
+
+/**
+ * THE LAUNCH OFFER (2026-10-22, Samuel: "a 50% off badge for Pro and for Power
+ * … show the full price crossed out"). It is bounded by `LAUNCH_PRICE_ENDS`, so
+ * every assertion is conditioned on the same `launchOfferFor` the cards read:
+ * live → badge + strike on Pro and Max; over → neither, anywhere.
+ */
+describe("the launch offer", () => {
+  const markup = paint();
+  const card = (scope: string, name: string) => {
+    const at = scope.indexOf(`>${name}</h3>`);
+    expect(at).toBeGreaterThan(-1);
+    return scope.slice(scope.lastIndexOf('<div class="lp-plan', at), at);
+  };
+
+  it("replaces Popular with N% off on Pro and Max, and strikes the reference price", () => {
+    const personal = group(markup, "Personal");
+    for (const [plan, name] of [["pro", "Pro"], ["max", MAX_PLAN_NAME]] as const) {
+      const offer = launchOfferFor(plan);
+      const after = personal.slice(personal.indexOf(`>${name}</h3>`));
+      const top = card(personal, name);
+      if (offer) {
+        expect(top).toContain(`>${offer.percentOff}% off<`);
+        expect(top).not.toContain(">Popular<");
+        expect(after.split("</div>")[0] + after.split("</div>")[1]).toContain(
+          formatMoney(offer.wasPrice)
+        );
+      } else {
+        expect(top).toContain(">Popular<");
+      }
+    }
+  });
+
+  it("keeps Popular on Team — it has no offer", () => {
+    expect(card(group(markup, "Workspaces"), "Team")).toContain(">Popular<");
+    expect(group(markup, "Workspaces")).not.toContain("% off");
+    expect(group(markup, "Workspaces")).not.toContain("lp-plan-price-was");
   });
 });
 
@@ -233,6 +288,12 @@ describe("the paid CTAs", () => {
     await waitFor(() => expect(button.disabled).toBe(false));
     fireEvent.click(button);
   }
+
+  it("sends Max to the personal billing forward, naming the plan", async () => {
+    nav.user = { id: "u-1" };
+    await clickCta(`Go ${MAX_PLAN_NAME}`);
+    expect(nav.push).toHaveBeenCalledWith("/billing?billing=upgrade&plan=max");
+  });
 
   it("sends Pro to the personal billing forward, naming the plan", async () => {
     nav.user = { id: "u-1" };

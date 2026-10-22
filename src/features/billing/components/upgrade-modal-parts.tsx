@@ -1,6 +1,7 @@
 "use client";
 
-import { formatMoney, TEAM_SEAT_PRICE } from "../prices";
+import { PERSONAL_PLAN_NAMES } from "../plans";
+import { formatMoney, launchOfferFor, TEAM_SEAT_PRICE } from "../prices";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
@@ -137,6 +138,27 @@ export function AddMemberBlocked({
   );
 }
 
+/**
+ * A personal option's price, with the launch strike while it is live
+ * (`prices.ts › launchOfferFor`) — the same bounded offer the plan cards and
+ * /pricing render, read at render time so it drops on its end date.
+ */
+export function PersonalPriceLine({ plan, price }: { plan: string; price: number }) {
+  const offer = launchOfferFor(plan);
+  return (
+    <>
+      {offer && (
+        <s className="mr-1.5 text-caption font-normal text-text-muted">
+          <span className="sr-only">Regular price </span>
+          {formatMoney(offer.wasPrice)}
+        </s>
+      )}
+      {formatMoney(price)}{" "}
+      <span className="text-caption font-normal text-text-muted">/ month</span>
+    </>
+  );
+}
+
 export function PlanOption({
   title,
   priceLine,
@@ -196,7 +218,7 @@ export function AlreadyPaidNote({
     <div className="mt-5">
       <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
         {ent.containerKind === "home"
-          ? "You're already on Pro."
+          ? `You're already on ${PERSONAL_PLAN_NAMES[ent.personalPlan ?? "pro"]}.`
           : `This workspace is already on ${
               ent.isSolo ? "the legacy Pro plan" : "Team"
             }.`}

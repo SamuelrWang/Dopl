@@ -9,12 +9,19 @@ import {
 } from "@/features/billing/components/use-workspace-entitlements";
 import {
   formatMoney,
+  PERSONAL_PLAN_PRICES,
   PRO_PRICE,
   SOLO_PRICE,
   TEAM_SEAT_PRICE,
 } from "@/features/billing/prices";
 import type { WalletKind } from "@/features/billing/credits";
-import { plansForKind } from "@/features/billing/plans";
+import {
+  PERSONAL_PLAN_NAMES,
+  plansForKind,
+  type PersonalPaidPlan,
+} from "@/features/billing/plans";
+import { usePersonalPlanChange } from "@/features/billing/components/use-personal-plan-change";
+import { formatDate } from "@/shared/lib/format-time";
 import { apiRequest, ApiError } from "@/shared/api/api-client";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
@@ -23,7 +30,12 @@ import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { CHIP } from "@/shared/ui/wells";
-import { isLegacySolo, PlanColumn, type CheckoutPlan, type PlanActions } from "./plan-cards";
+import {
+  isLegacySolo,
+  PlanColumn,
+  type CheckoutPlan,
+  type PlanActions,
+} from "./plan-cards";
 import { SettingsPane, SettingsPanel } from "./settings-panel";
 
 export type { CheckoutPlan };
@@ -48,13 +60,14 @@ export interface PlansBillingCoreProps {
 }
 
 /**
- * Plans & Billing — TWO cards, and WHICH TWO depends on the container
+ * Plans & Billing — the cards depend on the container
  * (`plans.ts › plansForKind`, 2026-09-08):
  *
- *   - a STANDARD workspace sells seats — Starter (free, 100 credits per member
- *     per month) and Team ($8.99 per seat per month, 5,000 per member);
+ *   - a STANDARD workspace sells seats — Starter and Team (two cards);
  *   - a `kind='home'` container sells one person their own home space —
- *     Free (500 credits a month) and Pro ($8.99 a month, 5,000).
+ *     Free, Pro and Max (three cards since 2026-10-22). A live Pro or Max
+ *     subscription switches tier IN PLACE (`/api/billing/change-plan`, via
+ *     `usePersonalPlanChange`), never through a second checkout.
  *
  * Every figure is interpolated from `billing/credits.ts` / `billing/prices.ts`
  * — never restated here (plans.ts's G4 rule).
@@ -92,6 +105,21 @@ export function PlansBillingCore({
   const isSuccessReturn = billingReturn === "success";
   const pollOnMount = billingReturn !== null;
   const [finalizing, setFinalizing] = useState(isSuccessReturn);
+  // The Pro ⇄ Max switch reads Stripe for a queued downgrade, so it is asked
+  // only where one can exist: a live personal plan the caller may manage.
+  const personal = usePersonalPlanChange(
+    workspaceId,
+    ent.containerKind === "home" && ent.isPaid && canManage
+  );
+  const planChange = {
+    scheduledPlan: personal.scheduledPlan,
+    effectiveAt: personal.effectiveAt,
+    pending: personal.pending,
+  };
+  async function handleChangePlan(plan: PersonalPaidPlan) {
+    if (await personal.change(plan)) await ent.refresh();
+  }
+  const plans = plansForKind(ent.containerKind);
 
   useEffect(() => {
     if (!pollOnMount) return;
@@ -163,7 +191,7 @@ export function PlansBillingCore({
             {/* ⚠ A home space has no seats to count — naming them here
                 would report a roster the container cannot have. */}
             {ent.containerKind === "home"
-              ? "Welcome to Pro."
+              ? `Welcome to ${PERSONAL_PLAN_NAMES[ent.personalPlan ?? "pro"]}.`
               : `Welcome to Team — ${ent.billableSeats} ${
                   ent.billableSeats === 1 ? "seat" : "seats"
                 } active.`}
@@ -177,7 +205,13 @@ export function PlansBillingCore({
           <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-caption text-warning">
             <div className="font-semibold">Payment past due</div>
             <div className="mt-0.5 text-text-secondary">
-              Your {ent.isPro ? "Pro" : ent.isSolo ? "legacy Pro" : "Team"} plan
+              Your{" "}
+              {ent.personalPlan
+                ? PERSONAL_PLAN_NAMES[ent.personalPlan]
+                : ent.isSolo
+                  ? "legacy Pro"
+                  : "Team"}{" "}
+              plan
               stays active for now. Update your payment method to avoid losing
               paid features.
               {canManage && (
@@ -205,15 +239,23 @@ export function PlansBillingCore({
           onUpgrade={onUpgrade}
           onManage={onManage}
           onSwitchToTeam={handleSwitchToTeam}
+          planChange={planChange}
+          onChangePlan={(plan) => void handleChangePlan(plan)}
         />
 
+        {personal.error && <p className="px-1 text-caption text-danger">{personal.error}</p>}
         {portalError && <p className="px-1 text-caption text-danger">{portalError}</p>}
         {switchError && <p className="px-1 text-caption text-danger">{switchError}</p>}
       </SettingsPanel>
 
       <SettingsPanel id="settings-billing-plans" label="Plans">
-        <div className="grid grid-cols-2 gap-3 max-[900px]:grid-cols-1">
-          {plansForKind(ent.containerKind).map((plan) => (
+        <div
+          className={cn(
+            "grid gap-3 max-[900px]:grid-cols-1",
+            plans.length === 3 ? "grid-cols-3" : "grid-cols-2"
+          )}
+        >
+          {plans.map((plan) => (
             <PlanColumn
               key={plan.id}
               plan={plan}
@@ -222,6 +264,8 @@ export function PlansBillingCore({
               switching={switching}
               onUpgrade={onUpgrade}
               onSwitchToTeam={handleSwitchToTeam}
+              planChange={planChange}
+              onChangePlan={(next) => void handleChangePlan(next)}
             />
           ))}
         </div>
@@ -240,7 +284,9 @@ function creditsLabel(wallet: WalletKind | null): string {
  *  cards under it cannot disagree about which product the reader is on. */
 function planLabel(ent: WorkspaceEntitlements): string {
   if (ent.containerKind === "home") {
-    return ent.isPro ? "Pro plan" : "Free plan";
+    return ent.isPaid && ent.personalPlan
+      ? `${PERSONAL_PLAN_NAMES[ent.personalPlan]} plan`
+      : "Free plan";
   }
   if (ent.isSolo) return "Legacy Pro plan";
   if (ent.isTeam) return "Team plan";
@@ -255,6 +301,7 @@ function BillingSummary({
   onUpgrade,
   onManage,
   onSwitchToTeam,
+  planChange,
 }: PlanActions) {
   // The one branch that decides every line below: a home space is one
   // person's home space, so it has no seats, no roster and no legacy row.
@@ -287,11 +334,24 @@ function BillingSummary({
       </div>
 
       {isHomeSpace ? (
-        ent.isPro && (
-          <div className="mt-3 text-body text-text-primary">
-            <span className="font-semibold">{formatMoney(PRO_PRICE)}</span>{" "}
-            <span className="text-caption text-text-muted">/ month</span>
-          </div>
+        ent.isPaid &&
+        ent.personalPlan && (
+          <>
+            <div className="mt-3 text-body text-text-primary">
+              <span className="font-semibold">
+                {formatMoney(PERSONAL_PLAN_PRICES[ent.personalPlan])}
+              </span>{" "}
+              <span className="text-caption text-text-muted">/ month</span>
+            </div>
+            {/* A queued Max → Pro downgrade: the date it lands, and that the
+                current plan stays until then. "Keep …" lives on the card. */}
+            {planChange.scheduledPlan && planChange.effectiveAt && (
+              <p className="mt-1 text-caption text-text-secondary">
+                Switches to {PERSONAL_PLAN_NAMES[planChange.scheduledPlan]} on{" "}
+                {formatDate(planChange.effectiveAt)}
+              </p>
+            )}
+          </>
         )
       ) : isLegacySolo(ent) ? (
         /* ⚠ A NOTE, NOT A CARD. Pro is retired from sale; the only thing this

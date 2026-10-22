@@ -7,6 +7,7 @@ import {
   type WorkspaceEntitlements,
 } from "@/features/billing/components/use-workspace-entitlements";
 import { useCancelPlan } from "@/features/billing/components/use-billing-account";
+import { PERSONAL_PLAN_NAMES } from "@/features/billing/plans";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { formatDate } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -15,7 +16,7 @@ import { SettingsPanel, SettingsRows } from "./settings-panel";
 
 /**
  * Account → Plan (Samuel, 2026-09-28: the app never says "subscription"): cancel or resume the caller's live subscriptions; renders nothing when
- * none is live. Next-free, so web and desktop mount the same block. Two rows are possible: Pro on
+ * none is live. Next-free, so web and desktop mount the same block. Two rows are possible: Pro or Max on
  * the caller's home space (no `workspaceId`; the server resolves it), and Team / legacy
  * Pro on the open standard workspace for admin/owner only (the route's own floor). The second row
  * is `containerKind === "standard"` only, so one subscription never draws twice.
@@ -57,7 +58,7 @@ export function AccountSubscription({
 }
 
 function planName(ent: WorkspaceEntitlements): string {
-  if (ent.isPro) return "Pro";
+  if (ent.personalPlan) return PERSONAL_PLAN_NAMES[ent.personalPlan];
   if (ent.isSolo) return "Legacy Pro";
   return "Team";
 }

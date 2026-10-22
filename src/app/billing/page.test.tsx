@@ -123,6 +123,17 @@ describe("`?plan=pro` — the home-space forward", () => {
     );
   });
 
+  it("forwards `?plan=max` to the same home space — Max is sold there too (2026-10-22)", async () => {
+    mocks.findSoleOwnedStandardWorkspace.mockResolvedValue({ workspace: ws(), count: 1 });
+    mocks.listMyWorkspacesWithRole.mockResolvedValue([
+      ws(),
+      ws({ id: "ws-home", name: "Home", slug: "home", publicId: "222222222222", kind: "home" }),
+    ]);
+    expect(await outcome({ billing: "upgrade", plan: "max" })).toBe(
+      "REDIRECT:/billing/home-222222222222?billing=upgrade&plan=max"
+    );
+  });
+
   it("OUTRANKS the sole-owned-workspace forward", async () => {
     // ⚠ Otherwise a one-workspace user asking for Pro lands on their
     // WORKSPACE's billing page and the checkout route refuses them there.
