@@ -76,6 +76,35 @@ export function getPersonalMaxPriceId(): string | null {
   return process.env.STRIPE_PERSONAL_MAX_PRICE_ID || null;
 }
 
+/**
+ * Max prices that are no longer SOLD but still BILL (2026-10-22 review): a comma
+ * list in `STRIPE_LEGACY_MAX_PRICE_IDS`, the Max twin of
+ * `STRIPE_LEGACY_SEAT_PRICE_ID`. Repricing Max mints a new price; every live
+ * subscription stays on the old one until it is migrated, and without this list
+ * those paying subscribers would stop being recognised as Max. Unset is normal.
+ */
+export function getLegacyMaxPriceIds(): string[] {
+  return (process.env.STRIPE_LEGACY_MAX_PRICE_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+/** The Stripe `lookup_key` a Max price carries in either mode. A price created
+ *  with it is recognised as Max with no env edit at all — the rotation-proof
+ *  arm. Recognition only; selling always uses `STRIPE_PERSONAL_MAX_PRICE_ID`. */
+export const MAX_PRICE_LOOKUP_KEY = "dopl_personal_max";
+
+/** Is this Stripe price a Max price — current, legacy, or lookup-keyed? */
+export function isPersonalMaxPrice(
+  price: { id?: string | null; lookup_key?: string | null } | null | undefined
+): boolean {
+  if (!price?.id) return false;
+  if (price.lookup_key === MAX_PRICE_LOOKUP_KEY) return true;
+  const current = getPersonalMaxPriceId();
+  return price.id === current || getLegacyMaxPriceIds().includes(price.id);
+}
+
 /** The Stripe price a personal paid plan is sold on, or null when its env is
  *  unset in this environment. */
 export function personalPlanPriceId(plan: "pro" | "max"): string | null {
@@ -217,9 +246,17 @@ export async function createPortalSession(
 ): Promise<string> {
   const stripe = getStripe();
 
+  // 🔒 A NAMED PORTAL CONFIGURATION WHEN ONE IS SET (2026-10-22 review): the
+  // account-default portal can be set to allow plan switching, which would move
+  // a subscription between tiers with none of `plan-change.ts`'s rules (no
+  // period-end downgrade, no claim, no confirm). `STRIPE_PORTAL_CONFIGURATION_ID`
+  // names a configuration with subscription UPDATES disabled; unset keeps the
+  // account default, as before.
+  const configuration = process.env.STRIPE_PORTAL_CONFIGURATION_ID || undefined;
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
     return_url: returnUrl(segment, "return"),
+    ...(configuration ? { configuration } : {}),
   });
 
   return session.url;
@@ -277,6 +314,36 @@ export async function setSubscriptionCancelAtPeriodEnd(
   return stripe.subscriptions.update(stripeSubscriptionId, {
     cancel_at_period_end: cancelAtPeriodEnd,
   });
+}
+
+/**
+ * The subscription as Stripe holds it NOW, for a webhook that would otherwise
+ * trust its event's snapshot (2026-10-22 review). Two of our own writes can land
+ * in one second — release a schedule, then swap the price — and the event
+ * watermark compares whole seconds, so the second event's snapshot could be
+ * dropped as stale while the first one's (older) snapshot stands: the payer on
+ * Max, the row on Pro. Writing what Stripe says at processing time makes the
+ * order of same-second events irrelevant.
+ *
+ * `refetched: false` = the snapshot is used: Stripe is not configured here (tests,
+ * preview), or the subscription no longer exists (`resource_missing`), in which
+ * case the snapshot is the last word there is. Any OTHER failure THROWS — the
+ * webhook answers 500 and Stripe retries, rather than writing a guess.
+ */
+export async function retrieveFreshSubscription(
+  snapshot: Stripe.Subscription
+): Promise<{ subscription: Stripe.Subscription; refetched: boolean }> {
+  if (!isStripeConfigured()) return { subscription: snapshot, refetched: false };
+  try {
+    return {
+      subscription: await getStripe().subscriptions.retrieve(snapshot.id),
+      refetched: true,
+    };
+  } catch (err) {
+    const code = (err as { code?: string } | null)?.code;
+    if (code === "resource_missing") return { subscription: snapshot, refetched: false };
+    throw err;
+  }
 }
 
 export function constructWebhookEvent(

@@ -48,7 +48,7 @@ export const GET = withWorkspaceAuth(
       return toHttpErrorResponse("billing/change-plan", err);
     }
   },
-  { minRole: "admin" }
+  { minRole: "owner" }
 );
 
 export const POST = withWorkspaceAuth(
@@ -62,5 +62,5 @@ export const POST = withWorkspaceAuth(
       return toHttpErrorResponse("billing/change-plan", err);
     }
   },
-  { minRole: "admin", sessionOnly: true }
+  { minRole: "owner", sessionOnly: true }
 );

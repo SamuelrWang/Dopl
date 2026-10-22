@@ -1,5 +1,4 @@
 import "server-only";
-import Stripe from "stripe";
 import { HttpError } from "@/shared/lib/http-error";
 import {
   isPersonalPaidPlan,
@@ -24,10 +23,15 @@ import {
 } from "./stripe-schedule";
 import { derivePlan } from "./webhook-plan";
 import {
+  finalizePersonalPlan,
+  previewUpgradeCharge,
+  upgradeInPlace,
+  type PendingPayment,
+} from "./plan-upgrade";
+import {
   claimWorkspaceCheckout,
   getWorkspaceBilling,
   releaseWorkspaceCheckout,
-  upsertWorkspaceBilling,
   type WorkspaceBillingRow,
 } from "./workspace-billing";
 
@@ -38,12 +42,12 @@ import {
  * this is the in-place move, the personal twin of `upgrade-to-team`.
  *
  * 🔒 **THE RULES, AND WHY THEY ARE ASYMMETRIC.**
- *   • **UPGRADE (Pro → Max) IS IMMEDIATE AND PAID NOW.** The item's price is
- *     swapped with `proration_behavior: "always_invoice"`, so Stripe invoices
- *     the prorated difference on the spot, and with `payment_behavior:
- *     "error_if_incomplete"`, so a declined card FAILS THE CALL and changes
- *     nothing (402 `PAYMENT_FAILED`) — never a Max subscription with an unpaid
- *     upgrade invoice behind it. The billing date does not move.
+ *   • **UPGRADE (Pro → Max) IS IMMEDIATE, STARTS A FRESH PERIOD, AND IS
+ *     APPLIED ONLY WHEN PAID** (`./plan-upgrade.ts`, 2026-10-22 review): the
+ *     billing date resets to today (full Max month minus unused Pro, a fresh
+ *     20,000 counter), 3-D Secure can complete (`requires_action`), and a
+ *     decline changes nothing (402 `PAYMENT_FAILED`). The UI confirms the
+ *     amount first (`previewPersonalUpgrade`).
  *   • **DOWNGRADE (Max → Pro) WAITS FOR THE PERIOD END.** It is a Stripe
  *     subscription schedule (`./stripe-schedule.ts`): Max stays live and fully
  *     entitled until the date the customer already paid through, then the price
@@ -54,11 +58,10 @@ import {
  *   • **Choosing the current plan while a downgrade is queued CANCELS it**
  *     ("Keep Max"): the schedule is released and nothing is billed.
  *
- * 🔒 **CREDITS FOLLOW FROM THE VERDICT, WITH NO TOP-UP CODE.** The personal
+ * 🔒 **CREDITS FOLLOW FROM THE PERIOD, WITH NO TOP-UP CODE.** The personal
  * wallet's counter is keyed on the period START (`credits.ts ›
- * resolveCreditPeriod`), and neither move changes it mid-period: an upgrade
- * keeps the billing date, so the same counter is now measured against 20,000
- * — the payer keeps what they spent and gains the difference at once. A
+ * resolveCreditPeriod`). An upgrade STARTS a new period (anchor reset), so it
+ * opens a fresh counter against 20,000 that the payer bought a full month of; a
  * downgrade lands exactly on the renewal, so the new period opens a fresh
  * counter against 5,000. Nothing here writes a credit row.
  *
@@ -70,6 +73,7 @@ import {
 
 export type PlanChangeOutcome =
   | "upgraded"
+  | "requires_action"
   | "downgrade_scheduled"
   | "downgrade_canceled"
   | "unchanged";
@@ -81,6 +85,9 @@ export interface PlanChangeState extends ScheduledChange {
 
 export interface PlanChangeResult extends PlanChangeState {
   outcome: PlanChangeOutcome;
+  /** Only on `requires_action`: the authentication step for the upgrade's
+   *  invoice. Nothing has changed until it completes. */
+  payment?: PendingPayment;
 }
 
 function livePersonalPlan(
@@ -152,20 +159,11 @@ function assertChangeable(billing: WorkspaceBillingRow | null): {
   return { subscriptionId: billing.stripeSubscriptionId };
 }
 
-function isPaymentFailure(err: unknown): boolean {
-  if (err instanceof Stripe.errors.StripeCardError) return true;
-  return err instanceof Stripe.errors.StripeError && err.statusCode === 402;
-}
-
 /**
- * Move a home space's live subscription to `target`. Serialized per container
- * by the same Postgres claim checkout takes, so a double-click, or a checkout
- * racing a switch, cannot interleave two Stripe writes on one subscription.
+ * Validate a switch and read Stripe's view of it — shared by the switch and the
+ * preview so the two cannot disagree about what is allowed.
  */
-export async function changePersonalPlan(
-  workspaceId: string,
-  target: PersonalPaidPlan
-): Promise<PlanChangeResult> {
+async function resolveSwitch(workspaceId: string, target: PersonalPaidPlan) {
   if (!isStripeConfigured()) {
     refuse(409, "STRIPE_NOT_CONFIGURED", "Billing is not configured in this environment.");
   }
@@ -181,7 +179,51 @@ export async function changePersonalPlan(
     );
   }
   const { subscriptionId } = assertChangeable(await getWorkspaceBilling(workspaceId));
+  return { subscriptionId, targetPriceId };
+}
 
+/** Stripe is the authority on what is billed now — the row may lag a webhook. */
+async function liveSubscription(subscriptionId: string) {
+  const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+  const current = derivePlan(subscription);
+  const item = selectSeatItem(subscription);
+  // Stripe says past_due while the row still says active (a webhook in flight):
+  // the true answer is the dunning one, not "no plan".
+  if (subscription.status === "past_due" && isPersonalPaidPlan(current)) {
+    refuse(
+      409,
+      "PAYMENT_PAST_DUE",
+      "Your last payment didn't go through. Update your payment method, then change plans."
+    );
+  }
+  if (
+    !isPersonalPaidPlan(current) ||
+    !item ||
+    (subscription.status !== "active" && subscription.status !== "trialing")
+  ) {
+    refuse(
+      409,
+      "NO_ACTIVE_SUBSCRIPTION",
+      "There is no active personal plan to change. Choose a plan to subscribe instead."
+    );
+  }
+  if (subscription.cancel_at_period_end) {
+    refuse(409, "PLAN_ENDING", "Your plan is set to end. Resume it first, then change plans.");
+  }
+  return { subscription, current, item };
+}
+
+/**
+ * Move a home space's live subscription to `target`. Serialized per container
+ * by the same Postgres claim checkout and cancel take, so a double-click, or a
+ * checkout or cancel racing a switch, cannot interleave Stripe writes on one
+ * subscription.
+ */
+export async function changePersonalPlan(
+  workspaceId: string,
+  target: PersonalPaidPlan
+): Promise<PlanChangeResult> {
+  const { subscriptionId, targetPriceId } = await resolveSwitch(workspaceId, target);
   if (!(await claimWorkspaceCheckout(workspaceId))) {
     refuse(
       409,
@@ -209,34 +251,18 @@ async function applyChange(
   target: PersonalPaidPlan,
   targetPriceId: string
 ): Promise<PlanChangeResult> {
-  const stripe = getStripe();
-  // Stripe is the authority on what is billed now — the row may lag a webhook.
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  const current = derivePlan(subscription);
-  const item = selectSeatItem(subscription);
-  if (
-    !isPersonalPaidPlan(current) ||
-    !item ||
-    (subscription.status !== "active" && subscription.status !== "trialing")
-  ) {
-    refuse(
-      409,
-      "NO_ACTIVE_SUBSCRIPTION",
-      "There is no active personal plan to change. Choose a plan to subscribe instead."
-    );
-  }
-  if (subscription.cancel_at_period_end) {
-    refuse(409, "PLAN_ENDING", "Your plan is set to end. Resume it first, then change plans.");
-  }
-
+  const { subscription, current, item } = await liveSubscription(subscriptionId);
   const pending = scheduledChangeOf(await liveScheduleFor(subscription));
 
   if (target === current) {
-    if (!pending.scheduledPlan) {
-      return { outcome: "unchanged", plan: current, ...NO_SCHEDULED_CHANGE };
+    if (pending.scheduledPlan) {
+      await releaseScheduleFor(subscription);
+      return { outcome: "downgrade_canceled", plan: current, ...NO_SCHEDULED_CHANGE };
     }
-    await releaseScheduleFor(subscription);
-    return { outcome: "downgrade_canceled", plan: current, ...NO_SCHEDULED_CHANGE };
+    // Also how a 3-D Secure upgrade FINISHES: Stripe applied the pending update
+    // after the first request returned, so stamp the metadata and the row now.
+    await finalizePersonalPlan(workspaceId, subscription, current);
+    return { outcome: "unchanged", plan: current, ...NO_SCHEDULED_CHANGE };
   }
 
   if (personalPlanRank(target) < personalPlanRank(current)) {
@@ -253,36 +279,38 @@ async function applyChange(
     return { outcome: "downgrade_scheduled", plan: current, ...change };
   }
 
-  // UPGRADE. A queued phase would re-apply the old price at its boundary, so
-  // any schedule is released first.
-  await releaseScheduleFor(subscription);
-  try {
-    await stripe.subscriptions.update(subscription.id, {
-      items: [{ id: item.id, price: targetPriceId, quantity: 1 }],
-      proration_behavior: "always_invoice",
-      payment_behavior: "error_if_incomplete",
-      // Same call as the price, so `derivePlan`'s metadata fallback can never
-      // disagree with the price it rode in with.
-      metadata: { ...subscription.metadata, plan: target },
-    });
-  } catch (err) {
-    if (isPaymentFailure(err)) {
-      refuse(
-        402,
-        "PAYMENT_FAILED",
-        `The payment for ${PERSONAL_PLAN_NAMES[target]} didn't go through, so nothing changed. Update your payment method and try again.`
-      );
-    }
-    throw err;
-  }
-  // The answer, not optimism: the authoritative `customer.subscription.updated`
-  // lands seconds later with its own watermark, and this write is idempotent with
-  // it. `lastStripeEventCreated` is NOT stamped here (same rule as
-  // `upgrade-to-team`), or the real event would be dropped as stale.
-  await upsertWorkspaceBilling(workspaceId, {
-    plan: target,
-    stripePriceId: targetPriceId,
-    seatCount: 1,
+  const result = await upgradeInPlace({
+    workspaceId,
+    subscription,
+    item,
+    target,
+    targetPriceId,
   });
+  if (result.outcome === "requires_action") {
+    return {
+      outcome: "requires_action",
+      plan: current,
+      ...NO_SCHEDULED_CHANGE,
+      payment: result.payment,
+    };
+  }
   return { outcome: "upgraded", plan: target, ...NO_SCHEDULED_CHANGE };
 }
+
+/**
+ * What switching UP to `target` would charge today, for the confirm dialog.
+ * Same validation as the switch; 409 `NOT_AN_UPGRADE` for any other direction,
+ * which charges nothing today and needs no amount.
+ */
+export async function previewPersonalUpgrade(
+  workspaceId: string,
+  target: PersonalPaidPlan
+): Promise<{ amountDue: number; currency: string }> {
+  const { subscriptionId, targetPriceId } = await resolveSwitch(workspaceId, target);
+  const { subscription, current, item } = await liveSubscription(subscriptionId);
+  if (personalPlanRank(target) <= personalPlanRank(current)) {
+    refuse(409, "NOT_AN_UPGRADE", "Only an upgrade is charged today.");
+  }
+  return previewUpgradeCharge(subscription, item, targetPriceId);
+}
+

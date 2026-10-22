@@ -43,6 +43,25 @@ vi.mock("@/shared/supabase/admin", () => ({
   }),
 }));
 
+/** Stripe's CURRENT view of a subscription, for the re-fetch cases. Only reached
+ *  when STRIPE_SECRET_KEY is stubbed; every other case uses the event snapshot. */
+const live = vi.hoisted(() => ({
+  subscription: null as unknown,
+  error: null as (Error & { code?: string }) | null,
+  retrieves: 0,
+}));
+vi.mock("stripe", () => ({
+  default: class FakeStripe {
+    subscriptions = {
+      retrieve: async () => {
+        live.retrieves += 1;
+        if (live.error) throw live.error;
+        return live.subscription;
+      },
+    };
+  },
+}));
+
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   getStripeEventWatermark: vi.fn(),
@@ -143,10 +162,29 @@ describe("derivePlan — Max", () => {
     expect(derivePlan(sub("price_personal_pro", { metadata: { plan: "max" } }))).toBe("pro");
   });
 
-  it("🔒 an UNKNOWN price never grants Max while the Max env is set", () => {
-    // Metadata is the fallback for an environment that cannot tell. Here it can,
-    // and the price is not Max — so the stamp is stale or hand-edited.
-    expect(derivePlan(sub("price_mystery", { metadata: { plan: "max" } }))).toBe("team");
+  it("🔒 a REPRICED Max sub stamped `plan: max` stays Max — logged, never dropped to team", () => {
+    // 2026-10-22 review: reading it as `team` would drop a paying subscriber to
+    // the free personal allowance the day Max is repriced.
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(derivePlan(sub("price_old_max", { metadata: { plan: "max" } }))).toBe("max");
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("STRIPE_LEGACY_MAX_PRICE_IDS"));
+    err.mockRestore();
+  });
+
+  it("recognises a LEGACY Max price from STRIPE_LEGACY_MAX_PRICE_IDS with no metadata", () => {
+    vi.stubEnv("STRIPE_LEGACY_MAX_PRICE_IDS", "price_old_max, price_older_max");
+    expect(derivePlan(sub("price_old_max"))).toBe("max");
+    expect(derivePlan(sub("price_older_max"))).toBe("max");
+  });
+
+  it("recognises a Max price by its lookup key, whatever its id", () => {
+    const s = sub("price_rotated");
+    (s.items.data[0].price as unknown as { lookup_key: string }).lookup_key = "dopl_personal_max";
+    expect(derivePlan(s)).toBe("max");
+  });
+
+  it("an unknown price with NO Max stamp still never becomes Max", () => {
+    expect(derivePlan(sub("price_mystery"))).toBe("team");
   });
 
   it("honours `plan: max` metadata only where the Max price is unknowable", () => {
@@ -174,6 +212,62 @@ describe("reportPlanContainerMismatch — Max", () => {
     await reportPlanContainerMismatch("ws-1", "max");
     expect(err.mock.calls[0][0]).toContain("'max'");
     err.mockRestore();
+  });
+});
+
+describe("🔒 the upsert RE-FETCHES the subscription (same-second events, 2026-10-22 review)", () => {
+  beforeEach(() => {
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fake");
+    live.subscription = null;
+    live.error = null;
+    live.retrieves = 0;
+  });
+
+  it("writes what Stripe holds NOW, not the event's snapshot", async () => {
+    // The snapshot says Pro (a release event); Stripe already bills Max.
+    live.subscription = sub("price_personal_max");
+    await processStripeEvent(event("customer.subscription.updated", sub("price_personal_pro")));
+    expect(live.retrieves).toBe(1);
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      PERSONAL,
+      expect.objectContaining({ plan: "max", stripePriceId: "price_personal_max" })
+    );
+  });
+
+  it("APPLIES a same-second event — it carries the latest state, so it must not be dropped", async () => {
+    mockRepo.getStripeEventWatermark.mockResolvedValue(1000);
+    live.subscription = sub("price_personal_max");
+    await processStripeEvent(event("customer.subscription.updated", sub("price_personal_pro"), 1000));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      PERSONAL,
+      expect.objectContaining({ plan: "max", lastStripeEventCreated: 1000 })
+    );
+  });
+
+  it("still drops a strictly OLDER event", async () => {
+    mockRepo.getStripeEventWatermark.mockResolvedValue(2000);
+    live.subscription = sub("price_personal_max");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await processStripeEvent(event("customer.subscription.updated", sub("price_personal_pro"), 1500));
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("🔒 a Stripe outage THROWS (Stripe retries) — it never writes a guess", async () => {
+    live.error = Object.assign(new Error("stripe down"), { code: "api_error" });
+    await expect(
+      processStripeEvent(event("customer.subscription.updated", sub("price_personal_max")))
+    ).rejects.toThrow("stripe down");
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the snapshot for a subscription Stripe no longer has", async () => {
+    live.error = Object.assign(new Error("No such subscription"), { code: "resource_missing" });
+    await processStripeEvent(event("customer.subscription.updated", sub("price_personal_max")));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      PERSONAL,
+      expect.objectContaining({ plan: "max" })
+    );
   });
 });
 

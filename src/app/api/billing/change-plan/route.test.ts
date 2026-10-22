@@ -77,10 +77,12 @@ beforeEach(() => {
 });
 
 describe("the gates", () => {
-  it("GET is admin; POST is admin AND sessionOnly — an agent token may never switch a plan", () => {
+  it("GET is owner; POST is owner AND sessionOnly — money on a home space is the owner's alone", () => {
+    // 2026-10-22 review: `owner`, not `admin` — a home space's only member is its
+    // owner, and a route that moves money there should say so rather than lean on it.
     expect(gates.opts).toEqual([
-      { minRole: "admin" },
-      { minRole: "admin", sessionOnly: true },
+      { minRole: "owner" },
+      { minRole: "owner", sessionOnly: true },
     ]);
   });
 });

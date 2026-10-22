@@ -275,4 +275,18 @@ describe("the portal return", () => {
     );
     expect(captured.portal!.return_url).not.toContain("/canvas");
   });
+
+  it("🔒 passes STRIPE_PORTAL_CONFIGURATION_ID when set — a portal that cannot switch tiers", async () => {
+    vi.stubEnv("STRIPE_PORTAL_CONFIGURATION_ID", "bpc_no_updates");
+    await createPortalSession("cus_123", SEGMENT);
+    expect(captured.portal!.configuration).toBe("bpc_no_updates");
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps the account-default portal when it is unset", async () => {
+    vi.stubEnv("STRIPE_PORTAL_CONFIGURATION_ID", "");
+    await createPortalSession("cus_123", SEGMENT);
+    expect(captured.portal).not.toHaveProperty("configuration");
+    vi.unstubAllEnvs();
+  });
 });

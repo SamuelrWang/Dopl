@@ -25,7 +25,14 @@ const fake = vi.hoisted(() => ({
   schedule: null as Record<string, unknown> | null,
   calls: [] as Array<{ op: string; id?: string; params?: Params }>,
   updateError: null as Error | null,
+  /** When set, a price update comes back PENDING with this PaymentIntent status. */
+  pendingIntent: null as string | null,
+  invoiceStatus: "open",
 }));
+
+/** The anchor reset: an upgrade's new period starts "now" in the fake. */
+const NEW_START = 1_761_000_000;
+const NEW_END = 1_763_600_000;
 
 vi.mock("stripe", () => {
   class StripeError extends Error {
@@ -43,7 +50,51 @@ vi.mock("stripe", () => {
       update: async (id: string, params: Params) => {
         fake.calls.push({ op: "subscriptions.update", id, params });
         if (fake.updateError) throw fake.updateError;
-        return { ...fake.subscription, ...params };
+        const base = fake.subscription as Record<string, unknown>;
+        if (params.items && fake.pendingIntent) {
+          return { ...base, pending_update: { expires_at: 1 }, latest_invoice: "in_1" };
+        }
+        if (params.items) {
+          const [item] = params.items as Array<{ id: string; price: string }>;
+          fake.subscription = {
+            ...base,
+            items: {
+              data: [
+                {
+                  id: item.id,
+                  quantity: 1,
+                  price: { id: item.price },
+                  current_period_start: NEW_START,
+                  current_period_end: NEW_END,
+                },
+              ],
+            },
+          };
+          return fake.subscription;
+        }
+        fake.subscription = { ...base, ...params };
+        return fake.subscription;
+      },
+    };
+    invoices = {
+      retrieve: async (id: string) => ({
+        id,
+        status: fake.invoiceStatus,
+        hosted_invoice_url: "https://invoice.stripe.com/i/1",
+        confirmation_secret: { client_secret: "cs_conf" },
+        payments: {
+          data: [
+            { payment: { payment_intent: { status: fake.pendingIntent, client_secret: "pi_secret" } } },
+          ],
+        },
+      }),
+      voidInvoice: async (id: string) => {
+        fake.calls.push({ op: "invoices.void", id });
+        return { id, status: "void" };
+      },
+      createPreview: async (params: Params) => {
+        fake.calls.push({ op: "invoices.preview", params });
+        return { amount_due: 1601, currency: "usd" };
       },
     };
     subscriptionSchedules = {
@@ -86,7 +137,7 @@ vi.mock("./workspace-billing", () => ({
 
 import Stripe from "stripe";
 import * as repo from "./workspace-billing";
-import { changePersonalPlan, getPlanChangeState } from "./plan-change";
+import { changePersonalPlan, getPlanChangeState, previewPersonalUpgrade } from "./plan-change";
 
 const mockRepo = vi.mocked(repo);
 const HOME = "personal-1";
@@ -112,6 +163,7 @@ function subscription(price: string, over: Record<string, unknown> = {}) {
   return {
     id: "sub_1",
     status: "active",
+    customer: "cus_1",
     cancel_at_period_end: false,
     schedule: null,
     metadata: { workspace_id: HOME, plan: price === "price_max" ? "max" : "pro" },
@@ -154,6 +206,8 @@ beforeEach(() => {
   fake.schedule = null;
   fake.calls = [];
   fake.updateError = null;
+  fake.pendingIntent = null;
+  fake.invoiceStatus = "open";
   mockRepo.getWorkspaceBilling.mockResolvedValue(row());
   mockRepo.claimWorkspaceCheckout.mockResolvedValue(true);
 });
@@ -162,8 +216,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("UPGRADE Pro → Max — immediate, prorated, paid now", () => {
-  it("updates the ONE existing item to the Max price with always_invoice + error_if_incomplete", async () => {
+describe("UPGRADE Pro → Max — a fresh period, paid in full, applied only when paid", () => {
+  it("🔒 resets the billing anchor: always_invoice + billing_cycle_anchor now + pending_if_incomplete", async () => {
     const result = await changePersonalPlan(HOME, "max");
     expect(result).toEqual({
       outcome: "upgraded",
@@ -173,24 +227,92 @@ describe("UPGRADE Pro → Max — immediate, prorated, paid now", () => {
     });
     const update = fake.calls.find((c) => c.op === "subscriptions.update");
     expect(update?.id).toBe("sub_1");
-    expect(update?.params).toMatchObject({
+    expect(update?.params).toEqual({
       items: [{ id: "si_1", price: "price_max", quantity: 1 }],
+      billing_cycle_anchor: "now",
       proration_behavior: "always_invoice",
-      payment_behavior: "error_if_incomplete",
-      metadata: { workspace_id: HOME, plan: "max" },
+      payment_behavior: "pending_if_incomplete",
     });
   });
 
-  it("writes the local row without stamping the event watermark", async () => {
+  it("stamps `plan` metadata in a SECOND call — pending updates cannot carry it", async () => {
+    await changePersonalPlan(HOME, "max");
+    const updates = fake.calls.filter((c) => c.op === "subscriptions.update");
+    expect(updates).toHaveLength(2);
+    expect(updates[1].params).toEqual({ metadata: { workspace_id: HOME, plan: "max" } });
+  });
+
+  it("🔒 writes the NEW period, so the credit counter starts fresh (the late-month exploit)", async () => {
     await changePersonalPlan(HOME, "max");
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(HOME, {
       plan: "max",
       stripePriceId: "price_max",
       seatCount: 1,
+      currentPeriodStart: new Date(NEW_START * 1000).toISOString(),
+      currentPeriodEnd: new Date(NEW_END * 1000).toISOString(),
     });
+    // The old anchor would have kept the old counter key: the new start differs.
+    expect(new Date(NEW_START * 1000).toISOString()).not.toBe(row().currentPeriodStart);
   });
 
-  it("🔒 a declined card is 402 PAYMENT_FAILED and changes NOTHING locally", async () => {
+  it("🔒 3-D Secure: answers requires_action with the client secret and changes NOTHING yet", async () => {
+    fake.pendingIntent = "requires_action";
+    const result = await changePersonalPlan(HOME, "max");
+    expect(result).toMatchObject({
+      outcome: "requires_action",
+      plan: "pro",
+      payment: { clientSecret: "pi_secret", hostedInvoiceUrl: "https://invoice.stripe.com/i/1" },
+    });
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    expect(fake.calls.filter((c) => c.op === "subscriptions.update")).toHaveLength(1);
+  });
+
+  it("🔒 a decline (pending, payment failed) VOIDS the invoice and is 402 — nothing changed", async () => {
+    fake.pendingIntent = "requires_payment_method";
+    await expect(changePersonalPlan(HOME, "max")).rejects.toMatchObject({
+      status: 402,
+      code: "PAYMENT_FAILED",
+    });
+    expect(fake.calls.some((c) => c.op === "invoices.void" && c.id === "in_1")).toBe(true);
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    expect(mockRepo.releaseWorkspaceCheckout).toHaveBeenCalledWith(HOME);
+  });
+
+  it("a retry while a payment is pending re-offers it rather than stacking an update", async () => {
+    fake.subscription = subscription("price_pro", { pending_update: { expires_at: 1 }, latest_invoice: "in_1" });
+    fake.pendingIntent = "requires_action";
+    const result = await changePersonalPlan(HOME, "max");
+    expect(result.outcome).toBe("requires_action");
+    expect(fake.calls.filter((c) => c.op === "subscriptions.update")).toHaveLength(0);
+  });
+
+  it("finishes a 3-D Secure upgrade on the follow-up POST: stamps metadata, writes the row", async () => {
+    // Stripe applied the pending update; the metadata still says pro.
+    fake.subscription = subscription("price_max", { metadata: { workspace_id: HOME, plan: "pro" } });
+    mockRepo.getWorkspaceBilling.mockResolvedValue(row({ plan: "pro" }));
+    const result = await changePersonalPlan(HOME, "max");
+    expect(result.outcome).toBe("unchanged");
+    expect(fake.calls[0]).toMatchObject({ op: "subscriptions.update", params: { metadata: { plan: "max" } } });
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      HOME,
+      expect.objectContaining({ plan: "max", stripePriceId: "price_max" })
+    );
+  });
+
+  it("🔒 a DB refusal AFTER the charge is 500 PLAN_RECORD_FAILED naming the migration", async () => {
+    mockRepo.upsertWorkspaceBilling.mockRejectedValueOnce(new Error("23514 check violation"));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(changePersonalPlan(HOME, "max")).rejects.toMatchObject({
+      status: 500,
+      code: "PLAN_RECORD_FAILED",
+    });
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining("20261121170000_workspace_billing_plan_max.sql")
+    );
+    err.mockRestore();
+  });
+
+  it("🔒 a synchronous card error is 402 PAYMENT_FAILED, still freeing the claim", async () => {
     fake.updateError = new (
       Stripe as unknown as { errors: { StripeCardError: new (m: string, s: number) => Error } }
     ).errors.StripeCardError("Your card was declined.", 402);
@@ -206,6 +328,26 @@ describe("UPGRADE Pro → Max — immediate, prorated, paid now", () => {
     fake.updateError = new Error("stripe down");
     await expect(changePersonalPlan(HOME, "max")).rejects.toThrow("stripe down");
     expect(mockRepo.releaseWorkspaceCheckout).toHaveBeenCalledWith(HOME);
+  });
+});
+
+describe("previewPersonalUpgrade — the confirm dialog's amount", () => {
+  it("previews the EXACT update the switch makes", async () => {
+    expect(await previewPersonalUpgrade(HOME, "max")).toEqual({ amountDue: 1601, currency: "usd" });
+    const preview = fake.calls.find((c) => c.op === "invoices.preview");
+    expect(preview?.params).toEqual({
+      customer: "cus_1",
+      subscription: "sub_1",
+      subscription_details: {
+        items: [{ id: "si_1", price: "price_max", quantity: 1 }],
+        billing_cycle_anchor: "now",
+        proration_behavior: "always_invoice",
+      },
+    });
+  });
+
+  it("409 NOT_AN_UPGRADE for a downgrade or the current plan — nothing is charged today", async () => {
+    await expect(previewPersonalUpgrade(HOME, "pro")).rejects.toMatchObject({ code: "NOT_AN_UPGRADE" });
   });
 });
 
@@ -298,6 +440,12 @@ describe("refusals — before Stripe is written", () => {
     expect(mockRepo.releaseWorkspaceCheckout).not.toHaveBeenCalled();
   });
 
+  it("🔒 Stripe says past_due while the row says active → PAYMENT_PAST_DUE, not 'no plan'", async () => {
+    fake.subscription = subscription("price_pro", { status: "past_due" });
+    await expect(changePersonalPlan(HOME, "max")).rejects.toMatchObject({ code: "PAYMENT_PAST_DUE" });
+    expect(fake.calls).toEqual([]);
+  });
+
   it("re-checks STRIPE, not just the row: an ending sub in Stripe is refused", async () => {
     fake.subscription = subscription("price_pro", { cancel_at_period_end: true });
     await expect(changePersonalPlan(HOME, "max")).rejects.toMatchObject({ code: "PLAN_ENDING" });
@@ -309,7 +457,8 @@ describe("refusals — before Stripe is written", () => {
     fake.subscription = subscription("price_max");
     const result = await changePersonalPlan(HOME, "max");
     expect(result.outcome).toBe("unchanged");
-    expect(fake.calls).toEqual([]);
+    // No price write — only the (already-correct) row is re-recorded.
+    expect(fake.calls.filter((c) => c.op === "subscriptions.update")).toEqual([]);
   });
 });
 

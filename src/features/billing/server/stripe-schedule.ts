@@ -1,7 +1,7 @@
 import "server-only";
 import type Stripe from "stripe";
 import type { PersonalPaidPlan } from "../plans";
-import { getStripe, personalPlanPriceId } from "./stripe";
+import { getStripe, isPersonalMaxPrice, personalPlanPriceId } from "./stripe";
 
 /**
  * Stripe SUBSCRIPTION SCHEDULES — the one mechanism behind a personal downgrade
@@ -49,7 +49,7 @@ function priceIdOf(price: string | Stripe.Price | Stripe.DeletedPrice): string {
 /** Which personal plan a Stripe price id is, by the price envs — or null for a
  *  price this environment cannot name (never guessed). */
 function planForPrice(priceId: string): PersonalPaidPlan | null {
-  if (priceId === personalPlanPriceId("max")) return "max";
+  if (isPersonalMaxPrice({ id: priceId })) return "max";
   if (priceId === personalPlanPriceId("pro")) return "pro";
   return null;
 }

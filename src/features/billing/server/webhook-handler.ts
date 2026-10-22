@@ -3,7 +3,7 @@ import type Stripe from "stripe";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { findSoleOwnedStandardWorkspace } from "@/features/workspaces/server/repository";
 import { isPersonalPaidPlan, type PlanId } from "../plans";
-import { getStripe, selectSeatItem } from "./stripe";
+import { getStripe, retrieveFreshSubscription, selectSeatItem } from "./stripe";
 import { derivePlan, reportPlanContainerMismatch } from "./webhook-plan";
 import { syncSeatQuantity } from "./seats";
 import { getUserByStripeCustomer } from "./subscriptions";
@@ -160,14 +160,25 @@ function subscriptionFields(subscription: Stripe.Subscription, plan: PlanId) {
  * `<=` is deliberate: Stripe stamps `created` at 1s granularity, so `<` lets an
  * `updated(active)` sharing a `deleted` event's second durably resurrect a
  * canceled sub. Dropping a second legitimate update in that second is transient.
+ *
+ * ⚠ `sameSecondApplies` (2026-10-22 review) is for a patch built from a
+ * subscription RE-FETCHED at processing time (`stripe.ts ›
+ * retrieveFreshSubscription`): it is current, not a snapshot, so a same-second
+ * event must not be dropped — it is the one carrying the latest state — and the
+ * resurrection `<=` guards against cannot happen (a canceled sub re-fetches as
+ * canceled).
  */
 async function applyStripeEvent(
   workspaceId: string,
   eventCreated: number,
-  patch: WorkspaceBillingUpsert
+  patch: WorkspaceBillingUpsert,
+  sameSecondApplies = false
 ): Promise<"applied" | "stale"> {
   const watermark = await getStripeEventWatermark(workspaceId);
-  if (watermark !== null && eventCreated <= watermark) {
+  const stale =
+    watermark !== null &&
+    (sameSecondApplies ? eventCreated < watermark : eventCreated <= watermark);
+  if (stale) {
     console.warn(
       `[webhook] Stale event for workspace ${workspaceId} (created=${eventCreated} <= watermark=${watermark}); skipping.`
     );
@@ -181,9 +192,10 @@ async function applyStripeEvent(
 }
 
 async function handleSubscriptionUpsert(
-  subscription: Stripe.Subscription,
+  snapshot: Stripe.Subscription,
   eventCreated: number
 ): Promise<void> {
+  const { subscription, refetched } = await retrieveFreshSubscription(snapshot);
   const workspaceId = await resolveWorkspaceIdForSubscription(subscription);
   if (!workspaceId) return;
   const status = mapStatus(subscription.status);
@@ -207,7 +219,7 @@ async function handleSubscriptionUpsert(
       // also ignores the anchor on a free verdict, healing unreached rows.)
       currentPeriodStart: null,
       currentPeriodEnd: null,
-    });
+    }, refetched);
     return;
   }
 
@@ -228,7 +240,7 @@ async function handleSubscriptionUpsert(
     ...(fields.currentPeriodEnd
       ? { currentPeriodEnd: fields.currentPeriodEnd }
       : {}),
-  });
+  }, refetched);
 }
 
 async function handleCheckoutCompleted(

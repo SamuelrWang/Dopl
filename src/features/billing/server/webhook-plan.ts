@@ -10,6 +10,7 @@ import {
   getLegacySeatPriceId,
   getPersonalMaxPriceId,
   getPersonalProPriceId,
+  isPersonalMaxPrice,
   getSeatPriceId,
   getSoloPriceId,
 } from "./stripe";
@@ -39,16 +40,16 @@ import {
  * The `team` default is deliberately not `pro`: every unstamped unknown-price
  * subscription that can reach it predates `pro`.
  *
- * 🔒 **`max` IS NEVER GRANTED BY METADATA ALONE WHILE ITS PRICE ENV IS SET
- * (2026-10-22).** Metadata is a fallback for an environment that cannot tell —
- * the price envs unset. Where `STRIPE_PERSONAL_MAX_PRICE_ID` IS set and the item
- * price is not it, a `plan: "max"` stamp is stale or hand-edited (a Max → Pro
- * schedule phase that lost its metadata, a dashboard edit), and honouring it
- * would hand the 20,000 allowance to a subscription Stripe bills at another
- * price. Such a sub falls through to the `team` default, which
- * `reportPlanContainerMismatch` logs on a home space and which entitles a home
- * space's wallet to nothing more than the free figure
- * (`credits.ts › personalCreditsForPlan`).
+ * 🔒 **A PAYING MAX SUBSCRIBER IS NEVER DOWNGRADED BY A PRICE-ID MISMATCH
+ * (2026-10-22 review — supersedes "never granted by metadata").** Max is
+ * recognised by `stripe.ts › isPersonalMaxPrice`: the current env price, any id
+ * in `STRIPE_LEGACY_MAX_PRICE_IDS`, or the `dopl_personal_max` lookup key — so a
+ * reprice keeps its old subscribers. A price none of those name but stamped
+ * `plan: "max"` (only our server writes that stamp; the portal cannot) is still
+ * `max`, and is logged at ERROR so the id gets added to the legacy list: reading
+ * it as `team` would drop a paying customer to 500 credits. A stale stamp
+ * cannot reach this arm through a Max → Pro switch — the Pro PRICE is
+ * recognised first, and the schedule's phase re-stamps the metadata.
  */
 export function derivePlan(subscription: Stripe.Subscription): PlanId {
   const priceIds = (subscription.items?.data ?? [])
@@ -57,12 +58,23 @@ export function derivePlan(subscription: Stripe.Subscription): PlanId {
   const has = (priceId: string | null) => !!priceId && priceIds.includes(priceId);
 
   if (has(getSeatPriceId()) || has(getLegacySeatPriceId())) return "team";
-  if (has(getPersonalMaxPriceId())) return "max";
+  if ((subscription.items?.data ?? []).some((item) => isPersonalMaxPrice(item.price))) {
+    return "max";
+  }
   if (has(getPersonalProPriceId())) return "pro";
   if (has(getSoloPriceId())) return "solo";
 
   const metaPlan = subscription.metadata?.plan;
-  if (metaPlan === "max") return getPersonalMaxPriceId() ? "team" : "max";
+  if (metaPlan === "max") {
+    if (getPersonalMaxPriceId()) {
+      console.error(
+        `[webhook] Subscription ${subscription.id} is stamped plan 'max' but bills on ` +
+          `${priceIds.join(", ") || "no price"}, which no Max env names. Honoured as max — ` +
+          `add the id to STRIPE_LEGACY_MAX_PRICE_IDS.`
+      );
+    }
+    return "max";
+  }
   if (metaPlan === "team" || metaPlan === "pro" || metaPlan === "solo") {
     return metaPlan;
   }
