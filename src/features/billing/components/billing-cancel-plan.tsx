@@ -4,6 +4,7 @@ import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { formatDate } from "@/shared/lib/format-time";
+import { PERSONAL_PLAN_NAMES, type PersonalPaidPlan } from "../plans";
 import { useCancelPlan } from "./use-billing-account";
 
 /**
@@ -20,15 +21,29 @@ import { useCancelPlan } from "./use-billing-account";
  * awaited status invalidation, during which this section still renders "Cancel
  * plan" off the old status, and a live button there is a second cancel.
  */
+/**
+ * The sentence a cancel confirmation adds when a Max → Pro switch is queued
+ * (2026-10-22 review): cancelling clears it, and resuming does not bring it
+ * back (`server/billing-account-service.ts › cancelReleasingSchedule`).
+ */
+export function queuedSwitchCancelNote(scheduledPlan: PersonalPaidPlan | null): string {
+  return scheduledPlan
+    ? `\nThis also cancels your switch to ${PERSONAL_PLAN_NAMES[scheduledPlan]}; if you resume, choose it again.`
+    : "";
+}
+
 export function BillingCancelPlan({
   workspaceId,
   cancelAtPeriodEnd,
   currentPeriodEnd,
+  scheduledPlan = null,
 }: {
   workspaceId: string;
   cancelAtPeriodEnd: boolean;
   /** ISO instant, or null when the webhook never stamped a period end. */
   currentPeriodEnd: string | null;
+  /** A queued Max → Pro switch the cancel would clear. */
+  scheduledPlan?: PersonalPaidPlan | null;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +126,8 @@ export function BillingCancelPlan({
         title="Cancel this plan?"
         description={
           endsOn
-            ? `Paid features stay on until ${endsOn}. After that the workspace reverts to Starter — nothing is deleted, and you can resume any time before then.`
-            : "Paid features stay on until the end of the current period. After that the workspace reverts to Starter — nothing is deleted, and you can resume any time before then."
+            ? `Paid features stay on until ${endsOn}. After that the workspace reverts to Starter — nothing is deleted, and you can resume any time before then.${queuedSwitchCancelNote(scheduledPlan)}`
+            : `Paid features stay on until the end of the current period. After that the workspace reverts to Starter — nothing is deleted, and you can resume any time before then.${queuedSwitchCancelNote(scheduledPlan)}`
         }
         confirmLabel="Cancel plan"
         cancelLabel="Keep plan"

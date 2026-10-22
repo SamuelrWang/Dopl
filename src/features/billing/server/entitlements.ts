@@ -3,6 +3,8 @@ import { HttpError } from "@/shared/lib/http-error";
 import {
   FREE_CHATS_WINDOW_DAYS,
   FREE_MULTI_MEMBER_OBJECT_CAP,
+  isPersonalPaidPlan,
+  type PersonalPaidPlan,
   type PlanId,
   type BillingStatus,
 } from "../plans";
@@ -21,8 +23,9 @@ import {
  * a `kind='home'` one (`../plans.ts › plansForKind`). `solo` is legacy:
  * retired from sale, and every rule below still applies to rows on it.
  *   - team: entitled while active/past_due; seats sync to active members.
- *   - pro: entitled while active/past_due, with NO member condition (F-673).
- *     Home spaces only.
+ *   - pro / max: entitled while active/past_due, with NO member condition
+ *     (F-673). Home spaces only; `max` (2026-10-22) differs from `pro` only in
+ *     its allowance (`../credits.ts`), never in a rule here.
  *   - solo: entitled only while active/past_due AND memberCount === 1; a second
  *     member degrades it to free multi-member rules, which is the backstop that
  *     keeps the object cap unbypassable.
@@ -93,11 +96,11 @@ function paidEntitlement(
   plan: WorkspacePlan,
   status: WorkspaceEntitlements["status"],
   memberCount: number
-): "solo" | "team" | "pro" | null {
+): "solo" | "team" | PersonalPaidPlan | null {
   const live = status === "active" || status === "past_due";
   if (!live) return null;
   if (plan === "team") return "team";
-  if (plan === "pro") return "pro";
+  if (isPersonalPaidPlan(plan)) return plan;
   if (plan === "solo" && memberCount <= SOLO_MAX_MEMBERS) return "solo";
   return null;
 }
@@ -191,13 +194,14 @@ export class EntitlementError extends Error {
  * entry points cannot drift apart. Workspace-agnostic on purpose: callers hold
  * only an id, and `/billing` resolves or asks for a segment on arrival.
  *
- * `plan` names what the caller is being sold and only `"pro"` is sayable
- * (2026-09-08): with it the segment-less `/billing` forwards to the caller's
- * home space, the only place a home-space upsell can land. Typed as the
+ * `plan` names what the caller is being sold and only a personal plan is
+ * sayable (`"pro"` 2026-09-08, `"max"` 2026-10-22): with it the segment-less
+ * `/billing` forwards to the caller's home space, the only place a home-space
+ * upsell can land. Typed as the
  * literal rather than `url.ts`'s `CheckoutPlan`, so this file's correctness is
  * not a question about merge order.
  */
-export function upgradeUrl(plan?: "pro"): string {
+export function upgradeUrl(plan?: PersonalPaidPlan): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
   return billingUrl(appUrl, { intent: "upgrade", plan });
 }
@@ -249,7 +253,7 @@ class MemberLimitError extends HttpError {
  *
  *   * a live legacy SOLO workspace → `SOLO_MEMBER_LIMIT`, with the Team
  *     checkout attached: buying Team is the fix.
- *   * a live PRO home space → `PERSONAL_SINGLE_MEMBER`, with NO
+ *   * a live PRO or MAX home space → `PERSONAL_SINGLE_MEMBER`, with NO
  *     upgrade url: there is nothing to buy and the empty string says so, the
  *     same posture `credits-service.ts › upgradeUrlFor` takes.
  *
@@ -276,7 +280,7 @@ export async function assertCanAddMember(workspaceId: string): Promise<void> {
       upgradeUrl()
     );
   }
-  if (billing?.plan === "pro" && memberCount >= PERSONAL_MAX_MEMBERS) {
+  if (isPersonalPaidPlan(billing?.plan) && memberCount >= PERSONAL_MAX_MEMBERS) {
     throw new MemberLimitError(
       "PERSONAL_SINGLE_MEMBER",
       "This is a personal space. Create a workspace to add members.",

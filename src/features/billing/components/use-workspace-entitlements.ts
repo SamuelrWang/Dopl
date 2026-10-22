@@ -4,9 +4,16 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceKind } from "@/features/workspaces/types";
-import type { PlanId, BillingStatus } from "../plans";
+import { isPersonalPaidPlan, type PlanId, type BillingStatus } from "../plans";
 import { PERSONAL_MONTHLY_CREDITS, type WalletKind } from "../credits";
-import { PRO_PRICE, SOLO_PRICE, TEAM_SEAT_PRICE, formatMoney } from "../prices";
+import {
+  MAX_PRICE,
+  PERSONAL_PLAN_PRICES,
+  PRO_PRICE,
+  SOLO_PRICE,
+  TEAM_SEAT_PRICE,
+  formatMoney,
+} from "../prices";
 
 /**
  * Client mirror of `/api/billing/status` (see `server/entitlements.ts`) — the
@@ -102,7 +109,7 @@ export interface WorkspaceEntitlementsStatus {
  * re-export keeps existing importers and every `vi.mock` of this module working
  * unchanged.
  */
-export { PRO_PRICE, SOLO_PRICE, TEAM_SEAT_PRICE, formatMoney };
+export { MAX_PRICE, PRO_PRICE, SOLO_PRICE, TEAM_SEAT_PRICE, formatMoney };
 
 const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   plan: "free",
@@ -189,10 +196,13 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
 
   const isSolo = data.plan === "solo";
   const isTeam = data.plan === "team";
-  /** The personal paid tier — flat, on the caller's own home container. */
+  /** The personal paid tiers — flat, on the caller's own home container.
+   *  `isMax` since 2026-10-22; `personalPlan` names whichever one it is. */
   const isPro = data.plan === "pro";
+  const isMax = data.plan === "max";
+  const personalPlan = isPersonalPaidPlan(data.plan) ? data.plan : null;
   const isPaid =
-    (isSolo || isTeam || isPro) &&
+    (isSolo || isTeam || personalPlan !== null) &&
     (data.status === "active" || data.status === "past_due");
   const isPastDue = data.status === "past_due";
   const isCapped = data.objectCap !== null;
@@ -200,12 +210,12 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
 
   // Live Stripe quantity when present, else member count (upgrade start).
   const billableSeats = data.seatCount ?? data.memberCount;
-  // Two flat plans and one per-seat one: Solo (legacy) and Pro (personal) are
+  // Three flat plans and one per-seat one: Solo (legacy), Pro and Max (personal) are
   // one price however many rows the container has; Team multiplies. A free
   // container projects a Team upgrade's cost, meaningful only on a standard
   // workspace — personal surfaces render `PRO_PRICE` directly, never this.
-  const monthlyTotal = isPro
-    ? PRO_PRICE
+  const monthlyTotal = personalPlan
+    ? PERSONAL_PLAN_PRICES[personalPlan]
     : isSolo
       ? SOLO_PRICE
       : billableSeats * TEAM_SEAT_PRICE;
@@ -216,6 +226,8 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
     isSolo,
     isTeam,
     isPro,
+    isMax,
+    personalPlan,
     isPastDue,
     isCapped,
     overCap,

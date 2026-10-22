@@ -1,6 +1,9 @@
 "use client";
 
-import { formatMoney, TEAM_SEAT_PRICE } from "../prices";
+import { PERSONAL_PLAN_NAMES } from "../plans";
+import { formatMoney, launchOfferFor, MAX_PRICE, TEAM_SEAT_PRICE } from "../prices";
+import { useUpgradeConfirm } from "./upgrade-confirm-dialog";
+import { usePersonalPlanChange } from "./use-personal-plan-change";
 import { useWorkspaceEntitlements } from "./use-workspace-entitlements";
 
 /**
@@ -137,6 +140,27 @@ export function AddMemberBlocked({
   );
 }
 
+/**
+ * A personal option's price, with the launch strike while it is live
+ * (`prices.ts › launchOfferFor`) — the same bounded offer the plan cards and
+ * /pricing render, read at render time so it drops on its end date.
+ */
+export function PersonalPriceLine({ plan, price }: { plan: string; price: number }) {
+  const offer = launchOfferFor(plan);
+  return (
+    <>
+      {offer && (
+        <s className="mr-1.5 text-caption font-normal text-text-muted">
+          <span className="sr-only">Regular price </span>
+          {formatMoney(offer.wasPrice)}
+        </s>
+      )}
+      {formatMoney(price)}{" "}
+      <span className="text-caption font-normal text-text-muted">/ month</span>
+    </>
+  );
+}
+
 export function PlanOption({
   title,
   priceLine,
@@ -187,21 +211,53 @@ export function PlanOption({
  */
 export function AlreadyPaidNote({
   ent,
+  workspaceId,
   onClose,
 }: {
   ent: Ent;
+  workspaceId?: string;
   onClose: () => void;
 }) {
+  // A live, healthy PRO home space has one more tier to buy (2026-10-22
+  // review): offer it in place — the same confirmed switch the plan cards use.
+  const canGoMax =
+    ent.containerKind === "home" &&
+    ent.personalPlan === "pro" &&
+    !ent.isPastDue &&
+    !ent.cancelAtPeriodEnd;
   return (
     <div className="mt-5">
+      {canGoMax && <MaxUpsell workspaceId={workspaceId} onDone={onClose} />}
       <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
         {ent.containerKind === "home"
-          ? "You're already on Pro."
+          ? `You're already on ${PERSONAL_PLAN_NAMES[ent.personalPlan ?? "pro"]}.`
           : `This workspace is already on ${
               ent.isSolo ? "the legacy Pro plan" : "Team"
             }.`}
       </p>
       <CloseButton onClose={onClose} />
+    </div>
+  );
+}
+
+function MaxUpsell({ workspaceId, onDone }: { workspaceId?: string; onDone: () => void }) {
+  const change = usePersonalPlanChange(workspaceId, true);
+  const confirm = useUpgradeConfirm(change, onDone);
+  return (
+    <div className="mb-3">
+      <PlanOption
+        title={PERSONAL_PLAN_NAMES.max}
+        priceLine={<PersonalPriceLine plan="max" price={MAX_PRICE} />}
+        pitch="The biggest credit allowance. Your new plan starts today."
+        cta={confirm.loading || change.pending ? "Checking…" : `Upgrade to ${PERSONAL_PLAN_NAMES.max}`}
+        highlight
+        canManageBilling
+        disabled={confirm.loading || change.pending}
+        onSelect={() => void confirm.request("max")}
+      />
+      {change.error && <p className="mt-2 text-caption text-danger">{change.error}</p>}
+      {change.notice && <p className="mt-2 text-caption text-text-secondary">{change.notice}</p>}
+      {confirm.dialog}
     </div>
   );
 }

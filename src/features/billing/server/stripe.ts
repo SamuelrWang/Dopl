@@ -66,6 +66,59 @@ export function getPersonalProPriceId(): string | null {
 }
 
 /**
+ * Flat personal Max price — $24.99/month on a `kind='home'` container
+ * (2026-10-22). Null when unset, and every SELLING path fails closed on that
+ * with an error naming `STRIPE_PERSONAL_MAX_PRICE_ID` — Max is never minted on
+ * another line's price. Recognition (`derivePlan`) treats unset as
+ * "inconclusive", exactly like the other price envs.
+ */
+export function getPersonalMaxPriceId(): string | null {
+  return process.env.STRIPE_PERSONAL_MAX_PRICE_ID || null;
+}
+
+/**
+ * Max prices that are no longer SOLD but still BILL (2026-10-22 review): a comma
+ * list in `STRIPE_LEGACY_MAX_PRICE_IDS`, the Max twin of
+ * `STRIPE_LEGACY_SEAT_PRICE_ID`. Repricing Max mints a new price; every live
+ * subscription stays on the old one until it is migrated, and without this list
+ * those paying subscribers would stop being recognised as Max. Unset is normal.
+ */
+export function getLegacyMaxPriceIds(): string[] {
+  return (process.env.STRIPE_LEGACY_MAX_PRICE_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+/** The Stripe `lookup_key` a Max price carries in either mode. A price created
+ *  with it is recognised as Max with no env edit at all — the rotation-proof
+ *  arm. Recognition only; selling always uses `STRIPE_PERSONAL_MAX_PRICE_ID`. */
+export const MAX_PRICE_LOOKUP_KEY = "dopl_personal_max";
+
+/** Is this Stripe price a Max price — current, legacy, or lookup-keyed? */
+export function isPersonalMaxPrice(
+  price: { id?: string | null; lookup_key?: string | null } | null | undefined
+): boolean {
+  if (!price?.id) return false;
+  if (price.lookup_key === MAX_PRICE_LOOKUP_KEY) return true;
+  const current = getPersonalMaxPriceId();
+  return price.id === current || getLegacyMaxPriceIds().includes(price.id);
+}
+
+/** The Stripe price a personal paid plan is sold on, or null when its env is
+ *  unset in this environment. */
+export function personalPlanPriceId(plan: "pro" | "max"): string | null {
+  return plan === "max" ? getPersonalMaxPriceId() : getPersonalProPriceId();
+}
+
+/** The env var behind `personalPlanPriceId(plan)` — for the fail-closed error. */
+export function personalPlanPriceEnv(plan: "pro" | "max"): string {
+  return plan === "max"
+    ? "STRIPE_PERSONAL_MAX_PRICE_ID"
+    : "STRIPE_PERSONAL_PRO_PRICE_ID";
+}
+
+/**
  * The previous per-seat Team price ($7.99), recognition only and optional.
  * Nothing mints against it, but a subscription whose price this env does not name
  * falls through `selectSeatItem` to `items[0]` and out of `derivePlan`'s price arm
@@ -93,6 +146,7 @@ export function selectSeatItem(
   for (const priceId of [
     getSeatPriceId(),
     getLegacySeatPriceId(),
+    getPersonalMaxPriceId(),
     getPersonalProPriceId(),
     getSoloPriceId(),
   ]) {
@@ -108,13 +162,14 @@ export interface WorkspaceCheckoutArgs {
    *  caller's `kind='home'` container for `pro`. Same column either way, which
    *  is why personal Pro needs no second Stripe pipeline. */
   workspaceId: string;
-  /** `"team"` or `"pro"` (2026-09-08). The retired Solo plan cannot be minted:
+  /** `"team"`, `"pro"` (2026-09-08) or `"max"` (2026-10-22). The retired Solo
+   *  plan cannot be minted:
    *  `POST /api/billing/checkout` answers 400 `PLAN_RETIRED`, and
    *  `PLAN_NOT_FOR_CONTAINER` when a plan meets the wrong container kind. This
    *  narrowing is the second lock. */
-  plan: "team" | "pro";
-  /** Team seat quantity (= active member count). Ignored for `pro`, which is flat
-   *  at quantity 1. */
+  plan: "team" | "pro" | "max";
+  /** Team seat quantity (= active member count). Ignored for `pro` and `max`,
+   *  which are flat at quantity 1. */
   quantity: number;
   email: string;
   stripeCustomerId?: string | null;
@@ -126,7 +181,8 @@ export interface WorkspaceCheckoutArgs {
 /**
  * Container-scoped subscription checkout: `team` buys `STRIPE_PRO_SEAT_PRICE_ID`
  * at `max(1, quantity)` seats (env name predates the Team rename), `pro` buys
- * `STRIPE_PERSONAL_PRO_PRICE_ID` at quantity 1.
+ * `STRIPE_PERSONAL_PRO_PRICE_ID` and `max` `STRIPE_PERSONAL_MAX_PRICE_ID`, both
+ * at quantity 1.
  *
  * Stamps `{ workspace_id, plan }` into both session and subscription metadata so
  * the webhook can route the subscription back and derive the plan even where the
@@ -145,17 +201,17 @@ export async function createWorkspaceCheckoutSession(
 ): Promise<string> {
   const stripe = getStripe();
 
-  const priceId =
-    args.plan === "pro" ? getPersonalProPriceId() : getSeatPriceId();
+  const personal = args.plan === "team" ? null : args.plan;
+  const priceId = personal ? personalPlanPriceId(personal) : getSeatPriceId();
   if (!priceId) {
     throw new Error(
-      args.plan === "pro"
-        ? "Personal Pro price not configured. Set STRIPE_PERSONAL_PRO_PRICE_ID in env."
+      personal
+        ? `Personal ${personal} price not configured. Set ${personalPlanPriceEnv(personal)} in env.`
         : "Per-seat Team price not configured. Set STRIPE_PRO_SEAT_PRICE_ID in env."
     );
   }
 
-  const quantity = args.plan === "pro" ? 1 : Math.max(1, args.quantity);
+  const quantity = personal ? 1 : Math.max(1, args.quantity);
   const metadata = { workspace_id: args.workspaceId, plan: args.plan };
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     ui_mode: "elements",
@@ -190,9 +246,17 @@ export async function createPortalSession(
 ): Promise<string> {
   const stripe = getStripe();
 
+  // 🔒 A NAMED PORTAL CONFIGURATION WHEN ONE IS SET (2026-10-22 review): the
+  // account-default portal can be set to allow plan switching, which would move
+  // a subscription between tiers with none of `plan-change.ts`'s rules (no
+  // period-end downgrade, no claim, no confirm). `STRIPE_PORTAL_CONFIGURATION_ID`
+  // names a configuration with subscription UPDATES disabled; unset keeps the
+  // account default, as before.
+  const configuration = process.env.STRIPE_PORTAL_CONFIGURATION_ID || undefined;
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
     return_url: returnUrl(segment, "return"),
+    ...(configuration ? { configuration } : {}),
   });
 
   return session.url;
@@ -250,6 +314,36 @@ export async function setSubscriptionCancelAtPeriodEnd(
   return stripe.subscriptions.update(stripeSubscriptionId, {
     cancel_at_period_end: cancelAtPeriodEnd,
   });
+}
+
+/**
+ * The subscription as Stripe holds it NOW, for a webhook that would otherwise
+ * trust its event's snapshot (2026-10-22 review). Two of our own writes can land
+ * in one second — release a schedule, then swap the price — and the event
+ * watermark compares whole seconds, so the second event's snapshot could be
+ * dropped as stale while the first one's (older) snapshot stands: the payer on
+ * Max, the row on Pro. Writing what Stripe says at processing time makes the
+ * order of same-second events irrelevant.
+ *
+ * `refetched: false` = the snapshot is used: Stripe is not configured here (tests,
+ * preview), or the subscription no longer exists (`resource_missing`), in which
+ * case the snapshot is the last word there is. Any OTHER failure THROWS — the
+ * webhook answers 500 and Stripe retries, rather than writing a guess.
+ */
+export async function retrieveFreshSubscription(
+  snapshot: Stripe.Subscription
+): Promise<{ subscription: Stripe.Subscription; refetched: boolean }> {
+  if (!isStripeConfigured()) return { subscription: snapshot, refetched: false };
+  try {
+    return {
+      subscription: await getStripe().subscriptions.retrieve(snapshot.id),
+      refetched: true,
+    };
+  } catch (err) {
+    const code = (err as { code?: string } | null)?.code;
+    if (code === "resource_missing") return { subscription: snapshot, refetched: false };
+    throw err;
+  }
 }
 
 export function constructWebhookEvent(

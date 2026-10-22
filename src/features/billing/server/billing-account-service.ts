@@ -8,14 +8,27 @@ import {
   type InvoiceStatus,
   type PaymentMethodDto,
 } from "../billing-account";
+import { isPersonalPaidPlan, type PersonalPaidPlan } from "../plans";
 import {
   getDefaultPaymentMethod,
+  getStripe,
   isStripeConfigured,
   listCustomerInvoices,
+  personalPlanPriceId,
+  selectSeatItem,
   setSubscriptionCancelAtPeriodEnd,
 } from "./stripe";
 import {
+  liveScheduleFor,
+  releaseScheduleFor,
+  scheduledChangeOf,
+  scheduleSwitchAtPeriodEnd,
+} from "./stripe-schedule";
+import { derivePlan } from "./webhook-plan";
+import {
+  claimWorkspaceCheckout,
   getWorkspaceBilling,
+  releaseWorkspaceCheckout,
   upsertWorkspaceBilling,
   type WorkspaceBillingRow,
 } from "./workspace-billing";
@@ -130,17 +143,87 @@ export async function setWorkspaceCancelAtPeriodEnd(
     );
   }
 
-  await setSubscriptionCancelAtPeriodEnd(
-    billing.stripeSubscriptionId,
-    cancelAtPeriodEnd
-  );
-  await upsertWorkspaceBilling(workspaceId, { cancelAtPeriodEnd });
+  // 🔒 THE SAME CLAIM CHECKOUT AND `/change-plan` TAKE (2026-10-22 review), so a
+  // cancel cannot interleave its Stripe writes with a tier switch on the same
+  // subscription.
+  if (!(await claimWorkspaceCheckout(workspaceId))) {
+    throw new HttpError(
+      409,
+      "PLAN_CHANGE_IN_PROGRESS",
+      "A billing change is already in progress. Wait a moment and try again."
+    );
+  }
+  try {
+    let cleared: PersonalPaidPlan | null = null;
+    if (cancelAtPeriodEnd) {
+      cleared = await cancelReleasingSchedule(billing.stripeSubscriptionId);
+    } else {
+      await setSubscriptionCancelAtPeriodEnd(billing.stripeSubscriptionId, false);
+    }
+    await upsertWorkspaceBilling(workspaceId, { cancelAtPeriodEnd });
+    return {
+      cancelAtPeriodEnd,
+      // Already stamped by the webhook that opened the subscription; re-deriving
+      // from the update response would fork the sub-level/item-level fallback in
+      // `webhook-handler.ts › subscriptionFields`.
+      currentPeriodEnd: billing.currentPeriodEnd,
+      ...(cleared ? { clearedScheduledPlan: cleared } : {}),
+    };
+  } finally {
+    try {
+      await releaseWorkspaceCheckout(workspaceId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[billing/cancel] Failed to release the claim for ${workspaceId}: ${message}`);
+    }
+  }
+}
 
-  return {
-    cancelAtPeriodEnd,
-    // Already stamped by the webhook that opened the subscription; re-deriving
-    // from the update response would fork the sub-level/item-level fallback in
-    // `webhook-handler.ts › subscriptionFields`.
-    currentPeriodEnd: billing.currentPeriodEnd,
-  };
+/**
+ * ⚠ A CANCEL SUPERSEDES A QUEUED MAX → PRO DOWNGRADE (2026-10-22). Stripe refuses
+ * a cancelation edit on a schedule-managed subscription, so the schedule is
+ * released first — and if the cancel itself then FAILS, the downgrade is queued
+ * again, so a failed click leaves the subscription as it found it. Returns the
+ * plan of the switch it cleared (the UI says resuming does not restore it).
+ */
+async function cancelReleasingSchedule(
+  subscriptionId: string
+): Promise<PersonalPaidPlan | null> {
+  const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+  const queued = scheduledChangeOf(await liveScheduleFor(subscription)).scheduledPlan;
+  const released = await releaseScheduleFor(subscription);
+  try {
+    await setSubscriptionCancelAtPeriodEnd(subscriptionId, true);
+  } catch (err) {
+    if (released && queued) await restoreQueuedSwitch(subscription, queued);
+    throw err;
+  }
+  return released ? queued : null;
+}
+
+async function restoreQueuedSwitch(
+  subscription: Stripe.Subscription,
+  queued: PersonalPaidPlan
+): Promise<void> {
+  const item = selectSeatItem(subscription);
+  const current = derivePlan(subscription);
+  const targetPriceId = personalPlanPriceId(queued);
+  try {
+    if (!item || !targetPriceId || !isPersonalPaidPlan(current)) {
+      throw new Error("subscription no longer has a personal plan item");
+    }
+    await scheduleSwitchAtPeriodEnd({
+      subscription: { ...subscription, schedule: null },
+      item,
+      currentPlan: current,
+      targetPlan: queued,
+      targetPriceId,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[billing/cancel] Cancel failed after releasing the queued switch to ${queued} ` +
+        `on ${subscription.id}, and it could not be re-queued: ${message}`
+    );
+  }
 }

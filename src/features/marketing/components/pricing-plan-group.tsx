@@ -1,23 +1,49 @@
+import { useEffect, useState } from "react";
 import type { PlanDef } from "@/features/billing/plans";
-import { formatMoney, TEAM_SEAT_PRICE } from "@/features/billing/prices";
+import {
+  formatMoney,
+  launchOfferFor,
+  TEAM_SEAT_PRICE,
+  type LaunchOffer,
+} from "@/features/billing/prices";
+
+/**
+ * The launch offer, decided IN THE BROWSER after mount (2026-10-22 review).
+ * `/pricing` is prerendered at build time, so an offer computed during render
+ * is frozen into the HTML: after `LAUNCH_PRICE_ENDS` the static page would keep
+ * the badge until the next deploy, and the client's own answer would then
+ * disagree with it (a hydration mismatch). The server paint carries no badge
+ * and no strike; the client adds them while the offer is live.
+ */
+export function useLaunchOffer(planId: string): LaunchOffer | null {
+  const [offer, setOffer] = useState<LaunchOffer | null>(null);
+  useEffect(() => {
+    setOffer(launchOfferFor(planId));
+  }, [planId]);
+  return offer;
+}
 
 /**
  * One /pricing product group: its plan cards and its own comparison table.
  * Split out of pricing-content.tsx (500-line cap); that file owns the data,
  * the auth/billing reads and the CTA handlers, this one only renders.
+ *
+ * N plans per group since 2026-10-22 (Personal = Free / Pro / Max, three; the
+ * Workspaces group keeps two): a comparison row carries one cell PER PLAN, in
+ * the group's card order, so a column cannot be paired with the wrong card.
  */
 
 export type CompareCell = { main: string; sub?: string };
-export type CompareRow = { label: string; left: CompareCell; right: CompareCell };
+export type CompareRow = { label: string; cells: CompareCell[] };
 
 export interface GroupProps {
   title: string;
   plans: ReadonlyArray<PlanDef>;
   summary: Record<string, string>;
   rows: CompareRow[];
-  /** CTA on this group's PAID card. */
-  subscribeLabel: string;
-  onSubscribe: () => void;
+  /** CTA label on one of this group's PAID cards, by plan id. */
+  subscribeLabel: (planId: string) => string;
+  onSubscribe: (planId: string) => void;
   authChecked: boolean;
   onGetStarted: () => void;
   /** Live-subscription reflection — WORKSPACES ONLY (see the status read). */
@@ -29,35 +55,48 @@ export interface GroupProps {
 
 /** One product: its cards and its own comparison table. */
 export function PlanGroup(props: GroupProps) {
-  const [freePlan, paidPlan] = props.plans;
   return (
     <div className="lp-plan-group">
       <h2 className="lp-plan-group-title">{props.title}</h2>
-      <div className="lp-plans">
+      <div className={`lp-plans${props.plans.length === 3 ? " lp-plans--3" : ""}`}>
         {props.plans.map((plan) => (
           <PlanCard key={plan.id} plan={plan} {...props} />
         ))}
       </div>
-      <ComparisonTable
-        rows={props.rows}
-        left={freePlan?.name ?? ""}
-        right={paidPlan?.name ?? ""}
-      />
+      <ComparisonTable rows={props.rows} plans={props.plans} />
     </div>
   );
 }
 
 function PlanCard({ plan, ...group }: GroupProps & { plan: PlanDef }) {
   const popular = plan.id !== "free";
+  // ⚠ "50% off" REPLACES "Popular" on Pro and Max (Samuel, 2026-10-22), and
+  // only while `prices.ts › launchOfferFor` says the bounded launch offer is
+  // live — read at render, so it drops on its end date with no deploy. Team has
+  // no offer and keeps "Popular".
+  const offer = useLaunchOffer(plan.id);
+  // No "Popular" on a card that HAS a launch reference price, even before the
+  // client has decided — the badge would flash "Popular" then swap.
+  const offerable = plan.id === "pro" || plan.id === "max";
 
   return (
     <div className={`lp-plan${popular ? " lp-plan--popular" : ""}`}>
       <div className="lp-plan-top">
-        {popular && <span className="lp-plan-badge">Popular</span>}
+        {offer ? (
+          <span className="lp-plan-badge">{offer.percentOff}% off</span>
+        ) : (
+          popular && !offerable && <span className="lp-plan-badge">Popular</span>
+        )}
       </div>
 
       <h3 className="lp-plan-name">{plan.name}</h3>
       <div className="lp-plan-price">
+        {offer && (
+          <s className="lp-plan-price-was">
+            <span className="sr-only">Regular price </span>
+            {formatMoney(offer.wasPrice)}
+          </s>
+        )}
         <span className="lp-plan-price-figure">{plan.priceMonthly}</span>
         {plan.priceNote && (
           <span className="lp-plan-price-note">{plan.priceNote}</span>
@@ -130,22 +169,20 @@ function PlanCardCta({ plan, ...group }: GroupProps & { plan: PlanDef }) {
     <button
       type="button"
       className="lp-btn lp-btn--3d lp-plan-cta"
-      onClick={group.onSubscribe}
+      onClick={() => group.onSubscribe(plan.id)}
       disabled={!group.authChecked}
     >
-      {group.subscribeLabel}
+      {group.subscribeLabel(plan.id)}
     </button>
   );
 }
 
 function ComparisonTable({
   rows,
-  left,
-  right,
+  plans,
 }: {
   rows: CompareRow[];
-  left: string;
-  right: string;
+  plans: ReadonlyArray<PlanDef>;
 }) {
   return (
     <div className="lp-compare">
@@ -158,18 +195,28 @@ function ComparisonTable({
               <th scope="col">
                 <span className="lp-compare-caption">Compare plans</span>
               </th>
-              <th scope="col">{left}</th>
-              <th scope="col" className="lp-compare-col--popular">
-                {right}
-              </th>
+              {plans.map((plan) => (
+                <th
+                  key={plan.id}
+                  scope="col"
+                  className={plan.id !== "free" ? "lp-compare-col--popular" : undefined}
+                >
+                  {plan.name}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.label}>
                 <th scope="row">{row.label}</th>
-                <CompareValue cell={row.left} />
-                <CompareValue cell={row.right} popular />
+                {plans.map((plan, i) => (
+                  <CompareValue
+                    key={plan.id}
+                    cell={row.cells[i] ?? { main: "" }}
+                    popular={plan.id !== "free"}
+                  />
+                ))}
               </tr>
             ))}
           </tbody>

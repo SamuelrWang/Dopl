@@ -20,6 +20,7 @@ import type { WorkspaceBillingPlan } from "./workspace-billing";
 const MIGRATIONS = resolve(process.cwd(), "supabase", "migrations");
 const NAME = "20260930130000_workspace_billing_plan_pro.sql";
 const TAXONOMY_V2 = "20260719000000_workspace_billing_plan_taxonomy_v2.sql";
+const MAX_SUCCESSOR = "20261121170000_workspace_billing_plan_max.sql";
 const read = (f: string) => readFileSync(resolve(MIGRATIONS, f), "utf8");
 
 const raw = read(NAME);
@@ -53,10 +54,12 @@ describe("the CHECK", () => {
     expect(sql).toContain("CHECK (plan IN ('free', 'solo', 'team', 'pro'))");
   });
 
-  it("🔒 the CHECK's value set EQUALS the TypeScript taxonomy", () => {
-    // The drift this file exists to catch, in both directions: a value the CHECK
-    // lacks is a webhook `23514` that retries forever; a value the union lacks is a
-    // row every reader casts into a type that cannot hold it.
+  it("🔒 the CHECK's value set is the TypeScript taxonomy minus `max`", () => {
+    // ⚠ SUPERSEDED 2026-10-22: `20261121170000_workspace_billing_plan_max.sql`
+    // re-states this constraint with a fifth value, and THAT file's suite
+    // (`workspace-billing-plan-max-schema.test.ts`) now owns the equality with
+    // `PlanId`. This one pins that the historical file admitted exactly the
+    // taxonomy as it then stood, so a replay up to here is the four-value set.
     const inCheck = [
       ...sql.matchAll(/CHECK \(plan IN \(([^)]*)\)\)/g),
     ][0]?.[1]
@@ -64,22 +67,24 @@ describe("the CHECK", () => {
       .map((v) => v.trim().replace(/'/g, ""));
     expect(inCheck?.slice().sort()).toEqual(["free", "pro", "solo", "team"]);
 
-    // The two unions, spelled out — `satisfies` makes each an exhaustiveness
-    // error rather than a stale list if `PlanId` grows.
+    // `satisfies` keeps each an exhaustiveness error if `PlanId` grows again.
     const planIds = {
       free: 1,
       solo: 1,
       team: 1,
       pro: 1,
+      max: 1,
     } satisfies Record<PlanId, number>;
     const rowPlans = {
       free: 1,
       solo: 1,
       team: 1,
       pro: 1,
+      max: 1,
     } satisfies Record<WorkspaceBillingPlan, number>;
-    expect(Object.keys(planIds).sort()).toEqual(inCheck?.slice().sort());
-    expect(Object.keys(rowPlans).sort()).toEqual(inCheck?.slice().sort());
+    const withoutMax = (keys: string[]) => keys.filter((k) => k !== "max").sort();
+    expect(withoutMax(Object.keys(planIds))).toEqual(inCheck?.slice().sort());
+    expect(withoutMax(Object.keys(rowPlans))).toEqual(inCheck?.slice().sort());
   });
 
   it("changes NOTHING else — no data migration, no rename, no new column", () => {
@@ -139,7 +144,11 @@ describe("ordering", () => {
     // widens — checked over every later file, not over an allow-list of names
     // (and not by asserting this is the newest migration, which only holds while
     // the branch is alone).
-    const later = files.filter((f) => f.slice(0, 14) > "20260930130000");
+    // The ONE sanctioned successor is the Max widening, which owns its own
+    // suite (`workspace-billing-plan-max-schema.test.ts`) and the same rule.
+    const later = files.filter(
+      (f) => f.slice(0, 14) > "20260930130000" && f !== MAX_SUCCESSOR
+    );
     for (const name of later) {
       // A COMMENT ON the column documents it and re-states no CHECK.
       const laterSql = strip(read(name)).replace(/COMMENT ON[\s\S]*?';/g, "");

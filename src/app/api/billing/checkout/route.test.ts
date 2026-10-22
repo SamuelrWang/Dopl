@@ -71,6 +71,10 @@ vi.mock("@/shared/auth/with-workspace-auth", () => ({
 vi.mock("@/features/billing/server/stripe", () => ({
   createWorkspaceCheckoutSession: vi.fn(async () => "cs_test_secret"),
   createPortalSession: vi.fn(async () => "https://billing.stripe.com/p/s_1"),
+  personalPlanPriceId: vi.fn((plan: string) => `price_${plan}`),
+  personalPlanPriceEnv: vi.fn((plan: string) =>
+    plan === "max" ? "STRIPE_PERSONAL_MAX_PRICE_ID" : "STRIPE_PERSONAL_PRO_PRICE_ID"
+  ),
 }));
 
 vi.mock("@/features/billing/server/workspace-billing", () => ({
@@ -141,6 +145,7 @@ beforeEach(() => {
   mockStripe.createPortalSession.mockResolvedValue(
     "https://billing.stripe.com/p/s_1"
   );
+  mockStripe.personalPlanPriceId.mockImplementation((plan) => `price_${plan}`);
   profile.row = { email: "payer@acme.test" };
   AUTH.workspaceKind = "standard";
   AUTH.workspaceId = "ws-1";
@@ -273,6 +278,64 @@ describe("🔒 which CONTAINER may buy which plan", () => {
     expect((await call({ plan: "team" })).status).toBe(400);
     expect((await call({ plan: "pro" })).status).toBe(400);
     expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("sells Max on a home space, flat at quantity 1 (2026-10-22)", async () => {
+    asContainer("home");
+    const res = await call({ plan: "max" });
+    expect(res.status).toBe(200);
+    expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "personal-1", plan: "max", quantity: 1 })
+    );
+    expect(mockRepo.countActiveMembers).not.toHaveBeenCalled();
+  });
+
+  it("400s PLAN_NOT_FOR_CONTAINER for Max on a standard or link container, and mints nothing", async () => {
+    const res = await call({ plan: "max" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("PLAN_NOT_FOR_CONTAINER");
+    expect(body.message).toContain("Max is for your personal space");
+    asContainer("link", "link-1");
+    expect((await call({ plan: "max" })).status).toBe(400);
+    expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("🔒 FAILS CLOSED with 503 PRICE_NOT_CONFIGURED when the Max price env is unset", async () => {
+    asContainer("home");
+    mockStripe.personalPlanPriceId.mockImplementation((plan) =>
+      plan === "max" ? null : `price_${plan}`
+    );
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await call({ plan: "max" });
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toBe("PRICE_NOT_CONFIGURED");
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining("STRIPE_PERSONAL_MAX_PRICE_ID")
+    );
+    // ⚠ Never a Pro session in Max's place, and the claim is still freed.
+    expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
+    expect(mockRepo.releaseWorkspaceCheckout).toHaveBeenCalledWith("personal-1");
+    // Pro is unaffected by Max's missing env.
+    expect((await call({ plan: "pro" })).status).toBe(200);
+    err.mockRestore();
+  });
+
+  it("409s Max checkout on a home space already paying for Pro — the switch is change-plan", async () => {
+    asContainer("home");
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ workspaceId: "personal-1", plan: "pro", seatCount: 1 })
+    );
+    expect((await call({ plan: "max" })).status).toBe(409);
+    expect(mockStripe.createWorkspaceCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("treats an unrecognised plan string as ABSENT, never as Max", async () => {
+    asContainer("home");
+    expect((await call({ plan: "MAX" })).status).toBe(200);
+    expect(mockStripe.createWorkspaceCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({ plan: "pro" })
+    );
   });
 
   it("answers an ABSENT plan from the container: Pro on personal", async () => {

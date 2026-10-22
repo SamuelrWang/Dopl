@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
-import { formatMoney, PRO_PRICE, TEAM_SEAT_PRICE } from "@/features/billing/prices";
+import {
+  formatMoney,
+  PERSONAL_PLAN_PRICES,
+  TEAM_SEAT_PRICE,
+} from "@/features/billing/prices";
+import { isPersonalPaidPlan, PERSONAL_PLAN_NAMES } from "@/features/billing/plans";
 import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
 import { useBillingPortal } from "@/features/billing/components/use-billing-portal";
 import type { Role } from "@/features/workspaces/types";
@@ -15,8 +20,8 @@ import styles from "../settings-modal.module.css";
  * pane for Stripe embedded checkout in place, and redirect this tab to the
  * Stripe-hosted portal.
  *
- * ⚠ CHECKOUT SELLS TWO PLANS SINCE 2026-09-08 — `team` on a standard workspace,
- * `pro` on a home space (`features/billing/url.ts › CheckoutPlan`) — so
+ * ⚠ CHECKOUT SELLS THREE PLANS — `team` on a standard workspace, `pro`
+ * (2026-09-08) and `max` (2026-10-22) on a home space (`features/billing/url.ts › CheckoutPlan`) — so
  * the confirmation line above the card form branches on the PLAN IT WAS HANDED,
  * never on the container: the plan is what the session will be created for.
  * Prices and seat counts are interpolated, never restated.
@@ -72,11 +77,12 @@ export function PlansBilling({
           ← Back to plans
         </button>
         <h2 className={styles.paneTitle}>
-          Upgrade to {checkoutPlan === "pro" ? "Pro" : "Team"}
+          Upgrade to{" "}
+          {isPersonalPaidPlan(checkoutPlan) ? PERSONAL_PLAN_NAMES[checkoutPlan] : "Team"}
         </h2>
         <p className="mb-4 text-caption text-text-secondary">
-          {checkoutPlan === "pro"
-            ? `${formatMoney(PRO_PRICE)} / month`
+          {isPersonalPaidPlan(checkoutPlan)
+            ? `${formatMoney(PERSONAL_PLAN_PRICES[checkoutPlan])} / month`
             : `${ent.billableSeats} ${
                 ent.billableSeats === 1 ? "seat" : "seats"
               } · ${formatMoney(ent.billableSeats * TEAM_SEAT_PRICE)} / month`}

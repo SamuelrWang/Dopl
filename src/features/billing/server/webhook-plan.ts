@@ -5,10 +5,12 @@ import {
   isStandardWorkspace,
   type WorkspaceKind,
 } from "@/features/workspaces/types";
-import type { PlanId } from "../plans";
+import { isPersonalPaidPlan, type PlanId } from "../plans";
 import {
   getLegacySeatPriceId,
+  getPersonalMaxPriceId,
   getPersonalProPriceId,
+  isPersonalMaxPrice,
   getSeatPriceId,
   getSoloPriceId,
 } from "./stripe";
@@ -28,13 +30,26 @@ import {
  * The arms, in the order they are asked:
  *   • CURRENT per-seat Team price, or the LEGACY $7.99 seat price → `team`: a
  *     legacy seat sub is a Team sub, its price moved and its plan did not.
- *   • Personal Pro price → `pro` (2026-09-08).
+ *   • Personal Max price → `max` (2026-10-22), then personal Pro → `pro`
+ *     (2026-09-08). Max is asked first only because a sub mid-swap could in
+ *     principle carry both lines, and the bigger tier is the one being sold.
  *   • Flat Solo price → `solo`. Legacy-only (2026-09-07, spec A6), but every
  *     live Solo sub still sends events here and dropping the arm would re-plan a
  *     paying Solo workspace as Team on its next invoice event.
  *
  * The `team` default is deliberately not `pro`: every unstamped unknown-price
  * subscription that can reach it predates `pro`.
+ *
+ * 🔒 **A PAYING MAX SUBSCRIBER IS NEVER DOWNGRADED BY A PRICE-ID MISMATCH
+ * (2026-10-22 review — supersedes "never granted by metadata").** Max is
+ * recognised by `stripe.ts › isPersonalMaxPrice`: the current env price, any id
+ * in `STRIPE_LEGACY_MAX_PRICE_IDS`, or the `dopl_personal_max` lookup key — so a
+ * reprice keeps its old subscribers. A price none of those name but stamped
+ * `plan: "max"` (only our server writes that stamp; the portal cannot) is still
+ * `max`, and is logged at ERROR so the id gets added to the legacy list: reading
+ * it as `team` would drop a paying customer to 500 credits. A stale stamp
+ * cannot reach this arm through a Max → Pro switch — the Pro PRICE is
+ * recognised first, and the schedule's phase re-stamps the metadata.
  */
 export function derivePlan(subscription: Stripe.Subscription): PlanId {
   const priceIds = (subscription.items?.data ?? [])
@@ -43,10 +58,23 @@ export function derivePlan(subscription: Stripe.Subscription): PlanId {
   const has = (priceId: string | null) => !!priceId && priceIds.includes(priceId);
 
   if (has(getSeatPriceId()) || has(getLegacySeatPriceId())) return "team";
+  if ((subscription.items?.data ?? []).some((item) => isPersonalMaxPrice(item.price))) {
+    return "max";
+  }
   if (has(getPersonalProPriceId())) return "pro";
   if (has(getSoloPriceId())) return "solo";
 
   const metaPlan = subscription.metadata?.plan;
+  if (metaPlan === "max") {
+    if (getPersonalMaxPriceId()) {
+      console.error(
+        `[webhook] Subscription ${subscription.id} is stamped plan 'max' but bills on ` +
+          `${priceIds.join(", ") || "no price"}, which no Max env names. Honoured as max — ` +
+          `add the id to STRIPE_LEGACY_MAX_PRICE_IDS.`
+      );
+    }
+    return "max";
+  }
   if (metaPlan === "team" || metaPlan === "pro" || metaPlan === "solo") {
     return metaPlan;
   }
@@ -54,12 +82,12 @@ export function derivePlan(subscription: Stripe.Subscription): PlanId {
 }
 
 /**
- * Does this plan belong on this container's KIND? `pro` is sold only on a
- * `kind='home'` container and `team` only on a standard workspace
+ * Does this plan belong on this container's KIND? `pro` and `max` are sold only
+ * on a `kind='home'` container and `team` only on a standard workspace
  * (spec §11.1); `solo` and `free` are legacy/absent and constrain nothing.
  */
 function planFitsKind(plan: PlanId, kind: WorkspaceKind | undefined): boolean {
-  if (plan === "pro") return kind === "home";
+  if (isPersonalPaidPlan(plan)) return kind === "home";
   // The positive predicate (§4A, F-295), never `kind !== "home"` — a
   // fourth kind must not become sellable by the act of being named.
   if (plan === "team") return isStandardWorkspace({ kind });
@@ -81,7 +109,7 @@ export async function reportPlanContainerMismatch(
   workspaceId: string,
   plan: PlanId
 ): Promise<void> {
-  if (plan !== "pro" && plan !== "team") return;
+  if (!isPersonalPaidPlan(plan) && plan !== "team") return;
   const workspace = await findWorkspaceById(workspaceId);
   if (!workspace || planFitsKind(plan, workspace.kind)) return;
   console.error(

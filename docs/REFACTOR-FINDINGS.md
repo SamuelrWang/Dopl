@@ -10730,3 +10730,15 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 - Found during: Grok smoke S10 (grok 1.0.52). With the word-joiner guard bypassed in a probe, a `session/prompt` of `/always-approve on` ran as a slash command (no model call, 8 ms turn), and the next `search_replace` — which asks in `default` mode — ran with NO `session/request_permission`. `_x.ai/sessions/changed` kept reporting `yolo: false`, so the readback Dopl relied on as the backstop was blind to it. The PreToolUse hook's `permissionMode` read `bypassPermissions`. With the word joiner, the same text reached the model as chat and the mode stayed `default`.
 - Fix (`d0b70c0f`, with F-777): the word joiner stays (now also in front of leading zero-width/format characters), and the hook's `permissionMode` is the new readback — anything but `default` / `auto` is denied and the session stopped (`safety_mismatch`).
 - Status: RESOLVED.
+
+### F-780 — A Pro wallet that runs out is offered no upgrade, though Max now exists (2026-10-22)
+
+- Location: `src/features/billing/server/credits-service.ts › upgradeUrlFor`, `› upgradeCreditsFor`; `packages/mcp-server/src/tools/respond.ts › creditsExhausted`.
+- Found during: the Max wave. Both functions answer `""` / `0` for ANY paid verdict on the personal wallet, a rule written while Pro was the best personal allowance ("Team and Pro are each the best allowance their wallet has"). Since Max ($24.99, 20,000) a `pro` verdict has a bigger tier above it, so an exhausted Pro payer's MCP refusal carries no link. Not wired in this wave because the refusal SENTENCE is fixed in the MCP package (`"Upgrade to Pro…"`), which cannot import `src/` and ships a committed `dist/`: offering Max needs a plan name on the wire (`CreditConsumeResult`, a new optional field with the §8 fallback) plus a package rebuild.
+- Status: OPEN — product call for Samuel (should a Pro refusal upsell Max?).
+
+### F-781 — Refunds and disputes are not webhook events this app handles (2026-10-22)
+
+- Location: `src/features/billing/server/webhook-handler.ts › dispatch`.
+- Found during: the Max wave's edge-case pass. `dispatch` handles `checkout.session.completed`, `customer.subscription.updated|deleted` and `invoice.payment_failed|succeeded` only. A refund or a lost dispute (`charge.refunded`, `charge.dispute.created|closed`) changes nothing here, so entitlement follows the SUBSCRIPTION's state alone: a refunded Max payment keeps Max until the subscription itself is canceled in Stripe. True for every paid plan, not new with Max — recorded because the wave was asked to cover it.
+- Status: OPEN — the operator path today is "cancel the subscription in Stripe", which the existing `customer.subscription.deleted` arm handles.

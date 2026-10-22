@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   createPortalSession,
   createWorkspaceCheckoutSession,
+  personalPlanPriceEnv,
+  personalPlanPriceId,
 } from "@/features/billing/server/stripe";
 import {
   claimWorkspaceCheckout,
@@ -13,7 +15,13 @@ import {
 } from "@/features/billing/server/workspace-billing";
 import { composeSegment } from "@/shared/lib/url/parse-segment";
 import { isStandardWorkspace } from "@/features/workspaces/types";
-import { PRO_PRICE, TEAM_SEAT_PRICE, formatMoney } from "@/features/billing/prices";
+import { MAX_PRICE, PRO_PRICE, TEAM_SEAT_PRICE, formatMoney } from "@/features/billing/prices";
+import {
+  isPersonalPaidPlan,
+  MAX_PLAN_NAME,
+  PERSONAL_PLAN_NAMES,
+  type PersonalPaidPlan,
+} from "@/features/billing/plans";
 
 /** 400 for a body still asking to buy the retired Solo plan. ⚠ A REFUSAL, not a
  *  silent upgrade: a caller that asked for a $5.99 flat WORKSPACE plan must not
@@ -23,7 +31,7 @@ function planRetired() {
   return NextResponse.json(
     {
       error: "PLAN_RETIRED",
-      message: `The old flat plan is no longer sold. Team is ${formatMoney(TEAM_SEAT_PRICE)} per seat per month; Pro is ${formatMoney(PRO_PRICE)} a month for your personal space.`,
+      message: `The old flat plan is no longer sold. Team is ${formatMoney(TEAM_SEAT_PRICE)} per seat per month; for your personal space, Pro is ${formatMoney(PRO_PRICE)} a month and ${MAX_PLAN_NAME} is ${formatMoney(MAX_PRICE)} a month.`,
     },
     { status: 400 }
   );
@@ -34,27 +42,44 @@ function planRetired() {
  * SURFACE that can sell it, because every caller of this route holds one
  * workspace id and no way to guess the other one.
  */
-function planNotForContainer(plan: "team" | "pro") {
+function planNotForContainer(plan: "team" | PersonalPaidPlan) {
   return NextResponse.json(
     {
       error: "PLAN_NOT_FOR_CONTAINER",
-      message:
-        plan === "pro"
-          ? "Pro is for your personal space; open billing from Home."
-          : "Team is for a workspace.",
+      message: isPersonalPaidPlan(plan)
+        ? `${PERSONAL_PLAN_NAMES[plan]} is for your personal space; open billing from Home.`
+        : "Team is for a workspace.",
     },
     { status: 400 }
+  );
+}
+
+/**
+ * 503 for a personal plan whose Stripe price is not configured in this environment — FAIL
+ * CLOSED, before Stripe is called and before any session exists, and never on another plan's
+ * price (2026-10-22: Max ships ahead of its `STRIPE_PERSONAL_MAX_PRICE_ID`).
+ */
+function priceNotConfigured(plan: PersonalPaidPlan) {
+  console.error(
+    `[checkout] ${personalPlanPriceEnv(plan)} is not set; refusing ${plan} checkout.`
+  );
+  return NextResponse.json(
+    {
+      error: "PRICE_NOT_CONFIGURED",
+      message: `${PERSONAL_PLAN_NAMES[plan]} isn't available yet. Please try again later.`,
+    },
+    { status: 503 }
   );
 }
 
 /** What the body asked for. `retired` is an explicit `solo`; `unknown` is an
  *  absent, unparseable or unrecognized plan, which the CONTAINER then decides
  *  (the desktop Upgrade button POSTs no body at all). */
-type PlanRequest = "team" | "pro" | "retired" | "unknown";
+type PlanRequest = "team" | PersonalPaidPlan | "retired" | "unknown";
 
 /**
- * Plan from an optional JSON body. **Team and Pro are the purchasable plans**
- * (2026-09-08, spec §11); an explicit `"solo"` is REFUSED rather than coerced,
+ * Plan from an optional JSON body. **Team, Pro and Max are the purchasable
+ * plans** (2026-09-08, spec §11; Max 2026-10-22); an explicit `"solo"` is REFUSED rather than coerced,
  * and anything else is `unknown` rather than a plan the caller did not ask for.
  *
  * ⚠ IT DOES NOT DEFAULT TO `team` ANY MORE, and that is the whole edit: a
@@ -65,7 +90,7 @@ async function readPlan(request: NextRequest): Promise<PlanRequest> {
   try {
     const body = (await request.json()) as { plan?: unknown };
     if (body?.plan === "solo") return "retired";
-    if (body?.plan === "team" || body?.plan === "pro") return body.plan;
+    if (body?.plan === "team" || isPersonalPaidPlan(body?.plan)) return body.plan;
   } catch {
   }
   return "unknown";
@@ -79,10 +104,14 @@ function checkoutConflict(portalUrl: string | null) {
 }
 
 /**
- * Subscription checkout for the active CONTAINER. Admin/owner only. Two plans, and the container's
- * KIND decides which one it may buy (2026-09-08, spec §11):
+ * Subscription checkout for the active CONTAINER. Admin/owner only. The container's KIND decides
+ * which plans it may buy (2026-09-08, spec §11):
  *   • a STANDARD workspace buys `team`, per-seat, quantity = active member count;
- *   • a `kind='home'` container buys `pro`, flat, quantity 1.
+ *   • a `kind='home'` container buys `pro` or `max` (2026-10-22), flat, quantity 1.
+ *
+ * ⚠ CHECKOUT IS FOR A CONTAINER WITH NO LIVE SUBSCRIPTION. Pro → Max and Max → Pro are a change to
+ * the ONE subscription that exists, never a second one: the live-subscription guard below answers
+ * 409, and the in-place switch is `POST /api/billing/change-plan` (`server/plan-change.ts`).
  *
  * 🔒 **THE KIND FENCE IS HERE, AND HERE IS THE ONLY PLACE IT IS FREE.** Both plans are $8.99, both
  * live on `workspace_billing` keyed by container id, and nothing downstream can tell them apart
@@ -141,10 +170,13 @@ export const POST = withWorkspaceAuth(
       // must not become sellable by the act of being named.
       const plan =
         requested === "unknown" ? (isStandard ? "team" : "pro") : requested;
-      if (plan === "pro" && workspaceKind !== "home") {
-        return planNotForContainer("pro");
+      if (isPersonalPaidPlan(plan) && workspaceKind !== "home") {
+        return planNotForContainer(plan);
       }
       if (plan === "team" && !isStandard) return planNotForContainer("team");
+      if (isPersonalPaidPlan(plan) && !personalPlanPriceId(plan)) {
+        return priceNotConfigured(plan);
+      }
 
       const { data: profile } = await supabaseAdmin()
         .from("profiles")
@@ -158,9 +190,9 @@ export const POST = withWorkspaceAuth(
         );
       }
 
-      // ⚠ Pro is flat — a home space has exactly one member, so the
+      // ⚠ Pro and Max are flat — a home space has exactly one member, so the
       // count is both known and unbillable. Skipping it also skips a read.
-      const quantity = plan === "pro" ? 1 : await countActiveMembers(workspaceId);
+      const quantity = isPersonalPaidPlan(plan) ? 1 : await countActiveMembers(workspaceId);
 
       // Re-read billing before minting: a webhook may have persisted a subscription id since
       // the first read. Defense-in-depth behind the claim.
