@@ -11,10 +11,17 @@
    reference: the root wears `.lp`, so `--ink` / `--muted` / `--line` /
    `--grotesk` are `marketing.css`'s own, and the pieces are its classes set
    in the markup — `.lp-connect-term` windows with gray dots and a plain
-   "Copy" (connect-section.tsx), the glass-over-photo `.lp-connect-band`
-   (once: "Connect an agent"), `.lp-mp-card` hairline cards and
+   "Copy" (connect-section.tsx; marketing.css marks that window SHARED),
+   `.lp-mp-card` hairline cards and
    `.lp-mp-chrome` (multiplayer-card.tsx), `.lp-ctl-*` eyebrow, check list
    and secondary link (control-section.tsx), `.lp-btn--3d-light` pills.
+   ⚠ Anything the landing may rewrite (the connect window's rows, the
+   ontology composer pill) is COPIED here under `docs-*` names with a
+   pointer, never worn by class — the 2026-10-22 connect rewrite deleted
+   the `.lp-connect-tab*` rules this page wore and broke it.
+   TYPE (Samuel, 2026-10-22: "headers should be bolded... black"): headings
+   and nav group labels are `--ink` at 600; body is `#161616`; secondary
+   copy is `--docs-soft`; `--muted` is kept for captions, dates and kbd.
    Grayscale only. The few literal grays below are values those sections
    already use (`#161616` body ink, `#f5f5f4` side panel, `#f1f1f0` pill,
    `#f4f4f4` visual well) — marketing's DESIGN-SYSTEM exemption.
@@ -31,6 +38,8 @@ body.legal-active {
 
 .docs {
   --docs-header-h: 112px;
+  /* Secondary copy (descriptions, subtitles): darker than `--muted`. */
+  --docs-soft: #5c5c5c;
   font-size: 14px;
   line-height: 20px;
   color: #161616;
@@ -95,12 +104,12 @@ body.legal-active {
   height: 100%;
   font-size: 14px;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--docs-soft);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 .docs-header-tab:hover { color: var(--ink); }
-.docs-header-tab[data-active] { color: var(--ink); }
+.docs-header-tab[data-active] { color: var(--ink); font-weight: 600; }
 .docs-header-tab[data-active]::after {
   content: "";
   position: absolute;
@@ -201,7 +210,8 @@ body.legal-active {
   padding-left: 16px;
   font-size: 14px;
   line-height: 24px;
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .docs-nav ul {
@@ -226,7 +236,7 @@ body.legal-active {
 }
 .docs-nav-link::-webkit-details-marker { display: none; }
 .docs-nav-link:hover { opacity: 0.55; }
-.docs-nav-link[data-active] { background: #f5f5f4; font-weight: 500; color: var(--ink); opacity: 1; }
+.docs-nav-link[data-active] { background: #f5f5f4; font-weight: 600; color: var(--ink); opacity: 1; }
 
 .docs-nav-chevron {
   margin-left: -6px;
@@ -258,10 +268,10 @@ body.legal-active {
 
 .docs-mobile-nav { display: none; }
 
-/* ── Page head: gray eyebrow, plain dark heading ────────────────────── */
+/* ── Page head: eyebrow, bold black heading ─────────────────────────── */
 .docs-page-head { margin-bottom: 32px; }
 
-.docs .docs-eyebrow { margin: 2px 0 0; line-height: 20px; }
+.docs .docs-eyebrow { margin: 2px 0 0; line-height: 20px; font-weight: 500; color: var(--docs-soft); }
 
 .docs-title-row {
   display: flex;
@@ -273,11 +283,11 @@ body.legal-active {
 
 .docs-title-row h1 {
   margin: 0;
-  font-size: 24px;
-  line-height: 28px;
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  color: #0a0a0a;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 
@@ -285,7 +295,7 @@ body.legal-active {
   margin: 12px 0 0;
   font-size: 16px;
   line-height: 24px;
-  color: var(--muted);
+  color: var(--docs-soft);
 }
 
 .docs-copy { display: flex; align-items: center; }
@@ -298,29 +308,35 @@ body.legal-active {
   margin: 40px 0 16px;
   font-size: 20px;
   line-height: 32px;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: -0.02em;
-  color: #0a0a0a;
+  color: var(--ink);
   scroll-margin-top: calc(var(--docs-header-h) + 24px);
 }
 .docs-prose h3 {
   margin: 28px 0 12px;
   font-size: 16px;
   line-height: 24px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   scroll-margin-top: calc(var(--docs-header-h) + 24px);
 }
 
-.docs-prose a {
+/* Links: ink with a clearly visible underline; hover inks it fully. */
+.docs-prose a,
+.docs-window-prose a {
   color: var(--ink);
+  font-weight: 500;
   text-decoration: underline;
-  text-decoration-color: var(--line);
+  text-decoration-color: rgba(13, 13, 13, 0.4);
+  text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
 }
-.docs-prose a:hover { text-decoration-color: currentColor; }
+.docs-prose a:hover,
+.docs-window-prose a:hover { text-decoration-color: currentColor; text-decoration-thickness: 1.5px; }
 
-.docs-prose strong { font-weight: 500; color: var(--ink); }
+.docs-prose strong { font-weight: 600; color: var(--ink); }
 
 .docs-prose :not(pre) > code {
   padding: 1px 6px;
@@ -339,7 +355,7 @@ body.legal-active {
 .docs-prose ol { list-style: decimal; }
 .docs-prose ol > li { padding-left: 8px; }
 .docs-prose ol > li + li { margin-top: 8px; }
-.docs-prose ol > li::marker { color: var(--muted); }
+.docs-prose ol > li::marker { color: var(--docs-soft); font-weight: 500; }
 
 /* The Control section's check list, at docs size. */
 .docs-prose ul.docs-check-list { padding-left: 0; gap: 12px; margin-bottom: 24px; }
@@ -349,7 +365,7 @@ body.legal-active {
   margin: 22px 0;
   padding-left: 24px;
   border-left: 2px solid var(--line);
-  color: var(--muted);
+  color: var(--docs-soft);
 }
 
 /* ── Cards: the multiplayer card's white hairline shell ─────────────── */
@@ -362,15 +378,16 @@ body.legal-active {
 
 .docs-prose a.docs-card {
   min-height: 158px;
+  font-weight: 400;
   padding: 20px 24px;
   color: var(--ink);
   text-decoration: none;
   transition: border-color 0.15s ease;
 }
 .docs-prose a.docs-card:hover { border-color: #d4d4d4; }
-.docs-card-icon { color: var(--muted); }
-.docs-card-title { margin-top: 24px; font-size: 16px; line-height: 32px; font-weight: 500; letter-spacing: -0.015em; }
-.docs-card-desc { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--muted); }
+.docs-card-icon { color: var(--ink); }
+.docs-card-title { margin-top: 24px; font-size: 16px; line-height: 32px; font-weight: 600; letter-spacing: -0.015em; }
+.docs-card-desc { margin-top: 4px; font-size: 14px; line-height: 20px; color: var(--docs-soft); }
 
 /* ── Steps ──────────────────────────────────────────────────────────── */
 .docs-steps { margin: 24px 0; }
@@ -392,7 +409,7 @@ body.legal-active {
   background: #f1f1f0;
   font-size: 12px;
   line-height: 16px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
 }
 .docs-step-line {
@@ -408,7 +425,7 @@ body.legal-active {
   margin: 12px 0 20px !important;
   font-size: 16px;
   line-height: 20px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
 }
 .docs-step-content > :last-child { margin-bottom: 0; }
@@ -422,6 +439,10 @@ body.legal-active {
 .docs-prose li .docs-window,
 .docs-step-content .docs-window { margin: 12px 0 16px; }
 .docs .docs-window .lp-connect-term-bar { height: 42px; padding: 0 8px 0 16px; }
+/* The landing's #b8b8b8 Copy is too faint on a reading page. */
+.docs .lp-connect-copy { color: var(--muted); }
+.docs .lp-connect-copy:hover,
+.docs .lp-connect-copy[data-copied="true"] { color: var(--ink); }
 .docs-window-left { display: flex; align-items: center; gap: 18px; min-width: 0; }
 .docs-window-tabs { display: flex; gap: 16px; overflow-x: auto; }
 .docs-window-tab {
@@ -447,11 +468,27 @@ body.legal-active {
 .docs-window-prose { font-size: 14px; line-height: 22px; color: #161616; }
 .docs-window-prose a { color: var(--ink); }
 
-/* "Connect an agent": the landing band, sized for the column (no scroll scrub here). */
-.docs .docs-connect-band { height: auto; padding: 28px; margin: 4px 0 20px; border-radius: 18px; }
-.docs .docs-connect-glass-box { width: 100%; }
-.docs .docs-connect-body { height: auto; min-height: 72px; padding: 20px 20px 18px; }
-.docs .docs-connect-hint { height: auto; min-height: 44px; padding: 10px 20px 0; }
+/* "Connect an agent": the landing's `dopl-mcp` window. ⚠ COPIED from
+   marketing.css › `.lp-connect-file` / `.lp-connect-code` / `-comment` /
+   `-row` / `-cmd` / `-str` / `-install` (connect-section.tsx) so a landing
+   rewrite cannot break the docs again — keep the values in step. */
+.docs-mcp-file { padding-right: 8px; font-size: 13.5px; font-weight: 500; letter-spacing: -0.01em; color: var(--docs-soft); }
+.docs-mcp-code { display: flex; flex-direction: column; gap: 16px; padding: 20px 12px 20px 20px; }
+.docs-mcp-comment,
+.docs-mcp-cmd {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.docs-mcp-comment { color: #8c8c8c; font-weight: 600; }
+.docs-mcp-row { display: flex; align-items: flex-start; gap: 10px; }
+.docs-mcp-cmd { flex: 1; min-width: 0; color: #161616; }
+.docs-mcp-str { color: #4d83c4; }
+.docs-prose a.docs-mcp-install { color: inherit; font-weight: inherit; text-decoration-color: currentColor; text-underline-offset: 2px; }
+.docs-prose a.docs-mcp-install:hover { color: #161616; }
 
 /* ── Use-case hero: photo with one white window ─────────────────────── */
 .docs-hero {
@@ -476,8 +513,8 @@ body.legal-active {
   overflow: hidden;
 }
 .docs-hero-label { padding: 12px 16px 0; font-size: 12px; color: var(--muted); }
-.docs-hero-line-strong { padding: 0 16px; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--ink); }
-.docs-hero-line { padding: 0 16px; font-size: 14px; color: var(--muted); }
+.docs-hero-line-strong { padding: 0 16px; font-size: 16px; line-height: 24px; font-weight: 600; color: var(--ink); }
+.docs-hero-line { padding: 0 16px; font-size: 14px; color: var(--docs-soft); }
 
 /* ── API reference: plain mono, no coloured badges ──────────────────── */
 .docs-endpoint {
@@ -516,20 +553,21 @@ body.legal-active {
 }
 .docs-param { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .docs-param:last-child { border-bottom: 0; }
-.docs-param p { margin: 8px 0 0; color: var(--muted); }
+.docs-param p { margin: 8px 0 0; color: var(--docs-soft); }
 .docs-param-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .docs-prose .docs-param-name {
   padding: 0 !important;
   background: none !important;
   font-size: 13.5px !important;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink) !important;
 }
 .docs-chip {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--docs-soft);
 }
+.docs-chip-required { color: var(--ink); font-weight: 600; }
 
 .docs-api-aside {
   position: sticky;
@@ -544,7 +582,7 @@ body.legal-active {
 }
 .docs .docs-api-aside .docs-window { margin: 0 0 24px; }
 .docs-api-aside .docs-window-body { max-height: 320px; }
-.docs-api-title { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+.docs-api-title { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--ink); }
 .docs-aside-inline { display: none; }
 
 /* ── Table ──────────────────────────────────────────────────────────── */
@@ -553,7 +591,7 @@ body.legal-active {
 .docs-table th {
   padding: 8px 12px 8px 0;
   border-bottom: 1px solid var(--line);
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   color: var(--ink);
 }
@@ -575,7 +613,7 @@ body.legal-active {
 .docs-changelog-entry + .docs-changelog-entry { padding-top: 64px; }
 .docs-changelog-date { padding-top: 4px; font-size: 13px; color: var(--muted); }
 .docs-prose .docs-changelog-entry h2 { margin: 0; font-size: 20px; line-height: 28px; }
-.docs-prose .docs-changelog-desc { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+.docs-prose .docs-changelog-desc { margin: 8px 0 0; font-size: 14px; color: var(--docs-soft); }
 .docs-changelog-media { height: 192px; margin-top: 24px; border-radius: 8px; background: #f4f4f4; }
 
 /* ── Feedback, pager, footer ────────────────────────────────────────── */
@@ -586,7 +624,7 @@ body.legal-active {
   gap: 16px;
   margin-top: 80px;
 }
-.docs-feedback p { margin: 0; color: var(--muted); white-space: nowrap; }
+.docs-feedback p { margin: 0; font-weight: 500; color: var(--ink); white-space: nowrap; }
 .docs-feedback-buttons { display: flex; gap: 8px; }
 .docs .docs-feedback-btn { height: 34px; padding: 0 16px; font-size: 14px; }
 
@@ -600,7 +638,7 @@ body.legal-active {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   text-decoration: none;
   transition: opacity 0.15s ease;
@@ -623,33 +661,51 @@ body.legal-active {
   z-index: 10;
   padding: 0 0 24px;
 }
-.docs-ask-box {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+/* The landing's "Direct at any depth" composer pill. ⚠ COPIED from
+   marketing.css › `.lp-ont-composer` / `-composer-text` / `-composer-hint` /
+   `.lp-ont-send` (ontology-command.tsx), scaled up to a real field; the
+   drop is the floating-bar shadow, since it sits over the page. */
+.docs-ask-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 18px;
+  border: 1px solid #ececec;
+  border-radius: 999px;
   background: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 30px rgba(0, 0, 0, 0.06);
+  transition: border-color 0.15s ease;
 }
-.docs-ask-box textarea {
-  display: block;
-  width: 100%;
-  height: 60px;
-  padding: 10px 48px 10px 14px;
+.docs-ask-pill:focus-within { border-color: #d4d4d4; }
+.docs-ask-pill input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
   border: 0;
   outline: none;
-  resize: none;
   background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 14px;
-  line-height: 20px;
 }
-.docs-ask-box textarea::placeholder { color: var(--muted); }
+.docs-ask-pill input::placeholder { color: var(--muted); }
 .docs-ask-send {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #ffffff;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
 }
+.docs-ask-send:disabled { cursor: default; opacity: 0.35; }
+.docs-ask-send:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* ── "On this page" ─────────────────────────────────────────────────── */
 .docs-toc {
@@ -669,7 +725,8 @@ body.legal-active {
   margin: 0;
   font-size: 14px;
   line-height: 32px;
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--ink);
 }
 .docs-toc ul { list-style: none; margin: 12px 0 0; padding: 0; }
 .docs-toc li[data-depth="3"] { padding-left: 16px; }
@@ -707,7 +764,8 @@ body.legal-active {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    color: var(--muted);
+    font-weight: 600;
+    color: var(--ink);
     list-style: none;
   }
   .docs-mobile-nav summary::-webkit-details-marker { display: none; }
@@ -721,5 +779,4 @@ body.legal-active {
   .docs .docs-search-btn { width: 160px; }
   .docs-cards { grid-template-columns: minmax(0, 1fr); }
   .docs-changelog-entry { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .docs .docs-connect-band { padding: 12px; }
 }

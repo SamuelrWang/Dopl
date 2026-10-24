@@ -377,14 +377,15 @@ describe("addressed at a home space", () => {
     expect(markup).not.toContain("billable seat");
   });
 
-  it("sells Free and Pro — never Starter, Team or a seat price", () => {
+  it("sells the personal plans, never Team or a seat price", () => {
     const markup = screen({}, PERSONAL_FREE);
     expect(markup).toContain("Upgrade to Pro");
     expect(markup).toContain(`$${PRO_PRICE.toFixed(2)}`);
     // The two groups are never concatenated: `team` on a home space
     // answers 400 `PLAN_NOT_FOR_CONTAINER`, so offering it would sell a checkout
     // that refuses.
-    expect(markup).not.toContain("Starter");
+    // The personal free plan is also named "Starter" (2026-10-22), so the
+    // workspace leak is caught by Team / seat wording, not that word.
     expect(markup).not.toContain("/ seat / month");
     expect(markup).not.toContain("Upgrade to Team");
   });

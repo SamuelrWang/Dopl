@@ -6,7 +6,7 @@
  * can mount one step without starting the clock, resize fit or scripted cursor.
  */
 
-import { useMemo, useState, type RefObject } from "react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { AgentLaunchControls } from "@/features/channels/components/use-agents-panel";
@@ -41,8 +41,10 @@ import {
   MEMBERS,
   MY_SESSION,
   MY_SESSIONS,
+  PEER_NOTICE,
   PEER_SCOUT,
   PEER_TRIAGE,
+  PEER_WAKE,
   SERVER_SESSIONS,
   WORKSPACE_ID,
 } from "./demo-data";
@@ -55,12 +57,19 @@ import { narrationAt, typedDmAt } from "./demo-narration";
 import { revealBody } from "./typed-reveal";
 import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
-import {
-  DemoAccountRail,
-  DemoChannelList,
-  DemoHomeHeader,
-} from "./demo-home-chrome";
+import { DemoAccountRail } from "./demo-home-chrome";
+// The demo-only redesign of /home's header and channel column (`demo-home-faces.tsx`);
+// `demo-home-chrome.tsx › DemoHomeHeader` / `DemoChannelList` are the product-faithful
+// faces, kept so a revert is these two mounts.
+import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
+import { DemoComposerChips } from "./demo-composer-chips";
+import { identityFace } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
+import { DemoThreadCards } from "./demo-thread-card";
+import { DemoAgentCards, DemoAgentStateRows } from "./demo-agent-card";
+import { DemoAgentViewFaces } from "./demo-agent-view-faces";
+import { DemoStreamBoxes, type StreamFace } from "./demo-stream-boxes";
+import { agentNameHandle } from "@/features/channels/lib/agent-mentions";
 
 /** The composer's writes never fire (the slot is inert), so the gate is a stub. */
 const DEMO_GATE: MutationGate = { begin() {}, end() {} };
@@ -114,6 +123,9 @@ export function DemoScene({
   typedWords?: number;
 }) {
   const [qc] = useState(() => new QueryClient());
+  // Tests mount the scene without the banner's ref; the thread-card swap still needs a pane.
+  const ownPane = useRef<HTMLDivElement>(null);
+  const pane = paneRef ?? ownPane;
   // The typed line is cut in the DATA, so the real transcript renders it as is.
   const messages = useMemo(() => {
     const all = messagesAt(step);
@@ -161,14 +173,15 @@ export function DemoScene({
     const live: typeof MY_SESSIONS = [];
     if (reached(step, "launch-2")) live.push(MY_SESSIONS[0]);
     if (reached(step, "thread-launch-1")) live.push(MY_SESSIONS[1]);
-    if (reached(step, "thread-launch-2")) live.push(MY_SESSIONS[2]);
-    if (reached(step, "thread-launch-3")) live.push(MY_SESSIONS[3]);
     return live;
   }, [step]);
   const peers = useMemo(() => {
     const out = [];
     if (reached(step, "launch-1")) out.push(PEER_TRIAGE);
     if (reached(step, "launch-3")) out.push(PEER_SCOUT);
+    // Grace's and Anthony's coders, on the same beats the planner's launch lines name.
+    if (reached(step, "thread-launch-2")) out.push(PEER_NOTICE);
+    if (reached(step, "thread-launch-3")) out.push(PEER_WAKE);
     return out;
   }, [step]);
   /**
@@ -191,6 +204,17 @@ export function DemoScene({
     [step]
   );
   const homeRows = useMemo(() => homeRowsAt(step), [step]);
+  /** `@handle` → the agent's owner photo + colour, for the demo's received/posted faces. */
+  const streamFaces = useMemo(() => {
+    const out = new Map<string, StreamFace>();
+    const viewerPhoto = index.byId.get(CURRENT_USER_ID)?.avatarUrl ?? null;
+    out.set("you", { photo: viewerPhoto, color: null });
+    for (const [agentId, entry] of AGENT_INDEX) {
+      const handle = agentNameHandle(entry.displayName);
+      if (handle) out.set(handle, identityFace(agentId));
+    }
+    return out;
+  }, [index]);
 
   /**
    * **THE COMPOSER'S LIVE SET** (Samuel, 2026-10-12: show the agents currently working
@@ -225,13 +249,13 @@ export function DemoScene({
           <div className="lp-demo-home antialiased">
             <DemoAccountRail />
             <main className="page-float lp-demo-panel">
-              <DemoHomeHeader />
+              <DemoTopBar viewer={VIEWER} />
               <div className="flex min-h-0 flex-1">
-                <DemoChannelList rows={homeRows} selectedId={HOME_ROW_ID} />
+                <DemoChannelSwitcher rows={homeRows} selectedId={HOME_ROW_ID} />
                 {/* The record pane: a line-bounded card, not an elevation, as on /home.
                     `data-frame-skin` applies the kit's account palette; the pane is
                     the agent view's containing block. */}
-                <div className="lp-demo-record" data-frame-skin ref={paneRef}>
+                <div className="lp-demo-record" data-frame-skin ref={pane}>
                   <ChannelsMessagePane
                     key={`pane-${run}`}
                     channelId={CHANNEL_ID}
@@ -308,6 +332,31 @@ export function DemoScene({
                       }}
                     />
                   </div>
+                  {/* The demo's redesigned thread card, portalled over the product's
+                      (`demo-thread-card.tsx`): the pane itself is unchanged. */}
+                  <DemoThreadCards
+                    paneRef={pane}
+                    rows={rows}
+                    messages={messages}
+                    index={index}
+                    onOpenThread={onOpenThread}
+                  />
+                  <DemoComposerChips paneRef={pane} />
+                  <DemoAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
+                  <DemoAgentViewFaces paneRef={pane} agent={MY_SESSION} onClose={NOOP} />
+                  <DemoAgentCards
+                    paneRef={pane}
+                    sessions={sessions}
+                    peers={peers}
+                    index={index}
+                    openAgent={agentOpen ? agentKey(MY_SESSION) : null}
+                    onOpenAgent={onOpenAgent}
+                  />
+                  <DemoStreamBoxes
+                    paneRef={pane}
+                    faces={streamFaces}
+                    self={identityFace(MY_SESSION.agentId)}
+                  />
                   <DemoAgentView
                     open={agentOpen}
                     agent={MY_SESSION}

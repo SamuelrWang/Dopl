@@ -97,6 +97,36 @@ export function AmbientAudio() {
   const fade = useRef<Fade>({ id: null, timer: null });
   const [playing, setPlaying] = useState(false);
 
+  // Over a dark band (the Devices section, or anything marked `data-lp-dark`)
+  // the toggle takes the dark 3D face: marketing.css › `[data-on-dark]`.
+  useEffect(() => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const b = btn.getBoundingClientRect();
+      const y = b.top + b.height / 2;
+      const x = b.left + b.width / 2;
+      const onDark = Array.from(document.querySelectorAll(".lp-dev, [data-lp-dark]")).some((band) => {
+        const r = band.getBoundingClientRect();
+        return y >= r.top && y <= r.bottom && x >= r.left && x <= r.right;
+      });
+      btn.toggleAttribute("data-on-dark", onDark);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;

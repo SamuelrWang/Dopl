@@ -372,8 +372,6 @@ function ownSession(
 export const MY_SESSIONS: DesktopSessionSummary[] = [
   ownSession(AGENT_IDS.planner, "", 4, 46_000),
   ownSession(AGENT_IDS.teardown, OPEN_THREAD_ID, 2, 38_000),
-  ownSession(AGENT_IDS.notice, OPEN_THREAD_ID, 2, 24_000),
-  ownSession(AGENT_IDS.wake, OPEN_THREAD_ID, 2, 19_000),
 ];
 
 /** The session the cursor opens, and whose private lane the script writes. */
@@ -411,7 +409,7 @@ function peer(
     color: AGENT_COLORS[agentId as keyof typeof AGENT_COLORS],
     state: "working",
     channelName: CHANNEL_NAME,
-    threadTitle: null,
+    threadTitle: threadId === OPEN_THREAD_ID ? OPEN_THREAD.title : null,
     updatedAt: minsAgo(0),
     userId,
   };
@@ -420,6 +418,16 @@ function peer(
 /** The other members' orchestrators. Their coders run on their machines, not ours. */
 export const PEER_TRIAGE = peer(U.grace, AGENT_IDS.triage);
 export const PEER_SCOUT = peer(U.anthony, AGENT_IDS.scout);
+
+/**
+ * **TWO OF THE THREAD'S CODERS ARE OTHER PEOPLE'S** (Samuel, 2026-10-22: "have some of
+ * the agents be not Daniel's agents ... that really demonstrates that you can have
+ * multiple agents with different people talking to each other"). End Notice Check runs on
+ * Grace's machine and Wake Replay Trace on Anthony's, so the thread holds three owners'
+ * agents; only Teardown Order Fix is the viewer's own (`MY_SESSIONS`).
+ */
+export const PEER_NOTICE = peer(U.grace, AGENT_IDS.notice, OPEN_THREAD_ID);
+export const PEER_WAKE = peer(U.anthony, AGENT_IDS.wake, OPEN_THREAD_ID);
 
 /**
  * **THE SERVER'S SESSION PROJECTION, WHICH INCLUDES THE VIEWER'S OWN AGENTS.**
@@ -445,6 +453,6 @@ export const SERVER_SESSIONS: ChannelPeerSession[] = [
   PEER_SCOUT,
   peer(U.samuel, AGENT_IDS.planner),
   peer(U.samuel, AGENT_IDS.teardown, OPEN_THREAD_ID),
-  peer(U.samuel, AGENT_IDS.notice, OPEN_THREAD_ID),
-  peer(U.samuel, AGENT_IDS.wake, OPEN_THREAD_ID),
+  PEER_NOTICE,
+  PEER_WAKE,
 ];

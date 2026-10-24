@@ -202,7 +202,7 @@ describe("the plan list on a HOME space", () => {
   });
 
   it("offers no workspace plan and no seat wording", () => {
-    expect(markup).not.toContain("Starter");
+    // "Starter" is also the personal free plan's name (2026-10-22): check Team / seats.
     expect(markup).not.toContain("Upgrade to Team");
     expect(markup).not.toContain("/ seat / month");
     expect(markup).not.toContain("/seat");

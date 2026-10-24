@@ -2,6 +2,25 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
+   * DEV-ONLY, AND IT IS WHY BROWSER-BACK INTO A DEV PAGE CAME BACK DEAD (F-782,
+   * measured 2026-10-16 on Next 16.2.2; the same code is still in 16.4.2).
+   *
+   * With the default `reactDebugChannel: true`, `next dev` keeps React's debug info OUT
+   * of the HTML and streams it over the HMR WebSocket, keyed by the document's request id
+   * (`self.__next_r`). Hydration waits for that stream to close. The server hands each
+   * id's stream out ONCE (`next/dist/server/dev/debug-channel.js ›
+   * connectReactDebugChannelForHtmlRequest` deletes it, and silently returns for an
+   * unknown id). Browser back/forward re-serves the document from DISK CACHE (dev HTML is
+   * `no-cache`, which history navigation skips; the open HMR socket keeps it out of
+   * bfcache), so the replayed page asks for an id already spent, never gets its close
+   * chunk, and never hydrates: every client hook stays at its SSR `static` mode and every
+   * `ssr: false` chunk (and its CSS) never loads — "animations and styling dropped".
+   *
+   * `false` puts the debug info back inline in the RSC payload. Production never had the
+   * channel (it is gated on `__NEXT_DEV_SERVER`), so this changes nothing there.
+   */
+  experimental: { reactDebugChannel: false },
+  /**
    * Expose the Google OAuth client ID to the browser for Google One Tap. The
    * client ID is not a secret (One Tap embeds it in the page), so we alias the
    * existing server-side GOOGLE_CLIENT_ID into the NEXT_PUBLIC_ name the One Tap

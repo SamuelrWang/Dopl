@@ -54,7 +54,7 @@ export type DocBlock =
   | { type: "steps"; items: { title: string; blocks: DocBlock[] }[] }
   /** A copyable instruction in a white window ("Copy this instruction into your agent"). */
   | { type: "prompt"; text: Rich }
-  /** The Claude / Codex / Cursor / SDK connect window (`../components/docs-connect.tsx`). */
+  /** The `dopl-mcp` connect window (`../components/docs-interactive.tsx › DocsConnect`). */
   | { type: "connect" }
   | { type: "code"; tabs: CodeTab[] }
   | { type: "hero"; label: string; lines: string[] }

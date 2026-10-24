@@ -95,35 +95,34 @@ describe("the two products", () => {
 
   it("names both groups", () => {
     expect(markup).toContain("Personal");
-    expect(markup).toContain("Workspaces");
+    expect(markup).toContain("Teams");
   });
 
-  it("gives Personal three cards and Workspaces two — never one five-column list", () => {
+  it("gives Personal three cards and Teams two, never one five-column list", () => {
     expect(markup.match(/class="lp-plan(?: lp-plan--popular)?"/g)?.length).toBe(5);
     expect(markup.split('<div class="lp-plan-group">').length - 1).toBe(2);
     const cards = (scope: string) =>
       scope.match(/class="lp-plan(?: lp-plan--popular)?"/g)?.length;
     expect(cards(group(markup, "Personal"))).toBe(3);
-    expect(cards(group(markup, "Workspaces"))).toBe(2);
-    // The three-card grid is a modifier, so Workspaces keeps two full columns.
+    expect(cards(group(markup, "Teams"))).toBe(2);
+    // The three-card grid is a modifier, so Teams keeps two full columns.
     expect(group(markup, "Personal")).toContain('class="lp-plans lp-plans--3"');
-    expect(group(markup, "Workspaces")).toContain('class="lp-plans"');
+    expect(group(markup, "Teams")).toContain('class="lp-plans"');
   });
 
-  it("puts Free, Pro and Max under Personal", () => {
+  it("puts Starter, Pro and Max under Personal", () => {
     const personal = group(markup, "Personal");
-    expect(personal).toContain(">Free<");
+    expect(personal).toContain(">Starter<");
     expect(personal).toContain(">Pro<");
     expect(personal).toContain(`>${MAX_PLAN_NAME}<`);
     // 🔒 The workspace plans never leak into this group: `team` on a personal
     // container answers 400 `PLAN_NOT_FOR_CONTAINER`.
-    expect(personal).not.toContain("Starter");
     expect(personal).not.toContain(">Team<");
     expect(personal).not.toContain("seat");
   });
 
-  it("puts Starter and Team under Workspaces", () => {
-    const workspaces = group(markup, "Workspaces");
+  it("puts Starter and Team under Teams", () => {
+    const workspaces = group(markup, "Teams");
     expect(workspaces).toContain(">Starter<");
     expect(workspaces).toContain(">Team<");
     expect(workspaces).not.toContain(">Pro<");
@@ -144,10 +143,10 @@ describe("the two products", () => {
     const cols = (title: string) =>
       group(paint(), title).split("<tbody>")[0].match(/<th scope="col"/g)?.length;
     expect(cols("Personal")).toBe(4);
-    expect(cols("Workspaces")).toBe(3);
+    expect(cols("Teams")).toBe(3);
     // Every body row carries one cell per plan — a short row would pair a
     // figure with the wrong card.
-    for (const [title, n] of [["Personal", 3], ["Workspaces", 2]] as const) {
+    for (const [title, n] of [["Personal", 3], ["Teams", 2]] as const) {
       for (const row of group(paint(), title).split("<tbody>")[1].split("</tr>").slice(0, -1)) {
         expect(row.match(/<td/g)?.length).toBe(n);
       }
@@ -239,7 +238,7 @@ describe("the launch offer", () => {
   });
 
   it("keeps Popular on Team — it has no offer", () => {
-    const workspaces = group(paint(), "Workspaces");
+    const workspaces = group(paint(), "Teams");
     expect(workspaces).toContain(">Popular<");
     expect(workspaces).not.toContain("% off");
     expect(workspaces).not.toContain("lp-plan-price-was");
@@ -247,7 +246,7 @@ describe("the launch offer", () => {
 });
 
 describe("the workspace numbers, all of them interpolated", () => {
-  const workspaces = () => group(paint(), "Workspaces");
+  const workspaces = () => group(paint(), "Teams");
 
   it("prices Team per seat from the constant", () => {
     const row = compareRow(workspaces(), "Price");

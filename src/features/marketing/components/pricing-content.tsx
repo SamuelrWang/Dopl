@@ -29,6 +29,7 @@ import { isStandardWorkspace } from "@/features/workspaces/types";
 import type { WorkspaceKind } from "@/features/workspaces/types";
 import type { User } from "@supabase/supabase-js";
 import { PlanGroup, type CompareRow } from "./pricing-plan-group";
+import { PERSONAL_SUMMARY, WORKSPACE_SUMMARY } from "./pricing-summaries";
 
 /** Only what this page reads off `GET /api/workspaces`. */
 type WorkspaceWireRow = { id: string; kind?: WorkspaceKind };
@@ -139,18 +140,6 @@ const WORKSPACE_ROWS: CompareRow[] = [
     cells: [{ main: "Free" }, { main: formatMoney(TEAM_SEAT_PRICE), sub: "/ seat / month" }],
   },
 ];
-
-/** Card sub-line, keyed inside its group — both groups own an `id: "free"`
- *  card, so one flat map would make them collide. */
-const PERSONAL_SUMMARY: Record<string, string> = {
-  free: "Your own space, free forever.",
-  pro: "More credits and your whole history, for one flat price.",
-  max: "The biggest credit allowance, for heavy daily use.",
-};
-const WORKSPACE_SUMMARY: Record<string, string> = {
-  free: "Everything, free forever — caps only start when a second member joins.",
-  team: "Your whole team, uncapped — pay only per seat, synced automatically.",
-};
 
 /** Sign-in hop that returns to `to`. ⚠ Param is `redirectTo`, never `redirect` —
  *  nothing reads the latter and the round-trip fails silently (ENGINEERING §9.2,
@@ -278,7 +267,7 @@ export function PricingContent() {
       />
 
       <PlanGroup
-        title="Workspaces"
+        title="Teams"
         plans={WORKSPACE_PLANS}
         summary={WORKSPACE_SUMMARY}
         rows={WORKSPACE_ROWS}

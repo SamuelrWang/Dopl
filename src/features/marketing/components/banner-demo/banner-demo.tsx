@@ -52,6 +52,9 @@ function findButton(
 ): HTMLButtonElement | null {
   if (!root) return null;
   for (const el of root.querySelectorAll("button")) {
+    // A product card the demo re-faces is hidden (`demo-swap.ts`), so its buttons
+    // have no box to glide to; the demo face's own button is the one to press.
+    if (el.closest("[data-lp-swapped]")) continue;
     if (match((el.textContent ?? "").trim())) return el;
   }
   return null;
@@ -130,12 +133,13 @@ export function BannerDemo() {
       // is a demo-only hook, which is why the product's handlers run and the scene
       // reacts the way the app does.
       if (at(step, "cursor-to-thread") || at(step, "click-thread"))
-        // The thread card's own button (`thread-card-row.tsx`).
+        // The thread card's own button (`demo-thread-card.tsx`, the demo's face).
         return findButton(pane, (l) => l === "Open thread");
       if (at(step, "cursor-to-tab") || at(step, "click-tab"))
         // The count badge concatenates into textContent ("Agents3").
         return findButton(pane, (l) => l.startsWith("Agents"));
       if (at(step, "cursor-to-agent") || at(step, "click-agent"))
+        // The demo's agent card face (`demo-agent-card.tsx`).
         return findButton(pane, (l) => l === "Open");
       if (at(step, "cursor-to-crumb") || at(step, "click-crumb"))
         // The breadcrumb's channel crumb, which is a button in thread view only

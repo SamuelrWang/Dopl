@@ -9,7 +9,7 @@ export const NAV_LINKS = ["Product", "Services", "Docs", "Pricing", "About"] as 
  * (fires dmg + install steps) → sign in in-app. Account before download, so
  * install drop-off is measurable.
  */
-export const GET_STARTED_LABEL = "Get Started";
+export const GET_STARTED_LABEL = "Sign up for free";
 
 /**
  * Route: `src/app/(auth)/authenticate/page.tsx`, opened in sign-up by the
@@ -24,9 +24,9 @@ export const MENU_LABEL = "Menu";
 
 export const HERO = {
   /** One array entry = one rendered line. */
-  headlineLines: ["Your Personal AI on Every", "Model and Device"] as const,
+  headlineLines: ["Deploy Digital Identities", "to Every Device"] as const,
   subhead:
-    "Dopl is the digital office that powers collaborative agents operated by humans.",
+    "Dopl is the unified harness for agents to interface with the humans and hardware around them.",
   primaryCta: GET_STARTED_LABEL,
 } as const;
 

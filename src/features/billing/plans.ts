@@ -67,7 +67,8 @@ export const MAX_PLAN_NAME = "Max";
 /** Display names of the personal plans, for copy that names "the plan in front
  *  of it" ("Welcome to …", "Upgrade to …"). */
 export const PERSONAL_PLAN_NAMES: Record<"free" | PersonalPaidPlan, string> = {
-  free: "Free",
+  // The free personal plan is "Starter" (Samuel, 2026-10-22), like the workspace one.
+  free: "Starter",
   pro: "Pro",
   max: MAX_PLAN_NAME,
 };
@@ -139,7 +140,7 @@ export const WORKSPACE_PLANS: ReadonlyArray<PlanDef> = [
     priceMonthly: "Free",
     priceNote: "",
     features: [
-      "Every feature included — no gates",
+      "Every feature included, no gates",
       "Unlimited members",
       "Unlimited ontology objects while you work solo",
       `Teams of 2+: up to ${planNumber(FREE_MULTI_MEMBER_OBJECT_CAP)} ontology objects`,
@@ -178,11 +179,11 @@ export const WORKSPACE_PLANS: ReadonlyArray<PlanDef> = [
 export const PERSONAL_PLANS: ReadonlyArray<PlanDef> = [
   {
     id: "free",
-    name: "Free",
+    name: "Starter",
     priceMonthly: "Free",
     priceNote: "",
     features: [
-      "Every feature included — no gates",
+      "Every feature included, no gates",
       "Unlimited ontology objects",
       `${FREE_CHATS_WINDOW_DAYS} days of chat history`,
       personalCreditsFeature("free"),

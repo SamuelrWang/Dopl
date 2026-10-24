@@ -37,10 +37,15 @@ export type CompareCell = { main: string; sub?: string };
 export type CompareRow = { label: string; cells: CompareCell[] };
 
 export interface GroupProps {
-  title: string;
+  /** Group label; omitted on the landing summary, which shows one group. */
+  title?: string;
   plans: ReadonlyArray<PlanDef>;
   summary: Record<string, string>;
-  rows: CompareRow[];
+  /** Omitted in `compact` mode, which draws no comparison table. */
+  rows?: CompareRow[];
+  /** Landing summary: no comparison table and no Team seat note; the cards
+   *  keep their feature checkmarks. /pricing never sets it. */
+  compact?: boolean;
   /** CTA label on one of this group's PAID cards, by plan id. */
   subscribeLabel: (planId: string) => string;
   onSubscribe: (planId: string) => void;
@@ -57,13 +62,13 @@ export interface GroupProps {
 export function PlanGroup(props: GroupProps) {
   return (
     <div className="lp-plan-group">
-      <h2 className="lp-plan-group-title">{props.title}</h2>
+      {props.title ? <h2 className="lp-plan-group-title">{props.title}</h2> : null}
       <div className={`lp-plans${props.plans.length === 3 ? " lp-plans--3" : ""}`}>
         {props.plans.map((plan) => (
           <PlanCard key={plan.id} plan={plan} {...props} />
         ))}
       </div>
-      <ComparisonTable rows={props.rows} plans={props.plans} />
+      {props.rows && !props.compact && <ComparisonTable rows={props.rows} plans={props.plans} />}
     </div>
   );
 }
@@ -119,11 +124,11 @@ function PlanCard({ plan, ...group }: GroupProps & { plan: PlanDef }) {
 
       {/* ⚠ TEAM ONLY, AND IT IS ABOUT SEATS. Pro is flat and quantity-1, so
           "only pay for your team" describes nothing on that card. */}
-      {plan.id === "team" && (
+      {plan.id === "team" && !group.compact && (
         <p className="lp-plan-guarantee">
           <strong>Only pay for your team</strong>
           {formatMoney(TEAM_SEAT_PRICE)} per member each month. Seats sync
-          automatically as people join or leave — cancel anytime.
+          automatically as people join or leave, and you can cancel anytime.
         </p>
       )}
     </div>
@@ -154,7 +159,7 @@ function PlanCardCta({ plan, ...group }: GroupProps & { plan: PlanDef }) {
         className="lp-btn lp-btn--3d lp-plan-cta"
         onClick={group.onManageBilling}
       >
-        Payment issue — manage billing
+        Payment issue: manage billing
       </button>
     );
   }

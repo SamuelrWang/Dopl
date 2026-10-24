@@ -1,7 +1,7 @@
 import type { DocBlock, DocPage } from "./types";
 
 /** "Your agent can:" + bullets, then three steps that each end in a "Read more:" link. */
-function useCase(
+function casePage(
   slug: string,
   title: string,
   description: string,
@@ -28,7 +28,7 @@ function useCase(
 }
 
 export const USE_CASE_PAGES: DocPage[] = [
-  useCase(
+  casePage(
     "show",
     "Show on a device",
     "Put a card, list or status on your user's screen",
@@ -56,7 +56,7 @@ export const USE_CASE_PAGES: DocPage[] = [
       },
     ]
   ),
-  useCase(
+  casePage(
     "ask",
     "Ask and get an answer",
     "Your agent asks a question and gets the user's pick back",
@@ -84,7 +84,7 @@ export const USE_CASE_PAGES: DocPage[] = [
       },
     ]
   ),
-  useCase(
+  casePage(
     "notify",
     "Notify",
     "Tap your user on the shoulder, wherever they are",
@@ -112,7 +112,7 @@ export const USE_CASE_PAGES: DocPage[] = [
       },
     ]
   ),
-  useCase(
+  casePage(
     "connect-devices",
     "Connect your users' devices",
     "Let your users link their hardware to your agent",
@@ -140,7 +140,7 @@ export const USE_CASE_PAGES: DocPage[] = [
       },
     ]
   ),
-  useCase(
+  casePage(
     "routing",
     "Route to the right device",
     "Dopl picks the device your user is on right now",

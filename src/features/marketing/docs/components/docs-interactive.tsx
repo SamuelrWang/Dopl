@@ -1,21 +1,19 @@
 "use client";
 
-import { Check, ChevronDown, Copy } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Copy } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { LiquidGlass } from "@/shared/design/liquid-glass/liquid-glass";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
-import { SendButton } from "@/shared/ui/send-button";
 
-import { CONNECT_TABS } from "../content/connect";
+import { CONNECT_ROWS, CURSOR_INSTALL_URL } from "../content/connect";
 import type { CodeTab } from "../content/types";
 
 /**
  * The docs' interactive pieces, on the landing sections' recipe BY CLASS NAME
  * (`marketing.css`): the white window with gray dots and a plain "Copy" text button is
- * `.lp-connect-term` / `-term-bar` / `.lp-connect-dots` / `.lp-connect-copy`; the connect
- * tabs over the photo are `.lp-connect-band` / `.lp-connect-tab` inside `LiquidGlass`.
+ * `.lp-connect-term` / `-term-bar` / `.lp-connect-dots` / `.lp-connect-copy` (the window
+ * marketing.css keeps as SHARED). Anything the landing may rewrite is copied into docs.css.
  */
 
 /** The DOM id of the floating ask input — the header's "Ask Assistant ⌘I" focuses it. */
@@ -109,55 +107,62 @@ export function PromptWindow({ text, children }: { text: string; children: React
 }
 
 /**
- * "Connect an agent": the landing Connect section's glass-over-photo band, tabs and terminal
- * (`.lp-connect-*`), sized for the docs column. Static — no scroll scrub here.
+ * "Connect an agent": the landing Connect section's `dopl-mcp` code window (connect-section.tsx),
+ * on the shared `.lp-connect-term` window. The row/comment/copy rules are docs-prefixed copies in
+ * docs.css, so a landing rewrite cannot break this block again.
  */
 export function DocsConnect() {
-  const [active, setActive] = useState(0);
-  const tab = CONNECT_TABS[active];
   return (
-    <div className="lp-connect-band docs-connect-band">
-      <div className="lp-connect-glass-box docs-connect-glass-box">
-        <LiquidGlass radius={18} className="lp-connect-glass" edge="rim">
-          <div className="lp-connect-glass-pad">
-            <div className="lp-connect-tabs" role="tablist" aria-label="Ways to connect">
-              {CONNECT_TABS.map((t, i) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={i === active}
-                  className="lp-connect-tab"
-                  data-active={i === active}
-                  onClick={() => setActive(i)}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <div className="lp-connect-term">
-              <div className="lp-connect-term-bar">
-                <span className="lp-connect-dots" aria-hidden>
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <CopyText text={tab.command} />
-              </div>
-              <div key={tab.id} role="tabpanel" className="lp-connect-term-body docs-connect-body">
-                <span className="lp-connect-prompt" aria-hidden>
-                  &rsaquo;
-                </span>
-                <code className="lp-connect-cmd">{tab.command}</code>
-              </div>
-            </div>
-            <div key={`${tab.id}-hint`} className="lp-connect-hint docs-connect-hint">
-              {tab.hint && <span>{tab.hint}</span>}
+    <div className="lp-connect-term docs-window docs-mcp">
+      <div className="lp-connect-term-bar">
+        <span className="lp-connect-dots" aria-hidden>
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="docs-mcp-file">dopl-mcp</span>
+      </div>
+      <div className="docs-mcp-code">
+        {CONNECT_ROWS.map((row) => (
+          <div key={row.id} className="docs-mcp-block">
+            <code className="docs-mcp-comment"># {row.comment}</code>
+            <div className="docs-mcp-row">
+              <code className="docs-mcp-cmd">
+                {row.value.map((tok, i) => (
+                  <span key={i} className={tok.k ? "docs-mcp-str" : undefined}>
+                    {tok.t}
+                  </span>
+                ))}
+              </code>
+              <CopyIcon text={row.copy} label={row.label} />
             </div>
           </div>
-        </LiquidGlass>
+        ))}
+        <code className="docs-mcp-comment">
+          # Cursor:{" "}
+          <a href={CURSOR_INSTALL_URL} className="docs-mcp-install">
+            one-click install
+          </a>
+        </code>
       </div>
     </div>
+  );
+}
+
+/** The landing connect window's per-line copy: icon only, "Copied" while it holds. */
+function CopyIcon({ text, label }: { text: string; label: string }) {
+  const { copied, copy } = useCopyToClipboard(900);
+  return (
+    <button
+      type="button"
+      className="lp-connect-copy"
+      data-copied={copied}
+      aria-label={copied ? `${label} copied` : `Copy ${label}`}
+      onClick={() => void copy(text)}
+    >
+      {copied && <span aria-live="polite">Copied</span>}
+      {copied ? <Check size={14} strokeWidth={2} aria-hidden /> : <Copy size={14} strokeWidth={1.8} aria-hidden />}
+    </button>
   );
 }
 
@@ -237,7 +242,8 @@ export function PageFeedback() {
   );
 }
 
-/** The "Ask a question…" input pinned to the bottom of the main column. */
+/** The "Ask a question…" pill pinned to the bottom of the main column: the landing's
+ *  "Direct at any depth" composer (ontology-command.tsx › `.lp-ont-composer`), as a real field. */
 export function AskBar() {
   const [text, setText] = useState("");
   const submit = () => {
@@ -249,27 +255,24 @@ export function AskBar() {
   return (
     <div className="docs-ask">
       <form
-        className="docs-ask-box"
+        className="docs-ask-pill"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
-        <textarea
+        <input
           id={ASK_INPUT_ID}
+          type="text"
           value={text}
-          rows={2}
           placeholder="Ask a question..."
           aria-label="Ask a question"
+          autoComplete="off"
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
         />
-        <SendButton className="docs-ask-send" disabled={!text.trim()} onClick={submit} />
+        <button type="submit" className="docs-ask-send" aria-label="Send" disabled={!text.trim()}>
+          <ArrowUp size={16} strokeWidth={2.5} aria-hidden />
+        </button>
       </form>
     </div>
   );

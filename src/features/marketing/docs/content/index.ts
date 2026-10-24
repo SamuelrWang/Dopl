@@ -1,4 +1,4 @@
-import { CONNECT_TABS } from "./connect";
+import { CONNECT_ROWS, CURSOR_INSTALL_URL } from "./connect";
 import { DOC_TABS } from "./nav";
 import { API_PAGES, CHANGELOG_PAGES } from "./pages-api";
 import { DEVICE_PAGES } from "./pages-devices";
@@ -6,7 +6,7 @@ import { OVERVIEW_PAGES } from "./pages-overview";
 import { USE_CASE_PAGES } from "./pages-use-cases";
 import type { DocBlock, DocPage, DocTab, NavLink } from "./types";
 
-export { CONNECT_TABS, DOC_TABS };
+export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_TABS };
 export type * from "./types";
 
 /** The landing page of `/docs` (bare `/docs` 308s here — `next.config.ts › redirects`). */
@@ -92,7 +92,10 @@ function blockText(b: DocBlock): string[] {
     case "prompt":
       return [`> ${plain(b.text)}`];
     case "connect":
-      return CONNECT_TABS.map((t) => `**${t.label}**: \`${t.command}\``);
+      return [
+        ...CONNECT_ROWS.map((r) => `**${r.comment}**: \`${r.copy}\``),
+        `**Cursor one-click install**: ${CURSOR_INSTALL_URL}`,
+      ];
     case "code":
       return b.tabs.map((t) => `\`\`\`${t.label}\n${t.code}\n\`\`\``);
     case "hero":

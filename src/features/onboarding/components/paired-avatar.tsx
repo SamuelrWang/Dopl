@@ -18,26 +18,64 @@ const RAISED_SHADOW =
   "var(--raised-light-bevel), 0 4px 7px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.08)";
 export const agentColor = (n: number) => `var(--agent-color-${String(n).padStart(2, "0")})`;
 
+/**
+ * 🔒 THE IDENTITY AVATAR RATIO (Samuel, 2026-10-22, from the Monitoring log):
+ * colour ring 2px → white frame 2px → photo, at every size. `thinFrame` draws
+ * it; the landing uses it everywhere (marketing ontology-bits › AgentFace and
+ * every other identity avatar). The onboarding/login journey keeps the raised
+ * scaled frame (`Profile`) unless a caller opts in.
+ */
+export const RING_PX = 2;
+/** White frame between the colour ring and the photo: equal to the ring. */
+export const WHITE_FRAME_PX = RING_PX;
+
 export function PairedAvatar({
   d,
   photo,
   agentLogo,
   color,
+  thinFrame = false,
 }: {
   /** The person circle's diameter; the badge is half of it. */
   d: number;
   photo?: string;
   agentLogo?: string;
+  /** A thin white frame inside the colour ring, exactly as wide as the ring
+   *  (RING_PX), instead of the scaled raised frame (Monitoring log, Samuel
+   *  2026-10-22). */
+  thinFrame?: boolean;
   /** Agent colour-bank slot, 1–16, for both rings. */
   color: number;
 }) {
   const ring = agentColor(color);
+  const rw = RING_PX;
   const b = d * 0.5;
   return (
     <div style={{ position: "relative", width: d, height: d, flex: "none" }}>
-      <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${ring}` }}>
+      <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `${rw}px solid ${ring}` }}>
         <div style={{ position: "absolute", inset: 0 }}>
-          <Profile src={photo} d={d - 4} />
+          {thinFrame && photo ? (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: "50%",
+                boxSizing: "border-box",
+                padding: WHITE_FRAME_PX,
+                background: "var(--raised-light-face)",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- shared file, also compiled by Vite */}
+              <img
+                src={photo}
+                alt=""
+                draggable={false}
+                style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover", display: "block" }}
+              />
+            </div>
+          ) : (
+            <Profile src={photo} d={d - 2 * rw} />
+          )}
         </div>
       </div>
       <Face d={b} round ring={ring} style={{ position: "absolute", width: b, height: b, right: -b * 0.3, bottom: -b * 0.3 }}>
@@ -68,7 +106,7 @@ export function Face({
         ...style,
         borderRadius: round ? "50%" : d * 0.28,
         background: "var(--raised-light-face)",
-        border: ring ? `2px solid ${ring}` : "1px solid var(--raised-light-line)",
+        border: ring ? `${RING_PX}px solid ${ring}` : `${Math.min(1, d / 26)}px solid var(--raised-light-line)`,
         boxShadow: RAISED_SHADOW,
         boxSizing: "border-box",
         display: "grid",

@@ -35,6 +35,10 @@ opening the file it names is how a fiction gets promoted into INVARIANTS.**
 - **For ANY UI work, read [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) first.** All interface code MUST
   use the global design tokens (semantic `text-*` scale, token color utilities) and kit classes — never
   hardcode hex colors, raw px font sizes, or shadow/border recipes in components.
+- **For ANY new design or restyle, also read [docs/DESIGN-LANGUAGE.md](docs/DESIGN-LANGUAGE.md)** — Samuel's
+  approved "identity" look (white cards, hairlines, one soft shadow, the identity avatar ratio, component
+  recipes, motion, copy voice) and how to roll it out (granular, demo-first). DESIGN-SYSTEM.md stays the
+  source for tokens; port this look into tokens/kit, never as local literals.
 - **Open findings live in [docs/REFACTOR-FINDINGS.md](docs/REFACTOR-FINDINGS.md)** with `F-NNN` ids.
   ⚠ **Allocate a new id from the highest claimed on ANY LIVE BRANCH, never from `master`'s** — that
   file is an append-only shared counter, and on 2026-09-01 three branches of one wave each allocated
