@@ -17,7 +17,7 @@ export const ORCH_COPY = {
 } as const;
 
 /** Runtime marks, the same files the onboarding runtime picker shows. */
-export const RUNTIME = {
+const RUNTIME = {
   claude: { name: "Claude", logo: "/img/onboarding/claude-logo.svg" },
   grok: { name: "Grok", logo: "/img/logos/grok-bot.png" },
   muse: { name: "Muse", logo: "/img/onboarding/muse-logo.svg" },

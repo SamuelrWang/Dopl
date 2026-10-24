@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 /**
- * The Agent native section: heading and three tabs render, the tour advances
- * off the active meter, a click jumps to a tab, and reduced motion is static.
- * Mirrors ./ontology-section.test.tsx.
+ * The Agent native section: one demo, no tabs; the heading renders; every
+ * tool row in the script is a real Dopl MCP tool; reduced motion shows the
+ * finished frame; on screen the transcript starts empty and plays.
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { AgentNativeSection } from "./agent-native-section";
-import { AGENTS_SCENE, AGENT_NATIVE_COPY, IDENTITY_SCENE, KNOWLEDGE_SCENE, STAGE_COPY } from "./agent-native-content";
+import { AGENT_NATIVE_COPY, AGENT_SCRIPT } from "./agent-native-content";
 
 let reducedMotion = false;
 
@@ -48,66 +48,59 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
-const selected = () => screen.getByRole("tab", { selected: true });
-const meter = () => document.querySelector<HTMLElement>(".lp-ont-tab-meter i");
-const play = () => document.querySelector<HTMLElement>(".lp-ont-window-swap")?.dataset.play;
 const MANIFEST = readFileSync(join(__dirname, "../../../../packages/mcp-server/src/tool-manifest.ts"), "utf8");
-const IDS = ["identities", "knowledge", "agents"] as const;
+const lastText = (seg: number) => {
+  const msgs = AGENT_SCRIPT[seg].msgs;
+  const last = msgs[msgs.length - 1];
+  return last.kind === "tool" ? last.label : last.text;
+};
 
-describe("Agent native tour", () => {
-  it("renders the heading and three tabs, opening on the first and playing on screen", () => {
+describe("Agent native section", () => {
+  it("renders the heading and one demo with no tabs", () => {
     render(<AgentNativeSection />);
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(AGENT_NATIVE_COPY.heading);
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(
-      IDS.map((id, i) => (i === 0 ? STAGE_COPY[id].title + STAGE_COPY[id].blurb : STAGE_COPY[id].title)),
-    );
-    expect(play()).toBe("in");
-    expect(meter()?.dataset.running).toBe("true");
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(document.querySelector(".lp-ont-tab-meter")).toBeNull();
+    expect(document.querySelectorAll(".lp-agn-app")).toHaveLength(1);
   });
 
-  it("advances (wrapping) when the active meter ends", () => {
-    render(<AgentNativeSection />);
-    for (const next of ["knowledge", "agents", "identities"] as const) {
-      act(() => {
-        fireEvent.animationEnd(meter()!);
-      });
-      expect(selected().textContent).toContain(STAGE_COPY[next].title);
+  it("every tool row is a real Dopl MCP tool, humanised", () => {
+    const tools = AGENT_SCRIPT.flatMap((s) => s.msgs.flatMap((m) => (m.kind === "tool" ? [m.label] : [])));
+    expect(tools.length).toBeGreaterThan(0);
+    for (const label of tools) {
+      expect(label).toMatch(/^Dopl [a-z]+( [a-z]+)*$/);
+      const name = label.toLowerCase().replace(/ /g, "_");
+      expect(MANIFEST).toContain(`name: "${name}"`);
     }
   });
 
-  it("a click jumps to that tab and swaps in its window", () => {
-    render(<AgentNativeSection />);
-    for (const id of IDS) {
-      fireEvent.click(screen.getByRole("tab", { name: new RegExp(STAGE_COPY[id].title) }));
-      expect(selected().textContent).toContain(STAGE_COPY[id].title);
-      expect(document.querySelector(".lp-ont-window-swap")?.children.length).toBe(1);
-      expect(meter()?.dataset.running).toBe("true");
-    }
+  it("plays Claude then Gemini, and no line uses a dash", () => {
+    expect(AGENT_SCRIPT.map((s) => s.logo)).toEqual(["claude", "gemini"]);
+    for (const s of AGENT_SCRIPT)
+      for (const m of s.msgs) expect(m.kind === "tool" ? m.arg : m.text).not.toMatch(/[—–]| - /);
+    expect(AGENT_NATIVE_COPY.lede).not.toMatch(/[—–]/);
   });
 
-  it("reduced motion: static end frames, a full meter that never advances", () => {
+  it("reduced motion: Claude's finished frame, nothing moving", () => {
     reducedMotion = true;
     render(<AgentNativeSection />);
-    expect(play()).toBeUndefined();
-    expect(meter()?.dataset.static).toBe("true");
-    act(() => {
-      fireEvent.animationEnd(meter()!);
-    });
-    expect(selected().textContent).toContain(STAGE_COPY.identities.title);
+    const chat = document.querySelector(".lp-agn-app-chat")!;
+    expect(chat.textContent).toContain(lastText(0));
+    expect(document.querySelector(".lp-agn-app-title")?.textContent).toContain("Claude");
   });
 
-  it("every scripted call lands inside its scene and in order", () => {
-    for (const scene of [IDENTITY_SCENE, KNOWLEDGE_SCENE, AGENTS_SCENE]) {
-      scene.calls.forEach((call, i) => {
-        expect(call.doneAt).toBeGreaterThan(call.at);
-        expect(call.doneAt).toBeLessThanOrEqual(scene.endMs);
-        if (i) expect(call.at).toBeGreaterThanOrEqual(scene.calls[i - 1].doneAt);
-        // a real tool on the MCP surface, not an invented one
-        expect(MANIFEST).toContain(`name: "${call.tool}"`);
-      });
-    }
+  it("on screen: the transcript starts empty and types in", () => {
+    vi.useFakeTimers();
+    render(<AgentNativeSection />);
+    const chat = document.querySelector(".lp-agn-app-chat")!;
+    expect(chat.textContent).toBe("");
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(chat.textContent).toContain(AGENT_SCRIPT[0].msgs[0].kind === "user" ? "Set up" : "");
   });
 });

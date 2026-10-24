@@ -1,182 +1,68 @@
 /**
- * Every word (and every scripted beat) in the Agent native section: tab copy
- * AND the strings drawn inside its three animated windows, so copy can change
- * without touching markup.
- * Markup: ./agent-native-section.tsx (shell + tour), ./agent-native-windows.tsx
- * (the three windows). Styles: ../agent-native.css (+ the shared `.lp-ont-*`
- * shell and play contract in ../marketing.css).
+ * Every word in the Agent native section, including the script the agent
+ * window plays. Markup: ./agent-native-section.tsx (shell) and
+ * ./agent-native-window.tsx (the agent's own desktop chat, on the glass).
  *
- * ⚠ Times are ms from the moment the window starts playing; the tab meter fills
- * over `endMs` plus the section's settle (same tour as Orchestration).
- * Tool names are the real Dopl MCP surface (packages/mcp-server/src/tool-manifest.ts).
+ * The script reuses onboarding step 2's shape and timeline builder
+ * (`@/features/onboarding/components/connect-agent-script`): segments of user
+ * turns, agent turns and Dopl MCP tool rows, Claude then Gemini, looping. One
+ * continuous piece of work across the two agents, since both reach the same
+ * workspace. Tool labels are Dopl's real MCP names, humanised the onboarding
+ * way (`dopl_manage_agent` → "Dopl manage agent"); the section test checks each
+ * one against packages/mcp-server/src/tool-manifest.ts.
  */
-import { PEOPLE, RUNTIME } from "./ontology-content";
+import type { ScriptSegment } from "@/features/onboarding/components/connect-agent-script";
 
 export const AGENT_NATIVE_COPY = {
   eyebrow: "Agent native",
   heading: "Software built for your agents to operate",
-  tablistLabel: "Agent native views",
+  lede: "Every feature in Dopl is exposed over MCP, so anything you can do in the app, your agent can do for you.",
   primaryCta: "Get started",
   secondaryCta: "Download the app",
 } as const;
 
-export const STAGE_COPY = {
-  identities: {
-    title: "Create identities",
-    blurb: "Your agent creates each identity with its role, runtime, and instructions through Dopl's MCP tools.",
+/** The agent app's window chrome. */
+export const AGENT_APP = {
+  connected: "Dopl connected",
+  replyTo: "Reply to",
+  logos: {
+    claude: "/img/onboarding/claude-logo.svg",
+    gemini: "/img/logos/gemini.svg",
   },
-  knowledge: {
-    title: "Build knowledge",
-    blurb: "Your agent creates knowledge bases, writes sectioned entries, and grants identities access to them.",
+  doplMark: "/img/onboarding/dopl-mark.png",
+} as const;
+
+export const AGENT_SCRIPT: ScriptSegment[] = [
+  {
+    logo: "claude",
+    name: "Claude",
+    msgs: [
+      { kind: "user", text: "Set up a recruiter and a coder for our backend hire." },
+      { kind: "agent", text: "Creating both identities in Dopl." },
+      { kind: "tool", label: "Dopl manage agent", arg: "Recruiter" },
+      { kind: "tool", label: "Dopl manage agent", arg: "Coder" },
+      { kind: "agent", text: "Both identities are ready, each with its own role and instructions." },
+      { kind: "user", text: "Give them our hiring playbook." },
+      { kind: "tool", label: "Dopl manage knowledge", arg: "Hiring playbook" },
+      { kind: "tool", label: "Dopl write entry", arg: "Sourcing" },
+      { kind: "tool", label: "Dopl write entry", arg: "Interview loop" },
+      { kind: "agent", text: "The playbook has two entries, and both identities can read it." },
+    ],
   },
-  agents: {
-    title: "Launch and end agents",
-    blurb: "Your agent launches identities into a channel, follows their progress, and ends each session when the work is done.",
+  {
+    logo: "gemini",
+    name: "Gemini",
+    msgs: [
+      { kind: "user", text: "Start them on the backend role in a new channel." },
+      { kind: "tool", label: "Dopl create channel", arg: "#backend-hire" },
+      { kind: "tool", label: "Dopl launch agent", arg: "Recruiter" },
+      { kind: "tool", label: "Dopl launch agent", arg: "Coder" },
+      { kind: "agent", text: "Both agents are now working in #backend-hire." },
+      { kind: "agent", text: "Recruiter shortlisted 12 candidates, and Coder scored all four take-home submissions." },
+      { kind: "user", text: "Great work. End both sessions." },
+      { kind: "tool", label: "Dopl manage session", arg: "End Recruiter" },
+      { kind: "tool", label: "Dopl manage session", arg: "End Coder" },
+      { kind: "agent", text: "Both sessions have ended, and their results are saved in #backend-hire." },
+    ],
   },
-} as const;
-export type StageId = keyof typeof STAGE_COPY;
-
-export type IdentityId = "orchestrator" | "recruiter" | "coder";
-
-/** Sam's identities: his photo, ringed in the identity's colour-bank slot,
- *  with the runtime's mark inset (the landing's identity avatar). */
-export const IDENTITIES: Record<
-  IdentityId,
-  { name: string; color: number; runtime: (typeof RUNTIME)[keyof typeof RUNTIME] }
-> = {
-  orchestrator: { name: "Orchestrator", color: 3, runtime: RUNTIME.claude },
-  recruiter: { name: "Recruiter", color: 9, runtime: RUNTIME.muse },
-  coder: { name: "Coder", color: 13, runtime: RUNTIME.chatgpt },
-};
-export const OWNER_PHOTO = PEOPLE.sam.photo;
-export const DOPL_MARK = "/img/onboarding/dopl-mark.png";
-
-/** The agent doing the work, shown at the head of every window's log. */
-export const OPERATOR = {
-  identity: "orchestrator" as IdentityId,
-  via: "Connected over MCP",
-  working: "Working",
-  done: "Done",
-} as const;
-
-/** One MCP call in the log: it appears at `at` running, and lands at `doneAt`. */
-export type ToolCall = { tool: string; args: string; at: number; doneAt: number };
-
-// ── 1 · Create identities ─────────────────────────────────────────────────
-
-export const IDENTITY_SCENE = {
-  endMs: 5800,
-  prompt: "Set up a recruiter and a coder for our backend hire.",
-  calls: [
-    { tool: "dopl_manage_agent", args: 'action: "create", name: "Recruiter", runtime: "muse"', at: 700, doneAt: 1500 },
-    { tool: "dopl_manage_agent", args: 'action: "create", name: "Coder", runtime: "chatgpt"', at: 2000, doneAt: 2800 },
-    { tool: "dopl_manage_agent", args: 'action: "update", identity: "recruiter", instructions: "…"', at: 3300, doneAt: 4100 },
-    { tool: "dopl_list_agents", args: "{}", at: 4600, doneAt: 5200 },
-  ] as ToolCall[],
-  label: "Identities",
-  instructionsKey: "Instructions",
-  notSet: "Not set",
-  cards: [
-    {
-      identity: "recruiter" as IdentityId,
-      role: "Sources and screens backend candidates",
-      at: 1500,
-      /** Filled by the `update` call. */
-      instructions: "Prioritize Go and Postgres depth",
-      instructionsAt: 4100,
-    },
-    {
-      identity: "coder" as IdentityId,
-      role: "Reviews take-home submissions",
-      at: 2800,
-      instructions: "Score against the backend rubric",
-      instructionsAt: 2800,
-    },
-  ],
-  footer: "2 identities ready",
-  footerAt: 5200,
-} as const;
-
-// ── 2 · Build knowledge ───────────────────────────────────────────────────
-
-export const KNOWLEDGE_SCENE = {
-  endMs: 6200,
-  prompt: "Write our hiring playbook and give both identities access.",
-  calls: [
-    { tool: "dopl_manage_knowledge", args: 'action: "create_base", name: "Hiring playbook"', at: 700, doneAt: 1400 },
-    { tool: "dopl_write_entry", args: 'path: "Sourcing", body: "## Channels …"', at: 1800, doneAt: 2600 },
-    { tool: "dopl_write_entry", args: 'path: "Interview loop", body: "## Screen …"', at: 3000, doneAt: 3800 },
-    { tool: "dopl_manage_agent", args: 'action: "update", identity: "recruiter", knowledge_bases: […]', at: 4200, doneAt: 4800 },
-    { tool: "dopl_manage_agent", args: 'action: "update", identity: "coder", knowledge_bases: […]', at: 5000, doneAt: 5600 },
-  ] as ToolCall[],
-  label: "Knowledge base",
-  title: "Hiring playbook",
-  titleAt: 1400,
-  entries: [
-    { name: "Sourcing", sections: ["Channels", "Outreach", "Referrals"], at: 2600 },
-    { name: "Interview loop", sections: ["Screen", "Technical", "Debrief"], at: 3800 },
-  ],
-  readersLabel: "Read by",
-  readers: [
-    { identity: "recruiter" as IdentityId, at: 4800 },
-    { identity: "coder" as IdentityId, at: 5600 },
-  ],
-} as const;
-
-// ── 3 · Launch and end agents ─────────────────────────────────────────────
-
-export type SessionStatus = "working" | "reported" | "ended";
-export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
-  working: "Working",
-  reported: "Reported",
-  ended: "Ended",
-};
-
-export const AGENTS_SCENE = {
-  endMs: 6900,
-  prompt: "Launch both on the backend role and end them once they report back.",
-  calls: [
-    { tool: "dopl_create_channel", args: 'name: "backend-hire"', at: 700, doneAt: 1300 },
-    { tool: "dopl_launch_agent", args: 'channel: "backend-hire", identity: "recruiter"', at: 1700, doneAt: 2300 },
-    { tool: "dopl_launch_agent", args: 'channel: "backend-hire", identity: "coder"', at: 2700, doneAt: 3300 },
-    { tool: "dopl_manage_session", args: 'action: "end", to: "@recruiter"', at: 5000, doneAt: 5600 },
-    { tool: "dopl_manage_session", args: 'action: "end", to: "@coder"', at: 5900, doneAt: 6500 },
-  ] as ToolCall[],
-  label: "Channel",
-  channel: "backend-hire",
-  channelAt: 1300,
-  liveSuffix: "live",
-  sessions: [
-    {
-      identity: "recruiter" as IdentityId,
-      at: 2300,
-      steps: [
-        ["working", 2300],
-        ["reported", 4200],
-        ["ended", 5600],
-      ],
-      output: [
-        ["Sourcing backend candidates…", 2300],
-        ["Shortlisted 12 candidates", 4200],
-      ],
-    },
-    {
-      identity: "coder" as IdentityId,
-      at: 3300,
-      steps: [
-        ["working", 3300],
-        ["reported", 4700],
-        ["ended", 6500],
-      ],
-      output: [
-        ["Reviewing 4 take-home submissions…", 3300],
-        ["Scored 4 submissions", 4700],
-      ],
-    },
-  ] as {
-    identity: IdentityId;
-    at: number;
-    steps: [SessionStatus, number][];
-    output: [string, number][];
-  }[],
-} as const;
+];
