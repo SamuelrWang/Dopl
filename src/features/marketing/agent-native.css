@@ -1,0 +1,241 @@
+/* ── Agent native — three-stage tour over the cloud banner ───────────────
+   Markup: components/agent-native-section.tsx (+ agent-native-windows.tsx;
+   every word in agent-native-content.ts). The SHELL is Orchestration's: the
+   section root wears `.lp-ont` too, so its eyebrow, heading, banner, scrubbed
+   glass, pinned white window, play contract, tab row, meter and CTA rules
+   (marketing.css › "Orchestration") apply unchanged, along with its
+   section-local palette (`--lp-ont-*`). Only what differs lives here: three
+   tabs instead of four, and the agent-log | Dopl-surface window.
+   ⚠ Every colour is a var marketing.css declares; no literals. */
+
+.lp-agn .lp-ont-tabs {
+  grid-template-columns: repeat(3, 1fr);
+}
+.lp-agn .lp-ont-banner-img {
+  object-position: center;
+}
+
+/* ── Window: agent log | the Dopl surface it builds ─────────────────── */
+.lp-agn-log,
+.lp-agn-surface {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 12px;
+}
+.lp-agn-log {
+  flex: 0 0 52%;
+}
+.lp-agn-surface {
+  flex: 1 1 0;
+}
+
+.lp-agn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lp-agn-head-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lp-agn-head-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-agn-head-via {
+  font-size: 11px;
+  color: var(--muted);
+}
+.lp-agn-head-state {
+  margin-left: auto;
+}
+.lp-agn-prompt {
+  margin-top: 10px;
+}
+
+.lp-agn-calls {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+/* Tool row (DESIGN-LANGUAGE › Tool row): Dopl mark tile, the tool name, the
+   call in muted monospace, and its tick. ⚠ Spacing on the INNER row, never the
+   `.lp-ont-grow` wrapper, so unplayed rows leave no gap. */
+.lp-agn-call {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--lp-ont-rule);
+}
+.lp-ont-grow:first-child .lp-agn-call {
+  border-top: 0;
+}
+.lp-agn-call-mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px var(--lp-ont-hair);
+}
+.lp-agn-call-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lp-agn-call-tool,
+.lp-agn-call-args,
+.lp-agn-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.lp-agn-call-tool {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lp-agn-call-args {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* ── Surface pieces ─────────────────────────────────────────────────── */
+.lp-agn-card {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--lp-ont-hair);
+  border-radius: 10px;
+}
+.lp-agn-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lp-agn-card-name {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.lp-agn-card-status {
+  margin-left: auto;
+}
+.lp-agn-card-role {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.lp-agn-runtime {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.lp-agn-runtime img {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+.lp-agn-kv {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--lp-ont-well);
+  font-size: 11.5px;
+}
+.lp-agn-kv-key {
+  flex: none;
+  color: var(--muted);
+}
+.lp-agn-kv-value {
+  min-width: 0;
+  color: var(--ink);
+}
+.lp-agn-kv-value > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-agn-entry {
+  align-items: flex-start;
+}
+.lp-agn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.lp-agn-chip {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--lp-ont-well);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.lp-agn-readers {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lp-agn-reader {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink);
+}
+
+.lp-agn-chan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 4px;
+}
+.lp-agn-chan-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--grotesk);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+/* No sessions left: the live dot goes quiet. */
+.lp-agn .lp-ont-live[data-idle] i {
+  background: var(--lp-ont-dash);
+}
+
+@media (max-width: 560px) {
+  .lp-agn .lp-ont-tabs {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mirrors marketing.css's 699px break (use-glass-scrub MIN_WIDTH - 1): the
+   shared rule stacks the window's two panes; the log stops claiming half. */
+@media (max-width: 699px) {
+  .lp-agn-log {
+    flex: none;
+  }
+  .lp-agn-surface {
+    flex: none;
+  }
+}

@@ -1,3 +1,4 @@
+import { AgentNativeSection } from "./agent-native-section";
 import { ControlSection } from "./control-section";
 import { ConnectSection } from "./connect-section";
 import { OntologySection } from "./ontology-section";
@@ -28,6 +29,7 @@ export function Hero() {
       <Anchor id={ANCHORS.orchestration} />
       <OntologySection />
       <ControlSection />
+      <AgentNativeSection />
       <Anchor id={ANCHORS.connect} />
       <ConnectSection />
       <Anchor id={ANCHORS.devices} />
