@@ -173,6 +173,12 @@ export const CHANGELOG_PAGES: DocPage[] = [
         type: "changelog",
         entries: [
           {
+            date: "October 24",
+            title: "Google Home",
+            description:
+              "Speak on Google Home and Nest speakers and show cards on a Nest Hub. See [Google Home](/docs/devices/google-home)",
+          },
+          {
             date: "October 20",
             title: "Developer docs",
             description: "Start here, use cases, devices and the API reference for show, ask and notify",

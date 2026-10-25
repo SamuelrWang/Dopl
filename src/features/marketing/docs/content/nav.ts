@@ -36,6 +36,7 @@ export const DOC_TABS: DocTab[] = [
           { label: "Phone push", slug: "devices/phone-push" },
           { label: "Mac notch", slug: "devices/mac-notch" },
           { label: "Desktop", slug: "devices/desktop" },
+          { label: "Google Home", slug: "devices/google-home" },
           { label: "Apple Watch (coming soon)", slug: "devices/apple-watch" },
           { label: "Cars (coming soon)", slug: "devices/cars" },
           { label: "Meta Ray-Ban (coming soon)", slug: "devices/meta-ray-ban" },

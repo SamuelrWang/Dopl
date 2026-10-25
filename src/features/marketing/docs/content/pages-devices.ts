@@ -1,3 +1,4 @@
+import { GOOGLE_HOME_PAGE } from "./pages-google-home";
 import type { DocPage } from "./types";
 
 function available(slug: string, title: string, description: string, supports: string[]): DocPage {
@@ -54,6 +55,7 @@ export const DEVICE_PAGES: DocPage[] = [
     "`ask` — any number of options",
     "`notify` — a system notification",
   ]),
+  GOOGLE_HOME_PAGE,
   comingSoon("apple-watch", "Apple Watch", "Glanceable intents on the wrist"),
   comingSoon("cars", "Cars", "Intents on in-car displays"),
   comingSoon("meta-ray-ban", "Meta Ray-Ban", "Audio-first intents on Meta Ray-Ban glasses"),
