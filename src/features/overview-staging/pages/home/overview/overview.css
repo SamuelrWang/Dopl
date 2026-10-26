@@ -4,6 +4,15 @@
  * fill behind content; a 3px meter track and a bar strip's zero ticks keep a translucent tone. */
 
 .ove {
+  --ove-gap: 14px;
+  /* Side by side, both columns are --ove-cols-h tall: the slotted cards take their height and the
+   * last card in a column takes the rest, so the two always end on one line. */
+  --ove-cols-h: 900px;
+  --ove-needs-h: 212px;
+  --ove-agents-h: 336px;
+  --ove-credits-h: 288px;
+  --ove-tokens-h: 160px;
+  --ove-pair-h: 332px;
   min-width: 0;
   flex: 1;
   overflow-y: auto;
@@ -14,17 +23,27 @@
 .ove-inner {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--ove-gap);
   max-width: 1080px;
   margin: 0 auto;
   padding: 18px 20px 28px;
 }
 .ove-card {
+  position: relative;
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px 14px;
+}
+.ove-card-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
 }
 .ove-card-head {
   display: flex;
@@ -87,26 +106,60 @@
 /* 2 · the two columns */
 .ove-grid {
   display: grid;
+  height: var(--ove-cols-h);
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  align-items: start;
-  gap: 14px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--ove-gap);
+}
+.ove-grid[data-solo="true"] {
+  height: calc(var(--ove-credits-h) + var(--ove-gap) + var(--ove-tokens-h));
 }
 .ove-col {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--ove-gap);
+}
+.ove-col > .ove-card {
+  flex: none;
+}
+.ove-col > .ove-card:last-child {
+  height: auto;
+  flex: 1 1 0%;
+}
+.ove-slot-needs {
+  height: var(--ove-needs-h);
+}
+.ove-slot-agents {
+  height: var(--ove-agents-h);
+}
+.ove-slot-credits {
+  height: var(--ove-credits-h);
+}
+.ove-slot-tokens {
+  height: var(--ove-tokens-h);
 }
 .ove-pair {
   display: grid;
+  height: var(--ove-pair-h);
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 14px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--ove-gap);
 }
+/* One column: every card is as tall as its content, so nothing scrolls inside it. */
 @container (max-width: 720px) {
   .ove-grid,
+  .ove-grid[data-solo="true"],
   .ove-pair {
+    height: auto;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  .ove-col > .ove-card,
+  .ove-col > .ove-card:last-child {
+    height: auto;
+    flex: none;
   }
 }
 

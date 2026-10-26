@@ -38,9 +38,6 @@
   color: var(--text-secondary);
   white-space: nowrap;
 }
-.ove-picker {
-  position: relative;
-}
 .ove-picker-btn {
   display: inline-flex;
   align-items: center;
@@ -52,13 +49,13 @@
   font-size: var(--text-caption);
   color: var(--text-primary);
 }
+/* Its containing block is the card, not the scrolling card body, so the body does not clip it;
+ * with no insets it sits at its static place under the button. */
 .ove-picker-list {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
   z-index: 10;
   min-width: 180px;
-  margin: 0;
+  margin: 4px 0 0;
   padding: 4px;
   list-style: none;
   background: var(--bg-overlay);
