@@ -391,7 +391,6 @@
   border: 1px solid var(--kv-border);
   border-radius: 12px;
   background: var(--bg-elevated);
-  cursor: pointer;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.04),
     0 6px 18px rgba(0, 0, 0, 0.05);
@@ -415,10 +414,10 @@
 .scopePublic {
   --kv-scope: var(--success);
 }
-/* The kit's `.card-lift` rise and `--shadow-card-lift` token: one hover lift for every card face. */
+/* The rise is the kit's `.card-lift`, worn in `base-card.tsx`; the shadow is restated because this
+   unlayered rest shadow outranks the kit's layered hover one. */
 .card:hover {
   border-color: var(--kv-border-strong);
-  transform: translateY(-3px);
   box-shadow: var(--shadow-card-lift);
 }
 .cardHead {

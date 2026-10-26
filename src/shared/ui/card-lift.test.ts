@@ -1,4 +1,4 @@
-// ONE HOVER LIFT, TWO CARD FACES — the kit's `.card-lift` and the knowledge card's `.card:hover`.
+// ONE HOVER LIFT, TWO CARD FACES — the kit's `.card-lift`, worn by the identity and knowledge cards.
 //
 // 🔒 SAMUEL, 2026-09-21: the Agents and Knowledge cards *"should have the same animation"*.
 // ⚠ P9-01: the Agents half used to be Tailwind arbitraries built by TEMPLATE interpolation, which
@@ -17,6 +17,7 @@ const read = (rel: string) => readFileSync(join(HERE, rel), "utf8");
 const KNOWLEDGE_CSS = read(
   "../../features/knowledge/components/knowledge-v2/knowledge-v2.module.css"
 );
+const KNOWLEDGE_TSX = read("../../features/knowledge/components/knowledge-v2/home/base-card.tsx");
 const AGENTS_TSX = read("../../features/agent-identities/components/identity-section.tsx");
 const KITS = {
   "src/app/globals.css": read("../../app/globals.css"),
@@ -42,7 +43,8 @@ describe("the two card faces share one hover lift", () => {
   it("both kit copies define `.card-lift` — a rise AND the token shadow, both transitioned", () => {
     for (const [file, css] of Object.entries(KITS)) {
       const hover = rule(css, ".card-lift:hover");
-      expect(hover, file).toContain("transform: translateY(-3px)");
+      expect(hover, file).toContain("transform: translateY(calc(-1 * var(--lift)))");
+      expect(css.replace(/\s+/g, " "), file).toContain(".card-lift { --lift: 3px; }");
       expect(hover, file).toContain("box-shadow: var(--shadow-card-lift)");
       const base = rule(css, ".card-lift");
       expect(base, file).toContain("transform");
@@ -59,9 +61,10 @@ describe("the two card faces share one hover lift", () => {
     expect(new Set(values).size).toBe(1);
   });
 
-  it("the knowledge card rises the same distance onto the same token", () => {
+  it("the knowledge card wears the kit lift and only restates the token shadow", () => {
+    expect(KNOWLEDGE_TSX).toContain('cn("card-lift", styles.card');
     const hover = rule(KNOWLEDGE_CSS, ".card:hover");
-    expect(hover).toContain("transform: translateY(-3px)");
+    expect(hover).not.toContain("transform");
     expect(hover).toContain("box-shadow: var(--shadow-card-lift)");
   });
 
