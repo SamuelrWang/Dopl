@@ -6,6 +6,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { cn } from "@/shared/lib/utils";
 import type { ActivityDot } from "@/shared/lib/format-time";
 import type { MemberRole } from "../../types";
+import { LABEL_TEXT_MUTED } from "@/shared/ui/section-heading";
 
 const DOT_STYLE: Record<ActivityDot, string> = {
   active: "bg-success",
@@ -65,7 +66,7 @@ export function IconButton({
 
 export function ColumnLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
+    <span className={LABEL_TEXT_MUTED}>
       {children}
     </span>
   );

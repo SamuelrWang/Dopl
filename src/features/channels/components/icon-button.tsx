@@ -25,6 +25,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { CHROME_ICON_BOX, CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
 
 /**
  * Quiet square icon button — the one chrome affordance in every header, and
@@ -99,12 +100,14 @@ export function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex shrink-0 items-center justify-center transition-colors",
-        bare ? "h-8 w-8" : "h-7 w-7 rounded-tile",
-        active && "text-text-primary",
-        active && !bare && "raised-tab",
-        !active && "text-text-secondary hover:text-text-primary",
-        !active && !bare && "hover:bg-surface-raised-1",
+        bare
+          ? cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center transition-colors",
+              active ? "text-text-primary" : "text-text-secondary hover:text-text-primary"
+            )
+          : active
+            ? cn(CHROME_ICON_BOX, "raised-tab text-text-primary")
+            : CHROME_ICON_BUTTON,
         disabled && "cursor-not-allowed opacity-50",
         className
       )}

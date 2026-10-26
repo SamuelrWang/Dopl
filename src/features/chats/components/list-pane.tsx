@@ -20,9 +20,7 @@ import { formatShortDate } from "@/shared/lib/format-time";
 import { ShareMenu } from "./share-control";
 import { SHARE_SCOPE_ICONS } from "@/shared/ui/scope-share-popover";
 import type { ChatFilter, FolderGroup } from "./chats-view";
-
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
 
 const FILTERS: ReadonlyArray<{ key: ChatFilter; label: string }> = [
   { key: "all", label: "All" },
@@ -141,7 +139,7 @@ export function ListPane({
         <span className="flex-1" />
         <button
           type="button"
-          className={ICON_BTN}
+          className={CHROME_ICON_BUTTON}
           aria-label="New folder"
           onClick={() => setFolderDraft((v) => (v === null ? "" : null))}
         >

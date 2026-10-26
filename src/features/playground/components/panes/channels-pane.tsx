@@ -20,6 +20,7 @@ import {
   type DemoMessage,
   type MessageListResponse,
 } from "./channels-pane-data";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
 
 /**
  * Playground: the Channels page. A visual clone of
@@ -146,7 +147,7 @@ function ListPane({
           type="button"
           aria-label="New"
           title="New"
-          className="flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+          className={CHROME_ICON_BUTTON}
         >
           <Plus size={16} />
         </button>
@@ -346,7 +347,7 @@ function ChannelDetail({
             type="button"
             aria-label="Add members"
             title="Add members"
-            className="flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+            className={CHROME_ICON_BUTTON}
           >
             <UserPlus size={16} />
           </button>

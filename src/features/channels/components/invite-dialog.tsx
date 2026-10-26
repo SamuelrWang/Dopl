@@ -20,6 +20,7 @@ import {
   addChannelMember,
   removeChannelMember,
 } from "../client/api";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 interface Props {
   workspaceId: string;
@@ -226,7 +227,7 @@ export function InviteDialog({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <span className={LABEL_TEXT}>
             In this channel · {channelMembers?.length ?? 0}
           </span>
           <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-strong">

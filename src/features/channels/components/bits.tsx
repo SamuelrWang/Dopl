@@ -8,6 +8,7 @@ import { CHIP } from "@/shared/ui/wells";
 import { pillButton } from "@/shared/ui/pill-button";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./icon-button";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 export { IconButton };
 
 /** A right-panel tab's own action ("New thread", "Launch agent") at the 36px dark scale. Split controls use
@@ -144,7 +145,7 @@ export function SectionHeader({
         </button>
       ) : (
         <>
-          <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <span className={LABEL_TEXT}>
             {title}
           </span>
           <span className="flex-1" />

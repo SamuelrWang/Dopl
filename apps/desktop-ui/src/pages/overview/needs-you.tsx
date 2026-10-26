@@ -1,6 +1,7 @@
 import type { AccountStatus, AccountWaitingItem } from "@/features/channels/types";
 import { cn } from "@/shared/lib/utils";
 import { RouterLink } from "#/components/app-shell";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /**
  * "NEEDS YOU" — messages ADDRESSED TO THIS PERSON that they have not answered.
@@ -110,7 +111,7 @@ export function NeedsYou({
 }) {
   return (
     <section className="bento flex flex-col p-3.5">
-      <h2 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+      <h2 className={LABEL_TEXT}>
         Needs you
       </h2>
       {rows.length === 0 ? (

@@ -36,6 +36,8 @@ import {
   type PaneFilter,
   type PaneMessage,
 } from "./chats-pane-data";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /**
  * Playground chats pane — a clone of the desktop Chats page
@@ -46,9 +48,6 @@ import {
  * REAL workspace chats over the same JSX. Reads only — no writes, realtime,
  * or navigation.
  */
-
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
 export function ChatsPane() {
   const { session } = usePlaygroundSession();
@@ -107,7 +106,7 @@ export function ChatsPane() {
           </h1>
           <span className="text-caption text-text-muted">{chatCount}</span>
           <span className="flex-1" />
-          <span className={ICON_BTN} aria-hidden>
+          <span className={CHROME_ICON_BUTTON} aria-hidden>
             <FolderPlus size={16} />
           </span>
         </div>
@@ -184,7 +183,7 @@ export function ChatsPane() {
                 {selected.isPublic ? "Public" : "Private"}
               </span>
               <span
-                className={cn(ICON_BTN, selected.pinned && "text-text-primary")}
+                className={cn(CHROME_ICON_BUTTON, selected.pinned && "text-text-primary")}
                 aria-hidden
               >
                 <Star
@@ -192,10 +191,10 @@ export function ChatsPane() {
                   className={cn(selected.pinned && "fill-current")}
                 />
               </span>
-              <span className={ICON_BTN} aria-hidden>
+              <span className={CHROME_ICON_BUTTON} aria-hidden>
                 <Copy size={15} />
               </span>
-              <span className={ICON_BTN} aria-hidden>
+              <span className={CHROME_ICON_BUTTON} aria-hidden>
                 <MoreHorizontal size={16} />
               </span>
             </div>
@@ -205,7 +204,7 @@ export function ChatsPane() {
                 <HeaderCard chat={selected} />
 
                 <div className="mb-3 mt-7 flex items-baseline gap-2">
-                  <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+                  <span className={LABEL_TEXT}>
                     Conversation
                   </span>
                   <span className="text-caption text-text-muted">
@@ -355,7 +354,7 @@ function DisclosureStrip({ label, meta }: { label: string; meta?: string }) {
     <div className="border-t border-border-subtle">
       <div className="flex w-full items-center gap-2 bg-card-surface-subtle px-4 py-1.5 text-left">
         <ChevronRight size={11} className="shrink-0 text-text-muted" />
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        <span className={LABEL_TEXT}>
           {label}
         </span>
         {meta && <span className="text-caption text-text-muted">{meta}</span>}

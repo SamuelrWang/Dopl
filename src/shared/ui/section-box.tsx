@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 const MIN_BODY_H = 56;
 
@@ -59,7 +60,7 @@ export function SectionBox({
   return (
     <section className="w-full overflow-hidden rounded-xl border border-border-strong">
       <div className="flex items-center gap-2 bg-card-surface-subtle px-4 py-1.5">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        <span className={LABEL_TEXT}>
           {label}
         </span>
         {meta && <span className="text-caption text-text-muted">{meta}</span>}

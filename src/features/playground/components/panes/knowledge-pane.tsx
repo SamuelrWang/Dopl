@@ -29,10 +29,7 @@ import {
   type KnowledgeViewFolder,
 } from "./knowledge-pane-live";
 import styles from "./knowledge-pane.module.css";
-
-/** App-wide icon-button recipe (knowledge-v2 detail-panel.tsx). */
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
 
 /* ── Static demo corpus, themed on the real seed (Dopl Guide KB) ────────── */
 
@@ -196,15 +193,15 @@ export function KnowledgePane() {
               size="sm"
             />
           </div>
-          <button className={ICON_BTN} type="button" aria-label="Download knowledge base">
+          <button className={CHROME_ICON_BUTTON} type="button" aria-label="Download knowledge base">
             <Download size={16} />
           </button>
-          <button className={ICON_BTN} type="button" aria-label="Knowledge base settings">
+          <button className={CHROME_ICON_BUTTON} type="button" aria-label="Knowledge base settings">
             <Settings size={16} />
           </button>
           <span className={styles.divider} />
           <button
-            className={cn(ICON_BTN, "hover:text-danger")}
+            className={cn(CHROME_ICON_BUTTON, "hover:text-danger")}
             type="button"
             aria-label="Delete knowledge base"
           >

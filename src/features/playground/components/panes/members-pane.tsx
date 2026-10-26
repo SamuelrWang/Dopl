@@ -17,6 +17,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { SectionBox } from "@/shared/ui/section-box";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { useLiveMembers, type PaneAccessRow, type PaneMember, type PaneRole } from "./members-pane-live";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
 
 /**
  * Playground clone of the members console (two-pane master-detail of
@@ -80,9 +81,6 @@ const SCOPE: Record<PaneAccessRow["level"], { label: string; className: string }
   read: { label: "Read only", className: "bg-surface-raised-2 border-border-default text-text-secondary" },
 };
 
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
-
 const SEARCH_PLACEHOLDER: Record<TabKey, string> = {
   members: "Search members",
   teams: "Search teams",
@@ -133,10 +131,10 @@ export function MembersPane() {
             {members.length}
           </span>
           <span className="flex-1" />
-          <button type="button" className={ICON_BTN} aria-label="New team" title="New team">
+          <button type="button" className={CHROME_ICON_BUTTON} aria-label="New team" title="New team">
             <Users size={16} />
           </button>
-          <button type="button" className={ICON_BTN} aria-label="Add members" title="Add members">
+          <button type="button" className={CHROME_ICON_BUTTON} aria-label="Add members" title="Add members">
             <UserPlus size={16} />
           </button>
         </div>

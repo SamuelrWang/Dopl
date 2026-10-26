@@ -24,6 +24,7 @@ import type { WorkspaceMemberView } from "@/features/members/types";
 import type { Channel, ChannelVisibility } from "../types";
 import { addChannelMember, createChannel } from "../client/api";
 import { seedAgentDefaults } from "../lib/agent-defaults-seed";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 interface Props {
   workspaceId: string;
@@ -243,7 +244,7 @@ export function CreateChannelDialog({
           </div>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Name
             </span>
             <input
@@ -264,7 +265,7 @@ export function CreateChannelDialog({
                 Samuel, 2026-09-15)** — one word for one thing across the product.
                 The state, the payload key and the column stay `topic`: a label
                 change, not a migration. */}
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Description{" "}
               <span className="font-normal normal-case text-text-muted">
                 (optional)
@@ -280,7 +281,7 @@ export function CreateChannelDialog({
           </label>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Visibility
             </span>
             <SegmentedControl
@@ -299,7 +300,7 @@ export function CreateChannelDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Members{" "}
               <span className="font-normal normal-case text-text-muted">
                 (optional)
@@ -400,7 +401,7 @@ export function CreateChannelDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Folder
             </span>
             <div className="truncate rounded-field border border-border-subtle bg-bg-inset px-3 py-2 text-body text-text-secondary">

@@ -20,6 +20,7 @@ import { Avatar } from "@/shared/ui/avatar";
 import type { Chat } from "../types";
 import { FORMAT_LABELS, SOURCE_LABELS } from "../constants";
 import { formatDate } from "@/shared/lib/format-time";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /** Chat header box: title, overview, meta line (plus owner when shared), and
  *  the agent-filled detail as collapsed disclosure strips below. */
@@ -166,7 +167,7 @@ function Disclosure({
             open && "rotate-90"
           )}
         />
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        <span className={LABEL_TEXT}>
           {label}
         </span>
         {meta && <span className="text-caption text-text-muted">{meta}</span>}

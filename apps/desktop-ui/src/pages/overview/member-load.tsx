@@ -1,4 +1,5 @@
 import type { OverviewMemberLoadRow } from "@/features/workspaces/types";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /**
  * Per-member share of the period's messages.
@@ -22,7 +23,7 @@ export function MemberLoad({
 }) {
   return (
     <section className="bento flex flex-col p-3.5">
-      <h2 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+      <h2 className={LABEL_TEXT}>
         Member load, last 30 days
       </h2>
       {rows.length === 0 ? (

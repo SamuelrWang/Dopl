@@ -7,6 +7,8 @@
  * worth a second profile read, so the one name already in hand is used.
  */
 
+import { LABEL_TEXT_MUTED } from "@/shared/ui/section-heading";
+
 /** Local-clock greeting. morning < 12 ≤ afternoon < 18 ≤ evening. */
 export function greetingFor(hour: number): string {
   if (hour < 12) return "Good morning";
@@ -24,7 +26,7 @@ export function OverviewHeader({
   return (
     <header className="flex items-start justify-between gap-6">
       <div className="min-w-0">
-        <p className="text-label font-semibold uppercase tracking-wide text-text-muted">
+        <p className={LABEL_TEXT_MUTED}>
           {greetingFor(new Date().getHours())}
         </p>
         <h1 className="mt-1.5 text-display font-semibold tracking-tight text-text-primary">

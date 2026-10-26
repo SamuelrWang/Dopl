@@ -20,11 +20,12 @@ import { RuntimeCredentialBars } from "@/features/channels/components/runtime-cr
 import { useRuntimeCredentials } from "@/features/channels/components/runtime-signin";
 import { AGENT_APPS_PATH, type AgentApp } from "../types";
 import { useAgentApps, useInvalidateAgentApps } from "./use-devices";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /** A card's own small heading — Overview's `RailCard` label face. */
 function CardHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+    <h3 className={LABEL_TEXT}>
       {children}
     </h3>
   );
