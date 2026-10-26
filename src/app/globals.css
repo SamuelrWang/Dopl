@@ -800,6 +800,11 @@ html {
 .status-pill[data-tone="done"] .status-pill-dot {
   background: var(--success);
 }
+/* `bare`: the dot and the word alone, on a card that already frames them. */
+.status-pill[data-bare="true"] {
+  padding-inline: 0;
+  background: none;
+}
 
 /* Frosted glass panel — the card a public page on white renders into (`/link/{token}`).
    The fill must stay translucent: `backdrop-filter` blurs only what shows through it.

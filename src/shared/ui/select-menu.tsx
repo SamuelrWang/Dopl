@@ -45,6 +45,11 @@ const TRIGGER_FACE = {
     "transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
   ),
   raised: "auth-btn-3d-light h-9 px-3 text-body font-medium text-text-primary",
+  /** A hairline pill at caption size on a white card (the Overview's usage scope). */
+  outline: cn(
+    "h-5.5 border border-border-default px-2 text-caption font-normal text-text-primary",
+    "transition-colors hover:bg-surface-raised-1"
+  ),
   /** The page header's white pill beside the ink page action (the ontology board's display). */
   pill: cn(WHITE_PILL, "px-3.5"),
   /** `raised` at field-row height (composer panels' Identity and Model rows): the same face, only

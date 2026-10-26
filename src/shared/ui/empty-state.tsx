@@ -6,7 +6,8 @@ import { cn } from "@/shared/lib/utils";
  * THE empty treatment. `pane` (default) is the empty detail of a two-pane browser (chats /
  * members / skills): a bare hint line stays muted; a title over a description gets the emphasis.
  * `well` is an empty LIST inside a card: a small icon and one phrase in a `.card-well`, so the
- * empty state keeps a shape.
+ * empty state keeps a shape. `outline` is the same on a surface that takes no grey fill: a dashed
+ * hairline box (the /home Overview cards).
  */
 export function EmptyState({
   icon: Icon,
@@ -16,22 +17,25 @@ export function EmptyState({
   variant = "pane",
   className,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   title: string;
   description?: ReactNode;
   children?: ReactNode;
-  variant?: "pane" | "well";
+  variant?: "pane" | "well" | "outline";
   className?: string;
 }) {
-  if (variant === "well") {
+  if (variant !== "pane") {
     return (
       <div
         className={cn(
-          "card-well flex min-h-13 items-center justify-center gap-1.5 text-caption text-text-muted",
+          "flex items-center justify-center gap-1.5 text-caption text-text-muted",
+          variant === "well"
+            ? "card-well min-h-13"
+            : "min-h-10 rounded-[10px] border border-dashed border-border-default",
           className
         )}
       >
-        <Icon size={14} aria-hidden="true" />
+        {Icon && <Icon size={14} aria-hidden="true" />}
         <span>{title}</span>
       </div>
     );
@@ -43,7 +47,7 @@ export function EmptyState({
         className
       )}
     >
-      <Icon size={30} className="text-border-strong" />
+      {Icon && <Icon size={30} className="text-border-strong" />}
       <p
         className={cn(
           "text-body",
