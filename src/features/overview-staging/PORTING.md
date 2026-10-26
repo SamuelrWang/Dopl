@@ -7,7 +7,7 @@ of the UI. I like the way that it has been doing the UI stuff for the task."*). 
 (the branch copy and Version D) were deleted on 2026-10-26 (Samuel: *"For the playground, delete
 all the other versions of the overview and just keep version E."*).
 
-Look: the channel tasks recipe (`channels-staging`, `ui-staging/staging.css › .uis-tk*`): white
+Look: the channel tasks recipe (`channels/components/task-list.tsx`): white
 cards, hairlines between rows, `--shadow-bento`, caption-scale meta, tokens only, under the grey
 ban below.
 

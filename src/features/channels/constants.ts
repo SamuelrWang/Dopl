@@ -11,6 +11,7 @@ export const CHANNEL_TABLES = [
   "channels",
   "channel_members",
   "channel_messages",
+  "channel_tasks",
 ] as const;
 
 /**

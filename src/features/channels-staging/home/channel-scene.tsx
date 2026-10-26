@@ -14,11 +14,9 @@
  *  - the composer's send and the New thread dialog's Create are caught in the CAPTURE phase
  *    and turned into in-memory writes, because the product hands both to `useThreadWrites`
  *    (a network mutation). Nothing here fetches.
- *  - (2026-10-26, channel tasks, round 2: both at once) the info column is
- *    `./tasks-info-panel.tsx › StagingInfoPanel` (the product panel + a Tasks tab, the full
- *    view), and the pane's `agentActivity` is `./tasks-popover.tsx › StagingTasksBar` (the
- *    product's working pills + a tasks pill and quick view). A quick-view row opens the Info
- *    column on Tasks, on that task's detail (round 4). With `tasks` absent, both are the product's.
+ *  - (2026-10-26, channel tasks) the product's Tasks tab (`TasksPanel`) and composer quick view
+ *    (`TasksQuickView`) draw the page's in-memory tasks; the open task and the tab ask are held
+ *    here, as the selection hook holds them in the product. With `tasks` absent, neither draws.
  */
 
 import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
@@ -45,19 +43,19 @@ import { stagingAgentIndex, stagingIdentityFace } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
 import { StagingSettingsTab } from "./settings-tab";
 import { AddPersonDialog } from "@/features/popups-staging/pages/home/add-person-dialog";
-import { StagingInfoPanel } from "./tasks-info-panel";
-import { StagingTasksBar } from "./tasks-popover";
-import { TaskPanel } from "./task-panel";
-import { isActive, type StagingTask, type TaskLink } from "../data/staging-tasks";
+import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
+import { TasksPanel } from "@/features/channels/components/tasks-panel";
+import { TasksQuickView } from "@/features/channels/components/tasks-quick-view";
+import { useTaskFaces } from "@/features/channels/components/task-faces";
+import { isActiveTask } from "@/features/channels/lib/task-model";
+import type { ChannelTaskDetail, TaskLink, TaskStatus } from "@/features/channels/types";
 
 /** STAGING (2026-10-26): the channel's tasks (the Tasks tab and the composer quick view). */
 export type SceneTasks = {
-  list: readonly StagingTask[];
-  onResolve: (taskId: string) => void;
-  onReopen: (taskId: string) => void;
-  /** Round 4: the task detail's subtask checks and notes. */
+  list: readonly ChannelTaskDetail[];
+  onSetStatus: (taskId: string, status: TaskStatus) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
-  onAddNote: (taskId: string, text: string) => void;
+  onAddNote: (taskId: string, body: string) => Promise<void>;
 };
 
 /** The composer's writes are intercepted before they reach the gate, so it is a stub. */
@@ -151,28 +149,15 @@ export function StagingChannelScene({
     actions.exitThread();
     actions.jumpToSeq(link.seq);
   };
-  const taskList = tasks && {
-    tasks: tasks.list,
-    members,
-    onResolve: tasks.onResolve,
-    onReopen: tasks.onReopen,
-    onOpenLink: openTaskLink,
-  };
-  // STAGING (round 2 + 4): the quick view's row / "See all" → the Info column on Tasks, on that
-  // task's detail (`openTaskId`, like the open thread) or on the list. The nonce switches tabs.
+  const taskFaceOf = useTaskFaces(index, agentFeeds);
+  // STAGING: `use-channels-selection.ts`'s open task and Tasks-tab ask, held here.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const [tasksSignal, setTasksSignal] = useState(0);
-  const openTasksTab = (taskId: string | null) => {
+  const [tasksTabSignal, setTasksTabSignal] = useState(0);
+  const openTask = (taskId: string | null) => {
     if (!infoOpen) actions.toggleInfo();
     setOpenTaskId(taskId);
-    setTasksSignal((n) => n + 1);
+    setTasksTabSignal((n) => n + 1);
   };
-  const working = (
-    <AgentActivityRows
-      agents={ownAgentsWorking(sessions, channel.id, thread?.id ?? null)}
-      colors={workingColors}
-    />
-  );
 
   /** STAGING: the composer's send, done in memory. Clears via the toolbar's own Discard. */
   const sendFrom = (root: HTMLElement) => {
@@ -246,17 +231,19 @@ export function StagingChannelScene({
         liveAgents={live}
         agentFeeds={agentFeeds}
         agentActivity={
-          taskList ? (
-            <StagingTasksBar
+          <AgentActivityRows
+            agents={ownAgentsWorking(sessions, channel.id, thread?.id ?? null)}
+            colors={workingColors}
+          />
+        }
+        tasksQuickView={
+          tasks && (
+            <TasksQuickView
               key={`tasks-${channel.id}`}
-              paneRef={pane}
-              working={working}
-              tasks={taskList.tasks}
-              members={members}
-              onOpenTask={openTasksTab}
+              tasks={tasks.list}
+              faceOf={taskFaceOf}
+              onOpenTask={openTask}
             />
-          ) : (
-            working
           )
         }
         onToggleInfo={actions.toggleInfo}
@@ -268,21 +255,24 @@ export function StagingChannelScene({
         onJumpToSeq={actions.jumpToSeq}
       />
       <div className="channel-info-slide" data-open={infoOpen ? "true" : "false"}>
-        {/* STAGING (2026-10-26): the product panel + a Tasks tab; without `tasks`, the product's. */}
-        <StagingInfoPanel
+        <ChannelsInfoPanel
           tasks={
-            taskList && tasks ? (
-              <TaskPanel
-                {...taskList}
-                openId={openTaskId}
-                onOpenChange={setOpenTaskId}
-                onToggleSubtask={tasks.onToggleSubtask}
+            tasks && (
+              <TasksPanel
+                tasks={tasks.list}
+                faceOf={taskFaceOf}
+                openTaskId={openTaskId}
+                onOpenTask={setOpenTaskId}
+                detail={tasks.list.find((t) => t.id === openTaskId) ?? null}
+                onOpenLink={openTaskLink}
+                onSetStatus={(t, status) => tasks.onSetStatus(t.id, status)}
+                onToggleSubtask={(t, sub) => tasks.onToggleSubtask(t.id, sub.id)}
                 onAddNote={tasks.onAddNote}
               />
-            ) : undefined
+            )
           }
-          taskCount={tasks?.list.filter(isActive).length}
-          tasksSignal={tasksSignal}
+          activeTaskCount={tasks?.list.filter(isActiveTask).length}
+          tasksTabSignal={tasksTabSignal}
           key={`info-${channel.id}`}
           channel={channel}
           channelName={channel.name}

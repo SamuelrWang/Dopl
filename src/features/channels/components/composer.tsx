@@ -52,6 +52,7 @@ export function ChannelsComposer({
   newThreadSignal = 0,
   liveAgents = EMPTY_LIVE_AGENTS,
   working = null,
+  tasksQuickView = null,
   recentAgentIds = EMPTY_RECENT,
   threadOtherParty = null,
 }: {
@@ -74,6 +75,8 @@ export function ChannelsComposer({
   liveAgents?: readonly LiveAgentSession[];
   /** My agents mid-turn, drawn at the end of the recipient line. */
   working?: ReactNode;
+  /** The tasks quick view, at the recipient line's right end (`tasks-quick-view.tsx`). */
+  tasksQuickView?: ReactNode;
   /** The room's recent agent posters, newest first (RR3). */
   recentAgentIds?: readonly string[];
   /** A thread's other party (RR1); `null` in the main room. */
@@ -269,6 +272,7 @@ export function ChannelsComposer({
         threadOtherParty={threadOtherParty}
         cancelled={addressOff}
         working={working}
+        trailing={tasksQuickView}
       />
       {/* The white card; its 1px hairline plus this padding puts the content 13px/11px in. */}
       <div data-composer-card="" className="white-card flex flex-col rounded-[20px] px-3 py-2.5">

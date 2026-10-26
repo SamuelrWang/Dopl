@@ -3,7 +3,7 @@
 /**
  * ONE CHANNEL, WHOLE — everything right of the channel tree: the breadcrumb
  * header, the transcript, the composer, and the Info / Threads / Agents /
- * Settings column beside them.
+ * (Tasks) / Settings column beside them.
  *
  * ⚠ EXTRACTED FROM `channels-core.tsx` ON 2026-08-23 SO A SECOND HOST CAN
  * MOUNT IT: the workspace page, and `channel-surface-standalone.tsx` for a
@@ -36,6 +36,8 @@ import { useInfoSlide } from "./use-info-slide";
 import type { TabKey } from "./info-panel";
 import type { ChannelWebView } from "./use-channel-web-view";
 import { PeerActivityRow, peerWorkingOn } from "./peer-activity";
+import { TasksQuickView } from "./tasks-quick-view";
+import { useTaskFaces } from "./task-faces";
 import type { ChannelSurfaceData } from "./channel-surface-data";
 import type { ChannelsSelection } from "./use-channels-selection";
 import type { Channel } from "../types";
@@ -180,6 +182,7 @@ export function ChannelSurface({
     () => ({ sessions: agentSessions, peers: agentsPanel.peerSessions }),
     [agentSessions, agentsPanel.peerSessions]
   );
+  const taskFaceOf = useTaskFaces(index, agentFeeds);
 
   const messagePane = (viewSelect?: ReactNode) => (
     <ChannelsMessagePane
@@ -256,6 +259,11 @@ export function ChannelSurface({
           // picker and tint read, so one agent cannot be two hues on one screen.
           colors={workingColors}
         />
+      }
+      tasksQuickView={
+        capabilities?.tasks && !webView ? (
+          <TasksQuickView tasks={data.tasks} faceOf={taskFaceOf} onOpenTask={sel.openTask} />
+        ) : null
       }
       // "Anthony's agent is working…", off the peer projection the Agents tab
       // already polls. Thread view only — the row is about ONE exchange.

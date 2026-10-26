@@ -22,27 +22,28 @@ const TABS = [
   { key: "info", label: "Info" },
   { key: "threads", label: "Threads" },
   { key: "agents", label: "Agents" },
+  { key: "tasks", label: "Tasks" },
   { key: "settings", label: "Settings" },
 ] as const;
 
 export type TabKey = (typeof TABS)[number]["key"];
 
 /**
- * THE ROW IS SHORTER IN THREAD VIEW (Samuel, 2026-08-21).
+ * THE ROW FOR THIS VIEW AND HOST.
  *
- * ⚠ THREADS IS A CHANNEL-VIEW TAB: with a thread open, a list of the channel's
- * OTHER threads is the one control here that navigates away from what the reader
- * is looking at. The sidebar's tree covers thread-to-thread movement meanwhile.
- *
- * ⚠ THREAD VIEW IS THE ONLY THING THAT SHORTENS THE ROW, AND THERE IS NO
- * CAPABILITY-GATED TAB LEFT (Samuel's ruling R-18, 2026-09-17): the `knowledge` arm
- * went with the hostless Knowledge lane, so every host draws the same four
- * options and `options.length > 4` can never be true again.
+ * ⚠ THREADS IS A CHANNEL-VIEW TAB (Samuel, 2026-08-21): with a thread open, a list of the channel's
+ * OTHER threads is the one control here that navigates away from what the reader is looking at.
+ * ⚠ TASKS IS THE ONE CAPABILITY-ADDED TAB (`channel-surface-contract.ts › tasks`), left of
+ * Settings. It stays in thread view: tasks belong to the channel. The row is `overflow-x-auto`
+ * (`info-panel.tsx`), so five options never push the column wider.
  */
 export function channelPaneTabs(
-  threadView: boolean
+  threadView: boolean,
+  tasks = false
 ): ReadonlyArray<(typeof TABS)[number]> {
-  return TABS.filter((t) => t.key !== "threads" || !threadView);
+  return TABS.filter(
+    (t) => (t.key !== "threads" || !threadView) && (t.key !== "tasks" || tasks)
+  );
 }
 
 /**
@@ -58,14 +59,17 @@ export function channelPaneTabs(
  *
  * ⚠ THREADS COUNTS THE LOADED LIST — count what is displayed and say when the
  * display clipped (`threadsTruncated`), never a wider count nothing renders.
+ * ⚠ TASKS COUNTS THE ACTIVE (unresolved) tasks of the loaded list, the ones the tab leads with.
  */
 export function tabCount(
   key: TabKey,
   threads: readonly unknown[],
-  agentCount: number | undefined
+  agentCount: number | undefined,
+  activeTaskCount?: number
 ): number | undefined {
   if (key === "threads") return threads.length;
   if (key === "agents") return agentCount;
+  if (key === "tasks") return activeTaskCount;
   return undefined;
 }
 

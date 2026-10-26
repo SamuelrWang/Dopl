@@ -122,7 +122,7 @@ export interface ChannelSurfaceSlots {
   infoExtras?: (ctx: ChannelInfoTabContext) => ChannelInfoExtras;
 }
 
-/** Each flag NARROWS the workspace page's behaviour, except `artifacts`, which adds. */
+/** Each flag NARROWS the workspace page's behaviour, except `artifacts` and `tasks`, which add. */
 export interface ChannelSurfaceCapabilities {
   /**
    * Whether this container's membership can be CHANGED. Default `true`.
@@ -164,6 +164,12 @@ export interface ChannelSurfaceCapabilities {
    * (Samuel's ruling R-18, 2026-09-17) — re-adding the face needs his word.
    */
   artifacts?: boolean;
+  /**
+   * Draw the channel's TASKS: a Tasks tab left of Settings and the composer's quick view.
+   * ⚠ Default `false`, an ADD like {@link artifacts}: a host that passes nothing reads no tasks.
+   * /home passes it. The web's one column has no Tasks face, so the guest lane does not.
+   */
+  tasks?: boolean;
   /**
    * **WHICH OF THE TWO RULED MENTIONS FACES THIS SURFACE DRAWS.** Default
    * `"disclosure"` — the workspace channels page's.

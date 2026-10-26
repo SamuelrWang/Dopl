@@ -75,6 +75,12 @@ export function channelArtifactsPath(channelId: string): string {
   return channelPath(channelId, "/artifacts");
 }
 
+/** The channel's TASKS: the list, and one task's detail behind `?task=<id>`. One route, so `.all`
+ *  reaches both arms. */
+export function channelTasksPath(channelId: string): string {
+  return channelPath(channelId, "/tasks");
+}
+
 export const CHANNEL_CONSENT_PATH = "/api/channels/consent";
 
 export const channelKeys = {
@@ -97,6 +103,9 @@ export const channelKeys = {
   /** ⚠ `.all` covers BOTH arms — the list and every `?artifact=<id>` card. */
   artifacts: (channelId: string): ApiResourceKeys =>
     apiResource(channelArtifactsPath(channelId)),
+  /** ⚠ `.all` covers BOTH arms — the list and every `?task=<id>` detail. */
+  tasks: (channelId: string): ApiResourceKeys =>
+    apiResource(channelTasksPath(channelId)),
   consent: (): ApiResourceKeys => apiResource(CHANNEL_CONSENT_PATH),
 };
 

@@ -1,0 +1,151 @@
+"use client";
+
+import { useState } from "react";
+import { Check, ChevronRight } from "lucide-react";
+import { formatRelativeTime } from "@/shared/lib/format-time";
+import { cn } from "@/shared/lib/utils";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { StatusPill } from "@/shared/ui/status-pill";
+import { byTaskOrder, isActiveTask } from "../lib/task-model";
+import {
+  TASK_TICK,
+  TASK_TICK_CONTROL,
+  TaskAssignees,
+  TaskLinkChip,
+  TaskProgress,
+  TaskTickMark,
+  nextStatus,
+} from "./task-bits";
+import { STATUS_TONE, TASK_STATUS_LABEL, type TaskFaceOf } from "./task-faces";
+import type { ChannelTask, TaskLink, TaskStatus } from "../types";
+
+/** The white card every task list draws (rows with a hairline between them). */
+export const TASK_CARD = "white-card m-0 list-none px-3";
+
+export interface TaskListProps {
+  tasks: readonly ChannelTask[];
+  /** The read came back at its ceiling; said under the list (INVARIANTS §9). */
+  truncated?: boolean;
+  faceOf: TaskFaceOf;
+  /** Absent (a guest) draws the tick as a mark, not a control (R8). */
+  onSetStatus?: (task: ChannelTask, status: TaskStatus) => void;
+  onOpen: (taskId: string) => void;
+  onOpenLink: (link: TaskLink) => void;
+}
+
+function TaskRow({
+  task,
+  faceOf,
+  onSetStatus,
+  onOpen,
+  onOpenLink,
+}: { task: ChannelTask } & Omit<TaskListProps, "tasks" | "truncated">) {
+  const done = task.status === "resolved";
+  const next = nextStatus(task);
+  const by = done && task.resolvedBy ? task.resolvedBy : task.createdBy;
+  const face = faceOf(by);
+  return (
+    <li
+      data-status={task.status}
+      className="grid min-h-[52px] grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-border-default py-2 first:border-t-0"
+    >
+      {onSetStatus ? (
+        <button
+          type="button"
+          data-status={task.status}
+          aria-label={`${next.verb} ${task.title}`}
+          title={next.verb}
+          onClick={() => onSetStatus(task, next.status)}
+          className={cn(TASK_TICK, TASK_TICK_CONTROL)}
+        >
+          <TaskTickMark status={task.status} />
+        </button>
+      ) : (
+        <span data-status={task.status} aria-hidden="true" className={TASK_TICK}>
+          <TaskTickMark status={task.status} />
+        </span>
+      )}
+      <span className="flex min-w-0 flex-col gap-0.75">
+        <button
+          type="button"
+          aria-label={`Open ${task.title}`}
+          onClick={() => onOpen(task.id)}
+          className={cn(
+            "p-0 text-left text-body font-medium leading-[1.35] underline-offset-2 hover:underline",
+            done ? "text-text-muted" : "text-text-primary"
+          )}
+        >
+          {task.title}
+        </button>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.25 gap-y-0.5 text-label text-text-muted">
+          <IdentityFace size={14} {...face} />
+          <span>
+            {face.name} {done ? "resolved" : "opened"}{" "}
+            {formatRelativeTime(done ? task.resolvedAt : task.createdAt)}
+          </span>
+          {task.link && <TaskLinkChip link={task.link} onOpen={onOpenLink} />}
+        </span>
+      </span>
+      <span className="flex flex-col items-end gap-1.25">
+        <TaskAssignees actors={task.assignees} faceOf={faceOf} />
+        <span className="inline-flex items-center gap-1.5">
+          <TaskProgress task={task} />
+          <StatusPill tone={STATUS_TONE[task.status]} dot={false}>
+            {TASK_STATUS_LABEL[task.status]}
+          </StatusPill>
+        </span>
+      </span>
+    </li>
+  );
+}
+
+/** Active tasks in one card, resolved ones collapsed under a "Resolved N" toggle. */
+export function TaskList({ tasks, truncated = false, ...row }: TaskListProps) {
+  const [resolvedOpen, setResolvedOpen] = useState(false);
+  if (tasks.length === 0) {
+    return <EmptyState variant="well" icon={Check} title="No tasks yet" />;
+  }
+  const active = tasks.filter(isActiveTask).sort(byTaskOrder);
+  const resolved = tasks.filter((t) => !isActiveTask(t)).sort(byTaskOrder);
+  const rows = (list: readonly ChannelTask[]) =>
+    list.map((t) => <TaskRow key={t.id} task={t} {...row} />);
+
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      {active.length > 0 ? (
+        <ul aria-label="Active tasks" className={TASK_CARD}>
+          {rows(active)}
+        </ul>
+      ) : (
+        <EmptyState variant="well" icon={Check} title="All tasks resolved" />
+      )}
+      {resolved.length > 0 && (
+        <>
+          <button
+            type="button"
+            aria-expanded={resolvedOpen}
+            onClick={() => setResolvedOpen((v) => !v)}
+            className="inline-flex items-center gap-1 self-start px-0.5 py-1 text-caption font-medium text-text-secondary transition-colors hover:text-text-primary"
+          >
+            <ChevronRight
+              size={12}
+              aria-hidden="true"
+              className={cn("transition-transform", resolvedOpen && "rotate-90")}
+            />
+            Resolved
+            <span className="text-text-muted">{resolved.length}</span>
+          </button>
+          {resolvedOpen && (
+            <ul aria-label="Resolved tasks" className={TASK_CARD}>
+              {rows(resolved)}
+            </ul>
+          )}
+        </>
+      )}
+      {truncated && (
+        <p className="px-0.5 text-caption text-text-muted">Showing the most recent tasks</p>
+      )}
+    </div>
+  );
+}

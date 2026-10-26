@@ -1,0 +1,141 @@
+"use client";
+
+import { ChevronLeft } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
+import { IdentityStack } from "@/shared/ui/avatar-stack";
+import { Breadcrumb } from "@/shared/ui/breadcrumb";
+import { StatusPill } from "@/shared/ui/status-pill";
+import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { ThinMeter } from "@/shared/ui/usage-meter";
+import { actorKey } from "../lib/task-model";
+import { TaskLinkChip, nextStatus } from "./task-bits";
+import { STATUS_TONE, TASK_STATUS_LABEL, type TaskFaceOf } from "./task-faces";
+import { TaskNotes } from "./task-notes";
+import { TaskSubtasks } from "./task-subtasks";
+import type {
+  ChannelTask,
+  ChannelTaskDetail,
+  ChannelTaskSubtask,
+  TaskLink,
+  TaskStatus,
+} from "../types";
+
+export interface TaskDetailProps {
+  /** The list's row: the header paints from it while the detail read is in flight. */
+  task: ChannelTask;
+  detail: ChannelTaskDetail | null;
+  faceOf: TaskFaceOf;
+  onBack: () => void;
+  onOpenLink: (link: TaskLink) => void;
+  /** Absent (a guest) draws no Resolve / Reopen and no subtask checks (R8). */
+  onSetStatus?: (task: ChannelTask, status: TaskStatus) => void;
+  onToggleSubtask?: (task: ChannelTaskDetail, subtask: ChannelTaskSubtask) => void;
+  onAddNote: (taskId: string, body: string) => Promise<unknown>;
+}
+
+/** The assignees as one stack; a green dot marks the owner of an in-progress subtask. */
+function AssigneeStack({ task, faceOf }: { task: ChannelTask; faceOf: TaskFaceOf }) {
+  if (task.assignees.length === 0) return null;
+  const active = new Set(task.active.map(actorKey));
+  const faces = task.assignees.map((a) => ({ ...faceOf(a), online: active.has(actorKey(a)) }));
+  const names = faces.map((f) => (f.online ? `${f.name} (active)` : f.name)).join(", ");
+  return (
+    <span className="inline-flex h-5.5 flex-none items-center">
+      <IdentityStack faces={faces} size={20} label={`Assigned to ${names}`} />
+      <span className="ml-2 whitespace-nowrap text-caption leading-[22px] text-text-secondary">
+        {faces.length === 1 ? faces[0].name : `${faces.length} assigned`}
+      </span>
+    </span>
+  );
+}
+
+/** One task inside the Tasks tab: breadcrumb, header, subtasks, notes. */
+export function TaskDetail({
+  task: row,
+  detail,
+  faceOf,
+  onBack,
+  onOpenLink,
+  onSetStatus,
+  onToggleSubtask,
+  onAddNote,
+}: TaskDetailProps) {
+  const task = detail ?? row;
+  const next = nextStatus(task);
+  return (
+    <article aria-label={task.title} className="flex min-w-0 flex-col gap-5">
+      <Breadcrumb
+        items={[
+          {
+            key: "tasks",
+            label: "Tasks",
+            icon: <ChevronLeft size={13} aria-hidden="true" />,
+            onSelect: onBack,
+            ariaLabel: "Back to tasks",
+          },
+          { key: task.id, label: task.title },
+        ]}
+      />
+
+      <header className="flex flex-col gap-2.5">
+        <div className="flex items-start justify-between gap-2.5">
+          <h3 className="text-title font-semibold leading-[1.3] text-text-primary">{task.title}</h3>
+          <StatusPill tone={STATUS_TONE[task.status]} dot={false}>
+            {TASK_STATUS_LABEL[task.status]}
+          </StatusPill>
+        </div>
+        {task.description && (
+          <p className="whitespace-pre-wrap text-body leading-normal text-text-secondary">
+            {task.description}
+          </p>
+        )}
+        {task.progress && (
+          <div className="flex items-center gap-2 text-caption tabular-nums text-text-muted">
+            <ThinMeter used={task.progress.done} limit={task.progress.total} className="flex-1" />
+            <span
+              role="img"
+              aria-label={`${task.progress.done} of ${task.progress.total} subtasks done`}
+            >
+              {task.progress.done}/{task.progress.total}
+            </span>
+          </div>
+        )}
+        <div className="flex min-w-0 items-center gap-2.5 border-t border-border-default pt-2.5">
+          <AssigneeStack task={task} faceOf={faceOf} />
+          {task.link && (
+            <TaskLinkChip
+              link={task.link}
+              onOpen={onOpenLink}
+              className="h-5.5 flex-[0_1_auto] px-2 text-caption leading-[22px]"
+            />
+          )}
+          {onSetStatus && (
+            <button
+              type="button"
+              onClick={() => onSetStatus(task, next.status)}
+              className={cn(PILL_BUTTON, "ml-auto h-5.5 py-0")}
+            >
+              {next.verb}
+            </button>
+          )}
+        </div>
+      </header>
+
+      {detail && (
+        <>
+          <TaskSubtasks
+            subtasks={detail.subtasks}
+            faceOf={faceOf}
+            onToggle={onToggleSubtask && ((s) => onToggleSubtask(detail, s))}
+          />
+          <TaskNotes
+            notes={detail.notes}
+            truncated={detail.notesTruncated}
+            faceOf={faceOf}
+            onAdd={(body) => onAddNote(detail.id, body)}
+          />
+        </>
+      )}
+    </article>
+  );
+}

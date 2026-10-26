@@ -35,7 +35,7 @@ function Mounted() {
   );
   const store = useStagingChannels((id) => seedChannel(qc, id));
   const { selected, fixture, createChannel, revokeLink } = store;
-  // STAGING (2026-10-26, channel tasks): the Tasks tab and the composer quick view read this.
+  // STAGING (2026-10-26, channel tasks): the product Tasks tab and quick view read this.
   const tasksApi = useStagingTasks(store.rows);
 
   // The frame's "New channel" pill and a link card's Revoke are the shared popups-staging copies
@@ -81,10 +81,9 @@ function Mounted() {
             agentsVersion={store.agentsVersion}
             tasks={{
               list: tasksApi.tasksFor(fixture.channel.id),
-              onResolve: (id) => tasksApi.resolve(fixture.channel.id, id),
-              onReopen: (id) => tasksApi.reopen(fixture.channel.id, id),
+              onSetStatus: (id, status) => tasksApi.setStatus(fixture.channel.id, id, status),
               onToggleSubtask: (id, sub) => tasksApi.toggleSubtask(fixture.channel.id, id, sub),
-              onAddNote: (id, text) => tasksApi.addNote(fixture.channel.id, id, text),
+              onAddNote: (id, body) => tasksApi.addNote(fixture.channel.id, id, body),
             }}
           />
         ) : selected?.kind === "link" ? (

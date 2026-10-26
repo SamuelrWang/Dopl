@@ -170,10 +170,12 @@ export function RelationshipRecord({
       // between the two channel record surfaces (Samuel, 2026-09-15; the
       // capability's docblock carries the ruling). A capability rather than a
       // fork precisely so it stays the only one.
+      // `tasks: true` — the Tasks tab and the composer's quick view.
       capabilities={{
         memberManagement: false,
         peerNamedHeader: false,
         artifacts: true,
+        tasks: true,
         mentionsLayout: "category",
       }}
     />
