@@ -4375,7 +4375,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 
 - ⚠ **Id note:** see F-338's; same read, same race.
 - Location: `apps/desktop-ui/src/pages/home/identity-panels.tsx` — `containerList.error` was read,
-  `homeList.error` was not — against `identity-panels.tsx › PrivateIdentitySection` (the card half merged back into that file 2026-09-23).
+  `homeList.error` was not — against `identity-panels.tsx`'s Personal section (since 2026-10-26 `› personalState`).
 - **The mechanism, and it compounds.** `useAgentIdentities` reports `resolved: query.data !== undefined`,
   so a FAILED read is unresolved **forever**. `scopePending` was `!homeList.resolved`, so:
   1. the section body rendered a bare `<div className="h-10" />` — no sentence, no error, no retry;
