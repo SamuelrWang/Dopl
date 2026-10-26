@@ -3,14 +3,9 @@
 /**
  * THE AGENT VIEW'S CONTROL STRIP — Pause · End · Open window.
  *
- * ⚠ SPLIT OUT OF `agent-panel.tsx` ON 2026-08-22, when the 1:1 composer landed in
- * that panel and pushed it to 517 lines against the 500-line cap (INVARIANTS §1).
- * **The seam is the one `agents-controls.ts` was split on, not the line count
- * that forced the question**: this file is COMMANDS — it changes when the bridge
- * grows an op or an op grows a coordinate, which has happened four times in four
- * days — while what stays in `agent-panel.tsx` is the surface's LAYOUT and its
- * read-only lanes. Two rates of change in one file is how a panel gets
- * re-reviewed every time a button is added.
+ * This file is COMMANDS — it changes when the bridge grows an op or an op grows a
+ * coordinate — while `agent-panel.tsx` is the surface's LAYOUT and its read-only
+ * lanes.
  *
  * ⚠ EVERYTHING HERE IS OWN-AGENTS-ONLY, structurally rather than by a check: the
  * ops resolve against main's OWN session registry, which holds nothing but this
@@ -35,14 +30,10 @@ import {
   type AgentControl,
   useAgentControls,
 } from "./agents-controls";
-// ⚠ THE HELD-GATE CARDS RENDER IN THIS BOX (2026-09-17, Samuel's inline-approval ruling), and
-// the reason is what this file IS: Approve / Deny is a CONTROL, and it belongs beside Pause /
-// End / Open window rather than in the stream, which is a RECORD of what the agent did. It
-// mounts here rather than in `agent-panel.tsx` for the same §1 reason that file's own split was
-// taken — it stands at exactly the 500-line cap — and the placement is the better one either
-// way. ⚠ IT LANDS ON BOTH CHANNEL SURFACES BY CONSTRUCTION: the workspace page
-// (`channel-surface.tsx`) and /home's standalone pane (`channel-surface-standalone.tsx`) both
-// mount `ChannelsAgentPanel`, which mounts this strip.
+// ⚠ THE HELD-GATE CARDS RENDER IN THIS BOX (2026-09-17, Samuel's inline-approval ruling):
+// Approve / Deny is a CONTROL, and it belongs beside Pause / End / Open window rather than in
+// the stream, which is a RECORD of what the agent did. Both channel surfaces mount
+// `ChannelsAgentPanel`, which mounts this strip.
 import { AgentHeldGates } from "./agent-held-gate";
 
 /**
@@ -53,22 +44,6 @@ import { AgentHeldGates } from "./agent-held-gate";
  */
 export const AGENT_CONTROL_REFUSED =
   "This agent already ended — nothing was changed.";
-
-/**
- * ⚠ `AGENT_WINDOW_UNAVAILABLE` STOOD HERE AND IS DELETED (2026-08-20, F-212's
- * closure). It read "This agent runs without a window", which Samuel called
- * meaningless — correctly. **A window is a VIEW, not a runtime property.**
- * Whether main happened to mint a BrowserWindow for a spawn is an
- * implementation detail of the spawn shape; it is not a fact about the agent
- * and it is no answer to "show me what this thing is doing". The button opens
- * `channels/components/agent-window.tsx` now, on every agent, so there is no
- * refusal left for it to word.
- *
- * The lesson worth keeping: an honest refusal is still only worth shipping when
- * the operator can DO something with it. "Main did nothing, and here is the
- * internal reason" is an improvement on silence and not a substitute for the
- * feature.
- */
 
 /** How long a refusal notice stands before clearing itself. */
 const REFUSAL_NOTICE_MS = 6000;
@@ -103,12 +78,8 @@ export function AgentControls({
   stats,
 }: {
   agent: DesktopSessionSummary;
-  /**
-   * THE CONTEXT/USAGE READOUT, rendered INSIDE this box (Samuel, 2026-08-27).
-   * ⚠ IT HAD A BAND OF ITS OWN directly above these buttons — two stacked strips of chrome
-   * about one agent, eating the height the stream wants. It is a SLOT rather than a second
-   * component here because what it renders is the panel's business, not the controls'.
-   */
+  /** THE CONTEXT/USAGE READOUT, rendered inside this box under the buttons: one band of chrome.
+   *  A slot, because what it renders is the panel's business, not the controls'. */
   stats?: ReactNode;
   /** The workspace segment the agent window's route is built from. */
   workspaceSlug: string;
@@ -223,12 +194,6 @@ export function AgentControls({
         {canOpen && (
           <ControlButton
             icon={PanelTop}
-            // ⚠ "Open agent" UNTIL 2026-08-25 (Samuel). It became "Open agent" on
-            // 2026-08-20 (F-212) to stop a window reading as a runtime property
-            // of the agent — but the panel it sits in IS the agent, so the verb
-            // named the thing the operator was already looking at. What the
-            // button opens is a WINDOW. ⚠ Two tests key on this string
-            // (`agents-tab.test.tsx`, `agents-detail.test.tsx`); both updated.
             label="Open window"
             title="Watch what this agent is doing, and message it directly."
             onClick={reveal}
@@ -276,9 +241,6 @@ function ControlButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      // ⚠ FULLY ROUNDED (Samuel, 2026-08-25) — `rounded-full`, not the `[8px]`
-      // rectangle these wore. Size, padding and glyphs are untouched; only the
-      // corner changed, so the strip keeps its measured geometry.
       className="btn-light flex items-center gap-1.5 rounded-full px-2 py-1 text-caption font-medium text-text-primary disabled:cursor-not-allowed disabled:text-text-disabled"
     >
       <Icon size={13} aria-hidden />

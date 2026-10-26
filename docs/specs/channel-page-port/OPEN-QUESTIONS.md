@@ -229,3 +229,47 @@ Workers append a `## <slice>` section per question: the question, what was chose
     `session-pill-db-contract` (the state-CHECK scan now skips `channel_task_subtasks_state_check`).
 11. **`channel-addressing-rule.test.ts`** banned a `status` param (the retired agent-status op). It
     now asserts `status` is only the task status enum.
+
+## Phase 3.3 agent view (branch `ui/port-agent-view`)
+
+1. **No runtime badge in the product.** `AgentPanelHeader` takes `face: IdentityFacts` and draws the
+   badge only when the host hands a `runtimeLogo`. The product has no runtime → logo source that
+   loads on both hosts (the SPA's logos are `#/assets/*.svg?inline` imports, the web's are
+   `/img/onboarding/*` URLs the SPA does not serve), so `ChannelsAgentPanel` passes none; the landing
+   demo, /channels and /popups pass their scripted logos. Same call as Phase 3.1 item 2. A shared
+   logo map (data URIs, or a per-host provider) would light it up everywhere.
+   `channels/components/agent-panel-header.tsx`, `agent-panel.tsx`.
+2. **Whose photo.** The open agent is always the viewer's own, so its face is the viewer's photo
+   (`viewerPerson`) in the agent's colour ring. The stream cards: a posted box wears that same face;
+   an arriving one wears the operator's photo only when `fromOperator` (their words, or their own
+   agent in its ring), otherwise initials off the resolved name (an agent ringed in `senderColor`,
+   neutral without one), and none for an unknown kind. The inbound frame carries no sender id, so a
+   peer's photo cannot be known. `agent-stream-inbound-box.tsx › inboundFace`. Delta: the demo's
+   received card for a peer agent showed its owner's photo; it now shows initials.
+3. **Label wording follows the spec.** "Message received from X" → "Received from X" and "Received
+   from you" (DESIGN-LANGUAGE §4, the demo face). The nameless sentence stays "Message received"
+   (a bare "Received" says nothing). `inboundLabel`.
+4. **Edges.** Inbound: person black (`--surface-cta`), agent its colour, unknown or uncoloured
+   `--border-strong`. Posted: the agent's colour once settled; Pending / Not sent / no colour are
+   `--border-strong` (the old dark CTA banner on a pending draft is gone with the banner). The
+   addressee pills are `StatusPill dot={false}` in ink, not the old translucent banner pill.
+   `agent-stream-card.tsx › StreamCard`.
+5. **Stats well on the same ground.** `AgentStats` is `.card-well` (`--home-card`) on the panel's
+   `--home-card` ground, exactly as staged (#fbfcfc on #fbfcfd there), so the well reads by its
+   padding and radius, not by contrast. The meter is `ThinMeter` with a new `fill` prop (the agent's
+   colour; ink in the window, which threads no colour). The agent view and window no longer draw
+   `UsageMeter` (the ramp fill is gone there); the window's `meterClassName=""` prop is deleted.
+6. **The window shares every face.** The agent window's stats, stream cards and composer pill are
+   the new faces (one implementation); its own chrome, posture row and held-gate card are untouched.
+7. **The demo/staging agent view is ONE component.** The staging copy (`channels-staging/home/
+   agent-view.tsx`) was the demo's plus a send and `layout="fill"`; both became props on
+   `banner-demo/demo-agent-view.tsx › DemoAgentView`, which /channels and /popups now mount. It
+   stays because the product panel reads narration over the bridge. It mounts the real
+   `AgentControls` (no bridge: the box holds only the stats) instead of restating its box.
+8. **`AgentStatusPill`** (`agent-bits.tsx`) maps liveness to `StatusPill` (working → live dot, else
+   neutral) for the header and the thread card's agent rows. The info-column slice may want it for
+   the Agents-tab cards instead of inlining the same ternary.
+9. **`colorSlot` / `useDemoSwap` stay in `demo-swap.ts`**: `demo-agent-card.tsx` (info-column slice)
+   still uses both. Whichever slice removes the last caller deletes them.
+10. **Pre-existing red, unchanged:** `src/shared/ui/clickable-cursor.test.ts` on
+    `ontology-staging/.../kanban-column-header.tsx`.

@@ -13,11 +13,14 @@ import { LaunchAgentDialog } from "@/features/channels/components/launch-agent-d
 import type { AgentLaunchPanel } from "@/features/channels/components/use-agent-launch";
 import { agentColorOrNull } from "@/features/channels/lib/agent-colors";
 import { StagingChannelScene } from "@/features/channels-staging/home/channel-scene";
-import { StagingAgentView } from "@/features/channels-staging/home/agent-view";
+import { DemoAgentView } from "@/features/marketing/components/banner-demo/demo-agent-view";
 import { useStagingChannels } from "@/features/channels-staging/store/use-staging-channels";
 import { initialRows } from "@/features/channels-staging/data/staging-rows";
 import { seedChannel, stagingQueryClient } from "@/features/channels-staging/data/staging-query-seed";
-import { stagingAgentIndex } from "@/features/channels-staging/data/staging-agents";
+import {
+  stagingAgentIndex,
+  stagingIdentityFace,
+} from "@/features/channels-staging/data/staging-agents";
 import { CURRENT_USER_ID, VIEWER } from "@/features/channels-staging/data/demo-imports";
 
 /**
@@ -25,7 +28,7 @@ import { CURRENT_USER_ID, VIEWER } from "@/features/channels-staging/data/demo-i
  * window bridge. The window CHROME (shell, tabs, rail) is real. The BODIES are the /channels
  * staging face, IMPORTED (not copied) from `src/features/channels-staging/`: its in-memory store
  * (`useStagingChannels`), its record pane (`StagingChannelScene`, here forced into one thread) and
- * its agent view (`StagingAgentView`, `layout="fill"`). The agent window's "+" draws the product's
+ * its agent view (the landing demo's `DemoAgentView`, `layout="fill"`). The agent window's "+" draws the product's
  * `LaunchAgentDialog` on that store's launch controls, the same pair /channels' composer uses.
  *
  * One store per open window (`StagingChannelWindowsProvider`, mounted by
@@ -176,10 +179,11 @@ export function ChannelsAgentWindow({
     );
   }
   return (
-    <StagingAgentView
+    <DemoAgentView
       layout="fill"
       open
       agent={agent}
+      owner={stagingIdentityFace(agent.agentId)}
       entries={channel.narration[agent.agentId ?? ""] ?? []}
       messages={channel.messages}
       currentUserId={CURRENT_USER_ID}

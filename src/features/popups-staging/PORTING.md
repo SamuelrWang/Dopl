@@ -48,8 +48,9 @@ exposes `onStagingChannelCreated` / `onStagingLinkRevoked` listeners (`/channels
 
 From `/channels` staging (imported, not copied; see `channels-staging/PORTING.md`): the window
 bodies use `channels-staging/store/use-staging-channels.ts`, `home/channel-scene.tsx ›
-StagingChannelScene` (the thread transcript), `home/agent-view.tsx › StagingAgentView`
-(`layout="fill"`) and `data/staging-query-seed.ts`.
+StagingChannelScene` (the thread transcript) and `data/staging-query-seed.ts`. The agent window's
+body is the landing demo's `marketing/components/banner-demo/demo-agent-view.tsx › DemoAgentView`
+(`layout="fill"`), which mounts the product's agent view parts.
 
 ## Stubs and staging-only files (do NOT port)
 

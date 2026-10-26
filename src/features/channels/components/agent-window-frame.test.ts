@@ -316,11 +316,10 @@ describe("a tab label and a rail row are one type SIZE, in two weights", () => {
  * ⚠ **IT IS AN EQUALITY ACROSS THREE FILES THAT DO NOT IMPORT EACH OTHER**, which is this module's
  * whole subject: the UPPER gap is `agent-posture.tsx`'s own `py-2.5` (the thread line above it,
  * `agent-window.tsx › AgentWorkingOn`, carries no bottom padding), the LOWER one is that file's
- * margin under the pickers, and a THIRD margin was arriving from `shared/ui/usage-meter.tsx`'s
- * `className` default — which measured 20px against 10, so it was never a padding at all.
+ * margin under the pickers, and the stats well must bring no margin of its own to stack on it.
  *
- * 🔒 MUTATION-PROOF: drop `meterClassName=""` from the stats and the second expectation fails;
- * change either `2.5` and the first does.
+ * 🔒 MUTATION-PROOF: give `AgentStats`' well a margin and the second expectation fails; change
+ * either `2.5` and the first does.
  */
 describe("the pickers sit the same distance from the line above and the meter below", () => {
   it("uses ONE step for both gaps", () => {
@@ -331,11 +330,10 @@ describe("the pickers sit the same distance from the line above and the meter be
     expect(lower![1]!.replace("mt-", "")).toBe(upper![1]!.replace("py-", ""));
   });
 
-  it("leaves the meter no margin of its own to stack on it", () => {
-    // ⚠ EMPTY, NOT ABSENT: `usage-meter.tsx` defaults `className` to `mt-3`, so omitting the prop
-    // is what put the extra 12px there. ⚠ IT IS A PROP ON `AgentStats` SINCE P17 (2026-09-17) —
-    // the window stopped spelling the meter itself when the two stats copies collapsed.
-    expect(view).toMatch(/meterClassName=""/);
+  it("leaves the stats well no margin of its own to stack on it", () => {
+    const well = code("agent-stats.tsx").match(/<div className="(card-well[^"]*)"/);
+    expect(well?.[1], "the stats well moved").toBeTruthy();
+    expect(well![1]).not.toMatch(/\b(m[tby]?-)/);
   });
 
   /** ⚠ AND THE ROW ABOVE STILL CONTRIBUTES NOTHING — the moment `AgentWorkingOn` grows a bottom

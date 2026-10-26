@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * The demo's redesigned Agents-tab card (`demo-agent-card.tsx`) and received / posted boxes
- * (`demo-stream-boxes.tsx`): each product element is hidden and re-faced in place, with the
- * same facts, and the card's Open is the control the scripted cursor presses.
+ * The demo's redesigned Agents-tab card (`demo-agent-card.tsx`): each product card is hidden and
+ * re-faced in place, with the same facts, and the card's Open is the control the scripted cursor
+ * presses. The agent view and its received / posted cards are the product's own faces.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -51,27 +51,19 @@ describe("the demo Agents-tab card", () => {
   });
 });
 
-describe("the demo received / posted boxes", () => {
-  it("re-faces the inbound brief and the posted reply with a header row", async () => {
+describe("the demo received / posted cards", () => {
+  it("are the product's cards, unswapped, with a header row", () => {
     const { container } = render(
       <DemoScene step={STEP} thread={OPEN_THREAD} agentOpen />
     );
-    await waitFor(() =>
-      expect(container.querySelectorAll(".lp-demo-sb")).toHaveLength(2)
-    );
-    const [received, posted] = [
-      container.querySelector('.lp-demo-sb[data-kind="inbound"]'),
-      container.querySelector('.lp-demo-sb[data-kind="sent"]'),
-    ];
-    expect(received?.querySelector(".lp-demo-sb-label")?.textContent).toMatch(
-      /^Received from @cleanup-planner$/
-    );
-    expect(posted?.querySelector(".lp-demo-sb-label")?.textContent).toMatch(/^Posted to /);
-    // The body is the product's own rendering, cloned.
+    const view = container.querySelector('aside[aria-label="Agent view"]')!;
+    const labels = [...view.querySelectorAll("[data-stream-card-label]")].map((l) => l.textContent);
+    expect(labels).toContain("Received from @cleanup-planner");
+    expect(labels.some((l) => l?.startsWith("Posted to "))).toBe(true);
+    const received = view.querySelector("[data-stream-inbound]");
     expect(received?.textContent).toContain("session/teardown.ts");
-    expect(posted?.textContent).toContain("On it.");
-    for (const p of container.querySelectorAll("[data-stream-inbound]"))
-      expect(p.hasAttribute("data-lp-swapped")).toBe(true);
+    expect(received?.hasAttribute("data-lp-swapped")).toBe(false);
+    expect(view.textContent).toContain("On it.");
   });
 });
 
@@ -105,12 +97,14 @@ describe("mixed ownership and identity faces", () => {
     expect(subs).toContain("Anthony's agent");
   });
 
-  it("the agent view's header and stats are re-faced with the product's figures", async () => {
+  it("the agent view's header wears the owner's face and runtime badge over the product stats", () => {
     const { container } = render(<DemoScene step={STEP} thread={OPEN_THREAD} agentOpen />);
-    await waitFor(() => expect(container.querySelector(".lp-demo-avs")).not.toBeNull());
-    expect(container.querySelector(".lp-demo-avh-name")?.textContent).toBe("Teardown Order Fix");
-    const stats = container.querySelector(".lp-demo-avs")!.textContent ?? "";
-    expect(stats).toContain("Context tokens");
-    expect(stats).toContain("tokens spent");
+    const view = container.querySelector('aside[aria-label="Agent view"]')!;
+    const header = view.querySelector("header")!;
+    expect(header.textContent).toContain("Teardown Order Fix");
+    expect(header.querySelector("[data-identity-face] img[src*='logo']")).not.toBeNull();
+    const well = view.querySelector(".card-well")!.textContent ?? "";
+    expect(well).toContain("Context tokens");
+    expect(well).toContain("tokens spent");
   });
 });

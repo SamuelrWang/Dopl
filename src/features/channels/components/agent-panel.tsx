@@ -4,43 +4,21 @@
  * Channels — THE AGENT VIEW: a fourth surface that slides in over the info
  * panel and shows ONE of my agents from the inside.
  *
- * ⚠ WIRED (wiring plan Phase 5, 2026-08-18). `fixtures-agents.ts` is DELETED and
- * nothing here is invented. The header identity, the liveness, the context meter
- * and the token/timing line are this machine's own measurements
- * (`agents-model.ts`); the feed is the messages this agent REALLY POSTED, read
- * out of the same transcript the thread renders.
+ * Nothing here is invented: the liveness, the context meter and the token/timing
+ * line are this machine's own measurements (`agents-model.ts`); the Sent lane is
+ * the messages this agent REALLY POSTED, read out of the same transcript the
+ * thread renders (`agentSentMessages` below, which the window imports); the work
+ * narration is the ring `dopl-desktop-app/main/session-narration.js` keeps; the
+ * 1:1 lane goes over `sessions.message`.
  *
  * Why it is a panel and not a tab: the thread transcript is party-to-party
  * traffic, and much of what an agent does is addressed to its OPERATOR rather
- * than to the thread. That lane needs somewhere to live, and it is not the
- * transcript (INVARIANTS §5's Agents-tab bullet; the ruling arrived in the
- * port's intent doc, deleted at the Phase 12 cutover).
+ * than to the thread (INVARIANTS §5's Agents-tab bullet).
  *
- * ⚠ THE MOCK DREW THREE LANES, AND ALL THREE ARE BUILT — BUT TWO OF THEM LIVE IN
- * THE AGENT WINDOW, NOT HERE (2026-08-20, F-212's closure).
- *
- *  1. **Sent** — ✅ HERE. What this agent posted into its thread, captioned with
- *     where it went. The SAME strings the thread transcript carries, matched on
- *     `metadata.threadId` + an agent-authored row under the viewer's own account.
- *     `agentSentMessages` below is the derivation, and the window IMPORTS it
- *     rather than writing a second one.
- *  2. **Work narration** ("scanning 14 components…") — ✅ BUILT, in
- *     `channels/components/agent-window.tsx` over the ring
- *     `dopl-desktop-app/main/session-narration.js` keeps.
- *  3. **The direct 1:1 lane** (me ↔ this agent, out of band) — ✅ BUILT, in that
- *     same window, over `sessions.message`.
- *
- * ⚠ THE SPLIT IS DELIBERATE AND IS NOT A MIGRATION-IN-PROGRESS. This panel is the
- * GLANCE: it slides in beside the thread you are reading and answers "what is
- * this agent up to" without taking you anywhere. The window is the INSIDE, for
- * when the answer is "let me watch it, and say something to it" — a surface you
- * put beside your editor. Cramming a live stream and a composer into a 380px
- * overlay on top of a transcript would make both worse.
- *
- * ⚠ AND THE COMPOSER STILL DOES NOT BELONG HERE. The old rule — an inert input
- * looks exactly like every input that does send, so render none — is why this
- * panel shipped without one. It has an "Open window" button instead, which is an
- * affordance that keeps its promise.
+ * This panel is the GLANCE: it slides in beside the thread you are reading and
+ * answers "what is this agent up to" without taking you anywhere. The window is
+ * the INSIDE, a surface you put beside your editor. Both mount the same stream
+ * and the same 1:1 composer.
  *
  * ⚠ PAUSE / END ARE OWN-AGENTS-ONLY. See `agents-controls.ts › useAgentControls`
  * — the CONTROLS module, split out of `agents-model.ts` on 2026-08-20; the model
@@ -52,32 +30,20 @@
  * session, so it never needs a qualifier. This is the surface where the
  * temptation lives, and the noun here is the AGENT — never "agent session",
  * never "channel session".
- *
- * The surface is the kit's `.bento` with its radius and three of its four
- * borders dropped: a full-height edge panel keeps the card's fill and its
- * elevation but cannot keep a 14px radius against the page edge.
  */
 
 import { useMemo, useState } from "react";
-import { Bot, CornerDownRight, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import type { IdentityFacts } from "@/shared/ui/identity-face";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
-import { IconButton } from "./bits";
-import { AgentEndedPill, AgentLiveness } from "./agent-bits";
 import {
-  NO_THREAD_LABEL,
   agentDisplayName,
   agentKey,
   agentLiveness,
-  agentPermissionLabel,
-  agentProfileLabel,
-  agentRunningModel,
   postDestination,
   parseAgentPostStamp,
 } from "./agents-model";
-import { agentModelShortLabel } from "../lib/agent-models";
-import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import { AgentComposer } from "./agent-composer";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
@@ -85,11 +51,8 @@ import { indexMembers, viewerPerson, type AuthorIndex } from "./view-model";
 import type { AgentColorKey } from "../types";
 import { answersByEscalation } from "./view-model-display";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
-// ⚠ THE CONTROL STRIP IS ITS OWN FILE since 2026-08-22 (`agent-panel-controls.tsx`),
-// split at the 500-line cap when the composer landed — and on the COMMANDS seam,
-// not an arbitrary cut: it changes when the bridge does, this file when the layout
-// does. `AGENT_CONTROL_REFUSED` moved with it, being that strip's copy.
 import { AgentControls } from "./agent-panel-controls";
+import { AgentPanelHeader } from "./agent-panel-header";
 import { AgentStats } from "./agent-stats";
 
 /**
@@ -268,6 +231,13 @@ export function ChannelsAgentPanel({
     () => viewerPerson(messages, currentUserId),
     [messages, currentUserId]
   );
+  // The agent's identity: its owner is the viewer (own agents only), in its colour ring. No
+  // runtime badge: this tree has no runtime logo it can load on both hosts.
+  const face: IdentityFacts = {
+    photo: viewer?.avatarUrl ?? null,
+    name: agent ? agentDisplayName(agent) : null,
+    ring: color ?? "neutral",
+  };
   // WHICH DECISIONS ALREADY HAVE AN ANSWER — off the SAME transcript, through the SAME derivation
   // the channel view uses, so one question cannot read answered in one pane and open in the other.
   // ⚠ `indexMembers` with NO ROSTER: the viewer is what gates the buttons; who chose is labelled
@@ -283,54 +253,17 @@ export function ChannelsAgentPanel({
       aria-label="Agent view"
       inert={!open}
       className={cn(
-        // ⚠ THE WIDTH IS `--info-w` SINCE 2026-09-13, AND THAT *IS* THE PAIRING, NOW KEPT
-        // BY CONSTRUCTION: the operator drags the info column's width
-        // (`use-info-resize.ts`), so a literal here would make the divider jump the
-        // moment an agent view opened over a resized column. The 380px fallback is the
-        // value this line carried literally, for a host that mounts no handle.
-        // ⚠ `w-[380px]` WAS PAIRED WITH `.channel-info-slide`'s open width
-        // (globals.css + the desktop `kit.css` copy) — Samuel, 2026-08-25. This
-        // panel is absolutely positioned against the SAME right edge as the
-        // info column, so a mismatch makes the divider jump sideways the moment
-        // an agent view opens. **Change one and change the other.**
-        // ⚠ NOT `.bento` ANY MORE (Samuel, 2026-08-27). That recipe is a floating CARD — its own
-        // fill, hairline and drop shadow — and this pane is not a card ON the chat area, it is a
-        // COLUMN OF IT. The shadow and the pale hairline were what made it read as a lighter
-        // surface sitting on top. It takes the SAME fill the CHAT AREA behind it has, stated
-        // explicitly so the two cannot drift if either recipe moves.
-        //
-        // ⚠ THAT FILL IS `--home-card` — THE WHITE CARD LEVEL — ON BOTH HOSTS, and reading it
-        // off the wrong level is what this line keeps getting wrong (twice on 2026-08-30, both
-        // caught on sight by Samuel). The chat surface does not paint a ground of its own; it
-        // inherits one, and after the shell restructure that ground is the white card in the
-        // frame model's level 2:
-        //   · WORKSPACE page — `channels-core.tsx`'s `.page-float` is TRANSPARENT inside the
-        //     shell (`app-shell.module.css › .pageCard :global(.page-float)`), so the ground is
-        //     `.pageCard`'s `--home-card`.
-        //   · /home — `StandaloneChannelSurface` mounts inside the record pane, which states
-        //     `bg-home-card` itself (`pages/home/index.tsx`).
-        // ⚠ IT WAS `--panel-surface` (right while `.page-float` was white), then `--home-panel`
-        // for part of one afternoon — correct for the hour when the page float itself was the
-        // gray panel, and wrong the moment the page became a white card inside it, which is the
-        // gray-against-white Samuel is pointing at. **Read the level, not the history**: if this
-        // pane ever looks like a different surface from the transcript beside it, the ground it
-        // sits on moved and this token is what has to follow.
+        // ⚠ THE WIDTH IS `--info-w`: this pane sits against the info column's right edge and the
+        // operator drags that column (`use-info-resize.ts`), so any literal makes the divider jump
+        // the moment an agent view opens. 380px is the fallback for a host that mounts no handle.
+        // ⚠ THE GROUND IS `--home-card`, the same level the chat area behind it inherits: this
+        // pane is a column of that area, not a card on it.
         "z-20 flex flex-col bg-[var(--home-card)]",
-        // ⚠ TWO GEOMETRIES, ONE PANE — see `full`. The column form is the
-        // 380px overlay this file was written for; `full` is the same pane AS
-        // the main area, with no column beside it to divide from.
         full
           ? "min-h-0 min-w-0 flex-1"
           : "absolute inset-y-0 right-0 w-[var(--info-w,380px)]",
-        // ⚠ THE DIVIDER IS `border-l border-border-default` — THE SAME CLASS THIS PANE'S OTHER
-        // LINES ALREADY CARRY, and that is the whole point. Its header rule is
-        // `border-b border-border-default`; under the account palette skin BOTH are recoloured to
-        // `--home-panel-line` (`src/app/globals.css` › THE ACCOUNT PALETTE SKIN), which is the
-        // line Samuel is pointing at. **The colour is not chosen here** — it is whatever that rule
-        // says, so the divider and the pane's own lines cannot differ. An earlier attempt
-        // hardcoded `border-link`, a DIFFERENT blue, and in doing so dropped the class the rule
-        // keys on.
-        // ⚠ 2px COMES FROM THE SAME BLOCK, not from a number here.
+        // The account palette skin recolours `border-border-default`, so the divider and the
+        // pane's own lines are one rule.
         !full && "border-l border-border-default",
         !full && "transition-transform duration-200 ease-out motion-reduce:transition-none",
         !full && (open ? "translate-x-0" : "pointer-events-none translate-x-full")
@@ -338,45 +271,32 @@ export function ChannelsAgentPanel({
     >
       {agent && (
         <>
-          <AgentPanelHeader agent={agent} onClose={onClose} />
-          {/* ⚠ ONE BOX, NOT TWO (Samuel, 2026-08-27). The context meter had a strip of its own
-              directly above the pause/end/open row — two stacked bands of chrome saying things
-              about the same agent, which ate the height the STREAM wants. The stats now render
-              inside the controls box, under its buttons. */}
+          <AgentPanelHeader agent={agent} face={face} onClose={onClose} />
+          {/* The numbers ride inside the controls box, under its buttons: one band of chrome. */}
           <AgentControls
             agent={agent}
             workspaceSlug={workspaceSlug}
             onRefreshSessions={onRefreshSessions}
-            stats={<AgentStats agent={agent} />}
+            stats={<AgentStats agent={agent} color={color} />}
           />
-          {/* ⚠ THE FULL STREAM, NOT A SENT-LANE (Samuel, 2026-08-22). The panel showed only what
-              the agent had POSTED, the one lane that says least about what it is doing — an agent
-              mid-tool-run read as an agent doing nothing. It now shares the window's stream whole
-              (`agent-stream.tsx`): the same content at another width, not a different question.
-              ⚠ `agent.agentId` IS THE FOURTH ARGUMENT (F-251): the panel is opened FROM one card,
+          {/* ⚠ `agent.agentId` IS THE FOURTH ARGUMENT (F-251): the panel is opened FROM one card,
               so a lane carrying its siblings' posts answers a click about a different agent.
               Narration is keyed on the same id (F-250), so both halves are this agent's. */}
           <AgentStream
             color={color}
-            // ⚠ THE LIVE TAIL AT THE FOOT OF THE STREAM (Samuel, 2026-09-14) — the
-            // SAME `agentLiveness` verdict the header pill above renders, handed
-            // down rather than re-derived, so the two cannot disagree.
+            self={face}
+            // The header pill's own verdict, handed down so the two cannot disagree.
             liveness={agentLiveness(agent)}
             entries={narration.entries}
             supported={narration.supported}
             sent={agentSentMessages(messages, agent.threadId, currentUserId, agent.agentId)}
-            // ⚠ THE UNFILTERED TRANSCRIPT, BESIDE THE FILTERED ONE (2026-08-25).
-            // `agentSentMessages` requires `metadata.threadId`, which a threadless
-            // post does not carry — so it cannot answer "did this draft land",
-            // and a held card went on saying "Not sent" over a delivered post.
+            // ⚠ THE UNFILTERED TRANSCRIPT, BESIDE THE FILTERED ONE: `agentSentMessages` needs
+            // `metadata.threadId`, which a threadless post lacks, so only this can answer "did
+            // this draft land".
             delivered={messages}
             pending={pendingPosts}
             onPost={onPostPending}
             postBusy={postBusy}
-            // ⚠ WHICH CARDS ARE ALREADY ANSWERED IS DERIVED HERE, off the
-            // transcript this panel already holds — no new read, and the same
-            // first-answer-wins rule the channel transcript applies
-            // (`view-model-display.ts › answersByEscalation`).
             displayIndex={displayIndex}
             // ⚠ THE ROSTER, BESIDE THE VIEWER-ONLY `displayIndex` AND NOT INSTEAD OF IT —
             // two different questions, stated at the prop above.
@@ -384,19 +304,11 @@ export function ChannelsAgentPanel({
             displayAnswers={displayAnswers}
             onAnswerDisplay={onAnswerDisplay}
             destination={postDestination(agent)}
-            // ⚠ THE VIEWER'S FACE for their own turns, resolved off the SAME
-            // transcript the Sent lane reads (`view-model.ts › viewerPerson`) —
-            // no roster prop to thread through two hosts, and no second read.
             viewer={viewer}
             className="px-3.5"
           />
-          {/* ⚠ THE 1:1 LANE IS HERE NOW (Samuel, 2026-08-22), not only in the
-              window. The footer note used to send the operator away to say one
-              sentence to their own agent — the glance is exactly where a short
-              steer belongs. ⚠ SHARED COMPONENT, never a second send path
-              (`agent-composer.tsx`), and `agent.agentId` names WHICH instance:
-              this panel is opened FROM one card, so reaching the thread's oldest
-              agent instead would answer a click about a different agent. */}
+          {/* ⚠ SHARED COMPONENT, never a second send path (`agent-composer.tsx`), and
+              `agent.agentId` names WHICH instance this panel was opened from. */}
           <AgentComposer
             channelId={agent.channelId}
             threadId={agent.threadId}
@@ -410,62 +322,5 @@ export function ChannelsAgentPanel({
         </>
       )}
     </aside>
-  );
-}
-
-export function AgentPanelHeader({
-  agent,
-  onClose,
-}: {
-  agent: DesktopSessionSummary;
-  onClose: () => void;
-}) {
-  // The desktop's model rosters, so the chip names a live model the way its runtime does (F15).
-  const { catalogs } = useChannelLaunchPosture(agent.channelId);
-  const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
-  const permissionLabel = agentPermissionLabel(agent);
-  const profileLabel = agentProfileLabel(agent);
-  return (
-    <header className="flex h-[56px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
-      <Bot size={15} aria-hidden className="shrink-0 text-text-secondary" />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-semibold text-text-primary">
-          {agentDisplayName(agent)}
-        </span>
-        <span className="flex min-w-0 items-center gap-1 text-caption text-text-secondary">
-          <CornerDownRight size={11} aria-hidden className="shrink-0 text-text-muted" />
-          <span className="truncate">
-            in {agent.threadTitle ?? NO_THREAD_LABEL}
-          </span>
-        {/* ⚠ THE EFFECTIVE MODEL, and ONLY when this build reports one
-            (2026-08-22). It rides the detail line that already exists rather than
-            earning chrome of its own — minimal copy (INVARIANTS §5). Absent
-            renders NOTHING: a main that does not report a model has said nothing
-            about what this agent is running, and "Default" would be this build
-            claiming to know (`agents-model.ts › agentRunningModel`). */}
-          {modelLabel && (
-            <span className="shrink-0 text-text-muted">
-              · {modelLabel}
-            </span>
-          )}
-          {permissionLabel && (
-            <span className="shrink-0 text-text-muted" title={agent.permission?.setting}>
-              · {permissionLabel}
-            </span>
-          )}
-          {profileLabel && (
-            <span className="shrink-0 text-text-muted">· {profileLabel}</span>
-          )}
-        </span>
-      </span>
-      {/* ⚠ The pill REPLACES the liveness on an ended agent — one fact, one
-          element. `agent-bits.tsx › AgentEndedPill` carries why. */}
-      {agent.state === "ended" ? (
-        <AgentEndedPill />
-      ) : (
-        <AgentLiveness {...agentLiveness(agent)} />
-      )}
-      <IconButton icon={X} label="Close agent view" size={15} onClick={onClose} />
-    </header>
   );
 }

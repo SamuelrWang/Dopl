@@ -1,9 +1,12 @@
 "use client";
 
 /**
- * The demo's agent panel, rebuilt from `channels/components/agent-panel.tsx`'s exported
- * parts: `ChannelsAgentPanel` reads the desktop bridge, which a browser cannot feed, so
- * this scripts the entries the bridge would have pushed.
+ * The demo's agent panel, built from `channels/components/agent-panel.tsx`'s parts:
+ * `ChannelsAgentPanel` reads the desktop bridge for the agent's work stream, which a browser
+ * cannot feed, so this hands the stream the entries the bridge would have pushed. Every face is
+ * the product's. The /channels staging page and the /popups agent window mount it too, with a
+ * send (`onSend`) and, for the window, `layout="fill"` (no slide, no header: the window's chrome
+ * names the agent).
  */
 
 import { useState } from "react";
@@ -22,10 +25,9 @@ import {
   postDestination,
 } from "@/features/channels/components/agents-model";
 import { AgentStream } from "@/features/channels/components/agent-stream";
-import {
-  AgentPanelHeader,
-  agentSentMessages,
-} from "@/features/channels/components/agent-panel";
+import { agentSentMessages } from "@/features/channels/components/agent-panel";
+import { AgentPanelHeader } from "@/features/channels/components/agent-panel-header";
+import { AgentControls } from "@/features/channels/components/agent-panel-controls";
 import { AgentStats } from "@/features/channels/components/agent-stats";
 import {
   COMPOSER_BOTTOM,
@@ -33,8 +35,10 @@ import {
 } from "@/features/channels/components/composer-input";
 
 export function DemoAgentView({
+  layout = "slide",
   open,
   agent,
+  owner,
   entries,
   messages,
   currentUserId,
@@ -42,66 +46,72 @@ export function DemoAgentView({
   roster,
   color,
   onClose,
+  onSend,
 }: {
+  /** `slide` = the record pane's slide-over; `fill` = the agent window's body. */
+  layout?: "slide" | "fill";
   open: boolean;
   agent: DesktopSessionSummary;
+  /** The scene's identity table: the owner's photo and the runtime's logo. */
+  owner: { photo: string | null; logo: string };
   /** The scripted 1:1 lane — what the bridge would have pushed. */
   entries: DesktopNarrationEntry[];
   /** The channel transcript — source of the agent's Sent lane. */
   messages: ChannelMessage[];
   currentUserId: string;
   viewer: AvatarPerson;
-  /** The channel's roster, for the addressee pills on a posted box (`agent-stream.tsx ›
-   *  roster`). ⚠ NOT the same index as that file's `displayIndex`, which answers a
-   *  different question; the demo presses no card buttons, so it hands none. */
+  /** The channel's roster, for the addressee pills on a posted box (`agent-stream.tsx › roster`). */
   roster: AuthorIndex;
   /** Resolved by the mount from the channel's bank (`view-model.ts › AgentRosterEntry.color`). */
   color: AgentColorKey | null;
   onClose: () => void;
+  /** The in-memory 1:1 send; absent keeps the arrow disabled (the landing page never sends). */
+  onSend?: (text: string) => void;
 }) {
   const [draft, setDraft] = useState("");
+  const face = {
+    photo: owner.photo,
+    name: agentDisplayName(agent),
+    ring: color ?? ("neutral" as const),
+    runtimeLogo: owner.logo,
+  };
+  const text = draft.trim();
   return (
     <aside
       aria-label="Agent view"
       inert={!open}
-      className={cn(
-        // Verbatim from agent-panel.tsx (the divider + slide notes live there).
-        "absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col bg-[var(--panel-surface)]",
-        "border-l border-border-default",
-        "transition-transform duration-200 ease-out motion-reduce:transition-none",
-        open ? "translate-x-0" : "pointer-events-none translate-x-full",
-      )}
+      className={
+        layout === "fill"
+          ? "flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--panel-surface)]"
+          : cn(
+              "absolute inset-y-0 right-0 z-20 flex w-[380px] flex-col bg-[var(--panel-surface)]",
+              "border-l border-border-default",
+              "transition-transform duration-200 ease-out motion-reduce:transition-none",
+              open ? "translate-x-0" : "pointer-events-none translate-x-full",
+            )
+      }
     >
-      {/* Mounted, not copied: it reads only the session row, so it needs no bridge. */}
-      <AgentPanelHeader agent={agent} onClose={onClose} />
-
-      {/* `AgentControls` is bridge-gated, so this states its box (`agent-panel-controls.tsx`,
-          class for class) around the real `AgentStats`, as its `stats` slot would. */}
-      <div className="flex shrink-0 flex-col gap-1.5 border-b border-border-default px-3.5 py-2">
-        <AgentStats agent={agent} />
-      </div>
-
+      {layout === "slide" && <AgentPanelHeader agent={agent} face={face} onClose={onClose} />}
+      {/* No bridge: no Pause / End / Open window and no held gates, so the box holds the numbers. */}
+      <AgentControls
+        agent={agent}
+        workspaceSlug=""
+        stats={<AgentStats agent={agent} color={color} />}
+      />
       <AgentStream
         entries={entries}
         supported
         roster={roster}
-        // The key the transcript paints this agent's posts in.
         color={color}
-        // The header pill's own verdict, handed down so the two cannot disagree.
+        self={face}
         liveness={agentLiveness(agent)}
-        sent={agentSentMessages(
-          messages,
-          agent.threadId,
-          currentUserId,
-          agent.agentId,
-        )}
+        sent={agentSentMessages(messages, agent.threadId, currentUserId, agent.agentId)}
         delivered={messages}
         destination={postDestination(agent)}
         viewer={viewer}
         className="px-3.5"
       />
-
-      {/* `agent-composer.tsx`'s mount; the demo never sends, so the arrow stays disabled. */}
+      {/* `agent-composer.tsx`'s mount, on an in-memory send. */}
       <div className={cn("shrink-0 pt-3", COMPOSER_BOTTOM, "px-3.5")}>
         <ComposerInputRow
           face="pill"
@@ -109,9 +119,13 @@ export function DemoAgentView({
           onChange={setDraft}
           placeholder={`Message ${agentDisplayName(agent)}`}
           ariaLabel="Message your agent"
-          onSend={() => {}}
-          sendDisabled
-          sendTitle="This is a demo"
+          onSend={() => {
+            if (!text || !onSend) return;
+            onSend(text);
+            setDraft("");
+          }}
+          sendDisabled={!onSend || text.length === 0}
+          sendTitle={!onSend ? "This is a demo" : text ? "Send" : "Write a message first"}
           sendLabel="Send"
         />
       </div>

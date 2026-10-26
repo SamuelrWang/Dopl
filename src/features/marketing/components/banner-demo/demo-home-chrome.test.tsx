@@ -66,33 +66,34 @@ describe("the column tracks the scripted conversation", () => {
 
 /**
  * The agent view mounts the panel's own parts. The wrapper may state only the
- * aside's class list and the box `AgentControls` would have drawn around the
- * stats; everything else is an import.
+ * aside's class list; everything else is an import.
  */
 describe("the agent view is the product's panel, minus what needs a bridge", () => {
   const VIEW_SRC =
     "src/features/marketing/components/banner-demo/demo-agent-view.tsx";
-  const PANEL_SRC = "src/features/channels/components/agent-panel.tsx";
-  // `AgentStats` lives outside the panel: the window held a second copy, and
-  // collapsing them into one declaration had to be a split (§1 cap).
+  const HEADER_SRC = "src/features/channels/components/agent-panel-header.tsx";
+  const CONTROLS_SRC = "src/features/channels/components/agent-panel-controls.tsx";
   const STATS_SRC = "src/features/channels/components/agent-stats.tsx";
 
-  it("🔒 imports the header and the stats rather than re-declaring them", () => {
+  it("🔒 imports the header, the controls box and the stats rather than re-declaring them", () => {
     const view = readFileSync(VIEW_SRC, "utf8");
-    expect(view).toMatch(/AgentPanelHeader,\s*\n\s*agentSentMessages,/);
+    expect(view).toContain("import { AgentPanelHeader } from");
+    expect(view).toContain("import { AgentControls } from");
     expect(view).toContain("import { AgentStats } from");
-    expect(view).toContain("<AgentPanelHeader agent={agent} onClose={onClose} />");
-    expect(view).toContain("<AgentStats agent={agent} />");
+    expect(view).toContain("<AgentPanelHeader agent={agent} face={face} onClose={onClose} />");
+    expect(view).toContain("<AgentStats agent={agent} color={color} />");
     // And no transcriptions — bidirectional, or this passes on a file that grew
     // the copies back beside the imports.
     expect(view).not.toContain("<header");
-    expect(view).not.toContain("UsageMeter");
-    expect(view).not.toContain("AgentLiveness");
+    expect(view).not.toContain("ThinMeter");
+    expect(view).not.toContain("StatusPill");
+    expect(view).not.toMatch(/\bborder-b\b/);
   });
 
   it("🔒 …and each really has ONE declaration, in the file the demo names", () => {
     for (const [name, src] of [
-      ["AgentPanelHeader", PANEL_SRC],
+      ["AgentPanelHeader", HEADER_SRC],
+      ["AgentControls", CONTROLS_SRC],
       ["AgentStats", STATS_SRC],
     ] as const) {
       const declared = readFileSync(src, "utf8").match(

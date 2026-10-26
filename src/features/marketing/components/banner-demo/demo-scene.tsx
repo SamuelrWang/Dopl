@@ -62,9 +62,6 @@ import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
 import { identityFace } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
 import { DemoAgentCards, DemoAgentStateRows } from "./demo-agent-card";
-import { DemoAgentViewFaces } from "./demo-agent-view-faces";
-import { DemoStreamBoxes, type StreamFace } from "./demo-stream-boxes";
-import { agentNameHandle } from "@/features/channels/lib/agent-mentions";
 
 /** The composer's writes never fire (the slot is inert), so the gate is a stub. */
 const DEMO_GATE: MutationGate = { begin() {}, end() {} };
@@ -199,17 +196,6 @@ export function DemoScene({
     [step]
   );
   const homeRows = useMemo(() => homeRowsAt(step), [step]);
-  /** `@handle` → the agent's owner photo + colour, for the demo's received/posted faces. */
-  const streamFaces = useMemo(() => {
-    const out = new Map<string, StreamFace>();
-    const viewerPhoto = index.byId.get(CURRENT_USER_ID)?.avatarUrl ?? null;
-    out.set("you", { photo: viewerPhoto, color: null });
-    for (const [agentId, entry] of AGENT_INDEX) {
-      const handle = agentNameHandle(entry.displayName);
-      if (handle) out.set(handle, identityFace(agentId));
-    }
-    return out;
-  }, [index]);
   const agentFeeds = useMemo(() => ({ sessions, peers }), [sessions, peers]);
 
   /**
@@ -330,7 +316,6 @@ export function DemoScene({
                     />
                   </div>
                   <DemoAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
-                  <DemoAgentViewFaces paneRef={pane} agent={MY_SESSION} onClose={NOOP} />
                   <DemoAgentCards
                     paneRef={pane}
                     sessions={sessions}
@@ -339,14 +324,10 @@ export function DemoScene({
                     openAgent={agentOpen ? agentKey(MY_SESSION) : null}
                     onOpenAgent={onOpenAgent}
                   />
-                  <DemoStreamBoxes
-                    paneRef={pane}
-                    faces={streamFaces}
-                    self={identityFace(MY_SESSION.agentId)}
-                  />
                   <DemoAgentView
                     open={agentOpen}
                     agent={MY_SESSION}
+                    owner={identityFace(MY_SESSION.agentId)}
                     entries={narration}
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}

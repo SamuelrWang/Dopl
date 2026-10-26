@@ -363,20 +363,6 @@ button.lp-demo-top-profile {
   background: var(--home-card);
 }
 
-/* ── CHANNELS: THE AGENT VIEW'S CONTEXT WELL TAKES THE SHELL GREY (Samuel, 2026-10-24) ─
-   *"the gray color that the context bar is sitting on here, needs to be the
-   same gray as the gray behind on the channel page, the gray where the word
-   "recent" sits, right where the dropdown is."* The "Recent" heading sits on
-   the outer panel, which the surface swap above set to `--home-card`
-   (#fbfcfc). The well (`.lp-demo-avs-well`, marketing.css) paints the shared
-   `--bg-inset` (#f1f1f1); only THIS well is overridden, the token is not.
-   The meter track (`oklch(0 0 0 / 0.08)`, translucent) still reads, and reads
-   slightly stronger on the lighter ground. Port target: desktop agent panel
-   stats box background → the home panel surface. */
-.uis-window .lp-demo-record.uis-ch-pane .lp-demo-avs-well {
-  background: var(--home-card);
-}
-
 /* ── CHANNELS: THE SETTINGS TAB, MIRRORED IN THE NEW LOOK (Samuel, 2026-10-24) ─
    `channels-staging/home/settings-tab.tsx` (+ `settings-dialogs.tsx`); that
    docblock lists the rows mirrored. Hand-written, not Tailwind (a new utility

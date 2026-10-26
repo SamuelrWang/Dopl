@@ -81,11 +81,11 @@ describe("one input row, two composers", () => {
         "<SendButton"
       );
     }
-    // ⚠ THE AGENT BAR NEVER NAMES THE FACE: its row IS the box and takes `.raised-tab` from the
+    // ⚠ THE AGENT BAR NEVER NAMES THE FACE: its row IS the box and takes the white pill from the
     // shared component. The CHANNEL surface's one box is its white CARD (next case); the pill
     // face landing there as well is the bubble-in-a-bubble this file exists to keep out.
-    expect(codeOf(AGENT), "the agent bar re-stated the input face").not.toContain("raised-tab");
-    expect(codeOf(CHANNEL), "the channel surface grew the pill face").not.toContain("raised-tab");
+    expect(codeOf(AGENT), "the agent bar re-stated the input face").not.toContain("white-card");
+    expect(codeOf(CHANNEL), "the channel surface grew the pill face").not.toContain("rounded-full p-1.25");
     expect(
       codeOf(CHANNEL).match(/white-card/g) ?? [],
       "the channel surface wears the card in more than one place"
@@ -120,7 +120,7 @@ describe("one input row, two composers", () => {
     const row = codeOf("composer-input.tsx");
     expect(row).toContain('const ROW_GEOMETRY = "flex items-center gap-2"');
     expect(row, "the inset left the face it pays for").toContain(
-      'const PILL_FACE = "raised-tab rounded-[10px] p-1.5 pl-3"'
+      'const PILL_FACE = "white-card rounded-full p-1.25 pl-2.75"'
     );
     expect(row, "the face switch grew a second class").toContain(
       'cn(ROW_GEOMETRY, face === "pill" && PILL_FACE)'
@@ -188,7 +188,7 @@ describe("one input row, two composers", () => {
     // send button an `ml-1` and an opacity of its own, which is how the two came to look
     // different in the first place.
     const row = codeOf("composer-input.tsx");
-    expect(row).toContain("raised-tab");
+    expect(row).toContain("white-card rounded-full");
     expect(row).toContain("<SendButton");
     expect(row, "the shared row grew an override prop").not.toMatch(/\bclassName\??:/);
   });
@@ -276,6 +276,6 @@ describe("the agent pane's divider", () => {
     expect(panel).toContain("border-l border-border-default");
     expect(panel, "the divider picked its own blue again").not.toMatch(/border-link\b/);
     // The header rule it must match, still stated the same way.
-    expect(panel).toContain("border-b border-border-default");
+    expect(codeOf("agent-panel-header.tsx")).toContain("border-b border-border-default");
   });
 });

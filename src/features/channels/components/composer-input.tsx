@@ -18,7 +18,7 @@
  * re-open the exact gap this closes.
  *
  * ⚠ THE ONE THING A CALLER CHOOSES IS THE `face`, AND IT IS A MODE, NOT A STYLE HOOK (Samuel,
- * 2026-08-27). `"pill"` draws `.raised-tab`; `"bare"` draws no face at all. The agent composer is
+ * 2026-08-27). `"pill"` draws the white pill; `"bare"` draws no face at all. The agent composer is
  * NOTHING BUT this row, so there the pill IS the box. The channel composer already has a box —
  * its card — and a faced row inside a bordered card is a bubble in a bubble, which is the thing
  * being fixed.
@@ -32,10 +32,8 @@
  * {@link ROW_GEOMETRY} (the axis, the alignment, the gap) and the FIELD's own recipe stay
  * unconditional, which is what keeps the two surfaces one row and not two trees.
  *
- * ⚠ THE PILL FACE IS `.raised-tab`, THE APP-WIDE RAISED IDIOM (docs/DESIGN-SYSTEM.md), which draws
- * its own 1px ring from `--raised-light-line`. Main's card is the kit's `.white-card` instead.
- * ⚠ `.raised-tab` SUPPLIES THE FILL, so no `bg-*` utility may ride along: the utility layer
- * outranks the kit layer and a stray background flattens the gradient to nothing.
+ * ⚠ THE PILL FACE IS THE KIT'S `.white-card` ROUNDED FULL (DESIGN-LANGUAGE §4, Composer), the same
+ * material main's card wears, so the two composers read as one family across the divider.
  *
  * ⚠ THE ONE OTHER THING A CALLER MAY HAND THIS ROW IS `highlight`, AND IT IS A CONTENT MODE ON
  * `face`'s terms (2026-09-07, the composer tint). A textarea cannot hold a coloured run, so the
@@ -93,13 +91,14 @@ export const COMPOSER_BOTTOM = "pb-4";
 const ROW_GEOMETRY = "flex items-center gap-2";
 
 /**
- * THE BOX: the raised material and the inset that holds content off its edge, together.
+ * THE BOX: the white pill and the inset that holds content off its edge, together.
  *
  * ⚠ THEY ARE ONE THING AND MUST STAY ONE THING. The inset is not a style preference, it is what a
  * drawn edge costs; splitting them is how `"bare"` came to pay for an edge it does not draw. In
- * main the CARD is the box and the CARD pays it — see the header.
+ * main the CARD is the box and the CARD pays it — see the header. The card's 1px hairline is paid
+ * out of the inset (5px + 1px = the 6px it had), so the row's height does not move.
  */
-const PILL_FACE = "raised-tab rounded-[10px] p-1.5 pl-3";
+const PILL_FACE = "white-card rounded-full p-1.25 pl-2.75";
 
 /**
  * **EVERY TYPOGRAPHIC FACT THAT DECIDES WHERE A CHARACTER LANDS** — worn by the field AND by the

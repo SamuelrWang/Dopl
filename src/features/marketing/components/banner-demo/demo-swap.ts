@@ -2,8 +2,7 @@
 
 /**
  * **THE DEMO'S FACE SWAP** — how the banner shows a redesigned card without touching the
- * shared product component (Samuel, 2026-10-22: the thread card, then the Agents-tab card
- * and the agent view's received / posted boxes).
+ * shared product component (Samuel, 2026-10-22: the Agents-tab card).
  *
  * The product still renders every card. For each one {@link useDemoSwap} finds, it marks
  * the product element `data-lp-swapped` (hidden by `marketing.css`, inside the scene only),

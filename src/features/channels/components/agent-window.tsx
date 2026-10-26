@@ -304,12 +304,7 @@ export function ChannelsAgentWindow({
           agent={agent}
           channelId={channelId}
           threadId={threadId}
-          // 🔒 `meterClassName=""` (Samuel, 2026-09-15) and no start stamp — the two
-          // differences that used to justify a second copy of this component (P17,
-          // collapsed 2026-09-17); `agent-stats.tsx` carries both reasons.
-          stats={
-            <AgentStats agent={agent} meterClassName="" showStarted={false} />
-          }
+          stats={<AgentStats agent={agent} showStarted={false} />}
         />
       ) : null}
       {/* 🔒 **THE HELD-GATE CARD, IN THE WINDOW TOO** (Samuel's ruling R-24,

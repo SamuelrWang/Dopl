@@ -83,11 +83,10 @@
   own outer edge instead of from under an opaque ring. ONE stroke, one silhouette, one shadow.
   **One post, one bar** — a run does not merge, and a continuation keeps its bar without a pill.
   The frame, the top bar and the second row component (message-box-agent) are DELETED.
-- **Pop-out**: the "posted to channel" bar takes the agent's colour. ⚠ **It did NOT follow the
-  2026-09-14 restyle** (measured): it is a full-width delivery record with no side, no author
-  and no pill, so a framed pill and an outer-edge bar have nothing to attach to. Its geometry
-  constant moved back into `agent-stream-sent-box.tsx › AGENT_BAR` when the transcript's top bar
-  it was paired with was deleted.
+- **Agent stream**: a posted box's border line takes the agent's colour once it has gone out
+  (`agent-stream-card.tsx › StreamCard`). ⚠ **It did NOT follow the 2026-09-14 restyle**: it is a
+  full-width delivery record with no side and no pill, so a framed pill and an outer-edge bar have
+  nothing to attach to.
 - **Filter**: a `SelectMenu` (text face, chevron) immediately LEFT of the
   info-pane collapse toggle in the channel header: **All** · **People**
   (every post with no box: humans + Desktop agent) · then one entry per agent

@@ -34,6 +34,9 @@ export interface IdentityFaceProps {
   className?: string;
 }
 
+/** Who a face shows, without how big it is drawn: what a host hands a component that sizes it. */
+export type IdentityFacts = Pick<IdentityFaceProps, "photo" | "name" | "ring" | "runtimeLogo">;
+
 function initialsTextClass(size: number): string {
   if (size >= 32) return "text-body";
   if (size > 22) return "text-caption";

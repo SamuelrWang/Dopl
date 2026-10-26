@@ -152,7 +152,7 @@ describe("the inbound lane — the message that woke this agent", () => {
 
 describe("the inbound FACE", () => {
   it("names the sender, and says a complete sentence without one", () => {
-    expect(inboundLabel("Diana Taylor")).toBe("Message received from Diana Taylor");
+    expect(inboundLabel("Diana Taylor")).toBe("Received from Diana Taylor");
     // ⚠ The nameless form is a fact, not a gap — and the copy carries no em dash (Dopl voice).
     expect(inboundLabel(null)).toBe(INBOUND_ANON_LABEL);
     expect(inboundLabel("   ")).toBe(INBOUND_ANON_LABEL);
@@ -168,7 +168,7 @@ describe("the inbound FACE", () => {
    * can say 'you'"*, `buildAgentStream` carries it onto the item lane-gated (the case in
    * section 1 pins exactly that) — and `agent-stream.tsx` passed `senderName` and `at` to
    * the box and not this. So the operator's own channel post read back at them as
-   * **"Message received from <their own display name>"**: their account, captioned as a
+   * **"Received from <their own display name>"**: their account, captioned as a
    * counterparty.
    * ⚠ **IT OUTRANKS THE RESOLVED NAME.** Main's `authorLabel` answers a display name or
    * *"<person>'s agent"*, and ruling 2 (2026-09-25) folds the operator's OWN agents into
@@ -178,8 +178,8 @@ describe("the inbound FACE", () => {
   it("says the sender is YOU when the operator's own account sent it", () => {
     expect(inboundLabel("Sam Wang", true)).toBe(INBOUND_OPERATOR_LABEL);
     // Only `true` counts, the `truncated` / `pending` discipline.
-    expect(inboundLabel("Sam Wang", false)).toBe("Message received from Sam Wang");
-    expect(inboundLabel("Sam Wang")).toBe("Message received from Sam Wang");
+    expect(inboundLabel("Sam Wang", false)).toBe("Received from Sam Wang");
+    expect(inboundLabel("Sam Wang")).toBe("Received from Sam Wang");
     // And with no name either, the flag is still the more specific fact.
     expect(inboundLabel(null, true)).toBe(INBOUND_OPERATOR_LABEL);
     expect(INBOUND_OPERATOR_LABEL).not.toMatch(/[—–]/);
@@ -190,12 +190,12 @@ describe("the inbound FACE", () => {
     // than through `inboundLabel` alone: the words were already right and nobody read them.
     renderStream({ entries: [inboundFrame({ senderName: "Sam Wang", fromOperator: true })] });
     expect(screen.getByText(INBOUND_OPERATOR_LABEL)).toBeTruthy();
-    expect(screen.queryByText("Message received from Sam Wang")).toBeNull();
+    expect(screen.queryByText("Received from Sam Wang")).toBeNull();
   });
 
   it("renders the arriving message in its own box, NOT as a posted one", () => {
     renderStream({ entries: [inboundFrame()] });
-    expect(screen.getByText("Message received from Diana Taylor")).toBeTruthy();
+    expect(screen.getByText("Received from Diana Taylor")).toBeTruthy();
     expect(screen.getByText("please review the picker fix")).toBeTruthy();
     // THE PROPERTY: the dark "Posted to…" banner is the one claim this row may never make.
     expect(screen.queryByText(/^Posted to/)).toBeNull();

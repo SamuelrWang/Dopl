@@ -15,8 +15,8 @@ import { ChevronRight, MessagesSquare, Users } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { PILL_BUTTON } from "@/shared/ui/small-action-button";
-import { StatusPill } from "@/shared/ui/status-pill";
 import { cn } from "@/shared/lib/utils";
+import { AgentStatusPill } from "./agent-bits";
 import { AddresseePill } from "./bits";
 import { AuthoredRow } from "./authored-row";
 import { TextOnlyLinks } from "./message-markdown";
@@ -51,9 +51,7 @@ function AgentRow({
         <span className="truncate text-small font-medium text-text-primary">{agent.name}</span>
         <span className="truncate text-micro text-text-muted">{agent.owner}</span>
       </span>
-      <StatusPill tone={agent.liveness.tone === "working" ? "live" : "neutral"}>
-        {agent.liveness.label}
-      </StatusPill>
+      <AgentStatusPill {...agent.liveness} />
       {onOpen && (
         <ChevronRight size={13} strokeWidth={2.2} aria-hidden className="flex-none text-text-disabled" />
       )}

@@ -85,18 +85,9 @@ export function UsageMeter({
   const fmt = formatValue ?? ((value: number) => value.toLocaleString());
   const pct = percentOf(used, limit);
   /**
-   * IS THERE A DENOMINATOR TO SHOW.
-   *
-   * ⚠ THE ARITHMETIC GUARD ABOVE WAS NOT THE WHOLE OF "OWNING THE MISSING DENOMINATOR", AND THE
-   * READOUT IS WHERE IT LEAKED (2026-08-28). Two agent surfaces call this unconditionally —
-   * `channels/components/agent-stats.tsx › AgentStats` passes `used ?? 0` and
-   * `limit ?? 0` — on the stated grounds that *"`UsageMeter` handles the missing denominator
-   * itself"*. It handled it for the BAR. The number beside the label printed `{fmt(limit)}`
-   * regardless, so an agent whose context USED is known but whose WINDOW is not rendered
-   * **"84k / 0k"** over an empty track: a fabricated denominator, and an empty bar that reads as
-   * headroom. `channels/components/agent-metrics.ts › metric` exists to stop exactly this and names the
-   * case — *"a model this build has no window for has no denominator … NONE of them means zero —
-   * a context meter reading 0% of a window that is nearly full is a lie the operator acts on."*
+   * IS THERE A DENOMINATOR TO SHOW. A `limit` of 0 is "not measured": printing it would render
+   * **"84k / 0k"** over an empty track, a fabricated denominator and an empty bar that reads as
+   * headroom.
    *
    * ⚠ IT DROPS THE DENOMINATOR, NOT THE METER. The bar still renders unconditionally at 0, which
    * is the standing rule for these surfaces; what stops is the assertion nobody can support.
@@ -149,10 +140,13 @@ export function UsageMeter({
 export function ThinMeter({
   used,
   limit,
+  fill,
   className,
 }: {
   used: number;
   limit: number;
+  /** A CSS colour for the bar (an agent's `var(--agent-color-NN)`); absent is ink. */
+  fill?: string;
   className?: string;
 }) {
   return (
@@ -162,7 +156,7 @@ export function ThinMeter({
     >
       <span
         className="absolute inset-y-0 left-0 rounded-full bg-text-primary transition-[width] duration-200"
-        style={{ width: `${percentOf(used, limit)}%` }}
+        style={{ width: `${percentOf(used, limit)}%`, background: fill }}
       />
     </span>
   );

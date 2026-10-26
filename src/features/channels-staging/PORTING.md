@@ -24,8 +24,6 @@ there are three layers to port to:
 | `home/settings-tab.tsx` + `home/settings-dialogs.tsx` **(new 2026-10-24)** | — | `channels/components/settings-slot.tsx` → `settings-tab.tsx` (+ `settings-agent.tsx`, `settings-agent-launch-rows.tsx`, `settings-agent-rows.tsx`, `settings-desktop-rows.tsx`, `settings-channel-agents.tsx`) for channel view; `thread-settings-tab.tsx` for thread view; dialogs from `channel-manage.tsx` / `thread-manage.tsx` |
 | `home/task-list.tsx` + `home/tasks-info-panel.tsx` + `home/tasks-popover.tsx` + (round 4) `home/task-panel.tsx`, `home/task-detail.tsx`, `home/task-subtasks.tsx`, `home/task-notes.tsx` **(new 2026-10-26, channel tasks)** | — (row recipe from the landing `marketing/components/ontology-windows.tsx › TasksWindow`) | NO product counterpart yet. BOTH ship together (round 2, 2026-10-26). Tasks tab (full view) → a `tasks` key in `channels/components/info-panel-tabs.ts › TABS` + `tabCount` + a body branch in `info-panel.tsx`, plus a nonce prop that switches to it. Quick view → a right-end slot on `channels/components/composer-recipients.tsx`'s row (the `working` line above the composer card) for the pill, and a pop-up anchored to `composer.tsx`'s wrapper, right edge on the card's. Both need a tasks read/write and an MCP tool for agents to open/assign/resolve tasks |
 | `home/agent-card.tsx` | `demo-agent-card.tsx` | `channels/components/agents-tab-cards.tsx`, `thread-info-tab.tsx › AgentStateRow` |
-| `home/agent-view-faces.tsx` | `demo-agent-view-faces.tsx` | `channels/components/agent-panel.tsx › AgentPanelHeader`, `agent-stats.tsx` |
-| `home/agent-view.tsx` | `demo-agent-view.tsx` | `channels/components/agent-panel.tsx` (+ `agent-composer.tsx`) |
 
 **Desktop dialogs live in `popups-staging/` (deduped 2026-10-22).** "Add person" (the Info tab),
 "New channel" (the frame's top-bar pill, via `ui-staging/staging-popups-provider.tsx`) and the link
@@ -36,8 +34,8 @@ changed for the store) are deleted. The page sees their writes through
 (subscribed in `staging-channels-page.tsx`), so a new channel still lands in the column and a
 revoked link row still leaves it. Port those dialogs from `popups-staging/PORTING.md`.
 
-Imported from the demo as-is (no copy): `demo-swap.ts`,
-`demo-stream-boxes.tsx`, `demo-data.ts`, `demo-transcript.ts`, `demo-narration.ts`,
+Imported from the demo as-is (no copy): `demo-swap.ts`, `demo-agent-view.tsx` (the agent view,
+with this page's in-memory 1:1 send), `demo-data.ts`, `demo-transcript.ts`, `demo-narration.ts`,
 `demo-info-data.ts`, `demo-identities.ts`, `demo-home-rows.ts`, `demo-steps.ts`, and
 `marketing.css` (via the staging frame).
 
@@ -48,20 +46,19 @@ activity squares are the product's own faces now (`channels/components/thread-ca
 `agent-activity.tsx`, `thread-activity.tsx`). The staged copies, their face swaps and their CSS are
 deleted; the scene mounts the product components directly.
 
+**Ported to the product (2026-10-26, channel page slice 3)**: the agent view's header, its stats
+well (the context well's grey), the received / posted cards and the 1:1 composer pill are the
+product's own faces (`channels/components/agent-panel-header.tsx`, `agent-stats.tsx`,
+`agent-stream-card.tsx`, `composer-input.tsx`). The staged agent view and its face swaps are
+deleted; the scene and `/popups`' agent window mount `demo-agent-view.tsx › DemoAgentView`.
+
 Edits made in the copies (marked `STAGING` in comments):
 - `agent-card.tsx`: "Open" opens that card's agent (the demo had one agent to open).
-- `agent-card.tsx`, `agent-view-faces.tsx`: faces via `data/staging-agents.ts`.
-- `agent-view.tsx`: the 1:1 composer sends (in memory, with a canned reply); `layout="fill"` (no
-  slide, no header) is the body `/popups`' agent window imports.
+- `agent-card.tsx`: faces via `data/staging-agents.ts`.
 - **Surfaces (Samuel, 2026-10-24, "perfect", keep)**: on the channels page the record pane is
   #ffffff and the panel under the top bar / channel column takes the pane's old `--home-card`
   (`ui-staging/staging.css › .uis-ch-pane`). Port target: desktop `pages/home` record pane +
   `.page-float` panel surfaces.
-- **Agent view context well (Samuel, 2026-10-24)**: the grey well under the agent view header
-  (context tokens + meter + meta) takes the outer panel's grey, the one under the channel
-  list's "Recent" heading (`--home-card`, #fbfcfc), instead of `--bg-inset` (#f1f1f1). Staging
-  overrides `.lp-demo-avs-well` only on the channels page; the token is untouched. Port: the
-  desktop agent panel's stats box background → the home panel surface.
 - **Settings tab (Samuel, 2026-10-24: "the settings tab is blank. We need to mirror it in there.
   Also, have the agent mirror it with the new UI design.")**: it was blank because the scene
   passed no `settings` to `ChannelsInfoPanel`; the product's `ChannelsSettingsSlot` needs live
@@ -142,7 +139,7 @@ Edits made in the copies (marked `STAGING` in comments):
   copy), not a span.
 
 Also imported by `/popups` (its thread and agent windows' bodies, `popups-staging/stubs/channel-windows.tsx`):
-`store/use-staging-channels.ts`, `home/channel-scene.tsx`, `home/agent-view.tsx`,
+`store/use-staging-channels.ts`, `home/channel-scene.tsx`, `data/staging-agents.ts`,
 `data/staging-query-seed.ts`, `data/staging-rows.ts`. A change here moves those windows too.
 
 ## Stand-ins (do NOT port — they replace network/Electron code)

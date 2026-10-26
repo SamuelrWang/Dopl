@@ -39,18 +39,12 @@ import {
 } from "@/features/channels/components/agent-activity";
 import { agentColorVar } from "@/features/channels/lib/agent-colors";
 import { liveAgentsFromKey, liveAgentsKey } from "@/features/channels/lib/live-agents";
-import { agentNameHandle } from "@/features/channels/lib/agent-mentions";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import {
-  DemoStreamBoxes,
-  type StreamFace,
-} from "@/features/marketing/components/banner-demo/demo-stream-boxes";
+import { DemoAgentView } from "@/features/marketing/components/banner-demo/demo-agent-view";
 import { CURRENT_USER_ID, VIEWER } from "../data/demo-imports";
 import { stagingAgentIndex, stagingIdentityFace } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
 import { StagingAgentCards, StagingAgentStateRows } from "./agent-card";
-import { StagingAgentViewFaces } from "./agent-view-faces";
-import { StagingAgentView } from "./agent-view";
 import { StagingSettingsTab } from "./settings-tab";
 import { AddPersonDialog } from "@/features/popups-staging/pages/home/add-person-dialog";
 import { StagingInfoPanel } from "./tasks-info-panel";
@@ -138,15 +132,6 @@ export function StagingChannelScene({
     for (const agent of live) if (agent.color) out.set(agent.name, agentColorVar(agent.color));
     return out;
   }, [live]);
-  const streamFaces = useMemo(() => {
-    const out = new Map<string, StreamFace>();
-    out.set("you", { photo: VIEWER.avatarUrl ?? null, color: null });
-    for (const [agentId, entry] of index.agents) {
-      const handle = agentNameHandle(entry.displayName);
-      if (handle) out.set(handle, stagingIdentityFace(agentId));
-    }
-    return out;
-  }, [index]);
 
   const openSession = sessions.find((s) => agentKey(s) === openAgentKey) ?? null;
   const viewAgent = openSession ?? sessions[0] ?? null;
@@ -344,13 +329,6 @@ export function StagingChannelScene({
         />
       </div>
       <StagingAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
-      {viewAgent && (
-        <StagingAgentViewFaces
-          paneRef={pane}
-          agent={viewAgent}
-          onClose={() => actions.openAgent(null)}
-        />
-      )}
       <StagingAgentCards
         paneRef={pane}
         sessions={sessions}
@@ -359,16 +337,12 @@ export function StagingChannelScene({
         openAgent={openSession ? agentKey(openSession) : null}
         onOpenAgent={(key) => actions.openAgent(key)}
       />
-      <DemoStreamBoxes
-        paneRef={pane}
-        faces={streamFaces}
-        self={stagingIdentityFace(viewAgent?.agentId)}
-      />
       {viewAgent && (
-        <StagingAgentView
+        <DemoAgentView
           key={agentKey(viewAgent)}
           open={openSession !== null}
           agent={viewAgent}
+          owner={stagingIdentityFace(viewAgent.agentId)}
           entries={fixture.narration[viewAgent.agentId ?? ""] ?? []}
           messages={messages}
           currentUserId={CURRENT_USER_ID}
