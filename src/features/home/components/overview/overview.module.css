@@ -307,13 +307,3 @@
   justify-content: flex-end;
   gap: 8px;
 }
-
-.error {
-  display: flex;
-  min-height: 240px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--text-primary);
-}

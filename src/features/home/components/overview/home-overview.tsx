@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { RotateCw } from "lucide-react";
-import { userFacingMessage } from "@/shared/api/user-facing-message";
 import type { SettingsSection } from "@/shared/layout/settings-modal/settings-modal-core";
+import { PageError } from "@/shared/ui/page-error";
 import { USAGE_SCOPE_ALL } from "@/features/home/overview-types";
 import { monthKey } from "@/features/home/overview-period";
-import { CARD_PILL } from "./overview-card";
 import { CreditsCard, type HomeChannelOption } from "./overview-credits";
 import { DevicesCard } from "./overview-devices";
 import { ChannelsTable, ClippedLine, PeopleCard, ToolsCard } from "./overview-ledger";
@@ -15,25 +13,6 @@ import { NeedsCard, SummaryStrip } from "./overview-summary";
 import { TokensCard } from "./overview-tokens";
 import { useHomeOverviewReads, type HomeOverviewReads, type HomeOverviewReadArgs } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
-
-function OverviewError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-  return (
-    <div className={styles.root}>
-      <div className={styles.error} role="alert">
-        <p>{userFacingMessage(error)}</p>
-        <div className="flex items-center gap-2">
-          <button type="button" className={CARD_PILL} onClick={onRetry}>
-            <RotateCw size={12} aria-hidden="true" />
-            Try again
-          </button>
-          <button type="button" className={CARD_PILL} onClick={() => window.location.reload()}>
-            Reload
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * /home → Overview: one account-wide face. A summary strip; two columns that end on one line
@@ -59,7 +38,11 @@ export function HomeOverview({
   const { overview } = reads;
 
   if (overview.error) {
-    return <OverviewError error={overview.error} onRetry={() => void overview.refetch()} />;
+    return (
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PageError error={overview.error} onRetry={() => void overview.refetch()} />
+      </div>
+    );
   }
   if (!overview.data) return <OverviewSkeleton />;
 

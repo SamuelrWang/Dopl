@@ -23,8 +23,9 @@ Each: the question, what was chosen, where.
    spend." on error.
 7. **Scope menu order.** Product: All channels, channels, Desktop agent. Staging: All channels,
    Desktop agent, channels. Chose: staging. Where: `overview-credits.tsx › ScopeMenu`.
-8. **Error state.** Staging shows the message and Try again; the product also offered Reload.
-   Chose: keep Reload beside Try again. Where: `home-overview.tsx › OverviewError`.
+8. **Error state.** Staging shows the message and Try again in its pills; the product also offered
+   Reload. Chose: the shared `shared/ui/page-error.tsx › PageError` (Try again + Reload, its own
+   `btn-light` face), one implementation over the staging pills. Where: `home-overview.tsx`.
 9. **The allowance waited for the series.** The old bar ghosted until the ledger series landed too.
    Chose: the allowance and the daily bars ghost independently (they are separate blocks in the
    staging card).
@@ -33,8 +34,6 @@ Each: the question, what was chosen, where.
 11. **Copy the old rulings removed.** Staging titles the card "Credits" and says "of N used", words
     the 2026-09-13 ruling had dropped; "Get more credits" is a card pill, not the 36px page button.
     Chose: staging (the newer design). INVARIANTS updated.
-12. **`SECTION_TITLE` row.** `src/shared/ui/section-title.ts` is byte-identical to `ui/port-ontology`'s,
-    which also adds its DESIGN-SYSTEM row; this branch does not, to keep the merge clean.
-13. **Pre-existing red, not this slice.** `src/features/ui-staging/staging-frame.test.tsx › opens
+12. **Pre-existing red, not this slice.** `src/features/ui-staging/staging-frame.test.tsx › opens
     every frame-level popup` looks for a Devices *button* in the settings modal, whose sections are
     tabs; nothing here touches the modal.
