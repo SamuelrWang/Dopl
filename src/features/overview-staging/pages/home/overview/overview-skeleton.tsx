@@ -1,4 +1,4 @@
-// STAGING ONLY — Overview Version E's loading frame: the SAME skeleton as the page (summary strip,
+// STAGING ONLY. The Overview loading frame: the SAME skeleton as the page (summary strip,
 // two columns of cards, the channels table, the people/tools pair), with ghost lines where text
 // lands, so nothing moves when the reads arrive.
 "use client";
@@ -28,7 +28,7 @@ function GhostCard({ rows, title = "40%" }: { rows: number; title?: string }) {
   );
 }
 
-export function OverviewESkeleton({ preview }: { preview: boolean }) {
+export function OverviewSkeleton({ preview }: { preview: boolean }) {
   return (
     <div className="ove" aria-busy="true" aria-label="Loading Overview">
       <div className="ove-inner">

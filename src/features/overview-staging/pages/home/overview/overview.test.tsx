@@ -1,7 +1,4 @@
 // @vitest-environment jsdom
-//
-// Version E (STAGING): the toolbar's "Version E" swaps in the from-scratch face; it carries the
-// information Current and Version D show, from the same fixtures; every Reads and Plan state lands.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { OverviewStagingPage } from "../../../overview-staging-page";
@@ -17,15 +14,14 @@ async function settle() {
     vi.advanceTimersByTime(1000);
   });
 }
-async function openE() {
+async function openPage() {
   render(<OverviewStagingPage />);
-  fireEvent.click(screen.getByText("Version E"));
   await settle();
 }
 const card = (name: string) => screen.getByRole("region", { name });
 const text = () => document.body.textContent ?? "";
 
-describe("Overview Version E", () => {
+describe("Overview staging face", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     globalThis.ResizeObserver ??= class { observe() {} disconnect() {} unobserve() {} } as never;
@@ -35,29 +31,14 @@ describe("Overview Version E", () => {
     vi.useRealTimers();
   });
 
-  it("the switch swaps the face and back", async () => {
-    render(<OverviewStagingPage />);
-    await settle();
-    expect(document.querySelector(".ove")).toBeNull();
-    fireEvent.click(screen.getByText("Version E"));
-    await settle();
-    expect(document.querySelector(".ove")).not.toBeNull();
-    expect(screen.queryByText("Credits by channel")).toBeNull();
-    expect(document.querySelector(".ovd")).toBeNull();
-    fireEvent.click(screen.getByText("Version D"));
-    await settle();
-    expect(document.querySelector(".ove")).toBeNull();
-    expect(document.querySelector(".ovd")).not.toBeNull();
-  });
-
   it("carries the inventoried information", async () => {
-    await openE();
+    await openPage();
     // Summary strip.
     const strip = card("Summary");
     for (const label of ["Working", "Need you", "Devices online", "Credits left"]) {
       expect(within(strip).getByText(label)).toBeTruthy();
     }
-    // Needs you: D's two asks, each resolvable.
+    // Needs you: both asks, each resolvable.
     const needs = card("Needs you");
     expect(within(needs).getByText("Wants to post in Dopl")).toBeTruthy();
     expect(within(needs).getByText("Which account should the outreach go from?")).toBeTruthy();
@@ -119,7 +100,7 @@ describe("Overview Version E", () => {
   });
 
   it("renders each Reads state and each Plan state", async () => {
-    await openE();
+    await openPage();
     fireEvent.click(screen.getByText("Loading"));
     await settle();
     expect(screen.getByLabelText("Loading Overview").getAttribute("aria-busy")).toBe("true");

@@ -1,12 +1,11 @@
-// STAGING ONLY — Overview Version E: devices (the reach order, every device, Add device) and the
-// activity feed (Routing and Logs). Built new; no Current / D component imported.
+// STAGING ONLY. Overview devices (reach order, every device, Add device) and the activity feed.
 "use client";
 
 import { useState } from "react";
 import { ArrowRight, Check, Plus, X } from "lucide-react";
 import type { DevicesMock } from "@/features/overview-staging/overview-mock-data";
-import { ECard, EDeviceMark, EStatus } from "./overview-e-bits";
-import { seen, type DeviceRow } from "./overview-e-data";
+import { ECard, EDeviceMark, EStatus } from "./overview-bits";
+import { seen, type DeviceRow } from "./overview-data";
 
 const ADD_KINDS = [
   { kind: "computer", label: "Mac" },

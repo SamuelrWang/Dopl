@@ -1,7 +1,5 @@
-// STAGING ONLY — Overview Version E (Samuel, 2026-10-26: "completely redesign the overview page,
-// literally from scratch"). Toggled from the staging toolbar ("Version E"); Current and D are
-// untouched. Same reads, gates and fixtures as both (`../overview-panels.tsx`,
-// `../overview-d/overview-d.tsx`); no component of theirs is imported or copied.
+// STAGING ONLY. The Overview face (Samuel, 2026-10-26: "completely redesign the overview page,
+// literally from scratch"), on the product reads and gates through the stubs.
 "use client";
 
 import { useMemo, useState } from "react";
@@ -16,16 +14,19 @@ import {
 import { useApiQuery } from "@/features/overview-staging/stubs/use-api-query";
 import { useWorkspaceEntitlements } from "@/features/overview-staging/stubs/use-workspace-entitlements";
 import { openHomeSettings } from "@/features/overview-staging/stubs/home-settings-control";
-import { DEVICES_MOCK, DEVICES_MOCK_USER_ID } from "@/features/overview-staging/overview-mock-data";
-import type { TokenSpendReport } from "@/features/overview-staging/components/overview/token-spend-strip";
-import { AgentsCard, NeedsCard, SummaryStrip } from "./overview-e-now";
-import { CreditsCard, TokensCard } from "./overview-e-usage";
-import { ActivityCard, DevicesCard } from "./overview-e-devices";
-import { ChannelsTable, ClippedLine, PeopleCard, ToolsCard } from "./overview-e-ledger";
-import { OverviewESkeleton } from "./overview-e-skeleton";
-import { NEEDS, deviceDirectory, monthKeyOf, seriesPath } from "./overview-e-data";
-import "./overview-e.css";
-import "./overview-e-parts.css";
+import {
+  DEVICES_MOCK,
+  DEVICES_MOCK_USER_ID,
+  type TokenSpendReport,
+} from "@/features/overview-staging/overview-mock-data";
+import { AgentsCard, NeedsCard, SummaryStrip } from "./overview-now";
+import { CreditsCard, TokensCard } from "./overview-usage";
+import { ActivityCard, DevicesCard } from "./overview-devices";
+import { ChannelsTable, ClippedLine, PeopleCard, ToolsCard } from "./overview-ledger";
+import { OverviewSkeleton } from "./overview-skeleton";
+import { NEEDS, deviceDirectory, monthKeyOf, seriesPath } from "./overview-data";
+import "./overview.css";
+import "./overview-parts.css";
 
 /**
  * TOP TO BOTTOM.
@@ -35,10 +36,9 @@ import "./overview-e-parts.css";
  *      Devices (reach order, every device, Add device).
  *   3. Channels: one table, credits and messages on the same row.
  *   4. People and MCP tools side by side, then the clipped-scan line.
- * Agents, Needs (D's two asks), Devices and Activity follow the Devices preview gate, as in
- * Current and D.
+ * Agents, Needs, Devices and Activity follow the Devices preview gate.
  */
-export function HomeOverviewE({
+export function StagingOverview({
   homeWorkspaceId,
   currentUserId,
 }: {
@@ -71,7 +71,7 @@ export function HomeOverviewE({
       </div>
     );
   }
-  if (!overview.data) return <OverviewESkeleton preview={preview} />;
+  if (!overview.data) return <OverviewSkeleton preview={preview} />;
 
   const data = overview.data;
   const walletReady = !wallet.loading && Boolean(homeWorkspaceId);

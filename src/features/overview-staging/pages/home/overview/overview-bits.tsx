@@ -1,12 +1,10 @@
-// STAGING ONLY — Overview Version E: E's own small pieces (card, meter, bars, status dot, marks).
-// Built new on the channel-tasks recipe (white card, hairline, one soft shadow, caption meta);
-// nothing here is imported or copied from Current's or Version D's components.
+// STAGING ONLY. Overview card, meter, bars, status dot and marks.
 "use client";
 
 import type { ReactNode } from "react";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import type { MockStatus } from "@/features/overview-staging/overview-mock-data";
-import { RUNTIME_LOGO } from "./overview-e-data";
+import { RUNTIME_LOGO } from "./overview-data";
 
 /** One white card with a plain title row; `aside` sits at the title row's right end. */
 export function ECard({

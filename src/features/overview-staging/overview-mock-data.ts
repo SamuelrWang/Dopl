@@ -1,15 +1,15 @@
 /**
  * STAGING DATA for `/overview` — every value here is made up. THE ONE DATA FILE.
  *
- * The desktop Overview reads four API paths and two hooks; the staging stubs
+ * The desktop Overview reads three API paths and one hook; the staging stubs
  * (`./stubs/*`) answer each of them out of this file and nothing else. No
  * Supabase, no fetch, no Electron IPC.
  *
  *   GET /api/home/overview            → `HOME_OVERVIEW`
  *   GET /api/home/overview-series     → `overviewSeries(scope, month)`
  *   GET /api/home/token-spend         → `tokenSpendReport()`
- *   GET /api/billing/status (credits) → `CREDIT_STATES[plan]`
- *   useHomeChannels()                 → `HOME_CHANNELS`
+ *   GET /api/billing/status (credits) → `creditState(plan)`
+ *   usage scopes                      → `HOME_CHANNELS`
  *
  * The Devices section's types and `DEVICES_MOCK` are the branch
  * `devices-dashboard-mock` file `apps/desktop-ui/src/pages/home/devices-mock/devices-mock-data.ts`,
@@ -22,7 +22,6 @@ import type {
 } from "@/features/home/overview-types";
 import { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP } from "@/features/home/overview-types";
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
-import type { TokenSpendReport } from "./components/overview/token-spend-strip";
 
 /* ────────────────────────────── home channels ────────────────────────────── */
 
@@ -151,6 +150,12 @@ export function overviewSeries(scope: string, month: string, empty = false): Hom
 }
 
 /* ──────────────────────────────── token spend ──────────────────────────────── */
+
+/** One entry per run, newest first. Mirrors the server report shape. */
+export interface TokenSpendReport {
+  marks: Array<{ at: string; tokens: number }>;
+  truncated: boolean;
+}
 
 /** ~60 agent runs over the last 31 local days, newest first. */
 export function tokenSpendReport(empty = false): TokenSpendReport {

@@ -1,5 +1,4 @@
-// STAGING ONLY — Overview Version E: credits (the period's allowance + the month's daily credits,
-// with scope and month) and tokens (the last 31 days). Built new; no Current / D component.
+// STAGING ONLY. Overview credits (allowance + daily credits by scope and month) and tokens (31 days).
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -7,8 +6,8 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatShortDate } from "@/shared/lib/format-time";
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
 import type { HomeSeriesPoint } from "@/features/home/overview-types";
-import { ECard, EBars, EEmpty, EMeter } from "./overview-e-bits";
-import { SCOPES, compact, monthKeyOf, monthName, shiftMonth, tokenDays } from "./overview-e-data";
+import { ECard, EBars, EEmpty, EMeter } from "./overview-bits";
+import { SCOPES, compact, monthKeyOf, monthName, shiftMonth, tokenDays } from "./overview-data";
 
 /** A small scope picker: the label is the button, the list drops below. */
 function ScopePicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {

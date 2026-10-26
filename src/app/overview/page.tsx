@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * UI STAGING: desktop /home → Overview (branch `devices-dashboard-mock`) on fake data, inside the
+ * UI STAGING: desktop /home → Overview on fake data, inside the
  * landing demo's window. No auth, no fetch. See `src/features/overview-staging/PORTING.md`.
  */
 export default function OverviewStagingRoute() {

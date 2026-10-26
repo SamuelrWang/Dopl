@@ -5,24 +5,19 @@ import type { SettingsSection } from "@/shared/layout/settings-modal/settings-mo
 import { cn } from "@/shared/lib/utils";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
 import { STAGING_HOME_WORKSPACE_ID } from "@/features/ui-staging/staging-stubs";
-import { HomeOverviewPanels } from "./pages/home/overview-panels";
-import { HomeOverviewD } from "./pages/home/overview-d/overview-d";
-import { HomeOverviewE } from "./pages/home/overview-e/overview-e";
+import { StagingOverview } from "./pages/home/overview/overview";
 import { StagingSettingsModal } from "@/features/settings-staging/staging-settings-modal";
 import { DEVICES_MOCK_USER_ID, type StagingPlan } from "./overview-mock-data";
 import {
   DEFAULT_STAGING_STATE,
   StagingStateProvider,
-  type StagingFace,
   type StagingLoad,
   type StagingState,
 } from "./stubs/staging-state";
 import { STAGING_OPEN_SETTINGS_EVENT } from "./stubs/home-settings-control";
 
 /**
- * `/overview` — desktop /home → Overview (the `devices-dashboard-mock` branch version) inside the
- * landing demo's window, on fake data. The pane is `HomePane`'s Overview branch
- * (`home-panes.tsx`), which on the branch passes `currentUserId` to gate the Devices preview.
+ * `/overview`: the Overview face inside the landing demo window, on fake data.
  *
  * The small toolbar bottom-right is STAGING ONLY (not part of the desktop UI): it flips the states
  * the Overview can be in, so each can be reviewed without real data.
@@ -47,24 +42,10 @@ export function OverviewStagingPage() {
   return (
     <StagingStateProvider value={state}>
       <StagingFrame tab="overview" showChannels>
-        {/* `home-panes.tsx › HomePane` (branch): the Overview face. Version D is staging-only. */}
-        {/* STAGING (2026-10-26): Version E, the from-scratch redesign (`overview-e/`). */}
-        {state.face === "e" ? (
-          <HomeOverviewE
-            homeWorkspaceId={STAGING_HOME_WORKSPACE_ID}
-            currentUserId={state.devicesPreview ? DEVICES_MOCK_USER_ID : null}
-          />
-        ) : state.face === "d" ? (
-          <HomeOverviewD
-            homeWorkspaceId={STAGING_HOME_WORKSPACE_ID}
-            currentUserId={state.devicesPreview ? DEVICES_MOCK_USER_ID : null}
-          />
-        ) : (
-          <HomeOverviewPanels
-            homeWorkspaceId={STAGING_HOME_WORKSPACE_ID}
-            currentUserId={state.devicesPreview ? DEVICES_MOCK_USER_ID : null}
-          />
-        )}
+        <StagingOverview
+          homeWorkspaceId={STAGING_HOME_WORKSPACE_ID}
+          currentUserId={state.devicesPreview ? DEVICES_MOCK_USER_ID : null}
+        />
       </StagingFrame>
       <StagingSettingsModal
         open={settingsOpen}
@@ -85,11 +66,6 @@ const LOADS: Array<{ key: StagingLoad; label: string }> = [
   { key: "loading", label: "Loading" },
   { key: "empty", label: "Empty" },
   { key: "error", label: "Error" },
-];
-const FACES: Array<{ key: StagingFace; label: string }> = [
-  { key: "current", label: "Current" },
-  { key: "d", label: "Version D" },
-  { key: "e", label: "Version E" },
 ];
 const PLANS: Array<{ key: StagingPlan; label: string }> = [
   { key: "free", label: "Free" },
@@ -161,12 +137,6 @@ function StagingToolbar({
       </div>
       {open && (
         <>
-          <Segmented
-            label="Version"
-            options={FACES}
-            value={state.face}
-            onChange={(face) => onChange({ ...state, face })}
-          />
           <Segmented
             label="Reads"
             options={LOADS}

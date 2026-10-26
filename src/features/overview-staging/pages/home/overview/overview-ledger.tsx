@@ -1,10 +1,8 @@
-// STAGING ONLY — Overview Version E: where it went. One Channels table (credits AND messages on the
-// same row, which Current splits into two rails), then People and MCP tools side by side.
-// Built new; no Current / D component imported.
+// STAGING ONLY. Overview ledger: one Channels table (credits and messages per row), People, MCP tools.
 "use client";
 
 import type { HomeOverview } from "@/features/home/overview-types";
-import { ECard, EEmpty, EMeter } from "./overview-e-bits";
+import { ECard, EEmpty, EMeter } from "./overview-bits";
 
 export function ChannelsTable({ data }: { data: HomeOverview }) {
   const rows = data.channels ?? [];

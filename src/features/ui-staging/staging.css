@@ -657,33 +657,6 @@ button.lp-demo-top-profile {
   opacity: 1;
 }
 
-/* ── DEVICES SECTION CARD (Samuel, 2026-10-22, ask 4) ────────────────
-   The Devices section on /playground/overview dropped `SectionPanel`:
-   no grey ground, no heading standing on grey, no white panels layered
-   on top (Samuel: "we should lean away from the gray background with
-   the header on the gray background and then different panels on top").
-   Its cards sit straight on the record pane, so they need the landing's
-   card face rather than the kit's `.bento`, whose `--panel-surface`
-   (#fbfcfd) is 1/255 from the pane's `--home-card` (#fbfcfc) and would
-   read as nothing at all.
-
-   #ffffff is DESIGN-LANGUAGE.md §1 ("white surfaces, not grey") and the
-   shadow is its §3 thread-card recipe, verbatim. THE SECTION'S ONE
-   LITERAL: every other value in `devices-mock/*` is a token utility, so
-   flipping the trial back is this rule and nothing else.
-   Port target if approved: a white variant of `globals.css › .bento`
-   (+ `apps/desktop-ui/src/styles/kit.css`, gated by
-   scripts/check-css-token-drift.ts) read by the desktop
-   `pages/home/devices-mock/*`. */
-.uis-window .uis-dev-card {
-  background: #ffffff;
-  border: 1px solid var(--border-default);
-  border-radius: 14px;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 8px 22px rgba(0, 0, 0, 0.05);
-}
-
 /* ── LIFT ON THE WHITE PANEL (Samuel, 2026-10-22) ────────────────────
    With the panel white, the white channel rows and top-bar pills lost
    their edge. Stronger cast shadows instead of a grey fill. */

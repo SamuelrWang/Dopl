@@ -1,11 +1,10 @@
-// STAGING ONLY — Overview Version E: the top of the page. A summary strip (four calm cells in one
-// card), then what needs you and what is running. Built new; no Current / D component imported.
+// STAGING ONLY. Overview top: the summary strip, what needs you and what is running.
 "use client";
 
 import { MessageCircleQuestion, ShieldCheck, Zap } from "lucide-react";
 import type { MockHost } from "@/features/overview-staging/overview-mock-data";
-import { ECard, EDeviceMark, EEmpty, EMeter, ERuntime, EStatus } from "./overview-e-bits";
-import { agentIndex, runTime, type Need } from "./overview-e-data";
+import { ECard, EDeviceMark, EEmpty, EMeter, ERuntime, EStatus } from "./overview-bits";
+import { agentIndex, runTime, type Need } from "./overview-data";
 
 export type Wallet = { used: number; limit: number; remaining: number; over: boolean } | null;
 

@@ -1,6 +1,4 @@
-// STAGING ONLY — Overview Version E (2026-10-26): pure derivations over the SAME fixtures Current
-// and Version D read (`overview-mock-data.ts` through the stubs, plus D's two invented asks). No
-// UI, and nothing imported from Current's or D's components: every helper here is E's own.
+// STAGING ONLY. Pure derivations over `overview-mock-data.ts` (read through the stubs).
 import {
   DEVICES_MOCK,
   HOME_CHANNELS,
@@ -9,7 +7,23 @@ import {
 } from "@/features/overview-staging/overview-mock-data";
 import { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP } from "@/features/home/overview-types";
 
-export { NEEDS, type Need } from "../overview-d/overview-d-data";
+/**
+ * Invented: the mock has no pending-approval or open-question field, so both asks are lifted from
+ * `DEVICES_MOCK` events (log l8 "Permission asked", route r5) and held open. The product reads these
+ * off the approvals queue and open decisions.
+ */
+export interface Need {
+  id: string;
+  agentId: string;
+  kind: "permission" | "question";
+  at: string;
+  ask: string;
+}
+
+export const NEEDS: readonly Need[] = [
+  { id: "n1", agentId: "a3", kind: "permission", at: "13:20", ask: "Wants to post in Dopl" },
+  { id: "n2", agentId: "a1", kind: "question", at: "11:02", ask: "Which account should the outreach go from?" },
+];
 
 /* ── months ── */
 
@@ -33,7 +47,7 @@ export function seriesPath(scope: string, month: string): string {
   return `/api/home/overview-series?${params.join("&")}`;
 }
 
-/** Usage scopes, the same set Current's scope menu offers. */
+/** Usage scopes, the same set the product scope menu offers. */
 export const SCOPES: ReadonlyArray<{ id: string; label: string }> = [
   { id: USAGE_SCOPE_ALL, label: "All channels" },
   { id: USAGE_SCOPE_DESKTOP, label: "Desktop agent" },

@@ -8,7 +8,7 @@ import {
   tokenSpendReport,
 } from "../overview-mock-data";
 import { USAGE_SCOPE_ALL } from "@/features/home/overview-types";
-import { monthKey } from "../pages/home/overview-usage-filter";
+import { monthKeyOf } from "../pages/home/overview/overview-data";
 import { useStagingState, type StagingLoad } from "./staging-state";
 
 /**
@@ -35,7 +35,7 @@ function resolvePath(path: string, load: StagingLoad): unknown {
     case "/api/home/overview-series":
       return overviewSeries(
         url.searchParams.get("channel") ?? USAGE_SCOPE_ALL,
-        url.searchParams.get("month") ?? monthKey(),
+        url.searchParams.get("month") ?? monthKeyOf(),
         empty
       );
     case "/api/home/token-spend":
