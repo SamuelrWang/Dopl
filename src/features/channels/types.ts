@@ -490,3 +490,4 @@ export type {
   ConsentDecisionSurface,
   ChannelConsentRequest,
 } from "./types-consent";
+export * from "./types-tasks";

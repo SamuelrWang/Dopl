@@ -11,7 +11,7 @@ import type { SessionStateUpsert } from "./collab-dto";
 export const SESSION_DIFF_COLUMNS =
   "session_key, channel_id, thread_id, name, state, channel_name, thread_title, " +
   "detail, tool_label, model, context_used, context_window, tokens_spent, " +
-  "started_at, last_activity_at, identity_name, display_name, " +
+  "started_at, last_activity_at, identity_name, display_name, runtime, " +
   "turns, tokens_delta, stale, denied_calls, last_denied_tool, " +
   "last_wake_seq, last_wake_at, " +
   // Also the incumbent key for `session-colors.ts` rule 1 — missing, every push would reassign it.
@@ -55,6 +55,7 @@ export function sessionRowMatches(
     stored.last_activity_at === reported.last_activity_at &&
     stored.identity_name === reported.identity_name &&
     stored.display_name === reported.display_name &&
+    stored.runtime === reported.runtime &&
     stored.color === reported.color &&
     (stored.color_shared === true) === (reported.color_shared === true) &&
     sameCount(stored.turns, reported.turns) &&

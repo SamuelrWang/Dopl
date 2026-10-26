@@ -82,6 +82,8 @@ export type SessionStateRow = {
   display_name: string | null;
   /** Peer-visible by design (every member draws it); TEXT, so `narrowSessionColor` narrows it. */
   color: string | null;
+  /** Peer-visible: the runtime badge. NULL = a desktop older than the field. */
+  runtime: string | null;
 };
 
 /**
@@ -157,6 +159,7 @@ export type SessionStateUpsert = {
   identity_name: string | null;
   /** The one field the server may overrule (`session-colors.ts › resolveReportedColors`). */
   color: AgentColorKey | null;
+  runtime: string | null;
   /**
    * SERVER-SET, never reported: this session REUSES a key another live session in the channel
    * holds, because every key was taken (2026-10-08). Exempts the row from the per-channel unique
@@ -220,6 +223,7 @@ export function mapPeerSessionStateRow(
     displayName: row.display_name ?? null,
     // Peer-visible, and narrowed rather than passed through.
     color: narrowSessionColor(row.color),
+    runtime: row.runtime ?? null,
     updatedAt: row.updated_at,
   };
 }

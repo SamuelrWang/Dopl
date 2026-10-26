@@ -285,6 +285,8 @@ export type {
  * here: this file is the barrel, so there is no second path to a symbol.
  */
 export { ArtifactActionSchema } from "./schema-artifacts";
+export { TaskActionSchema, TaskQuerySchema } from "./schema-tasks";
+export type { TaskActionInput } from "./schema-tasks";
 export type { ArtifactActionInput } from "./schema-artifacts";
 
 

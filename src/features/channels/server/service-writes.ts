@@ -239,6 +239,7 @@ export async function postMessage(
     {
       handoff: opts.handoff,
       fanoutGroupId: opts.fanoutGroupId,
+      taskId: opts.taskId,
       // The SAME validated list the membership fence above just checked, so every addressing
       // shape (`to=`, the composer's / thread opener's `toUserId`) notifies, and a future shape
       // cannot address without stamping. Never resilience-repaired recipients.

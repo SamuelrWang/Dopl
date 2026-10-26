@@ -103,7 +103,7 @@ function reported(over: Partial<SessionStateUpsert> = {}): SessionStateUpsert {
     thread_title: null,
     detail: null, tool_label: null, model: null,
     context_used: null, context_window: null, tokens_spent: null,
-    started_at: null, last_activity_at: null, identity_name: null, display_name: null,
+    started_at: null, last_activity_at: null, identity_name: null, display_name: null, runtime: null,
     // Every current desktop requests a colour; a `null` default would make every stored row read as changed.
     color: "agent-01",
     ...over,

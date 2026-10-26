@@ -92,6 +92,7 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
     display_name: entry.displayName ?? null,
     // A request, resolved in the reconcile (`session-colors.ts › resolveReportedColors`); `null` = most distinct free key.
     color: entry.color ?? null,
+    runtime: entry.runtime ?? null,
   };
 }
 

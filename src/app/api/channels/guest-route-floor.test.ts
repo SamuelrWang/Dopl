@@ -183,6 +183,10 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   // posts: the messages route's floor, behind the same service fence.
   [`${CHANNELS_REL}/[channelId]/artifacts/route.ts`, "GET"],
   [`${CHANNELS_REL}/[channelId]/artifacts/route.ts`, "POST"],
+  // CHANNEL TASKS (2026-10-26, R8): a guest reads tasks and adds notes; the service refuses the
+  // rest (`service-tasks-shared.ts › requireTaskEditor`).
+  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "GET"],
+  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "POST"],
   // ⚠ THREE `personal-arming` ROWS STOOD HERE AND ARE DELETED WITH THE ROUTE
   // (2026-09-07) — see this file's header.
   //
@@ -244,18 +248,18 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
 const ALLOWED_KEYS = new Set(GUEST_ALLOWED.map(([f, m]) => `${f}#${m}`));
 
 describe("guest route floor — the guest-allowed set is exactly what runs at minRole:guest", () => {
-  it("has 27 entries (pins the size against a silent add/drop)", () => {
+  it("has 29 entries (pins the size against a silent add/drop)", () => {
     // 19 until 2026-09-06 (artifacts ×2), 24 while the three personal-arming
     // verbs existed, 21 once they were deleted with the route (2026-09-07), 27
     // with the ontology lane (2026-09-09, F-685), 30 with that lane's CHANGELOG
     // (the same day, F-686 part 2); 15 until Home Knowledge Panels M2, and **26
     // since R-18 took the four knowledge-lane entries out (2026-09-17)**, 27 with the composer's
-    // own-send `messages/landed` check (2026-10-08).
+    // own-send `messages/landed` check (2026-10-08), 29 with channel tasks (2026-10-26).
     // ⚠ ENTRIES, NOT FILES, which is why B2
     // counts occurrences. The number blesses nothing; set B proves the tree.
     // Re-derive both, never quote:
     //   grep -rc 'minRole: "guest"' $(grep -rl 'minRole: "guest"' src/app/api)
-    expect(ALLOWED_KEYS.size).toBe(27);
+    expect(ALLOWED_KEYS.size).toBe(29);
   });
 
   it.each(GUEST_ALLOWED)("A: %s %s is at minRole:guest", (file, method) => {

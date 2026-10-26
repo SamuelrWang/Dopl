@@ -58,6 +58,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     last_wake_seq: null,
     last_wake_at: null,
     display_name: null,
+    runtime: null,
     color: null,
     ...over,
   };
@@ -75,6 +76,7 @@ function session(over: Record<string, unknown> = {}) {
     channelName: "General",
     threadTitle: "Deploy check",
     color: null,
+    runtime: null,
     updatedAt: "2026-08-05T12:00:05.000Z",
     model: null,
     toolLabel: null,
@@ -213,6 +215,7 @@ describe("reportSessionStates", () => {
     last_wake_seq: null,
     last_wake_at: null,
     display_name: null,
+    runtime: null,
     color: null,
   };
 

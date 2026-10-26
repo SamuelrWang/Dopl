@@ -79,6 +79,9 @@ export {
 // that file's docblock carries the seam, and the function's carries why the
 // design's "not offered" line gave way.
 export { listChannelArtifacts } from "./service-artifacts-list";
+
+// CHANNEL TASKS (PLAN.md R5–R10): the list, one task, and the POST action union.
+export { applyTaskAction, listChannelTasks, readChannelTask } from "./service-tasks";
 // `revalidateAwaitAccess` / `pollChannelMessages` / `hasNewMessages` are NOT
 // re-exported: `service-await.ts` imports them directly, and a second name for a
 // long-poll internal only invites a handler to call one.

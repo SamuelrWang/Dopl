@@ -150,6 +150,36 @@ function migrationColumns(source: string): string[] {
   return [...source.matchAll(/ADD COLUMN IF NOT EXISTS\s+(\w+)/g)].map((m) => m[1]);
 }
 
+/**
+ * PEER FIELDS (2026-10-26): fields the peer projection carries that are not health, with the same
+ * silent failure (optional AND nullable). Each must be named in the zod schema, in BOTH
+ * `ChannelSessionState` declarations (the server's and the SDK's hand mirror) and as a column.
+ */
+const PEER_FIELDS: Record<string, { column: string; migration: string }> = {
+  runtime: {
+    column: "runtime",
+    migration: "supabase/migrations/20261121191000_channel_sessions_runtime.sql",
+  },
+};
+
+function peerFieldDrift(): string[] {
+  const zod = read("src/features/channels/schema-sessions.ts");
+  const server = typeFields(read("src/features/channels/types-sessions.ts"), "ChannelSessionState");
+  const sdk = typeFields(read("packages/dopl-client/src/session-types.ts"), "ChannelSessionState");
+  const problems: string[] = [];
+  for (const [field, { column, migration }] of Object.entries(PEER_FIELDS)) {
+    if (!new RegExp(`^\\s{2}${field}:\\s*z\\b`, "m").test(zod)) {
+      problems.push(`schema-sessions.ts › SessionStateEntrySchema lacks ${field}`);
+    }
+    if (!server.includes(field)) problems.push(`types-sessions.ts › ChannelSessionState lacks ${field}`);
+    if (!sdk.includes(field)) problems.push(`dopl-client session-types.ts › ChannelSessionState lacks ${field}`);
+    if (!migrationColumns(read(migration)).includes(column)) {
+      problems.push(`${migration} does not ADD COLUMN ${column}`);
+    }
+  }
+  return problems;
+}
+
 function main(): void {
   const reference = typeFields(read(REFERENCE_FILE), "ChannelSessionHealth");
   const expected = new Set(reference);
@@ -200,6 +230,11 @@ function main(): void {
     }
   }
 
+  for (const problem of peerFieldDrift()) {
+    drift = true;
+    console.error(`[drift] peer field: ${problem}`);
+  }
+
   if (drift) {
     console.error(
       `\n❌ Session-health drift detected. Every field is optional AND nullable, so drift here does not fail a build or a test — it just means the field never arrives. Sync the type, the zod block and the migration in ONE change.`
@@ -208,7 +243,7 @@ function main(): void {
   }
 
   console.log(
-    `✅ All ${sites.length} session-health declarations agree with ${REFERENCE_FILE} › ChannelSessionHealth on the set: ${reference.slice().sort().join(", ")}.`
+    `✅ All ${sites.length} session-health declarations agree with ${REFERENCE_FILE} › ChannelSessionHealth on the set: ${reference.slice().sort().join(", ")}; peer field(s) ${Object.keys(PEER_FIELDS).join(", ")} declared at all four sites.`
   );
 }
 

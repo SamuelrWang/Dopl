@@ -290,3 +290,15 @@ describe("the two INT4 health counts are bounded at the COLUMN's ceiling", () =>
     }
   });
 });
+
+describe("SessionStateReportSchema — runtime (R9)", () => {
+  it("takes a runtime id on the launch grammar, absent or null as well", () => {
+    expect(parse([entry({ runtime: "codex" })]).success).toBe(true);
+    expect(parse([entry({ runtime: null })]).success).toBe(true);
+    expect(parse([entry()]).success).toBe(true);
+  });
+
+  it("refuses one the column CHECK would refuse, so it is a named 400 and not a 500", () => {
+    expect(parse([entry({ runtime: "Claude Code" })]).success).toBe(false);
+  });
+});
