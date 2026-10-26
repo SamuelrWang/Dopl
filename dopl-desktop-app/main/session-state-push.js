@@ -79,6 +79,8 @@ function reportRow(e) {
     // An ASK the server resolves (its rule 1 keeps a stored colour, so null cannot erase one); a closed set, so
     // membership-tested rather than length-bounded.
     color: wire.colorKey(e && e.color),
+    // Peer-visible, so a peer's agent shows which runtime it runs on.
+    runtime: wire.runtimeKey(e && e.runtimeId),
     ...telemetry.telemetryFields(e),
   };
 }

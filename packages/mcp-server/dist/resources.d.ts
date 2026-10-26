@@ -1,6 +1,6 @@
 /**
- * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Three: the channels
- * doctrine, the knowledge one, and the displays one. {@link RESOURCES} is the
+ * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES: the channels
+ * doctrine, the knowledge one, the displays one and the tasks one. {@link RESOURCES} is the
  * list; a reader counting them reads that table, never this sentence.
  *
  * ⚠ WHY A RESOURCE AND NOT A LONGER DESCRIPTION (T10/T82, 2026-09-02). A tool

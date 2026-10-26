@@ -32,7 +32,7 @@ exports.CHANNEL_DESCRIPTION = (0, tool_style_1.composeDescription)({
         exports.HOME_CHANNEL_POINTER,
         // Every op appears quoted as `"op_name"` (`parity.test.ts` reads that form against the enum);
         // `wait_ms= holds` is pinned by `channel-wake-runtime.test.ts`.
-        `OPS — "send" a message, "read" the transcript (since=, wait_ms= holds), "status" your live agents, "manage" one of them, "rooms" for the place, "artifact" the fold. The last three take action=.`,
+        `OPS — "send" a message, "read" the transcript (since=, wait_ms= holds), "status" your live agents, "manage" one of them, "rooms" for the place, "artifact" the fold, "task" its tasks. The last four take action=.`,
         // A contract of the read: a folded run reads back as fewer rows than were written.
         `A read returns a CARD where folded messages were — nothing is edited or deleted, and "dissolve" puts them back.`,
     ],

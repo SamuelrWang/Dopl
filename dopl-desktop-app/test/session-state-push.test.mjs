@@ -71,6 +71,9 @@ test("ROW: the payload is the schema's shape, field for field", () => {
     // already holds. That is what exempts `color` from the `identityName` erase hazard
     // `session-store.js`'s durable whitelist records.
     color: null,
+    // ⚠ JOINED 2026-10-26 (20261121191000): the runtime, PEER-VISIBLE. NULL here because the
+    // fixture names none.
+    runtime: null,
     detail: null,
     toolLabel: null,
     model: null,
@@ -109,7 +112,7 @@ test("ROW: the payload is the schema's shape, field for field", () => {
 // on `session-summary.js` and reaching the table because nobody chose to send it. ⚠ SIXTEEN SINCE 2026-08-22 (agent
 // identities): `identityName` was added DELIBERATELY, with the column to receive it (`channel_sessions.identity_name`,
 // OPERATOR-ONLY — the server's mapper is the fence and the GRANT list is the belt, neither of which is this file's).
-test("ROW: the wire row is exactly the twenty-five columns, and no summary field rides along free", () => {
+test("ROW: the wire row is exactly the twenty-six columns, and no summary field rides along free", () => {
   const m = load();
   const wide = entry({
     detail: "tool",
@@ -136,12 +139,22 @@ test("ROW: the wire row is exactly the twenty-five columns, and no summary field
   // every one of them is a fact about how somebody's own machine is getting on.
   // ⚠ TWENTY-FIVE SINCE 2026-09-13: `color` joined, DELIBERATELY and with the column to receive
   // it (`channel_sessions.color`, PEER-VISIBLE by design — Samuel's cross-member ruling).
+  // ⚠ TWENTY-SIX SINCE 2026-10-26: `runtime`, with its column (`channel_sessions.runtime`,
+  // PEER-VISIBLE, PLAN.md R9).
   assert.deepEqual(Object.keys(m.reportRow(wide)).sort(), [
     "channelId", "channelName", "color", "contextUsed", "contextWindow", "deniedCalls", "detail",
     "displayName", "identityName", "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "model",
-    "name", "sessionKey", "stale", "startedAt", "state", "threadId",
+    "name", "runtime", "sessionKey", "stale", "startedAt", "state", "threadId",
     "threadTitle", "tokensDelta", "tokensSpent", "toolLabel", "turns",
   ]);
+  // ⚠ THE RUNTIME CROSSES ON THE SERVER'S GRAMMAR or not at all: one id the column CHECK refuses
+  // would 400 the whole workspace's push.
+  for (const id of ["claude", "codex", "cursor", "muse", "grok"]) {
+    assert.equal(m.reportRow(entry({ runtimeId: id })).runtime, id);
+  }
+  for (const bad of ["", "Claude", "9codex", "x".repeat(40), 7, undefined]) {
+    assert.equal(m.reportRow(entry({ runtimeId: bad })).runtime, null, String(bad));
+  }
   // ⚠ **THE COLOUR CROSSES MEMBERSHIP-TESTED, NOT SANITIZED**, which is the one difference from
   // `displayName` above and the reason it is asserted here rather than assumed: the set is a
   // closed sixteen, so anything outside it must become NULL ("no colour") rather than a shortened

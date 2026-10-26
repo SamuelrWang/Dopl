@@ -98,13 +98,14 @@ describe("the group-channel threshold is not restated per lane", () => {
 });
 
 describe("the removed named-agent surface is ABSENT from the published shape", () => {
-  it("declares no to_agent / to_agents / as_agent / participants / agent / status", () => {
+  it("declares no to_agent / to_agents / as_agent / participants / agent, and `status` is only a task's", () => {
     // ⚠ Not "declared and ignored" — a param an MCP client can see is a param a
     // model will try, and a silently-dropped address is the invisible-delivery
     // failure the addressing contract exists to prevent.
-    for (const key of ["to_agent", "to_agents", "as_agent", "participants", "agent", "status"]) {
+    for (const key of ["to_agent", "to_agents", "as_agent", "participants", "agent"]) {
       expect(CHANNEL_INPUT_SHAPE, key).not.toHaveProperty(key);
     }
+    expect(CHANNEL_INPUT_SHAPE.status.unwrap().options).toEqual(["open", "in_progress", "resolved"]);
   });
 
   it("REFUSES every removed op at the enum, before any handler runs", () => {

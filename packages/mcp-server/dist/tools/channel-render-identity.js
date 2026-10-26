@@ -26,6 +26,7 @@ exports.memberRef = memberRef;
 exports.namesFromMessages = namesFromMessages;
 exports.agentNamesFromMessages = agentNamesFromMessages;
 exports.nameHandle = nameHandle;
+exports.nameSlug = nameSlug;
 exports.addressTag = addressTag;
 exports.sessionTail = sessionTail;
 const channel_shared_1 = require("./channel-shared");
@@ -294,7 +295,7 @@ function agentRef(agentId, view) {
  * null), so each caller keeps its own fallback, the `@agent-<id>` handle.
  */
 function nameHandle(name, view = exports.NO_MEMBER_VIEW) {
-    const slug = name.trim().toLowerCase().replace(/\s+/g, "-");
+    const slug = nameSlug(name);
     if (/^[a-z0-9][a-z0-9-]*$/.test(slug) && !slugIsTaken(slug, view))
         return `@${slug}`;
     const safe = (0, channel_shared_1.neutralizeInline)(name);
@@ -304,10 +305,14 @@ function slugIsTaken(slug, view) {
     if (slug.startsWith("agent-") || slug === "desktop")
         return true;
     for (const member of view.names.values()) {
-        if (member.trim().toLowerCase().replace(/\s+/g, "-") === slug)
+        if (nameSlug(member) === slug)
             return true;
     }
     return false;
+}
+/** The slug a display name tags as, before any charset check. */
+function nameSlug(name) {
+    return name.trim().toLowerCase().replace(/\s+/g, "-");
 }
 /**
  * **WHY THE SERVER PICKED THIS AGENT** — `metadata.wake_reason`, when nobody was

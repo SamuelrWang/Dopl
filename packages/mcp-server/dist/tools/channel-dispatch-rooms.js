@@ -8,7 +8,7 @@
  * conversation in it. `read` answers "what was said", `status` "what is
  * running", and this answers "what is this place, and who is in it".
  *
- * ⚠ **FOUR OF THE EIGHT WRITE, AND THE GATE IS PER ACTION** (`gating.ts ›
+ * ⚠ **FOUR ACTIONS WRITE, AND THE GATE IS PER ACTION** (`gating.ts ›
  * WRITE_OPS` names `rooms.open`, `rooms.invite`, `rooms.thread_mode` and
  * `rooms.update`). Classifying the whole op as a write would refuse a
  * `dopl.read` token the four calls it exists to make — listing its channels
@@ -29,6 +29,7 @@ const channel_vocab_1 = require("./channel-vocab");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_open_1 = require("./channel-ops-open");
 const channel_ops_threads_1 = require("./channel-ops-threads");
+const channel_ops_task_read_1 = require("./channel-ops-task-read");
 const channel_ops_update_1 = require("./channel-ops-update");
 /**
  * True for an action this module answers. ⚠ **THE ONE PLACE THE PAIRING IS
@@ -101,6 +102,12 @@ async function dispatchRoomsAction(action, args, client, selfUserId, isAdmin, di
             if (miss)
                 return miss;
             return (0, channel_ops_read_1.opListThreads)(client, args.channel, selfUserId);
+        }
+        case "tasks": {
+            const bad = (0, respond_1.strictParams)('rooms action="tasks"', args, ["channel"], ["task"]);
+            if (bad)
+                return bad;
+            return (0, channel_ops_task_read_1.opReadTasks)(client, args.channel, args.task);
         }
         case "thread_mode": {
             const miss = (0, respond_1.missingParams)('rooms action="thread_mode"', args, [

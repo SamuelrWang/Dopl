@@ -14,9 +14,9 @@ const { isKnowledgeReadCall } = require('./knowledge-ops');
 const { isDoplReadOpCall } = require('./dopl-read-ops');
 const {
   OWN_CHANNEL_MARKER_KIND, OWN_CHANNEL_THREAD_NEW, OWN_CHANNEL_ESCALATE_KIND, OWN_CHANNEL_OUTBOUND_OPS,
-  OWN_CHANNEL_SEND_OPS, OWN_CHANNEL_ARTIFACT_OPS,
+  OWN_CHANNEL_SEND_OPS, OWN_CHANNEL_ARTIFACT_OPS, OWN_CHANNEL_TASK_OPS,
   isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
-  isOwnChannelArtifact, isOwnChannelOutboundCall,
+  isOwnChannelArtifact, isOwnChannelTask, isOwnChannelOutboundCall,
 } = require('./session-own-outbound');
 const { channelOpKey } = require('./channel-op-key');
 // The own-machine lanes: launch (depth-bounded), direct (buys a turn) and manage (rename/end/posture), each its
@@ -62,7 +62,7 @@ function isOwnChannelPost(input, sessionChannelId) {
 
 // The inbound half's read set, keyed `<op>.<action>` (F-578). `rooms` is here only BY ACTION: four of its
 // actions write; `rooms.list` enumerates every channel, so it stays gated.
-const OWN_CHANNEL_READ_OPS = ['read', 'status', 'rooms.threads', 'rooms.members'];
+const OWN_CHANNEL_READ_OPS = ['read', 'status', 'rooms.threads', 'rooms.members', 'rooms.tasks'];
 
 // The membership half, shared with the gate reason so the explainer has no second copy of the key rule.
 function isOwnChannelReadCall(input) {
@@ -188,7 +188,7 @@ const grantDecisionDetail = makeGrantDetail(grantDecision, {
   isChannelTool, isOwnChannelPost, isOwnChannelRead, postFieldsOk, grantKeyFor,
   OWN_CHANNEL_READ_OPS, isOwnChannelReadCall, normalizeToolMode, isAwaitOp,
   canonicalDoplName, isOwnChannelMarker, isOwnChannelThreadOpen, isOwnChannelEscalate, isOwnChannelOutbound,
-  isOwnChannelArtifact, isOwnChannelOutboundCall,
+  isOwnChannelArtifact, isOwnChannelTask, isOwnChannelOutboundCall,
   OWN_CHANNEL_OUTBOUND_OPS, isOwnMachineLaunch, isOwnMachineDirect,
   isOwnMachineManage, manageAllowReason,
   toolModeAllows, isKnowledgeReadCall, isDoplReadOpCall,
@@ -205,6 +205,7 @@ module.exports = {
   isOwnChannelMarker, OWN_CHANNEL_MARKER_KIND, isOwnChannelThreadOpen, OWN_CHANNEL_THREAD_NEW,
   isOwnChannelEscalate, OWN_CHANNEL_ESCALATE_KIND,
   isOwnChannelArtifact, OWN_CHANNEL_ARTIFACT_OPS, OWN_CHANNEL_SEND_OPS,
+  isOwnChannelTask, OWN_CHANNEL_TASK_OPS,
   isOwnChannelOutboundCall,
   isOwnChannelOutbound, OWN_CHANNEL_OUTBOUND_OPS,
   isOwnMachineManage, OWN_MACHINE_MANAGE_OPS, manageAllowReason,

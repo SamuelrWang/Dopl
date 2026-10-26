@@ -157,11 +157,29 @@ const OWN_CHANNEL_ARTIFACT_OPS = [
   'artifact.dissolve',
 ];
 
+// ── CHANNEL TASKS (2026-10-26) ──────────────────────────────────────────────────────────────
+//
+// `op="task"` admits on the fold's argument: an act on this session's own channel, governed by the
+// outbound half of the message axis like a post into it. Resolving is not terminal (`set_status`
+// back to `open` undoes it) and there is no delete, so it clears the settle bar too. An `assign` to
+// an agent posts an addressed message, but the server writes that post itself, inside the channel
+// the operator bound this session to. Named one by one, for the reason the fold's list is.
+const OWN_CHANNEL_TASK_OPS = [
+  'task.create_task',
+  'task.update_task',
+  'task.set_status',
+  'task.assign',
+  'task.unassign',
+  'task.add_subtask',
+  'task.update_subtask',
+  'task.add_note',
+];
+
 // The UNION — the one list `grantDecision`'s Axis-B branch and the explainer ask.
 // ⚠ IT IS NO LONGER A LIST OF ONE, so `scopedToOwnChannel`'s warning about reading a bare `i.op`
 // is now LIVE rather than prophylactic: `artifact` alone would match all four actions and every
 // action added after them. Every membership test in this tree goes through `channelOpKey`.
-const OWN_CHANNEL_OUTBOUND_OPS = OWN_CHANNEL_SEND_OPS.concat(OWN_CHANNEL_ARTIFACT_OPS);
+const OWN_CHANNEL_OUTBOUND_OPS = OWN_CHANNEL_SEND_OPS.concat(OWN_CHANNEL_ARTIFACT_OPS, OWN_CHANNEL_TASK_OPS);
 
 // THE ONE SCOPE RULE, shared by every predicate below so two of them can never disagree about
 // what "my own channel" means. Same shape and same safe failure as
@@ -220,6 +238,12 @@ function isOwnChannelArtifact(input, sessionChannelId) {
   return scopedToOwnChannel(OWN_CHANNEL_ARTIFACT_OPS, input, sessionChannelId);
 }
 
+/** An own-channel TASK write — one of the eight actions, in this session's own channel by id. Used by
+ *  the gate REASON, to say which allow this was. */
+function isOwnChannelTask(input, sessionChannelId) {
+  return scopedToOwnChannel(OWN_CHANNEL_TASK_OPS, input, sessionChannelId);
+}
+
 /** Any of them — the single question `grantDecision`'s Axis-B branch asks. */
 function isOwnChannelOutbound(input, sessionChannelId) {
   return scopedToOwnChannel(OWN_CHANNEL_OUTBOUND_OPS, input, sessionChannelId);
@@ -248,11 +272,13 @@ module.exports = {
   OWN_CHANNEL_ESCALATE_KIND,
   OWN_CHANNEL_SEND_OPS, // 2026-09-06: the `send` half alone — what the three SHAPE predicates ask
   OWN_CHANNEL_ARTIFACT_OPS, // ...and the fold's four dotted keys
+  OWN_CHANNEL_TASK_OPS, // ...and the task op's eight
   OWN_CHANNEL_OUTBOUND_OPS, // ...and their union, which is what the gate asks
   isOwnChannelMarker,
   isOwnChannelThreadOpen,
   isOwnChannelEscalate,
   isOwnChannelArtifact,
+  isOwnChannelTask,
   isOwnChannelOutbound,
   isOwnChannelOutboundCall,
 };

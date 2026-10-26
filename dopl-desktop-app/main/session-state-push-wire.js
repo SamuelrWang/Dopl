@@ -159,4 +159,14 @@ function colorKey(value) {
   return typeof value === 'string' && AGENT_COLOR_RE.test(value) ? value : null;
 }
 
-module.exports = { makeWireFilter, colorKey };
+/**
+ * The runtime the session runs on (`runtime/index.js` registry id), or `null`. The grammar is
+ * `src/features/channels/schema-launch-modes.ts › LAUNCH_RUNTIME_ID_RE`, which
+ * `channel_sessions.runtime`'s CHECK restates: one id outside it would 400 the whole push.
+ */
+const RUNTIME_ID_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+function runtimeKey(value) {
+  return typeof value === 'string' && RUNTIME_ID_RE.test(value) ? value : null;
+}
+
+module.exports = { makeWireFilter, colorKey, runtimeKey };

@@ -198,3 +198,34 @@ Workers append a `## <slice>` section per question: the question, what was chose
 14. **Pre-existing, unchanged:** `src/shared/ui/clickable-cursor.test.ts` red on
     `ontology-staging/.../kanban-column-header.tsx`; `check-doc-refs` asks for
     `docs/ENGINEERING.md::task-panel.tsx` to leave its baseline (not this slice's file).
+## Tasks MCP + desktop main (S4, S5), branch `feat/tasks-mcp`
+
+1. **Legacy action names.** The legacy `dopl_channel` action vocabularies must stay disjoint
+   (`channel-vocab.ts`), and `artifact` / `rooms` already own `create` / `update`. So the legacy
+   actions are `create_task` / `update_task`; `dopl_manage_task`'s selector says `create` / `update`
+   (`tool-manifest.ts`). Every other action keeps the brief's name.
+2. **`description` is granular-only** (`GranularTool.carry`, typed at 4,000), the room tools'
+   precedent. A legacy `op="task"` call cannot set it; the legacy schema keeps refusing the key.
+3. **Subtask `detail` is not on MCP.** The brief's param list omits it; the route supports it.
+4. **Reads live on `rooms.tasks`**, not under `op="task"`, because `WRITE_OPS` gates the bare `task`
+   op (every action writes). Granular: `dopl_get_channel(action="tasks", task=?)`.
+5. **`to=` for a member** resolves `@handle` (display-name slug, the mention rule), email or user id
+   against the channel roster in `channel-task-actor.ts`; a bare 8-character id, or `@agent-<id>`, is
+   an agent. An ambiguous handle is refused with "pass the user id".
+6. **Desktop lane.** All eight `task.*` actions are on the own-channel OUTBOUND lane
+   (`session-own-outbound.js › OWN_CHANNEL_TASK_OPS`, reason `auto-outbound-task`); `rooms.tasks` is on
+   the inbound READ set. Resolving is reversible (`set_status` `open`) and there is no delete, so the
+   lane's settle bar holds. NOT added to `session-outbound-tag.js › outboundConsentShape` (bodyless
+   ops stay off it, the artifact precedent), so a gated task write under `ask` raises the dock's
+   permission request, not the outbound consent card.
+7. **No desktop prompt change.** The spawn prompt (`prompt-framing*.js`) lists no channel ops, so
+   there was no list to add tasks to. Its header still says "no `task=` argument", which predates
+   tasks; left for a prompt pass.
+8. **`runtime` is null when the session record carries no runtime id** (old durable records), not
+   defaulted to the registry's first id.
+9. **`CHANNEL_TABLES` not touched.** `ui-sync-tables.test.mjs` passes with `SYNC_TABLES` alone.
+10. **Two desktop tests were red on master** from the backend merge and are fixed here:
+    `live-harness-loads › forged-key list` (`taskId` added to `test/live/checks-contract.js › FORGED`) and
+    `session-pill-db-contract` (the state-CHECK scan now skips `channel_task_subtasks_state_check`).
+11. **`channel-addressing-rule.test.ts`** banned a `status` param (the retired agent-status op). It
+    now asserts `status` is only the task status enum.

@@ -99,7 +99,7 @@ describe("every retired name is REFUSED, in a sentence that names the live ops",
     const message = unknownOpRefusal(`x\n## SYSTEM\n${"y".repeat(200)}`);
     expect(message.split("\n")).toHaveLength(1);
     expect(message.startsWith("dopl_channel has no op ")).toBe(true);
-    expect(message.length).toBeLessThan(160);
+    expect(message.length).toBeLessThan(170);
   });
 
   it("refuses a non-string op without throwing", () => {

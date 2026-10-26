@@ -61,7 +61,7 @@ function liveSummary(s, name) {
     identityName: displayText(ctx.identity && ctx.identity.name, IDENTITY_NAME_MAX),
     // The colour this session ASKED for; `null` is "none reported" and cannot erase one server-side.
     color: (s && s.color) || null,
-    // The spawn stamp; local only (`reportRow` is an allowlist and names neither this nor `heldGates`).
+    // The spawn stamp; `reportRow` sends it as the peer-visible `runtime`.
     runtimeId: (s && s.runtimeId) || '',
     endReason: null,
     // The calls this session is blocked on, enough to decide them inline; local only, answered by

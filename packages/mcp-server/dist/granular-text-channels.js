@@ -9,6 +9,8 @@ const channel_schema_launch_fields_js_1 = require("./tools/channel-schema-launch
 exports.CHANNEL_DESCRIPTION_MAX_CHARS = 2000;
 /** Carried past the legacy schema, whose `summary` caps at a notification's 200. */
 const channelDescription = zod_1.z.string().trim().max(exports.CHANNEL_DESCRIPTION_MAX_CHARS);
+/** `src/features/channels/schema-tasks.ts › DescriptionSchema`'s cap. */
+const taskDescription = zod_1.z.string().trim().max(4000);
 /** A decision is its own tool: the named refusal points there, and nothing is sent. */
 const sendKind = zod_1.z.enum(["message", "milestone", "record"], {
     error: (issue) => issue.input === "decision"
@@ -21,8 +23,12 @@ exports.CHANNEL_TEXT = {
         description: "Channels you are in within one container, with slugs and ids. Start here before reading or posting; dopl_get_status covers every container at once.",
     },
     dopl_get_channel: {
-        description: 'One channel\'s facts: action="status" your live agents in it (omit `channel` for every channel), "members" its roster, "threads" its threads.',
-        params: { channel: 'Channel slug or id; required except for action="status".' },
+        description: 'One channel\'s facts: action="status" your live agents in it (omit `channel` for every channel), "members" its roster, "threads" its threads, "tasks" its tasks (with `task`, one whole).',
+        params: {
+            channel: 'Channel slug or id; required except for action="status".',
+            task: 'action="tasks": one task with its subtasks, assignees and notes.',
+        },
+        fenced: true,
     },
     dopl_read_channel: {
         description: "A channel's transcript, newest page first or only messages after `since`; omit `channel` to read every channel. With `wait_ms` it HOLDS until a message arrives: wait that way, never poll on a timer.",
@@ -151,5 +157,23 @@ exports.CHANNEL_TEXT = {
             summary: "create: what the run was about.",
         },
         required: ["channel"],
+    },
+    dopl_manage_task: {
+        description: 'Track a channel task from created to resolved. "create" hands back task=<id>; "assign" a member or agent; "add_subtask", "update_subtask"; "add_note" as work moves; "set_status" resolved once everyone on it agrees. Read: dopl_get_channel(action="tasks"); rules: dopl_get_guide(topic="tasks").',
+        params: {
+            task: "Task id; required except on create.",
+            subtask: "update_subtask (required): its id.",
+            title: "Task or subtask title; required on create and add_subtask.",
+            description: "What the task is.",
+            status: "set_status (required).",
+            state: "update_subtask: its state.",
+            due: 'ISO date-time with offset; "" clears it.',
+            to: "Assignees on create (comma-separated), one on assign/unassign, a subtask's owner: @handle, email, user id or @agent-<id>.",
+            thread: "create: the source thread.",
+            message: "create: the source message seq, instead of a thread.",
+            body: "add_note (required): the note.",
+        },
+        required: ["channel"],
+        types: { description: taskDescription },
     },
 };
