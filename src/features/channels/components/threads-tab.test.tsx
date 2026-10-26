@@ -11,7 +11,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { WELL_FACES } from "./collapse-wells";
-import { ROW_CARD } from "./bits";
 import {
   THREADS_CLIPPED_NOTE,
   THREAD_WELLS_STORAGE_KEY,
@@ -224,13 +223,16 @@ describe("channels threads tab — the recency wells", () => {
     expect(headings()).toEqual([]);
   });
 
-  it("wears the heading face over one white card of rows, with New thread outside it", () => {
+  it("wears the plain heading with each thread its OWN white card, and New thread outside it", () => {
     renderTab({ onNewThread: vi.fn() });
     const recent = wellOf("Recent");
-    expect(recent.className).toBe(WELL_FACES.card.box);
-    const card = within(recent).getByText("Zebra sweep").closest(`[class="${ROW_CARD}"]`);
-    expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText("Alpha audit")).toBeTruthy();
+    expect(recent.className).toBe(WELL_FACES.heading.box);
+    const zebra = within(recent).getByText("Zebra sweep").closest(".white-card")!;
+    const alpha = within(recent).getByText("Alpha audit").closest(".white-card")!;
+    expect(zebra).not.toBe(alpha);
+    // The meta line and the actions sit in the card, beside the title rather than under it.
+    expect(within(zebra as HTMLElement).getByText("you · Diana T.")).toBeTruthy();
+    expect(within(zebra as HTMLElement).getByRole("button", { name: "Open" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "New thread" }).closest("section")).toBeNull();
   });
 

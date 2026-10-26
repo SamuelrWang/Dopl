@@ -95,9 +95,11 @@ the white card `.white-card` (selectable: `+ .select-card`), the well `.card-wel
 white pill `WHITE_PILL`, `StatusPill`, `ThinMeter`,
 `IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, the ink pill
 family (`INK_PILL_FACE`: `PAGE_ACTION_BTN`, `SMALL_PRIMARY_PILL`, `INK_PILL`, `QUIET_PILL`),
-the 15px `text-heading` step, and the list of rows: one white card with a hairline between rows
-(`channels/components/bits.tsx › ROW_CARD` / `› ROW_CARD_ROW`), worn by the Tasks list and, under
-quiet uppercase recency headings, the Threads and Artifacts lists. An opened artifact reads as a
+the 15px `text-heading` step, the list of rows (one white card with a hairline between rows,
+`channels/components/bits.tsx › ROW_CARD`, the Tasks list) and the list of items (each item its own
+white card, title over one meta line led by small faces, actions centred right:
+`channels/components/item-card.tsx › ItemCard`, the Threads and Artifacts lists under quiet uppercase
+recency headings). An opened artifact reads as a
 document (breadcrumb, title, caption, meta line, then face + name + time rows over normal message
 bodies), never as one bubble. A port imports them; DESIGN-SYSTEM.md lists each.
 

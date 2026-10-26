@@ -1,21 +1,20 @@
 "use client";
 
 /**
- * The Threads tab's artifacts face: this channel's folded runs as rows, each openable read-only.
+ * The Threads tab's artifacts face: this channel's folded runs as cards, each openable read-only.
  * No writes here — folding happens over messages in the transcript (`op="artifact"`).
  */
 
 import { useMemo, useState } from "react";
 import { Layers, TriangleAlert } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { IdentityFace } from "@/shared/ui/identity-face";
 import { QUIET_PILL } from "@/shared/ui/small-action-button";
 import { useChannelArtifacts } from "../hooks/use-channel-artifacts";
+import { actorKey } from "../lib/task-model";
 import { artifactSpanLabel } from "./artifact-card";
 import { ArtifactDetail } from "./artifact-detail";
-import { ROW_CARD_ROW } from "./bits";
+import { ItemCard } from "./item-card";
 import { bodyContextOf, TextOnlyLinks } from "./message-markdown";
 import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { BodyContext } from "./message-markdown-context";
@@ -100,13 +99,13 @@ export function ArtifactsTab({
         <div className="flex flex-col gap-2">
           <RecencyWells
             storageKey={ARTIFACT_WELLS_STORAGE_KEY}
-            variant="card"
+            variant="heading"
             items={artifacts.map(
               (folded): RecencyWellItem => ({
                 key: folded.artifact.id,
                 at: artifactFoldedAt(folded),
                 node: (
-                  <ArtifactRow
+                  <ArtifactItem
                     folded={folded}
                     faceOf={faceOf}
                     summaryCtx={summaryCtx}
@@ -125,8 +124,8 @@ export function ArtifactsTab({
   );
 }
 
-/** One artifact: name and folder, a one-line summary, then its span, age and Open. */
-function ArtifactRow({
+/** One artifact: its name, a one-line summary, then the folder's face, its span and age. */
+function ArtifactItem({
   folded,
   faceOf,
   summaryCtx,
@@ -138,36 +137,39 @@ function ArtifactRow({
   onOpen: () => void;
 }) {
   const { artifact, count, firstSeq, lastSeq } = folded;
-  const folder = faceOf(folderOf(folded));
+  const actor = folderOf(folded);
+  const folder = faceOf(actor);
   return (
-    <div
-      className={cn(
-        ROW_CARD_ROW,
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 py-2.5"
-      )}
-    >
-      <span className="truncate text-body font-medium text-text-primary">{artifact.name}</span>
-      <IdentityFace size={22} {...folder} label={`Folded by ${folder.name}`} />
-      {artifact.summary !== "" && (
-        <p className="col-span-2 truncate text-caption text-text-secondary">
-          <TextOnlyLinks>
-            <MessageMarkdownInline text={artifact.summary} ctx={summaryCtx} />
-          </TextOnlyLinks>
-        </p>
-      )}
-      <span className="flex min-w-0 items-center gap-1.25 text-label text-text-muted">
-        <span className="min-w-0 truncate">{artifactSpanLabel(count, firstSeq, lastSeq)}</span>
-        <span aria-hidden="true">·</span>
-        <span className="flex-none">{formatRelativeTime(artifact.createdAt)}</span>
-      </span>
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open ${artifact.name}`}
-        className={cn(QUIET_PILL, "justify-self-end")}
-      >
-        Open
-      </button>
-    </div>
+    <ItemCard
+      title={artifact.name}
+      detail={
+        artifact.summary !== "" && (
+          <p className="truncate text-caption text-text-secondary">
+            <TextOnlyLinks>
+              <MessageMarkdownInline text={artifact.summary} ctx={summaryCtx} />
+            </TextOnlyLinks>
+          </p>
+        )
+      }
+      faces={[{ key: actorKey(actor), ...folder }]}
+      facesLabel={`Folded by ${folder.name}`}
+      meta={
+        <>
+          <span className="min-w-0 truncate">{artifactSpanLabel(count, firstSeq, lastSeq)}</span>
+          <span aria-hidden="true">·</span>
+          <span className="flex-none">{formatRelativeTime(artifact.createdAt)}</span>
+        </>
+      }
+      actions={
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Open ${artifact.name}`}
+          className={QUIET_PILL}
+        >
+          Open
+        </button>
+      }
+    />
   );
 }

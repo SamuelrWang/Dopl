@@ -113,7 +113,7 @@ describe("/channels staging", () => {
     const rowOpen = (title: string) => {
       const row = [...panel.querySelectorAll(".text-body.font-medium")].find(
         (n) => n.textContent === title
-      )?.parentElement;
+      )?.closest<HTMLElement>(".white-card");
       return within(row!).getByRole("button", { name: /^Open/ });
     };
 

@@ -21,7 +21,7 @@ export const TAB_ACTION_SHELL = cn(INK_PILL_FACE, "h-9");
 /** The label's own type and pad — everything inside the shell. */
 export const TAB_ACTION_INK = "gap-1 px-3.75 text-small";
 
-/** The white card of hairline-separated rows: the Tasks list, the Threads and Artifacts wells. */
+/** The white card of hairline-separated rows: the Tasks list and a task's subtasks. */
 export const ROW_CARD = "white-card m-0 flex min-w-0 list-none flex-col px-3";
 /** One {@link ROW_CARD} row: a hairline above every row but the first. */
 export const ROW_CARD_ROW = "border-t border-border-default first:border-t-0";

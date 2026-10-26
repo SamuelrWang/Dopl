@@ -9,14 +9,15 @@ import type { ReactNode } from "react";
 import { MessagesSquare } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { formatRelativeTime } from "@/shared/lib/format-time";
-import { IdentityStack, type IdentityStackFace } from "@/shared/ui/avatar-stack";
+import type { IdentityStackFace } from "@/shared/ui/avatar-stack";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useRuntimeLogo } from "@/shared/ui/runtime-logo";
 import { QUIET_PILL } from "@/shared/ui/small-action-button";
 import { StatusPill } from "@/shared/ui/status-pill";
-import { ROW_CARD_ROW, TAB_ACTION, TAB_ACTION_LIGHT } from "./bits";
+import { TAB_ACTION, TAB_ACTION_LIGHT } from "./bits";
 import { agentIdentity, type AgentFeeds } from "./agent-face";
 import { FadeSwap } from "./fade-swap";
+import { ItemCard } from "./item-card";
 import { RecencyWells, type RecencyWellItem } from "./recency-wells";
 import { runningCount, threadCardAgents } from "./thread-card-agents";
 import { shortName, threadParties, type AuthorIndex } from "./view-model";
@@ -41,9 +42,6 @@ export const THREADS_CLIPPED_NOTE = "Showing the most recently active threads";
 /** Face-toggle labels name where the press goes, not where you are. */
 export const ARTIFACTS_FACE_LABEL = "Artifacts";
 export const THREADS_FACE_LABEL = "Threads";
-
-/** At most this many faces on a row before the stack counts the rest. */
-const ROW_FACES = 4;
 
 export function ThreadsTab({
   threads,
@@ -122,13 +120,13 @@ export function ThreadsTab({
             {/* Empty wells still draw once loaded; while loading, nothing is measured (§11). */}
             <RecencyWells
               storageKey={THREAD_WELLS_STORAGE_KEY}
-              variant="card"
+              variant="heading"
               items={threads.map(
                 (thread): RecencyWellItem => ({
                   key: thread.id,
                   at: threadActivityAt(thread),
                   node: (
-                    <ThreadRow
+                    <ThreadItem
                       thread={thread}
                       index={index}
                       feeds={feeds}
@@ -153,8 +151,8 @@ export function ThreadsTab({
   );
 }
 
-/** One thread: title over its parties and last activity; the people and agents on it, then Open. */
-function ThreadRow({
+/** One thread: its title over the faces of its people and agents, its parties and last activity. */
+function ThreadItem({
   thread,
   index,
   feeds,
@@ -188,43 +186,38 @@ function ThreadRow({
   const names = [...partyNames, ...agents.map((a) => a.name)];
 
   return (
-    <div
-      className={cn(
-        ROW_CARD_ROW,
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 py-2.5"
-      )}
-    >
-      <span className="truncate text-body font-medium text-text-primary">{thread.title}</span>
-      <IdentityStack
-        faces={faces}
-        size={22}
-        max={ROW_FACES}
-        label={names.length > 0 ? `With ${names.join(", ")}` : undefined}
-      />
-      <span className="flex min-w-0 items-center gap-1.25 text-label text-text-muted">
-        {partyNames.length > 0 && (
-          <>
-            <span className="min-w-0 truncate">{partyNames.join(" · ")}</span>
-            <span aria-hidden="true">·</span>
-          </>
-        )}
-        <span className="flex-none">{formatRelativeTime(thread.lastActivityAt)}</span>
-      </span>
-      <span className="flex items-center justify-end gap-1.5">
-        {running > 0 && (
-          <StatusPill dot tone="live">
-            {running} running
-          </StatusPill>
-        )}
-        <button
-          type="button"
-          aria-current={viewing ? "true" : undefined}
-          onClick={onOpen}
-          className={cn(QUIET_PILL, viewing && "border-border-default text-text-primary")}
-        >
-          {viewing ? "Viewing" : "Open"}
-        </button>
-      </span>
-    </div>
+    <ItemCard
+      title={thread.title}
+      faces={faces}
+      facesLabel={names.length > 0 ? `With ${names.join(", ")}` : undefined}
+      meta={
+        <>
+          {partyNames.length > 0 && (
+            <>
+              <span className="min-w-0 truncate">{partyNames.join(" · ")}</span>
+              <span aria-hidden="true">·</span>
+            </>
+          )}
+          <span className="flex-none">{formatRelativeTime(thread.lastActivityAt)}</span>
+        </>
+      }
+      actions={
+        <>
+          {running > 0 && (
+            <StatusPill dot tone="live">
+              {running} running
+            </StatusPill>
+          )}
+          <button
+            type="button"
+            aria-current={viewing ? "true" : undefined}
+            onClick={onOpen}
+            className={cn(QUIET_PILL, viewing && "border-border-default text-text-primary")}
+          >
+            {viewing ? "Viewing" : "Open"}
+          </button>
+        </>
+      }
+    />
   );
 }
