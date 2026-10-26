@@ -20,9 +20,9 @@ const TOOLBAR_ICON = "h-6 w-6 rounded-full text-text-muted";
  *
  * ⚠ **IT IS AN ALTERNATIVE TO {@link TOOLBAR_ICON}, NEVER A LAYER OVER IT.** The two are
  * handed to `className` whole ({@link openFace}), so the radius is a straight swap —
- * `rounded-full` and `rounded-[7px]` are one tailwind-merge group and a composed pair
+ * `rounded-full` and `rounded-tile` are one tailwind-merge group and a composed pair
  * would resolve by string order, which is the silent-circle bug this shape makes
- * unreachable. `rounded-[7px]` is `icon-button.tsx`'s OWN radius, i.e. this control's
+ * unreachable. `rounded-tile` is `icon-button.tsx`'s OWN radius, i.e. this control's
  * square corner, not a new number.
  * ⚠ **THE TWO HOVER CLASSES ARE THE RULING "the open face must win over the hover fill",
  * AND THEY ARE NOT BELT-AND-BRACES.** `IconButton`'s resting arms are `hover:bg-surface-raised-1`
@@ -36,7 +36,7 @@ const TOOLBAR_ICON = "h-6 w-6 rounded-full text-text-muted";
  * chrome glyph and borrowing that recipe would put a second button scale in the row.
  */
 const TOOLBAR_ICON_OPEN =
-  "h-6 w-6 rounded-[7px] bg-surface-cta text-text-on-cta hover:bg-surface-cta hover:text-text-on-cta";
+  "h-6 w-6 rounded-tile bg-surface-cta text-text-on-cta hover:bg-surface-cta hover:text-text-on-cta";
 
 /**
  * The face one glyph wears for its popup's state. ⚠ **ONE FUNCTION, THREE CALLERS, because

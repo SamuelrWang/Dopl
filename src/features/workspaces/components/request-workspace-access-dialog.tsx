@@ -81,7 +81,7 @@ export function RequestWorkspaceAccessDialog({
           type="button"
           className={cn(
             DIALOG_BTN_PRIMARY,
-            "min-w-[160px]",
+            "min-w-40",
             // The requested state is an answer, not a dead control: keep it legible.
             requested && "disabled:opacity-70"
           )}

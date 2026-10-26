@@ -47,7 +47,7 @@ export function PaneHeader({
   // Pop-out window: the title only; every page control acts on something this window lacks.
   if (chrome === "window") {
     return (
-      <header className="flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4">
+      <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-border-default px-4">
         <h1 className="truncate text-body font-semibold text-text-primary">
           {threadTitle ?? channelName}
         </h1>
@@ -56,7 +56,7 @@ export function PaneHeader({
   }
 
   return (
-    <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4">
+    <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-4">
       <Breadcrumb
         className="text-title"
         items={

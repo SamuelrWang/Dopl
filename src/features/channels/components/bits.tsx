@@ -31,7 +31,7 @@ export function IconTile({ children }: { children: ReactNode }) {
   return (
     <span
       aria-hidden
-      className="btn-light pointer-events-none flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] text-caption text-text-secondary"
+      className="btn-light pointer-events-none flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-tile text-caption text-text-secondary"
     >
       {children}
     </span>
@@ -59,7 +59,7 @@ export function agentAccent(agentId: string): string {
 /** Right-aligned count pill on a nav row; render only where a real count exists. */
 export function CountBadge({ value }: { value: number }) {
   return (
-    <span className="ml-auto inline-flex h-[16px] min-w-[16px] shrink-0 items-center justify-center rounded-full bg-bg-inset px-1.5 text-micro font-semibold text-text-secondary">
+    <span className="ml-auto inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-bg-inset px-1.5 text-micro font-semibold text-text-secondary">
       {value}
     </span>
   );
@@ -136,7 +136,7 @@ export function SectionHeader({
           type="button"
           onClick={onToggle}
           aria-expanded={open !== false}
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-[6px] py-0.5 text-left transition-colors hover:text-text-primary"
+          className="flex min-w-0 flex-1 items-center gap-1 rounded-sm py-0.5 text-left transition-colors hover:text-text-primary"
         >
           <span className="truncate text-label font-semibold uppercase tracking-wide text-text-secondary">
             {title}
@@ -176,7 +176,7 @@ export function MetaRow({
   return (
     <div
       className={cn(
-        "group/meta flex h-9 items-center gap-2 rounded-[8px] px-2",
+        "group/meta flex h-9 items-center gap-2 rounded-md px-2",
         className
       )}
     >

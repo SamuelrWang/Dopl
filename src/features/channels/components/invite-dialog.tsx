@@ -63,7 +63,7 @@ const selectChannelMembers = (body: { members: ChannelMember[] }) =>
  */
 export function GroupChannelRoutingNote() {
   return (
-    <div className="flex gap-1.5 rounded-[10px] border border-border-subtle bg-bg-inset px-3 py-2 text-caption text-text-secondary">
+    <div className="flex gap-1.5 rounded-lg border border-border-subtle bg-bg-inset px-3 py-2 text-caption text-text-secondary">
       <Info size={13} className="mt-0.5 shrink-0 text-text-muted" />
       <p>
         A message reaches an agent only when you address it to someone. That is
@@ -192,7 +192,7 @@ export function InviteDialog({
           placeholder="Search members"
         />
 
-        <div className="flex max-h-[240px] flex-col overflow-y-auto rounded-[10px] border border-border-strong">
+        <div className="flex max-h-60 flex-col overflow-y-auto rounded-lg border border-border-strong">
           {addable.length === 0 ? (
             <p className="px-3 py-4 text-center text-caption text-text-muted">
               {q ? "No members match." : "Everyone is already in this channel."}
@@ -229,7 +229,7 @@ export function InviteDialog({
           <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
             In this channel · {channelMembers?.length ?? 0}
           </span>
-          <ul className="flex flex-col divide-y divide-border-subtle rounded-[10px] border border-border-strong">
+          <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-strong">
             {(channelMembers ?? []).map((m) => {
               const removable =
                 m.userId === currentUserId || (canManage && m.role !== "owner");
@@ -281,7 +281,7 @@ export function InviteDialog({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="auth-btn-3d-light flex h-10 items-center justify-center gap-1.5 rounded-[9px] px-4 text-body font-medium text-text-primary"
+            className="auth-btn-3d-light flex h-10 items-center justify-center gap-1.5 rounded-field px-4 text-body font-medium text-text-primary"
           >
             <Check size={14} />
             Done

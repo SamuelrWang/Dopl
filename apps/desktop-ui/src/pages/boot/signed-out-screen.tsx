@@ -102,7 +102,7 @@ export function SignedOutScreen() {
               src={doplMark}
               alt=""
               draggable={false}
-              className="auth-logo-3d h-8 w-8 rounded-[8px]"
+              className="auth-logo-3d h-8 w-8 rounded-md"
             />
           }
         />

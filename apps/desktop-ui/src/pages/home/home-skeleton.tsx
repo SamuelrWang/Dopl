@@ -104,7 +104,7 @@ function IdentitiesGhost() {
         </div>
         <div className="rail-layout-aside">
           <SectionPanelGhost flat headingWidth={72}>
-            <Skeleton className="h-[62px] rounded-xl" />
+            <Skeleton className="h-15.5 rounded-xl" />
           </SectionPanelGhost>
         </div>
       </div>
@@ -116,9 +116,9 @@ function IdentitiesGhost() {
 function HomeHeaderGhost() {
   return (
     <HomeHeaderRow
-      lead={<Skeleton className="h-9 w-[124px] rounded-full" />}
+      lead={<Skeleton className="h-9 w-31 rounded-full" />}
       tabs={
-        <div className="flex h-9 items-center gap-[22px]">
+        <div className="flex h-9 items-center gap-5.5">
           {HOME_TABS.map(({ key, label }) => (
             <SkeletonLine key={key} w={`calc(${label.length}ch)`} h={12} />
           ))}
@@ -126,8 +126,8 @@ function HomeHeaderGhost() {
       }
       trail={
         <>
-          <Skeleton className="h-9 w-[260px] rounded-full" />
-          <Skeleton className="h-9 w-[88px] rounded-full" />
+          <Skeleton className="h-9 w-65 rounded-full" />
+          <Skeleton className="h-9 w-22 rounded-full" />
         </>
       }
     />
@@ -168,7 +168,7 @@ function WellGhost({ label, rows }: { label: string; rows: number }) {
     <section aria-hidden className={face.box}>
       <div className="flex w-full min-w-0 items-center justify-between gap-2 px-1 pt-1.5">
         <SkeletonLine w={`calc(${label.length}ch)`} h={10} />
-        <SkeletonBar h={face.chevron} w={face.chevron} className="rounded-[4px]" />
+        <SkeletonBar h={face.chevron} w={face.chevron} className="rounded-mark" />
       </div>
       {rows > 0 && (
         <div className={face.rows}>
@@ -188,14 +188,14 @@ function HomeRowGhost() {
       aria-hidden
       className={cn(
         GHOST_FLAT_FACE,
-        "flex w-full flex-col gap-1 rounded-xl bg-home-card px-[11px] py-[9px]"
+        "flex w-full flex-col gap-1 rounded-xl bg-home-card px-2.75 py-2.25"
       )}
     >
-      <div className="flex h-[18px] items-center justify-between gap-2">
+      <div className="flex h-4.5 items-center justify-between gap-2">
         <SkeletonLine w="58%" h={11} />
         <SkeletonLine w={30} h={8} />
       </div>
-      <div className="flex h-[18px] items-center gap-1">
+      <div className="flex h-4.5 items-center gap-1">
         <Skeleton className="h-5 w-5 rounded-full" />
         <Skeleton className="h-5 w-5 rounded-full" />
       </div>

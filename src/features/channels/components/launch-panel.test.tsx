@@ -13,7 +13,7 @@
  * which `agent-stream-sent-box.tsx` mounts for exactly this text). A second renderer for
  * "the same prose, approved instead of posted" is the defect, not the fix.
  * ⚠ **BLOCKS, NOT THE INLINE ARM**, and the box is why: the preview SCROLLS
- * (`max-h-[200px] overflow-y-auto`) rather than clamping, so a drafted list stays a list.
+ * (`max-h-50 overflow-y-auto`) rather than clamping, so a drafted list stays a list.
  * The clamped lanes of the channel surface take the inline arm for the opposite reason
  * (`message-markdown-inline.tsx` rule 2).
  */

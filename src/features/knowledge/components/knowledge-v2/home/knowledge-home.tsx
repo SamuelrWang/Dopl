@@ -116,7 +116,7 @@ export function KnowledgeHome({
             <img src={heroImageSrc} alt="" className={styles.homeHeroImg} />
             <LiquidGlass
               radius={18}
-              className="absolute bottom-4 left-4 top-4 w-[360px] max-w-[46%]"
+              className="absolute bottom-4 left-4 top-4 w-90 max-w-[46%]"
             >
               <div className="flex h-full flex-col justify-center px-6">
                 <h2 className="text-title font-semibold text-white">

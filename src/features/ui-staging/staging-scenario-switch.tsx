@@ -35,9 +35,9 @@ export function StagingScenarioSwitch({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="fixed bottom-[34px] right-[34px] z-[60] flex flex-col items-end gap-2">
+    <div className="fixed bottom-8.5 right-8.5 z-[60] flex flex-col items-end gap-2">
       {open && (
-        <div className="w-[248px] rounded-xl border border-border-default bg-bg-elevated p-3 shadow-lg">
+        <div className="w-62 rounded-xl border border-border-default bg-bg-elevated p-3 shadow-lg">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-caption font-semibold text-text-primary">Staging states</span>
             <button

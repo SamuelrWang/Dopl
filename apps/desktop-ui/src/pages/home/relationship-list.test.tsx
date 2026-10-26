@@ -326,7 +326,7 @@ describe("the SELECTED row's face", () => {
     expect(row.className).toContain("border-surface-cta");
     expect(row.className).not.toContain("border-border-subtle");
     expect(row.className).not.toContain("auth-btn-3d");
-    expect(row.className).toContain("px-[11px] py-[9px]");
+    expect(row.className).toContain("px-2.75 py-2.25");
   });
 
   it("keeps the white lifted card on every row that is not selected", async () => {
@@ -346,7 +346,7 @@ describe("the SELECTED row's face", () => {
     expect(other.getAttribute("aria-current")).toBeNull();
     expect(other.className).toContain("white-card raise border-border-subtle");
     expect(other.className).not.toContain("bg-surface-cta");
-    expect(other.className).toContain("px-[11px] py-[9px]");
+    expect(other.className).toContain("px-2.75 py-2.25");
   });
 
   /**

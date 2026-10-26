@@ -31,7 +31,7 @@ export function EmptyState({
           "flex items-center justify-center gap-1.5 text-caption text-text-muted",
           variant === "well"
             ? "card-well min-h-13"
-            : "min-h-10 rounded-[10px] border border-dashed border-border-default",
+            : "min-h-10 rounded-lg border border-dashed border-border-default",
           className
         )}
       >
@@ -57,7 +57,7 @@ export function EmptyState({
         {title}
       </p>
       {description && (
-        <p className="max-w-[380px] text-center text-caption leading-relaxed">
+        <p className="max-w-95 text-center text-caption leading-relaxed">
           {description}
         </p>
       )}

@@ -57,7 +57,7 @@ export function SectionBox({
   };
 
   return (
-    <section className="w-full overflow-hidden rounded-[14px] border border-border-strong">
+    <section className="w-full overflow-hidden rounded-xl border border-border-strong">
       <div className="flex items-center gap-2 bg-card-surface-subtle px-4 py-1.5">
         <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
           {label}

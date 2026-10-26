@@ -135,7 +135,7 @@ function ListPane({
     ));
 
   return (
-    <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
+    <div className="flex w-93 shrink-0 flex-col border-r border-border-default">
       <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
         <h1 className="text-title font-semibold tracking-tight text-text-primary">
           Channels
@@ -146,7 +146,7 @@ function ListPane({
           type="button"
           aria-label="New"
           title="New"
-          className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+          className="flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
         >
           <Plus size={16} />
         </button>
@@ -220,7 +220,7 @@ function ChannelRow({
       )}
     >
       {selected && (
-        <span className="absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-r-[3px] bg-text-primary" />
+        <span className="absolute bottom-1.5 left-0 top-1.5 w-0.75 rounded-r-[3px] bg-text-primary" />
       )}
       {c.isDirect ? (
         <Avatar
@@ -275,7 +275,7 @@ function ChannelDetail({
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
+      <div className="flex h-13 shrink-0 items-center gap-2 border-b border-border-default px-3.5">
         {channel.isDirect ? (
           <>
             <Avatar
@@ -337,7 +337,7 @@ function ChannelDetail({
           type="button"
           aria-label="Rooms"
           title="Show rooms"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
         >
           <PanelRight size={16} />
         </button>
@@ -346,7 +346,7 @@ function ChannelDetail({
             type="button"
             aria-label="Add members"
             title="Add members"
-            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+            className="flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
           >
             <UserPlus size={16} />
           </button>
@@ -355,7 +355,7 @@ function ChannelDetail({
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto px-14 pt-6">
-          <div className="mx-auto flex max-w-[760px] flex-col gap-2.5 pb-2">
+          <div className="mx-auto flex max-w-190 flex-col gap-2.5 pb-2">
             {channel.messages.length > 0 ? (
               channel.messages.map((m) => <MessageBubble key={m.id} message={m} />)
             ) : loadingMessages ? (
@@ -380,7 +380,7 @@ function MessageBubble({ message: m }: { message: DemoMessage }) {
   return (
     <article
       className={cn(
-        "max-w-[66%] rounded-[10px] border px-3.5 py-2.5",
+        "max-w-[66%] rounded-lg border px-3.5 py-2.5",
         isOwn ? "self-end" : "self-start",
         isHuman
           ? "border-border-default bg-card-surface-subtle"
@@ -419,8 +419,8 @@ function MessageBubble({ message: m }: { message: DemoMessage }) {
 function Composer({ channel }: { channel: DemoChannel }) {
   return (
     <div className="shrink-0 px-14 pb-5 pt-2">
-      <div className="mx-auto max-w-[760px]">
-        <div className="concave-field flex items-end gap-2 rounded-[12px] px-3 py-2">
+      <div className="mx-auto max-w-190">
+        <div className="concave-field flex items-end gap-2 rounded-card px-3 py-2">
           <textarea
             rows={1}
             readOnly

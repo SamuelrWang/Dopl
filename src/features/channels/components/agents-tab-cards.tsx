@@ -34,7 +34,7 @@ import {
 
 const CARD = "white-card flex flex-col px-3 py-2.5";
 /** Under the name, clear of the 30px face and its gap. */
-const UNDER_HEAD = "mt-1.5 ml-[39px] min-w-0 truncate text-caption";
+const UNDER_HEAD = "mt-1.5 ml-9.75 min-w-0 truncate text-caption";
 const OPEN_BUTTON = cn(pillButton("outline", "sm"), "px-3");
 
 /** The operator's description, read off a widened local type (older desktops omit it); own agents only. */
@@ -59,7 +59,7 @@ function CardHead({
   status: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-[9px]">
+    <div className="flex items-center gap-2.25">
       <AgentFace
         size={30}
         photo={owner?.avatarUrl}

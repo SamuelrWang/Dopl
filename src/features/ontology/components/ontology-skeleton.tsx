@@ -32,11 +32,11 @@ export function OntologyBoardSkeleton() {
 function ColumnSkeleton({ cards }: { cards: number }) {
   return (
     <div className="flex w-72 shrink-0 flex-col gap-2 self-start">
-      <Skeleton className="h-10 w-full shrink-0 rounded-[12px]" />
+      <Skeleton className="h-10 w-full shrink-0 rounded-card" />
       {Array.from({ length: cards }).map((_, i) => (
-        <Skeleton key={i} className="h-36 w-full shrink-0 rounded-[12px]" />
+        <Skeleton key={i} className="h-36 w-full shrink-0 rounded-card" />
       ))}
-      <Skeleton className="h-7 w-24 shrink-0 self-start rounded-[8px]" />
+      <Skeleton className="h-7 w-24 shrink-0 self-start rounded-md" />
     </div>
   );
 }

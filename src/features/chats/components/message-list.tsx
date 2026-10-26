@@ -17,7 +17,7 @@ export function MessageList({ messages }: Props) {
         <article
           key={message.index}
           className={cn(
-            "rounded-[10px] border px-3.5 py-2.5",
+            "rounded-lg border px-3.5 py-2.5",
             message.role === "user"
               ? "ml-12 border-border-default bg-card-surface-subtle"
               : "border-border-subtle bg-bg-elevated"

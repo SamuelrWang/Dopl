@@ -206,7 +206,7 @@ export function CreditsCard({
       }
     >
       {wallet.loading ? (
-        <Skeleton className="h-[54px] w-full rounded-md" />
+        <Skeleton className="h-13.5 w-full rounded-md" />
       ) : (
         <Allowance credits={wallet.credits} />
       )}

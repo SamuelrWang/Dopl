@@ -31,7 +31,7 @@ export function SectionPanelGhost({
   const inset = flat ? undefined : "px-1";
   return (
     <div data-section-panel className={cn(!flat && SECTION_PANEL_SHELL, !flat && ground)}>
-      <div className={cn("flex min-h-[22px] items-center justify-between gap-2 pb-2.5", inset)}>
+      <div className={cn("flex min-h-5.5 items-center justify-between gap-2 pb-2.5", inset)}>
         <SkeletonLine w={headingWidth} h={10} />
         {action}
       </div>

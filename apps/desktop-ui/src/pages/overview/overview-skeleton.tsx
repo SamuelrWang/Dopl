@@ -12,7 +12,7 @@ import { cn } from "@/shared/lib/utils";
  * removing it would pull every block inside in by a pixel. Same reasoning, and
  * the same spelling, as `shared/ui/section-panel.tsx › SECTION_PANEL_GROUND`.
  */
-const FLAT_PANEL = "rounded-[14px] border border-transparent p-3.5";
+const FLAT_PANEL = "rounded-xl border border-transparent p-3.5";
 
 /**
  * `/:workspaceSegment/overview`'s loading shape — the page's OWN column, not
@@ -41,7 +41,7 @@ const FLAT_PANEL = "rounded-[14px] border border-transparent p-3.5";
  * is `Skeleton` on the page's own ground.
  *
  * ⚠ WHAT LEFT, AND WHERE IT STILL LIVES. The period group's well was
- * `rounded-[14px] border border-border-default bg-bg-inset p-3.5`
+ * `rounded-xl border border-border-default bg-bg-inset p-3.5`
  * (`period-stats.tsx`'s own string, byte-shared) and the chart card was the kit's
  * `.bento` (fill + 1px line + `--shadow-bento`). **Both remain on the REAL page
  * — only the ghost dropped them**, which is the one thing that makes this a
@@ -68,13 +68,13 @@ export function OverviewSkeleton({
               <SkeletonLine w={268} h={24} />
               <SkeletonLine w={196} h={10} />
             </div>
-            <Skeleton className="mt-5 h-8 w-[124px] shrink-0 rounded-full" />
+            <Skeleton className="mt-5 h-8 w-31 shrink-0 rounded-full" />
           </div>
 
           {/* FOUR STAT CARDS. */}
           <div className="grid grid-cols-4 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-[104px] rounded-[14px]" />
+              <Skeleton key={i} className="h-26 rounded-xl" />
             ))}
           </div>
 
@@ -82,8 +82,8 @@ export function OverviewSkeleton({
           <div className={FLAT_PANEL}>
             <SkeletonLine w={112} h={9} />
             <div className="mt-3 grid grid-cols-2 gap-3">
-              <Skeleton className="h-[104px] rounded-[14px]" />
-              <Skeleton className="h-[104px] rounded-[14px]" />
+              <Skeleton className="h-26 rounded-xl" />
+              <Skeleton className="h-26 rounded-xl" />
             </div>
           </div>
 
@@ -94,7 +94,7 @@ export function OverviewSkeleton({
               <SkeletonLine w={104} h={9} />
               <div className="flex items-center gap-3">
                 <SkeletonLine w={64} h={9} />
-                <Skeleton className="h-7 w-[168px] rounded-full" />
+                <Skeleton className="h-7 w-42 rounded-full" />
               </div>
             </div>
             <div className="mt-4 flex gap-2">
@@ -109,15 +109,15 @@ export function OverviewSkeleton({
                   comment: `page-skeletons.test.tsx` scans this file's raw text
                   for it, which is what makes "never re-typed" enforceable. */}
               <Skeleton
-                className={cn(PLOT_HEIGHT_CLASS, "min-w-0 flex-1 rounded-[10px]")}
+                className={cn(PLOT_HEIGHT_CLASS, "min-w-0 flex-1 rounded-lg")}
               />
             </div>
           </div>
 
           {/* THE UNEVEN BOTTOM ROW — 48/52, matching the reference. */}
           <div className="grid grid-cols-[48fr_52fr] gap-3">
-            <Skeleton className="h-[228px] rounded-[14px]" />
-            <Skeleton className="h-[228px] rounded-[14px]" />
+            <Skeleton className="h-57 rounded-xl" />
+            <Skeleton className="h-57 rounded-xl" />
           </div>
         </div>
       </div>

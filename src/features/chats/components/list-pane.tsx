@@ -22,7 +22,7 @@ import { SHARE_SCOPE_ICONS } from "@/shared/ui/scope-share-popover";
 import type { ChatFilter, FolderGroup } from "./chats-view";
 
 const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+  "flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
 const FILTERS: ReadonlyArray<{ key: ChatFilter; label: string }> = [
   { key: "all", label: "All" },
@@ -132,7 +132,7 @@ export function ListPane({
   };
 
   return (
-    <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
+    <div className="flex w-93 shrink-0 flex-col border-r border-border-default">
       <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
         <h1 className="text-title font-semibold tracking-tight text-text-primary">
           Chats
@@ -164,7 +164,7 @@ export function ListPane({
       />
 
       {folderDraft !== null && (
-        <div className="concave-field relative mx-3.5 mb-3 flex items-center rounded-[9px]">
+        <div className="concave-field relative mx-3.5 mb-3 flex items-center rounded-field">
           <Folder
             size={14}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
@@ -180,7 +180,7 @@ export function ListPane({
             }}
             placeholder="New folder name — Enter to create"
             spellCheck={false}
-            className="h-9 w-full bg-transparent pl-[33px] pr-9 text-body text-text-primary outline-none placeholder:text-text-muted"
+            className="h-9 w-full bg-transparent pl-8.25 pr-9 text-body text-text-primary outline-none placeholder:text-text-muted"
           />
           <button
             type="button"
@@ -393,7 +393,7 @@ function FolderShareControl({
         title="Change who can read the chats in this folder"
         aria-label={`Folder sharing: ${scope}`}
         className={cn(
-          "flex h-6 w-6 items-center justify-center rounded-[6px] transition-colors hover:bg-surface-raised-3",
+          "flex h-6 w-6 items-center justify-center rounded-sm transition-colors hover:bg-surface-raised-3",
           scope === "private"
             ? "text-text-muted"
             : "text-text-secondary"
@@ -405,7 +405,7 @@ function FolderShareControl({
         open={open}
         onClose={() => setOpen(false)}
         align="right"
-        className="w-[264px] p-1.5"
+        className="w-66 p-1.5"
       >
         {/* Mounted only while open so the teams fetch is lazy. */}
         <ShareMenu
@@ -453,7 +453,7 @@ function ChatRow({
       )}
     >
       {selected && (
-        <span className="absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-r-[3px] bg-text-primary" />
+        <span className="absolute bottom-1.5 left-0 top-1.5 w-0.75 rounded-r-[3px] bg-text-primary" />
       )}
       <span className="flex w-full items-center gap-1.5">
         {chat.pinned && (

@@ -50,7 +50,7 @@ export function PeriodStats({ credits }: { credits: WorkspaceCreditsStatus }) {
   ];
 
   return (
-    <section className="rounded-[14px] border border-border-default bg-bg-inset p-3.5">
+    <section className="rounded-xl border border-border-default bg-bg-inset p-3.5">
       <h2 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
         {PERIOD_LABEL}
       </h2>

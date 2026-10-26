@@ -242,7 +242,7 @@ function CheckoutSkeleton() {
   return (
     <div className="space-y-3.5" aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading checkout</span>
-      <Skeleton className="h-[52px] w-full rounded-lg" />
+      <Skeleton className="h-13 w-full rounded-lg" />
       <div className="space-y-3">
         <Skeleton className="h-10 w-full rounded-lg" />
         <Skeleton className="h-10 w-full rounded-lg" />

@@ -21,13 +21,13 @@ describe("ChannelsSkeleton", () => {
   it("mirrors the loaded chrome: two panes inside the page-float", () => {
     expect(html).toContain("page-float");
     expect(html).toContain("border-r border-border-default");
-    expect(html).toContain("h-[52px]");
+    expect(html).toContain("h-13");
   });
 
   it("ghosts a transcript in the detail pane, not a document", () => {
     // user turns indent right, exactly as the loaded thread renders them
     expect(html).toContain("ml-12");
-    expect(html).toContain("max-w-[760px]");
+    expect(html).toContain("max-w-190");
   });
 
   it("announces itself rather than shimmering silently", () => {

@@ -111,7 +111,7 @@ export function DirectMessageDialog({
           placeholder="Search members"
         />
 
-        <div className="flex max-h-[280px] flex-col overflow-y-auto rounded-[10px] border border-border-strong">
+        <div className="flex max-h-70 flex-col overflow-y-auto rounded-lg border border-border-strong">
           {people.length === 0 ? (
             <p className="px-3 py-4 text-center text-caption text-text-muted">
               {q ? "No members match." : "No other members yet."}
@@ -158,7 +158,7 @@ export function DirectMessageDialog({
           <button
             type="button"
             onClick={close}
-            className="auth-btn-3d-light h-10 rounded-[9px] px-4 text-body font-medium text-text-primary"
+            className="auth-btn-3d-light h-10 rounded-field px-4 text-body font-medium text-text-primary"
           >
             Cancel
           </button>

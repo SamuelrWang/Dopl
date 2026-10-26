@@ -72,7 +72,7 @@ const COLLAPSED_BODY_LINES = 6;
  * IT. The clip box below carries `text-caption`, so `1em` is
  * `--text-caption` (11.5px today) rather than whatever the card inherits; `1.5`
  * is `leading-normal` from the body's own `textClassName`, and the `18px` is
- * `StreamProse`'s `py-[9px]` top and bottom. Change either of those two on the
+ * `StreamProse`'s `py-2.25` top and bottom. Change either of those two on the
  * body and change them here — that pairing is why the numbers are spelled out
  * instead of being one magic pixel count.
  */
@@ -106,7 +106,7 @@ function SentBody({ text, collapsible }: { text: string; collapsible: boolean })
   const prose = (
     <StreamProse
       text={text}
-      className="px-3 py-[9px]"
+      className="px-3 py-2.25"
       textClassName="text-caption leading-normal text-text-primary"
     />
   );

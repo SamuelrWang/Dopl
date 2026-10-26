@@ -8,7 +8,7 @@ import { SearchPopup } from "./search-popup";
 import { Keycap } from "./search-popup-rows";
 
 const SEARCH_PILL =
-  "white-card raise-pill flex h-9 w-[260px] cursor-text items-center gap-2 rounded-full px-3.5 text-text-muted";
+  "white-card raise-pill flex h-9 w-65 cursor-text items-center gap-2 rounded-full px-3.5 text-text-muted";
 
 /**
  * /home's header search: an always-open pill whose results arrive in a popup; typing never

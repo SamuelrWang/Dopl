@@ -22,7 +22,7 @@ import { agentColorVar } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 
 /**
- * ⚠ **`size-2` (8px) AND NOT A LITERAL `w-[8px]`** — the tree's own sizing scale, which is
+ * ⚠ **`size-2` (8px) AND NOT A LITERAL `w-2`** — the tree's own sizing scale, which is
  * what docs/DESIGN-SYSTEM.md asks for and what keeps this mark in step if the scale is
  * retuned. It sits on the text baseline row of every caller, so it is sized against the
  * `text-body` line rather than given a height of its own.
@@ -77,7 +77,7 @@ export function AgentColorDot({
  *
  * ⚠ **THE DISC IS `size-5` (20px), WHICH IS THE PALETTE'S OWN CIRCLE STEP** —
  * `agent-color-circles.tsx › CIRCLE` is `h-5 w-5`. On the tree's spacing scale, not an arbitrary
- * `w-[20px]`, and it sits inside the rail's 36px `TILE` with room for the selected row's tint.
+ * `w-5`, and it sits inside the rail's 36px `TILE` with room for the selected row's tint.
  *
  * ⚠ **THE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN** — not `text-white`, a literal
  * white being a colour a restyle cannot follow — and it is safe across the WHOLE bank rather than

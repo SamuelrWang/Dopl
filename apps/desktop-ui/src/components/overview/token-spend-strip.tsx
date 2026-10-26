@@ -44,7 +44,7 @@ export function TokenSpendStrip({
         </p>
       </div>
 
-      <div className="flex h-16 items-end gap-[3px]" aria-hidden="true">
+      <div className="flex h-16 items-end gap-0.75" aria-hidden="true">
         {days.map((day) => {
           const tokens = byDay.get(day) ?? 0;
           return (

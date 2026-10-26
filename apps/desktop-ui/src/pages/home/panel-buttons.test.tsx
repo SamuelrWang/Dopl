@@ -108,7 +108,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
    * its `h-6` blocks stand for are controls that live in `channels/components/` and are
    * genuinely 24px there — the channel header's bookmark `IconButton
    * className="h-6 w-6"` and the composer toolbar's six glyphs. Restating those
-   * as `h-[24px]` to satisfy a text scan would paint the same pixels while
+   * as `h-6` to satisfy a text scan would paint the same pixels while
    * breaking §1A's GEOMETRY-BY-REFERENCE rule, which is the worse trade.
    * ⚠ THE EXCLUSION IS ASSERTED, NOT ASSUMED — the case below proves these files
    * carry no `<button` at all, so nothing can hide a 24px pill behind the name.

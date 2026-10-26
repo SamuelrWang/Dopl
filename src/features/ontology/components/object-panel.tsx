@@ -63,7 +63,7 @@ export function ObjectPanel({
     <div
       {...pendingRow(
         pending,
-        "white-card my-2 mr-2 flex min-h-0 w-[420px] shrink-0 flex-col overflow-hidden rounded-[14px]"
+        "white-card my-2 mr-2 flex min-h-0 w-105 shrink-0 flex-col overflow-hidden rounded-xl"
       )}
     >
       <header className="flex shrink-0 flex-col border-b border-border-subtle px-4 pt-2 pb-3">

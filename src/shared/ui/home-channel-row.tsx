@@ -71,10 +71,10 @@ export function HomeChannelRow({
       className={cn(
         ROW_FACE,
         selected && ROW_SELECTED,
-        "flex w-full cursor-pointer flex-col gap-1 px-[11px] py-[9px] text-left"
+        "flex w-full cursor-pointer flex-col gap-1 px-2.75 py-2.25 text-left"
       )}
     >
-      <span className="flex min-h-[18px] w-full items-center justify-between gap-2">
+      <span className="flex min-h-4.5 w-full items-center justify-between gap-2">
         <span
           className={cn(
             "truncate text-body",
@@ -88,7 +88,7 @@ export function HomeChannelRow({
           {formatChannelTimestamp(row.at)}
         </span>
       </span>
-      <span className="flex min-h-[18px] w-full items-center gap-1.5">
+      <span className="flex min-h-4.5 w-full items-center gap-1.5">
         {row.linkOut && <LinkOutChip onDark={selected} />}
         {row.pendingLine && (
           <span className={cn("truncate text-caption", quiet)}>{row.pendingLine}</span>

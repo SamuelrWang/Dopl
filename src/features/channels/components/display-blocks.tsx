@@ -75,7 +75,7 @@ export function DisplayBlocks({
                   choice ? face.context : face.body,
                   "whitespace-pre-wrap",
                   inkOf(block),
-                  block.border && "rounded-[8px] border border-border-default px-2 py-1"
+                  block.border && "rounded-md border border-border-default px-2 py-1"
                 )}
               >
                 {block.content}

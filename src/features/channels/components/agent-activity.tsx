@@ -228,8 +228,8 @@ export function AgentActivityRows({
             // ⚠ `shrink` OVERRIDES THE FACE'S `shrink-0` (`cn` is tailwind-merge, later
             // wins) — three pills on the recipient line must ELIDE, and a pill that
             // refuses to shrink gets clipped by the parent's `truncate` with no `…`.
-            // `rounded-full` / `h-[18px]`: the working chip is a full pill, unlike the badge face.
-            className={cn(AGENT_PILL_FACE, "flex h-[18px] min-w-0 shrink items-center rounded-full py-0")}
+            // `rounded-full` / `h-4.5`: the working chip is a full pill, unlike the badge face.
+            className={cn(AGENT_PILL_FACE, "flex h-4.5 min-w-0 shrink items-center rounded-full py-0")}
             // ⚠ **THE AGENT'S COLOUR IS THE PILL'S FILL NOW, NOT A DOT BESIDE IT**
             // (Samuel, 2026-10-10). The dot said WHICH agent in 6px of hue next to
             // text that then had to be read separately; the pill says it with the

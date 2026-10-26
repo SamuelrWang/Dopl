@@ -124,7 +124,7 @@ export function TasksQuickView({
                   <button
                     type="button"
                     onClick={() => go(t.id)}
-                    className="grid min-h-8.5 w-full grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-[8px] px-2 py-1 text-left transition-colors hover:bg-surface-raised-1"
+                    className="grid min-h-8.5 w-full grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-surface-raised-1"
                   >
                     <span data-status={t.status} aria-hidden="true" className={TASK_TICK}>
                       <TaskTickMark status={t.status} />

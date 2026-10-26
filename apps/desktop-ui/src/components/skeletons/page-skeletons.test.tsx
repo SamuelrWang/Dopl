@@ -274,7 +274,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    */
   it("the overview ghost paints no container face, and the page still does", () => {
     expect(file("../../pages/overview/period-stats.tsx")).toContain(
-      "rounded-[14px] border border-border-default bg-bg-inset p-3.5"
+      "rounded-xl border border-border-default bg-bg-inset p-3.5"
     );
     expect(file("../../pages/overview/activity-chart.tsx")).toContain(
       'className="bento p-3.5"'
@@ -286,7 +286,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // The geometry survived the face: radius and padding, on a border box that
     // is still there and cannot be seen.
     expect(ghost).toContain(
-      'const FLAT_PANEL = "rounded-[14px] border border-transparent p-3.5"'
+      'const FLAT_PANEL = "rounded-xl border border-transparent p-3.5"'
     );
   });
 
@@ -315,12 +315,12 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     const composer = shared("features/channels/components/composer.tsx");
 
     for (const [source, geometry] of [
-      [sidebar, "flex w-[260px] shrink-0 flex-col border-r border-border-default"],
-      [sidebarSearch, "flex h-[52px] shrink-0 items-center gap-2 px-3"],
+      [sidebar, "flex w-65 shrink-0 flex-col border-r border-border-default"],
+      [sidebarSearch, "flex h-13 shrink-0 items-center gap-2 px-3"],
       [sidebar, "flex flex-col gap-px px-2"],
       // The section header's strip — `pt-3`, not the `pt-4` this ghost carried.
       [header, "flex items-center gap-1 px-3 pb-1 pt-3"],
-      [paneHeader, "flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4"],
+      [paneHeader, "flex h-14 shrink-0 items-center gap-1.5 border-b border-border-default px-4"],
       [pane, "px-8 py-5"],
     ] as const) {
       expect(source).toContain(geometry);
@@ -338,9 +338,9 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     }
 
     // One row shell, one height, one indent pair.
-    expect(rows).toContain("h-[36px]");
+    expect(rows).toContain("h-9");
     expect(rows).toContain('const DEPTH_PAD = ["pl-2", "pl-5"]');
-    expect(CHANNELS_SKELETON).toContain("h-[36px]");
+    expect(CHANNELS_SKELETON).toContain("h-9");
     expect(CHANNELS_SKELETON).toContain('indented ? "pl-5" : "pl-2"');
     expect(code("../../pages/channels/channels-skeleton.tsx")).not.toContain("pb-4");
   });
@@ -366,7 +366,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // The generic ghost's giveaways — a fixed list width and a document measure.
     const body = code("../../pages/members/members-skeleton.tsx");
     expect(body).not.toContain("372");
-    expect(body).not.toContain("max-w-[760px]");
+    expect(body).not.toContain("max-w-190");
   });
 
   it("the knowledge ghosts keep the two dividers /home's .frame selects on", () => {

@@ -131,7 +131,7 @@ export function AccountBillingHistory({
                 </button>
               ) : (
                 // Holds the column so amounts stay aligned.
-                <span className="w-[13px] shrink-0" aria-hidden />
+                <span className="w-3.25 shrink-0" aria-hidden />
               )}
             </li>
           ))}

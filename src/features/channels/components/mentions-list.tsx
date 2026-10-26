@@ -253,7 +253,7 @@ function MentionItem({
       onClick={onOpen}
       data-unread={unread || undefined}
       className={cn(
-        "flex w-full flex-col gap-1 rounded-[8px] px-2 py-1.5 text-left transition-colors",
+        "flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left transition-colors",
         // ⚠ **NO BACKGROUND ON A MENTION ROW, READ OR UNREAD** (Samuel, 2026-09-15,
         // looking at it live: *"right now there is no background color around each
         // mention, I actually like this better"*). The blue unread tint and the

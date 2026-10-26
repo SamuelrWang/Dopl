@@ -95,7 +95,7 @@ export function ActivityTab({
                 key={row.id}
                 className="flex items-center gap-2.5 border-b border-border-subtle py-2.5 last:border-b-0"
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-bg-inset text-text-secondary">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-bg-inset text-text-secondary">
                   <Icon size={13} aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1 text-body leading-snug text-text-primary">

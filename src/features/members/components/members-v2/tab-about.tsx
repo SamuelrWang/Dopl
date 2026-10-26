@@ -165,7 +165,7 @@ function BioEditor({
         }}
         rows={3}
         maxLength={2000}
-        className="concave-field w-full resize-none rounded-[9px] px-3 py-2 text-lead leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-60"
+        className="concave-field w-full resize-none rounded-field px-3 py-2 text-lead leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-60"
         placeholder="A line or two about what you work on."
       />
     </label>

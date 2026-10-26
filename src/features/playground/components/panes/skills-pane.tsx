@@ -241,7 +241,7 @@ function StaticSkillsPane() {
   return (
     <div className="page-float flex antialiased">
       {/* List pane */}
-      <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
+      <div className="flex w-93 shrink-0 flex-col border-r border-border-default">
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
           <h1 className="text-title font-semibold tracking-tight text-text-primary">
             Skills
@@ -253,7 +253,7 @@ function StaticSkillsPane() {
           <span
             title="New skill"
             aria-hidden
-            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary"
+            className="flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary"
           >
             <Plus size={16} />
           </span>

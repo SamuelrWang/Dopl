@@ -69,7 +69,7 @@ describe("🔒 /home's pill", () => {
 
   it("is a fixed 260px white pill with no toggle button", () => {
     expect(src).toContain("white-card raise-pill");
-    expect(src).toContain("w-[260px]");
+    expect(src).toContain("w-65");
     expect(src).not.toContain("search-expand");
     expect(src).not.toMatch(/<button/);
   });
@@ -96,7 +96,7 @@ describe("🔒 the popup is anchored on the header's action group", () => {
   it("the card's width is the anchor's, never its content's", () => {
     const popup = read("src/features/search/components/search-popup.tsx");
     const width = popup.match(/export const SEARCH_CARD_W = "([^"]+)"/)?.[1];
-    expect(width).toBe("w-[280px] max-w-[calc(100vw-2rem)]");
+    expect(width).toBe("w-70 max-w-[calc(100vw-2rem)]");
     expect(popup).not.toMatch(/\bw-max\b|max-content|min-w-\[/);
   });
 

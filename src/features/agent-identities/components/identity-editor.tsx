@@ -288,7 +288,7 @@ export function IdentityEditor({
             type="button"
             onClick={() => setConfirmOpen(true)}
             disabled={busy}
-            className="flex h-[var(--action-h-sm)] items-center rounded-[8px] px-2.5 text-caption font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
+            className="flex h-[var(--action-h-sm)] items-center rounded-md px-2.5 text-caption font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40"
           >
             {deleting ? "Deleting…" : "Delete"}
           </button>

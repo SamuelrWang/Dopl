@@ -46,7 +46,7 @@ const TEAM_AVATARS = [onboardingAvatar2, onboardingAvatar3];
 const BRAND_MARK = (
   // next/image forbidden — no Next runtime in this SPA.
   // eslint-disable-next-line @next/next/no-img-element
-  <img src={doplMark} alt="" draggable={false} className="auth-logo-3d h-8 w-8 rounded-[8px]" />
+  <img src={doplMark} alt="" draggable={false} className="auth-logo-3d h-8 w-8 rounded-md" />
 );
 
 /**

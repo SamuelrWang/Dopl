@@ -115,7 +115,7 @@ function RowEditor({
   return (
     <div
       ref={rowRef}
-      className="flex h-9 items-center gap-2 rounded-[8px] px-2"
+      className="flex h-9 items-center gap-2 rounded-md px-2"
       // ⚠ FOCUS MOVING WITHIN THE ROW IS NOT LEAVING IT. Without this, Tab from
       // the label to the value commits, re-renders, and drops the caret.
       onBlur={(event) => {
@@ -135,7 +135,7 @@ function RowEditor({
       }}
     >
       <CircleDashed size={14} className="shrink-0 text-text-muted" />
-      {/* ⚠ `flex-1 min-w-0`, NOT a fixed `w-[92px]` (~12 chars): the label cap is
+      {/* ⚠ `flex-1 min-w-0`, NOT a fixed `w-23` (~12 chars): the label cap is
           40 chars (`INFO_CARD_LABEL_MAX`), and a 12-char field cannot show a
           label being edited. It takes the same horizontal band the read-mode
           `MetaRow` label truncates into, so the row does not change width between
@@ -157,7 +157,7 @@ function RowEditor({
         spellCheck={false}
         placeholder="Value"
         onChange={(event) => setValue(event.target.value)}
-        className={cn(UNDERLINE_FIELD, "w-[150px] text-right")}
+        className={cn(UNDERLINE_FIELD, "w-37.5 text-right")}
       />
     </div>
   );
@@ -261,7 +261,7 @@ export function InfoCardAddRow({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="flex h-9 w-full items-center gap-2 rounded-[8px] px-2 text-left text-text-disabled transition-colors hover:bg-surface-raised-1 hover:text-text-secondary"
+        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-text-disabled transition-colors hover:bg-surface-raised-1 hover:text-text-secondary"
       >
         <Plus size={14} className="shrink-0" />
         {/* ⚠ NO EXPLAINER. The glyph and the ellipsis are the whole label —

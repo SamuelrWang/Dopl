@@ -100,7 +100,7 @@ export function IconButton({
       onClick={onClick}
       className={cn(
         "flex shrink-0 items-center justify-center transition-colors",
-        bare ? "h-8 w-8" : "h-7 w-7 rounded-[7px]",
+        bare ? "h-8 w-8" : "h-7 w-7 rounded-tile",
         active && "text-text-primary",
         active && !bare && "raised-tab",
         !active && "text-text-secondary hover:text-text-primary",

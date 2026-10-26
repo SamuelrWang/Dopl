@@ -51,7 +51,7 @@ export function LinkOutPanel({ link }: { link: ChannelPendingLink }) {
         type="button"
         disabled={revoke.pending}
         onClick={() => revoke.mutate(link.id)}
-        className="btn-light mt-3 rounded-[8px] px-3.5 py-1.5 text-small text-danger disabled:opacity-60"
+        className="btn-light mt-3 rounded-md px-3.5 py-1.5 text-small text-danger disabled:opacity-60"
       >
         Revoke
       </button>
@@ -64,7 +64,7 @@ export function LinkOutPanel({ link }: { link: ChannelPendingLink }) {
 export function PendingLinkCard({ link }: { link: ChannelPendingLink }) {
   return (
     <div className="flex flex-1 items-center justify-center px-6">
-      <div className="bento w-[380px] rounded-[14px] px-5 py-4">
+      <div className="bento w-95 rounded-xl px-5 py-4">
         <div className="mb-2.5 text-label font-semibold uppercase tracking-wide text-text-muted">
           {link.label ?? "Channel link"}
         </div>

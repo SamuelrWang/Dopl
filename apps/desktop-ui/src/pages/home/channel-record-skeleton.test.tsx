@@ -160,8 +160,8 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
   it("ghosts the Info face's four sections at the real heading and row boxes", () => {
     for (const [source, geometry] of [
       ["bits.tsx", "flex items-center gap-2 px-3.5 pb-1.5 pt-6"],
-      ["bits.tsx", "flex h-9 items-center gap-2 rounded-[8px] px-2"],
-      ["member-roster.tsx", "flex h-[46px] items-center gap-2.5 rounded-[8px] px-2"],
+      ["bits.tsx", "flex h-9 items-center gap-2 rounded-md px-2"],
+      ["member-roster.tsx", "flex h-11.5 items-center gap-2.5 rounded-md px-2"],
       ["member-roster.tsx", "flex flex-col gap-px px-2"],
       ["thread-activity.tsx", "px-3.5 pt-1"],
     ] as const) {
@@ -173,7 +173,7 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     }
     const { container } = render(<ChannelRecordSkeleton />);
     expect(container.querySelectorAll("aside .pt-6")).toHaveLength(4);
-    expect(container.querySelectorAll("aside .h-\\[46px\\]").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("aside .h-11\\.5").length).toBeGreaterThan(0);
   });
 
   /** ⚠ THE DIVIDER OCCUPIES NO WIDTH — a zero-width flex sibling, so the ghost's
@@ -221,7 +221,7 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
   it("byte-shares the row shell, the attribution pill and the body cap", () => {
     for (const [source, geometry] of [
       ["authored-row.tsx", "-mx-2 flex flex-col"],
-      ["authored-row.tsx", "rounded-[10px] px-2 py-1"],
+      ["authored-row.tsx", "rounded-lg px-2 py-1"],
       ["authored-row.tsx", "flex w-full min-w-0 flex-col gap-1.5"],
       [
         // ⚠ **`rounded-full` IS NO LONGER IN THIS LITERAL (2026-09-15).** The pill
@@ -243,7 +243,7 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
       ["message-pane.tsx", "px-8 py-5"],
       [
         "message-pane-header.tsx",
-        "flex h-[56px] shrink-0 items-center gap-1 border-b border-border-default px-4",
+        "flex h-14 shrink-0 items-center gap-1 border-b border-border-default px-4",
       ],
     ] as const) {
       expect(v2(source)).toContain(geometry);
@@ -259,7 +259,7 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
 
     const { container } = render(<ChannelRecordSkeleton />);
     // Three to four groups, each a pill over its body lines.
-    const rows = container.querySelectorAll(".rounded-\\[10px\\]");
+    const rows = container.querySelectorAll(".rounded-lg");
     expect(rows.length).toBeGreaterThanOrEqual(3);
     expect(rows.length).toBeLessThanOrEqual(4);
     expect(container.querySelectorAll(".rounded-full.border-transparent").length).toBe(

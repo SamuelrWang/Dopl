@@ -106,6 +106,13 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
+  /* Off-ramp radii that repeat across the kit (docs/specs/design-system/AUDIT.md):
+     mark 4px (inline code, mention chips, ticks), tile 7px (28px icon tiles and buttons),
+     field 9px (concave fields, 40px dialog buttons), card 12px (the identity look's cards). */
+  --radius-mark: 4px;
+  --radius-tile: 7px;
+  --radius-field: 9px;
+  --radius-card: 12px;
   /* The small action height (Open / Launch / Discard); New agent / New channel stay `h-9`. */
   --action-h-sm: 30px;
 

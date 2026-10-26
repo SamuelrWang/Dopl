@@ -117,7 +117,7 @@ describe("channels transcript — an unbroken body wraps", () => {
   });
 
   it("contains a thread card's title and wraps its preview", () => {
-    // The card is `max-w-[460px]`; an unbroken title truncates inside its `min-w-0` slot and the
+    // The card is `max-w-115`; an unbroken title truncates inside its `min-w-0` slot and the
     // clamped preview wraps, so neither sizes the card past its edge.
     renderRows(
       channelRows(

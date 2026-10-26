@@ -111,7 +111,7 @@ export function InfoTabCard({
             <Avatar
               person={memberPerson(creator)}
               size="xs"
-              className="h-[20px] w-[20px] text-micro"
+              className="h-5 w-5 text-micro"
             />
             <span className="text-body text-text-primary">
               {memberLabel(creator)}

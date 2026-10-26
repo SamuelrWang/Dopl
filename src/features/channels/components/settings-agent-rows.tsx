@@ -140,7 +140,7 @@ export function SettingAction({
         data-settings-row
         onClick={onSelect}
         className={cn(
-          "flex min-h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-body transition-colors",
+          "flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-left text-body transition-colors",
           "hover:bg-menu-item-hover-bg",
           destructive ? "text-danger" : "text-text-primary"
         )}

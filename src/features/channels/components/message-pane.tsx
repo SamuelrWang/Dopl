@@ -305,7 +305,7 @@ export function ChannelsMessagePane({
         {missing && (
           <p
             role="status"
-            className="mb-3 rounded-[8px] border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-muted"
+            className="mb-3 rounded-md border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-muted"
           >
             {SCROLL_TARGET_MISSING_NOTE}
           </p>

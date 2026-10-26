@@ -73,7 +73,7 @@ function BrandMark() {
       alt="Dopl"
       width={48}
       height={48}
-      className="auth-logo-3d block h-12 w-12 rounded-[12px]"
+      className="auth-logo-3d block h-12 w-12 rounded-card"
     />
   );
 }

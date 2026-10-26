@@ -49,12 +49,12 @@ const LEAD_PX = 20;
 
 /** The row face; `[&_mark]` paints the server's snippet marks and the title's alike. */
 const ROW =
-  "menu-row flex w-full items-center gap-2.5 px-2 py-1.5 text-left [&_mark]:rounded-[2px] [&_mark]:bg-caution/25 [&_mark]:text-text-primary";
+  "menu-row flex w-full items-center gap-2.5 px-2 py-1.5 text-left [&_mark]:rounded-xs [&_mark]:bg-caution/25 [&_mark]:text-text-primary";
 
 /** Small white key box: the footer legend, the active row's Enter and the field's Esc. */
 export function Keycap({ children }: { children: ReactNode }) {
   return (
-    <span className="text-micro inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-[5px] border border-border-default bg-bg-elevated px-1 leading-none text-text-secondary">
+    <span className="text-micro inline-flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-[5px] border border-border-default bg-bg-elevated px-1 leading-none text-text-secondary">
       {children}
     </span>
   );

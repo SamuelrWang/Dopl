@@ -23,7 +23,7 @@ export function TeamChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-caption text-text-primary max-w-[140px]",
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-caption text-text-primary max-w-35",
         className
       )}
       style={{ backgroundColor: `${hex}1f`, borderColor: `${hex}3d` }}

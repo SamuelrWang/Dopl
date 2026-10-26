@@ -28,7 +28,7 @@ export function MentionBadge({
     <span
       title={`${count} unread ${count === 1 ? "mention" : "mentions"}`}
       className={cn(
-        "flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-micro font-medium",
+        "flex h-4.5 shrink-0 items-center rounded-full px-1.5 text-micro font-medium",
         onDark
           ? "bg-text-on-cta text-surface-cta"
           : "bg-surface-cta text-text-on-cta"

@@ -17,7 +17,7 @@ export interface AvatarPerson {
 
 const SIZE = {
   xs: "w-6 h-6 text-micro",
-  px30: "w-[30px] h-[30px] text-caption",
+  px30: "w-7.5 h-7.5 text-caption",
   sm: "w-8 h-8 text-caption",
   px36: "w-9 h-9 text-small",
   md: "w-10 h-10 text-body",

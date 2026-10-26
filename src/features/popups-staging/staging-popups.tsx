@@ -179,7 +179,7 @@ const STAGING_MEMBERS = STAGING_PEOPLE.map(
  */
 export function StagingChannelPeople() {
   return (
-    <div className="bento flex w-[380px] flex-col gap-2 py-3">
+    <div className="bento flex w-95 flex-col gap-2 py-3">
       <PersonRosterActions homeChannel={STAGING_CHANNEL} />
       <ul className="divide-y divide-border-subtle px-3.5">
         {STAGING_MEMBERS.map((m) => (

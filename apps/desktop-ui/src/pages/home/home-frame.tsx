@@ -38,7 +38,7 @@ export function HomeFrame({
             {/* Bounded by its line, no shadow: the pane has no top or left gap to cast into. */}
             <div
               className={cn(
-                "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border border-home-panel-line",
+                "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-xl border border-home-panel-line",
                 home.pane
               )}
               data-frame-skin

@@ -116,7 +116,7 @@ const PILL_FACE = "white-card rounded-full p-1.25 pl-2.75";
  * ⚠ **NOTHING ABOUT COLOUR IS IN HERE.** The two layers differ in exactly that, which is the
  * whole mechanism.
  */
-const FIELD_TEXT = "py-[4px] text-lead leading-[22px] pointer-coarse:text-[16px]";
+const FIELD_TEXT = "py-1 text-lead leading-[22px] pointer-coarse:text-[16px]";
 
 /**
  * **EVERY FACT THAT DECIDES WHERE A LINE BREAKS** — worn by the field AND by the mirror, from
@@ -297,8 +297,8 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // whole app and dragged the panelling with it. 16px at focus size is the ONLY thing
         // that turns that off; `maximum-scale`/`user-scalable=no` would do it by disabling
         // pinch-zoom for everyone, which is an accessibility regression, not a fix.
-        // ⚠ THE BOX DOES NOT MOVE: `leading-[22px]` + `py-[4px]` still sum to the row's
-        // `h-[30px]`, so 16px text lands in the same 30px object the send button is aligned
+        // ⚠ THE BOX DOES NOT MOVE: `leading-[22px]` + `py-1` still sum to the row's
+        // `h-7.5`, so 16px text lands in the same 30px object the send button is aligned
         // to. ⚠ COARSE POINTERS ONLY — a mouse never triggers the zoom, so the desktop face
         // keeps `text-lead` exactly as drawn.
         // ⚠ THE TYPOGRAPHY IS `FIELD_TEXT` AND IS NOT SPELLED HERE — the mirror wears the same
@@ -327,7 +327,7 @@ export function ComposerInputRow(props: ComposerInputRowProps) {
         // comment above has claimed a 30px row since 2026-09-04; it was 36px, and the 6px was
         // descender space under a field nobody had asked to sit on a baseline.
         className={cn(
-          "block h-[30px] w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
+          "block h-7.5 w-full resize-none overflow-y-auto bg-transparent outline-none placeholder:text-text-muted",
           FIELD_WRAP,
           FIELD_TEXT,
           // ⚠ THE TEXT GOES TRANSPARENT ONLY WHERE SOMETHING IS PAINTED UNDER IT, AND THE CARET

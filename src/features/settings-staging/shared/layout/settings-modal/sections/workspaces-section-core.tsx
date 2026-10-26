@@ -121,7 +121,7 @@ function Row({
       {role && <RolePill role={role} />}
     </>
   );
-  const face = "flex w-full items-center gap-2.5 rounded-[10px] px-1.5 py-2 text-left";
+  const face = "flex w-full items-center gap-2.5 rounded-lg px-1.5 py-2 text-left";
   return (
     <li className="py-0.5" aria-current={active ? "true" : undefined}>
       {onOpen ? (
@@ -143,7 +143,7 @@ function Row({
  *  Dopl mark is a packaged PNG the web tree cannot import. */
 function HomeGlyph() {
   return (
-    <span className="raised-tab flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-caption font-semibold text-text-secondary">
+    <span className="raised-tab flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-caption font-semibold text-text-secondary">
       H
     </span>
   );

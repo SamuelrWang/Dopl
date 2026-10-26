@@ -54,9 +54,9 @@ export const ARTIFACT_COLLAPSE_LABEL = "Show less";
  *
  * ⚠ **THE `18px` IS INHERITED FROM A1's CARD AND IS AN APPROXIMATION HERE, NOT
  * THIS BOX'S ARITHMETIC** (corrected 2026-09-06 — the docblock was copied from
- * `agent-stream-sent-box.tsx`, where `18px` is exactly `StreamProse`'s `py-[9px]`
+ * `agent-stream-sent-box.tsx`, where `18px` is exactly `StreamProse`'s `py-2.25`
  * top AND bottom, and that sentence was simply false in this file). THIS run's
- * chrome is different in both halves: the body below renders `pb-[9px]` — bottom
+ * chrome is different in both halves: the body below renders `pb-2.25` — bottom
  * only, no top — and EVERY MEMBER additionally carries a `pt-1.5` header line
  * (6px) above its body. So the padding inside the bound is per-member and grows
  * with the run, rather than being one fixed 9+9, and "6 lines" is six line-boxes
@@ -69,7 +69,7 @@ export const ARTIFACT_COLLAPSE_LABEL = "Show less";
  * visual change and nobody has ruled it.
  *
  * ⚠ THE PAIRING, POINTED AT THE PADDING THIS FILE ACTUALLY HAS: change the body's
- * `pb-[9px]` or the member header's `pt-1.5` below and reconsider this number.
+ * `pb-2.25` or the member header's `pt-1.5` below and reconsider this number.
  * That pairing is why it is spelled out rather than being one magic pixel count.
  */
 const COLLAPSED_RUN_LINES = 6;
@@ -175,7 +175,7 @@ function FoldedRun({ members }: { members: ArtifactMember[] }) {
                   read as raw asterisks after. */}
               <StreamProse
                 text={member.body}
-                className="px-3 pb-[9px]"
+                className="px-3 pb-2.25"
                 textClassName="text-caption leading-normal text-text-primary"
               />
             </div>
@@ -239,7 +239,7 @@ export function ArtifactCard({
     <section
       data-artifact-id={id}
       className={cn(
-        "min-w-0 overflow-hidden rounded-[12px] border border-border-active bg-card-surface-subtle",
+        "min-w-0 overflow-hidden rounded-card border border-border-active bg-card-surface-subtle",
         // ⚠ **GREY, THE SAME RULING THE ROW TINT TOOK** (Samuel, 2026-09-16 — see
         // `authored-row.tsx › FLASH_TINT`). One click path lands on either a row or a
         // folded card, so one flash colour: a blue ring here and a grey wash there would
@@ -248,7 +248,7 @@ export function ArtifactCard({
         flash && "ring-2 ring-border-strong"
       )}
     >
-      <div className="flex items-center gap-1.5 bg-surface-cta px-2.5 py-[5px]">
+      <div className="flex items-center gap-1.5 bg-surface-cta px-2.5 py-1.25">
         <span className="min-w-0 truncate text-micro font-medium text-text-on-cta">
           {name}
         </span>

@@ -96,7 +96,7 @@ export function IdentityLaunchPicker({
       open={open}
       at={at ?? undefined}
       onClose={onClose}
-      className="max-h-[min(60vh,420px)] w-[288px] overflow-y-auto"
+      className="max-h-[min(60vh,420px)] w-72 overflow-y-auto"
     >
       <PickerBody
         workspaceId={workspaceId}

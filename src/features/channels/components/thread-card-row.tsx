@@ -27,7 +27,7 @@ import { shortName, type AuthorIndex } from "./view-model";
 import type { ThreadCardRow } from "./view-model-rows";
 
 const AGENT_ROW =
-  "white-card flex h-[42px] w-full flex-none items-center gap-2 rounded-[10px] border-border-subtle pl-[7px] pr-2 text-left";
+  "white-card flex h-10.5 w-full flex-none items-center gap-2 rounded-lg border-border-subtle pl-1.75 pr-2 text-left";
 
 function AgentRow({
   agent,
@@ -79,7 +79,7 @@ function ThreadAgents({
   if (agents.length === 0) return <EmptyState variant="well" icon={Users} title="No agents yet" />;
   const running = runningCount(agents);
   return (
-    <div className="card-well flex min-h-0 flex-col gap-[5px] p-2">
+    <div className="card-well flex min-h-0 flex-col gap-1.25 p-2">
       <p className="flex items-baseline justify-between gap-2 text-label font-semibold uppercase tracking-wide text-text-muted">
         <span>
           {agents.length} agent{agents.length === 1 ? "" : "s"} in this thread
@@ -87,7 +87,7 @@ function ThreadAgents({
         {running > 0 && <span className="flex-none text-success">{running} running</span>}
       </p>
       {/* The padding gives a lifted row room inside the scroll box; the margin puts it back. */}
-      <div className="-m-1.5 flex max-h-[146px] min-h-0 flex-col gap-1 overflow-y-auto p-1.5">
+      <div className="-m-1.5 flex max-h-36.5 min-h-0 flex-col gap-1 overflow-y-auto p-1.5">
         {agents.map((agent) => (
           <AgentRow
             key={agent.key}
@@ -138,7 +138,7 @@ export function ThreadCardMessage({
       continuation={false}
       flash={flash}
     >
-      <div className="white-card mt-1 flex w-full max-w-[460px] flex-col gap-2 rounded-[14px] py-3 pl-3.5 pr-3 text-left">
+      <div className="white-card mt-1 flex w-full max-w-115 flex-col gap-2 rounded-xl py-3 pl-3.5 pr-3 text-left">
         <span className="flex min-w-0 items-center gap-2 text-heading font-medium text-text-primary">
           <span className="mark-tile size-5 flex-none">
             <MessagesSquare size={11} strokeWidth={2.2} aria-hidden />

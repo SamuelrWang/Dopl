@@ -104,7 +104,7 @@ export function ChangelogList({
     return (
       <div className={cn(card, "py-2.5")} role="status" aria-busy="true">
         <span className="sr-only">Loading changelog</span>
-        <div className="h-8 animate-pulse rounded-[10px] bg-surface-raised-1" />
+        <div className="h-8 animate-pulse rounded-lg bg-surface-raised-1" />
       </div>
     );
   }

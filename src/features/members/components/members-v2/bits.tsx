@@ -21,7 +21,7 @@ export function PresenceDot({ dot }: { dot: ActivityDot }) {
 }
 
 export const SECTION_CARD =
-  "min-w-0 overflow-hidden rounded-[14px] border border-border-strong bg-bg-elevated";
+  "min-w-0 overflow-hidden rounded-xl border border-border-strong bg-bg-elevated";
 
 /** Zebra striping on ODD rows so the first keeps the card fill. */
 export const ZEBRA_ROW = "odd:bg-card-surface-subtle";
@@ -51,7 +51,7 @@ export function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+        "flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-tile transition-colors disabled:cursor-not-allowed disabled:opacity-40",
         onInvert
           ? "text-text-on-invert/60 hover:bg-text-on-invert/10 hover:text-text-on-invert"
           : "text-text-muted hover:bg-surface-raised-1 hover:text-text-primary",
@@ -114,7 +114,7 @@ export function FieldRow({ label, children }: { label: string; children: ReactNo
     // rows on a flat `SectionPanel` whose own `p-3` IS the gutter, so a second
     // one would step them in past the section heading.
     <div className="flex items-center gap-3 border-b border-border-subtle px-1 py-2 last:border-b-0">
-      <span className="w-[92px] shrink-0 text-caption text-text-secondary">{label}</span>
+      <span className="w-23 shrink-0 text-caption text-text-secondary">{label}</span>
       <span className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-body text-text-primary">
         {children}
       </span>

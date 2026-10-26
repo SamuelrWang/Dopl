@@ -62,10 +62,10 @@ export const SECTION_PANEL_GROUND =
  * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT.** `shared/ui/panel-well.ts ›
  * PANEL_WELL` is the gray well — `bg-home-panel` on this geometry, no hairline (the same
  * face `SECTION_PANEL_GROUND` has carried on every page since R-39 flattened it) — reached by
- * IMPORT rather than by retyping `rounded-[14px] p-3`, so the day the well's radius or padding
+ * IMPORT rather than by retyping `rounded-xl p-3`, so the day the well's radius or padding
  * moves it moves on every surface at once.
  */
-export const SECTION_PANEL_SHELL = "rounded-[14px] p-3";
+export const SECTION_PANEL_SHELL = "rounded-xl p-3";
 
 export function SectionPanel({
   id,
@@ -99,7 +99,7 @@ export function SectionPanel({
     >
       <div
         className={cn(
-          "flex min-h-[22px] items-center justify-between gap-2 pb-2.5",
+          "flex min-h-5.5 items-center justify-between gap-2 pb-2.5",
           !flat && "px-1"
         )}
       >

@@ -428,7 +428,7 @@ function AgentWorkingOn({
  *
  * ⚠ THE MARK IS A ROUNDED SQUARE SHORTER THAN THE BAR, and that is the whole instruction (*"It
  * should not be the same height as the top bar, but be to the left of the name"*): 24px inside a
- * 56px bar, `rounded-[8px]`.
+ * 56px bar, `rounded-md`.
  *
  * ⚠ THE RIGHT GROUP READS STATUS → EXPAND → CLOSE (Samuel, same day: *"move the ended
  * badge/thinking badges and stuff to the left of the expand and X buttons"*). The badges are the

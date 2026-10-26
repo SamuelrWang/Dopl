@@ -27,7 +27,7 @@ import { MessageList } from "./message-list";
 import { ShareControl } from "./share-control";
 
 const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+  "flex h-7 w-7 items-center justify-center rounded-tile text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
 interface Props {
   chat: Chat | null;
@@ -95,7 +95,7 @@ export function DetailPane({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
+      <div className="flex h-13 shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
         <span className="shrink-0 text-small font-medium text-text-secondary">
           {!isMine ? "Shared" : (folder?.name ?? UNFILED_LABEL)}
         </span>
@@ -169,7 +169,7 @@ export function DetailPane({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
-        <div className="mx-auto max-w-[760px]">
+        <div className="mx-auto max-w-190">
           <HeaderCard chat={chat} currentUserId={currentUserId} />
 
           <div className="mb-3 mt-7 flex items-baseline gap-2">

@@ -40,7 +40,7 @@ export function NameField({
       label="Name"
       value={draft}
       onChange={setDraft}
-      className="w-[220px] shrink-0"
+      className="w-55 shrink-0"
       inputClassName="font-medium"
       autoFocus
       onBlur={commit}
@@ -108,7 +108,7 @@ export function BoardSettingsMenu({
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={close}
-        className="min-w-[200px]"
+        className="min-w-50"
       >
         {onRename && (
           <MenuItem

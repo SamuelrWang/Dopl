@@ -85,9 +85,9 @@ export function SegmentedControl<K extends string>({
       ? "h-[var(--action-h-sm)] px-3 text-caption"
       : size === "lg"
         ? tracked
-          ? "h-[30px] px-[15px] text-small"
+          ? "h-7.5 px-3.75 text-small"
           : "h-9 px-3 text-small"
-        : "h-[27px] px-3 text-caption";
+        : "h-6.75 px-3 text-caption";
   return (
     <div
       role="tablist"
@@ -99,7 +99,7 @@ export function SegmentedControl<K extends string>({
           : vertical
             ? "flex flex-col items-start gap-2"
             : underlined
-              ? cn("flex items-center", tabBar ? "gap-[22px]" : "gap-5")
+              ? cn("flex items-center", tabBar ? "gap-5.5" : "gap-5")
               : "flex items-center gap-1.5",
         className
       )}
@@ -146,7 +146,7 @@ export function SegmentedControl<K extends string>({
           {hint && <span className="text-micro font-normal text-text-muted">{hint}</span>}
           {count !== undefined &&
             (value === key ? (
-              <span className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-surface-cta px-1.5 text-micro font-semibold text-text-on-cta">
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-cta px-1.5 text-micro font-semibold text-text-on-cta">
                 {count}
               </span>
             ) : (

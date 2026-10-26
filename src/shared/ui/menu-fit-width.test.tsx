@@ -14,7 +14,7 @@ import { SelectMenu } from "./select-menu";
  * ⚠ ONE RULE, ON THE SURFACE: `.menu-card` is `width: max-content`, floored at
  * `--menu-min-width` or the `--menu-trigger-width` `Popover` sets, capped at
  * `--menu-max-width`, both bounded by the viewport. `SelectMenu` used to force
- * `min-w-[280px] max-w-[340px]` over it, which is the empty space he saw; this pins
+ * `min-w-70 max-w-85` over it, which is the empty space he saw; this pins
  * that no fixed width comes back through the primitive, and that both kit copies
  * carry the rule (`check-css-token-drift.ts` compares selector NAMES, not bodies).
  */

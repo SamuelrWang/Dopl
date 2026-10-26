@@ -34,7 +34,7 @@ export function HeaderCard({
   const isMine = chat.owner.userId === currentUserId;
 
   return (
-    <section className="overflow-hidden rounded-[14px] border border-border-strong bg-bg-elevated">
+    <section className="overflow-hidden rounded-xl border border-border-strong bg-bg-elevated">
       <div className="px-5 pb-4 pt-4">
         <h2 className="break-words text-display font-semibold tracking-tight text-text-primary">
           {chat.title}

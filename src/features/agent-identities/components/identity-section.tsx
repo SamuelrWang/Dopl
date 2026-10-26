@@ -148,11 +148,11 @@ export function IdentitySection({
  * appended to a chip that is not its own concept.
  */
 const IDENTITY_ROW =
-  "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-[7px] border border-border-default bg-bg-elevated pl-1.5 pr-2 text-caption text-text-primary";
+  "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-tile border border-border-default bg-bg-elevated pl-1.5 pr-2 text-caption text-text-primary";
 
 /** The quiet add row on a personal card: the chip's geometry, dashed. */
 export const IDENTITY_ROW_ADD =
-  "flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-dashed border-border-strong bg-transparent pl-1.5 pr-2 text-caption text-text-muted transition-colors hover:border-border-highlight hover:text-text-secondary";
+  "flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-tile border border-dashed border-border-strong bg-transparent pl-1.5 pr-2 text-caption text-text-muted transition-colors hover:border-border-highlight hover:text-text-secondary";
 
 /** A runtime's 14px mark: its logo, or a generic chip glyph for a runtime with none. */
 export function RuntimeMark({ logo }: { logo: string | null }) {
@@ -272,7 +272,7 @@ function IdentityCard({
     </>
   );
 
-  const shell = "white-card flex min-h-[104px] flex-col gap-2.5 p-3 text-left";
+  const shell = "white-card flex min-h-26 flex-col gap-2.5 p-3 text-left";
   // The kit's `.card-lift`, shared with the Knowledge card.
   const raise = "card-lift";
 

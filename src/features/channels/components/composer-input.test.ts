@@ -128,7 +128,7 @@ describe("one input row, two composers", () => {
     // Both call sites take the geometry from that one constant — neither states any of it.
     for (const file of [CHANNEL, AGENT]) {
       expect(codeOf(file), `${file} re-stated the row's padding`).not.toMatch(
-        /p-1\.5|rounded-\[10px\]/
+        /p-1\.5|rounded-lg/
       );
     }
   });
@@ -165,7 +165,7 @@ describe("one input row, two composers", () => {
 
   it("the bare row's field starts flush with the card's content box", () => {
     // ⚠ ONE INSET FOR THE CARD'S CONTENTS, AND THE CARD PAYS IT (Samuel, live review 2026-08-28:
-    // *the input sits further up and left*). The card's `px-[13px] py-[11px]` is that one source;
+    // *the input sits further up and left*). The card's `px-3.25 py-2.75` is that one source;
     // the toolbar row adds nothing on top of it, and now neither does the input row, so the
     // field and the icons under it start from the same edge.
     // ⚠ THE PROPERTY IS "THE SHARED ROW SHAPE CARRIES NO PADDING AT ALL", asserted over the
@@ -195,8 +195,8 @@ describe("one input row, two composers", () => {
 
   it("the channel composer's CARD is the kit's white card, its hairline inside the padding", () => {
     // ⚠ `.white-card` draws a real 1px border on a border-box element, so `px-3 py-2.5` plus that
-    // pixel keeps the content 13px/11px in and the card's HEIGHT unchanged; `px-[13px]
-    // py-[11px]` here would grow it 2px. No `bg-*` or shadow utility rides along: the kit owns
+    // pixel keeps the content 13px/11px in and the card's HEIGHT unchanged; `px-3.25
+    // py-2.75` here would grow it 2px. No `bg-*` or shadow utility rides along: the kit owns
     // the face.
     const box = codeOf(CHANNEL);
     expect(box).toContain('"white-card flex flex-col rounded-[20px] px-3 py-2.5"');

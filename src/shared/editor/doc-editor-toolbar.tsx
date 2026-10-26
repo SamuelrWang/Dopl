@@ -48,7 +48,7 @@ interface ToolbarItem {
 export function Toolbar({
   editor,
   variant = "float",
-  toolbarInset = "md:left-[570px] md:right-[6px]",
+  toolbarInset = "md:left-142.5 md:right-1.5",
 }: ToolbarProps) {
   // ⚠ Subscribe to the transaction stream, not parent renders: the `header`
   // variant renders outside the `useEditor` owner and would never update.
@@ -265,7 +265,7 @@ export function Toolbar({
         toolbarInset
       )}
     >
-      <div className="pointer-events-auto flex items-center gap-1 rounded-[14px] border border-black/[0.08] bg-[var(--panel-surface)] px-2 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.12)]">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-black/[0.08] bg-[var(--panel-surface)] px-2 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.12)]">
         {rows}
       </div>
     </div>

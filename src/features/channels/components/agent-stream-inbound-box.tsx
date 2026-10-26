@@ -157,7 +157,7 @@ export function InboundBox({
       // The test vocabulary for "which weight did this card draw" — read, never styled on.
       data-stream-inbound-paint={edge ? (authorKind === "agent" ? "agent" : "human") : "neutral"}
     >
-      <StreamProse text={text} className="px-3 py-[9px]" />
+      <StreamProse text={text} className="px-3 py-2.25" />
     </StreamCard>
   );
 }
