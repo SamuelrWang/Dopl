@@ -13,6 +13,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { WHITE_PILL } from "@/shared/ui/page-action-button";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 
 export interface SelectMenuOption<T extends string> {
@@ -44,6 +45,8 @@ const TRIGGER_FACE = {
     "transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
   ),
   raised: "auth-btn-3d-light h-9 px-3 text-body font-medium text-text-primary",
+  /** The page header's white pill beside the ink page action (the ontology board's display). */
+  pill: cn(WHITE_PILL, "px-3.5"),
   /** `raised` at field-row height (composer panels' Identity and Model rows): the same face, only
    *  the box shrinks, so the row matches its ~40px text-row siblings. */
   raisedField: "auth-btn-3d-light h-6 px-2 text-small font-medium text-text-primary",
