@@ -46,3 +46,26 @@ Each one: the question, the conservative choice made, and where it lives.
 12. **Concurrent shared files.** Additive only: `SectionPanel flat`, `.title-chip`, `.rail-layout`,
     `ModalShell size="panel"`, `HomePane`'s `viewer` prop, the identities `.pane` rule in
     `home.module.css`. A knowledge/overview worker adding a similar flat face should reuse `flat`.
+
+## Samuel's Electron review (2026-10-26)
+
+14. **One create button, which scope.** The single "+ Agent Identity" (controls row, right end)
+    creates a PERSONAL identity. A shared one is created from the Shared grid's dashed "Create new"
+    cell. Asked: filler only when Shared is empty; chose: also as the grid's last cell when it has
+    rows (hidden while a filter hides every row), otherwise a non-empty channel would have no way
+    to share a new identity. Member+ only; a guest sees the plain empty line.
+15. **Section titles** wear `SECTION_TITLE` (the Overview "Needs you" face) with no grey chip;
+    the kit's `.title-chip` is deleted.
+16. **Readiness line removed** with its code (`runtimeReadiness`, the page head). Not-signed-in
+    runtimes now surface only at launch, as before the port.
+17. **Search** is `SEARCH_PILL_FACE`, the header search's own face, now one constant both read.
+    The kit's `.search-expand` recipe has no wearer left but is still pinned by
+    `home-search.test.ts`; left for a sweep.
+18. **Activity tabs** use `SegmentedControl variant="underline"` (no raised face), matching the
+    view popup and the /home header. Faces: run cards 28 → 34px, recent rows 22 → 30px.
+19. **Rail width** defaults to 300px, 240–480px and at most half the pane, per device
+    (`dopl.identities.railWidth`).
+20. **Launch** is `INK_PILL` (the card's primary act), bottom right.
+21. **Section titles, again** (supersedes 15). Shared / Personal (and Activity, the third `SectionPanel flat`) now
+    wear `IDENTITY_NAME_TEXT`, the ontology switcher's face (14px medium ink); chose to reuse that
+    existing constant in both places instead of minting an identical `PAGE_NAME_TEXT`.

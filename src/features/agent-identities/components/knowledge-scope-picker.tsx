@@ -122,7 +122,7 @@ export function KnowledgeScopePicker({
           role="tree"
           aria-label="Knowledge"
           onKeyDown={onTreeKeyDown}
-          className="flex max-h-55 flex-col overflow-y-auto rounded-lg bg-bg-inset p-1"
+          className="flex max-h-[220px] flex-col overflow-y-auto rounded-lg bg-bg-inset p-1"
         >
           {bases.map((base) => (
             <BaseNode

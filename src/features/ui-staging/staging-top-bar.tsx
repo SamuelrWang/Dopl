@@ -60,7 +60,7 @@ export function StagingTopBar({
       <div className="lp-demo-top-lead">
         <span className="lp-demo-top-cell">
           {onNew ? (
-            <button type="button" className="lp-demo-top-new" onClick={onNew}>
+            <button type="button" className="lp-demo-top-new raise-ink" onClick={onNew}>
               <Plus size={14} strokeWidth={2.2} aria-hidden />
               {newLabel}
             </button>
@@ -103,7 +103,7 @@ export function StagingTopBar({
       <div className="lp-demo-top-trail uis-top-trail">
         <StagingSearch userId={viewer.userId} />
         {onProfile ? (
-          <button type="button" className="lp-demo-top-profile" title="Profile" onClick={onProfile}>
+          <button type="button" className="lp-demo-top-profile raise-pill" title="Profile" onClick={onProfile}>
             <ProfileFace viewer={viewer} first={first} />
           </button>
         ) : (

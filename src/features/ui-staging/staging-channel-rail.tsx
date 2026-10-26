@@ -106,7 +106,7 @@ function Row({
   const shared = {
     "aria-label": row.name,
     "aria-current": selected ? ("true" as const) : undefined,
-    className: "lp-demo-sw-row",
+    className: "lp-demo-sw-row raise",
     "data-selected": selected ? "true" : undefined,
   };
   if (onSelect) {
@@ -121,7 +121,6 @@ function Row({
             onSelect();
           }
         }}
-        style={{ cursor: "pointer" }}
         {...shared}
       >
         <RowBody row={row} />

@@ -108,7 +108,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
    * its `h-6` blocks stand for are controls that live in `channels/components/` and are
    * genuinely 24px there — the channel header's bookmark `IconButton
    * className="h-6 w-6"` and the composer toolbar's six glyphs. Restating those
-   * as `h-6` to satisfy a text scan would paint the same pixels while
+   * as `h-[24px]` to satisfy a text scan would paint the same pixels while
    * breaking §1A's GEOMETRY-BY-REFERENCE rule, which is the worse trade.
    * ⚠ THE EXCLUSION IS ASSERTED, NOT ASSUMED — the case below proves these files
    * carry no `<button` at all, so nothing can hide a 24px pill behind the name.
@@ -165,32 +165,27 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
 });
 
 describe("the CARD-scale pill survives where the ruling did not reach", () => {
-  it("🔒 `LaunchIntoChannelButton` is still the card Open's face", () => {
-    // ⚠ THE HALF THAT DID NOT MOVE. It sits ON an identity card beside the
-    // card's own controls, not in a section header, so the 2026-08-28 ruling
-    // still governs it — and the two buttons parting company is exactly the
-    // thing that made this comparison worth rendering in the first place.
+  it("🔒 the knowledge card's Open is still the shared card-scale pill", () => {
     render(
-      <>
-        <BaseCard
-          base={BASE}
-          ownerLabel="You"
-          starred={false}
-          onOpen={() => {}}
-          onToggleStar={() => {}}
-        />
-        <LaunchIntoChannelButton onClick={() => {}} disabled={false} busy={false} />
-      </>
+      <BaseCard
+        base={BASE}
+        ownerLabel="You"
+        starred={false}
+        onOpen={() => {}}
+        onToggleStar={() => {}}
+      />
     );
-
     const open = faceOf(/Open Renewals/);
-    // ⚠ THE LAYOUT GAP IS THE CALLER'S, exactly as `open-scale-button.tsx`
-    // says: the pill is the FACE and the spinner's spacing is not part of it.
-    expect(faceOf("Launch")).toEqual(
-      new Set([...open, "w-full", "justify-center", "gap-1.5", "disabled:opacity-60"])
-    );
     expect(open.has("btn-light")).toBe(true);
     expect(open.size).toBeGreaterThan(1);
+  });
+
+  it("🔒 `LaunchIntoChannelButton` is the small ink pill, not a 3D or full-width face", () => {
+    render(<LaunchIntoChannelButton onClick={() => {}} disabled={false} busy={false} />);
+    const launch = faceOf("Launch");
+    for (const cls of pillButton("ink", "sm").split(/\s+/)) expect(launch.has(cls)).toBe(true);
+    expect(launch.has("w-full")).toBe(false);
+    expect(launch.has("btn-light")).toBe(false);
   });
 
   it("🔒 the knowledge module no longer declares the pill", () => {

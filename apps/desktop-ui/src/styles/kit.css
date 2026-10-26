@@ -17,7 +17,7 @@
 }
 .auth-btn-3d:hover:not(:disabled) {
   filter: brightness(1.1);
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   /* The ambient pair is `--shadow-raised-hover`, shared with the transcript's agent badge; the two
      inset lines are this gradient's bevel. */
   box-shadow:
@@ -45,7 +45,7 @@
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 .auth-btn-3d-light:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   filter: brightness(0.99);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -96,7 +96,7 @@
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 .btn-light:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 3px 7px rgba(0, 0, 0, 0.08);
@@ -152,7 +152,7 @@
   transition: transform 0.14s ease-out, box-shadow 0.14s ease-out;
 }
 .card-lift:hover {
-  transform: translateY(-3px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow: var(--shadow-card-lift);
 }
 
@@ -171,16 +171,10 @@
   background: var(--home-card);
 }
 
-/* THE TITLE CHIP: a flat section's heading on white, a snug grey box behind just the text
-   (`SectionPanel flat`). */
-.title-chip {
-  border-radius: 8px;
-  background: var(--surface-raised-2);
-  padding: 3px 10px;
-}
-
-/* THE RAIL LAYOUT: a page body 3/4 | 1/4, each column scrolling on its own, once the PANE (a size
-   container, not the viewport) is 760px wide; below that one column, rail last, the pane scrolls.
+/* THE RAIL LAYOUT: a page body and a right rail, each scrolling on its own, once the PANE (a size
+   container, not the viewport) is 760px wide: main, the divider handle's zero-width track, then the
+   rail at `--rail-layout-w` (written by `shared/ui/use-split-resize.ts`) behind a full-height hairline.
+   Below that one column, rail last, the pane scrolls.
    Two elements because a container query styles descendants only: `.rail-layout` is measured,
    `.rail-layout-cols` switches. */
 .rail-layout {
@@ -211,10 +205,14 @@
 @container (min-width: 760px) {
   .rail-layout-cols {
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 0 var(--rail-layout-w, 300px);
     gap: 0;
     padding: 0;
     overflow: hidden;
+  }
+  /* No rail on this mount: the main column takes the row. */
+  .rail-layout-cols[data-rail="off"] {
+    grid-template-columns: minmax(0, 1fr);
   }
   .rail-layout-main,
   .rail-layout-aside {
@@ -222,10 +220,11 @@
     overflow-y: auto;
   }
   .rail-layout-main {
-    padding: 12px 6px 12px 12px;
+    padding: 12px;
   }
   .rail-layout-aside {
-    padding: 12px 12px 12px 6px;
+    padding: 12px;
+    border-left: 1px solid var(--border-default);
   }
 }
 
@@ -288,11 +287,11 @@
 }
 .raise:hover,
 .raise-pill:hover {
-  transform: translateY(-2px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow: var(--shadow-raise-hover);
 }
 .raise-ink:hover {
-  transform: translateY(-2px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow: var(--shadow-raise-ink-hover);
 }
 /* A pill holding a field stays put while it is typed in. */
@@ -307,6 +306,36 @@
   .raise-ink:hover {
     transform: none;
   }
+}
+
+/* THE LIFT'S STILL HIT BOX. A hover transform moves the hit box with the face, so a cursor on the
+   bottom `--lift` px falls off, the hover ends, the face drops back under it and hovers again: the
+   hand/arrow cursor flicker. While hovered, a transparent band below the face fills the strip the
+   lift vacated (`+ 1px` is the bottom border, outside the padding box `top: 100%` measures). Each
+   recipe's hover transform reads the same `--lift`. */
+.auth-btn-3d,
+.auth-btn-3d-light,
+.btn-light {
+  --lift: 1px;
+}
+.raise,
+.raise-pill,
+.raise-ink {
+  --lift: 2px;
+}
+.card-lift {
+  --lift: 3px;
+}
+:where(.auth-btn-3d, .auth-btn-3d-light, .btn-light, .card-lift, .raise, .raise-pill, .raise-ink) {
+  position: relative;
+}
+:where(.auth-btn-3d, .auth-btn-3d-light, .btn-light, .card-lift, .raise, .raise-pill, .raise-ink):hover:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--lift) + 1px);
 }
 
 /* THE STATUS PILL: an optional dot and one word. `data-tone` picks the ink. */

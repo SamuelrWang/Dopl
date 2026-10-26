@@ -83,7 +83,7 @@ export function AgentIdentitiesCore({
 
   return (
     <div className="page-float flex flex-col antialiased">
-      <header className="flex h-13 shrink-0 items-center gap-3 border-b border-border-default px-4">
+      <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-default px-4">
         <h1 className="text-display font-semibold text-text-primary">Identities</h1>
         <span className="flex-1" />
         <button
@@ -97,7 +97,7 @@ export function AgentIdentitiesCore({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        <div className="mx-auto flex max-w-240 flex-col gap-3">
+        <div className="mx-auto flex max-w-[960px] flex-col gap-3">
           {list.error != null && (
             <p role="alert" className="text-caption text-danger">
               {agentIdentityErrorMessage(list.error, "Couldn't load identities")}

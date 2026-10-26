@@ -7,7 +7,6 @@ import {
   endedRuns,
   joinRuns,
   liveRuns,
-  runtimeReadiness,
   usageFor,
   usageOf,
 } from "./identity-runs";
@@ -95,23 +94,5 @@ describe("search, filter and sort", () => {
     expect(sorted("recent")).toEqual(["id-1", "id-2"]);
     expect(sorted("name")).toEqual(["id-1", "id-2"]);
     expect(sorted("running")).toEqual(["id-1", "id-2"]);
-  });
-});
-
-describe("runtime readiness", () => {
-  const runtimes = [
-    { id: "claude", label: "Claude" },
-    { id: "codex", label: "Codex" },
-  ];
-
-  it("is unknown until the desktop has answered", () => {
-    expect(runtimeReadiness({ runtimes, connected: [], connectedKnown: false })).toBeNull();
-  });
-
-  it("marks a runtime that is not signed in", () => {
-    expect(runtimeReadiness({ runtimes, connected: ["claude"], connectedKnown: true })).toEqual([
-      { id: "claude", label: "Claude", ready: true },
-      { id: "codex", label: "Codex", ready: false },
-    ]);
   });
 });

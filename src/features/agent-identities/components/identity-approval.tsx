@@ -56,7 +56,7 @@ export function IdentityApprovalDialog({
           <div
             className={cn(
               RAISED_INPUT,
-              "mb-3 max-h-60 overflow-y-auto whitespace-pre-wrap px-3 py-2 text-small leading-relaxed"
+              "mb-3 max-h-[240px] overflow-y-auto whitespace-pre-wrap px-3 py-2 text-small leading-relaxed"
             )}
           >
             {instructions}

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { BookOpen, Cpu, Users } from "lucide-react";
+import { BookOpen, Cpu, Plus, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import type { ModelCatalogs } from "@/features/channels/lib/model-catalog";
@@ -82,6 +82,7 @@ export function IdentityGrid({
   onOpen,
   pendingIds,
   actionFor,
+  onCreate,
   grid = IDENTITY_GRID,
   ...host
 }: IdentityCardHost & {
@@ -96,8 +97,10 @@ export function IdentityGrid({
   pendingIds?: ReadonlySet<string>;
   /** The card's footer controls (knowledge, launch). */
   actionFor?: (identity: AgentIdentity) => ReactNode;
+  /** A dashed "Create new" cell after the cards; it stands in for the empty line too. */
+  onCreate?: () => void;
 }) {
-  if (identities.length === 0) {
+  if (identities.length === 0 && !onCreate) {
     return emptyLine ? <p className="pb-1 text-caption text-text-muted">{emptyLine}</p> : null;
   }
   return (
@@ -112,6 +115,16 @@ export function IdentityGrid({
           host={host}
         />
       ))}
+      {onCreate && (
+        <button
+          type="button"
+          onClick={onCreate}
+          className="flex min-h-[104px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong text-small font-medium text-text-muted transition-colors hover:border-border-highlight hover:text-text-secondary"
+        >
+          <Plus size={16} strokeWidth={2} aria-hidden="true" />
+          Create new
+        </button>
+      )}
     </div>
   );
 }
@@ -148,11 +161,11 @@ export function IdentitySection({
  * appended to a chip that is not its own concept.
  */
 const IDENTITY_ROW =
-  "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-tile border border-border-default bg-bg-elevated pl-1.5 pr-2 text-caption text-text-primary";
+  "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-[7px] border border-border-default bg-bg-elevated pl-1.5 pr-2 text-caption text-text-primary";
 
 /** The quiet add row on a personal card: the chip's geometry, dashed. */
 export const IDENTITY_ROW_ADD =
-  "flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-tile border border-dashed border-border-strong bg-transparent pl-1.5 pr-2 text-caption text-text-muted transition-colors hover:border-border-highlight hover:text-text-secondary";
+  "flex h-6 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-dashed border-border-strong bg-transparent pl-1.5 pr-2 text-caption text-text-muted transition-colors hover:border-border-highlight hover:text-text-secondary";
 
 /** A runtime's 14px mark: its logo, or a generic chip glyph for a runtime with none. */
 export function RuntimeMark({ logo }: { logo: string | null }) {
@@ -272,7 +285,7 @@ function IdentityCard({
     </>
   );
 
-  const shell = "white-card flex min-h-26 flex-col gap-2.5 p-3 text-left";
+  const shell = "white-card flex min-h-[104px] flex-col gap-2.5 p-3 text-left";
   // The kit's `.card-lift`, shared with the Knowledge card.
   const raise = "card-lift";
 
