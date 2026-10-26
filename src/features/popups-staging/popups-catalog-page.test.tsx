@@ -57,7 +57,7 @@ describe("/popups staging", () => {
     }
     // Rail switching inside the open modal, and a nested confirm.
     const settings = dialog("Settings");
-    fireEvent.click(within(settings).getByRole("button", { name: /Agents/ }));
+    fireEvent.click(within(settings).getByRole("tab", { name: /Agents/ }));
     await tick();
     expect(within(settings).getAllByText("Sign-ins").length).toBeGreaterThan(0);
     fireEvent.click(within(settings).getByText("Connect an agent"));
@@ -66,11 +66,11 @@ describe("/popups staging", () => {
     expect(dialog("Disconnect Claude Code?")).toBeTruthy();
     fireEvent.click(within(dialog("Disconnect Claude Code?")).getByText("Cancel"));
     await tick();
-    fireEvent.click(within(settings).getByRole("button", { name: /Devices/ }));
+    fireEvent.click(within(settings).getByRole("tab", { name: /Devices/ }));
     await tick();
     fireEvent.click(within(settings).getByText("Pair glasses"));
     expect(within(settings).getByLabelText("Pairing code")).toBeTruthy();
-    fireEvent.click(within(settings).getByRole("button", { name: /Account/ }));
+    fireEvent.click(within(settings).getByRole("tab", { name: /Account/ }));
     await tick();
     expect(within(settings).getByText("Billing history")).toBeTruthy();
     expect(within(settings).getByText("Delete account")).toBeTruthy();

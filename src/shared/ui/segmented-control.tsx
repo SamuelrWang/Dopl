@@ -22,7 +22,8 @@ export interface SegmentedOption<K extends string = string> {
  *   button and both faces draw rings, not borders, so selecting never shifts layout.
  * - `"track"`: the page-header selector, one flat `.seg-track`.
  * - `"underline"`: text only, the current option marked by a black rule. At `size="lg"` it is the
- *   /home header's tab bar: 13px ink labels that dim on hover.
+ *   /home header's tab bar: 13px ink labels that dim on hover. `orientation="vertical"` stacks the
+ *   same tabs as a rail (the profile popup's), each hugging its word so the rule sits under it.
  * - `"plain"`: `"pills"` without the hairline, for a form's selector.
  * `size="lg"` lands on the 36px header height: trackless the pill is the control; tracked, 30px
  * options + the track's 3px pad.
@@ -34,6 +35,7 @@ export function SegmentedControl<K extends string>({
   disabled,
   variant = "pills",
   size = "sm",
+  orientation = "horizontal",
   className,
   ariaLabel,
 }: {
@@ -48,6 +50,8 @@ export function SegmentedControl<K extends string>({
   variant?: "pills" | "track" | "underline" | "plain";
   /** Compact filter row (default), `"md"` = the `--action-h-sm` token, or the header scale. */
   size?: "sm" | "md" | "lg";
+  /** `"vertical"` is the `underline` form only. */
+  orientation?: "horizontal" | "vertical";
   /** Layout only, plus the track's `bg-*` token in the `"track"` form. */
   className?: string;
   /** Accessible name for the `role="tablist"`; needed wherever a visible word outside the row
@@ -58,11 +62,12 @@ export function SegmentedControl<K extends string>({
   const underlined = variant === "underline";
   const plain = variant === "plain";
   const tabBar = underlined && size === "lg";
+  const vertical = underlined && orientation === "vertical";
   // Trackless `lg` takes a 12px side pad, not 15: the channel info column's four-option row
   // with count badges overflows at 15.
   const option = underlined
     ? tabBar
-      ? "relative h-9 px-0.5 text-lead"
+      ? cn("relative px-0.5 text-lead", vertical ? "h-7" : "h-9")
       : "relative h-9 px-1 text-small"
     : size === "md"
       ? "h-[var(--action-h-sm)] px-3 text-caption"
@@ -75,12 +80,15 @@ export function SegmentedControl<K extends string>({
     <div
       role="tablist"
       aria-label={ariaLabel}
+      aria-orientation={vertical ? "vertical" : undefined}
       className={cn(
         tracked
           ? "seg-track"
-          : underlined
-            ? cn("flex items-center", tabBar ? "gap-[22px]" : "gap-5")
-            : "flex items-center gap-1.5",
+          : vertical
+            ? "flex flex-col items-start gap-2"
+            : underlined
+              ? cn("flex items-center", tabBar ? "gap-[22px]" : "gap-5")
+              : "flex items-center gap-1.5",
         className
       )}
     >

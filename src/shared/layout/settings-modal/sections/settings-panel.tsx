@@ -2,24 +2,19 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { SECTION_PANEL_GROUND, SECTION_PANEL_SHELL } from "@/shared/ui/section-panel";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 /**
- * THE PROFILE POPUP'S PANEL LANGUAGE — /home Overview's, by reference (Samuel, 2026-09-28: the
- * popup pages "don't use our design system"). Every pane is a stack of `SectionPanel`-shaped gray
- * wells holding white `.bento` cards, exactly `pages/home/overview-panels.tsx`.
- * ⚠ The well heading is Overview's "Credit spend" face (`IDENTITY_NAME_TEXT`, 14px medium), NOT
- * `SectionPanel`'s 18px `SECTION_HEADING_TEXT` (Samuel, 2026-09-28: the headers were "too big").
- * So the panel composes the well by its exported recipe instead of mounting `SectionPanel`.
- * ⚠ No header strips, no `SECTION_BOX_INSET` wells, no `bg-card-surface-subtle` / `bg-bg-inset`
- * fills: those were the popup's own and nothing on /home wears them.
+ * THE PROFILE POPUP'S PANEL LANGUAGE, the identity look (docs/DESIGN-LANGUAGE.md): every pane is a
+ * stack of flat sections, each a heading over `.white-card`s with hairline rows. The heading is
+ * Overview's "Credit spend" face (`IDENTITY_NAME_TEXT`), not the 18px section heading.
  */
 
-/** A pane: panels stacked with /home Overview's gap. */
+/** A pane: sections stacked a section's gap apart. */
 export function SettingsPane({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-3">{children}</div>;
+  return <div className="flex flex-col gap-6">{children}</div>;
 }
 
 export function SettingsPanel({
@@ -37,11 +32,7 @@ export function SettingsPanel({
   children: ReactNode;
 }) {
   return (
-    <section
-      aria-labelledby={id}
-      data-section-panel
-      className={cn(SECTION_PANEL_SHELL, SECTION_PANEL_GROUND)}
-    >
+    <section aria-labelledby={id}>
       <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2">
         <h2 id={id} className={cn("truncate", IDENTITY_NAME_TEXT)}>
           {label}
@@ -54,7 +45,7 @@ export function SettingsPanel({
   );
 }
 
-/** The white card inside a panel (`.bento`, Overview's card padding). */
+/** A white card in a section. */
 export function SettingsCard({
   className,
   children,
@@ -66,13 +57,13 @@ export function SettingsCard({
   label?: string;
 }) {
   return (
-    <section aria-label={label} className={cn("bento p-3.5", className)}>
+    <section aria-label={label} className={cn("white-card p-3.5", className)}>
       {children}
     </section>
   );
 }
 
-/** A card of rows: Overview's Recent-activity list (hairline dividers, no row frames). */
+/** A card of rows: hairline dividers, no row frames. */
 export function SettingsRows({
   label,
   children,
@@ -81,7 +72,7 @@ export function SettingsRows({
   children: ReactNode;
 }) {
   return (
-    <ul aria-label={label} className="bento divide-y divide-border-subtle px-3.5 py-1">
+    <ul aria-label={label} className="white-card divide-y divide-border-default px-3.5 py-1">
       {children}
     </ul>
   );
@@ -97,7 +88,7 @@ export function SettingsRow({
   leading?: ReactNode;
   /** The row's name — text, or a control that stands in for it (an inline rename). */
   title: ReactNode;
-  /** A small pill after the name ("This computer"). */
+  /** A status word after the name ("This computer"). */
   badge?: ReactNode;
   meta?: ReactNode;
   /** Trailing controls. */
@@ -109,11 +100,7 @@ export function SettingsRow({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0 truncate text-body font-medium text-text-primary">{title}</div>
-          {badge && (
-            <span className="shrink-0 rounded-full border border-border-strong px-2 py-px text-micro font-medium text-text-secondary">
-              {badge}
-            </span>
-          )}
+          {badge && <StatusPill className="shrink-0">{badge}</StatusPill>}
         </div>
         {meta && <div className="mt-0.5 truncate text-caption text-text-muted">{meta}</div>}
       </div>

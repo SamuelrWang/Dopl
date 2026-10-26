@@ -15,7 +15,8 @@ import { usePersonalPlanChange } from "@/features/settings-staging/stubs/use-bil
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { formatDate } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { OpenScaleButton } from "@/shared/ui/open-scale-button";
+import { cn } from "@/shared/lib/utils";
+import { SMALL_PILL_BUTTON } from "@/shared/ui/small-action-button";
 import { SettingsPanel, SettingsRows } from "@/shared/layout/settings-modal/sections/settings-panel";
 
 /**
@@ -116,21 +117,23 @@ function SubscriptionRow({
           )}
         </div>
         {ending ? (
-          <OpenScaleButton
+          <button
+            type="button"
             disabled={cancel.pending}
             onClick={() => void run(true)}
-            className="disabled:opacity-50"
+            className={SMALL_PILL_BUTTON}
           >
             {cancel.pending ? "Resuming…" : "Resume plan"}
-          </OpenScaleButton>
+          </button>
         ) : (
-          <OpenScaleButton
+          <button
+            type="button"
             disabled={cancel.pending}
             onClick={() => setConfirming(true)}
-            className="text-danger disabled:opacity-50"
+            className={cn(SMALL_PILL_BUTTON, "text-danger")}
           >
             {cancel.pending ? "Cancelling…" : "Cancel plan"}
-          </OpenScaleButton>
+          </button>
         )}
       </div>
       {error && (

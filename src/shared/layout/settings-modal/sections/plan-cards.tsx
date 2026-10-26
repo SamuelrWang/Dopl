@@ -127,7 +127,7 @@ export function PlanColumn({ plan, ...actions }: CardActions & { plan: PlanDef }
   return (
     <div
       className={cn(
-        "bento flex flex-col p-3.5",
+        "white-card flex flex-col p-3.5",
         highlight && "border-border-highlight",
         isCurrent && "border-2 border-text-primary"
       )}

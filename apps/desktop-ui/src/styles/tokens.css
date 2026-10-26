@@ -563,15 +563,9 @@ html {
      38px tile + centered in 54px keeps 8px side gutters. */
   --shell-rail-w: 54px;
   --shell-sidebar-w: 232px;
-  /* Settings-modal rail surface (the app sidebar stands on `--home-panel` now). */
   --shell-surface: #ececec;
-  /* Resting `.nav-chip` fill. ⚠ Lightened #e2e2e2 → #e8e8e8 on 2026-08-30
-     (Samuel: *"the grayed resting backgrounds one step lighter"*). It is read in
-     exactly one place — `.nav-chip:not(.nav-chip-active)` — and both mounts of
-     that chip wanted the same shift: the app sidebar's nav rows, which now stand
-     on `--home-panel` (#f1f3f5, lighter than the #ececec the old value was tuned
-     against), and the settings modal's section list, on `--home-panel` too since
-     2026-09-11 (Samuel: the sidebar takes the channel switcher's gray). */
+  /* Resting `.nav-chip` fill, read only by `.nav-chip:not(.nav-chip-active)`: the app sidebar's
+     nav rows on `--home-panel`. */
   --shell-chip: #e8e8e8;
   /* Must match --shell-gap-bottom — equal top/bottom panel margins. */
   --shell-gap-top: 6px;

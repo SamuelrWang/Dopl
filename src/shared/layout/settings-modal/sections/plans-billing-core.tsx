@@ -29,8 +29,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
-import { OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
+import { SMALL_PILL_BUTTON, SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { CHIP } from "@/shared/ui/wells";
 import {
   isLegacySolo,
@@ -322,11 +321,11 @@ function BillingSummary({
   const isHomeSpace = ent.containerKind === "home";
 
   if (ent.loading) {
-    return <div className="bento h-24 animate-pulse opacity-50" />;
+    return <div className="white-card h-24 animate-pulse opacity-50" />;
   }
 
   return (
-    <div className="bento p-3.5">
+    <div className="white-card p-3.5">
       <div className="flex items-center justify-between">
         <span
           className={cn(
@@ -430,13 +429,14 @@ function BillingSummary({
         {ent.isPaid ? (
           canManage ? (
             <div className="flex items-center gap-2">
-              <OpenScaleButton
+              <button
+                type="button"
                 disabled={portalLoading}
                 onClick={onManage}
-                className="disabled:opacity-50"
+                className={SMALL_PILL_BUTTON}
               >
                 {portalLoading ? "Loading…" : "Manage billing"}
-              </OpenScaleButton>
+              </button>
               {isLegacySolo(ent) && (
                 <button
                   type="button"

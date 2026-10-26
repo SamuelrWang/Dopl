@@ -37,18 +37,18 @@ describe("StagingSettingsModal", () => {
       [/Plans & Billing/, "Manage billing"],
     ];
     for (const [row, marker] of panes) {
-      fireEvent.click(modal.getByRole("button", { name: row }));
+      fireEvent.click(modal.getByRole("tab", { name: row }));
       await tick();
       expect(modal.getAllByText(marker).length).toBeGreaterThan(0);
     }
     // Configuration's Ask / Auto / Full menu opens.
-    fireEvent.click(modal.getByRole("button", { name: /Configuration/ }));
+    fireEvent.click(modal.getByRole("tab", { name: /Configuration/ }));
     await tick();
     fireEvent.click(modal.getByLabelText("Permissions for agents you launch"));
     expect(screen.getAllByText("Full").length).toBeGreaterThan(0);
     // Account → Cancel plan confirm.
     fireEvent.keyDown(document, { key: "Escape" });
-    fireEvent.click(modal.getByRole("button", { name: /Account/ }));
+    fireEvent.click(modal.getByRole("tab", { name: /Account/ }));
     await tick();
     fireEvent.click(modal.getByText("Cancel plan"));
     await tick();

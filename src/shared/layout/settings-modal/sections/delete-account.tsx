@@ -6,7 +6,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { OpenScaleButton } from "@/shared/ui/open-scale-button";
+import { cn } from "@/shared/lib/utils";
+import { SMALL_PILL_BUTTON } from "@/shared/ui/small-action-button";
 import { toast } from "@/shared/ui/toast";
 import { SettingsPanel, SettingsRow, SettingsRows } from "./settings-panel";
 
@@ -66,9 +67,13 @@ export function DeleteAccount() {
           title="Delete account"
           meta={error ? <span className="text-danger">{error}</span> : undefined}
         >
-          <OpenScaleButton onClick={() => setConfirmOpen(true)} className="text-danger">
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            className={cn(SMALL_PILL_BUTTON, "text-danger")}
+          >
             Delete
-          </OpenScaleButton>
+          </button>
         </SettingsRow>
       </SettingsRows>
 
