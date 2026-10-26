@@ -99,7 +99,7 @@ async function routeSend(client, args, runtime) {
         });
     }
     // ⚠ **THE RECORD LANE, AND IT IS THE SECOND HALF OF THE ADDRESSING
-    // STRUCTURE** (2026-09-18, Samuel's ruling). It stores `intent:"chat"`
+    // STRUCTURE.** It stores `intent:"chat"`
     // on an ordinary `message` row — an existing concept given a name
     // rather than a new stored shape — and the server then refuses to
     // repair its address, so it wakes and feeds nobody. ⚠ `to` is REFUSED
@@ -123,7 +123,7 @@ async function routeSend(client, args, runtime) {
         });
     }
     // ⚠ **A PLAIN SEND ADDRESSES SOMEBODY OR IT IS REFUSED** — the other
-    // half of the same ruling. Checked AFTER the three kinds above, each
+    // half of the same structure. Checked AFTER the three kinds above, each
     // of which is already an address or already a post for nobody, and
     // carved out for a THREAD send, where the thread's two parties are the
     // address (INVARIANTS §5, RR1).

@@ -4,6 +4,7 @@
  * handle `to=` takes, so a task result always hands a value the next call can pass.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.TASK_ASSIGNEE_MAX = void 0;
 exports.resolveTaskActors = resolveTaskActors;
 exports.resolveTaskActor = resolveTaskActor;
 exports.taskMemberView = taskMemberView;
@@ -15,8 +16,8 @@ const channel_render_identity_1 = require("./channel-render-identity");
 const narration_1 = require("./narration");
 const respond_1 = require("./respond");
 const PLAIN_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
-/** `src/features/channels/constants.ts › CHANNEL_TASK_ASSIGNEE_MAX`. */
-const TASK_ASSIGNEE_MAX = 20;
+/** `src/features/channels/constants.ts › CHANNEL_TASK_ASSIGNEE_MAX`, pinned by `channel-task-contract-pins.test.ts`. */
+exports.TASK_ASSIGNEE_MAX = 20;
 const UNCHANGED = "Nothing was changed — field=to";
 function unresolved(raw, channel) {
     return (0, respond_1.err)([
@@ -48,8 +49,8 @@ async function resolveOne(token, roster, channel) {
 /** Every comma-separated token of `to`, against the channel's roster, read at most once. */
 async function resolveTaskActors(client, channelId, channel, to) {
     const tokens = to.split(",").map((t) => t.trim()).filter(Boolean);
-    if (tokens.length > TASK_ASSIGNEE_MAX) {
-        return (0, respond_1.err)(`${UNCHANGED} reason=too_many count=${tokens.length} max=${TASK_ASSIGNEE_MAX}.`);
+    if (tokens.length > exports.TASK_ASSIGNEE_MAX) {
+        return (0, respond_1.err)(`${UNCHANGED} reason=too_many count=${tokens.length} max=${exports.TASK_ASSIGNEE_MAX}.`);
     }
     let members = null;
     const roster = () => (members ??= client.listChannelMembers(channelId));

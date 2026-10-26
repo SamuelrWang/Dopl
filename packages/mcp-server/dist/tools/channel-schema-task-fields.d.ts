@@ -3,6 +3,9 @@
  * `src/features/channels/schema-tasks.ts`; the rules are in the pulled `task-doctrine.ts`.
  */
 import { z } from "zod";
+/** The route's sets, pinned to `schema-tasks.ts` by `channel-task-contract-pins.test.ts`. */
+export declare const TASK_STATUSES: readonly ["open", "in_progress", "resolved"];
+export declare const SUBTASK_STATES: readonly ["todo", "in_progress", "done"];
 export declare const TASK_INPUT_FIELDS: {
     task: z.ZodOptional<z.ZodString>;
     subtask: z.ZodOptional<z.ZodString>;

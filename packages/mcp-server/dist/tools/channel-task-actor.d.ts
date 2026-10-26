@@ -5,6 +5,8 @@
 import type { DoplClient, TaskActor, TaskActorRef } from "@dopl/client";
 import { type MemberView } from "./channel-render-identity";
 import { type ToolResponse } from "./respond";
+/** `src/features/channels/constants.ts › CHANNEL_TASK_ASSIGNEE_MAX`, pinned by `channel-task-contract-pins.test.ts`. */
+export declare const TASK_ASSIGNEE_MAX = 20;
 /** Every comma-separated token of `to`, against the channel's roster, read at most once. */
 export declare function resolveTaskActors(client: DoplClient, channelId: string, channel: string, to: string): Promise<TaskActorRef[] | ToolResponse>;
 /** Exactly one actor, for the actions that name one. */
