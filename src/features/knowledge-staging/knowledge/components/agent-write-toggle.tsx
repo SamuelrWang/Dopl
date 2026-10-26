@@ -1,0 +1,87 @@
+"use client";
+
+/** STAGING COPY of `src/features/knowledge/components/agent-write-toggle.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
+import { userFacingMessage } from "@/shared/api/user-facing-message";
+import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import { Switch } from "@/shared/ui/switch";
+import { toast } from "@/shared/ui/toast";
+import { updateBase } from "../client/api";
+
+interface Props {
+  baseId: string;
+  workspaceId: string;
+  initialValue: boolean;
+}
+
+/**
+ * `agent_write_enabled` toggle: ON lets MCP-origin callers
+ * create/edit/move/delete in this base; OFF (default) is read-only.
+ *
+ * Enforcement is server-side in
+ * [service.ts#assertAgentWriteAllowed](src/features/knowledge/server/service.ts).
+ */
+export function AgentWriteToggle({
+  baseId,
+  workspaceId,
+  initialValue,
+}: Props) {
+  const [enabled, setEnabled] = useState(initialValue);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleToggle(next: boolean) {
+    setSubmitting(true);
+    try {
+      const updated = await updateBase(
+        baseId,
+        { agentWriteEnabled: next },
+        workspaceId
+      );
+      setEnabled(updated.agentWriteEnabled);
+      toast({
+        title: updated.agentWriteEnabled
+          ? "Agent writes enabled"
+          : "Agent writes disabled",
+        description: updated.agentWriteEnabled
+          ? "Your agent (MCP / CLI) can now edit this knowledge base."
+          : "Your agent can read but not modify this knowledge base.",
+      });
+    } catch (err) {
+      toast({ title: "Couldn't toggle", description: userFacingMessage(err) });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border-default p-4 bg-surface-raised-1">
+      <div className="flex items-start gap-4">
+        <div className="flex-1">
+          <p className="text-title font-medium text-text-primary">
+            Allow agent writes
+          </p>
+          <p className="mt-1 text-caption text-text-secondary leading-relaxed">
+            Lets your connected agent (e.g. Claude Code via MCP) create,
+            edit, move, and delete folders + entries in this knowledge
+            base. Reads are always allowed regardless. Off by default
+            for safety.
+          </p>
+          {enabled ? (
+            <div className="mt-2 flex items-center gap-1.5 text-caption text-warning/80">
+              <AlertTriangle size={11} />
+              <span>
+                Agent edits land directly. There&rsquo;s no review step.
+              </span>
+            </div>
+          ) : null}
+        </div>
+        <Switch
+          checked={enabled}
+          disabled={submitting}
+          onChange={(next) => void handleToggle(next)}
+          aria-label="Allow agent writes"
+        />
+      </div>
+    </div>
+  );
+}

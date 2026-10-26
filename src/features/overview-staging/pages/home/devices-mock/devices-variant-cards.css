@@ -1,0 +1,257 @@
+/* STAGING ONLY (variant D · Cards). Deleted with D if Samuel picks another variant.
+ *
+ * ⚠ EVERY LITERAL OF VARIANT D LIVES HERE AND NOWHERE ELSE — the same discipline PORTING.md
+ * applies to DEV_CARD's white fill. Values are docs/DESIGN-LANGUAGE.md §2, measured from the
+ * landing. When D ports, each `--dvd-*` becomes a token (globals.css + desktop tokens.css) and
+ * `.dvd-card` becomes the white variant of `.bento` that PORTING.md already names; nothing here
+ * is inlined at a call site. Scoped under `.dvd` so it cannot leak onto any other surface. */
+
+.dvd {
+  --dvd-ink: #0d0d0d;
+  --dvd-body: #3d3d3d;
+  --dvd-muted: #8a8a8a;
+  --dvd-line: #ececec;
+  --dvd-off: #c9c9c9;
+  --dvd-live: #2fa45a;
+  --dvd-card: #ffffff;
+  --dvd-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 22px rgba(0, 0, 0, 0.05);
+  --dvd-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+/* ── the computer card: white, hairline, 14px, the one soft shadow ── */
+.dvd-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--dvd-card);
+  border: 1px solid var(--dvd-line);
+  border-radius: 14px;
+  box-shadow: var(--dvd-shadow);
+}
+
+.dvd-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.dvd-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dvd-name {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--dvd-ink);
+}
+.dvd-sub {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--dvd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── status pill: dot + word, 999px, hairline. Green only when live. ── */
+.dvd-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--dvd-line);
+  border-radius: 999px;
+  background: var(--dvd-card);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dvd-ink);
+  white-space: nowrap;
+}
+.dvd-pill[data-tone="off"] {
+  color: var(--dvd-muted);
+}
+.dvd-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--dvd-off);
+}
+.dvd-dot[data-tone="live"] {
+  background: var(--dvd-live);
+}
+/* Offline hollows the dot: "not reachable" and "reachable, idle" are not one picture. */
+.dvd-dot[data-tone="off"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--dvd-off);
+}
+
+/* ── groups inside a card: a hairline and a quiet sentence-case label ── */
+.dvd-group {
+  display: flex;
+  flex-direction: column;
+  padding-top: 10px;
+  border-top: 1px solid var(--dvd-line);
+}
+.dvd-label {
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dvd-muted);
+}
+.dvd-more {
+  padding-top: 4px;
+  font-size: 12px;
+  color: var(--dvd-muted);
+}
+.dvd-empty {
+  font-size: 12px;
+  color: var(--dvd-muted);
+}
+
+/* ── an agent: face, name, state, time ── */
+.dvd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 38px;
+}
+.dvd-row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dvd-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dvd-state {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dvd-body);
+}
+.dvd-time {
+  flex: none;
+  min-width: 48px;
+  text-align: right;
+  font-family: var(--dvd-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dvd-muted);
+}
+
+/* ── a connected device: two lines, what it IS on top, what it DOES under ── */
+.dvd-dev {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 5px;
+  padding: 7px 0;
+}
+.dvd-dev-glyph {
+  grid-row: span 2;
+  align-self: start;
+}
+.dvd-dev-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.dvd-dev-name > :first-child {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dvd-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dvd-inuse {
+  flex: none;
+  font-size: 12px;
+  color: var(--dvd-muted);
+}
+.dvd-dev-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.dvd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dvd-chip {
+  padding: 0 7px;
+  border: 1px solid var(--dvd-line);
+  border-radius: 999px;
+  font-family: var(--dvd-mono);
+  font-size: 11.5px;
+  line-height: 18px;
+  color: var(--dvd-body);
+}
+
+/* ── the 3px meter. Track is the hairline, not the banned grey well (PORTING.md, grey ban). ── */
+.dvd-battery {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dvd-pct {
+  font-family: var(--dvd-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dvd-muted);
+}
+.dvd-meter {
+  width: 36px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dvd-line);
+}
+.dvd-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dvd-ink);
+}
+
+/* ── remove: hover-revealed, so an X beside every row is not itself clutter ── */
+.dvd-x {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.dvd-head:hover .dvd-x,
+.dvd-dev:hover .dvd-x,
+.dvd-x:focus-visible {
+  opacity: 1;
+}

@@ -1,0 +1,1865 @@
+/* ─────────────────────────────────────────────────────────────────────
+   UI STAGING — the stage around the landing demo's app window.
+   ⚠ Page-scoped: only `staging-frame.tsx` imports this (and marketing.css,
+   whose `.lp-demo-*` rules draw the window's chrome). Every selector here is
+   `.uis-`-prefixed so nothing leaks into the rest of the web app.
+
+   DESKTOP CSS BRIDGE: `apps/desktop-ui/src/styles/{tokens,kit}.css` are a
+   hand-copied SUBSET of `src/app/globals.css` (checked 2026-10-22: every kit
+   class and every token var in the desktop sheets exists in globals.css), so
+   the web app already serves the desktop's tokens + kit recipes. The only
+   desktop-host difference that matters inside a pane is the font: desktop
+   bodies use `var(--font-app)`, while the hero inherits Helvetica from the
+   landing's `.lp` wrapper. The stage pins the desktop's face below.
+   ───────────────────────────────────────────────────────────────────── */
+
+.uis-stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* The hero's picture behind the window (`hero-banner.tsx › .lp-banner-img`). */
+  background: #1d2430 url("/img/landscape-valley-v2.jpg") center / cover no-repeat;
+  font-family: var(--font-app), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The window — `marketing.css › .lp-banner-demo-slot`'s recipe (radius, frame
+   ground, hairline, drop), minus its opacity flip and `pointer-events: none`:
+   this window is meant to be clicked. Fixed 26px inset, the slot's own. */
+.uis-window {
+  position: absolute;
+  inset: 26px;
+  border-radius: 14px;
+  background: var(--home-frame);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    0 18px 48px rgba(0, 0, 0, 0.26);
+  overflow: hidden;
+}
+
+/* The record pane without the channel column beside it: the pane gets the
+   12px left gutter the column's own padding would otherwise give it. */
+.uis-record-solo {
+  margin-left: 12px !important;
+}
+
+/* Clickable top-bar tabs (the demo's are inert spans). Same face; links only. */
+a.lp-demo-top-tab {
+  text-decoration: none;
+  cursor: pointer;
+}
+.lp-demo-top-tab[data-disabled="true"] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* Frame triggers (the demo draws them as inert spans; here they open the staged popups via
+   `staging-popups-provider.tsx`). Same faces; only the button resets + pointer. */
+button.uis-rail-create,
+button.lp-demo-top-search,
+button.lp-demo-top-profile {
+  cursor: pointer;
+  font: inherit;
+}
+button.uis-rail-create {
+  border: 0;
+  color: inherit;
+}
+button.lp-demo-top-search {
+  font-size: var(--text-small);
+  text-align: left;
+}
+button.lp-demo-top-profile {
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+.uis-top-trail {
+  position: relative;
+}
+
+/* ── THE SHARED CHANNEL PICKER (Samuel, 2026-10-22) ──────────────────
+   The frame now draws the channel column on EVERY face
+   (`staging-channel-rail.tsx`), as desktop /home does. These are the
+   behaviour resets the staged rail needs over the demo's inert column;
+   every FACE rule below in this file (white rows, lift, hover) already
+   applies to it, because the markup keeps the demo's `.lp-demo-sw*`
+   classes. Port target: `apps/desktop-ui/src/pages/home/relationship-list.tsx`
+   (rows + wells) and `shared/ui/home-channel-row.tsx` (the row face).
+
+   A long list scrolls inside the column instead of being clipped
+   (`marketing.css › .lp-demo-sw` is `overflow: hidden`, right for the
+   hero's fixed six rows, wrong for a picker). */
+.uis-window .uis-sw {
+  overflow-y: auto;
+}
+/* A row that LINKS (any face but `/channels`, which selects in place). Same
+   card face; link resets only. */
+.uis-window a.lp-demo-sw-row {
+  text-decoration: none;
+  color: inherit;
+}
+/* The well heading is a toggle button, not a caption: it fills the heading
+   row and inherits every type property from `.lp-demo-sw-head`. */
+.uis-window .uis-sw-head-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+/* ── THE AGENT THREAD BOX, RESTRUCTURED (Samuel, 2026-10-22, ask 6) ──
+   `channels-staging/home/thread-card.tsx` — the box's own docblock carries
+   the element-by-element reasoning. Port target: that file → the demo's
+   `banner-demo/demo-thread-card.tsx` + `marketing.css › .lp-demo-tc*`, then
+   the product's `channels/components/thread-card-row.tsx ›
+   ThreadCardMessage`. Literals become tokens on the way into the product. */
+
+/* ⚠ THE BOX SIZES TO ITS CONTENT, UP TO THREE AGENTS (Samuel, ask 6c: "if
+   there are no agents, the thread doesn't make sense for it to be that big
+   ... I like the one with the three agents in it. I like that as a max fixed
+   size"). The cap is on the AGENT LIST, in rows, so the max IS the 3-agent
+   height by construction rather than by a measured pixel guess, and an empty
+   box is small on its own. Past three the list scrolls, which he kept. */
+.uis-window .uis-tc {
+  gap: 8px;
+}
+
+/* The header IS the thread's name, at the title's size, standing where the
+   literal "Agent thread" label used to ("it should keep that same large font
+   size"). The tile glyph carries the kind. */
+.uis-window .uis-tc-name {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.uis-window .uis-tc-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The opening ask, the one piece of prose that decides whether to open. */
+.uis-window .uis-tc-desc {
+  margin: 0;
+  -webkit-line-clamp: 2;
+}
+
+/* ⚠ THE AGENTS ARE A COMPARTMENT (the structure-before-font-styling rule,
+   `KB orchestration-guidelines › Plans/UI Standing Rules › rule 5`). They were a
+   caption over a list, which left the empty box as three stacked lines in
+   three stylings with no skeleton — the rule's first named instance. The
+   grey well is the demo thread card's own recipe (`marketing.css ›
+   .lp-demo-tc-well`), reused rather than re-invented, and it gives the
+   empty state a shape to live in. */
+.uis-window .uis-tc-agents {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--bg-inset);
+}
+/* The empty state is an ELEMENT, not another line: an icon and one phrase,
+   centred, so covering the text still leaves a shape (that rule's own test). */
+.uis-window .uis-tc-agents-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 0;
+  font-size: var(--text-small);
+  color: var(--text-muted);
+}
+/* Both ends of this line are occupied: the count leads, how many are running
+   trails (the Blank Space Rule — a real fact in the slack, not padding). */
+.uis-window .uis-tc-agents-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.uis-window .uis-tc-agents-live {
+  flex: none;
+  color: var(--success);
+}
+/* ⚠ THE CAP, AND THE ROOM THE HOVER LIFT NEEDS INSIDE IT (Samuel, ask 6c:
+   the hover shadow "gets cut off because it's bounded by the size", and
+   "the first agent gets cut off at the top"). A scroll box clips at its own
+   edge, so the padding gives the raised row somewhere to cast and the first
+   row something above it; the negative margin puts the rows back on the
+   card's own left edge. Three rows (`--uis-tc-row`) + two gaps + that
+   padding IS the max height. */
+.uis-window .uis-tc-agent-list {
+  --uis-tc-row: 42px;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 4px;
+  max-height: calc(3 * var(--uis-tc-row) + 2 * 4px + 12px);
+  padding: 6px;
+  margin: -6px;
+  overflow-y: auto;
+}
+/* One agent, one row. A row that opens its agent view is a button; a peer's
+   agent runs on their machine, so that row is a plain div with the same face
+   (absent, not disabled). */
+.uis-window .uis-tc-agent {
+  display: flex;
+  width: 100%;
+  /* The row's own height, so three of them are exactly the list's cap. */
+  height: var(--uis-tc-row, 42px);
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font: inherit;
+  text-align: left;
+}
+.uis-window button.uis-tc-agent {
+  cursor: pointer;
+}
+.uis-window .uis-tc-agent-who {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.uis-window .uis-tc-agent-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.uis-window .uis-tc-agent-owner {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+/* Liveness as a dot and a word, the language every other agent face here
+   uses (`.lp-demo-ac-status`). */
+.uis-window .uis-tc-agent-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+.uis-window .uis-tc-agent-state i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-disabled);
+}
+.uis-window .uis-tc-agent-state[data-tone="working"] i,
+.uis-window .uis-tc-agent-state[data-tone="live"] i {
+  background: var(--success);
+}
+.uis-window .uis-tc-agent-go {
+  flex: none;
+  color: var(--text-disabled);
+}
+.uis-window button.uis-tc-agent:hover .uis-tc-agent-go {
+  color: var(--text-primary);
+}
+
+/* The actions, OUT of the agent rectangle ("it doesn't make sense for the
+   open thread button to be inside the rectangle for the agent"). "Open
+   thread" is the card's one primary action; "Launch agent" stays, quiet
+   rather than "too jacked". */
+/* ⚠ THE FOOTER IS FENCED (structure before font styling): a hairline makes it a band rather than a
+   third line of text under the body. */
+.uis-window .uis-tc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+.uis-window .uis-tc-by {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+.uis-window .lp-demo-tc-btn.uis-tc-quiet {
+  border-color: var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+.uis-window .lp-demo-tc-btn.uis-tc-quiet:hover {
+  color: var(--text-primary);
+}
+
+/* Hover lift, the same rule the panel's raised things follow (Samuel, ask 6:
+   "when I hover over them, they should translate up"). */
+.uis-window .lp-demo-tc-btn,
+.uis-window button.uis-tc-agent {
+  transition: transform 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+.uis-window .lp-demo-tc-btn:hover,
+.uis-window button.uis-tc-agent:hover {
+  transform: translateY(-2px);
+}
+.uis-window button.uis-tc-agent:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 8px 18px rgba(0, 0, 0, 0.1);
+}
+.uis-window .lp-demo-tc-btn.lp-demo-tc-btn--ink:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 10px 22px rgba(0, 0, 0, 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uis-window .lp-demo-tc-btn:hover,
+  .uis-window button.uis-tc-agent:hover {
+    transform: none;
+  }
+}
+
+/* ── PROFILE ICONS ON THE CHANNELS PAGE (Samuel, 2026-10-22, ask 6d) ─
+   *"The profile icons are way too small"* — about every face on the page,
+   not only the message badge. The staged faces take their size in code
+   (`channels-staging/home/*.tsx`: badge 36, agent card 30, rows 26). These
+   are the ones the PRODUCT still draws inside the record pane, through
+   `shared/ui/avatar.tsx › Avatar` (the Info tab's People roster, the thread
+   Info tab, peer activity, the agent stream), whose call sites ask for
+   `xs` (24px) and `sm` (32px).
+
+   ⚠ A SCOPED OVERRIDE, NOT AN EDIT TO THE KIT. `Avatar` is shared with the
+   real web app and the desktop, and the call sites are product files; both
+   are out of bounds here. This lifts the two steps inside the staged window
+   only. PORT TARGET: the `size` prop at those call sites, or a new step in
+   `shared/ui/avatar.tsx › SIZE` — not a CSS rule.
+   ⚠ The selector is "a round span of exactly that size inside the record
+   pane", which is what an avatar is here; `AvatarWithPresence`'s ring and
+   gap sit on its wrapper and follow the inner size on their own. */
+.uis-window .lp-demo-record span.rounded-full.w-6.h-6 {
+  width: 30px;
+  height: 30px;
+  font-size: var(--text-caption);
+}
+.uis-window .lp-demo-record span.rounded-full.w-8.h-8 {
+  width: 36px;
+  height: 36px;
+  font-size: var(--text-small);
+}
+
+/* ── THE AGENT'S BADGE ON A MESSAGE (Samuel, 2026-10-23, ask 6c reversed) ─
+   `channels-staging/home/attribution-pill.tsx` — that file's docblock
+   carries the reasoning. Port target: the product's
+   `channels/components/attribution-pill.tsx` (the face). The flag frame
+   (`authored-row.tsx › ACCENT_FRAME`) STAYS, so nothing here overrides it:
+   this face only fills it. */
+
+/* The host and the face take the frame's radius, so the bar-side corners
+   stay square and the far side stays a stadium, whichever side the row is. */
+.uis-ap-host {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: inherit;
+}
+/* The product's framed pill box (`py-1 pl-1 pr-3.5 gap-2 bg-bg-elevated`).
+   Photo only, no runtime icon (Samuel, 2026-10-24: "keep the user profile
+   image only the small agent icon move"), so nothing hangs below it and the
+   padding is symmetric: frame inner edge → photo = 5px left, top and bottom.
+   Frame 3 + 5 + 32 + 5 + 3 = 48px. Name/time are centred on the photo. */
+.uis-window .uis-ap {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 5px;
+  border: 0;
+  border-radius: inherit;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+}
+/* ⚠ NO HOVER TRANSFORM HERE. The product's frame span wraps this badge and
+   carries `has-[button:hover]:-translate-y-0.5`, so the lift already happens, once.
+   A second one on the button would double it. */
+.uis-window button.uis-ap {
+  cursor: pointer;
+}
+/* The photo on the neutral hairline: no agent-colour ring (the frame is the
+   colour) and no runtime icon. */
+.uis-window .uis-ap-face {
+  position: relative;
+  flex: none;
+  display: block;
+}
+.uis-window .uis-ap-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1px solid var(--raised-light-line);
+  object-fit: cover;
+}
+.uis-window .uis-ap-who {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.uis-window .uis-ap-name {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.uis-window .uis-ap-time {
+  font-size: var(--text-label);
+  line-height: 1.25;
+  color: var(--text-muted);
+}
+
+/* ── THE DECISION BOX, RESTRUCTURED (Samuel, 2026-10-22, ask 6b) ─────
+   `channels-staging/home/decision-card.tsx` — that file's docblock carries
+   the element-by-element reasoning. Port target: the product's
+   `channels/components/display-card.tsx` + `display-choice.tsx` +
+   `escalation-card-face.ts` (the face table). Literals become tokens on the
+   way in. */
+/* Scoped like every other rail rule (2026-10-24): this sheet loads on all six
+   playground routes, so a top-level selector here is a cross-route rule. The
+   host is created inside the window by the swap, which `cards.test.tsx` pins. */
+.uis-window .uis-dc-host {
+  width: 100%;
+  max-width: 460px;
+  margin-top: 4px;
+}
+.uis-window .uis-dc {
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 22px rgba(0, 0, 0, 0.05);
+  text-align: left;
+}
+.uis-window .uis-dc-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+}
+/* ⚠ SIZED TO ITS CONTENT (the Blank Space Rule). This was a full-bleed bar
+   in the agent's paint with three words at its left edge and nothing else
+   across 460px — the exact shape that rule forbids. As a tag it keeps the paint
+   (whose agent is asking) and Samuel's own words for it (2026-09-20: "I want
+   the top bar, to instead say, Needs Your Decision") and earns its width.
+   `align-items: flex-start` on the panel is what stops the flex column
+   stretching it back out. */
+.uis-window .uis-dc-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-on-cta);
+}
+/* THE QUESTION — the one thing a reader must take in. Largest type here. */
+/* Prose and the option list take the card's reading measure; the TAG above is
+   the thing that rule was about, and it is the only child that hugs. */
+.uis-window .uis-dc-q,
+.uis-window .uis-dc-ctx,
+.uis-window .uis-dc-options,
+.uis-window .uis-dc-answered {
+  align-self: stretch;
+}
+.uis-window .uis-dc-q {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+/* The context: why you are being asked. Supporting, and it looks it. */
+.uis-window .uis-dc-ctx {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+/* AN OPTION IS THE BUTTON. Label in ink, consequence under it, the row is
+   pressable — no letter badges and no second strip to map them onto. */
+.uis-window .uis-dc-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+.uis-window .uis-dc-opt {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font: inherit;
+  text-align: left;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+.uis-window button.uis-dc-opt {
+  cursor: pointer;
+}
+.uis-window button.uis-dc-opt:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 8px 18px rgba(0, 0, 0, 0.1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uis-window button.uis-dc-opt:hover {
+    transform: none;
+  }
+}
+/* The recommendation rides on its own option, not on a paragraph naming a
+   letter: a hairline in ink plus one quiet marker. */
+.uis-window .uis-dc-opt[data-recommended] {
+  border-color: var(--border-strong);
+}
+.uis-window .uis-dc-opt-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.uis-window .uis-dc-opt-label {
+  min-width: 0;
+  flex: 1;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.uis-window .uis-dc-opt-rec {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-size: var(--text-label);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.uis-window .uis-dc-opt-tick {
+  flex: none;
+  color: var(--text-on-cta);
+}
+.uis-window .uis-dc-opt-what {
+  font-size: var(--text-label);
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+.uis-window .uis-dc-opt-why {
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border-default);
+  font-size: var(--text-label);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+/* THE ANSWER IS A STATE OF THE ROWS: the chosen one goes ink, the rest go
+   quiet. Same rule the old strip had, now on the thing you pressed. */
+.uis-window .uis-dc-opt[data-chosen] {
+  border-color: var(--surface-cta);
+  background: var(--surface-cta);
+}
+.uis-window .uis-dc-opt[data-chosen] .uis-dc-opt-label {
+  color: var(--text-on-cta);
+}
+.uis-window .uis-dc-opt[data-chosen] .uis-dc-opt-what,
+.uis-window .uis-dc-opt[data-chosen] .uis-dc-opt-why {
+  border-left-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.72);
+}
+.uis-window .uis-dc-opt[data-chosen] .uis-dc-opt-rec {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text-on-cta);
+}
+.uis-window .uis-dc-opt[data-quiet] {
+  border-color: var(--border-subtle);
+  background: var(--bg-inset);
+  box-shadow: none;
+  opacity: 0.72;
+}
+.uis-window .uis-dc-answered {
+  margin: 2px 0 0;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+.uis-window .uis-dc-answered b {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* ── WHITE PANEL TRIAL (Samuel, 2026-10-22) ──────────────────────────
+   The floating panel behind the top bar (New channel pill, page tabs,
+   channel picker) and the channel column: white instead of the kit's
+   `--home-panel` grey (#f1f3f5). DESIGN-LANGUAGE.md §1 "White surfaces,
+   not grey". Background only — the token itself is left alone, because
+   knowledge rows (`--kv-row-fill`) and the settings modal read it.
+   Port target if approved: `globals.css › .page-float` / `--home-panel`. */
+.uis-window .lp-demo-panel.page-float {
+  background: #ffffff;
+}
+
+/* ── TOP TABS (Samuel, 2026-10-22) ───────────────────────────────────
+   Overview / Channels / Knowledge / Identities / Ontology: 13px (was
+   `--text-small` 12px; 14px read clunky) and all black (was `--text-muted`).
+   Selected = the 2px underline only, same weight as the rest.
+   Port target: `marketing.css › .lp-demo-top-tab` → desktop /home header. */
+.uis-window .lp-demo-top-tab {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.uis-window .lp-demo-top-tab:hover {
+  color: var(--text-primary);
+  opacity: 0.7;
+}
+.uis-window .lp-demo-top-tab[data-selected="true"] {
+  opacity: 1;
+}
+
+/* ── DEVICES SECTION CARD (Samuel, 2026-10-22, ask 4) ────────────────
+   The Devices section on /playground/overview dropped `SectionPanel`:
+   no grey ground, no heading standing on grey, no white panels layered
+   on top (Samuel: "we should lean away from the gray background with
+   the header on the gray background and then different panels on top").
+   Its cards sit straight on the record pane, so they need the landing's
+   card face rather than the kit's `.bento`, whose `--panel-surface`
+   (#fbfcfd) is 1/255 from the pane's `--home-card` (#fbfcfc) and would
+   read as nothing at all.
+
+   #ffffff is DESIGN-LANGUAGE.md §1 ("white surfaces, not grey") and the
+   shadow is its §3 thread-card recipe, verbatim. THE SECTION'S ONE
+   LITERAL: every other value in `devices-mock/*` is a token utility, so
+   flipping the trial back is this rule and nothing else.
+   Port target if approved: a white variant of `globals.css › .bento`
+   (+ `apps/desktop-ui/src/styles/kit.css`, gated by
+   scripts/check-css-token-drift.ts) read by the desktop
+   `pages/home/devices-mock/*`. */
+.uis-window .uis-dev-card {
+  background: #ffffff;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 22px rgba(0, 0, 0, 0.05);
+}
+
+/* ── LIFT ON THE WHITE PANEL (Samuel, 2026-10-22) ────────────────────
+   With the panel white, the white channel rows and top-bar pills lost
+   their edge. Stronger cast shadows instead of a grey fill. */
+.uis-window .lp-demo-sw-row {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.uis-window .lp-demo-top-search,
+.uis-window .lp-demo-top-profile {
+  box-shadow: var(--shadow-card-lift);
+}
+.uis-window .lp-demo-top-new {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+/* ── HOVER LIFT (Samuel, 2026-10-22) ─────────────────────────────────
+   Anything clickable that sits on the panel as a raised object (channel
+   rows, New channel, search, profile) rises 2px on hover so it reads as
+   clickable. Shadow deepens with it. */
+.uis-window .lp-demo-sw-row,
+.uis-window button.lp-demo-top-new,
+.uis-window button.lp-demo-top-search,
+.uis-window button.lp-demo-top-profile {
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.uis-window .lp-demo-sw-row:hover,
+.uis-window button.lp-demo-top-new:hover,
+.uis-window button.lp-demo-top-search:hover,
+.uis-window button.lp-demo-top-profile:hover {
+  transform: translateY(-2px);
+}
+.uis-window .lp-demo-sw-row:hover,
+.uis-window button.lp-demo-top-search:hover,
+.uis-window button.lp-demo-top-profile:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 10px 22px rgba(0, 0, 0, 0.12);
+}
+.uis-window button.lp-demo-top-new:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 12px 26px rgba(0, 0, 0, 0.2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uis-window .lp-demo-sw-row:hover,
+  .uis-window button.lp-demo-top-new:hover,
+  .uis-window button.lp-demo-top-search:hover,
+  .uis-window button.lp-demo-top-profile:hover {
+    transform: none;
+  }
+}
+
+/* ── THE IDENTITIES PAGE RAIL (.uis-idp-*, item 8, 2026-10-24) ─────────────────────────────────
+   Port target: `identities-staging/home/identity-panels.tsx` (layout) and
+   `identities-staging/page/identity-activity-panel.tsx` (the run card + feed row) → in the
+   product, kit recipes in BOTH CSS copies (`src/app/globals.css` +
+   `apps/desktop-ui/src/styles/kit.css`; the drift gate compares them).
+
+   Samuel: three-fourths identities on the left, a quarter on the right for activity, and each
+   working agent in a short white box. Replaces item 7's six-column event grid
+   (`.uis-idp-act-*`), which a quarter-width rail cannot hold.
+
+   🔒 **HAND-WRITTEN CSS, NOT TAILWIND**, for the reason item 7 recorded: the dev server compiles
+   only the utilities that existed when it booted, so a new arbitrary utility emits nothing until a
+   cold build (`identities-staging/PORTING.md › CORRECTION`). Every rule is `.uis-window`-scoped
+   because this file is global to every playground route (PORTING.md › `staging.css` is GLOBAL).
+
+   LAYOUT: the pane is a size container; at ≥ 760px of PANE (not viewport) it is two columns,
+   3fr | 1fr, each scrolling on its own. Below that it is one column and the pane scrolls, with the
+   rail after the identities. A container query, because the pane's width is the staging window's,
+   which is not the viewport's. */
+/* ⚠ TWO ELEMENTS, NOT ONE: a container query styles the container's DESCENDANTS, never the
+   container itself, so `.uis-idp-layout` is the measured box and `.uis-idp-cols` is what switches. */
+.uis-window .uis-idp-layout {
+  container-type: inline-size;
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.uis-window .uis-idp-cols {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+.uis-window .uis-idp-main,
+.uis-window .uis-idp-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+@container (min-width: 760px) {
+  .uis-window .uis-idp-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+    overflow: hidden;
+    padding: 0;
+    gap: 0;
+  }
+  /* Each column owns its scroll, so a long identities grid never drags the rail away and the
+     rail never grows the page. The padding moves onto the columns so scrollbars sit at the edge. */
+  .uis-window .uis-idp-main,
+  .uis-window .uis-idp-aside {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .uis-window .uis-idp-main {
+    padding: 12px 6px 12px 12px;
+  }
+  .uis-window .uis-idp-aside {
+    padding: 12px 12px 12px 6px;
+  }
+}
+
+/* ── ITEM 9 (2026-10-24): ALL WHITE, NO WELLS ─────────────────────────────────────────────────
+   Samuel: *"make the entire panel… white… remove the gray from the 'Shared across your channels'
+   and 'Personal' lines… no more gray backgrounding… just have it be a gray box behind just that
+   text"*.
+
+   1. The pane is white (it was the record's near-white `rgb(251,252,252)`).
+   2. Every `SectionPanel` on this page loses its `bg-home-panel` well, its padding and its border,
+      so the sections sit flat on the white. Cards keep their own hairline + soft shadow, which is
+      what separates them now. Hooked on the kit's own `data-section-panel` attribute (the
+      skeleton ghost carries it too), scoped to `.uis-idp-layout`, so no other playground face and
+      no kit file is touched. ⚠ These win over the Tailwind utilities because this file is
+      UNLAYERED and Tailwind's utilities live in `@layer utilities`; specificity is not the reason.
+   3. The section TITLE gets the grey instead: a snug chip behind just the text (DESIGN-LANGUAGE §2
+      well `#f5f5f5`, 8px radius). The h2 is a flex item of the header row, so it is already
+      content-width; the chip is padding on it, never a full-width bar.
+   4. Without wells the gap between sections does the grouping: 12px → 28px between sections. */
+.uis-window .uis-idp-layout {
+  background: #ffffff;
+}
+.uis-window .uis-idp-layout [data-section-panel] {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+/* The header row's `px-1` inset was the well's; without the well it set the chip 4px in from the
+   cards' edge. Flush, so the chip and the cards share one left edge. */
+.uis-window .uis-idp-layout [data-section-panel] > div:first-child {
+  padding-left: 0;
+  padding-right: 0;
+}
+.uis-window .uis-idp-layout [data-section-panel] > div:first-child > h2 {
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 3px 10px;
+}
+.uis-window .uis-idp-main,
+.uis-window .uis-idp-aside {
+  gap: 28px;
+}
+
+/* THE RUN CARD — DESIGN-LANGUAGE §4 agent card, slimmed to two lines: white, hairline, 12px,
+   the one soft shadow (§2's message-card value). */
+.uis-window .uis-idp-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.uis-window .uis-idp-run {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 150ms ease;
+}
+.uis-window .uis-idp-run:hover {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 22px rgba(0, 0, 0, 0.06);
+}
+.uis-window .uis-idp-run:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 2px;
+}
+
+/* A logged event: bare row inside the panel (the panel is the container), 2% ink hover — the
+   kit's one sanctioned option-row hover, never the banned grey. */
+.uis-window .uis-idp-feed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 4px;
+  text-align: left;
+  border-radius: 8px;
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-idp-feed-row:hover {
+  background: var(--surface-raised-1);
+}
+
+/* ── CHANNELS: WHITE PANE ON A TINTED SHELL (Samuel, 2026-10-24) ──────
+   *"can we make the inside panel white, and the outer panel, where the new
+   channel button sits on, the current background of the inside panel? Want
+   to see what that looks like"*. A TRIAL, /playground/channels only: the
+   page passes `recordClassName="uis-ch-pane"`, so every other face keeps
+   the shared frame's surfaces. The two values simply swap: the record pane
+   (was `--home-card`, #fbfcfc) goes #ffffff, and the panel the top bar and
+   the channel column sit on (was #ffffff) takes `--home-card`. The pane's
+   1px `--home-panel-line` border and 14px radius are untouched, which is
+   what keeps its edge reading against the shell. Port target if approved:
+   desktop `pages/home` record pane + `.page-float` panel surfaces. */
+.uis-window .lp-demo-record.uis-ch-pane {
+  background: #ffffff;
+}
+.uis-window .lp-demo-panel:has(.lp-demo-record.uis-ch-pane) {
+  background: var(--home-card);
+}
+
+/* ── CHANNELS: EMPTY ACTIVITY SQUARES LOSE THEIR OUTLINE (Samuel, 2026-10-24) ─
+   *"for the channel activity ... for the squares that are gray bc they had no
+   activity, can we remove the borderline around it."* Product:
+   `channels/components/thread-activity.tsx › ActivityCells`, whose measured-zero
+   branch is `border border-border-subtle bg-bg-inset`. The border goes
+   TRANSPARENT rather than 0, so the 14px border-box square keeps its size (no
+   shift) and the inset grey paints under it edge to edge, like the coloured
+   squares. Channels playground only. Port: drop `border border-border-subtle`
+   from that branch. */
+.uis-window .lp-demo-record.uis-ch-pane [role="img"] > span.border-border-subtle.bg-bg-inset {
+  border-color: transparent;
+}
+
+/* ── CHANNELS: THE AGENT VIEW'S CONTEXT WELL TAKES THE SHELL GREY (Samuel, 2026-10-24) ─
+   *"the gray color that the context bar is sitting on here, needs to be the
+   same gray as the gray behind on the channel page, the gray where the word
+   "recent" sits, right where the dropdown is."* The "Recent" heading sits on
+   the outer panel, which the surface swap above set to `--home-card`
+   (#fbfcfc). The well (`.lp-demo-avs-well`, marketing.css) paints the shared
+   `--bg-inset` (#f1f1f1); only THIS well is overridden, the token is not.
+   The meter track (`oklch(0 0 0 / 0.08)`, translucent) still reads, and reads
+   slightly stronger on the lighter ground. Port target: desktop agent panel
+   stats box background → the home panel surface. */
+.uis-window .lp-demo-record.uis-ch-pane .lp-demo-avs-well {
+  background: var(--home-card);
+}
+
+/* ── CHANNELS: THE SETTINGS TAB, MIRRORED IN THE NEW LOOK (Samuel, 2026-10-24) ─
+   `channels-staging/home/settings-tab.tsx` (+ `settings-dialogs.tsx`); that
+   docblock lists the rows mirrored. Hand-written, not Tailwind (a new utility
+   compiles nothing until a cold build). Port target: the product's
+   `settings-tab.tsx`, `settings-agent*.tsx`, `settings-desktop-rows.tsx`,
+   `settings-channel-agents.tsx`, `thread-settings-tab.tsx` → kit recipes.
+   - Sections sit on the white pane under a plain text title (the grey chip
+     was removed 2026-10-24), 20px apart.
+   - A section's rows are ONE white card: hairline, 12px, the one soft shadow
+     (DESIGN-LANGUAGE §1/§2), with a hairline between rows (product rule,
+     2026-09-13).
+   - Dropdowns are value + chevron, no pill (Identities item 7 `bare`).
+   - The Details well is the outer-panel grey (`--home-card`), the grey Samuel
+     picked for the agent view's context well. */
+.uis-window .uis-st {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 14px 24px;
+}
+.uis-window .uis-st-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+/* Plain text, no chip (Samuel, 2026-10-24: "Remove the gray background box
+   around the words "agent settings" and "channel""), flush with the cards. */
+.uis-window .uis-st-title {
+  align-self: flex-start;
+  padding: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.uis-window .uis-st-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 2px 4px;
+  background: #ffffff;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.04);
+}
+/* One hairline between rows: every row-level child after the first. */
+.uis-window .uis-st-card > * + * {
+  border-top: 1px solid var(--border-default);
+}
+.uis-window .uis-st-row {
+  display: flex;
+  min-height: 40px;
+  padding: 0 8px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.uis-window .uis-st-name {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+.uis-window .uis-st-control {
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  justify-content: flex-end;
+}
+.uis-window .uis-st-control > button {
+  max-width: 100%;
+}
+.uis-window .uis-st-caption {
+  padding: 0 8px 8px;
+  border-top: 0;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.uis-window .uis-st-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px;
+  border-top: 0;
+}
+.uis-window .uis-st-details-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.uis-window .uis-st-details-toggle:hover {
+  color: var(--text-secondary);
+}
+.uis-window .uis-st-well {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--home-card);
+}
+.uis-window .uis-st-well-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--text-caption);
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.uis-window .uis-st-mono {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uis-window .uis-st-folder {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.uis-window .uis-st-path {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uis-window .uis-st-path:hover {
+  color: var(--text-secondary);
+}
+/* DESIGN-LANGUAGE §4: the outlined secondary pill button. */
+.uis-window .uis-st-pill,
+.uis-st-people .uis-st-pill {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-st-pill:hover,
+.uis-st-people .uis-st-pill:hover {
+  background: var(--surface-raised-1);
+}
+.uis-window .uis-st-action {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 8px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  text-align: left;
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-st-action:hover {
+  background: var(--surface-raised-1);
+}
+.uis-window .uis-st-action svg {
+  flex: none;
+  color: var(--text-muted);
+}
+.uis-window .uis-st-action[data-tone="danger"],
+.uis-window .uis-st-action[data-tone="danger"] svg {
+  color: var(--danger);
+}
+/* The Add members stand-in (portalled, so not under `.uis-window`). */
+.uis-st-people {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.uis-st-person {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+}
+.uis-st-initial {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  background: var(--home-card);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.uis-st-person-name {
+  flex: 1 1 0%;
+  min-width: 0;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+/* A status pill (DESIGN-LANGUAGE §4): grey, word only. */
+.uis-st-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+/* ── CHANNELS: TASKS (new 2026-10-26; round 2: tab + quick view together) ─
+   `channels-staging/home/task-list.tsx` is the full list, the Tasks tab's
+   body (`tasks-info-panel.tsx`); `tasks-popover.tsx` is the composer line's
+   pill + concise pop-up (below). The row is the landing Orchestration "Tasks"
+   window's recipe (`marketing.css › .lp-ont-task*`: tick, title, owner face,
+   status pill) on the identity look: white card, hairline, 12px, the one soft
+   shadow (`--shadow-bento`), a hairline between rows. Tokens only.
+   Port target if approved: a kit recipe in `globals.css` + the desktop kit. */
+.uis-window .uis-tk-tab {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 14px 24px;
+}
+.uis-window .uis-tk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.uis-window .uis-tk-card {
+  margin: 0;
+  padding: 0 12px;
+  list-style: none;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-bento);
+}
+.uis-window .uis-tk-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 0;
+}
+.uis-window .uis-tk-row + .uis-tk-row {
+  border-top: 1px solid var(--border-default);
+}
+/* The tick IS the control (Resolve / Reopen), `.lp-ont-tick`'s three faces. */
+.uis-window .uis-tk-tick {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1.5px solid var(--raised-light-line);
+  border-radius: 50%;
+  color: var(--text-on-invert);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.uis-window .uis-tk-tick:hover {
+  border-color: var(--text-primary);
+}
+.uis-window .uis-tk-tick[data-status="in_progress"] {
+  border-color: var(--border-default);
+  border-top-color: var(--text-primary);
+}
+.uis-window .uis-tk-tick[data-status="in_progress"]:hover {
+  border-color: var(--text-primary);
+}
+.uis-window .uis-tk-tick[data-status="resolved"] {
+  border-color: var(--text-primary);
+  background: var(--text-primary);
+}
+.uis-window .uis-tk-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.uis-window .uis-tk-title {
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+.uis-window .uis-tk-row[data-status="resolved"] .uis-tk-title {
+  color: var(--text-muted);
+}
+.uis-window .uis-tk-meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 5px;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+.uis-window .uis-tk-link {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-size: var(--text-label);
+  line-height: 18px;
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-tk-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uis-window .uis-tk-link:hover {
+  background: var(--bg-inset-hover);
+}
+.uis-window .uis-tk-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.uis-window .uis-tk-stack {
+  display: inline-flex;
+  align-items: center;
+}
+.uis-window .uis-tk-stack-item + .uis-tk-stack-item {
+  margin-left: -6px;
+}
+.uis-window .uis-tk-more {
+  margin-left: 3px;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+.uis-window .uis-tk-person {
+  display: grid;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--raised-light-line);
+  border-radius: 50%;
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.uis-window .uis-tk-person img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* `.lp-ont-status`: grey word pill; in progress = amber ("needs attention"
+   family), resolved = green, each a tint of the semantic token. */
+.uis-window .uis-tk-status {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.uis-window .uis-tk-status[data-status="in_progress"] {
+  background: color-mix(in oklch, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+.uis-window .uis-tk-status[data-status="resolved"] {
+  background: color-mix(in oklch, var(--success) 12%, transparent);
+  color: var(--success);
+}
+.uis-window .uis-tk-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.uis-window .uis-tk-toggle:hover {
+  color: var(--text-primary);
+}
+.uis-window .uis-tk-toggle svg {
+  transition: transform 150ms ease;
+}
+.uis-window .uis-tk-toggle svg[data-open="true"] {
+  transform: rotate(90deg);
+}
+.uis-window .uis-tk-toggle-count {
+  color: var(--text-muted);
+}
+/* Empty state: icon + one phrase inside a well (Structure before font styling). */
+.uis-window .uis-tk-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  border-radius: 10px;
+  background: var(--home-card);
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+
+/* ── Round 2 (Samuel, 2026-10-26): the QUICK VIEW on the composer's line ──
+   `tasks-popover.tsx › StagingTasksBar` is the pane's `agentActivity` node,
+   so it renders in `composer-recipients.tsx`'s row (`p[aria-label=
+   "Recipients"]`), inside its `min-w-0 shrink` working slot. That slot grows
+   here so the bar spans to the row's end; the product's working pills take
+   the room left and elide (they never wrap: `truncate`), the tasks pill sits
+   at the right end. The row has `px-0.5` and the card below does not, so the
+   pill pulls right by that 2px onto the card's right edge. Port: a slot at
+   the recipients row's right end (no `:has()`). */
+.uis-window [aria-label="Recipients"] > span:has(> .uis-tk-bar) {
+  flex: 1 1 0%;
+}
+.uis-window .uis-tk-bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.uis-window .uis-tk-bar-working {
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow: hidden;
+}
+/* Round 3 (Samuel, 2026-10-26: "make the pill look like it used to"): round 1's
+   face again: white, hairline, the soft shadow, faces of the agents on
+   in-progress work + "N tasks", 30px tall. Only its seat changed (here). */
+.uis-window .uis-tk-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  margin-left: auto;
+  margin-right: calc(var(--spacing) * -0.5);
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-bento);
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-tk-pill:has(> svg) {
+  padding-left: 11px;
+}
+.uis-window .uis-tk-pill:hover,
+.uis-window .uis-tk-pill[aria-expanded="true"] {
+  background: var(--bg-elevated-hover);
+}
+/* The pop-up's host: the composer wrapper's last child (that wrapper is
+   `relative px-4`), so `right` = the wrapper's padding = the card's right
+   edge, and `bottom: 100%` opens it upward from the pill's line. */
+.uis-window .uis-tk-pop-anchor {
+  position: absolute;
+  right: calc(var(--spacing) * 4);
+  bottom: 100%;
+  z-index: 20;
+}
+.uis-window .uis-tk-pop {
+  display: flex;
+  width: 300px;
+  max-height: 320px;
+  margin-bottom: 4px;
+  flex-direction: column;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-bento);
+}
+.uis-window .uis-tk-pop-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--border-default);
+}
+.uis-window .uis-tk-pop-title {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.uis-window .uis-tk-pop-count {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.uis-window .uis-tk-pop-all {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-tk-pop-all:hover {
+  background: var(--surface-raised-2);
+  color: var(--text-primary);
+}
+.uis-window .uis-tk-pop-hide {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-muted);
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-tk-pop-hide:hover {
+  background: var(--surface-raised-2);
+  color: var(--text-primary);
+}
+.uis-window .uis-tk-quick {
+  min-height: 0;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+.uis-window .uis-tk-qrow {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  text-align: left;
+  transition: background-color 150ms ease;
+}
+.uis-window .uis-tk-qrow:hover {
+  background: var(--surface-raised-1);
+}
+.uis-window .uis-tk-qtitle {
+  overflow: hidden;
+  font-size: var(--text-caption);
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uis-window .uis-tk-pop .uis-tk-empty {
+  margin: 8px;
+}
+
+/* ── Round 4 (Samuel, 2026-10-26): TASK DETAIL + the list row's progress ──
+   `task-panel.tsx` swaps the list for `task-detail.tsx` (+ `task-subtasks.tsx`,
+   `task-notes.tsx`) inside the Tasks tab. Identity look: plain section titles,
+   white cards with hairlines, one grey well for the facts, a 3px meter, the
+   pill composer. Tokens only. */
+.uis-window .uis-tk-open {
+  padding: 0;
+  text-align: left;
+}
+.uis-window .uis-tk-open:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.uis-window .uis-tk-side-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.uis-window .uis-tk-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.uis-window .uis-tkd {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.uis-window .uis-tkd-crumbs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+.uis-window .uis-tkd-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-muted);
+}
+.uis-window .uis-tkd-back:hover {
+  color: var(--text-primary);
+}
+.uis-window .uis-tkd-crumb-current {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uis-window .uis-tkd-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.uis-window .uis-tkd-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.uis-window .uis-tkd-title {
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.uis-window .uis-tkd-desc {
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.uis-window .uis-tkd-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.uis-window .uis-tkd-meter {
+  position: relative;
+  flex: 1 1 0%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-raised-4);
+}
+.uis-window .uis-tkd-meter > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--text-primary);
+  transition: width 200ms ease;
+}
+/* Round 5 (Samuel, 2026-10-26: "this part looks too jumbled"): the facts
+   well is gone; one row fenced by a hairline: assignee stack, From chip,
+   Resolve at the right end. (Round 8: the meta line above it is removed.) */
+.uis-window .uis-tkd-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-default);
+}
+/* Round 6 (Samuel: "whyds this so big lol"): every item on this row is one
+   22px caption-scale line. The stack + its label never shrink ("3 assigned"
+   stays whole); the From chip is what elides. */
+.uis-window .uis-tkd-stack {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 22px;
+}
+.uis-window .uis-tkd-stack-item {
+  position: relative;
+  display: inline-flex;
+}
+.uis-window .uis-tkd-stack-item + .uis-tkd-stack-item {
+  margin-left: -6px;
+}
+/* Green only for live (DESIGN-LANGUAGE §1): who is on it now. Top-right, so
+   it never sits on the runtime badge (bottom-right). */
+.uis-window .uis-tkd-stack-item[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--bg-overlay);
+  border-radius: 50%;
+  background: var(--success);
+}
+.uis-window .uis-tkd-stack-label {
+  margin-left: 8px;
+  font-size: var(--text-caption);
+  line-height: 22px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.uis-window .uis-tkd-row .uis-tk-link {
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 8px;
+  font-size: var(--text-caption);
+  line-height: 22px;
+}
+.uis-window .uis-tkd-resolve {
+  flex: none;
+  height: 22px;
+  margin-left: auto;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 20px;
+}
+.uis-window .uis-tkd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.uis-window .uis-tkd-section-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.uis-window .uis-tkd-section-count {
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.uis-window .uis-tkd-sub {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 7px 0;
+}
+.uis-window .uis-tkd-sub + .uis-tkd-sub {
+  border-top: 1px solid var(--border-default);
+}
+.uis-window .uis-tkd-check {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1.5px solid var(--raised-light-line);
+  border-radius: 5px;
+  color: var(--text-on-invert);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.uis-window .uis-tkd-check:hover {
+  border-color: var(--text-primary);
+}
+.uis-window .uis-tkd-check[data-state="done"] {
+  border-color: var(--text-primary);
+  background: var(--text-primary);
+}
+.uis-window .uis-tkd-sub-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.uis-window .uis-tkd-sub-title {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+.uis-window .uis-tkd-sub[data-state="done"] .uis-tkd-sub-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.uis-window .uis-tkd-sub-detail {
+  overflow: hidden;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uis-window .uis-tkd-sub-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.uis-window .uis-tkd-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.uis-window .uis-tkd-note {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+}
+.uis-window .uis-tkd-note-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.uis-window .uis-tkd-note-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.uis-window .uis-tkd-note-name {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.uis-window .uis-tkd-note-time {
+  font-size: var(--text-label);
+  color: var(--text-muted);
+}
+.uis-window .uis-tkd-note-text {
+  font-size: var(--text-body);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.uis-window .uis-tkd-composer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 4px 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-overlay);
+}
+.uis-window .uis-tkd-input {
+  flex: 1 1 0%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+.uis-window .uis-tkd-input::placeholder {
+  color: var(--text-muted);
+}
+.uis-window .uis-tkd-send {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+  transition: opacity 150ms ease;
+}
+.uis-window .uis-tkd-send:disabled {
+  opacity: 0.35;
+}
+
+/* Round 6: `task-list.tsx › TaskFace`'s agent face, `PairedAvatar`'s thin-
+   frame recipe in spans (valid inside a <p>). Ring width and colour, badge
+   size and offset come inline from the same constants PairedAvatar uses. */
+.uis-tk-idface {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+}
+.uis-tk-idface-ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-style: solid;
+  border-radius: 50%;
+  background: var(--raised-light-face);
+}
+.uis-tk-idface-ring img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.uis-tk-idface-badge {
+  position: absolute;
+  display: grid;
+  box-sizing: border-box;
+  place-items: center;
+  border-style: solid;
+  border-radius: 50%;
+  background: var(--raised-light-face);
+  box-shadow: var(--raised-light-bevel);
+}
+.uis-tk-idface-badge img {
+  display: block;
+  object-fit: contain;
+}

@@ -1,0 +1,92 @@
+/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/routing.ts` — verbatim; imports point at staging copies (data layer = in-memory). */
+/**
+ * Router-shaped dependencies as injectable contracts, so the same components
+ * serve the Next app and the desktop SPA (apps/desktop-ui/CONVENTIONS.md
+ * § Sharing code with the web app).
+ *
+ * `KnowledgeRouting` = coarse "leave this page / re-pull what this tree doesn't
+ * own". `KnowledgeUrlSync` = fine-grained selection↔address-bar sync. Both
+ * implementations must guarantee a base switch does not remount the shell.
+ */
+
+import type { KnowledgeBase } from "../../types";
+import { knowledgeBaseSegment } from "../../url";
+
+export interface KnowledgeRouting {
+  /** Re-pull data this tree renders but does not own. Web app: `ownerNames` /
+   *  `kbTeams` are RSC props → `router.refresh()`; SPA invalidates its own
+   *  queries. */
+  refreshServerData: () => void;
+  /** Navigate to a base's page; `null` = base-less knowledge root. `push` for
+   *  a user move (create), `replace` where the old URL must not survive in
+   *  history (delete, canonical slug change). */
+  goToBase: (base: KnowledgeBase | null, mode: "push" | "replace") => void;
+}
+
+export interface KnowledgeUrlLocation {
+  /** `{slug}-{publicId}`, or null at the knowledge root. */
+  baseSegment: string | null;
+  entryId: string | null;
+}
+
+/**
+ * Implementations must be referentially stable for the life of a mounted
+ * knowledge view: the controller's write effect depends on this object, and an
+ * adapter rebuilt on every URL change re-runs that effect with the pre-change
+ * selection and writes the stale URL back. Read the live location through a ref
+ * inside `current`/`read` instead.
+ */
+export interface KnowledgeUrlSync {
+  /** Comparable to `current()`. */
+  urlFor: (location: KnowledgeUrlLocation) => string;
+  current: () => string;
+  /** Address bar only — must not unmount this tree. */
+  write: (url: string, mode: "push" | "replace") => void;
+  read: () => KnowledgeUrlLocation;
+  /** Returns an unsubscribe. */
+  subscribe: (handler: () => void) => () => void;
+}
+
+export function locationForSelection(
+  selection: { kind: "base" | "entry"; base: KnowledgeBase; entry?: { id: string } } | null
+): KnowledgeUrlLocation {
+  if (!selection) return { baseSegment: null, entryId: null };
+  return {
+    baseSegment: knowledgeBaseSegment(selection.base),
+    entryId: selection.kind === "entry" ? (selection.entry?.id ?? null) : null,
+  };
+}
+
+/**
+ * Web app sync: `window.location` + History API. Shallow updates only — no Next
+ * navigation, so the shell never remounts and a selection change fires no
+ * server round-trip.
+ */
+export function createHistoryUrlSync(workspaceSegment: string): KnowledgeUrlSync {
+  const root = `/${workspaceSegment}/knowledge`;
+  return {
+    urlFor: ({ baseSegment, entryId }) => {
+      if (!baseSegment) return root;
+      const path = `${root}/${baseSegment}`;
+      return entryId ? `${path}?entryId=${entryId}` : path;
+    },
+    current: () => window.location.pathname + window.location.search,
+    write: (url, mode) => {
+      if (mode === "push") window.history.pushState(null, "", url);
+      else window.history.replaceState(null, "", url);
+    },
+    read: () => {
+      const parts = window.location.pathname.split("/").filter(Boolean);
+      // /{ws}/knowledge/{seg?}
+      const baseSegment = parts[1] === "knowledge" ? (parts[2] ?? null) : null;
+      return {
+        baseSegment,
+        entryId: new URLSearchParams(window.location.search).get("entryId"),
+      };
+    },
+    subscribe: (handler) => {
+      window.addEventListener("popstate", handler);
+      return () => window.removeEventListener("popstate", handler);
+    },
+  };
+}

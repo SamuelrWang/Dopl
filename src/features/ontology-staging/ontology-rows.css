@@ -1,0 +1,424 @@
+/* ─────────────────────────────────────────────────────────────────────
+   ONTOLOGY — ROWS DISPLAY ONLY (Samuel, 2026-10-22, ask 5b:
+   "Start with just the row view. When the user is on the row view just
+   overhaul this.")
+
+   ⚠ SCOPE IS THE POINT. Every selector is `.uis-window .uis-ont-*`, and
+   the `.uis-ont-*` classes are written ONLY by the Rows branch of
+   `ontology/components/kanban-board.tsx` + `ontology-row.tsx` +
+   `ontology-rows-group-header.tsx`. The Canvas display keeps `.kanban-card`
+   and `bg-home-panel` untouched, so flipping the board's display menu
+   shows the before and the after side by side.
+
+   ⚠ NOT globals.css, NOT a shared token retune (orchestrator, re #4798 →
+   proposal piece A is SCOPED). The product's `--bg-elevated` (#fbfcfd),
+   `--panel-surface`, `--text-primary` (#232a31), `--text-secondary`,
+   `--text-muted` (#98a2ad) are LEFT ALONE — they are read by the whole app
+   and the desktop SPA. The neutral values below shadow them inside this
+   subtree only.
+
+   ⚠ EVERY LITERAL HERE IS `docs/DESIGN-LANGUAGE.md` §2, VERBATIM — no
+   invented colour:
+     #ffffff card · #f5f5f5 well · #ececec hairline · #f1f1f1 rule
+     #0d0d0d ink · #3d3d3d body · #8a8a8a muted · #c9c9c9 separator
+     shadow 0 1px 2px rgba(0,0,0,.04), 0 6px 16px rgba(0,0,0,.04)
+   The same house style as `ui-staging/staging.css › .uis-dev-card`, which
+   carries its literals for the same reason (§1, "white surfaces, not grey").
+
+   TYPE LADDER (proposal piece C). The product scale puts six of its seven
+   steps inside 2.5px (`globals.css:157`: 10.5/11/11.5/12/12.5/13, then 18),
+   so a 12.5px card title over an 11.5px body has no hierarchy at all. The
+   landing's ontology object uses 18/15/13/11.5/10 and that ladder is what
+   these rules apply. Sizes are literals here for the same reason the
+   colours are: the real fix is 2 NEW STEPS in the scale, which is a
+   globals.css edit and therefore out of this round's scope.
+
+   PORT TARGET if approved: these recipes become kit classes in
+   `src/app/globals.css` + `apps/desktop-ui/src/styles/kit.css` (BOTH, or
+   `scripts/check-css-token-drift.ts` fails), read by
+   `src/features/ontology/components/ontology-row.tsx`. See
+   `src/features/ontology-staging/PORTING.md › Port-time notes`.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* ── The board ground ────────────────────────────────────────────────
+   White, and NO dot grid. `.kanban-substrate`'s 12px pitch is load-bearing
+   arithmetic for Canvas lane geometry (lanes 288, gutter 12, padding 24),
+   but Rows has no spatial placement — nothing drags, nothing connects,
+   nothing is freely placed — so on this display the texture charges the
+   reader for a capability the surface does not have. */
+.uis-window .uis-ont-rows {
+  background-color: #ffffff;
+  background-image: none;
+  padding: 18px 20px 28px;
+}
+
+/* ── One object type = one group ─────────────────────────────────────
+   No fill and no card. Grouping comes from the header line and the space
+   under it, the way the landing separates `.lp-ont-kb` from `.lp-ont-client`.
+   This is the third of the three greys the proposal measured (P4): the grey
+   lane held a white header card and white rows ON TOP of it, which is the
+   exact "gray background with the header on the gray background and then
+   different panels on top" Samuel rejected for Devices. */
+.uis-window .uis-ont-group + .uis-ont-group {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid #ececec;
+}
+
+/* ── The group header line ───────────────────────────────────────────
+   One full-width row: disclosure, name, count, description, then the
+   controls. Replaces a 264px white card marooned at the left of a wide grey
+   panel with its fold chevron stranded at the far right (P9 locally): the
+   thing you fold and the handle you fold it with are now the same place. */
+.uis-window .uis-ont-grouphead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+}
+.uis-window .uis-ont-grouphead-name {
+  min-width: 0;
+  flex: none;
+  max-width: 320px;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #0d0d0d;
+}
+.uis-window .uis-ont-grouphead-name:focus {
+  outline: 0;
+}
+.uis-window .uis-ont-grouphead-name::placeholder {
+  color: #8a8a8a;
+}
+/* The count is a fact about the type, so it reads as one: no filled pill. */
+.uis-window .uis-ont-grouphead-count {
+  flex: none;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: #8a8a8a;
+}
+/* The type's description, inline after its name instead of hidden behind a
+   disclosure that also folded the rows (the old header fused the two). */
+.uis-window .uis-ont-grouphead-desc {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  color: #3d3d3d;
+  text-overflow: ellipsis;
+}
+.uis-window .uis-ont-grouphead-desc:focus {
+  outline: 0;
+}
+.uis-window .uis-ont-grouphead-desc::placeholder {
+  color: #8a8a8a;
+}
+/* Disclosure + the two trailing controls: quiet at rest, a grey well on
+   hover (§1 reserves grey for exactly this). */
+.uis-window .uis-ont-icon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a8a8a;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.uis-window .uis-ont-icon:hover {
+  background: #f5f5f5;
+  color: #0d0d0d;
+}
+/* The record's own fold handle: sits on the 15px name's line, inset from the
+   card edge.
+   ⚠ THE INSET IS HERE, NOT ON TAILWIND `mt-2.5 mr-2.5`. It was, and `mr-2.5`
+   compiled to NOTHING — the chevron sat flush against the card's right edge
+   while the markup read correctly. CAUSE, settled on a cold rebuild
+   2026-10-23: the warm `.next` cache carries a stale scan set, and a restart
+   does NOT refresh it — only a cold rebuild (`.next` moved aside) does.
+   ⚠ NOT "a class present when the server boots compiles". That shorthand is
+   false and this class disproves it: `mr-2.5` was written ~22:2x, a server
+   booted 22:49:49, its sheet built 22:50:28, and the class was STILL dead
+   until the cold rebuild's 00:03 sheet. Boot timing is not the variable.
+   `mr-2.5` was new that session; `mt-2.5` survived only because other already
+   scanned files demanded it, so it was in the cached set. The sole-demander
+   correlation is the SYMPTOM the stale cache produces, not the rule — useful
+   as a predictor for exactly that reason.
+   A production build is unaffected. Box properties on a `.uis-ont-*` element
+   still belong in this sheet: literal CSS is immune to the whole class of
+   problem, which is why nothing styled here depends on utility compilation. */
+.uis-window .uis-ont-rec-fold {
+  margin: 10px 10px 0 0;
+}
+
+/* ── The record card ─────────────────────────────────────────────────
+   `docs/DESIGN-LANGUAGE.md` §2 + the landing's `.lp-ont-client`
+   (`marketing.css:2300`): pure white, one hairline, 12px, ONE soft
+   two-layer shadow. Replaces `.kanban-card` on this display, whose fill was
+   `--bg-elevated` #fbfcfd — a blue-tinted off-white that, on the old grey
+   lane, read as neither white nor grey (P1). */
+.uis-window .uis-ont-rec {
+  background: #ffffff;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 6px 16px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+.uis-window .uis-ont-rec:hover {
+  border-color: #e2e2e2;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 22px rgba(0, 0, 0, 0.06);
+}
+/* Selection reads on the LEFT EDGE, not as a ring. A row in a list is
+   scanned down its left margin, and an inset bar marks the open record
+   without moving it or thickening its hairline. §5: near-black ink, no
+   colour — the open record is not a status. */
+.uis-window .uis-ont-rec[data-selected="true"] {
+  border-color: #d8d8d8;
+  box-shadow:
+    inset 3px 0 0 #0d0d0d,
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 22px rgba(0, 0, 0, 0.06);
+}
+
+/* ── The record's own head: name over description ───────────────────── */
+.uis-window .uis-ont-rec-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: #0d0d0d;
+}
+.uis-window .uis-ont-rec-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #3d3d3d;
+}
+
+/* ── Field rows ──────────────────────────────────────────────────────
+   The landing's `.lp-ont-field` exactly (`marketing.css:2407`): 34px min
+   row, 1px #f1f1f1 rule between rows, key 13px MUTED left, value 13px/500
+   INK right.
+
+   THE KEY IS QUIET GREY — Samuel, channel #4801. The filled
+   `bg-text-secondary` #57606b badge with white semibold text is out: down a
+   full-width row list it was a heavy dark column where the landing has
+   quiet keys on hairlines, and keeping it would have made this display read
+   differently from the record card the Canvas side is getting next. */
+.uis-window .uis-ont-fields {
+  margin: 0;
+  padding: 0 14px;
+  border-top: 1px solid #ececec;
+}
+.uis-window .uis-ont-field {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-height: 34px;
+  padding: 7px 0;
+  border-top: 1px solid #f1f1f1;
+}
+.uis-window .uis-ont-field:first-child {
+  border-top: 0;
+}
+.uis-window .uis-ont-field-key {
+  flex: none;
+  width: 148px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 400;
+  color: #8a8a8a;
+}
+.uis-window .uis-ont-field-val {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0d0d0d;
+}
+/* A relationship is an EDGE, not a field, and it says so with a direction
+   glyph rather than italics (italic appears nowhere in the design
+   language, and it was on both the row and the hover card). */
+.uis-window .uis-ont-edge-mark {
+  flex: none;
+  margin-right: 5px;
+  color: #c9c9c9;
+}
+.uis-window .uis-ont-empty {
+  font-weight: 400;
+  color: #8a8a8a;
+}
+/* A number is read against the numbers above it. */
+.uis-window .uis-ont-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Value faces, one per field kind ─────────────────────────────────
+   P6: every `ref` / `knowledge` / `skill` / relationship value used to
+   render as `names.join(", ")` — plain text, indistinguishable from a typed
+   string, on the page whose whole subject is what links to what. A value
+   that POINTS at something now looks like it points at something. */
+
+/* A link to another object in the graph, or to a knowledge entry. */
+.uis-window .uis-ont-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid #ececec;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-size: 12px;
+  font-weight: 500;
+  color: #0d0d0d;
+}
+.uis-window .uis-ont-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uis-window .uis-ont-chip-mark {
+  flex: none;
+  color: #8a8a8a;
+}
+/* ⚠ THE ELEMENT IS IN THE SELECTOR ON PURPOSE, and so is the `.uis-window`
+   ancestor: `ExternalAnchor` hard-codes `text-link underline underline-offset-2`
+   through `cn()`, and a className passed to it cannot outrank those by order —
+   Tailwind decides order in the emitted sheet, not in the string. `.uis-window
+   a.uis-ont-chip` is (0,2,1) against their (0,1,0), so the chip face wins
+   deterministically instead of by luck. */
+.uis-window a.uis-ont-chip {
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.uis-window a.uis-ont-chip:hover {
+  border-color: #d8d8d8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.uis-window button.uis-ont-chip {
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.uis-window button.uis-ont-chip:hover {
+  border-color: #d8d8d8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* An `enum` is one of a closed set, so it reads as a state: the grey well,
+   never a colour. §5 keeps colour for identity, green for live and amber
+   for "needs you" — a funnel stage is none of those. */
+.uis-window .uis-ont-enum {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3d3d3d;
+}
+
+/* ── The record's foot: its actions ──────────────────────────────────
+   Was a 10.5px line reading `Actions · a · b`. An action is a thing an
+   agent can DO to this object, which is the most functional fact on the
+   card (§7), so it gets the landing's dashed provenance rule and real
+   chips instead of the smallest type on screen. */
+.uis-window .uis-ont-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 14px;
+  padding: 9px 0;
+  border-top: 1px dashed #e2e2e2;
+}
+.uis-window .uis-ont-acts-label {
+  flex: none;
+  font-size: 11.5px;
+  color: #8a8a8a;
+}
+.uis-window .uis-ont-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid #ececec;
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #3d3d3d;
+}
+.uis-window .uis-ont-act-mark {
+  flex: none;
+  color: #8a8a8a;
+}
+
+/* ── The group's own add button ──────────────────────────────────────
+   Keeps its label as the object's own name (Samuel, 2026-09-11: `+ Lead`,
+   not `+ Object`), and keeps hugging the left edge under the last record —
+   it is the next row in the list, not a footer. Quiet: it is the lowest
+   control on the surface. */
+.uis-window .uis-ont-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 5px 10px 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3d3d3d;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.uis-window .uis-ont-add:hover {
+  border-color: #ececec;
+  background: #ffffff;
+  color: #0d0d0d;
+}
+.uis-window .uis-ont-add-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uis-window .uis-ont-rec,
+  .uis-window .uis-ont-icon,
+  .uis-window .uis-ont-add,
+  .uis-window a.uis-ont-chip,
+  .uis-window button.uis-ont-chip {
+    transition: none;
+  }
+}
