@@ -280,7 +280,7 @@
   border-collapse: collapse;
 }
 .table th {
-  padding: 0 0 6px;
+  padding: 0 8px 6px;
   border-bottom: 1px solid var(--border-default);
   font-size: var(--text-caption);
   font-weight: 400;
@@ -289,8 +289,39 @@
 }
 .table td {
   height: 36px;
-  padding: 0;
+  padding: 0 8px;
   color: var(--text-primary);
+}
+/* A row is one button: its `::after` covers the row, and hover and keyboard focus share the
+   menu-row face (a flat fill, so nothing moves). */
+.table tbody tr {
+  position: relative;
+}
+.table tbody tr:has(.open:hover) td,
+.table tbody tr:has(.open:focus-visible) td {
+  background: var(--menu-item-hover-bg);
+}
+.name {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+.open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 .table tbody tr + tr td {
   border-top: 1px solid var(--border-default);

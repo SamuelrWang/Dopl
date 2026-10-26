@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { Link2 } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { channelRowFaces } from "@/features/channels/lib/channel-display";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
 import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
@@ -8,7 +10,7 @@ import { HomeKnowledgePanels } from "@/features/knowledge/components/home/home-k
 import { HomeOntologyPanels } from "@/features/ontology/components/home-ontology-panels";
 import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import type { ActivityJump } from "./use-activity-jump";
-import type { HomeRow } from "./home-rows";
+import { channelPeople, channelRowId, type HomeRow } from "./home-rows";
 import { openHomeSettings, type HomeViewer } from "./home-settings-control";
 import { useHomeChannels } from "./use-home-channels";
 import {
@@ -46,6 +48,8 @@ export interface HomePaneProps {
   jump: ActivityJump;
   /** The selected channel was deleted. */
   onChannelDeleted: () => void;
+  /** Selects a row and raises the Channel face, as a pick in the left pane does. */
+  onOpenRow: (rowId: string) => void;
 }
 
 /**
@@ -60,12 +64,13 @@ export function HomePane({
   viewer,
   jump,
   onChannelDeleted,
+  onOpenRow,
 }: HomePaneProps) {
   /** The row a pane token names, read out of the token, never the page's selection. */
   const rowFor = (id: string) =>
     rows.find((candidate) => candidate.id === id) ?? null;
 
-  if (shown === OVERVIEW_PANE) return <OverviewPane identity={identity} />;
+  if (shown === OVERVIEW_PANE) return <OverviewPane identity={identity} onOpenRow={onOpenRow} />;
   if (shown === ONTOLOGY_PANE) return <OntologyPane identity={identity} />;
   if (shown.startsWith(IDENTITIES_PANE)) {
     const shownRow = rowFor(shown.slice(IDENTITIES_PANE.length));
@@ -124,14 +129,32 @@ export function HomePane({
 }
 
 /** The Overview face: the credit figures read the caller's `kind='home'` container, their PERSONAL
- *  wallet (`credits-service.ts › resolveBillingTarget`); the home channels scope the daily credits. */
-function OverviewPane({ identity }: { identity: BootPayload }) {
+ *  wallet (`credits-service.ts › resolveBillingTarget`); the home channels scope the daily credits
+ *  and give the Channels table its faces and rows to open. */
+function OverviewPane({
+  identity,
+  onOpenRow,
+}: {
+  identity: BootPayload;
+  onOpenRow: (rowId: string) => void;
+}) {
   const homeChannels = useHomeChannels();
+  const options = useMemo(
+    () =>
+      homeChannels.map((channel) => ({
+        id: channel.id,
+        workspaceId: channel.workspaceId,
+        name: channel.name,
+        faces: channelRowFaces(channelPeople(channel)),
+      })),
+    [homeChannels]
+  );
   return (
     <HomeOverview
       homeWorkspaceId={identity.workspace?.id ?? null}
-      homeChannels={homeChannels}
+      homeChannels={options}
       onOpenSettings={openHomeSettings}
+      onOpenChannel={(workspaceId) => onOpenRow(channelRowId(workspaceId))}
     />
   );
 }

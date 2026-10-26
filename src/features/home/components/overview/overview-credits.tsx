@@ -18,13 +18,18 @@ import {
 } from "@/features/home/overview-types";
 import { monthKey, monthLabel, shiftMonthKey, utcDayLabel } from "@/features/home/overview-period";
 import { pillButton } from "@/shared/ui/pill-button";
+import type { HomeChannelRowFace } from "@/shared/ui/home-channel-row";
 import { Bars, OverviewCard } from "./overview-card";
 import type { HomeOverviewReads, OverviewRead } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
 
 export interface HomeChannelOption {
   id: string;
+  /** The channel's container, which the Channels table's rows are keyed by. */
+  workspaceId: string;
   name: string;
+  /** Everybody else in the channel; empty when the viewer is alone in it. */
+  faces: readonly HomeChannelRowFace[];
 }
 
 /**
