@@ -2,6 +2,7 @@ import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
 import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
+import { LAUNCH_RUNTIME_ID_MESSAGE, LAUNCH_RUNTIME_ID_RE } from "./schema-launch-modes";
 import type { AgentColorKey, MachineDelivery, SessionPillState } from "./types";
 
 // Bounds only the two INTEGER health columns (`turns`, `denied_calls`); past it, a 22003 fails the whole push.
@@ -75,6 +76,10 @@ const SessionStateEntrySchema = z.object({
   // ── THE OPERATOR-GIVEN AGENT NAME (2026-08-31, migration 20260905120000) ──
   /** Peer-visible by design, unlike `identityName`; 60 mirrors the column CHECK and `main/agent-names.js › MAX_NAME`. */
   displayName: safeLabel("Agent name", 60).nullable().optional(),
+
+  // ── THE RUNTIME (2026-10-26, migration 20261121191000) ──
+  /** Peer-visible; the launch runtime grammar, which the column CHECK restates. */
+  runtime: z.string().trim().regex(LAUNCH_RUNTIME_ID_RE, LAUNCH_RUNTIME_ID_MESSAGE).nullable().optional(),
 });
 export type SessionStateEntryInput = z.infer<typeof SessionStateEntrySchema>;
 

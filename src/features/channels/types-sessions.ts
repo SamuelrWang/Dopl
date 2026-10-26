@@ -133,6 +133,9 @@ export type ChannelSessionState = {
    * it becomes paint.
    */
   color?: AgentColorKey | null;
+  /** The runtime this session runs on (`claude`, `codex`, …), peer-visible for the runtime badge.
+   *  Optional and nullable on `detail`'s grounds. Not a closed set: the roster is the desktop's. */
+  runtime?: string | null;
   updatedAt: string;
 };
 

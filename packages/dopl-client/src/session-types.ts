@@ -89,6 +89,9 @@ export interface ChannelSessionState {
   detail?: SessionDetailKey | null;
   channelName: string | null;
   threadTitle: string | null;
+  /** The runtime this session runs on (`claude`, `codex`, …). Absent on an older server, `null`
+   *  from an older desktop. Not a closed set: the roster is the desktop's. */
+  runtime?: string | null;
   updatedAt: string;
 }
 

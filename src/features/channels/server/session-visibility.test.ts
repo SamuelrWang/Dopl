@@ -42,6 +42,7 @@ function fullRow(over: Partial<SessionStateRow> = {}): SessionStateRow {
     identity_name: "Acme Contract Auditor",
     // Peer-visible by design, so it must survive the peer mapper.
     display_name: "Bug Reviewer",
+    runtime: "codex",
     color: "agent-04",
     // Values chosen to occur nowhere in the peer JSON (`name`, ISO stamps): the value property is a substring search.
     turns: 47,
@@ -115,6 +116,8 @@ describe("the PEER mapper can never emit operator-only telemetry", () => {
         // Peer-visible by design.
         "displayName",
         "name",
+        // Peer-visible by design: the runtime badge on a peer's agent card (R9).
+        "runtime",
         "state",
         "threadId",
         "threadTitle",
