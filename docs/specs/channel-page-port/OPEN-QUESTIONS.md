@@ -69,3 +69,8 @@ Workers append a `## <slice>` section per question: the question, what was chose
 - **Live redteam locally.** Supabase CLI 2.75's GoTrue trusts only its ES256 key, so the HS256
   service-role key from `supabase status` is refused; the run used an ES256 service-role JWT minted
   from the local auth container's own key (100/100 passed). CI pins CLI 2.116 and is unaffected.
+
+## Orchestrator: production migrations
+- Applied `rename_task_to_thread` to production 2026-10-26 (history version 20261026103134, statements md5 c63d4e13fd0e302d23eca782d7c8b763 = file). Pre-check: every task-named prod object was covered by the migration.
+- NOT applied, not part of this port: `20261121170000_workspace_billing_plan_max.sql` is absent from production history and prod `workspace_billing_plan_check` has no `max`. Left for you.
+- `drop_channels_archived_at` has no recorded prod row; its file only carries the drop as a comment, prod still has `channels.archived_at`. Left as is.
