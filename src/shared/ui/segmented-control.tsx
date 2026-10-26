@@ -23,7 +23,8 @@ export interface SegmentedOption<K extends string = string> {
  * - `"track"`: the page-header selector, one flat `.seg-track`.
  * - `"underline"`: text only, the current option marked by a black rule. At `size="lg"` it is the
  *   /home header's tab bar: 13px ink labels that dim on hover. `orientation="vertical"` stacks the
- *   same tabs as a rail (the profile popup's), each hugging its word so the rule sits under it.
+ *   same tabs as a rail (the profile popup's) one type step up, 14px on 32px rows, each hugging
+ *   its word so the rule sits under it.
  * - `"plain"`: `"pills"` without the hairline, for a form's selector.
  * `size="lg"` lands on the 36px header height: trackless the pill is the control; tracked, 30px
  * options + the track's 3px pad.
@@ -67,7 +68,7 @@ export function SegmentedControl<K extends string>({
   // with count badges overflows at 15.
   const option = underlined
     ? tabBar
-      ? cn("relative px-0.5 text-lead", vertical ? "h-7" : "h-9")
+      ? cn("relative px-0.5", vertical ? "h-8 text-title" : "h-9 text-lead")
       : "relative h-9 px-1 text-small"
     : size === "md"
       ? "h-[var(--action-h-sm)] px-3 text-caption"

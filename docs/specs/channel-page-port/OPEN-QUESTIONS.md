@@ -473,6 +473,7 @@ Workers append a `## <slice>` section per question: the question, what was chose
 5. **Shared beyond the popup:** `SettingsPanel` / `SettingsCard` / `SettingsRows` and
    `delete-account.tsx` also render on the web billing page (`billing-plans-pane.tsx › DeleteAccount`),
    which now wears the same flat section and white card.
+6. **Rail spacing (branch `ui/profile-rail-spacing`):** items `text-lead` 13px on 28px rows → `text-title` 14px on 32px rows; `.nav` padding 12px → 28px top, 24px sides, 20px bottom; width stays 192px (words fit). Where: `segmented-control.tsx` vertical form, `settings-modal.module.css › .nav`.
 ## Ontology staging overhaul (branch `ui/ontology-overhaul`)
 
 1. **Selection on a white card.** /home's channel row selects by filling ink; an ontology card is

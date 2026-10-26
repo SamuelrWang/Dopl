@@ -158,7 +158,7 @@
   flex: 0 0 192px;
   background: var(--bg-overlay);
   border-right: 1px solid var(--home-panel-line);
-  padding: 12px;
+  padding: 28px 24px 20px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
