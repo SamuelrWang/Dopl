@@ -499,6 +499,7 @@ export type Database = {
           model: string | null
           operator_user_id: string
           refusal_reason: string | null
+          requested_by_agent_id: string | null
           resolved_chain: boolean | null
           resolved_message_mode: string | null
           resolved_model: string | null
@@ -540,6 +541,7 @@ export type Database = {
           model?: string | null
           operator_user_id: string
           refusal_reason?: string | null
+          requested_by_agent_id?: string | null
           resolved_chain?: boolean | null
           resolved_message_mode?: string | null
           resolved_model?: string | null
@@ -581,6 +583,7 @@ export type Database = {
           model?: string | null
           operator_user_id?: string
           refusal_reason?: string | null
+          requested_by_agent_id?: string | null
           resolved_chain?: boolean | null
           resolved_message_mode?: string | null
           resolved_model?: string | null
@@ -913,6 +916,7 @@ export type Database = {
           channel_id: string
           channel_name: string | null
           color: string | null
+          color_shared: boolean
           context_used: number | null
           context_window: number | null
           created_at: string
@@ -946,6 +950,7 @@ export type Database = {
           channel_id: string
           channel_name?: string | null
           color?: string | null
+          color_shared?: boolean
           context_used?: number | null
           context_window?: number | null
           created_at?: string
@@ -979,6 +984,7 @@ export type Database = {
           channel_id?: string
           channel_name?: string | null
           color?: string | null
+          color_shared?: boolean
           context_used?: number | null
           context_window?: number | null
           created_at?: string
@@ -2402,6 +2408,41 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          channel_id: string | null
+          enabled: boolean
+          event_type: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id?: string | null
+          enabled: boolean
+          event_type: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string | null
+          enabled?: boolean
+          event_type?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oauth_authorization_codes: {
         Row: {
           client_id: string
@@ -2956,6 +2997,44 @@ export type Database = {
           },
         ]
       }
+      runtime_model_catalogs: {
+        Row: {
+          app_version: string | null
+          default_id: string | null
+          device_id: string
+          models: Json
+          published_at: string
+          runtime: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          default_id?: string | null
+          device_id: string
+          models: Json
+          published_at?: string
+          runtime: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          default_id?: string | null
+          device_id?: string
+          models?: Json
+          published_at?: string
+          runtime?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runtime_model_catalogs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "desktop_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       skill_events: {
         Row: {
           author_id: string | null
@@ -3302,6 +3381,21 @@ export type Database = {
           last_error?: string | null
           processed?: boolean
           processed_at?: string | null
+        }
+        Relationships: []
+      }
+      workspace_access_requests: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3795,6 +3889,29 @@ export type Database = {
       }
     }
     Functions: {
+      analytics_recent_alert_groups: {
+        Args: { p_limit: number; p_severities: string[]; p_since: string }
+        Returns: {
+          category: string
+          event_count: number
+          fingerprint: string
+          first_seen: string
+          last_seen: string
+          sample_message: string
+          severity: string
+          source: string
+        }[]
+      }
+      analytics_route_error_groups: {
+        Args: { p_severities: string[]; p_since: string }
+        Returns: {
+          criticals_24h: number
+          errors_24h: number
+          last_error_at: string
+          last_error_message: string
+          route: string
+        }[]
+      }
       can_current_user_read_agent_identity: {
         Args: { p_identity_id: string }
         Returns: boolean
@@ -3818,6 +3935,13 @@ export type Database = {
           count: number
           first_seq: number
           last_seq: number
+        }[]
+      }
+      channel_member_tally: {
+        Args: { p_channel_ids: string[] }
+        Returns: {
+          channel_id: string
+          member_count: number
         }[]
       }
       channel_message_insert: {
@@ -4073,6 +4197,21 @@ export type Database = {
           updated_at: string
         }[]
       }
+      home_credit_usage_bins: {
+        Args: {
+          p_bucket: string
+          p_channel_id: string
+          p_channel_scope: string
+          p_owned_container_ids: string[]
+          p_payer_user_id: string
+          p_since: string
+          p_until: string
+        }
+        Returns: {
+          bin_start: string
+          credits: number
+        }[]
+      }
       home_space_origin_of: { Args: { p_owner_id: string }; Returns: string }
       is_channel_member: { Args: { p_channel_id: string }; Returns: boolean }
       is_current_workspace_member: {
@@ -4148,6 +4287,55 @@ export type Database = {
       stamp_channel_message_display_answer: {
         Args: { p_answer: Json; p_message_id: string }
         Returns: boolean
+      }
+      workspace_credit_usage_bins: {
+        Args: {
+          p_bucket: string
+          p_channel_id: string
+          p_channel_ids: string[]
+          p_since: string
+          p_until: string
+          p_workspace_id: string
+        }
+        Returns: {
+          bin_start: string
+          credits: number
+        }[]
+      }
+      workspace_credit_usage_tally: {
+        Args: {
+          p_channel_ids: string[]
+          p_since: string
+          p_workspace_id: string
+        }
+        Returns: {
+          credits: number
+          dimension: string
+          events: number
+          tally_key: string
+        }[]
+      }
+      workspace_mcp_tool_tally: {
+        Args: { p_since: string; p_workspace_id: string }
+        Returns: {
+          calls: number
+          op_name: string
+          tool_name: string
+        }[]
+      }
+      workspace_message_author_tally: {
+        Args: { p_since: string; p_workspace_id: string }
+        Returns: {
+          author_id: string
+          messages: number
+        }[]
+      }
+      workspace_message_channel_tally: {
+        Args: { p_since: string; p_workspace_id: string }
+        Returns: {
+          billed_channel_id: string
+          messages: number
+        }[]
       }
     }
     Enums: {
