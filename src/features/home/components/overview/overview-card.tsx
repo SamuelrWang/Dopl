@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { SECTION_TITLE } from "@/shared/ui/section-title";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import styles from "./overview.module.css";
 
 /** One white card: the title row (count beside it, `aside` at its right end) over the body. */
@@ -20,7 +20,7 @@ export function OverviewCard({
   return (
     <section className={cn("white-card", styles.card, className)} aria-label={title}>
       <header className={styles.head}>
-        <h3 className={SECTION_TITLE}>{title}</h3>
+        <h3 className={IDENTITY_NAME_TEXT}>{title}</h3>
         {count !== undefined && <span className={styles.count}>{count}</span>}
         {aside && <span className={styles.aside}>{aside}</span>}
       </header>

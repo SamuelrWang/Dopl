@@ -54,3 +54,5 @@ Not changed; listed so each can be confirmed or sent back.
   ordered by credits.
 - **People shows a role tag for every role** (owner, member, guest); the old rail marked guests
   only (the guest subtotal is kept).
+- **Card titles 12.5px semibold → 14px medium**: Samuel asked for the Identities section-title face, so
+  `OverviewCard` wears `IDENTITY_NAME_TEXT`; `SECTION_TITLE` stays for the ontology object panel.

@@ -101,4 +101,4 @@ Overview); their "both Overviews" comments are corrected.
   `overview-usage-filter.tsx`. One copy now, in `src/`.
 - Meter: staging `EMeter` = `shared/ui/usage-meter.tsx › ThinMeter`. Reused.
 - Pills: staging `.ove-btn` = `small-action-button.ts › PILL_BUTTON` / `INK_PILL`. Reused.
-- Card title: `shared/ui/section-title.ts › SECTION_TITLE` (byte-identical to `ui/port-ontology`).
+- Card title: `shared/ui/section-heading.ts › IDENTITY_NAME_TEXT` (the Identities section titles' face).
