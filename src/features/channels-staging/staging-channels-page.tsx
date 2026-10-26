@@ -28,11 +28,7 @@ import { initialRows } from "./data/staging-rows";
 import { useStagingTasks } from "./store/use-staging-tasks";
 
 function Mounted() {
-  const [qc] = useState(() =>
-    stagingQueryClient(
-      initialRows().flatMap((r) => (r.kind === "channel" ? [r.channel.id] : []))
-    )
-  );
+  const [qc] = useState(() => stagingQueryClient(initialRows()));
   const store = useStagingChannels((id) => seedChannel(qc, id));
   const { selected, fixture, createChannel, revokeLink } = store;
   // The product Tasks tab and quick view read this.

@@ -47,10 +47,10 @@ Also imported by `/popups` (its thread and agent windows' bodies,
 | Staging file | Replaces |
 |---|---|
 | `store/use-staging-channels.ts` | the channels reads + `useThreadWrites`, the launch bridge (`use-launch-controls.ts`), the 1:1 bridge |
-| `data/staging-query-seed.ts` | `GET /api/agent-identities`, `GET /api/channels/:id/artifacts`, `GET /api/devices`, `GET /api/glasses/devices` (seeded into a private QueryClient, `staleTime: Infinity`) |
+| `data/staging-query-seed.ts` + `data/staging-artifacts.ts` | `GET /api/agent-identities`, `GET /api/channels/:id/artifacts` (the list and each `?artifact=` run; runs of the fixture's own posts, picked by body prefix), `GET /api/devices`, `GET /api/glasses/devices` (seeded into a private QueryClient, `staleTime: Infinity`) |
 | `data/tech-debt-fixture.ts` | the demo channel at its final beat (read off the demo's own selectors) |
 | `data/decision-fixture.ts` | one "needs your decision" post in #tech-debt, as a real `metadata.display` v2 envelope with a `choice` block — the shape `dopl_request_decision` writes, answered in memory |
-| `data/extra-fixtures.ts`, `data/staging-builders.ts`, `data/staging-agents.ts`, `data/staging-rows.ts`, `data/demo-imports.ts`, `data/staging-fixture-types.ts` | fake data (invented transcripts for the column's other channels, in the demo's voice) |
+| `data/extra-fixtures.ts`, `data/staging-history.ts`, `data/staging-builders.ts`, `data/staging-agents.ts`, `data/staging-rows.ts`, `data/demo-imports.ts`, `data/staging-fixture-types.ts` | fake data (invented transcripts for the column's other channels, and every channel's older threads across the four recency wells, in the demo's voice) |
 | `data/staging-tasks.ts` + `data/staging-task-details.ts` + `store/use-staging-tasks.ts` | `channels/hooks/use-channel-tasks.ts` + `use-task-writes.ts` (the tasks route); contract-shaped `ChannelTaskDetail`s seeded for #tech-debt only |
 | `staging-channels-page.tsx` | page root |
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StagingChannelsPage } from "./staging-channels-page";
 
 vi.mock("next/link", () => ({
@@ -30,10 +30,10 @@ describe("/channels staging", () => {
 
     render(<StagingChannelsPage />);
 
-    // The demo's channel, fully revealed: last scripted line and every thread card.
+    // The demo's channel, fully revealed: last scripted line and every thread card (4 older + 3 scripted).
     await waitFor(() => expect(text()).toContain("straight in. it's test only"));
     expect(text()).toContain("Session teardown leaks");
-    expect(visible("Open thread").length).toBe(3);
+    expect(visible("Open thread").length).toBe(7);
 
     // Every channel in the column switches the face.
     fireEvent.click(row("flaky-tests"));
@@ -51,8 +51,8 @@ describe("/channels staging", () => {
 
     // Back to the demo channel: open a thread, then leave through the crumb.
     fireEvent.click(row("tech-debt"));
-    await waitFor(() => expect(visible("Open thread").length).toBe(3));
-    fireEvent.click(visible("Open thread")[1]);
+    await waitFor(() => expect(visible("Open thread").length).toBe(7));
+    fireEvent.click(visible("Open thread")[5]);
     await waitFor(() => expect(text()).toContain("Teardown Order Fix"));
     expect(text()).not.toContain("straight in. it's test only");
     // The breadcrumb's channel crumb (a real <button>; the column row is a role=button div).
@@ -82,6 +82,81 @@ describe("/channels staging", () => {
       fireEvent.keyDown(box, { key: "Enter" });
     });
     await waitFor(() => expect(text()).toContain("staging line from the test"));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("files the seeded threads and artifacts into their wells, and opens one of each", async () => {
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    } as never;
+    Element.prototype.scrollIntoView ??= () => {};
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<StagingChannelsPage />);
+    await waitFor(() => expect(text()).toContain("straight in. it's test only"));
+
+    const panel = document.querySelector<HTMLElement>(".channel-info-slide")!;
+    const wells = () =>
+      [...panel.querySelectorAll("section")].filter((s) => s.querySelector(":scope > button h3"));
+    const titlesIn = (label: string) => {
+      const well = wells().find((s) => s.querySelector("h3")?.textContent === label);
+      return [...(well?.querySelectorAll(".text-body.font-semibold") ?? [])].map((n) => n.textContent);
+    };
+    const openWells = () => {
+      for (const well of wells()) {
+        const header = well.querySelector<HTMLButtonElement>(":scope > button")!;
+        if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header);
+      }
+    };
+    const cardButton = (title: string, label: string) => {
+      const card = [...panel.querySelectorAll(".text-body.font-semibold")].find(
+        (n) => n.textContent === title
+      )?.parentElement;
+      return within(card!).getByRole("button", { name: label });
+    };
+
+    const threadsTab = screen
+      .getAllByRole("tab")
+      .find((b) => (b.textContent ?? "").trim().startsWith("Threads"));
+    fireEvent.click(threadsTab!);
+    await waitFor(() => expect(titlesIn("Recent").length).toBeGreaterThan(0));
+    openWells();
+    await waitFor(() => expect(titlesIn("Earlier")).toEqual(["Logger migration"]));
+    expect(titlesIn("Recent")).toEqual(
+      expect.arrayContaining(["Session teardown leaks", "Flaky test suite", "Upload retry path"])
+    );
+    expect(titlesIn("Last 7 days")).toEqual(["Retry backoff constants", "Unused dependencies"]);
+    expect(titlesIn("Last 30 days")).toEqual(["Dead feature flags"]);
+
+    // A card's Open opens its thread in the pane.
+    fireEvent.click(cardButton("Logger migration", "Open"));
+    await waitFor(() => expect(text()).toContain("do billing last"));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "tech-debt" }).find((b) => b.tagName === "BUTTON")!
+    );
+    await waitFor(() => expect(text()).toContain("straight in. it's test only"));
+
+    const tab = screen
+      .getAllByRole("tab")
+      .find((b) => (b.textContent ?? "").trim().startsWith("Threads"));
+    fireEvent.click(tab!);
+    fireEvent.click(await within(panel).findByRole("button", { name: "Artifacts" }));
+    await waitFor(() => expect(titlesIn("Recent")).toContain("Teardown briefs"));
+    openWells();
+    await waitFor(() => expect(titlesIn("Earlier")).toEqual(["Logger migration"]));
+    expect(titlesIn("Recent")).toEqual(["Teardown briefs", "Who owns what", "Debt survey"]);
+    expect(titlesIn("Last 7 days")).toEqual(["Retry backoff decision", "Dependency audit"]);
+    expect(titlesIn("Last 30 days")).toEqual(["Feature flag cleanup"]);
+
+    // Open reads the card's run from the seeded `?artifact=` arm.
+    fireEvent.click(cardButton("Retry backoff decision", "Open"));
+    await waitFor(() =>
+      expect(panel.querySelector('[data-artifact-id="stg-art-backoff"]')).toBeTruthy()
+    );
+    expect(panel.querySelectorAll("[data-artifact-member]").length).toBe(4);
+    expect(panel.textContent).toContain("keep the upload one, it's the only one with tests");
 
     expect(fetchSpy).not.toHaveBeenCalled();
   }, 30_000);
