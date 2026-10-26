@@ -148,15 +148,11 @@ export function BoardSettingsMenu({
 }
 
 const DISPLAY_OPTIONS: ReadonlyArray<SelectMenuOption<BoardDisplay>> = [
-  { value: "canvas", label: "Canvas", description: "Each object type is a lane of cards." },
-  {
-    value: "rows",
-    label: "Rows",
-    description: "Each object type spans the page, with every object as a row of its details.",
-  },
+  { value: "canvas", label: "Canvas" },
+  { value: "rows", label: "Rows" },
 ];
 
-/** The board's display picker, a white pill left of the gear. A view preference on this device,
+/** The board's display picker, a text link left of the gear. A view preference on this device,
  *  not an edit, so everyone may switch; the board reads the same store. */
 export function BoardDisplayMenu() {
   const [value, onChange] = useBoardDisplay();
@@ -166,7 +162,7 @@ export function BoardDisplayMenu() {
       options={DISPLAY_OPTIONS}
       onChange={onChange}
       ariaLabel="Board display"
-      variant="pill"
+      variant="link"
       className="shrink-0"
     />
   );

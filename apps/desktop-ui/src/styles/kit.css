@@ -514,8 +514,13 @@
 /* The one menu-option hover face: flat `--menu-item-hover-bg`, no elevation. Every option reaches
    it through `.menu-row` or the same token as a utility; never restate the gray. `:focus-visible`
    is the same face (the gray is the focus indicator). No transform on either state. */
+.menu-row + .menu-row {
+  margin-top: 2px;
+}
+/* ONE highlight for the hovered, focused and selected row; the selected row adds the check. */
 .menu-row:hover,
-.menu-row:focus-visible {
+.menu-row:focus-visible,
+.menu-row-selected {
   outline: none;
   background: var(--menu-item-hover-bg);
 }

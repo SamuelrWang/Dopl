@@ -43,9 +43,9 @@
   --color-surface-raised-3: var(--surface-raised-3);
   --color-surface-raised-4: var(--surface-raised-4);
   --color-surface-selected: var(--surface-selected);
-  /* The one menu-option hover face. A reference to `--surface-raised-1` (the "+ Add item"
-     hover, `info-card-rows.tsx › InfoCardAddRow`), never a copy of its value. `.menu-row` is
-     the CSS consumer; this utility is for option rows that are not `MenuItem`. */
+  /* The one menu-option highlight (hovered, focused and selected alike), a reference to
+     `--surface-raised-1` (the "+ Add item" hover), never a copy of its value. `.menu-row` is the
+     CSS consumer; this utility is for option rows that are not `MenuItem`. */
   --color-menu-item-hover-bg: var(--menu-item-hover-bg);
   /* Histogram bar: solid, not a tint — an alpha `surface-raised-*` bar picks up the card
      beneath it. Consumer: `apps/desktop-ui/src/components/charts/bar-series.tsx`. */
@@ -219,7 +219,7 @@
   /* The histogram bar's resting fill: opaque, one step darker than its card. */
   --chart-bar: #e8e8e8;
   --surface-selected: oklch(0 0 0 / 8%);
-  /* The menu-option hover face (see `--color-menu-item-hover-bg`). */
+  /* The menu-option highlight (see `--color-menu-item-hover-bg`). */
   --menu-item-hover-bg: var(--surface-raised-1);
   /* THE dropdown width rule (`.menu-card`): fit the widest row, never under this floor (or the
      trigger's width when `Popover` is handed one), never over this cap; long labels truncate.
@@ -1054,8 +1054,13 @@ html {
 }
 /* The one menu-option hover face: flat `--menu-item-hover-bg`, no elevation, and the keyboard
    focus indicator too. Option rows that are not `MenuItem` wear `bg-menu-item-hover-bg`. */
+.menu-row + .menu-row {
+  margin-top: 2px;
+}
+/* ONE highlight for the hovered, focused and selected row; the selected row adds the check. */
 .menu-row:hover,
-.menu-row:focus-visible {
+.menu-row:focus-visible,
+.menu-row-selected {
   outline: none;
   background: var(--menu-item-hover-bg);
 }

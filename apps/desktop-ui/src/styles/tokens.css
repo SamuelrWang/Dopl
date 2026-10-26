@@ -270,7 +270,7 @@
      card it stands on (see the `--color-chart-bar` note in the theme block). */
   --chart-bar: #e8e8e8;
   --surface-selected: oklch(0 0 0 / 8%);
-  /* THE menu-option hover face — see `--color-menu-item-hover-bg` above. */
+  /* THE menu-option highlight — see `--color-menu-item-hover-bg` above. */
   --menu-item-hover-bg: var(--surface-raised-1);
   /* THE dropdown width rule — see globals.css beside `--menu-item-hover-bg`. */
   --menu-min-width: 128px;

@@ -310,7 +310,7 @@ export function MenuItem({
         destructive
           ? "text-danger hover:bg-danger/10 hover:bg-none focus-visible:bg-danger/10 focus-visible:bg-none"
           : active
-            ? "bg-surface-selected text-text-primary"
+            ? "menu-row-selected text-text-primary"
             : "text-text-secondary hover:text-text-primary focus-visible:text-text-primary"
       )}
     >
