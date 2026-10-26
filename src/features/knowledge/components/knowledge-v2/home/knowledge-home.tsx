@@ -119,10 +119,10 @@ export function KnowledgeHome({
               className="absolute bottom-4 left-4 top-4 w-90 max-w-[46%]"
             >
               <div className="flex h-full flex-col justify-center px-6">
-                <h2 className="text-title font-semibold text-white">
+                <h2 className="text-title font-semibold text-text-on-invert">
                   Your team&apos;s living library
                 </h2>
-                <p className="mt-1.5 text-caption font-light leading-[1.5] text-[#e3e3e3]">
+                <p className="mt-1.5 text-caption font-light leading-[1.5] text-text-on-invert/90">
                   Knowledge bases hold the docs, notes, and playbooks your
                   agents read and write — organized, shareable, and always
                   current.

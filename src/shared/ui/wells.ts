@@ -5,12 +5,12 @@ export const FIELD_WELL = "concave-field rounded-lg focus:outline-none";
 
 /** Raised chip sitting on an inset body — verse-pill on a concave field. */
 export const CHIP =
-  "rounded-full border border-border-strong bg-bg-elevated px-2.5 py-0.5 text-small font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
+  "rounded-full border border-border-strong bg-bg-elevated px-2.5 py-0.5 text-small font-medium text-text-primary shadow-(--shadow-hairline)";
 
 /** Raised block field on an inset body — CHIP's rectangular counterpart, for
  *  inputs/textareas/code wells inside a SectionBox body. */
 export const RAISED_WELL =
-  "rounded-lg border border-border-default bg-bg-elevated shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
+  "rounded-lg border border-border-default bg-bg-elevated shadow-(--shadow-hairline)";
 
 /**
  * The "pillow" text control: `RAISED_WELL` with type, placeholder ink and a focus hairline — the

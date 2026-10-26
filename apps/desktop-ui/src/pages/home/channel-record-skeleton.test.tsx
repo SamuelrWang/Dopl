@@ -184,8 +184,8 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     expect(v2("info-resize-handle.tsx")).toContain("<SplitResizeHandle");
     expect(
       file("../../../../../src/shared/ui/split-resize-handle.tsx")
-    ).toContain('className="relative z-[2] w-0 shrink-0"');
-    expect(GHOST).toContain('className="relative z-[2] w-0 shrink-0"');
+    ).toContain('className="relative z-(--layer-raised) w-0 shrink-0"');
+    expect(GHOST).toContain('className="relative z-(--layer-raised) w-0 shrink-0"');
     const { container } = render(<ChannelRecordSkeleton />);
     expect(container.querySelector(".w-0.shrink-0")).not.toBeNull();
   });

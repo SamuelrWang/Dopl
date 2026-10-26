@@ -261,11 +261,11 @@ export function Toolbar({
   return (
     <div
       className={cn(
-        "pointer-events-none fixed bottom-4 left-0 right-0 z-[5] flex justify-center px-4",
+        "pointer-events-none fixed bottom-4 left-0 right-0 z-(--layer-float) flex justify-center px-4",
         toolbarInset
       )}
     >
-      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-black/[0.08] bg-[var(--panel-surface)] px-2 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.12)]">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border-default bg-[var(--panel-surface)] px-2 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.12)]">
         {rows}
       </div>
     </div>

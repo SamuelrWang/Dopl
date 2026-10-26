@@ -193,7 +193,7 @@ describe("the shell's own loading state mirrors the shell", () => {
     expect(shellCss).toContain(".wordsCard[data-skeleton]");
     // 🚫 and the ghost still names no inset of its own.
     const ghost = code("./shell-skeleton.tsx");
-    for (const inset of ["p-4.5", "rounded-lg", "px-2.5"]) {
+    for (const inset of ["p-4.5", "rounded-[10px]", "px-2.5"]) {
       expect(ghost).not.toContain(inset);
     }
   });

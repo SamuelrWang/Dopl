@@ -256,7 +256,7 @@ function SkillBody({
   // Member/agent-authored markdown, shown as plain text in the demo's prose
   // recipe (see the typography note in ./skills-pane.tsx). Never HTML.
   return (
-    <div className="whitespace-pre-wrap text-[16px] leading-[1.7] text-text-primary/90">
+    <div className="whitespace-pre-wrap text-(length:--doc-text) leading-[1.7] text-text-primary/90">
       {body}
     </div>
   );

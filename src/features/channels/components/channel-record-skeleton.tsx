@@ -79,7 +79,7 @@ function RecordColumns() {
     <>
       <TranscriptColumnGhost />
       {/* `info-resize-handle.tsx`'s zero-width sibling, so the row's box math is the real row's. */}
-      <div className="relative z-[2] w-0 shrink-0">
+      <div className="relative z-(--layer-raised) w-0 shrink-0">
         <span className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center">
           <Skeleton className="h-10 w-1 shrink-0 rounded-full" />
         </span>

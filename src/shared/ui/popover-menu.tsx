@@ -237,7 +237,7 @@ function CoordinatePanel({
     <>
       {!closing && (
         <div
-          className="fixed inset-0 z-[999]"
+          className="fixed inset-0 z-(--layer-menu-scrim)"
           onClick={onClose}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -250,7 +250,7 @@ function CoordinatePanel({
         {...panelProps}
         ref={ref}
         style={{ ...style, ...floorStyle(triggerWidth) }}
-        className={cn("z-[1000]", SURFACE, className)}
+        className={cn("z-(--layer-menu)", SURFACE, className)}
       >
         {children}
       </div>

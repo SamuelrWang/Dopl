@@ -114,7 +114,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <FlushGrid />
-      <main className="relative z-[2] container mx-auto px-4 py-8">
+      <main className="relative z-(--layer-raised) container mx-auto px-4 py-8">
         {children}
       </main>
     </>
