@@ -1,7 +1,8 @@
 "use client";
 
 import { Loader2, Plus } from "lucide-react";
-import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
+import { cn } from "@/shared/lib/utils";
+import { INK_PILL } from "@/shared/ui/small-action-button";
 import type { AgentIdentity, IdentityKnowledgeRef } from "../client/types";
 import { EMPTY_KNOWLEDGE } from "../lib/knowledge-scopes";
 import { IDENTITY_ROW_ADD } from "./identity-section";
@@ -78,7 +79,7 @@ function AddKnowledgeRow({
   );
 }
 
-/** One-click Launch, full width at the card's foot. */
+/** One-click Launch: the card's primary act, so the small ink pill, at the card's bottom right. */
 export function LaunchIntoChannelButton({
   onClick,
   busy,
@@ -90,13 +91,14 @@ export function LaunchIntoChannelButton({
   disabled: boolean;
 }) {
   return (
-    <OpenScaleButton
+    <button
+      type="button"
       onClick={onClick}
       disabled={disabled || busy}
-      className="w-full justify-center gap-1.5 disabled:opacity-60"
+      className={cn(INK_PILL, "gap-1.5 self-end disabled:cursor-not-allowed disabled:opacity-60")}
     >
-      {busy && <Loader2 size={OPEN_SCALE_ICON} aria-hidden="true" className="animate-spin" />}
+      {busy && <Loader2 size={12} aria-hidden="true" className="animate-spin" />}
       Launch
-    </OpenScaleButton>
+    </button>
   );
 }

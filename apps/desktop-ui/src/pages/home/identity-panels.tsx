@@ -7,7 +7,6 @@ import {
 } from "@/features/agent-identities/components/identities-home";
 import { authorMarker } from "@/features/agent-identities/components/identity-picker";
 import { useAgentIdentities } from "@/features/agent-identities/hooks/use-agent-identities";
-import { runtimeReadiness } from "@/features/agent-identities/lib/identity-runs";
 import { groupByVisibility } from "@/features/agent-identities/lib/visibility";
 import { AGENT_RUN_PRESENTER } from "@/features/channels/components/agent-run-presenter";
 import { useDesktopSessions } from "@/features/channels/components/use-desktop-sessions";
@@ -114,7 +113,6 @@ export function HomeIdentityPanels({
         card={{ photoFor: roster.photoFor, runtimeLabel, catalogs: launch.catalogs }}
         sessions={sessions}
         agents={AGENT_RUN_PRESENTER}
-        readiness={runtimeReadiness(launch)}
         runtimes={runtimes}
         currentUserId={currentUserId}
         viewerPhoto={viewer?.avatarUrl ?? null}

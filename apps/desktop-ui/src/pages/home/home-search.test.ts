@@ -66,10 +66,13 @@ describe("🔒 the search pill's width lives on `[data-open]`, not on the box", 
 
 describe("🔒 /home's pill", () => {
   const src = read("src/features/search/components/header-search.tsx");
+  // The face is the shared search pill's, which the Identities filter wears too.
+  const face = read("src/shared/ui/search-pill.tsx");
 
   it("is a fixed 260px white pill with no toggle button", () => {
-    expect(src).toContain("white-card raise-pill");
-    expect(src).toContain("w-[260px]");
+    expect(src).toContain("className={SEARCH_PILL_FACE}");
+    expect(face).toContain("white-card raise-pill");
+    expect(face).toContain("w-[260px]");
     expect(src).not.toContain("search-expand");
     expect(src).not.toMatch(/<button/);
   });

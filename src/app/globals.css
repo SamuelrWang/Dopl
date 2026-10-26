@@ -683,16 +683,10 @@ html {
   background: var(--home-card);
 }
 
-/* THE TITLE CHIP: a flat section's heading on white, a snug grey box behind just the text
-   (`SectionPanel flat`). */
-.title-chip {
-  border-radius: 8px;
-  background: var(--surface-raised-2);
-  padding: 3px 10px;
-}
-
-/* THE RAIL LAYOUT: a page body 3/4 | 1/4, each column scrolling on its own, once the PANE (a size
-   container, not the viewport) is 760px wide; below that one column, rail last, the pane scrolls.
+/* THE RAIL LAYOUT: a page body and a right rail, each scrolling on its own, once the PANE (a size
+   container, not the viewport) is 760px wide: main, the divider handle's zero-width track, then the
+   rail at `--rail-layout-w` (written by `shared/ui/use-split-resize.ts`) behind a full-height hairline.
+   Below that one column, rail last, the pane scrolls.
    Two elements because a container query styles descendants only: `.rail-layout` is measured,
    `.rail-layout-cols` switches. */
 .rail-layout {
@@ -723,10 +717,14 @@ html {
 @container (min-width: 760px) {
   .rail-layout-cols {
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 0 var(--rail-layout-w, 300px);
     gap: 0;
     padding: 0;
     overflow: hidden;
+  }
+  /* No rail on this mount: the main column takes the row. */
+  .rail-layout-cols[data-rail="off"] {
+    grid-template-columns: minmax(0, 1fr);
   }
   .rail-layout-main,
   .rail-layout-aside {
@@ -734,10 +732,11 @@ html {
     overflow-y: auto;
   }
   .rail-layout-main {
-    padding: 12px 6px 12px 12px;
+    padding: 12px;
   }
   .rail-layout-aside {
-    padding: 12px 12px 12px 6px;
+    padding: 12px;
+    border-left: 1px solid var(--border-default);
   }
 }
 

@@ -1,69 +1,21 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import type { ReactNode } from "react";
 import { SearchPill } from "@/shared/ui/search-pill";
 import { SelectMenu } from "@/shared/ui/select-menu";
-import {
-  SORT_OPTIONS,
-  type IdentityArrangement,
-  type RuntimeReadiness,
-} from "../lib/identity-runs";
+import { SORT_OPTIONS, type IdentityArrangement } from "../lib/identity-runs";
 
 /**
- * The page's own surfaces above the grid: the head says what the page holds and whether its
- * runtimes can launch; the controls directly above the grid only rearrange it. Neither row is a
- * container, so each ends where its content ends.
+ * The page's one controls row, above the grid: the search pill (the header search's face), the
+ * runtime filter and the sort, then the page's single create button at the right end.
  */
-
-export function IdentityPageHead({
-  sharedCount,
-  personalCount,
-  readiness,
-}: {
-  /** `null` = no channel, so no shared count to state. */
-  sharedCount: number | null;
-  personalCount: number;
-  /** `null` = the desktop has not said. */
-  readiness: ReadonlyArray<RuntimeReadiness> | null;
-}) {
-  return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-      <p className="min-w-0 truncate text-caption text-text-muted">
-        {sharedCount !== null && `${sharedCount} shared in this channel · `}
-        {personalCount} personal
-      </p>
-      {readiness && <RuntimeReadinessLine readiness={readiness} />}
-    </div>
-  );
-}
-
-/** One quiet line when every runtime can launch; otherwise it names only the ones that cannot. */
-function RuntimeReadinessLine({ readiness }: { readiness: ReadonlyArray<RuntimeReadiness> }) {
-  const blocked = readiness.filter((r) => !r.ready);
-  if (blocked.length === 0) {
-    return (
-      <p className="flex flex-none items-center gap-1.5 text-caption text-text-muted">
-        <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />
-        All runtimes ready
-      </p>
-    );
-  }
-  return (
-    <p className="flex min-w-0 items-center gap-1.5 text-caption">
-      <AlertTriangle size={12} strokeWidth={2} className="flex-none text-warning" aria-hidden="true" />
-      <span className="min-w-0 truncate text-text-secondary">
-        {blocked.map((r) => `${r.label} is not signed in`).join(" · ")}
-      </span>
-    </p>
-  );
-}
-
 export function IdentityControls({
   arrangement,
   onArrangement,
   runtimes,
   showing,
   total,
+  action,
 }: {
   arrangement: IdentityArrangement;
   onArrangement: (next: IdentityArrangement) => void;
@@ -71,6 +23,8 @@ export function IdentityControls({
   runtimes: ReadonlyArray<{ id: string; label: string }>;
   showing: number;
   total: number;
+  /** The page's create button. */
+  action: ReactNode;
 }) {
   const set = (patch: Partial<IdentityArrangement>) => onArrangement({ ...arrangement, ...patch });
   return (
@@ -109,6 +63,7 @@ export function IdentityControls({
           {showing} of {total}
         </p>
       )}
+      <div className="ml-auto flex-none">{action}</div>
     </div>
   );
 }

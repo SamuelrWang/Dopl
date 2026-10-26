@@ -58,9 +58,13 @@ beforeEach(() => {
  *  that differs about which workspace the create hits, so this reaches them
  *  through their region. A button-name lookup would now be ambiguous. */
 function createButtonIn(section: string): HTMLButtonElement {
-  return within(screen.getByRole("region", { name: section })).getByRole(
-    "button",
-    { name: "Agent Identity" }
+  // Shared creates from its own "Create new" cell; Personal from the page's one create button.
+  return (
+    section === PERSONAL_SECTION
+      ? screen.getByRole("button", { name: "Agent Identity" })
+      : within(screen.getByRole("region", { name: section })).getByRole("button", {
+          name: "Create new",
+        })
   ) as HTMLButtonElement;
 }
 
