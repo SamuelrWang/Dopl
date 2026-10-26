@@ -152,7 +152,7 @@ function makeWireFilter(diag) {
  * ⚠ **A LOCAL COPY OF THE PATTERN, FORCED RATHER THAN CHOSEN** — `main/` cannot import from
  * `src/`. The same regex is in `session-launch-op.js › colorKey`, in both column CHECKs in
  * `20261005120000_agent_session_colors.sql`, and as a key list in
- * `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`.
+ * `src/shared/lib/agent-colors.ts › AGENT_COLOR_KEYS`.
  */
 const AGENT_COLOR_RE = /^agent-(0[1-9]|1[0-6])$/;
 function colorKey(value) {

@@ -169,7 +169,7 @@ test("the agent's own name rides ONLY beside `authorKind: 'agent'`, flattened an
 
 test("the agent's COLOUR rides the same gate, unvalidated here on purpose", () => {
   // ⚠ MAIN DOES NOT OWN THE PALETTE: the key crosses as the server wrote it and
-  // `channels/lib/agent-colors.ts › agentColorOrNull` is the ONE membership test, at the item
+  // `src/shared/lib/agent-colors.ts › agentColorOrNull` is the ONE membership test, at the item
   // boundary. Two validators would be two chances to disagree about one agent's colour — so this
   // arm's job is the GATE (kind + presence) and the BOUND, not the vocabulary.
   assert.equal(

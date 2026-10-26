@@ -455,8 +455,8 @@ function feedLiveSession(entry, m, myUserId) {
       // AND, FOR AN AGENT, ITS NAME AND ITS COLOUR KEY — both joined server-side onto the row
       // (`types.ts › ChannelMessage.authorAgentName` / `.authorAgentColor`), so the banner can name
       // `@the-agent` and paint with the colour that agent already wears. ⚠ GATED ON THE KIND, and
-      // the colour rides as the KEY: `lib/agent-colors.ts` is the only place one becomes a `var()`
-      // and this machine does not own the palette.
+      // the colour rides as the KEY: `src/shared/lib/agent-colors.ts` is the only place one becomes
+      // a `var()` and this machine does not own the palette.
       ...(m.authorKind === 'agent' && m.authorAgentName ? { authorAgentName: m.authorAgentName } : {}),
       ...(m.authorKind === 'agent' && m.authorAgentColor ? { authorAgentColor: m.authorAgentColor } : {}),
     });

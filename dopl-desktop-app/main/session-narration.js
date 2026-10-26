@@ -271,7 +271,7 @@ function entryFor(event, now) {
       const agentName = line(event && event.authorAgentName, SENDER_CAP);
       if (agentName) entry.senderAgentName = agentName;
       // ITS IDENTITY COLOUR, as the server's KEY. ⚠ NOT VALIDATED HERE, DELIBERATELY: the palette
-      // belongs to the renderer's token layer and `channels/lib/agent-colors.ts › agentColorOrNull`
+      // belongs to the renderer's token layer and `src/shared/lib/agent-colors.ts › agentColorOrNull`
       // is the ONE membership test — a seventeenth key from a newer server must read as "no colour"
       // at that one boundary rather than at two that can disagree. Bounded like every caption so a
       // long value cannot ride the ring, and gated on the kind like the name above.
