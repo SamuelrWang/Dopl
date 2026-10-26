@@ -37,3 +37,12 @@ export const SMALL_PRIMARY_BUTTON =
  * (`form-dialog.tsx`: New channel, Add person, New agent) keep {@link SMALL_PRIMARY_BUTTON}.
  */
 export const SMALL_PRIMARY_PILL = cn(SMALL_PRIMARY_BUTTON, "rounded-full");
+
+/**
+ * THE IDENTITY LOOK'S OUTLINED PILL (DESIGN-LANGUAGE §4, the secondary pill on a white card):
+ * hairline, white, caption type, a raised-1 tint on hover. Content-height; a caller that sits it on
+ * a fixed-height row sets the height through `cn`.
+ */
+export const PILL_BUTTON =
+  "inline-flex flex-none items-center rounded-full border border-border-default bg-bg-overlay px-2.5 py-0.5 " +
+  "text-caption font-medium text-text-primary transition-colors hover:bg-surface-raised-1";

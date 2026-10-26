@@ -3,22 +3,46 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * THE empty-detail treatment for two-pane browsers (chats / members / skills).
- * Bare hint line stays muted; a title over a description gets the emphasis.
+ * THE empty treatment. `pane` (default) is the empty detail of a two-pane browser (chats /
+ * members / skills): a bare hint line stays muted; a title over a description gets the emphasis.
+ * `well` is an empty LIST inside a card: a small icon and one phrase in a `.card-well`, so the
+ * empty state keeps a shape.
  */
 export function EmptyState({
   icon: Icon,
   title,
   description,
   children,
+  variant = "pane",
+  className,
 }: {
   icon: LucideIcon;
   title: string;
   description?: ReactNode;
   children?: ReactNode;
+  variant?: "pane" | "well";
+  className?: string;
 }) {
+  if (variant === "well") {
+    return (
+      <div
+        className={cn(
+          "card-well flex min-h-13 items-center justify-center gap-1.5 text-caption text-text-muted",
+          className
+        )}
+      >
+        <Icon size={14} aria-hidden="true" />
+        <span>{title}</span>
+      </div>
+    );
+  }
   return (
-    <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-10 text-text-muted">
+    <div
+      className={cn(
+        "flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-10 text-text-muted",
+        className
+      )}
+    >
       <Icon size={30} className="text-border-strong" />
       <p
         className={cn(

@@ -53,6 +53,11 @@ export interface UsageMeterProps {
   readout?: string;
 }
 
+/** Zero/negative limit: an empty bar rather than dividing by it. */
+function percentOf(used: number, limit: number): number {
+  return limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+}
+
 /**
  * `tone="ramp"` fill, by percent full. Four bands, not interpolation: the
  * thresholds are the takeaway, and an interpolated hue names no point.
@@ -78,8 +83,7 @@ export function UsageMeter({
   readout,
 }: UsageMeterProps) {
   const fmt = formatValue ?? ((value: number) => value.toLocaleString());
-  // Zero/negative limit: empty track rather than dividing by it.
-  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const pct = percentOf(used, limit);
   /**
    * IS THERE A DENOMINATOR TO SHOW.
    *
@@ -135,5 +139,31 @@ export function UsageMeter({
         <p className="mt-1.5 text-micro text-text-secondary">{overNote}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * The identity look's 3px meter (DESIGN-LANGUAGE §4): the bar alone, so the caller places the
+ * readout, which carries the value (the bar is decorative).
+ */
+export function ThinMeter({
+  used,
+  limit,
+  className,
+}: {
+  used: number;
+  limit: number;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("relative block h-0.75 overflow-hidden rounded-full bg-surface-raised-4", className)}
+    >
+      <span
+        className="absolute inset-y-0 left-0 rounded-full bg-text-primary transition-[width] duration-200"
+        style={{ width: `${percentOf(used, limit)}%` }}
+      />
+    </span>
   );
 }

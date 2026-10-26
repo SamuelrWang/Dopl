@@ -21,7 +21,7 @@ const SIZE = {
   md: "w-10 h-10 text-body",
 } as const;
 
-function initialFor(name: string | null, email: string | null): string {
+export function initialFor(name: string | null, email: string | null): string {
   const source = (name || email || "?").trim();
   return source.charAt(0).toUpperCase() || "?";
 }

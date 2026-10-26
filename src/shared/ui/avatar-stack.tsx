@@ -2,6 +2,7 @@
 
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
+import { IdentityFace, type IdentityFaceProps } from "./identity-face";
 
 export interface AvatarStackUser {
   userId: string;
@@ -145,5 +146,43 @@ export function AvatarStack({
         </div>
       )}
     </div>
+  );
+}
+
+export type IdentityStackFace = Omit<IdentityFaceProps, "size" | "label" | "className"> & {
+  key: string;
+};
+
+/**
+ * The identity look's stack: {@link IdentityFace}s overlapping by 6px, then a muted `+N` that,
+ * as above, counts what is hidden. `label` names the whole stack (and is its tooltip); without it
+ * the stack is decorative.
+ */
+export function IdentityStack({
+  faces,
+  size,
+  max = faces.length,
+  label,
+  className,
+}: {
+  faces: readonly IdentityStackFace[];
+  size: number;
+  max?: number;
+  label?: string;
+  className?: string;
+}) {
+  if (faces.length === 0) return null;
+  const shown = faces.slice(0, max);
+  const overflow = faces.length - shown.length;
+  const a11y = label
+    ? { role: "img" as const, "aria-label": label, title: label }
+    : { "aria-hidden": true };
+  return (
+    <span {...a11y} className={cn("inline-flex flex-none items-center", className)}>
+      {shown.map(({ key, ...face }, i) => (
+        <IdentityFace key={key} size={size} {...face} className={i > 0 ? "-ml-1.5" : undefined} />
+      ))}
+      {overflow > 0 && <span className="ml-0.75 text-label text-text-muted">+{overflow}</span>}
+    </span>
   );
 }

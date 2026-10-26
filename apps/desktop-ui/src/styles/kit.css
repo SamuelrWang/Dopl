@@ -156,6 +156,59 @@
   box-shadow: var(--shadow-card-lift);
 }
 
+/* THE WHITE CARD (DESIGN-LANGUAGE §1/§2): hairline, 12px, the one soft shadow. Layout and padding
+   stay with the caller. */
+.white-card {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-bento);
+}
+
+/* THE WELL inside a white card: no hairline, the outer-panel grey. */
+.card-well {
+  border-radius: 10px;
+  background: var(--home-card);
+}
+
+/* THE STATUS PILL: an optional dot and one word. `data-tone` picks the ink. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-disabled);
+}
+.status-pill[data-tone="live"] .status-pill-dot {
+  background: var(--success);
+}
+.status-pill[data-tone="attention"] {
+  background: color-mix(in oklch, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+.status-pill[data-tone="attention"] .status-pill-dot {
+  background: var(--warning);
+}
+.status-pill[data-tone="done"] {
+  background: color-mix(in oklch, var(--success) 12%, transparent);
+  color: var(--success);
+}
+.status-pill[data-tone="done"] .status-pill-dot {
+  background: var(--success);
+}
+
 /* Frosted glass panel: the card a public page on white renders into (`/link/{token}`).
    The fill must stay translucent or the blur is computed and never seen; `-webkit-backdrop-filter`
    is still needed for Safari. */

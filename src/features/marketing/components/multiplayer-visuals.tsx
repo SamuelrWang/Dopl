@@ -2,7 +2,8 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { CalendarDays, Check, CornerUpLeft, Mic } from "lucide-react";
-import { Face, Img, WHITE_FRAME_PX, agentColor } from "@/features/onboarding/components/paired-avatar";
+import { Face, Img, agentColor } from "@/features/onboarding/components/paired-avatar";
+import { IDENTITY_RING_PX } from "@/shared/ui/identity-face";
 import { AGENT, DOPL_MARK, MULTIPLAYER_COPY } from "./multiplayer-content";
 import { GmailMark, NotionMark } from "./ontology-marks";
 import { useVisualPlay } from "./use-visual-play";
@@ -64,10 +65,10 @@ export function AlexAvatar({ d, popAt, badgeAt }: { d: number; popAt?: number; b
       className={popAt === undefined ? "lp-mp-avatar" : "lp-mp-avatar lp-mp-fade"}
       style={{ width: d, height: d, ...(popAt === undefined ? {} : at(popAt)) }}
     >
-      {/* The identity avatar ratio (paired-avatar.tsx › RING_PX / WHITE_FRAME_PX):
+      {/* The identity avatar ratio (shared/ui/identity-face.tsx › IDENTITY_RING_PX):
           2px colour ring (CSS) → 2px white → photo, no hairline. */}
       <span className="lp-mp-avatar-ring" style={{ borderColor: ring }}>
-        <span className="lp-mp-avatar-face" style={{ padding: WHITE_FRAME_PX, borderWidth: 0 }}>
+        <span className="lp-mp-avatar-face" style={{ padding: IDENTITY_RING_PX, borderWidth: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- tiny decorative avatar */}
           <img src={AGENT.photo} alt="" draggable={false} className="lp-mp-avatar-img" />
         </span>

@@ -152,6 +152,7 @@
        body    12.5px  default body, row titles, inputs
        lead    13px    prose/document body, emphasized text
        title   14px    pane headers, card titles
+       heading 15px    card headlines (thread name, decision question)
        display 18px    page/document titles
        stat    26px    large dashboard figures — pair with font-mono */
   --text-micro: 10.5px;
@@ -168,6 +169,8 @@
   --text-lead--line-height: 1.55;
   --text-title: 14px;
   --text-title--line-height: 1.4;
+  --text-heading: 15px;
+  --text-heading--line-height: 1.35;
   --text-display: 18px;
   --text-display--line-height: 1.375;
   --text-stat: 26px;
@@ -302,6 +305,10 @@
     inset 0 -1px 0 rgba(0, 0, 0, 0.06),
     0 2px 3px rgba(0, 0, 0, 0.08);
   --raised-light-shadow: var(--raised-light-bevel), 0 6px 14px rgba(0, 0, 0, 0.06);
+  /* A small raised face standing proud of what it overlaps (the identity face's runtime badge,
+     onboarding's app tiles). */
+  --raised-light-drop: var(--raised-light-bevel), 0 4px 7px rgba(0, 0, 0, 0.1),
+    0 10px 20px rgba(0, 0, 0, 0.08);
   /* Attention: darker hairline + soft halo in place of the ambient drop. The app-wide "this
      one is live" signal (focused `.concave-field`, open search pill, selected row). */
   --focus-line: rgba(24, 24, 24, 0.22);
@@ -758,6 +765,59 @@ html {
 .card-lift:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-card-lift);
+}
+
+/* THE WHITE CARD (DESIGN-LANGUAGE §1/§2): hairline, 12px, the one soft shadow. Layout and padding
+   stay with the caller. */
+.white-card {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  box-shadow: var(--shadow-bento);
+}
+
+/* THE WELL inside a white card: no hairline, the outer-panel grey. */
+.card-well {
+  border-radius: 10px;
+  background: var(--home-card);
+}
+
+/* THE STATUS PILL: an optional dot and one word. `data-tone` picks the ink. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.status-pill-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-disabled);
+}
+.status-pill[data-tone="live"] .status-pill-dot {
+  background: var(--success);
+}
+.status-pill[data-tone="attention"] {
+  background: color-mix(in oklch, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+.status-pill[data-tone="attention"] .status-pill-dot {
+  background: var(--warning);
+}
+.status-pill[data-tone="done"] {
+  background: color-mix(in oklch, var(--success) 12%, transparent);
+  color: var(--success);
+}
+.status-pill[data-tone="done"] .status-pill-dot {
+  background: var(--success);
 }
 
 /* Frosted glass panel — the card a public page on white renders into (`/link/{token}`).

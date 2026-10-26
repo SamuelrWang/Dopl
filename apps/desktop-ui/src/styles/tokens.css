@@ -182,6 +182,7 @@
        body    default body, row titles, inputs
        lead    prose/document body, emphasized text
        title   pane headers, card titles
+       heading card headlines (thread name, decision question)
        display page/document titles
        stat    large dashboard figures — pair with font-mono */
   --text-micro: 10.5px;
@@ -198,6 +199,8 @@
   --text-lead--line-height: 1.55;
   --text-title: 14px;
   --text-title--line-height: 1.4;
+  --text-heading: 15px;
+  --text-heading--line-height: 1.35;
   --text-display: 18px;
   --text-display--line-height: 1.375;
   --text-stat: 26px;
@@ -393,6 +396,10 @@
     inset 0 -1px 0 rgba(0, 0, 0, 0.06),
     0 2px 3px rgba(0, 0, 0, 0.08);
   --raised-light-shadow: var(--raised-light-bevel), 0 6px 14px rgba(0, 0, 0, 0.06);
+  /* A small raised face standing proud of what it overlaps (the identity face's runtime badge,
+     onboarding's app tiles). */
+  --raised-light-drop: var(--raised-light-bevel), 0 4px 7px rgba(0, 0, 0, 0.1),
+    0 10px 20px rgba(0, 0, 0, 0.08);
   /* ATTENTION, in two parts: the hairline darkens and a soft halo replaces the
      ambient drop. THE app-wide "this one is live" signal — `.concave-field` on
      focus, the search pill while open, and a selected row wear the same one, so

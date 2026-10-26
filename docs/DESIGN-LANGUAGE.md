@@ -53,14 +53,19 @@ Sentence case everywhere. Titles are short noun/verb phrases.
 
 ## 3. The identity avatar (codified)
 
-`src/features/onboarding/components/paired-avatar.tsx`:
+`src/shared/ui/identity-face.tsx › IdentityFace` (spans only, so it is valid inside a `<p>`):
 
-- **Ratio — `RING_PX = 2`, `WHITE_FRAME_PX = RING_PX`:** 2px agent-colour ring →
-  2px white → photo, at every size. Pass `thinFrame` to `PairedAvatar`. Samuel
-  arrived at this from the Monitoring log and wants it everywhere identities show.
+- **Ratio — `IDENTITY_RING_PX = 2`:** 2px agent-colour ring → 2px white → photo, at
+  every size. `ring` takes the agent's `AgentColorKey`, or `"neutral"` (the raised
+  hairline) for a saved identity, which has no colour; no ring is a person (plain
+  photo on a hairline). No photo falls back to initials, or the profile glyph.
+  Samuel arrived at this from the Monitoring log and wants it everywhere identities
+  show. `PairedAvatar thinFrame` (onboarding) renders through it.
 - **Runtime badge:** half the avatar's diameter, hanging `0.3 × badge` past the
   bottom-right, on a raised light face with the same 2px colour ring. The badge
-  never gets the white frame.
+  never gets the white frame. No runtime, no badge.
+- **Presence:** a 7px green dot at the top-right (`online`), so it never sits on the
+  badge. Green only for live (§1).
 - **Photo** = the person who owns the identity. **Badge** = the runtime
   (Claude / ChatGPT / Grok Bot / Muse / Gemini logo).
 - Small sizes: 16px (breadcrumbs), 20–22px (rows), 28–34px (headers).
@@ -84,6 +89,11 @@ Sentence case everywhere. Titles are short noun/verb phrases.
 | **Connect pill** | Real `LiquidGlass` (`radius 14, edge="rim", staticMap`, small tight shadow), "Device · Connected" + monospace function chips. | `device-connect.tsx` |
 | **Code window** | White window, grey dots, title right, monospace, comments grey + bold, URLs/strings `#4d83c4`, a copy icon per copyable line. | `connect-section.tsx`, `sdk-section.tsx` |
 | **Liquid glass** | Always the real `LiquidGlass` with the hero-banner settings; replace its heavy drop shadow with a small one; never fake glass with a semi-opaque fill. | `hero-banner.tsx`, `.lp-mp-notify-glass` |
+
+In the product these recipes are already kit and `src/shared/ui` primitives (2026-10-26):
+the white card `.white-card`, the well `.card-well`, `StatusPill`, `ThinMeter`,
+`IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, and
+the 15px `text-heading` step. A port imports them; DESIGN-SYSTEM.md lists each.
 
 ## 5. Motion
 
