@@ -18,7 +18,7 @@
 --
 -- `channel_seq`  per channel, on EVERY row, NOT NULL. A STABLE IDENTITY — the
 --                `#N` a person cites. Gappy after a delete, on purpose.
--- `thread_seq`   per thread, NULL on a row with no `metadata.taskId`. A DENSE
+-- `thread_seq`   per thread, NULL on a row with no `metadata.threadId`. A DENSE
 --                COUNT — the `#1, #2, #3` inside one exchange.
 --
 -- ⚠ **`seq` IS NOT TOUCHED AND MUST NOT BE.** It stays the table-wide IDENTITY
@@ -26,7 +26,7 @@
 -- listAccountMessagesAfter`) and the workspace-wide hold
 -- (`repository-await-workspace.ts`) are legal because of. Renumbering it would
 -- also invalidate every persisted desktop cursor, every `last_wake_seq`, and
--- every stored legacy `task-<channelId>-<seq>` thread id. These two columns are
+-- every stored legacy `thread-<channelId>-<seq>` thread id. These two columns are
 -- PURELY ADDITIVE: no existing column changes meaning, so an older installed
 -- desktop that never reads them keeps working unchanged.
 --
@@ -118,7 +118,7 @@ ALTER TABLE IF EXISTS public.channel_messages
 --
 -- ⚠ **THE `CASE` IS LOAD-BEARING AND THE OBVIOUS VERSION IS WRONG.** Dry-run
 -- read-only against production 2026-10-12: without it,
--- `PARTITION BY (channel_id, metadata->>'taskId')` collapses every UNTAGGED row
+-- `PARTITION BY (channel_id, metadata->>'threadId')` collapses every UNTAGGED row
 -- into ONE null partition and numbers the main room 1…1,941 — the Dopl channel's
 -- newest message came back `thread_seq = 1941` while belonging to no thread at
 -- all. A main-room row must be NULL here, never numbered.
@@ -134,9 +134,9 @@ WITH numbered AS (
   SELECT id,
          row_number() OVER (PARTITION BY channel_id ORDER BY seq) AS channel_no,
          CASE
-           WHEN metadata ? 'taskId'
+           WHEN metadata ? 'threadId'
            THEN row_number() OVER (
-                  PARTITION BY channel_id, metadata ->> 'taskId'
+                  PARTITION BY channel_id, metadata ->> 'threadId'
                   ORDER BY seq
                 )
          END AS thread_no
@@ -168,7 +168,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_channel_no_key
 -- holds NULL here and NULLs do not collide, but a partial index says so in the
 -- index rather than relying on that.
 CREATE UNIQUE INDEX IF NOT EXISTS channel_messages_thread_no_key
-  ON public.channel_messages (channel_id, (metadata ->> 'taskId'), thread_seq)
+  ON public.channel_messages (channel_id, (metadata ->> 'threadId'), thread_seq)
   WHERE thread_seq IS NOT NULL;
 
 
@@ -229,19 +229,19 @@ BEGIN
   -- thread inheritance before it calls this function (`service-writes-metadata.ts`
   -- can adopt an untagged DM post into an open thread), so the caller's metadata
   -- is authoritative here and no second lookup is honest.
-  v_thread_tag := p_metadata ->> 'taskId';
+  v_thread_tag := p_metadata ->> 'threadId';
 
   IF v_thread_tag IS NOT NULL THEN
     -- Index-only on `channel_messages_thread_no_key`. Keyed on the RAW TEXT tag,
-    -- never on a join to `channel_tasks`: 43 of 96 distinct tags in production
-    -- have no row there (31 legacy `task-<channelId>-<seq>` ids that installed
+    -- never on a join to `channel_threads`: 43 of 96 distinct tags in production
+    -- have no row there (31 legacy `thread-<channelId>-<seq>` ids that installed
     -- desktops still mint, 12 UUIDs whose thread row is gone — measured
     -- 2026-10-12), and an FK-keyed counter would silently skip all of them.
     SELECT COALESCE(MAX(thread_seq), 0) + 1
       INTO v_thread_seq
       FROM public.channel_messages
      WHERE channel_id = p_channel_id
-       AND metadata ->> 'taskId' = v_thread_tag;
+       AND metadata ->> 'threadId' = v_thread_tag;
   END IF;
 
   INSERT INTO public.channel_messages (
@@ -310,28 +310,28 @@ BEGIN
     RAISE EXCEPTION 'channel_seq is not a dense 1..n run in % channel(s)', n;
   END IF;
 
-  -- 6d. ⚠ THE BACKFILL TRAP. A row with no `taskId` must hold NULL. If the
+  -- 6d. ⚠ THE BACKFILL TRAP. A row with no `threadId` must hold NULL. If the
   -- `CASE` were dropped this is the assertion that fires.
   SELECT count(*) INTO n
     FROM public.channel_messages
-   WHERE NOT (metadata ? 'taskId') AND thread_seq IS NOT NULL;
+   WHERE NOT (metadata ? 'threadId') AND thread_seq IS NOT NULL;
   IF n > 0 THEN
     RAISE EXCEPTION '% untagged row(s) carry a thread_seq — the CASE was lost', n;
   END IF;
 
-  -- 6e. A row WITH a `taskId` must hold one, and it must be dense per thread.
+  -- 6e. A row WITH a `threadId` must hold one, and it must be dense per thread.
   SELECT count(*) INTO n
     FROM public.channel_messages
-   WHERE (metadata ? 'taskId') AND thread_seq IS NULL;
+   WHERE (metadata ? 'threadId') AND thread_seq IS NULL;
   IF n > 0 THEN
     RAISE EXCEPTION '% thread-tagged row(s) have no thread_seq', n;
   END IF;
 
   SELECT count(*) INTO n FROM (
-    SELECT channel_id, metadata ->> 'taskId' AS tag
+    SELECT channel_id, metadata ->> 'threadId' AS tag
       FROM public.channel_messages
-     WHERE metadata ? 'taskId'
-     GROUP BY channel_id, metadata ->> 'taskId'
+     WHERE metadata ? 'threadId'
+     GROUP BY channel_id, metadata ->> 'threadId'
     HAVING min(thread_seq) <> 1
         OR max(thread_seq) <> count(*)
   ) bad;
