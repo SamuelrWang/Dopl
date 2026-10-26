@@ -127,6 +127,7 @@ export function BaseGeneralPane({
               label="Description"
               ariaLabel="Description"
               caption={`${description.length}/${KB_BASE_DESCRIPTION_MAX}`}
+              placeholder="What's in this knowledge base? Agents see this when listing bases."
               value={description}
               onChange={(next) => setDescription(next.slice(0, KB_BASE_DESCRIPTION_MAX))}
               maxLength={KB_BASE_DESCRIPTION_MAX}
@@ -138,7 +139,7 @@ export function BaseGeneralPane({
                 id="kb-settings-slug"
                 label="URL slug"
                 ariaLabel="Slug"
-                caption="Old links stop working"
+                caption="Lowercase letters, numbers and hyphens. Old links stop working."
                 value={slug}
                 onChange={setSlug}
               />

@@ -71,6 +71,12 @@ export function BaseSettingsModal({
   routing,
 }: Props) {
   const [section, setSection] = useState<Section>("general");
+  // Each opening starts on General, as the profile popup does.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setSection("general");
+  }
   const nav = NAV.filter(({ key }) => key !== "folders" || folders.length > 0);
   const shown = nav.some(({ key }) => key === section) ? section : "general";
   const close = () => onOpenChange(false);

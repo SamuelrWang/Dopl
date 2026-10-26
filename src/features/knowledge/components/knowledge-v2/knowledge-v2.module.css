@@ -438,7 +438,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Same recipe as `.pillBlue`, but hue comes from `--kv-scope`. */
+/* The card's scope pill: a tint of `--kv-scope` with the hue as its ink. */
 .cardScope {
   flex: 0 0 auto;
   display: inline-flex;

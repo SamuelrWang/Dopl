@@ -29,7 +29,7 @@ import type {
  * Settings → Sharing → Channels: which CHANNELS this knowledge base is shared
  * into, one row per channel, three states per row.
  *
- * The three states are `None` (no grant row), `Agent only` (the channel's
+ * The three states are `Not shared` (no grant row; `none` on the wire), `Agent only` (the channel's
  * agents read it, no human does) and `Visible` (everyone in the channel,
  * guests included) — the table's own shape, not a translation of it.
  *
