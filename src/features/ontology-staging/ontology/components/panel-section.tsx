@@ -3,83 +3,61 @@
 import { useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 
 /**
- * The well and the rows' column live in `shared/ui/panel-well.ts` (the Agents tab
- * wears the same well, and `docs/INVARIANTS.md` §1 forbids `channels → ontology`).
- * Re-exported here so this stays the import path of record for `ontology/`.
- */
-export { PANEL_ROWS, PANEL_WELL };
-
-/**
- * The object panel's section: an uppercase label, flat and flush left, over a gray
- * well of white row bars (Samuel, 2026-09-12 and 2026-09-13).
- *
- * No frame — `shared/ui/section-box.tsx › SectionBox`'s box around the label is
- * what 2026-09-12 deleted. This is the frame model's alternation
- * (docs/DESIGN-SYSTEM.md § the three grounds): level 3 well, level 2 card.
- *
- * No count (Samuel, 2026-09-13). The `meta` prop is deleted rather than left
- * unpassed, because an optional slot beside the label is how the number returns.
- *
- * The label is an `h3`, so each section is reachable by role — which is what the
- * History pin (`pages/home/ontology-panels.test.tsx`) matches on.
+ * One section of the object panel: a muted caption title over hairline rows that sit directly on
+ * the panel's white card. The title is an `h3`, so each section is reachable by role.
  */
 export function PanelSection({
   label,
+  caption,
   children,
 }: {
   label: string;
+  /** One line under the title, for a fact the rows cannot state. */
+  caption?: string;
   children: ReactNode;
 }) {
   return (
-    // The section is the well and the label sits inside it, as the /home Overview's
-    // Token-spend panel does (Samuel, 2026-09-13). Same header row geometry as
-    // `shared/ui/section-panel.tsx › SectionPanel`.
-    <section className={PANEL_WELL}>
-      <div className="flex min-h-[22px] items-center px-1 pb-0.5">
-        <h3 className="truncate text-label font-semibold uppercase tracking-wide text-text-secondary">
-          {label}
-        </h3>
-      </div>
+    <section className="flex min-w-0 flex-col">
+      <h3 className="pb-1 text-caption font-medium text-text-muted">{label}</h3>
+      {caption && <p className="pb-1 text-caption text-text-muted">{caption}</p>}
       {children}
     </section>
   );
 }
 
-/**
- * One row = one white bar on that well — `.bento`, the same class the Token-spend
- * panel's white face wears. Fill, hairline, radius and shadow are the class's; the
- * caller composes direction and gaps, so an attribute's one-line row and an
- * action's four-field stack are the same bar.
- *
- * Fields sit on the bar, not in wells of their own: every input is the popup kit's
- * underline (`board-header-bits.tsx › InlineUnderlineField`) and every picker a
- * `SelectMenu` text face, so the bar adds a surface, never an indent.
- */
-export const PANEL_ROW = "bento min-w-0 px-2.5 py-2";
+/** The rows' column: each row draws its own leading hairline, kept off the first. */
+export const PANEL_ROWS = "flex min-w-0 flex-col";
+
+/** One row's line: the hairline above it (none on the first) and the row's own height. */
+export const PANEL_ROW = "group min-w-0 border-t border-border-subtle py-1 first:border-t-0";
 
 /**
- * The row's remove ✕ — naked, revealed on the row's hover. One declaration for all
- * four editors. Pair it with `group` on the row itself.
+ * The label / value grid every keyed row uses (attributes, default fields, relationships): a fixed
+ * label column, then the value with its trailing controls. A hint takes the value column's second
+ * line.
  */
-export const ROW_REMOVE_BUTTON =
-  "rounded-md p-1 text-text-muted opacity-0 transition " +
-  "hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100";
+export const PANEL_GRID = "grid grid-cols-[104px_minmax(0,1fr)] items-center gap-x-3";
 
-/**
- * `+ Add` — under the rows, inside the well, appending an empty row rather than
- * opening a composer (Samuel, 2026-09-13): every cell of the new row is there from
- * the moment it appears. One accessible name, "Add", in all four sections.
- */
+/** A quiet glyph button inside a row (the link's pencil, a chip's remove). */
+export const ROW_ICON_BUTTON =
+  "shrink-0 rounded-md p-1 text-text-muted transition-colors hover:text-text-primary";
+
+/** The row's remove ✕ and ⋯: revealed on the row's hover or on focus. Pair with `group` on the row. */
+export const ROW_REMOVE_BUTTON = cn(
+  ROW_ICON_BUTTON,
+  "opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+);
+
+/** `+ Add` under the rows, appending an empty row. One accessible name, "Add", in every section. */
 export function PanelAddButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cn(SMALL_TEXT_BUTTON, "gap-1 self-start")}
+      className={cn(SMALL_TEXT_BUTTON, "-ml-2.5 gap-1 self-start text-text-muted")}
     >
       <Plus size={11} /> Add
     </button>
@@ -87,15 +65,12 @@ export function PanelAddButton({ onClick }: { onClick: () => void }) {
 }
 
 /**
- * The rows that are not saved yet. An unnamed row has no address — an attribute's
- * `key` is its label slugged, a relationship is addressed by label in the reducer
- * (`graph-state.ts › RELATIONSHIP_SET`, which also drops edges with no targets) —
- * so it waits here and dispatches the moment it has a name (an edge: a target).
+ * The rows that are not saved yet. An unnamed row has no address (an attribute's `key` is its
+ * label slugged; an edge is addressed by label), so it waits here and is dispatched once it has one.
  *
- * Key the rendered rows BY POSITION (`row-${i}` over the persisted rows,
- * `row-${persisted.length + n}` over these): a committed draft then lands at the
- * index it was drawn at and React reconciles the same subtree instead of
- * unmounting the row under the caret. Keys off the data drop the caret mid-word.
+ * Key rendered rows BY POSITION (`row-${i}` over the persisted rows, `row-${persisted.length + n}`
+ * over these): a committed draft then lands at the index it was drawn at and React keeps the same
+ * subtree, so the caret stays put.
  */
 export function useDraftRows<T>(blank: () => T) {
   const [drafts, setDrafts] = useState<T[]>([]);
@@ -104,7 +79,6 @@ export function useDraftRows<T>(blank: () => T) {
     add: () => setDrafts((rows) => [...rows, blank()]),
     patch: (index: number, next: T) =>
       setDrafts((rows) => rows.map((row, i) => (i === index ? next : row))),
-    drop: (index: number) =>
-      setDrafts((rows) => rows.filter((_, i) => i !== index)),
+    drop: (index: number) => setDrafts((rows) => rows.filter((_, i) => i !== index)),
   };
 }

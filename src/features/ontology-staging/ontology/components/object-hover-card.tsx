@@ -1,13 +1,19 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useWorkspaceResources } from "../hooks/use-workspace-resources";
+import { StatusPill } from "@/shared/ui/status-pill";
 import { containerNameOf, type GraphState } from "@/features/ontology/graph-state";
-import { formatIsoDate } from "@/features/ontology/field-kinds";
 import type { OntologyObject } from "@/features/ontology/types";
+import { FieldList } from "./field-list";
+import { CHIP_TEXT, VALUE_CHIP } from "./ontology-bits";
 
-/** Cursor-following quick view: fixed portal at cursor + 14px, clamped to
- *  viewport, pointer-events-none. */
+/** Fields the quick view lists before "+N more". */
+const HOVER_FIELDS = 6;
+
+const noop = () => {};
+
+/** Cursor-following quick view: a white card portalled at cursor + 14px, clamped to the viewport,
+ *  `pointer-events-none`. */
 export function ObjectHoverCard({
   object,
   graph,
@@ -19,7 +25,6 @@ export function ObjectHoverCard({
   x: number;
   y: number;
 }) {
-  const { nameOf } = useWorkspaceResources();
   if (typeof document === "undefined") return null;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -27,81 +32,40 @@ export function ObjectHoverCard({
 
   return createPortal(
     <div
-      className="pointer-events-none fixed z-[9999] w-[22rem] max-w-[80vw] overflow-hidden rounded-xl border border-border-strong bg-white shadow-xl"
+      className="white-card pointer-events-none fixed z-[9999] w-[22rem] max-w-[80vw] overflow-hidden shadow-[var(--shadow-card-lift)]"
       style={{ left: Math.min(x + 14, vw - 366), top: Math.min(y + 14, vh - 340) }}
     >
-      <div className="flex items-center gap-2 bg-card-surface-subtle px-3.5 py-1.5">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+      <div className="flex items-center gap-2 px-3.5 pt-3">
+        <span className="min-w-0 flex-1 truncate text-title font-medium text-text-primary">
           {object.name}
         </span>
-        <span className="flex-1" />
-        {containerName && (
-          <span className="rounded-full border border-border-strong bg-bg-inset px-2 py-px text-micro font-semibold text-text-secondary">
-            {containerName}
-          </span>
-        )}
+        {containerName && <StatusPill>{containerName}</StatusPill>}
       </div>
-      <div className="max-h-72 space-y-2.5 overflow-hidden p-3.5 text-lead">
+      <div className="max-h-72 space-y-2 overflow-hidden px-3.5 pt-1 pb-3">
         {object.subtitle && (
-          <p className="leading-snug text-text-secondary">{object.subtitle}</p>
+          <p className="text-caption leading-snug text-text-secondary">{object.subtitle}</p>
         )}
-        {object.attributes.length > 0 && (
-          <div className="space-y-1">
-            {object.attributes.slice(0, 5).map((attr) => (
-              <p key={attr.key} className="text-body leading-snug text-text-primary">
-                <span className="font-semibold text-text-muted">{attr.label}</span>{" "}
-                {attr.value.kind === "knowledge" || attr.value.kind === "skill"
-                  ? attr.value.value
-                      .map((id) => nameOf(id))
-                      .filter(Boolean)
-                      .join(", ") || "—"
-                  : attr.value.kind === "ref"
-                    ? attr.value.value
-                        .map((id) => graph.objects[id]?.name)
-                        .filter(Boolean)
-                        .join(", ") || "—"
-                    : attr.value.kind === "date" && attr.value.value
-                      ? formatIsoDate(attr.value.value)
-                      : attr.value.value || "—"}
-              </p>
-            ))}
-            {object.attributes.length > 5 && (
-              <p className="text-caption text-text-muted">
-                +{object.attributes.length - 5} more attributes
-              </p>
-            )}
-          </div>
-        )}
-        {object.relationships.length > 0 && (
-          <div className="space-y-1">
-            {object.relationships.map((rel) => (
-              <p key={rel.label} className="text-body leading-snug text-text-primary">
-                <span className="italic text-text-muted">{rel.label}</span>{" "}
-                {rel.targetIds
-                  .map((id) => graph.objects[id]?.name)
-                  .filter(Boolean)
-                  .join(", ")}
-              </p>
-            ))}
-          </div>
-        )}
+        <FieldList
+          object={object}
+          graph={graph}
+          onSelect={noop}
+          limit={HOVER_FIELDS}
+          className="border-t border-border-subtle"
+        />
         {object.methods.length > 0 && (
-          <p className="text-body leading-snug text-text-primary">
-            <span className="font-semibold text-text-muted">Actions</span>{" "}
+          <p className="text-caption text-text-primary">
+            <span className="text-text-muted">Actions</span>{" "}
             {object.methods.map((m) => m.name).join(" · ")}
           </p>
         )}
         {object.childIds.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             {object.childIds.map((childId) => {
               const child = graph.objects[childId];
               if (!child) return null;
               return (
-                <span
-                  key={childId}
-                  className="rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-caption font-medium text-text-primary"
-                >
-                  {child.name}
+                <span key={childId} className={VALUE_CHIP}>
+                  <span className={CHIP_TEXT}>{child.name}</span>
                 </span>
               );
             })}

@@ -6,16 +6,12 @@ import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import { ExternalAnchor } from "@/shared/ui/external-anchor";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { formatIsoDate, isHttpUrl, isIsoDate, isNumeric } from "@/features/ontology/field-kinds";
+import { ROW_ICON_BUTTON } from "./panel-section";
 
 /**
- * The value cells of the typed kinds: select, date, link (2026-10-01), number
- * (2026-10-09).
- *
- * ⚠ EACH ONE WRITES ONLY A VALUE THE SERVER WILL ACCEPT. The panel's save is a
- * whole-array PATCH of the attribute bag (`hooks/use-ontology.ts`), so a single
- * invalid value 400s every other edit riding the same debounce. The select can
- * only offer its options, the date input yields a full day or nothing, and the
- * link holds its draft locally until it parses as http(s).
+ * The value cells of the typed kinds. Each writes only a value the server accepts: the panel's save
+ * is a whole-array PATCH of the attribute bag, so one invalid value 400s every edit riding the same
+ * debounce.
  */
 
 /** Sentinel for "no choice" — never a stored value (the store spells it ""). */
@@ -32,11 +28,10 @@ export function EnumValueEditor({
   canEdit: boolean;
   onChange: (next: string) => void;
 }) {
-  // A stored value the options no longer carry is still SHOWN (it is the truth
-  // on the row), never offered back once moved off.
+  // A stored value the options no longer carry is still shown, never offered back once moved off.
   const choices = value && !options.includes(value) ? [value, ...options] : options;
   return (
-    <span className="flex min-w-[5rem] flex-1 items-center">
+    <span className="flex min-w-0 flex-1 items-center">
       <SelectMenu
         value={value === "" ? NONE : value}
         options={[
@@ -57,11 +52,8 @@ export function EnumValueEditor({
 const NUMBER_TYPING_RE = /^-?\d*(\.\d*)?$/;
 
 /**
- * Number (2026-10-09). Typing that cannot become a number is refused live, so a
- * letter never appears in the line. A half-typed number (`-`, `3.`) is held in a
- * local draft and not written; the store only ever gets `""` or a full number
- * (`field-kinds.ts › isNumeric`). Blur drops an unfinished draft back to the
- * stored value.
+ * Typing that cannot become a number is refused live. A half-typed number (`-`, `3.`) is held in a
+ * local draft and not written; blur drops it back to the stored value.
  */
 export function NumberValueEditor({
   value,
@@ -91,7 +83,7 @@ export function NumberValueEditor({
         }
       }}
       onBlur={() => setDraft(null)}
-      className="min-w-[5rem] flex-1"
+      className="min-w-0 flex-1"
     />
   );
 }
@@ -107,7 +99,7 @@ export function DateValueEditor({
 }) {
   if (!canEdit) {
     return (
-      <span className="min-w-[5rem] flex-1 text-body text-text-primary">
+      <span className="min-w-0 flex-1 text-body text-text-primary">
         {value ? formatIsoDate(value) : "—"}
       </span>
     );
@@ -118,21 +110,18 @@ export function DateValueEditor({
       type="date"
       value={value}
       quiet
-      // A browser date input reports a full `YYYY-MM-DD` or "" — anything else
-      // is a half-typed day, which is held back rather than written.
+      // Anything but a full `YYYY-MM-DD` or "" is a half-typed day, held back.
       onChange={(next) => {
         if (next === "" || isIsoDate(next)) onChange(next);
       }}
-      className="min-w-[5rem] flex-1"
+      className="min-w-0 flex-1"
     />
   );
 }
 
 /**
- * Saved and valid → a real hyperlink that opens in the user's browser
- * (`shared/ui/external-anchor.tsx`, the bridge path on desktop), with a pencil
- * to edit. Empty, editing or invalid → the underline input; the value is written
- * on blur / Enter and only when it is an http(s) URL (or cleared).
+ * Saved and valid: a real hyperlink (the bridge path on desktop) with a pencil to edit. Empty,
+ * editing or invalid: the underline input, written on blur / Enter only as an http(s) URL or "".
  */
 export function LinkValueEditor({
   value,
@@ -149,7 +138,7 @@ export function LinkValueEditor({
 
   if (!editing && value && isHttpUrl(value)) {
     return (
-      <span className="flex min-w-[5rem] flex-1 items-center gap-1.5">
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
         <ExternalAnchor href={value} title={value} className="min-w-0 truncate text-body">
           {value}
         </ExternalAnchor>
@@ -158,7 +147,7 @@ export function LinkValueEditor({
             type="button"
             aria-label="Edit link"
             onClick={() => setDraft(value)}
-            className="shrink-0 rounded-md p-1 text-text-muted hover:text-text-primary"
+            className={ROW_ICON_BUTTON}
           >
             <Pencil size={11} />
           </button>
@@ -176,7 +165,7 @@ export function LinkValueEditor({
   };
 
   return (
-    <span className="flex min-w-[5rem] flex-1 flex-col">
+    <span className="flex min-w-0 flex-1 flex-col">
       <InlineUnderlineField
         label="Value"
         placeholder="https://"

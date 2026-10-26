@@ -683,6 +683,20 @@ html {
   background: var(--home-card);
 }
 
+/* THE SELECTABLE WHITE CARD: worn with `.white-card` by a card that opens in a side panel (the
+   ontology's object cards and records). A firmer hairline on hover; `data-selected="true"` adds an
+   ink bar on the leading edge, so selecting moves nothing. */
+.select-card {
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.select-card:hover {
+  border-color: var(--border-strong);
+}
+.select-card[data-selected="true"] {
+  border-color: var(--border-highlight);
+  box-shadow: inset 3px 0 0 var(--surface-cta), var(--shadow-bento);
+}
+
 /* THE MARK TILE: a small raised light square holding a glyph (the thread card's kind). Size stays
    with the caller. */
 .mark-tile {

@@ -428,3 +428,21 @@ Workers append a `## <slice>` section per question: the question, what was chose
    `docs/REFACTOR-FINDINGS.md` (`use-writes-shared.ts`, `page-action-button.tsx`). Not touched:
    comments naming `channels/lib/agent-colors.ts` in `dopl-desktop-app/main/*` and
    `scripts/check-css-token-drift.ts`'s header line naming the deleted landing rules.
+
+## Ontology staging overhaul (branch `ui/ontology-overhaul`)
+
+1. **Selection on a white card.** /home's channel row selects by filling ink; an ontology card is
+   too large for that. Chosen: the Rows record's existing inset ink bar on the leading edge, made a
+   kit state (`.select-card`) and worn by canvas cards, lane headers and Rows records alike.
+2. **Canvas lanes lost their grey fill** (the Rows ruling against a grey ground holding white
+   cards), and canvas cards lost their fixed 216px height: a card now previews its first three
+   fields (`field-list.tsx`) above the counts footer, so heights follow content. The dotted ground
+   stays as the canvas's identity.
+3. **The attribute's kind stays visible**, as a muted `bare` menu after the value, rather than
+   hidden until hover: hiding it would have cost the at-a-glance type and kept its width anyway.
+   The ⋯ / ✕ are revealed on hover or focus.
+4. **Pickers after chips read `+ Add`** (accessible names "Add knowledge" / "Add skill", so they do
+   not collide with the section's "Add"); the relationship and object pickers keep `+ Link`.
+5. **The Rows display moved onto kit and tokens.** The brief named `ontology-rows.css` for deletion;
+   its literal neutral palette (DESIGN-LANGUAGE §2) is now the product tokens (`--text-primary`
+   etc.), so Rows reads slightly cooler than it did. No shared token was retuned.

@@ -7,10 +7,6 @@
 
 import { useEffect, useState } from "react";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
-// ⚠ THE ROWS DISPLAY'S FACE, scoped `.uis-window .uis-ont-*` (Samuel, ask 5b).
-// Lives here rather than in `ui-staging/staging.css` so this round touches no
-// file the other overhaul workers are in; same selector convention as that sheet.
-import "./ontology-rows.css";
 import {
   STAGING_HOME_SEGMENT,
   STAGING_HOME_WORKSPACE_ID,

@@ -17,6 +17,13 @@ export const PAGE_ACTION_BTN = cn(INK_PILL_FACE, "h-9 px-3.75 text-small");
 export const PAGE_ACTION_BTN_LIGHT =
   "auth-btn-3d-light flex h-9 cursor-pointer items-center rounded-full px-3.75 text-small font-medium text-text-primary";
 
+/**
+ * The /home header's white pill (search, Profile) at the page scale: `.white-card` on the
+ * `.raise-pill` lift. Face and height only; width and padding stay with the caller.
+ */
+export const WHITE_PILL =
+  "white-card raise-pill inline-flex h-9 cursor-pointer items-center rounded-full text-small font-medium text-text-primary";
+
 /** Glyph size inside {@link PAGE_ACTION_BTN}. */
 export const PAGE_ACTION_ICON = 13;
 

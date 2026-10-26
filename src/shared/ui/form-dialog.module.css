@@ -183,3 +183,8 @@
   line-height: 1.45;
   resize: none;
 }
+
+/* A secondary-ink line: a description beside a title, a key beside its value. */
+.inputSecondary {
+  color: var(--text-secondary);
+}

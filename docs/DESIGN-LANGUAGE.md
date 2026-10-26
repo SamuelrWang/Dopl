@@ -91,7 +91,8 @@ Sentence case everywhere. Titles are short noun/verb phrases.
 | **Liquid glass** | Always the real `LiquidGlass` with the hero-banner settings; replace its heavy drop shadow with a small one; never fake glass with a semi-opaque fill. | `hero-banner.tsx`, `.lp-mp-notify-glass` |
 
 In the product these recipes are already kit and `src/shared/ui` primitives (2026-10-26):
-the white card `.white-card`, the well `.card-well`, `StatusPill`, `ThinMeter`,
+the white card `.white-card` (selectable: `+ .select-card`), the well `.card-well`, the header
+white pill `WHITE_PILL`, `StatusPill`, `ThinMeter`,
 `IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, the ink pill
 family (`INK_PILL_FACE`: `PAGE_ACTION_BTN`, `SMALL_PRIMARY_PILL`, `INK_PILL`, `QUIET_PILL`), and
 the 15px `text-heading` step. A port imports them; DESIGN-SYSTEM.md lists each.
