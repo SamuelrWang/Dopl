@@ -140,6 +140,8 @@ export declare function agentNamesFromMessages(messages: ChannelMessage[]): Map<
  * null), so each caller keeps its own fallback, the `@agent-<id>` handle.
  */
 export declare function nameHandle(name: string, view?: MemberView): string | null;
+/** The slug a display name tags as, before any charset check. */
+export declare function nameSlug(name: string): string;
 /**
  * **WHO THIS MESSAGE WAS FOR, OFF THE COLUMNS THAT DECIDED IT** (2026-09-04).
  *

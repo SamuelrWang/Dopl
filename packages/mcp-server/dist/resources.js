@@ -1,7 +1,7 @@
 "use strict";
 /**
- * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Three: the channels
- * doctrine, the knowledge one, and the displays one. {@link RESOURCES} is the
+ * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES: the channels
+ * doctrine, the knowledge one, the displays one and the tasks one. {@link RESOURCES} is the
  * list; a reader counting them reads that table, never this sentence.
  *
  * ⚠ WHY A RESOURCE AND NOT A LONGER DESCRIPTION (T10/T82, 2026-09-02). A tool
@@ -32,6 +32,7 @@ const call_ref_js_1 = require("./call-ref.js");
 const channel_doctrine_js_1 = require("./tools/channel-doctrine.js");
 const knowledge_doctrine_js_1 = require("./tools/knowledge-doctrine.js");
 const display_doctrine_js_1 = require("./tools/display-doctrine.js");
+const task_doctrine_js_1 = require("./tools/task-doctrine.js");
 const RESOURCES = {
     [channel_doctrine_js_1.DOCTRINE_URI]: {
         name: "channels-doctrine",
@@ -56,6 +57,12 @@ const RESOURCES = {
         title: "Dopl displays — blocks, limits, devices",
         description: () => "The display blocks dopl_show takes, their limits, how each degrades on glasses, and two examples.",
         text: display_doctrine_js_1.displaysDoctrine,
+    },
+    [task_doctrine_js_1.TASKS_DOCTRINE_URI]: {
+        name: "tasks-doctrine",
+        title: "Dopl tasks — create, assign, resolve",
+        description: () => "How a channel task moves from created to resolved: assignees, subtasks, notes and status.",
+        text: task_doctrine_js_1.tasksDoctrine,
     },
 };
 /** A published resource's text in the active set — also what a pulled guide topic serves. */

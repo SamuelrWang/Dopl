@@ -131,6 +131,8 @@ export const WRITE_OPS: Record<string, Set<string>> = {
     "rooms.update",
     // Every action writes (`channel-vocab.ts › CHANNEL_ACTIONS.artifact`); a new one fails closed.
     "artifact",
+    // Every action writes (`channel-vocab.ts › CHANNEL_ACTIONS.task`); the reads are `rooms.tasks`.
+    "task",
   ]),
 };
 

@@ -96,7 +96,7 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
       chats: "dopl_chats:guide",
     },
     select: "topic",
-    pulled: { knowledge: "dopl://doctrine/knowledge", displays: "dopl://doctrine/displays" },
+    pulled: { knowledge: "dopl://doctrine/knowledge", displays: "dopl://doctrine/displays", tasks: "dopl://doctrine/tasks" },
     params: ["section"],
   },
   // ── Channels ────────────────────────────────────────────────────────────
@@ -107,8 +107,9 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
       status: "dopl_channel:status",
       members: "dopl_channel:rooms.members",
       threads: "dopl_channel:rooms.threads",
+      tasks: "dopl_channel:rooms.tasks",
     },
-    params: ["channel"],
+    params: ["channel", "task"],
   },
   {
     name: "dopl_read_channel",
@@ -193,6 +194,22 @@ export const GRANULAR_TOOLS: readonly GranularTool[] = [
       dissolve: "dopl_channel:artifact.dissolve",
     },
     params: ["channel", "artifact", "messages", "name", "summary", "client_msg_id"],
+    destructive: true,
+  },
+  {
+    name: "dopl_manage_task",
+    bind: {
+      create: "dopl_channel:task.create_task",
+      update: "dopl_channel:task.update_task",
+      set_status: "dopl_channel:task.set_status",
+      assign: "dopl_channel:task.assign",
+      unassign: "dopl_channel:task.unassign",
+      add_subtask: "dopl_channel:task.add_subtask",
+      update_subtask: "dopl_channel:task.update_subtask",
+      add_note: "dopl_channel:task.add_note",
+    },
+    params: ["channel", "task", "subtask", "title", "status", "state", "due", "to", "thread", "message", "body", "client_msg_id"],
+    carry: ["description"],
     destructive: true,
   },
   // ── Knowledge ───────────────────────────────────────────────────────────

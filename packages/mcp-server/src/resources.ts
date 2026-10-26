@@ -1,6 +1,6 @@
 /**
- * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES. Three: the channels
- * doctrine, the knowledge one, and the displays one. {@link RESOURCES} is the
+ * resources.ts — THE MCP RESOURCES THIS SERVER PUBLISHES: the channels
+ * doctrine, the knowledge one, the displays one and the tasks one. {@link RESOURCES} is the
  * list; a reader counting them reads that table, never this sentence.
  *
  * ⚠ WHY A RESOURCE AND NOT A LONGER DESCRIPTION (T10/T82, 2026-09-02). A tool
@@ -32,6 +32,7 @@ import type { ToolSet } from "./tool-manifest.js";
 import { channelDoctrine, DOCTRINE_URI } from "./tools/channel-doctrine.js";
 import { knowledgeDoctrine, KNOWLEDGE_DOCTRINE_URI } from "./tools/knowledge-doctrine.js";
 import { displaysDoctrine, DISPLAYS_DOCTRINE_URI } from "./tools/display-doctrine.js";
+import { tasksDoctrine, TASKS_DOCTRINE_URI } from "./tools/task-doctrine.js";
 
 interface Resource {
   name: string;
@@ -66,6 +67,12 @@ const RESOURCES: Readonly<Record<string, Resource>> = {
     title: "Dopl displays — blocks, limits, devices",
     description: () => "The display blocks dopl_show takes, their limits, how each degrades on glasses, and two examples.",
     text: displaysDoctrine,
+  },
+  [TASKS_DOCTRINE_URI]: {
+    name: "tasks-doctrine",
+    title: "Dopl tasks — create, assign, resolve",
+    description: () => "How a channel task moves from created to resolved: assignees, subtasks, notes and status.",
+    text: tasksDoctrine,
   },
 };
 
