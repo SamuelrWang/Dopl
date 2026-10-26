@@ -45,6 +45,14 @@ export default function HomePage() {
     onRaise: () => setTab("channels"),
   });
 
+  /** A left-pane pick or an Overview channel row: drops any held thread and always raises the
+   *  channel face, even on the selected row. */
+  const openRow = (id: string) => {
+    setSelectedId(id);
+    jump.clear();
+    setTab("channels");
+  };
+
   /**
    * Opens what a search row names: on /home a selection plus a face, never a route (containers
    * have no page). Only a `messages` row carries a `seq` to scroll to (F-714).
@@ -166,13 +174,7 @@ export default function HomePage() {
           <RelationshipList
             rows={rows}
             selectedId={selected?.id ?? null}
-            // A pick drops any held thread and always raises the channel face, even on the
-            // selected row.
-            onSelect={(id) => {
-              setSelectedId(id);
-              jump.clear();
-              setTab("channels");
-            }}
+            onSelect={openRow}
           />
         }
       >
@@ -189,6 +191,7 @@ export default function HomePage() {
                 setSelectedId(null);
                 void channelsQuery.refetch();
               }}
+              onOpenRow={openRow}
             />
           )}
         </Crossfade>

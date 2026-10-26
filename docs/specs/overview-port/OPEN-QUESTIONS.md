@@ -35,6 +35,10 @@ Each: the question, what was chosen, where.
 11. **Copy the old rulings removed.** Staging titles the card "Credits" and says "of N used", words
     the 2026-09-13 ruling had dropped; "Get more credits" is a card pill, not the 36px page button.
     Chose: staging (the newer design). INVARIANTS updated.
+12. **Channels rows open their channel (branch `ui/overview-channel-rows`).** Chose: a row with no
+    cached channel stays plain text; hover/focus is the flat menu-row fill (no lift on a table row,
+    cells gain 8px side padding for it); faces cap at 3 + N; the playground goes to
+    `/playground/channels`. Where: `overview-ledger.tsx › ChannelsTable`.
 
 ## For Samuel (review, 2026-10-26): reversals of earlier rulings the staging look brings
 

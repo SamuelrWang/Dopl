@@ -24,12 +24,15 @@ export function HomeOverview({
   homeWorkspaceId,
   homeChannels,
   onOpenSettings,
+  onOpenChannel,
   useReads = useHomeOverviewReads,
 }: {
   homeWorkspaceId: string | null;
-  /** The operator's home channels, for the usage scope. */
+  /** The operator's home channels, for the usage scope and the Channels table's faces. */
   homeChannels: readonly HomeChannelOption[];
   onOpenSettings: (section: SettingsSection) => void;
+  /** Raises the Channel face on the channel this container holds. */
+  onOpenChannel: (workspaceId: string) => void;
   useReads?: (args: HomeOverviewReadArgs) => HomeOverviewReads;
 }) {
   const [scope, setScope] = useState<string>(USAGE_SCOPE_ALL);
@@ -69,7 +72,7 @@ export function HomeOverview({
             <TokensCard spend={reads.spend} />
           </div>
         </div>
-        <ChannelsTable data={overview.data} />
+        <ChannelsTable data={overview.data} channels={homeChannels} onOpenChannel={onOpenChannel} />
         <div className={styles.pair}>
           <PeopleCard data={overview.data} />
           <ToolsCard data={overview.data} />

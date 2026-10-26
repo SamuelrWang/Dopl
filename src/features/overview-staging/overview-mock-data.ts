@@ -21,23 +21,24 @@ import { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP } from "@/features/home/overview-t
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
 import type { ConnectedDevice } from "@/features/devices/types";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
+import type { HomeChannelOption } from "@/features/home/components/overview/overview-credits";
+import { STAGING_PEOPLE } from "@/features/ui-staging/staging-stubs";
 
 /* ────────────────────────────── home channels ────────────────────────────── */
 
-/** The subset of `Channel` the usage scope menu reads (`id`, `name`). */
-export interface StagingChannel {
-  id: string;
-  /** The channel's container, which the rails key by (`HomeChannelUsage.workspaceId`). */
-  workspaceId: string;
-  name: string;
-}
+const [, GRACE, ANTHONY] = STAGING_PEOPLE.map((person) => ({
+  userId: person.userId,
+  displayName: person.displayName ?? "Member",
+  avatarUrl: person.avatarUrl,
+}));
 
-export const HOME_CHANNELS: readonly StagingChannel[] = [
-  { id: "ch-tech-debt", workspaceId: "demo-ws-q4", name: "tech-debt" },
-  { id: "ch-deploys", workspaceId: "demo-ws-weekly", name: "deploys" },
-  { id: "ch-flaky-tests", workspaceId: "demo-ws-flakes", name: "flaky-tests" },
-  { id: "ch-api-v2", workspaceId: "demo-ws-apiv2", name: "api-v2-migration" },
-  { id: "ch-design-review", workspaceId: "demo-ws-design", name: "design-review" },
+/** The home channels the scope menu and the Channels table read; design-review is solo. */
+export const HOME_CHANNELS: readonly HomeChannelOption[] = [
+  { id: "ch-tech-debt", workspaceId: "demo-ws-q4", name: "tech-debt", faces: [GRACE, ANTHONY] },
+  { id: "ch-deploys", workspaceId: "demo-ws-weekly", name: "deploys", faces: [GRACE] },
+  { id: "ch-flaky-tests", workspaceId: "demo-ws-flakes", name: "flaky-tests", faces: [ANTHONY] },
+  { id: "ch-api-v2", workspaceId: "demo-ws-apiv2", name: "api-v2-migration", faces: [GRACE, ANTHONY] },
+  { id: "ch-design-review", workspaceId: "demo-ws-design", name: "design-review", faces: [] },
 ];
 
 /* ─────────────────────────────── the overview ─────────────────────────────── */

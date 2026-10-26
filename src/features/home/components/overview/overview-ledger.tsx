@@ -1,18 +1,34 @@
+import { cn } from "@/shared/lib/utils";
+import { IdentityStack } from "@/shared/ui/avatar-stack";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ThinMeter } from "@/shared/ui/usage-meter";
 import {
   EMPTY_CHANNEL_USAGE,
   EMPTY_PERSON_USAGE,
   EMPTY_TOOL_USAGE,
+  type HomeChannelUsage,
   type HomeOverview,
 } from "@/features/home/overview-types";
 import { OverviewCard } from "./overview-card";
+import type { HomeChannelOption } from "./overview-credits";
 import styles from "./overview.module.css";
 
-/** One row per home channel: credits beside a meter scaled to the top channel, then messages. */
-export function ChannelsTable({ data }: { data: HomeOverview }) {
+/**
+ * One row per home channel: the name and everybody else's faces, credits beside a meter scaled to
+ * the top channel, then messages. A row whose channel is in the left pane's list opens it.
+ */
+export function ChannelsTable({
+  data,
+  channels,
+  onOpenChannel,
+}: {
+  data: HomeOverview;
+  channels: readonly HomeChannelOption[];
+  onOpenChannel: (workspaceId: string) => void;
+}) {
   const rows = data.channels ?? EMPTY_CHANNEL_USAGE;
   const peak = Math.max(1, ...rows.map((row) => row.credits));
+  const byWorkspace = new Map(channels.map((channel) => [channel.workspaceId, channel]));
   return (
     <OverviewCard title="Channels" count={rows.length}>
       {rows.length === 0 ? (
@@ -34,7 +50,11 @@ export function ChannelsTable({ data }: { data: HomeOverview }) {
             {rows.map((row) => (
               <tr key={row.workspaceId}>
                 <td className="font-medium">
-                  {row.name ? `#${row.name}` : <span className="text-text-muted">Untitled channel</span>}
+                  <ChannelName
+                    row={row}
+                    channel={byWorkspace.get(row.workspaceId)}
+                    onOpen={() => onOpenChannel(row.workspaceId)}
+                  />
                 </td>
                 <td className={styles.num}>
                   <span className={styles.numMeter}>
@@ -49,6 +69,38 @@ export function ChannelsTable({ data }: { data: HomeOverview }) {
         </table>
       )}
     </OverviewCard>
+  );
+}
+
+/** The name cell: a button over the whole row when the channel can be opened, else plain text. */
+function ChannelName({
+  row,
+  channel,
+  onOpen,
+}: {
+  row: HomeChannelUsage;
+  channel: HomeChannelOption | undefined;
+  onOpen: () => void;
+}) {
+  const label = row.name ? `#${row.name}` : "Untitled channel";
+  const faces = channel?.faces ?? [];
+  const body = (
+    <>
+      <span className={row.name ? "truncate" : "truncate text-text-muted"}>{label}</span>
+      {faces.length > 0 && (
+        <IdentityStack
+          size={20}
+          max={3}
+          faces={faces.map((f) => ({ key: f.userId, photo: f.avatarUrl, name: f.displayName }))}
+        />
+      )}
+    </>
+  );
+  if (!channel) return <span className={styles.name}>{body}</span>;
+  return (
+    <button type="button" className={cn(styles.name, styles.open)} aria-label={`Open ${label}`} onClick={onOpen}>
+      {body}
+    </button>
   );
 }
 

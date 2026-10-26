@@ -3,7 +3,12 @@ import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-w
 import type { ConnectedDevice } from "@/features/devices/types";
 import type { HomeOverview, HomeOverviewSeries } from "@/features/home/overview-types";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
+import type { HomeChannelOption } from "./overview-credits";
 import type { HomeOverviewReads, OverviewRead } from "./use-home-overview-reads";
+
+export const HOME_CHANNELS: HomeChannelOption[] = [
+  { id: "ch-1", workspaceId: "ws-1", name: "Priya Shah", faces: [] },
+];
 
 export const OVERVIEW: HomeOverview = {
   range: "month",
