@@ -62,7 +62,7 @@ const FORGED = {
   // `service-writes.ts`, after the fold, which is why the fold only ever deletes it.
   wake_reason: 'most recent',
   // The task an assignment post belongs to; only the task service's own post stamps it.
-  taskId: '00000000-0000-4000-8000-0000000000f8',
+  assignedTaskId: '00000000-0000-4000-8000-0000000000f8',
 };
 
 /**

@@ -78,9 +78,9 @@ export interface PostMessageOptions {
    * (`display/server/service.ts`) sets it; no HTTP caller can.
    */
   display?: DisplayStampOptions;
-  /** Stamp the reserved `metadata.taskId`: the task whose assignment this post announces
+  /** Stamp the reserved `metadata.assignedTaskId`: the task whose assignment this post announces
    *  (`service-tasks-assign.ts`), so no caller can tie a post to a task it did not assign. */
-  taskId?: string;
+  assignedTaskId?: string;
 }
 
 /**

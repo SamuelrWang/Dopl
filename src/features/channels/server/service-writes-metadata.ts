@@ -37,7 +37,7 @@ import { SERVER_STAMPED_DEVICE_KEYS } from "./service-writes-device";
  * `session_id`, `to_user_notify`, `threadMode`, `threadCreatedBy`, `threadTitle`,
  * `threadTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
  * `handoff`, `fanoutGroup`, `mentionedUserIds`, `escalation`,
- * `escalationAnswer`, `taskId`, `source`, `display`, and the six calm-terminal flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
+ * `escalationAnswer`, `assignedTaskId`, `source`, `display`, and the six calm-terminal flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
  * thread closing (wiring plan Phase 4, 2026-08-18) — no writer and, unlike the
  * dead agent keys below, no RENDERER either.
  * `service-writes-metadata-markers.ts` records why. `threadId` stays
@@ -231,7 +231,7 @@ export async function resolvePostMetadata(
   // sharing this id into ONE request card, so a settable group id is a way to
   // render your own thread inside somebody else's request.
   delete metadata.fanoutGroup;
-  delete metadata.taskId;
+  delete metadata.assignedTaskId;
   // ⚠ Same terms as `fanoutGroup`, one step sharper: this key decides whose
   // Tags inbox the message lands in (and, from Phase 7, who gets notified), so
   // a caller able to set it could put its words in anybody's inbox without
@@ -388,7 +388,7 @@ export async function resolvePostMetadata(
   if (opts.fanoutGroupId && typeof metadata.threadId === "string") {
     metadata.fanoutGroup = opts.fanoutGroupId;
   }
-  if (opts.taskId) metadata.taskId = opts.taskId;
+  if (opts.assignedTaskId) metadata.assignedTaskId = opts.assignedTaskId;
 
   // MENTIONS — the server's own parse, never the caller's claim. ⚠ Deliberately
   // NOT conditioned on a surviving thread tag, unlike `handoff` / `fanoutGroup`:

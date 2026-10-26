@@ -229,17 +229,17 @@ describe("postMessage — fan-out group stamp (wiring plan Phase 3)", () => {
 });
 
 describe("postMessage — task stamp (channel tasks, R7)", () => {
-  it("stamps metadata.taskId from the server-side option", async () => {
-    await postMessage(ctx, "dm", { body: "assigned", toUserId: PEER }, { taskId: "task-1" });
-    expect(capturedMetadata().taskId).toBe("task-1");
+  it("stamps metadata.assignedTaskId from the server-side option", async () => {
+    await postMessage(ctx, "dm", { body: "assigned", toUserId: PEER }, { assignedTaskId: "task-1" });
+    expect(capturedMetadata().assignedTaskId).toBe("task-1");
   });
 
-  it("SECURITY: a caller-supplied metadata.taskId is stripped, never honored", async () => {
+  it("SECURITY: a caller-supplied metadata.assignedTaskId is stripped, never honored", async () => {
     await postMessage(ctx, "dm", {
       body: "assigned",
       toUserId: PEER,
-      metadata: { taskId: "somebody-elses-task" },
+      metadata: { assignedTaskId: "somebody-elses-task" },
     });
-    expect(has(capturedMetadata(), "taskId")).toBe(false);
+    expect(has(capturedMetadata(), "assignedTaskId")).toBe(false);
   });
 });

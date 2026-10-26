@@ -109,6 +109,6 @@ export interface PostMetadataOptions {
   /** Checked addressees stamped as mentions, and those the body must @-tag (2026-10-08). */
   addressedUserIds?: readonly string[];
   mustTagUserIds?: readonly string[];
-  /** Stamp reserved `metadata.taskId`. Only caller: `service-tasks-assign.ts`, via `postMessage`. */
-  taskId?: string;
+  /** Stamp reserved `metadata.assignedTaskId`. Only caller: `service-tasks-assign.ts`, via `postMessage`. */
+  assignedTaskId?: string;
 }

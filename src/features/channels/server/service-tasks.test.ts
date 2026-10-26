@@ -170,7 +170,7 @@ describe("create", () => {
       agent,
       CHANNEL,
       expect.objectContaining({ to: `@agent-${OTHER_AGENT}`, clientMsgId: `task-${TASK}-assign-assignee-1` }),
-      { taskId: TASK }
+      { assignedTaskId: TASK }
     );
   });
 
@@ -256,6 +256,23 @@ describe("assign", () => {
       assignee: { kind: "agent", agentId: OTHER_AGENT },
     });
     expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it("takes the new row back out when the wake post fails, so a retry wakes the agent", async () => {
+    liveAgent(PEER);
+    const down = new Error("post failed");
+    vi.mocked(postMessage).mockRejectedValueOnce(down);
+    const assign = () =>
+      applyTaskAction(person, CHANNEL, {
+        action: "assign",
+        task: TASK,
+        assignee: { kind: "agent", agentId: OTHER_AGENT },
+      });
+    await expect(assign()).rejects.toBe(down);
+    expect(repoTasks.deleteAssignee).toHaveBeenCalledWith(TASK, { agentId: OTHER_AGENT });
+    await assign();
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(repoTasks.deleteAssignee).toHaveBeenCalledTimes(1);
   });
 
   it("refuses an agent with no session in this channel", async () => {

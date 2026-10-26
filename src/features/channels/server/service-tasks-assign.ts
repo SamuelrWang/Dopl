@@ -28,7 +28,8 @@ export function assertAssignable(ctx: ChannelContext, actor: TaskActorIds): void
 
 /**
  * Adds the assignee, and when it is an agent other than the caller, posts an ordinary addressed
- * message through the one post path so that agent wakes (R7). An existing assignment posts nothing.
+ * message through the one post path so that agent wakes. An existing assignment posts nothing, so a
+ * failed post takes its new row back out: otherwise a retry would find the row and never wake.
  */
 export async function assignActor(
   ctx: ChannelContext,
@@ -42,16 +43,21 @@ export async function assignActor(
   const rowId = await repoTasks.insertAssignee(task.id, actor.userId, actor.agentId);
   if (rowId === null || actor.agentId === null) return;
   if (actor.agentId === callerActor(ctx).agentId) return;
-  await postMessage(
-    ctx,
-    channelId,
-    {
-      body: `Task assigned to you: ${task.title}`,
-      to: `@agent-${actor.agentId}`,
-      clientMsgId: `task-${task.id}-assign-${rowId}`,
-    },
-    { taskId: task.id }
-  );
+  try {
+    await postMessage(
+      ctx,
+      channelId,
+      {
+        body: `Task assigned to you: ${task.title}`,
+        to: `@agent-${actor.agentId}`,
+        clientMsgId: `task-${task.id}-assign-${rowId}`,
+      },
+      { assignedTaskId: task.id }
+    );
+  } catch (err) {
+    await repoTasks.deleteAssignee(task.id, { agentId: actor.agentId });
+    throw err;
+  }
 }
 
 export async function assignTask(
