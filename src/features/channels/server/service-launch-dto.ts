@@ -33,7 +33,7 @@ export function toDirective(
     // For the desktop's local ownership re-check (F-273, F-284); always the caller's own id.
     operatorUserId: row.operator_user_id,
     channelId: row.channel_id,
-    threadId: row.task_id,
+    threadId: row.thread_id,
     goal: row.goal,
     model: row.model,
     // Every newer column is read `?? null`: a stale PostgREST cache may omit it. `null` runtime

@@ -3,8 +3,6 @@
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (parity.test.ts).
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`.
- *
  * ⚠ Every string below is server NARRATION, outside untrusted framing. What is
  * peer-controlled:
  *   - `ch.name` — creator-typed, and `resolveChannelOr` resolves PUBLIC channels
@@ -29,7 +27,7 @@ export declare function opCreateThread(client: DoplClient, channelRef: string, t
  *    instead; there is not, and the words themselves now teach a feature that
  *    does not exist, so the op left the enum too.
  *  - `opProposeClose()` — the agent's terminal act, a marked non-terminal
- *    `task_progress` its operator confirmed. Nothing to confirm.
+ *    `thread_progress` its operator confirmed. Nothing to confirm.
  *
  * The rendering rules they demonstrated are still the file's: a peer-typed TITLE
  * goes in one inline code span with `channel-render.ts`'s

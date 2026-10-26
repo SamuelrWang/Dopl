@@ -124,7 +124,7 @@ function HeldGateCard({
     // hiding it on click would hide the one case worth seeing — an answer nothing took.
     void answerAgentPermission({
       channelId: agent.channelId,
-      taskId: agent.taskId,
+      threadId: agent.threadId,
       agentId: agent.agentId,
       requestId: gate.requestId,
       allow,

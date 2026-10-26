@@ -1,7 +1,7 @@
 // THE PRIVATE TURN — a 1:1 exchange between the operator and their own agent (2026-08-22,
 // Samuel's ruling).
 //
-// The operator types into the agent view's composer; `session-reopen.js › messageByTask` dispatches
+// The operator types into the agent view's composer; `session-reopen.js › messageByThread` dispatches
 // a `steer`. The agent's answer to THAT turn is for the operator alone and must not become a
 // channel post. The framing says so (`session-seed.js › frameOperatorTurn`) — and a prompt is a
 // request, so this file is the ENFORCEMENT. An accidental public reply to a private question is the
@@ -237,7 +237,7 @@ function effectiveMessageMode(s) {
  * `grantDecision` consults this value.
  *
  * A PER-AGENT PICK NARROWS, ON BOTH AXES (Samuel's ruling 3, "narrower sticks"): the agent view or
- * an orchestrator can pin ONE session's posture (`session-reopen.js › setModeByTask` with `pinned`,
+ * an orchestrator can pin ONE session's posture (`session-reopen.js › setModeByThread` with `pinned`,
  * or a pinned start posture), and the gate then enforces the narrower of that pick and the channel's
  * live value. It can never be wider than the channel. `state.toolModeSet` / `messageModeSet` are
  * stamped only by a pinned set; a channel fan-out never stamps one.

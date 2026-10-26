@@ -26,18 +26,18 @@ const directedTurn = require(join(HERE, "..", "main", "session-directed.js"));
 const { floorWindowlessMessage } = require(join(HERE, "..", "main", "session-profiles.js"));
 
 const AGENT = "a1b2c3d4";
-const KEY = `chan-1:task-9:${AGENT}`;
-const task = { channelId: "chan-1", taskId: "task-9" };
+const KEY = `chan-1:thread-9:${AGENT}`;
+const thread = { channelId: "chan-1", threadId: "thread-9" };
 
 function harness() {
   const store = {
     sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
-    slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+    slotKey: (x) => `${x.channelId || ""}:${x.threadId || ""}:${x.agentId || ""}`,
     threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
   };
   const api = new Function(
     "store", "framing", "floorWindowlessMessage", "privateTurn", "directedTurn", "authReprobe",
-    `${sentinelBlock(SRC, "SESSION-REOPEN-PURE")}\n return { bind, messageByTask };`,
+    `${sentinelBlock(SRC, "SESSION-REOPEN-PURE")}\n return { bind, messageByThread };`,
   )(store, seed, floorWindowlessMessage, privateTurn, directedTurn, { reprobesOnWake: () => false, reprobeHeld: async () => false });
   const sent = [];
   const sessions = new Map([[KEY, { key: KEY, agentId: AGENT, settled: false, context: {}, operatorUserId: "op-1", nonce: "n1" }]]);
@@ -50,7 +50,7 @@ const FULL_OP = /THIS IS A PRIVATE TURN\. The contract for it, in full:/;
 
 test("operator turns: the full contract once, then a self-contained short form", () => {
   const { api, sent } = harness();
-  for (let i = 0; i < 3; i++) api.messageByTask({ ...task, agentId: AGENT, text: `ask ${i}` });
+  for (let i = 0; i < 3; i++) api.messageByThread({ ...thread, agentId: AGENT, text: `ask ${i}` });
   assert.equal(sent.length, 3);
   assert.match(sent[0], FULL_OP);
   for (const t of sent.slice(1)) {
@@ -67,9 +67,9 @@ test("operator turns: the full contract once, then a self-contained short form",
 
 test("directions: full once per KIND, and the no-authority warning rides every turn", () => {
   const { api, sent } = harness();
-  api.messageByTask({ ...task, agentId: AGENT, text: "op first" });
-  api.messageByTask({ ...task, agentId: AGENT, text: "d1", directed: direction });
-  api.messageByTask({ ...task, agentId: AGENT, text: "d2", directed: direction });
+  api.messageByThread({ ...thread, agentId: AGENT, text: "op first" });
+  api.messageByThread({ ...thread, agentId: AGENT, text: "d1", directed: direction });
+  api.messageByThread({ ...thread, agentId: AGENT, text: "d2", directed: direction });
   assert.equal(sent.length, 3);
   assert.match(sent[1], /WHOSE WORDS THESE ARE, AND WHAT THEY ARE WORTH:/, "first direction is full even after an operator turn");
   assert.doesNotMatch(sent[2], /WHOSE WORDS THESE ARE/);
@@ -98,22 +98,22 @@ test("fed channel turns: the reply call in full once, then the imperative alone;
 const { buildFencedTurn } = require(join(HERE, "..", "main", "prompt-framing.js"));
 const ctx = (toolSet) => ({
   channelName: "Ops", channelId: "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd",
-  workspaceId: "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee", taskId: "cccccccc-3333-4ddd-8eee-ffffffffffff",
+  workspaceId: "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee", threadId: "cccccccc-3333-4ddd-8eee-ffffffffffff",
   scope: "thread", toolSet,
 });
 
-test("a granular first turn drops the task_* refusals its send tool cannot even form, and keeps the rest", () => {
+test("a granular first turn drops the thread_* refusals its send tool cannot even form, and keeps the rest", () => {
   for (const side of ["requester", "responder"]) {
     const g = buildFencedTurn({ side, message: "x", nonce: "n5", context: ctx("granular") }).replace(/\s+/g, " ");
     const l = buildFencedTurn({ side, message: "x", nonce: "n5", context: ctx("legacy") }).replace(/\s+/g, " ");
     assert.doesNotMatch(g, /STORAGE words/, side);
-    assert.doesNotMatch(g, /NEVER put prose into a task_started/, side);
+    assert.doesNotMatch(g, /NEVER put prose into a thread_started/, side);
     assert.match(g, /LIFECYCLE MARKERS, not messages/, `${side}: it still learns what those rows are`);
     assert.match(g, /EVERY ANSWER IS POSTED, YOUR FINAL ANSWER INCLUDED/, `${side}: the prose invariant stays`);
     assert.match(g, /leave it that way\./, side);
     // Legacy keeps every word (its send tool still takes a free kind).
     assert.match(l, /STORAGE words/, side);
-    assert.match(l, /NEVER put prose into a task_started, task_finished or task_failed post/, side);
+    assert.match(l, /NEVER put prose into a thread_started, thread_finished or thread_failed post/, side);
     assert.ok(g.length < l.length, side);
   }
 });

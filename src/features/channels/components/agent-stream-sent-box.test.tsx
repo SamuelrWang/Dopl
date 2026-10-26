@@ -241,19 +241,19 @@ describe("the settled banner says WHERE, by name", () => {
   });
 
   /** ⚠ THE PROJECTION IS `agents-model.ts › postDestination` AND IT IS THE ONE PLACE the
-   *  `taskId === ""` wire spelling becomes a place (`spa-bridge-shapes.ts`). */
+   *  `threadId === ""` wire spelling becomes a place (`spa-bridge-shapes.ts`). */
   it("reads the place off the session, not off the presence of a title", () => {
     expect(
-      postDestination({ taskId: "", channelName: "Dopl", threadTitle: null })
+      postDestination({ threadId: "", channelName: "Dopl", threadTitle: null })
     ).toEqual({ kind: "channel", name: "Dopl" });
     expect(
-      postDestination({ taskId: "t-1", channelName: "Dopl", threadTitle: "Yada Yada" })
+      postDestination({ threadId: "t-1", channelName: "Dopl", threadTitle: "Yada Yada" })
     ).toEqual({ kind: "thread", name: "Yada Yada" });
     // A thread-scoped agent whose title has not arrived is still on a THREAD.
     expect(
-      postDestination({ taskId: "t-1", channelName: "Dopl", threadTitle: null })
+      postDestination({ threadId: "t-1", channelName: "Dopl", threadTitle: null })
     ).toEqual({ kind: "thread", name: null });
     // An older main reports no channel name; "cannot say" is not "the channel is unnamed".
-    expect(postDestination({ taskId: "" })).toEqual({ kind: "channel", name: null });
+    expect(postDestination({ threadId: "" })).toEqual({ kind: "channel", name: null });
   });
 });

@@ -188,7 +188,7 @@ test("approval can never be switched off, whatever the server says", async () =>
 });
 
 /**
- * ⚠ THERE IS ONE PASSIVE BANNER SITE NOW, NOT TWO (Samuel's spec, 2026-10-09). `notifyTaskReply`
+ * ⚠ THERE IS ONE PASSIVE BANNER SITE NOW, NOT TWO (Samuel's spec, 2026-10-09). `notifyThreadReply`
  * no longer raises a reply banner and no longer runs a gate of its own — it routes a TAG as a
  * `mention` through `notification-route`, which runs the gate once, for every caller. So the
  * second half of this pin moved to where the gate actually is, rather than being deleted.
@@ -196,7 +196,7 @@ test("approval can never be switched off, whatever the server says", async () =>
 test("the mention banner site asks the gate before showing anything", () => {
   const src = (f) => readFileSync(join(MAIN, f), "utf8");
   // ⚠ ARITY GREW (2026-10-12): `myUserId` rides in so the banner can tell MY agent from a PEER's
-  // (`task-notify.js › mentionAuthorLabel`). What this pin is ABOUT is unchanged — the gate is
+  // (`thread-notify.js › mentionAuthorLabel`). What this pin is ABOUT is unchanged — the gate is
   // still the first thing the site does — so it matches the gate, not the parameter list.
   assert.match(src("trigger.js"), /function sendFyi\(entry, m, myUserId\) \{[\s\S]{0,300}?if \(!notificationPrefs\.allowsMessage\(m, entry\)\)/);
 });
@@ -205,8 +205,8 @@ test("and the route gates every event it raises, whoever calls it", () => {
   const src = readFileSync(join(MAIN, "notification-route.js"), "utf8");
   // The one place a passive notice can be raised is also the one place the switch is read.
   assert.match(src, /if \(!prefs\.allowsIn\(prefs\.getPrefs\(\), eventId\)\) return 'none';/);
-  // And task-notify must NOT have grown its own copy of the gate back.
-  const notify = readFileSync(join(MAIN, "task-notify.js"), "utf8");
+  // And thread-notify must NOT have grown its own copy of the gate back.
+  const notify = readFileSync(join(MAIN, "thread-notify.js"), "utf8");
   assert.doesNotMatch(notify, /allowsMessage/, "one gate, in the route");
   assert.doesNotMatch(notify, /new Notification/, "and it raises nothing itself");
 });

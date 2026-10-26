@@ -64,7 +64,7 @@
 //
 // ⚠ AND THE SCOPE IS THE CHANNEL, BY ID. A `channel` naming anything but this session's channel
 // id — A SLUG INCLUDED — is ANOTHER channel and gates, exactly as for a post. The THREAD is
-// deliberately NOT scoped: the gate is handed a channelId, not a taskId, so a wrong thread id
+// deliberately NOT scoped: the gate is handed a channelId, not a threadId, so a wrong thread id
 // costs a confirm prompt inside a channel the operator is already bound to (F-139).
 
 // ── THE THREE HALVES ARE SHAPES OF ONE OP NOW (2026-09-02, F-578) ───────────────────────────

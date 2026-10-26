@@ -58,7 +58,7 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     name: "flint",
     state: "idle",
     channelName: "Website",
@@ -150,14 +150,14 @@ describe("agents-wells — the bucketing expression", () => {
 describe("AgentsTab — the four wells", () => {
   /** One agent per bucket, plus the two cases Samuel named. */
   const fixture: DesktopSessionSummary[] = [
-    summary({ sessionId: "s-now", agentId: "aaaa1111", displayName: "Alpha", taskId: "t-1", startedAt: NOW - 2 * HOUR }),
+    summary({ sessionId: "s-now", agentId: "aaaa1111", displayName: "Alpha", threadId: "t-1", startedAt: NOW - 2 * HOUR }),
     // ⚠ AN ENDED AGENT, LAST ACTIVE THREE DAYS AGO → Last 7 days. Verbatim: "if
     // it's an ended agent but they were active last thirty days … that should be
     // in … the respective gray boxes."
     summary({
       sessionId: "s-ended",
       agentId: "bbbb2222", displayName: "Bravo",
-      taskId: "t-2",
+      threadId: "t-2",
       state: "ended",
       startedAt: NOW - 4 * DAY,
       lastActivityAt: NOW - 3 * DAY,
@@ -165,14 +165,14 @@ describe("AgentsTab — the four wells", () => {
     summary({
       sessionId: "s-month",
       agentId: "cccc3333", displayName: "Charlie",
-      taskId: "t-3",
+      threadId: "t-3",
       startedAt: NOW - 12 * DAY,
       lastActivityAt: NOW - 12 * DAY,
     }),
     summary({
       sessionId: "s-old",
       agentId: "dddd4444", displayName: "Delta",
-      taskId: "t-4",
+      threadId: "t-4",
       startedAt: NOW - 200 * DAY,
       lastActivityAt: NOW - 120 * DAY,
     }),
@@ -353,7 +353,7 @@ describe("AgentsTab — the wells remember, per device", () => {
       <AgentsTab
         sessions={[
           summary({ agentId: "aaaa1111", displayName: "Alpha" }),
-          summary({ sessionId: "s-2", agentId: "bbbb2222", displayName: "Bravo", taskId: "t-2", startedAt: NOW - 3 * DAY, lastActivityAt: NOW - 3 * DAY }),
+          summary({ sessionId: "s-2", agentId: "bbbb2222", displayName: "Bravo", threadId: "t-2", startedAt: NOW - 3 * DAY, lastActivityAt: NOW - 3 * DAY }),
         ]}
         channelId={CHANNEL_ID}
         openAgent={null}

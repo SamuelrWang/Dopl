@@ -113,19 +113,13 @@ export async function removeChannelMember(
 // optimistic, so their request and their cache patch are one decision.
 
 // ─── Threads ────────────────────────────────────────────────────────
-//
-// THE CLIENT BOUNDARY: wire/storage name `task` == domain name `thread`. The
-// route segment (`/tasks`) and the response envelope keys (`tasks` / `task`)
-// are STORAGE names and stay put — renaming them means a migration plus every
-// read and write path. Every function below hands the rest of the web a
-// `thread`.
 
-// NO `listChannelThreads` WRAPPER. `GET /tasks` is read by `use-channel-threads.ts` through
+// NO `listChannelThreads` WRAPPER. `GET /threads` is read by `use-channel-threads.ts` through
 // `useApiQuery`, which owns the cache key; the bare wrapper here had no caller and would have
 // been a read the cache never sees. Same reasoning as the agents roster below.
 
 // NO `createChannelThread` / `closeChannelThread` / `reopenChannelThread` WRAPPERS either.
-// `POST /tasks` and `PATCH /tasks/[taskId]` are the thread half of `use-thread-writes.ts`:
+// `POST /threads` and `PATCH /threads/[threadId]` are the thread half of `use-thread-writes.ts`:
 // the create carries the `clientMsgId` that makes a resend return the ALREADY-created thread
 // instead of double-spawning the responder's window, and the close/reopen patches the thread
 // row that IS the transcript's status overlay. Neither is expressible as a bare call.

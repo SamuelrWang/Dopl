@@ -28,7 +28,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     workspace_id: WS,
     user_id: USER,
     session_key: `${CHAN}:t-1`,
-    task_id: null,
+    thread_id: null,
     name: "flint",
     state: "working",
     channel_name: "General",

@@ -167,7 +167,7 @@ export function artifactRowFor(
  * then an insertion, cannot disagree with itself.
  *
  * ⚠ **THE POSITION IS THE SEQ, NOT THE ENTRY ORDER.** A message arm can produce
- * no row at all (a dropped `task_started`, a threaded reply collapsed into its
+ * no row at all (a dropped `thread_started`, a threaded reply collapsed into its
  * card), so an anchor that named a neighbouring row would sometimes name a row
  * that is not there. Every row in this tree carries `seq`, and the card goes
  * before the first row that is newer than it.

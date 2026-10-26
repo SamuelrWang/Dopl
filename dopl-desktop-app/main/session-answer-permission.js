@@ -1,17 +1,17 @@
 // session-answer-permission.js — THE OPERATOR ANSWERING ONE HELD TOOL CALL, INLINE.
 //
-// It is a sibling of `main/session-reopen.js`'s `controlByTask` / `setModeByTask` /
-// `messageByTask`. It takes `resolveSession` by injection so the multiplayer address
+// It is a sibling of `main/session-reopen.js`'s `controlByThread` / `setModeByThread` /
+// `messageByThread`. It takes `resolveSession` by injection so the multiplayer address
 // rule stays stated once, in `session-reopen.js`, and it re-validates its own payload
 // (`main/session-delete-op.js`'s rule: the gates go where the body is). `session-ipc-ops.js`
 // keeps the IPC surface — op name, sender binding, refusal shape.
 //
 // IT DECIDES NOTHING. The gate already decided "hold and ask" (`session-gate-bridge.js ›
 // gateCall`); this carries a HUMAN's answer to the resolver already parked. It cannot widen a
-// posture, grant a tool for the task, or make a held call succeed that the profile would have
+// posture, grant a tool for the thread, or make a held call succeed that the profile would have
 // refused — the verdict it answers was `gate`, never `deny`.
 //
-// ALLOW-ONCE ONLY, like the notification's Allow button: `allow-task` mints a STANDING grant,
+// ALLOW-ONCE ONLY, like the notification's Allow button: `allow-thread` mints a STANDING grant,
 // and a compact inline card is too small a surface to hand a session-wide power from.
 //
 // EXACTLY ONCE, proved by the resolver map rather than a flag here: the live check reads
@@ -28,7 +28,7 @@
 const { isUuid } = require('./ipc-guards');
 const { isAgentId } = require('./agent-id');
 
-// Bounded rather than shape-checked, the same treatment `taskId` gets: the opts may carry the
+// Bounded rather than shape-checked, the same treatment `threadId` gets: the opts may carry the
 // platform's own id, an unrecognised value simply resolves nothing, and refusing on shape would
 // teach a probe which shapes exist.
 const REQUEST_ID_CAP = 64;
@@ -49,7 +49,7 @@ function bind(d) {
 /**
  * ANSWER ONE HELD TOOL CALL.
  *
- * `{ channelId, taskId, agentId?, requestId, allow }` ->
+ * `{ channelId, threadId, agentId?, requestId, allow }` ->
  *   `{ ok: true, decision }`                       the parked resolver took it
  *   `{ ok: false, reason: 'no-session' }`          the address names nothing live here
  *   `{ ok: false, reason: 'unknown-request' }`     unknown id, or one already answered/expired
@@ -62,14 +62,14 @@ function bind(d) {
  * resolver here would leave the reducer believing the call was still held.
  *
  * The grant name rides along unused by `allow-once`: the reducer reads `event.name` only on
- * `allow-task`, and supplying the session's own recorded key means a later widening of this op
+ * `allow-thread`, and supplying the session's own recorded key means a later widening of this op
  * cannot key a standing grant on a renderer-chosen string.
  */
-function answerPermissionByTask(a) {
+function answerPermissionByThread(a) {
   const p = a || {};
   const requestId = String(p.requestId || '');
   if (!requestId || !deps.resolveSession || !deps.dispatch) return { ok: false };
-  const s = deps.resolveSession(p, String(p.channelId || ''), String(p.taskId || ''));
+  const s = deps.resolveSession(p, String(p.channelId || ''), String(p.threadId || ''));
   if (!s || s.settled) return { ok: false, reason: 'no-session' };
   // The RESOLVER MAP, not `state.pendingPermissions`. The reducer's array is the projection the
   // card is drawn from; the Map is where a live `canUseTool` promise waits, and it is the one
@@ -96,7 +96,7 @@ function answerPermissionByTask(a) {
 
 /**
  * THE BOUNDARY — what `sessions:answerPermission` forwards, validated here (`session-delete-op.js`'s
- * rule: the gates go where the body is). `channelId` is UUID-gated, `taskId` coerced, `agentId`
+ * rule: the gates go where the body is). `channelId` is UUID-gated, `threadId` coerced, `agentId`
  * dropped to '' unless it matches the closed charset, `requestId` bounded. Every refusal is the
  * same `{ ok: false }` a sender-binding refusal answers, so a hostile page cannot learn which
  * window it is in.
@@ -108,13 +108,13 @@ function answerPermissionByTask(a) {
 function answerPermission(payload) {
   const p = payload || {};
   if (!isUuid(p.channelId)) return { ok: false };
-  return answerPermissionByTask({
+  return answerPermissionByThread({
     channelId: p.channelId,
-    taskId: String(p.taskId || ''),
+    threadId: String(p.threadId || ''),
     agentId: isAgentId(p.agentId) ? String(p.agentId) : '',
     requestId: String(p.requestId == null ? '' : p.requestId).slice(0, REQUEST_ID_CAP),
     allow: p.allow === true,
   });
 }
 
-module.exports = { bind, answerPermission, answerPermissionByTask, REQUEST_ID_CAP };
+module.exports = { bind, answerPermission, answerPermissionByThread, REQUEST_ID_CAP };

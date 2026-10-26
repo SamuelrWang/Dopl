@@ -123,7 +123,7 @@ function parkedRecord(over = {}) {
     sessionId: "11111111-2222-3333-4444-555555555555",
     sdkSessionId: "sdk-y1uun32v",
     channelId: CHANNEL,
-    taskId: "",
+    threadId: "",
     workspaceId: "a5b5a013-d2dc-4387-a41b-e08b47d68e79",
     side: "responder",
     profile: "channel_agent",
@@ -136,7 +136,7 @@ function parkedRecord(over = {}) {
     agentId: "y1uun32v",
     counterpartyName: "Samuel",
     channelName: "Dopl",
-    taskTitle: null,
+    threadTitle: null,
     identityName: "Coder",
     turns: 7,
     costUsd: 0.42,
@@ -166,7 +166,7 @@ function harness(over = {}) {
     setRecordPhase: (k, phase) => { calls.phase.push([k, phase]); if (cfg.records[k]) cfg.records[k].phase = phase; },
     reloadDisposition: storePure.reloadDisposition,
     resumedPostSeq: storePure.resumedPostSeq,
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.threadId) || ""}:${(a && a.agentId) || ""}`,
   };
   const crypto = { randomBytes: () => ({ toString: () => "cafebabe" }) };
   const diag = (...parts) => calls.diag.push(parts.join(" "));

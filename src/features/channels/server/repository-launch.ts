@@ -12,7 +12,7 @@ export type LaunchDirectiveRow = {
   kind: string;
   workspace_id: string;
   channel_id: string;
-  task_id: string | null;
+  thread_id: string | null;
   operator_user_id: string;
   goal: string | null;
   model: string | null;
@@ -64,7 +64,7 @@ type LaunchDirectiveInsert = {
   kind?: "launch" | "end" | "rename" | "set_agent_mode";
   workspace_id: string;
   channel_id: string;
-  task_id: string | null;
+  thread_id: string | null;
   goal: string | null;
   model: string | null;
   /** Server-resolved under the caller's visibility, never raw caller input. */

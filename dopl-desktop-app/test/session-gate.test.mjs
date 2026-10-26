@@ -40,7 +40,7 @@ const KEY = "c1:t1";
 function harness() {
   const calls = { dispatch: [] };
   const sessions = new Map();
-  const store = { slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}` };
+  const store = { slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.threadId)) || ""}` };
   const io = { noteGatedBody: realIo.noteGatedBody }; // FIX F1: the real seed-exclusion recorder
   const api = new Function("io", "store", `${BLOCK}\n return { bind, feedInbound };`)(io, store);
   api.bind({ sessions, dispatch: (s, ev) => { calls.dispatch.push(ev); } });
@@ -53,7 +53,7 @@ function fakeSession(over = {}) {
   return { key: KEY, settled: false, ...over, state };
 }
 
-const reply = (over = {}) => ({ channelId: "c1", taskId: "t1", message: "ping", authorName: "David", ...over });
+const reply = (over = {}) => ({ channelId: "c1", threadId: "t1", message: "ping", authorName: "David", ...over });
 const evTypes = (calls) => calls.dispatch.map((e) => e.type);
 
 test("feedInbound dispatches every message on arrival, in every posture, live or parked", () => {

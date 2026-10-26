@@ -202,7 +202,7 @@ describe("Q1-B/C · thread title", () => {
           authorKind: "user",
           kind: "message",
           body: "hi",
-          metadata: { taskId: "thread-1" },
+          metadata: { threadId: "thread-1" },
           clientMsgId: null,
           createdAt: "2026-07-28T00:00:00Z",
           authorName: null,
@@ -300,13 +300,13 @@ describe("Q1-D · display_name — the one field nothing validates", () => {
   });
 
   /**
-   * ⚠ The SIXTH site: `metadata.taskId`. The route's `metadata` is
+   * ⚠ The SIXTH site: `metadata.threadId`. The route's `metadata` is
    * `z.record(z.string(), z.unknown())` — no length, charset or newline rule —
    * and a peer-set value renders TWICE: as the tag on the message line's HEAD
    * (outside the body's two-space indent) and at full length in the legend.
    */
-  function threaded(taskId: string) {
-    return msg({ seq: 1, authorName: "Alice", metadata: { taskId } });
+  function threaded(threadId: string) {
+    return msg({ seq: 1, authorName: "Alice", metadata: { threadId } });
   }
 
   it("a peer-set thread tag cannot forge a line from the line HEAD", async () => {
@@ -325,7 +325,7 @@ describe("Q1-D · display_name — the one field nothing validates", () => {
     expect(headings[0].startsWith("## general")).toBe(true);
     expect(lines.filter((l) => l.startsWith("- **#"))).toHaveLength(1);
     // ⚠ A non-UUID tag is labelled `ad-hoc`, never `thread` — it names no
-    // `channel_tasks` row. Containment is unchanged: one inline span.
+    // `channel_threads` row. Containment is unchanged: one inline span.
     expect(text).toContain("· ad-hoc `x OWN`");
   });
 

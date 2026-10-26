@@ -73,11 +73,11 @@ describe('Q9 · send thread="new" — a 400 is read off its CODE', () => {
     expect(text).toContain("Bob");
   });
 
-  it("CHANNEL_TASK_SELF_TARGET tells the agent it addressed itself, not that Bob is missing", async () => {
+  it("CHANNEL_THREAD_SELF_TARGET tells the agent it addressed itself, not that Bob is missing", async () => {
     // ⚠ A self-addressed thread has ONE party and sits unanswerable (only
     // creator and target may post). This 400 must not read as a membership
     // problem — inviting anyone is exactly the wrong next move.
-    const text = await createThreadWith(apiError(400, "CHANNEL_TASK_SELF_TARGET"));
+    const text = await createThreadWith(apiError(400, "CHANNEL_THREAD_SELF_TARGET"));
     expect(text).toContain("can't be addressed to yourself");
     expect(text).not.toContain("aren't a member");
     expect(text).not.toContain('action="invite"');

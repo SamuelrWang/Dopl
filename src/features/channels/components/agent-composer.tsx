@@ -32,7 +32,7 @@ function useCanMessageAgent(): boolean {
 
 export function AgentComposer({
   channelId,
-  taskId,
+  threadId,
   agentId,
   runtimeId,
   name,
@@ -41,7 +41,7 @@ export function AgentComposer({
   currentUserId,
 }: {
   channelId: string;
-  taskId: string;
+  threadId: string;
   /** Which instance; absent on an older main, which then resolves the oldest live agent. */
   agentId?: string;
   /** The runtime this agent was spawned on (`DesktopSessionSummary.runtimeId`) — whose sign-in
@@ -65,7 +65,7 @@ export function AgentComposer({
 
   // One instance serves every agent, so its state is keyed by the addressee; an older main (no
   // `agentId`) addresses `(channel, thread)`.
-  const agentKey = agentId ?? `${channelId} ${taskId}`;
+  const agentKey = agentId ?? `${channelId} ${threadId}`;
   // The draft per addressee, kept across navigation, reload and restart (`lib/draft-store.ts`).
   // The channel id is a UUID, so it already pins the workspace.
   const draft = usePersistentDraft({ userId: currentUserId }, `agent:${channelId}:${agentKey}`);
@@ -117,7 +117,7 @@ export function AgentComposer({
     const sentTo = agentKey;
     // Bound to the SENT agent's key, so a delivery after a switch still clears the right draft.
     const clearSent = draft.clear;
-    void messageAgent({ channelId, taskId, agentId, text: body })
+    void messageAgent({ channelId, threadId, agentId, text: body })
       .then((res) => {
         // Cleared only on a delivered message; a refusal keeps every word for a retry.
         if (res.ok) clearSent();

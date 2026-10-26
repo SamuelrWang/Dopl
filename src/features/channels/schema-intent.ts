@@ -1,7 +1,7 @@
 import { closedEnum } from "@/shared/lib/closed-enum";
 import type { MessageIntent } from "./types";
 
-// A leaf (no channel-schema imports), so `schema.ts` and `schema-tasks.ts` can both use it
+// A leaf (no channel-schema imports), so `schema.ts` and `schema-threads.ts` can both use it
 // without a require cycle through the barrel. Split out of `schema.ts` 2026-10-11.
 
 /**

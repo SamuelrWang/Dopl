@@ -109,7 +109,7 @@ export function StagingAgentView({
         liveness={agentLiveness(agent)}
         sent={agentSentMessages(
           messages,
-          agent.taskId,
+          agent.threadId,
           currentUserId,
           agent.agentId,
         )}

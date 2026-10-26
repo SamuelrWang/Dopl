@@ -145,16 +145,16 @@ class Api {
   }
 
   createThread(channelId, payload) {
-    return this.request('POST', `/api/channels/${channelId}/tasks`, payload);
+    return this.request('POST', `/api/channels/${channelId}/threads`, payload);
   }
 
   listThreads(channelId) {
-    return this.request('GET', `/api/channels/${channelId}/tasks`);
+    return this.request('GET', `/api/channels/${channelId}/threads`);
   }
 
   /** The participant read `channel-threads.fetchParticipants` performs. */
   thread(channelId, threadId) {
-    return this.request('GET', `/api/channels/${channelId}/tasks/${threadId}`);
+    return this.request('GET', `/api/channels/${channelId}/threads/${threadId}`);
   }
 
   // ⚠ `closeThread` was here — `PATCH … {op:'close'}` — and is DELETED with thread closing

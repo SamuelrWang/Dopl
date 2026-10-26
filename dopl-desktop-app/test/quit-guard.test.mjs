@@ -56,7 +56,7 @@ const pure = (over = {}) => new Function(
 )(over.deps || {}, 0, 1, 2, over.cap || 16 * 60 * 1000, () => {});
 
 const s = (o = {}) => ({
-  key: "c1:t1", channelName: "Ops", taskTitle: "Ship the invoice import",
+  key: "c1:t1", channelName: "Ops", threadTitle: "Ship the invoice import",
   counterpartyName: "David", working: true, ...o,
 });
 
@@ -72,7 +72,7 @@ test("a row is the THREAD and the CHANNEL, so the operator can recognise it", ()
 
 test("a thread with no title still reads as something, and a DM falls back to the peer", () => {
   const q = pure();
-  assert.match(q.describeSession(s({ taskTitle: null })), /untitled thread/);
+  assert.match(q.describeSession(s({ threadTitle: null })), /untitled thread/);
   assert.match(q.describeSession(s({ channelName: null })), /in David/,
     "a DM's channel name is the peer, which is what the operator calls it");
   assert.ok(!q.describeSession(s({ working: false })).includes("working now"));
@@ -80,7 +80,7 @@ test("a thread with no title still reads as something, and a DM falls back to th
 
 test("the dialog is a LIST, not a count — the count alone was the thing being fixed", () => {
   const q = pure();
-  const opts = q.buildDialogOptions([s(), s({ key: "c2:t2", taskTitle: "Fix the importer", channelName: "Eng" })]);
+  const opts = q.buildDialogOptions([s(), s({ key: "c2:t2", threadTitle: "Fix the importer", channelName: "Eng" })]);
   assert.equal(opts.message, "You have 2 active agent sessions.");
   for (const needle of ["Ship the invoice import", "Fix the importer", "Ops", "Eng"]) {
     assert.ok(opts.detail.includes(needle), `${needle} missing from the dialog body`);
@@ -242,7 +242,7 @@ function reopen() {
 }
 
 const live = (key, over = {}) => ({
-  key, settled: false, context: { channelName: "Ops", taskTitle: "T " + key },
+  key, settled: false, context: { channelName: "Ops", threadTitle: "T " + key },
   counterpartyName: "David",
   state: { parked: false, activity: "working", ...(over.state || {}) },
   ...over,

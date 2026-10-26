@@ -99,7 +99,7 @@ function serve(over: Partial<Channel> = {}, homeRole: Role = "owner"): void {
       if (bare === `/api/channels/${CHANNEL_ID}/members`) {
         return Promise.resolve(ok(MEMBERS));
       }
-      if (bare === `/api/channels/${CHANNEL_ID}/tasks`) {
+      if (bare === `/api/channels/${CHANNEL_ID}/threads`) {
         return Promise.resolve(ok(THREADS));
       }
       if (bare === `/api/channels/${CHANNEL_ID}` && opts.method === "PATCH") {

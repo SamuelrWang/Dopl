@@ -69,7 +69,7 @@ export function estimateMessageLines(body: string): number {
  * true here, and both have to:
  *   1. the budget dropped rows the query returned (`kept < rows`), or
  *   2. the query came back AT its own ceiling, which is indistinguishable from
- *      over it — the rule `service-reads.ts › listChannelTasks` already applies
+ *      over it — the rule `service-reads.ts › listChannelThreads` already applies
  *      to `truncated`.
  * Case 2 costs at most one extra fetch; the opposite error hides history, which
  * INVARIANTS §9 does not let a bounded read do.

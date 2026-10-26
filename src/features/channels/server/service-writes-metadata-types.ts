@@ -28,7 +28,7 @@ export interface PostMetadataResult {
   metadata: Record<string, unknown>;
   /**
    * **A THREAD TAG THE POSTER WAS NOT ENTITLED TO, DROPPED** (2026-09-02, v2
-   * wave B slice B4 — ruling B1). Only the LEGACY (`task-<channelId>-<seq>`)
+   * wave B slice B4 — ruling B1). Only the LEGACY (`thread-<channelId>-<seq>`)
    * arm can produce it; the first-class uuid arm 403s instead.
    *
    * ⚠ **IT IS REPORTED RATHER THAN MERELY DONE, AND THE READER IS THE VERDICT.**
@@ -84,21 +84,21 @@ export interface PostMetadataResult {
  *
  * ⚠ TWO OPTIONS ENDED HERE with thread closing (Phase 4, 2026-08-18):
  * `closeProposal` (stamped the close-proposal marker keys for the deleted
- * `proposeTaskClose`) and `reopened` (stamped `threadReopened` for the deleted
- * `reopenTask`).
+ * `proposeThreadClose`) and `reopened` (stamped `threadReopened` for the deleted
+ * `reopenThread`).
  */
 export interface PostMetadataOptions {
   /**
    * Stamp reserved `metadata.handoff` true. Only caller:
-   * `service-tasks.createTask`, forwarding validated `TaskCreateInput.handoff`.
+   * `service-threads.createThread`, forwarding validated `ThreadCreateInput.handoff`.
    * ⚠ Reserved on the runtime stamp's terms — desktop reads it to decide whether
    * to open a requester window, so it must never be caller-settable.
    */
   handoff?: boolean;
   /**
    * Stamp reserved `metadata.fanoutGroup` with this id. Only caller:
-   * `service-tasks-broadcast.ts › createTaskFanOut` (through
-   * `service-tasks.ts › createTask`), which derives it server-side from the
+   * `service-threads-broadcast.ts › createThreadFanOut` (through
+   * `service-threads.ts › createThread`), which derives it server-side from the
    * channel, the creator and the validated base idempotency key.
    *
    * ⚠ Reserved on the handoff stamp's terms — the transcript renders every

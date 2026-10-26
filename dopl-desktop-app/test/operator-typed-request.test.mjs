@@ -1,10 +1,10 @@
-// `targeting.requesterTaskOpen` — WHOSE THREAD OPENER THIS MACHINE WOULD DRIVE.
+// `targeting.requesterThreadOpen` — WHOSE THREAD OPENER THIS MACHINE WOULD DRIVE.
 //
 // ⚠ THIS FILE IS NOW A PURE PREDICATE TABLE (2026-08-20, F-228). It was written as the
 // RED/GREEN for "the operator's own typed request starts the agent" (2026-08-05, rollback plan
 // §3.4), and the half of it that drove the listener is deleted with route (2) — see the two
 // excision blocks at the foot. The PREDICATE is untouched: `main/targeting.js` was not
-// modified by the retirement, so `requesterTaskOpen`, `declaresHandoff`, `DESKTOP_RUNTIMES`
+// modified by the retirement, so `requesterThreadOpen`, `declaresHandoff`, `DESKTOP_RUNTIMES`
 // and `requesterTypedByOperator` are all still live functions with live truth tables, and
 // INVARIANTS §14 says a mixed file whose feature is deleted is rewritten down to what
 // survives, not removed.
@@ -56,7 +56,7 @@ const targeting = require("../main/targeting.js"); // dependency-free; the REAL 
 
 const ME = "11111111-1111-1111-1111-111111111111";
 const PEER = "22222222-2222-2222-2222-222222222222";
-const TASK = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+const THREAD = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 
 // ── 1. the predicate's truth table ───────────────────────────────────────────────
 
@@ -72,10 +72,10 @@ const typed = (over = {}) => ({
   body: "please look at the deploy",
   seq: 41,
   metadata: {
-    taskId: has(over, "taskId") ? over.taskId : TASK,
-    taskCreatedBy: has(over, "taskCreatedBy") ? over.taskCreatedBy : ME,
-    taskTarget: has(over, "taskTarget") ? over.taskTarget : PEER,
-    taskTitle: "Deploy check",
+    threadId: has(over, "threadId") ? over.threadId : THREAD,
+    threadCreatedBy: has(over, "threadCreatedBy") ? over.threadCreatedBy : ME,
+    threadTarget: has(over, "threadTarget") ? over.threadTarget : PEER,
+    threadTitle: "Deploy check",
     to_user_id: PEER,
     ...(has(over, "runtime") ? { runtime: over.runtime } : { runtime: "desktop-ui" }),
     ...(over.authorAgentId ? { author_agent_id: over.authorAgentId } : {}),
@@ -83,7 +83,7 @@ const typed = (over = {}) => ({
   },
 });
 
-const opens = (m) => targeting.requesterTaskOpen(m, ME);
+const opens = (m) => targeting.requesterThreadOpen(m, ME);
 
 test("GREEN: the operator's typed request satisfies the requester predicate", () => {
   // ⚠ RETITLED (2026-08-20). It read "…opens a full requester session", which was a claim
@@ -147,9 +147,9 @@ test("a declared handoff opens the session; read strictly; identity pair still b
   }
   // it clears the STAMP conjunct only, never the identity pair (the wrong-machine guard):
   assert.equal(opens(handoff({ authorUserId: PEER })), false, "a peer's create, flag or not");
-  assert.equal(opens(handoff({ taskCreatedBy: PEER })), false, "a thread I did not open");
-  assert.equal(opens(handoff({ taskTarget: ME })), false, "a self-addressed thread");
-  assert.equal(opens(handoff({ taskId: `task-${TASK}-7` })), false, "a legacy id is no thread");
+  assert.equal(opens(handoff({ threadCreatedBy: PEER })), false, "a thread I did not open");
+  assert.equal(opens(handoff({ threadTarget: ME })), false, "a self-addressed thread");
+  assert.equal(opens(handoff({ threadId: `thread-${THREAD}-7` })), false, "a legacy id is no thread");
 });
 
 test("a FORGED or near-miss runtime value opens nothing — exact match only", () => {
@@ -175,29 +175,29 @@ test("the identity conjuncts are still the real bound, and each is load bearing"
   // The stamp is a ROUTING HINT (src/shared/auth/runtime-header.ts): a correct one rescues
   // nothing, so the AND is not accidentally an OR.
   assert.equal(opens(typed({ authorUserId: PEER })), false, "a peer's create is a RESPONDER trigger");
-  assert.equal(opens(typed({ taskCreatedBy: PEER })), false, "a thread I did not open");
-  assert.equal(opens(typed({ taskTarget: ME })), false, "a self-addressed thread has no counterparty");
-  assert.equal(opens(typed({ taskTarget: "" })), false, "and an unaddressed one has none either");
+  assert.equal(opens(typed({ threadCreatedBy: PEER })), false, "a thread I did not open");
+  assert.equal(opens(typed({ threadTarget: ME })), false, "a self-addressed thread has no counterparty");
+  assert.equal(opens(typed({ threadTarget: "" })), false, "and an unaddressed one has none either");
   const noTarget = typed();
-  delete noTarget.metadata.taskTarget;
+  delete noTarget.metadata.threadTarget;
   assert.equal(opens(noTarget), false);
-  assert.equal(targeting.requesterTaskOpen(typed(), null), false, "identity not resolved yet");
-  assert.equal(targeting.requesterTaskOpen(typed(), ""), false);
-  assert.equal(targeting.requesterTaskOpen(null, ME), false);
+  assert.equal(targeting.requesterThreadOpen(typed(), null), false, "identity not resolved yet");
+  assert.equal(targeting.requesterThreadOpen(typed(), ""), false);
+  assert.equal(targeting.requesterThreadOpen(null, ME), false);
 });
 
 test("first-class threads only, and a non-message kind is never an opener", () => {
-  assert.equal(opens(typed({ taskId: `task-${TASK}-7` })), false, "a legacy id is not a thread row");
-  assert.equal(opens(typed({ taskId: "" })), false);
-  assert.equal(opens(typed({ taskId: TASK.slice(0, -1) })), false);
-  for (const kind of ["task_started", "task_failed", "task_finished"]) {
+  assert.equal(opens(typed({ threadId: `thread-${THREAD}-7` })), false, "a legacy id is not a thread row");
+  assert.equal(opens(typed({ threadId: "" })), false);
+  assert.equal(opens(typed({ threadId: THREAD.slice(0, -1) })), false);
+  for (const kind of ["thread_started", "thread_failed", "thread_finished"]) {
     assert.equal(opens(typed({ kind })), false, kind);
   }
 });
 
 test("server-stamped keys are read as strings; a spoofed non-string is ignored", () => {
-  assert.equal(opens(typed({ taskTarget: 123 })), false);
-  assert.equal(opens(typed({ taskCreatedBy: { id: ME } })), false);
+  assert.equal(opens(typed({ threadTarget: 123 })), false);
+  assert.equal(opens(typed({ threadCreatedBy: { id: ME } })), false);
 });
 
 test("requesterTypedByOperator separates the two runtimes, and gates nothing on its own", () => {
@@ -242,7 +242,7 @@ test("requesterTypedByOperator separates the two runtimes, and gates nothing on 
 //   deleted; the leak rule it enforced has no call site left to break.
 //
 // ⚠ AND SECTION 5, THE LIFECYCLE STRIP — six tests over `noteRequestLifecycle` (route 4): the
-// peer's task_started -> Accepted, a `declined: true` task_failed -> Declined and a flagless
+// peer's thread_started -> Accepted, a `declined: true` thread_failed -> Declined and a flagless
 // one holding, the first reply -> Replied WITHOUT being swallowed, the pair binding (a third
 // member, somebody else's thread, my own milestone and a legacy id all move nothing), the
 // inherited-key guard on `REQUEST_MILESTONES` (`constructor` is not a milestone), and the

@@ -9,8 +9,8 @@
  *
  * The rules, each pinned below:
  *  - **NO DEAD ROWS** (INVARIANTS §5). Mode is CREATOR-only because
- *    `service-tasks.ts › setTaskMode` is; Delete is creator-or-manager because
- *    `service-tasks-delete.ts` is. A reader entitled to neither gets the empty
+ *    `service-threads.ts › setThreadMode` is; Delete is creator-or-manager because
+ *    `service-threads-delete.ts` is. A reader entitled to neither gets the empty
  *    state, not a heading over greyed-out controls.
  *  - **NO CHANNEL ROWS.** Invite / visibility / archive / leave belong to
  *    `settings-tab.tsx` and must not reappear here at a scope where they mean

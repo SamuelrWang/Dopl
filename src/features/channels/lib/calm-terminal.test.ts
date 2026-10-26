@@ -42,35 +42,35 @@ function msg(
 }
 
 describe("calmTerminalStatus", () => {
-  it("reads each calm flag off a task_failed row", () => {
-    expect(calmTerminalStatus(msg("task_failed", { declined: true }))).toBe("declined");
-    expect(calmTerminalStatus(msg("task_failed", { dropped: true }))).toBe("dropped");
-    expect(calmTerminalStatus(msg("task_failed", { interrupted: true }))).toBe("interrupted");
-    expect(calmTerminalStatus(msg("task_failed", { capped: true }))).toBe("capped");
-    expect(calmTerminalStatus(msg("task_failed", { ended: true }))).toBe("ended");
+  it("reads each calm flag off a thread_failed row", () => {
+    expect(calmTerminalStatus(msg("thread_failed", { declined: true }))).toBe("declined");
+    expect(calmTerminalStatus(msg("thread_failed", { dropped: true }))).toBe("dropped");
+    expect(calmTerminalStatus(msg("thread_failed", { interrupted: true }))).toBe("interrupted");
+    expect(calmTerminalStatus(msg("thread_failed", { capped: true }))).toBe("capped");
+    expect(calmTerminalStatus(msg("thread_failed", { ended: true }))).toBe("ended");
   });
 
-  it("answers null for an UNFLAGGED task_failed — that is a real failure", () => {
+  it("answers null for an UNFLAGGED thread_failed — that is a real failure", () => {
     // The whole point of the read: `null` is what makes the receipt say "Failed"
     // and the activity dot go danger-red.
-    expect(calmTerminalStatus(msg("task_failed", {}))).toBeNull();
+    expect(calmTerminalStatus(msg("thread_failed", {}))).toBeNull();
   });
 
   it("is STRICT === true — a truthy value must not disguise a real failure", () => {
     // ⚠ `metadata` is an unbounded z.record on the wire, so these are all values
     // a caller can set. Softening any of them paints a genuine crash calm.
     for (const value of ["yes", 1, {}, [], "true"]) {
-      expect(calmTerminalStatus(msg("task_failed", { dropped: value }))).toBeNull();
-      expect(calmTerminalStatus(msg("task_failed", { declined: value }))).toBeNull();
+      expect(calmTerminalStatus(msg("thread_failed", { dropped: value }))).toBeNull();
+      expect(calmTerminalStatus(msg("thread_failed", { declined: value }))).toBeNull();
     }
-    expect(calmTerminalStatus(msg("task_failed", { ended: false }))).toBeNull();
+    expect(calmTerminalStatus(msg("thread_failed", { ended: false }))).toBeNull();
   });
 
   it("checks the KIND too — a calm flag on any other row declares nothing", () => {
     // A flag laundered onto a non-terminal (or a success) row must not be read
-    // as an ending. `task_progress` in particular carries `session_ended`, which
+    // as an ending. `thread_progress` in particular carries `session_ended`, which
     // this read has never answered for and must not start answering for.
-    for (const kind of ["message", "task_started", "task_progress", "task_finished", "system"] as const) {
+    for (const kind of ["message", "thread_started", "thread_progress", "thread_finished", "system"] as const) {
       expect(calmTerminalStatus(msg(kind, { declined: true }))).toBeNull();
       expect(calmTerminalStatus(msg(kind, { session_ended: true }))).toBeNull();
     }
@@ -80,10 +80,10 @@ describe("calmTerminalStatus", () => {
     // "The work never ran" beats "the run stopped this way": the receipt must
     // report Declined, not Interrupted, when a denied request's row carries both.
     expect(
-      calmTerminalStatus(msg("task_failed", { declined: true, interrupted: true, capped: true }))
+      calmTerminalStatus(msg("thread_failed", { declined: true, interrupted: true, capped: true }))
     ).toBe("declined");
-    expect(calmTerminalStatus(msg("task_failed", { dropped: true, ended: true }))).toBe("dropped");
-    expect(calmTerminalStatus(msg("task_failed", { interrupted: true, ended: true }))).toBe(
+    expect(calmTerminalStatus(msg("thread_failed", { dropped: true, ended: true }))).toBe("dropped");
+    expect(calmTerminalStatus(msg("thread_failed", { interrupted: true, ended: true }))).toBe(
       "interrupted"
     );
   });

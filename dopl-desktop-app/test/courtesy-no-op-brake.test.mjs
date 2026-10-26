@@ -18,7 +18,7 @@
 //      the loop brake is ever reached.
 //
 // So a message that asked for nothing raised a consent card on the peer and could
-// spawn a session under a synthetic `task-<channel>-<seq>` id, against the
+// spawn a session under a synthetic `thread-<channel>-<seq>` id, against the
 // courtesy note itself. Two agents can ping-pong that way. Only the consent gate
 // stopped it — and standing trust, which the product offers, removes the gate.
 //

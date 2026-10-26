@@ -151,7 +151,7 @@ test("🔒 the SESSION lane stamps `desktop-session`, or its own agents read as 
   // ⚠ **THE LABEL IS THE ABSENCE OF THIS HEADER.** The server's one discriminator is
   // `src/features/channels/lib/desktop-handle.ts › isExternalSessionAuthor` — `authorKind ===
   // 'agent' && runtime !== 'desktop-session'` — and it stamps `metadata.external_session` at
-  // WRITE time, per row, permanently. `channel-post.js › postTaskEvent` posts every task
+  // WRITE time, per row, permanently. `channel-post.js › postThreadEvent` posts every thread
   // lifecycle event through this transport as `authorKind: 'agent'`, so with no runtime on the
   // request every `Started working on this request.`, every `Session ended` and every `This
   // session went inactive.` was recorded as an outside session's work. It surfaced on ENDED

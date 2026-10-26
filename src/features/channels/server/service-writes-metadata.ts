@@ -1,10 +1,10 @@
 import "server-only";
 import { isUuid } from "@/shared/lib/id/uuid";
 import type { ChannelMessageCreateInput } from "../schema";
-import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
-import { ChannelTaskNotInChannelError, TaskForbiddenError } from "./errors";
+import type { ChannelMemberRow, ChannelRow, ChannelThreadRow } from "./dto";
+import { ChannelThreadNotInChannelError, ThreadForbiddenError } from "./errors";
 import * as repo from "./repository";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import {
   isLegacyThreadParticipant,
   isThreadParticipant,
@@ -34,13 +34,13 @@ import { SERVER_STAMPED_DEVICE_KEYS } from "./service-writes-device";
  *
  * RESERVED KEYS — always stripped from caller metadata, re-added only from
  * server-validated values: `to_user_id`, `summary`, `runtime`, `appVersion`,
- * `session_id`, `to_user_notify`, `taskMode`, `taskCreatedBy`, `taskTitle`,
- * `taskTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
+ * `session_id`, `to_user_notify`, `threadMode`, `threadCreatedBy`, `threadTitle`,
+ * `threadTarget`, `to_agent_id`, `to_agent_ids`, `author_agent_id`, `intent`,
  * `handoff`, `fanoutGroup`, `mentionedUserIds`, `escalation`,
  * `escalationAnswer`, `source`, `display`, and the six calm-terminal flags. ⚠ The two close-proposal keys and `threadReopened` LEFT this list with
  * thread closing (wiring plan Phase 4, 2026-08-18) — no writer and, unlike the
  * dead agent keys below, no RENDERER either.
- * `service-writes-metadata-markers.ts` records why. `taskId` stays
+ * `service-writes-metadata-markers.ts` records why. `threadId` stays
  * caller-settable, but every thread id — first-class or legacy — must BELONG to
  * the poster (see {@link resolvePostMetadata}). Marker keys live in
  * `service-writes-metadata-markers.ts`, the thread half in
@@ -62,7 +62,7 @@ import { SERVER_STAMPED_DEVICE_KEYS } from "./service-writes-device";
 // test file that already carried that name. Fold 4 is unchanged.
 import {
   resolveDirectPeer,
-  resolveInheritableTask,
+  resolveInheritableThread,
 } from "./service-writes-metadata-inherit";
 // ⚠ THE TWO SHAPES MOVED (§2 split, 2026-10-11): this file was 529 lines against a 500-line
 // `error` cap, and it sat at EXACTLY 500 at the review base — the 29 lines that took it over
@@ -95,23 +95,23 @@ import type {
  *    a DM exactly as in a group channel. `resolveDirectPeer` survives for fold
  *    (3) — thread inheritance — and `intent:"chat"` still skips it, so a chat
  *    post never inherits an open thread either.
- * 3. **Task keys.** Reserved four stripped and re-stamped from the resolved task
- *    row, so `taskMode` reflects the latest `set_task_mode` and can't be
- *    spoofed. `taskId` stays caller-settable: a UUID resolving to no task in
- *    THIS channel is rejected; a legacy `task-<uuid>-<seq>` resolves to no row
+ * 3. **Thread keys.** Reserved four stripped and re-stamped from the resolved thread
+ *    row, so `threadMode` reflects the latest `set_thread_mode` and can't be
+ *    spoofed. `threadId` stays caller-settable: a UUID resolving to no thread in
+ *    THIS channel is rejected; a legacy `thread-<uuid>-<seq>` resolves to no row
  *    and stamps none of the four (titleless card is the tell). A caller
- *    `taskId` SUPPRESSES inheritance; inheritance fires only for a plain
- *    `message` in a DM addressed to the peer, since a task id on a lifecycle
- *    marker would land an unrelated `task_failed` on that task's card.
+ *    `threadId` SUPPRESSES inheritance; inheritance fires only for a plain
+ *    `message` in a DM addressed to the peer, since a thread id on a lifecycle
+ *    marker would land an unrelated `thread_failed` on that thread's card.
  * 4. **Thread participation.** ⚠ Resolving in this channel is NOT enough — any
- *    member can read any thread id, and a stamped `taskId` puts the message
+ *    member can read any thread id, and a stamped `threadId` puts the message
  *    inside that thread's card AND routes it to the responder's session window.
  *    The two id shapes fail differently on purpose:
  *    - First-class (UUID): must be `created_by` / `target_user_id`, else 403
  *      ({@link isThreadParticipant}). ⚠ Refused, never silently unthreaded — a
  *      message the author believes landed and the recipient never sees is the
  *      invisible-delivery failure this feature exists to prevent.
- *    - Legacy (`task-<channelId>-<seq>`): {@link isLegacyThreadParticipant} —
+ *    - Legacy (`thread-<channelId>-<seq>`): {@link isLegacyThreadParticipant} —
  *      this channel's id, positive seq, poster inside the opener's
  *      {author, to_user_id} pair, either direction. Anything else has the tag
  *      STRIPPED and posts untagged. ⚠ NEVER throws: installed desktop posts
@@ -275,30 +275,30 @@ export async function resolvePostMetadata(
   if (toUserId) metadata.to_user_id = toUserId;
   if (input.summary) metadata.summary = input.summary;
 
-  delete metadata.taskMode;
-  delete metadata.taskCreatedBy;
-  delete metadata.taskTitle;
-  delete metadata.taskTarget;
+  delete metadata.threadMode;
+  delete metadata.threadCreatedBy;
+  delete metadata.threadTitle;
+  delete metadata.threadTarget;
 
-  const callerTaskId =
-    typeof metadata.taskId === "string" && metadata.taskId.trim().length > 0
-      ? metadata.taskId
+  const callerThreadId =
+    typeof metadata.threadId === "string" && metadata.threadId.trim().length > 0
+      ? metadata.threadId
       : undefined;
   // Dropping a blank/non-string tag here is what lets everything below read
-  // `metadata.taskId` as "an ACCEPTED thread tag".
-  if (!callerTaskId) delete metadata.taskId;
+  // `metadata.threadId` as "an ACCEPTED thread tag".
+  if (!callerThreadId) delete metadata.threadId;
 
-  let task: ChannelTaskRow | null = null;
-  if (callerTaskId) {
-    if (isUuid(callerTaskId)) {
-      task = await repoTasks.findTaskByChannelAndId(channel.id, callerTaskId);
-      if (!task) throw new ChannelTaskNotInChannelError(callerTaskId);
+  let thread: ChannelThreadRow | null = null;
+  if (callerThreadId) {
+    if (isUuid(callerThreadId)) {
+      thread = await repoThreads.findThreadByChannelAndId(channel.id, callerThreadId);
+      if (!thread) throw new ChannelThreadNotInChannelError(callerThreadId);
       // Membership in the channel is not membership in the THREAD.
-      if (!isThreadParticipant(task, ctx.userId)) {
-        throw new TaskForbiddenError("post into this task");
+      if (!isThreadParticipant(thread, ctx.userId)) {
+        throw new ThreadForbiddenError("post into this thread");
       }
     } else if (
-      !(await isLegacyThreadParticipant(channel.id, callerTaskId, ctx.userId))
+      !(await isLegacyThreadParticipant(channel.id, callerThreadId, ctx.userId))
     ) {
       // ⚠ A legacy id that is not the poster's own exchange is STRIPPED, never
       // refused — the post lands untagged, silently. The installed desktop that
@@ -307,7 +307,7 @@ export async function resolvePostMetadata(
       // {@link PostMetadataResult.threadTagStripped}. The post is not a main-room
       // post that forgot to address anybody, and the resilience arms must not
       // treat it as one.
-      delete metadata.taskId;
+      delete metadata.threadId;
       threadTagStripped = true;
     }
   } else if (
@@ -321,18 +321,18 @@ export async function resolvePostMetadata(
   ) {
     const peerUserId = await resolveDirectPeer(channel, ctx.userId, roster);
     if (peerUserId && toUserId === peerUserId) {
-      task = await resolveInheritableTask(channel, ctx.userId, peerUserId);
-      if (task) metadata.taskId = task.id;
+      thread = await resolveInheritableThread(channel, ctx.userId, peerUserId);
+      if (thread) metadata.threadId = thread.id;
     }
   }
 
-  if (task) {
-    metadata.taskMode = task.mode;
-    metadata.taskCreatedBy = task.created_by;
-    metadata.taskTitle = task.title;
-    // Null target (unaddressed task) stamps nothing — desktop's suppression
+  if (thread) {
+    metadata.threadMode = thread.mode;
+    metadata.threadCreatedBy = thread.created_by;
+    metadata.threadTitle = thread.title;
+    // Null target (unaddressed thread) stamps nothing — desktop's suppression
     // predicate then cannot match and falls through to the trigger rules.
-    if (task.target_user_id) metadata.taskTarget = task.target_user_id;
+    if (thread.target_user_id) metadata.threadTarget = thread.target_user_id;
   }
 
   // ⚠ TWO GATES, BECAUSE THE SIX CALM FLAGS ANSWER TWO DIFFERENT QUESTIONS
@@ -343,12 +343,12 @@ export async function resolvePostMetadata(
   //    `ended`) describe a THREAD outcome, so they re-stamp only for the
   //    thread's own participants — the same question as "did a thread tag
   //    survive the gate above". Anything else (a foreign thread, unresolvable
-  //    id, no thread) has no `taskId` left, so a fabricated outcome has nothing
+  //    id, no thread) has no `threadId` left, so a fabricated outcome has nothing
   //    to attach to.
   //  · `session_ended` IS NOT A THREAD OUTCOME, and gating it on a thread tag
   //    was always wrong — `service-writes-metadata-markers.ts` says in as many
-  //    words that it is about ONE SESSION ending, rides a `task_progress` rather
-  //    than a `task_failed`, and is not read by `calmTerminalStatus`. The cost
+  //    words that it is about ONE SESSION ending, rides a `thread_progress` rather
+  //    than a `thread_failed`, and is not read by `calmTerminalStatus`. The cost
   //    was silent and total: a CHANNEL-LEVEL session (`<channel>::<agent>`,
   //    no thread tag) could never report that it had stopped, so every such row
   //    in prod carries `session_ended` NULL while every
@@ -363,7 +363,7 @@ export async function resolvePostMetadata(
   // running, and a post that carries neither a session id nor a thread tag
   // stamps nothing at all.
   if (calmFlags.length > 0) {
-    const inOwnThread = typeof metadata.taskId === "string";
+    const inOwnThread = typeof metadata.threadId === "string";
     const inOwnSession = typeof metadata.session_id === "string";
     for (const key of calmFlags) {
       if (key === "session_ended" ? inOwnSession : inOwnThread) {
@@ -375,16 +375,16 @@ export async function resolvePostMetadata(
   // Spawn-with-handoff, same discipline: only onto a thread tag the poster is
   // entitled to (the opening message always is). ⚠ ROUTING HINT, NOT an
   // authorization — desktop still requires the identity pair (author === me,
-  // task creator === me), so a peer-attached `handoff` opens nothing on anyone
+  // thread creator === me), so a peer-attached `handoff` opens nothing on anyone
   // else's machine. Literal boolean, read `=== true` on the desktop.
-  if (opts.handoff === true && typeof metadata.taskId === "string") {
+  if (opts.handoff === true && typeof metadata.threadId === "string") {
     metadata.handoff = true;
   }
 
   // Fan-out group, same discipline and the same condition: it only ever rides
   // the opening message of a thread the poster just created, so a tag that did
   // not survive the participation gate above takes the group with it.
-  if (opts.fanoutGroupId && typeof metadata.taskId === "string") {
+  if (opts.fanoutGroupId && typeof metadata.threadId === "string") {
     metadata.fanoutGroup = opts.fanoutGroupId;
   }
 

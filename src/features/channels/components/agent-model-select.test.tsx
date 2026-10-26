@@ -33,7 +33,7 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     agentId: "k3v7d2mq",
     name: "k3v7d2mq",
     state: "working",
@@ -65,7 +65,7 @@ function stubBridge(sessions: Record<string, unknown> = {}, catalogs = CLAUDE_CA
 
 /** Renders the live strip and lets the channel's launch record answer. */
 async function renderLive(agent: DesktopSessionSummary) {
-  render(<PostureControls agent={agent} channelId={CHANNEL_ID} taskId="t-1" />);
+  render(<PostureControls agent={agent} channelId={CHANNEL_ID} threadId="t-1" />);
   await act(async () => {});
 }
 

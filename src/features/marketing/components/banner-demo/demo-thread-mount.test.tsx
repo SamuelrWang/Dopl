@@ -4,7 +4,7 @@
  * **THE MOUNT PROBE FOR THREAD VIEW** (v3, ordered first by @cleanup-orchestrator).
  *
  * The v3 audit was READ-level: it established that `message-pane.tsx` takes a `thread`,
- * that `threadRows` filters by `metadata.taskId`, and that the thread card and the
+ * that `threadRows` filters by `metadata.threadId`, and that the thread card and the
  * breadcrumb crumb are real `<button>`s the scripted cursor can press. What it could NOT
  * establish from reading is whether the DEMO can feed those components — the scene has
  * never rendered a thread, and `demo-steps.ts` records that the last attempt was reverted.

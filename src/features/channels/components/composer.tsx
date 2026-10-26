@@ -3,7 +3,7 @@
 /**
  * Channels composer card: one plain chat send (`intent:"chat"`) plus the @-mention popover. New thread and
  * New Agent open dialogs (`new-thread-dialog.tsx`, `launch-agent-dialog.tsx`); `fanOutThreads` stays here and
- * the thread dialog calls it — one `channel_tasks` row per addressee (INVARIANTS §5).
+ * the thread dialog calls it — one `channel_threads` row per addressee (INVARIANTS §5).
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";

@@ -5,7 +5,7 @@
 // plainly — "The Channels listener keeps its own copy (E2E-verified — not
 // refactored here)" — so when Phase 2 gave api.js a 401 repair, listener-io.js
 // never received it. listener-io is the transport under listWorkspaces,
-// listChannels, every `/await` long-poll, channel-post's task-lifecycle posts,
+// listChannels, every `/await` long-poll, channel-post's thread-lifecycle posts,
 // the roster, threads and consent: the ENTIRE Channels subsystem.
 //
 // That was survivable while a remote page ran in the window, because supabase-js

@@ -85,7 +85,7 @@ export function isMissingRelation(error: unknown): boolean {
  * block for the one case it is acted on.
  * ⚠ Matched on the CODE, never the message, which is prose — the same rule
  * {@link isMissingRelation} follows, and the reason the degrade below re-reads
- * `channel_tasks` rather than parsing which constraint was named.
+ * `channel_threads` rather than parsing which constraint was named.
  */
 const PG_FOREIGN_KEY_VIOLATION = "23503";
 
@@ -98,7 +98,7 @@ function isForeignKeyViolation(error: unknown): boolean {
 }
 
 /**
- * Which of these thread ids still have a `channel_tasks` row.
+ * Which of these thread ids still have a `channel_threads` row.
  *
  * ⚠ IT RUNS ONLY ON THE FAILURE PATH (F-241) — never on a healthy push. A
  * pre-flight existence check on every report would add a query per push to
@@ -106,15 +106,15 @@ function isForeignKeyViolation(error: unknown): boolean {
  * cost this whole table's design refuses.
  * ⚠ NOT WORKSPACE-FENCED, deliberately: it answers "does this row exist", and
  * the only use of the answer is to STOP writing an id. A narrower query could
- * only ever null MORE `task_id`s, never fewer, so the fence buys no safety and
+ * only ever null MORE `thread_id`s, never fewer, so the fence buys no safety and
  * would make a cross-workspace id (which the `channel_child_workspace_guard`
  * trigger refuses anyway) read as merely dead.
  */
-async function liveTaskIds(ids: string[]): Promise<Set<string>> {
+async function liveThreadIds(ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("channel_tasks")
+    .from("channel_threads")
     .select("id")
     .in("id", ids);
   if (error) throw error;
@@ -281,7 +281,7 @@ export async function agentDisplayNames(
 
 /**
  * DROP EVERY member's session-state row that targets ONE thread — the thread
- * cascade's session step (`service-tasks-delete.ts › deleteTask`).
+ * cascade's session step (`service-threads-delete.ts › deleteThread`).
  *
  * ⚠ EVERY MEMBER'S, AND THAT IS NOT A WIDENING OF WHO MAY WRITE. These rows are
  * a PROJECTION of a desktop's live registry, not state anybody owns: the row's
@@ -289,7 +289,7 @@ export async function agentDisplayNames(
  * so the statement the row makes is gone, whoever's machine wrote it. ⚠ The
  * PEER'S ACTUAL AGENT IS NOT REACHABLE and is not touched — it dies on its own
  * idle/abandon timer, and until it does its next push re-inserts the row with
- * `task_id` nulled ({@link healDeadThreadRefs}, F-241). ⚠ **THAT ROW IS NOT
+ * `thread_id` nulled ({@link healDeadThreadRefs}, F-241). ⚠ **THAT ROW IS NOT
  * STALE, IT IS THREADLESS**, and the tab reads it as such: a thread-scoped
  * Agents tab drops it (no `threadId` to match), a channel-scoped one keeps it,
  * because the agent IS still running. ⚠ **This sentence claimed "the card's
@@ -299,18 +299,18 @@ export async function agentDisplayNames(
  * the session goes away); age only DIMS a card now.
  *
  * ⚠ THE FK IS `ON DELETE SET NULL`, WHICH IS WHY THIS EXISTS. `channel_sessions
- * .task_id REFERENCES channel_tasks(id) ON DELETE SET NULL` (`20260805120000`),
+ * .thread_id REFERENCES channel_threads(id) ON DELETE SET NULL` (`20260805120000`),
  * so deleting the thread row would leave the session rows STANDING with a null
  * thread — a card reading "working" against no exchange. The delete has to be
- * explicit, and it has to run BEFORE the task row so the `task_id` it keys on is
+ * explicit, and it has to run BEFORE the thread row so the `thread_id` it keys on is
  * still there.
  *
  * ⚠ TWO STATEMENTS, TWO KEYS, ON PURPOSE.
- *   1. `task_id = threadId` — the column, over `channel_sessions_task_idx`.
+ *   1. `thread_id = threadId` — the column, over `channel_sessions_thread_idx`.
  *   2. `session_key LIKE '<channelId>:<threadId>%'` — the desktop's own stable
  *      key (`dopl-desktop-app/main/session-store.js › sessionKey`,
- *      `<channelId>:<taskId>:<agentId>`, and a two-segment legacy shape before
- *      2026-08-21). It catches a row whose `task_id` was already nulled by an
+ *      `<channelId>:<threadId>:<agentId>`, and a two-segment legacy shape before
+ *      2026-08-21). It catches a row whose `thread_id` was already nulled by an
  *      earlier partial run, which the first statement cannot see.
  *   The pattern needs no escaping and cannot over-reach: both ids are UUIDs, so
  *   they contain no `%`, no `_` and no colon, and one fixed-length UUID is never
@@ -322,12 +322,12 @@ export async function deleteSessionStatesForThread(
   threadId: string
 ): Promise<void> {
   const db = supabaseAdmin();
-  const { error: byTask } = await db
+  const { error: byThread } = await db
     .from("channel_sessions")
     .delete()
     .eq("workspace_id", workspaceId)
-    .eq("task_id", threadId);
-  if (byTask) throw byTask;
+    .eq("thread_id", threadId);
+  if (byThread) throw byThread;
   const { error: byKey } = await db
     .from("channel_sessions")
     .delete()
@@ -339,10 +339,10 @@ export async function deleteSessionStatesForThread(
 
 /**
  * F-241 — A THREAD CAN BE DELETED WHILE A PEER'S MACHINE IS STILL RUNNING AN
- * AGENT ON IT, AND ONE DEAD `task_id` MUST NOT POISON THE WHOLE REPLACE.
+ * AGENT ON IT, AND ONE DEAD `thread_id` MUST NOT POISON THE WHOLE REPLACE.
  *
- * THE RACE, in full. `channel_sessions.task_id REFERENCES channel_tasks(id)`.
- * The thread cascade (`service-tasks-delete.ts › deleteTask`) deletes EVERY
+ * THE RACE, in full. `channel_sessions.thread_id REFERENCES channel_threads(id)`.
+ * The thread cascade (`service-threads-delete.ts › deleteThread`) deletes EVERY
  * member's session rows for that thread — but a peer's actual AGENT is not
  * reachable from any server: it lives in another main process and stops on its
  * own idle/abandon timer. Until then that desktop keeps reporting the session,
@@ -354,16 +354,16 @@ export async function deleteSessionStatesForThread(
  *
  * THE DEGRADE, and why it is this one. On a foreign-key violation, re-read
  * which of the reported thread ids still exist and NULL only the dead ones,
- * then let the caller retry once. **Nulling `task_id` is not a lie**: the row's
+ * then let the caller retry once. **Nulling `thread_id` is not a lie**: the row's
  * other half — "user U is running an agent, in channel C, state working" — is
  * still true, and it is exactly what the column's own `ON DELETE SET NULL`
  * would have left behind had the row been stored before the delete. The
  * alternatives were worse: dropping the row silently loses a LIVE agent from
- * the projection, and nulling every `task_id` in the batch would discard the
+ * the projection, and nulling every `thread_id` in the batch would discard the
  * thread of rows whose threads are perfectly alive.
  *
  * ⚠ IT NEVER GUESSES WHICH CONSTRAINT FAILED. `channel_sessions` has four
- * FOREIGN KEYS (workspace, user, channel, task) and this matches on the CODE
+ * FOREIGN KEYS (workspace, user, channel, thread) and this matches on the CODE
  * alone — the house rule, because a constraint NAME in an error message is
  * prose. If nothing in the batch names a dead thread, the original error is
  * RETHROWN unchanged: a 23503 on `channel_id` means the CHANNEL is gone, which
@@ -372,20 +372,20 @@ export async function deleteSessionStatesForThread(
  * them once more and throws on failure. There is no loop, so a violation this
  * degrade does not cover cannot spin.
  */
-async function healDeadThreadRefs<T extends { task_id: string | null }>(
+async function healDeadThreadRefs<T extends { thread_id: string | null }>(
   rows: T[],
   error: unknown
 ): Promise<T[]> {
   if (!isForeignKeyViolation(error)) throw error;
   const wanted = [
-    ...new Set(rows.map((r) => r.task_id).filter((id): id is string => !!id)),
+    ...new Set(rows.map((r) => r.thread_id).filter((id): id is string => !!id)),
   ];
-  const live = await liveTaskIds(wanted);
+  const live = await liveThreadIds(wanted);
   const dead = wanted.filter((id) => !live.has(id));
   // Not the thread FK (or nothing to null): the caller's error stands.
   if (dead.length === 0) throw error;
   return rows.map((r) =>
-    r.task_id && !live.has(r.task_id) ? { ...r, task_id: null } : r
+    r.thread_id && !live.has(r.thread_id) ? { ...r, thread_id: null } : r
   );
 }
 
@@ -419,7 +419,7 @@ async function healDeadThreadRefs<T extends { task_id: string | null }>(
  *
  * ⚠ EXACTLY ONE DEGRADE, AND IT IS NOT THAT ONE: a FOREIGN-KEY violation naming
  * a thread that has been deleted under a still-running peer agent (F-241) nulls
- * those rows' `task_id` and retries ONCE — see {@link healDeadThreadRefs} for
+ * those rows' `thread_id` and retries ONCE — see {@link healDeadThreadRefs} for
  * why that is honest rather than a swallow, and why it never guesses which
  * constraint failed. ⚠ **Do NOT widen this into a blanket try/catch.** Every
  * other error here means the store did not happen, and reporting one that did

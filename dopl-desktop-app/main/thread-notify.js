@@ -1,11 +1,11 @@
-// Channels listener — passive task-reply notification (Feature 4, requester side).
+// Channels listener — passive thread-reply notification (Feature 4, requester side).
 //
 // When the REQUESTER receives an inbound reply that belongs to an INTERACTIVE
-// task they created, classify() (targeting.js) returns the 'task-reply' verdict.
+// thread they created, classify() (targeting.js) returns the 'thread-reply' verdict.
 // Such a reply is not a new request: it needs NO consent row, NO watcher record,
 // NO spawn. ⚠ AND SINCE 2026-10-09 IT RAISES NOTHING FOR BEING A REPLY (Samuel's spec): what
 // still raises here is a reply that @-TAGS ME, routed as the `mention` it is — see
-// `notifyTaskReply` below for why that path must exist at all. A click opens the channel via
+// `notifyThreadReply` below for why that path must exist at all. A click opens the channel via
 // the SAME injected-handler seam trigger.sendFyi uses (targeting.openChannelForEntry,
 // wired from index.js through targeting.setHandlers). No token use, no API write.
 //
@@ -14,12 +14,9 @@
 // must not grow either of them.
 //
 // EXTRACTION NOTE: `mentionNotice` is a pure, plain `function` declaration (like
-// classify/metaStr) so test/task-notify.test.mjs can slice + evaluate its body
+// classify/metaStr) so test/thread-notify.test.mjs can slice + evaluate its body
 // verbatim without loading Electron. Keep it free of braces inside its
 // strings/comments/regex or the test's brace-balancing extractor breaks.
-// ⚠ IT NAMED `taskReplyNotice` UNTIL 2026-10-10 — a function deleted eleven lines below this
-// note, in the same wave that replaced it with `mentionNotice`. The rule is about whichever pure
-// builder this module exposes, and that is the one.
 
 const io = require('./listener-io');
 const targeting = require('./targeting');
@@ -30,7 +27,7 @@ const { diag } = require('./diag');
 // gate of its own — `notificationRoute.raise` does both, so there is exactly one place that can.
 const notificationRoute = require('./notification-route');
 
-// `taskReplyNotice` built the REPLY copy — "Reply in <thread>", "<Ada>: <summary>" — and is gone
+// The REPLY copy builder ("Reply in <thread>", "<Ada>: <summary>") is gone
 // with the reply banner it wrote (Samuel's spec, 2026-10-09).
 //
 // What replaces it is `mentionNotice`, below, and the difference is the point: a tag inside my
@@ -41,12 +38,10 @@ const notificationRoute = require('./notification-route');
 // Pure: { title, body } from the message plus pre-resolved channel and author names. Prefers the
 // server-stamped thread title for the headline (then the channel, then a name-free fallback) and
 // the server-stamped summary for the body (then a truncated excerpt).
-// ⚠ STAYS A PLAIN `function` DECLARATION WITH NO ELECTRON IN REACH: test/task-notify.test.mjs
+// ⚠ STAYS A PLAIN `function` DECLARATION WITH NO ELECTRON IN REACH: test/thread-notify.test.mjs
 // reads this source and evaluates this builder alone, which is why the copy is testable at all.
-// The `taskTitle` metadata key is the wire spelling (wire name `task` == domain name `thread`);
-// the words the operator READS carry no "task" at all.
 function mentionNotice(m, channelName, authorName) {
-  const where = metaStr(m, 'taskTitle') || channelName || 'a channel';
+  const where = metaStr(m, 'threadTitle') || channelName || 'a channel';
   const detail = metaStr(m, 'summary') || truncate(m && m.body, 120);
   return {
     title: where,
@@ -77,7 +72,7 @@ function mentionNotice(m, channelName, authorName) {
  * phrasing, which is wrong-but-honest rather than wrong-and-silent.
  *
  * Pure, and a plain `function` declaration with no braces inside its strings/comments/regex, for
- * the same reason `mentionNotice` is one: test/task-notify.test.mjs slices and evaluates it
+ * the same reason `mentionNotice` is one: test/thread-notify.test.mjs slices and evaluates it
  * verbatim, without Electron. The agent name is operator-set text landing in an OS notification
  * body, so it is stripped of line breaks and capped the way `room-roster.js › authorHandle` caps it.
  */
@@ -98,7 +93,7 @@ function mentionAuthorLabel(m, personName, myUserId) {
  * agent's reply raises anything for being a reply.
  *
  * ⚠ BUT A MENTION STILL DOES, AND THAT IS WHY THIS FUNCTION STILL EXISTS. `classify` returns
- * 'task-reply' for a post inside a thread I opened (`targeting.js:182`, `:190`) BEFORE it can
+ * 'thread-reply' for a post inside a thread I opened (`targeting.js:182`, `:190`) BEFORE it can
  * reach the mention arm (`:217`), so an @-mention made inside my own thread arrives HERE and not
  * at `sendFyi`. Deleting this path outright would have silenced a mention while the
  * Notifications tab still showed Mentions ON — silently unraisable, the twin of the silently
@@ -107,10 +102,10 @@ function mentionAuthorLabel(m, personName, myUserId) {
  * So: tagged → raise it as the `mention` it is. Untagged → nothing at all, which is the ruling.
  * The thread still holds every reply either way, and the Tags inbox still holds the mention.
  */
-function notifyTaskReply(entry, m, myUserId) {
+function notifyThreadReply(entry, m, myUserId) {
   const cid = entry && entry.channel && entry.channel.id ? entry.channel.id.slice(0, 8) : '?';
   if (!targeting.mentionsMe(m, myUserId)) {
-    diag('task-reply', cid, 'seq', m && m.seq, '— no banner (spec 2026-10-09), thread holds it');
+    diag('thread-reply', cid, 'seq', m && m.seq, '— no banner (spec 2026-10-09), thread holds it');
     return;
   }
   // ⚠ Routed as `mention`, the same event id and the same builder `sendFyi` uses, so a tag reads
@@ -129,11 +124,11 @@ function notifyTaskReply(entry, m, myUserId) {
     title: notice.title,
     body: notice.body,
     onClick: () => targeting.openChannelForEntry(entry, {
-      threadId: metaStr(m, 'taskId') || null,
+      threadId: metaStr(m, 'threadId') || null,
       seq: m && m.seq,
     }),
   });
-  diag('task-reply mention', cid, 'seq', m && m.seq, '→', went);
+  diag('thread-reply mention', cid, 'seq', m && m.seq, '→', went);
 }
 
 // TWO PASSIVE AGENT NOTICES lived here and are gone with named agents (channels rollback §1):
@@ -152,7 +147,7 @@ function notifyTaskReply(entry, m, myUserId) {
 // record a consent, pinned as its dependency set in test/wake-external-requester.test.mjs.
 
 module.exports = {
-  notifyTaskReply,
+  notifyThreadReply,
   mentionNotice,
   mentionAuthorLabel,
 };

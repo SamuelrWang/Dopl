@@ -40,13 +40,13 @@ const { REPLY_ROUTING } = require(join(MAIN, "prompt-framing-text.js"));
 
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
-const TASK = "cccccccc-3333-4ddd-8eee-ffffffffffff";
+const THREAD = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 
 const ids = (over = {}) => ({
   channelName: "Ops",
   channelId: CH,
   workspaceId: WS,
-  taskId: TASK,
+  threadId: THREAD,
   ...over,
 });
 

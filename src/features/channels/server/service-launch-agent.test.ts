@@ -12,7 +12,7 @@ vi.mock("./repository-launch", () => fx.mocks.launchRepo);
 // Mocked at the predicate, not the raw owner read: `agentIsAnotherMembers` also bounds the row's age (F-418).
 vi.mock("./repository-agent-owner", () => fx.mocks.agentOwner);
 vi.mock("./repository-collab", () => fx.mocks.collab);
-vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-threads", () => fx.mocks.threads);
 vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
 vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
@@ -74,8 +74,8 @@ describe("createAgentDirective — the operator stamp", () => {
 
   it("never stamps a thread — an agent is addressed as an INSTANCE", async () => {
     await createAgentDirective(ctx, { kind: "end", channel: "general", agentId: AGENT });
-    // `task_id` places a launch; an agent is addressed by its instance id alone.
-    expect(vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0][1].task_id).toBeNull();
+    // `thread_id` places a launch; an agent is addressed by its instance id alone.
+    expect(vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0][1].thread_id).toBeNull();
   });
 });
 

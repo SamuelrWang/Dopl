@@ -2,7 +2,7 @@
 //
 // 1. The own-machine lanes (launch / direct / manage) admit a call at the runtime's WIDEST Axis-A
 //    mode. They compared to the literal `bypass`, so a Codex session (widest `never`) never could.
-// 2. An "Allow for this task" edit grant is scoped by the runtime's own edit-tool names.
+// 2. An "Allow for this thread" edit grant is scoped by the runtime's own edit-tool names.
 //
 // The real modules, driven through `grantDecision` with the args `session-io.js › grantArgs` builds.
 

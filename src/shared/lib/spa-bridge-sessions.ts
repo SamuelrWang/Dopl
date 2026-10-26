@@ -17,7 +17,7 @@ export interface SpaBridgeSessions {
   /** `segment`: a live windowless session reopens as the agent window, whose landing is a route. */
   reopen(
     channelId: string,
-    taskId: string,
+    threadId: string,
     segment?: string,
     agentId?: string
   ): Promise<{ ok: boolean; reason?: string }>;
@@ -25,7 +25,7 @@ export interface SpaBridgeSessions {
   openAgentWindow?(
     segment: string,
     channelId: string,
-    taskId: string,
+    threadId: string,
     agentId?: string
   ): Promise<{ ok: boolean; reason?: string }>;
   /**
@@ -35,7 +35,7 @@ export interface SpaBridgeSessions {
    */
   message?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     text: string,
     agentId?: string
   ): Promise<{ ok: boolean; reason?: string }>;
@@ -64,7 +64,7 @@ export interface SpaBridgeSessions {
    */
   setMode?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     axis: "tools" | "messages",
     mode: string,
     agentId?: string
@@ -76,14 +76,14 @@ export interface SpaBridgeSessions {
    */
   setModel?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     model: string,
     agentId?: string
   ): Promise<{ ok: boolean; reason?: string; model?: string; detail?: string }>;
   /** The agent's work ring. Read once on mount, then listen: push-only would leave a new window blank. */
   narration?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     agentId?: string
   ): Promise<{ entries: DesktopNarrationEntry[] }>;
   /** Frames fan out to every app window keyed by `sessionKey`; the reader filters. */
@@ -101,7 +101,7 @@ export interface SpaBridgeSessions {
   launch?(payload: {
     channelId: string;
     /** `null` = a channel-level agent (the main room). Pass `null`, not `""` (the legacy no-thread value). */
-    taskId: string | null;
+    threadId: string | null;
     /** A pre-assigned id ({@link mintAgentId}); absent = main mints. Accepted, not trusted (`agent-id.js › isAgentId`). */
     agentId?: string;
     workspaceId?: string;
@@ -143,7 +143,7 @@ export interface SpaBridgeSessions {
   /** Interrupt the turn in flight; the session stays live. Omitting `agentId` pauses the oldest live agent. */
   pause?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     agentId?: string
   ): Promise<{ ok: boolean; reason?: string }>;
   /**
@@ -154,7 +154,7 @@ export interface SpaBridgeSessions {
    */
   answerPermission?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     requestId: string,
     allow: boolean,
     agentId?: string
@@ -165,7 +165,7 @@ export interface SpaBridgeSessions {
    */
   end?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     agentId?: string
   ): Promise<{ ok: boolean; reason?: string }>;
   /**
@@ -176,7 +176,7 @@ export interface SpaBridgeSessions {
    */
   delete?(
     channelId: string,
-    taskId: string,
+    threadId: string,
     agentId: string
   ): Promise<{ ok: boolean; reason?: string; ended?: boolean }>;
   /**
@@ -191,6 +191,6 @@ export interface SpaBridgeSessions {
    */
   forgetThread?(
     channelId: string,
-    taskId: string
+    threadId: string
   ): Promise<{ ok: boolean; forgotten?: number }>;
 }

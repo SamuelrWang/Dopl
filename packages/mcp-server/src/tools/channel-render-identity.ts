@@ -418,7 +418,7 @@ export function addressTag(m: ChannelMessage, view: MemberView): string {
 
 /**
  * THE SLOT-KEY SEGMENT THAT NAMES A SESSION. `metadata.session_id` is the
- * desktop's slot key, `<channelId>:<taskId>:<agentId>`
+ * desktop's slot key, `<channelId>:<threadId>:<agentId>`
  * (`main/session-store.js › sessionKey`), and the AGENT id is the only segment
  * that distinguishes one session from another on the SAME thread — which is the
  * whole point of multiplayer.

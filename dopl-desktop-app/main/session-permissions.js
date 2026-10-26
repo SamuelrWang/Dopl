@@ -198,7 +198,7 @@ function resolvePerm(s, requestId, decision) {
   if (!resolve) return false;
   s.pendingPermissions.delete(requestId);
   s.pendingNames.delete(requestId);
-  // FIX M1: FAIL CLOSED. ALLOW only on an explicit 'allow' (the reducer maps allow-once/allow-task
+  // FIX M1: FAIL CLOSED. ALLOW only on an explicit 'allow' (the reducer maps allow-once/allow-thread
   // -> 'allow'); anything else, unknown included, denies.
   resolve(decision === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: denialMessage(s, requestId) });
   return true;

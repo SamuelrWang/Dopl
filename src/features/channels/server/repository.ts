@@ -12,7 +12,7 @@ import { visibleChannelsOr } from "./repository-visibility";
  * The generated `Database` type does not carry the channels tables, so
  * `supabaseAdmin()` is untyped and results are cast to `dto.ts`'s row types.
  *
- * Siblings: `repository-messages.ts` (transcript), `repository-tasks.ts`,
+ * Siblings: `repository-messages.ts` (transcript), `repository-threads.ts`,
  * `repository-collab.ts` (consent + trust + presence),
  * `repository-members.ts` (the `channel_members` table) and
  * `repository-workspace.ts` (workspace membership + profiles), both re-exported here.
@@ -293,7 +293,7 @@ export async function softDeleteChannel(
  *
  * ⚠ ONE STATEMENT, and that is why there is NO RPC here. All six child FKs into
  * `channels` are `ON DELETE CASCADE` (members, messages, consent requests,
- * tasks → participants, agents, sessions), so one DELETE is already atomic and
+ * threads → participants, agents, sessions), so one DELETE is already atomic and
  * complete. Do not add an RPC to "follow the pattern" —
  * `cascade_hard_delete_ontology` needed PL/pgSQL for the OPPOSITE reason
  * (ontology's cascade is over MEMBERSHIP rows, so it had to be composed).

@@ -264,7 +264,7 @@ describe("H-3 write-gate coverage", () => {
         // token has no confirm dialog to gate it — the same argument the team
         // DELETE below carries. ⚠ Per-METHOD: GET and the set-mode PATCH on that
         // file stay ungated.
-        "channels/[channelId]/tasks/[taskId]/route.ts",
+        "channels/[channelId]/threads/[threadId]/route.ts",
         // HOME CHANNELS (2026-08-23), same credential class as
         // `workspaces/[workspaceSlug]/join-link` above: POST mints the claim
         // URL, DELETE revokes it, and the claim SPENDS one — the outcome of

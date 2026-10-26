@@ -52,7 +52,7 @@ export type SessionDetailKey =
 
 export interface ChannelSessionState {
   channelId: string;
-  /** Thread (task) this session is on, or null. */
+  /** Thread this session is on, or null. */
   threadId: string | null;
   /**
    * THE ADDRESS, not the name. On any current desktop this is the AGENT-INSTANCE ID

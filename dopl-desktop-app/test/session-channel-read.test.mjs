@@ -293,7 +293,7 @@ test("M3: a read's gate says WHICH fact stopped it, and an allow says which rule
 test("M3: a read grant is still OP-SCOPED — one read approved does not approve the others", () => {
   // FIX F2's rule is untouched by the posture change: the KEY covers the shape the operator saw.
   const readKey = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, CH);
-  const held = { toolName: DOPL_CHANNEL_TOOL, allowForTask: [readKey] };
+  const held = { toolName: DOPL_CHANNEL_TOOL, allowForThread: [readKey] };
   assert.equal(decide({ ...held, input: { op: "read" } }), "allow");
   assert.equal(decide({ ...held, input: { op: "get_thread" } }), "gate", "each op earns its own key");
   assert.equal(decide({ ...held, input: { op: "post", body: "hi" } }), "gate");
@@ -302,7 +302,7 @@ test("M3: a read grant is still OP-SCOPED — one read approved does not approve
 
 // ── THE CHANNEL-LEVEL AGENT'S PULL LANE (2026-08-22, Samuel's refinement) ─────────
 //
-// A CHANNEL-LEVEL agent (`taskId: null`, key `<channelId>::<agentId>`) is FED only untagged
+// A CHANNEL-LEVEL agent (`threadId: null`, key `<channelId>::<agentId>`) is FED only untagged
 // main-room posts — thread traffic is never pushed to it, not even when a thread message
 // @-mentions its id. The supervisor use case ("monitor the threads and the agents working in
 // them") is therefore answered by READING ON DEMAND, and that only works if a THREAD-SCOPED
@@ -336,9 +336,9 @@ test("CHANNEL AGENT: a THREAD-scoped read of its own channel auto-allows under t
 
 test("CHANNEL AGENT: the thread argument changes NOTHING — the scope is the channel", () => {
   // ⚠ The pin against a future "tighten the read to the session's own thread". A channel-level
-  // session HAS no thread (`taskId` is ''), so a thread-scoped read rule would deny every one of
+  // session HAS no thread (`threadId` is ''), so a thread-scoped read rule would deny every one of
   // these and the supervisor lane would silently stop working.
-  for (const thread of [THREAD, "", null, undefined, "task-legacy-7"]) {
+  for (const thread of [THREAD, "", null, undefined, "thread-legacy-7"]) {
     assert.equal(
       decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "read", channel: CH, thread }, messageMode: "auto_inbound" }),
       "allow",

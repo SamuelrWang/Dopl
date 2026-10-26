@@ -94,7 +94,7 @@ function sessionReducer(state, event) {
       state: clone(state, { phase: 'running' }),
       effects: [
         { type: 'persist', phase: 'running' },
-        { type: 'lifecycle', kind: 'task_started', extra: {} },
+        { type: 'lifecycle', kind: 'thread_started', extra: {} },
         { type: 'scheduleIdle' },
       ],
     };
@@ -148,8 +148,8 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'permission_request') {
-    // A shape already granted for the task allows with no button; `name` is the SCOPED grant key.
-    if (state.allowForTask.indexOf(event.name) !== -1) {
+    // A shape already granted for the thread allows with no button; `name` is the SCOPED grant key.
+    if (state.allowForThread.indexOf(event.name) !== -1) {
       return { state: state, effects: [{ type: 'resolvePermission', requestId: event.requestId, decision: 'allow' },
         { type: 'scheduleIdle' }] };
     }
@@ -166,8 +166,8 @@ function sessionReducer(state, event) {
 
   if (type === 'permission_decision') {
     // FAIL CLOSED: only the two explicit allows grant; anything else, forged strings included, is a deny (FIX M1).
-    const sdkDecision = event.decision === 'allow-once' || event.decision === 'allow-task' ? 'allow' : 'deny';
-    const nextAllow = event.decision === 'allow-task' ? addUnique(state.allowForTask, event.name) : state.allowForTask;
+    const sdkDecision = event.decision === 'allow-once' || event.decision === 'allow-thread' ? 'allow' : 'deny';
+    const nextAllow = event.decision === 'allow-thread' ? addUnique(state.allowForThread, event.name) : state.allowForThread;
     const nextPending = without(state.pendingPermissions, event.requestId);
     // A stale click on a PARKED session must not flip it to running; only a steer or an inbound turn wakes it.
     const phase = state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'running');
@@ -176,7 +176,7 @@ function sessionReducer(state, event) {
     // Answering a card is activity, except on a parked session, which has no live turn to keep alive.
     if (!state.parked) effects.push({ type: 'scheduleIdle' });
     return {
-      state: clone(state, { phase: phase, activity: activity, allowForTask: nextAllow, pendingPermissions: nextPending }),
+      state: clone(state, { phase: phase, activity: activity, allowForThread: nextAllow, pendingPermissions: nextPending }),
       effects: effects,
     };
   }
@@ -260,7 +260,7 @@ function sessionReducer(state, event) {
     return {
       state: clone(state, { phase: 'parked', parked: true, activity: 'parked',
         authHeld: true, toolMode: toolModesOf(state)[0], messageMode: MESSAGE_MODES[0],
-        allowForTask: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
+        allowForThread: [], pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
       effects: parkEffects({ lifecycle: true }),
     };
   }
@@ -285,7 +285,7 @@ function sessionReducer(state, event) {
         // C3: abort FIRST, so the transport never outlives an "ended"; the echo matches the reload path's.
         { type: 'abortQuery' },
         { type: 'settle', outcome: 'interrupted' },
-        { type: 'lifecycle', kind: 'task_failed', extra: { interrupted: true }, body: terminalBody({ interrupted: true }) },
+        { type: 'lifecycle', kind: 'thread_failed', extra: { interrupted: true }, body: terminalBody({ interrupted: true }) },
       ],
     };
   }

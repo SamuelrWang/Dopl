@@ -14,17 +14,15 @@ import { MessageIntentSchema } from "./schema-intent";
 // Split out of `schema.ts` at the 500-line cap (2026-10-11), verbatim; `schema.ts` re-exports
 // every name below, so importers of the barrel are unchanged.
 
-/** Task execution mode. `set_task_mode` governs the creator's own machine. */
-/** ⚠ Annotated so TS-side drift breaks the build — see `VisibilitySchema`.
- *  ⚠ The DOMAIN name is `ThreadMode`; `task` is the storage spelling (INVARIANTS
- *  §5), which is why the schema and the type do not share a name. */
-const TaskModeSchema = closedEnum<ThreadMode>()(["interactive", "autonomous"]);
+/** Thread execution mode; it governs the creator's own machine.
+ *  ⚠ Annotated so TS-side drift breaks the build — see `VisibilitySchema`. */
+const ThreadModeSchema = closedEnum<ThreadMode>()(["interactive", "autonomous"]);
 
 /**
- * Create a task. `title` = queryable header; `body` = initial request (posted as
- * the task's first message, addressed to `toUserId`); `mode` defaults
+ * Create a thread. `title` = queryable header; `body` = initial request (posted as
+ * the thread's first message, addressed to `toUserId`); `mode` defaults
  * interactive. `toUserId` must be an active member (service validates).
- * `clientMsgId` idempotency key: a re-send returns the existing task rather than
+ * `clientMsgId` idempotency key: a re-send returns the existing thread rather than
  * double-creating it AND double-spawning the responder's window.
  *
  * ⚠ `toUserId` is OPTIONAL since 1.37.1: a thread with no target has its opener
@@ -32,9 +30,9 @@ const TaskModeSchema = closedEnum<ThreadMode>()(["interactive", "autonomous"]);
  * column was always nullable (`ON DELETE SET NULL`), so every reader already
  * handles it. `intent:"chat"` opens it as a RECORD, the MCP `kind="record"`.
  */
-export const TaskCreateSchema = z.object({
+export const ThreadCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  mode: TaskModeSchema.optional(),
+  mode: ThreadModeSchema.optional(),
   body: z.string().min(1).max(16000),
   toUserId: z.string().uuid().optional(),
   intent: MessageIntentSchema.optional(),
@@ -50,10 +48,10 @@ export const TaskCreateSchema = z.object({
    * `service-writes-metadata.resolvePostMetadata`).
    *
    * ⚠ Security gate: the launch predicate ALSO requires `authorUserId === me` AND
-   * `taskCreatedBy === me`, so a peer's handoff can never open a window elsewhere.
+   * `threadCreatedBy === me`, so a peer's handoff can never open a window elsewhere.
    *
    * ⚠ **NO CURRENT BUILD READS THIS STAMP (F-274, measured 2026-08-22).**
-   * `dopl-desktop-app/main/targeting.js › requesterTaskOpen` has no caller; its
+   * `dopl-desktop-app/main/targeting.js › requesterThreadOpen` has no caller; its
    * listener path went with the session window (F-228). Everything else still happens
    * (accepted, stripped from caller metadata, re-stamped, stored). ⚠ KEPT ON PURPOSE:
    * refusing it would 400 every older external agent for no gain. What was removed is
@@ -64,26 +62,26 @@ export const TaskCreateSchema = z.object({
   /** REMOVED (rollback §1) — see {@link removedParam}. */
   participants: removedParam(REMOVED_PARTICIPANTS),
 });
-export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
+export type ThreadCreateInput = z.infer<typeof ThreadCreateSchema>;
 
 /**
  * Create ONE request against N addressees — the "New agent thread" panel's send.
  * Storage still holds one requester + one target per thread (INVARIANTS §5), so the
- * service loops `createTask`; this is the shape of the ASK, not of a row.
+ * service loops `createThread`; this is the shape of the ASK, not of a row.
  *
  * ⚠ `toUserIds` is `.min(1)`: **a fan-out with no addressees is a 400**, not an empty
  * success — a surface that accepted it would report a request never raised. The UI
  * disables Send at zero too; only one of the two is the contract.
  *
- * ⚠ `clientMsgId` is REQUIRED here where `TaskCreateSchema` leaves it optional: it is
- * the BASE the per-addressee keys derive from (`server/service-tasks-broadcast.ts ›
+ * ⚠ `clientMsgId` is REQUIRED here where `ThreadCreateSchema` leaves it optional: it is
+ * the BASE the per-addressee keys derive from (`server/service-threads-broadcast.ts ›
  * addresseeClientMsgId`) AND the seed of the group id the N threads share, so a
  * fan-out without one cannot converge on retry. Bounded under `clientMsgId`'s own 200
  * so the derived `${base}:${uuid}` keys stay inside it.
  */
-export const TaskFanOutSchema = z.object({
+export const ThreadFanOutSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  mode: TaskModeSchema.optional(),
+  mode: ThreadModeSchema.optional(),
   body: z.string().min(1).max(16000),
   toUserIds: z
     .array(z.string().uuid())
@@ -91,31 +89,31 @@ export const TaskFanOutSchema = z.object({
     .max(CHANNEL_FANOUT_MAX_ADDRESSEES),
   clientMsgId: z.string().min(1).max(120),
 });
-export type TaskFanOutInput = z.infer<typeof TaskFanOutSchema>;
+export type ThreadFanOutInput = z.infer<typeof ThreadFanOutSchema>;
 
 /**
- * What POST `/channels/[channelId]/tasks` accepts: the fan-out shape or the
+ * What POST `/channels/[channelId]/threads` accepts: the fan-out shape or the
  * single-target one. ⚠ Plain union, FAN-OUT FIRST, and the order is load-bearing —
  * there is no discriminator to add without breaking every installed caller, and zod
  * STRIPS unknown keys, so a `{toUserIds}` body checked against
- * {@link TaskCreateSchema} first would parse as a targetless thread. The single arm
+ * {@link ThreadCreateSchema} first would parse as a targetless thread. The single arm
  * refuses a `toUserIds` key outright, so first-match is exact.
  */
-export const TaskCreatePayloadSchema = z.union([
-  TaskFanOutSchema,
-  TaskCreateSchema,
+export const ThreadCreatePayloadSchema = z.union([
+  ThreadFanOutSchema,
+  ThreadCreateSchema,
 ]);
-type TaskCreatePayloadInput = z.infer<typeof TaskCreatePayloadSchema>;
+type ThreadCreatePayloadInput = z.infer<typeof ThreadCreatePayloadSchema>;
 
-/** True for the fan-out arm of {@link TaskCreatePayloadSchema}. */
-export function isTaskFanOutInput(
-  input: TaskCreatePayloadInput
-): input is TaskFanOutInput {
-  return Array.isArray((input as TaskFanOutInput).toUserIds);
+/** True for the fan-out arm of {@link ThreadCreatePayloadSchema}. */
+export function isThreadFanOutInput(
+  input: ThreadCreatePayloadInput
+): input is ThreadFanOutInput {
+  return Array.isArray((input as ThreadFanOutInput).toUserIds);
 }
 
 /**
- * Update a task. ONE op survives: `set_mode` — creator only.
+ * Update a thread. ONE op survives: `set_mode` — creator only.
  *
  * ⚠ THREADS NO LONGER CLOSE (wiring plan Phase 4, 2026-08-18): the services behind
  * `close`, `propose_close` and `reopen` are DELETED, and the operator pauses or ends
@@ -128,8 +126,8 @@ export function isTaskFanOutInput(
  * object would make `op` optional-by-omission. ⚠ **ONE LIVE ARM** — a second real op
  * goes in beside `set_mode`.
  */
-const TaskUpdateUnion = z.discriminatedUnion("op", [
-  z.object({ op: z.literal("set_mode"), mode: TaskModeSchema }),
+const ThreadUpdateUnion = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("set_mode"), mode: ThreadModeSchema }),
   removedOp("close", REMOVED_THREAD_CLOSE),
   removedOp("propose_close", REMOVED_THREAD_CLOSE),
   removedOp("reopen", REMOVED_THREAD_CLOSE),
@@ -140,10 +138,10 @@ const TaskUpdateUnion = z.discriminatedUnion("op", [
  * refinement always fails), so the union's inferred output describes three results the
  * parser cannot return; `Extract` states what `safeParse` can actually hand back.
  */
-type TaskUpdateInput = Extract<
-  z.infer<typeof TaskUpdateUnion>,
+type ThreadUpdateInput = Extract<
+  z.infer<typeof ThreadUpdateUnion>,
   { op: "set_mode" }
 >;
-export const TaskUpdateSchema =
-  TaskUpdateUnion as unknown as z.ZodType<TaskUpdateInput>;
+export const ThreadUpdateSchema =
+  ThreadUpdateUnion as unknown as z.ZodType<ThreadUpdateInput>;
 

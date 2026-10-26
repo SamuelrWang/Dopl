@@ -18,7 +18,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 // ⚠ **THE VERDICT RESOLVER READS `channel_sessions` (A9)** and this suite is
 // about the METADATA fold, not about who a post wakes. Mocked to the empty
 // projection so the agent half of `service-wake-verdict.ts` resolves nothing:
@@ -30,7 +30,7 @@ vi.mock("./repository-sessions");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import * as repoSessions from "./repository-sessions";
 import { ChannelChatAddressedError } from "./errors";
 import { postMessage } from "./service-writes";
@@ -38,14 +38,14 @@ import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskActivityRow,
+  ChannelThreadActivityRow,
 } from "./dto";
 import type { ChannelContext } from "./service-shared";
 
 const WS = "ws-1";
 const USER = "11111111-e29b-41d4-a716-446655440000";
 const PEER = "22222222-e29b-41d4-a716-446655440000";
-const TASK_ID = "55555555-e29b-41d4-a716-446655440000";
+const THREAD_ID = "55555555-e29b-41d4-a716-446655440000";
 
 const ctx: ChannelContext = {
   workspaceId: WS,
@@ -91,9 +91,9 @@ function memberRow(userId: string): ChannelMemberRow {
 }
 
 /** An OPEN thread between the two DM members — the inheritance candidate. */
-function taskRow(overrides: Partial<ChannelTaskActivityRow> = {}): ChannelTaskActivityRow {
+function threadRow(overrides: Partial<ChannelThreadActivityRow> = {}): ChannelThreadActivityRow {
   return {
-    id: TASK_ID,
+    id: THREAD_ID,
     channel_id: "chan-1",
     workspace_id: WS,
     created_by: USER,
@@ -164,7 +164,7 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
       rows: [],
       truncated: false,
     });
@@ -194,16 +194,16 @@ describe("postMessage — the DEFAULT intent is unchanged", () => {
   });
 
   it("still inherits the single open DM thread with no intent", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
+    vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
+      rows: [threadRow()],
       truncated: false,
     });
 
     await postMessage(ctx, "dm", { body: "progress", toUserId: PEER });
 
     const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
-    expect(meta.taskTitle).toBe("Ship the thing");
+    expect(meta.threadId).toBe(THREAD_ID);
+    expect(meta.threadTitle).toBe("Ship the thing");
   });
 
   it("an EXPLICIT request behaves identically, and says so on the wire", async () => {
@@ -239,31 +239,31 @@ describe("postMessage — intent:chat reaches nobody's agent", () => {
   it("does NOT inherit the open DM thread", async () => {
     // Inheritance is part of the auto-addressing machinery and fires only for a
     // message addressed to the peer — a chat post is addressed to nobody.
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
+    vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
+      rows: [threadRow()],
       truncated: false,
     });
 
     await postMessage(ctx, "dm", { body: "unrelated aside", intent: "chat" });
 
     const meta = capturedMetadata();
-    expect(has(meta, "taskId")).toBe(false);
-    expect(has(meta, "taskTitle")).toBe(false);
+    expect(has(meta, "threadId")).toBe(false);
+    expect(has(meta, "threadTitle")).toBe(false);
   });
 
   it("is otherwise an ORDINARY message — it still posts, and still threads", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(threadRow());
 
     const msg = await postMessage(ctx, "dm", {
       body: "one more thought",
       intent: "chat",
-      metadata: { taskId: TASK_ID },
+      metadata: { threadId: THREAD_ID },
     });
 
     const meta = capturedMetadata();
     // A tag the caller PASSED is honoured (caller is the thread's creator).
-    expect(meta.taskId).toBe(TASK_ID);
-    expect(meta.taskTitle).toBe("Ship the thing");
+    expect(meta.threadId).toBe(THREAD_ID);
+    expect(meta.threadTitle).toBe("Ship the thing");
     expect(has(meta, "to_user_id")).toBe(false);
     expect(msg.seq).toBe(41);
     expect(repo.touchChannel).toHaveBeenCalled();
@@ -350,8 +350,8 @@ describe("postMessage — intent is a RESERVED metadata key", () => {
    *  lets a caller dress a request up as chat on the receiver's screen — or
    *  suppress THREAD INHERITANCE — without passing the validated field. */
   it("SECURITY: a spoofed copy does not suppress thread inheritance", async () => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
+    vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
+      rows: [threadRow()],
       truncated: false,
     });
 
@@ -362,7 +362,7 @@ describe("postMessage — intent is a RESERVED metadata key", () => {
     });
 
     const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
+    expect(meta.threadId).toBe(THREAD_ID);
     expect(has(meta, "intent")).toBe(false);
   });
 

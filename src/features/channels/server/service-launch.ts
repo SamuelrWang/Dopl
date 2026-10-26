@@ -13,7 +13,7 @@ import {
 } from "./errors";
 import { resolveDirectiveColor } from "./service-launch-color";
 import * as launchRepo from "./repository-launch";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 import { insertOrConverge } from "./service-mailbox-idempotency";
 import { resolveIdentityForDirective } from "./service-launch-identity";
@@ -84,15 +84,15 @@ export async function createLaunchDirective(
     }
   }
 
-  let taskId: string | null = null;
+  let threadId: string | null = null;
   if (input.threadId) {
-    const task = await repoTasks.findTaskByChannelAndId(
+    const thread = await repoThreads.findThreadByChannelAndId(
       channel.id,
       input.threadId
     );
     // Same not-found as a foreign id, so thread ids can't be probed across channels.
-    if (!task) throw new LaunchDirectiveNotFoundError(input.threadId);
-    taskId = task.id;
+    if (!thread) throw new LaunchDirectiveNotFoundError(input.threadId);
+    threadId = thread.id;
   }
 
   const identity = await resolveIdentityForDirective(ctx, input.identity);
@@ -113,7 +113,7 @@ export async function createLaunchDirective(
     insert: () => launchRepo.insertLaunchDirective(ctx.userId, {
       workspace_id: ctx.workspaceId,
       channel_id: channel.id,
-      task_id: taskId,
+      thread_id: threadId,
       goal: input.goal ?? null,
       model: input.model ?? null,
       runtime: input.runtime ?? null,

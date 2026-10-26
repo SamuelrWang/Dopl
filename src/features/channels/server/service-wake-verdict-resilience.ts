@@ -44,7 +44,7 @@ export async function liveChannelSessions(
  * RR1: a thread reply with no `to` goes to the thread's other party. Total because a thread has
  * exactly two parties (`isThreadParticipant` 403s a third first). Reads the stamps
  * `resolvePostMetadata` already re-derived from the thread row, so no round trip. A legacy
- * `task-<channelId>-<seq>` tag or an unaddressed thread resolves to `null`: the send keeps the
+ * `thread-<channelId>-<seq>` tag or an unaddressed thread resolves to `null`: the send keeps the
  * `thread` verdict and wakes nothing.
  */
 export function threadOtherParty(
@@ -52,9 +52,9 @@ export function threadOtherParty(
   metadata: Record<string, unknown>
 ): string | null {
   const createdBy =
-    typeof metadata.taskCreatedBy === "string" ? metadata.taskCreatedBy : null;
+    typeof metadata.threadCreatedBy === "string" ? metadata.threadCreatedBy : null;
   const target =
-    typeof metadata.taskTarget === "string" ? metadata.taskTarget : null;
+    typeof metadata.threadTarget === "string" ? metadata.threadTarget : null;
   if (createdBy === null) return null;
   if (ctx.userId === createdBy) return target;
   if (ctx.userId === target) return createdBy;

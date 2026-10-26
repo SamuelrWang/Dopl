@@ -82,16 +82,16 @@ test("garbage rows are skipped rather than thrown on", () => {
 
 test("only the newly-shared container's sessions are selected", () => {
   const live = [
-    { key: "a", workspaceId: "c1", channelId: "ch1", taskId: "t1" },
-    { key: "b", workspaceId: "c2", channelId: "ch2", taskId: "t2" },
-    { key: "c", workspaceId: "w-standard", channelId: "ch3", taskId: "t3" },
+    { key: "a", workspaceId: "c1", channelId: "ch1", threadId: "t1" },
+    { key: "b", workspaceId: "c2", channelId: "ch2", threadId: "t2" },
+    { key: "c", workspaceId: "w-standard", channelId: "ch3", threadId: "t3" },
   ];
   assert.deepEqual(P.sessionsToStop(live, ["c1"]).map((s) => s.key), ["a"]);
   assert.deepEqual(P.sessionsToStop(live, ["c1", "c2"]).map((s) => s.key).sort(), ["a", "b"]);
 });
 
 test("nothing newly shared selects nothing, and a session with no channel is skipped", () => {
-  const live = [{ key: "a", workspaceId: "c1", channelId: null, taskId: "t1" }];
+  const live = [{ key: "a", workspaceId: "c1", channelId: null, threadId: "t1" }];
   assert.deepEqual(P.sessionsToStop(live, []), []);
   assert.deepEqual(P.sessionsToStop(live, ["c1"]), []);
   assert.deepEqual(P.sessionsToStop(null, ["c1"]), []);

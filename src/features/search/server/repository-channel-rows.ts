@@ -48,7 +48,7 @@ export interface SearchHit {
 
 /**
  * The Messages section means `kind='message'` only — what a person or agent said.
- * The `task_*` kinds are thread lifecycle narration and `system` is untyped by
+ * The `thread_*` kinds are thread lifecycle narration and `system` is untyped by
  * anyone, so both are excluded: one autonomous run would otherwise flood the
  * section with rows pointing at a single Threads row.
  */
@@ -168,7 +168,7 @@ interface MessageRow {
 }
 
 /**
- * Threads whose title matches. The table is `channel_tasks` — the thread list's
+ * Threads whose title matches. The table is `channel_threads` — the thread list's
  * own store; there has never been a `channel_threads` table.
  * Closed threads are kept: finished work is what people search for most.
  */
@@ -179,7 +179,7 @@ export async function searchThreads(
   if (channelIds.length === 0) return [];
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("channel_tasks")
+    .from("channel_threads")
     .select("id, title, channel_id, workspace_id, updated_at")
     .in("channel_id", channelIds)
     .ilike("title", containsPattern(query))

@@ -76,7 +76,7 @@ const LAUNCH_BLOCKING = [
   {
     path: 'containment.profiles.<profile>.denyList',
     why: 'grantDecision step 1 reads cfg.disallowedTools as the gate\'s OWN first check — the one '
-      + 'verdict no task grant and no bypass can open. A restricted profile launched with no deny '
+      + 'verdict no thread grant and no bypass can open. A restricted profile launched with no deny '
       + 'list in this runtime\'s vocabulary has NO enforcement of that profile: a native sandbox '
       + 'bounds the filesystem, it does not deny delegation, exfil or persistence built-ins. '
       + '⚠ THE ONE PLACE ABSENT DOES NOT MEAN HIDE, because the control here IS containment.',

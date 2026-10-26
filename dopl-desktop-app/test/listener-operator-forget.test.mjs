@@ -63,17 +63,17 @@ after(() => { try { listener.stop(); } catch (_) { /* best-effort */ } });
 
 let seq = 0;
 async function launch() {
-  const taskId = `44444444-5555-4666-8777-${String(++seq).padStart(12, "0")}`;
+  const threadId = `44444444-5555-4666-8777-${String(++seq).padStart(12, "0")}`;
   const before = rt.handles.length;
   const res = await engine.launchResponderSession({
-    windowless: true, channelId: CHANNEL, taskId, workspaceId: WORKSPACE,
+    windowless: true, channelId: CHANNEL, threadId, workspaceId: WORKSPACE,
     runtime: "claude", message: "hi", counterpartyId: PEER, direct: false,
-    context: { channelName: "Ops", channelId: CHANNEL, workspaceId: WORKSPACE, taskId },
+    context: { channelName: "Ops", channelId: CHANNEL, workspaceId: WORKSPACE, threadId },
     toolProfile: "channel_agent", mode: "autonomous", startModes: { tools: "manual", messages: "ask" },
   });
   assert.ok(res && res.sessionId, JSON.stringify(res));
   await settle();
-  const s = registryReads.sessionOn({ channelId: CHANNEL, taskId });
+  const s = registryReads.sessionOn({ channelId: CHANNEL, threadId });
   const m = rt.handles[before] && rt.handles[before].pushed[0];
   const c = m && m.message && m.message.content;
   const turn = typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b && b.text) || "").join("") : "";

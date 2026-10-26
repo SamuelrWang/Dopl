@@ -19,7 +19,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("./repository-agents");
 vi.mock("./service-reads");
 // ⚠ `getChannel` MOVED TO `service-list.ts` (R-26) — the one row projection.

@@ -38,7 +38,7 @@ const ChannelNameSchema = safeLabel("Channel name", 120);
  * is NOT NULL default `''`). `safeOptionalLabel` carries the empty-string branch.
  */
 const ChannelTopicSchema = safeOptionalLabel("Channel topic", 2000);
-// `system` server-reserved. `agent` stays postable: the desktop posts task results
+// `system` server-reserved. `agent` stays postable: the desktop posts thread results
 // with authorKind `agent` over a cookie session, and the service derives agent vs user
 // from the token when it is omitted.
 // ⚠ `closedEnum` over the DERIVED `PostableAuthorKind` — see `MessageKind` below.
@@ -52,10 +52,10 @@ const PostableAuthorKindSchema = closedEnum<PostableAuthorKind>()([
 // `scripts/check-message-kind-drift.ts`. Argument: `types.ts › PostableMessageKind`.
 const PostableMessageKindSchema = closedEnum<PostableMessageKind>()([
   "message",
-  "task_started",
-  "task_progress",
-  "task_finished",
-  "task_failed",
+  "thread_started",
+  "thread_progress",
+  "thread_finished",
+  "thread_failed",
 ]);
 
 /**
@@ -230,17 +230,17 @@ export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema
 >;
 
-// ─── Tasks ──────────────────────────────────────────────────────────────────
-// The thread create / fan-out / update schemas live in `schema-tasks.ts` (500-line cap
+// ─── Threads ──────────────────────────────────────────────────────────────────
+// The thread create / fan-out / update schemas live in `schema-threads.ts` (500-line cap
 // split, 2026-10-11); re-exported here because this file is the barrel.
 export {
-  TaskCreateSchema,
-  TaskFanOutSchema,
-  TaskCreatePayloadSchema,
-  isTaskFanOutInput,
-  TaskUpdateSchema,
-} from "./schema-tasks";
-export type { TaskCreateInput, TaskFanOutInput } from "./schema-tasks";
+  ThreadCreateSchema,
+  ThreadFanOutSchema,
+  ThreadCreatePayloadSchema,
+  isThreadFanOutInput,
+  ThreadUpdateSchema,
+} from "./schema-threads";
+export type { ThreadCreateInput, ThreadFanOutInput } from "./schema-threads";
 
 /**
  * The MEMBER schemas — the self-service PATCH, add and remove — live in

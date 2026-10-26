@@ -1,12 +1,12 @@
 import "server-only";
 import {
-  TaskForbiddenError,
-  TaskNotFoundError,
+  ThreadForbiddenError,
+  ThreadNotFoundError,
 } from "./errors";
 import * as repoCollab from "./repository-collab";
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { canManageChannel, requireMemberChannel } from "./service-shared";
 import type { ChannelContext } from "./service-shared";
 
@@ -27,10 +27,10 @@ import type { ChannelContext } from "./service-shared";
  * exchange it was losing. The only caller is an operator clicking through a
  * confirm dialog.
  *
- * ⚠ SPLIT OUT OF `service-tasks.ts` rather than added to it: that file is CREATE
+ * ⚠ SPLIT OUT OF `service-threads.ts` rather than added to it: that file is CREATE
  * plus set-mode, and this is a cascade over four tables with an ordering
  * argument. Two reasons to change, two files (INVARIANTS §1) — the same seam
- * `service-tasks-broadcast.ts` sits on.
+ * `service-threads-broadcast.ts` sits on.
  */
 
 /**
@@ -58,12 +58,12 @@ import type { ChannelContext } from "./service-shared";
  */
 export function assertMayDeleteThread(
   ctx: ChannelContext,
-  task: { created_by: string },
+  thread: { created_by: string },
   membership: Parameters<typeof canManageChannel>[1]
 ): void {
-  if (task.created_by === ctx.userId) return;
+  if (thread.created_by === ctx.userId) return;
   if (canManageChannel(ctx, membership)) return;
-  throw new TaskForbiddenError("delete this thread");
+  throw new ThreadForbiddenError("delete this thread");
 }
 
 /**
@@ -74,11 +74,11 @@ export function assertMayDeleteThread(
  * order is chosen for what a FAILURE half-way through leaves behind. Every prefix
  * of this list is a thread with LESS hanging off it, which every reader already
  * copes with and which re-clicking Delete finishes. The reverse order is the one
- * that breaks reads: the task row going first nulls `channel_sessions.task_id`
- * (its FK is `ON DELETE SET NULL`) and strands every `metadata.taskId` message on
+ * that breaks reads: the thread row going first nulls `channel_sessions.thread_id`
+ * (its FK is `ON DELETE SET NULL`) and strands every `metadata.threadId` message on
  * an id that resolves to nothing.
  *
- *   1. `channel_messages` tagged `metadata->>'taskId'` — the transcript. No FK
+ *   1. `channel_messages` tagged `metadata->>'threadId'` — the transcript. No FK
  *      links them to the thread, so this statement IS the cascade, and it hands
  *      back the seqs it removed. ⚠ `channel_mention_reads` rides along inside it:
  *      its `message_id` FK is `ON DELETE CASCADE` (`20260818140000`), which was
@@ -88,9 +88,7 @@ export function assertMayDeleteThread(
  *      expireConsentForMessageSeqs` carries the audit argument.
  *   3. `channel_sessions` targeting the thread, EVERY member's. They are
  *      projections of a live desktop registry, not owned state.
- *   4. `channel_tasks` — the row itself. (The legacy breakout table
- *      `channel_task_participants` is dropped by
- *      `supabase/migrations/20261114130000_drop_dead_tables_and_rpcs.sql`.)
+ *   4. `channel_threads` — the row itself.
  *
  * ⚠ THE PEER'S RUNNING AGENT IS NOT REACHABLE FROM HERE AND THAT IS ACCEPTED
  * (Samuel, 2026-08-21). Step 3 removes the ROW that says a peer's agent is on this
@@ -100,7 +98,7 @@ export function assertMayDeleteThread(
  * (`channels/components/thread-manage.tsx`), which is the only side that can.
  *
  * ⚠ THE DOORBELL IS `channel_messages`, AND IT HAD TO BE BOUGHT — 2026-08-22.
- * `channel_tasks` stays out of the publication (§7) and so does `channel_sessions`,
+ * `channel_threads` stays out of the publication (§7) and so does `channel_sessions`,
  * and the consent step UPDATEs rather than deletes, so step 1's DELETEs on
  * `channel_messages` are the ONLY event this cascade can ring with.
  *
@@ -119,10 +117,10 @@ export function assertMayDeleteThread(
  * A thread with no messages at all still rings nothing and is corrected by the
  * deleting client's own invalidate.
  */
-export async function deleteTask(
+export async function deleteThread(
   ctx: ChannelContext,
   ref: string,
-  taskId: string
+  threadId: string
 ): Promise<void> {
   const { channel, membership } = await requireMemberChannel(
     ctx,
@@ -130,17 +128,17 @@ export async function deleteTask(
     "delete a thread in this channel"
   );
   // ⚠ Channel-scoped load: a thread that is not in THIS channel is a 404, so the
-  // id cannot be probed across rooms (the same collapse `getChannelTask` makes).
-  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!task) throw new TaskNotFoundError(taskId);
-  assertMayDeleteThread(ctx, task, membership);
+  // id cannot be probed across rooms (the same collapse `getChannelThread` makes).
+  const thread = await repoThreads.findThreadByChannelAndId(channel.id, threadId);
+  if (!thread) throw new ThreadNotFoundError(threadId);
+  assertMayDeleteThread(ctx, thread, membership);
 
-  const seqs = await repoMessages.deleteMessagesByThread(channel.id, task.id);
+  const seqs = await repoMessages.deleteMessagesByThread(channel.id, thread.id);
   await repoCollab.expireConsentForMessageSeqs(channel.id, seqs);
   await repoSessions.deleteSessionStatesForThread(
     ctx.workspaceId,
     channel.id,
-    task.id
+    thread.id
   );
-  await repoTasks.deleteTask(channel.id, task.id);
+  await repoThreads.deleteThread(channel.id, thread.id);
 }

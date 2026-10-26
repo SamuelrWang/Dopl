@@ -215,7 +215,7 @@ describe("`delivery=` is the ack, and it is the only one", () => {
 
   it("hands back the cursor and the thread a follow-up call needs", async () => {
     const out = await send(
-      sendStub(vi.fn(async () => message({ seq: 41, metadata: { taskId: THREAD } }))),
+      sendStub(vi.fn(async () => message({ seq: 41, metadata: { threadId: THREAD } }))),
       { thread: THREAD },
     );
     expect(out).toContain("seq=41");
@@ -309,7 +309,7 @@ describe("the refusals, MUTATION-VERIFIED", () => {
   });
 
   it("a multi-line milestone is refused — and a one-line one is sent", async () => {
-    const post = vi.fn(async () => message({ kind: "task_progress" }));
+    const post = vi.fn(async () => message({ kind: "thread_progress" }));
     const client = sendStub(post);
     const over = await send(client, {
       kind: "milestone",
@@ -327,9 +327,9 @@ describe("the refusals, MUTATION-VERIFIED", () => {
     expect(under).toContain("milestone");
     expect(post).toHaveBeenCalledTimes(1);
     // ⚠ THE KIND IS FIXED AT THE SEAM, never picked by the caller: a milestone
-    // stores `task_progress`, and the agent never chooses between two enum
+    // stores `thread_progress`, and the agent never chooses between two enum
     // values one apart.
-    expect(post.mock.calls[0][1].kind).toBe("task_progress");
+    expect(post.mock.calls[0][1].kind).toBe("thread_progress");
   });
 
   it('`thread="new"` needs both `to` and `summary` — and opens the thread once it has them', async () => {

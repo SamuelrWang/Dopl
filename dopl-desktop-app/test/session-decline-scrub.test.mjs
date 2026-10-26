@@ -44,7 +44,7 @@ function harness() {
   const calls = { dispatch: [] };
   const io = { noteGatedBody: realIo.noteGatedBody };
   const sessions = new Map();
-  const store = { slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.taskId)) || ""}` };
+  const store = { slotKey: (a) => `${(a && a.channelId) || ""}:${(a && (a.agentId || a.threadId)) || ""}` };
   const api = new Function("io", "store", `${BLOCK}\n return { bind, enqueue, feedInbound };`)(io, store);
   api.bind({ sessions, dispatch: (s, ev) => calls.dispatch.push(ev) });
   return { ...api, sessions, calls };
@@ -58,7 +58,7 @@ const session = (over = {}) => ({
   ...over,
 });
 
-const reply = (message) => ({ channelId: "c1", taskId: "t1", message, authorName: "David" });
+const reply = (message) => ({ channelId: "c1", threadId: "t1", message, authorName: "David" });
 
 /** The exact predicate session-seed.js filters the fresh-run transcript with. */
 const wouldReachTheAgent = (s, body) =>

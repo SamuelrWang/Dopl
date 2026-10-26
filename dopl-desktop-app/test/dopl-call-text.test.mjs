@@ -44,7 +44,7 @@ test("granular names the tool that runs the job, with its selector when it has o
 const CTX = {
   channelId: "c0ffee00-0000-4000-8000-000000000001",
   workspaceId: "c0ffee00-0000-4000-8000-000000000002",
-  taskId: "c0ffee00-0000-4000-8000-000000000003",
+  threadId: "c0ffee00-0000-4000-8000-000000000003",
   channelName: "ops", authorName: "Ann", agentId: "abcd1234", agentName: "Bug Reviewer",
   roster: { agents: [{ handle: "x", mine: true }], people: [], agentsMore: 2, read: "failed" },
   ontologies: [{ id: "o1", name: "Graph", level: "view" }],

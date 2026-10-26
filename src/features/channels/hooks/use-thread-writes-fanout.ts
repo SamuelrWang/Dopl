@@ -39,7 +39,7 @@ import type { ChannelThread } from "../types";
  * ONE request against N addressees — the "New agent thread" panel's send.
  *
  * ⚠ `clientMsgId` is the BASE, not a per-row key. The server derives
- * `${base}:${toUserId}` per addressee (`server/service-tasks-broadcast.ts ›
+ * `${base}:${toUserId}` per addressee (`server/service-threads-broadcast.ts ›
  * addresseeClientMsgId`) and the group id from the base plus the caller, so a
  * retry of the whole send converges thread-by-thread onto the same card. Minting
  * it HERE is what makes that possible: a server-minted key could not survive the
@@ -55,10 +55,10 @@ export interface FanOutThreadsDraft {
   toUserIds: string[];
 }
 
-/** The fan-out's response. `tasks` and `openingSeqs` are ALIGNED by index, in
+/** The fan-out's response. `threads` and `openingSeqs` are ALIGNED by index, in
  *  addressee order — the order the optimistic rows were written in. */
 export interface FanOutThreadsResponse {
-  tasks: ChannelThread[];
+  threads: ChannelThread[];
   openingSeqs: (number | null)[];
   fanoutGroup: string;
 }
@@ -69,7 +69,7 @@ export interface FanOutThreadsResponse {
  * only.
  *
  * ⚠ NOT the wire key. The server derives its own from the base it was sent
- * (`service-tasks-broadcast.ts › addresseeClientMsgId`) and the two are never
+ * (`service-threads-broadcast.ts › addresseeClientMsgId`) and the two are never
  * compared — this one exists so the N pending rows of one send have N distinct
  * cache identities instead of overwriting each other, which is the same bug the
  * server-side key prevents one layer down. A drift between them costs nothing.
@@ -123,7 +123,7 @@ export function fanOutThreadsConfig(
                   // ⚠ Wire spellings — the pending rows are read by the real
                   // renderer, so they carry the real keys.
                   metadata: {
-                    taskId: pendingMessageId(
+                    threadId: pendingMessageId(
                       pendingAddresseeKey(draft.clientMsgId, toUserId)
                     ),
                     to_user_id: toUserId,
@@ -161,7 +161,7 @@ export function fanOutThreadsConfig(
     // wrong for exactly one frame — and then the invalidated read would fix it.
     reconcile: (data, draft) => [
       patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) =>
-        data.tasks.reduce<ThreadsCache | undefined>(
+        data.threads.reduce<ThreadsCache | undefined>(
           (acc, thread, i) =>
             upsertThread(
               acc,
@@ -174,12 +174,12 @@ export function fanOutThreadsConfig(
         )
       ),
       patchCache<MessagesCache>(messagesKey(draft.channelId), (cache) =>
-        data.tasks.reduce<MessagesCache | undefined>(
+        data.threads.reduce<MessagesCache | undefined>(
           (acc, thread, i) =>
             retagPendingMessage(
               acc,
               pendingAddresseeKey(draft.clientMsgId, draft.toUserIds[i]),
-              { taskId: thread.id, fanoutGroup: data.fanoutGroup }
+              { threadId: thread.id, fanoutGroup: data.fanoutGroup }
             ),
           cache
         )

@@ -37,7 +37,7 @@ const row = (over = {}) => ({
   id: DID,
   workspace_id: WS,
   channel_id: CH,
-  task_id: TH,
+  thread_id: TH,
   operator_user_id: ME,
   agent_id: AGENT,
   body: "check the deploy and tell me what you find",
@@ -118,7 +118,7 @@ test("NO FALLBACK: an ordinary operator message is untouched — `null`, and eve
 
 test("WIRE: both spellings of every field are read — the F-284 failure", () => {
   // ⚠ A realtime frame is snake_case; a claimed or polled row is the server's DTO (camelCase,
-  // and `task_id` renamed to `threadId`). A reader that knows one works on one lane and silently
+  // and `thread_id` renamed to `threadId`). A reader that knows one works on one lane and silently
   // drops every row on the other.
   const dto = {
     id: DID, workspaceId: WS, channelId: CH, threadId: TH,

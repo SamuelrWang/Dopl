@@ -12,14 +12,14 @@ import { CHANNEL_ID } from "./test-fixtures";
 import { catalog, channelRecordBridge } from "../hooks/launch-selection-harness";
 import { installSpaBridge } from "@/shared/testing/spa-bridge";
 
-const TASK = "t-1";
+const THREAD = "t-1";
 afterEach(cleanup);
 
 function agent(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: TASK,
+    threadId: THREAD,
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -58,7 +58,7 @@ function install(
 /** Renders, then lets the channel's launch-record read answer. */
 async function mount(over: Partial<DesktopSessionSummary> = {}) {
   render(
-    <PostureControls agent={agent(over)} channelId={CHANNEL_ID} taskId={TASK} />
+    <PostureControls agent={agent(over)} channelId={CHANNEL_ID} threadId={THREAD} />
   );
   await act(async () => {});
 }
@@ -185,7 +185,7 @@ describe("what a change does", () => {
     // its oldest live member.
     expect(setMode).toHaveBeenCalledWith(
       CHANNEL_ID,
-      TASK,
+      THREAD,
       "tools",
       "bypass",
       undefined
@@ -202,7 +202,7 @@ describe("what a change does", () => {
     });
     expect(setMode).toHaveBeenCalledWith(
       CHANNEL_ID,
-      TASK,
+      THREAD,
       "messages",
       "auto_inbound",
       undefined
@@ -238,7 +238,7 @@ describe("when the controls are not offered at all", () => {
   it("renders nothing on a build without the op", async () => {
     install(); // no `setMode`
     const { container } = render(
-      <PostureControls agent={agent()} channelId={CHANNEL_ID} taskId={TASK} />
+      <PostureControls agent={agent()} channelId={CHANNEL_ID} threadId={THREAD} />
     );
     expect(container.firstChild).toBeNull();
   });
@@ -250,7 +250,7 @@ describe("when the controls are not offered at all", () => {
       <PostureControls
         agent={agent({ state: "ended", toolMode: null, messageMode: null })}
         channelId={CHANNEL_ID}
-        taskId={TASK}
+        threadId={THREAD}
       />
     );
     expect(container.firstChild).toBeNull();
@@ -263,7 +263,7 @@ describe("when the controls are not offered at all", () => {
       <PostureControls
         agent={agent({ state: "ended", toolMode: null, messageMode: null })}
         channelId={CHANNEL_ID}
-        taskId={TASK}
+        threadId={THREAD}
         stats={<p>Context tokens</p>}
       />
     );
@@ -278,7 +278,7 @@ describe("when the controls are not offered at all", () => {
       <PostureControls
         agent={agent()}
         channelId={CHANNEL_ID}
-        taskId={TASK}
+        threadId={THREAD}
         stats={<p>Context tokens</p>}
       />
     );

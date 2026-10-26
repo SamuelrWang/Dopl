@@ -94,7 +94,7 @@ export function oldestSeq(page: readonly ChannelMessage[]): number | null {
  *
  * ⚠ **THE FAILING CASE IS REAL, NOT THEORETICAL.** The newest page is refetched
  * on every realtime doorbell, so its `min` walks FORWARD. Land more than a page
- * between two paints — a working agent posting `task_progress` will — and
+ * between two paints — a working agent posting `thread_progress` will — and
  * `page.min` steps past the boundary; concatenating anyway renders the gap as two
  * adjacent rows, minutes apart, with nothing saying so.
  *
@@ -290,7 +290,7 @@ export function mergeEntries(
  * one call, and a reader scrolled back would otherwise keep rendering the deleted
  * rows until they switched channels.
  *
- * ⚠ THE TAG IS READ FROM THE WIRE KEY `metadata.taskId`, exactly as the server
+ * ⚠ THE TAG IS READ FROM THE WIRE KEY `metadata.threadId`, exactly as the server
  * matches it — never from a domain field, because there is not one.
  *
  * ⚠ Returns the SAME window when nothing matched, so a delete in an unrelated
@@ -304,7 +304,7 @@ export function dropThreadFromWindow(
   window: MessageWindow,
   threadId: string
 ): MessageWindow {
-  const kept = window.older.filter((m) => m.metadata?.taskId !== threadId);
+  const kept = window.older.filter((m) => m.metadata?.threadId !== threadId);
   if (kept.length === window.older.length) return window;
   return { ...window, older: kept };
 }

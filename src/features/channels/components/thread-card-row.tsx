@@ -26,7 +26,7 @@ import type { ThreadCardRow } from "./view-model-rows";
  *
  * Dark-shell card (2026-08-19) — no longer the `MESSAGE_CARD` face: a
  * body the message points at rather than says. **ONE CARD, N THREADS** — the
- * fan-out writes one `channel_tasks` row per addressee (INVARIANTS §5: a thread
+ * fan-out writes one `channel_threads` row per addressee (INVARIANTS §5: a thread
  * is one requester + one target) and they share a server-stamped `fanoutGroup`,
  * so each pill is one real ADDRESSEE, read off that thread's own
  * `targetUserId`.

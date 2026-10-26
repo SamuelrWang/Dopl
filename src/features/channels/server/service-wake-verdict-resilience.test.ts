@@ -37,9 +37,9 @@ beforeEach(() => {
 describe("RR1 — a thread reply with no `to` goes to the thread's other party", () => {
   it("resolves the OTHER party from the server's own thread stamps", async () => {
     const out = await resolve("what about the migration?", {
-      taskId: "task-1",
-      taskCreatedBy: "user-1",
-      taskTarget: "user-2",
+      threadId: "thread-1",
+      threadCreatedBy: "user-1",
+      threadTarget: "user-2",
     });
     expect(out).toMatchObject({
       verdict: "thread_peer",
@@ -51,34 +51,34 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
 
   it("…in EITHER direction — the author is whichever of the two they are", async () => {
     const out = await resolve("on it", {
-      taskId: "task-1",
-      taskCreatedBy: "user-2",
-      taskTarget: "user-1",
+      threadId: "thread-1",
+      threadCreatedBy: "user-2",
+      threadTarget: "user-1",
     });
     expect(out.recipientUserIds).toEqual(["user-2"]);
   });
 
   it("costs NO extra read — the pair is already stamped in the metadata fold", async () => {
     await resolve("hi", {
-      taskId: "task-1",
-      taskCreatedBy: "user-1",
-      taskTarget: "user-2",
+      threadId: "thread-1",
+      threadCreatedBy: "user-1",
+      threadTarget: "user-2",
     });
     expect(vi.mocked(repoSessions.listChannelSessionStates)).not.toHaveBeenCalled();
   });
 
   it("DEGENERATE: an unaddressed thread has no other party — `thread`, not a guess", async () => {
-    // `taskTarget` absent: the thread names nobody, so there is no other party to route to.
+    // `threadTarget` absent: the thread names nobody, so there is no other party to route to.
     const out = await resolve("anyone?", {
-      taskId: "task-1",
-      taskCreatedBy: "user-1",
+      threadId: "thread-1",
+      threadCreatedBy: "user-1",
     });
     expect(out).toMatchObject({ verdict: "thread", delivery: "idle" });
   });
 
   it("DEGENERATE: a LEGACY tag stamps no pair, so it stays `thread`", async () => {
-    // A legacy `task-<channelId>-<seq>` id resolves to no row, so no pair is stamped.
-    const out = await resolve("step done", { taskId: "task-chan-1-4" });
+    // A legacy `thread-<channelId>-<seq>` id resolves to no row, so no pair is stamped.
+    const out = await resolve("step done", { threadId: "thread-chan-1-4" });
     expect(out).toMatchObject({ verdict: "thread", delivery: "idle" });
   });
 
@@ -93,9 +93,9 @@ describe("RR1 — a thread reply with no `to` goes to the thread's other party",
   it("an explicit `to=` still wins — RR1 only fires when NOBODY was addressed", async () => {
     const out = await resolve("ping", {
       to_user_id: "user-3",
-      taskId: "task-1",
-      taskCreatedBy: "user-1",
-      taskTarget: "user-2",
+      threadId: "thread-1",
+      threadCreatedBy: "user-1",
+      threadTarget: "user-2",
     });
     expect(out).toMatchObject({ verdict: "member", recipientUserIds: ["user-3"] });
   });
@@ -135,9 +135,9 @@ describe("RR2 IS DELETED — an unaddressed AGENT post reaches nobody", () => {
   it("a THREADED agent post is UNTOUCHED — RR1 is an address, not a repair", async () => {
     // A thread has exactly two parties, so `thread_peer` holds for either author kind.
     const out = await resolve("here is the diff", {
-      taskId: "task-1",
-      taskCreatedBy: "user-1",
-      taskTarget: "user-2",
+      threadId: "thread-1",
+      threadCreatedBy: "user-1",
+      threadTarget: "user-2",
     }, { authorKind: "agent", clientMsgId: "agent-k3v7d2mq-3" });
     expect(out).toMatchObject({ verdict: "thread_peer", recipientUserIds: ["user-2"] });
   });
@@ -187,7 +187,7 @@ describe("RR3 — an unaddressed human message is answered by one agent", () => 
 
   it("does not fire for a non-`message` kind — a milestone repairs no address", async () => {
     roomProjection(sessionRow({ name: "k3v7d2mq" }));
-    const out = await resolve("step two", {}, { kind: "task_progress" });
+    const out = await resolve("step two", {}, { kind: "thread_progress" });
     expect(out).toMatchObject({ verdict: "none", delivery: "none" });
     expect(vi.mocked(repoSessions.listChannelSessionStates)).not.toHaveBeenCalled();
   });

@@ -37,7 +37,7 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -265,7 +265,7 @@ describe("the Agents tab wires it through for MY agents and not for peers", () =
  * There is no refusal path left to word; there is a window.
  */
 describe("Open window always opens the agent view", () => {
-  const AGENT = { channelId: CHANNEL_ID, taskId: "t-1" };
+  const AGENT = { channelId: CHANNEL_ID, threadId: "t-1" };
   const SEGMENT = "acme-a1b2";
 
   afterEach(() => {
@@ -444,7 +444,7 @@ describe("the panel's usage readout", () => {
 
   it("names the CHANNEL, not a missing field, for an agent on no thread", () => {
     // ⚠ "no thread title" DESCRIBED A MISSING FIELD. A channel-level agent is attached to the
-    // ROOM on purpose (`agents-controls.ts`: `taskId: null`) — an ordinary scope, not a gap.
+    // ROOM on purpose (`agents-controls.ts`: `threadId: null`) — an ordinary scope, not a gap.
     mountPanel({ threadTitle: null });
     expect(screen.getByText(/in main channel/i)).toBeTruthy();
   });

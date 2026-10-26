@@ -51,7 +51,7 @@ function harness() {
     // session-park resumes on the record's OWN slot — all three parts, exactly as the real
     // `main/session-store.js › slotKey` composes them. `getRecord` / `getSdkSessionId` left with
     // the shell-recreate lane — nothing in the surviving block reads a record.
-    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`,
+    slotKey: (a) => `${(a && a.channelId) || ""}:${(a && a.threadId) || ""}:${(a && a.agentId) || ""}`,
   };
   // ⚠ `sessionWindowless` JOINED 2026-08-22 (F-272): `startResume` now enforces
   // `MAX_CONCURRENT_SESSIONS`. These cases are about the PROFILE a resume comes back with, so the
@@ -96,7 +96,7 @@ function harness() {
 // ⚠ IT CARRIES AN `agentId` SINCE 2026-08-22 so the slot key is deterministic here. A record
 // WITHOUT one now gets a freshly minted id (that is the fix, and test/session-park.test.mjs owns
 // it); these cases are about the PROFILE, so they pin the id rather than re-testing the mint.
-const REC = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", workspaceId: "w1", side: "responder", mode: "interactive" };
+const REC = { channelId: "c1", threadId: "t1", agentId: "a1b2c3d4", workspaceId: "w1", side: "responder", mode: "interactive" };
 
 test("C7: a corrupt / unknown stored profile resumes as read_only, never full", async () => {
   for (const bad of [undefined, null, "", "FULL", "full_access", "administrator", 42, {}, "read_only "]) {

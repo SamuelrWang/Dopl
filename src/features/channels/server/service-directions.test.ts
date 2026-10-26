@@ -32,7 +32,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository-agent-owner", () => ({ agentIsAnotherMembers: vi.fn(async () => false) }));
 vi.mock("./repository-directions");
 vi.mock("./repository-collab");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("./service-shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./service-shared")>();
   return { ...actual, loadVisibleChannel: vi.fn() };
@@ -40,7 +40,7 @@ vi.mock("./service-shared", async (importOriginal) => {
 
 import * as directionRepo from "./repository-directions";
 import * as collab from "./repository-collab";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { agentIsAnotherMembers } from "./repository-agent-owner";
 import { AgentDirectiveForeignError } from "./errors";
 import { loadVisibleChannel } from "./service-shared";
@@ -74,7 +74,7 @@ function row(over: Record<string, unknown> = {}) {
     id: DID,
     workspace_id: WS,
     channel_id: CH,
-    task_id: null,
+    thread_id: null,
     operator_user_id: ME,
     agent_id: AGENT,
     body: "check the deploy",
@@ -175,7 +175,7 @@ describe("what a direction may be filed against", () => {
   });
 
   it("REFUSES a thread that is not in that channel", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null as never);
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(null as never);
     await expect(
       createAgentDirection(ctx, {
         channel: CH,

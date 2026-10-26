@@ -3,7 +3,7 @@
 // WHAT HAPPENED. api.js:2 said it out loud — "The Channels listener keeps its own
 // copy (E2E-verified — not refactored here)". So when Phase 2 gave api.js a 401
 // repair, listener-io.js never got one, and listener-io is the transport under
-// `listWorkspaces`, `listChannels`, every `/await` long-poll, channel-post's task
+// `listWorkspaces`, `listChannels`, every `/await` long-poll, channel-post's thread
 // lifecycle, the roster, threads and consent. On the bundled SPA nothing keeps the
 // Supabase cookie jar fresh (the page that used to is gone) and `getAuthCookie()`
 // repairs an EMPTY jar, never a STALE one — the jar cookie is written with a

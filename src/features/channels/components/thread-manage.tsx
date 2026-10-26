@@ -36,7 +36,7 @@ interface ChannelsThreadManageProps {
   workspaceId: string;
   currentUserId: string;
   /** Channel owner or workspace admin — computed by the caller, which already
-   *  holds both facts. ⚠ A DISPLAY gate; `service-tasks-delete.ts` is the fence. */
+   *  holds both facts. ⚠ A DISPLAY gate; `service-threads-delete.ts` is the fence. */
   canManageChannel: boolean;
   /** THIS MACHINE'S live session feed, or `null` for "could not ask" (a plain
    *  browser, or a main without it). ⚠ Carried as `null`, never collapsed to
@@ -83,7 +83,7 @@ export function ChannelsThreadManageActions({
    * dev paths fall through here without a branch of their own.
    *
    * ⚠ ONE CALL PER AGENT, NOT ONE PER THREAD. `end` addresses `(channelId,
-   * taskId)`, and since multiplayer agents (2026-08-21) that pair names a THREAD
+   * threadId)`, and since multiplayer agents (2026-08-21) that pair names a THREAD
    * rather than one agent — F-239. Looping the rows is what makes this end all of
    * them on a main that ends one per call; on a main that ends the whole thread at
    * once, the remaining calls are no-ops that return `false`.
@@ -100,7 +100,7 @@ export function ChannelsThreadManageActions({
     if (!agentSessions) return;
     for (const agent of ownAgentsFor(agentSessions, thread.channelId, thread.id)) {
       try {
-        await control("end", { channelId: agent.channelId, taskId: agent.taskId });
+        await control("end", { channelId: agent.channelId, threadId: agent.threadId });
       } catch {
         // A bridge that rejects is one more agent that outlives the thread by a
         // timeout. It is not a reason to leave the thread standing.
@@ -111,7 +111,7 @@ export function ChannelsThreadManageActions({
   /**
    * ⚠ THE ORDER IS THE POINT: STOP, THEN DELETE. Reversed, the transcript goes
    * out from under a live session that is still posting into it, and its next post
-   * lands tagged for a thread that no longer exists (`taskId` is caller-settable
+   * lands tagged for a thread that no longer exists (`threadId` is caller-settable
    * and silently dropped when it names nothing, so the message would arrive in the
    * channel unthreaded rather than erroring).
    *

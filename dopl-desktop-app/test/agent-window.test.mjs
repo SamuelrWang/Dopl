@@ -114,8 +114,8 @@ const PAGE = "agent-window";
 test("ROUTE: the agent rides `?thread=` as a SELECTION, on the channel's path", () => {
   const { api } = load();
   assert.equal(
-    api.agentRoute("acme-a1b2", PAGE, "chan-1", "task-9"),
-    "/acme-a1b2/agent-window/chan-1?thread=task-9"
+    api.agentRoute("acme-a1b2", PAGE, "chan-1", "thread-9"),
+    "/acme-a1b2/agent-window/chan-1?thread=thread-9"
   );
 });
 
@@ -125,9 +125,9 @@ test("ROUTE: any EMPTY input refuses rather than interpolating a hole", () => {
   // second answer to it (INVARIANTS §11). Refusing an empty one is all this owes.
   const { api } = load();
   for (const args of [
-    ["", PAGE, "chan-1", "task-9"],
-    ["acme", "", "chan-1", "task-9"],
-    ["acme", PAGE, "", "task-9"],
+    ["", PAGE, "chan-1", "thread-9"],
+    ["acme", "", "chan-1", "thread-9"],
+    ["acme", PAGE, "", "thread-9"],
     ["acme", PAGE, "chan-1", ""],
   ]) {
     assert.equal(api.agentRoute(...args), null, JSON.stringify(args));
@@ -186,7 +186,7 @@ test("DEEP LINK: the page is in NEITHER SPA table — a link cannot mint a bare 
 
 // ── 3. THE WINDOW LAYER ──────────────────────────────────────────────────────────────
 
-const TARGET = { segment: "acme-a1b2", channelId: "chan-1", taskId: "task-9" };
+const TARGET = { segment: "acme-a1b2", channelId: "chan-1", threadId: "thread-9" };
 
 test("OPEN: it creates ONE window, lands it on the hash, registers and polices it", () => {
   const { api, created, registered, policed } = load();
@@ -194,7 +194,7 @@ test("OPEN: it creates ONE window, lands it on the hash, registers and polices i
   assert.equal(created.length, 1);
   // ⚠ LANDED AT CREATION, on the hash — the SPA is a hash router over a file:// document,
   // so there is no mount race and nothing is steered over the navigate bridge afterwards.
-  assert.match(created[0].loaded, /#\/acme-a1b2\/agent-window\/chan-1\?thread=task-9$/);
+  assert.match(created[0].loaded, /#\/acme-a1b2\/agent-window\/chan-1\?thread=thread-9$/);
   // ⚠ THE LINE THAT MAKES THE WINDOW WORK AT ALL: without registration every privileged
   // call from this renderer is refused and the surface renders nothing while reporting
   // nothing (INVARIANTS §11's silent-feature-deletion shape).
@@ -263,20 +263,20 @@ test("OPEN: asking again for the SAME agent FRONTS the window rather than duplic
 test("OPEN: a DIFFERENT agent becomes a TAB of the same window", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);
-  api.openAgentWindow({ ...TARGET, taskId: "task-2" });
+  api.openAgentWindow({ ...TARGET, threadId: "thread-2" });
   assert.equal(created.length, 1, "a second agent must not build a second window");
   assert.equal(api.count(), 2, "two tabs");
   const pushes = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs");
   assert.equal(pushes.length >= 1, true, "the renderer is told about the new tab");
   const last = pushes[pushes.length - 1];
   // ⚠ THE ADDRESSES ARE `TARGET`'s OWN, read off the fixture rather than retyped: this case
-  // shipped asserting `["task-1", "task-2"]` and a focus key ending `task-2|agent-1` over a
-  // `TARGET` that is `task-9` with NO agent id, so it failed on the two things it had invented
+  // shipped asserting `["thread-1", "thread-2"]` and a focus key ending `thread-2|agent-1` over a
+  // `TARGET` that is `thread-9` with NO agent id, so it failed on the two things it had invented
   // and never checked the rule it exists for.
-  assert.deepEqual(last.payload.tabs.map((t) => t.taskId), [TARGET.taskId, "task-2"]);
+  assert.deepEqual(last.payload.tabs.map((t) => t.threadId), [TARGET.threadId, "thread-2"]);
   assert.equal(
     last.payload.focusKey,
-    api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId),
+    api.agentWindowKey(TARGET.channelId, "thread-2", TARGET.agentId),
     "the new tab is shown"
   );
   assert.equal(created[0].calls.focus >= 1, true);
@@ -287,13 +287,13 @@ test("OPEN: a DIFFERENT agent becomes a TAB of the same window", () => {
 test("OPEN: an agent already tabbed is FOCUSED, not added twice", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);
-  api.openAgentWindow({ ...TARGET, taskId: "task-2" });
+  api.openAgentWindow({ ...TARGET, threadId: "thread-2" });
   api.openAgentWindow(TARGET);
   assert.equal(api.count(), 2, "still two tabs");
   const pushes = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs");
   assert.equal(
     pushes[pushes.length - 1].payload.focusKey,
-    api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId)
+    api.agentWindowKey(TARGET.channelId, TARGET.threadId, TARGET.agentId)
   );
 });
 
@@ -303,9 +303,9 @@ test("BUDGET: it refuses past the TAB cap, in the SAME shape as a bad id", () =>
   // full budget from an unusable target.
   const { api, created } = load();
   for (let i = 0; i < api.MAX_AGENT_TABS; i += 1) {
-    assert.deepEqual(api.openAgentWindow({ ...TARGET, taskId: `t-${i}` }), { ok: true });
+    assert.deepEqual(api.openAgentWindow({ ...TARGET, threadId: `t-${i}` }), { ok: true });
   }
-  assert.deepEqual(api.openAgentWindow({ ...TARGET, taskId: "one-too-many" }), { ok: false });
+  assert.deepEqual(api.openAgentWindow({ ...TARGET, threadId: "one-too-many" }), { ok: false });
   assert.deepEqual(api.openAgentWindow({}), { ok: false });
   assert.equal(created.length, 1, "one window however many tabs");
   assert.equal(api.count(), api.MAX_AGENT_TABS);
@@ -318,9 +318,9 @@ test("BUDGET: it refuses past the TAB cap, in the SAME shape as a bad id", () =>
 test("TABS: the last tab takes the window with it", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);
-  api.openAgentWindow({ ...TARGET, taskId: "task-2" });
-  const first = api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId);
-  const second = api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId);
+  api.openAgentWindow({ ...TARGET, threadId: "thread-2" });
+  const first = api.agentWindowKey(TARGET.channelId, TARGET.threadId, TARGET.agentId);
+  const second = api.agentWindowKey(TARGET.channelId, "thread-2", TARGET.agentId);
 
   assert.equal(api.closeAgentTab(first), true);
   assert.equal(created[0].calls.close, 0, "one tab left — the window stays");
@@ -346,21 +346,21 @@ test("TABS: the last tab takes the window with it", () => {
 test("TABS: the first load focuses the tab asked for LAST, not the one the window was built for", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);
-  api.openAgentWindow({ ...TARGET, taskId: "task-2" }); // before the renderer can hear anything
-  const second = api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId);
+  api.openAgentWindow({ ...TARGET, threadId: "thread-2" }); // before the renderer can hear anything
+  const second = api.agentWindowKey(TARGET.channelId, "thread-2", TARGET.agentId);
 
   created[0].wcHandlers["did-finish-load"](); // the renderer is ready and the push can land
   const last = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs").at(-1);
-  assert.deepEqual(last.payload.tabs.map((t) => t.taskId), [TARGET.taskId, "task-2"]);
+  assert.deepEqual(last.payload.tabs.map((t) => t.threadId), [TARGET.threadId, "thread-2"]);
   assert.equal(last.payload.focusKey, second, "the agent the operator just asked for is shown");
 });
 
 test("TABS: a RELOAD never focuses a tab that has been closed, or an earlier one", () => {
   const { api, created } = load();
   api.openAgentWindow(TARGET);
-  api.openAgentWindow({ ...TARGET, taskId: "task-2" });
-  const first = api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId);
-  const second = api.agentWindowKey(TARGET.channelId, "task-2", TARGET.agentId);
+  api.openAgentWindow({ ...TARGET, threadId: "thread-2" });
+  const first = api.agentWindowKey(TARGET.channelId, TARGET.threadId, TARGET.agentId);
+  const second = api.agentWindowKey(TARGET.channelId, "thread-2", TARGET.agentId);
 
   created[0].wcHandlers["did-finish-load"]();
   api.openAgentWindow(TARGET); // the operator picks tab one
@@ -418,7 +418,7 @@ test("CLOSE: it is keyed on the AGENT and cannot reach a sibling's tab", () => {
   assert.equal(created[0].calls.close, 0, "one tab left — the window stays open");
   // ⚠ AND THE SURVIVOR IS THE FIRST AGENT'S, not merely "one of them".
   const pushes = created[0].webContents.sent.filter((s) => s.channel === "agent-window:tabs");
-  const first = api.agentWindowKey(TARGET.channelId, TARGET.taskId, TARGET.agentId);
+  const first = api.agentWindowKey(TARGET.channelId, TARGET.threadId, TARGET.agentId);
   assert.deepEqual(pushes[pushes.length - 1].payload.tabs.map((t) => t.key), [first]);
   // Closing the one that is left DOES take the window, which is the last-tab rule.
   assert.equal(api.closeAgentWindow(TARGET), true);

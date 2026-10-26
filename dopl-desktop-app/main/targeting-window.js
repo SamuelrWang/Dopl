@@ -31,7 +31,7 @@ function setHandlers(h) {
 //
 // ONE DESTINATION FOR EVERY PRODUCER, deliberately. Three call sites reach here
 // — the inbound REQUEST notification (trigger.js), the silent FYI (trigger.js
-// › sendFyi) and the passive task-reply notice (task-notify.js) — and the
+// › sendFyi) and the passive thread-reply notice (thread-notify.js) — and the
 // per-kind alternative would be the Inbox for requests only. The ruling names
 // the channel first ("auto-navigates to the channel/DM where the request was
 // made" — the port's intent doc, deleted at the Phase 12 cutover; the live

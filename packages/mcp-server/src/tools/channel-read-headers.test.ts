@@ -30,7 +30,7 @@ function client(messages: Record<string, unknown>[], extra: Record<string, unkno
 
 const row = {
   id: "m", seq: 4597, channelId: "chan-1", authorUserId: SELF, authorKind: "agent", kind: "message",
-  body: "hi", metadata: { session_id: "chan-1:task-1:k6tg0tbc" }, clientMsgId: null, createdAt: TS,
+  body: "hi", metadata: { session_id: "chan-1:thread-1:k6tg0tbc" }, clientMsgId: null, createdAt: TS,
   authorName: "Samuel Wang", authorAgentName: "Cleanup Orchestrator 3",
   recipientAgentIds: [], recipientUserIds: [],
 };
@@ -72,7 +72,7 @@ describe("the line head, by format and tool set", () => {
 describe("one thread on the whole page is named once, by the legend", () => {
   const TH = "eaa93e41-5427-4fde-8bcc-4008be3200e7";
   const page = (over: Record<string, unknown>[] = []) =>
-    [0, 1].map((i) => ({ ...row, id: `t${i}`, seq: 10 + i, metadata: { taskId: TH }, ...(over[i] ?? {}) }));
+    [0, 1].map((i) => ({ ...row, id: `t${i}`, seq: 10 + i, metadata: { threadId: TH }, ...(over[i] ?? {}) }));
   const render = async (messages: Record<string, unknown>[], format?: ResponseFormat) =>
     (await withToolSet("granular", () => opRead(client(messages), "general", undefined, undefined, SELF, undefined, format)))
       .content[0].text;
@@ -85,7 +85,7 @@ describe("one thread on the whole page is named once, by the legend", () => {
   });
 
   it("keeps the tag when the page mixes threads, on `concise` (no legend), or on `detailed`", async () => {
-    const mixed = await render(page([{}, { metadata: { taskId: "bbbbbbbb-5427-4fde-8bcc-4008be3200e7" } }]));
+    const mixed = await render(page([{}, { metadata: { threadId: "bbbbbbbb-5427-4fde-8bcc-4008be3200e7" } }]));
     expect(heads(mixed).every((h) => h.includes("thread `"))).toBe(true);
     for (const f of ["concise", "detailed"] as const) {
       expect(heads(await render(page(), f)).every((h) => h.includes("thread `eaa93e41`")), f).toBe(true);

@@ -10,7 +10,7 @@
  * somebody else's screen their words land on. `author_user_id` is always
  * `ctx.userId` and is the signal the layout hangs off.
  *
- * Also pinned: `task_started` renders as NOTHING while a TERMINAL lifecycle row
+ * Also pinned: `thread_started` renders as NOTHING while a TERMINAL lifecycle row
  * renders as a slim receipt line (the shipping desktop's trigger lanes still
  * post both — INVARIANTS §5), a thread's opening message becomes a CARD in the
  * channel view while the rest stay in the thread view, and the scroll-target row
@@ -158,13 +158,13 @@ describe("channels transcript — channel view vs thread view", () => {
   const T = thread({ id: "t-1", title: "UI-kit design" });
   const MESSAGES = [
     message({ id: "chan", seq: 1, body: "CHANNEL-TEXT" }),
-    message({ id: "open", seq: 2, body: "OPENING-TEXT", metadata: { taskId: "t-1" } }),
+    message({ id: "open", seq: 2, body: "OPENING-TEXT", metadata: { threadId: "t-1" } }),
     message({
       id: "reply",
       seq: 3,
       body: "THREAD-REPLY",
       authorUserId: PEER,
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
     }),
   ];
 
@@ -204,9 +204,9 @@ describe("channels transcript — channel view vs thread view", () => {
 /**
  * THE LIFECYCLE RECEIPT. The property: **an ENDING is not run state.**
  *
- * `task_started` is a fact about a runtime and belongs to the Agents tab, so it
+ * `thread_started` is a fact about a runtime and belongs to the Agents tab, so it
  * renders as nothing on every build, forever. A TERMINAL row does not: the
- * shipping desktop's `main/trigger-outcomes.js` posts `task_failed` +
+ * shipping desktop's `main/trigger-outcomes.js` posts `thread_failed` +
  * `{declined:true}` on a consent deny, and dropping that left the requester
  * staring at an ask nobody appeared to have answered.
  */
@@ -219,7 +219,7 @@ describe("channels transcript — lifecycle receipts", () => {
           message({
             id: "x",
             seq: 1,
-            kind: "task_failed",
+            kind: "thread_failed",
             authorKind: "agent",
             body: "Request declined",
             metadata: { declined: true },
@@ -239,7 +239,7 @@ describe("channels transcript — lifecycle receipts", () => {
     expect(line.innerHTML).not.toContain("text-danger");
   });
 
-  it("renders the headless lane's flagless task_finished as a receipt", () => {
+  it("renders the headless lane's flagless thread_finished as a receipt", () => {
     // ⚠ PRODUCER GONE, ROW NOT: `main/trigger-headless.js › openOutboundReview`
     // posted this flagless; that lane is deleted, installed builds still post it.
     renderRows(
@@ -248,7 +248,7 @@ describe("channels transcript — lifecycle receipts", () => {
           message({
             id: "f",
             seq: 1,
-            kind: "task_finished",
+            kind: "thread_finished",
             authorKind: "agent",
             body: "Finished this request.",
           }),
@@ -262,21 +262,21 @@ describe("channels transcript — lifecycle receipts", () => {
     expect(line.dataset.receiptStatus).toBe("finished");
   });
 
-  it("drops a bare task_started, and drops an old build's task_started too", () => {
+  it("drops a bare thread_started, and drops an old build's thread_started too", () => {
     renderRows(
       channelRows(
         [
-          // Today's headless lane: `postTaskEvent` fills the default body.
+          // Today's headless lane: `postThreadEvent` fills the default body.
           message({
             id: "s1",
             seq: 1,
-            kind: "task_started",
+            kind: "thread_started",
             body: "Started working on this request.",
           }),
           // A v1 session-window echo — producer deleted, installed builds still post it.
-          message({ id: "s2", seq: 2, kind: "task_started", body: "STARTED" }),
+          message({ id: "s2", seq: 2, kind: "thread_started", body: "STARTED" }),
           // A flagless terminal row with nothing human in it is machine noise.
-          message({ id: "n", seq: 3, kind: "task_failed", body: "   " }),
+          message({ id: "n", seq: 3, kind: "thread_failed", body: "   " }),
         ],
         [],
         INDEX,
@@ -290,14 +290,14 @@ describe("channels transcript — lifecycle receipts", () => {
     expect(screen.getByText("Nothing posted here yet.")).not.toBeNull();
   });
 
-  it("paints a FLAGLESS task_failed — a real fault — in alarm ink", () => {
+  it("paints a FLAGLESS thread_failed — a real fault — in alarm ink", () => {
     renderRows(
       channelRows(
         [
           message({
             id: "x",
             seq: 1,
-            kind: "task_failed",
+            kind: "thread_failed",
             body: "Could not complete this request.",
           }),
         ],
@@ -313,16 +313,16 @@ describe("channels transcript — lifecycle receipts", () => {
 });
 
 describe("channels transcript — what it refuses to render", () => {
-  it("keeps task_progress prose, which is not a lifecycle kind", () => {
+  it("keeps thread_progress prose, which is not a lifecycle kind", () => {
     renderRows(
       channelRows(
-        [message({ id: "p", seq: 1, kind: "task_progress", body: "PROGRESS" })],
+        [message({ id: "p", seq: 1, kind: "thread_progress", body: "PROGRESS" })],
         [],
         INDEX,
         formatChannelTimestamp
       )
     );
-    // `task_progress` is prose an agent wrote — it stays.
+    // `thread_progress` is prose an agent wrote — it stays.
     expect(screen.getByText("PROGRESS")).not.toBeNull();
   });
 
@@ -419,13 +419,13 @@ describe("channels transcript — the request fan-out", () => {
       id: "op-a",
       seq: 1,
       body: "START-HERE",
-      metadata: { taskId: "t-a", fanoutGroup: GROUP },
+      metadata: { threadId: "t-a", fanoutGroup: GROUP },
     }),
     message({
       id: "op-b",
       seq: 2,
       body: "START-HERE",
-      metadata: { taskId: "t-b", fanoutGroup: GROUP },
+      metadata: { threadId: "t-b", fanoutGroup: GROUP },
     }),
   ];
 
@@ -460,7 +460,7 @@ describe("channels transcript — the request fan-out", () => {
   it("keeps a fan-out thread's REPLY out of the channel — one card, not two", () => {
     // ⚠ Only OPENERS carry `fanoutGroup` (the server strips it from every
     // other post), so a reply arrives under the thread's OTHER identity, its
-    // `taskId`. A group-only seen-key let it re-emit the card as its own
+    // `threadId`. A group-only seen-key let it re-emit the card as its own
     // (observed live 2026-08-20: the addressee's first agent reply rendered as
     // a second "Agent thread" card in the main transcript).
     const reply = message({
@@ -469,7 +469,7 @@ describe("channels transcript — the request fan-out", () => {
       body: "AGENT-REPLY",
       authorUserId: PEER,
       authorKind: "agent",
-      metadata: { taskId: "t-a" },
+      metadata: { threadId: "t-a" },
     });
     renderRows(
       channelRows([...OPENERS, reply], THREADS, FANOUT_INDEX, formatChannelTimestamp),

@@ -29,7 +29,7 @@ import type { ChannelMessageRow } from "./dto";
  * large half of this table and the answer is an id list. Bounded at
  * {@link RECENT_AGENT_POSTS_LIMIT} — the window bounds it in TIME, and a busy
  * room can still put thousands of rows inside 15 minutes.
- * ⚠ **`thread IS NULL` IS SPELLED `metadata->>taskId IS NULL`**, the expression
+ * ⚠ **`thread IS NULL` IS SPELLED `metadata->>threadId IS NULL`**, the expression
  * `listMessages` already uses (RR2's read, the other citation, was deleted 2026-09-18).
  */
 const RECENT_AGENT_POSTS_LIMIT = 50;
@@ -49,7 +49,7 @@ export async function listRecentRoomAgentPosts(
     .select("seq, created_at, author_kind, client_msg_id, metadata")
     .eq("channel_id", channelId)
     .eq("author_kind", "agent")
-    .is("metadata->>taskId", null)
+    .is("metadata->>threadId", null)
     .gt("created_at", sinceIso)
     .order("seq", { ascending: false })
     .limit(RECENT_AGENT_POSTS_LIMIT);
@@ -131,7 +131,7 @@ export async function listRecentRoomTagsBy(
     // ⚠ THE AUTHOR'S OWN AGENTS SHARE THIS `author_user_id` — see the header. Without this the
     // 50-row budget fills with rows the rule discards and the look-back shortens invisibly.
     .neq("author_kind", "agent")
-    .is("metadata->>taskId", null)
+    .is("metadata->>threadId", null)
     .order("seq", { ascending: false })
     .limit(RECENT_AGENT_POSTS_LIMIT);
   if (error) throw error;

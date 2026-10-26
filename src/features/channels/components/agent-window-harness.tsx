@@ -24,7 +24,7 @@ import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { ChannelsAgentWindow } from "./agent-window";
 import { CHANNEL_ID, ME } from "./test-fixtures";
 
-export const TASK = "t-1";
+export const THREAD = "t-1";
 export const WS = "ws-1";
 
 export function summary(
@@ -33,7 +33,7 @@ export function summary(
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: TASK,
+    threadId: THREAD,
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -123,7 +123,7 @@ export async function mount() {
       <ChannelsAgentWindow
         workspaceId={WS}
         channelId={CHANNEL_ID}
-        taskId={TASK}
+        threadId={THREAD}
         currentUserId={ME}
       />
     );

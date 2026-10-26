@@ -22,7 +22,7 @@
  * the panel reached four is a different write wearing the same button. So `bits.tsx ›
  * AgentTargetPill` survives as itself, dropped one at a time, under a kit `FormSection` label.
  * ⚠ ZERO IS NOT SENDABLE: "broadcast" is not a shape this product has (INVARIANTS §5) and
- * `schema.ts › TaskFanOutSchema` 400s an empty list, so disabling the button is courtesy only.
+ * `schema.ts › ThreadFanOutSchema` 400s an empty list, so disabling the button is courtesy only.
  *
  * ⚠ **THE OLD PANEL IS DELETED, AND THIS IS THE ONLY THREAD FORM (2026-09-08, Samuel: *"look
  * there is an icon in the text input bar that is supposed to spawn new threads. Why wasn't that
@@ -168,7 +168,7 @@ export function NewThreadDialog({
       clientMsgId: newClientMsgId(),
       title: title.trim(),
       // ⚠ THE WIRE FIELD IS `body` AND THE FORM'S WORD IS "Description" — that mismatch is
-      // `TaskFanOutSchema`'s and predates both surfaces. Do not rename either half to match.
+      // `ThreadFanOutSchema`'s and predates both surfaces. Do not rename either half to match.
       body: description.trim(),
       toUserIds: addressed.map((t) => t.id),
     };

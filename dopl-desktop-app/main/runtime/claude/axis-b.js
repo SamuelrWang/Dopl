@@ -140,9 +140,9 @@ function makeAgentOpsServer(s) {
       }
       let res = { ok: false };
       try {
-        res = require('../../session-engine').controlByTask({
+        res = require('../../session-engine').controlByThread({
           channelId: String(v.row.channelId || ''),
-          taskId: String(v.row.taskId || ''),
+          threadId: String(v.row.threadId || ''),
           agentId: String(v.row.agentId || ''),
           action: 'end',
         }) || { ok: false };

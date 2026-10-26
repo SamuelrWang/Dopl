@@ -59,7 +59,7 @@ function boot(api = {}, opts = {}) {
 }
 
 const payload = (over = {}) => ({
-  channelId: CH, taskId: THREAD, workspaceId: WS, threadTitle: "T", ...over,
+  channelId: CH, threadId: THREAD, workspaceId: WS, threadTitle: "T", ...over,
 });
 
 // ── 0. THE BLANK LANE IS UNTOUCHED ───────────────────────────────────────────

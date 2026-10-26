@@ -26,7 +26,7 @@ export interface AccountWaitingItem {
   messageId: string;
   seq: number;
   channelId: string;
-  /** `metadata.taskId` when the message was threaded, else null. */
+  /** `metadata.threadId` when the message was threaded, else null. */
   threadId: string | null;
   authorUserId: string | null;
   /** Display name or email of the author, null when unresolved. */

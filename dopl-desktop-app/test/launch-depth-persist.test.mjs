@@ -55,7 +55,7 @@ const SDK = "sdk-y1uun32v";
 
 /** A live session as the engine stamps it, with only the fields `baseRecord` reads. */
 const live = (over = {}) => ({
-  key: KEY, sessionId: "s1", sdkSessionId: SDK, channelId: CHANNEL, taskId: "",
+  key: KEY, sessionId: "s1", sdkSessionId: SDK, channelId: CHANNEL, threadId: "",
   workspaceId: "w1", side: "responder", profile: "channel_agent", mode: "interactive",
   startedAt: 1757000000000, agentId: "y1uun32v", counterpartyId: "peer-1", bind: "pair",
   model: "opus", runtimeId: "claude", ownPostSeq: 3,

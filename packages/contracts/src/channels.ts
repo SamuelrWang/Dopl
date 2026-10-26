@@ -34,7 +34,7 @@ export type ThreadMode = "interactive" | "autonomous";
 /**
  * ⚠ LEGACY AND UNREAD SINCE 2026-08-18 (wiring plan Phase 4). THREADS DO NOT
  * CLOSE — no close, no propose-then-confirm, no reopen; the operator pauses or
- * ends an AGENT. `channel_tasks.status` and its CHECK constraint survive
+ * ends an AGENT. `channel_threads.status` and its CHECK constraint survive
  * carrying rows closed before the removal (dropping the column is a migration
  * behind a desktop-floor raise, INVARIANTS §13), and this type is the projection
  * of that column. **Nothing writes it and nothing may branch on it.** A new
@@ -60,16 +60,16 @@ export type MessageAuthorKind = "user" | "agent" | "system";
 export type PostableAuthorKind = Exclude<MessageAuthorKind, "system">;
 
 /**
- * Message kind. `message` = chat; the `task_*` values are structured activity
+ * Message kind. `message` = chat; the `thread_*` values are structured activity
  * events (payload in `metadata`, human-readable render in `body`); `system` =
  * joins / topic changes, server-emitted only.
  */
 export type ChannelMessageKind =
   | "message"
-  | "task_started"
-  | "task_progress"
-  | "task_finished"
-  | "task_failed"
+  | "thread_started"
+  | "thread_progress"
+  | "thread_finished"
+  | "thread_failed"
   | "system";
 
 /**
@@ -79,7 +79,7 @@ export type ChannelMessageKind =
  * keep in step.
  *
  * ⚠ POSTABLE IS NOT AGENT-WRITABLE. An agent token may write exactly `message`
- * and `task_progress`; the three lifecycle kinds are refused from it at two
+ * and `thread_progress`; the three lifecycle kinds are refused from it at two
  * layers on the CREDENTIAL (INVARIANTS §5,
  * `server/service-writes-lifecycle.ts`). That is an authorization, not a shape,
  * and it is deliberately not expressed here.

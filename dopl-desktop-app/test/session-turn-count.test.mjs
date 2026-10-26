@@ -14,7 +14,7 @@ const KEY = `${CHANNEL}::${AGENT}`;
 
 STORE.sessionRecords = {
   [KEY]: {
-    key: KEY, sessionId: "11111111-2222-3333-4444-555555555555", channelId: CHANNEL, taskId: "",
+    key: KEY, sessionId: "11111111-2222-3333-4444-555555555555", channelId: CHANNEL, threadId: "",
     workspaceId: WORKSPACE, side: "responder", profile: "channel_agent", mode: "interactive",
     phase: "parked", startedAt: Date.now() - 60000, parkedAt: Date.now() - 1000, agentId: AGENT,
     turns: 7, ownPostSeq: 3, runtimeId: "claude", usageBaseline: "resets",
@@ -23,7 +23,7 @@ STORE.sessionRecords = {
 STORE.sessionIds = { [KEY]: "sdk-parked" };
 engine.setSelfIdentity(ME);
 
-const live = () => registryReads.sessionOn({ channelId: CHANNEL, taskId: "", agentId: AGENT });
+const live = () => registryReads.sessionOn({ channelId: CHANNEL, threadId: "", agentId: AGENT });
 
 test("boot re-parks the record and the card shows the turns it had already run", async () => {
   await engine.init();
@@ -33,7 +33,7 @@ test("boot re-parks the record and the card shows the turns it had already run",
 });
 
 test("the next turn after the resume counts on from there", async () => {
-  assert.deepEqual(engine.messageByTask({ channelId: CHANNEL, taskId: "", agentId: AGENT, text: "continue" }), { ok: true });
+  assert.deepEqual(engine.messageByThread({ channelId: CHANNEL, threadId: "", agentId: AGENT, text: "continue" }), { ok: true });
   await settle();
   const h = rt.handles[rt.handles.length - 1];
   assert.equal(h && h.via, "resume");
@@ -43,7 +43,7 @@ test("the next turn after the resume counts on from there", async () => {
   await settle();
   assert.equal(summary.liveSummary(live()).turns, 8);
   // The record is written at the next park or settle, with the same counter.
-  assert.deepEqual(engine.controlByTask({ channelId: CHANNEL, taskId: "", agentId: AGENT, action: "end" }), { ok: true });
+  assert.deepEqual(engine.controlByThread({ channelId: CHANNEL, threadId: "", agentId: AGENT, action: "end" }), { ok: true });
   await settle();
   assert.equal(STORE.sessionRecords[KEY].turns, 8);
 });

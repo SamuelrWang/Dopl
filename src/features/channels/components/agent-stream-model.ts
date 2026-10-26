@@ -210,8 +210,8 @@ function epoch(iso: string): number {
  *
  *   1. **The landing check read the AGENT-FILTERED lane.** `sent` comes from
  *      `agent-panel.tsx › agentSentMessages`, which requires
- *      `m.metadata.taskId === taskId`. **A channel-level post carries no
- *      `taskId`** — the measured row's metadata was
+ *      `m.metadata.threadId === threadId`. **A channel-level post carries no
+ *      `threadId`** — the measured row's metadata was
  *      `{intent, runtime, summary, session_id}` and nothing else — so the
  *      delivered row was filtered out before the join could see it, on every
  *      threadless post there is. The join itself was never wrong: the stored
@@ -245,7 +245,7 @@ export function buildAgentStream({
    * ⚠ IT IS UNFILTERED ON PURPOSE. `sent` is agent-scoped so one agent's box
    * never shows a sibling's words (F-251); this answers a different question —
    * *did these bytes reach the channel at all* — and the agent filter is
-   * actively wrong for it, because a threadless post carries no `taskId` to be
+   * actively wrong for it, because a threadless post carries no `threadId` to be
    * filtered ON. Defaults to `sent` so a caller that has not threaded it yet
    * behaves exactly as before.
    */
@@ -294,7 +294,7 @@ export function buildAgentStream({
     // so the echo drops rather than doubling.
     if (lane === "sent" && !held && posted.has(echo)) return;
     // ⚠ A FORMERLY-HELD FRAME IS NOT DROPPED BY `hasTranscript`. Its row exists
-    // but `agentSentMessages` could not attribute it (no `taskId` on a threadless
+    // but `agentSentMessages` could not attribute it (no `threadId` on a threadless
     // post), so dropping it would delete the operator's only view of a post they
     // just authorized. It renders as the ordinary POSTED face instead.
     const wasHeld = lane === "sent" && framePending(entry);

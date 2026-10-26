@@ -88,13 +88,13 @@ test("a spawn handed NO posture seeds nothing: it starts at manual/ask", () => {
   const state = startedState({ key: "ch:th", side: "responder" });
   assert.equal(state.toolMode, "manual");
   assert.equal(state.messageMode, "ask");
-  assert.equal(state.allowForTask.length, 0, "a posture is still not a grant");
+  assert.equal(state.allowForThread.length, 0, "a posture is still not a grant");
 });
 
 // ── 2b. ⚠ FIX 1b ENDED HERE — 2026-08-20, F-228 ──────────────────────────────
 //
 // Five tests, the blocker of the 2026-08-02 wave. The consent registry was keyed
-// sessionKey(channelId, taskId) — the SAME key recreateParkedShell, openFromChannel,
+// sessionKey(channelId, threadId) — the SAME key recreateParkedShell, openFromChannel,
 // openRequesterShell and startResume all spawned under — and startSession read it
 // UNCONDITIONALLY, so a card armed but not yet accepted was spent by whichever spawn reached
 // that key first. `spec.adoptsConsent === true` was the fix: exactly one spawn shape, launch()'s

@@ -170,7 +170,7 @@ function bootLaunch(entries, fetchChannel) {
 /** The profile the requester lane really hands the engine. */
 async function requesterProfile(channelId, entries = ENTRIES, fetchChannel = undefined) {
   const { launch, launches, event } = bootLaunch(entries, fetchChannel);
-  const res = await launch(event, { channelId, taskId: THREAD, threadTitle: "T" });
+  const res = await launch(event, { channelId, threadId: THREAD, threadTitle: "T" });
   assert.equal(res.ok, true, "the launch itself must succeed — otherwise nothing was resolved");
   assert.equal(launches.length, 1);
   return launches[0].toolProfile;

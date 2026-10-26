@@ -22,7 +22,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { CH, MAIN, TASK, call, harness } from "./_session-launch-funnel-harness.mjs";
+import { CH, MAIN, THREAD, call, harness } from "./_session-launch-funnel-harness.mjs";
 
 // ── ⚠ D1: THE WINDOWLESS TOOL FLOOR IS LAUNCH-BLOCKING (2026-09-01) ──────────────────────────
 //
@@ -39,7 +39,7 @@ import { CH, MAIN, TASK, call, harness } from "./_session-launch-funnel-harness.
 
 test("D1: a runtime with NO orderable windowless floor is REFUSED before anything is constructed", async () => {
   const h = harness({ floorRefusal: "Test Runtime declares no windowless tool floor, and a session with no gate surface would silently deny every tool call it makes" });
-  const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
+  const res = await h.launch(call({ channelId: CH, threadId: THREAD, runtime: "codex" }));
   // ⚠ `'disabled'`, NOT AN EIGHTH WIRE WORD. `REFUSAL_REASONS` is backed by a deployed column
   // CHECK, so a new word here would be a refusal the database refuses to record. `'disabled'` is
   // the existing local-only code for "this build will not run this spawn shape"; the SPECIFIC
@@ -67,7 +67,7 @@ test("D1: every SHIPPED adapter declares an orderable floor, so none of them is 
   // make this file green over a check that does not exist.
   for (const runtime of ["claude", "codex", "cursor", undefined]) {
     const h = harness();
-    const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime }));
+    const res = await h.launch(call({ channelId: CH, threadId: THREAD, runtime }));
     assert.equal(res.skipped, undefined, `${runtime || "(default)"} must launch`);
     assert.equal(h.calls.started.length, 1, `${runtime || "(default)"} constructs its session`);
   }
@@ -117,7 +117,7 @@ test("D3: a runtime whose Axis B is not op-scoped LAUNCHES, and says so", async 
   // from the frozen Codex descriptor with `opScoped` set back to `'unverified'` and injected.
   const req = createRequire(import.meta.url), D = req(join(MAIN, "runtime", "index.js")).descriptorFor("codex");
   const h = harness({ opScopedWarning: req(join(MAIN, "runtime", "capability.js")).axisBOpScopedWarning({ ...D, axisB: { ...D.axisB, opScoped: "unverified" } }) });
-  const res = await h.launch(call({ channelId: CH, taskId: TASK, runtime: "codex" }));
+  const res = await h.launch(call({ channelId: CH, threadId: THREAD, runtime: "codex" }));
   assert.equal(res.skipped, undefined, "it is a WARNING — the launch proceeds");
   assert.equal(h.calls.started.length, 1, "…and the session is really constructed");
   const warned = h.calls.diag.filter((l) => /Axis B is not op-scoped/.test(l));
@@ -129,7 +129,7 @@ test("D3: a runtime whose Axis B is not op-scoped LAUNCHES, and says so", async 
 test("D3: an op-scoped runtime says NOTHING — a warning on every launch is a warning nobody reads", async () => {
   for (const runtime of ["claude", "cursor", "codex"]) {
     const h = harness();
-    await h.launch(call({ channelId: CH, taskId: TASK, runtime }));
+    await h.launch(call({ channelId: CH, threadId: THREAD, runtime }));
     assert.deepEqual(h.calls.diag.filter((l) => /Axis B is not op-scoped/.test(l)), [], runtime);
   }
 });

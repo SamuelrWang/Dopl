@@ -9,10 +9,6 @@
  * A thread-scoped read now carries the METADATA HEADER that op rendered, above
  * the transcript it always rendered, so the fold deleted an op and no answer.
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread` — the `thread`
- * op param resolves against `channel_tasks` rows and `/tasks` routes under
- * `@dopl/client`.
- *
  * Every STRING these ops emit lives in `channel-render.ts`, where the
  * peer-authored-text discipline is documented and enforced. This file is
  * control flow.

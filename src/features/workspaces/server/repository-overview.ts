@@ -102,7 +102,7 @@ export interface OverviewMessageRow {
   created_at: string;
 }
 
-export interface OverviewTaskRow {
+export interface OverviewThreadRow {
   id: string;
   channel_id: string;
   title: string;
@@ -112,7 +112,7 @@ export interface OverviewTaskRow {
 }
 
 const MESSAGE_COLS = "id, channel_id, author_user_id, body, created_at";
-const TASK_COLS = "id, channel_id, title, created_by, created_at, closed_at";
+const THREAD_COLS = "id, channel_id, title, created_by, created_at, closed_at";
 
 /** `channel_messages` of kind `message` created at or after `sinceIso`. */
 export async function countMessagesSince(
@@ -185,36 +185,36 @@ export async function listRecentMessages(
 }
 
 /** Newest threads OPENED across the already-fenced channel ids. */
-export async function listRecentTasksOpened(
+export async function listRecentThreadsOpened(
   channelIds: string[],
   limit: number
-): Promise<OverviewTaskRow[]> {
+): Promise<OverviewThreadRow[]> {
   if (channelIds.length === 0) return [];
   const { data, error } = await supabaseAdmin()
-    .from("channel_tasks")
-    .select(TASK_COLS)
+    .from("channel_threads")
+    .select(THREAD_COLS)
     .in("channel_id", channelIds)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []) as OverviewTaskRow[];
+  return (data ?? []) as OverviewThreadRow[];
 }
 
 /** Newest threads CLOSED across the already-fenced channel ids. */
-export async function listRecentTasksClosed(
+export async function listRecentThreadsClosed(
   channelIds: string[],
   limit: number
-): Promise<OverviewTaskRow[]> {
+): Promise<OverviewThreadRow[]> {
   if (channelIds.length === 0) return [];
   const { data, error } = await supabaseAdmin()
-    .from("channel_tasks")
-    .select(TASK_COLS)
+    .from("channel_threads")
+    .select(THREAD_COLS)
     .in("channel_id", channelIds)
     .not("closed_at", "is", null)
     .order("closed_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []) as OverviewTaskRow[];
+  return (data ?? []) as OverviewThreadRow[];
 }
 
 /** One author and how many user messages they wrote in the window. */
@@ -390,7 +390,7 @@ export async function countThreadsInWindow(
   channelId: string | null = null
 ): Promise<number> {
   let query = supabaseAdmin()
-    .from("channel_tasks")
+    .from("channel_threads")
     .select("id", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
     .gte("created_at", win.startIso)

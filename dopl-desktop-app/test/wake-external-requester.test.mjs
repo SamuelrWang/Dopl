@@ -3,7 +3,7 @@
 // still surface as the passive OS notification.
 //
 // WHY THIS FILE EXISTS. WAKE-V1 makes an external session await its own reply (a
-// long-held MCP call that wakes it when the peer answers), so targeting.requesterTaskOpen
+// long-held MCP call that wakes it when the peer answers), so targeting.requesterThreadOpen
 // demanded a `desktop-*` runtime stamp before auto-opening a requester window — otherwise a
 // desktop window raced the waiting session for the same reply. Removing that window removed
 // the ONE route that used to claim these messages, which put the whole burden on the
@@ -24,9 +24,9 @@
 //   listener-messages.js versionSkew.observe        — diagnostic, before any route can claim it
 //   listener-messages.js noteMyLegacyThread         — the registry, also ahead of every route
 //   listener-messages.js feedLiveSession            -> false (no session was ever spawned,
-//                                                     so no live session for this task)
-//   listener-messages.js classify                   -> 'task-reply'
-//   listener-messages.js taskNotify.notifyTaskReply — the passive silent banner.
+//                                                     so no live session for this thread)
+//   listener-messages.js classify                   -> 'thread-reply'
+//   listener-messages.js threadNotify.notifyThreadReply — the passive silent banner.
 //
 // METHOD: the repo's source-extraction idiom. targeting.js is dependency-free so it is
 // required for real (the runtime gate must be the REAL one here, not a fake); the
@@ -97,7 +97,7 @@ test("the listener runs THE route, and classify still runs LAST", () => {
   assert.match(LOOP, /await messages\.drainPage\(entry, msgs, myUserId\)/);
 });
 
-test("the post-classify branch is plain: trigger, fyi, task-reply, and no route among them", () => {
+test("the post-classify branch is plain: trigger, fyi, thread-reply, and no route among them", () => {
   // ⚠ NEW PIN, AND IT REPLACES A DELETED ONE (2026-08-20, F-228). Route (5),
   // `maybeReopenAddressedThread`, ran HERE — inside the 'trigger' branch, diverting a peer's
   // follow-up into the window that had answered it rather than raising a second consent card
@@ -107,41 +107,41 @@ test("the post-classify branch is plain: trigger, fyi, task-reply, and no route 
   // route there can divert a message classify already decided.
   assert.match(LISTENER, /if \(verdict === 'trigger'\) return trigger\.handleTrigger\(entry, m\);/);
   // ⚠ `myUserId` JOINED THE CALL (2026-10-12) so the mention banner can tell MY agent from a
-  // PEER's (`task-notify.js › mentionAuthorLabel`). It is passed, never consulted here: the
+  // PEER's (`thread-notify.js › mentionAuthorLabel`). It is passed, never consulted here: the
   // branch is still plain, which is the whole of what this pin protects. Same shape as the
-  // 'task-reply' arm below, which has carried `myUserId` all along.
+  // 'thread-reply' arm below, which has carried `myUserId` all along.
   assert.match(LISTENER, /if \(verdict === 'fyi'\) trigger\.sendFyi\(entry, m, myUserId\);/);
   assert.ok(!/maybeReopenAddressedThread/.test(LISTENER), "no post-classify route survives");
 });
 
-test("a 'task-reply' verdict reaches the passive notifier, with no consent or spawn", () => {
+test("a 'thread-reply' verdict reaches the passive notifier, with no consent or spawn", () => {
   // ⚠ THE CONJUNCT MOVED INSIDE (2026-10-09, Samuel's spec). It used to read
   // `m.authorKind === 'user' || targeting.mentionsMe(...)` HERE, and the old pin asserted it in
   // place because wiring and gate were one statement. The spec turns the REPLY notice off for
   // both authors, so author kind decides nothing now and the only question is "was I tagged",
-  // which `notifyTaskReply` asks — it must still be asked SOMEWHERE, because a tag inside my own
-  // thread classifies 'task-reply' and never reaches `sendFyi`. So the pin is now TWO parts: the
+  // which `notifyThreadReply` asks — it must still be asked SOMEWHERE, because a tag inside my own
+  // thread classifies 'thread-reply' and never reaches `sendFyi`. So the pin is now TWO parts: the
   // verdict still reaches the notifier unconditionally, and the notifier still reads the tag.
   assert.match(
     LISTENER,
-    /else if \(verdict === 'task-reply'\) taskNotify\.notifyTaskReply\(entry, m, myUserId\);/
+    /else if \(verdict === 'thread-reply'\) threadNotify\.notifyThreadReply\(entry, m, myUserId\);/
   );
   assert.match(
-    M("task-notify.js"),
+    M("thread-notify.js"),
     /if \(!targeting\.mentionsMe\(m, myUserId\)\)/,
     "an untagged reply raises nothing, and a tagged one is still gated on the tag"
   );
   // The passive path is exactly that: no consent row, no watcher record, no spawn. The
   // strongest available pin is the module's DEPENDENCY set — it cannot reach the consent,
   // spawner or engine machinery because it does not require any of it.
-  const NOTIFY = M("task-notify.js");
+  const NOTIFY = M("thread-notify.js");
   const deps = [...NOTIFY.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
   // 2026-10-09 (Samuel's spec): `electron` and `./notification-prefs` LEFT and
   // `./notification-route` joined. This module raises nothing and gates nothing itself now — the
   // route does both — so the dependency set got NARROWER, which is the direction this pin exists
   // to protect. The route is itself passive: prefs + diag + electron, no consent, no spawner.
   assert.deepEqual(deps, ["./diag", "./listener-io", "./notification-route", "./targeting"],
-    "task-notify reaches nothing that could spawn, gate or record a consent");
+    "thread-notify reaches nothing that could spawn, gate or record a consent");
   const ROUTE = M("notification-route.js");
   const routeDeps = [...ROUTE.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
   // `./notify-action` joined 2026-10-09: the route builds the ACTIONABLE banner through it for
@@ -168,9 +168,9 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
 // ⚠ STATIC PIN 2 STOOD HERE AND IS GONE (2026-08-20, F-228) —
 // "with no durable record the gate refuses: recreateParkedShell -> {ok:false} -> false".
 //
-// It bottomed the claim "a reply about a task nothing on this machine remembers is DECLINED,
+// It bottomed the claim "a reply about a thread nothing on this machine remembers is DECLINED,
 // not swallowed" out in three source lines: `session-park.recreateParkedShell` answering
-// `{ ok: false }` for an absent record, `session-gate.feedInboundForTask` turning that into
+// `{ ok: false }` for an absent record, `session-gate.feedInboundForThread` turning that into
 // `false`, and `session-dispatch.maybeSurfaceRequesterReply` returning the gate's verdict
 // verbatim with nothing in between. All three are deleted: route (3) with the window it
 // gated, and both engine entry points with it.
@@ -179,7 +179,7 @@ test("a 'task-reply' verdict reaches the passive notifier, with no consent or sp
 // drop rather than repoint. The pin existed because a route stood between the reply and
 // classify and could have claimed it while being unable to show it anywhere. There is no such
 // route: `feedLiveSession` is the only one left, it claims a message ONLY when a live session
-// for that exact (channel, task) exists AND the author is its bound counterparty, and the
+// for that exact (channel, thread) exists AND the author is its bound counterparty, and the
 // behavioral tests below drive that miss end-to-end to the banner.
 
 // ── The behavioral mirror ────────────────────────────────────────────────────────
@@ -223,13 +223,13 @@ const { classify } = new Function(
 
 const ME = "11111111-1111-1111-1111-111111111111";
 const PEER = "22222222-2222-2222-2222-222222222222";
-const TASK = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+const THREAD = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 
 // The listener's loop body, mirrored. Returns everything that happened to one message so a
 // test can assert on the WHOLE outcome, not just the route that fired.
 function harness(over = {}) {
   const cfg = { live: false, ...over };
-  const calls = { feed: [], notifyLocal: [], taskNotify: [], trigger: [], fyi: [], diag: [] };
+  const calls = { feed: [], notifyLocal: [], threadNotify: [], trigger: [], fyi: [], diag: [] };
   // ⚠ FAN-OUT SHAPE (2026-08-21): the route asks for every live agent on the thread. `cfg.live`
   // means "one of my agents is on this thread"; the counterparty fence this used to model was
   // replaced by the thread itself.
@@ -274,7 +274,7 @@ function harness(over = {}) {
     // had stopped sending it. ⚠ The `authorKind === 'user'` half was MISSING from this mirror
     // until 2026-08-20, making it stricter than prod for a HUMAN-typed reply — restated here
     // byte-for-byte off the pin above.
-    else if (verdict === "task-reply" && (m.authorKind === "user" || targeting.mentionsMe(m, ME))) calls.taskNotify.push(m);
+    else if (verdict === "thread-reply" && (m.authorKind === "user" || targeting.mentionsMe(m, ME))) calls.threadNotify.push(m);
     return `classify:${verdict}`;
   }
   return { dispatch, calls, cfg };
@@ -287,7 +287,7 @@ const entry = { channel: { id: "c1", name: "General", memberCount: 2, isMember: 
 const createMsg = (runtime) => ({
   kind: "message", seq: 41, authorUserId: ME, authorKind: "agent", body: "please look at X",
   metadata: {
-    taskId: TASK, taskMode: "interactive", taskCreatedBy: ME, taskTarget: PEER, to_user_id: PEER,
+    threadId: THREAD, threadMode: "interactive", threadCreatedBy: ME, threadTarget: PEER, to_user_id: PEER,
     ...(runtime ? { runtime } : {}),
   },
 });
@@ -296,13 +296,13 @@ const createMsg = (runtime) => ({
 //
 // ⚠ IT CARRIES THE SERVER'S MENTION STAMP (2026-08-18, wiring plan Phase 7), because the
 // BANNER is what most of this file asserts and an AGENT's reply is mention-gated. The verdict is
-// not: `classify` still answers 'task-reply' either way, which is what stops the reply
+// not: `classify` still answers 'thread-reply' either way, which is what stops the reply
 // spawning a counter-session, and `replyUntagged` below is the fixture that proves the two
 // halves came apart cleanly rather than the gate having eaten the routing.
 const replyMsg = () => ({
   kind: "message", seq: 42, authorUserId: PEER, authorKind: "agent", body: "here is the answer",
   metadata: {
-    taskId: TASK, taskMode: "interactive", taskCreatedBy: ME, taskTarget: PEER, to_user_id: ME,
+    threadId: THREAD, threadMode: "interactive", threadCreatedBy: ME, threadTarget: PEER, to_user_id: ME,
     mentionedUserIds: [ME],
   },
 });
@@ -317,7 +317,7 @@ const replyUntagged = () => {
 test("EXTERNAL create: nothing is started, and nothing else fires either", async () => {
   const h = harness();
   assert.equal(await h.dispatch(entry, createMsg(null)), "classify:ignore");
-  assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.taskNotify.length], [0, 0, 0]);
+  assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.threadNotify.length], [0, 0, 0]);
   assert.equal(h.calls.feed.length, 0, "no session on this machine to feed my own create to");
   assert.equal(h.calls.notifyLocal.length, 0, "and no local notice for my own message");
 });
@@ -327,7 +327,7 @@ test("a DESKTOP-STAMPED create now starts nothing either — that IS the retirem
   // OPPOSITE — "DESKTOP-spawned create still launches its requester window (the gate is not a
   // mute)" — and it was the control that proved the runtime gate was a discriminator rather
   // than a blanket refusal. Route (2) is deleted, so the discrimination is gone and both
-  // stamps land in the same place. The stamp itself is untouched and `requesterTaskOpen`
+  // stamps land in the same place. The stamp itself is untouched and `requesterThreadOpen`
   // still reads it (test/operator-typed-request.test.mjs owns that table); what changed is
   // that nothing on this machine acts on the answer.
   for (const runtime of ["desktop-session", "desktop-ui", null]) {
@@ -340,32 +340,32 @@ test("a DESKTOP-STAMPED create now starts nothing either — that IS the retirem
 test("EXTERNAL reply: no session, no record -> the PASSIVE notification, not a swallow", async () => {
   const h = harness({ live: false });
   await h.dispatch(entry, createMsg(null)); // the external create, ignored as above
-  assert.equal(await h.dispatch(entry, replyMsg()), "classify:task-reply");
-  assert.equal(h.calls.taskNotify.length, 1, "the operator gets the silent banner");
-  assert.equal(h.calls.taskNotify[0].seq, 42);
+  assert.equal(await h.dispatch(entry, replyMsg()), "classify:thread-reply");
+  assert.equal(h.calls.threadNotify.length, 1, "the operator gets the silent banner");
+  assert.equal(h.calls.threadNotify[0].seq, 42);
   // The reply reaches the EXTERNAL agent through its own armed await; this machine must
   // not have spawned or gated anything on its behalf.
   assert.equal(h.calls.feed.length, 0, "no live session to feed");
   assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length], [0, 0], "no consent prompt either");
 });
 
-test("EXTERNAL reply that tags NOBODY: still routed as a task-reply, but silent", async () => {
+test("EXTERNAL reply that tags NOBODY: still routed as a thread-reply, but silent", async () => {
   // The Phase 7 half. The verdict — and therefore the SUPPRESSION that keeps this reply from
   // looking like a fresh request — is unchanged; only the banner is gone. This is the case the
   // policy is aimed at: an agent answering in a thread, turn after turn, with nothing in it
   // the operator has to act on. The reply still reaches the EXTERNAL agent through its own
   // armed await, and the Tags inbox still records the thread on the web.
   const h = harness({ live: false });
-  assert.equal(await h.dispatch(entry, replyUntagged()), "classify:task-reply");
-  assert.equal(h.calls.taskNotify.length, 0, "no per-message banner for untagged thread traffic");
+  assert.equal(await h.dispatch(entry, replyUntagged()), "classify:thread-reply");
+  assert.equal(h.calls.threadNotify.length, 0, "no per-message banner for untagged thread traffic");
   assert.deepEqual([h.calls.trigger.length, h.calls.fyi.length, h.calls.feed.length], [0, 0, 0]);
 
   // …and the 2026-08-20 counter-rule, in the same breath: a HUMAN's untagged reply DOES
   // banner. Same verdict, same absent tag, different author kind.
   const human = harness({ live: false });
   const typed = { ...replyUntagged(), authorKind: "user" };
-  assert.equal(await human.dispatch(entry, typed), "classify:task-reply");
-  assert.equal(human.calls.taskNotify.length, 1, "a person's addressed words are never invisible");
+  assert.equal(await human.dispatch(entry, typed), "classify:thread-reply");
+  assert.equal(human.calls.threadNotify.length, 1, "a person's addressed words are never invisible");
 });
 
 test("a DESKTOP-owned thread is unaffected: a live session still eats the reply", async () => {
@@ -377,25 +377,25 @@ test("a DESKTOP-owned thread is unaffected: a live session still eats the reply"
   const live = harness({ live: true });
   assert.equal(await live.dispatch(entry, replyMsg()), "feedLiveSession");
   assert.equal(live.calls.feed.length, 1);
-  assert.equal(live.calls.taskNotify.length, 0, "a fed reply must not ALSO banner");
+  assert.equal(live.calls.threadNotify.length, 0, "a fed reply must not ALSO banner");
 
   const settled = harness({ live: false });
-  assert.equal(await settled.dispatch(entry, replyMsg()), "classify:task-reply");
-  assert.equal(settled.calls.taskNotify.length, 1, "settled now means the banner, like external");
+  assert.equal(await settled.dispatch(entry, replyMsg()), "classify:thread-reply");
+  assert.equal(settled.calls.threadNotify.length, 1, "settled now means the banner, like external");
 });
 
 test("the runtime stamp cannot be forged by the peer into anything on my machine", async () => {
-  // A counterparty stamping runtime on THEIR message changes nothing: `requesterTaskOpen`
-  // still requires the message to be MINE and the task to be mine, and the peer's reply
-  // classifies 'task-reply' either way. (The stamp is server-written anyway; this pins that
+  // A counterparty stamping runtime on THEIR message changes nothing: `requesterThreadOpen`
+  // still requires the message to be MINE and the thread to be mine, and the peer's reply
+  // classifies 'thread-reply' either way. (The stamp is server-written anyway; this pins that
   // the gate is an AND, not a shortcut.)
   // ⚠ REPOINTED (2026-08-20): the old reading was "and no window was launched". There is no
   // launch to count, so the predicate is asked DIRECTLY — it is untouched and still exported —
   // alongside the verdict the message actually gets.
   const h = harness();
   const forged = { ...replyMsg(), metadata: { ...replyMsg().metadata, runtime: "desktop-session" } };
-  assert.equal(targeting.requesterTaskOpen(forged, ME), false, "a peer's create, stamp or not");
-  assert.equal(await h.dispatch(entry, forged), "classify:task-reply");
+  assert.equal(targeting.requesterThreadOpen(forged, ME), false, "a peer's create, stamp or not");
+  assert.equal(await h.dispatch(entry, forged), "classify:thread-reply");
   assert.equal(h.calls.feed.length, 0, "and no live session claims it");
 });
 
@@ -412,6 +412,6 @@ test("the runtime stamp cannot be forged by the peer into anything on my machine
 //
 // ⚠ THE SYMPTOM IT WATCHED FOR NO LONGER EXISTS, which is why this is an excision and not a
 // loss. Nothing opens a requester window on any stamp, so there is no behaviour for a missing
-// stamp to silently switch off. `desktopRuntime` / `requesterTaskOpen` survive untouched and
+// stamp to silently switch off. `desktopRuntime` / `requesterThreadOpen` survive untouched and
 // their truth table is test/operator-typed-request.test.mjs; what is gone is the ROUTE that
 // read the answer, and with it the only thing skew could have broken quietly.

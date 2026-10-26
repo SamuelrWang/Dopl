@@ -32,7 +32,7 @@ vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 vi.mock("./repository");
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import * as repo from "./repository";
@@ -113,7 +113,7 @@ describe("the two (channel, client_msg_id) reads are scoped differently", () => 
 
   it("and it is the ONLY (channel, client_msg_id) read left on this module", () => {
     // ⚠ THE CROSS-AUTHOR SIBLING IS DELETED (2026-09-02). It existed for
-    // `service-tasks.ts › storedOpeningSeq`, the arm a create took when it
+    // `service-threads.ts › storedOpeningSeq`, the arm a create took when it
     // converged on somebody else's thread; author-scoping the THREAD probe too
     // removed that arm, and an orphan repository helper reads as a live door.
     expect("findMessageByClientId" in repoMessages).toBe(false);

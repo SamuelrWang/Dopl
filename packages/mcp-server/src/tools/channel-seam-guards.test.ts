@@ -53,9 +53,9 @@ function seamStub(over: Record<string, unknown> = {}): DoplClient {
     postChannelMessage: vi.fn(async () => ({
       id: "m1",
       seq: 7,
-      kind: "task_progress",
+      kind: "thread_progress",
       authorUserId: "u1",
-      metadata: { taskId: THREAD },
+      metadata: { threadId: THREAD },
     })),
     createChannel: vi.fn(async () => CHANNEL),
     listWorkspaceMembers: vi.fn(async () => [

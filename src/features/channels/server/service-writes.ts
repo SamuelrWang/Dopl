@@ -52,7 +52,7 @@ import {
  * Siblings, each with its own reason to change: the channel HEADER lifecycle
  * (create incl. direct, update incl. archive, soft-delete) is
  * `service-writes-channel.ts` and is re-exported from here, the membership lane
- * is `service-writes-members.ts`, the task lifecycle `service-tasks.ts`, and
+ * is `service-writes-members.ts`, the thread lifecycle `service-threads.ts`, and
  * the metadata folds a post goes through `service-writes-metadata.ts`.
  */
 
@@ -230,7 +230,7 @@ export async function postMessage(
   }
 
   // Addressing, the reserved-key anti-spoof fold and
-  // task-key stamping all live in `service-writes-metadata.ts` — ONE place
+  // thread-key stamping all live in `service-writes-metadata.ts` — ONE place
   // decides what a caller may put in `metadata`.
   const { metadata, memberHandles, typedEscalationAnswer } = await resolvePostMetadata(
     ctx,
@@ -255,7 +255,7 @@ export async function postMessage(
 
   // ⚠ **WHO THIS IS FOR AND WHAT IT DID — DECIDED HERE, ONCE** (2026-09-02, A9).
   // It runs AFTER the metadata fold and reads that fold's output rather than the
-  // caller's input, because `to_user_id` and `taskId` are only trustworthy once
+  // caller's input, because `to_user_id` and `threadId` are only trustworthy once
   // the anti-spoof strip has re-stamped them from validated values.
   // ⚠ It comes AFTER the idempotency short-circuit too: a converged retry
   // returns the FIRST request's stored verdict, which is the whole point of the

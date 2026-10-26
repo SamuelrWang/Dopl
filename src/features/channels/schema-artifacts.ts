@@ -19,7 +19,7 @@ import { safeLabel, safeOptionalProse } from "@/shared/lib/safe-label";
  */
 const ARTIFACT_CREATE_MAX_MESSAGES = 200;
 
-/** ⚠ Same class as `channels.name` and `channel_tasks.title`, by ruling: these
+/** ⚠ Same class as `channels.name` and `channel_threads.title`, by ruling: these
  *  strings render into `dopl_channel` results, so they take the bounds this tree
  *  already sets rather than inventing a third rule. */
 const ArtifactNameSchema = safeLabel("Artifact name", 200);

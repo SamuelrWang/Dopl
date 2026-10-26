@@ -79,8 +79,8 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // ── Wired today ────────────────────────────────────────────────────────────────────────────
   // ⚠ BOTH ROUTE THROUGH `notification-route.js` as of 2026-10-09, so each resolves to ONE
   // surface: the toast while Dopl is in front, the OS banner while it is away. `mention` has TWO
-  // call sites — `trigger.js › sendFyi` for a tag in the room, and `task-notify.js ›
-  // notifyTaskReply` for a tag inside a thread I opened, which classify ranks 'task-reply' so it
+  // call sites — `trigger.js › sendFyi` for a tag in the room, and `thread-notify.js ›
+  // notifyThreadReply` for a tag inside a thread I opened, which classify ranks 'thread-reply' so it
   // never reaches sendFyi. They share one copy builder so a tag reads the same either way.
   { id: "mention", label: "Mentions and replies", surface: "both", wired: true },
   { id: "decision", label: "Decisions for you", surface: "both", wired: true },
@@ -103,7 +103,7 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   { id: "peer_ask", label: "A peer's agent asks you", surface: "both", wired: true },
   { id: "draft_reply", label: "Replies your agent drafted", surface: "both", wired: true },
   // Raised at the launch funnel (`session-launch.js`), the one path all three lanes pass. ⚠ Its
-  // own emit, not a channel arm: `task_started` is dropped at `targeting.js:133` and always was.
+  // own emit, not a channel arm: `thread_started` is dropped at `targeting.js:133` and always was.
   // COALESCED — a fan-out that launches several is ONE notice naming the total, because ten
   // banners for one intention is worse than none.
   { id: "agent_started", label: "An agent starts", surface: "both", wired: true },
@@ -138,7 +138,7 @@ export const NOTIFICATION_EVENTS: ReadonlyArray<NotificationEvent> = [
   // observed in channel bb0f57db on 2026-10-10 — a turn that ended having posted nothing
   // (`viloxuwt`, zero channel messages across a 7-minute run), and a parked session reaped by the
   // 12h abandonment bound with no closing post (`jsk2zowk`, last word a MILESTONE, never a DONE).
-  // Both wrote a `task_progress` lifecycle marker, which addresses nobody and wakes nothing, so
+  // Both wrote a `thread_progress` lifecycle marker, which addresses nobody and wakes nothing, so
   // whoever launched the agent went on believing the work was in flight.
   // Same family as the safety four above — it marks WORK STOPPING SILENTLY — but default ON and
   // NOT locked: the channel post is the durable record either way, so muting the banner costs the

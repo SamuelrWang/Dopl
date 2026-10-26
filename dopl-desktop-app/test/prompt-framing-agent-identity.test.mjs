@@ -72,7 +72,7 @@ test("no identity ⇒ [] — not a blank line, not a header, nothing", () => {
 });
 
 test("a built REQUESTER turn is byte-identical with no identity and with a context that omits it", () => {
-  const base = { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: "t", scope: "thread" };
+  const base = { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: "t", scope: "thread" };
   const withoutKey = buildFencedTurn({ side: "requester", message: "go", nonce: N, context: base });
   const withNull = buildFencedTurn({
     side: "requester", message: "go", nonce: N, context: { ...base, identity: null },
@@ -413,7 +413,7 @@ test("in a built turn the ROLE sits above the GOAL, and below the machine's own 
   const out = buildFencedTurn({
     side: "requester", message: "audit PR 12", nonce: N,
     context: {
-      channelName: "Ops", channelId: CH, workspaceId: WS, taskId: "t", scope: "thread",
+      channelName: "Ops", channelId: CH, workspaceId: WS, threadId: "t", scope: "thread",
       profile: "full", identity: tpl(),
     },
   });
@@ -432,7 +432,7 @@ test("the pinned ORDERING constraints are unmoved by the splice", () => {
   for (const identity of [null, tpl()]) {
     const out = buildFencedTurn({
       side: "requester", message: "x", nonce: N,
-      context: { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: "t", profile: "full", identity },
+      context: { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: "t", profile: "full", identity },
     });
     assert.ok(orderOf(out, "FIRST ACTIONS THIS TURN", "VOCABULARY (use these words"));
     assert.ok(orderOf(out, "VOCABULARY (use these words", "Deliver every message"));

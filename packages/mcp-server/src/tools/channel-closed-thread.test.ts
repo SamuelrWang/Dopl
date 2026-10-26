@@ -44,7 +44,7 @@ function posted() {
     seq: 356,
     kind: "message",
     authorUserId: "u-me",
-    metadata: { taskId: THREAD_ID, taskTitle: "Wire the listener" },
+    metadata: { threadId: THREAD_ID, threadTitle: "Wire the listener" },
   };
 }
 

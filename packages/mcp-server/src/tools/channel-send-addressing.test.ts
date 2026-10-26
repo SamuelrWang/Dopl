@@ -85,7 +85,7 @@ describe("a bare send is REFUSED, and the refusal names the two choices", () => 
     // has exactly two parties, so a reply with no `to` is addressed to the other
     // one by the thread's own structure and the server resolves it (RR1,
     // INVARIANTS §5). Refusing here would break every in-thread exchange.
-    const post = vi.fn(async () => message({ metadata: { taskId: "t1" } }));
+    const post = vi.fn(async () => message({ metadata: { threadId: "t1" } }));
     await send(sendStub(post), { thread: "t1" });
     expect(post).toHaveBeenCalledTimes(1);
     expect(post.mock.calls[0][1].to).toBeUndefined();
@@ -95,7 +95,7 @@ describe("a bare send is REFUSED, and the refusal names the two choices", () => 
     // ⚠ Both are routed BEFORE the check and both are structurally for nobody or
     // for a person reading a card, so a refusal on either would be this rule
     // reaching past its own subject.
-    const milestone = vi.fn(async () => message({ kind: "task_progress" }));
+    const milestone = vi.fn(async () => message({ kind: "thread_progress" }));
     await send(sendStub(milestone), { kind: "milestone", thread: "t1", body: "schema applied" });
     expect(milestone).toHaveBeenCalledTimes(1);
 

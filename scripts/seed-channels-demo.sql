@@ -7,7 +7,7 @@
 -- deleted at the Phase 12 cutover).
 --
 -- ⚠ NOTHING HERE IS ROUTE-SHAPED. It seeds `channels` / `channel_members` /
--- `channel_tasks` / `channel_messages` rows and nothing that names a page, so the
+-- `channel_threads` / `channel_messages` rows and nothing that names a page, so the
 -- `channels-v2` → `channels` rename did not touch it. Verified 2026-08-18.
 --
 -- PROPERTIES
@@ -114,18 +114,18 @@ where not exists (
   where cm.channel_id = 'de300000-0000-4000-8000-0000000000c1' and cm.user_id = v.id
 );
 
--- ── 4. Threads (channel_tasks: one requester + one target each) ────────────
-insert into public.channel_tasks (id, channel_id, workspace_id, title, status, mode, created_by, target_user_id, client_msg_id)
+-- ── 4. Threads (channel_threads: one requester + one target each) ────────────
+insert into public.channel_threads (id, channel_id, workspace_id, title, status, mode, created_by, target_user_id, client_msg_id)
 values
   ('de300000-0000-4000-8000-0000000000a1', 'de300000-0000-4000-8000-0000000000c1',
    '5291e457-6a49-4148-af71-0f87361d5f55', 'UI-kit design', 'open', 'interactive',
-   'e95bd11c-32b9-42ab-b754-ffe93787de0a', 'de300000-0000-4000-8000-000000000001', 'demo-seed-task-1'),
+   'e95bd11c-32b9-42ab-b754-ffe93787de0a', 'de300000-0000-4000-8000-000000000001', 'demo-seed-thread-1'),
   ('de300000-0000-4000-8000-0000000000a2', 'de300000-0000-4000-8000-0000000000c1',
    '5291e457-6a49-4148-af71-0f87361d5f55', 'Lottie animation handoff', 'open', 'interactive',
-   'de300000-0000-4000-8000-000000000001', 'de300000-0000-4000-8000-000000000003', 'demo-seed-task-2'),
+   'de300000-0000-4000-8000-000000000001', 'de300000-0000-4000-8000-000000000003', 'demo-seed-thread-2'),
   ('de300000-0000-4000-8000-0000000000a3', 'de300000-0000-4000-8000-0000000000c1',
    '5291e457-6a49-4148-af71-0f87361d5f55', 'Color token audit', 'open', 'interactive',
-   'e95bd11c-32b9-42ab-b754-ffe93787de0a', 'de300000-0000-4000-8000-000000000005', 'demo-seed-task-3')
+   'e95bd11c-32b9-42ab-b754-ffe93787de0a', 'de300000-0000-4000-8000-000000000005', 'demo-seed-thread-3')
 on conflict (id) do nothing;
 
 -- ── 5. Messages, through the serialized-append RPC, then backdated ─────────
@@ -172,35 +172,35 @@ begin
   -- Thread: UI-kit design (t1)
   perform public.channel_message_insert(ch, ws, diana, 'agent', 'message',
     'Pulled the interactive elements out of the v3.0 file. Hover, focus, pressed and disabled are drafted for 14 components. Two still missing a disabled face: the date field and the file drop zone.',
-    jsonb_build_object('taskId', t1), 'demo-seed-m07');
+    jsonb_build_object('threadId', t1), 'demo-seed-m07');
   perform public.channel_message_insert(ch, ws, sam, 'agent', 'message',
     'Put the drafted states on the kit review page so they can be read side by side. Renamed btn/secondary to btn/light so the names match the code. Blocked on the two disabled faces before the kit can be frozen. @Diana Taylor',
-    jsonb_build_object('taskId', t1, 'to_user_id', diana), 'demo-seed-m08');
+    jsonb_build_object('threadId', t1, 'to_user_id', diana), 'demo-seed-m08');
   perform public.channel_message_insert(ch, ws, diana, 'user', 'message',
     'Good catch on the rename — I''ll mirror it in the library today. The disabled faces are drawn, just not published; they go up after standup.',
-    jsonb_build_object('taskId', t1), 'demo-seed-m09');
+    jsonb_build_object('threadId', t1), 'demo-seed-m09');
   perform public.channel_message_insert(ch, ws, sam, 'user', 'message',
     'Perfect. Once those land I''ll freeze v1 of the kit and tag it.',
-    jsonb_build_object('taskId', t1), 'demo-seed-m10');
+    jsonb_build_object('threadId', t1), 'demo-seed-m10');
   perform public.channel_message_insert(ch, ws, diana, 'agent', 'message',
     'Disabled faces are published — date field and drop zone are both in the v3.0 file. @Samuel Wang both faces are in, ready for your freeze.',
-    jsonb_build_object('taskId', t1, 'to_user_id', sam), 'demo-seed-m11');
+    jsonb_build_object('threadId', t1, 'to_user_id', sam), 'demo-seed-m11');
 
   -- Thread: Lottie animation handoff (t2)
   perform public.channel_message_insert(ch, ws, diana, 'user', 'message',
     'Handing the hero and empty-state animations to you as Lottie files — both are in the shared folder. Loop points are marked; the hero should NOT loop on reduced motion.',
-    jsonb_build_object('taskId', t2, 'to_user_id', emily), 'demo-seed-m12');
+    jsonb_build_object('threadId', t2, 'to_user_id', emily), 'demo-seed-m12');
   perform public.channel_message_insert(ch, ws, emily, 'agent', 'message',
     'Files received and parsed. Hero animation is 340KB — over the 250KB budget; I can strip the unused precomps and get it under. Empty-state is fine as-is. Proceeding with the strip unless told otherwise.',
-    jsonb_build_object('taskId', t2), 'demo-seed-m13');
+    jsonb_build_object('threadId', t2), 'demo-seed-m13');
 
   -- Thread: Color token audit (t3) — older traffic, sits outside the 24h window
   perform public.channel_message_insert(ch, ws, sam, 'user', 'message',
     'Audit the color usage across v3.0 — anything hardcoded that should be a token, and any token used against its role. List per screen, no fixes yet.',
-    jsonb_build_object('taskId', t3, 'to_user_id', william), 'demo-seed-m14');
+    jsonb_build_object('threadId', t3, 'to_user_id', william), 'demo-seed-m14');
   perform public.channel_message_insert(ch, ws, william, 'agent', 'message',
     'First pass done on 12 of 21 screens: 7 hardcoded greys (5 are one value — probably a missing token), 2 success-greens used for links. Full per-screen list tomorrow.',
-    jsonb_build_object('taskId', t3), 'demo-seed-m15');
+    jsonb_build_object('threadId', t3), 'demo-seed-m15');
 end $$;
 
 -- Backdate, in seq order (oldest history first) so seq stays monotonic per
@@ -227,19 +227,19 @@ from (values
 where channel_messages.client_msg_id = v.cmid
   and channel_messages.channel_id = 'de300000-0000-4000-8000-0000000000c1';
 
-update public.channel_tasks set created_at = now() - v.age
+update public.channel_threads set created_at = now() - v.age
 from (values
   ('de300000-0000-4000-8000-0000000000a1'::uuid, interval '6 hours'),
   ('de300000-0000-4000-8000-0000000000a2'::uuid, interval '5 hours'),
   ('de300000-0000-4000-8000-0000000000a3'::uuid, interval '26 hours')
 ) as v(id, age)
-where channel_tasks.id = v.id;
+where channel_threads.id = v.id;
 
 commit;
 
 -- ── Removal (run manually if the demo should go) ────────────────────────────
 -- delete from public.channel_messages where channel_id = 'de300000-0000-4000-8000-0000000000c1';
--- delete from public.channels where id = 'de300000-0000-4000-8000-0000000000c1';  -- cascades members/tasks
+-- delete from public.channels where id = 'de300000-0000-4000-8000-0000000000c1';  -- cascades members/threads
 -- delete from public.workspace_members where user_id::text like 'de300000-%';
 -- delete from public.profiles where id::text like 'de300000-%';
 -- delete from auth.users where id::text like 'de300000-%';

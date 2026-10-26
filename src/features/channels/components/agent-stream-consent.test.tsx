@@ -20,7 +20,7 @@
  *    sent", which is also true of the seconds between a Post and delivery. An
  *    operator told that about a post that went out sends it again.
  *  - **THE LANDING CHECK CANNOT USE THE AGENT-SCOPED LANE.** It filters on a
- *    `metadata.taskId` that a threadless post does not carry (F-311), so on a
+ *    `metadata.threadId` that a threadless post does not carry (F-311), so on a
  *    solo /home container it can never see the delivered row.
  *  - **NOTHING MAY BE LOCAL.** A pressed card survives a remount and is visible
  *    to the other agent surface only if every input is a server fact.
@@ -170,13 +170,13 @@ describe("a HELD draft is not a sent post", () => {
  * `proposed_reply` (95 chars, no whitespace to collapse). The card still said
  * **"Not sent"**. Two causes, both pinned below: the landing check was reading
  * the AGENT-FILTERED lane (which drops a threadless post — the measured row's
- * metadata was `{intent, runtime, summary, session_id}`, no `taskId`), and
+ * metadata was `{intent, runtime, summary, session_id}`, no `threadId`), and
  * "no pending row" was being rendered as failure.
  */
 describe("a delivered draft converges to the posted face", () => {
   const DRAFT =
     "Standing by in this channel — watching the main room. Tag me or address me and I'll pick it up.";
-  /** The delivered row EXACTLY as measured: agent-authored, and no `taskId`. */
+  /** The delivered row EXACTLY as measured: agent-authored, and no `threadId`. */
   const threadless = message({
     id: "m-standby",
     authorKind: "agent",
@@ -186,7 +186,7 @@ describe("a delivered draft converges to the posted face", () => {
 
   it("reads the CHANNEL transcript, not the agent-filtered lane", () => {
     // ⚠ THE BUG, EXACTLY: `sent` is empty because `agentSentMessages` filters on
-    // `metadata.taskId` and a threadless post has none. The row still exists.
+    // `metadata.threadId` and a threadless post has none. The row still exists.
     const items = buildAgentStream({
       entries: [heldPost(DRAFT)],
       sent: [],

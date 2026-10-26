@@ -54,7 +54,7 @@ describe("deriveMessageReceipt", () => {
   });
 
   // (2)
-  it("returns null for my unaddressed broadcast (no recipient, no task)", () => {
+  it("returns null for my unaddressed broadcast (no recipient, no thread)", () => {
     const mine = msg({
       kind: "message",
       authorKind: "user",
@@ -77,46 +77,46 @@ describe("deriveMessageReceipt", () => {
   });
 
   // (4)
-  it("returns 'working' for an explicit-taskId message with a later task_started", () => {
+  it("returns 'working' for an explicit-threadId message with a later thread_started", () => {
     const t = "3f1c8e42-9b7a-4c2e-8d6f-2a1b0c9d8e7f";
     const mine = msg({
       kind: "message",
       authorKind: "user",
       authorUserId: ME,
       body: "please do X",
-      metadata: { taskId: t, to_user_id: PEER },
+      metadata: { threadId: t, to_user_id: PEER },
     });
     const started = msg({
-      kind: "task_started",
+      kind: "thread_started",
       authorKind: "agent",
       authorUserId: PEER,
-      metadata: { taskId: t },
+      metadata: { threadId: t },
     });
     expect(deriveMessageReceipt(mine, [mine, started], ME)).toBe("working");
   });
 
   // (5)
-  it("returns 'replied' once a linked agent reply lands on the explicit task", () => {
+  it("returns 'replied' once a linked agent reply lands on the explicit thread", () => {
     const t = "3f1c8e42-9b7a-4c2e-8d6f-2a1b0c9d8e7f";
     const mine = msg({
       kind: "message",
       authorKind: "user",
       authorUserId: ME,
       body: "please do X",
-      metadata: { taskId: t, to_user_id: PEER },
+      metadata: { threadId: t, to_user_id: PEER },
     });
     const started = msg({
-      kind: "task_started",
+      kind: "thread_started",
       authorKind: "agent",
       authorUserId: PEER,
-      metadata: { taskId: t },
+      metadata: { threadId: t },
     });
     const reply = msg({
       kind: "message",
       authorKind: "agent",
       authorUserId: PEER,
       body: "Done.",
-      metadata: { taskId: t },
+      metadata: { threadId: t },
     });
     expect(deriveMessageReceipt(mine, [mine, started, reply], ME)).toBe(
       "replied",
@@ -124,8 +124,8 @@ describe("deriveMessageReceipt", () => {
   });
 
   // (6)
-  it("links a legacy task-{ch}-{N} start by the opener's seq (working, then replied)", () => {
-    // Desktop spawner mints `task-{channelId}-{seq}` for the opener at seq N;
+  it("links a legacy thread-{ch}-{N} start by the opener's seq (working, then replied)", () => {
+    // Desktop spawner mints `thread-{channelId}-{seq}` for the opener at seq N;
     // the receipt reconstructs it from the message's own channelId + seq.
     const mine = msg({
       seq: 500,
@@ -135,13 +135,13 @@ describe("deriveMessageReceipt", () => {
       body: "the proposal",
       metadata: { to_user_id: PEER },
     });
-    const legacyId = `task-c1-500`;
+    const legacyId = `thread-c1-500`;
     const started = msg({
       seq: 501,
-      kind: "task_started",
+      kind: "thread_started",
       authorKind: "agent",
       authorUserId: PEER,
-      metadata: { taskId: legacyId },
+      metadata: { threadId: legacyId },
     });
     expect(deriveMessageReceipt(mine, [mine, started], ME)).toBe("working");
     const reply = msg({
@@ -150,7 +150,7 @@ describe("deriveMessageReceipt", () => {
       authorKind: "agent",
       authorUserId: PEER,
       body: "done reply",
-      metadata: { taskId: legacyId },
+      metadata: { threadId: legacyId },
     });
     expect(deriveMessageReceipt(mine, [mine, started, reply], ME)).toBe(
       "replied",
@@ -158,7 +158,7 @@ describe("deriveMessageReceipt", () => {
   });
 
   // (7)
-  it("returns 'replied' for a pair reply (agent -> me) with no taskId", () => {
+  it("returns 'replied' for a pair reply (agent -> me) with no threadId", () => {
     const mine = msg({
       kind: "message",
       authorKind: "user",
@@ -177,41 +177,41 @@ describe("deriveMessageReceipt", () => {
   });
 
   // (8)
-  it("returns 'declined' for a linked task_failed carrying declined:true", () => {
+  it("returns 'declined' for a linked thread_failed carrying declined:true", () => {
     const t = "8c2d1e90-4a5b-4f3c-9e1d-7b6a5c4d3e2f";
     const mine = msg({
       kind: "message",
       authorKind: "user",
       authorUserId: ME,
       body: "please do X",
-      metadata: { taskId: t, to_user_id: PEER },
+      metadata: { threadId: t, to_user_id: PEER },
     });
     const failed = msg({
-      kind: "task_failed",
+      kind: "thread_failed",
       authorKind: "agent",
       authorUserId: PEER,
       body: "Request declined",
-      metadata: { taskId: t, declined: true },
+      metadata: { threadId: t, declined: true },
     });
     expect(deriveMessageReceipt(mine, [mine, failed], ME)).toBe("declined");
   });
 
   // (9)
-  it("returns 'failed' for a bare linked task_failed", () => {
+  it("returns 'failed' for a bare linked thread_failed", () => {
     const t = "8c2d1e90-4a5b-4f3c-9e1d-7b6a5c4d3e2f";
     const mine = msg({
       kind: "message",
       authorKind: "user",
       authorUserId: ME,
       body: "please do X",
-      metadata: { taskId: t, to_user_id: PEER },
+      metadata: { threadId: t, to_user_id: PEER },
     });
     const failed = msg({
-      kind: "task_failed",
+      kind: "thread_failed",
       authorKind: "agent",
       authorUserId: PEER,
       body: "Crashed.",
-      metadata: { taskId: t },
+      metadata: { threadId: t },
     });
     expect(deriveMessageReceipt(mine, [mine, failed], ME)).toBe("failed");
   });
@@ -224,13 +224,13 @@ describe("deriveMessageReceipt", () => {
         authorKind: "user",
         authorUserId: ME,
         body: "please do X",
-        metadata: { taskId: t, to_user_id: PEER },
+        metadata: { threadId: t, to_user_id: PEER },
       });
       const failed = msg({
-        kind: "task_failed",
+        kind: "thread_failed",
         authorKind: "agent",
         authorUserId: PEER,
-        metadata: { taskId: t, ...flag },
+        metadata: { threadId: t, ...flag },
       });
       return deriveMessageReceipt(mine, [mine, failed], ME);
     };
@@ -248,14 +248,14 @@ describe("deriveMessageReceipt", () => {
       authorKind: "user",
       authorUserId: ME,
       body: "please do X",
-      metadata: { taskId: t, to_user_id: PEER },
+      metadata: { threadId: t, to_user_id: PEER },
     });
     const failed = msg({
-      kind: "task_failed",
+      kind: "thread_failed",
       authorKind: "agent",
       authorUserId: PEER,
       body: "Crashed.",
-      metadata: { taskId: t, declined: "yes" },
+      metadata: { threadId: t, declined: "yes" },
     });
     expect(deriveMessageReceipt(mine, [mine, failed], ME)).toBe("failed");
   });
@@ -268,21 +268,21 @@ describe("deriveMessageReceipt", () => {
       authorKind: "user",
       authorUserId: ME,
       body: "please do X",
-      metadata: { taskId: t, to_user_id: PEER },
+      metadata: { threadId: t, to_user_id: PEER },
     });
     const reply = msg({
       kind: "message",
       authorKind: "agent",
       authorUserId: PEER,
       body: "partial",
-      metadata: { taskId: t },
+      metadata: { threadId: t },
     });
     const failed = msg({
-      kind: "task_failed",
+      kind: "thread_failed",
       authorKind: "agent",
       authorUserId: PEER,
       body: "Crashed.",
-      metadata: { taskId: t },
+      metadata: { threadId: t },
     });
     expect(deriveMessageReceipt(mine, [mine, reply, failed], ME)).toBe("failed");
   });
@@ -306,7 +306,7 @@ describe("deriveMessageReceipt", () => {
     expect(deriveMessageReceipt(mine, [mine, reply], ME)).toBe("replied");
   });
 
-  it("binds a no-taskId pair-reply to the NEAREST preceding ask only (stacked asks stay 'sent')", () => {
+  it("binds a no-threadId pair-reply to the NEAREST preceding ask only (stacked asks stay 'sent')", () => {
     // ⚠ One reply answers the SECOND ask only — it must never light up
     // "Replied" on every stacked ask before it.
     const askX = msg({
@@ -335,13 +335,13 @@ describe("deriveMessageReceipt", () => {
     expect(deriveMessageReceipt(askY, thread, ME)).toBe("replied");
   });
 
-  // ⚠ The legacy `task-{channelId}-{seq}` id is DERIVABLE by any channel member
-  // (the DTO exposes `seq`) and the server does not gate a non-UUID taskId on
+  // ⚠ The legacy `thread-{channelId}-{seq}` id is DERIVABLE by any channel member
+  // (the DTO exposes `seq`) and the server does not gate a non-UUID threadId on
   // participation, so linking on string equality alone lets any third member
   // stamp a chip on someone else's request. Fixtures below are 3-party.
   const THIRD = "third";
 
-  it("ignores a THIRD member's task_failed carrying my legacy id (no forged 'Failed')", () => {
+  it("ignores a THIRD member's thread_failed carrying my legacy id (no forged 'Failed')", () => {
     const mine = msg({
       seq: 500,
       kind: "message",
@@ -352,11 +352,11 @@ describe("deriveMessageReceipt", () => {
     });
     const forged = msg({
       seq: 501,
-      kind: "task_failed",
+      kind: "thread_failed",
       authorKind: "agent",
       authorUserId: THIRD,
       body: "Crashed.",
-      metadata: { taskId: "task-c1-500" },
+      metadata: { threadId: "thread-c1-500" },
     });
     expect(deriveMessageReceipt(mine, [mine, forged], ME)).toBe("sent");
   });
@@ -370,13 +370,13 @@ describe("deriveMessageReceipt", () => {
       body: "the proposal",
       metadata: { to_user_id: PEER },
     });
-    const legacyId = "task-c1-600";
+    const legacyId = "thread-c1-600";
     const forgedStart = msg({
       seq: 601,
-      kind: "task_started",
+      kind: "thread_started",
       authorKind: "agent",
       authorUserId: THIRD,
-      metadata: { taskId: legacyId },
+      metadata: { threadId: legacyId },
     });
     const forgedReply = msg({
       seq: 602,
@@ -384,7 +384,7 @@ describe("deriveMessageReceipt", () => {
       authorKind: "agent",
       authorUserId: THIRD,
       body: "All done!",
-      metadata: { taskId: legacyId },
+      metadata: { threadId: legacyId },
     });
     expect(deriveMessageReceipt(mine, [mine, forgedStart], ME)).toBe("sent");
     expect(
@@ -403,22 +403,22 @@ describe("deriveMessageReceipt", () => {
       body: "the proposal",
       metadata: { to_user_id: PEER },
     });
-    const legacyId = "task-c1-700";
+    const legacyId = "thread-c1-700";
     const noise = msg({
       seq: 701,
       kind: "message",
       authorKind: "agent",
       authorUserId: THIRD,
       body: "unrelated",
-      metadata: { taskId: legacyId },
+      metadata: { threadId: legacyId },
     });
     const failed = msg({
       seq: 702,
-      kind: "task_failed",
+      kind: "thread_failed",
       authorKind: "agent",
       authorUserId: PEER,
       body: "Crashed.",
-      metadata: { taskId: legacyId },
+      metadata: { threadId: legacyId },
     });
     expect(deriveMessageReceipt(mine, [mine, noise, failed], ME)).toBe("failed");
   });
@@ -434,10 +434,10 @@ describe("deriveMessageReceipt", () => {
     });
     const dropped = msg({
       seq: 801,
-      kind: "task_failed",
+      kind: "thread_failed",
       authorKind: "agent",
       authorUserId: ME,
-      metadata: { taskId: "task-c1-800", dropped: true },
+      metadata: { threadId: "thread-c1-800", dropped: true },
     });
     expect(deriveMessageReceipt(mine, [mine, dropped], ME)).toBe("dropped");
   });

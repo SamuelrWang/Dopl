@@ -12,7 +12,7 @@
  * here goes through `inlineOr` first, because both splice sites (line head,
  * legend) sit OUTSIDE the untrusted-body framing and the route's `metadata` is a
  * bare record with no charset or newline rule. Today's write path stores either
- * a uuid or a fixed `task-<channel>-<seq>` shape, so this is DEFENCE IN DEPTH
+ * a uuid or a fixed `thread-<channel>-<seq>` shape, so this is DEFENCE IN DEPTH
  * for rows written before that gate — a channel carries dozens — and for the
  * render's own rule that it be safe on whatever jsonb hands it.
  */
@@ -60,23 +60,23 @@ const THREAD_TAG_LEN = 8;
 const THREAD_LEGEND_MAX = 6;
 /**
  * SYNTHETIC id a receiving desktop mints for an untagged request:
- * `task-<channel uuid>-<seq>`, deterministic from (channel, seq)
- * (`main/trigger.js › taskIdFor`, mirrored in `main/legacy-threads.js`). ⚠ Must
+ * `thread-<channel uuid>-<seq>`, deterministic from (channel, seq)
+ * (`main/trigger.js › threadIdFor`, mirrored in `main/legacy-threads.js`). ⚠ Must
  * NOT render like a real thread id — it groups an untagged request with its
  * reply on one machine's card and nothing more.
  */
-const SYNTHETIC_THREAD_RE = /^task-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}-(\d{1,15})$/;
+const SYNTHETIC_THREAD_RE = /^thread-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}-(\d{1,15})$/;
 /**
- * The thread a message belongs to. `metadata.taskId` is the STORAGE key for the
+ * The thread a message belongs to. `metadata.threadId` is the STORAGE key for the
  * domain's `thread` and is what decides continuation-vs-new on the receiving
  * side — the body cannot tell them apart.
  */
 function threadIdOf(m) {
-    return (0, channel_shared_1.metaString)(m, "taskId");
+    return (0, channel_shared_1.metaString)(m, "threadId");
 }
 /**
- * True when this id names a real, shared `channel_tasks` thread. Must stay the uuid test the
- * product gates on (`resolvePostMetadata › isUuid`, desktop `targeting.firstClassTaskId`).
+ * True when this id names a real, shared `channel_threads` thread. Must stay the uuid test the
+ * product gates on (`resolvePostMetadata › isUuid`, desktop `targeting.firstClassThreadId`).
  */
 function isFirstClassThreadId(id) {
     return narration_1.UUID_RE.test(id);
@@ -84,7 +84,7 @@ function isFirstClassThreadId(id) {
 /**
  * A SHORT, STABLE stand-in for an id — the half that distinguishes it.
  *
- * ⚠ NOT a blind `slice(0, 8)`: every synthetic id in one channel begins `task-`
+ * ⚠ NOT a blind `slice(0, 8)`: every synthetic id in one channel begins `thread-`
  * + the SAME channel uuid, so the first eight chars of two different ad-hoc
  * exchanges are byte-identical. The distinguishing half is the trailing SEQ,
  * which is also the seq of the message that OPENED the exchange.
@@ -137,7 +137,7 @@ function threadTagOf(m, anyTagged) {
  *
  * ⚠ TWO LINES, NOT ONE — they promise different things. The threads line says
  * "continue one with thread=<id>", meaning a shared, titled exchange both
- * members see. The ad-hoc line cannot: a `task-…` id names no row.
+ * members see. The ad-hoc line cannot: a `thread-…` id names no row.
  *
  * ⚠ But it must NOT tell the reader not to pass one. The receiving desktop's
  * prompt (`main/prompt-framing.js` THREAD_TAG) tells a session to keep its
@@ -157,7 +157,7 @@ function threadLegend(messages, ref) {
         if (!id)
             continue;
         if (!titles.get(id))
-            titles.set(id, (0, channel_shared_1.metaString)(m, "taskTitle"));
+            titles.set(id, (0, channel_shared_1.metaString)(m, "threadTitle"));
     }
     if (titles.size === 0)
         return null;
@@ -175,7 +175,7 @@ function threadLegend(messages, ref) {
 function legendEntry([id, title]) {
     const named = title ? (0, channel_shared_1.neutralizeInline)(title) : null;
     // ⚠ FULL id at full length lands here, and a hand-built code span is not a
-    // container — one backtick in a peer-set `taskId` closes it and the rest
+    // container — one backtick in a peer-set `threadId` closes it and the rest
     // becomes legend text; a newline forges whole entries plus the tool-call
     // guidance under them. `inlineOr` strips before it wraps.
     return `${(0, channel_shared_1.inlineOr)(shortRef(id), exports.UNREADABLE_ID)} = ${(0, channel_shared_1.inlineOr)(id, exports.UNREADABLE_ID)}${named ? ` (${named})` : ""}`;
@@ -190,5 +190,5 @@ function legendThreads(entries, ref) {
 }
 function legendAdHoc(entries, ref) {
     const shown = entries.slice(0, THREAD_LEGEND_MAX).map(legendEntry);
-    return `Ad-hoc exchanges above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. These are NOT threads: a \`task-<channel>-<seq>\` id is the label a RECEIVING machine mints for an untagged request so the reply groups with it on that machine's card. There is no thread row behind one: no title and no recorded parties, so nothing to join. Passing one as thread="<the full id>" keeps a reply grouped with its request, which is worth doing on every post in that exchange; it does not open a shared exchange, and an id that is not yours is dropped and the post lands untagged. If this work needs a real thread, open one with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${ref}"`, thread: '"new"', summary: '"..."', body: '"..."', to: '"..."' })}.`;
+    return `Ad-hoc exchanges above: ${shown.join("; ")}${moreNote(entries.length, shown.length)}. These are NOT threads: a \`thread-<channel>-<seq>\` id is the label a RECEIVING machine mints for an untagged request so the reply groups with it on that machine's card. There is no thread row behind one: no title and no recorded parties, so nothing to join. Passing one as thread="<the full id>" keeps a reply grouped with its request, which is worth doing on every post in that exchange; it does not open a shared exchange, and an id that is not yours is dropped and the post lands untagged. If this work needs a real thread, open one with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${ref}"`, thread: '"new"', summary: '"..."', body: '"..."', to: '"..."' })}.`;
 }

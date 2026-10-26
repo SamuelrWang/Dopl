@@ -19,7 +19,7 @@ import {
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    // `thread` is a FILTER on metadata.taskId, not a lookup: an id nothing carries returns [].
+    // `thread` is a FILTER on metadata.threadId, not a lookup: an id nothing carries returns [].
     // ⚠ `parseQuery` reads ONLY the keys named here — a param added to the
     // schema and forgotten in this list parses as absent, silently, forever.
     const query = parseQuery(request.nextUrl.searchParams, MessageReadQuerySchema, [

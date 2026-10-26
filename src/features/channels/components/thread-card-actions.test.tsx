@@ -63,13 +63,13 @@ const OPENERS = [
     id: "op-a",
     seq: 1,
     body: "START-HERE",
-    metadata: { taskId: "t-a", fanoutGroup: GROUP },
+    metadata: { threadId: "t-a", fanoutGroup: GROUP },
   }),
   message({
     id: "op-b",
     seq: 2,
     body: "START-HERE",
-    metadata: { taskId: "t-b", fanoutGroup: GROUP },
+    metadata: { threadId: "t-b", fanoutGroup: GROUP },
   }),
 ];
 

@@ -50,9 +50,9 @@ function classifyBadRequest(e) {
         // the remedy and this arm only has to say nothing was sent.
         case "CHANNEL_RECIPIENT_UNRESOLVED":
             return "recipient_unresolved";
-        case "CHANNEL_TASK_NOT_IN_CHANNEL":
+        case "CHANNEL_THREAD_NOT_IN_CHANNEL":
             return "thread_not_in_channel";
-        case "CHANNEL_TASK_SELF_TARGET":
+        case "CHANNEL_THREAD_SELF_TARGET":
             return "self_target";
         case "VALIDATION_FAILED":
         case "INVALID_JSON":
@@ -70,7 +70,7 @@ function classifyForbidden(e) {
     switch ((0, respond_1.apiErrorCode)(e)) {
         case "CHANNEL_FORBIDDEN":
             return "not_a_member";
-        case "TASK_FORBIDDEN":
+        case "THREAD_FORBIDDEN":
             return "thread_authorization";
         case "CHANNEL_LIFECYCLE_KIND_FORBIDDEN":
             return "lifecycle_kind";

@@ -235,7 +235,7 @@ test("NAMES: two agents on ONE thread are two rows with two different names", ()
   assert.equal(listed.length, 2, "(channel, thread) is a GROUP now, never one row");
   assert.deepEqual(listed.map((r) => r.name).sort(), ["a1b2c3d4", "z9y8x7w6"]);
   assert.deepEqual(listed.map((r) => r.agentId).sort(), ["a1b2c3d4", "z9y8x7w6"]);
-  assert.deepEqual(new Set(listed.map((r) => r.taskId)), new Set(["task-1"]));
+  assert.deepEqual(new Set(listed.map((r) => r.threadId)), new Set(["thread-1"]));
 });
 
 test("NAMES: the handle rides the AGENT, so a park/resume/recreate keeps it", () => {
@@ -262,7 +262,7 @@ test("NAMES: a departed agent's name is never handed to the next one", () => {
   assert.equal(m.list()[0].name, "a1b2c3d4");
   m.bind({ sessions: new Map() });
   assert.deepEqual(m.list(), []);
-  const next = session({ taskId: "task-9", agentId: "q7w8e9r0" });
+  const next = session({ threadId: "thread-9", agentId: "q7w8e9r0" });
   m.bind({ sessions: new Map([[next.key, next]]) });
   assert.equal(m.list()[0].name, "q7w8e9r0", "a fresh instance, a fresh address");
 });
@@ -279,7 +279,7 @@ test("NAMES: a departed agent's name is never handed to the next one", () => {
 test("PUSH: the event name and payload are the shape the preload forwards", async () => {
   const m = load();
   assert.equal(m.SESSIONS_EVENT, "dopl:sessions");
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 1);
@@ -358,7 +358,7 @@ test("ENGINE: every startSession registry mutation is accompanied by a touch", (
 
 test("PUSH: a burst of dispatches costs ONE frame", async () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
   for (let i = 0; i < 50; i += 1) m.touch(); // one turn is many engine events
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
@@ -386,7 +386,7 @@ test("PUSH: nothing is sent when nothing a pill could show has moved", async () 
 
 test("PUSH: a frame that never reached a window is re-sent, not swallowed", async () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   let win = null; // the SPA window is not built yet
   m.start({ getWindows: () => (win ? [win] : []) });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
@@ -399,7 +399,7 @@ test("PUSH: a frame that never reached a window is re-sent, not swallowed", asyn
 
 test("PUSH: a destroyed window fails closed rather than throwing into the engine", async () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.spaWindow.destroyed = true;
   m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
@@ -422,7 +422,7 @@ test("PUSH: EVERY app window gets the frame, and one dead one does not swallow t
   popout.webContents.send = (channel, payload) => popoutSent.push({ channel, payload });
   const dead = load().spaWindow;
   dead.destroyed = true;
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [dead, m.spaWindow, popout] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 1, "the shell got it");
@@ -432,7 +432,7 @@ test("PUSH: EVERY app window gets the frame, and one dead one does not swallow t
 
 test("PUSH: a rebuilt window is repainted, not left with the previous frame's digest", async () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   m.start({ getWindows: () => [m.spaWindow] });
   await new Promise((r) => setTimeout(r, m.PUSH_COALESCE_MS + 30));
   assert.equal(m.sent.length, 1);

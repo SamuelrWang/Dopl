@@ -37,10 +37,6 @@
  * caller's OWN agents — and the server resolves it; with one the message is a
  * REQUEST, without one it is chat and reaches nobody.
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
- * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
- * `/tasks` routes keep the storage name.
- *
  * ⚠ No `dopl_channel_admin` twin — no destructive ops over MCP (archive/delete
  * are human decisions in the web UI).
  */
@@ -162,7 +158,7 @@ export function registerChannelTool(
         //
         // ⚠ THREE LANES, ONE OP, AND THE `kind` IS FIXED AT THIS SEAM rather
         // than left to the caller's spelling. `milestone` stores
-        // `task_progress`; `decision` MUST stay `kind='message'` or
+        // `thread_progress`; `decision` MUST stay `kind='message'` or
         // `dopl-desktop-app/main/targeting.js › classify` drops the card and the
         // human it asks is never notified. Both delegate to `opPost` rather than
         // growing a second delivery path.
@@ -216,7 +212,7 @@ export function registerChannelTool(
             const oversize = milestoneRefusal(body);
             if (oversize) return oversize;
             return opPost(client, channel, body, {
-              kind: "task_progress",
+              kind: "thread_progress",
               thread: args.thread as string,
               summary: args.summary,
               runtime,
@@ -381,8 +377,8 @@ export function registerChannelTool(
             args.since,
             args.limit,
             selfUserId,
-            // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
-            // ids are real `metadata.taskId` values and must stay filterable.
+            // ⚠ Any non-empty string is legal — legacy `thread-<channelId>-<seq>`
+            // ids are real `metadata.threadId` values and must stay filterable.
             args.thread,
             args.response_format,
             pollSubject(caller),

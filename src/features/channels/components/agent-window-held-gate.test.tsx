@@ -22,7 +22,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { CHANNEL_ID } from "./test-fixtures";
-import { TASK, installBridge, mount, summary } from "./agent-window-harness";
+import { THREAD, installBridge, mount, summary } from "./agent-window-harness";
 
 // The window's server reads are real hooks; this suite is about one control.
 vi.mock("../hooks/use-channel-messages", () => ({
@@ -93,7 +93,7 @@ describe("the agent window can answer a held call", () => {
     // resolves against its own registry (`agents-controls.ts`).
     expect(answer).toHaveBeenCalledWith(
       CHANNEL_ID,
-      TASK,
+      THREAD,
       REQUEST,
       true,
       "a1b2c3d4"

@@ -7,11 +7,6 @@
  * pauses/resumes, a thread does not. Unlike chats (private per-owner archive), a
  * channel has explicit membership: PUBLIC = any workspace member, PRIVATE = members
  * only.
- *
- * ⚠ BOUNDARY — wire/storage name `task` == domain name `thread`. The
- * `channel_tasks` table, the `metadata.task*` keys, `task_*` message kinds and the
- * `/api/channels/[channelId]/tasks/**` routes keep the STORAGE name (renaming =
- * migration + every read/write path); mapping is in `client/api.ts`, `server/dto.ts`.
  */
 
 // ⚠ IMPORTED, NOT RE-DECLARED: the info card's shape and its zod schema are ONE
@@ -80,7 +75,7 @@ export type ChannelDirectPeer = {
 
 /**
  * A titled, mode-tagged exchange. The transcript rides on `channel_messages` via
- * `metadata.taskId = ChannelThread.id`; the `channel_tasks` row is the authoritative
+ * `metadata.threadId = ChannelThread.id`; the `channel_threads` row is the authoritative
  * status/mode/title store, shared by both members.
  */
 export type ChannelThread = {
@@ -100,7 +95,7 @@ export type ChannelThread = {
   outcomeSummary: string | null;
   /**
    * When this thread last saw real activity — the newest message tagged for it, or
-   * its own `createdAt`. Derived by the `channel_tasks_activity` view; ⚠ NEVER
+   * its own `createdAt`. Derived by the `channel_threads_activity` view; ⚠ NEVER
    * `updatedAt`, whose only writer is `set_mode` since close and reopen were removed
    * (C-1). ⚠ ABSENT means THIS READ DID NOT DERIVE IT (a single-thread load), never
    * "no activity": only the thread LIST carries it, and it is what that list is
@@ -284,7 +279,7 @@ export type ChannelMessage = {
   /**
    * **THE PER-THREAD COUNT — `#1, #2, #3` INSIDE ONE EXCHANGE** (same migration).
    *
-   * ⚠ **`null` IS A REAL STATE**: the row is in no thread. Only `metadata.taskId`
+   * ⚠ **`null` IS A REAL STATE**: the row is in no thread. Only `metadata.threadId`
    * earns one, and that tag is write-once, so this cannot go stale.
    * ⚠ **THIS IS THE ONE THAT READS AS 1, 2, 3** — a thread-scoped read hides
    * nothing and never folds (`service-artifacts-fold.ts › readNamesMessages`).

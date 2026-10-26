@@ -38,10 +38,6 @@
  * caller's OWN agents — and the server resolves it; with one the message is a
  * REQUEST, without one it is chat and reaches nobody.
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
- * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
- * `/tasks` routes keep the storage name.
- *
  * ⚠ No `dopl_channel_admin` twin — no destructive ops over MCP (archive/delete
  * are human decisions in the web UI).
  */
@@ -136,7 +132,7 @@ directory) {
             //
             // ⚠ THREE LANES, ONE OP, AND THE `kind` IS FIXED AT THIS SEAM rather
             // than left to the caller's spelling. `milestone` stores
-            // `task_progress`; `decision` MUST stay `kind='message'` or
+            // `thread_progress`; `decision` MUST stay `kind='message'` or
             // `dopl-desktop-app/main/targeting.js › classify` drops the card and the
             // human it asks is never notified. Both delegate to `opPost` rather than
             // growing a second delivery path.
@@ -183,7 +179,7 @@ directory) {
                     if (oversize)
                         return oversize;
                     return (0, channel_ops_write_1.opPost)(client, channel, body, {
-                        kind: "task_progress",
+                        kind: "thread_progress",
                         thread: args.thread,
                         summary: args.summary,
                         runtime,
@@ -312,8 +308,8 @@ directory) {
                     !(0, identity_1.isDesktopRun)(caller));
                 }
                 return (0, channel_ops_read_1.opRead)(client, args.channel, args.since, args.limit, selfUserId, 
-                // ⚠ Any non-empty string is legal — legacy `task-<channelId>-<seq>`
-                // ids are real `metadata.taskId` values and must stay filterable.
+                // ⚠ Any non-empty string is legal — legacy `thread-<channelId>-<seq>`
+                // ids are real `metadata.threadId` values and must stay filterable.
                 args.thread, args.response_format, (0, channel_poll_detector_1.pollSubject)(caller), 
                 // ⚠ See the account branch above for why the uncertain case marks.
                 !(0, identity_1.isDesktopRun)(caller));

@@ -54,7 +54,7 @@ const MESSAGES_KEY = apiQueryKey(`${LIST}/${CHANNEL}/messages`, {
 const MEMBERS_KEY = apiQueryKey(`${LIST}/${CHANNEL}/members`, {
   workspaceId: WORKSPACE,
 });
-const THREADS_KEY = apiQueryKey(`${LIST}/${CHANNEL}/tasks`, {
+const THREADS_KEY = apiQueryKey(`${LIST}/${CHANNEL}/threads`, {
   workspaceId: WORKSPACE,
 });
 
@@ -153,7 +153,7 @@ function harness(rows: Channel[]): Harness {
       },
       evictChannel: (id) => {
         evicted.push(id);
-        for (const tail of ["messages", "members", "tasks"]) {
+        for (const tail of ["messages", "members", "threads"]) {
           client.removeQueries({
             queryKey: apiPathKey(`${LIST}/${id}/${tail}`),
           });
@@ -275,7 +275,7 @@ describe("delete — one verb, two mechanics (C-16 / F-173)", () => {
   function seedChannelCaches(h: Harness) {
     h.client.setQueryData(MESSAGES_KEY, { messages: [{ id: "m-1" }] });
     h.client.setQueryData(MEMBERS_KEY, { members: [] });
-    h.client.setQueryData(THREADS_KEY, { tasks: [] });
+    h.client.setQueryData(THREADS_KEY, { threads: [] });
   }
 
   it("HARD-deletes a non-DM: the row goes at once, the per-channel caches are evicted ON SUCCESS", async () => {

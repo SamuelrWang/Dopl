@@ -23,7 +23,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 // ⚠ The room's session projection, empty: RR3 reads it for every unaddressed
 // human message, and a file that leaves it unstubbed reaches the real admin
 // client and TIMES OUT rather than failing. This suite measures the metadata
@@ -32,7 +32,7 @@ vi.mock("./repository-sessions");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import * as repoSessions from "./repository-sessions";
 import { postMessage } from "./service-writes";
 import { CITES_METADATA_KEY, CITE_MODE_METADATA_KEY } from "../lib/cites";
@@ -60,7 +60,7 @@ const ctx: ChannelContext = {
  * and both outcomes need a fixture.
  */
 const ROWS = [
-  { id: "m-12", seq: 12, metadata: { taskId: "task-chan-1-7" } },
+  { id: "m-12", seq: 12, metadata: { threadId: "thread-chan-1-7" } },
   { id: "m-20", seq: 20, metadata: {} },
 ];
 
@@ -151,7 +151,7 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
     rows: [],
     truncated: false,
   });
@@ -177,7 +177,7 @@ describe("postMessage — a resolved citation is stored as a MESSAGE ID", () => 
       cites: [{ seq: 12 }],
     });
     expect(capturedMetadata()[CITES_METADATA_KEY]).toEqual([
-      { messageId: "m-12", seq: 12, no: null, thread: "task-chan-1-7" },
+      { messageId: "m-12", seq: 12, no: null, thread: "thread-chan-1-7" },
     ]);
   });
 
@@ -229,7 +229,7 @@ describe("postMessage — a resolved citation is stored as a MESSAGE ID", () => 
   it("a matching thread claim resolves", async () => {
     await postMessage(ctx, "room", {
       body: "in that exchange",
-      cites: [{ seq: 12, thread: "task-chan-1-7" }],
+      cites: [{ seq: 12, thread: "thread-chan-1-7" }],
     });
     expect(capturedMetadata()[CITES_METADATA_KEY]).toHaveLength(1);
   });
@@ -273,9 +273,9 @@ describe("a citation that cannot be resolved REFUSES THE SEND", () => {
     await expect(
       postMessage(ctx, "room", {
         body: "in the other exchange",
-        cites: [{ seq: 12, thread: "task-chan-1-99" }],
+        cites: [{ seq: 12, thread: "thread-chan-1-99" }],
       })
-    ).rejects.toThrow(/seq=12 in thread task-chan-1-99/);
+    ).rejects.toThrow(/seq=12 in thread thread-chan-1-99/);
     expect(inserted()).toBe(false);
   });
 
@@ -283,9 +283,9 @@ describe("a citation that cannot be resolved REFUSES THE SEND", () => {
     await expect(
       postMessage(ctx, "room", {
         body: "x",
-        cites: [{ seq: 20, thread: "task-chan-1-7" }],
+        cites: [{ seq: 20, thread: "thread-chan-1-7" }],
       })
-    ).rejects.toThrow(/seq=20 in thread task-chan-1-7/);
+    ).rejects.toThrow(/seq=20 in thread thread-chan-1-7/);
   });
 
   it("🔒 refuses `no` as UNAVAILABLE, never as a silent fallback to `seq`", async () => {
@@ -336,7 +336,7 @@ describe("the caller cannot supply either citation key", () => {
       cites: [{ seq: 12 }],
     });
     expect(capturedMetadata()[CITES_METADATA_KEY]).toEqual([
-      { messageId: "m-12", seq: 12, no: null, thread: "task-chan-1-7" },
+      { messageId: "m-12", seq: 12, no: null, thread: "thread-chan-1-7" },
     ]);
   });
 

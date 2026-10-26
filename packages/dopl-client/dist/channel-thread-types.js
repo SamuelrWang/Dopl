@@ -33,7 +33,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 /**
  * ⚠ TWO RESULT SHAPES ENDED HERE with thread closing (wiring plan Phase 4,
  * 2026-08-18): `ChannelThreadClosed` (thread + `echoSeq`, the seq of the
- * `task_finished` / `task_failed` marker a close posted) and
+ * `thread_finished` / `thread_failed` marker a close posted) and
  * `ChannelThreadCloseProposed` (thread + `markerSeq` + the proposed outcome).
  *
  * The rule they both carried is live on {@link ChannelThreadCreated.openingSeq}

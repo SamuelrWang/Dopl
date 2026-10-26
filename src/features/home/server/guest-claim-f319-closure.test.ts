@@ -21,8 +21,8 @@
 import { describe, it, expect } from "vitest";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { canManageChannel } from "@/features/channels/server/service-shared";
-import { assertMayDeleteThread } from "@/features/channels/server/service-tasks-delete";
-import { TaskForbiddenError } from "@/features/channels/server/errors";
+import { assertMayDeleteThread } from "@/features/channels/server/service-threads-delete";
+import { ThreadForbiddenError } from "@/features/channels/server/errors";
 import type { ChannelContext } from "@/features/channels/server/service-shared";
 import type { ChannelMemberRow } from "@/features/channels/server/dto";
 import { HomeLinkMintSchema } from "../schema";
@@ -95,7 +95,7 @@ describe("F-319 — a guest cannot delete another member's thread", () => {
         { created_by: OTHER_USER },
         guestChannelMembership()
       )
-    ).toThrow(TaskForbiddenError);
+    ).toThrow(ThreadForbiddenError);
   });
 
   it("ALLOWS the guest to withdraw their OWN thread", () => {

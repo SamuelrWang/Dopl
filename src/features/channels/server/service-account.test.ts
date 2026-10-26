@@ -72,7 +72,7 @@ function sessionRow(channelId: string): SessionStateRow {
     workspace_id: WS_A,
     user_id: ME,
     session_key: "k",
-    task_id: null,
+    thread_id: null,
     name: "Worker",
     state: "working",
     channel_name: null,

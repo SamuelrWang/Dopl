@@ -481,7 +481,7 @@ describe("7. threads exist only once their opener has landed", () => {
 
   it("tags the briefs into that thread, so the thread view has a body", () => {
     const inThread = messagesAt(LAST_STEP).filter(
-      (m) => m.metadata?.taskId === OPEN_THREAD.id
+      (m) => m.metadata?.threadId === OPEN_THREAD.id
     );
     // Three launches, three briefs, the opener and the coder's reply.
     expect(inThread.length).toBeGreaterThanOrEqual(7);
@@ -492,7 +492,7 @@ describe("7. threads exist only once their opener has landed", () => {
     // it — which would have dropped one silently. Every briefing line carries an agent
     // tag, so the thread's posts are exactly where that would have shown.
     const brief = post(BRIEF_POST);
-    expect(brief.metadata?.taskId).toBe(OPEN_THREAD.id);
+    expect(brief.metadata?.threadId).toBe(OPEN_THREAD.id);
     expect(brief.body.startsWith("@")).toBe(true);
   });
 });

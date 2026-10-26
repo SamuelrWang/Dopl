@@ -6,14 +6,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
 vi.mock("./repository-launch", () => fx.mocks.launchRepo);
 vi.mock("./repository-collab", () => fx.mocks.collab);
-vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-threads", () => fx.mocks.threads);
 vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
 vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
 vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);
 
 import * as launchRepo from "./repository-launch";
 import * as collab from "./repository-collab";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { loadVisibleChannel } from "./service-shared";
 import {
   LaunchDirectiveNotClaimableError,
@@ -29,7 +29,7 @@ import { LAUNCH_DIRECTIVE_TTL_MS } from "../constants";
 import { CHANNEL_ROW, DIR, ME, WS, ctx, row, wireLaunchDefaults } from "./service-launch-fixtures";
 
 const OTHER = "99999999-9999-9999-9999-999999999999";
-const TASK = "44444444-4444-4444-4444-444444444444";
+const THREAD = "44444444-4444-4444-4444-444444444444";
 
 beforeEach(wireLaunchDefaults);
 
@@ -60,17 +60,17 @@ describe("create — the three gates, in order", () => {
 
   it("REFUSES a thread that is not in that channel — never silently drops it", async () => {
     // A dropped thread id would start the agent in the wrong place and report success.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(null);
     await expect(
-      createLaunchDirective(ctx, { channel: "general", threadId: TASK })
+      createLaunchDirective(ctx, { channel: "general", threadId: THREAD })
     ).rejects.toBeInstanceOf(LaunchDirectiveNotFoundError);
     expect(launchRepo.insertLaunchDirective).not.toHaveBeenCalled();
   });
 
   it("carries a valid thread id through", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue({ id: TASK } as never);
-    await createLaunchDirective(ctx, { channel: "general", threadId: TASK });
-    expect(vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0][1].task_id).toBe(TASK);
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue({ id: THREAD } as never);
+    await createLaunchDirective(ctx, { channel: "general", threadId: THREAD });
+    expect(vi.mocked(launchRepo.insertLaunchDirective).mock.calls[0][1].thread_id).toBe(THREAD);
   });
 
   it("sets expires_at from LAUNCH_DIRECTIVE_TTL_MS", async () => {

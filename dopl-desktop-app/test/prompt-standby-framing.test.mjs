@@ -21,15 +21,15 @@ const { VOCABULARY, MAIN_ROOM_VOCABULARY } = require(join(MAIN, "prompt-framing-
 
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
-const TASK = "cccccccc-3333-4ddd-8eee-ffffffffffff";
+const THREAD = "cccccccc-3333-4ddd-8eee-ffffffffffff";
 
 // The shell `sessions:launch` registers (`session-launch-op.js`), fresh, so its first turn is framed.
 const firstTurn = (channelLevel, toolSet) => {
-  const taskId = channelLevel ? "" : TASK;
+  const threadId = channelLevel ? "" : THREAD;
   return seed.withSeed({
     side: "requester", nonce: "n1", freshFraming: true, doplToolSet: toolSet,
     launchGoal: defaultGoal(channelLevel, channelLevel ? "" : "Q3 report"),
-    context: { channelName: "AI Glasses MCP", taskTitle: channelLevel ? null : "Q3 report", channelId: CH, workspaceId: WS, taskId, scope: channelLevel ? "channel" : "thread" },
+    context: { channelName: "AI Glasses MCP", threadTitle: channelLevel ? null : "Q3 report", channelId: CH, workspaceId: WS, threadId, scope: channelLevel ? "channel" : "thread" },
   }, "");
 };
 
@@ -64,7 +64,7 @@ test("REQUESTER: a thread-driving launch keeps its opening, delivery and milesto
   assert.match(turn, /^You are a Dopl agent DRIVING a thread you opened in the shared channel "AI Glasses MCP": "Q3 report"\./);
   assert.match(turn, /Respond and loop until the goal is met, then STOP and report to your operator\./);
   assert.ok(turn.includes("Deliver every message to the peer by posting into this channel with the mcp__dopl__dopl_send_message MCP tool."));
-  assert.ok(turn.includes(`Make the call exactly like this: channel "${CH}", container "${WS}", thread "${TASK}".`));
+  assert.ok(turn.includes(`Make the call exactly like this: channel "${CH}", container "${WS}", thread "${THREAD}".`));
   assert.match(turn, /That is how the peer's agent receives you\./);
   assert.match(turn, /MILESTONES \(optional/);
   assert.match(turn, /as the thread goal DATA/);

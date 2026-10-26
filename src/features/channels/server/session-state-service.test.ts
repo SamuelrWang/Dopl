@@ -16,7 +16,7 @@ import type { ChannelContext } from "./service-shared";
 const WS = "ws-1";
 const USER = "11111111-e29b-41d4-a716-446655440000";
 const CHAN = "chan-1";
-const TASK = "44444444-e29b-41d4-a716-446655440000";
+const THREAD = "44444444-e29b-41d4-a716-446655440000";
 
 const ctx: ChannelContext = {
   workspaceId: WS,
@@ -32,8 +32,8 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
     channel_id: CHAN,
     workspace_id: WS,
     user_id: USER,
-    session_key: `${CHAN}:${TASK}`,
-    task_id: TASK,
+    session_key: `${CHAN}:${THREAD}`,
+    thread_id: THREAD,
     name: "flint",
     state: "working",
     channel_name: "General",
@@ -68,7 +68,7 @@ function row(over: Partial<SessionStateRow> = {}): SessionStateRow {
 function session(over: Record<string, unknown> = {}) {
   return {
     channelId: CHAN,
-    threadId: TASK,
+    threadId: THREAD,
     name: "flint",
     state: "working",
     detail: null,
@@ -105,7 +105,7 @@ describe("listSessionStates", () => {
   it("maps rows into the session-state shape the MCP op returns", async () => {
     vi.mocked(sessionRepo.listSessionStates).mockResolvedValue([
       row(),
-      row({ name: "onyx", state: "idle", task_id: null, thread_title: null }),
+      row({ name: "onyx", state: "idle", thread_id: null, thread_title: null }),
       row({ name: "quartz", state: "ended" }),
     ]);
 
@@ -217,9 +217,9 @@ describe("reportSessionStates", () => {
   };
 
   const entry = {
-    sessionKey: `${CHAN}:${TASK}`,
+    sessionKey: `${CHAN}:${THREAD}`,
     channelId: CHAN,
-    threadId: TASK,
+    threadId: THREAD,
     name: "flint" as const,
     state: "working" as const,
     channelName: "General",
@@ -241,9 +241,9 @@ describe("reportSessionStates", () => {
     ] as never);
     expect(sessionRepo.replaceSessionStates).toHaveBeenCalledWith(USER, WS, [
       {
-        session_key: `${CHAN}:${TASK}`,
+        session_key: `${CHAN}:${THREAD}`,
         channel_id: CHAN,
-        task_id: TASK,
+        thread_id: THREAD,
         name: "flint",
         state: "working",
         channel_name: "General",
@@ -261,7 +261,7 @@ describe("reportSessionStates", () => {
     expect(rows[0]).toEqual({
       session_key: `${CHAN}:`,
       channel_id: CHAN,
-      task_id: null,
+      thread_id: null,
       name: "onyx",
       state: "idle",
       channel_name: null,

@@ -102,7 +102,7 @@ export async function readMessages(
   const params = new URLSearchParams();
   if (opts.since !== undefined) params.set("since", String(opts.since));
   if (opts.limit !== undefined) params.set("limit", String(opts.limit));
-  // Server filters on `metadata.taskId`. Omitted entirely when unset, so an
+  // Server filters on `metadata.threadId`. Omitted entirely when unset, so an
   // older deployment sees the read it always saw.
   if (opts.thread !== undefined) params.set("thread", opts.thread);
   const qs = params.toString();
@@ -330,15 +330,10 @@ export async function showDisplay(t: DoplTransport, input: ShowDisplayInput): Pr
 const SHOW_DISPLAY_TIMEOUT_MS = 215_000;
 
 // ─── Threads ────────────────────────────────────────────────────────
-//
-// ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Route segment
-// (`/tasks`) and envelope keys (`tasks` / `task`) are STORAGE names and stay —
-// renaming means a migration plus every read and write path. Everything above
-// this line speaks `thread`.
 
 /**
  * A channel's threads, MOST RECENTLY ACTIVE FIRST — the server's order, which
- * is the only order (`repository-tasks.ts › listTasksByChannel`). ⚠ Do not
+ * is the only order (`repository-threads.ts › listThreadsByChannel`). ⚠ Do not
  * re-sort: the server's LIMIT clipped against that order, so a re-sorted list is
  * the wrong rows in a plausible order.
  *
@@ -350,11 +345,11 @@ export async function listChannelThreads(
   t: DoplTransport,
   channelId: string
 ): Promise<ChannelThreadPage> {
-  const data = await t.request<{ tasks: ChannelThread[]; truncated?: boolean }>(
-    `/api/channels/${enc(channelId)}/tasks`,
+  const data = await t.request<{ threads: ChannelThread[]; truncated?: boolean }>(
+    `/api/channels/${enc(channelId)}/threads`,
     { toolName: "channel_list_threads" }
   );
-  return { threads: data.tasks, truncated: data.truncated === true };
+  return { threads: data.threads, truncated: data.truncated === true };
 }
 
 /**
@@ -395,11 +390,11 @@ export async function getChannelThread(
   channelId: string,
   threadId: string
 ): Promise<ChannelThread> {
-  const data = await t.request<{ task: ChannelThread }>(
-    `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
+  const data = await t.request<{ thread: ChannelThread }>(
+    `/api/channels/${enc(channelId)}/threads/${enc(threadId)}`,
     { toolName: "channel_get_thread" }
   );
-  return data.task;
+  return data.thread;
 }
 
 export async function createChannelThread(
@@ -407,8 +402,8 @@ export async function createChannelThread(
   channelId: string,
   input: ChannelThreadCreateInput
 ): Promise<ChannelThreadCreated> {
-  const data = await t.request<{ task: ChannelThread; openingSeq?: number | null }>(
-    `/api/channels/${enc(channelId)}/tasks`,
+  const data = await t.request<{ thread: ChannelThread; openingSeq?: number | null }>(
+    `/api/channels/${enc(channelId)}/threads`,
     {
       method: "POST",
       body: input,
@@ -419,7 +414,7 @@ export async function createChannelThread(
   // reads as null here, so the caller looks the cursor up rather than arming
   // `await` on `undefined`.
   return {
-    thread: data.task,
+    thread: data.thread,
     openingSeq: typeof data.openingSeq === "number" ? data.openingSeq : null,
   };
 }
@@ -438,15 +433,15 @@ export async function setChannelThreadMode(
   threadId: string,
   input: { mode: ThreadMode }
 ): Promise<ChannelThread> {
-  const data = await t.request<{ task: ChannelThread }>(
-    `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
+  const data = await t.request<{ thread: ChannelThread }>(
+    `/api/channels/${enc(channelId)}/threads/${enc(threadId)}`,
     {
       method: "PATCH",
       body: { op: "set_mode", mode: input.mode },
       toolName: "channel_set_thread_mode",
     }
   );
-  return data.task;
+  return data.thread;
 }
 
 // ─── Launch directives + the private direct lane ────────────────────

@@ -187,7 +187,7 @@ describe("the payload is the panel's, field for field", () => {
     expect(popup.body).toBe("start here");
     expect(popup.toUserIds).toEqual([PEER, THIRD]);
     // ⚠ THE KEY SET IS PART OF THE CLAIM — a draft carrying an extra field is a payload the
-    // server's schema has never seen, and `TaskFanOutSchema` is not a `.passthrough()`.
+    // server's schema has never seen, and `ThreadFanOutSchema` is not a `.passthrough()`.
     expect(Object.keys(popup).sort()).toEqual(
       ["body", "channelId", "clientMsgId", "title", "toUserIds"]
     );

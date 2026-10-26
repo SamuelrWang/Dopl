@@ -1,5 +1,5 @@
 // Tests for the session-reopen helpers (main/session-reopen.js) — the MAIN-window bridge onto
-// ONE OF MY OWN AGENTS: open a VIEW on it (`reopenByTask`) and talk to it (`messageByTask`).
+// ONE OF MY OWN AGENTS: open a VIEW on it (`reopenByThread`) and talk to it (`messageByThread`).
 // That the bridge starts NOTHING is pinned separately in test/open-session-no-query.test.mjs.
 //
 // ⚠ REWRITTEN DOWN TO WHAT SURVIVES (2026-08-20, F-228), NOT REMOVED — INVARIANTS §14. The v1
@@ -30,13 +30,13 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-reopen.js"), "utf8");
 // The REAL operator-turn delimiter, injected like `store` — the 1:1 lane's cases are about
 // the delimiting a turn actually gets, and a stub would let the two drift apart.
 const framing = createRequire(import.meta.url)(join(HERE, "..", "main", "session-seed.js"));
-// ⚠ THE REAL `session-private.js` (2026-08-22), not a stub: `messageByTask` OPENS the
+// ⚠ THE REAL `session-private.js` (2026-08-22), not a stub: `messageByThread` OPENS the
 // private-turn window before dispatching, and the DEPTH it opens with depends on whether a turn
 // is already in flight. A fake would let this suite go green over a window covering the wrong
 // turn — the one bug the depth exists to prevent.
 const privateTurn = createRequire(import.meta.url)(join(HERE, "..", "main", "session-private.js"));
 const directedTurn = createRequire(import.meta.url)(join(HERE, "..", "main", "session-directed.js"));
-// ⚠ THE REAL AXIS-B FLOOR, injected for the same reason (2026-08-20, F-236). `setModeByTask`
+// ⚠ THE REAL AXIS-B FLOOR, injected for the same reason (2026-08-20, F-236). `setModeByThread`
 // clamps a windowless session's message axis, and a stub would let this suite pass over a
 // clamp that does not match the one lane the launch path uses. Its own rules live in
 // `test/session-mode-floor.test.mjs`; here it is a real dependency, not a subject.
@@ -56,14 +56,14 @@ for (const banned of ["require(", "electron", "process.", "child_process", "@ant
 // COMPATIBILITY half of the resolution rule — an unnamed op takes the oldest live agent on the
 // thread, exactly what a caller got when a thread could hold only one.
 const AGENT = "a1b2c3d4";
-const KEY = `chan-1:task-9:${AGENT}`;
+const KEY = `chan-1:thread-9:${AGENT}`;
 
 /**
  * A live session object as the engine's registry really holds one SINCE THE RETIREMENT:
  * registered, unsettled, and `win` NEVER ASSIGNED (`session-windowless.js › attachSurface`).
  *
  * ⚠ `win` USED TO BE THE POINT OF THIS FIXTURE and is now absent by default. The old version
- * built a fake BrowserWindow and counted `show()` / `focus()`, because `reopenByTask`'s first
+ * built a fake BrowserWindow and counted `show()` / `focus()`, because `reopenByThread`'s first
  * branch revealed a live session's own window. There is no such branch and no such window; a
  * case that still wants one passes it explicitly, and exactly one below does — deliberately.
  */
@@ -82,7 +82,7 @@ function fakeSession(over = {}) {
  *
  * The F-228 sweep rebuilt `session-reopen.js › bind`'s `deps` literal and dropped
  * `openAgentWindow` from it, so the handle `session-engine.js` passes was discarded and
- * `reopenByTask` hit its own fail-closed guard on EVERY live session — the Agents tab's "Open
+ * `reopenByThread` hit its own fail-closed guard on EVERY live session — the Agents tab's "Open
  * window" answering `{ ok: false }` in production, indistinguishable from a session that is
  * legitimately unopenable. This file caught it, tested the branch behind `bind` through a shim,
  * and carried a self-expiring HANDOFF case that failed the moment `bind` was fixed.
@@ -97,7 +97,7 @@ function harness(over = {}) {
   const calls = { refreshTray: 0, dispatch: [], opened: [] };
   const store = {
     sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
-    slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+    slotKey: (x) => `${x.channelId || ""}:${x.threadId || ""}:${x.agentId || ""}`,
     threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
   };
   const api = new Function(
@@ -105,12 +105,12 @@ function harness(over = {}) {
     "framing",
     "floorWindowlessMessage",
     "privateTurn",
-    // ⚠ `directedTurn` JOINED ON 2026-08-31 (the private direct lane): `messageByTask`
+    // ⚠ `directedTurn` JOINED ON 2026-08-31 (the private direct lane): `messageByThread`
     // now reads a DIRECTION off its argument and, when there is one, frames it as DATA
     // and arms the reply capture. The REAL module — it is pure, and the branch it
     // drives is the behaviour.
     "directedTurn",
-    `${BLOCK}\n return { bind, resolveSession, listLiveSessions, reopenByTask, controlByTask, setModeByTask, messageByTask,
+    `${BLOCK}\n return { bind, resolveSession, listLiveSessions, reopenByThread, controlByThread, setModeByThread, messageByThread,
        listOrphanRisk, endLiveSessions };`
   )(store, framing, floorWindowlessMessage, privateTurn, directedTurn);
   const sessions = new Map();
@@ -128,26 +128,26 @@ function harness(over = {}) {
   return { ...api, sessions, calls };
 }
 
-const task = { channelId: "chan-1", taskId: "task-9" };
+const thread = { channelId: "chan-1", threadId: "thread-9" };
 
-// ⚠ "reopenByTask shows the window of a LIVE (parked) session (no fallback)" STOOD HERE.
+// ⚠ "reopenByThread shows the window of a LIVE (parked) session (no fallback)" STOOD HERE.
 // It pinned that a live session's OWN BrowserWindow was `show()`n and `focus()`ed and that
 // `s.windowHidden` was cleared, in preference to rebuilding anything. Gone with the window: a
-// live session has no `win`, `windowHidden` is never set, and `reopenByTask`'s live branch now
+// live session has no `win`, `windowHidden` is never set, and `reopenByThread`'s live branch now
 // opens `main/agent-window.js` instead. Its replacement is the OPEN section below.
 
 // ⚠ FOUR CASES OF THE v1.7.4 P2 `recreateParkedShell` FALLBACK STOOD HERE:
 //   • "P2 fallback: no live session delegates to recreateParkedShell" — and pinned the Q6b CLICK
-//     marker `{ channelId, taskId, fromChannel: true }`, the one caller allowed to build a shell
+//     marker `{ channelId, threadId, fromChannel: true }`, the one caller allowed to build a shell
 //     for a thread with no local durable record;
-//   • "P2 fallback: recreateParkedShell can return {ok:false} for a truly-closed task";
+//   • "P2 fallback: recreateParkedShell can return {ok:false} for a truly-closed thread";
 //   • "no live session AND no fallback bound -> {ok:false} (mid-wave safety)";
 //   • "a settled or destroyed session falls through to the fallback (not shown)".
 // `recreateParkedShell` is DELETED from `main/session-park.js` with the rest of the v1 shell
 // machinery, so there is no fallback and nothing to delegate to. ⚠ THE LIVE RESIDUE OF ALL FOUR
 // — that a key resolving to nothing, or to something settled, REFUSES rather than inventing a
 // session — is not lost: it is the two REFUSE cases below, and it is the same
-// `{ ok: false, reason: 'no-session' }` shape `controlByTask` and `messageByTask` return.
+// `{ ok: false, reason: 'no-session' }` shape `controlByThread` and `messageByThread` return.
 // ⚠ It is worth recording WHY the fallback died rather than only that it did. Its first line
 // answered `{ ok: true }` for a live session it had not rebuilt, so the button reported success
 // having opened nothing — the swallow F-212 was filed about.
@@ -186,7 +186,7 @@ const task = { channelId: "chan-1", taskId: "task-9" };
 // can DO something with it. Reporting an internal reason beats silence and is not a substitute
 // for the feature.
 
-// THE PRIVATE DIRECT LANE, THROUGH THE REAL `messageByTask` (Samuel's ruling, 2026-08-31).
+// THE PRIVATE DIRECT LANE, THROUGH THE REAL `messageByThread` (Samuel's ruling, 2026-08-31).
 //
 // ⚠ **ITS OWN FILE, AND THE SEAM IS A REASON TO CHANGE RATHER THAN THE LINE COUNT THAT FORCED
 // THE QUESTION** (§1). `session-reopen.test.mjs` is about the RENDERER'S OPS on a live session —
@@ -222,8 +222,8 @@ test("DIRECTION: 🔒 it is FENCED AS DATA and carries NO operator authority", (
   // caller that reached for the wrong one would leave both functions perfectly correct.
   const h = harness();
   h.sessions.set(KEY, fakeSession({ nonce: "abc123" }));
-  h.messageByTask({
-    ...task, agentId: AGENT, text: "audit the deploy",
+  h.messageByThread({
+    ...thread, agentId: AGENT, text: "audit the deploy",
     directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" },
   });
   const [, event] = h.calls.dispatch[0];
@@ -239,7 +239,7 @@ test("DIRECTION: the OPERATOR's own message is untouched by the lane", () => {
   // ⚠ The other half of the same pin: every pre-existing caller keeps the operator framing.
   const h = harness();
   h.sessions.set(KEY, fakeSession({ nonce: "abc123" }));
-  h.messageByTask({ ...task, text: "hello" });
+  h.messageByThread({ ...thread, text: "hello" });
   const [, event] = h.calls.dispatch[0];
   assert.match(event.text, /YOUR OPERATOR is speaking to you directly/);
   assert.equal(/ANOTHER OF YOUR OPERATOR'S AGENTS/.test(event.text), false);
@@ -249,7 +249,7 @@ test("DIRECTION: the OPERATOR's own message is untouched by the lane", () => {
 test("DIRECTION: it is TAGGED for the narration lane, so the operator can tell the two apart", () => {
   const h = harness();
   h.sessions.set(KEY, fakeSession({ nonce: "abc123" }));
-  h.messageByTask({ ...task, agentId: AGENT, text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" } });
+  h.messageByThread({ ...thread, agentId: AGENT, text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" } });
   const [, event] = h.calls.dispatch[0];
   assert.equal(event.directed, true);
   assert.equal(event.private, true, "it is still a PRIVATE turn — the gate is unchanged");
@@ -259,7 +259,7 @@ test("DIRECTION: it opens the SAME private window, so an accidental public reply
   const h = harness();
   const s = fakeSession({ nonce: "abc123" });
   h.sessions.set(KEY, s);
-  h.messageByTask({ ...task, agentId: AGENT, text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" } });
+  h.messageByThread({ ...thread, agentId: AGENT, text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" } });
   assert.ok(privateTurn.isPrivateTurn(s), "the outbound widening is withdrawn for this turn");
 });
 
@@ -272,8 +272,8 @@ test("DIRECTION: 🔒 one from a DIFFERENT operator cannot reach this session", 
   // machine. Same guard, same reason, as `session-state-push.js › trackOrigin`.
   const h = harness();
   h.sessions.set(KEY, fakeSession({ nonce: "abc123", operatorUserId: "op-A" }));
-  const out = h.messageByTask({
-    ...task, agentId: AGENT, text: "x",
+  const out = h.messageByThread({
+    ...thread, agentId: AGENT, text: "x",
     directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-B" },
   });
   assert.deepEqual(out, { ok: false, reason: "no-session" });
@@ -283,8 +283,8 @@ test("DIRECTION: 🔒 one from a DIFFERENT operator cannot reach this session", 
 test("DIRECTION: 🔒 an UNSTAMPED session refuses — the fence fails closed", () => {
   const h = harness();
   h.sessions.set(KEY, fakeSession({ nonce: "abc123", operatorUserId: undefined }));
-  const out = h.messageByTask({
-    ...task, agentId: AGENT, text: "x",
+  const out = h.messageByThread({
+    ...thread, agentId: AGENT, text: "x",
     directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" },
   });
   assert.deepEqual(out, { ok: false, reason: "no-session" });
@@ -295,7 +295,7 @@ test("DIRECTION: the OPERATOR's own message is unaffected by the stamp", () => {
   // their own keyboard, in a window main created, and has never been owner-checked here.
   const h = harness();
   h.sessions.set(KEY, fakeSession({ nonce: "abc123", operatorUserId: "op-A" }));
-  assert.deepEqual(h.messageByTask({ ...task, text: "hello" }), { ok: true });
+  assert.deepEqual(h.messageByThread({ ...thread, text: "hello" }), { ok: true });
 });
 
 test("DIRECTION: 🔒 one that NAMES NO AGENT is refused, and dispatches nothing", () => {
@@ -303,8 +303,8 @@ test("DIRECTION: 🔒 one that NAMES NO AGENT is refused, and dispatches nothing
   // an agent the orchestrator did not address, with nothing reporting the swap.
   const h = harness();
   h.sessions.set(KEY, fakeSession({ nonce: "abc123" }));
-  const out = h.messageByTask({
-    ...task, agentId: "", text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" },
+  const out = h.messageByThread({
+    ...thread, agentId: "", text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" },
   });
   assert.deepEqual(out, { ok: false, reason: "no-session" });
   assert.equal(h.calls.dispatch.length, 0);
@@ -316,7 +316,7 @@ test("DIRECTION: the capture remembers the FRAMED prompt it pushed (CXP-3B)", ()
   const h = harness();
   const s = fakeSession({ nonce: "abc123" });
   h.sessions.set(KEY, s);
-  h.messageByTask({ ...task, agentId: AGENT, text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" } });
+  h.messageByThread({ ...thread, agentId: AGENT, text: "x", directed: { id: "d-1", workspaceId: "w", operatorUserId: "op-1" } });
   const [, event] = h.calls.dispatch[0];
   assert.equal(s.directed.length, 1);
   assert.equal(s.directed[0].prompt, event.text);

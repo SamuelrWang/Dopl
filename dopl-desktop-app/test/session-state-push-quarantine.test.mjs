@@ -28,9 +28,9 @@ const poisonServer = (body) =>
   keysIn(body).includes(BAD) ? { ok: false, status: 400 } : { ok: true, status: 200 };
 
 const three = () => [
-  entry({ agentId: "aaaaaaaa", taskId: "11111111-1111-4111-8111-111111111111" }),
-  entry({ agentId: BAD, name: BAD, taskId: "22222222-2222-4222-8222-222222222222" }),
-  entry({ agentId: "cccccccc", taskId: "33333333-3333-4333-8333-333333333333" }),
+  entry({ agentId: "aaaaaaaa", threadId: "11111111-1111-4111-8111-111111111111" }),
+  entry({ agentId: BAD, name: BAD, threadId: "22222222-2222-4222-8222-222222222222" }),
+  entry({ agentId: "cccccccc", threadId: "33333333-3333-4333-8333-333333333333" }),
 ];
 
 // ── 1. THE SWEEP ────────────────────────────────────────────────────────────────────────────

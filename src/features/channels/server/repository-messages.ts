@@ -47,10 +47,10 @@ interface MessageReadOpts {
    */
   excludeAuthor?: string;
   /**
-   * Keep only rows tagged for this thread (`metadata->>'taskId'`). ⚠ A FILTER,
+   * Keep only rows tagged for this thread (`metadata->>'threadId'`). ⚠ A FILTER,
    * not a lookup: an unmatched id yields `[]`, never an error, and nothing is
-   * validated against `channel_tasks` — legacy `task-<channelId>-<seq>` ids are
-   * real `metadata.taskId` values too.
+   * validated against `channel_threads` — legacy `thread-<channelId>-<seq>` ids are
+   * real `metadata.threadId` values too.
    */
   threadId?: string;
 }
@@ -117,10 +117,10 @@ export async function listMessages(
   if (opts.excludeAuthor !== undefined) {
     query = query.or(excludeAuthorFilter(opts.excludeAuthor));
   }
-  // ⚠ `metadata->>taskId` compares as TEXT, so the stored value matches
+  // ⚠ `metadata->>threadId` compares as TEXT, so the stored value matches
   // verbatim — uuid or legacy string alike.
   if (opts.threadId !== undefined) {
-    query = query.eq("metadata->>taskId", opts.threadId);
+    query = query.eq("metadata->>threadId", opts.threadId);
   }
   // FORWARD: oldest-first from the cursor. BACKWARD / NEWEST: the newest
   // qualifying `limit`, flipped to ascending for display / cursor semantics.
@@ -169,9 +169,8 @@ export async function hasMessagesAfter(
 
 /**
  * ⚠ `latestThreadActivitySeq` USED TO LIVE HERE — the newest `seq` in a thread
- * that was not itself a close proposal. Its ONE caller was
- * service-tasks-propose.ts's proposeTaskClose, which keyed a re-proposal on
- * it; both are DELETED with thread closing (wiring plan Phase 4, 2026-08-18).
+ * that was not itself a close proposal. Its ONE caller was the
+ * close-proposal op, which keyed a re-proposal on it; both are DELETED with thread closing (wiring plan Phase 4, 2026-08-18).
  *
  * ⚠ IT WAS THE PRODUCTION ORPHAN THIS PHASE ALMOST LEFT BEHIND, and the reason
  * is worth knowing: `npx knip` did NOT flag it, because its `.test.ts` still
@@ -189,9 +188,9 @@ export async function hasMessagesAfter(
 
 // ⚠ `findMessageByClientId` — the CHANNEL-SCOPED read of (channel,
 // client_msg_id) — STOOD HERE AND IS DELETED (2026-09-02). Its one caller was
-// service-tasks.ts's storedOpeningSeq, the arm a create took when it converged
+// service-threads.ts's storedOpeningSeq, the arm a create took when it converged
 // on SOMEBODY ELSE's thread. Author-scoping the thread probe
-// (`repository-tasks.ts › findOwnTaskByClientId`) removed that arm: a colliding
+// (`repository-threads.ts › findOwnThreadByClientId`) removed that arm: a colliding
 // key from another member yields a separate thread instead of converging, so
 // nothing reads across authors any more. Deleted with its caller rather than
 // left exported — an orphan repository helper is invisible to the orphan check
@@ -254,10 +253,10 @@ export async function findOwnMessageByClientId(
 
 /**
  * One message by per-channel `seq`. Backs the LEGACY thread pair check: a
- * `task-<channelId>-<seq>` id names the opening request at that seq, and its
+ * `thread-<channelId>-<seq>` id names the opening request at that seq, and its
  * author + `metadata.to_user_id` are the exchange's two participants — ⚠ the
  * ONLY server-side record of who a legacy thread belongs to, since a legacy
- * exchange has no `channel_tasks` row to authorize against.
+ * exchange has no `channel_threads` row to authorize against.
  */
 /**
  * ⚠ TWO READS OF (channel, seq), AND THE PROJECTION IS THE WHOLE DIFFERENCE.
@@ -294,7 +293,7 @@ export async function findMessageBySeq(
  * the narrow select exists to avoid — and twenty round trips to do it.
  *
  * ⚠ `metadata` IS IN THE PROJECTION AND `body` IS NOT. The thread check needs
- * `metadata.taskId`; nothing here needs the body, which is the whole saving.
+ * `metadata.threadId`; nothing here needs the body, which is the whole saving.
  *
  * ⚠ **`channel_id` IS THE FENCE, NOT A NARROWING** — `findMessageById`'s rule.
  * The caller has been proved a member of THIS channel, so scoping the lookup is
@@ -392,7 +391,7 @@ export async function insertMessage(
   // 2026-10-12: exactly one database function inserts into `channel_messages`
   // (`channel_message_insert`), this is its only call site, and nothing writes
   // the table directly — `insert-funnel.test.ts` pins all three. Stamping a layer
-  // up would leave `service-tasks.ts › createTask`, the artifact writes and
+  // up would leave `service-threads.ts › createThread`, the artifact writes and
   // anything added later unstamped, and an unstamped NEW row silently gets
   // legacy pills, which is the exact failure the stamp exists to prevent.
   //
@@ -428,20 +427,20 @@ export async function insertMessage(
 /**
  * HARD-DELETE every message tagged for one thread, and hand back the `seq`s that
  * actually went — the first step of the thread cascade
- * (`service-tasks-delete.ts › deleteTask`).
+ * (`service-threads-delete.ts › deleteThread`).
  *
  * ⚠ THE TAG IS THE ONLY LINK. `channel_messages` has NO foreign key into
- * `channel_tasks` (INVARIANTS §5 — the transcript rides on `metadata.taskId`), so
+ * `channel_threads` (INVARIANTS §5 — the transcript rides on `metadata.threadId`), so
  * deleting the thread row cascades NOTHING here. This statement IS the cascade,
- * and it has to run before the task row goes or the messages are orphaned onto an
+ * and it has to run before the thread row goes or the messages are orphaned onto an
  * id that resolves to nothing.
  *
  * ⚠ INDEXED, NOT A SCAN: `channel_messages_thread_activity_idx` on
- * `(channel_id, (metadata ->> 'taskId'))` (migration `20260807160000`) answers
+ * `(channel_id, (metadata ->> 'threadId'))` (migration `20260807160000`) answers
  * exactly this predicate. Both terms are named, in that order.
  *
- * ⚠ `metadata->>taskId` compares as TEXT — same rule {@link listMessages}
- * follows, so a legacy `task-<channelId>-<seq>` tag is matched verbatim rather
+ * ⚠ `metadata->>threadId` compares as TEXT — same rule {@link listMessages}
+ * follows, so a legacy `thread-<channelId>-<seq>` tag is matched verbatim rather
  * than cast and lost.
  *
  * ⚠ THE RETURNED SEQS ARE THE CONSENT CASCADE'S KEY. `channel_consent_requests`
@@ -463,7 +462,7 @@ export async function deleteMessagesByThread(
     .from("channel_messages")
     .delete()
     .eq("channel_id", channelId)
-    .eq("metadata->>taskId", threadId)
+    .eq("metadata->>threadId", threadId)
     .select("seq");
   if (error) throw error;
   return ((data ?? []) as Array<{ seq: number }>).map((r) => r.seq);

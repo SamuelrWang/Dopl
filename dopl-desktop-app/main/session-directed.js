@@ -20,7 +20,7 @@ function safeReply(text) {
 }
 
 /**
- * The direction on a `messageByTask` call: null (the operator's own keyboard), the direction, or `false` for one
+ * The direction on a `messageByThread` call: null (the operator's own keyboard), the direction, or `false` for one
  * that is malformed (no id, or no agent named), which the caller refuses. It fails toward refusal, never toward
  * operator authority, and has no oldest-agent fallback: an off-machine caller must name the agent it steers.
  */

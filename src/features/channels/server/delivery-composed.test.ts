@@ -91,7 +91,7 @@ function machine(live: Session[]) {
     "targeting", "sessionEngine", "io", "agentHandles", "deliveryAck", "diag", "agentAuthorNote", "authorAddress",
     `${dispatchBlock()}\n return { feedLiveSession };`
   )(
-    { firstClassTaskId: (m: { taskId?: string }) => m.taskId || "" },
+    { firstClassThreadId: (m: { threadId?: string }) => m.threadId || "" },
     {
       liveOnThread: () => live,
       feedInbound: (a: { agentId: string; wake: boolean }) => {
@@ -133,7 +133,7 @@ function sessionRow(name: string, displayName: string | null = null): SessionSta
     workspace_id: "ws-1",
     user_id: ME,
     session_key: `${CHAN}:${THREAD}:${name}`,
-    task_id: THREAD,
+    thread_id: THREAD,
     name,
     state: "working",
     display_name: displayName,
@@ -193,7 +193,7 @@ async function post(
       kind: "message",
       clientMsgId: over.clientMsgId,
     } as Parameters<typeof resolveWakeVerdict>[2],
-    { ...(threaded ? { taskId: THREAD } : {}), ...over.metadata },
+    { ...(threaded ? { threadId: THREAD } : {}), ...over.metadata },
     {
       authorKind: over.authorKind ?? "user",
       // ⚠ A LIST SINCE 2026-09-18 — the fixture still names at most one.
@@ -212,7 +212,7 @@ async function post(
     authorUserId: author,
     authorKind: over.authorKind ?? "user",
     body,
-    taskId: threaded ? THREAD : "",
+    threadId: threaded ? THREAD : "",
     seq: 42,
     wakeVerdict: verdict.verdict,
     recipientUserIds: verdict.recipientUserIds,
@@ -347,7 +347,7 @@ describe("the server decides, the machine executes", () => {
     // and no cross-account delivery either.
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([sessionRow(A1)]);
     const { verdict, desktop } = await post("what about the migration?", [agent(A1)], true, {
-      metadata: { taskCreatedBy: ME, taskTarget: "user-2" },
+      metadata: { threadCreatedBy: ME, threadTarget: "user-2" },
     });
     expect(verdict.verdict).toBe("thread_peer");
     expect(verdict.recipientUserIds).toEqual(["user-2"]);
@@ -363,7 +363,7 @@ describe("the server decides, the machine executes", () => {
     vi.mocked(repoSessions.listChannelSessionStates).mockResolvedValue([sessionRow(A1)]);
     const { verdict, desktop } = await post("and the other one?", [agent(A1), agent(A2)], true, {
       author: "user-2",
-      metadata: { taskCreatedBy: "user-2", taskTarget: ME },
+      metadata: { threadCreatedBy: "user-2", threadTarget: ME },
     });
     expect(verdict.verdict).toBe("thread_peer");
     expect(verdict.recipientUserIds).toEqual([ME]);

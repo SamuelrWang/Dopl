@@ -50,7 +50,7 @@ async function checkRouteCoverage(ctx) {
       clientMsgId: `harness-${ctx.stamp}-cover`,
     }), okish],
     ['GET  /api/channels/{id}/await', () => api.awaitRoute(id, ctx.lastSeq || 0), (s) => okish(s) || s === 408],
-    ['GET  /api/channels/{id}/tasks', () => api.listThreads(id), okish],
+    ['GET  /api/channels/{id}/threads', () => api.listThreads(id), okish],
     ['GET  /api/channels/consent', () => api.consent(id), (s) => okish(s) || refusal(s)],
     // PRESENCE IS POST-ONLY — it is a heartbeat, not a read. A GET here answers 405, which
     // the first draft of this table recorded as a route failure. The 405 is the route being
@@ -69,7 +69,7 @@ async function checkRouteCoverage(ctx) {
     // would have failed check 7 on the first live run.
   ];
   if (thread) {
-    calls.push(['GET  /api/channels/{id}/tasks/{taskId}', () => api.thread(id, thread.id), okish]);
+    calls.push(['GET  /api/channels/{id}/threads/{threadId}', () => api.thread(id, thread.id), okish]);
   }
 
   const fails = [];
@@ -87,7 +87,7 @@ async function checkRouteCoverage(ctx) {
     if (res.status >= 500) fails.push(`${label} answered ${res.status} (server error): ${String(res.text).slice(0, 200)}`);
     else if (!allowed(res.status)) fails.push(`${label} answered ${res.status}, which is outside its allowed set`);
   }
-  if (!thread) lines.push('GET  /api/channels/{id}/tasks/{taskId} -> not exercised (no thread was opened)');
+  if (!thread) lines.push('GET  /api/channels/{id}/threads/{threadId} -> not exercised (no thread was opened)');
 
   return verdict(fails, { extraLines: lines });
 }

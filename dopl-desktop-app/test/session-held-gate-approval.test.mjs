@@ -27,7 +27,7 @@ function mkSession(over) {
   return {
     profile: "full",
     channelId: "ch1",
-    state: { allowForTask: [], toolMode: "manual", messageMode: "ask", pendingPermissions: [] },
+    state: { allowForThread: [], toolMode: "manual", messageMode: "ask", pendingPermissions: [] },
     pendingPermissions: new Map(),
     pendingNames: new Map(),
     ...(over || {}),
@@ -205,7 +205,7 @@ test("BRIDGE: the op is declared in ALL THREE places the preload's surface has t
   assert.match(read("apps", "desktop-ui", "src", "lib", "dopl-bridge.ts"),
     /interface DoplBridge extends SpaBridgeSurface/, "…which the SPA's bridge type extends");
   assert.match(readFileSync(join(HERE, "..", "renderer", "app-preload.js"), "utf8"),
-    /answerPermission: \(channelId, taskId, requestId, allow, agentId\) =>/,
+    /answerPermission: \(channelId, threadId, requestId, allow, agentId\) =>/,
     "…and the preload is the ground truth all three follow");
 });
 
@@ -238,12 +238,12 @@ const CH = "11111111-2222-4333-8444-555555555555";
 test("ANSWER: an allow dispatches `permission_decision` as ALLOW-ONCE and reports the resolve", () => {
   const { dispatched } = mkAnswerer();
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", agentId: "a1b2c3d4", requestId: "r1", allow: true }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", agentId: "a1b2c3d4", requestId: "r1", allow: true }),
     { ok: true, decision: "allow-once" }
   );
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].type, "permission_decision");
-  // ALLOW-ONCE, never allow-task: a standing grant keyed on the scoped name is too much to hand
+  // ALLOW-ONCE, never allow-thread: a standing grant keyed on the scoped name is too much to hand
   // over from a compact inline card.
   assert.equal(dispatched[0].decision, "allow-once");
   // The grant name is the SESSION's own recorded key, never a caller's string.
@@ -253,7 +253,7 @@ test("ANSWER: an allow dispatches `permission_decision` as ALLOW-ONCE and report
 test("ANSWER: a deny is the same lane with the other word", () => {
   const { dispatched } = mkAnswerer();
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", requestId: "r1", allow: false }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", requestId: "r1", allow: false }),
     { ok: true, decision: "deny" }
   );
   assert.equal(dispatched[0].decision, "deny");
@@ -262,14 +262,14 @@ test("ANSWER: a deny is the same lane with the other word", () => {
 test("ANSWER: `allow` FAILS CLOSED — anything but a literal `true` denies", () => {
   for (const allow of [undefined, null, 0, "", "true", 1, {}, []]) {
     const { dispatched } = mkAnswerer();
-    answer.answerPermission({ channelId: CH, taskId: "t1", requestId: "r1", allow });
+    answer.answerPermission({ channelId: CH, threadId: "t1", requestId: "r1", allow });
     assert.equal(dispatched[0].decision, "deny", `allow=${JSON.stringify(allow)} must deny`);
   }
 });
 
 test("ANSWER: EXACTLY ONCE — the second click answers {ok:false}, never a blanket success", () => {
   const { dispatched } = mkAnswerer();
-  const p = { channelId: CH, taskId: "t1", requestId: "r1", allow: true };
+  const p = { channelId: CH, threadId: "t1", requestId: "r1", allow: true };
   assert.deepEqual(answer.answerPermission(p), { ok: true, decision: "allow-once" });
   // The second call must not reach the reducer at all: the resolver map no longer holds it.
   assert.deepEqual(answer.answerPermission(p), { ok: false, reason: "unknown-request" });
@@ -279,7 +279,7 @@ test("ANSWER: EXACTLY ONCE — the second click answers {ok:false}, never a blan
 test("ANSWER: an UNKNOWN request id is refused and dispatches nothing", () => {
   const { dispatched } = mkAnswerer();
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", requestId: "nope", allow: true }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", requestId: "nope", allow: true }),
     { ok: false, reason: "unknown-request" }
   );
   assert.equal(dispatched.length, 0);
@@ -293,7 +293,7 @@ test("ANSWER: a request the reducer still lists but no resolver holds is `alread
   let resolvedLive = true;
   answer.bind({ resolveSession: () => s, dispatch: () => { resolvedLive = false; return false; } });
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", requestId: "r1", allow: true }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", requestId: "r1", allow: true }),
     { ok: false, reason: "already-decided" }
   );
   assert.equal(resolvedLive, false);
@@ -302,7 +302,7 @@ test("ANSWER: a request the reducer still lists but no resolver holds is `alread
 test("ANSWER: an address that names nothing live here answers `no-session`", () => {
   mkAnswerer();
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", agentId: "zzzzzzzz", requestId: "r1", allow: true }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", agentId: "zzzzzzzz", requestId: "r1", allow: true }),
     { ok: false, reason: "no-session" }
   );
 });
@@ -311,7 +311,7 @@ test("ANSWER: a settled session answers `no-session` — an ended agent has noth
   const { s } = mkAnswerer();
   s.settled = true;
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", requestId: "r1", allow: true }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", requestId: "r1", allow: true }),
     { ok: false, reason: "no-session" }
   );
 });
@@ -329,7 +329,7 @@ test("ANSWER: the BOUNDARY gates — a non-UUID channel is the plain refusal, in
 test("ANSWER: an out-of-charset agent id degrades to the thread answer, it does not throw", () => {
   const { dispatched } = mkAnswerer();
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", agentId: "NOT VALID", requestId: "r1", allow: true }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", agentId: "NOT VALID", requestId: "r1", allow: true }),
     { ok: true, decision: "allow-once" }
   );
   assert.equal(dispatched.length, 1);
@@ -340,7 +340,7 @@ test("ANSWER: the request id is BOUNDED at the boundary", () => {
   const long = "r".repeat(500);
   s.pendingPermissions.set(long.slice(0, answer.REQUEST_ID_CAP), () => {});
   assert.deepEqual(
-    answer.answerPermission({ channelId: CH, taskId: "t1", requestId: long, allow: false }),
+    answer.answerPermission({ channelId: CH, threadId: "t1", requestId: long, allow: false }),
     { ok: true, decision: "deny" }
   );
   assert.equal(dispatched[0].requestId.length, answer.REQUEST_ID_CAP);
@@ -348,5 +348,5 @@ test("ANSWER: the request id is BOUNDED at the boundary", () => {
 
 test("ANSWER: UNBOUND FAILS CLOSED — an unbound privileged verb is not a usable one", () => {
   answer.bind(null);
-  assert.deepEqual(answer.answerPermission({ channelId: CH, taskId: "t1", requestId: "r1", allow: true }), { ok: false });
+  assert.deepEqual(answer.answerPermission({ channelId: CH, threadId: "t1", requestId: "r1", allow: true }), { ok: false });
 });

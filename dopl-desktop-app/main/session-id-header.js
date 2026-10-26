@@ -35,7 +35,7 @@ const HEADER = 'X-Dopl-Session-Id';
  * a guess (INVARIANTS §11): the row renders "Agent", which is true.
  *
  * ⚠ THE ARGUMENT IS THE SLOT KEY (`session-store.js › sessionKey`,
- * `<channelId>:<taskId>:<agentId>`) and NEVER the per-launch `sessionId`. The AGENT segment is
+ * `<channelId>:<threadId>:<agentId>`) and NEVER the per-launch `sessionId`. The AGENT segment is
  * the one every reader wants — `lib/agent-post-stamp.ts › agentIdOfSessionKey` reads it from the
  * END — and the ephemeral id carries none, so stamping that would produce a header the server
  * accepts and no reader can resolve.

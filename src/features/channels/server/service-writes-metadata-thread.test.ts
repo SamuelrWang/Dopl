@@ -2,10 +2,10 @@
  * THREAD PARTICIPATION on a post — both id shapes, plus the calm-terminal flags
  * riding on the same decision.
  *
- * ⚠ A stamped `metadata.taskId` puts a message inside a thread's card AND routes
+ * ⚠ A stamped `metadata.threadId` puts a message inside a thread's card AND routes
  * it to the responder's session window, and every channel member can SEE every
  * thread id (reads are channel-transparent by design). Ungated, the legacy
- * `task-{channelId}-{seq}` shape lets a third member stamp another pair's
+ * `thread-{channelId}-{seq}` shape lets a third member stamp another pair's
  * exchange, land a message in their card, or flip its outcome via a lifecycle
  * kind.
  *
@@ -21,15 +21,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 
-// ⚠ `repoMessages` and `repoTasks` are still named HERE because the cases below assert on them
+// ⚠ `repoMessages` and `repoThreads` are still named HERE because the cases below assert on them
 // directly; `repo` and `repoSessions` are only FILLED IN, which now happens in the fixtures, so
 // naming them here would be an unused import. The four `vi.mock` calls above still cover all
 // four — they are hoisted per module graph and must stay in this file.
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
-import { TaskForbiddenError } from "./errors";
+import * as repoThreads from "./repository-threads";
+import { ThreadForbiddenError } from "./errors";
 import { postMessage } from "./service-writes";
 // ⚠ THE FIXTURE LAYER MOVED, NOT A SINGLE CASE (§2 split, 2026-10-11): this file reached 567
 // lines against a 500-line `error` cap. All 23 cases are still here — a cap-driven split of a
@@ -40,11 +40,11 @@ import {
   USER,
   PEER,
   THIRD,
-  TASK_ID,
+  THREAD_ID,
   LEGACY_ID,
   ctx,
   desktopCtx,
-  taskRow,
+  threadRow,
   opener,
   capturedMetadata,
   has,
@@ -55,13 +55,13 @@ beforeEach(installThreadMocks);
 
 describe("postMessage — legacy thread tag, kept for the exchange's own pair", () => {
   it("keeps the tag for the ADDRESSEE of the opening request (the responder's reply)", async () => {
-    await postMessage(ctx, "dm", { body: "on it", metadata: { taskId: LEGACY_ID } });
+    await postMessage(ctx, "dm", { body: "on it", metadata: { threadId: LEGACY_ID } });
 
-    expect(capturedMetadata().taskId).toBe(LEGACY_ID);
+    expect(capturedMetadata().threadId).toBe(LEGACY_ID);
     expect(repoMessages.findMessageBySeq).toHaveBeenCalledWith("chan-1", 7);
-    // No task row exists for a legacy id, so none of the four server-stamped
-    // task keys appear — a titleless legacy card is the tell.
-    expect(has(capturedMetadata(), "taskTitle")).toBe(false);
+    // No thread row exists for a legacy id, so none of the four server-stamped
+    // thread keys appear — a titleless legacy card is the tell.
+    expect(has(capturedMetadata(), "threadTitle")).toBe(false);
   });
 
   it("keeps the tag for the AUTHOR of the opening request (the requester's follow-up)", async () => {
@@ -71,43 +71,43 @@ describe("postMessage — legacy thread tag, kept for the exchange's own pair", 
 
     await postMessage(ctx, "dm", {
       body: "any progress?",
-      metadata: { taskId: LEGACY_ID },
+      metadata: { threadId: LEGACY_ID },
     });
 
-    expect(capturedMetadata().taskId).toBe(LEGACY_ID);
+    expect(capturedMetadata().threadId).toBe(LEGACY_ID);
   });
 
   it("keeps it on a LIFECYCLE post — the compat case the strip exists to protect", async () => {
-    // ⚠ Installed desktops post legacy ids for task_started/finished/failed and
+    // ⚠ Installed desktops post legacy ids for thread_started/finished/failed and
     // must keep threading — which is why the gate strips instead of 403ing.
     await postMessage(desktopCtx, "dm", {
       body: "Session ended",
-      kind: "task_finished",
-      metadata: { taskId: LEGACY_ID },
+      kind: "thread_finished",
+      metadata: { threadId: LEGACY_ID },
     });
 
-    expect(capturedMetadata().taskId).toBe(LEGACY_ID);
+    expect(capturedMetadata().threadId).toBe(LEGACY_ID);
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", () => {
   /** Every strip case must still deliver the message, untagged. */
-  async function expectStripped(taskId: string, body = "landing elsewhere") {
+  async function expectStripped(threadId: string, body = "landing elsewhere") {
     // Usage data only — mockClear, not mockReset, so a case may assert over
     // several ids in a row.
     vi.mocked(repoMessages.insertMessage).mockClear();
 
-    await postMessage(ctx, "dm", { body, metadata: { taskId } });
+    await postMessage(ctx, "dm", { body, metadata: { threadId } });
 
     const meta = capturedMetadata();
-    expect(has(meta, "taskId")).toBe(false);
+    expect(has(meta, "threadId")).toBe(false);
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
     return meta;
   }
 
   it("SECURITY: a third member cannot stamp another pair's exchange", async () => {
-    // The forgery: C posts `task_failed` carrying A-and-B's legacy id, landing
+    // The forgery: C posts `thread_failed` carrying A-and-B's legacy id, landing
     // in their card and flipping their session status.
     vi.mocked(repoMessages.findMessageBySeq).mockResolvedValue(
       opener({ author_user_id: PEER, metadata: { to_user_id: THIRD } })
@@ -117,8 +117,8 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
   });
 
   it("strips an id that names ANOTHER channel, without touching the DB", async () => {
-    await expectStripped("task-chan-2-7");
-    await expectStripped(`task-${TASK_ID}-7`);
+    await expectStripped("thread-chan-2-7");
+    await expectStripped(`thread-${THREAD_ID}-7`);
 
     // ⚠ Prefix mismatch decided from the id ALONE — a foreign id can never probe
     // this channel's seq space.
@@ -127,12 +127,12 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
 
   it("strips a malformed seq and a tag that is not a legacy id at all", async () => {
     for (const bad of [
-      "task-chan-1-abc",
-      "task-chan-1-",
-      "task-chan-1-0", // seqs start at 1
-      "task-chan-1--3",
-      "task-chan-1-7.5",
-      "task-chan-1-99999999999999999999", // past integer precision
+      "thread-chan-1-abc",
+      "thread-chan-1-",
+      "thread-chan-1-0", // seqs start at 1
+      "thread-chan-1--3",
+      "thread-chan-1-7.5",
+      "thread-chan-1-99999999999999999999", // past integer precision
       "eng-thread", // a plain typo used to report "THREADED"
     ]) {
       await expectStripped(bad);
@@ -157,9 +157,9 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
   });
 
   it("strips a blank / non-string tag rather than storing it", async () => {
-    await postMessage(ctx, "dm", { body: "hi", metadata: { taskId: "   " } });
+    await postMessage(ctx, "dm", { body: "hi", metadata: { threadId: "   " } });
 
-    expect(has(capturedMetadata(), "taskId")).toBe(false);
+    expect(has(capturedMetadata(), "threadId")).toBe(false);
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 
@@ -174,41 +174,41 @@ describe("postMessage — legacy thread tag, STRIPPED for everyone else (Q10)", 
     await postMessage(ctx, "dm", {
       body: "landing elsewhere",
       toUserId: PEER,
-      metadata: { taskId: LEGACY_ID },
+      metadata: { threadId: LEGACY_ID },
     });
 
     const meta = capturedMetadata();
-    expect(has(meta, "taskId")).toBe(false);
+    expect(has(meta, "threadId")).toBe(false);
     expect(meta.to_user_id).toBe(PEER);
-    expect(has(meta, "taskMode")).toBe(false);
+    expect(has(meta, "threadMode")).toBe(false);
   });
 });
 
 describe("postMessage — first-class (UUID) thread tag is unchanged", () => {
   it("SECURITY: still REFUSES a non-participant outright (403, not a strip)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: PEER, target_user_id: THIRD })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: PEER, target_user_id: THIRD })
     );
 
     await expect(
       postMessage(ctx, "dm", {
         body: "landing in someone else's thread",
-        metadata: { taskId: TASK_ID },
+        metadata: { threadId: THREAD_ID },
       })
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
+    ).rejects.toBeInstanceOf(ThreadForbiddenError);
 
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
 
-  it("keeps threading (and the stamped task keys) for a participant", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
+  it("keeps threading (and the stamped thread keys) for a participant", async () => {
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(threadRow());
 
-    await postMessage(ctx, "dm", { body: "here it is", metadata: { taskId: TASK_ID } });
+    await postMessage(ctx, "dm", { body: "here it is", metadata: { threadId: THREAD_ID } });
 
     const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
-    expect(meta.taskTitle).toBe("Wire the listener");
+    expect(meta.threadId).toBe(THREAD_ID);
+    expect(meta.threadTitle).toBe("Wire the listener");
   });
 });
 
@@ -221,13 +221,13 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
   it("stamps the flag for a participant of a LEGACY exchange (the decline echo)", async () => {
     await postMessage(desktopCtx, "dm", {
       body: "Request declined",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, declined: true },
+      kind: "thread_failed",
+      metadata: { threadId: LEGACY_ID, declined: true },
     });
 
     const meta = capturedMetadata();
     expect(meta.declined).toBe(true);
-    expect(meta.taskId).toBe(LEGACY_ID);
+    expect(meta.threadId).toBe(LEGACY_ID);
     // One resolver, one read — tag gate and flags share the lookup.
     expect(repoMessages.findMessageBySeq).toHaveBeenCalledTimes(1);
   });
@@ -239,8 +239,8 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
 
     await postMessage(desktopCtx, "dm", {
       body: "Session ended",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, ended: true },
+      kind: "thread_failed",
+      metadata: { threadId: LEGACY_ID, ended: true },
     });
 
     expect(capturedMetadata().ended).toBe(true);
@@ -256,14 +256,14 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
 
     await postMessage(desktopCtx, "dm", {
       body: "Request declined",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, declined: true, dropped: true },
+      kind: "thread_failed",
+      metadata: { threadId: LEGACY_ID, declined: true, dropped: true },
     });
 
     const meta = capturedMetadata();
     expect(has(meta, "declined")).toBe(false);
     expect(has(meta, "dropped")).toBe(false);
-    expect(has(meta, "taskId")).toBe(false);
+    expect(has(meta, "threadId")).toBe(false);
     // Stripped, but the message still posts (visible, attributable).
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
@@ -273,27 +273,27 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
 
     await postMessage(desktopCtx, "dm", {
       body: "Request interrupted",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, interrupted: true },
+      kind: "thread_failed",
+      metadata: { threadId: LEGACY_ID, interrupted: true },
     });
 
     const meta = capturedMetadata();
     expect(has(meta, "interrupted")).toBe(false);
-    expect(has(meta, "taskId")).toBe(false);
+    expect(has(meta, "threadId")).toBe(false);
   });
 
   it("stamps the flag on a FIRST-CLASS thread the poster participates in", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(threadRow());
 
     await postMessage(desktopCtx, "dm", {
       body: "Turn limit reached",
-      kind: "task_failed",
-      metadata: { taskId: TASK_ID, capped: true },
+      kind: "thread_failed",
+      metadata: { threadId: THREAD_ID, capped: true },
     });
 
     const meta = capturedMetadata();
     expect(meta.capped).toBe(true);
-    expect(meta.taskTitle).toBe("Wire the listener");
+    expect(meta.threadTitle).toBe("Wire the listener");
     // A first-class id the poster does not participate in is refused above.
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
@@ -303,20 +303,20 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
     // rather than relying on every reader staying strict.
     await postMessage(desktopCtx, "dm", {
       body: "Crashed",
-      kind: "task_failed",
-      metadata: { taskId: LEGACY_ID, capped: "true", ended: 1 },
+      kind: "thread_failed",
+      metadata: { threadId: LEGACY_ID, capped: "true", ended: 1 },
     });
 
     const meta = capturedMetadata();
     expect(has(meta, "capped")).toBe(false);
     expect(has(meta, "ended")).toBe(false);
-    expect(meta.taskId).toBe(LEGACY_ID);
+    expect(meta.threadId).toBe(LEGACY_ID);
   });
 
   it("strips flags on a post with no thread id at all", async () => {
     await postMessage(desktopCtx, "dm", {
       body: "not a real outcome",
-      kind: "task_failed",
+      kind: "thread_failed",
       metadata: { declined: true },
     });
 
@@ -330,10 +330,10 @@ describe("postMessage — calm-terminal flags follow the tag decision", () => {
  * (2026-10-11).
  *
  * ⚠ **THE REGRESSION IT PINS.** The re-stamp ran only
- * `if (calmFlags.length > 0 && typeof metadata.taskId === "string")`, so a
+ * `if (calmFlags.length > 0 && typeof metadata.threadId === "string")`, so a
  * CHANNEL-LEVEL session — slot key `<channel>::<agent>`, which carries no thread
  * tag by construction — had its `session_ended` stripped and NEVER re-stamped.
- * Prod said so exactly: every `task_progress` row whose `metadata.session_id` is
+ * Prod said so exactly: every `thread_progress` row whose `metadata.session_id` is
  * `<channel>::<agent>` carries `session_ended` NULL, every
  * `<channel>:<thread>:<agent>` row carries `'true'`. The flag is documented in
  * `service-writes-metadata-markers.ts` as explicitly NOT a thread outcome — it
@@ -354,7 +354,7 @@ describe("postMessage — session_ended answers to the SESSION, not the thread",
       "dm",
       {
         body: "Session ended",
-        kind: "task_progress",
+        kind: "thread_progress",
         metadata: { session_ended: true },
       }
     );
@@ -363,7 +363,7 @@ describe("postMessage — session_ended answers to the SESSION, not the thread",
     expect(meta.session_ended).toBe(true);
     expect(meta.session_id).toBe(CHANNEL_SLOT);
     // No tag was sent and none was invented — the point is that it is not needed.
-    expect(has(meta, "taskId")).toBe(false);
+    expect(has(meta, "threadId")).toBe(false);
     // The session gate costs no thread lookup.
     expect(repoMessages.findMessageBySeq).not.toHaveBeenCalled();
   });
@@ -372,7 +372,7 @@ describe("postMessage — session_ended answers to the SESSION, not the thread",
     // Nothing identifies the session being narrated, so there is nothing to narrate with.
     await postMessage(desktopCtx, "dm", {
       body: "Session ended",
-      kind: "task_progress",
+      kind: "thread_progress",
       metadata: { session_ended: true },
     });
     expect(has(capturedMetadata(), "session_ended")).toBe(false);
@@ -380,12 +380,12 @@ describe("postMessage — session_ended answers to the SESSION, not the thread",
     vi.mocked(repoMessages.insertMessage).mockClear();
     await postMessage(desktopCtx, "dm", {
       body: "Session ended",
-      kind: "task_progress",
-      metadata: { taskId: LEGACY_ID, session_ended: true },
+      kind: "thread_progress",
+      metadata: { threadId: LEGACY_ID, session_ended: true },
     });
     expect(has(capturedMetadata(), "session_ended")).toBe(false);
     // The tag itself still resolves normally — only the flag is withheld.
-    expect(capturedMetadata().taskId).toBe(LEGACY_ID);
+    expect(capturedMetadata().threadId).toBe(LEGACY_ID);
   });
 
   it("a THREAD-gated flag still needs the tag, session id or not", async () => {
@@ -396,7 +396,7 @@ describe("postMessage — session_ended answers to the SESSION, not the thread",
       "dm",
       {
         body: "Request interrupted",
-        kind: "task_failed",
+        kind: "thread_failed",
         metadata: { interrupted: true, session_ended: true },
       }
     );
@@ -409,20 +409,20 @@ describe("postMessage — session_ended answers to the SESSION, not the thread",
 
   it("the thread-tagged session keeps stamping it, exactly as before", async () => {
     // The arm that already worked in prod, pinned so the fix cannot be read as a swap.
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(threadRow());
 
     await postMessage(
-      { ...desktopCtx, sessionId: `chan-1:${TASK_ID}:a1b2c3d4` },
+      { ...desktopCtx, sessionId: `chan-1:${THREAD_ID}:a1b2c3d4` },
       "dm",
       {
         body: "Session ended",
-        kind: "task_progress",
-        metadata: { taskId: TASK_ID, session_ended: true },
+        kind: "thread_progress",
+        metadata: { threadId: THREAD_ID, session_ended: true },
       }
     );
 
     const meta = capturedMetadata();
     expect(meta.session_ended).toBe(true);
-    expect(meta.taskId).toBe(TASK_ID);
+    expect(meta.threadId).toBe(THREAD_ID);
   });
 });

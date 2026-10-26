@@ -63,12 +63,12 @@ const { noteFailure, clearFailures, forgetFailures, retryable, armRetry, clearRe
 const quarantine = retryLane.makeQuarantine(diag, (ws, rows) => send(ws, rows));
 
 /** One report entry -> the wire row, picked BY NAME (a new summary field reaches no column until named here).
- *  `key` is the stable session key (not the ephemeral sessionId); '' taskId is the column's NULL. */
+ *  `key` is the stable session key (not the ephemeral sessionId); '' threadId is the column's NULL. */
 function reportRow(e) {
   return {
     sessionKey: String((e && e.key) || ''),
     channelId: String((e && e.channelId) || ''),
-    threadId: (e && e.taskId) || null,
+    threadId: (e && e.threadId) || null,
     name: (e && e.name) || '',
     state: (e && e.state) || '',
     channelName: (e && e.channelName) || null,

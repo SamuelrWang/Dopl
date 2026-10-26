@@ -49,12 +49,12 @@ const FORGED = {
   // else's request — a claim about who was asked what, made by the wrong person.
   fanoutGroup: 'forged-fanout-group',
   // The THREAD-SHAPE keys. Stripped unconditionally alongside the rest, and worth forging
-  // for the same reason: `taskTarget` and `taskCreatedBy` are attribution, and `taskMode`
+  // for the same reason: `threadTarget` and `threadCreatedBy` are attribution, and `threadMode`
   // is the field that decides whether a thread starts at ask or runs unattended.
-  taskMode: 'auto',
-  taskCreatedBy: '00000000-0000-4000-8000-0000000000fb',
-  taskTitle: 'forged title',
-  taskTarget: '00000000-0000-4000-8000-0000000000fa',
+  threadMode: 'auto',
+  threadCreatedBy: '00000000-0000-4000-8000-0000000000fb',
+  threadTitle: 'forged title',
+  threadTarget: '00000000-0000-4000-8000-0000000000fa',
   // WHY THE SERVER PICKED AN AGENT NOBODY NAMED (2026-09-04, RR3's arms 3 and 4).
   // Forged on `handoff`'s terms: the read line renders it as `→ @<name> (most recent)`,
   // so a caller able to set it could narrate a repair that never happened — a delivery
@@ -64,14 +64,14 @@ const FORGED = {
 };
 
 /**
- * `taskId` IS DELIBERATELY NOT FORGED, and this is the note that keeps somebody from
+ * `threadId` IS DELIBERATELY NOT FORGED, and this is the note that keeps somebody from
  * "fixing" that. It is the only conditionally-stripped key in `resolvePostMetadata`: a
  * caller-supplied thread tag that names a real thread the caller participates in is
  * HONOURED (it is how a post joins a thread at all), and only a blank, non-string, or
  * non-participant id is dropped. Forging it would assert a strip the service is right not
  * to perform. The load guard (test/live-harness-loads.test.mjs) carries the same exclusion.
  */
-const CONDITIONALLY_STRIPPED = ['taskId'];
+const CONDITIONALLY_STRIPPED = ['threadId'];
 
 /**
  * 1. EVERY RESERVED KEY IS STRIPPED. The forged post is read back off the same route the

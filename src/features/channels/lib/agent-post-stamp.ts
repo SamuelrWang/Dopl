@@ -58,7 +58,7 @@ export function parseAgentPostStamp(
  * alone.
  *
  * ⚠ **THE KEY SHAPE IS `main/session-store.js › sessionKey`,
- * `<channelId>:<taskId>:<agentId>`, AND THE MIDDLE SEGMENT IS LEGITIMATELY
+ * `<channelId>:<threadId>:<agentId>`, AND THE MIDDLE SEGMENT IS LEGITIMATELY
  * EMPTY** for a session with no first-class thread (`chan::deynelz3` is the
  * ordinary room shape). So it reads from the END and walks back rather than
  * counting segments — the same rule `packages/mcp-server/src/tools/
@@ -287,7 +287,7 @@ export function recentAgentsAddressedBy(
     // (`serverRoutedAgentIds`'s complement); WHOSE habit is being read is this function's
     // question, and it already owns the author filter one line up. One question, one place.
     if (row.authorKind === "agent") continue;
-    if (typeof row.metadata?.taskId === "string") continue;
+    if (typeof row.metadata?.threadId === "string") continue;
     if (windowMs !== undefined) {
       const at = Date.parse(row.createdAt);
       if (!Number.isFinite(at) || now - at > windowMs) continue;

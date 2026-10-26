@@ -159,7 +159,7 @@ test("H1: the gate is CLOSED until the init is verified — a call before it is 
 });
 
 test("core turns the refusal into the stop signal, outranking the init's MCP status", () => {
-  const s = { key: "k", runtimeId: "claude", state: { phase: "launching" }, channelId: "c", taskId: "t" };
+  const s = { key: "k", runtimeId: "claude", state: { phase: "launching" }, channelId: "c", threadId: "t" };
   const store = { setSdkSessionId() {}, saveRecord() {} };
   const evs = [{ type: "launched", sessionId: "sid", model: "m", mcpServers: [] }, { type: "safety_mismatch", detail: "x" }];
   assert.deepEqual(io.applyCoreEvents(s, evs, () => {}, store), { type: "safety_stop", detail: "x" });
@@ -179,7 +179,7 @@ test("H1: a tool_use BEFORE any init stops the session; the gate is never called
   let aborted = false;
   async function* stream() { yield { type: "assistant", message: { content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] } }; yield { type: "result" }; }
   const q = stream();
-  const s = { key: "k", runtimeId: "claude", state: { phase: "launching" }, channelId: "c", taskId: "t", query: q,
+  const s = { key: "k", runtimeId: "claude", state: { phase: "launching" }, channelId: "c", threadId: "t", query: q,
     abortController: { abort: () => { aborted = true; } }, pushIterator: { close() {} },
     launchContract: lc.contractOf(launchOptions("full")), launchVerified: false };
   const gate = require("../main/runtime/claude/launch-spec.js").untilVerified(s, async () => { gateCalls += 1; return { behavior: "allow" }; });
@@ -200,7 +200,7 @@ test("consume ENDS on the stop: handles torn down, end code stamped, crash dispa
   const init = { type: "system", subtype: "init", session_id: "sid", model: "m", mcp_servers: [], permissionMode: "bypassPermissions", tools: ["Read"] };
   async function* stream() { read += 1; yield init; read += 1; yield { type: "assistant", message: { content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] } }; }
   const q = stream();
-  const s = { key: "k", runtimeId: "claude", state: { phase: "launching" }, channelId: "c", taskId: "t", query: q,
+  const s = { key: "k", runtimeId: "claude", state: { phase: "launching" }, channelId: "c", threadId: "t", query: q,
     abortController: { abort: () => { aborted = true; } }, pushIterator: { close() {} },
     launchContract: lc.contractOf(launchOptions("read_only")) };
   await sq.consume(s, q, { normalize: normalizer.normalize });

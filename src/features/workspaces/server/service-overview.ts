@@ -33,15 +33,15 @@ import {
   countRunningSessions,
   countThreadsInWindow,
   listRecentMessages,
-  listRecentTasksClosed,
-  listRecentTasksOpened,
+  listRecentThreadsClosed,
+  listRecentThreadsOpened,
   listRecentUserMessageAuthors,
   listVisibleChannelRefs,
   tallyUserMessageAuthors,
   type DayWindow,
   type MessageAuthorTallyRow,
   type OverviewMessageRow,
-  type OverviewTaskRow,
+  type OverviewThreadRow,
   type VisibleChannelRef,
 } from "./repository-overview";
 import { listProfileSummaries } from "./repository";
@@ -275,8 +275,8 @@ export async function getWorkspaceOverviewSeries(
 
 interface ActivityInput {
   messages: OverviewMessageRow[];
-  opened: OverviewTaskRow[];
-  closed: OverviewTaskRow[];
+  opened: OverviewThreadRow[];
+  closed: OverviewThreadRow[];
   channelNames: Map<string, string>;
   names: Map<string, string | null>;
 }
@@ -284,7 +284,7 @@ interface ActivityInput {
 /**
  * Merge the three feeds into one newest-first list.
  *
- * ⚠ `thread_closed` rows carry `actorName: null` ON PURPOSE. `channel_tasks`
+ * ⚠ `thread_closed` rows carry `actorName: null` ON PURPOSE. `channel_threads`
  * records `closed_at` but no closer, so who closed a thread is a fact this
  * schema does not hold; the contract's "null when unattributable" is that case,
  * and naming the OPENER there would be a fabrication in an audit-shaped feed.
@@ -313,7 +313,7 @@ export function mergeActivity(input: ActivityInput): OverviewActivityRow[] {
       at: t.created_at,
     })),
     ...input.closed
-      .filter((t): t is OverviewTaskRow & { closed_at: string } =>
+      .filter((t): t is OverviewThreadRow & { closed_at: string } =>
         Boolean(t.closed_at)
       )
       .map((t) => ({
@@ -441,8 +441,8 @@ export async function getWorkspaceOverview(
   const channelIds = visible.map((c) => c.id);
   const [messages, opened, closed] = await Promise.all([
     listRecentMessages(channelIds, ACTIVITY_LIMIT),
-    listRecentTasksOpened(channelIds, ACTIVITY_LIMIT),
-    listRecentTasksClosed(channelIds, ACTIVITY_LIMIT),
+    listRecentThreadsOpened(channelIds, ACTIVITY_LIMIT),
+    listRecentThreadsClosed(channelIds, ACTIVITY_LIMIT),
   ]);
 
   // ⚠ **THE WAVE-8 PANELS RIDE THE SAME ROUND TRIP (R-29(b)).** The rails and

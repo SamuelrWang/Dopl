@@ -252,7 +252,7 @@ describe("the agent board — R-25 and the privacy half", () => {
     id: "s1",
     channel_id: CHAN,
     user_id: "peer",
-    task_id: "t1",
+    thread_id: "t1",
     name: "agent_abc12345",
     display_name: null,
     state: "working",

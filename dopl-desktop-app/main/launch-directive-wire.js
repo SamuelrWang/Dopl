@@ -60,8 +60,8 @@ function directiveFrom(raw, workspaceId) {
   const channelId = String(r.channel_id || r.channelId || '');
   if (!UUID_RE.test(id) || !UUID_RE.test(channelId)) return null;
   const identityId = String(r.identity_id || r.identityId || '');
-  // The realtime row says `task_id`, the server DTO `threadId`; `taskId` is this tree's wire name.
-  const taskId = String(r.task_id || r.threadId || r.taskId || '');
+  // The realtime row says `thread_id`, the server DTO `threadId`.
+  const threadId = String(r.thread_id || r.threadId || '');
   const status = String(r.status || '');
   const targetAgentId = String(r.target_agent_id || r.targetAgentId || '');
   return {
@@ -71,7 +71,7 @@ function directiveFrom(raw, workspaceId) {
     workspaceId: String(r.workspace_id || r.workspaceId || workspaceId || ''),
     channelId: channelId,
     // '' = channel-level; a non-UUID collapses to it rather than entering a session key.
-    taskId: UUID_RE.test(taskId) ? taskId : '',
+    threadId: UUID_RE.test(threadId) ? threadId : '',
     operatorUserId: String(r.operator_user_id || r.operatorUserId || ''),
     goal: text(r.goal, GOAL_MAX),
     model: text(r.model, MODEL_MAX),

@@ -145,7 +145,7 @@ const CHANNEL_TRANSPARENT_SELECT_POLICIES = [
   "channels_member_select",
   "channel_members_member_select",
   "channel_messages_member_select",
-  "channel_tasks_member_select",
+  "channel_threads_member_select",
   "channel_agents_member_select",
 ];
 

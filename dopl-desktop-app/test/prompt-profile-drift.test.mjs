@@ -18,7 +18,7 @@
 // them — a copy would drift exactly like the thing it is guarding.
 //
 // WHAT IT DOES NOT CLAIM. It is not a ban on NAMING a denied tool: the prompt legitimately
-// talks about the `task_*` kinds it refuses, and one day may name a tool to say "do not use
+// talks about the `thread_*` kinds it refuses, and one day may name a tool to say "do not use
 // it". It bans the CALL SHAPE — `Name(` — which is what an agent reads as an instruction to
 // invoke, and which is precisely what shipped.
 //
@@ -44,7 +44,7 @@ const PROFILES = ["read_only", "dopl_only", "full"];
 
 const CH = "11111111-1111-4111-8111-111111111111";
 const WS = "22222222-2222-4222-8222-222222222222";
-const TASK = "33333333-3333-4333-8333-333333333333";
+const THREAD = "33333333-3333-4333-8333-333333333333";
 
 // ⚠ AN IDENTITY-BUILT TURN IS ONE OF THE SHAPES (2026-08-22, agent identities). An AGENT IDENTITY
 // splices a ROLE BLOCK into the requester turn, and that block can NAME TOOLS — it teaches the
@@ -68,7 +68,7 @@ function everyTurn(profile = "full", toolSet = undefined) {
   const contexts = [
     { channelName: "Ops", toolSet },
     { channelName: "Ops", channelId: CH, workspaceId: WS, toolSet },
-    { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK, toolSet },
+    { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: THREAD, toolSet },
   ];
   for (const context of contexts) {
     turns.push({
@@ -92,7 +92,7 @@ function everyTurn(profile = "full", toolSet = undefined) {
         bind: "room",
         message: "x",
         nonce: "n",
-        context: { ...context, agentName: "quartz", ownerName: "Sam", agentId: TASK },
+        context: { ...context, agentName: "quartz", ownerName: "Sam", agentId: THREAD },
       }),
     });
   }
@@ -241,7 +241,7 @@ test("a `channel_agent` turn says it has no shell; the other three profiles do n
   // line must not appear on their turns.
   const SHELL_LINE = /no shell in this channel \(shared-channel rule\); ask the operator to run commands/;
   for (const side of ["requester", "responder"]) {
-    const context = { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK };
+    const context = { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: THREAD };
     const withProfile = (profile) =>
       buildFencedTurn({ side, message: "x", nonce: "n", context: { ...context, profile } });
     assert.ok(SHELL_LINE.test(withProfile("channel_agent")), `${side}: channel_agent is not told`);

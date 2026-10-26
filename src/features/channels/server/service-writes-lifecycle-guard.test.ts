@@ -6,14 +6,14 @@
  * ⚠ THE SEAM IS THE CREDENTIAL, not who the message says wrote it. Too wide and
  * the desktop runtime's own echoes stop (`main/session-window.js` posts on
  * Electron's Supabase cookies, so `source:"user"`); too narrow and an agent's
- * answer posted as `task_finished` renders nowhere — since wiring plan Phase 5
+ * answer posted as `thread_finished` renders nowhere — since wiring plan Phase 5
  * (2026-08-18) because `channels/components/view-model.ts › isLifecycleEcho`
  * drops the three kinds outright; before that because a session card folded the
  * marker into its `endEvent`. Asserted in both directions.
  *
  * ⚠ REWRITTEN DOWN 2026-08-18 (wiring plan Phase 4). It also held the
- * propose-then-confirm contract — `closeTask` refusing an agent token,
- * `proposeTaskClose`'s idempotency anchor, the reserved close-proposal keys —
+ * propose-then-confirm contract — `closeThread` refusing an agent token,
+ * `proposeThreadClose`'s idempotency anchor, the reserved close-proposal keys —
  * and every one of those services is deleted. What is here is the lifecycle-kind
  * guard, which is untouched by that removal.
  */
@@ -23,21 +23,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { postMessage } from "./service-writes";
 import { ChannelLifecycleKindForbiddenError } from "./errors";
 import type { ChannelContext } from "./service-shared";
-import type { ChannelMemberRow, ChannelMessageRow, ChannelRow, ChannelTaskRow } from "./dto";
+import type { ChannelMemberRow, ChannelMessageRow, ChannelRow, ChannelThreadRow } from "./dto";
 
 const WS = "ws-1";
 const USER = "user-1";
 const PEER = "user-2";
-const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+const THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
 
 /**
  * The two lanes. `agentCtx` = bearer agent token (every MCP `op="post"`);
@@ -53,7 +53,7 @@ const agentCtx: ChannelContext = {
 };
 const desktopCtx: ChannelContext = { ...agentCtx, source: "user" };
 
-const LIFECYCLE_KINDS = ["task_started", "task_finished", "task_failed"] as const;
+const LIFECYCLE_KINDS = ["thread_started", "thread_finished", "thread_failed"] as const;
 
 function channelRow(): ChannelRow {
   return {
@@ -88,9 +88,9 @@ function memberRow(userId: string): ChannelMemberRow {
   };
 }
 
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+function threadRow(overrides: Partial<ChannelThreadRow> = {}): ChannelThreadRow {
   return {
-    id: TASK_ID,
+    id: THREAD_ID,
     channel_id: "chan-1",
     workspace_id: WS,
     title: "Ship it",
@@ -143,13 +143,13 @@ beforeEach(() => {
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
   vi.mocked(repo.fetchProfiles).mockResolvedValue([]);
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) => insertedRow(row));
-  vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(threadRow());
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
       rows: [],
       truncated: false,
     });
-  vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
-    taskRow({ ...patch })
+  vi.mocked(repoThreads.updateThread).mockImplementation(async (_id, patch) =>
+    threadRow({ ...patch })
   );
 });
 
@@ -168,14 +168,14 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
   it("names the kind and says where the prose goes instead", async () => {
     const err: Error = await postMessage(agentCtx, "general", {
       body: "done",
-      kind: "task_finished",
+      kind: "thread_finished",
     }).then(
       () => new Error("the post was NOT refused"),
       (e: Error) => e
     );
-    expect(err.message).toContain("task_finished");
+    expect(err.message).toContain("thread_finished");
     expect(err.message).toContain("Post your message with no kind");
-    expect(err.message).toContain("task_progress");
+    expect(err.message).toContain("thread_progress");
   });
 
   it("refuses BEFORE the idempotency short-circuit, so a retry cannot replay it", async () => {
@@ -188,7 +188,7 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
         workspace_id: WS,
         author_user_id: USER,
         author_kind: "agent",
-        kind: "task_finished",
+        kind: "thread_finished",
         body: "done",
         metadata: {},
         client_msg_id: "k1",
@@ -204,7 +204,7 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
     await expect(
       postMessage(agentCtx, "general", {
         body: "done",
-        kind: "task_finished",
+        kind: "thread_finished",
         clientMsgId: "k1",
       })
     ).rejects.toBeInstanceOf(ChannelLifecycleKindForbiddenError);
@@ -215,17 +215,17 @@ describe("postMessage — an AGENT TOKEN cannot post a lifecycle kind", () => {
 // ── 2. what must keep working ──────────────────────────────────────────────────
 
 describe("postMessage — the lanes the guard must NOT touch", () => {
-  it("task_progress stays agent-writable: it is the milestone lane", async () => {
-    // Only `task_*` kind whose body IS rendered (it is the milestone lane; the
+  it("thread_progress stays agent-writable: it is the milestone lane", async () => {
+    // Only `thread_*` kind whose body IS rendered (it is the milestone lane; the
     // `splitSessionEntries` reader that used to say so was deleted with the
     // session card, wiring plan Phase 5) and the
     // only one claiming nothing about lifecycle.
     const msg = await postMessage(agentCtx, "general", {
       body: "schema half landed",
-      kind: "task_progress",
+      kind: "thread_progress",
     });
-    expect(msg.kind).toBe("task_progress");
-    expect(inserted()?.kind).toBe("task_progress");
+    expect(msg.kind).toBe("thread_progress");
+    expect(inserted()?.kind).toBe("thread_progress");
   });
 
   it("a plain message from an agent is untouched (the whole point of the rule)", async () => {
@@ -236,7 +236,7 @@ describe("postMessage — the lanes the guard must NOT touch", () => {
   it.each(LIFECYCLE_KINDS)(
     "the DESKTOP RUNTIME still posts %s on its cookie session",
     async (kind) => {
-      // `main/session-window.js` onLaunched/onEnded → `channel-post.postTaskEvent`
+      // `main/session-window.js` onLaunched/onEnded → `channel-post.postThreadEvent`
       // → `listener-io.apiFetch`, on the Electron session's Supabase cookies.
       const msg = await postMessage(desktopCtx, "general", {
         body: "Started working on this request.",

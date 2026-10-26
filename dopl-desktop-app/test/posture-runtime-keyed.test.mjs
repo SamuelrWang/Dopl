@@ -84,7 +84,7 @@ test("P4-02: the auth hold resets to THIS runtime's narrowest, and a per-agent p
 
 test("P4-02: the summary's default is the session runtime's narrowest word, never `manual`", () => {
   summary.bind({ sessions: new Map([["k", {
-    key: "k", sessionId: "s", channelId: CH, taskId: "", agentId: "a1b2c3d4", runtimeId: "codex",
+    key: "k", sessionId: "s", channelId: CH, threadId: "", agentId: "a1b2c3d4", runtimeId: "codex",
     state: { ...startedStateFor({ windowless: true }, { id: "codex" }), toolMode: "" },
   }]]) });
   assert.equal(summary.list()[0].toolMode, "untrusted");
@@ -184,14 +184,14 @@ test("X-02: the button lane starts a dialog-picked Codex agent on the level in C
     return require(join(MAIN, id));
   };
   const op = evalModule(readFileSync(M("session-launch-op.js"), "utf8"), stub);
-  const res = await op.launchFromButton({ channelId: CH, taskId: "", runtime: "codex" });
+  const res = await op.launchFromButton({ channelId: CH, threadId: "", runtime: "codex" });
   assert.equal(res.ok, true, JSON.stringify(res));
   assert.equal(launches[0].runtime, "codex");
   assert.deepEqual(launches[0].startModes, { tools: "never", messages: "auto_inbound", native: { sandbox_mode: "danger-full-access" } });
-  await op.launchFromButton({ channelId: CH, taskId: "" });
+  await op.launchFromButton({ channelId: CH, threadId: "" });
   assert.equal(launches[1].runtime, "claude", "no pick: the channel's runtime");
   assert.equal(launches[1].startModes.tools, "bypass");
-  const refused = await op.launchFromButton({ channelId: CH, taskId: "", runtime: "borg" });
+  const refused = await op.launchFromButton({ channelId: CH, threadId: "", runtime: "borg" });
   assert.deepEqual(refused, { ok: false, reason: "no-sdk" }, "an explicit pick this build cannot run is refused, never swapped");
   assert.equal(launches.length, 2);
 });
@@ -204,12 +204,12 @@ test("C2: sessions:setMode hands the RAW word to the session (validated there) a
   const stub = (id) => {
     if (id === "electron") return { ipcMain: { handle: (n, fn) => { handlers[n] = fn; } } };
     if (id === "./ipc-guards") return { isAppWindowSender: () => true, isUuid: require(M("ipc-guards.js")).isUuid };
-    if (id === "./session-engine") return { setModeByTask: (a) => { sent.push(a); return { ok: true }; } };
+    if (id === "./session-engine") return { setModeByThread: (a) => { sent.push(a); return { ok: true }; } };
     if (id === "./diag") return { diag: () => {} };
     return require(join(MAIN, id));
   };
   evalModule(readFileSync(M("session-ipc-ops.js"), "utf8"), stub).register({ getSenderIds: () => new Set([1]) });
-  handlers["sessions:setMode"]({}, { channelId: CH, taskId: "", agentId: "a1b2c3d4", axis: "tools", mode: "never" });
+  handlers["sessions:setMode"]({}, { channelId: CH, threadId: "", agentId: "a1b2c3d4", axis: "tools", mode: "never" });
   assert.equal(sent[0].mode, "never", "not pre-coerced against the default runtime's words at the boundary");
   assert.equal(sent[0].pinned, true);
   handlers["sessions:setMode"]({}, { channelId: CH, axis: "tools", mode: { toString: () => "bypass" } });

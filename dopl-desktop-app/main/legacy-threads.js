@@ -29,16 +29,16 @@ function metaStr(m, key) {
 // ── Legacy thread registry (incident 2026-07-31) ─────────────────────────────
 // THE ONLY LOCAL RECORD OF A THREAD I OPENED WITHOUT create_thread.
 //
-// A legacy exchange has no channel_tasks row, so the server stamps NO task metadata
-// for it at all: resolvePostMetadata deletes taskMode / taskCreatedBy / taskTitle /
-// taskTarget unconditionally and re-adds them only from a resolved (UUID) task, and a
-// 'task-<channel>-<seq>' id is not a UUID, so it resolves to nothing and is passed
+// A legacy exchange has no channel_threads row, so the server stamps NO thread metadata
+// for it at all: resolvePostMetadata deletes threadMode / threadCreatedBy / threadTitle /
+// threadTarget unconditionally and re-adds them only from a resolved (UUID) thread, and a
+// 'thread-<channel>-<seq>' id is not a UUID, so it resolves to nothing and is passed
 // through verbatim (it is also NOT rejected: only an unresolved UUID 400s). The wire
 // therefore tells the requester nothing about who owns a legacy thread.
 //
 // What the requester DOES own is the fact that it authored the opening message. The
-// legacy id is deterministic from (channel, seq) alone (trigger.taskIdFor's fallback,
-// and handleTrigger's futureTaskId), so this machine can compute the exact id a peer's
+// legacy id is deterministic from (channel, seq) alone (trigger.threadIdFor's fallback,
+// and handleTrigger's futureThreadId), so this machine can compute the exact id a peer's
 // desktop will mint for MY message the moment it sees that message go by, and store it
 // with the member I addressed. Matching a later reply against that store is provenance
 // no peer can forge, because no peer can author a message as me.
@@ -68,14 +68,14 @@ function metaStr(m, key) {
 // It recorded EVERY addressed message of mine, and in a DM the server auto-addresses
 // every post (since v2.6), so in the ordinary 1:1 case that is literally every message
 // the operator sends — each one minting a legacy id a peer may later claim. And
-// `metadata.taskId` is CALLER-SETTABLE for a legacy id with no participation check
+// `metadata.threadId` is CALLER-SETTABLE for a legacy id with no participation check
 // (F-083: only the calm flags are gated), so a peer could stamp a genuinely NEW request
-// with an old legacy id of mine and have it classified 'task-reply' — a passive banner
+// with an old legacy id of mine and have it classified 'thread-reply' — a passive banner
 // with NO consent row, NO gate and NO Accept — for as long as the process lived.
 //
 // Two bounds close that, both in the fail-safe direction (a miss costs a consent
 // prompt, never a swallowed message):
-//   OPENERS ONLY. A message carrying an inbound taskId is a CONTINUATION, not the
+//   OPENERS ONLY. A message carrying an inbound threadId is a CONTINUATION, not the
 //     start of a thread, so it opens nothing. The legacy id is derived from the
 //     OPENER's seq, so a multi-turn exchange still matches the one record — every
 //     later turn of mine carries `thread=<that id>` and is skipped here.
@@ -87,7 +87,7 @@ function metaStr(m, key) {
 const LEGACY_THREAD_CAP = 500;
 const LEGACY_THREAD_TTL_MS = 6 * 60 * 60 * 1000;
 const LEGACY_THREAD_KEY = 'legacyThreads'; // electron-store key (Q11)
-const legacyThreads = new Map(); // legacy task id -> { owner, target, at }
+const legacyThreads = new Map(); // legacy thread id -> { owner, target, at }
 // The injected persistence, or null for the in-memory registry. Duck-typed to
 // { get(key), set(key, value) } so a test can hand in a plain object and this block
 // never has to know electron-store exists.
@@ -142,11 +142,11 @@ function useLegacyThreadStore(store, nowMs) {
 }
 
 // The legacy thread id a peer's desktop mints for a message at (channel, seq). MUST stay
-// byte-identical to trigger.js taskIdFor / handleTrigger's futureTaskId, since matching a
+// byte-identical to trigger.js threadIdFor / handleTrigger's futureThreadId, since matching a
 // reply is a plain string lookup. Built by concatenation, not a template literal, so the
 // brace-balancing extractor the truth tables use never has to reason about `${`.
 function legacyThreadId(channelId, seq) {
-  return 'task-' + String(channelId) + '-' + String(seq);
+  return 'thread-' + String(channelId) + '-' + String(seq);
 }
 
 // Record a thread I opened: MY OWN message, explicitly addressed to someone else. Called
@@ -169,7 +169,7 @@ function noteMyLegacyThread(m, entry, myId, nowMs) {
   // OPENERS ONLY. A message already carrying a thread id continues someone's thread;
   // it does not open one, and recording it would mint a second id for the same
   // exchange that no reply will ever match anyway.
-  if (metaStr(m, 'taskId')) return;
+  if (metaStr(m, 'threadId')) return;
   if (!Number.isInteger(seq) || seq <= 0) return;
   const at = Number(nowMs) || Date.now();
   const id = legacyThreadId(channelId, seq);
@@ -191,7 +191,7 @@ function noteMyLegacyThread(m, entry, myId, nowMs) {
 // FIX S5: an entry past its TTL is dropped on read and answers false, so a banked
 // legacy id cannot suppress consent indefinitely.
 function knownLegacyReply(m, myId, nowMs) {
-  const id = metaStr(m, 'taskId');
+  const id = metaStr(m, 'threadId');
   if (!id) return false;
   const rec = legacyThreads.get(id);
   if (!rec) return false;

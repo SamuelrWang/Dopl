@@ -38,7 +38,7 @@ function summary(over: Partial<Summary> = {}): Summary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     agentId: "a1b2c3d4",
     name: "a1b2c3d4",
     state: "working",

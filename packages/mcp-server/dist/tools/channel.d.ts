@@ -37,10 +37,6 @@
  * caller's OWN agents — and the server resolves it; with one the message is a
  * REQUEST, without one it is chat and reaches nobody.
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Ops and params
- * say `thread`; `channel_tasks`, `metadata.taskId`, `task_*` kinds and the
- * `/tasks` routes keep the storage name.
- *
  * ⚠ No `dopl_channel_admin` twin — no destructive ops over MCP (archive/delete
  * are human decisions in the web UI).
  */

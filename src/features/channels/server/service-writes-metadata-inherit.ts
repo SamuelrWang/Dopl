@@ -1,7 +1,7 @@
 /** Split out of `service-writes-metadata.ts` (2026-09-14, 500-line cap): the two DM THREAD-INHERITANCE resolvers fold 4 spends — the pair's peer and the pair's one thread — whose behaviour is pinned by `service-writes-metadata-inherit.test.ts`. */
 import "server-only";
-import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
-import * as repoTasks from "./repository-tasks";
+import type { ChannelMemberRow, ChannelRow, ChannelThreadRow } from "./dto";
+import * as repoThreads from "./repository-threads";
 
 /**
  * Other member of a DIRECT channel, or undefined when ambiguous. A DM is exactly
@@ -34,7 +34,7 @@ export async function resolveDirectPeer(
 }
 
 /**
- * Single task of a direct channel whose participants are exactly {author, peer},
+ * Single thread of a direct channel whose participants are exactly {author, peer},
  * else null. All-or-nothing: with 2+ candidates a guess would attach a turn to
  * the wrong card and route it to the wrong session window on the peer's machine.
  *
@@ -44,21 +44,21 @@ export async function resolveDirectPeer(
  * thread inherit nothing, which reads as inheritance being broken. The column is
  * legacy and unread; this was one of its readers.
  */
-export async function resolveInheritableTask(
+export async function resolveInheritableThread(
   channel: ChannelRow,
   authorUserId: string,
   peerUserId: string
-): Promise<ChannelTaskRow | null> {
+): Promise<ChannelThreadRow | null> {
   // ⚠ Reads the ACTIVITY-ordered page (the one thread read there is). Order is
   // irrelevant here — this is an all-or-nothing match, not a pick-the-first —
   // and the bound is not a risk on this path: it runs only for a DIRECT
   // channel, i.e. one pair's threads.
-  const { rows: tasks } = await repoTasks.listTasksByChannel(channel.id);
-  const candidates = tasks.filter(
-    (task) =>
-      (task.created_by === authorUserId &&
-        task.target_user_id === peerUserId) ||
-      (task.created_by === peerUserId && task.target_user_id === authorUserId)
+  const { rows: threads } = await repoThreads.listThreadsByChannel(channel.id);
+  const candidates = threads.filter(
+    (thread) =>
+      (thread.created_by === authorUserId &&
+        thread.target_user_id === peerUserId) ||
+      (thread.created_by === peerUserId && thread.target_user_id === authorUserId)
   );
   return candidates.length === 1 ? candidates[0] : null;
 }

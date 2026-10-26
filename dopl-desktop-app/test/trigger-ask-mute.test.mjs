@@ -47,7 +47,7 @@ function loadTrigger(route) {
     if (id === "./listener-io") return { displayNameFor: () => "Ada" };
     if (id === "./targeting") {
       return {
-        firstClassTaskId: () => null,
+        firstClassThreadId: () => null,
         metaStr: (m, k) => (m && m.metadata && m.metadata[k]) || "",
         truncate: (s, n) => String(s == null ? "" : s).slice(0, n),
         resolveLaunchToolProfile: () => "narrow",
@@ -62,7 +62,7 @@ function loadTrigger(route) {
     }
     if (id === "./channel-dirs") return { liveChannelDirLabel: () => "~/Dopl/design" };
     if (id === "./tool-profiles") return { profileLabel: () => "narrow", profileHint: () => "" };
-    if (id === "./task-notify") return { mentionNotice: () => ({ title: "t", body: "b" }) };
+    if (id === "./thread-notify") return { mentionNotice: () => ({ title: "t", body: "b" }) };
     if (id === "./channel-post") return { postCourtesy: async (_e, _m, body) => { calls.courtesies.push(body); } };
     if (id === "./queued-notice") return { announce: async () => { calls.announced += 1; } };
     if (id === "./trigger-outcomes") {
@@ -151,7 +151,7 @@ test("no agent runtime still defers before any notification is raised", async ()
     if (id === "./session-engine") return {};
     if (id === "./channel-dirs") return {};
     if (id === "./tool-profiles") return { profileLabel: () => "", profileHint: () => "" };
-    if (id === "./task-notify") return { mentionNotice: () => ({}) };
+    if (id === "./thread-notify") return { mentionNotice: () => ({}) };
     if (id === "./channel-post") return { postCourtesy: async () => {} };
     if (id === "./queued-notice") return { announce: async () => {} };
     if (id === "./trigger-outcomes") return { AUTH_HELD_REPLY: "", RESEND: "", CANNOT_RUN: "" };

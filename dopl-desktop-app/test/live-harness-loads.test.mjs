@@ -89,7 +89,7 @@ test("the forged-key list covers every reserved key the service strips", () => {
   // live run proves.
   //
   // `CONDITIONALLY_STRIPPED` is subtracted because those keys are NOT always dropped —
-  // `taskId` is honoured when it names a thread the caller participates in, so asserting a
+  // `threadId` is honoured when it names a thread the caller participates in, so asserting a
   // strip on it would assert the opposite of the contract. The exclusion lives next to the
   // forged list itself so the two cannot drift.
   const stripped = [...src.matchAll(/delete metadata\.(\w+);/g)].map((m) => m[1]);

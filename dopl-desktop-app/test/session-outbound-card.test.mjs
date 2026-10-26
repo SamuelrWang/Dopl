@@ -66,7 +66,7 @@ const POST = { op: "send", body: "Shipping the invoice import tonight." };
 // left exactly one item; the requestId handover through `outbound_gate` (and its no-ops for an
 // unknown id, a missing id and an already-resolved card); the L3 RACE that turned a DELIVERED
 // bubble back into a card when auto-approve was flipped off mid-post; the three decisions
-// (allow-once / allow-task deliver, deny marks not_sent); markOutboundDecided FAILING CLOSED on
+// (allow-once / allow-thread deliver, deny marks not_sent); markOutboundDecided FAILING CLOSED on
 // anything that is not an explicit allow; one card answering only for ITSELF across two pending
 // posts; the dock still surfacing a Bash request queued BEHIND a post; and the tool_result belt.
 // EVERY ONE of those assertions was a property of `vm.reduceEvent` / `vm.markOutboundDecided` /
@@ -75,22 +75,22 @@ const POST = { op: "send", body: "Shipping the invoice import tonight." };
 // tests leaned on (the prediction, the single artifact, the park echo) are all still here.
 
 test("io: postWillGate mirrors canUseTool — gate by default, NOT under a grant or AXIS B", () => {
-  const mkSession = (over) => ({ profile: "full", channelId: "ch1", state: { allowForTask: [], messageMode: "ask" }, ...over });
+  const mkSession = (over) => ({ profile: "full", channelId: "ch1", state: { allowForThread: [], messageMode: "ask" }, ...over });
   assert.equal(io.postWillGate(mkSession(), POST), true, "nothing granted -> the card appears");
   // v2.9: the outbound half of the MESSAGE axis replaced the auto-approve toggle here.
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [], messageMode: "auto_outbound" } }), POST), false,
+  assert.equal(io.postWillGate(mkSession({ state: { allowForThread: [], messageMode: "auto_outbound" } }), POST), false,
     "auto send outgoing -> no card, the post just goes");
   // FIX F7: the post grant is scoped to the EXACT body, so the key is built from the same
   // call, not hand-written — a body-blind constant no longer suppresses anything.
   const postGrant = profiles.grantKeyFor(CHANNEL_TOOL, POST, "ch1");
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [postGrant], messageMode: "ask" } }), POST), false,
-    "the scoped task grant for THIS body -> no card either");
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [postGrant], messageMode: "ask" } }),
+  assert.equal(io.postWillGate(mkSession({ state: { allowForThread: [postGrant], messageMode: "ask" } }), POST), false,
+    "the scoped thread grant for THIS body -> no card either");
+  assert.equal(io.postWillGate(mkSession({ state: { allowForThread: [postGrant], messageMode: "ask" } }),
     { ...POST, body: "ssh key: AAAA" }), true, "...but a DIFFERENT body is a different decision");
   // A grant taken on another op does NOT suppress the card (FIX F2 scoping).
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [CHANNEL_TOOL + "#op:read"], messageMode: "ask" } }), POST), true);
+  assert.equal(io.postWillGate(mkSession({ state: { allowForThread: [CHANNEL_TOOL + "#op:read"], messageMode: "ask" } }), POST), true);
   // And the TOOL axis can never send a message, not even at `bypass` (THE INVARIANT).
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [], toolMode: "bypass" } }), POST), true);
+  assert.equal(io.postWillGate(mkSession({ state: { allowForThread: [], toolMode: "bypass" } }), POST), true);
 });
 
 // ── main/session-io: the gate PREDICTION + the suppressed double artifact ──────────
@@ -118,7 +118,7 @@ test("io: an auto-approved post carries NO pending marker (the v2.6 payload, exa
 });
 
 test("io: the AXIS B auto-send bypass still dispatches NOTHING (no card, no dock)", async () => {
-  const s = { profile: "full", channelId: "ch1", state: { allowForTask: [], messageMode: "auto_outbound" }, pendingPermissions: new Map(), pendingNames: new Map() };
+  const s = { profile: "full", channelId: "ch1", state: { allowForThread: [], messageMode: "auto_outbound" }, pendingPermissions: new Map(), pendingNames: new Map() };
   const events = [];
   const res = await axisB.makeCanUseTool(s, (_s, ev) => events.push(ev))(CHANNEL_TOOL, POST, { requestId: "rA", toolUseID: "tA" });
   assert.deepEqual(res, { behavior: "allow" });
@@ -204,7 +204,7 @@ test("L3 PARK: the park deny-closes the post's own request first", () => {
 // ⚠ DELETED 2026-08-20 (F-228) — three renderer wiring pins:
 //   - "the controller decides by the card's own requestId" read renderer/session/session.js.
 //   - "the preload RETURNS main's own verdict, fail-closed" read session-preload.js. Its rule
-//     (coerce to allow-once | allow-task | deny, else DENY) had no other reader: the IPC channel
+//     (coerce to allow-once | allow-thread | deny, else DENY) had no other reader: the IPC channel
 //     it guarded (`session:permission`) went with session-ipc.js.
 //   - "the card's recipe is a full-width sibling of the inbound gate card" read session.css.
 // All three files are deleted.

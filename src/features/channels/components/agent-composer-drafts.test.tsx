@@ -45,7 +45,7 @@ function composer(agentId: string, ended = false) {
   return (
     <AgentComposer
       channelId={CHANNEL_ID}
-      taskId="t-1"
+      threadId="t-1"
       agentId={agentId}
       name={agentId}
       ended={ended}

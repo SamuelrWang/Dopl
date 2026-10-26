@@ -5,7 +5,7 @@
 // tool-profiles / the consent-watcher WATCHER-PURE block). Covers every phase transition
 // and its effects, the turn / idle / cost caps, the universal inbound gate + its
 // auto-accept bypasses (v2.5 D1; accept / decline live in inbound-gate.test.mjs), the
-// allow-for-task short-circuit, terminal idempotency. FIX F3: session-reducer-outbound.
+// allow-for-thread short-circuit, terminal idempotency. FIX F3: session-reducer-outbound.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -36,7 +36,7 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   assert.equal(s.turnCap, undefined);
   assert.equal(s.costCapUsd, undefined);
   assert.deepEqual(s.pendingPermissions, []);
-  assert.deepEqual(s.allowForTask, []);
+  assert.deepEqual(s.allowForThread, []);
   // v2.9 THE TWO AXES both start at their MOST RESTRICTIVE value (fail-closed).
   assert.equal(s.toolMode, "manual");
   assert.equal(s.messageMode, "ask");
@@ -67,13 +67,13 @@ test("initialSessionState honors mode/side and the idle TTL, ignores a persisted
 
 // ── launched ──────────────────────────────────────────────────────────────────
 
-test("launched: launching -> running with persist/lifecycle(task_started)/scheduleIdle", () => {
+test("launched: launching -> running with persist/lifecycle(thread_started)/scheduleIdle", () => {
   const s0 = initialSessionState();
   const { state, effects } = sessionReducer(s0, { type: "launched", payload: { type: "init", model: "m" } });
   assert.equal(state.phase, "running");
   assert.deepEqual(effTypes(effects), ["persist", "lifecycle", "scheduleIdle"]);
   assert.equal(findEff(effects, "persist").phase, "running");
-  assert.equal(findEff(effects, "lifecycle").kind, "task_started");
+  assert.equal(findEff(effects, "lifecycle").kind, "thread_started");
 });
 
 // ── render events ────────────────────────────────────────────────────────────────
@@ -125,8 +125,8 @@ test("permission_request (not granted): -> awaiting_permission, tracks requestId
   assert.deepEqual(effTypes(r.effects), ["emit", "scheduleIdle"]);
 });
 
-test("permission_request short-circuits when the tool is already allowed for the task", () => {
-  const s = { ...running(), allowForTask: ["Bash"] };
+test("permission_request short-circuits when the tool is already allowed for the thread", () => {
+  const s = { ...running(), allowForThread: ["Bash"] };
   const r = sessionReducer(s, { type: "permission_request", requestId: "r9", name: "Bash", payload: {} });
   // No button: the reducer resolves allow immediately and does NOT change phase.
   assert.equal(r.state.phase, "running");
@@ -140,15 +140,15 @@ test("permission_decision allow-once -> running + resolvePermission(allow)", () 
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.activity, "working"); // last button cleared -> back to the in-flight turn
   assert.deepEqual(r.state.pendingPermissions, []);
-  assert.deepEqual(r.state.allowForTask, []);
+  assert.deepEqual(r.state.allowForThread, []);
   assert.deepEqual(effTypes(r.effects), ["resolvePermission", "scheduleIdle"]);
   assert.deepEqual(findEff(r.effects, "resolvePermission"), { type: "resolvePermission", requestId: "r1", decision: "allow" });
 });
 
-test("permission_decision allow-task adds the tool to allowForTask; SDK decision is allow", () => {
+test("permission_decision allow-thread adds the tool to allowForThread; SDK decision is allow", () => {
   const s = { ...running(), phase: "awaiting_permission", pendingPermissions: ["r1"] };
-  const r = sessionReducer(s, { type: "permission_decision", requestId: "r1", decision: "allow-task", name: "Write" });
-  assert.deepEqual(r.state.allowForTask, ["Write"]);
+  const r = sessionReducer(s, { type: "permission_decision", requestId: "r1", decision: "allow-thread", name: "Write" });
+  assert.deepEqual(r.state.allowForThread, ["Write"]);
   assert.equal(findEff(r.effects, "resolvePermission").decision, "allow");
 });
 
@@ -163,7 +163,7 @@ test("FIX M1: an unrecognized decision string FAILS CLOSED — resolves DENY, gr
   for (const bad of ["allow", "yes", "", undefined, "ALLOW-ONCE", "bypass"]) {
     const r = sessionReducer(s, { type: "permission_decision", requestId: "r1", decision: bad, name: "Bash" });
     assert.equal(findEff(r.effects, "resolvePermission").decision, "deny", `decision ${JSON.stringify(bad)} must resolve DENY`);
-    assert.deepEqual(r.state.allowForTask, [], "an unrecognized decision never grants for the task");
+    assert.deepEqual(r.state.allowForThread, [], "an unrecognized decision never grants for the thread");
   }
 });
 
@@ -314,46 +314,46 @@ test("interrupt (Stop): -> interrupted, interruptQuery", () => {
 
 // ── ends ───────────────────────────────────────────────────────────────────────
 
-test("end (operator End): -> ended + a NON-TERMINAL session_ended signal, task stays open", () => {
+test("end (operator End): -> ended + a NON-TERMINAL session_ended signal, thread stays open", () => {
   const s = running();
   const r = sessionReducer(s, { type: "end" });
   assert.equal(r.state.phase, "ended");
   // P3: the operator End posts a lifecycle BEFORE settle.
   assert.deepEqual(effTypes(r.effects), ["abortQuery", "lifecycle", "emit", "settle"]);
   const lc = findEff(r.effects, "lifecycle");
-  // P1-7 (decision 3, 2026-08-04): it used to be `task_failed` + { ended: true }.
+  // P1-7 (decision 3, 2026-08-04): it used to be `thread_failed` + { ended: true }.
   // The flag kept the CHIP calm, but the KIND is terminal — group-thread folds a
-  // task_failed into `endEvent` and reads it as the exchange's OUTCOME — so one
+  // thread_failed into `endEvent` and reads it as the exchange's OUTCOME — so one
   // member parking their own window painted the SHARED thread as failed on the
-  // peer's card. `task_progress` cannot become an outcome at all, which is the
+  // peer's card. `thread_progress` cannot become an outcome at all, which is the
   // property being pinned here rather than the string.
-  assert.equal(lc.kind, "task_progress");
+  assert.equal(lc.kind, "thread_progress");
   assert.deepEqual(lc.extra, { session_ended: true });
   assert.equal(lc.body, "Session ended");
-  assert.ok(!["task_failed", "task_finished"].includes(lc.kind), "never a terminal kind");
+  assert.ok(!["thread_failed", "thread_finished"].includes(lc.kind), "never a terminal kind");
   const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
   assert.equal(ended.payload.reason, "operator");
   assert.equal(findEff(r.effects, "settle").outcome, "ended");
 });
 
-// ⚠ TWO `close_task` CASES ENDED HERE (wiring plan Phase 4, 2026-08-18). They pinned the
-// operator's Close in the session window: a `closeTask` effect flipping `channel_tasks.status`,
-// then abort, a task_finished/task_failed lifecycle echo, an `ended` emit carrying the summary,
+// ⚠ TWO `close_thread` CASES ENDED HERE (wiring plan Phase 4, 2026-08-18). They pinned the
+// operator's Close in the session window: a `closeThread` effect flipping `channel_threads.status`,
+// then abort, a thread_finished/thread_failed lifecycle echo, an `ended` emit carrying the summary,
 // and a settle on the chosen outcome. Threads do not close, so the branch is deleted.
 //
 // What replaces them is the pin that it stays deleted, driven through the reducer rather than
 // asserted about the source: an UNKNOWN event is inert here, so a resurrected renderer sending
-// `close_task` changes nothing and settles nothing rather than half-ending a live session.
-test("close_task is no longer an event: it changes nothing and emits nothing", () => {
+// `close_thread` changes nothing and settles nothing rather than half-ending a live session.
+test("close_thread is no longer an event: it changes nothing and emits nothing", () => {
   const s = running();
-  const r = sessionReducer(s, { type: "close_task", outcome: "completed", summary: "done" });
+  const r = sessionReducer(s, { type: "close_thread", outcome: "completed", summary: "done" });
   assert.equal(r.state.phase, "running", "the session is untouched");
-  assert.deepEqual(r.effects, [], "no closeTask, no lifecycle, no settle");
+  assert.deepEqual(r.effects, [], "no closeThread, no lifecycle, no settle");
 });
 
 // 2026-09-07: `cost_cap` was an EVENT too — the externally-dispatched twin of the reducer's own
 // crossing — and it ended the session with a capped lifecycle. Deleted with the caps. Pinned the
-// same way `close_task` is: the arm is gone, so a stale dispatcher sending it changes nothing.
+// same way `close_thread` is: the arm is gone, so a stale dispatcher sending it changes nothing.
 test("cost_cap is no longer an event: it changes nothing and emits nothing", () => {
   const s = running();
   const r = sessionReducer(s, { type: "cost_cap" });
@@ -374,7 +374,7 @@ test("crash: abortQuery FIRST, then settle(interrupted) + lifecycle", () => {
   assert.deepEqual(effTypes(r.effects), ["abortQuery", "settle", "lifecycle"]);
   assert.equal(findEff(r.effects, "settle").outcome, "interrupted");
   const lc = findEff(r.effects, "lifecycle");
-  assert.equal(lc.kind, "task_failed");
+  assert.equal(lc.kind, "thread_failed");
   assert.deepEqual(lc.extra, { interrupted: true });
 });
 
@@ -386,7 +386,7 @@ test("a settled (ended) session ignores every later event — no re-emit, no re-
     { type: "result", turnCostUsd: 1 },
     { type: "crash" },
     { type: "end" },
-    { type: "close_task", outcome: "completed" },
+    { type: "close_thread", outcome: "completed" },
     { type: "interrupt" },
   ]) {
     const r = sessionReducer(ended, ev);

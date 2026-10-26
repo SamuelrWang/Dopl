@@ -161,7 +161,7 @@ export const APP_OPS = [
   // `channel_messages` and cannot touch a LIVE session — the SPA ends those first.
   "sessions.forgetThread",
   // 2026-08-20: `sessions.launch` — attach MY OWN agent to a thread, windowless. appWindowOnly,
-  // UUID-gated channel AND task. It DOES start a query, which is the feature: the same authority the
+  // UUID-gated channel AND thread. It DOES start a query, which is the feature: the same authority the
   // consent Allow exercises, here on the operator's OWN thread with no peer involved. Posture is
   // main's; the renderer hands over ids and display strings only.
   "sessions.launch",
@@ -169,7 +169,7 @@ export const APP_OPS = [
   // same shape as each other:
   //   `sessions.message` — THE ONE OP ON THIS BRIDGE THAT STARTS A TURN. UUID-gated channel, body
   //     capped in both layers (main's `MESSAGE_CAP` is the fence), empty-after-trim refused. It
-  //     dispatches the EXISTING `steer` event through `session-reopen.js › messageByTask` on a
+  //     dispatches the EXISTING `steer` event through `session-reopen.js › messageByThread` on a
   //     session resolved against MAIN'S OWN registry, which makes it own-agents-only structurally.
   //     The text carries OPERATOR authority (`session-seed.js › frameOperatorTurn`) and is
   //     deliberately not fenced as data. It BYPASSES the inbound gate, correctly: Axis B governs

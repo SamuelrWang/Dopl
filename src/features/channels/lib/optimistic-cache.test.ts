@@ -143,15 +143,15 @@ describe("pending message rows", () => {
       clientMsgId: key,
       body: "do the thing",
       authorUserId: ME,
-      metadata: { taskId: pendingMessageId(key), to_user_id: "peer" },
+      metadata: { threadId: pendingMessageId(key), to_user_id: "peer" },
     });
     const retagged = retagPendingMessage(
       appendPendingMessage(cacheOf(), pending),
       key,
-      { taskId: "real-thread" }
+      { threadId: "real-thread" }
     );
     expect(retagged?.messages[0].metadata).toEqual({
-      taskId: "real-thread",
+      threadId: "real-thread",
       to_user_id: "peer",
     });
   });
@@ -179,7 +179,7 @@ describe("pending thread rows", () => {
 
   it("swaps the pending row for the server's, keeping one card", () => {
     const pendingId = pendingMessageId("c-6");
-    const cache = upsertThread({ tasks: [] }, {
+    const cache = upsertThread({ threads: [] }, {
       ...buildPendingThread({
         id: pendingId,
         channelId: CHANNEL,
@@ -200,8 +200,8 @@ describe("pending thread rows", () => {
       }),
     };
     const settled = upsertThread(cache, real, pendingId);
-    expect(settled?.tasks).toHaveLength(1);
-    expect(settled?.tasks[0].id).toBe("real-thread");
+    expect(settled?.threads).toHaveLength(1);
+    expect(settled?.threads[0].id).toBe("real-thread");
   });
 });
 

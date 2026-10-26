@@ -85,9 +85,9 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
     // the remedy and this arm only has to say nothing was sent.
     case "CHANNEL_RECIPIENT_UNRESOLVED":
       return "recipient_unresolved";
-    case "CHANNEL_TASK_NOT_IN_CHANNEL":
+    case "CHANNEL_THREAD_NOT_IN_CHANNEL":
       return "thread_not_in_channel";
-    case "CHANNEL_TASK_SELF_TARGET":
+    case "CHANNEL_THREAD_SELF_TARGET":
       return "self_target";
     case "VALIDATION_FAILED":
     case "INVALID_JSON":
@@ -107,13 +107,13 @@ export function classifyBadRequest(e: unknown): BadRequestKind {
  * {@link classifyBadRequest}: a bare `status === 403` reports one cause for all.
  *
  *   - `not_a_member`         — `CHANNEL_FORBIDDEN`: not a member of the channel.
- *   - `thread_authorization` — `TASK_FORBIDDEN`: IN the channel but not
+ *   - `thread_authorization` — `THREAD_FORBIDDEN`: IN the channel but not
  *     authorized on THIS THREAD. A thread's two parties are its creator and its
  *     target, and only those two may post into it or set its mode
- *     (`service-tasks.ts`, `service-writes-metadata.ts`). ⚠ The arm must say
+ *     (`service-threads.ts`, `service-writes-metadata.ts`). ⚠ The arm must say
  *     WHICH write it refused, and must NOT read as "you left the channel".
  *   - `lifecycle_kind`       — `CHANNEL_LIFECYCLE_KIND_FORBIDDEN`: a post
- *     carrying `task_started`/`task_finished`/`task_failed`. The tool refuses
+ *     carrying `thread_started`/`thread_finished`/`thread_failed`. The tool refuses
  *     these pre-call, so this is the belt for a bypassed build. ⚠ Must not be
  *     reported as a channel-membership problem.
  *   - `unknown`              — an unrecognized 403. ⚠ Say so; never guess.
@@ -133,7 +133,7 @@ export function classifyForbidden(e: unknown): ForbiddenKind {
   switch (apiErrorCode(e)) {
     case "CHANNEL_FORBIDDEN":
       return "not_a_member";
-    case "TASK_FORBIDDEN":
+    case "THREAD_FORBIDDEN":
       return "thread_authorization";
     case "CHANNEL_LIFECYCLE_KIND_FORBIDDEN":
       return "lifecycle_kind";

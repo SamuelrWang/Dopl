@@ -60,7 +60,7 @@ function byAgent(id: string, agentId: string | null, seq = 1) {
     body: `BODY-${id}`,
     authorUserId: ME,
     authorKind: "agent",
-    metadata: { taskId: "t-1" },
+    metadata: { threadId: "t-1" },
     clientMsgId: agentId === null ? null : `agent-${agentId}-${seq}`,
   });
 }
@@ -140,7 +140,7 @@ describe("an agent's sender pill opens that agent's view", () => {
   it("leaves a HUMAN pill a plain span", () => {
     const onOpenAgent = vi.fn();
     renderWith(
-      [message({ id: "h", seq: 1, body: "HUMAN", authorUserId: ME, metadata: { taskId: "t-1" } })],
+      [message({ id: "h", seq: 1, body: "HUMAN", authorUserId: ME, metadata: { threadId: "t-1" } })],
       WITH_A,
       onOpenAgent
     );

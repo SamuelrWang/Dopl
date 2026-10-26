@@ -83,7 +83,7 @@ const { DOPL_CHANNEL_TOOL } = require(M("tool-profiles.js"));
 test("H2: main stamps `directChannel` on a DM session's post surface, and only then", () => {
   const mk = (direct) => ({
     profile: "full", channelId: "ch1", counterpartyName: "David", direct,
-    state: { allowForTask: [], messageMode: "ask" },
+    state: { allowForThread: [], messageMode: "ask" },
     pendingPermissions: new Map(), pendingNames: new Map(),
   });
   const gated = (s) => {
@@ -162,7 +162,7 @@ test("the counterparty's id is resolved to their name before it leaves main", ()
 test("H2: the flag is read off the channel DTO and survives every session-start path", () => {
   // The responder path is the one that answers a DM, so it is the one whose card was wrong.
   // `counterpartyId` is NOT a substitute — a group thread binds one too (session-dispatch
-  // passes `taskTarget`), and the server addresses nothing there.
+  // passes `threadTarget`), and the server addresses nothing there.
   const src = readFileSync(M("trigger.js"), "utf8");
   assert.match(src, /direct: entry\.channel\.isDirect === true/,
     "the responder session must carry the server's own 1:1 flag, strictly compared");

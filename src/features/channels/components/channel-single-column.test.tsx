@@ -123,7 +123,7 @@ vi.mock("./use-agents-panel", () => ({
 const SESSION: DesktopSessionSummary = {
   sessionId: "s-1",
   channelId: CHANNEL_ID,
-  taskId: "t-1",
+  threadId: "t-1",
   agentId: "ab12cd34",
   name: "flint",
   displayName: "Scout",

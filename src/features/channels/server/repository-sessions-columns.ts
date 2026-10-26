@@ -9,7 +9,7 @@ import type { SessionStateUpsert } from "./collab-dto";
 
 /** Columns the reconcile compares; `id` / `created_at` / `updated_at` are deliberately absent. */
 export const SESSION_DIFF_COLUMNS =
-  "session_key, channel_id, task_id, name, state, channel_name, thread_title, " +
+  "session_key, channel_id, thread_id, name, state, channel_name, thread_title, " +
   "detail, tool_label, model, context_used, context_window, tokens_spent, " +
   "started_at, last_activity_at, identity_name, display_name, " +
   "turns, tokens_delta, stale, denied_calls, last_denied_tool, " +
@@ -40,7 +40,7 @@ export function sessionRowMatches(
   };
   return (
     stored.channel_id === reported.channel_id &&
-    stored.task_id === reported.task_id &&
+    stored.thread_id === reported.thread_id &&
     stored.name === reported.name &&
     stored.state === reported.state &&
     stored.channel_name === reported.channel_name &&

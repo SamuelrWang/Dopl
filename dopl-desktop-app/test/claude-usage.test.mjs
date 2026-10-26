@@ -147,7 +147,7 @@ function assembled(s) {
   return fake(s);
 }
 
-const session = (over) => ({ profile: "full", channelId: "c1", workspaceId: "w1", taskId: "t1", ...over });
+const session = (over) => ({ profile: "full", channelId: "c1", workspaceId: "w1", threadId: "t1", ...over });
 
 test("the launch spec carries the picked model on a FRESH launch", () => {
   assert.equal(assembled(session({ model: "opus" })).model, "opus");
@@ -204,7 +204,7 @@ const baseRecord = new Function(
 const durable = new Function(`${fnOf(STORE, "durableName")}\n${fnOf(STORE, "durableSessionRecord")}
                               return durableSessionRecord;`)();
 const live = (over = {}) => ({
-  key: "c1:t1", sessionId: "s1", channelId: "c1", taskId: "t1", workspaceId: "w1",
+  key: "c1:t1", sessionId: "s1", channelId: "c1", threadId: "t1", workspaceId: "w1",
   side: "responder", profile: "full", mode: "interactive", startedAt: 1,
   state: { phase: "running", turns: 0, costUsd: 0 }, context: {}, ...over,
 });

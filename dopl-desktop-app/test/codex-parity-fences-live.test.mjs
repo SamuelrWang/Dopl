@@ -90,7 +90,7 @@ const outputs = (run) => {
 describe('1 — the operator\'s `never` is sent as a narrower granular, and nothing but the channel call changes', () => {
   // A path OUTSIDE every writable root: not the cwd, not $TMPDIR, not /tmp.
   const outside = join(homedir(), 'Library', 'Caches', `dopl-codex-parity-${process.pid}`);
-  const post = { op: 'send', channel: CH, thread: 'task-1', kind: 'message', body: 'NEVER-MARKER' };
+  const post = { op: 'send', channel: CH, thread: 'thread-1', kind: 'message', body: 'NEVER-MARKER' };
   const rounds = [
     () => fc(0, 'exec_command', { cmd: 'echo PLAIN > plain.txt && echo ok' }),
     () => fc(1, 'exec_command', { cmd: `mkdir -p ${outside} && echo x > ${outside}/esc.txt`, sandbox_permissions: 'require_escalated', justification: 'probe' }),
@@ -104,7 +104,7 @@ describe('1 — the operator\'s `never` is sent as a narrower granular, and noth
     },
   ];
   const gate = (messageMode) => (name, input) => (profiles.grantDecision({
-    runtime: 'codex', profile: 'full', toolMode: 'never', messageMode, channelId: CH, allowForTask: [], toolName: name, input,
+    runtime: 'codex', profile: 'full', toolMode: 'never', messageMode, channelId: CH, allowForThread: [], toolName: name, input,
   }) === 'allow' ? 'allow' : 'deny');
 
   test('1a/1b: same shell/file/escalation/network outcomes as native `never`; the post reaches Dopl\'s gate and runs ONCE', async (t) => {
@@ -283,7 +283,7 @@ describe('TIER 2 — a real model on `never` posts through the gate, with the fe
           },
           onServerRequest: (m) => serverRequests.answer(m, async (name, input) => {
             asked.push({ name, input });
-            return profiles.grantDecision({ runtime: 'codex', profile: 'full', toolMode: 'never', messageMode: 'auto_outbound', channelId: CH, allowForTask: [], toolName: name, input }) === 'allow' ? 'allow' : 'deny';
+            return profiles.grantDecision({ runtime: 'codex', profile: 'full', toolMode: 'never', messageMode: 'auto_outbound', channelId: CH, allowForThread: [], toolName: name, input }) === 'allow' ? 'allow' : 'deny';
           }),
         }),
       }, async (conn) => {

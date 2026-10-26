@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("@/features/devices/server/agent-apps-repository", () => ({ readGrantOrigin: vi.fn() }));
 
 import * as repo from "./repository";

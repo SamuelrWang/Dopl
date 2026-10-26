@@ -6,7 +6,7 @@
 // then the REDUCER's wake rules — the only things that may actually start work.
 //
 // ⚠ THE FIRST THREE LAYERS ARE DELETED — 2026-08-20, F-228, and they were all one mechanism.
-// `session-reopen.reopenByTask` no longer shows a window (no session has one) and no longer
+// `session-reopen.reopenByThread` no longer shows a window (no session has one) and no longer
 // falls back to `session-park.recreateParkedShell` (deleted, with `emitParkedShell` and the
 // `renderer/session/**` tree it painted into); `session-engine.startSession` no longer carries
 // `if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }`, because nothing
@@ -58,7 +58,7 @@ const REDUCER = [
 // `firstTurn` getters THREW, so touching the SDK was a test failure rather than a review
 // question; and "with no live session recreates a PARKED shell, never a running one" pinned that
 // the only fallback was the shell builder, marked `fromChannel: true` so the inbound gate could
-// never reach it. Neither branch exists: `reopenByTask` answers a live session with
+// never reach it. Neither branch exists: `reopenByThread` answers a live session with
 // `deps.openAgentWindow(...)` and everything else with `{ok:false, reason:'no-session'}`.
 // The throwing-getter idiom is worth keeping in mind for whatever pins the agent window.
 

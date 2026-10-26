@@ -57,11 +57,11 @@ const CursorParam = z.union([
 ]);
 
 /**
- * `?since=<seq>&before=<seq>&limit=<n<=200>&thread=<taskId>` for a message read.
+ * `?since=<seq>&before=<seq>&limit=<n<=200>&thread=<threadId>` for a message read.
  *
- * `thread` is a FILTER, not a lookup: it keeps rows whose `metadata.taskId` equals it,
+ * `thread` is a FILTER, not a lookup: it keeps rows whose `metadata.threadId` equals it,
  * and an unmatched id returns `[]`, not an error. ⚠ Deliberately ANY non-empty string,
- * NOT `.uuid()` — the transcript still carries legacy `task-<channelId>-<seq>` ids
+ * NOT `.uuid()` — the transcript still carries legacy `thread-<channelId>-<seq>` ids
  * from before threads were a table.
  *
  * ⚠ `since` AND `before` ARE THE TWO ENDS OF ONE WINDOW, NOT AN EITHER/OR, and neither

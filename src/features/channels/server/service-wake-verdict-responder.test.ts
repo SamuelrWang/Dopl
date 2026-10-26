@@ -476,7 +476,7 @@ describe("🔒 an unresolved handle blocks the repair — it is not an unaddress
     projection(sessionRow({ id: "s-1", name: "k3v7d2mq" }));
     const out = await resolve(
       "@agent-k3v7d2mq noted",
-      { session_id: "chan-1:task-1:k3v7d2mq" },
+      { session_id: "chan-1:thread-1:k3v7d2mq" },
       { authorKind: "agent" }
     );
     expect(out.delivery).not.toBe("unreachable");

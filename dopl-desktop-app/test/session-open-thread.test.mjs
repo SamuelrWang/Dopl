@@ -10,7 +10,7 @@
 // `recreateParkedShell`, whose single job was to MINT A SESSION WINDOW; `main/session-window.js`
 // and the whole `renderer/session/**` tree are gone, so there is no window to open, no replay
 // ring to seed from history (`session-history.js` went too), and no `resolveChannelContext`
-// handle on session-park's bind(). `reopenByTask` now has exactly two answers — a LIVE session
+// handle on session-park's bind(). `reopenByThread` now has exactly two answers — a LIVE session
 // opens `main/agent-window.js`, anything else is `{ok:false, reason:'no-session'}` — and that
 // contract is pinned by test/session-reopen.test.mjs, not from here.
 //
@@ -82,7 +82,7 @@ test("a channel the caller is not a member of, or with no workspace, yields NOTH
 // `recreateParkedShell({..., fromChannel: true})`. What they pinned:
 //   · no durable record + an operator CLICK opened a shell seeded from the channel, FAIL
 //     RESTRICTIVE at `read_only` and `side: 'requester'`;
-//   · the history it loaded was TASK-SCOPED, on the same shell;
+//   · the history it loaded was THREAD-SCOPED, on the same shell;
 //   · opening started NO agent work (no query, no consumer, no lifecycle, zero counters);
 //   · a channel the operator cannot open answered `{ok:false, reason:'no-thread'}`;
 //   · the shared WINDOW budget refused a reopen storm, checked BEFORE the network read;
@@ -91,15 +91,15 @@ test("a channel the caller is not a member of, or with no workspace, yields NOTH
 //   · ⚠ THE INBOUND GATE COULD NEVER OPEN A RECORD-LESS SHELL — only a click, via `fromChannel`.
 //
 // The last one was the security rule of the set, and it is now structural rather than tested:
-// `session-gate.js` no longer HAS a recreate call site (`feedInboundForTask`, `decideInbound`,
+// `session-gate.js` no longer HAS a recreate call site (`feedInboundForThread`, `decideInbound`,
 // `drainQueue` and `drainInbound` were deleted with the hold surface), and a windowless
 // session's message axis is floored at `auto_inbound`, so an inbound never holds and never asks
 // for a surface. There is no `fromChannel` flag left to forget.
 
 // ⚠ THE §3 VERDICT TEST STOOD HERE. It grepped session-reopen.js for the
-// `recreateParkedShell({ channelId, taskId, fromChannel: true })` call site and for the three
+// `recreateParkedShell({ channelId, threadId, fromChannel: true })` call site and for the three
 // verdict strings the web card words (`{ ok: true }`, `reason: 'no-thread'`, `reason: 'busy'`).
 // Two of those three verdicts no longer exist: there is no thread-less open to refuse and no
-// window budget to be busy against. `reopenByTask`'s live contract — live session -> agent
+// window budget to be busy against. `reopenByThread`'s live contract — live session -> agent
 // window, everything else -> `{ok:false, reason:'no-session'}` — belongs to session-reopen's own
 // suite, which drives the function instead of grepping its call site.

@@ -7,27 +7,27 @@ import { parseJson } from "@/shared/api/parse-json";
 import { requireChannelId, toChannelErrorResponse, channelWorkspace } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
-  createTask,
-  createTaskFanOut,
-  listChannelTasks,
+  createThread,
+  createThreadFanOut,
+  listChannelThreads,
 } from "@/features/channels/server/service";
 import { withMessageSource } from "@/features/channels/server/message-source";
 import {
-  isTaskFanOutInput,
-  TaskCreatePayloadSchema,
+  isThreadFanOutInput,
+  ThreadCreatePayloadSchema,
 } from "@/features/channels/schema";
 
-// Channel tasks: GET lists, POST creates. NOT sessionOnly — task ops arrive over the MCP device
+// Channel threads: GET lists, POST creates. NOT sessionOnly — thread ops arrive over the MCP device
 // token; the service enforces channel-scoped authorization.
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChannelContext(auth);
-    const { threads, truncated } = await listChannelTasks(
+    const { threads, truncated } = await listChannelThreads(
       ctx,
       requireChannelId(auth.params)
     );
-    // `tasks` keeps the storage name; `truncated` is load-bearing (INVARIANTS §9).
-    return NextResponse.json({ tasks: threads, truncated });
+    // `truncated` is load-bearing (INVARIANTS §9).
+    return NextResponse.json({ threads, truncated });
   } catch (err) {
     return toChannelErrorResponse(err);
   }
@@ -35,37 +35,35 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
 
 // ⚠ One POST, two shapes: single create, or fan-out (`toUserIds`, one thread per
 // addressee + group id). Same gate, since a fan-out is N ordinary creates
-// (INVARIANTS §9). Empty `toUserIds` is refused by `TaskFanOutSchema`.
+// (INVARIANTS §9). Empty `toUserIds` is refused by `ThreadFanOutSchema`.
 async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, TaskCreatePayloadSchema);
+    const input = await parseJson(request, ThreadCreatePayloadSchema);
     const ctx = await withMessageSource(buildChannelContext(auth), request);
-    if (isTaskFanOutInput(input)) {
-      const { threads, groupId } = await createTaskFanOut(
+    if (isThreadFanOutInput(input)) {
+      const { threads, groupId } = await createThreadFanOut(
         ctx,
         requireChannelId(auth.params),
         input
       );
-      // `tasks` / `openingSeqs` keep the storage name and stay ALIGNED by
-      // index — the client patches its optimistic rows against that order.
+      // `threads` / `openingSeqs` stay ALIGNED by index — the client patches its optimistic rows against that order.
       return NextResponse.json(
         {
-          tasks: threads.map((t) => t.thread),
+          threads: threads.map((t) => t.thread),
           openingSeqs: threads.map((t) => t.openingSeq),
           fanoutGroup: groupId,
         },
         { status: 201 }
       );
     }
-    const { thread, openingSeq } = await createTask(
+    const { thread, openingSeq } = await createThread(
       ctx,
       requireChannelId(auth.params),
       input
     );
-    // `task` keeps the storage name. `openingSeq` lets a requester arm `await` without
-    // a follow-up read. ⚠ Null only when the idempotent short-circuit returned
+    // `openingSeq` lets a requester arm `await` without a follow-up read. ⚠ Null only when the idempotent short-circuit returned
     // another member's thread.
-    return NextResponse.json({ task: thread, openingSeq }, { status: 201 });
+    return NextResponse.json({ thread, openingSeq }, { status: 201 });
   } catch (err) {
     return toChannelErrorResponse(err);
   }

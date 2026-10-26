@@ -52,7 +52,7 @@ const row = (over = {}) => ({
   id: DID,
   workspace_id: WS,
   channel_id: CH,
-  task_id: TH,
+  thread_id: TH,
   operator_user_id: ME,
   agent_id: AGENT,
   body: "check the deploy and tell me what you find",
@@ -330,7 +330,7 @@ test("DELIVERY: it goes through the SAME op the operator's own composer uses", a
   assert.equal(h.directs.length, 1);
   assert.deepEqual(h.directs[0], {
     channelId: CH,
-    taskId: TH,
+    threadId: TH,
     agentId: AGENT,
     text: "check the deploy and tell me what you find",
     // ⚠ `senderAgentId` RIDES BESIDE `operatorUserId` AND IS NOTHING LIKE IT (F-376a,

@@ -123,14 +123,14 @@ function privateTurnMessageMode(mode) {
 
 /**
  * The per-call verdict: 'deny' (hard-denied, unopenable), 'preapproved' (shadowed past the callback, never the
- * channel tool), 'allow' (a task grant or a posture), 'gate' (ask). ORDER IS THE CONTRACT: hard-deny ->
+ * channel tool), 'allow' (a thread grant or a posture), 'gate' (ask). ORDER IS THE CONTRACT: hard-deny ->
  * audience belt -> operator-tool turn -> Axis-B channel branch -> preapproved -> scoped grant -> Axis A
  * (+ an operator tool at Full) -> knowledge read -> gate.
  * `a.runtime` names which vocabulary steps 1 and 4 are asked in; absent is the default runtime.
  */
 function grantDecision(args) {
   const a = args || {};
-  const allowForTask = a.allowForTask || [];
+  const allowForThread = a.allowForThread || [];
   const rt = runtimeFor(a.runtime);
   const cfg = rt.toolConfigFor(a.profile);
   // Canonicalized once so every list agrees on the server; the GRANT KEY keeps the raw name (the shape shown).
@@ -148,7 +148,7 @@ function grantDecision(args) {
     if (!postFieldsOk(a.input)) return 'gate';
     if (isAwaitOp(a.input)) return 'deny';
     // Only a grant for THIS exact shape (no bare-name fallback: one read grant must not open `open`).
-    if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
+    if (allowForThread.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
     if (autoOutboundMode(a.messageMode) && isOwnChannelPost(a.input, a.channelId)) return 'allow';
     // Own-channel markers, thread opens, decision cards and artifact folds ride the same out half (arguments in
     // `session-own-outbound.js`).
@@ -163,7 +163,7 @@ function grantDecision(args) {
   }
   // 2.5 A server request no adapter recognises (`sdk-shape.js › UNRECOGNISED_REQUEST_PREFIX`): a restricted
   // profile DENIES it (containment has no row for what it cannot name); on `full` it is decided per request —
-  // Axis A or the gate, NEVER a standing task grant (one click must not pre-approve a request type Dopl
+  // Axis A or the gate, NEVER a standing thread grant (one click must not pre-approve a request type Dopl
   // cannot describe). Ahead of every grant lookup below.
   if (isUnrecognisedRequest(a.toolName)) {
     if (a.profile !== UNRESTRICTED_PROFILE_NAME) return 'deny';
@@ -171,7 +171,7 @@ function grantDecision(args) {
   }
   if (cfg.preApproved.indexOf(name) !== -1) return 'preapproved';
   // 3. A scoped standing grant, keyed on the shape the operator saw.
-  if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
+  if (allowForThread.indexOf(grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1) return 'allow';
   // 4. Axis A in this runtime's own words; an unknown mode allows nothing.
   if (operator === 'allow' || rt.axisAAllows(a.toolMode, name)) return 'allow';
   // 5. An op-scoped READ of a mixed write tool (`dopl-read-ops.js`), after Axis A so it narrows nothing: a

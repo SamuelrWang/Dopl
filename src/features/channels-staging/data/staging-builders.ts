@@ -143,7 +143,7 @@ export function postsFor(channelId: string, prefix: string) {
       body,
       metadata: {
         ...mentionMetadata(body, author),
-        ...(opts.thread ? { taskId: opts.thread } : {}),
+        ...(opts.thread ? { threadId: opts.thread } : {}),
         ...(opts.device ? { source: DEVICE[opts.device] } : {}),
       },
       clientMsgId: opts.agent ? `agent-${opts.agent}-${n}` : null,
@@ -173,7 +173,7 @@ export function ownSessionOf(
   return {
     sessionId: `stg-session-${agentId}`,
     channelId,
-    taskId: thread?.id ?? "",
+    threadId: thread?.id ?? "",
     agentId,
     name: agentId,
     displayName: name,
@@ -225,7 +225,7 @@ export function mentionOf(message: ChannelMessage, read: boolean): ChannelMentio
     messageId: message.id,
     seq: message.seq,
     channelId: message.channelId,
-    threadId: (message.metadata?.taskId as string | undefined) ?? null,
+    threadId: (message.metadata?.threadId as string | undefined) ?? null,
     authorUserId: author,
     authorKind: message.authorKind,
     authorName: message.authorName,

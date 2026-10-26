@@ -28,7 +28,7 @@
 //   4. `handleTrigger`'s source does not reach for `claudeAvailable` again.
 //
 // METHOD: `trigger.js` is electron-bound, so — like `classify.test.mjs` and
-// `first-class-task-id.test.mjs` — the gate is exercised through the real source
+// `first-class-thread-id.test.mjs` — the gate is exercised through the real source
 // of `sessionSpawnAvailable` plus a source ASSERTION on `handleTrigger`, rather
 // than by booting the module. `sessionSpawnAvailable` lives in `claude-runtime.js`
 // (split out at the §2 cap, and because the question deserved a home of its own);

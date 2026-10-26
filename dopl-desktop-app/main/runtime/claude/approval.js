@@ -33,7 +33,7 @@ function answerApproval(request, verdict) {
  * ⚠ THE TAG IS AN INVARIANT, NOT A REQUEST, and that is why this method exists at all. The
  * delivery prompt already names the thread and the agent omits the argument anyway — measured,
  * with an incident behind it (`main/session-outbound-tag.js`'s header). The value is the
- * session's own task id, which comes from the spawn spec ON THIS MACHINE and never off the wire,
+ * session's own thread id, which comes from the spawn spec ON THIS MACHINE and never off the wire,
  * so no server can supply it and no prompt can be trusted to carry it.
  * ⚠ `null` IS NOT A LEGAL RETURN. A runtime with no input-rewrite route stops agents
  * self-filtering their own posts in a shared channel — a fan-out/echo failure, not a cosmetic

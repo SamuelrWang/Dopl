@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const fx = await vi.hoisted(() => import("./service-launch-fixtures"));
 vi.mock("./repository-launch", () => fx.mocks.launchRepo);
 vi.mock("./repository-collab", () => fx.mocks.collab);
-vi.mock("./repository-tasks", () => fx.mocks.tasks);
+vi.mock("./repository-threads", () => fx.mocks.threads);
 vi.mock("./repository-session-colors", () => fx.mocks.sessionColors);
 vi.mock("./service-shared", (importOriginal) => fx.serviceSharedMock(importOriginal));
 vi.mock("@/features/agent-identities/server/service", () => fx.mocks.identities);

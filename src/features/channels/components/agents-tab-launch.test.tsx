@@ -266,7 +266,7 @@ describe("the identity name on an own-agent card", () => {
           {
             sessionId: "s-1",
             channelId: CHANNEL_ID,
-            taskId: "t-1",
+            threadId: "t-1",
             name: "flint",
             state: "working",
             threadTitle: "UI-kit design",

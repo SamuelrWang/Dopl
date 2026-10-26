@@ -23,16 +23,16 @@ import {
 /** A live-registry row, as `session-engine.js › listLiveSessions` projects one. */
 const liveRow = (agentId, over = {}) => ({
   sessionId: "s1", key: `${CH}::${agentId}`, channelId: CH, workspaceId: WS,
-  taskId: "", agentId, channelName: "General", taskTitle: null, status: "running", hidden: false,
+  threadId: "", agentId, channelName: "General", threadTitle: null, status: "running", hidden: false,
   ...over,
 });
 
 /** A pending END directive, as the server would write it. */
-const endRow = (over = {}) => row({ kind: "end", task_id: null, goal: null, model: null,
+const endRow = (over = {}) => row({ kind: "end", thread_id: null, goal: null, model: null,
   target_agent_id: "a1b2c3d4", ...over });
 
 /** A pending RENAME directive. ⚠ `target_name: ""` is LEGAL and means CLEAR. */
-const renameRow = (name, over = {}) => row({ kind: "rename", task_id: null, goal: null,
+const renameRow = (name, over = {}) => row({ kind: "rename", thread_id: null, goal: null,
   model: null, target_agent_id: "a1b2c3d4", target_name: name, ...over });
 
 const decided = (h) => decidePosts(h).map((p) => p.body);
@@ -120,7 +120,7 @@ test("TARGET: `target_name` keeps '' apart from null — that difference IS the 
 
 // ── 2. END — THE SHARED PATH, NOT A SECOND IMPLEMENTATION ────────────────────────────────
 
-test("END: dispatches through the SAME controlByTask the in-process verb and the Agents tab use",
+test("END: dispatches through the SAME controlByThread the in-process verb and the Agents tab use",
   async () => {
     const h = boot({ live: [liveRow("a1b2c3d4")] });
     await h.api.handle(endRow(), WS);
@@ -128,7 +128,7 @@ test("END: dispatches through the SAME controlByTask the in-process verb and the
     // ⚠ THE ADDRESS COMES FROM THE RESOLVED REGISTRY ROW, NOT FROM THE WIRE. Re-deriving a
     // session key from directive fields is how the lane and the engine come to disagree about
     // which session a request names.
-    assert.deepEqual(h.controls, [{ channelId: CH, taskId: "", agentId: "a1b2c3d4", action: "end" }]);
+    assert.deepEqual(h.controls, [{ channelId: CH, threadId: "", agentId: "a1b2c3d4", action: "end" }]);
     assert.deepEqual(decided(h), [{ directiveId: DID, status: "done" }]);
   });
 
@@ -138,9 +138,9 @@ test("END: it is the SAME two calls `axis-b.js`'s in-process end_agent makes, in
   // second stop path is a second set of teardown bugs.
   const src = readFileSync(join(MAIN, "directive-agent-ops.js"), "utf8");
   assert.match(src, /agentOps\.endVerdict\(/, "the verdict table is agent-self-ops.js's");
-  assert.match(src, /controlByTask\(\{/, "…and the dispatch is session-engine.js's");
+  assert.match(src, /controlByThread\(\{/, "…and the dispatch is session-engine.js's");
   assert.ok(!/dispatch\(|settleSession|\{ type: 'end' \}/.test(src),
-    "it must never reach past controlByTask into the reducer itself");
+    "it must never reach past controlByThread into the reducer itself");
   const axisB = readFileSync(join(MAIN, "runtime", "claude", "axis-b.js"), "utf8");
   assert.match(axisB, /agentOps\.endVerdict\(/, "the in-process verb still uses the same table");
 });

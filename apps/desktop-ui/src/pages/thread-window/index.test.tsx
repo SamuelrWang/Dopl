@@ -73,7 +73,7 @@ const MESSAGES = [
     authorKind: "user",
     kind: "message",
     body: "in the thread",
-    metadata: { taskId: THREAD_ID },
+    metadata: { threadId: THREAD_ID },
     clientMsgId: null,
     createdAt: "2026-08-01T11:59:00.000Z",
     authorName: "Ada",
@@ -145,7 +145,7 @@ beforeEach(() => {
       }
       if (path.endsWith("/messages")) return json({ messages: MESSAGES });
       if (path.endsWith("/members")) return json({ members: MEMBERS });
-      if (path.endsWith("/tasks")) return json({ tasks: [{ ...THREAD, workspaceId }] });
+      if (path.endsWith("/threads")) return json({ threads: [{ ...THREAD, workspaceId }] });
       // The decision surfaces' channel-scoped consent read (2026-08-20).
       if (path === "/api/channels/consent") return json({ requests: [] });
       throw new Error(`unexpected request: ${url}`);

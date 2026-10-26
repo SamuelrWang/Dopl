@@ -4,11 +4,11 @@
 // lifecycle event so the requester's card on the OTHER machine stops pulsing "Working…" —
 // every one except three:
 //   1. THE 12h ABANDONMENT. `endLifecycle('abandoned')` returned null. This is the COMMON
-//      path: request -> task_started -> 15min idle -> silent park -> 12h -> silent end. So
+//      path: request -> thread_started -> 15min idle -> silent park -> 12h -> silent end. So
 //      the ending that happens most often was the one nobody was told about.
 //   2. THE Q6 AUTH-PREFLIGHT HOLD. `startSession` returns the held session, so `launch()`
 //      answers with a sessionId and `trigger.inboundApproved` takes its SUCCESS branch — with
-//      no query ever run, no `task_started`, and nothing at all on the wire.
+//      no query ever run, no `thread_started`, and nothing at all on the wire.
 //   3. THE WINDOW-BUDGET EVICTION. `evictIdleShell` called the engine's `settle()` directly,
 //      which is teardown only: no reducer, therefore no lifecycle effect.
 //      ⚠ THAT CALLER IS GONE AND THE RULE IS NOT (2026-08-20, F-228). The eviction existed to
@@ -21,16 +21,16 @@
 // inactive, worded as a STATUS NOTE and not an error — it is nobody's fault.
 //
 // WHAT THAT MEANS MECHANICALLY, and why it is the existing machinery rather than a new path:
-// the note is `task_progress` + the reserved `session_ended` marker, which is the operator-End
+// the note is `thread_progress` + the reserved `session_ended` marker, which is the operator-End
 // precedent (P1-7). The kind is what makes it non-terminal BY CONSTRUCTION, so it can never
 // become the shared thread's outcome; a terminal kind here would paint the exchange as failed
 // on the peer's side, which is the exact bug P1-7 was raised to fix for the operator End.
 //
 // ⚠ THE READER CHANGED UNDER IT, AND THE NOTE DID NOT (wiring plan Phase 5, 2026-08-18). The
-// mechanics above used to be spelled in terms of `group-thread.ts` folding a `task_progress`
+// mechanics above used to be spelled in terms of `group-thread.ts` folding a `thread_progress`
 // into a session CARD's `calmEndStatus`; that whole family is DELETED with the card, and the
 // v2 transcript renders the note as an ordinary milestone row instead. What survives is the
-// only part that ever mattered here: a `task_progress` cannot be an outcome, and it is the
+// only part that ever mattered here: a `thread_progress` cannot be an outcome, and it is the
 // ONE lifecycle post this desktop still makes — the three terminal kinds went in the same
 // change (trigger-outcomes.js, pinned by lifecycle-echo.test.mjs).
 //
@@ -61,11 +61,11 @@ const lifecycleOf = (effects) => effects.find((e) => e.type === "lifecycle") || 
 
 // ── THE MESSAGE ──────────────────────────────────────────────────────────────────────
 
-test("the note is a STATUS, not an outcome: task_progress + the calm session_ended marker", () => {
+test("the note is a STATUS, not an outcome: thread_progress + the calm session_ended marker", () => {
   for (const reason of ["abandoned", "inactive"]) {
     const lc = endLifecycle(reason);
     assert.ok(lc, `${reason} must post`);
-    assert.equal(lc.kind, "task_progress", "a terminal kind would paint the SHARED thread failed");
+    assert.equal(lc.kind, "thread_progress", "a terminal kind would paint the SHARED thread failed");
     assert.deepEqual(lc.extra, { session_ended: true });
     assert.equal(lc.body, INACTIVE_NOTE);
   }
@@ -117,15 +117,15 @@ test("the marker stays RESERVED server-side, even though no client reads it any 
 
 test("the OTHER terminals are untouched — an unknown reason still posts NOTHING", () => {
   // ⚠ THIS CASE READ "the caps stay terminal, on purpose" AND DROVE `turn_cap` / `cost_cap`
-  // through `endLifecycle`, asserting `task_failed` — this machine REFUSING to continue, which
+  // through `endLifecycle`, asserting `thread_failed` — this machine REFUSING to continue, which
   // the peer was owed as an outcome. Both reasons are deleted (2026-09-07, Samuel's ruling) and
   // neither arm exists, so the assertion is dropped rather than re-pointed.
   assert.equal(endLifecycle("operator").body, "Session ended", "the End keeps its own wording");
-  // ⚠ `close_task` is history: thread closing was removed in Phase 4 (2026-08-18) and the
+  // ⚠ `close_thread` is history: thread closing was removed in Phase 4 (2026-08-18) and the
   // reducer branch went with it. `turn_cap` and `cost_cap` are now unknown reasons in exactly
   // the same way, which is the property worth keeping — an unrecognised terminal posts NOTHING
   // rather than falling back to a claim about the exchange.
-  for (const gone of ["close_task", "turn_cap", "cost_cap"]) {
+  for (const gone of ["close_thread", "turn_cap", "cost_cap"]) {
     assert.equal(endLifecycle(gone), null, `${gone} is not a reason any more, so it posts nothing`);
   }
   assert.equal(endLifecycle("idle_timeout"), null, "an idle PARK is not terminal and posts nothing");
@@ -170,7 +170,7 @@ test("AUTH HOLD: the park that runs no query at all still posts, and no longer c
   const r = sessionReducer(running(), { type: "auth_hold" });
   const lc = lifecycleOf(r.effects);
   assert.ok(lc, "nothing else on this path ever reaches the wire — C-5's whole point");
-  assert.equal(lc.kind, "task_progress", "the MILESTONE lane: a hold can never be a thread outcome");
+  assert.equal(lc.kind, "thread_progress", "the MILESTONE lane: a hold can never be a thread outcome");
   assert.equal(lc.body, AUTH_HELD_NOTE);
   assert.notEqual(lc.body, INACTIVE_NOTE, "a PARK must not borrow an ENDING's sentence");
   assert.ok(!/inactive|ended|stopped/i.test(lc.body), "it may not say this session finished, in any wording");
@@ -200,7 +200,7 @@ test("PARK-ON-CLAIM: an end nobody asked for says what caused it", () => {
   const r = sessionReducer(running(), { type: "end", reason: "claimed" });
   const lc = lifecycleOf(r.effects);
   assert.ok(lc, "the peer is still told, exactly as an operator End tells them");
-  assert.equal(lc.kind, "task_progress");
+  assert.equal(lc.kind, "thread_progress");
   assert.equal(lc.body, CLAIMED_NOTE);
   assert.notEqual(lc.body, "Session ended", "the whole point is that it reads differently");
   assert.equal(r.state.phase, "ended", "it is a REAL end: only the sentence changed");
@@ -208,7 +208,7 @@ test("PARK-ON-CLAIM: an end nobody asked for says what caused it", () => {
 
 test("PARK-ON-CLAIM: it settles identically to the operator's own End", () => {
   // ⚠ THE REASON MAY ONLY CHOOSE COPY. If it started choosing TEARDOWN too, this sweep would be
-  // a second end path and a second set of teardown bugs — the thing `controlByTask` and
+  // a second end path and a second set of teardown bugs — the thing `controlByThread` and
   // `directive-agent-ops.js` both refuse to become.
   const claimed = endEffects(running(), "ended", "claimed").map((e) => e.type);
   const operator = endEffects(running(), "ended", "operator").map((e) => e.type);
@@ -216,7 +216,7 @@ test("PARK-ON-CLAIM: it settles identically to the operator's own End", () => {
 });
 
 test("PARK-ON-CLAIM: an UNRECOGNISED reason falls back to the End's own wording, never to silence", () => {
-  // The reason rides in from a caller (`session-reopen.js › controlByTask`, closed set). A value
+  // The reason rides in from a caller (`session-reopen.js › controlByThread`, closed set). A value
   // that reached here anyway must not mint copy nobody wrote, and must not post NOTHING either:
   // the peer is owed the ending regardless of how well this machine can explain it.
   for (const bogus of ["", "whatever", "claimed-by-someone", null, undefined]) {
@@ -325,7 +325,7 @@ const win = () => new Function(
 // echoes. Calls below pass the info object alone.
 
 const info = (over = {}) => ({
-  channelId: "c1", taskId: "t1", key: "c1:t1", sessionId: "sess-A", sdkSessionId: null, ...over,
+  channelId: "c1", threadId: "t1", key: "c1:t1", sessionId: "sess-A", sdkSessionId: null, ...over,
 });
 
 test("GUARD: the same (thread, cycle) says it once", () => {
@@ -368,7 +368,7 @@ test("GUARD: the ledger is bounded — this tree has been bitten by a set that o
 test("GUARD: it fences ONLY the calm note — a real terminal is never suppressed", () => {
   const onEnded = ECHO_SRC.slice(ECHO_SRC.indexOf("function onEnded("));
   assert.match(onEnded, /meta\.session_ended === true &&/, "the guard is conditioned on the marker");
-  // A `task_failed` for a cap or a crash carries no session_ended, so it can never be dropped
+  // A `thread_failed` for a cap or a crash carries no session_ended, so it can never be dropped
   // by this — and its own P2-9 keying already collapses cycles on the server.
-  assert.ok(!/firstInactiveNote\(entry\.channel\.id, m\.seq\)\)\) return;[\s\S]{0,40}task_failed/.test(onEnded));
+  assert.ok(!/firstInactiveNote\(entry\.channel\.id, m\.seq\)\)\) return;[\s\S]{0,40}thread_failed/.test(onEnded));
 });

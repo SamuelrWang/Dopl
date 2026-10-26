@@ -48,7 +48,7 @@ function summary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -146,7 +146,7 @@ describe("AgentsTab — the cards", () => {
   it("names the CHANNEL for a session on no first-class thread, as the panel does", () => {
     render(
       <AgentsTab
-        sessions={[summary({ taskId: "", threadTitle: null })]}
+        sessions={[summary({ threadId: "", threadTitle: null })]}
         channelId={CHANNEL_ID}
         openAgent={null}
         onOpenAgent={noop}
@@ -189,11 +189,11 @@ describe("agentsForChannel / agentKey", () => {
   it("groups agents sharing a thread together, keeping feed order within one", () => {
     // ⚠ THE SHARED-THREAD CASE IS THE NORMAL ONE SINCE 2026-08-21 (multiplayer
     // agents): every launch mints a new instance, so N of them sit on one
-    // taskId. The grouping keeps them adjacent and must not reorder anything.
+    // threadId. The grouping keeps them adjacent and must not reorder anything.
     const rows = [
-      summary({ sessionId: "a", taskId: "t-1", name: "one" }),
-      summary({ sessionId: "b", taskId: "t-2", name: "two" }),
-      summary({ sessionId: "c", taskId: "t-1", name: "three" }),
+      summary({ sessionId: "a", threadId: "t-1", name: "one" }),
+      summary({ sessionId: "b", threadId: "t-2", name: "two" }),
+      summary({ sessionId: "c", threadId: "t-1", name: "three" }),
     ];
     expect(agentsForChannel(rows, CHANNEL_ID).map((s) => s.name)).toEqual([
       "one",
@@ -253,7 +253,7 @@ describe("ChannelsAgentPanel", () => {
             authorUserId: ME,
             authorKind: "agent",
             body: "Renamed btn/secondary to btn/light.",
-            metadata: { taskId: "t-1" },
+            metadata: { threadId: "t-1" },
           }),
         ]}
         currentUserId={ME}

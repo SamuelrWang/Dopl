@@ -48,7 +48,7 @@ export type SessionStateRow = {
   workspace_id: string;
   user_id: string;
   session_key: string;
-  task_id: string | null;
+  thread_id: string | null;
   name: string;
   state: string;
   channel_name: string | null;
@@ -132,7 +132,7 @@ export const OPERATOR_ONLY_SESSION_FIELDS = [
 export type SessionStateUpsert = {
   session_key: string;
   channel_id: string;
-  task_id: string | null;
+  thread_id: string | null;
   name: string;
   state: string;
   channel_name: string | null;
@@ -208,7 +208,7 @@ export function mapPeerSessionStateRow(
 ): ChannelSessionState {
   return {
     channelId: row.channel_id,
-    threadId: row.task_id,
+    threadId: row.thread_id,
     name: row.name,
     // A cast, not a check: the render's closed-set test (`channel-session-render.ts › formatSessionLine`) holds.
     state: row.state as SessionPillState,

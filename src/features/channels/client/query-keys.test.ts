@@ -39,7 +39,7 @@ function source(rel: string): string {
 describe("channel paths", () => {
   it("encodes the channel id into every per-channel path", () => {
     expect(channelMessagesPath("a/b")).toBe("/api/channels/a%2Fb/messages");
-    expect(channelThreadsPath(CHANNEL)).toBe(`/api/channels/${CHANNEL}/tasks`);
+    expect(channelThreadsPath(CHANNEL)).toBe(`/api/channels/${CHANNEL}/threads`);
   });
 
   it("agrees with the read hooks that hold their path as a literal", () => {

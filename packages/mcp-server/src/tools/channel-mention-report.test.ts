@@ -204,7 +204,7 @@ describe("what a post result actually carries about its `@` tokens", () => {
         seq: 42,
         kind: "message",
         authorUserId: "u-me",
-        metadata: { ...(thread ? { taskId: thread } : {}), mentionedUserIds: resolved },
+        metadata: { ...(thread ? { threadId: thread } : {}), mentionedUserIds: resolved },
       })),
     } as unknown as DoplClient;
     const res = await opPost(client, "eng", body, thread ? { thread } : {});

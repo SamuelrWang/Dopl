@@ -3,7 +3,7 @@
 // ── WHY THIS FILE EXISTS (incident 2026-07-31, second capture) ──────────────────────
 // A requester opened FIRST-CLASS thread 300f2b7e (seq 141). The responder's session window
 // answered at seq 143, and that reply carried metadata {runtime, summary, to_user_id} and NO
-// taskId at all. On the requester's machine an addressed, agent-authored, thread-less message
+// threadId at all. On the requester's machine an addressed, agent-authored, thread-less message
 // is indistinguishable from a fresh request, so it classified `trigger`, raised a consent row,
 // and popped an "INCOMING REQUEST" window for the answer to its own question.
 //
@@ -25,12 +25,12 @@
 //     D2/FIX #9 exist to catch; it is not ours to rewrite.
 //   - ONLY WHEN THE SESSION HAS A THREAD ID. No id, no tag, byte-identical input.
 //   - NEVER OVERWRITE. If the agent supplied a thread id — via the `thread` argument or a
-//     `metadata.taskId` copy, both of which the MCP op honors — that value stands. When it
+//     `metadata.threadId` copy, both of which the MCP op honors — that value stands. When it
 //     DIFFERS from the session's own we leave it and log, because an agent deliberately
 //     threading elsewhere is a decision, and silently rewriting it would be main lying about
 //     what the operator approved.
-//   - THE VALUE IS OURS. `s.taskId` comes from the spawn spec on this machine, never off the
-//     wire, and works for both a first-class UUID and a legacy `task-<channel>-<seq>` id (the
+//   - THE VALUE IS OURS. `s.threadId` comes from the spawn spec on this machine, never off the
+//     wire, and works for both a first-class UUID and a legacy `thread-<channel>-<seq>` id (the
 //     server passes a non-UUID through verbatim rather than resolving it).
 //
 // Its own module, kept dependency-free (session-profiles only, which is crypto + tool-profiles) so the truth table
@@ -102,19 +102,19 @@ function outboundConsentShape(name, input, sessionChannelId) {
 // ─── BEGIN OUTBOUND-THREAD-TAG (pure; unit-tested via source extraction) ──────
 //
 // The dopl_channel argument that threads a post. `thread` since the 1.7.11 hard cutover;
-// the server folds it into the STORAGE key `metadata.taskId` (channel-ops-write.ts). Passing
+// the server folds it into the STORAGE key `metadata.threadId` (channel-ops-write.ts). Passing
 // `task` — which is what the prompt used to teach, FIX S1 — names nothing.
 const THREAD_ARG = 'thread';
 
 // The thread id the AGENT put on this call, from either place the op reads one, or ''.
-// `metadata.taskId` counts: the op honors it when no explicit `thread` is passed, so an
+// `metadata.threadId` counts: the op honors it when no explicit `thread` is passed, so an
 // agent that threaded that way has already made a choice we must not overwrite.
 function suppliedThreadId(input) {
   const i = input && typeof input === 'object' ? input : {};
   const explicit = typeof i[THREAD_ARG] === 'string' ? i[THREAD_ARG].trim() : '';
   if (explicit) return explicit;
   const meta = i.metadata && typeof i.metadata === 'object' ? i.metadata : null;
-  const viaMeta = meta && typeof meta.taskId === 'string' ? meta.taskId.trim() : '';
+  const viaMeta = meta && typeof meta.threadId === 'string' ? meta.threadId.trim() : '';
   return viaMeta;
 }
 
@@ -198,8 +198,8 @@ function markOwnPost(s) {
 // WHOLE call as written and log: rewriting half of a call the operator will see is worse than
 // rewriting none of it, and a post that is deliberately going to another thread is not a post
 // this session should later filter out of its own feed.
-function threadTagFor(input, taskId, clientMsgId) {
-  const want = typeof taskId === 'string' ? taskId.trim() : '';
+function threadTagFor(input, threadId, clientMsgId) {
+  const want = typeof threadId === 'string' ? threadId.trim() : '';
   const stamp = typeof clientMsgId === 'string' ? clientMsgId.trim() : '';
   if (!want && !stamp) return { action: 'none', reason: 'no-thread' };
   if (!input || typeof input !== 'object') return { action: 'none', reason: 'no-input' };
@@ -221,7 +221,7 @@ function threadTagFor(input, taskId, clientMsgId) {
 
 // The immediate (auto-allowed) verdict, tagged when there is something to tag. An allow with
 // no injection is the exact object the gate returned before, so the pre-approved and
-// task-granted paths are unchanged for every call that needs nothing.
+// thread-granted paths are unchanged for every call that needs nothing.
 function allowResult(tag) {
   return tag && tag.action === 'inject'
     ? { behavior: 'allow', updatedInput: tag.input }

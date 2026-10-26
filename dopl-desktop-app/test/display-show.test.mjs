@@ -22,7 +22,7 @@ const decide = (input, messageMode) => {
   const call = canonicalDoplCall("mcp__dopl__dopl_show", input);
   return profiles.grantDecision({
     runtime: "claude", profile: "full", toolMode: "default", messageMode,
-    channelId: "chan-1", allowForTask: [], toolName: call.name, input: call.input,
+    channelId: "chan-1", allowForThread: [], toolName: call.name, input: call.input,
   });
 };
 

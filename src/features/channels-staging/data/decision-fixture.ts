@@ -90,7 +90,7 @@ export function decisionMessage(afterSeq: number): ChannelMessage {
     // The plain-text fallback the product keeps for readers that do not know displays.
     body: "Ship the teardown fix behind a flag, or hold it for the next release?",
     metadata: {
-      taskId: OPEN_THREAD_ID,
+      threadId: OPEN_THREAD_ID,
       [MENTIONS_METADATA_KEY]: [CURRENT_USER_ID],
       [DISPLAY_METADATA_KEY]: DECISION,
     },

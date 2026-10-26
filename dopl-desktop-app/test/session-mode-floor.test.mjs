@@ -14,7 +14,7 @@
 //
 // ⚠ THAT WAS TRUE OF THE LAUNCH LANES AND OF NOTHING ELSE. `channel-prefs.js ›
 // windowlessMessageMode` floors both spawn paths, but NOTHING floored a mode set on a session
-// ALREADY RUNNING — and `session-reopen.js › setModeByTask` accepted all four values, reachable
+// ALREADY RUNNING — and `session-reopen.js › setModeByThread` accepted all four values, reachable
 // in one gesture from the agent view's Messages select. Set it to "Ask each time" and the next
 // peer reply is held on a session with no way to accept it: the session parks at
 // `awaiting_inbound` forever, `io.noteGatedBody` records the body, and session-seed and
@@ -24,7 +24,7 @@
 //
 // ── WHAT THE FIX IS ──────────────────────────────────────────────────────────────────
 // `session-profiles.js › floorWindowlessMessage` is the ONE statement of the floor, and
-// `setModeByTask` applies it when the resolved session is windowless. It CLAMPS, never
+// `setModeByThread` applies it when the resolved session is windowless. It CLAMPS, never
 // refuses: an operator asking for `auto_outbound` wanted less supervision on the OUT half and
 // gets exactly that, and a refusal would leave the select showing a value main is not
 // enforcing — which is the lie that surface has already been fixed for twice.
@@ -98,18 +98,18 @@ test("the floor never LOWERS supervision on the out half", () => {
 
 // ── 2. THE LIVE LANE APPLIES IT ──────────────────────────────────────────────────────
 
-/** `setModeByTask`, sliced with the engine's internals faked. */
+/** `setModeByThread`, sliced with the engine's internals faked. */
 function harness({ windowless = true, state = {} } = {}) {
   const src = read("session-reopen.js");
-  // ⚠ TWO FUNCTIONS ARE SLICED SINCE 2026-08-21, not one: `setModeByTask` resolves its session
+  // ⚠ TWO FUNCTIONS ARE SLICED SINCE 2026-08-21, not one: `setModeByThread` resolves its session
   // through `resolveSession`, the ONE statement of the multiplayer resolution rule (an
   // `agentId` matches exactly; none takes the oldest live agent on the thread). Slicing the op
   // without it would evaluate to a ReferenceError, and stubbing it would test a resolution
   // this file does not ship.
-  const body = fnOf(src, "resolveSession") + "\n" + fnOf(src, "setModeByTask");
+  const body = fnOf(src, "resolveSession") + "\n" + fnOf(src, "setModeByThread");
   const dispatched = [];
   const s = {
-    key: "chan-1:task-1:a1b2c3d4",
+    key: "chan-1:thread-1:a1b2c3d4",
     agentId: "a1b2c3d4",
     settled: false,
     windowless,
@@ -118,7 +118,7 @@ function harness({ windowless = true, state = {} } = {}) {
   const sessions = new Map([[s.key, s]]);
   const fn = new Function(
     "deps", "store", "floorWindowlessMessage", "privateTurn",
-    `${body}\n return setModeByTask;`
+    `${body}\n return setModeByThread;`
   )(
     {
       sessions,
@@ -130,7 +130,7 @@ function harness({ windowless = true, state = {} } = {}) {
     },
     {
       sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
-      slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+      slotKey: (x) => `${x.channelId || ""}:${x.threadId || ""}:${x.agentId || ""}`,
       threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
     },
     floorWindowlessMessage,
@@ -146,7 +146,7 @@ test("LIVE: `ask` on a windowless session is clamped to auto_inbound, not stored
   // ⚠ THE REGRESSION CASE. Before the floor this dispatched `mode: 'ask'`, and the very next
   // peer reply was held with nothing able to accept it.
   const h = harness();
-  const res = h.fn({ channelId: CH, taskId: "task-1", axis: "messages", mode: "ask" });
+  const res = h.fn({ channelId: CH, threadId: "thread-1", axis: "messages", mode: "ask" });
   assert.equal(h.dispatched[0].mode, "auto_inbound", "the reducer is handed the floored value");
   assert.equal(res.messages, "auto_inbound", "and the UI is told main's truth, not its own request");
   assert.equal(res.ok, true, "it CLAMPS — a refusal would leave the select ahead of the engine");
@@ -154,7 +154,7 @@ test("LIVE: `ask` on a windowless session is clamped to auto_inbound, not stored
 
 test("LIVE: `auto_outbound` keeps its auto-send and gains the inbound floor", () => {
   const h = harness();
-  const res = h.fn({ channelId: CH, taskId: "task-1", axis: "messages", mode: "auto_outbound" });
+  const res = h.fn({ channelId: CH, threadId: "thread-1", axis: "messages", mode: "auto_outbound" });
   assert.equal(res.messages, "auto_both");
   assert.equal(h.dispatched[0].mode, "auto_both", "the operator's OUT choice survives the floor");
 });
@@ -162,7 +162,7 @@ test("LIVE: `auto_outbound` keeps its auto-send and gains the inbound floor", ()
 test("LIVE: a mode already at or above the floor is passed through untouched", () => {
   for (const mode of ["auto_inbound", "auto_both"]) {
     const h = harness();
-    const res = h.fn({ channelId: CH, taskId: "task-1", axis: "messages", mode });
+    const res = h.fn({ channelId: CH, threadId: "thread-1", axis: "messages", mode });
     assert.equal(res.messages, mode);
   }
 });
@@ -180,7 +180,7 @@ test("LIVE: the TOOL axis is not floored IN STATE — this lane is Axis B's and 
   // lives in `session-tool-floor.test.mjs`. Deleting this test to make room for that one would
   // drop the only pin on state NOT being rewritten here.
   const h = harness();
-  const res = h.fn({ channelId: CH, taskId: "task-1", axis: "tools", mode: "manual" });
+  const res = h.fn({ channelId: CH, threadId: "thread-1", axis: "tools", mode: "manual" });
   assert.equal(h.dispatched[0].type, "set_tool_mode");
   assert.equal(h.dispatched[0].mode, "manual", "the most restrictive TOOL mode is still reachable");
   assert.equal(res.tools, "manual");
@@ -191,7 +191,7 @@ test("LIVE: a session that is NOT windowless is left alone", () => {
   // tree currently mints a windowed session — but writing the clamp as unconditional would
   // hard-code the current shape into a rule that is about a CAPABILITY.
   const h = harness({ windowless: false });
-  const res = h.fn({ channelId: CH, taskId: "task-1", axis: "messages", mode: "ask" });
+  const res = h.fn({ channelId: CH, threadId: "thread-1", axis: "messages", mode: "ask" });
   assert.equal(res.messages, "ask");
 });
 

@@ -110,9 +110,9 @@ const DELETE_DOORBELL_TABLES = Object.freeze([
   // ⚠ JOINED 2026-08-22, MOVED OUT OF `NO_DELETE_DOORBELL` BELOW — this list's own
   // instruction ("if the reason has changed, move it to DELETE_DOORBELL_TABLES and say so"),
   // followed. The exemption read "cascade from channels / workspaces only", which was true
-  // until a THREAD became deletable (2026-08-21, INVARIANTS §5): `service-tasks-delete.ts ›
-  // deleteTask` fires real DELETEs here, and NOTHING else in that cascade is published —
-  // `channel_tasks` and `channel_sessions` are both deliberately out (§7), and consent rows
+  // until a THREAD became deletable (2026-08-21, INVARIANTS §5): `service-threads-delete.ts ›
+  // deleteThread` fires real DELETEs here, and NOTHING else in that cascade is published —
+  // `channel_threads` and `channel_sessions` are both deliberately out (§7), and consent rows
   // are UPDATEd to `expired` rather than deleted. So under DEFAULT the counterparty's UI
   // never learned the thread died. `20260822130000` is the fix.
   "channel_messages",

@@ -28,7 +28,7 @@ export function AgentWindowLaunch({
   workspaceId,
   currentUserId,
   channelId,
-  taskId,
+  threadId,
   sessions = NO_SESSIONS,
   agent,
 }: {
@@ -37,7 +37,7 @@ export function AgentWindowLaunch({
   currentUserId: string;
   channelId: string;
   /** The active tab's thread; `""` = none first-class, so the agent starts on the room (`null`). */
-  taskId: string;
+  threadId: string;
   /** This machine's feed — the only colour source here, so a peer's key looks free until the
    *  server rejects it. `null` = could not ask (reads as empty). */
   sessions?: readonly DesktopSessionSummary[] | null;
@@ -72,7 +72,7 @@ export function AgentWindowLaunch({
       panel={panel}
       newAgent={newAgent}
       liveSessions={liveSessions}
-      openThreadId={taskId || null}
+      openThreadId={threadId || null}
       channelId={channelId}
       workspaceId={workspaceId}
       currentUserId={currentUserId}

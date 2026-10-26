@@ -44,7 +44,7 @@ function durableHistory(rec) {
     agentId: String(r.agentId || ''),
     sessionId: String(r.sessionId || ''),
     channelId: String(r.channelId || ''),
-    taskId: String(r.taskId || ''),
+    threadId: String(r.threadId || ''),
     workspaceId: String(r.workspaceId || ''),
     channelName: historyName(r.channelName),
     threadTitle: historyName(r.threadTitle),

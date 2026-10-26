@@ -135,7 +135,7 @@ describe("listRecentRoomTagsBy — RR3 arm 3's feed", () => {
     await listRecentRoomTagsBy(CHANNEL, ME);
 
     expect(calls.find((c) => c.op === "is")?.args).toEqual([
-      "metadata->>taskId",
+      "metadata->>threadId",
       null,
     ]);
     expect(calls.some((c) => c.op === "gt")).toBe(false);

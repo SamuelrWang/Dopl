@@ -26,23 +26,23 @@
 
 function makeWireFilter(diag) {
   // ── THE AD-HOC SESSION NEVER GOES ON THE WIRE ───────────────────────────────────────────
-  // ⚠ An UNTHREADED inbound (the ordinary DM) has no first-class thread, so trigger.taskIdFor mints
-  // `task-<channelId>-<seq>`, which the server's `SESSION_KEY_RE` and `threadId: z.string().uuid()` both refuse.
+  // ⚠ An UNTHREADED inbound (the ordinary DM) has no first-class thread, so trigger.threadIdFor mints
+  // `thread-<channelId>-<seq>`, which the server's `SESSION_KEY_RE` and `threadId: z.string().uuid()` both refuse.
   // Zod validates the ARRAY, so ONE such entry 400s the WHOLE payload; retryable(400) is false, so the digest is
   // never recorded and every later push for that workspace fails identically — `read_sessions` answers [] for
   // the machine, valid UUID-threaded sessions included, and stale rows are never cleared.
   // ⚠ Filter client-side; do NOT widen the server schema. `read_sessions` answers "what is this member's agent
   // doing on THIS thread", and an ad-hoc session has no thread for the answer to be about. Widening the key
   // charset also gives up the reconcile's delete-by-key safety. The predicate RESTATES the server's contract
-  // (uuid channel, uuid thread or none) rather than sniffing `!key.startsWith('task-')`: the reason to drop a
+  // (uuid channel, uuid thread or none) rather than sniffing `!key.startsWith('thread-')`: the reason to drop a
   // row is that the server refuses it.
   const WIRE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   function serverReportable(e) {
     const x = e || {};
     if (!WIRE_UUID_RE.test(String(x.channelId || ''))) return false;
-    const taskId = String(x.taskId || '');
-    return taskId === '' || WIRE_UUID_RE.test(taskId);
+    const threadId = String(x.threadId || '');
+    return threadId === '' || WIRE_UUID_RE.test(threadId);
   }
 
   // ── A ROW WITH NO USABLE HANDLE DOES NOT GO ON THE WIRE EITHER (2026-08-22) ─────────────

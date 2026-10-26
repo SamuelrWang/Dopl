@@ -27,7 +27,7 @@ const REVIEWER = 'codex-auto-review'; // the model id the reviewer asks the prov
 const ALLOW = [{ type: 'message', role: 'assistant', id: 'g', content: [{ type: 'output_text', text: '{"risk_level":"low","outcome":"allow","rationale":"ok"}' }] }];
 
 async function postUnder(reviewer) {
-  const post = { op: 'send', channel: CH, thread: 'task-1', kind: 'message', body: 'AUTO-REVIEW-MARKER' };
+  const post = { op: 'send', channel: CH, thread: 'thread-1', kind: 'message', body: 'AUTO-REVIEW-MARKER' };
   let step = 0;
   const model = await scriptedModel((b) => {
     if (b.model === REVIEWER) return ALLOW;

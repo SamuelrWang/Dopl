@@ -184,7 +184,7 @@ export function bootIpc({ blocked = false } = {}) {
       };
     }
     if (id === "./session-engine") {
-      return { reopenByTask: (a) => { reopens.push(a); return { ok: true }; } };
+      return { reopenByThread: (a) => { reopens.push(a); return { ok: true }; } };
     }
     // The REAL character rule — a second regex in channel-dir-ipc.js would be a second answer to it.
     if (id === "./deep-link-target") {
@@ -239,4 +239,4 @@ export function bootIpc({ blocked = false } = {}) {
 
 export const CH = "44444444-4444-4444-8444-444444444444";
 export const PRESET = { tools: "bypass", messages: "auto_both" };
-export const POPOUT_PAYLOAD = { segment: "acme-a1b2", channelId: CH, threadId: "task-1" };
+export const POPOUT_PAYLOAD = { segment: "acme-a1b2", channelId: CH, threadId: "thread-1" };

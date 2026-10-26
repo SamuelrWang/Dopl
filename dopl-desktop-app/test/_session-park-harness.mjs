@@ -58,9 +58,9 @@ const agentId = createRequire(import.meta.url)(join(HERE, "..", "main", "agent-i
 const RUNTIME = createRequire(import.meta.url)(join(HERE, "..", "main", "runtime", "index.js"));
 
 // ⚠ AND THE FAKE `slotKey` IS THE REAL THREE-PART SHAPE. It mirrored the deleted D2 CHOICE
-// (`agentId` OR `taskId`), which stopped being what `main/session-store.js › slotKey` does when
+// (`agentId` OR `threadId`), which stopped being what `main/session-store.js › slotKey` does when
 // multiplayer blended all three — so a case could pass here against a key production never builds.
-const fakeSlotKey = (a) => `${(a && a.channelId) || ""}:${(a && a.taskId) || ""}:${(a && a.agentId) || ""}`;
+const fakeSlotKey = (a) => `${(a && a.channelId) || ""}:${(a && a.threadId) || ""}:${(a && a.agentId) || ""}`;
 
 const BLOCK = sentinelBlock(SRC, "SESSION-PARK-PURE");
 

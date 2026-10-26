@@ -238,7 +238,7 @@ contextBridge.exposeInMainWorld('dopl', {
     dismissPrompt: (runtimeId) => ipcRenderer.invoke('runtime:dismissSignInPrompt', { runtimeId: asId(runtimeId) }),
   },
 
-  // The operator's OWN agents on this machine. Main resolves (channelId, taskId[, agentId]) against
+  // The operator's OWN agents on this machine. Main resolves (channelId, threadId[, agentId]) against
   // its own registry, so nothing here reaches another member's runtime; never keyed on `sessionId`
   // (ephemeral across a park+recreate). Ids are coerced here and re-validated in main. The web tree
   // feature-detects each op. `test/preload-parity.test.mjs` is a pinned inventory: adding an op
@@ -246,8 +246,8 @@ contextBridge.exposeInMainWorld('dopl', {
   sessions: {
     // A trailing optional `agentId` picks which of several agents on a thread; omitted = the oldest
     // live one. `segment` lets a windowless session reopen as the agent window (router path).
-    reopen: (channelId, taskId, segment, agentId) => ipcRenderer.invoke('sessions:reopen',
-      { channelId: asId(channelId), taskId: asId(taskId), segment: asId(segment), agentId: asId(agentId) }),
+    reopen: (channelId, threadId, segment, agentId) => ipcRenderer.invoke('sessions:reopen',
+      { channelId: asId(channelId), threadId: asId(threadId), segment: asId(segment), agentId: asId(agentId) }),
     summaries: () => ipcRenderer.invoke('sessions:summaries'),
     onSummaries: (callback) => {
       if (typeof callback !== 'function') return () => {};
@@ -267,30 +267,30 @@ contextBridge.exposeInMainWorld('dopl', {
     approveIdentity: (identityId) => ipcRenderer.invoke('sessions:approveIdentity', { identityId: asId(identityId) }),
 
     // After a thread DELETE: main cannot see the server cascade. Local history only.
-    forgetThread: (channelId, taskId) => ipcRenderer.invoke('agents:forgetThread',
-      { channelId: asId(channelId), taskId: asId(taskId) }),
-    pause: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:pause',
-      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
-    end: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:end',
-      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
+    forgetThread: (channelId, threadId) => ipcRenderer.invoke('agents:forgetThread',
+      { channelId: asId(channelId), threadId: asId(threadId) }),
+    pause: (channelId, threadId, agentId) => ipcRenderer.invoke('sessions:pause',
+      { channelId: asId(channelId), threadId: asId(threadId), agentId: asId(agentId) }),
+    end: (channelId, threadId, agentId) => ipcRenderer.invoke('sessions:end',
+      { channelId: asId(channelId), threadId: asId(threadId), agentId: asId(agentId) }),
     // Answer ONE held tool call: allow-once, no standing grant, no turn
     // (`main/session-answer-permission.js`). `allow` fails closed here and in main.
-    answerPermission: (channelId, taskId, requestId, allow, agentId) => ipcRenderer.invoke('sessions:answerPermission',
-      { channelId: asId(channelId), taskId: asId(taskId), requestId: asId(requestId), allow: allow === true, agentId: asId(agentId) }),
+    answerPermission: (channelId, threadId, requestId, allow, agentId) => ipcRenderer.invoke('sessions:answerPermission',
+      { channelId: asId(channelId), threadId: asId(threadId), requestId: asId(requestId), allow: allow === true, agentId: asId(agentId) }),
 
     // `end` plus an erase of every LOCAL trace (posts are the server's). `agentId` is REQUIRED here:
     // an omitted id resolves to the oldest agent, wrong for a destructive verb.
-    delete: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:delete',
-      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
+    delete: (channelId, threadId, agentId) => ipcRenderer.invoke('sessions:delete',
+      { channelId: asId(channelId), threadId: asId(threadId), agentId: asId(agentId) }),
 
     // Asks main for an agent window (F-212); no handle comes back — main creates and registers it.
-    openAgentWindow: (segment, channelId, taskId, agentId) => ipcRenderer.invoke('sessions:openAgentWindow',
-      { segment: asId(segment), channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
+    openAgentWindow: (segment, channelId, threadId, agentId) => ipcRenderer.invoke('sessions:openAgentWindow',
+      { segment: asId(segment), channelId: asId(channelId), threadId: asId(threadId), agentId: asId(agentId) }),
 
     // A LIVE session's posture (supervision, not containment; the profile is checked first). Main
     // re-validates both strings and the reducer coerces again.
-    setMode: (channelId, taskId, axis, mode, agentId) => ipcRenderer.invoke('sessions:setMode',
-      { channelId: asId(channelId), taskId: asId(taskId), axis: asMode(axis), mode: asMode(mode), agentId: asId(agentId) }),
+    setMode: (channelId, threadId, axis, mode, agentId) => ipcRenderer.invoke('sessions:setMode',
+      { channelId: asId(channelId), threadId: asId(threadId), axis: asMode(axis), mode: asMode(mode), agentId: asId(agentId) }),
 
     // Display only; '' clears. Main answers its own stored value, so a refused name reverts.
     rename: (agentId, name) => ipcRenderer.invoke('sessions:rename',
@@ -303,19 +303,19 @@ contextBridge.exposeInMainWorld('dopl', {
     mintAgentId: () => ipcRenderer.invoke('sessions:mintAgentId'),
     // Switch ONE live session's model and record the pick on it; main coerces the id. No per-channel
     // model for the next spawn.
-    setModel: (channelId, taskId, model, agentId) => ipcRenderer.invoke('sessions:setModel',
-      { channelId: asId(channelId), taskId: asId(taskId), model: asMode(model), agentId: asId(agentId) }),
+    setModel: (channelId, threadId, model, agentId) => ipcRenderer.invoke('sessions:setModel',
+      { channelId: asId(channelId), threadId: asId(threadId), model: asMode(model), agentId: asId(agentId) }),
 
     // The ONE op that starts a turn: the operator's words to their own agent, delimited with that
     // session's nonce (`session-seed.js › frameOperatorTurn`). It cannot grant a tool, widen a
     // posture or post without the outbound gate. Capped here and in main (main's is the fence).
-    message: (channelId, taskId, text, agentId) => ipcRenderer.invoke('sessions:message',
-      { channelId: asId(channelId), taskId: asId(taskId), text: String(text == null ? '' : text).slice(0, 4000), agentId: asId(agentId) }),
+    message: (channelId, threadId, text, agentId) => ipcRenderer.invoke('sessions:message',
+      { channelId: asId(channelId), threadId: asId(threadId), text: String(text == null ? '' : text).slice(0, 4000), agentId: asId(agentId) }),
 
     // The work lane: read once, then listen. Frames are keyed by `sessionKey`; main tracks no
     // subscriptions.
-    narration: (channelId, taskId, agentId) => ipcRenderer.invoke('sessions:narration',
-      { channelId: asId(channelId), taskId: asId(taskId), agentId: asId(agentId) }),
+    narration: (channelId, threadId, agentId) => ipcRenderer.invoke('sessions:narration',
+      { channelId: asId(channelId), threadId: asId(threadId), agentId: asId(agentId) }),
     onNarration: (callback) => {
       if (typeof callback !== 'function') return () => {};
       const listener = (_event, payload) => {
@@ -392,7 +392,7 @@ contextBridge.exposeInMainWorld('dopl', {
               key: asStr(r.key),
               segment: asStr(r.segment),
               channelId: asStr(r.channelId),
-              taskId: asStr(r.taskId),
+              threadId: asStr(r.threadId),
               agentId: asStr(r.agentId),
             };
           }),

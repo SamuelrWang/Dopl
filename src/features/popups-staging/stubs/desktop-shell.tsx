@@ -115,10 +115,10 @@ export function useWorkspaceAccess() {
  * demo's own agent inside its open thread (`/channels` staging's `tech-debt` channel), so the
  * window bodies (`channel-windows.tsx`) find it in the channels staging store.
  */
-const WINDOW_SESSION = MY_SESSIONS.find((s) => s.taskId) ?? MY_SESSIONS[0];
+const WINDOW_SESSION = MY_SESSIONS.find((s) => s.threadId) ?? MY_SESSIONS[0];
 export const STAGING_WINDOW_ROUTE = {
   channelId: WINDOW_SESSION?.channelId ?? "",
-  taskId: WINDOW_SESSION?.taskId ?? "",
+  threadId: WINDOW_SESSION?.threadId ?? "",
   agentId: WINDOW_SESSION?.agentId ?? "",
 };
 
@@ -127,7 +127,7 @@ export function useParams<T extends Record<string, string>>(): Partial<T> {
   return { channelId: STAGING_WINDOW_ROUTE.channelId, workspaceSegment: STAGING_HOME_SEGMENT } as unknown as Partial<T>;
 }
 export function useSearchParams(): [URLSearchParams] {
-  return [new URLSearchParams({ thread: STAGING_WINDOW_ROUTE.taskId, agent: STAGING_WINDOW_ROUTE.agentId })];
+  return [new URLSearchParams({ thread: STAGING_WINDOW_ROUTE.threadId, agent: STAGING_WINDOW_ROUTE.agentId })];
 }
 export function useRouteError(): unknown {
   return new Error("Staging route error");

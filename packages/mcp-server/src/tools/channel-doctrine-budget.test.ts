@@ -35,7 +35,7 @@ import {
 // ⚠ **AND THIS RAISE LEAVES ZERO HEADROOM, DELIBERATELY** — the ruling was "exactly what's needed,
 // nothing extra", so the ceilings below ARE the measured sizes. The next line of doctrine is
 // therefore a conversation, not an edit: re-derive, then pay for it.
-const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 14_548, granular: 14_745 };
+const DOCTRINE_MAX_CHARS: Record<ToolSet, number> = { legacy: 14_556, granular: 14_753 };
 // Per section as served (a typical pull is one section); a ceiling only. `send` is the largest, so
 // its next rule should split the section rather than raise this. Re-derive, never quote.
 const DOCTRINE_SECTION_MAX_CHARS: Record<ToolSet, number> = { legacy: 3_600, granular: 3_650 };

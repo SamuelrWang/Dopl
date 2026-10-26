@@ -39,8 +39,8 @@ import type {
   ChannelMessageRow,
   ChannelArtifactRow,
   ChannelRow,
-  ChannelTaskActivityRow,
-  ChannelTaskRow,
+  ChannelThreadActivityRow,
+  ChannelThreadRow,
   ChannelViewerState,
   MapMemberOptions,
   ProfileRef,
@@ -50,14 +50,14 @@ export type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskActivityRow,
-  ChannelTaskRow,
+  ChannelThreadActivityRow,
+  ChannelThreadRow,
   ChannelViewerState,
   MapMemberOptions,
   MemberPresence,
   ProfileRef,
 } from "./dto-rows";
-export { CHANNEL_MESSAGE_COLS, CHANNEL_TASK_ACTIVITY_COLS } from "./dto-rows";
+export { CHANNEL_MESSAGE_COLS, CHANNEL_THREAD_ACTIVITY_COLS } from "./dto-rows";
 
 /**
  * A `BIGINT` as it crosses PostgREST — `number`, `string`, or absent.
@@ -386,16 +386,16 @@ export function mapMemberRow(
 }
 
 /**
- * Task row -> DTO. Pure — the task is the authoritative status/mode store.
+ * Thread row -> DTO. Pure — the thread is the authoritative status/mode store.
  *
  * ⚠ `lastActivityAt` rides through ONLY when the row came from the activity
- * view ({@link ChannelTaskActivityRow}). On a single-row load it is ABSENT, and
+ * view ({@link ChannelThreadActivityRow}). On a single-row load it is ABSENT, and
  * absent means "this view did not derive it" — never "no activity" and never
  * "same as created_at" (INVARIANTS §9: omitting the field says this view did
  * not ask). Anything ordering or windowing by it must read it from the LIST.
  */
-export function mapTaskRow(
-  row: ChannelTaskRow | ChannelTaskActivityRow
+export function mapThreadRow(
+  row: ChannelThreadRow | ChannelThreadActivityRow
 ): ChannelThread {
   const lastActivityAt =
     "last_activity_at" in row ? { lastActivityAt: row.last_activity_at } : {};

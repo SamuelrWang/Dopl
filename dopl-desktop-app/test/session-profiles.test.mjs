@@ -5,7 +5,7 @@
 //
 // The rulings it pins:
 //   H1 — `dopl_channel` is neither pre-approved nor denied on ANY profile; it reaches the gate.
-//   D2 — and it never auto-allows there: even an own-channel op=send gates. The task grant a post
+//   D2 — and it never auto-allows there: even an own-channel op=send gates. The thread grant a post
 //        can earn is the narrow POST_GRANT key, which cannot open a DM.
 //   H2 + H3 — reversed for `full` (2026-08-08, F-177): `full`'s hard-deny is the UNIVERSAL FLOOR
 //        and nothing else, and the delegation / outbound / persistence / escalation built-ins
@@ -301,9 +301,9 @@ test("v2.5 D2: EVERY dopl_channel op gates, own-channel post included (no 'preap
   // Gated: the exfiltration surface the blanket pre-approval used to hand out free.
   assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "open", direct: true, member: "evil@x" } }), "gate", "op=open (DM) must gate");
   assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post("OTHER") }), "gate", "cross-channel post must gate");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "create_task", channel: chan } }), "gate", "create_task gates");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "close_task", channel: chan } }), "gate", "close_task gates");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "set_task_mode", channel: chan } }), "gate", "set_task_mode gates");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "create_thread", channel: chan } }), "gate", "create_thread gates");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "close_thread", channel: chan } }), "gate", "close_thread gates");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "set_thread_mode", channel: chan } }), "gate", "set_thread_mode gates");
   // With no input at all it cannot be an own-channel post -> gate.
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan }), "gate");
 });
@@ -326,13 +326,13 @@ test("2026-09-17: the OWN-MACHINE MANAGE LANE, through the EXTRACTED block", () 
   }
 });
 
-test("FIX H1: allow-for-task lets the operator grant a gated dopl_channel op for the task", () => {
+test("FIX H1: allow-for-thread lets the operator grant a gated dopl_channel op for the thread", () => {
   const chan = "c1";
   const openInput = { op: "open", direct: true, member: "peer@x" };
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: openInput }), "gate");
   // FIX F2: the grant is the OP-SCOPED key for the shape that was actually shown.
   const openGrant = grantKeyFor(DOPL_CHANNEL_TOOL, openInput, chan);
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: openInput, allowForTask: [openGrant] }), "allow");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: openInput, allowForThread: [openGrant] }), "allow");
 });
 
 // ── FIX F2: EVERY channel grant is op-scoped, and the bare name is worthless ──────
@@ -369,17 +369,17 @@ test("FIX F2: a grant on op=read does NOT allow a later op=post or op=open (each
   const chan = "c1";
   const readGrant = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, chan);
   const granted = [readGrant];
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "read" }, allowForTask: granted }), "allow");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post(chan), allowForTask: granted }), "gate", "a post needs its own grant");
-  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "open", direct: true, member: "evil@x" }, allowForTask: granted }), "gate", "op=open is the exfil path FIX H1 closed");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "list_tasks" }, allowForTask: granted }), "gate");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "read" }, allowForThread: granted }), "allow");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post(chan), allowForThread: granted }), "gate", "a post needs its own grant");
+  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "open", direct: true, member: "evil@x" }, allowForThread: granted }), "gate", "op=open is the exfil path FIX H1 closed");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "list_threads" }, allowForThread: granted }), "gate");
 });
 
-test("FIX F2: the BARE tool name in allowForTask allows NOTHING on the channel tool", () => {
+test("FIX F2: the BARE tool name in allowForThread allows NOTHING on the channel tool", () => {
   const chan = "c1";
-  for (const input of [post(chan), { op: "post" }, { op: "open", direct: true }, { op: "read" }, { op: "create_task" }, undefined]) {
+  for (const input of [post(chan), { op: "post" }, { op: "open", direct: true }, { op: "read" }, { op: "create_thread" }, undefined]) {
     assert.equal(
-      grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input, allowForTask: [DOPL_CHANNEL_TOOL] }),
+      grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input, allowForThread: [DOPL_CHANNEL_TOOL] }),
       "gate",
       `bare-name grant must not cover ${JSON.stringify(input)}`
     );
@@ -388,15 +388,15 @@ test("FIX F2: the BARE tool name in allowForTask allows NOTHING on the channel t
 
 test("D2: an 'Allow for this session' taken on a POST authorizes posts only, never rooms.open", () => {
   const granted = [ownPostKey(post("c1"))];
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("c1"), allowForTask: granted }), "allow");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "send" }, allowForTask: granted }), "allow");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("c1"), allowForThread: granted }), "allow");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "send" }, allowForThread: granted }), "allow");
   // The exfil ops stay gated under a post-only grant — this is the whole point of the key.
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "rooms", action: "open", direct: true, member: "evil@x" }, allowForTask: granted }), "gate");
-  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("OTHER"), allowForTask: granted }), "gate", "cross-channel post is not covered");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "rooms", action: "open", direct: true, member: "evil@x" }, allowForThread: granted }), "gate");
+  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("OTHER"), allowForThread: granted }), "gate", "cross-channel post is not covered");
   // The retired spelling is covered by nothing (2026-09-02, F-578): `post` matches no classifier
   // now, so it falls to the unclassified arm and GATES — which is why a deleted op needs no deny.
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForTask: granted }), "gate");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "status" }, allowForTask: granted }), "gate", "a read is not covered by a post grant");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForThread: granted }), "gate");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "status" }, allowForThread: granted }), "gate", "a read is not covered by a post grant");
 });
 
 test("D2/F2: every channel grant key is unrepresentable as a real SDK tool name", () => {
@@ -420,18 +420,18 @@ test("grantDecision: an ungranted work tool GATES under full; granting THAT SHAP
     const input = { command: "ls -la", file_path: "/tmp/a.txt", notebook_path: "/tmp/n.ipynb", url: "https://x.test/a" };
     assert.equal(grantDecision({ profile: "full", toolName: t, input }), "gate", `${t} gates under full`);
     const key = grantKeyFor(t, input, "c1");
-    assert.equal(grantDecision({ profile: "full", toolName: t, input, allowForTask: [key] }), "allow", `${t} allowed-for-task`);
-    assert.equal(grantDecision({ profile: "full", toolName: t, input, allowForTask: [t] }), "gate", `${t}: the bare name grants nothing`);
+    assert.equal(grantDecision({ profile: "full", toolName: t, input, allowForThread: [key] }), "allow", `${t} allowed-for-thread`);
+    assert.equal(grantDecision({ profile: "full", toolName: t, input, allowForThread: [t] }), "gate", `${t}: the bare name grants nothing`);
   }
 });
 
-test("grantDecision: a hard-denied tool -> 'deny', even when allowed-for-task (deny checked first)", () => {
+test("grantDecision: a hard-denied tool -> 'deny', even when allowed-for-thread (deny checked first)", () => {
   assert.equal(grantDecision({ profile: "read_only", toolName: "Bash" }), "deny");
   assert.equal(grantDecision({ profile: "read_only", toolName: "WebFetch" }), "deny");
-  assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", allowForTask: ["Bash"] }), "deny");
+  assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", allowForThread: ["Bash"] }), "deny");
   // v2.9: and not via the scoped key either, nor under `bypass` (see session-permission-axes).
   const key = grantKeyFor("Bash", { command: "ls" }, "c1");
-  assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", input: { command: "ls" }, allowForTask: [key], toolMode: "bypass" }), "deny");
+  assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", input: { command: "ls" }, allowForThread: [key], toolMode: "bypass" }), "deny");
 });
 
 // ── F-177: the released set gates under full and STILL denies under the restricted two ──

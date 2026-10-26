@@ -127,7 +127,7 @@ export const DEMO_CHANNEL = channel(CHANNEL_ID, CHANNEL_NAME, {
 /**
  * **ONE THREAD PER ORCHESTRATOR** (v3, Samuel 2026-10-12).
  *
- * ⚠ **A THREAD IS JOINED TO ITS MESSAGES BY `metadata.taskId`, NOTHING ELSE**
+ * ⚠ **A THREAD IS JOINED TO ITS MESSAGES BY `metadata.threadId`, NOTHING ELSE**
  * (`view-model.ts › threadIdOf`). `channelRows` then collapses every tagged message
  * into ONE `thread-card` for the opener and suppresses the rest
  * (`view-model-rows.ts › channelRows`), and `threadRows` filters the same array back
@@ -325,14 +325,14 @@ export const AGENT_INDEX: ReadonlyMap<string, AgentRosterEntry> = new Map([
 /**
  * Samuel's own live agents — the desktop feed the Agents tab and the panel read.
  *
- * ⚠ **`taskId` IS WHERE A SESSION POSTS, AND IT DECIDES THE SENT BOX'S CAPTION**
+ * ⚠ **`threadId` IS WHERE A SESSION POSTS, AND IT DECIDES THE SENT BOX'S CAPTION**
  * (`agents-model.ts › postDestination`): `""` is the channel ("Posted to channel"), a
  * thread id names the thread. The planner works the channel; its three coders work
  * inside the thread it opened, so only they carry one.
  */
 function ownSession(
   agentId: string,
-  taskId: string,
+  threadId: string,
   startedMinsAgo: number,
   contextUsed: number,
 ): DesktopSessionSummary {
@@ -340,11 +340,11 @@ function ownSession(
   if (!identity?.displayName) {
     throw new Error(`banner demo: no agent identity for ${agentId}`);
   }
-  const openThread = taskId === "" ? null : OPEN_THREAD.title;
+  const openThread = threadId === "" ? null : OPEN_THREAD.title;
   return {
     sessionId: `demo-session-${agentId}`,
     channelId: CHANNEL_ID,
-    taskId,
+    threadId,
     agentId,
     name: agentId,
     displayName: identity.displayName,
