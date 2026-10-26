@@ -45,6 +45,7 @@ exports.ChannelMethods = void 0;
 const client_members_js_1 = require("./client-members.js");
 const channel = __importStar(require("./channel.js"));
 const channelAccount = __importStar(require("./channel-account.js"));
+const channelTasks = __importStar(require("./channel-tasks.js"));
 class ChannelMethods extends client_members_js_1.MemberMethods {
     listChannels() {
         return channel.listChannels(this.transport);
@@ -103,6 +104,15 @@ class ChannelMethods extends client_members_js_1.MemberMethods {
     }
     readChannelArtifact(channelId, artifactId) {
         return channel.readArtifact(this.transport, channelId, artifactId);
+    }
+    listChannelTasks(channelId, opts) {
+        return channelTasks.listTasks(this.transport, channelId, opts);
+    }
+    readChannelTask(channelId, taskId) {
+        return channelTasks.readTask(this.transport, channelId, taskId);
+    }
+    writeChannelTask(channelId, input) {
+        return channelTasks.writeTask(this.transport, channelId, input);
     }
     awaitChannelMessages(channelId, opts) {
         return channel.awaitMessages(this.transport, channelId, opts);

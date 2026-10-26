@@ -191,6 +191,7 @@ const PUBLIC_SURFACE = [
   "listAgentIdentitiesPayload",
   "listChannelMembers",
   "listChannelSessions",
+  "listChannelTasks",
   "listChannelThreads",
   "listChannels",
   "listChatFolders",
@@ -210,6 +211,7 @@ const PUBLIC_SURFACE = [
   "readAccountMessages",
   "readChannelArtifact",
   "readChannelMessages",
+  "readChannelTask",
   "readChannelTranscript",
   "readKbFileByPath",
   // SECTION READS (2026-09-03) — one section, or the outline alone.
@@ -229,6 +231,8 @@ const PUBLIC_SURFACE = [
   "updateOntologyObject",
   "updateSkill",
   "writeChannelArtifact",
+  // CHANNEL TASKS (2026-10-26): list, read one, and the action POST over one route.
+  "writeChannelTask",
   "writeKbFileByPath",
   "writeSkillBody",
   // HISTORY + RESTORE (2026-09-23, DMP-002) — eight names over routes the app's
