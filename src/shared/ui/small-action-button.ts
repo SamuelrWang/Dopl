@@ -66,3 +66,15 @@ export const SMALL_PRIMARY_PILL = cn(INK_PILL_FACE, "h-[var(--action-h-sm)] px-3
 export const PILL_BUTTON =
   "inline-flex flex-none items-center rounded-full border border-border-default bg-bg-overlay px-2.5 py-0.5 " +
   "text-caption font-medium text-text-primary transition-colors hover:bg-surface-raised-1";
+
+/**
+ * {@link PILL_BUTTON} at the 30px action scale: the secondary twin of {@link SMALL_PRIMARY_PILL}
+ * (the profile popup's Sign out, Manage billing, Connect an agent).
+ */
+export const SMALL_PILL_BUTTON = cn(
+  PILL_BUTTON,
+  "h-[var(--action-h-sm)] cursor-pointer gap-1.5 px-3.5 disabled:cursor-default disabled:opacity-50"
+);
+
+/** Glyph size inside {@link SMALL_PILL_BUTTON}. */
+export const SMALL_PILL_ICON = 12;

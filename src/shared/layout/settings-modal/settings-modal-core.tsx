@@ -1,16 +1,6 @@
 "use client";
 
-import {
-  Bell,
-  Bot,
-  CreditCard,
-  LayoutGrid,
-  Monitor,
-  SlidersHorizontal,
-  UserRound,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import { SegmentedControl, type SegmentedOption } from "@/shared/ui/segmented-control";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { ModalShell } from "./modal-shell";
 import styles from "./settings-modal.module.css";
@@ -52,33 +42,16 @@ export type SettingsSection =
   | "account"
   | "billing";
 
-interface NavItem {
-  id: SettingsSection;
-  label: string;
-  icon: LucideIcon;
-}
-
-/**
- * ONE FLAT LIST, NO GROUP HEADERS (Samuel, 2026-09-18: *"kill the indented
- * sidebar"*, *"remove the Account/Workspace headers"*).
- *
- * ⚠ The uppercase "WORKSPACE" / "ACCOUNT" strips and the `.navGroup` column they
- * titled are DELETED, not hidden: they were the only thing indenting this rail,
- * and a header over a single row was naming a group of one.
- *
- * ⚠ **"Configuration" and "Notifications" are the rows that may be ABSENT** (2026-10-02,
- * 2026-10-09) — `has` below is what drops them, so the WEB draws five rows and the DESKTOP
- * seven.
- * It is not reordered by that: the list is the order, filtered, never two lists.
- */
-const NAV: ReadonlyArray<NavItem> = [
-  { id: "workspaces", label: "Workspaces", icon: LayoutGrid },
-  { id: "agents", label: "Agents", icon: Bot },
-  { id: "devices", label: "Devices", icon: Monitor },
-  { id: "configuration", label: "Configuration", icon: SlidersHorizontal },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "account", label: "Account", icon: UserRound },
-  { id: "billing", label: "Plans & Billing", icon: CreditCard },
+/** One flat list, in order; `has` drops the optional rows, so the web draws five and the desktop
+ *  seven. */
+const NAV: ReadonlyArray<SegmentedOption<SettingsSection>> = [
+  { key: "workspaces", label: "Workspaces" },
+  { key: "agents", label: "Agents" },
+  { key: "devices", label: "Devices" },
+  { key: "configuration", label: "Configuration" },
+  { key: "notifications", label: "Notifications" },
+  { key: "account", label: "Account" },
+  { key: "billing", label: "Plans & Billing" },
 ];
 
 export interface SettingsModalCoreProps {
@@ -148,27 +121,16 @@ export function SettingsModalCore({
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
       <nav className={styles.nav}>
-        {/* ⚠ THE APP SIDEBAR'S ROW, NOT A LOOKALIKE — same `nav-chip` recipe,
-            same `--shell-chip` resting gray, same 20px lucide glyph at the same
-            stroke (`app-shell/app-sidebar-core.tsx`), Agents wearing that rail's
-            own `Bot`. The two rails read one declaration, so neither can drift
-            to a second gray. */}
-        <div className={styles.navList}>
-          {NAV.filter(({ id }) => has(id)).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onSectionChange(id)}
-              className={cn(
-                "nav-chip",
-                section === id && "nav-chip-active raised-tab"
-              )}
-            >
-              <Icon size={20} strokeWidth={1.8} />
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* /home's header tabs, stacked: words only, the selected one underlined. */}
+        <SegmentedControl<SettingsSection>
+          options={NAV.filter(({ key }) => has(key))}
+          value={section}
+          onChange={onSectionChange}
+          variant="underline"
+          size="lg"
+          orientation="vertical"
+          ariaLabel="Settings sections"
+        />
         <div className={styles.navFoot}>
           {/* The popup kit's flat text button (`shared/ui/form-dialog.tsx` ›
               Discard), so this footer and every New-agent-style popup footer

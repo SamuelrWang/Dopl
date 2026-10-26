@@ -454,3 +454,22 @@ Workers append a `## <slice>` section per question: the question, what was chose
 3. **#tech-debt's scripted posts are renumbered** (`seq` lifted by the count of older posts), so its
    older threads can sit below the script in seq order. Mentions are lifted with them. Where:
    `channels-staging/data/tech-debt-fixture.ts`.
+## Profile popup restyle (branch `ui/profile-popup`)
+
+1. **The New channel button's ground differs per face.** /home's panel is `--bg-overlay` on every
+   face but Channels, where it is `--home-card` (`pages/home/home.module.css`). The rail took
+   `--bg-overlay`: the page opens on Overview (`home-tabs.ts › HOME_DEFAULT_TAB`) and four of five
+   faces wear it. The popup's pane stays `--bg-elevated`, so rail and pane are near-equal whites
+   split by the `--home-panel-line` hairline. Where: `settings-modal.module.css › .nav`.
+2. **"Just the words" read as no glyph too.** The rail's lucide icons are dropped with the chip
+   face, matching the /home top tabs. Easy to restore if Samuel meant the face only.
+3. **Left as they were (not named in the brief):** the raised glyph tiles (`DeviceGlyph`, the
+   Workspaces pane's Home glyph, both `.raised-tab`), the plan badges (Current plan / Popular /
+   % off and the summary's plan label), the success and past-due banners, the members `RolePill`
+   on workspace rows, and `workspace-icon-uploader.tsx`'s `.btn-light` (the frozen `/settings`
+   page, not the popup).
+4. **`RuntimeCredentialBars`' `bars` variant is deleted, not restyled.** Onboarding stopped
+   mounting it on 2026-10-14; the popup's rows were its only face.
+5. **Shared beyond the popup:** `SettingsPanel` / `SettingsCard` / `SettingsRows` and
+   `delete-account.tsx` also render on the web billing page (`billing-plans-pane.tsx › DeleteAccount`),
+   which now wears the same flat section and white card.

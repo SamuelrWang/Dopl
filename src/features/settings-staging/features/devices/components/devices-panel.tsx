@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { formatRelativeTime } from "@/shared/lib/format-time";
-import { OpenScaleButton, OPEN_SCALE_ICON } from "@/shared/ui/open-scale-button";
+import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
 import {
   SettingsCard,
   SettingsPanel,
@@ -36,10 +36,15 @@ export function DevicesPanel() {
       id="settings-connect-devices"
       label="Devices"
       action={
-        <OpenScaleButton onClick={() => setPairing((open) => !open)} aria-expanded={pairing}>
-          <Plus size={OPEN_SCALE_ICON} aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setPairing((open) => !open)}
+          aria-expanded={pairing}
+          className={SMALL_PILL_BUTTON}
+        >
+          <Plus size={SMALL_PILL_ICON} aria-hidden="true" />
           Pair glasses
-        </OpenScaleButton>
+        </button>
       }
     >
       {pairing && (

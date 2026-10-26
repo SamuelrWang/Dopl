@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 import { apiRequest } from "@/features/settings-staging/stubs/api";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { OpenScaleButton, OPEN_SCALE_ICON } from "@/shared/ui/open-scale-button";
+import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
 import {
   RowAction,
   SettingsCard,
@@ -48,10 +48,15 @@ export function AgentsPanel() {
       id="settings-connect-agents"
       label="Agents"
       action={
-        <OpenScaleButton onClick={() => setConnecting((open) => !open)} aria-expanded={connecting}>
-          <Plus size={OPEN_SCALE_ICON} aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setConnecting((open) => !open)}
+          aria-expanded={connecting}
+          className={SMALL_PILL_BUTTON}
+        >
+          <Plus size={SMALL_PILL_ICON} aria-hidden="true" />
           Connect an agent
-        </OpenScaleButton>
+        </button>
       }
     >
       {connecting && (
@@ -63,7 +68,7 @@ export function AgentsPanel() {
 
       <SettingsCard label="Connected agents">
         <CardHeading>Connected</CardHeading>
-        <ul aria-label="Connected agents" className="mt-1 divide-y divide-border-subtle">
+        <ul aria-label="Connected agents" className="mt-1 divide-y divide-border-default">
           {apps === null ? (
             <SettingsRowsSkeleton />
           ) : apps.length === 0 ? (
@@ -79,7 +84,7 @@ export function AgentsPanel() {
       {runtimes.length > 0 && (
         <SettingsCard label="Agent sign-ins">
           <CardHeading>Sign-ins</CardHeading>
-          <RuntimeCredentialBars variant="rows" className="mt-1" />
+          <RuntimeCredentialBars className="mt-1" />
         </SettingsCard>
       )}
     </SettingsPanel>

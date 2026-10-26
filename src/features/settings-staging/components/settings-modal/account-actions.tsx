@@ -1,7 +1,8 @@
 // STAGING COPY of apps/desktop-ui/src/components/settings-modal/account-actions.tsx (tree of 2026-10-22). Only import paths differ from the source (data hooks and
 // desktop libs → src/features/settings-staging/stubs). See src/features/settings-staging/PORTING.md.
 import { ExternalLink } from "lucide-react";
-import { OpenScaleButton, OPEN_SCALE_ICON } from "@/shared/ui/open-scale-button";
+import { cn } from "@/shared/lib/utils";
+import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
 import {
   SettingsPanel,
   SettingsRow,
@@ -27,18 +28,25 @@ export function AccountActions({ workspaceSegment }: { workspaceSegment: string 
       <SettingsRows label="Session">
         {canSignOut && (
           <SettingsRow title="Sign out">
-            <OpenScaleButton onClick={() => void bridge?.signOut?.()}>Sign out</OpenScaleButton>
+            <button
+              type="button"
+              onClick={() => void bridge?.signOut?.()}
+              className={SMALL_PILL_BUTTON}
+            >
+              Sign out
+            </button>
           </SettingsRow>
         )}
         <SettingsRow title="Delete account">
           {/* `/billing/{segment}` (`src/app/billing/[segment]/page.tsx`) carries the account danger zone. */}
-          <OpenScaleButton
+          <button
+            type="button"
             onClick={() => openInBrowser(accountPagePath(workspaceSegment))}
-            className="text-danger"
+            className={cn(SMALL_PILL_BUTTON, "text-danger")}
           >
             Open in browser
-            <ExternalLink size={OPEN_SCALE_ICON} aria-hidden="true" />
-          </OpenScaleButton>
+            <ExternalLink size={SMALL_PILL_ICON} aria-hidden="true" />
+          </button>
         </SettingsRow>
       </SettingsRows>
     </SettingsPanel>
