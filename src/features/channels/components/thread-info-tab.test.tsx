@@ -14,9 +14,9 @@
  *  - **"COULD NOT ASK" IS NOT "NOTHING IS RUNNING."** `null` sessions (a plain
  *    browser, or a main without the feed) must not render as "No agents on this
  *    thread", and must carry no count (INVARIANTS §11 — UNKNOWN is not EMPTY).
- *  - **AGENTS RENDER BY ID.** The stone-name pool is being deleted; several of one
- *    operator's agents now sit on one thread, and the id is the only thing that
- *    tells them apart.
+ *  - **AGENTS RENDER BY NAME, AS IDENTITY FACES.** Several of one operator's agents
+ *    sit on one thread and their names tell them apart; the instance id is never
+ *    shown.
  *  - **NO THREAD-CLOSING VOCABULARY.** A thread has no finished state anywhere in
  *    the product, so this panel has no Status row to fill.
  */
@@ -29,6 +29,7 @@ import { CREATED_ROW_LABEL } from "../lib/channel-display";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import { ThreadInfoTab } from "./thread-info-tab";
 import { CHANNEL_ID, ME, PEER, member, thread } from "./test-fixtures";
+import { indexMembers } from "./view-model";
 
 afterEach(cleanup);
 
@@ -41,6 +42,8 @@ const MEMBERS = [
     email: "diana@example.com",
   }),
 ];
+
+const INDEX = indexMembers(MEMBERS, ME);
 
 /**
  * ⚠ WIDENED LOCALLY WITH `agentId`. The field is main's, and
@@ -87,7 +90,7 @@ function renderTab(
     <ThreadInfoTab
       thread={thread()}
       members={MEMBERS}
-      currentUserId={ME}
+      index={INDEX}
       agentSessions={[]}
       peerSessions={[]}
       {...over}
@@ -135,7 +138,7 @@ describe("the thread's own facts", () => {
       <ThreadInfoTab
         thread={thread({ status: "closed", outcome: "completed" })}
         members={MEMBERS}
-        currentUserId={ME}
+        index={INDEX}
         agentSessions={[]}
       />
     );
@@ -203,7 +206,30 @@ describe("the agents on this thread", () => {
     renderTab({ agentSessions: [summary()], peerSessions: [peer()] });
     expect(screen.getByText("flint")).toBeTruthy();
     expect(screen.getByText("onyx")).toBeTruthy();
-    expect(screen.getByText("Diana Taylor's")).toBeTruthy();
+    expect(screen.getByText("Diana's agent")).toBeTruthy();
+    expect(screen.getByText("Yours")).toBeTruthy();
+  });
+
+  it("draws each agent as an identity face with its runtime badge, never the bot glyph", () => {
+    const { container } = render(
+      <ThreadInfoTab
+        thread={thread()}
+        members={MEMBERS}
+        index={INDEX}
+        agentSessions={[summary({ agentId: "a1b2c3d4", runtimeId: "claude" })]}
+        peerSessions={[peer({ runtime: "codex", displayName: "Onyx" })]}
+      />
+    );
+    expect(container.querySelectorAll("[data-identity-face]")).toHaveLength(2);
+    expect(container.querySelector("svg.lucide-bot")).toBeNull();
+    const badges = [...container.querySelectorAll("[data-identity-face] img")].map((i) =>
+      i.getAttribute("src")
+    );
+    expect(badges).toContain("/img/onboarding/claude-logo.svg");
+    expect(badges).toContain("/img/onboarding/chatgpt-logo.svg");
+    // A peer is named by its display name, never its instance id.
+    expect(screen.getByText("Onyx")).toBeTruthy();
+    expect(screen.queryByText("onyx")).toBeNull();
   });
 
   it("says nothing is running when the desktop answered with an empty feed", () => {

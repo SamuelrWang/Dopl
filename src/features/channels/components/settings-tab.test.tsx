@@ -38,7 +38,7 @@
  * writes, exactly as it did when the intent came from a menu item.
  *
  * ⚠ THE AGENT HALF SPLIT OFF ON 2026-09-14 (500-line cap) into
- * `settings-tab-agent.test.tsx` — Tool access, the Working Folder row and the
+ * `settings-tab-agent.test.tsx` — Tool access, the Working folder row and the
  * Launch-agents control — and the two shared helpers into
  * `_settings-tab-fixtures.ts`. Everything above holds for both halves.
  */
@@ -182,7 +182,7 @@ describe("no dead rows, and nothing behind a click", () => {
     // ⚠ NAMES REPOINTED 2026-09-06 (settings overhaul): "Agent folder" → "Working
     // Folder", "Permissions" → "Tool use", "Sends" → "Messaging". Renames only —
     // what this case pins is that a bridgeless browser renders NONE of them.
-    expect(screen.queryByText("Working Folder")).toBeNull();
+    expect(screen.queryByText("Working folder")).toBeNull();
     expect(screen.queryByText("For the next request you allow")).toBeNull();
     expect(screen.queryByText("Tool use")).toBeNull();
     expect(screen.queryByText("Messaging")).toBeNull();

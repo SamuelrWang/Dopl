@@ -46,7 +46,7 @@ export function AgentDefaultsSettings() {
         {/* Same row name as the channel tab; only the option list differs (see `DefaultChainValue`). */}
         <SettingRow name="Launch agents">
           <SelectMenu<DefaultChainValue>
-            variant="text"
+            variant="bare"
             value={chain}
             options={CHAIN_OPTIONS}
             onChange={(next) => {

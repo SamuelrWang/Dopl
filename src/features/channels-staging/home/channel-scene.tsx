@@ -5,7 +5,7 @@
  * PANE half only (the rail, top bar and column are `ui-staging/staging-frame.tsx`'s). Same
  * product mounts in the same order with the same props: `ChannelsMessagePane`, the
  * `.channel-info-slide` holding `ChannelsInfoPanel`, then the remaining face swaps (agent
- * state rows, agent view faces, agent cards, stream boxes) and the agent view.
+ * view faces, stream boxes) and the agent view.
  *
  * What differs (all marked STAGING):
  *  - it renders ONE CHANNEL FIXTURE (`../data/*`) instead of the demo's step-gated script, so
@@ -48,7 +48,6 @@ import {
 import { CURRENT_USER_ID, VIEWER } from "../data/demo-imports";
 import { stagingAgentIndex, stagingIdentityFace } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
-import { StagingAgentCards, StagingAgentStateRows } from "./agent-card";
 import { StagingAgentViewFaces } from "./agent-view-faces";
 import { StagingAgentView } from "./agent-view";
 import { StagingSettingsTab } from "./settings-tab";
@@ -323,8 +322,8 @@ export function StagingChannelScene({
           mentionsLayout="category"
           activityBins={fixture.activity}
           activityLoading={false}
-          // STAGING: the product's `settings-slot.tsx` is wired to live writes; this is its face
-          // over local state (`./settings-tab.tsx`). Without it the tab body was blank.
+          // STAGING: `settings-slot.tsx`'s hosts are wired to live writes; `./settings-tab.tsx`
+          // mounts the product views over local state instead.
           settings={
             <StagingSettingsTab
               channel={channel}
@@ -343,7 +342,6 @@ export function StagingChannelScene({
           }}
         />
       </div>
-      <StagingAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
       {viewAgent && (
         <StagingAgentViewFaces
           paneRef={pane}
@@ -351,14 +349,6 @@ export function StagingChannelScene({
           onClose={() => actions.openAgent(null)}
         />
       )}
-      <StagingAgentCards
-        paneRef={pane}
-        sessions={sessions}
-        peers={peers}
-        index={index}
-        openAgent={openSession ? agentKey(openSession) : null}
-        onOpenAgent={(key) => actions.openAgent(key)}
-      />
       <DemoStreamBoxes
         paneRef={pane}
         faces={streamFaces}

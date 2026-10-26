@@ -172,7 +172,7 @@ export function ChannelsInfoPanel({
               <ThreadInfoTab
                 thread={openThread}
                 members={members}
-                currentUserId={index.currentUserId}
+                index={index}
                 agentSessions={agentSessions}
                 peerSessions={peerSessions}
               />

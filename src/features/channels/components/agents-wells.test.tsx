@@ -14,7 +14,7 @@
  *    font-medium` here would pass a class assertion and drift the day that
  *    constant moves, so the assertion is against the CONSTANT.
  *  - **THE CARDS ARE UNCHANGED.** This ruling put a GROUND under the column; the
- *    white `.bento` cards and their gap are the ones that were already there.
+ *    agent cards (`.white-card`) and their gap sit directly in the column.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -340,7 +340,7 @@ describe("AgentsTab — the well's face and its collapse", () => {
       el.className.startsWith(PANEL_ROWS)
     );
     expect(column).toBeTruthy();
-    const card = screen.getByText("Alpha").closest(".bento")!;
+    const card = screen.getByText("Alpha").closest(".white-card")!;
     // ⚠ NO WRAPPER BOX between the column and the card (the `Fragment` key) — a
     // `div` per card would be a second layout owner inside the well.
     expect(card.parentElement).toBe(column);

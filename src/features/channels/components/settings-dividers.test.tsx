@@ -29,6 +29,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { ChannelsSettingsTab } from "./settings-tab";
 import { ChannelAgentsSettings } from "./settings-channel-agents";
 import { ChannelsThreadSettingsTab } from "./thread-settings-tab";
+import { ChannelAgentSettingsView } from "./settings-agent";
 import { agentView } from "./settings-agent-harness";
 import { channel, member, thread as makeThread, ME, PEER } from "./test-fixtures";
 
@@ -49,7 +50,7 @@ function renderedLines(root: HTMLElement): HTMLElement[] {
   );
 }
 
-/** The desktop-only rows too, so the Working Folder row is in the column. */
+/** The desktop-only rows too, so the Working folder row is in the column. */
 const FOLDER = {
   label: "~/Downloads",
   custom: false,
@@ -61,8 +62,8 @@ const FOLDER = {
 describe("the channel face — a line between every setting", () => {
   it("draws rows − 1 lines over the Agent Settings column", () => {
     const { container } = agentView({ folder: FOLDER });
-    // ⚠ A FLOOR, so the measurement cannot pass by rendering nothing: jsdom is a
-    // plain browser, so this is Tool use + Messaging + Tool access + Working Folder.
+    // ⚠ A FLOOR, so the measurement cannot pass by rendering nothing: Permissions, Messaging,
+    // Tool access and Working folder.
     expect(rows(container)).toBeGreaterThanOrEqual(4);
     expect(renderedLines(container)).toHaveLength(rows(container) - 1);
   });
@@ -80,19 +81,40 @@ describe("the channel face — a line between every setting", () => {
     expect(lines.length - renderedLines(container).length).toBe(1);
   });
 
-  it("🔒 separates the responder row from the block above it — `continues`, not a heading", () => {
-    // ⚠ THE CASE THE `first:hidden` RULE WOULD OTHERWISE GET WRONG. That row is the
-    // first child of its OWN container but not the first setting a reader sees, and
-    // the "AGENTS" label that used to be the break is deleted (same ruling).
-    const { container } = render(
-      <ChannelAgentsSettings
-        members={[member({ userId: PEER }), member({ userId: ME })]}
-        currentUserId={ME}
-        onSetUnaddressedResponder={noop}
+  it("🔒 separates Responder from the rows above it inside the one Agent Settings card", () => {
+    // Responder is its own slot but the same card, so it continues the column: its leading line
+    // shows, and only the card's first row is unlined.
+    render(
+      <ChannelsSettingsTab
+        channel={channel()}
+        canManage={false}
+        isChannelOwner={false}
+        memberManagement={false}
+        selfManagement={false}
+        agent={
+          <ChannelAgentSettingsView
+            profile="full"
+            onSetToolProfile={noop}
+            toolProfileBusy={false}
+            folder={FOLDER}
+          />
+        }
+        channelAgents={
+          <ChannelAgentsSettings
+            members={[member({ userId: PEER }), member({ userId: ME })]}
+            currentUserId={ME}
+            onSetUnaddressedResponder={noop}
+          />
+        }
+        onInvite={noop}
+        onToggleVisibility={noop}
+        onRequestDelete={noop}
+        onRequestLeave={noop}
       />
     );
-    expect(rows(container)).toBe(1);
-    expect(renderedLines(container)).toHaveLength(1);
+    const card = screen.getByRole("region", { name: "Agent Settings" });
+    expect(rows(card)).toBe(3);
+    expect(renderedLines(card)).toHaveLength(2);
   });
 
   it("draws rows − 1 lines over the Channel action rows", () => {

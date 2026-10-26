@@ -20,6 +20,7 @@ import type { RefObject } from "react";
 import { createPortal } from "react-dom";
 import { CornerDownRight, X } from "lucide-react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { AgentStatusPill } from "@/features/channels/components/agent-bits";
 import {
   agentDisplayName,
   agentLiveness,
@@ -93,10 +94,7 @@ export function DemoAgentViewFaces({
                   </span>
                 )}
               </span>
-              <span className="lp-demo-ac-status" data-tone={liveness.tone}>
-                <i />
-                {liveness.label}
-              </span>
+              <AgentStatusPill {...liveness} />
               <button
                 type="button"
                 className="lp-demo-avh-close"

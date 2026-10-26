@@ -198,3 +198,65 @@ Workers append a `## <slice>` section per question: the question, what was chose
 14. **Pre-existing, unchanged:** `src/shared/ui/clickable-cursor.test.ts` red on
     `ontology-staging/.../kanban-column-header.tsx`; `check-doc-refs` asks for
     `docs/ENGINEERING.md::task-panel.tsx` to leave its baseline (not this slice's file).
+
+## Phase 3.2 info column (branch `ui/port-info-column`)
+
+1. **Runtime badge assets per host.** There was no product runtime → logo map, and the packaged SPA
+   is a `file://` document with no `/img/` root. Chose: one table in `src/shared/ui/runtime-logo.tsx`
+   (`claude`, `codex` → the ChatGPT mark, `grok`, `muse`; anything else, e.g. `cursor`, draws no
+   badge) and a per-host resolver: the web default serves `public/img/onboarding/`, the SPA provides
+   `apps/desktop-ui/src/lib/runtime-logos.ts › spaRuntimeLogo` (bundled `?inline` SVGs) at
+   `app.tsx`. Own agents read `runtimeId`, falling back to their server row's `runtime`; `''` (the
+   default adapter) names no runtime here, so it draws no badge until the push carries one (S5).
+   The thread card's agent rows (slice 1, OQ 3.1 #2) now wear the badge too, through the same
+   `channels/components/agent-face.tsx › AgentFace`.
+2. **Grok's badge is the onboarding `grok-logo.svg` everywhere**, including the landing demo, whose
+   own faces used `/img/logos/grok-bot.png`. The demo and staging face tables now read the shared
+   table (`webRuntimeLogo`), so the demo's swapped boxes and the product cards cannot disagree.
+3. **One status pill: `StatusPill` (Phase 1 geometry, regular weight).** The Agents-tab cards, the
+   thread Info rows, the thread card rows and both agent-view face swaps wear it through
+   `agent-bits.tsx › AgentStatusPill` (`working` → green dot, else neutral). Deltas vs the demo's
+   `.lp-demo-ac-status` (deleted): weight 400 not 500, and `waiting` no longer has a darker dot than
+   `idle`. The thread Info tab's "Opened by" / "Addressed to" side pill is the same pill, dotless.
+4. **An ended own agent's card says "Ended" on that status pill**, not the black `AgentEndedPill`
+   (staging draws it so). The slide-out header and the agent window keep the black pill (slice 3).
+5. **Settings values are `bare` (caption, medium weight), against the 2026-09-10 "unbold the
+   values" and 2026-09-13 "gray highlight on hover" rulings.** Staging (the newer spec) draws the
+   value + muted chevron with an ink-only hover; names stay regular weight. `text` keeps the grey
+   hover for its other callers (ontology editors, Usage filter). The face is pinned by
+   `settings-agent-face.test.tsx` and `shared/ui/select-menu-face.test.tsx`.
+6. **The bleed of the shared rows.** `AgentLaunchPostureRows` and `SettingRow` are also the profile
+   popup's Configuration pane and the notifications panel: those rows now wear the `bare` values,
+   the 40px row with its `px-2`, and the full-width `--border-default` hairline. Accepted under R12
+   (one implementation); the Configuration pane's own "Launch agents" row moved to `bare` too so the
+   pane reads as one face.
+7. **`SettingRow`'s `continues` / `SettingDivider`'s `always` are deleted**: Responder is the last row
+   of the Agent Settings card now, so its leading line shows by the ordinary rule.
+8. **`hasActions` no longer counts `canManage` alone.** A manager of a DM with fixed membership had
+   a "Channel" heading over no rows; now that card is absent and the empty state decides.
+9. **The "where" line indent is 39px** (the 30px face plus its 9px gap, under the name); staging's
+   33px was left from the 24px avatar it had before ask 6d.
+10. **Staging settings mounts the product views, not `ChannelsSettingsSlot`.** The slot's hosts
+    (`channel-manage.tsx`, `thread-manage.tsx`, the settings container) hold live writes and the
+    bridge, so `channels-staging/home/settings-tab.tsx` is a stub HOST over local state with
+    `settings-staging`'s launch-record stub and /home's `memberManagement: false`. Consequence:
+    staging no longer shows Add members / Delete channel (R4), and its stand-in invite dialog is
+    deleted. The thread delete confirm's copy is restated there (the product's lives inside
+    `thread-manage.tsx`'s host).
+11. **InviteDialog is not restyled.** It is unreachable on /home (`memberManagement: false`), so a
+    restyle would be workspace-only work (R12). The channel/thread dialogs are already the product's
+    `ConfirmDialog` / `GoPublicDialog`, which staging used verbatim.
+12. **Info tab / roster unchanged.** Staging mounts the product `ChannelsInfoPanel` for it, so there
+    was no visual delta to port; every listed keep (headerEdit, infoCardEdit, infoExtras, launch,
+    mention marks, label swap, signal resets) is untouched.
+13. **`ThreadInfoTab` takes the surface's `index` instead of `currentUserId`**, so its agent rows are
+    the thread card's own list (`thread-card-agents.ts › threadCardAgents`: faces, colours, runtime,
+    "Yours" / "Diana's agent"). Peers now print their display name, not the instance id.
+14. **Not done here (left for their slices):** `--channel-divider-w` and `info-resize-handle.tsx ›
+    DIVIDER_WIDTH_VAR` (OQ Phase 2 #7) still have no declarer; retiring them reaches
+    `split-resize-handle.tsx`, its suites and an INVARIANTS paragraph. `PANEL_CARD` / `CARD_BUTTON`
+    remain for the Threads and Artifacts tabs. The stale pointer in `use-info-resize.ts` (OQ Phase 2
+    #8) is fixed.
+15. **Pre-existing, unchanged:** `src/shared/ui/clickable-cursor.test.ts` red on
+    `ontology-staging/.../kanban-column-header.tsx`; `check-doc-refs` asks for
+    `docs/ENGINEERING.md::task-panel.tsx` to leave its baseline.

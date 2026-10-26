@@ -119,7 +119,7 @@ export const SETTINGS_HELP: Readonly<Record<string, SettingHelpCopy>> = {
     body:
       "Whether agents you launch here may use your own tools: your MCP servers, connected apps, browser, skills and sub-agents. Only on turns you start; another member's message never reaches them. Permissions still apply.",
   },
-  "Working Folder": {
+  "Working folder": {
     body:
       "Where this channel's agents run on your Mac. It is context, not a sandbox — it does not change what an agent may do. Click the folder name to change it.",
   },
