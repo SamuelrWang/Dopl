@@ -113,7 +113,7 @@ button.lp-demo-top-profile {
    channel picker) and the channel column: white instead of the kit's
    `--home-panel` grey (#f1f3f5). DESIGN-LANGUAGE.md §1 "White surfaces,
    not grey". Background only — the token itself is left alone, because
-   knowledge rows (`--kv-row-fill`) and the settings modal read it.
+   the settings modal reads it.
    Port target if approved: `globals.css › .page-float` / `--home-panel`. */
 .uis-window .lp-demo-panel.page-float {
   background: #ffffff;

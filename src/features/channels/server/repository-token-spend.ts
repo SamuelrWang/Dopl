@@ -130,9 +130,8 @@ function isMissingLedger(error: unknown): boolean {
  * THE CALLER'S OWN SPEND since an instant, newest run first.
  *
  * ⚠ FENCED ON `user_id` ALONE, AND THAT IS THE WHOLE POINT. Overview is an
- * ACCOUNT surface that spans containers (`overview-panels.tsx`: "Overview is
- * about the account, and every section on it is cross-channel by
- * construction"), and "my agents' spend" is answered by this column without a
+ * ACCOUNT surface that spans containers (every section on it is cross-channel by
+ * construction), and "my agents' spend" is answered by this column without a
  * membership set to assemble. ⚠ It is also the NARROWEST possible fence: there
  * is no argument that widens it to a peer's rows, deliberately — nobody has
  * ruled that a workspace member may read a colleague's token spend.

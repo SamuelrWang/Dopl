@@ -1,5 +1,5 @@
 /**
- * The ONE base-delete flow both delete buttons run (`base-settings-form.tsx`, `base-header.tsx`).
+ * The ONE base-delete flow both delete buttons run (`base-settings-general.tsx`, `base-header.tsx`).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

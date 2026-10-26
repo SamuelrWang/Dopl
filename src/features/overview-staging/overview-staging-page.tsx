@@ -1,23 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { SettingsSection } from "@/shared/layout/settings-modal/settings-modal-core";
 import { cn } from "@/shared/lib/utils";
+import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
 import { STAGING_HOME_WORKSPACE_ID } from "@/features/ui-staging/staging-stubs";
-import { StagingOverview } from "./pages/home/overview/overview";
 import { StagingSettingsModal } from "@/features/settings-staging/staging-settings-modal";
-import { DEVICES_MOCK_USER_ID, type StagingPlan } from "./overview-mock-data";
+import { HOME_CHANNELS, type StagingPlan } from "./overview-mock-data";
 import {
   DEFAULT_STAGING_STATE,
   StagingStateProvider,
   type StagingLoad,
   type StagingState,
 } from "./stubs/staging-state";
-import { STAGING_OPEN_SETTINGS_EVENT } from "./stubs/home-settings-control";
+import { useStagingOverviewReads } from "./stubs/use-staging-overview-reads";
 
 /**
- * `/overview`: the Overview face inside the landing demo window, on fake data.
+ * `/overview`: the product Overview face inside the landing demo window, on fake data.
  *
  * The small toolbar bottom-right is STAGING ONLY (not part of the desktop UI): it flips the states
  * the Overview can be in, so each can be reviewed without real data.
@@ -27,24 +27,17 @@ export function OverviewStagingPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("billing");
 
-  // `openHomeSettings(section)` (stubbed) fires this; the desktop's one-slot registry opens the
-  // Settings modal on that section.
-  useEffect(() => {
-    const open = (event: Event) => {
-      const detail = (event as CustomEvent<SettingsSection>).detail;
-      setSection(detail ?? "billing");
-      setSettingsOpen(true);
-    };
-    window.addEventListener(STAGING_OPEN_SETTINGS_EVENT, open);
-    return () => window.removeEventListener(STAGING_OPEN_SETTINGS_EVENT, open);
-  }, []);
-
   return (
     <StagingStateProvider value={state}>
       <StagingFrame tab="overview" showChannels>
-        <StagingOverview
+        <HomeOverview
           homeWorkspaceId={STAGING_HOME_WORKSPACE_ID}
-          currentUserId={state.devicesPreview ? DEVICES_MOCK_USER_ID : null}
+          homeChannels={HOME_CHANNELS}
+          onOpenSettings={(next) => {
+            setSection(next);
+            setSettingsOpen(true);
+          }}
+          useReads={useStagingOverviewReads}
         />
       </StagingFrame>
       <StagingSettingsModal
@@ -148,15 +141,6 @@ function StagingToolbar({
             options={PLANS}
             value={state.plan}
             onChange={(plan) => onChange({ ...state, plan })}
-          />
-          <Segmented
-            label="Devices"
-            options={[
-              { key: "on", label: "Preview on" },
-              { key: "off", label: "Off" },
-            ]}
-            value={state.devicesPreview ? "on" : "off"}
-            onChange={(v) => onChange({ ...state, devicesPreview: v === "on" })}
           />
         </>
       )}

@@ -57,9 +57,7 @@ export type OpenActivity = (
 ) => void;
 
 export interface ActivityJump {
-  /** Hand to whatever opens a row — the SEARCH popup, and nothing else since
-   *  2026-09-20 (it was `HomeOverviewPanels` until the Activity panel was cut).
-   *  See {@link OpenActivity}. */
+  /** Hand to whatever opens a row — the SEARCH popup. See {@link OpenActivity}. */
   open: OpenActivity;
   /** The thread to raise when THIS row's record pane mounts, or `null`. */
   threadFor: (rowId: string) => string | null;

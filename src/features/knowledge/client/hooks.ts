@@ -263,7 +263,7 @@ export function useToggleBaseStar(workspaceId?: string, shelf?: KbShelf) {
   // The shelf must match the list the surface mounted: this patches ONE entry,
   // so against a surface reading `bases:W:shelf:workspace` a plain `bases:W`
   // key patches nothing anybody is listening to — §8's silent no-op, the exact
-  // failure `pages/home/knowledge-panel-cards.tsx › useStarToggle` exists to
+  // failure `knowledge/components/home/home-knowledge-cards.tsx › useStarToggle` exists to
   // avoid on the channel variant.
   const key = knowledgeBasesQueryKey(workspaceId, undefined, shelf);
   return useMutation({

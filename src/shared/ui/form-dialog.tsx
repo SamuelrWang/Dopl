@@ -69,6 +69,7 @@ export function UnderlineField({
   ariaLabel,
   id,
   caption,
+  placeholder,
   multiline = false,
   minRows = 1,
   maxLength,
@@ -81,6 +82,7 @@ export function UnderlineField({
   ariaLabel: string;
   id: string;
   caption?: string;
+  placeholder?: string;
   multiline?: boolean;
   /** Starting height in lines for a `multiline` field; it grows with the text. */
   minRows?: number;
@@ -107,6 +109,7 @@ export function UnderlineField({
     spellCheck: false,
     maxLength,
     autoFocus,
+    placeholder,
     "aria-label": ariaLabel,
   };
   return (

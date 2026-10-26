@@ -82,7 +82,7 @@ describe("knowledge base detail", () => {
     await screen.findByDisplayValue("Cold outreach");
 
     fireEvent.click(screen.getByLabelText("Knowledge base settings"));
-    fireEvent.click(await screen.findByText(/Show URL slug/));
+    fireEvent.click(await screen.findByText("Edit URL slug"));
     fireEvent.change(screen.getByDisplayValue("sales-playbook"), {
       target: { value: "playbook-v2" },
     });

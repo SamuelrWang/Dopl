@@ -1,6 +1,6 @@
 "use client";
 
-import { SectionPanel } from "@/shared/ui/section-panel";
+import { SettingsPanel } from "@/shared/layout/settings-modal/sections/settings-panel";
 import { ChangelogList } from "@/features/revisions/components/changelog-list";
 import { useRevisionHistory } from "@/features/revisions/client/hooks";
 import { restoreEntryRevision } from "@/features/revisions/client/api";
@@ -36,7 +36,7 @@ export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
   }
 
   return (
-    <SectionPanel id="kb-changelog" label="Changelog">
+    <SettingsPanel id="kb-changelog" label="Changelog">
       <ChangelogList
         days={history.days}
         status={history.status}
@@ -46,6 +46,6 @@ export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
         canRestore={canEdit}
         onRestore={restore}
       />
-    </SectionPanel>
+    </SettingsPanel>
   );
 }

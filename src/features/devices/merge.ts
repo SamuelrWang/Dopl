@@ -51,8 +51,12 @@ export function mergeDevices(
   );
 }
 
+/** `Online` / `5m ago` / `Offline`. */
+export function devicePresence(device: ConnectedDevice, lastSeenText: string): string {
+  return device.online ? "Online" : device.lastSeen ? lastSeenText : "Offline";
+}
+
 /** `macOS · Online` / `Even G2 · 5m ago`. */
 export function deviceMeta(device: ConnectedDevice, lastSeenText: string): string {
-  const presence = device.online ? "Online" : device.lastSeen ? lastSeenText : "Offline";
-  return [device.platformLabel, presence].filter(Boolean).join(" · ");
+  return [device.platformLabel, devicePresence(device, lastSeenText)].filter(Boolean).join(" · ");
 }

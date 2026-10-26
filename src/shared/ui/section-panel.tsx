@@ -60,7 +60,7 @@ export const SECTION_PANEL_GROUND =
  * every caller regardless of the ground it is handed.
  *
  * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT.** `shared/ui/panel-well.ts ›
- * PANEL_WELL` is the Token-spend well — `bg-home-panel` on this geometry, no hairline (the same
+ * PANEL_WELL` is the gray well — `bg-home-panel` on this geometry, no hairline (the same
  * face `SECTION_PANEL_GROUND` has carried on every page since R-39 flattened it) — reached by
  * IMPORT rather than by retyping `rounded-[14px] p-3`, so the day the well's radius or padding
  * moves it moves on every surface at once.

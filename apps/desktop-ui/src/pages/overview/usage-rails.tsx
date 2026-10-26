@@ -36,10 +36,8 @@ import {
  * visible set, a person to the roster), which is why neither sums to the plot.
  * INVARIANTS §9 states the two postures.
  *
- * ⚠ **THE RAILS THEMSELVES ARE `#/components/overview/rank-rail.tsx`'s** since
- * 2026-09-17 — this file had a byte-identical private copy of all five.
- * ⚠ **`ClippedNote` RENDERS INSIDE THIS PANEL AND OUTSIDE /home's** — a caller
- * concern on both faces, deliberately not absorbed into a rail.
+ * ⚠ **THE RAILS THEMSELVES ARE `#/components/overview/rank-rail.tsx`'s**; `ClippedNote` is
+ * this panel's, deliberately not absorbed into a rail.
  *
  * ⚠ MINIMAL COPY (INVARIANTS §5): labels and controls, no explainer paragraphs.
  */
@@ -75,9 +73,7 @@ export function UsageRails({ usage }: { usage?: WorkspaceUsageBreakdown }) {
   );
 }
 
-/** ⚠ **THE ID KEY IS THIS PAGE'S** — a workspace addresses a channel by
- *  `channelId`, /home by `workspaceId`, which is why the shared rail takes
- *  `RankRow`s and not a key flag. */
+/** A workspace addresses a channel by `channelId`; the rail takes the mapped `RankRow`s. */
 function channelRows(
   rows: readonly WorkspaceChannelUsage[],
   value: (row: WorkspaceChannelUsage) => number

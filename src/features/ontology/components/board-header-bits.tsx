@@ -1,40 +1,16 @@
 "use client";
 
-/** The ontology board header's own controls: the description, the rename field, the display
+/** The ontology board header's own controls: the rename field, the display
  *  picker and the gear menu. Split from `ontology-view.tsx` for the 500-line cap. */
 
 import { useRef, useState, type ReactNode } from "react";
 import { Pencil, Settings, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { InlineUnderlineField } from "@/shared/ui/form-dialog";
-import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { WHITE_PILL } from "@/shared/ui/page-action-button";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { useBoardDisplay, type BoardDisplay } from "../hooks/use-board-display";
-
-/**
- * The ontology's description as quiet inline text: no rule at rest, the ink line while it is being
- * edited. Saves through `ONTOLOGY_UPDATE` at `purpose`, which is what agents read.
- */
-export function DescriptionField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <InlineUnderlineField
-      label="Description"
-      value={value}
-      onChange={onChange}
-      quiet
-      className="min-w-0 flex-1"
-      inputClassName={fieldStyles.inputSecondary}
-    />
-  );
-}
 
 /**
  * The ontology's name while being renamed, in the switcher's slot. Enter and blur save; Escape and

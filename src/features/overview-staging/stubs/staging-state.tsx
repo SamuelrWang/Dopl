@@ -4,25 +4,21 @@ import { createContext, useContext, type ReactNode } from "react";
 import type { StagingPlan } from "../overview-mock-data";
 
 /**
- * STAGING-ONLY. The knobs the staging toolbar turns, read by the stubs so every desktop state the
- * Overview can reach (loading ghosts, error, empty account, free/paid/out-of-credits, the Devices
- * preview gate) is one click away. Nothing in the desktop app reads this; port nothing from here.
+ * STAGING-ONLY. The knobs the staging toolbar turns, read by the stubs so every state the Overview
+ * can reach (loading ghosts, error, empty account, free/paid/out-of-credits) is one click away.
  */
 export type StagingLoad = "ready" | "loading" | "error" | "empty";
 
 export interface StagingState {
   load: StagingLoad;
   plan: StagingPlan;
-  /** The branch gates the Devices preview on one user id; this flips that gate. */
-  devicesPreview: boolean;
-  /** Bumped by "Try again" so a stubbed read re-runs its fake latency. */
+  /** Bumped on every Reads switch so a stubbed read re-runs its fake latency. */
   epoch: number;
 }
 
 export const DEFAULT_STAGING_STATE: StagingState = {
   load: "ready",
   plan: "free",
-  devicesPreview: true,
   epoch: 0,
 };
 

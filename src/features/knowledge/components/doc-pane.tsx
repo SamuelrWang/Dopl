@@ -15,6 +15,7 @@ import type { KnowledgeEntry } from "../types";
 import { toast } from "@/shared/ui/toast";
 import type { Editor } from "@tiptap/react";
 import { DocEditor, SaveStatusIndicator, type SaveStatus } from "@/shared/editor/doc-editor";
+import { InPlaceDescription, InPlaceTitle } from "@/shared/ui/in-place-fields";
 import {
   ConflictBanner,
   WriteRuleWarnings,
@@ -366,48 +367,34 @@ export function DocPane({
           onDiscardMine={handleDiscardMine}
         />
       )}
-      {/* Header panel: file name plus the agent-facing description (entry
-          `excerpt`) that MCP clients see in tree listings. */}
-      <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-[14px] border border-border-strong">
-        <div className="flex items-center gap-3 bg-card-surface-subtle px-4 py-1.5">
-          <span className="flex-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
-            Overview
-          </span>
-          <WriteRuleWarnings labels={ruleLabels} />
-          <AvatarStack users={otherEditors} />
-          <SaveStatusIndicator state={status} />
-        </div>
-        <div className="border-t border-border-subtle bg-bg-inset px-4 pt-2.5 pb-2">
-          <input
-            type="text"
+      {/* The document's head card: the file name and the agent-facing
+          description (entry `excerpt`, which MCP clients see in tree
+          listings), both edited in place, with the save state beside the name. */}
+      <header className="white-card mb-6 flex flex-col gap-1 px-6 pt-4 pb-3">
+        <div className="flex items-center gap-3">
+          <InPlaceTitle
+            label="Title"
             value={title}
-            onChange={(e) => {
-              const next = e.target.value;
+            onChange={(next) => {
               setTitle(next);
               scheduleSave(next, body);
             }}
             placeholder="Untitled"
-            className="w-full min-w-0 bg-transparent text-display font-semibold leading-snug tracking-tight text-text-primary focus:outline-none placeholder:text-text-muted"
           />
-          <div className="mt-1 flex items-end gap-2">
-            <textarea
-              value={description}
-              onChange={(e) =>
-                setDescription(e.target.value.slice(0, DESCRIPTION_MAX))
-              }
-              onBlur={handleDescriptionBlur}
-              rows={2}
-              maxLength={DESCRIPTION_MAX}
-              aria-label="Description for agents"
-              placeholder="Add a short description — agents see this when browsing the tree, before opening the file…"
-              className="flex-1 min-w-0 resize-none bg-transparent text-body leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
-            />
-            <span className="shrink-0 pb-0.5 font-mono text-micro text-text-muted">
-              {description.length}/{DESCRIPTION_MAX}
-            </span>
-          </div>
+          <WriteRuleWarnings labels={ruleLabels} />
+          <AvatarStack users={otherEditors} size="2xs" />
+          <SaveStatusIndicator state={status} />
         </div>
-      </div>
+        <InPlaceDescription
+          label="Description for agents"
+          value={description}
+          onChange={setDescription}
+          onBlur={handleDescriptionBlur}
+          max={DESCRIPTION_MAX}
+          multiline
+          placeholder="Add a short description for agents browsing the tree"
+        />
+      </header>
       <DocEditor
         initialMarkdown={editorMd}
         resetKey={`${entry.id}:${editorReloadKey}`}

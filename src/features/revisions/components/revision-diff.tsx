@@ -4,7 +4,8 @@ import { useMemo } from "react";
 import { diffBodies, diffStats } from "../lib/diff";
 
 /**
- * The word-level diff of one revision against the one before it.
+ * The word-level diff of one revision against the one before it, in the card's
+ * well (`.card-well`).
  *
  * ⚠ **TOKENS ONLY — no hex, no raw px** (docs/DESIGN-SYSTEM.md). Additions take
  * `bg-success/10`, removals `bg-danger/10` with a strike — the SAME two washes
@@ -31,18 +32,14 @@ export function RevisionDiff({
   const stats = useMemo(() => diffStats(spans), [spans]);
 
   if (spans.length === 0) {
-    return (
-      <p className="px-1 py-1 text-caption text-text-muted">This version is empty.</p>
-    );
+    return <p className="text-caption text-text-muted">This version is empty.</p>;
   }
   if (stats.added === 0 && stats.removed === 0) {
     // ⚠ "NOTHING CHANGED" IS A FACT WORTH STATING. A save that changed only a
     // title or a folder still produces a revision, and rendering its body as a
     // wall of unchanged text would read as an edit that did nothing.
     return (
-      <p className="px-1 py-1 text-caption text-text-muted">
-        The body did not change in this version.
-      </p>
+      <p className="text-caption text-text-muted">The body did not change in this version.</p>
     );
   }
 
@@ -53,17 +50,13 @@ export function RevisionDiff({
       </p>
       {/* ⚠ ITS OWN `overflow-x-auto`: a markdown body carries code blocks and
           long URLs, and the page body must never scroll sideways. */}
-      <div className="max-h-64 overflow-auto rounded-md bg-bg-inset px-2 py-1.5">
+      <div className="card-well max-h-64 overflow-auto px-3 py-2">
         <p className="whitespace-pre-wrap break-words text-caption text-text-primary">
           {spans.map((span, i) =>
             span.kind === "same" ? (
               <span key={i}>{span.text}</span>
             ) : span.kind === "added" ? (
-              <ins
-                key={i}
-                className="bg-success/10 no-underline"
-                aria-label="added"
-              >
+              <ins key={i} className="bg-success/10 no-underline" aria-label="added">
                 {span.text}
               </ins>
             ) : (

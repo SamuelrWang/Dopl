@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Dispatch } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import fieldStyles from "@/shared/ui/form-dialog.module.css";
+import { InPlaceDescription, InPlaceTitle } from "@/shared/ui/in-place-fields";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { pendingRow } from "@/shared/ui/pending";
 import {
@@ -13,7 +13,6 @@ import {
   type GraphAction,
   type GraphState,
 } from "../graph-state";
-import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import { ActionsEditor } from "./actions-editor";
 import { ObjectHistory } from "./object-history";
 import { AttributesEditor } from "./attributes-editor";
@@ -87,27 +86,19 @@ export function ObjectPanel({
             <X size={NAKED_ICON} />
           </button>
         </div>
-        <input
-          type="text"
+        <InPlaceTitle
+          label="Object name"
           value={object.name}
           readOnly={!canEdit}
-          onChange={(e) =>
-            dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { name: e.target.value } })
-          }
-          className="w-full bg-transparent text-display font-semibold leading-snug tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
+          onChange={(name) => dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { name } })}
           placeholder="Object name"
-          aria-label="Object name"
         />
-        <InlineUnderlineField
-          label="Description"
+        <InPlaceDescription
           value={object.subtitle}
           readOnly={!canEdit}
-          quiet
-          onChange={(next) =>
-            dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle: next } })
+          onChange={(subtitle) =>
+            dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle } })
           }
-          className="w-full"
-          inputClassName={fieldStyles.inputSecondary}
         />
       </header>
 

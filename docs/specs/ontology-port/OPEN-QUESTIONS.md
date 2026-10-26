@@ -39,9 +39,8 @@ Each: the question, what was chosen, where.
    `clickable-cursor.test.ts` allowlist entry moved from `kanban-column-header.tsx` to this file.
 9. **Section titles (Samuel's add-on).** `SECTION_TITLE` is a shared constant
    (`src/shared/ui/section-title.ts`), not a kit class: both wearers are utility-class components
-   and a kit class would need the two-copy mirror. The Overview half is the staging Overview
-   (`overview-staging/.../overview-bits.tsx › ECard`); the product /home Overview has no "Needs you"
-   card yet, so it wears it when that face is ported.
+   and a kit class would need the two-copy mirror. The Overview half is the product /home Overview
+   since its port (`home/components/overview/overview-card.tsx › OverviewCard`).
 
 ## Left alone
 

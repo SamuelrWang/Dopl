@@ -2,6 +2,7 @@
 
 import { Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import { DEFAULT_TEAM_COLOR, TEAM_COLORS } from "../constants";
 
@@ -91,49 +92,35 @@ export function ScopePill({ level }: { level: AccessLevel | null }) {
   return <span className={base}>{SCOPE_LABEL[key]}</span>;
 }
 
-/** None / Read / Edit segmented control. */
+type LevelChoice = AccessLevel | "none";
+
+const ACCESS_LEVEL_OPTIONS: ReadonlyArray<SelectMenuOption<LevelChoice>> = [
+  { value: "none", label: "No access" },
+  { value: "read", label: "Read", description: "Can open it" },
+  { value: "edit", label: "Edit", description: "Can open and change it" },
+];
+
+/** A team's access to one resource: a bare No access / Read / Edit menu, `null` = no grant. */
 export function AccessLevelControl({
   value,
   onChange,
   disabled,
+  ariaLabel,
 }: {
   value: AccessLevel | null;
   onChange: (next: AccessLevel | null) => void;
   disabled?: boolean;
+  ariaLabel: string;
 }) {
-  const segments: Array<{ key: AccessLevel | null; label: string }> = [
-    { key: null, label: "None" },
-    { key: "read", label: "Read" },
-    { key: "edit", label: "Edit" },
-  ];
   return (
-    <div
-      role="radiogroup"
-      className="inline-flex items-center rounded-md border border-border-default overflow-hidden shrink-0"
-    >
-      {segments.map((seg) => {
-        const active = value === seg.key;
-        return (
-          <button
-            key={seg.label}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => !active && onChange(seg.key)}
-            className={cn(
-              "px-2.5 py-1 text-label uppercase tracking-wider transition-colors",
-              active
-                ? "bg-surface-selected text-text-primary"
-                : "text-text-muted hover:text-text-primary hover:bg-surface-raised-2",
-              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-            )}
-          >
-            {seg.label}
-          </button>
-        );
-      })}
-    </div>
+    <SelectMenu<LevelChoice>
+      variant="bare"
+      value={value ?? "none"}
+      options={ACCESS_LEVEL_OPTIONS}
+      onChange={(next) => onChange(next === "none" ? null : next)}
+      disabled={disabled}
+      ariaLabel={ariaLabel}
+    />
   );
 }
 

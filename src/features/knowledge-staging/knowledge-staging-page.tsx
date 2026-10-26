@@ -3,25 +3,26 @@
 /**
  * UI STAGING — desktop /home → Knowledge, on fake data, inside the landing demo's window.
  *
- * What mounts here is the desktop's own face (`home/knowledge-panels.tsx`, a copy of
- * `apps/desktop-ui/src/pages/home/knowledge-panels.tsx`) with the props `home-panes.tsx ›
- * HomePane` hands it. Everything under it is a staged copy whose data layer is the in-memory
- * store (`fake-store.ts`). A private QueryClient keeps the staged cache off the app's own
- * (persisted) one; a reload re-seeds from `data.ts`.
+ * What mounts here is the PRODUCT face (`knowledge/components/home/home-knowledge-panels.tsx`,
+ * which the desktop's `home-panes.tsx` mounts too) with the props `HomePane` hands it. Its requests
+ * are answered in memory by `staging-bridge.ts` → `server/routes.ts`, installed client-side, so
+ * the server renders the frame and the face's skeleton. A private QueryClient keeps the staged
+ * cache off the app's own (persisted) one; a mount re-seeds from `data.ts`.
  */
 
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Role } from "@/features/workspaces/types";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
-import { HomeKnowledgePanels } from "./home/knowledge-panels";
+import { HomeKnowledgePanels } from "@/features/knowledge/components/home/home-knowledge-panels";
+import { HomeKnowledgePanelsSkeleton } from "@/features/knowledge/components/knowledge-skeletons";
 import {
   STAGING_CHANNEL,
   STAGING_HOME_SEGMENT,
   STAGING_HOME_WORKSPACE_ID,
   STAGING_USER_ID,
 } from "./data";
-import { resetKnowledgeStore } from "./fake-store";
+import { useStagingBridge } from "./staging-bridge";
 import { StagingScenarioSwitch } from "@/features/ui-staging/staging-scenario-switch";
 
 type ChannelChoice = "tech-debt" | "none";
@@ -38,11 +39,8 @@ function makeClient(): QueryClient {
 }
 
 export function KnowledgeStagingPage() {
-  // Seed the in-memory DB and the cache once per mount (a reload is a clean slate).
-  const [client] = useState(() => {
-    resetKnowledgeStore();
-    return makeClient();
-  });
+  const ready = useStagingBridge();
+  const [client] = useState(makeClient);
   const [channelChoice, setChannelChoice] = useState<ChannelChoice>("tech-debt");
   const [role, setRole] = useState<RoleChoice>("owner");
   const [home, setHome] = useState<HomeChoice>("ready");
@@ -56,16 +54,20 @@ export function KnowledgeStagingPage() {
   return (
     <QueryClientProvider client={client}>
       <StagingFrame tab="knowledge" recordClassName="uis-white-pane">
-        <HomeKnowledgePanels
-          // `home-panes.tsx` keys this face by the selected row; the staging states join the key
-          // so a flip starts the face fresh, as a channel switch does on desktop.
-          key={`${channelChoice}:${role}:${home}`}
-          channel={channel}
-          homeWorkspaceId={homeReady ? STAGING_HOME_WORKSPACE_ID : null}
-          homeWorkspaceSegment={homeReady ? STAGING_HOME_SEGMENT : null}
-          homeRole={homeReady ? "owner" : null}
-          currentUserId={STAGING_USER_ID}
-        />
+        {ready ? (
+          <HomeKnowledgePanels
+            // `home-panes.tsx` keys this face by the selected row; the staging states join the key
+            // so a flip starts the face fresh, as a channel switch does on desktop.
+            key={`${channelChoice}:${role}:${home}`}
+            channel={channel}
+            homeWorkspaceId={homeReady ? STAGING_HOME_WORKSPACE_ID : null}
+            homeWorkspaceSegment={homeReady ? STAGING_HOME_SEGMENT : null}
+            homeRole={homeReady ? "owner" : null}
+            currentUserId={STAGING_USER_ID}
+          />
+        ) : (
+          <HomeKnowledgePanelsSkeleton />
+        )}
       </StagingFrame>
       <StagingScenarioSwitch
         groups={[

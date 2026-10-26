@@ -2,31 +2,37 @@
 
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { AlertTriangle } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
+import { SMALL_PILL_BUTTON, SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { toast } from "@/shared/ui/toast";
 import { SkeletonBar } from "@/shared/ui/skeleton";
 import { kbBodyIsUnsectioned, kbSummaryFault } from "@/shared/knowledge/write-rules";
 
 /**
- * Presentational chrome for DocPane: body-loading skeleton + 412-conflict
- * banner. Split from `doc-pane.tsx` for the §2 file-size cap.
+ * Presentational chrome for DocPane: the body-loading skeleton, the 412-conflict
+ * banner and the write-rule labels. Split from `doc-pane.tsx` for the §2
+ * file-size cap.
  */
 
 /**
- * Editor-column placeholder while the per-entry body fetch is in flight. Must
- * mirror the editor's geometry (`mx-auto … max-w-3xl px-6`) or the swap to real
- * content jumps; a 0%-width entry renders as a paragraph gap.
+ * The document's placeholder while the per-entry body fetch is in flight: the
+ * head card, then the editor column. Must mirror DocPane's geometry (the card's
+ * `mb-6 px-6 pt-4 pb-3`, the editor's `px-6`) or the swap to real content jumps;
+ * a 0%-width entry renders as a paragraph gap.
  */
 export function DocBodySkeleton() {
   return (
-    <div
-      className="mx-auto w-full max-w-3xl px-6 pt-5 flex flex-col gap-2.5"
-      aria-busy="true"
-      aria-live="polite"
-    >
+    <div aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading document</span>
-      {DOC_SKELETON_LINE_WIDTHS.map((w, i) => (
-        <SkeletonBar key={i} h={14} w={w} />
-      ))}
+      <div className="white-card mb-6 flex flex-col gap-2.5 px-6 pt-4 pb-3">
+        <SkeletonBar h={22} w="45%" />
+        <SkeletonBar h={12} w="70%" />
+      </div>
+      <div className="flex flex-col gap-2.5 px-6">
+        {DOC_SKELETON_LINE_WIDTHS.map((w, i) => (
+          <SkeletonBar key={i} h={14} w={w} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -48,7 +54,7 @@ export function ConflictBanner({
   return (
     <div
       role="alert"
-      className="border-y border-warning/25 bg-warning/5 px-6 py-3 flex flex-wrap items-center gap-3"
+      className="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-warning/10 px-4 py-3"
     >
       <AlertTriangle size={14} className="shrink-0 text-warning" />
       <div className="min-w-0 flex-1 text-small leading-relaxed text-text-primary">
@@ -61,7 +67,7 @@ export function ConflictBanner({
           type="button"
           onClick={onDiscardMine}
           disabled={resolving}
-          className="rounded-md border border-border-default bg-surface-raised-1 px-2.5 py-1 text-caption text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
+          className={SMALL_PILL_BUTTON}
         >
           Discard mine, reload
         </button>
@@ -69,7 +75,7 @@ export function ConflictBanner({
           type="button"
           onClick={onKeepMine}
           disabled={resolving}
-          className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1 text-caption text-text-primary transition-colors hover:bg-warning/15 disabled:opacity-40"
+          className={cn(SMALL_PRIMARY_PILL, "disabled:opacity-40")}
         >
           {resolving ? "Saving…" : "Save mine, overwrite"}
         </button>
@@ -119,7 +125,7 @@ export function writeRuleLabels({
  * would be a control with no verb.
  *
  * ⚠ **NOT A BANNER.** {@link ConflictBanner} interrupts because it is asking a
- * question; this only reports, so it rides the Overview header's own row beside
+ * question; this only reports, so it rides the head card's title row beside
  * the save indicator — the existing `text-caption text-warning` + `AlertTriangle`
  * recipe this feature already uses (`agent-write-toggle.tsx`), at no new size,
  * colour or geometry.

@@ -56,7 +56,7 @@ export interface StagingChannel {
   isDirect: boolean;
   /** The caller's WORKSPACE role in the container (`Channel.myWorkspaceRole`). */
   myWorkspaceRole: Role;
-  container: { segment: string } | null;
+  container: { segment: string };
   peers: ReadonlyArray<{ userId: string; displayName: string | null }>;
 }
 

@@ -12,7 +12,7 @@
  *
  * ⚠ THE COLOUR IS `--kv-text` WITH THE GLOBAL TOKEN BEHIND IT. Inside a
  * knowledge surface (`knowledge-v2.module.css › .shell`, /home's
- * `home.module.css › .kbCards`) the alias is bound and the card reads exactly
+ * `home-knowledge.module.css › .kbCards`) the alias is bound and the card reads exactly
  * as it did; on a /home section header there is no `--kv-*` scope, and an
  * unbound `var()` is invalid at computed-value time — the button would silently
  * inherit whatever ink its row had. Both bindings resolve to

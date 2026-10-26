@@ -152,6 +152,6 @@ export function knowledgeBases(
 }
 
 /** Any base's tree. The panels resolve one BEFORE mounting the detail view
- *  (`knowledge-base-view.tsx`), so a suite that opens a base must answer this
+ *  (`knowledge/components/home/home-knowledge-base-view.tsx`), so a suite that opens a base must answer this
  *  or the pane sits on its skeleton forever. */
 export const EMPTY_TREE_PATH = /^\/api\/knowledge\/bases\/[^/]+\/tree$/;

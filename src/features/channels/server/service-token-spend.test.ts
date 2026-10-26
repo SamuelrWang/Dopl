@@ -14,8 +14,7 @@ import type { SessionStateEntryInput } from "../schema-sessions";
  * NO DAYS.** Samuel ruled the strip buckets by the operator's LOCAL day, so this
  * function stopped bucketing at all — a UTC bucket on the wire is the
  * half-conversion the surface must never be handed. The bucketing itself is
- * pinned where it now happens (`apps/desktop-ui/src/pages/home/
- * overview-token-spend.test.ts`).
+ * pinned where it now happens (`src/shared/lib/token-spend-days.test.ts`).
  */
 // ⚠ BOTH EXPORTS ARE DECLARED even though only one is exercised: a mock factory
 // that omits a name the module under test imports fails at the USE site with a

@@ -4390,7 +4390,7 @@ workspaces (F-331 is exactly that shape, one table over).
 anything was changed:
 
 - the pane's key and fetch both carried boot's `workspace.id`
-  (`pages/home/knowledge-panels.tsx`), and `client/hooks.ts › knowledgeBasesCacheSegment` puts the
+  (`knowledge/components/home/home-knowledge-panels.tsx`), and `client/hooks.ts › knowledgeBasesCacheSegment` puts the
   workspace id **inside** the segment, so no two workspaces can share an entry;
 - `bootQueryKey(null)` is written only by the no-segment boot — `use-workspace-route.ts ›
   seedBootAnswer` seeds `bootQueryKey(boot.segment)`, never the launch key, so a routed workspace's
@@ -4631,7 +4631,7 @@ and cards directly on it.
   box (`SectionBox` clamps a body height against its scroll height); the Agents face never had one,
   and a resize handle on a section with no frame is a control gripping air.
 - **The sweep grew in the direction of the ruling.** `identity-editor.test.tsx › no concave surfaces`
-  swept four /home files for the Agents face; `knowledge-panels.tsx` joined them, which quietly
+  swept four /home files for the Agents face; `home-knowledge-panels.tsx` joined them, which quietly
   changes what that sweep MEANS — it is /home's flatness rule now, not one feature's. That is the
   right direction for a list that only grows: the failure mode of a sweep is a file nobody added, not
   a file added too eagerly.

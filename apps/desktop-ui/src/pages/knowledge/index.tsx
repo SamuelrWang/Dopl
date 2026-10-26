@@ -7,7 +7,7 @@ import { PageError } from "#/components/page-states";
 import {
   KnowledgeBaseSkeleton,
   KnowledgeHomeSkeleton,
-} from "#/components/skeletons/knowledge-skeletons";
+} from "@/features/knowledge/components/knowledge-skeletons";
 import { useWorkspaceAccess, type WorkspaceAccess } from "#/hooks/use-workspace-access";
 import { useKnowledgeUrlSync } from "./use-knowledge-url-sync";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
@@ -53,7 +53,7 @@ export default function KnowledgePage() {
   // Skeleton must match the mode it stands in for: no `:kbSlug` = card grid, so
   // a base-shaped ghost would resolve into a shape the user never asked for.
   // ⚠ BOTH SHAPES ARE THE REAL VIEW'S OWN CSS MODULE now
-  // (`#/components/skeletons/knowledge-skeletons.tsx`), not the two generic
+  // (`@/features/knowledge/components/knowledge-skeletons.tsx`), not the two generic
   // variants — same `.cardGrid`, same 232px `.rail`, so neither can drift.
   const { kbSlug } = useParams();
 

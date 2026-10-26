@@ -59,14 +59,14 @@ describe("🔒 the opened base — ONE panel, info at rest", () => {
    * `.page-float` — THE full-page card, of which the kit allows exactly one per
    * page (docs/DESIGN-SYSTEM.md › Patterns) — and /home mounts that view INSIDE
    * the record pane, which is already a bordered card on a panel. The fix is
-   * `knowledge-v2.tsx › Props.embedded`, threaded from `knowledge-base-view.tsx`.
+   * `knowledge-v2.tsx › Props.embedded`, threaded from `knowledge/components/home/home-knowledge-base-view.tsx`.
    *
    * ⚠ THE PIN IS A COUNT WITH AN IDENTITY, not a `not.toContain`. /home's own
    * `<main>` IS a `.page-float` and must stay one; what may not exist is a
    * SECOND one nested inside it. Asserting only the absence of the class would
    * go green the day the page surface itself was lost.
    *
-   * ⚠ MUTATION-VERIFIED: dropping `embedded` in `knowledge-base-view.tsx`
+   * ⚠ MUTATION-VERIFIED: dropping `embedded` in `home-knowledge-base-view.tsx`
    * turns the first assertion red (2 floats), and dropping the info face's
    * `SectionPanel`s turns the second red.
    */
