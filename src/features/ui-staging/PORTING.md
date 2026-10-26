@@ -57,9 +57,8 @@ the product forbids hand-rolled values.
 `staging.css` is imported by `staging-frame.tsx`, and every staged page mounts that frame, so
 **every selector in this file reaches all six `/playground/*` routes**, not just the face whose
 block it sits in. Scope each rule under `.uis-window` and its own prefix; an unscoped selector
-here is a cross-route rule whoever wrote it did not intend. The five at the top of the file
-(`a.lp-demo-top-tab`, `button.uis-rail-create`, `button.lp-demo-top-search`,
-`button.lp-demo-top-profile`) are unscoped — intended for the shared top bar, but they are the
+here is a cross-route rule whoever wrote it did not intend. The rules at the top of the file
+(`a.lp-demo-top-tab`, `button.uis-rail-create`, `button.lp-demo-top-profile`) are unscoped — intended for the shared top bar, but they are the
 shape to avoid copying.
 
 It does **not** reach the real landing page. Measured: the landing route loads only

@@ -1,9 +1,9 @@
-import "server-only";
-import { APOSTROPHE_CLASS, APOSTROPHES } from "./query-text";
 
 /**
- * The one place `SearchItem.snippet` is minted, and the one place a `<mark>` tag
- * enters this feature.
+ * The search's one matching rule, shared by both sides: the server mints
+ * `SearchItem.snippet` with it (the one place a `<mark>` tag enters this feature),
+ * and the popup marks a row's title and subtitle with the same terms as React
+ * nodes, so what is highlighted never depends on which side drew it.
  *
  * Not `ts_headline`, and that is a security choice: it copies the source through
  * verbatim, so a body containing `<script>` would come back as `<script>` into a
@@ -15,6 +15,15 @@ import { APOSTROPHE_CLASS, APOSTROPHES } from "./query-text";
  * rule to decide which rows are hits at all), so a returned row always has
  * something marked, and what is marked is a word, never a stray letter.
  */
+
+/**
+ * Every apostrophe a person or a keyboard produces: ASCII, the two curly quotes
+ * (macOS smart punctuation turns `can't` into `can’t`) and the modifier letter.
+ * One class, used on BOTH sides (here and `server/query-text.ts`), so `can't` finds
+ * `can’t` and the reverse.
+ */
+export const APOSTROPHE_CLASS = "['\u2018\u2019\u02BC]";
+export const APOSTROPHES = new RegExp(APOSTROPHE_CLASS, "g");
 
 /** Characters that would change the shape of the HTML around them. */
 const ESCAPES: Record<string, string> = {
@@ -159,8 +168,6 @@ export function buildSnippet(
 
   let start = 0;
   if (pattern) {
-    // `lastIndex` is reset on every call: a `g` regex reused across rows resumes
-    // where the previous row ended and silently misses early matches.
     pattern.lastIndex = 0;
     const hit = pattern.exec(text);
     if (hit && hit.index > LEAD_CHARS) start = hit.index - LEAD_CHARS;
@@ -169,29 +176,39 @@ export function buildSnippet(
   const prefix = start > 0 ? "…" : "";
   const suffix = start + SNIPPET_CHARS < text.length ? "…" : "";
 
-  if (!pattern) return `${prefix}${escapeHtml(window)}${suffix}`;
-
   // Match on the RAW text, escape every piece, emit `<mark>` last. Matching on
   // already-escaped text fails both ways: `A&B` would never match `A&amp;B`, and
   // a replace over escaped text cannot tell an inserted mark from one the body
   // contained. The only unescaped characters emitted are the tags below.
-  const parts: string[] = [];
+  const marked = splitMatches(window, pattern)
+    .map((part) => (part.match ? `<mark>${escapeHtml(part.text)}</mark>` : escapeHtml(part.text)))
+    .join("");
+  return `${prefix}${marked}${suffix}`;
+}
+
+export interface MatchPart {
+  text: string;
+  match: boolean;
+}
+
+/** Plain text cut into matched and unmatched runs, in order; no pattern is one run. */
+export function splitMatches(text: string, pattern: RegExp | null): MatchPart[] {
+  if (!pattern) return [{ text, match: false }];
+  const parts: MatchPart[] = [];
   let last = 0;
+  // `lastIndex` is reset on every call: a `g` regex reused across rows resumes
+  // where the previous row ended and silently misses early matches.
   pattern.lastIndex = 0;
-  for (
-    let hit = pattern.exec(window);
-    hit !== null;
-    hit = pattern.exec(window)
-  ) {
+  for (let hit = pattern.exec(text); hit !== null; hit = pattern.exec(text)) {
     // A zero-length match would spin forever — step past it.
     if (hit[0].length === 0) {
       pattern.lastIndex += 1;
       continue;
     }
-    parts.push(escapeHtml(window.slice(last, hit.index)));
-    parts.push(`<mark>${escapeHtml(hit[0])}</mark>`);
+    if (hit.index > last) parts.push({ text: text.slice(last, hit.index), match: false });
+    parts.push({ text: hit[0], match: true });
     last = hit.index + hit[0].length;
   }
-  parts.push(escapeHtml(window.slice(last)));
-  return `${prefix}${parts.join("")}${suffix}`;
+  if (last < text.length) parts.push({ text: text.slice(last), match: false });
+  return parts;
 }

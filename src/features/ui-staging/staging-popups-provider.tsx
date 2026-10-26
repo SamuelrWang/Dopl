@@ -7,7 +7,7 @@
  * | Trigger (frame) | Opens |
  * |---|---|
  * | top bar "New channel" pill | `popups-staging › StagingNewChannelDialog` (a page's `onNew` overrides) |
- * | top bar search pill | `popups-staging › StagingSearchField` (the desktop field + popup, in place) |
+ * | top bar search pill | the product popup (`search/components/header-search.tsx`, owned by the top bar) |
  * | top bar profile pill | `settings-staging › StagingSettingsModal` (Account; every row switches inside) |
  * | rail dashed "+" | `popups-staging › StagingRequestWorkspaceAccess` |
  * | an incoming toast's click | thread / agent pop-out windows (`thread:*` / `consent:*`, `resume`) |
@@ -43,17 +43,14 @@ export interface StagingPopups {
   open: (key: StagingPopupKey) => void;
   /** Opens the Settings modal on `section` (default Account), optionally on another plan. */
   openSettings: (section?: SettingsSection, plan?: StagingPlan) => void;
-  searchOpen: boolean;
+  /** Focuses the top bar's search field, which opens its popup. */
   openSearch: () => void;
-  closeSearch: () => void;
 }
 
 const NOOP_POPUPS: StagingPopups = {
   open: () => {},
   openSettings: () => {},
-  searchOpen: false,
   openSearch: () => {},
-  closeSearch: () => {},
 };
 
 const PopupsContext = createContext<StagingPopups>(NOOP_POPUPS);
@@ -77,17 +74,13 @@ export function useStagingPopupsState() {
     section: "account",
     plan: "pro",
   });
-  const [searchOpen, setSearchOpen] = useState(false);
-
   const api = useMemo<StagingPopups>(
     () => ({
       open: setPopup,
       openSettings: (section = "account", plan = "pro") => setSettings({ open: true, section, plan }),
-      searchOpen,
-      openSearch: () => setSearchOpen(true),
-      closeSearch: () => setSearchOpen(false),
+      openSearch: () => document.getElementById("home-search-field")?.focus(),
     }),
-    [searchOpen]
+    []
   );
 
   useEffect(() => {

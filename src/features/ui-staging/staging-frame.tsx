@@ -12,7 +12,7 @@
  *   - `banner-demo/demo-home-rows.ts › VIEWER`;
  *   - `banner-demo/demo-steps.ts › CANVAS_W` (the desktop window width, 1280).
  * What is COPIED: `DemoTopBar` → `./staging-top-bar.tsx` (needs a selectable,
- * clickable tab, and live search/profile pills); `DemoAccountRail` →
+ * clickable tab, the product search pill and a live profile pill); `DemoAccountRail` →
  * `./staging-account-rail.tsx` (a live "+"). The stage around the window → `./staging.css`.
  *
  * POPUPS: every frame trigger (New channel, search, profile, the rail's "+", toast clicks)
@@ -137,9 +137,6 @@ export function StagingFrame({
                     onNew={onNew ?? (() => popups.api.open("new-channel"))}
                     newLabel={newLabel}
                     tabHrefs={tabHrefs}
-                    searchOpen={popups.api.searchOpen}
-                    onSearch={popups.api.openSearch}
-                    onSearchClose={popups.api.closeSearch}
                     onProfile={() => popups.api.openSettings("account")}
                   />
                   <div className="flex min-h-0 flex-1">

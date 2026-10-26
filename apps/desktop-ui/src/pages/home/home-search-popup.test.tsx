@@ -157,7 +157,8 @@ describe("/home's search field", () => {
     fireEvent.focus(field);
     fireEvent.change(field, { target: { value: "orchestrator" } });
 
-    fireEvent.click(await screen.findByText("Desktop Orchestrator Protocol"));
+    // By the row: the popup marks the typed word inside the title.
+    fireEvent.click(await findRow("kb-orch"));
     await screen.findByRole("tab", { name: "Knowledge", selected: true });
   });
 
