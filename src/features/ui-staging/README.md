@@ -14,6 +14,7 @@ The frame's own staging → desktop map is `./PORTING.md`. Routes (each has a `P
 | `/identities` | `/playground/identities` | /home → Identities |
 | `/ontology` | `/playground/ontology` | /home → Ontology |
 | `/popups` | `/playground/popups` | catalog of every global popup and window (+ Settings, `settings-staging/`) |
+| `/system` | `/playground/system` | the design system reference sheet: the three control kinds, tokens, shared surfaces, each labelled with its name (`./system/`) |
 
 The `/playground/*` copies are the PUBLIC ones (see "Public access"); the top bar's tabs link there.
 
@@ -34,7 +35,8 @@ export default function Page() {
 ```
 
 `StagingFrame` props:
-- `tab`: which top-bar tab is underlined (`overview | channels | knowledge | identities | ontology`).
+- `tab`: which top-bar tab is underlined (`overview | channels | knowledge | identities | ontology`, or `null`
+  for none).
 - `showChannels`: draw /home's 290px channel column beside the pane. **On by default**
   (2026-10-22): desktop /home keeps `<RelationshipList>` on every tab, so every staged face
   carries the picker too. Client-only; the column's width is held until it mounts. Pass `false`

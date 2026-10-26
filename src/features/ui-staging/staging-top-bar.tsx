@@ -44,8 +44,8 @@ export function StagingTopBar({
   onProfile,
 }: {
   viewer: AvatarPerson;
-  /** The face this staging page shows; its tab is underlined. */
-  tab: HomeTab;
+  /** The face this staging page shows; its tab is underlined. `null`: none is. */
+  tab: HomeTab | null;
   /** Optional handler for the lead pill (the demo's "New channel"). */
   onNew?: () => void;
   newLabel?: string;
