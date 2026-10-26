@@ -25,7 +25,13 @@ ban below.
 | 3 | Channels | one table: channel (Untitled fallback), credits with meter, messages |
 | 4 | People · MCP tools | name (Unknown member), role, credits · tool.op, calls; then "From the newest N events." |
 
-States: loading = `overview-skeleton.tsx` (same frame, ghost lines); empty = in-card empty wells;
+Heights: side by side, both columns are `--ove-cols-h` tall and the pair is `--ove-pair-h` (all
+in `overview.css › .ove`). Needs you, Agents, Credits and Tokens wear an `ove-slot-*` height; the
+last card in a column takes the rest, so the columns end on one line. Every card's body scrolls
+under its fixed title row. Without the Devices preview the columns are Credits + gap + Tokens
+tall. In one column every card is content height.
+
+States: loading = `overview-skeleton.tsx` (same frame and slots, ghost lines); empty = in-card empty wells;
 error = message + Try again; plans from `useWorkspaceEntitlements`. Agents, Needs, Devices and
 Activity follow the Devices preview gate (the toolbar's Devices switch).
 

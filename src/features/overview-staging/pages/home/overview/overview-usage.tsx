@@ -23,7 +23,7 @@ function ScopePicker({ value, onChange }: { value: string; onChange: (id: string
   }, [open]);
   const label = SCOPES.find((s) => s.id === value)?.label ?? "All channels";
   return (
-    <span className="ove-picker" ref={box}>
+    <span ref={box}>
       <button
         type="button"
         className="ove-picker-btn"
@@ -110,6 +110,7 @@ export function CreditsCard({
   return (
     <ECard
       title="Credits"
+      className="ove-slot-credits"
       aside={!isPaid && credits ? (
         <button type="button" className="ove-btn" data-primary={over ? "true" : undefined} onClick={onGetCredits}>
           Get more credits
@@ -155,7 +156,7 @@ export function CreditsCard({
 export function TokensCard({ marks }: { marks: ReadonlyArray<{ at: string; tokens: number }> | null }) {
   const days = marks ? tokenDays(marks) : null;
   return (
-    <ECard title="Tokens" aside={<span className="ove-muted">31 days</span>}>
+    <ECard title="Tokens" className="ove-slot-tokens" aside={<span className="ove-muted">31 days</span>}>
       {!days ? (
         <span className="ove-skel" data-h="72" aria-hidden="true" />
       ) : days.runs === 0 ? (

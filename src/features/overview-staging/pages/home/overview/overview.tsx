@@ -90,7 +90,7 @@ export function StagingOverview({
           devices={preview ? { online: rows.filter((d) => d.status === "active").length, total: rows.length } : null}
           wallet={credits ? { used: credits.used, limit: credits.limit, remaining: credits.remaining, over } : null}
         />
-        <div className="ove-grid">
+        <div className="ove-grid" data-solo={preview ? undefined : "true"}>
           <div className="ove-col">
             <NeedsCard
               needs={needs}

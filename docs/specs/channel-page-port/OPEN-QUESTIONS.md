@@ -522,3 +522,7 @@ Workers append a `## <slice>` section per question: the question, what was chose
 7. **The artifact list's face is the folder** (`createdBy` / `createdByAgent`), not every author:
    the list payload carries no member authors. The opened artifact's meta line stacks every author
    from the members read.
+
+## Overview column heights (branch `ui/overview-column-heights`)
+
+1. **Fixed card heights, last card takes the rest; one column relaxes to content height.** Both columns are `--ove-cols-h` (900px) tall: Needs you 212 + Agents 336 + Activity (rest, 324) + 2 gaps of 14 = Credits 288 + Tokens 160 + Devices (rest, 424) + 2 gaps; without the Devices preview the columns are Credits + gap + Tokens (462) and Needs fills them; People/MCP tools are `--ove-pair-h` (332). Heights are estimates from the type scale (no browser per the worker rules) and may want a nudge once Samuel sees it. Where: `overview-staging/pages/home/overview/overview.css › .ove`.
