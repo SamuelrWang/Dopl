@@ -21,7 +21,7 @@ export function ECard({
   className?: string;
 }) {
   return (
-    <section className={`ove-card ${className ?? ""}`} aria-label={title}>
+    <section className={`white-card ove-card ${className ?? ""}`} aria-label={title}>
       <header className="ove-card-head">
         <h3 className="ove-card-title">{title}</h3>
         {count !== undefined && <span className="ove-card-count">{count}</span>}

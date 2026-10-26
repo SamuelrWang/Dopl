@@ -11,9 +11,10 @@
 import { useState, type FormEvent } from "react";
 import { ArrowUp } from "lucide-react";
 import { formatRelativeTime } from "@/shared/lib/format-time";
+import { IdentityFace } from "@/shared/ui/identity-face";
 import type { ChannelMember } from "@/features/channels/types";
 import type { StagingTaskNote } from "../data/staging-tasks";
-import { TaskFace, actorFace } from "./task-list";
+import { actorFace } from "./task-list";
 
 export function TaskNotes({
   notes,
@@ -44,7 +45,7 @@ export function TaskNotes({
             const f = actorFace(n.author, members);
             return (
               <li key={n.id} className="uis-tkd-note">
-                <TaskFace face={f} d={22} />
+                <IdentityFace size={22} {...f} />
                 <span className="uis-tkd-note-main">
                   <span className="uis-tkd-note-head">
                     <span className="uis-tkd-note-name">{f.name}</span>

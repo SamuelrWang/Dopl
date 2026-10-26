@@ -16,9 +16,11 @@
 
 import { useState } from "react";
 import { Check, ChevronRight, Hash, ListChecks, MessageSquare } from "lucide-react";
-import { RING_PX, agentColor } from "@/features/onboarding/components/paired-avatar";
-import { colorSlot } from "@/features/marketing/components/banner-demo/demo-swap";
 import { formatRelativeTime } from "@/shared/lib/format-time";
+import { IdentityStack } from "@/shared/ui/avatar-stack";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { IdentityFace, type IdentityRing } from "@/shared/ui/identity-face";
+import { StatusPill, type StatusTone } from "@/shared/ui/status-pill";
 import type { ChannelMember } from "@/features/channels/types";
 import { stagingAgentIndex, stagingIdentityFace } from "../data/staging-agents";
 import {
@@ -26,66 +28,42 @@ import {
   isActive,
   subtaskProgress,
   type StagingTask,
+  type SubtaskState,
   type TaskActor,
   type TaskLink,
+  type TaskStatus,
 } from "../data/staging-tasks";
 
-type Face = { name: string; photo: string | null; logo?: string; color: number | null };
+/** `IdentityFace` props for an actor: an agent is ringed in its colour, a person is a plain photo. */
+export type ActorFace = {
+  name: string;
+  photo: string | null;
+  ring?: IdentityRing;
+  runtimeLogo?: string | null;
+};
 
-export function actorFace(actor: TaskActor, members: readonly ChannelMember[]): Face {
+export function actorFace(actor: TaskActor, members: readonly ChannelMember[]): ActorFace {
   if (actor.kind === "agent") {
     const face = stagingIdentityFace(actor.agentId);
     return {
       name: stagingAgentIndex().get(actor.agentId)?.displayName ?? actor.agentId,
       photo: face.photo,
-      logo: face.logo,
-      color: colorSlot(face.color),
+      runtimeLogo: face.logo,
+      ring: face.color ?? "neutral",
     };
   }
   const m = members.find((x) => x.userId === actor.userId);
-  return { name: m?.displayName ?? m?.email ?? "Member", photo: m?.avatarUrl ?? null, color: null };
+  return { name: m?.displayName ?? m?.email ?? "Member", photo: m?.avatarUrl ?? null };
 }
 
-/** An agent is its identity face (ringed photo + runtime badge); a person is a plain photo. */
-export function TaskFace({ face, d }: { face: Face; d: number }) {
-  if (face.color !== null) {
-    // Round 6: `PairedAvatar`'s exact recipe (RING_PX colour ring → equal white frame → photo,
-    // runtime badge at half size hanging 0.3 × badge past the corner), drawn in SPANS so it is
-    // valid inside a `<p>` (the composer's recipients row, the detail meta line). PairedAvatar
-    // renders `<div>`s, which React flags there. CSS `.uis-tk-idface*`.
-    const ring = agentColor(face.color);
-    const b = d * 0.5;
-    return (
-      <span className="uis-tk-idface" style={{ width: d, height: d }}>
-        <span className="uis-tk-idface-ring" style={{ borderWidth: RING_PX, borderColor: ring, padding: RING_PX }}>
-          {face.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element -- staging, static /public photo
-            <img src={face.photo} alt="" draggable={false} />
-          ) : null}
-        </span>
-        {face.logo && (
-          <span
-            className="uis-tk-idface-badge"
-            style={{ width: b, height: b, right: -b * 0.3, bottom: -b * 0.3, borderWidth: RING_PX, borderColor: ring }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- staging, static /public logo */}
-            <img src={face.logo} alt="" draggable={false} style={{ width: b * 0.58, height: b * 0.58 }} />
-          </span>
-        )}
-      </span>
-    );
-  }
-  return (
-    <span className="uis-tk-person" style={{ width: d, height: d }}>
-      {face.photo ? (
-        // eslint-disable-next-line @next/next/no-img-element -- staging, static /public photo
-        <img src={face.photo} alt="" />
-      ) : (
-        face.name.charAt(0).toUpperCase()
-      )}
-    </span>
-  );
-}
+/** Task statuses and subtask states share the status pill's tones. */
+export const STATUS_TONE: Record<TaskStatus | SubtaskState, StatusTone> = {
+  open: "neutral",
+  todo: "neutral",
+  in_progress: "attention",
+  resolved: "done",
+  done: "done",
+};
 
 /** The status tick's face, `.lp-ont-tick`'s three states. */
 export function TaskTick({ status }: { status: StagingTask["status"] }) {
@@ -100,22 +78,15 @@ export function Assignees({
   members: readonly ChannelMember[];
 }) {
   const faces = actors.map((a) => actorFace(a, members));
-  const names = faces.map((f) => f.name).join(", ");
-  const shown = faces.slice(0, 3);
   return (
-    <span className="uis-tk-stack" role="img" aria-label={`Assigned to ${names}`} title={names}>
-      {shown.map((f) => (
-        <span key={f.name} className="uis-tk-stack-item">
-          <TaskFace face={f} d={22} />
-        </span>
-      ))}
-      {faces.length > shown.length && (
-        <span className="uis-tk-more">+{faces.length - shown.length}</span>
-      )}
-    </span>
+    <IdentityStack
+      faces={faces.map((f) => ({ key: f.name, ...f }))}
+      size={22}
+      max={3}
+      label={`Assigned to ${faces.map((f) => f.name).join(", ")}`}
+    />
   );
 }
-
 
 /** The thread or message a task came from; opens it. Shared with the detail header. */
 export function TaskLinkChip({ link, onOpen }: { link: TaskLink; onOpen: (link: TaskLink) => void }) {
@@ -197,14 +168,14 @@ function TaskRow({
         <span className="uis-tk-meta">
           {done && closer ? (
             <>
-              <TaskFace face={closer} d={14} />
+              <IdentityFace size={14} {...closer} />
               <span>
                 {closer.name} resolved {formatRelativeTime(task.resolvedAt)}
               </span>
             </>
           ) : (
             <>
-              <TaskFace face={creator} d={14} />
+              <IdentityFace size={14} {...creator} />
               <span>
                 {creator.name} opened {formatRelativeTime(task.createdAt)}
               </span>
@@ -217,9 +188,9 @@ function TaskRow({
         <Assignees actors={task.assignees} members={members} />
         <span className="uis-tk-side-row">
           <TaskProgress task={task} />
-          <span className="uis-tk-status" data-status={task.status}>
+          <StatusPill tone={STATUS_TONE[task.status]} dot={false}>
             {TASK_STATUS_LABEL[task.status]}
-          </span>
+          </StatusPill>
         </span>
       </span>
     </li>
@@ -238,25 +209,17 @@ export function TaskList(props: TaskListProps) {
   const row = (t: StagingTask) => <TaskRow key={t.id} task={t} {...props} />;
 
   if (props.tasks.length === 0) {
-    return (
-      <div className="uis-tk-empty">
-        <Check size={14} aria-hidden="true" />
-        <span>No tasks yet</span>
-      </div>
-    );
+    return <EmptyState variant="well" icon={Check} title="No tasks yet" />;
   }
 
   return (
     <div className="uis-tk-list">
       {active.length > 0 ? (
-        <ul className="uis-tk-card" aria-label="Active tasks">
+        <ul className="white-card uis-tk-card" aria-label="Active tasks">
           {active.map(row)}
         </ul>
       ) : (
-        <div className="uis-tk-empty">
-          <Check size={14} aria-hidden="true" />
-          <span>All tasks resolved</span>
-        </div>
+        <EmptyState variant="well" icon={Check} title="All tasks resolved" />
       )}
       {done.length > 0 && (
         <>
@@ -271,7 +234,7 @@ export function TaskList(props: TaskListProps) {
             <span className="uis-tk-toggle-count">{done.length}</span>
           </button>
           {doneOpen && (
-            <ul className="uis-tk-card" aria-label="Resolved tasks">
+            <ul className="white-card uis-tk-card" aria-label="Resolved tasks">
               {done.map(row)}
             </ul>
           )}

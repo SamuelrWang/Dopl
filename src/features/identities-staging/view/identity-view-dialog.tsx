@@ -58,7 +58,7 @@ import {
 } from "@/features/agent-identities/lib/knowledge-scopes";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
 import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { IdentityAvatar } from "@/features/identities-staging/identity-avatar";
+import { IdentityFace } from "@/shared/ui/identity-face";
 import type {
   IdentityCardFace,
   IdentityCardStats,
@@ -154,7 +154,7 @@ export function IdentityViewDialog({
     <IdentityModalShell open onClose={onClose} label={identity.name}>
       {/* ── The head: never changes with the tab ── */}
       <div className={styles.head}>
-        <IdentityAvatar d={44} photo={face?.photo} runtimeLogo={face?.runtimeLogo} />
+        <IdentityFace size={44} photo={face?.photo} runtimeLogo={face?.runtimeLogo} ring="neutral" />
         <div className={styles.headText}>
           <h2 className="min-w-0 truncate text-display font-semibold text-text-primary">
             {identity.name}

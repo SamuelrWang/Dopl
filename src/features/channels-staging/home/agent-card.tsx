@@ -14,7 +14,7 @@
  * AgentCard` / `PeerCards` still render inside the real `ChannelsInfoPanel`;
  * {@link DemoAgentCards} hides each one and portals this face after it (`demo-swap.ts`).
  * The look is the Orchestration rail card's (`ontology-agent-rail.tsx`): a white card on a
- * hairline, a PairedAvatar, the status as a dot + word, context as a thin meter with the
+ * hairline, an IdentityFace, the status as a dot + word, context as a thin meter with the
  * value right-aligned, and tokens spent muted.
  *
  * Same facts, read through the product's own helpers: name, liveness, where it works
@@ -42,8 +42,8 @@ import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import { agentColorVar } from "@/features/channels/lib/agent-colors";
 import type { AgentColorKey } from "@dopl/contracts";
 import { formatTokens } from "@/shared/lib/format-tokens";
-import { PairedAvatar } from "@/features/onboarding/components/paired-avatar";
-import { colorSlot, useDemoSwap } from "@/features/marketing/components/banner-demo/demo-swap";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { useDemoSwap } from "@/features/marketing/components/banner-demo/demo-swap";
 import {
   stagingAgentIdByLabel as agentIdByLabel,
   stagingIdentityFace as identityFace,
@@ -73,12 +73,11 @@ function Head({
     <div className="lp-demo-ac-head">
       {/* 30, not 24 (ask 6d): the ring + white frame cost a fixed 4px at any size, so 24
           left a 16px photo and a ~9px runtime logo. */}
-      <PairedAvatar
-        d={30}
-        thinFrame
-        photo={face.photo ?? undefined}
-        agentLogo={face.logo}
-        color={colorSlot(face.color)}
+      <IdentityFace
+        size={30}
+        photo={face.photo}
+        runtimeLogo={face.logo}
+        ring={face.color ?? "neutral"}
       />
       <span className="lp-demo-ac-name">{name}</span>
       <Status {...liveness} />
@@ -317,12 +316,11 @@ export function StagingAgentStateRows({
         return createPortal(
           <div className="lp-demo-asr">
             {/* 26, not 22 (ask 6d): the ring + white frame cost a fixed 4px at any size. */}
-            <PairedAvatar
-              d={26}
-              thinFrame
-              photo={face.photo ?? undefined}
-              agentLogo={face.logo}
-              color={colorSlot(face.color)}
+            <IdentityFace
+              size={26}
+              photo={face.photo}
+              runtimeLogo={face.logo}
+              ring={face.color ?? "neutral"}
             />
             <span className="lp-demo-asr-name">
               {(agentId && own ? agentDisplayName(own) : peer?.displayName) ?? label}

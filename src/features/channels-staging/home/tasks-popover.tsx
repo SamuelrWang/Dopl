@@ -21,22 +21,17 @@
 
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ListChecks } from "lucide-react";
+import { Check, ChevronDown, ListChecks } from "lucide-react";
+import { IdentityStack } from "@/shared/ui/avatar-stack";
+import { EmptyState } from "@/shared/ui/empty-state";
 import type { ChannelMember } from "@/features/channels/types";
 import { isActive, type StagingTask } from "../data/staging-tasks";
-import {
-  Assignees,
-  TaskFace,
-  TaskTick,
-  actorFace,
-  byOrder,
-  type TaskListProps,
-} from "./task-list";
+import { Assignees, TaskTick, actorFace, byOrder, type ActorFace, type TaskListProps } from "./task-list";
 
 /** Faces of whoever is on in-progress work (agents and people), at most three, for the pill. */
 function workingFaces(tasks: readonly StagingTask[], members: readonly ChannelMember[]) {
   const seen = new Set<string>();
-  const out: ReturnType<typeof actorFace>[] = [];
+  const out: ActorFace[] = [];
   for (const t of tasks) {
     if (t.status !== "in_progress") continue;
     for (const a of t.assignees) {
@@ -112,15 +107,8 @@ export function StagingTasksBar({
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
-          {/* Round 3 (Samuel, 2026-10-26: "make the pill look like it used to"): round 1's face. */}
           {faces.length > 0 ? (
-            <span className="uis-tk-stack" aria-hidden="true">
-              {faces.map((f) => (
-                <span key={f.name} className="uis-tk-stack-item">
-                  <TaskFace face={f} d={18} />
-                </span>
-              ))}
-            </span>
+            <IdentityStack faces={faces.map((f) => ({ key: f.name, ...f }))} size={18} />
           ) : (
             <ListChecks size={13} aria-hidden="true" />
           )}
@@ -130,7 +118,7 @@ export function StagingTasksBar({
       {open &&
         host &&
         createPortal(
-          <section className="uis-tk-pop" aria-label="Tasks">
+          <section className="white-card uis-tk-pop" aria-label="Tasks">
             <header className="uis-tk-pop-head">
               <span className="uis-tk-pop-title">Tasks</span>
               <span className="uis-tk-pop-count">{active.length}</span>
@@ -161,7 +149,7 @@ export function StagingTasksBar({
                 ))}
               </ul>
             ) : (
-              <p className="uis-tk-empty">All tasks resolved</p>
+              <EmptyState variant="well" icon={Check} title="All tasks resolved" className="m-2" />
             )}
           </section>,
           host

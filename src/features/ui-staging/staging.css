@@ -138,7 +138,7 @@ button.lp-demo-top-profile {
   min-width: 0;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
+  font-size: var(--text-heading);
   font-weight: 500;
   line-height: 1.3;
   letter-spacing: -0.01em;
@@ -436,7 +436,7 @@ button.lp-demo-top-profile {
 }
 .uis-window .uis-ap-name {
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: var(--text-lead);
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -504,7 +504,7 @@ button.lp-demo-top-profile {
 }
 .uis-window .uis-dc-q {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-heading);
   font-weight: 500;
   line-height: 1.35;
   letter-spacing: -0.01em;
@@ -646,7 +646,7 @@ button.lp-demo-top-profile {
    Selected = the 2px underline only, same weight as the rest.
    Port target: `marketing.css › .lp-demo-top-tab` → desktop /home header. */
 .uis-window .lp-demo-top-tab {
-  font-size: 13px;
+  font-size: var(--text-lead);
   color: var(--text-primary);
 }
 .uis-window .lp-demo-top-tab:hover {
@@ -949,10 +949,6 @@ button.lp-demo-top-profile {
   flex-direction: column;
   min-width: 0;
   padding: 2px 4px;
-  background: #ffffff;
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.04);
 }
 /* One hairline between rows: every row-level child after the first. */
 .uis-window .uis-st-card > * + * {
@@ -1012,8 +1008,6 @@ button.lp-demo-top-profile {
   flex-direction: column;
   gap: 2px;
   padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--home-card);
 }
 .uis-window .uis-st-well-row {
   display: flex;
@@ -1050,23 +1044,6 @@ button.lp-demo-top-profile {
 .uis-window .uis-st-path:hover {
   color: var(--text-secondary);
 }
-/* DESIGN-LANGUAGE §4: the outlined secondary pill button. */
-.uis-window .uis-st-pill,
-.uis-st-people .uis-st-pill {
-  flex: none;
-  padding: 2px 10px;
-  border: 1px solid var(--border-default);
-  border-radius: 999px;
-  background: #ffffff;
-  font-size: var(--text-caption);
-  font-weight: 500;
-  color: var(--text-primary);
-  transition: background-color 150ms ease;
-}
-.uis-window .uis-st-pill:hover,
-.uis-st-people .uis-st-pill:hover {
-  background: var(--surface-raised-1);
-}
 .uis-window .uis-st-action {
   display: flex;
   width: 100%;
@@ -1091,54 +1068,15 @@ button.lp-demo-top-profile {
 .uis-window .uis-st-action[data-tone="danger"] svg {
   color: var(--danger);
 }
-/* The Add members stand-in (portalled, so not under `.uis-window`). */
-.uis-st-people {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.uis-st-person {
-  display: flex;
-  min-height: 40px;
-  align-items: center;
-  gap: 10px;
-}
-.uis-st-initial {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: none;
-  place-items: center;
-  border: 1px solid var(--border-default);
-  border-radius: 50%;
-  background: var(--home-card);
-  font-size: var(--text-caption);
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.uis-st-person-name {
-  flex: 1 1 0%;
-  min-width: 0;
-  font-size: var(--text-body);
-  color: var(--text-primary);
-}
-/* A status pill (DESIGN-LANGUAGE §4): grey, word only. */
-.uis-st-status {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #f5f5f5;
-  font-size: var(--text-caption);
-  color: var(--text-secondary);
-}
-
 /* ── CHANNELS: TASKS (new 2026-10-26; round 2: tab + quick view together) ─
    `channels-staging/home/task-list.tsx` is the full list, the Tasks tab's
    body (`tasks-info-panel.tsx`); `tasks-popover.tsx` is the composer line's
    pill + concise pop-up (below). The row is the landing Orchestration "Tasks"
    window's recipe (`marketing.css › .lp-ont-task*`: tick, title, owner face,
    status pill) on the identity look: white card, hairline, 12px, the one soft
-   shadow (`--shadow-bento`), a hairline between rows. Tokens only.
-   Port target if approved: a kit recipe in `globals.css` + the desktop kit. */
+   shadow, a hairline between rows. The card (`.white-card`), faces, stacks,
+   status pill, meter, breadcrumb and empty well are `src/shared/ui`
+   primitives; these rules are the layout around them. Tokens only. */
 .uis-window .uis-tk-tab {
   display: flex;
   flex: 1 1 0%;
@@ -1157,10 +1095,6 @@ button.lp-demo-top-profile {
   margin: 0;
   padding: 0 12px;
   list-style: none;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  box-shadow: var(--shadow-bento);
 }
 .uis-window .uis-tk-row {
   display: grid;
@@ -1250,54 +1184,6 @@ button.lp-demo-top-profile {
   align-items: flex-end;
   gap: 5px;
 }
-.uis-window .uis-tk-stack {
-  display: inline-flex;
-  align-items: center;
-}
-.uis-window .uis-tk-stack-item + .uis-tk-stack-item {
-  margin-left: -6px;
-}
-.uis-window .uis-tk-more {
-  margin-left: 3px;
-  font-size: var(--text-label);
-  color: var(--text-muted);
-}
-.uis-window .uis-tk-person {
-  display: grid;
-  flex: none;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid var(--raised-light-line);
-  border-radius: 50%;
-  background: var(--bg-inset);
-  font-size: var(--text-micro);
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.uis-window .uis-tk-person img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-/* `.lp-ont-status`: grey word pill; in progress = amber ("needs attention"
-   family), resolved = green, each a tint of the semantic token. */
-.uis-window .uis-tk-status {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--bg-inset);
-  font-size: var(--text-micro);
-  line-height: 1.5;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-.uis-window .uis-tk-status[data-status="in_progress"] {
-  background: color-mix(in oklch, var(--warning) 14%, transparent);
-  color: var(--warning);
-}
-.uis-window .uis-tk-status[data-status="resolved"] {
-  background: color-mix(in oklch, var(--success) 12%, transparent);
-  color: var(--success);
-}
 .uis-window .uis-tk-toggle {
   display: inline-flex;
   align-self: flex-start;
@@ -1318,18 +1204,6 @@ button.lp-demo-top-profile {
   transform: rotate(90deg);
 }
 .uis-window .uis-tk-toggle-count {
-  color: var(--text-muted);
-}
-/* Empty state: icon + one phrase inside a well (Structure before font styling). */
-.uis-window .uis-tk-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 52px;
-  border-radius: 10px;
-  background: var(--home-card);
-  font-size: var(--text-caption);
   color: var(--text-muted);
 }
 
@@ -1401,10 +1275,6 @@ button.lp-demo-top-profile {
   max-height: 320px;
   margin-bottom: 4px;
   flex-direction: column;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  box-shadow: var(--shadow-bento);
 }
 .uis-window .uis-tk-pop-head {
   display: flex;
@@ -1478,9 +1348,6 @@ button.lp-demo-top-profile {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.uis-window .uis-tk-pop .uis-tk-empty {
-  margin: 8px;
-}
 
 /* ── Round 4 (Samuel, 2026-10-26): TASK DETAIL + the list row's progress ──
    `task-panel.tsx` swaps the list for `task-detail.tsx` (+ `task-subtasks.tsx`,
@@ -1514,32 +1381,6 @@ button.lp-demo-top-profile {
   gap: 20px;
   min-width: 0;
 }
-.uis-window .uis-tkd-crumbs {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-caption);
-  color: var(--text-muted);
-}
-.uis-window .uis-tkd-back {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 2px;
-  color: var(--text-muted);
-}
-.uis-window .uis-tkd-back:hover {
-  color: var(--text-primary);
-}
-.uis-window .uis-tkd-crumb-current {
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 500;
-  color: var(--text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .uis-window .uis-tkd-head {
   display: flex;
   flex-direction: column;
@@ -1570,21 +1411,6 @@ button.lp-demo-top-profile {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-.uis-window .uis-tkd-meter {
-  position: relative;
-  flex: 1 1 0%;
-  height: 3px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--surface-raised-4);
-}
-.uis-window .uis-tkd-meter > i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 999px;
-  background: var(--text-primary);
-  transition: width 200ms ease;
-}
 /* Round 5 (Samuel, 2026-10-26: "this part looks too jumbled"): the facts
    well is gone; one row fenced by a hairline: assignee stack, From chip,
    Resolve at the right end. (Round 8: the meta line above it is removed.) */
@@ -1605,26 +1431,6 @@ button.lp-demo-top-profile {
   align-items: center;
   height: 22px;
 }
-.uis-window .uis-tkd-stack-item {
-  position: relative;
-  display: inline-flex;
-}
-.uis-window .uis-tkd-stack-item + .uis-tkd-stack-item {
-  margin-left: -6px;
-}
-/* Green only for live (DESIGN-LANGUAGE §1): who is on it now. Top-right, so
-   it never sits on the runtime badge (bottom-right). */
-.uis-window .uis-tkd-stack-item[data-active="true"]::after {
-  content: "";
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid var(--bg-overlay);
-  border-radius: 50%;
-  background: var(--success);
-}
 .uis-window .uis-tkd-stack-label {
   margin-left: 8px;
   font-size: var(--text-caption);
@@ -1639,14 +1445,6 @@ button.lp-demo-top-profile {
   padding: 0 8px;
   font-size: var(--text-caption);
   line-height: 22px;
-}
-.uis-window .uis-tkd-resolve {
-  flex: none;
-  height: 22px;
-  margin-left: auto;
-  padding-top: 0;
-  padding-bottom: 0;
-  line-height: 20px;
 }
 .uis-window .uis-tkd-section {
   display: flex;
@@ -1797,42 +1595,3 @@ button.lp-demo-top-profile {
   opacity: 0.35;
 }
 
-/* Round 6: `task-list.tsx › TaskFace`'s agent face, `PairedAvatar`'s thin-
-   frame recipe in spans (valid inside a <p>). Ring width and colour, badge
-   size and offset come inline from the same constants PairedAvatar uses. */
-.uis-tk-idface {
-  position: relative;
-  display: inline-block;
-  flex: none;
-  vertical-align: middle;
-}
-.uis-tk-idface-ring {
-  display: block;
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  border-style: solid;
-  border-radius: 50%;
-  background: var(--raised-light-face);
-}
-.uis-tk-idface-ring img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.uis-tk-idface-badge {
-  position: absolute;
-  display: grid;
-  box-sizing: border-box;
-  place-items: center;
-  border-style: solid;
-  border-radius: 50%;
-  background: var(--raised-light-face);
-  box-shadow: var(--raised-light-bevel);
-}
-.uis-tk-idface-badge img {
-  display: block;
-  object-fit: contain;
-}

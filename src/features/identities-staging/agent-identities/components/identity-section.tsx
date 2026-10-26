@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 import { BookOpen, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Img } from "@/features/onboarding/components/paired-avatar";
-import { IdentityAvatar } from "@/features/identities-staging/identity-avatar";
+import { IdentityFace } from "@/shared/ui/identity-face";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import type { ModelCatalogs } from "@/features/channels/lib/model-catalog";
 import { pendingRow } from "@/shared/ui/pending";
@@ -328,11 +328,7 @@ function IdentityCard({
   const body = (
     <>
       <span className="flex w-full items-center gap-2.5">
-        <IdentityAvatar
-          d={38}
-          photo={face?.photo}
-          runtimeLogo={face?.runtimeLogo}
-        />
+        <IdentityFace size={38} photo={face?.photo} runtimeLogo={face?.runtimeLogo} ring="neutral" />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className={cn("min-w-0 truncate", IDENTITY_NAME_TEXT)}>
             {identity.name}

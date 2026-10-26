@@ -25,10 +25,6 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px 14px 14px;
-  background: var(--bg-overlay);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  box-shadow: var(--shadow-bento);
 }
 .ove-card-head {
   display: flex;

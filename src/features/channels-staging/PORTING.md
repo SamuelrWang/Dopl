@@ -113,7 +113,7 @@ Edits made in the copies (marked `STAGING` in comments):
   heading, directly under that block). The product's per-row help eye is kept.
 - **Avatar sizes (ask 6d)**: message badge photo `32px`, no runtime icon (2026-10-24, ask 6c final); agent card head `d=30`; thread
   box and thread-info agent rows `d=26`. The ring and white frame cost a fixed 4px at ANY size
-  (`paired-avatar.tsx › RING_PX`), so d=22 left a 14px photo and a ~7px runtime logo — that
+  (`shared/ui/identity-face.tsx › IDENTITY_RING_PX`), so d=22 left a 14px photo and a ~7px runtime logo — that
   fixed cost is why small `d` values read as dots, and it is the thing to remember on port.
   The product's own `Avatar` instances still inside the pane (Info tab roster, thread Info tab,
   peer activity, agent stream) are lifted by a SCOPED CSS rule in `ui-staging/staging.css`
@@ -168,10 +168,13 @@ Edits made in the copies (marked `STAGING` in comments):
     composer, in memory). The list row gained a "2/4" progress mark and its title opens the
     detail. Seed content: `data/staging-task-details.ts`. Port needs subtasks + notes in the
     tasks model and MCP tools for agents to write them.
-  - **Round 6 (Samuel: "Also 2 console errors")**: `task-list.tsx › TaskFace` draws the agent
-    face in SPANS (`.uis-tk-idface*`, `PairedAvatar`'s ring/frame/badge numbers) because the
-    pill's faces sit inside the product's recipients `<p>`, where `PairedAvatar`'s `<div>`s are
-    invalid. Port: give `PairedAvatar` an inline (span) mode rather than a second face.
+  - **Round 6 (Samuel: "Also 2 console errors")**: every face in the tasks UI is
+    `shared/ui/identity-face.tsx › IdentityFace`, which renders SPANS only, because the pill's
+    faces sit inside the product's recipients `<p>`.
+  - **Shared primitives (2026-10-26)**: the cards are the kit's `.white-card`, empty lists
+    `EmptyState variant="well"`, status words `StatusPill`, stacks `IdentityStack`, the subtask
+    meter `ThinMeter`, the back control `Breadcrumb`, Resolve and the settings pills
+    `PILL_BUTTON` (all `src/shared/ui`; DESIGN-SYSTEM.md lists them). Port by importing them.
   CSS `ui-staging/staging.css › .uis-tk*` + `.uis-tkd*` (the bar's `:has()` reach into the
   product row is staging-only; port it as a real slot).
 - `channel-switcher.tsx`: rows select, well headings toggle. The markup now lives once in

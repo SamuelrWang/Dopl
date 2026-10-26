@@ -15,6 +15,9 @@
 import { useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { StandardDialog } from "@/shared/ui/standard-dialog";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { StatusPill } from "@/shared/ui/status-pill";
 import { GoPublicDialog } from "@/features/channels/components/go-public-dialog";
 import type { Channel, ChannelMember, ChannelThread } from "@/features/channels/types";
 
@@ -48,19 +51,17 @@ function InviteStandIn({
   ];
   return (
     <StandardDialog open={open} onClose={onClose} title="Add members">
-      <ul className="uis-st-people" aria-label="Workspace members">
+      <ul className="flex flex-col gap-0.5" aria-label="Workspace members">
         {people.map((p) => (
-          <li key={p.userId} className="uis-st-person">
-            <span className="uis-st-initial" aria-hidden>
-              {p.name.slice(0, 1)}
-            </span>
-            <span className="uis-st-person-name">{p.name}</span>
+          <li key={p.userId} className="flex min-h-10 items-center gap-2.5">
+            <IdentityFace size={28} name={p.name} />
+            <span className="min-w-0 flex-1 text-body text-text-primary">{p.name}</span>
             {p.member ? (
-              <span className="uis-st-status">Member</span>
+              <StatusPill dot={false}>Member</StatusPill>
             ) : (
               <button
                 type="button"
-                className="uis-st-pill"
+                className={PILL_BUTTON}
                 onClick={() => setAdded((s) => new Set(s).add(p.userId))}
               >
                 Add

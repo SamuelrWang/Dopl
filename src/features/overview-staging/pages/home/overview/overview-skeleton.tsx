@@ -9,8 +9,8 @@ function Ghost({ w, h = 10 }: { w: string; h?: number }) {
 
 function GhostCard({ rows, title = "40%" }: { rows: number; title?: string }) {
   return (
-    <div className="ove-card" aria-hidden="true">
-      <div className="ove-card-head">
+    <div className="white-card ove-card" aria-hidden="true">
+      <div className="white-card ove-card-head">
         <Ghost w={title} h={12} />
       </div>
       <div className="ove-rows">
@@ -32,7 +32,7 @@ export function OverviewSkeleton({ preview }: { preview: boolean }) {
   return (
     <div className="ove" aria-busy="true" aria-label="Loading Overview">
       <div className="ove-inner">
-        <div className="ove-card ove-strip" aria-hidden="true">
+        <div className="white-card ove-card ove-strip" aria-hidden="true">
           {Array.from({ length: preview ? 4 : 2 }, (_, i) => (
             <div key={i} className="ove-cell">
               <Ghost w="50%" h={8} />

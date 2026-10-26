@@ -16,7 +16,7 @@
  *
  * | Line | Holds |
  * |---|---|
- * | 1 | PairedAvatar `thinFrame` (owner photo + runtime badge, agent-colour ring) · agent name (600) · elapsed time, muted, trailing |
+ * | 1 | IdentityFace (owner photo + runtime badge, agent-colour ring) · agent name (600) · elapsed time, muted, trailing |
  * | 2 | status pill (dot + word, green dot only when working) · ONE muted line: what it is doing (the thread title) |
  *
  * ⚠ **THE PILL IS ON LINE 2, MEASURED, NOT TASTE.** On line 1 beside the name (the full recipe's
@@ -47,8 +47,9 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { PairedAvatar } from "@/features/onboarding/components/paired-avatar";
-import { IdentityAvatar } from "../identity-avatar";
+import type { AgentColorKey } from "@dopl/contracts";
+import { AGENT_COLOR_KEYS } from "@/features/channels/lib/agent-colors";
+import { IdentityFace } from "@/shared/ui/identity-face";
 import { IdentityPanel } from "../agent-identities/components/identity-section";
 import { agoLabel } from "../view/identity-view-mocks";
 import { STAGING_PEOPLE } from "@/features/ui-staging/staging-stubs";
@@ -158,7 +159,12 @@ function RunCard({ run, onOpen }: { run: ActiveRun; onOpen: (identity: AgentIden
   return (
     <button type="button" onClick={() => onOpen(run.identity)} className={RUN_CARD}>
       <span className="flex w-full min-w-0 items-center gap-2">
-        <RunFace run={run} photo={face.photo} runtimeLogo={face.runtimeLogo} />
+        <IdentityFace
+          size={RUN_FACE_PX}
+          photo={face.photo}
+          runtimeLogo={face.runtimeLogo}
+          ring={agentColorKey(run.agent)}
+        />
         <span className="min-w-0 flex-1 truncate text-small font-semibold text-text-primary" title={run.agent}>
           {run.agent}
         </span>
@@ -175,41 +181,14 @@ function RunCard({ run, onOpen }: { run: ActiveRun; onOpen: (identity: AgentIden
 }
 
 /**
- * §3's face for a RUNNING agent: PairedAvatar `thinFrame`, the ring in the agent's colour (a run
- * has one; a saved identity does not, which is why the grid's cards use the greyscale
- * `IdentityAvatar`). ⚠ `PairedAvatar` always draws its badge and fills a missing logo with a grey
- * block, so a run whose identity names no runtime falls back to `IdentityAvatar`, never an empty
- * badge (the 2026-10-22 rule `identity-avatar.tsx` was forked for).
+ * The agent's colour key, derived from its name so a re-render never repaints it. A run is ringed
+ * in it; a saved identity has no colour, which is why the grid's cards ring `"neutral"`.
+ * STAGING: in the product the session row carries its own key.
  */
-function RunFace({
-  run,
-  photo,
-  runtimeLogo,
-}: {
-  run: ActiveRun;
-  photo: string | null;
-  runtimeLogo: string | null;
-}) {
-  if (!runtimeLogo) return <IdentityAvatar d={RUN_FACE_PX} photo={photo} />;
-  return (
-    <PairedAvatar
-      d={RUN_FACE_PX}
-      thinFrame
-      photo={photo ?? undefined}
-      agentLogo={runtimeLogo}
-      color={agentColorSlot(run.agent)}
-    />
-  );
-}
-
-/**
- * The agent's colour-bank slot (1–16), derived from its name so a re-render never repaints it.
- * STAGING: in the product the session row carries its own slot.
- */
-export function agentColorSlot(name: string): number {
+export function agentColorKey(name: string): AgentColorKey {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return (h % 16) + 1;
+  return AGENT_COLOR_KEYS[h % AGENT_COLOR_KEYS.length];
 }
 
 /** §4's status pill: dot + word. Green only when working (§1 rule 5); idle's dot is the muted ink.
@@ -239,7 +218,7 @@ function FeedItem({ row, onOpen }: { row: FeedRow; onOpen: (identity: AgentIdent
   const face = identityCardFace(row.identity);
   return (
     <button type="button" onClick={() => onOpen(row.identity)} className={FEED_ROW}>
-      <IdentityAvatar d={FEED_FACE_PX} photo={face.photo} runtimeLogo={face.runtimeLogo} />
+      <IdentityFace size={FEED_FACE_PX} photo={face.photo} runtimeLogo={face.runtimeLogo} ring="neutral" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="line-clamp-2 text-small font-medium text-text-primary" title={row.did}>
           {row.did}

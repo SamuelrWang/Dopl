@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 import { readCode, readSource } from "@/shared/testing/source-text";
 import { SEED_IDENTITIES } from "../data";
 import { activeEverywhere, pageFeed } from "./identity-page-data";
-import { agentColorSlot } from "./identity-activity-panel";
+import { AGENT_COLOR_KEYS } from "@/features/channels/lib/agent-colors";
+import { agentColorKey } from "./identity-activity-panel";
 
 const PANEL = readCode(new URL("./identity-activity-panel.tsx", import.meta.url));
 const PANELS = readCode(new URL("../home/identity-panels.tsx", import.meta.url));
@@ -92,24 +93,22 @@ describe("one compact white card per running agent", () => {
     expect(decl).toContain("box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.04)");
   });
 
-  it("wears PairedAvatar thinFrame, and the status pill's dot is green only when working", () => {
-    expect(PANEL).toContain("<PairedAvatar");
-    expect(PANEL).toContain("thinFrame");
+  it("rings the run face in the agent's colour, and the status pill's dot is green only when working", () => {
+    expect(PANEL).toContain("ring={agentColorKey(run.agent)}");
     expect(PANEL).toMatch(/state === "working" \? "bg-success"/);
   });
 
   it("does not print the channel (Samuel: it does not need to say what channel it is in)", () => {
-    const card = PANEL.slice(PANEL.indexOf("function RunCard"), PANEL.indexOf("function RunFace"));
+    const card = PANEL.slice(PANEL.indexOf("function RunCard"), PANEL.indexOf("export function agentColorKey"));
     expect(card).not.toContain("run.channel");
     expect(card).toContain("run.thread");
   });
 
-  it("derives a stable agent colour slot inside the 16-slot bank", () => {
+  it("derives a stable agent colour key from the bank", () => {
     for (const run of activeEverywhere(SEED_IDENTITIES)) {
-      const slot = agentColorSlot(run.agent);
-      expect(slot).toBeGreaterThanOrEqual(1);
-      expect(slot).toBeLessThanOrEqual(16);
-      expect(agentColorSlot(run.agent)).toBe(slot);
+      const key = agentColorKey(run.agent);
+      expect(AGENT_COLOR_KEYS).toContain(key);
+      expect(agentColorKey(run.agent)).toBe(key);
     }
   });
 });

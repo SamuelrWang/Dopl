@@ -58,8 +58,9 @@ import {
   ownAgentsFor,
   peerCardsFor,
 } from "@/features/channels/components/agents-model";
-import { PairedAvatar } from "@/features/onboarding/components/paired-avatar";
-import { colorSlot, useDemoSwap } from "@/features/marketing/components/banner-demo/demo-swap";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { agentColorOrNull } from "@/features/channels/lib/agent-colors";
+import { useDemoSwap } from "@/features/marketing/components/banner-demo/demo-swap";
 import { stagingIdentityFace as identityFace } from "../data/staging-agents";
 
 /** The product shell this face replaces; `thread-card-row.tsx` is the only wearer. */
@@ -98,12 +99,11 @@ function AgentRow({ agent }: { agent: ThreadCardAgent }) {
     <>
       {/* 26, not 22 (ask 6d): the ring and frame cost a fixed 4px at any size, so 22 left a
           14px photo. 26 keeps the row's rhythm and makes the face readable. */}
-      <PairedAvatar
-        d={26}
-        thinFrame
-        photo={agent.photo ?? undefined}
-        agentLogo={agent.logo}
-        color={colorSlot(agent.color)}
+      <IdentityFace
+        size={26}
+        photo={agent.photo}
+        runtimeLogo={agent.logo}
+        ring={agentColorOrNull(agent.color) ?? "neutral"}
       />
       <span className="uis-tc-agent-who">
         <span className="uis-tc-agent-name">{agent.name}</span>

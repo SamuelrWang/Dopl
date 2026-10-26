@@ -35,6 +35,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Hash, LogOut, Trash2, UserPlus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { PILL_BUTTON } from "@/shared/ui/small-action-button";
 import { SelectMenu, type SelectMenuOption } from "@/features/identities-staging/page/select-menu";
 import { AGENT_TOOL_PROFILE_LABELS, THREAD_MODE_LABELS } from "@/features/channels/constants";
 import {
@@ -113,7 +114,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="uis-st-section" aria-label={title}>
       <h2 className="uis-st-title">{title}</h2>
-      <div className="uis-st-card">{children}</div>
+      <div className="white-card uis-st-card">{children}</div>
     </section>
   );
 }
@@ -180,7 +181,7 @@ function PermissionDetails({ level }: { level: PermissionLevel }) {
         Details
       </button>
       {open && (
-        <ul className="uis-st-well" aria-label="Permissions by runtime">
+        <ul className="card-well uis-st-well" aria-label="Permissions by runtime">
           {RUNTIMES.map((r) => (
             <li key={r.id} className="uis-st-well-row">
               <span>
@@ -258,7 +259,7 @@ function ChannelSettings({ channel, members }: { channel: Channel; members: read
               {folder ?? DEFAULT_FOLDER}
             </button>
             {folder && (
-              <button type="button" className="uis-st-pill" onClick={() => setFolder(null)}>
+              <button type="button" className={PILL_BUTTON} onClick={() => setFolder(null)}>
                 Use default
               </button>
             )}

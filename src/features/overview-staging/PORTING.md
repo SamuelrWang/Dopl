@@ -32,8 +32,8 @@ Activity follow the Devices preview gate (the toolbar's Devices switch).
 **Files** (`pages/home/overview/`): `overview.tsx` (shell, reads, order), `overview-now.tsx`,
 `overview-usage.tsx`, `overview-devices.tsx`, `overview-ledger.tsx`, `overview-bits.tsx`,
 `overview-skeleton.tsx`, `overview-data.ts`, `overview.css` + `overview-parts.css` (plain scoped
-CSS under `.ove`), `overview.test.tsx`. **Port:** the reads are the product's; `.ove-card` is the
-white card the kit needs; the summary strip, the row recipe and the scope
+CSS under `.ove`), `overview.test.tsx`. **Port:** the reads are the product's; `.ove-card` wears the
+kit's `.white-card`; the summary strip, the row recipe and the scope
 picker are the pieces worth promoting.
 
 ### The grey ban (ruling, 2026-10-22)

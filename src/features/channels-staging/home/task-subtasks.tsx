@@ -8,9 +8,11 @@
  */
 
 import { Check } from "lucide-react";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { StatusPill } from "@/shared/ui/status-pill";
 import type { ChannelMember } from "@/features/channels/types";
 import { SUBTASK_STATE_LABEL, type StagingSubtask } from "../data/staging-tasks";
-import { TaskFace, actorFace } from "./task-list";
+import { STATUS_TONE, actorFace } from "./task-list";
 
 export function TaskSubtasks({
   subtasks,
@@ -31,7 +33,7 @@ export function TaskSubtasks({
           {done}/{subtasks.length}
         </span>
       </h4>
-      <ol className="uis-tk-card uis-tkd-subs">
+      <ol className="white-card uis-tk-card">
         {subtasks.map((s) => {
           const owner = actorFace(s.owner, members);
           const checked = s.state === "done";
@@ -54,12 +56,12 @@ export function TaskSubtasks({
               </span>
               <span className="uis-tkd-sub-side">
                 {!checked && (
-                  <span className="uis-tk-status" data-status={s.state}>
+                  <StatusPill tone={STATUS_TONE[s.state]} dot={false}>
                     {SUBTASK_STATE_LABEL[s.state]}
-                  </span>
+                  </StatusPill>
                 )}
-                <span title={owner.name} role="img" aria-label={`Owner ${owner.name}`}>
-                  <TaskFace face={owner} d={20} />
+                <span title={owner.name}>
+                  <IdentityFace size={20} {...owner} label={`Owner ${owner.name}`} />
                 </span>
               </span>
             </li>

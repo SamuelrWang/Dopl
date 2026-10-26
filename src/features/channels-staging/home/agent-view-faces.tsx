@@ -31,8 +31,8 @@ import {
   agentLiveness,
 } from "@/features/channels/components/agents-model";
 import { agentColorVar } from "@/features/channels/lib/agent-colors";
-import { PairedAvatar } from "@/features/onboarding/components/paired-avatar";
-import { colorSlot, useDemoSwap } from "@/features/marketing/components/banner-demo/demo-swap";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { useDemoSwap } from "@/features/marketing/components/banner-demo/demo-swap";
 import { stagingIdentityFace as identityFace } from "../data/staging-agents";
 
 const VIEW = 'aside[aria-label="Agent view"]';
@@ -83,12 +83,11 @@ export function StagingAgentViewFaces({
         if (key === "header") {
           return createPortal(
             <div className="lp-demo-avh">
-              <PairedAvatar
-                d={30}
-                thinFrame
-                photo={face.photo ?? undefined}
-                agentLogo={face.logo}
-                color={colorSlot(face.color)}
+              <IdentityFace
+                size={30}
+                photo={face.photo}
+                runtimeLogo={face.logo}
+                ring={face.color ?? "neutral"}
               />
               <span className="lp-demo-avh-id">
                 <span className="lp-demo-avh-name">{agentDisplayName(agent)}</span>

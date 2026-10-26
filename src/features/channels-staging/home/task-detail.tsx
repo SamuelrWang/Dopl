@@ -17,6 +17,12 @@
  */
 
 import { ChevronLeft } from "lucide-react";
+import { IdentityStack } from "@/shared/ui/avatar-stack";
+import { Breadcrumb } from "@/shared/ui/breadcrumb";
+import { StatusPill } from "@/shared/ui/status-pill";
+import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { ThinMeter } from "@/shared/ui/usage-meter";
+import { cn } from "@/shared/lib/utils";
 import type { ChannelMember } from "@/features/channels/types";
 import {
   TASK_STATUS_LABEL,
@@ -26,7 +32,7 @@ import {
   type TaskActor,
   type TaskLink,
 } from "../data/staging-tasks";
-import { TaskFace, TaskLinkChip, actorFace } from "./task-list";
+import { STATUS_TONE, TaskLinkChip, actorFace } from "./task-list";
 import { TaskSubtasks } from "./task-subtasks";
 import { TaskNotes } from "./task-notes";
 
@@ -46,20 +52,20 @@ const actorKey = (a: TaskActor) => (a.kind === "agent" ? a.agentId : a.userId);
 /** Assignees in one overlapping stack; a green dot marks who is active now. */
 function AssigneeStack({ task, members }: { task: StagingTask; members: readonly ChannelMember[] }) {
   const active = new Set(activeActors(task).map(actorKey));
-  const people = task.assignees.map((a) => ({
-    face: actorFace(a, members),
-    active: active.has(actorKey(a)),
+  const faces = task.assignees.map((a) => ({
+    ...actorFace(a, members),
+    online: active.has(actorKey(a)),
   }));
-  const names = people.map((p) => (p.active ? `${p.face.name} (active)` : p.face.name)).join(", ");
+  const names = faces.map((f) => (f.online ? `${f.name} (active)` : f.name)).join(", ");
   return (
-    <span className="uis-tkd-stack" role="img" aria-label={`Assigned to ${names}`} title={names}>
-      {people.map((p) => (
-        <span key={p.face.name} className="uis-tkd-stack-item" data-active={p.active ? "true" : undefined}>
-          <TaskFace face={p.face} d={20} />
-        </span>
-      ))}
+    <span className="uis-tkd-stack">
+      <IdentityStack
+        faces={faces.map((f) => ({ key: f.name, ...f }))}
+        size={20}
+        label={`Assigned to ${names}`}
+      />
       <span className="uis-tkd-stack-label">
-        {people.length === 1 ? people[0].face.name : `${people.length} assigned`}
+        {faces.length === 1 ? faces[0].name : `${faces.length} assigned`}
       </span>
     </span>
   );
@@ -79,28 +85,30 @@ export function TaskDetail({
   const progress = subtaskProgress(task);
   return (
     <article className="uis-tkd" aria-label={task.title}>
-      <nav className="uis-tkd-crumbs" aria-label="Breadcrumb">
-        <button type="button" className="uis-tkd-back" aria-label="Back to tasks" onClick={onBack}>
-          <ChevronLeft size={13} aria-hidden="true" />
-          Tasks
-        </button>
-        <span aria-hidden="true">›</span>
-        <span className="uis-tkd-crumb-current">{task.title}</span>
-      </nav>
+      <Breadcrumb
+        items={[
+          {
+            key: "tasks",
+            label: "Tasks",
+            icon: <ChevronLeft size={13} aria-hidden="true" />,
+            onSelect: onBack,
+            ariaLabel: "Back to tasks",
+          },
+          { key: task.id, label: task.title },
+        ]}
+      />
 
       <header className="uis-tkd-head">
         <div className="uis-tkd-title-row">
           <h3 className="uis-tkd-title">{task.title}</h3>
-          <span className="uis-tk-status" data-status={task.status}>
+          <StatusPill tone={STATUS_TONE[task.status]} dot={false}>
             {TASK_STATUS_LABEL[task.status]}
-          </span>
+          </StatusPill>
         </div>
         {task.description && <p className="uis-tkd-desc">{task.description}</p>}
         {progress && (
           <div className="uis-tkd-progress">
-            <span className="uis-tkd-meter" aria-hidden="true">
-              <i style={{ width: `${(progress.done / progress.total) * 100}%` }} />
-            </span>
+            <ThinMeter used={progress.done} limit={progress.total} className="flex-1" />
             <span role="img" aria-label={`${progress.done} of ${progress.total} subtasks done`}>
               {progress.done}/{progress.total}
             </span>
@@ -111,7 +119,7 @@ export function TaskDetail({
           {task.link && <TaskLinkChip link={task.link} onOpen={onOpenLink} />}
           <button
             type="button"
-            className="uis-st-pill uis-tkd-resolve"
+            className={cn(PILL_BUTTON, "ml-auto h-5.5 py-0")}
             onClick={() => (done ? onReopen(task.id) : onResolve(task.id))}
           >
             {done ? "Reopen" : "Resolve"}

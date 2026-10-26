@@ -36,7 +36,7 @@ export function SummaryStrip({
   const agents = hosts?.flatMap((h) => h.agents) ?? [];
   const working = agents.filter((a) => a.state === "working").length;
   return (
-    <section className="ove-card ove-strip" aria-label="Summary">
+    <section className="white-card ove-card ove-strip" aria-label="Summary">
       {hosts && <Cell label="Working" value={String(working)} of={`/ ${agents.length}`} />}
       <Cell label="Need you" value={String(needCount)} />
       {devices && <Cell label="Devices online" value={String(devices.online)} of={`/ ${devices.total}`} />}

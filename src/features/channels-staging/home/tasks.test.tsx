@@ -93,7 +93,7 @@ describe("channel tasks (staging)", () => {
     const pill = screen.getByRole("button", { name: "4 tasks" });
     expect(pill.closest('[aria-label="Recipients"]')).toBeTruthy();
     // Round 1's face (round 3): faces of who is on in-progress work, at most three.
-    expect(pill.querySelectorAll(".uis-tk-stack-item")).toHaveLength(3);
+    expect(pill.querySelectorAll("[data-identity-face]")).toHaveLength(3);
     fireEvent.click(tab!);
     await waitFor(() => expect(screen.getByRole("list", { name: "Active tasks" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: /Resolved/ }));
@@ -192,7 +192,7 @@ describe("channel tasks (staging)", () => {
         "Assigned to Teardown Order Fix (active), End Notice Check (active), Wake Replay Trace"
       )
     ).toBeTruthy();
-    expect(detail.querySelectorAll('.uis-tkd-stack-item[data-active="true"]')).toHaveLength(2);
+    expect(detail.querySelectorAll('[data-presence="online"]')).toHaveLength(2);
     // Round 8: the opener / dates meta line is gone.
     expect(within(detail).queryByLabelText("Task details")).toBeNull();
     expect(within(detail).queryByText(/^Opened /)).toBeNull();
