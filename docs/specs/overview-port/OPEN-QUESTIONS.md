@@ -4,7 +4,7 @@ Each: the question, what was chosen, where.
 
 1. **Cards with no data behind them.** Agents by computer, Activity (Routing / Logs), the reach
    order, device In use / battery / "through" host, and the Needs-you asks are mock in staging.
-   Chose: not shipped; Needs you carries the one real state (a spent allowance). Where:
+   Chose: not shipped; Needs you carried the one real state (a spent allowance) until item 13. Where:
    `src/features/home/components/overview/home-overview.tsx`, INVENTORY §4.
 2. **Where Devices sits.** Staging puts Devices last in the side column, beside Agents and Activity.
    With those two hidden the main column would hold Needs you alone at 900px. Chose: Needs you +
@@ -39,6 +39,16 @@ Each: the question, what was chosen, where.
     cached channel stays plain text; hover/focus is the flat menu-row fill (no lift on a table row,
     cells gain 8px side padding for it); faces cap at 3 + N; the playground goes to
     `/playground/channels`. Where: `overview-ledger.tsx › ChannelsTable`.
+
+13. **Needs you sources (branch `feat/overview-needs-you`).** Samuel approved tasks + decisions as
+    sources (2026-10-26). Chose: (a) a sibling read `GET /api/home/needs` rather than a field on
+    `/api/home/overview`, so a failure is the card's alone; (b) the fence is the reader's HOME
+    channels only (link containers), matching the rest of the face — standard-workspace channels
+    are not listed; (c) a decision's author shows as "Agent" or the person's name (agent names
+    resolve from the desktop feed at render elsewhere; the Overview has no such feed); (d) the
+    staging task and decision rows both go to `/playground/channels`; (e) the type lives in
+    `src/features/home/needs-types.ts`, not `@dopl/contracts` (one tree consumes it). Where:
+    `overview-needs.tsx`, `server/service-needs.ts`.
 
 ## For Samuel (review, 2026-10-26): reversals of earlier rulings the staging look brings
 

@@ -31,7 +31,7 @@ Tests: `pages/home/overview-{panels,credit-bar,unmetered-caption,usage-filter}.t
 |---|---|---|
 | Summary strip (Working, Need you, Devices online, Credits left + 3px meter) | none (stat tiles were cut 2026-09-01) | Need you, Devices online, Credits left; Working needs per-computer agents (§4) |
 | Two equal-height columns, fixed slots, inner scroll | gray `SectionPanel` wells, content height | the column grid (`--ove-*` heights), container query to one column |
-| Needs you (out-of-credits row + invented asks) | none | out-of-credits row only (real); asks are mock (§4) |
+| Needs you (out-of-credits row + invented asks) | none | out-of-credits row, open decisions, assigned tasks (`GET /api/home/needs`, 2026-10-26) |
 | Agents by computer | cut 2026-09-20 | not shipped (§4) |
 | Activity Routing / Logs | cut 2026-09-20 | not shipped (§4) |
 | Credits: used of limit, 3px meter, left · Resets · Unreconciled · Unmetered, paused note, Get more credits; scope pill + month + total; daily bars; "Newest rows only." | `CreditCapacityBar` (`UsageMeter`) + `UsageChart` (`BarSeries`) in two `.bento` cards | one card, `ThinMeter`, plain bars |
