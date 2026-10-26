@@ -6,7 +6,6 @@ import {
   BookOpen,
   Hash,
   MessagesSquare,
-  Network,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -17,7 +16,6 @@ import { PlaygroundSessionProvider } from "../session";
 import type { PlaygroundSection } from "../types";
 import { ConnectStrip } from "./connect-strip";
 import styles from "./playground-shell.module.css";
-import { OntologyPane } from "./panes/ontology-pane";
 import { KnowledgePane } from "./panes/knowledge-pane";
 import { SkillsPane } from "./panes/skills-pane";
 import { ChatsPane } from "./panes/chats-pane";
@@ -25,7 +23,7 @@ import { ChannelsPane } from "./panes/channels-pane";
 import { MembersPane } from "./panes/members-pane";
 
 /**
- * The real shell's `NAV` minus Overview — same labels, icons and order
+ * The real shell's `NAV` minus Overview and Ontology — same labels, icons and order
  * otherwise (`app-sidebar-core.tsx › NAV`). Kept local rather than filtered
  * from the real array so the playground never re-renders when the app's nav
  * grows a section the demo has no pane for.
@@ -35,7 +33,6 @@ const NAV: ReadonlyArray<{
   icon: LucideIcon;
   section: PlaygroundSection;
 }> = [
-  { label: "Ontology", icon: Network, section: "ontology" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
@@ -44,7 +41,6 @@ const NAV: ReadonlyArray<{
 ];
 
 const PANES: Record<PlaygroundSection, ComponentType> = {
-  ontology: OntologyPane,
   knowledge: KnowledgePane,
   skills: SkillsPane,
   chats: ChatsPane,
@@ -69,7 +65,7 @@ export function PlaygroundShell() {
 }
 
 function ShellChrome() {
-  const [section, setSection] = useState<PlaygroundSection>("ontology");
+  const [section, setSection] = useState<PlaygroundSection>("knowledge");
   const Pane = PANES[section];
 
   return (

@@ -11,33 +11,35 @@ import { NEW_COLUMN_NAME } from "../optimistic-create";
 import type { Ontology, OntologyObject } from "../types";
 import { KanbanCard } from "./kanban-card";
 import { KanbanColumnHeader } from "./kanban-column-header";
+import { ADD_OBJECT_BUTTON } from "./ontology-bits";
 import { OntologyRow } from "./ontology-row";
-import { RowsChevron, RowsCollapse } from "./rows-collapse";
+import { OntologyRowsGroupHeader } from "./ontology-rows-group-header";
+import { RowsCollapse } from "./rows-collapse";
 
 interface Props {
   ontology: Ontology;
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
   selectedId: string | null;
-  /** Optimistically created rows whose POST has not answered — drawn dimmed
-   *  and inert, since their id is provisional and nothing may be written at
-   *  it yet (`src/shared/ui/pending.ts`). */
+  /** Optimistically created rows whose POST has not answered — drawn dimmed and inert, since
+   *  their id is provisional (`src/shared/ui/pending.ts`). */
   pendingIds: ReadonlySet<string>;
   /** Viewers can read the board but can't add cards — hide the affordance. */
   canEdit: boolean;
   onSelect: (id: string) => void;
   onCreateObject: (columnId: string) => void;
-  /** `canvas`: lanes of cards. `rows`: full-width sections, objects as
-   *  full-width rows. Omitted ⇒ this device's choice (`use-board-display.ts`),
-   *  set by the header's `BoardDisplayMenu`. */
+  /** `canvas`: lanes of cards. `rows`: full-width groups of records. Omitted ⇒ this device's
+   *  choice (`use-board-display.ts`), set by the header's `BoardDisplayMenu`. */
   display?: BoardDisplay;
 }
 
 /**
- * The ontology as lanes of item cards. Each lane is an OBJECT: header card (the
- * object type — name edits in place, kebab opens it in the editor panel), then
- * its items, then the add button. The lane supplies its own gray; the
- * board behind it is the page surface.
+ * The ontology board. Each lane (canvas) or group (rows) is an OBJECT TYPE: its header, then its
+ * objects as white cards, then the add button.
+ *
+ * Canvas sits on the kit's dotted ground, whose 12px pitch the geometry lands on: padding 24, lane
+ * 288, gutter 12. Lanes take no fill of their own and hug their cards; the board scrolls. Rows has
+ * no spatial placement, so it drops the dots and groups by a header line and a hairline.
  */
 export function KanbanBoard({
   ontology,
@@ -55,33 +57,17 @@ export function KanbanBoard({
   const columns = ontology.columnIds
     .map((id) => graph.objects[id])
     .filter((col): col is OntologyObject => Boolean(col));
-  // Rows only: folded lanes and rows, remembered per ontology on this device.
-  const exists = useCallback(
-    (id: string) => Boolean(graph.objects[id]),
-    [graph.objects]
-  );
+  // Rows only: folded groups and records, remembered per ontology on this device.
+  const exists = useCallback((id: string) => Boolean(graph.objects[id]), [graph.objects]);
   const { collapsed, toggle } = useRowsCollapsed(ontology.id, exists);
 
   return (
-    // The dot grid is load-bearing geometry. `.kanban-substrate` tiles at 12px and
-    // every dimension here is a whole number of tiles: p-6 = 24 (2), lane w-72 =
-    // 288 (24), gutter gap-3 = 12 (1, dot dead centre), lane p-3 = 12 (1). Lane
-    // edges land at 24, 324, 624 … (stride 300 = 25 tiles), cards at 36 and 300.
-    // The 12px pitch is forced by the 12px gutter — at a 24px pitch every second
-    // lane sits half a tile out.
-    //
-    // No fill on this element: the lanes supply the only gray on the board
-    // (`bg-home-panel` below).
-    //
-    // `items-start` stops lanes stretching: each is as tall as its contents and
-    // vertical overflow belongs to this board, not a scrollbar per lane.
-    //
-    // Rows: the same lanes stacked top to bottom at the board's full width. Lane
-    // edges stay on the tile grid; only the width stops being 24 tiles.
     <div
       className={cn(
-        "graph-substrate kanban-substrate flex min-h-0 flex-1 gap-3 overflow-auto p-6",
-        display === "rows" ? "flex-col items-stretch" : "items-start"
+        "flex min-h-0 flex-1 overflow-auto",
+        display === "rows"
+          ? "flex-col items-stretch px-5 pt-4.5 pb-7"
+          : "graph-substrate kanban-substrate items-start gap-3 p-6"
       )}
     >
       {columns.map((col) => (
@@ -126,23 +112,13 @@ function Column({
   onSelect: (id: string) => void;
   onCreateObject: (columnId: string) => void;
   rows: boolean;
-  /** Rows only: ids folded shut (lanes and object rows alike). */
+  /** Rows only: ids folded shut (groups and records alike). */
   collapsed: ReadonlySet<string>;
   onToggleCollapsed: (id: string) => void;
 }) {
   const laneOpen = !rows || !collapsed.has(col.id);
-  const header = (
-    <KanbanColumnHeader
-      column={col}
-      graph={graph}
-      dispatch={dispatch}
-      canEdit={canEdit}
-      selected={selectedId === col.id}
-      onSelect={onSelect}
-      onCreateObject={onCreateObject}
-    />
-  );
-  /** `+ Lead` once named; `+ Untitled object` while the lane still is not. */
+  const recordsId = `type-records-${col.id}`;
+  /** `+ Lead` once named; `+ Untitled object` while the type still is not. */
   const addLabel = col.name || NEW_COLUMN_NAME;
   const items = (
     <>
@@ -170,19 +146,11 @@ function Column({
         )
       )}
       {canEdit && (
-        // Hugs the left corner after the last card: the next row in the list,
-        // not a footer.
-        //
-        // The label is the object's own name (Samuel, 2026-09-11) — the button
-        // adds an item of this object type, so it reads `+ Lead`; only an unnamed
-        // lane falls back to `NEW_COLUMN_NAME`. `min-w-0` + `truncate` because
-        // the label is user text in a fixed `w-72` lane and must ellipsise inside
-        // the pill rather than widen it.
         <button
           type="button"
           onClick={() => onCreateObject(col.id)}
           aria-label={`Add ${addLabel}`}
-          className="btn-light flex min-w-0 max-w-full shrink-0 items-center gap-1 self-start rounded-md px-2.5 py-1.5 text-small font-medium text-text-primary"
+          className={ADD_OBJECT_BUTTON}
         >
           <Plus size={12} className="shrink-0" />
           <span className="min-w-0 truncate">{addLabel}</span>
@@ -191,53 +159,42 @@ function Column({
     </>
   );
   return (
-    // A pending column takes its whole lane inert: header inputs, menu and add
-    // button all address an id the server hasn't minted yet.
-    //
-    // The lane's gray is the tab-switcher panel's (Samuel, 2026-09-11):
-    // `--home-panel`, by token and never a hex, and the skeleton lane wears the
-    // same one (`ontology-skeleton.tsx`).
+    // A pending type takes its whole lane inert: every control in it addresses an id the server
+    // has not minted yet.
     <div
       {...pendingRow(
         pendingIds.has(col.id),
-        cn(
-          "flex shrink-0 flex-col rounded-[14px] bg-home-panel p-3",
-          // Rows: no flex gap; the fold carries its own top padding so a closed
-          // lane does not keep an 8px gap under its header.
-          rows ? "w-full" : "w-72 gap-2 self-start"
-        )
+        rows
+          ? "flex w-full shrink-0 flex-col border-t border-border-default pt-5.5 mt-6.5 first:mt-0 first:border-t-0 first:pt-0"
+          : "flex w-72 shrink-0 flex-col gap-2 self-start"
       )}
     >
       {rows ? (
-        // Rows: the type card keeps its canvas width (264 = the lane's inner
-        // width there) and the lane's fold chevron sits at the far right.
-        <div className="flex items-start gap-2">
-          <div className="flex w-full max-w-[264px] min-w-0 flex-col">
-            {header}
-          </div>
-          <span className="flex-1" />
-          <button
-            type="button"
-            onClick={() => onToggleCollapsed(col.id)}
-            aria-expanded={laneOpen}
-            aria-label={`${laneOpen ? "Collapse" : "Expand"} ${col.name || NEW_COLUMN_NAME}`}
-            title={laneOpen ? "Collapse" : "Expand"}
-            className="shrink-0 rounded-md p-1.5 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
-          >
-            <RowsChevron open={laneOpen} size={14} />
-          </button>
-        </div>
-      ) : (
-        header
-      )}
-      {/* No scroller here: lane hugs its cards, the board scrolls. */}
-      {rows ? (
-        // `-mx-1 px-1`: the fold clips, so give row shadows and the selected
-        // ring room at the sides without moving the rows.
-        <RowsCollapse
+        <OntologyRowsGroupHeader
+          column={col}
+          graph={graph}
+          dispatch={dispatch}
+          canEdit={canEdit}
           open={laneOpen}
-          className="-mx-1 flex flex-col gap-2 px-1 pt-2"
-        >
+          onToggleOpen={() => onToggleCollapsed(col.id)}
+          recordsId={recordsId}
+          onSelect={onSelect}
+          onCreateObject={onCreateObject}
+        />
+      ) : (
+        <KanbanColumnHeader
+          column={col}
+          graph={graph}
+          dispatch={dispatch}
+          canEdit={canEdit}
+          selected={selectedId === col.id}
+          onSelect={onSelect}
+          onCreateObject={onCreateObject}
+        />
+      )}
+      {rows ? (
+        // `-mx-1 px-1`: the fold clips, so give the records' shadows and the selected bar room.
+        <RowsCollapse id={recordsId} open={laneOpen} className="-mx-1 flex flex-col gap-2.5 px-1 pt-3 pb-1">
           {items}
         </RowsCollapse>
       ) : (

@@ -51,11 +51,6 @@
   align-items: center;
   gap: 6px;
 }
-.ove-card-title {
-  font-size: var(--text-body);
-  font-weight: 600;
-  color: var(--text-primary);
-}
 .ove-card-count {
   font-size: var(--text-caption);
   color: var(--text-muted);

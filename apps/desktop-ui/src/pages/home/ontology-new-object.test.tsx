@@ -12,7 +12,7 @@ import {
 
 /**
  * **"+ Object" AND ITS POPUP**, on /home — its own file for the 500-line cap
- * (`ontology-panels.test.tsx` is the rest of this face, `ontology-rename.test.tsx`
+ * (`home-ontology-panels.test.tsx` is the rest of this face, `ontology-rename.test.tsx`
  * the gear's Rename, and the twin assertions on `/[ws]/ontology` live in
  * `pages/ontology/index.test.tsx`).
  *
