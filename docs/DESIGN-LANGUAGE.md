@@ -95,7 +95,10 @@ the white card `.white-card` (selectable: `+ .select-card`), the well `.card-wel
 white pill `WHITE_PILL`, `StatusPill`, `ThinMeter`,
 `IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, the ink pill
 family (`INK_PILL_FACE`: `PAGE_ACTION_BTN`, `SMALL_PRIMARY_PILL`, `INK_PILL`, `QUIET_PILL`), and
-the 15px `text-heading` step. A port imports them; DESIGN-SYSTEM.md lists each.
+the 15px `text-heading` step, and `SECTION_TITLE` (a card's or panel section's small bold ink
+title: the Overview cards, the ontology object panel). The ontology board and object panel
+(`src/features/ontology/components/`) are on this kit since 2026-10-26. A port imports them;
+DESIGN-SYSTEM.md lists each.
 
 ## 5. Motion
 

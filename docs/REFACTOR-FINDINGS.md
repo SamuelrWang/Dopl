@@ -8478,7 +8478,7 @@ one; a widening that turns out to be wrong produces nothing anybody sees.
   the share row can describe and no request can exercise: `guestsLevel: "edit"` is a stored word today.
 - ⚠ **IT FAILS CLOSED, WHICH IS WHY IT IS A FINDING AND NOT A P0.** A guest gets LESS than Samuel's
   matrix promises, never more; nothing leaks. What is broken is the half of the ruling that says *"are
-  guests access/view or edit"* — the control renders in `pages/home/ontology-share.tsx`, the PUT
+  guests access/view or edit"* — the control renders in `ontology/components/ontology-share.tsx`, the PUT
   stores what the operator picked, and the answer never reaches anybody.
 - ⚠ **THE FIX IS A RULING, NOT AN EDIT, WHICH IS WHY THIS WAVE DID NOT MAKE IT.** Flooring the two
   ontology READ routes to `minRole: "guest"` fails `src/app/api/channels/guest-route-floor.test.ts ›
