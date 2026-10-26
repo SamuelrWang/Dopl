@@ -34,6 +34,3 @@ Each: the question, what was chosen, where.
 11. **Copy the old rulings removed.** Staging titles the card "Credits" and says "of N used", words
     the 2026-09-13 ruling had dropped; "Get more credits" is a card pill, not the 36px page button.
     Chose: staging (the newer design). INVARIANTS updated.
-12. **Pre-existing red, not this slice.** `src/features/ui-staging/staging-frame.test.tsx › opens
-    every frame-level popup` looks for a Devices *button* in the settings modal, whose sections are
-    tabs; nothing here touches the modal.
