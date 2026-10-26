@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { BARE_TRIGGER_FACE } from "@/shared/ui/select-menu";
 import type { GraphState } from "../graph-state";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { OntologySwitcher, ontologySwitcherEntries } from "./ontology-switcher";
 
 afterEach(cleanup);
@@ -93,7 +94,7 @@ describe("the trigger", () => {
     for (const c of BARE_TRIGGER_FACE.split(" ")) {
       if (c !== "text-caption") expect(trigger.classList).toContain(c);
     }
-    expect(trigger.className).toMatch(/\btext-title\b/);
+    for (const c of IDENTITY_NAME_TEXT.split(" ")) expect(trigger.classList).toContain(c);
     expect(trigger.className).not.toMatch(/text-heading|text-display|font-semibold|font-bold/);
     expect(trigger.querySelector("svg")).toBeTruthy();
     // a dropdown, not tabs — the other ontology is behind it, never beside it.

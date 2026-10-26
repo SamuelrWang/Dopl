@@ -66,3 +66,6 @@ Each one: the question, the conservative choice made, and where it lives.
 19. **Rail width** defaults to 300px, 240–480px and at most half the pane, per device
     (`dopl.identities.railWidth`).
 20. **Launch** is `INK_PILL` (the card's primary act), bottom right.
+21. **Section titles, again** (supersedes 15). Shared / Personal (and Activity, the third `SectionPanel flat`) now
+    wear `IDENTITY_NAME_TEXT`, the ontology switcher's face (14px medium ink); chose to reuse that
+    existing constant in both places instead of minting an identical `PAGE_NAME_TEXT`.
