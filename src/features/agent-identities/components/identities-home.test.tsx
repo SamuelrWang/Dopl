@@ -25,7 +25,13 @@ const LIVE = {
   identityName: "Scout",
   startedAt: Date.now() - 60_000,
 } as DesktopSessionSummary;
-const ENDED = { ...LIVE, sessionId: "s2", displayName: "Scout two", state: "ended", endedAt: Date.now() };
+const ENDED: DesktopSessionSummary = {
+  ...LIVE,
+  sessionId: "s2",
+  displayName: "Scout two",
+  state: "ended",
+  endedAt: Date.now(),
+};
 
 function mount(over: Partial<IdentitiesHomeProps> = {}) {
   const props: IdentitiesHomeProps = {

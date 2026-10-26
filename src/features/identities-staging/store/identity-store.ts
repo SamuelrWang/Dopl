@@ -8,7 +8,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
-import { SEED_IDENTITIES } from "./data";
+import { SEED_IDENTITIES } from "../data";
 
 interface IdentityState {
   identities: AgentIdentity[];

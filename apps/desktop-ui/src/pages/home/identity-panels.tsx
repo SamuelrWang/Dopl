@@ -81,14 +81,12 @@ export function HomeIdentityPanels({
   );
 
   const runtimeLabel = (id: string) => launch.runtimes.find((r) => r.id === id)?.label || id;
-  const runtimes = useMemo(() => {
-    const ids = new Set(launch.runtimes.map((r) => r.id));
-    for (const identity of [...shared, ...personal]) if (identity.runtime) ids.add(identity.runtime);
-    return [...ids].map((id) => ({
-      id,
-      label: launch.runtimes.find((r) => r.id === id)?.label || id,
-    }));
-  }, [launch.runtimes, shared, personal]);
+  // The registered runtimes, plus any a row names that this desktop does not register.
+  const runtimeIds = new Set(launch.runtimes.map((r) => r.id));
+  for (const identity of [...shared, ...personal]) {
+    if (identity.runtime) runtimeIds.add(identity.runtime);
+  }
+  const runtimes = [...runtimeIds].map((id) => ({ id, label: runtimeLabel(id) }));
 
   if (channel !== null && containerList.error) {
     return <PageError error={containerList.error} onRetry={() => containerList.refetch()} />;

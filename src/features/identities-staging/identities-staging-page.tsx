@@ -1,57 +1,86 @@
 "use client";
 
 /**
- * UI STAGING — desktop /home → Identities, on fake data, inside the landing demo's window.
+ * UI STAGING: desktop /home → Identities on fake data, inside the landing demo's window. The face
+ * is the product's own (`home/identities-scene.tsx` is the stub host); the store reseeds on mount.
  *
- * What mounts here is the desktop's own face (`home/identity-panels.tsx`, a copy of
- * `apps/desktop-ui/src/pages/home/identity-panels.tsx`) with the props `home-panes.tsx ›
- * HomePane` hands it. The hooks under it read the in-memory store (`identity-store.ts`); a
- * reload re-seeds from `data.ts`.
+ * ⚠ CLIENT-ONLY CONTENT: the agents' times are relative to `Date.now()`, so a server pass would
+ * print different labels than the client. The server paints the empty window; the face mounts
+ * after hydration.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Role } from "@/features/workspaces/types";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
 import { StagingScenarioSwitch } from "@/features/ui-staging/staging-scenario-switch";
-import { HomeIdentityPanels } from "./home/identity-panels";
-import { STAGING_CHANNEL, STAGING_HOME_WORKSPACE_ID, STAGING_USER_ID } from "./data";
-import { resetIdentityStore, setHomeReadFails, useIdentityState } from "./identity-store";
+import { IdentitiesScene, type ReadinessScenario } from "./home/identities-scene";
+import {
+  CONTAINER_WORKSPACE_ID,
+  KNOWLEDGE_BASES,
+  KNOWLEDGE_ENTRIES,
+  KNOWLEDGE_FOLDERS,
+  STAGING_CHANNEL,
+  STAGING_HOME_WORKSPACE_ID,
+  STAGING_USER_ID,
+} from "./data";
+import { resetIdentityStore, setHomeReadFails, useIdentityState } from "./store/identity-store";
 
 type ChannelChoice = "tech-debt" | "none";
 type RoleChoice = "owner" | "member" | "guest";
 type HomeChoice = "ready" | "unset" | "fails";
-/** Item 3c: the three runtime worlds Samuel asked to see (all ready / re-auth / not signed in). */
-type ReadinessChoice = "ready" | "reauth" | "signin";
+
+/** The knowledge picker's per-base tree read (`knowledge/client/hooks.ts › useKnowledgeTree`),
+ *  seeded under its own key in both workspaces, so the product picker renders and nothing fetches. */
+function stagingQueryClient(): QueryClient {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity, gcTime: Infinity, retry: false } },
+  });
+  for (const ws of [STAGING_HOME_WORKSPACE_ID, CONTAINER_WORKSPACE_ID]) {
+    for (const base of KNOWLEDGE_BASES) {
+      qc.setQueryData(["knowledge", `tree:${ws}:${base.id}`], {
+        base,
+        folders: KNOWLEDGE_FOLDERS.filter((f) => f.knowledgeBaseId === base.id),
+        entries: KNOWLEDGE_ENTRIES.filter((e) => e.knowledgeBaseId === base.id),
+      });
+    }
+  }
+  return qc;
+}
 
 export function IdentitiesStagingPage() {
+  const [qc] = useState(stagingQueryClient);
   // Seed the store once per mount (a reload is a clean slate).
   useState(() => {
     resetIdentityStore();
     return true;
   });
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot mount flag
+  useEffect(() => setMounted(true), []);
   const { homeReadFails } = useIdentityState();
   const [channelChoice, setChannelChoice] = useState<ChannelChoice>("tech-debt");
   const [role, setRole] = useState<RoleChoice>("owner");
   const [homeSetUp, setHomeSetUp] = useState(true);
-  const [readiness, setReadiness] = useState<ReadinessChoice>("ready");
+  const [readiness, setReadiness] = useState<ReadinessScenario>("ready");
   const home: HomeChoice = !homeSetUp ? "unset" : homeReadFails ? "fails" : "ready";
 
   const channel =
-    channelChoice === "none"
-      ? null
-      : { ...STAGING_CHANNEL, myWorkspaceRole: role as Role };
+    channelChoice === "none" ? null : { ...STAGING_CHANNEL, myWorkspaceRole: role as Role };
 
   return (
-    <>
-      <StagingFrame tab="identities">
-        <HomeIdentityPanels
-          // `home-panes.tsx` keys this face by its pane token, so a channel switch remounts it.
-          key={`${channelChoice}:${role}:${homeSetUp}`}
-          channel={channel}
-          homeWorkspaceId={homeSetUp ? STAGING_HOME_WORKSPACE_ID : null}
-          currentUserId={STAGING_USER_ID}
-          readiness={readiness}
-        />
+    <QueryClientProvider client={qc}>
+      <StagingFrame tab="identities" recordClassName="uis-white-pane">
+        {mounted && (
+          <IdentitiesScene
+            // The desktop keys this face by its pane token, so a channel switch remounts it.
+            key={`${channelChoice}:${role}:${homeSetUp}`}
+            channel={channel}
+            homeWorkspaceId={homeSetUp ? STAGING_HOME_WORKSPACE_ID : null}
+            currentUserId={STAGING_USER_ID}
+            readiness={readiness}
+          />
+        )}
       </StagingFrame>
       <StagingScenarioSwitch
         groups={[
@@ -82,7 +111,6 @@ export function IdentitiesStagingPage() {
             value: readiness,
             options: [
               { value: "ready", label: "All ready" },
-              { value: "reauth", label: "Needs re-auth" },
               { value: "signin", label: "Not signed in" },
             ],
             onChange: setReadiness,
@@ -103,6 +131,6 @@ export function IdentitiesStagingPage() {
           },
         ]}
       />
-    </>
+    </QueryClientProvider>
   );
 }

@@ -9,10 +9,6 @@ import type {
   AgentIdentity,
   IdentityKnowledgeRef,
 } from "@/features/agent-identities/client/types";
-import type {
-  IdentityCardFace,
-  IdentityCardStats,
-} from "./agent-identities/components/identity-section";
 import type { ModelCatalog, ModelCatalogs } from "@/features/channels/lib/model-catalog";
 import type { RuntimeDescriptor } from "@/features/channels/lib/runtime-capability";
 import type { Role } from "@/features/workspaces/types";
@@ -32,7 +28,6 @@ import {
 
 export { STAGING_HOME_WORKSPACE_ID, STAGING_USER_ID, CONTAINER_WORKSPACE_ID };
 export { SEED_BASES as KNOWLEDGE_BASES, SEED_FOLDERS as KNOWLEDGE_FOLDERS, SEED_ENTRIES as KNOWLEDGE_ENTRIES };
-export type { IdentityCardFace, IdentityCardStats };
 
 const GRACE = STAGING_PEOPLE[1];
 const ANTHONY = STAGING_PEOPLE[2];
@@ -44,32 +39,15 @@ export interface StagingChannel {
   id: string;
   workspaceId: string;
   name: string;
-  isDirect: boolean;
   myWorkspaceRole: Role;
-  peers: ReadonlyArray<{ userId: string; displayName: string | null }>;
 }
 
 export const STAGING_CHANNEL: StagingChannel = {
   id: CHANNEL_ID,
   workspaceId: CONTAINER_WORKSPACE_ID,
   name: "tech-debt",
-  isDirect: false,
   myWorkspaceRole: "owner",
-  peers: [
-    { userId: GRACE.userId, displayName: GRACE.displayName ?? null },
-    { userId: ANTHONY.userId, displayName: ANTHONY.displayName ?? null },
-  ],
 };
-
-/** `apps/desktop-ui/src/pages/home/home-rows.ts › channelPeople`, over the staged channel. */
-export function channelPeople(channel: StagingChannel) {
-  return channel.peers;
-}
-
-/** `home-rows.ts › channelTitle` — the channel's own name, always. */
-export function channelTitle(channel: StagingChannel): string {
-  return channel.name;
-}
 
 // ─── Runtimes + model catalogs (the editor's Runtime / Model rows) ───
 
@@ -272,81 +250,3 @@ export const REFUSED_LAUNCH: Record<string, string> = {
   "id-researcher": "Codex isn't signed in on this computer. Sign in from Settings → Runtimes, then launch again.",
 };
 
-// ─── The card's face: whose identity it is, and what it runs on ──────
-
-/**
- * Runtime id → the logo its badge wears, the same files the login journey and the landing demo
- * use (`src/app/(auth)/auth-shell.tsx › WEB_LOGIN_IMAGES`; Codex is OpenAI's, so it takes the
- * ChatGPT mark). Staging-only: in the product this comes off the runtime registry beside
- * `RuntimeDescriptor.label`, which carries no logo yet (PORTING.md).
- */
-const RUNTIME_LOGOS: Record<string, string> = {
-  claude: "/img/onboarding/claude-logo.svg",
-  codex: "/img/onboarding/chatgpt-logo.svg",
-};
-
-/**
- * The owner's photo plus the runtime badge, from the staged roster
- * (`ui-staging/staging-stubs.ts › STAGING_PEOPLE`) and {@link STAGING_RUNTIMES}. An author the
- * roster cannot name keeps a face with no photo — the same shape as a member with no avatar, and
- * never a stand-in for someone else.
- */
-/**
- * MOCK LIVE STATE, item 2b: how many agents are running from a row, when it was last used, and
- * who else in the channel can wear a shared one. Allowed on the staged card as mock data (ask
- * §2b checklist 2); final inclusion is Samuel's pick, so nothing is wired to a real read.
- *
- * ⚠ `lastUsed` is a LITERAL LABEL, not a timestamp, on purpose: the staged clock is fixed
- * (`ui-staging/staging-stubs.ts`) and a relative label computed against the real clock renders
- * differently on the server and the client. In the product it is `updatedAt` through a relative
- * formatter, client-side.
- */
-const CARD_STATE: Record<string, { running: number; lastUsed: string | null }> = {
-  "id-release": { running: 1, lastUsed: "40m ago" },
-  "id-postmortem": { running: 0, lastUsed: "3d ago" },
-  "id-sql": { running: 2, lastUsed: "15m ago" },
-  "id-coder": { running: 1, lastUsed: "5m ago" },
-  "id-researcher": { running: 0, lastUsed: "2d ago" },
-  "id-recruiter": { running: 0, lastUsed: "9d ago" },
-  "id-critic": { running: 0, lastUsed: "1h ago" },
-  "id-flake": { running: 1, lastUsed: "3m ago" },
-  "id-writer": { running: 0, lastUsed: null },
-  "id-chief": { running: 0, lastUsed: "20m ago" },
-};
-
-/** Who can wear a shared row: the channel's people, the author first. Mock, like {@link CARD_STATE}. */
-const WORN_BY: Record<string, ReadonlyArray<string>> = {
-  "id-release": [GRACE.userId, STAGING_USER_ID, ANTHONY.userId],
-  "id-postmortem": [STAGING_USER_ID, GRACE.userId],
-  "id-sql": [ANTHONY.userId, STAGING_USER_ID],
-  "id-critic": [GRACE.userId, STAGING_USER_ID],
-  "id-flake": [STAGING_USER_ID, ANTHONY.userId],
-};
-
-export function identityCardStats(identity: AgentIdentity): IdentityCardStats {
-  const state = CARD_STATE[identity.id] ?? { running: 0, lastUsed: null };
-  const wornBy = (WORN_BY[identity.id] ?? []).flatMap((userId) => {
-    const person = STAGING_PEOPLE.find((p) => p.userId === userId);
-    return person
-      ? [
-          {
-            userId: person.userId,
-            displayName: person.displayName ?? person.email ?? "Member",
-            avatarUrl: person.avatarUrl ?? null,
-          },
-        ]
-      : [];
-  });
-  return { ...state, wornBy };
-}
-
-export function identityCardFace(identity: AgentIdentity): IdentityCardFace {
-  const owner = STAGING_PEOPLE.find((p) => p.userId === identity.createdBy);
-  const runtime = identity.runtime;
-  return {
-    photo: owner?.avatarUrl ?? null,
-    runtimeLogo: runtime ? RUNTIME_LOGOS[runtime] ?? null : null,
-    runtimeLabel:
-      STAGING_RUNTIMES.find((r) => r.id === runtime)?.label ?? runtime ?? null,
-  };
-}
