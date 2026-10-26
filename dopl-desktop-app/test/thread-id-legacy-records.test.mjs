@@ -50,11 +50,11 @@ test("a key that does not start with the record's channel or end with its agent 
   assert.equal(records[wrongAgent].threadId, "");
 });
 
-test("a thread id containing a colon survives, and the durable whitelist applies the same rule", () => {
+test("a thread id containing a colon survives, and a re-save writes it down without `taskId`", () => {
   const key = `${CHANNEL}:thread:with:colons:a1b2c3d4`;
-  const doc = { sessionRecords: {} };
+  const doc = { sessionRecords: { [key]: legacy(key) } };
   const store = loadStore(doc);
-  store.saveRecord(legacy(key));
+  store.saveRecord(store.loadRecords()[key]);
   assert.equal(doc.sessionRecords[key].threadId, "thread:with:colons");
   assert.equal("taskId" in doc.sessionRecords[key], false, "the retired field is not carried forward");
 });

@@ -71,7 +71,7 @@ function durableSessionRecord(rec) {
     key: r.key,
     sessionId: r.sessionId,
     channelId: r.channelId,
-    threadId: recordThreadId(r.key, r),
+    threadId: r.threadId || '',
     workspaceId: r.workspaceId,
     side: r.side,
     profile: r.profile,
