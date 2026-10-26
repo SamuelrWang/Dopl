@@ -47,6 +47,13 @@ export {
   ChannelAgentHandleAmbiguousError,
   ChannelRecipientUnresolvedError,
 } from "./errors-recipient";
+export {
+  SubtaskNotFoundError,
+  TaskActorUnresolvedError,
+  TaskLimitError,
+  TaskLinkUnresolvedError,
+  TaskNotFoundError,
+} from "./errors-tasks";
 
 /** Would leave the channel with no owner — transfer ownership first. */
 export class ChannelLastOwnerError extends ChannelError {

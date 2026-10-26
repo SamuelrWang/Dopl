@@ -40,6 +40,11 @@ import {
   ThreadForbiddenError,
   ThreadNotFoundError,
   ThreadSelfTargetError,
+  SubtaskNotFoundError,
+  TaskActorUnresolvedError,
+  TaskLimitError,
+  TaskLinkUnresolvedError,
+  TaskNotFoundError,
 } from "./errors";
 
 /** Maps channel domain errors to `HttpError`; `null` for anything else, so the shared tail
@@ -200,6 +205,21 @@ function mapChannelError(err: unknown): HttpError | null {
   // probeable across rooms.
   if (err instanceof ArtifactNotFoundError) {
     return new HttpError(404, "ARTIFACT_NOT_FOUND", err.message);
+  }
+  if (err instanceof TaskNotFoundError) {
+    return new HttpError(404, "TASK_NOT_FOUND", err.message);
+  }
+  if (err instanceof SubtaskNotFoundError) {
+    return new HttpError(404, "SUBTASK_NOT_FOUND", err.message);
+  }
+  if (err instanceof TaskActorUnresolvedError) {
+    return new HttpError(400, "TASK_ACTOR_UNRESOLVED", err.message);
+  }
+  if (err instanceof TaskLinkUnresolvedError) {
+    return new HttpError(400, "TASK_LINK_UNRESOLVED", err.message);
+  }
+  if (err instanceof TaskLimitError) {
+    return new HttpError(409, "TASK_LIMIT_REACHED", err.message);
   }
   if (err instanceof ChannelCursorUndecodableError) {
     return new HttpError(400, "CHANNEL_CURSOR_UNDECODABLE", err.message);

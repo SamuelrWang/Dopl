@@ -178,6 +178,16 @@ export const CHANNEL_THREAD_LIST_LIMIT = 200;
 export const CHANNEL_ARTIFACT_LIST_LIMIT = 50;
 
 /**
+ * Channel task ceilings (`service-tasks*.ts`). A list page at the ceiling is clipped (INVARIANTS
+ * §9). The subtask and assignee caps bound a task's embedded children, which ride every list row.
+ */
+export const CHANNEL_TASK_LIST_LIMIT = 100;
+export const CHANNEL_TASK_SUBTASK_MAX = 50;
+export const CHANNEL_TASK_ASSIGNEE_MAX = 20;
+/** Notes on a detail read, newest kept; older ones are reported as truncated. */
+export const CHANNEL_TASK_NOTE_READ_LIMIT = 200;
+
+/**
  * Ceiling on ONE channel's mentions-of-me page (`service-mentions.ts ›
  * listMyChannelMentions`). Mentions never leave the inbox — it is a record, not a
  * to-do pile — so the read needs a bound (INVARIANTS §9) and AT the ceiling counts as
