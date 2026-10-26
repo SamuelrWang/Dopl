@@ -1,7 +1,7 @@
 /**
  * Seed changelog rows (`@/features/revisions/types › Revision`) so the History
  * section and the Changelog face open on a realistic, day-grouped timeline. New
- * rows are appended live by the staging store as the board is edited.
+ * rows are appended live by the staging server as the board is edited.
  */
 
 import type { Revision, RevisionActor, RevisionOp, RevisionPayload } from "@/features/revisions/types";
