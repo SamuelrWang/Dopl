@@ -21,7 +21,7 @@ import { cn } from "@/shared/lib/utils";
 // ITEM 7: the staging copy, whose default face is `bare` — label + chevron, no pill (Samuel:
 // *"For dropdowns, it should just be the arrow. We don't need the whole pill around it"*). The
 // kit's `flat` face, which this wore, is also the banned `--bg-inset` grey.
-import { SelectMenu, type SelectMenuOption } from "./select-menu";
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import {
   STAGING_CHANNELS,
   type ChannelScope,
@@ -60,6 +60,7 @@ export function IdentityPageHead({
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 px-1">
       <SelectMenu
+        variant="bare"
         value={scope}
         options={options}
         onChange={onScope}

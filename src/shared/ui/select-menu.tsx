@@ -22,8 +22,21 @@ export interface SelectMenuOption<T extends string> {
   description?: string;
 }
 
+/**
+ * No chrome at all: the value in ink and a muted chevron, the identity look's settings-card
+ * dropdown (DESIGN-LANGUAGE §4). The chevron is the only hint of a menu and the hover is ink only,
+ * since any fill here is the pill coming back. Exported for a clickable VALUE that is not a menu
+ * (the working folder), so the two read as one vocabulary.
+ */
+export const BARE_TRIGGER_FACE = cn(
+  "px-0 py-0 text-caption font-medium text-text-primary",
+  "transition-colors hover:text-text-secondary disabled:hover:text-text-primary",
+  "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary"
+);
+
 /** Trigger faces, whole: alternatives, not layers. */
 const TRIGGER_FACE = {
+  bare: BARE_TRIGGER_FACE,
   flat: cn(
     "border border-border-strong bg-bg-inset px-2.5 py-1 text-caption font-medium text-text-secondary",
     "transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
@@ -44,6 +57,11 @@ const TRIGGER_FACE = {
     "transition-colors hover:bg-menu-item-hover-bg disabled:hover:bg-transparent"
   ),
 } as const;
+
+/** `bare`'s chevron is the affordance, so it is not the ink. */
+const CHEVRON_FACE: Partial<Record<keyof typeof TRIGGER_FACE, string>> = {
+  bare: "text-text-muted",
+};
 
 export function SelectMenu<T extends string>({
   value,
@@ -107,10 +125,10 @@ export function SelectMenu<T extends string>({
       >
         {icon}
         {prefix && <span className="shrink-0 text-text-muted">{prefix}</span>}
-        <span className="min-w-0 truncate text-text-primary">
+        <span className={cn("min-w-0 truncate", variant !== "bare" && "text-text-primary")}>
           {selected?.label ?? value}
         </span>
-        <ChevronDown size={11} className="shrink-0" />
+        <ChevronDown size={11} className={cn("shrink-0", CHEVRON_FACE[variant])} />
       </button>
       <Popover
         open={anchor !== null}

@@ -54,7 +54,7 @@ import { IdentityPanel } from "../agent-identities/components/identity-section";
 import { agoLabel } from "../view/identity-view-mocks";
 import { STAGING_PEOPLE } from "@/features/ui-staging/staging-stubs";
 import { identityCardFace, STAGING_USER_ID } from "../data";
-import { SelectMenu } from "./select-menu";
+import { SelectMenu } from "@/shared/ui/select-menu";
 import { AGENT_STATE_WORD, type ActiveRun, type AgentState, type FeedRow } from "./identity-page-data";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
 
@@ -112,6 +112,7 @@ export function IdentityActivityPanel({
       action={
         ownerOptions.length > 1 ? (
           <SelectMenu
+            variant="bare"
             value={owner}
             options={ownerOptions}
             onChange={setOwner}

@@ -12,10 +12,9 @@ import { SelectMenu } from "./select-menu";
  * ⚠ THE UNDERLINE AND THE BOLD ARE PINNED ABSENT NOW, AND THE OLD CASE ASSERTED
  * THE UNDERLINE PRESENT (Samuel, 2026-09-10, over the Agent Settings block:
  * "unbold these things … also remove the underline"). That is a SUPERSESSION, not
- * a loosened test: the row NAME (`settings-agent-rows.tsx › SettingRow`) and the
- * Working Folder path went on the same clock, and `settings-tab.test.tsx` pins
- * those two. The chevron assertion is what carries the weight now — with no
- * underline it is the ONLY hint that the label opens a menu.
+ * a loosened test. The chevron assertion is what carries the weight now — with no
+ * underline it is the ONLY hint that the label opens a menu. The channel Settings rows
+ * wear `bare` since 2026-10-26 (the identity look); `text` stays for the other panes.
  */
 /** Whole-class-token match — kept even though `decoration-*` is gone: `border`
  *  must never hit a `*-border-*` token in some later face. */
@@ -81,5 +80,32 @@ describe("SelectMenu › text face", () => {
     // ⚠ `font-medium` MOVED OFF THE SHARED BASE onto each pill face (2026-09-10) so
     // `text` could be regular; this pins the move did not silently unbold the pills.
     expect(hasClass(trigger, "font-medium")).toBe(true);
+  });
+});
+
+/** The identity look's settings-card value (2026-10-26): the value and a muted chevron, no pill,
+ *  and an ink-only hover — any fill is the pill coming back. */
+describe("SelectMenu › bare face", () => {
+  afterEach(cleanup);
+
+  it("is the value and a muted chevron, with no border, fill or fill on hover", () => {
+    render(
+      <SelectMenu value="a" options={OPTIONS} onChange={() => {}} ariaLabel="Pick" variant="bare" />
+    );
+    const trigger = screen.getByRole("button", { name: "Pick" });
+    expect(hasClass(trigger, "border")).toBe(false);
+    expect(hasPrefix(trigger, "bg-")).toBe(false);
+    expect(hasPrefix(trigger, "hover:bg-")).toBe(false);
+    expect(hasClass(trigger, "text-caption")).toBe(true);
+    expect(hasClass(trigger, "hover:text-text-secondary")).toBe(true);
+    expect(trigger.querySelector("svg")?.getAttribute("class")).toContain("text-text-muted");
+  });
+
+  it("keeps a focus mark, since it has no box of its own", () => {
+    render(
+      <SelectMenu value="a" options={OPTIONS} onChange={() => {}} ariaLabel="Pick" variant="bare" />
+    );
+    const trigger = screen.getByRole("button", { name: "Pick" });
+    expect(hasPrefix(trigger, "focus-visible:outline")).toBe(true);
   });
 });
