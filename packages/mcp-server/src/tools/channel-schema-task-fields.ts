@@ -4,6 +4,11 @@
  */
 
 import { z } from "zod";
+import type { SubtaskState, TaskStatus } from "@dopl/client";
+
+/** The route's sets, pinned to `schema-tasks.ts` by `channel-task-contract-pins.test.ts`. */
+export const TASK_STATUSES = ["open", "in_progress", "resolved"] as const satisfies readonly TaskStatus[];
+export const SUBTASK_STATES = ["todo", "in_progress", "done"] as const satisfies readonly SubtaskState[];
 
 export const TASK_INPUT_FIELDS = {
   // No `.uuid()`: zod publishes it as a `pattern`, which `tool-style.test.ts` refuses.
@@ -16,9 +21,9 @@ export const TASK_INPUT_FIELDS = {
 
   title: z.string().trim().min(1).max(200).optional().describe('op="task": the task or subtask title.'),
 
-  status: z.enum(["open", "in_progress", "resolved"]).optional().describe('op="task" action="set_status" (required).'),
+  status: z.enum(TASK_STATUSES).optional().describe('op="task" action="set_status" (required).'),
 
-  state: z.enum(["todo", "in_progress", "done"]).optional().describe('op="task" action="update_subtask".'),
+  state: z.enum(SUBTASK_STATES).optional().describe('op="task" action="update_subtask".'),
 
   due: z.string().optional().describe('op="task": ISO date-time with offset; "" clears it.'),
 

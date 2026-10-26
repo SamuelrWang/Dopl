@@ -8,6 +8,7 @@ import type {
   TaskLink,
   TaskStatus,
 } from "../types";
+import { subtaskFacts } from "../lib/task-model";
 
 export type ChannelTaskRow = {
   id: string;
@@ -29,7 +30,7 @@ export type ChannelTaskRow = {
   updated_at: string;
 };
 
-export type TaskAssigneeRow = {
+type TaskAssigneeRow = {
   id: string;
   task_id: string;
   user_id: string;
@@ -76,14 +77,12 @@ export const TASK_READ_COLS =
   "linked_thread:channel_threads!channel_tasks_linked_thread_id_fkey(title), " +
   "linked_message:channel_messages!channel_tasks_linked_message_id_fkey(seq)";
 
-export function actorOf(userId: string, agentId: string | null): TaskActor;
-export function actorOf(userId: string | null, agentId: string | null): TaskActor | null;
-export function actorOf(userId: string | null, agentId: string | null): TaskActor | null {
+function actorOf(userId: string, agentId: string | null): TaskActor;
+function actorOf(userId: string | null, agentId: string | null): TaskActor | null;
+function actorOf(userId: string | null, agentId: string | null): TaskActor | null {
   if (userId === null) return null;
   return agentId === null ? { kind: "person", userId } : { kind: "agent", userId, agentId };
 }
-
-const actorKey = (a: TaskActor) => (a.kind === "agent" ? `a:${a.agentId}` : `p:${a.userId}`);
 
 function byPosition(a: TaskSubtaskRow, b: TaskSubtaskRow): number {
   return a.position - b.position || a.created_at.localeCompare(b.created_at);
@@ -112,19 +111,6 @@ function linkOf(row: ChannelTaskReadRow): TaskLink | null {
   return null;
 }
 
-function activeOf(subtasks: readonly ChannelTaskSubtask[]): TaskActor[] {
-  const seen = new Set<string>();
-  const out: TaskActor[] = [];
-  for (const s of subtasks) {
-    if (s.state !== "in_progress" || s.owner === null) continue;
-    const key = actorKey(s.owner);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(s.owner);
-  }
-  return out;
-}
-
 function mapTaskWith(row: ChannelTaskReadRow, subtasks: ChannelTaskSubtask[]): ChannelTask {
   const assignees = [...(row.channel_task_assignees ?? [])]
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -140,11 +126,7 @@ function mapTaskWith(row: ChannelTaskReadRow, subtasks: ChannelTaskSubtask[]): C
     assignees,
     link: linkOf(row),
     dueAt: row.due_at,
-    progress:
-      subtasks.length === 0
-        ? null
-        : { done: subtasks.filter((s) => s.state === "done").length, total: subtasks.length },
-    active: activeOf(subtasks),
+    ...subtaskFacts(subtasks),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,

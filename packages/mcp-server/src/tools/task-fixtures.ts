@@ -9,7 +9,7 @@ export const SUBTASK_ID = "5b000000-0000-4000-8000-0000000000b1";
 export const SAM = "11111111-0000-4000-8000-000000000001";
 export const ANA = "22222222-0000-4000-8000-000000000002";
 
-export const MEMBERS = [
+const MEMBERS = [
   { channelId: CHANNEL.id, userId: SAM, role: "owner", displayName: "Samuel Wang", email: "sam@example.com" },
   { channelId: CHANNEL.id, userId: ANA, role: "member", displayName: "Ana", email: "ana@example.com" },
 ];

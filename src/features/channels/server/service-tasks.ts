@@ -70,7 +70,7 @@ async function resolveLink(
 }
 
 /** Idempotent on `clientMsgId`, author-scoped: a retry returns the caller's first task as it is now. */
-export async function createTask(
+async function createTask(
   ctx: ChannelContext,
   ref: string,
   input: TaskActionOf<"create">
@@ -115,7 +115,7 @@ export async function createTask(
   return taskResult(channel.id, taskId);
 }
 
-export async function updateTask(
+async function updateTask(
   ctx: ChannelContext,
   ref: string,
   input: TaskActionOf<"update">
@@ -131,7 +131,7 @@ export async function updateTask(
 }
 
 /** The one status write (R5). Resolving stamps who and when; any other status clears both. */
-export async function setTaskStatus(
+async function setTaskStatus(
   ctx: ChannelContext,
   ref: string,
   input: TaskActionOf<"set_status">

@@ -13,8 +13,8 @@ import { err, type ToolResponse } from "./respond";
 
 const PLAIN_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-/** `src/features/channels/constants.ts › CHANNEL_TASK_ASSIGNEE_MAX`. */
-const TASK_ASSIGNEE_MAX = 20;
+/** `src/features/channels/constants.ts › CHANNEL_TASK_ASSIGNEE_MAX`, pinned by `channel-task-contract-pins.test.ts`. */
+export const TASK_ASSIGNEE_MAX = 20;
 
 const UNCHANGED = "Nothing was changed — field=to";
 
