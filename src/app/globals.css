@@ -526,7 +526,7 @@ html {
 }
 .auth-btn-3d:hover:not(:disabled) {
   filter: brightness(1.1);
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   /* The ambient pair is `--shadow-raised-hover`, shared with the agent badge; the two insets
      are this gradient's bevel. */
   box-shadow:
@@ -555,7 +555,7 @@ html {
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 .auth-btn-3d-light:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   filter: brightness(0.99);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -606,7 +606,7 @@ html {
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 .btn-light:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 3px 7px rgba(0, 0, 0, 0.08);
@@ -658,13 +658,13 @@ html {
   box-shadow: var(--shadow-bento);
 }
 
-/* The card hover lift, shared with `knowledge-v2.module.css › .card:hover`. A kit class, not
+/* The card hover lift, worn by the identity and knowledge cards. A kit class, not
    Tailwind arbitraries: a class string built by template interpolation is never emitted. */
 .card-lift {
   transition: transform 0.14s ease-out, box-shadow 0.14s ease-out;
 }
 .card-lift:hover {
-  transform: translateY(-3px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow: var(--shadow-card-lift);
 }
 
@@ -800,11 +800,11 @@ html {
 }
 .raise:hover,
 .raise-pill:hover {
-  transform: translateY(-2px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow: var(--shadow-raise-hover);
 }
 .raise-ink:hover {
-  transform: translateY(-2px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow: var(--shadow-raise-ink-hover);
 }
 /* A pill holding a field stays put while it is typed in. */
@@ -819,6 +819,36 @@ html {
   .raise-ink:hover {
     transform: none;
   }
+}
+
+/* THE LIFT'S STILL HIT BOX. A hover transform moves the hit box with the face, so a cursor on the
+   bottom `--lift` px falls off, the hover ends, the face drops back under it and hovers again: the
+   hand/arrow cursor flicker. While hovered, a transparent band below the face fills the strip the
+   lift vacated (`+ 1px` is the bottom border, outside the padding box `top: 100%` measures). Each
+   recipe's hover transform reads the same `--lift`. */
+.auth-btn-3d,
+.auth-btn-3d-light,
+.btn-light {
+  --lift: 1px;
+}
+.raise,
+.raise-pill,
+.raise-ink {
+  --lift: 2px;
+}
+.card-lift {
+  --lift: 3px;
+}
+:where(.auth-btn-3d, .auth-btn-3d-light, .btn-light, .card-lift, .raise, .raise-pill, .raise-ink) {
+  position: relative;
+}
+:where(.auth-btn-3d, .auth-btn-3d-light, .btn-light, .card-lift, .raise, .raise-pill, .raise-ink):hover:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--lift) + 1px);
 }
 
 /* THE STATUS PILL: an optional dot and one word. `data-tone` picks the ink. */

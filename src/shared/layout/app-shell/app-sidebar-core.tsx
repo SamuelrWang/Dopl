@@ -125,7 +125,7 @@ export function AppSidebarCore({
         </div>
         <button
           type="button"
-          className={styles.upgradeBtn}
+          className={cn("auth-btn-3d", styles.upgradeBtn)}
           onClick={() => onOpenSettings("billing")}
         >
           Upgrade to Team

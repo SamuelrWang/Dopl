@@ -69,7 +69,7 @@ export function BaseCard({
   const scope = kbScope(base);
   return (
     <article
-      className={cn(styles.card, SCOPE_CLASS[scope])}
+      className={cn("card-lift", styles.card, SCOPE_CLASS[scope])}
       aria-label={base.name}
       /* ⚠ The card's hand cursor, and the ONLY thing that carries it — read by the base
          layer's one clickable-cursor rule (`globals.css › ANYTHING CLICKABLE SHOWS THE
