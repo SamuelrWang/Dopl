@@ -99,7 +99,7 @@ export function StagingTopBar({
         </span>
       </div>
       {/* `uis-top-trail` makes this `home-header.tsx`'s positioned action group: the search
-          popup is floored at pill-left to Profile-right. */}
+          popup spans pill-left to Profile-right. */}
       <div className="lp-demo-top-trail uis-top-trail">
         <StagingSearch userId={viewer.userId} />
         {onProfile ? (

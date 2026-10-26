@@ -56,11 +56,12 @@ export interface SearchPopupProps {
 }
 
 /**
- * The card fits its rows, floored at the field it hangs from and capped so a long snippet
- * truncates instead of widening it. The floor is the sidebar field's 260px pill plus the
- * body's padding; /home's header raises it to its whole action group (`header-search.tsx`).
+ * The card's width belongs to the field it hangs from, never to its content (Samuel,
+ * 2026-10-26: "only change the way stuff looks inside not the dimensions of it"). The DEFAULT
+ * is the sidebar field's 260px pill plus the body's padding; /home's header passes
+ * `left-0 w-auto` to span its action group, pill-left to Profile-right (`header-search.tsx`).
  */
-export const SEARCH_CARD_W = "w-max min-w-[280px] max-w-[min(440px,calc(100vw-2rem))]";
+export const SEARCH_CARD_W = "w-[280px] max-w-[calc(100vw-2rem)]";
 
 /**
  * Each section is about five rows tall and scrolls itself. Applied to the LIST, not the

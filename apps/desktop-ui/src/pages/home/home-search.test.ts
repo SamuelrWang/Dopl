@@ -76,13 +76,12 @@ describe("🔒 /home's pill", () => {
 });
 
 /**
- * 🔒 THE POPUP STARTS AT PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29). Anchored, not
- * measured: the card is the pill's SIBLING, right-aligned on the header's positioned action
- * group (first child the pill, last Profile) and floored at its width; longer rows widen it
- * leftward up to the card's cap.
+ * 🔒 THE POPUP SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29; kept 2026-10-26). Anchored,
+ * not measured: the card is the pill's SIBLING and fills the header's positioned action group,
+ * whose first child is the pill and last is Profile.
  */
 describe("🔒 the popup is anchored on the header's action group", () => {
-  it("header-search renders the popup OUTSIDE the pill, floored at the group", () => {
+  it("header-search renders the popup OUTSIDE the pill, spanning the group", () => {
     const src = read("src/features/search/components/header-search.tsx");
     const pill = src.indexOf("<label className={SEARCH_PILL}>");
     const close = src.indexOf("</label>");
@@ -90,7 +89,15 @@ describe("🔒 the popup is anchored on the header's action group", () => {
     expect(pill).toBeGreaterThan(-1);
     expect(close).toBeGreaterThan(pill);
     expect(popup).toBeGreaterThan(close);
-    expect(src).toMatch(/className="min-w-full"/);
+    expect(src).toMatch(/className="left-0 w-auto"/);
+  });
+
+  /** 🔒 Samuel, 2026-10-26: the overhaul changes the inside, "not the dimensions of it". */
+  it("the card's width is the anchor's, never its content's", () => {
+    const popup = read("src/features/search/components/search-popup.tsx");
+    const width = popup.match(/export const SEARCH_CARD_W = "([^"]+)"/)?.[1];
+    expect(width).toBe("w-[280px] max-w-[calc(100vw-2rem)]");
+    expect(popup).not.toMatch(/\bw-max\b|max-content|min-w-\[/);
   });
 
   it("the header's trail group is the positioned anchor, search first and Profile last", () => {

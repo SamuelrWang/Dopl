@@ -781,18 +781,19 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   (`channels/components/sidebar-search.tsx`). Composed from kit + primitives only: no new recipe.
   - **CARD**: `.white-card` + `shadow-[var(--shadow-card-lift)]` (the floating white card, as the
     ontology staging hover card), `overflow-hidden`, open exactly while the field has focus.
-  - 🔒 **ON /home IT STARTS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29:**
+  - 🔒 **ON /home IT SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29:**
     *"have it start at the same place that the search bar starts. so it's aligned
     flush. and have it extend on the right, so that it is flush with the end of the
-    profile button"*). The card is `absolute top-full right-0 mt-2`; `HeaderSearch` renders it
-    as a SIBLING of the pill and passes `min-w-full`, so its floor is the header's `relative`
-    trail group (`pages/home/home-frame.tsx › HomeHeaderRow`; the playground's `.uis-top-trail`),
+    profile button"*). The card is `absolute top-full mt-2`; `HeaderSearch` renders it as a
+    SIBLING of the pill and passes `left-0 w-auto`, so it fills the header's `relative` trail
+    group (`pages/home/home-frame.tsx › HomeHeaderRow`; the playground's `.uis-top-trail`),
     whose first child is the pill and last is Profile.
-  - **WIDTH FITS THE CONTENT (Samuel, 2026-10-26, the popup-width ruling):** `search-popup.tsx ›
-    SEARCH_CARD_W` is `w-max`, floored at 280px (the sidebar's 260px pill plus the body's padding;
-    /home raises the floor to its group) and capped at `min(440px, 100vw - 2rem)`, so a long
-    snippet truncates rather than widening the card. Right-anchored on /home, it grows leftward;
-    the sidebar pins it left (`!right-auto left-3`) and it grows into the page.
+  - 🔒 **THE DIMENSIONS ARE THE ANCHOR'S, NOT THE CONTENT'S (Samuel, 2026-10-26, over the
+    overhauled card:** *"I want the new to only change the way stuff looks inside not the
+    dimensions of it"*). `search-popup.tsx › SEARCH_CARD_W` is `w-[280px]` (the sidebar's 260px
+    pill plus the body's padding, pinned left there by `!right-auto left-3`); /home overrides it
+    with `left-0 w-auto` above. No content-fit growth; pinned by
+    `apps/desktop-ui/src/pages/home/home-search.test.ts`.
   - 🔒 **EACH SECTION IS A FIXED HEIGHT AND SCROLLS ITSELF (Samuel, 2026-09-17:**
     *"each section is a fixed height, and if there's more items in it, it's
     scrollable."*) — `search-popup.tsx › SEARCH_SECTION_MAX_H` (`max-h-[160px]`) +
