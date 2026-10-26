@@ -97,7 +97,7 @@ the wallet. The ruling: **both surfaces answer "what came out of MY personal wal
 | Surface | Source | Reads |
 |---|---|---|
 | Settings › Plans & billing | the WALLET counter | `GET /api/billing/status` → `credits.used` (`src/features/billing/server/status-service.ts`) |
-| /home Overview capacity bar | the SAME wallet counter | `credits.credits.used` off the same endpoint (`apps/desktop-ui/src/pages/home/overview-sections.tsx › CreditCapacityBar`) |
+| /home Overview capacity bar | the SAME wallet counter | `credits.credits.used` off the same endpoint (`src/features/home/components/overview/overview-credits.tsx › CreditsCard`) |
 | /home Overview credit plot, by-channel + by-person rails | the LEDGER, narrowed to that wallet's rows | `src/features/home/server/overview-tally.ts › isPersonalWalletBurn`, pushed into the read by `src/features/home/server/repository-overview.ts › scanCreditEvents` |
 | A standard workspace's Overview | that workspace's SEAT-wallet counters | `GET /api/billing/status` → `credits` for that workspace (`apps/desktop-ui/src/pages/overview/period-stats.tsx`), i.e. the CALLER'S OWN seat counter. ⚠ **VERIFIED 2026-09-13: it sums no ledger at all** — `workspaces/server/service-overview.ts` has no credit read and its series has no `credits` metric, so there is nothing here that can disagree with a wallet. A `seat` row is on no /home figure. |
 
@@ -182,7 +182,7 @@ network blip, the next column added ahead of its migration) reproduces it.
 | Half | Where | What |
 |---|---|---|
 | The atomic write | `supabase/migrations/20261004120000_credit_consume_with_ledger.sql` | `consume_user_credits` / `consume_member_credits` DROPped and re-created with `p_origin_workspace_id`, `p_caller_user_id`, `p_channel_id`; each `INSERT`s `credit_usage_events` itself, inside the branch its CAS proved moved the counter. Refused ⇒ no row. Insert fails ⇒ counter rolls back, RPC throws, the route's existing fail-open handles it. CAS/allowance semantics byte-for-byte `20260930120000` §3. |
-| The guard | `billing/server/credits-audit.ts › walletMatchesLedger(payer, wallet, period)` → `{ counter, ledgerSum, drift }` | Over `credit_ledger_sum` (that migration §4 — an RPC because PostgREST cannot aggregate, and a capped haul is a FLOOR that cannot measure a difference). Published as `GET /api/billing/status › credits.ledgerDrift`; rendered as one muted `Unreconciled` on `pages/home/overview-sections.tsx › CreditCapacityBar`, and NOTHING when 0. |
+| The guard | `billing/server/credits-audit.ts › walletMatchesLedger(payer, wallet, period)` → `{ counter, ledgerSum, drift }` | Over `credit_ledger_sum` (that migration §4 — an RPC because PostgREST cannot aggregate, and a capped haul is a FLOOR that cannot measure a difference). Published as `GET /api/billing/status › credits.ledgerDrift`; rendered as one muted `Unreconciled` on `home/components/overview/overview-credits.tsx › CreditsCard`, and NOTHING when 0. |
 
 ⚠ **`DROP` + bare `CREATE`, never `CREATE OR REPLACE`**: the argument list changed,
 so `OR REPLACE` leaves the four-argument function standing as an OVERLOAD — a second
@@ -339,7 +339,7 @@ Only `allowed === false` refuses (keep). Rebuild BOTH `packages/*/dist` (committ
 - Usage pane: meter label `Your credits` (seat) / `Personal credits` (personal); sub-line
   `Resets {date}`; Members line unchanged. **Minimal UI copy ruling: label + control, no explainer
   paragraphs** — delete the existing two-sentence intro under "Usage this period".
-- Desktop Home credit bar (`apps/desktop-ui/src/pages/home/overview-sections.tsx`): denominator
+- Desktop Home Credits card (`src/features/home/components/overview/overview-credits.tsx › creditAllowance`): denominator
   falls back to `PERSONAL_MONTHLY_CREDITS`, never a workspace plan figure.
 
 ## 8. Tests & gates (definition of green — INVARIANTS §14)

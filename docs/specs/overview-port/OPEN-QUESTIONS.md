@@ -11,7 +11,8 @@ Each: the question, what was chosen, where.
    Devices in the main column, Credits + Tokens in the side; the columns are Credits + gap + Tokens
    tall (462px) and still end on one line. Where: `overview.module.css › .root` (`--ove-cols-h`).
 3. **Devices poll on a cold face.** The devices hook refreshes presence every 30s; every other
-   Overview read is cold. Chose: reuse the hook as is (one implementation), noted in INVARIANTS.
+   Overview read is cold. Chose (review): `useConnectedDevices({ live: false })` from the Overview,
+   so the face stays cold and presence is as of the read; Settings › Devices keeps the refresh.
 4. **Add device.** Staging's inline kind picker + pairing code had no product flow beyond glasses.
    Chose: the button opens Settings › Devices, where pairing lives. Where: `home-overview.tsx`.
 5. **Token honesty line.** The old panel carried a sentence ("At least this many: reported spend is
@@ -34,3 +35,22 @@ Each: the question, what was chosen, where.
 11. **Copy the old rulings removed.** Staging titles the card "Credits" and says "of N used", words
     the 2026-09-13 ruling had dropped; "Get more credits" is a card pill, not the 36px page button.
     Chose: staging (the newer design). INVARIANTS updated.
+
+## For Samuel (review, 2026-10-26): reversals of earlier rulings the staging look brings
+
+Not changed; listed so each can be confirmed or sent back.
+
+- **Per-day readability vs `BarSeries`** (his 2026-09-08 reference chart: a labelled Y axis, a
+  slanted date caption on every bin, ink axes). The staging bars have none. Shipped: each bar
+  carries a hover title and an accessible name ("Sep 3 · 120 credits", "Oct 25 · 1.2M tokens");
+  the axis and captions are his call.
+- **The stat tiles return** as the summary strip (Need you, Devices online, Credits left); the row
+  of stat tiles was cut on 2026-09-01.
+- **Token spend no longer folds away** when nothing was spent: the Tokens card is a fixed slot that
+  says "No agent has spent tokens".
+- **Month and scope controls 14px → 13px**: the 2026-09-13 ruling put them on the 14px
+  `IDENTITY_NAME_TEXT` face; the staging card sets them at caption size.
+- **"Messages by channel" ranking is gone**: messages are a column of the Channels table, which is
+  ordered by credits.
+- **People shows a role tag for every role** (owner, member, guest); the old rail marked guests
+  only (the guest subtotal is kept).
