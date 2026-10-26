@@ -3,10 +3,11 @@ import { cn } from "@/shared/lib/utils";
 import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { SearchItem } from "@/features/search/contracts";
+import { HeaderSearch } from "@/features/search/components/header-search";
+import { apiSearchFetcher } from "@/features/search/search-client";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
 import { HomeHeaderRow } from "./home-frame";
 import { HomeSettingsControl, type HomeViewer } from "./home-settings-control";
-import { HomeSearch } from "./home-search";
 import { HOME_TABS, type HomeTab } from "./home-tabs";
 
 const NEW_CHANNEL_BTN = cn(PAGE_ACTION_BTN, "gap-1.5 pl-3");
@@ -56,10 +57,11 @@ export function HomeHeader({
       }
       trail={
         <>
-          <HomeSearch
+          <HeaderSearch
             query={query}
             onQueryChange={onQueryChange}
             onNavigate={onSearchNavigate}
+            fetcher={apiSearchFetcher}
             userId={identity.userId}
           />
           <HomeSettingsControl

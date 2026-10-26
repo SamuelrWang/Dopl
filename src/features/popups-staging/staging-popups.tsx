@@ -2,10 +2,9 @@
 
 import "./popups-staging.css";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Channel, ChannelMember } from "@/features/channels/types";
 import type { ChannelPendingLink } from "@/features/channels/types-list";
-import type { SearchItem } from "@/features/search/contracts";
 import { toast } from "@/shared/ui/toast";
 import {
   STAGING_HOME_WORKSPACE_ID,
@@ -16,7 +15,6 @@ import {
 } from "@/features/ui-staging/staging-stubs";
 import { STAGING_WORKSPACES } from "@/features/settings-staging/settings-mock-data";
 import { NewChannelDialog } from "./pages/home/new-channel-dialog";
-import { HomeSearch } from "./pages/home/home-search";
 import { PersonRosterActions, PersonRosterRowAction } from "./pages/home/person-roster-actions";
 import { LinkOutPanel } from "./pages/home/link-out-panel";
 import { RequestWorkspaceAccessDialog } from "./features/workspaces/components/request-workspace-access-dialog";
@@ -54,49 +52,6 @@ export function StagingNewChannelDialog({ open, onClose }: PopupProps) {
       }}
       onCreated={() => onClose()}
     />
-  );
-}
-
-/**
- * The search popup (`pages/home/home-search.tsx` → `features/search/components/search-popup.tsx`)
- * as the frame's top bar mounts it: the desktop's always-open field, swapped in for the demo's
- * search pill while open (`ui-staging/staging-top-bar.tsx`). It must render inside a POSITIONED
- * group whose last child is the Profile pill — `home-header.tsx`'s action group, which the top
- * bar's trail is — so the card spans pill-left to Profile-right. Focused on mount; a blur with
- * an empty query, Escape, or a picked result closes it. Fixture results (`search-fixtures.ts`),
- * no `/api/search`.
- */
-export function StagingSearchField({ onClose }: { onClose: () => void }) {
-  const [query, setQuery] = useState("");
-  // The query as of the latest keystroke: Escape clears and blurs in one tick, before a render.
-  const live = useRef("");
-  useEffect(() => {
-    const id = requestAnimationFrame(() => document.getElementById("home-search-field")?.focus());
-    return () => cancelAnimationFrame(id);
-  }, []);
-  return (
-    <div
-      className="contents"
-      onBlur={(e) => {
-        if (live.current || e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        onClose();
-      }}
-    >
-      <HomeSearch
-        query={query}
-        onQueryChange={(next) => {
-          live.current = next;
-          setQuery(next);
-        }}
-        onNavigate={(item: SearchItem) => {
-          toast({ title: `Staging: would open ${item.title}` });
-          live.current = "";
-          setQuery("");
-          onClose();
-        }}
-        userId={STAGING_USER_ID}
-      />
-    </div>
   );
 }
 

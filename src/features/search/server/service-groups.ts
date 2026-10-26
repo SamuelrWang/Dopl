@@ -13,7 +13,7 @@ import {
   highlightPattern,
   highlightTerms,
   queryMatcher,
-} from "./snippet";
+} from "../highlight";
 
 /**
  * Hit to item to group: the projection half of the search service, split from
@@ -191,7 +191,7 @@ export function assembleGroups(
 ): SearchGroup[] {
   const pattern = highlightPattern(highlightTerms(query));
   // (2026-09-29) Every group's rows are held to the words typed, whatever arm
-  // found them — see `snippet.ts › queryMatcher`.
+  // found them — see `highlight.ts › queryMatcher`.
   const matches = queryMatcher(query);
   const groups: SearchGroup[] = [];
   for (const kind of order) {

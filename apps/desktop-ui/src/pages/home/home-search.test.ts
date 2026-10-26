@@ -2,7 +2,7 @@
  * /home's search pill and the kit's expanding search, as SOURCE pins (jsdom loads no
  * stylesheet and lays nothing out).
  *
- * /home renders a fixed 260px white pill (`home-search.tsx`); the kit's `.search-expand` keeps a
+ * /home renders a fixed 260px white pill (`features/search/components/header-search.tsx`); the kit's `.search-expand` keeps a
  * closed and an open state for its other hosts (the channels sidebar), and its width belongs on
  * the state, not the box: a width on the box reserved the open width for a closed pill once.
  * Both kit copies, since the desktop renders `kit.css` (F-074).
@@ -65,7 +65,7 @@ describe("🔒 the search pill's width lives on `[data-open]`, not on the box", 
 });
 
 describe("🔒 /home's pill", () => {
-  const src = read("apps/desktop-ui/src/pages/home/home-search.tsx");
+  const src = read("src/features/search/components/header-search.tsx");
 
   it("is a fixed 260px white pill with no toggle button", () => {
     expect(src).toContain("white-card raise-pill");
@@ -76,20 +76,21 @@ describe("🔒 /home's pill", () => {
 });
 
 /**
- * 🔒 THE POPUP SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29). Anchored, not measured:
- * the card is the pill's SIBLING and fills the header's positioned action group, whose first
- * child is the pill and last is Profile.
+ * 🔒 THE POPUP STARTS AT PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29). Anchored, not
+ * measured: the card is the pill's SIBLING, right-aligned on the header's positioned action
+ * group (first child the pill, last Profile) and floored at its width; longer rows widen it
+ * leftward up to the card's cap.
  */
 describe("🔒 the popup is anchored on the header's action group", () => {
-  it("home-search renders the popup OUTSIDE the pill, full-width", () => {
-    const src = read("apps/desktop-ui/src/pages/home/home-search.tsx");
+  it("header-search renders the popup OUTSIDE the pill, floored at the group", () => {
+    const src = read("src/features/search/components/header-search.tsx");
     const pill = src.indexOf("<label className={SEARCH_PILL}>");
     const close = src.indexOf("</label>");
     const popup = src.indexOf("<SearchPopup");
     expect(pill).toBeGreaterThan(-1);
     expect(close).toBeGreaterThan(pill);
     expect(popup).toBeGreaterThan(close);
-    expect(src).toMatch(/className="left-0 w-auto"/);
+    expect(src).toMatch(/className="min-w-full"/);
   });
 
   it("the header's trail group is the positioned anchor, search first and Profile last", () => {
@@ -97,7 +98,7 @@ describe("🔒 the popup is anchored on the header's action group", () => {
     expect(frame).toContain('<div className="relative flex items-center gap-2.5">{trail}</div>');
     const header = read("apps/desktop-ui/src/pages/home/home-header.tsx");
     const trail = header.slice(header.indexOf("trail={"));
-    expect(trail.indexOf("<HomeSearch")).toBeGreaterThan(-1);
-    expect(trail.indexOf("<HomeSettingsControl")).toBeGreaterThan(trail.indexOf("<HomeSearch"));
+    expect(trail.indexOf("<HeaderSearch")).toBeGreaterThan(-1);
+    expect(trail.indexOf("<HomeSettingsControl")).toBeGreaterThan(trail.indexOf("<HeaderSearch"));
   });
 });

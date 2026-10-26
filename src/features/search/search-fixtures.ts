@@ -1,116 +1,143 @@
 /**
- * The fixture search source: a data table, so the popup can be reviewed live
- * without a server.
+ * The fixture search source: a data table behind a real `SearchFetcher`, for tests and for
+ * a surface reviewed without a server (the UI-staging playground's story,
+ * `ui-staging/data/search-results.ts`).
  *
- * Only the DATA is fixture — the debounce, abort, grouping, keyboard order,
- * recents and navigation are the real code paths, and this is a `SearchFetcher`
- * like any other. The swap is one import (`./search-client.ts ›
- * apiSearchFetcher`): no flag, no branch, no second code path.
- *
- * It filters for real, so the "No results" line and the empty-group omission are
- * reviewable too.
+ * Only the DATA is fixture. Rows are held to the server's own word-start rule and their
+ * snippets are minted by the server's own builder (`highlight.ts`), so a fixture answer
+ * marks the same words the endpoint would; the debounce, abort, grouping, keyboard order,
+ * recents and navigation are the real code paths.
  */
 
-import type { SearchGroup, SearchItem, SearchResponse } from "./contracts";
+import {
+  CONTAINER_ONLY_SEARCH_GROUPS,
+  SEARCH_GROUP_ITEM_CAP,
+  SEARCH_GROUP_ORDER,
+  type SearchGroup,
+  type SearchItem,
+  type SearchResponse,
+} from "./contracts";
+import { buildSnippet, highlightPattern, highlightTerms, queryMatcher } from "./highlight";
 import type { SearchFetcher } from "./use-search";
 
-/** Shown under the field before anything is typed, when this machine has no
- *  remembered queries of its own yet. */
+/** A row as the repository reads it: the body is plain text, the snippet is minted per query. */
+export type FixtureRow = Omit<SearchItem, "snippet"> & { body?: string };
+
+const CONTAINER_ONLY: ReadonlySet<string> = new Set(CONTAINER_ONLY_SEARCH_GROUPS);
+const FIXTURE_LATENCY_MS = 120;
+
+function answer(rows: readonly FixtureRow[], q: string, scope: SearchResponse["scope"]): SearchGroup[] {
+  const matches = queryMatcher(q);
+  const pattern = highlightPattern(highlightTerms(q));
+  const hits = rows.filter(
+    (row) =>
+      (scope === "container" || !CONTAINER_ONLY.has(row.kind)) &&
+      (matches?.([row.title, row.subtitle, row.body]) ?? false)
+  );
+  return SEARCH_GROUP_ORDER.flatMap((kind) => {
+    const own = hits.filter((row) => row.kind === kind);
+    if (own.length === 0) return [];
+    const items = own.slice(0, SEARCH_GROUP_ITEM_CAP).map(({ body, ...item }): SearchItem => {
+      const snippet = buildSnippet(body, pattern);
+      return snippet === undefined ? item : { ...item, snippet };
+    });
+    return [{ kind, total: own.length, items }];
+  });
+}
+
+export function createFixtureFetcher(rows: readonly FixtureRow[]): SearchFetcher {
+  return ({ q, scope, signal }) =>
+    new Promise<SearchResponse>((resolve, reject) => {
+      const timer = setTimeout(
+        () => resolve({ q, scope, tookMs: FIXTURE_LATENCY_MS, groups: answer(rows, q, scope) }),
+        FIXTURE_LATENCY_MS
+      );
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          reject(new DOMException("Aborted", "AbortError"));
+        },
+        { once: true }
+      );
+    });
+}
+
+/** Shown under the empty field while this machine has remembered no queries of its own. */
 export const FIXTURE_RECENTS = ["orchestrator", "credit model", "q4-outbound"];
 
-const ACCOUNT_ROWS: SearchItem[] = [
+const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+const MIN = 60_000;
+const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
+
+const ROWS: FixtureRow[] = [
   {
     id: "ch-q4",
     kind: "channels",
     title: "q4-outbound",
-    // The channel's description — `channels.topic`, which the server sends as a
-    // channel row's subtitle (`server/repository-channel-rows.ts ›
-    // searchChannels`). Not a roster: the row draws one line.
+    // A channel's subtitle is its description (`channels.topic`); none is the ordinary case.
     subtitle: "Outbound sequences and replies for the quarter",
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-q4",
-    updatedAt: new Date(Date.now() - 12 * 60_000).toISOString(),
+    updatedAt: ago(12 * MIN),
   },
   {
     id: "ch-weekly",
     kind: "channels",
     title: "weekly-review",
-    // No description is the ordinary case: `topic` is NOT NULL DEFAULT `''`, so
-    // most channels ride out with no subtitle and the row omits the span.
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-weekly",
-    updatedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+    updatedAt: ago(3 * HOUR),
   },
   {
     id: "msg-4821",
     kind: "messages",
-    title: "Priya Shah",
-    snippet:
-      "pushed the <mark>orchestrator</mark> identity to the shared base — rerun the wave when you get a sec",
+    // A message has no name: the server titles it with its channel.
+    title: "q4-outbound",
+    subtitle: "Original",
+    body: "Pushed the orchestrator identity to the shared base, rerun the wave when you get a sec",
     containerId: "ws-orig",
-    containerName: "q4-outbound",
+    containerName: "Original",
     channelId: "ch-q4",
     seq: 4821,
-    updatedAt: new Date(Date.now() - 26 * 60_000).toISOString(),
+    updatedAt: ago(26 * MIN),
   },
   {
     id: "msg-4790",
     kind: "messages",
-    title: "Dopl Main",
-    snippet:
-      "MILESTONE | wave 2 merged, <mark>credit model</mark> v2.1 migrations applied",
+    title: "weekly-review",
+    subtitle: "Original",
+    body: "MILESTONE | wave 2 merged, credit model v2.1 migrations applied",
     containerId: "ws-orig",
-    containerName: "weekly-review",
+    containerName: "Original",
     channelId: "ch-weekly",
     seq: 4790,
-    updatedAt: new Date(Date.now() - 5 * 3_600_000).toISOString(),
-  },
-  {
-    id: "msg-4655",
-    kind: "messages",
-    title: "Marcus Webb",
-    snippet: "the <mark>q4-outbound</mark> list is in the artifact, not the thread",
-    containerId: "ws-orig",
-    containerName: "q4-outbound",
-    channelId: "ch-q4",
-    seq: 4655,
-    updatedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    updatedAt: ago(5 * HOUR),
   },
   {
     id: "th-221",
     kind: "threads",
     title: "Pricing page rewrite",
-    // The parent channel, which is what `service-groups.ts › toItem` fills a
-    // thread's subtitle with — never a reply count, never "Direct message".
+    // A thread's subtitle is its parent channel (`server/service-groups.ts › toItem`).
     subtitle: "q4-outbound",
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-q4",
     threadId: "th-221",
-    updatedAt: new Date(Date.now() - 40 * 60_000).toISOString(),
-  },
-  {
-    id: "th-198",
-    kind: "threads",
-    title: "Desktop sign-out loop",
-    subtitle: "weekly-review",
-    containerId: "ws-orig",
-    containerName: "Original",
-    channelId: "ch-weekly",
-    threadId: "th-198",
-    updatedAt: new Date(Date.now() - 4 * 86_400_000).toISOString(),
+    updatedAt: ago(40 * MIN),
   },
   {
     id: "art-31",
     kind: "artifacts",
     title: "Q4 outbound sequence.md",
-    subtitle: "Artifact · q4-outbound",
+    subtitle: "q4-outbound",
     containerId: "ws-orig",
     containerName: "Original",
     channelId: "ch-q4",
-    updatedAt: new Date(Date.now() - 86_400_000).toISOString(),
+    updatedAt: ago(DAY),
   },
   {
     id: "kb-orch",
@@ -119,113 +146,37 @@ const ACCOUNT_ROWS: SearchItem[] = [
     subtitle: "Orchestration Guidelines",
     containerId: "ws-orig",
     containerName: "Original",
-    updatedAt: new Date(Date.now() - 9 * 86_400_000).toISOString(),
-  },
-  {
-    id: "kb-comms",
-    kind: "knowledge",
-    title: "Agent Communication Protocol",
-    subtitle: "Orchestration Guidelines",
-    containerId: "ws-orig",
-    containerName: "Original",
-    updatedAt: new Date(Date.now() - 9 * 86_400_000).toISOString(),
+    updatedAt: ago(9 * DAY),
   },
   {
     id: "tpl-orch",
     kind: "agentIdentities",
     title: "Orchestrator",
-    subtitle: "Fable · launches workers, never researches",
-    color: "var(--agent-color-03)",
+    subtitle: "Launches workers, never researches",
     containerId: "ws-orig",
     containerName: "Original",
   },
-  {
-    id: "tpl-coder",
-    kind: "agentIdentities",
-    title: "Coder",
-    subtitle: "Opus · builds and ships one branch",
-    color: "var(--agent-color-09)",
-    containerId: "ws-orig",
-    containerName: "Original",
-  },
-];
-
-/** Only a STANDARD workspace has these three (INVARIANTS §4A). */
-const WORKSPACE_ROWS: SearchItem[] = [
   {
     id: "mem-priya",
     kind: "members",
     title: "Priya Shah",
-    subtitle: "priya@shahco.tax · member",
+    subtitle: "priya@shahco.tax",
     containerId: "ws-orig",
-    avatarUrls: ["https://avatars.dopl.app/priya-shah.png"],
-  },
-  {
-    id: "mem-marcus",
-    kind: "members",
-    title: "Marcus Webb",
-    subtitle: "marcus@webb.dev · guest",
-    containerId: "ws-orig",
-    avatarUrls: ["https://avatars.dopl.app/marcus-webb.png"],
   },
   {
     id: "skill-outreach",
     kind: "skills",
     title: "Consulting outreach",
-    subtitle: "Skill · 2 procedures",
     containerId: "ws-orig",
-    updatedAt: new Date(Date.now() - 6 * 86_400_000).toISOString(),
+    updatedAt: ago(6 * DAY),
   },
   {
     id: "chat-credit",
     kind: "chats",
     title: "Credit model v2.1",
-    subtitle: "Chat · 38 messages",
     containerId: "ws-orig",
-    updatedAt: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+    updatedAt: ago(7 * DAY),
   },
 ];
 
-/** `<mark>` is the server's highlight, so it is not part of the text a query
- *  matches against. */
-const plain = (item: SearchItem) =>
-  `${item.title} ${item.subtitle ?? ""} ${(item.snippet ?? "").replace(/<\/?mark>/g, "")}`.toLowerCase();
-
-function groupRows(rows: SearchItem[]): SearchGroup[] {
-  const byKind = new Map<SearchItem["kind"], SearchItem[]>();
-  for (const row of rows) {
-    const list = byKind.get(row.kind) ?? [];
-    list.push(row);
-    byKind.set(row.kind, list);
-  }
-  return [...byKind].map(([kind, items]) => ({
-    kind,
-    total: items.length,
-    items,
-  }));
-}
-
-export const fixtureSearchFetcher: SearchFetcher = ({ q, scope, signal }) =>
-  new Promise<SearchResponse>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const needle = q.toLowerCase();
-      const pool =
-        scope === "container"
-          ? [...ACCOUNT_ROWS, ...WORKSPACE_ROWS]
-          : ACCOUNT_ROWS;
-      resolve({
-        q,
-        scope,
-        tookMs: 120,
-        groups: groupRows(pool.filter((row) => plain(row).includes(needle))),
-      });
-    }, 120);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        reject(new DOMException("Aborted", "AbortError"));
-      },
-      { once: true }
-    );
-  });
+export const fixtureSearchFetcher = createFixtureFetcher(ROWS);

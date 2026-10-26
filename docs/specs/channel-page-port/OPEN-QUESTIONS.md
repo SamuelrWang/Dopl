@@ -561,3 +561,37 @@ Workers append a `## <slice>` section per question: the question, what was chose
 9. **Pre-existing red, not this branch:** `src/features/ui-staging/staging-frame.test.tsx ›
    opens every frame-level popup on any face` looks the profile popup's sections up as `button`s,
    but the rail has been `role="tab"` since the profile popup restyle.
+
+## Search pop-up (playground mimic + contents overhaul, branch `ui/search-popup`)
+
+1. **One pill, not a copy.** /home's search pill moved from `apps/desktop-ui/src/pages/home/home-search.tsx`
+   to `src/features/search/components/header-search.tsx › HeaderSearch` (fetcher as a prop), so the
+   desktop header and the playground top bar mount the same component. The playground's
+   click-to-swap copy (`popups-staging › StagingSearchField`, `popups-staging/pages/home/home-search.tsx`,
+   the stub `apiSearchFetcher`, the provider's `searchOpen`/`closeSearch`) is deleted; the catalog's
+   "Search popup" now focuses the pill.
+2. **Kinds.** The product search returns nine kinds; on /home (account scope) members, skills and
+   chats never appear (`CONTAINER_ONLY_SEARCH_GROUPS`). Ontology objects and tasks are not search
+   kinds, so the staged answers (`ui-staging/data/search-results.ts`) hold channels, messages,
+   threads, artifacts, knowledge and identities, and no row uses `StatusPill` (no task row exists
+   to tick). Adding a tasks or ontology arm is a server change, not done here.
+3. **Width.** "Content-fit with a sensible max" sat against two locked widths (2026-09-17 sidebar
+   280px, 2026-09-29 /home pill-left to Profile-right). Chosen: `w-max`, floored at those widths
+   (sidebar 280px; /home `min-w-full` of the action group), capped at `min(440px, 100vw - 2rem)`;
+   right-anchored on /home so a wide answer grows leftward over the tabs, never off the window.
+4. **Opens on focus.** The card now opens whenever the field has focus: recents, else
+   `EmptyState` "Type to search". It used to stay shut until two characters or a recent existed,
+   which is why the playground pill looked dead. The sidebar host inherits this.
+5. **Card surface.** `.white-card` + `--shadow-card-lift` instead of `.menu-card` (gradient, three
+   drops), so the sticky section headings sit on the same flat white. The kit's dropdowns are
+   unchanged.
+6. **Highlighting.** `server/snippet.ts` became the isomorphic `search/highlight.ts` (+ new
+   `splitMatches`), so titles and subtitles are marked client-side with the server's own terms;
+   the fixture fetcher mints snippets with the server's builder. `SearchItem.color` was deleted:
+   the server never sent it and identities now lead with `IdentityFace` on the neutral ring.
+7. **Kept as they were:** the per-section scroll (locked 2026-09-17; headings are now also sticky
+   inside the card's own scroll), one-line channels/threads with the italic description, the
+   cross-container-only container name (now quiet text, not a bordered chip), `Loading results`,
+   `No results`, the 2-character server threshold, Escape clears, ↑/↓ wrap, Enter takes.
+8. **Staging navigation** stays a toast ("Staging: would open …"): the playground has no router
+   seam to land a row on its face.

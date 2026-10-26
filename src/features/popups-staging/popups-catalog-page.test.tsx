@@ -95,16 +95,15 @@ describe("/popups staging", () => {
     expect(screen.getByText("Staging: created #launch")).toBeTruthy();
     expect(screen.queryByLabelText("New channel name")).toBeNull();
 
-    // The catalog's button and the top bar's pill open the same in-place search field.
+    // The catalog's button focuses the top bar's search pill, which opens its popup.
     fireEvent.click(catalog().getByText("Search popup"));
     await tick();
     const search = screen.getByLabelText("Search");
-    fireEvent.focus(search);
-    fireEvent.change(search, { target: { value: "launch" } });
-    await tick(600);
+    expect(document.activeElement).toBe(search);
+    expect(screen.getByRole("listbox", { name: "Search results" })).toBeTruthy();
     fireEvent.keyDown(search, { key: "Escape" });
     await tick();
-    expect(screen.queryByLabelText("Search")).toBeNull();
+    expect(screen.queryByRole("listbox", { name: "Search results" })).toBeNull();
 
     // ── Account rail ──
     fireEvent.click(catalog().getByText("New workspace (request access)"));
@@ -181,10 +180,9 @@ describe("/popups staging", () => {
     expect(screen.getByLabelText("New channel name")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close new channel form" }));
     await tick();
-    fireEvent.click(top.getByRole("button", { name: /Search/ }));
-    await tick();
-    expect(screen.getByLabelText("Search")).toBeTruthy();
-    fireEvent.keyDown(screen.getByLabelText("Search"), { key: "Escape" });
+    fireEvent.focus(top.getByLabelText("Search"));
+    expect(screen.getByRole("listbox", { name: "Search results" })).toBeTruthy();
+    fireEvent.keyDown(top.getByLabelText("Search"), { key: "Escape" });
     await tick();
     fireEvent.click(top.getByTitle("Profile"));
     await tick();
