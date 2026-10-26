@@ -60,7 +60,7 @@ export interface WorkspaceCreditsStatus {
    * written before it.
    *
    * Not a meter and not a second `used`: the one surface that reads it prints a
-   * single muted word (`pages/home/overview-sections.tsx › CreditCapacityBar`).
+   * single muted word (`home/components/overview/overview-credits.tsx › CreditsCard`).
    * Shipped 2026-09-13, so it takes a `?? 0` fallback below (INVARIANTS §8) —
    * 0 is also what the server sends when it could not reconcile.
    */

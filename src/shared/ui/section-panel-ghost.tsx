@@ -42,7 +42,7 @@ export function SectionPanelGhost({
 }
 
 /** Every /home section heading ghost is one width. */
-export const SECTION_GHOST_HEADING_W = 148;
+const HEADING_W = 148;
 
 /**
  * A section header's create-button ghost: `page-action-button.tsx › CreateButton` is `PAGE_ACTION_BTN`
@@ -64,10 +64,10 @@ function CreateGhost({ label }: { label: string }) {
 export function PanelsGhost({ label, cards }: { label: string; cards: ReactNode }) {
   return (
     <>
-      <SectionPanelGhost headingWidth={SECTION_GHOST_HEADING_W} action={<CreateGhost label={label} />}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label={label} />}>
         {cards}
       </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={SECTION_GHOST_HEADING_W} action={<CreateGhost label={label} />}>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label={label} />}>
         {cards}
       </SectionPanelGhost>
     </>

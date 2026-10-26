@@ -3,8 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BarSeries, niceCeiling, type BarPoint } from "./bar-series";
 
 /**
- * THE SHARED BAR HISTOGRAM — the plot behind BOTH the workspace Overview's
- * `ActivityChart` and /home's `UsageChart`.
+ * THE BAR HISTOGRAM — the plot behind the workspace Overview's `ActivityChart`.
  *
  * ⚠ **THESE CASES PIN THE REFERENCE GEOMETRY SAMUEL RULED ON 2026-09-08**, and
  * they are the reason the plot has a suite of its own at all: every visual rule

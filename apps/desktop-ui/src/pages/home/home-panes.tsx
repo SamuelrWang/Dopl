@@ -6,9 +6,10 @@ import { PendingLinkCard } from "./link-out-panel";
 import { HomeIdentityPanels } from "./identity-panels";
 import { HomeKnowledgePanels } from "@/features/knowledge/components/home/home-knowledge-panels";
 import { HomeOntologyPanels } from "@/features/ontology/components/home-ontology-panels";
-import { HomeOverviewPanels } from "./overview-panels";
+import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import type { ActivityJump } from "./use-activity-jump";
 import type { HomeRow } from "./home-rows";
+import { openHomeSettings } from "./home-settings-control";
 import { useHomeChannels } from "./use-home-channels";
 import {
   IDENTITIES_PANE,
@@ -61,13 +62,7 @@ export function HomePane({
   const rowFor = (id: string) =>
     rows.find((candidate) => candidate.id === id) ?? null;
 
-  if (shown === OVERVIEW_PANE) {
-    // The caller's `kind='home'` container, so the credit bar reads their PERSONAL wallet
-    // (`credits-service.ts › resolveBillingTarget`). Null until onboarded.
-    return (
-      <HomeOverviewPanels homeWorkspaceId={identity.workspace?.id ?? null} />
-    );
-  }
+  if (shown === OVERVIEW_PANE) return <OverviewPane identity={identity} />;
   if (shown === ONTOLOGY_PANE) return <OntologyPane identity={identity} />;
   if (shown.startsWith(IDENTITIES_PANE)) {
     const shownRow = rowFor(shown.slice(IDENTITIES_PANE.length));
@@ -120,6 +115,19 @@ export function HomePane({
       // The message a search row named (F-714).
       initialSeq={jump.seqFor(row.id)}
       onDeleted={onChannelDeleted}
+    />
+  );
+}
+
+/** The Overview face: the credit figures read the caller's `kind='home'` container, their PERSONAL
+ *  wallet (`credits-service.ts › resolveBillingTarget`); the home channels scope the daily credits. */
+function OverviewPane({ identity }: { identity: BootPayload }) {
+  const homeChannels = useHomeChannels();
+  return (
+    <HomeOverview
+      homeWorkspaceId={identity.workspace?.id ?? null}
+      homeChannels={homeChannels}
+      onOpenSettings={openHomeSettings}
     />
   );
 }

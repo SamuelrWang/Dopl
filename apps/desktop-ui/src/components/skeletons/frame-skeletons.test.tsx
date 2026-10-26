@@ -288,59 +288,23 @@ describe("the /home shapes are /home's own geometry", () => {
     expect(ghostCode).not.toContain("auth-btn-3d");
   });
 
-  /** ⚠ THE LANDING FACE IS OVERVIEW (`home-tabs.ts › HOME_DEFAULT_TAB`), so the
-   *  ghost's pane is Overview's — TWO `.bento` Usage cards (the bar, then the plot
-   *  at the real plot height) over the 2×2 rails. It ghosted the CHANNELS face (a
-   *  pane header over `TranscriptSkeleton`) for nine days after the page stopped
-   *  landing there.
-   *  ⚠ BIDIRECTIONAL: the strings are read out of `overview-panels.tsx`.
-   *  ⚠ **`"bento flex flex-col gap-4 p-3.5"` WAS ON THIS LIST UNTIL 2026-09-13**,
-   *  when Samuel split the one Usage card into two — the shared string is the
-   *  histogram card's `"bento flex flex-col p-3.5"` and the `gap-3` between them
-   *  now, and the bar's card is `"bento p-3.5"` on both sides. */
+  /** The landing face is Overview, so the frame ghosts the Overview's own geometry (its module,
+   *  imported), flat: the page's white cards stay on the page. */
   it("ghosts the face the page actually opens on", () => {
     expect(HOME_DEFAULT_TAB).toBe("overview");
-    // ⚠ The rail ghost MOVED to `#/components/overview/rank-rail.tsx ›
-    // RailsGhost` on 2026-09-17 (both Overviews had a byte-identical copy), so
-    // its card size is pinned against THAT file — the scan stays bidirectional.
-    const panels =
-      file("../../pages/home/overview-panels.tsx") +
-      file("../overview/rank-rail.tsx");
-    // ⚠ GEOMETRY ONLY SINCE 2026-09-21 — see the FACE block below. The two
-    // `.bento` strings left this list when the ghost stopped drawing a face;
-    // what the two sides still share is the column, the grid and the rail size.
-    for (const shared of [
-      'className="flex flex-col gap-3"',
-      'className="grid grid-cols-2 gap-3"',
-      'className="h-40 rounded-[14px]"',
-    ]) {
-      expect(panels).toContain(shared);
-      expect(HOME_SKELETON).toContain(shared);
-    }
-    // 🔒 THE FACE IS THE PAGE'S ALONE (Samuel, 2026-09-21: the skeletons are
-    // FLAT — *"we basically just shouldn't have elevated components"*). The two
-    // Usage cards keep `.bento` on the PAGE and the ghost wears
-    // `shared/ui/skeleton.tsx › GHOST_FLAT_FACE`, so this pins the split in BOTH
-    // directions: parity here would re-elevate the loading state, and a bare
-    // `rounded-[14px]` on the ghost would drop the 1px border box and pull every
-    // block inside in by a pixel.
-    for (const face of ['"bento p-3.5"', '"bento flex flex-col p-3.5"']) {
-      expect(panels).toContain(face);
-      expect(HOME_SKELETON).not.toContain(face);
-    }
-    // The face is spelled ONCE, in the shared skeleton kit (the /home channel
-    // record ghost wears it too); every ghost on the page reads it.
-    expect(file("../../../../../src/shared/ui/skeleton.tsx")).toContain(
-      'export const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent"'
-    );
-    expect(HOME_SKELETON).toContain("GHOST_FLAT_FACE,");
-    // The plot height is IMPORTED, the way the Overview page's ghost takes it.
     expect(HOME_SKELETON).toContain(
-      'import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series"'
+      'import { OverviewGhost } from "@/features/home/components/overview/overview-skeleton"'
     );
-    expect(code("../../pages/home/home-skeleton.tsx")).not.toContain(
-      "TranscriptSkeleton"
-    );
+    const OVERVIEW = "../../../../../src/features/home/components/overview/";
+    const ghost = code(`${OVERVIEW}overview-skeleton.tsx`);
+    for (const geometry of ["styles.grid", "styles.col", "styles.slotNeeds", "styles.slotCredits", "styles.pair"]) {
+      expect(ghost).toContain(geometry);
+      expect(code(`${OVERVIEW}home-overview.tsx`) + code(`${OVERVIEW}overview-summary.tsx`) +
+        code(`${OVERVIEW}overview-credits.tsx`)).toContain(geometry);
+    }
+    expect(ghost).toContain("GHOST_FLAT_FACE");
+    expect(ghost).not.toContain("white-card");
+    expect(code("../../pages/home/home-skeleton.tsx")).not.toContain("TranscriptSkeleton");
   });
 
   it("keeps both faces on the panel hook the record pane repaints through", () => {

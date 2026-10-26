@@ -7,7 +7,7 @@ import { useStagingState } from "./staging-state";
 
 /**
  * STUB of `@/features/billing/components/use-workspace-entitlements › useWorkspaceEntitlements`,
- * the three fields `overview-panels.tsx › CreditsBar` reads: `loading`, `credits`, `isPaid`.
+ * the three fields the Overview reads: `loading`, `credits`, `isPaid`.
  * The plan comes from the staging toolbar.
  */
 export function useWorkspaceEntitlements(workspaceId: string | undefined): {

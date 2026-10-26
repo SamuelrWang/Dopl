@@ -414,8 +414,8 @@ function BillingSummary({
           THIS PROCESS IS METERING (2026-09-14).** The consume route fails OPEN
           by decision, so a dead RPC runs every MCP tool call UNMETERED and this
           meter prints the same `0` a quiet month prints. The SAME word the /home
-          bar puts in its caption row (`apps/desktop-ui/src/pages/home/
-          overview-sections.tsx › CreditCapacityBar`), off the same field, so the
+          Overview puts in its Credits card (`src/features/home/components/
+          overview/overview-credits.tsx › CreditsCard`), off the same field, so the
           two surfaces cannot say different things about one outage.
           ⚠ **MINIMAL COPY (INVARIANTS §5): the word, not the timestamp, and no
           explainer sentence.** The ISO instant is on the payload and in the log.

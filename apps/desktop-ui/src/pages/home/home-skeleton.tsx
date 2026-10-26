@@ -1,5 +1,6 @@
 import { cn } from "@/shared/lib/utils";
 import { ChannelRecordGhost } from "@/features/channels/components/channel-record-skeleton";
+import { OverviewGhost } from "@/features/home/components/overview/overview-skeleton";
 import {
   GHOST_FLAT_FACE,
   Skeleton,
@@ -8,24 +9,19 @@ import {
 } from "@/shared/ui/skeleton";
 import { WELL_FACES } from "@/features/channels/components/collapse-wells";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
-import {
-  PanelsGhost,
-  SECTION_GHOST_HEADING_W as HEADING_W,
-  SectionPanelGhost,
-} from "@/shared/ui/section-panel-ghost";
+import { PanelsGhost } from "@/shared/ui/section-panel-ghost";
 import { KbCardsGhost } from "@/features/knowledge/components/knowledge-skeletons";
 import { IdentityCardsGhost } from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
-import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
 import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
 import { HomeFrame, HomeHeaderRow, HomeListColumn } from "./home-frame";
 import { HOME_DEFAULT_TAB, HOME_TABS, type HomeTab } from "./home-tabs";
 
 /**
  * /home's loading shapes: the page frame, and one per record-pane face. Geometry is the page's own
- * by reference (`HomeFrame`, `--home-list-w`, `KbCardsGhost`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
- * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
+ * by reference (`HomeFrame`, `--home-list-w`, `KbCardsGhost`, `IDENTITY_GRID`, the Overview's own
+ * module), never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
 
 /**
@@ -56,7 +52,7 @@ export function HomePageSkeleton({
 /** One face's record pane, inside a surface that already announces the load. The ontology face
  *  paints its own loading shape once mounted, so it ghosts an empty pane. */
 function FaceGhost({ face }: { face: HomeTab }) {
-  if (face === "overview") return <OverviewFaceGhost />;
+  if (face === "overview") return <OverviewGhost />;
   if (face === "channels") return <ChannelRecordGhost />;
   if (face === "ontology") return null;
   return (
@@ -108,67 +104,6 @@ function HomeHeaderGhost() {
     />
   );
 }
-
-/**
- * The Overview record pane: Usage (the credit card, then the histogram card with its control row)
- * and the channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage
- * cards wear `GHOST_FLAT_FACE`, not the page's `.bento` (skeletons are flat).
- */
-function OverviewFaceGhost() {
-  return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-3">
-      <div className="flex flex-col gap-3">
-        {/* USAGE — one well holding the capacity bar, then the plot. */}
-        <SectionPanelGhost headingWidth={HEADING_W}>
-          <div className="flex flex-col gap-3">
-            {/* "Credit spend": the card's own `h3` (`mb-2`), then the bar at `CreditsBar`'s 54px. */}
-            <div className={cn(GHOST_FLAT_FACE, "p-3.5")}>
-              <div className="mb-2 flex h-5 items-center">
-                <SkeletonLine w={92} h={12} />
-              </div>
-              <Skeleton className="h-[54px] w-full rounded-lg" />
-            </div>
-            {/* The histogram: `overview-sections.tsx › UsageChart`'s control row (scope menu left;
-                month stepper and total right), then the plot at `mt-3`. */}
-            <div className={cn(GHOST_FLAT_FACE, "flex flex-col p-3.5")}>
-              <div className="flex items-center justify-between gap-3">
-                <SkeletonLine w={108} h={12} />
-                <div className="flex min-w-0 shrink-0 items-center gap-2">
-                  <div className="flex items-center gap-0.5">
-                    <span className="flex items-center justify-center p-2">
-                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
-                    </span>
-                    <SkeletonLine w={84} h={12} />
-                    <span className="flex items-center justify-center p-2">
-                      <SkeletonBar h={MONTH_ARROW} w={MONTH_ARROW} className="rounded-[4px]" />
-                    </span>
-                  </div>
-                  <SkeletonLine w={36} h={9} />
-                </div>
-              </div>
-              <Skeleton
-                className={cn(PLOT_HEIGHT_CLASS, "mt-3 w-full rounded-[10px]")}
-              />
-            </div>
-          </div>
-        </SectionPanelGhost>
-
-        {/* ALL CHANNELS — two rows of two rails. */}
-        <SectionPanelGhost headingWidth={HEADING_W}>
-          <div className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-40 rounded-[14px]" />
-            ))}
-          </div>
-        </SectionPanelGhost>
-      </div>
-    </div>
-  );
-}
-
-/** `overview-usage-filter.tsx › MONTH_ARROW_ICON` (file-private there): the stepper's 16px glyph in
- *  `NAKED_ICON_BUTTON`'s `p-2` box. */
-const MONTH_ARROW = 16;
 
 /* ── The channel column: the well headings and the rows under them ── */
 

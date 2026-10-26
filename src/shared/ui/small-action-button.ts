@@ -65,6 +65,10 @@ export const PILL_BUTTON =
   "inline-flex flex-none items-center rounded-full border border-border-default bg-bg-overlay px-2.5 py-0.5 " +
   "text-caption font-medium text-text-primary transition-colors hover:bg-surface-raised-1";
 
+/** {@link PILL_BUTTON} at a card's 26px action scale, beside {@link INK_PILL} and {@link QUIET_PILL}
+ *  (the /home Overview cards' Get more credits, Add device). */
+export const CARD_PILL = cn(PILL_BUTTON, "h-6.5 cursor-pointer gap-1 px-2.75 py-0");
+
 /**
  * {@link PILL_BUTTON} at the 30px action scale: the secondary twin of {@link SMALL_PRIMARY_PILL}
  * (the profile popup's Sign out, Manage billing, Connect an agent).
