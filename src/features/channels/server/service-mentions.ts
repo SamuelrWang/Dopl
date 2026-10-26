@@ -40,7 +40,7 @@ function snippetOf(body: string, viewerHandles: ReadonlySet<string>): string {
 
 /** `metadata.threadId` off a stored row — the navigate target. Same three-line
  *  reader the v2 view-model uses; the key is the storage-boundary name. */
-function threadIdOf(metadata: unknown): string | null {
+export function threadIdOf(metadata: unknown): string | null {
   if (typeof metadata !== "object" || metadata === null) return null;
   const value = (metadata as Record<string, unknown>).threadId;
   return typeof value === "string" && value.length > 0 ? value : null;

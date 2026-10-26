@@ -332,7 +332,7 @@ export async function resolveTypedEscalationAnswer(
     );
     if (answerable.length === 0) return false;
     answered = await repoMessages.listAnsweredEscalationIds(
-      channelId,
+      [channelId],
       answerable.map((row) => row.id)
     );
   } catch {

@@ -63,7 +63,7 @@ export type MentionMessageRow = {
  * no rows) or name the metadata key by hand. **One definition, two readers**:
  * the inbox, and {@link listMentionStamps} below it.
  */
-function mentionContainmentFilter(userId: string): [string, string] {
+export function mentionContainmentFilter(userId: string): [string, string] {
   return [`metadata->${MENTIONS_METADATA_KEY}`, JSON.stringify([userId])];
 }
 
