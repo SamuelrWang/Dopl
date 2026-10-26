@@ -226,20 +226,8 @@ describe("the face", () => {
     expect(document.querySelectorAll(".page-float").length).toBeLessThanOrEqual(1);
   });
 
-  /**
-   * 🔒 **THE LANE'S GRAY IS THE TAB-SWITCHER PANEL'S** (Samuel, 2026-09-11: *"I
-   * want it to be the same gray that appears on the panel holding the tab
-   * switcher. Right now, it's a different gray, and I don't like that"*).
-   *
-   * ⚠ ASSERTED AS THE TOKEN, not a colour: jsdom loads no stylesheet, so the
-   * utility class IS the contract — and `--home-panel` is exactly what the header
-   * strip's own panel paints (`pages/home/index.tsx`, `page-float bg-home-panel`).
-   *
-   * ⚠ MUTATION-VERIFIED — one revert, one failure: putting `bg-bg-inset` back on
-   * `kanban-board.tsx › Column` (the lanes render, the board renders, and only
-   * the token says the two grays disagree again).
-   */
-  it("paints the lanes in the header panel's own gray", async () => {
+  /** 🔒 The lanes take no fill of their own: the white cards sit on the dotted ground. */
+  it("gives the lanes no fill on the dotted ground", async () => {
     renderHome();
     await openOntologyFace();
     await screen.findByText("Acme");
@@ -247,14 +235,13 @@ describe("the face", () => {
     const lane = document.querySelector(".w-72");
 
     expect(lane).not.toBeNull();
-    expect(lane!.className).toMatch(/bg-home-panel/);
-    expect(lane!.className).not.toMatch(/bg-bg-inset/);
+    expect(lane!.className).not.toMatch(/\bbg-/);
+    expect(lane!.closest(".kanban-substrate")).not.toBeNull();
   });
 
   /**
-   * 🔒 THE DESCRIPTION FIELD (Samuel, 2026-09-10: *"Put in there, Description as
-   * the hint, and make it have a gray underline that turns black when a user is
-   * editing (like the one we have in other places)"*).
+   * 🔒 THE DESCRIPTION FIELD: "Description" as the hint, quiet secondary ink with no
+   * rule at rest, the ink line while editing.
    *
    * ⚠ `.lineActive` IS THE CONTRACT, not `:focus-within` — jsdom loads no
    * stylesheet, so the sweep is a class the field toggles
@@ -266,11 +253,8 @@ describe("the face", () => {
 
     const field = screen.getByLabelText("Description");
     expect(field.getAttribute("placeholder")).toBe("Description");
-    expect(field.className).toMatch(/input/);
-    // 🔒 AS TALL AS THE BLACK BUTTON beside it — the hairline sits flush with
-    // that button's bottom (Samuel, 2026-09-10: *"pushing the underline down so
-    // that it sits flush with the bottom of the + button"*).
-    expect(field.className).toMatch(/inputAction/);
+    expect(field.className).toMatch(/inputQuiet/);
+    expect(field.className).toMatch(/inputSecondary/);
     const line = field.parentElement;
     expect(line?.className).toMatch(/line/);
     expect(line?.className).not.toMatch(/lineActive/);

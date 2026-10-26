@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import type { Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
+import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { fieldKey } from "../field-kinds";
 import type { GraphAction } from "../graph-state";
@@ -12,6 +13,7 @@ import { InlineUnderlineField } from "./board-header-bits";
 import { FieldDescription, withDescription } from "./field-description";
 import { FieldMenu } from "./field-menu";
 import {
+  PANEL_GRID,
   PANEL_ROW,
   PANEL_ROWS,
   PanelAddButton,
@@ -20,14 +22,12 @@ import {
   useDraftRows,
 } from "./panel-section";
 
-/** Shared with the column header card's read-only template preview — two
- *  renderings of a field's kind must not drift. */
+/** Shared with the lane header's read-only template preview, so two renderings of a kind cannot
+ *  drift. "Select", not "Enum": the word a person picks from; the stored kind stays `enum`. */
 export const KIND_LABELS: Record<TemplateField["kind"], string> = {
   text: "Text",
   number: "Number",
   pill: "Tag",
-  // "Select", not "Enum": the word a person picks from (Samuel, 2026-10-01:
-  // *"basically a selector"*). The stored kind and the MCP kind stay `enum`.
   enum: "Select",
   date: "Date",
   link: "Link",
@@ -39,39 +39,29 @@ export const KIND_LABELS: Record<TemplateField["kind"], string> = {
 type Kind = TemplateField["kind"];
 
 /**
- * What a person may pick for a NEW field (Samuel, 2026-10-09): Text, Number,
- * Select, Date, Link, Knowledge, and Skill outside the home space (skills do not
- * live there). Tag, Object and home-space Skill are retired from the picker only:
- * stored fields of those kinds still render and edit, and agents may still write
- * them over MCP.
+ * What a person may pick for a NEW field. Tag, Object and home-space Skill are retired from the
+ * picker only: stored fields of those kinds still render and edit, and agents may still write them.
  */
 const PICKABLE: readonly Kind[] = ["text", "number", "enum", "date", "link", "knowledge"];
 
-/** The kind picker's rows for one field. A field already holding a retired kind
- *  keeps it as an option, else the trigger would misname it as the first row. */
+/** The kind picker's rows for one field. A field already holding a retired kind keeps it as an
+ *  option, else the trigger would misname it as the first row. */
 export function useKindOptions(current: Kind): ReadonlyArray<SelectMenuOption<Kind>> {
   const { homeSpace } = useWorkspaceResources();
   const kinds: Kind[] = homeSpace ? [...PICKABLE] : [...PICKABLE, "skill"];
   if (!kinds.includes(current)) kinds.push(current);
-  // No `description`: a second line per option in a 420px panel is the
-  // paragraph the minimal-copy ruling refuses.
   return kinds.map((value) => ({ value, label: KIND_LABELS[value] }));
 }
 
+/** The kind picker on a row: the `bare` face in muted regular ink, so it never competes with the
+ *  value beside it. */
+export const KIND_TRIGGER = "shrink-0 font-normal text-text-muted hover:text-text-primary";
+
 /**
- * The column's object template — default fields (label + kind, no values) every
- * new child is born with. Not the attributes editor: rows are field definitions,
- * so there is no value cell.
- *
- * Flat since 2026-09-12, and one white bar per field on a gray well since
- * 2026-09-13 — the same recipe the other three sections took, and not a return of
- * the frame (`panel-section.tsx › PanelSection`). `+ Add` appends an empty bar;
- * the field is written on the label's blur (or Enter), because a nameless default
- * field has no `key` to be addressed by.
- *
- * A draft whose label matches an existing field updates that field instead of
- * appending (`addField`'s upsert-by-label), so the new bar disappears and the row
- * above it takes the kind.
+ * The type's default fields (label + kind, no values) every new child is born with. A field is
+ * written on its label's blur or Enter, because a nameless field has no `key`. A draft whose label
+ * matches an existing field updates that field instead of appending (MCP `set_template_field`'s
+ * upsert-by-label).
  */
 export function TemplateEditor({
   column,
@@ -87,16 +77,13 @@ export function TemplateEditor({
     kind: "text",
   }));
 
-  // Hoisted, not inlined in the key: `vocabulary.test.ts` reads every string
-  // literal in this feature for the words the reader must never see, and a
-  // template literal holding `column.template.length` is one of them.
+  // Hoisted, not inlined in the key: `vocabulary.test.ts` reads every string literal in this
+  // feature, and a template literal holding `column.template.length` is one of them.
   const saved = column.template.length;
 
   const setTemplate = (template: TemplateField[]) =>
     dispatch({ type: "OBJECT_UPDATE", id: column.id, patch: { template } });
 
-  // Upsert by label (case-insensitive) to match MCP `set_template_field`
-  // semantics — no duplicate default fields.
   const addField = (index: number, row: Omit<TemplateField, "key">) => {
     const label = row.label.trim();
     if (!label) return;
@@ -105,19 +92,16 @@ export function TemplateEditor({
     setTemplate(
       existing
         ? column.template.map((f) => (f === existing ? { ...f, label, kind: row.kind } : f))
-        : [
-            ...column.template,
-            { key: fieldKey(label), label, kind: row.kind },
-          ]
+        : [...column.template, { key: fieldKey(label), label, kind: row.kind }]
     );
     drop(index);
   };
 
   return (
-    <PanelSection label="Default fields">
-      <p className="text-caption text-text-muted">
-        New objects of this type start with these fields, ready to fill.
-      </p>
+    <PanelSection
+      label="Default fields"
+      caption="New objects of this type start with these fields, ready to fill."
+    >
       <div className={PANEL_ROWS}>
         {column.template.map((field, i) => (
           <FieldRow
@@ -147,19 +131,8 @@ export function TemplateEditor({
   );
 }
 
-/**
- * One default field, persisted or draft — one component for both, so a commit
- * reconciles in place (`panel-section.tsx › useDraftRows`).
- *
- * Fields are `quiet` since 2026-09-14: the kit's `.inputQuiet`, a resting state of
- * the one underline recipe (`board-header-bits.tsx › InlineUnderlineField`), not
- * a second face. The panel's own description keeps its gray-at-rest line; the rule
- * is about row cells.
- *
- * Order untouched: a template row is a field definition — label + kind, no value
- * — so there is no value cell for the `Attribute : value dropdown` ruling to put
- * the picker after.
- */
+/** One default field, persisted or draft: one component for both, so a commit reconciles in
+ *  place. A saved field gets the ⋯ menu, a draft the naked ✕. */
 function FieldRow({
   row,
   canEdit,
@@ -174,12 +147,11 @@ function FieldRow({
   /** Draft only — fires on the label's blur and on Enter. */
   onCommit?: () => void;
   onRemove: () => void;
-  /** A persisted field: the ⋯ menu instead of the draft's naked ✕. */
   saved?: boolean;
 }) {
   const kindOptions = useKindOptions(row.kind);
   return (
-    <div className={cn(PANEL_ROW, "group flex flex-wrap items-center gap-2")}>
+    <div className={cn(PANEL_ROW, PANEL_GRID)}>
       <InlineUnderlineField
         label="Field label"
         value={row.label}
@@ -190,37 +162,40 @@ function FieldRow({
         onKeyDown={(e) => {
           if (e.key === "Enter") onCommit?.();
         }}
-        className="min-w-0 flex-1"
+        className="min-w-0"
+        inputClassName={fieldStyles.inputSecondary}
       />
-      <SelectMenu
-        value={row.kind}
-        options={kindOptions}
-        disabled={!canEdit}
-        onChange={(kind) => onChange({ ...row, kind })}
-        variant="text"
-        ariaLabel="Field kind"
-        className="shrink-0"
-      />
-      {canEdit && saved && (
-        <FieldMenu
-          label={row.label}
-          description={row.description ?? ""}
-          options={row.kind === "enum" ? (row.options ?? []) : undefined}
-          onDescription={(description) => onChange(withDescription(row, description))}
-          onOptions={(options) => onChange({ ...row, options })}
-          onRemove={onRemove}
+      <div className="flex min-w-0 items-center justify-end gap-1.5">
+        <SelectMenu
+          value={row.kind}
+          options={kindOptions}
+          disabled={!canEdit}
+          onChange={(kind) => onChange({ ...row, kind })}
+          variant="bare"
+          ariaLabel="Field kind"
+          className={cn(KIND_TRIGGER, "mr-auto")}
         />
-      )}
-      {canEdit && !saved && (
-        <button
-          type="button"
-          aria-label={`Remove ${row.label}`}
-          onClick={onRemove}
-          className={ROW_REMOVE_BUTTON}
-        >
-          <X size={12} />
-        </button>
-      )}
+        {canEdit && saved && (
+          <FieldMenu
+            label={row.label}
+            description={row.description ?? ""}
+            options={row.kind === "enum" ? (row.options ?? []) : undefined}
+            onDescription={(description) => onChange(withDescription(row, description))}
+            onOptions={(options) => onChange({ ...row, options })}
+            onRemove={onRemove}
+          />
+        )}
+        {canEdit && !saved && (
+          <button
+            type="button"
+            aria-label={`Remove ${row.label}`}
+            onClick={onRemove}
+            className={ROW_REMOVE_BUTTON}
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
       <FieldDescription text={row.description} />
     </div>
   );

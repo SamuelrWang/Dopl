@@ -3,33 +3,28 @@
 import { useState } from "react";
 import { pendingRow } from "@/shared/ui/pending";
 import type { GraphState } from "../graph-state";
+import { FieldList } from "./field-list";
 import { ObjectHoverCard } from "./object-hover-card";
 
 interface Props {
   objectId: string;
   graph: GraphState;
   selected: boolean;
-  /** Optimistically created, POST not answered: the card is the real content,
-   *  dimmed and inert — its id is provisional and cannot be selected into. */
+  /** Optimistically created, POST not answered: the card is the real content, dimmed and inert —
+   *  its id is provisional and cannot be selected into. */
   pending?: boolean;
   onSelect: (id: string) => void;
 }
 
+/** First fields a canvas card previews; the hover card and the panel carry the rest. */
+const CARD_FIELDS = 3;
+
 /**
- * One object in a lane: name, description, hairline, counts. Whole card selects;
- * hover shows the cursor-following quick view.
+ * One object in a canvas lane: a selectable white card with the name, description, the first few
+ * fields and the counts. The whole card selects; hover shows the cursor-following quick view.
  *
- * Fixed height is board arithmetic: `h-[216px]` = 18 × the 12px dot pitch, against
- * a 264px inner width.
- *
- * The eight-line clamp is arithmetic, not taste: 216 − meta row (≈ 32) − 20px body
- * padding − 18.75px name line − 2px gap ≈ 143px, and `text-caption` is 16.1px/line,
- * so 8 lines (128.8px) is the last that fits with its ellipsis. Re-do the sum if
- * height, paddings, lane padding or the type scale move.
- *
- * `<div>` + `onClick`, not a wrapping `<button>`: the title button is the
- * accessible control, the container handler is mouse convenience so the meta row
- * shares the target.
+ * `<div>` + `onClick`, not a wrapping `<button>`: the name button is the accessible control, and the
+ * card holds controls of its own (a `ref` chip opens that object, a link opens the browser).
  */
 export function KanbanCard({
   objectId,
@@ -47,38 +42,38 @@ export function KanbanCard({
       onMouseEnter={(e) => setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setHoverPos(null)}
-      onClick={() => onSelect(objectId)}
-      /* ⚠ Read by the base layer's one clickable-cursor rule (`globals.css › ANYTHING
-         CLICKABLE SHOWS THE HAND`) — this is the whole card's hand cursor, not a style
-         hook. No `role="button"`: the card holds buttons of its own. */
+      onClick={(e) => {
+        if (e.target instanceof Element && e.target.closest("a,button")) return;
+        onSelect(objectId);
+      }}
+      // The base layer's clickable-cursor hook (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`).
       data-clickable=""
       data-selected={selected ? "true" : undefined}
-      {...pendingRow(
-        pending,
-        "kanban-card flex h-[216px] shrink-0 flex-col rounded-[10px] border bg-bg-elevated"
-      )}
+      {...pendingRow(pending, "white-card select-card flex shrink-0 flex-col")}
     >
       <button
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(objectId);
-        }}
-        className="flex min-h-0 w-full flex-1 flex-col items-start px-3 pt-3 pb-2 text-left"
+        onClick={() => onSelect(objectId)}
+        className="flex w-full flex-col items-start px-3.5 pt-3 pb-2.5 text-left"
       >
-        <span className="block w-full truncate text-body font-semibold tracking-tight text-text-primary">
+        <span className="block w-full truncate text-heading font-medium tracking-tight text-text-primary">
           {object.name}
         </span>
-        {/* Flexible middle: clamps with ellipsis at the last fitting line. No
-            `block` beside the clamp — the clamp IS a display rule (-webkit-box)
-            and whichever the stylesheet emitted last wins. */}
         {object.subtitle && (
-          <span className="mt-0.5 line-clamp-[8] w-full min-h-0 flex-1 text-caption text-text-secondary">
+          <span className="mt-0.5 line-clamp-3 w-full text-caption text-text-secondary">
             {object.subtitle}
           </span>
         )}
       </button>
-      <div className="flex shrink-0 items-center gap-1.5 border-t border-border-subtle px-3 py-2 text-micro text-text-muted">
+      <FieldList
+        object={object}
+        graph={graph}
+        onSelect={onSelect}
+        limit={CARD_FIELDS}
+        compact
+        className="mx-3.5 border-t border-border-subtle"
+      />
+      <div className="mx-3.5 flex shrink-0 items-center gap-1.5 border-t border-border-subtle py-2 text-micro text-text-muted">
         <span>{object.attributes.length} attrs</span>
         <span aria-hidden>·</span>
         <span>{object.relationships.length} edges</span>

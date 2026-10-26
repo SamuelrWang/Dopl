@@ -1,18 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, MoreHorizontal, Plus, Settings2, Trash2 } from "lucide-react";
 import type { Dispatch } from "react";
-import { cn } from "@/shared/lib/utils";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { MenuItem, Popover } from "@/shared/ui/popover-menu";
-import {
-  orphanedByObjectDelete,
-  type GraphAction,
-  type GraphState,
-} from "../graph-state";
+import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
-import { deleteObjectMessage } from "./object-panel";
+import { ObjectTypeActions, TYPE_ICON_BUTTON } from "./object-type-actions";
+import { RowsChevron, RowsCollapse } from "./rows-collapse";
 import { KIND_LABELS } from "./template-editor";
 
 interface Props {
@@ -29,16 +22,12 @@ interface Props {
 }
 
 /**
- * Header card at the top of a column's lane: name (edited in place), card count,
- * and for editors an add button + kebab menu. Expands onto a preview of the
- * column's description and default fields; the template is edited in the panel's
- * TemplateEditor ("Object settings").
+ * The canvas lane's header card: fold, name (edited in place), count, then the type's actions. It
+ * unfolds onto the type's description and a read-only echo of its default fields; the editor is
+ * the panel's.
  *
- * The card is not one button: a `<button>` inside a `<button>` is invalid HTML
- * and browsers reparent the inner one out. Input + icon buttons are siblings; the
- * chevron is the real keyboard toggle (`aria-expanded` + `aria-controls`) and the
- * row's `onClick` duplicates it for the mouse. Every control stops propagation so
- * one click fires exactly one thing.
+ * Not one button: the chevron is the keyboard toggle (`aria-expanded` + `aria-controls`) and the
+ * row's `onClick` duplicates it for the mouse; every other control is a sibling that stops the click.
  */
 export function KanbanColumnHeader({
   column,
@@ -50,26 +39,18 @@ export function KanbanColumnHeader({
   onCreateObject,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const label = column.name || "untitled object";
   const detailsId = `column-details-${column.id}`;
 
   return (
-    // No `overflow-hidden`: the kebab's Popover is an absolutely positioned child
-    // and a clipping ancestor cuts the menu off. Nothing inside paints a
-    // background, so rounded corners hold without it.
     <div
-      className="kanban-card shrink-0 rounded-[10px] border bg-bg-elevated"
+      className="white-card select-card shrink-0"
       data-selected={selected ? "true" : undefined}
     >
-      {/* ⚠ `data-clickable` IS THE WHOLE ROW'S HAND CURSOR, not a style hook — the base layer's
-          one clickable-cursor rule reads it (`globals.css › ANYTHING CLICKABLE SHOWS THE HAND`).
-          The row toggles on click while the chevron button beside it carries the keyboard path,
-          so the div takes no `role`: a `role="button"` here would nest the actions button and
-          the `+` inside a button. */}
+      {/* `data-clickable` is the row's hand cursor (`globals.css › ANYTHING CLICKABLE SHOWS THE
+          HAND`); no `role`, since the row holds buttons of its own. */}
       <div
-        className="flex items-center gap-1 px-1.5 py-1"
+        className="flex items-center gap-1 py-1 pr-1 pl-1"
         data-clickable=""
         onClick={() => setOpen((v) => !v)}
       >
@@ -82,9 +63,9 @@ export function KanbanColumnHeader({
             e.stopPropagation();
             setOpen((v) => !v);
           }}
-          className="shrink-0 rounded-md p-1 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
+          className={TYPE_ICON_BUTTON}
         >
-          <ChevronDown size={13} className={cn("transition-transform", open && "rotate-180")} />
+          <RowsChevron open={open} size={13} />
         </button>
         <input
           type="text"
@@ -94,112 +75,45 @@ export function KanbanColumnHeader({
           onChange={(e) =>
             dispatch({ type: "OBJECT_UPDATE", id: column.id, patch: { name: e.target.value } })
           }
-          className="min-w-0 flex-1 bg-transparent text-body font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-title font-medium tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
           placeholder="Object name"
           aria-label="Object name"
         />
-        <span className="shrink-0 rounded-full bg-surface-raised-4 px-1.5 py-px text-micro font-medium text-text-secondary">
+        <span className="shrink-0 px-1 text-caption tabular-nums text-text-muted">
           {column.childIds.length}
         </span>
         {canEdit && (
-          // `Add to <name>`, not `Add <name>` — that phrase is the lane-foot
-          // button's (`kanban-board.tsx`), and two controls under one accessible
-          // name is an ambiguous stop for anyone navigating by name.
-          <button
-            type="button"
-            aria-label={`Add to ${label}`}
-            title={`Add to ${label}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onCreateObject(column.id);
-            }}
-            className="shrink-0 rounded-md p-1 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
-          >
-            <Plus size={13} />
-          </button>
-        )}
-        {canEdit && (
-          <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              aria-label={`Object actions for ${label}`}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((v) => !v)}
-              className="rounded-md p-1 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
-            >
-              <MoreHorizontal size={13} />
-            </button>
-            <Popover open={menuOpen} onClose={() => setMenuOpen(false)} align="right">
-              <MenuItem
-                icon={<Settings2 size={12} />}
-                onSelect={() => {
-                  setMenuOpen(false);
-                  onSelect(column.id);
-                }}
-              >
-                Object settings
-              </MenuItem>
-              <MenuItem
-                destructive
-                icon={<Trash2 size={12} />}
-                onSelect={() => {
-                  setMenuOpen(false);
-                  setConfirmDelete(true);
-                }}
-              >
-                Delete object
-              </MenuItem>
-            </Popover>
-          </div>
+          <ObjectTypeActions
+            column={column}
+            label={label}
+            graph={graph}
+            dispatch={dispatch}
+            onSelect={onSelect}
+            onCreateObject={onCreateObject}
+          />
         )}
       </div>
 
-      {/* Height collapse without measuring: row animates 0fr → 1fr, child clips
-          itself. `inert` while closed keeps the hidden input out of tab order and
-          off the a11y tree — `overflow: hidden` alone only hides it. */}
-      <div
-        id={detailsId}
-        inert={!open}
-        className={cn(
-          "grid transition-[grid-template-rows] duration-[250ms] ease-out",
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        )}
-      >
-        <div className="overflow-hidden">
-          <div className="border-t border-border-subtle px-2 pt-1.5 pb-2">
-            <input
-              type="text"
-              value={column.subtitle}
-              readOnly={!canEdit}
-              onChange={(e) =>
-                dispatch({
-                  type: "OBJECT_UPDATE",
-                  id: column.id,
-                  patch: { subtitle: e.target.value },
-                })
-              }
-              placeholder="Describe this object…"
-              className="w-full bg-transparent text-caption text-text-secondary placeholder:text-text-muted focus:outline-none"
-              aria-label="Object description"
-            />
-            <TemplatePreview column={column} />
-          </div>
+      <RowsCollapse id={detailsId} open={open}>
+        <div className="border-t border-border-subtle px-3 pt-2 pb-3">
+          <input
+            type="text"
+            value={column.subtitle}
+            readOnly={!canEdit}
+            onChange={(e) =>
+              dispatch({
+                type: "OBJECT_UPDATE",
+                id: column.id,
+                patch: { subtitle: e.target.value },
+              })
+            }
+            placeholder="Describe this object…"
+            className="w-full bg-transparent text-caption text-text-secondary placeholder:text-text-muted focus:outline-none"
+            aria-label="Object description"
+          />
+          <TemplatePreview column={column} />
         </div>
-      </div>
-
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title="Delete object?"
-        description={deleteObjectMessage(
-          column.name || "this object",
-          orphanedByObjectDelete(graph, column.id).length
-        )}
-        confirmLabel="Delete permanently"
-        destructive
-        onConfirm={() => dispatch({ type: "OBJECT_DELETE", id: column.id })}
-      />
+      </RowsCollapse>
     </div>
   );
 }
@@ -208,19 +122,20 @@ export function KanbanColumnHeader({
 function TemplatePreview({ column }: { column: OntologyObject }) {
   return (
     <>
-      <p className="mt-2 text-label font-semibold uppercase tracking-wide text-text-muted">
-        Default fields
-      </p>
+      <p className="mt-3 text-caption font-medium text-text-muted">Default fields</p>
       {column.template.length === 0 ? (
         <p className="mt-1 text-caption text-text-muted">No template fields yet</p>
       ) : (
-        <ul className="mt-1 flex flex-col gap-1">
+        <ul className="mt-1 flex flex-col">
           {column.template.map((field, i) => (
-            <li key={`${field.key}-${i}`} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-caption text-text-secondary">
+            <li
+              key={`${field.key}-${i}`}
+              className="flex min-h-7 items-center gap-2 border-t border-border-subtle first:border-t-0"
+            >
+              <span className="min-w-0 flex-1 truncate text-caption text-text-primary">
                 {field.label}
               </span>
-              <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium text-text-secondary">
+              <span className="shrink-0 text-caption text-text-muted">
                 {KIND_LABELS[field.kind]}
               </span>
             </li>
