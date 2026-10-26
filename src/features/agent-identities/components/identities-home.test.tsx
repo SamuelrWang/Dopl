@@ -49,7 +49,6 @@ function mount(over: Partial<IdentitiesHomeProps> = {}) {
     card: {},
     sessions: [LIVE, ENDED],
     agents: AGENTS,
-    readiness: null,
     runtimes: [],
     currentUserId: "user-1",
     viewerPhoto: null,
@@ -90,11 +89,52 @@ describe("the identities face", () => {
     expect(view.querySelectorAll("input, textarea")).toHaveLength(0);
   });
 
-  it("opens the editor directly on create", () => {
+  it("has ONE create button, at the end of the controls row, and it creates a personal row", () => {
     const props = mount();
-    const personal = screen.getByRole("region", { name: "Personal" });
-    fireEvent.click(within(personal).getByRole("button", { name: "Agent Identity" }));
+    const creates = screen.getAllByRole("button", { name: "Agent Identity" });
+    expect(creates).toHaveLength(1);
+    const search = screen.getByRole("textbox", { name: "Search identities" });
+    const row = creates[0].closest("div.flex-wrap")!;
+    expect(row.contains(search)).toBe(true);
+    expect(row.contains(screen.getByRole("button", { name: "Sort identities" }))).toBe(true);
+    // Search, then the sort, then the create button.
+    const order = [search, screen.getByRole("button", { name: "Sort identities" }), creates[0]];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    fireEvent.click(creates[0]);
     expect(props.onCreate).toHaveBeenCalledWith("home");
+  });
+
+  it("offers a Create new cell in an empty Shared section, to creators only", () => {
+    const props = mount({
+      shared: { identities: [], markerFor: () => null, canCreate: true, peers: [] },
+    });
+    const shared = screen.getByRole("region", { name: "Shared in this channel" });
+    fireEvent.click(within(shared).getByRole("button", { name: "Create new" }));
+    expect(props.onCreate).toHaveBeenCalledWith("container");
+    cleanup();
+    mount({ shared: { identities: [], markerFor: () => null, canCreate: false, peers: [] } });
+    const guest = screen.getByRole("region", { name: "Shared in this channel" });
+    expect(within(guest).queryByRole("button", { name: "Create new" })).toBeNull();
+  });
+
+  it("puts Launch on a personal card as a small ink pill, bottom right", () => {
+    mount({
+      personal: {
+        identities: [MINE],
+        state: { kind: "ready" },
+        canCreate: true,
+        footer: {
+          launch: { canLaunch: true, busyId: null, error: null, launch: vi.fn() },
+          onAddKnowledge: vi.fn(),
+        },
+      },
+    });
+    const launch = screen.getByRole("button", { name: "Launch" });
+    expect(launch.className).toContain("bg-surface-cta");
+    expect(launch.className).toContain("self-end");
+    expect(launch.className).not.toMatch(/w-full|auth-btn-3d|btn-light/);
   });
 
   it("puts live agents in Active now and finished ones only in Recent", async () => {

@@ -20,13 +20,13 @@ import {
   usageOf,
   type IdentityArrangement,
   type IdentityUse,
-  type RuntimeReadiness,
   type Sessions,
 } from "../lib/identity-runs";
 import { SECTIONS_CONTAINER, SECTION_PRIVATE_EVERYWHERE } from "../lib/visibility";
 import { IdentityActivityPanel } from "./identity-activity-panel";
 import { PersonalCardFooter, type CardLaunch } from "./identity-card-actions";
-import { IdentityControls, IdentityPageHead } from "./identity-page-controls";
+import { IdentityControls } from "./identity-page-controls";
+import { IdentityRailResizeHandle } from "./identity-rail-resize";
 import {
   IDENTITY_GRID_RAIL,
   IdentityGrid,
@@ -92,7 +92,6 @@ export interface IdentitiesHomeProps {
   /** This machine's agents; `null` = could not ask (no state lines, no rail). */
   sessions: Sessions;
   agents: AgentRunPresenter;
-  readiness: ReadonlyArray<RuntimeReadiness> | null;
   /** The runtimes the filter offers. */
   runtimes: ReadonlyArray<{ id: string; label: string }>;
   currentUserId: string;
@@ -103,8 +102,8 @@ export interface IdentitiesHomeProps {
 }
 
 /**
- * /home → Identities: the identities 3/4 left (head, controls, Shared, Personal), Activity 1/4
- * right. A card click opens the read-only view; its Edit hands the row to the host's editor in
+ * /home → Identities: the identities left (controls with the one create button, Shared,
+ * Personal), the Activity rail right behind a resizable hairline. A card click opens the read-only view; its Edit hands the row to the host's editor in
  * the workspace the row lives in. Create opens the editor directly.
  */
 export function IdentitiesHome(props: IdentitiesHomeProps) {
@@ -140,42 +139,38 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
 
   return (
     <div className="rail-layout">
-      <div className="rail-layout-cols">
+      <div className="rail-layout-cols" data-rail={sessions === null ? "off" : undefined}>
         <div className="rail-layout-main">
-          <div className="flex flex-col gap-3">
-            <IdentityPageHead
-              sharedCount={shared ? sharedShown.length : null}
-              personalCount={personalShown.length}
-              readiness={props.readiness}
-            />
-            <IdentityControls
-              arrangement={arrangement}
-              onArrangement={setArrangement}
-              runtimes={props.runtimes}
-              showing={sharedShown.length + personalShown.length}
-              total={everything.length}
-            />
-          </div>
+          <IdentityControls
+            arrangement={arrangement}
+            onArrangement={setArrangement}
+            runtimes={props.runtimes}
+            showing={sharedShown.length + personalShown.length}
+            total={everything.length}
+            action={
+              // The page's one create: a personal identity. A shared one is created from the
+              // Shared grid's "Create new" cell, which is in the channel it shares into.
+              <CreateButton disabled={!personal.canCreate} onClick={() => props.onCreate("home")}>
+                Agent Identity
+              </CreateButton>
+            }
+          />
 
           {shared === null ? (
             <EmptyState icon={Bot} title="No channel selected" />
           ) : (
-            <IdentityPanel
-              id="home-agents-shared"
-              label={SECTIONS_CONTAINER[0].label}
-              flat
-              action={
-                shared.canCreate ? (
-                  <CreateButton onClick={() => props.onCreate("container")}>
-                    Agent Identity
-                  </CreateButton>
-                ) : null
-              }
-            >
+            <IdentityPanel id="home-agents-shared" label={SECTIONS_CONTAINER[0].label} flat>
               <IdentityGrid
                 identities={sharedShown}
                 emptyLine={emptyLine(sharedRows, SECTIONS_CONTAINER[0].emptyLine)}
                 grid={IDENTITY_GRID_RAIL}
+                // Hidden below the write floor (a guest never meets a dead control), and while a
+                // filter has hidden every row, so "No matches." still reads.
+                onCreate={
+                  shared.canCreate && (sharedShown.length > 0 || sharedRows.length === 0)
+                    ? () => props.onCreate("container")
+                    : undefined
+                }
                 onOpen={open}
                 markerFor={shared.markerFor}
                 scopeFor={sharedScope}
@@ -185,16 +180,7 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
             </IdentityPanel>
           )}
 
-          <IdentityPanel
-            id="home-agents-private"
-            label={SECTION_PRIVATE_EVERYWHERE.label}
-            flat
-            action={
-              <CreateButton disabled={!personal.canCreate} onClick={() => props.onCreate("home")}>
-                Agent Identity
-              </CreateButton>
-            }
-          >
+          <IdentityPanel id="home-agents-private" label={SECTION_PRIVATE_EVERYWHERE.label} flat>
             <PersonalBody state={personal.state}>
               <IdentityGrid
                 identities={personalShown}
@@ -218,6 +204,7 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
           </IdentityPanel>
         </div>
 
+        {sessions !== null && <IdentityRailResizeHandle />}
         {sessions !== null && (
           <aside className="rail-layout-aside" aria-label="Activity">
             <IdentityActivityPanel

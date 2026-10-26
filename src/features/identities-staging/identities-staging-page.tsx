@@ -14,7 +14,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Role } from "@/features/workspaces/types";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
 import { StagingScenarioSwitch } from "@/features/ui-staging/staging-scenario-switch";
-import { IdentitiesScene, type ReadinessScenario } from "./home/identities-scene";
+import { IdentitiesScene } from "./home/identities-scene";
 import {
   CONTAINER_WORKSPACE_ID,
   KNOWLEDGE_BASES,
@@ -62,7 +62,6 @@ export function IdentitiesStagingPage() {
   const [channelChoice, setChannelChoice] = useState<ChannelChoice>("tech-debt");
   const [role, setRole] = useState<RoleChoice>("owner");
   const [homeSetUp, setHomeSetUp] = useState(true);
-  const [readiness, setReadiness] = useState<ReadinessScenario>("ready");
   const home: HomeChoice = !homeSetUp ? "unset" : homeReadFails ? "fails" : "ready";
 
   const channel =
@@ -78,7 +77,6 @@ export function IdentitiesStagingPage() {
             channel={channel}
             homeWorkspaceId={homeSetUp ? STAGING_HOME_WORKSPACE_ID : null}
             currentUserId={STAGING_USER_ID}
-            readiness={readiness}
           />
         )}
       </StagingFrame>
@@ -104,16 +102,6 @@ export function IdentitiesStagingPage() {
               { value: "guest", label: "Guest" },
             ],
             onChange: setRole,
-          },
-          {
-            key: "runtimes",
-            label: "Runtimes",
-            value: readiness,
-            options: [
-              { value: "ready", label: "All ready" },
-              { value: "signin", label: "Not signed in" },
-            ],
-            onChange: setReadiness,
           },
           {
             key: "home",

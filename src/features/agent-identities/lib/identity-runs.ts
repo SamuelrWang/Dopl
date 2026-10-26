@@ -1,6 +1,5 @@
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { formatRelativeTime } from "@/shared/lib/format-time";
-import type { RuntimeDescriptor } from "@/features/channels/lib/runtime-capability";
 import type { AgentIdentity } from "../client/types";
 
 /**
@@ -148,24 +147,4 @@ export function arrangeIdentities(
     return found.sort((a, b) => usageFor(use, b).running - usageFor(use, a).running);
   }
   return found.sort((a, b) => (usageFor(use, b).lastUsed ?? -1) - (usageFor(use, a).lastUsed ?? -1));
-}
-
-export interface RuntimeReadiness {
-  id: string;
-  label: string;
-  ready: boolean;
-}
-
-/** Each registered runtime and whether it is signed in; `null` until the desktop has answered. */
-export function runtimeReadiness(selection: {
-  runtimes: ReadonlyArray<RuntimeDescriptor>;
-  connected: ReadonlyArray<string>;
-  connectedKnown: boolean;
-}): RuntimeReadiness[] | null {
-  if (!selection.connectedKnown || selection.runtimes.length === 0) return null;
-  return selection.runtimes.map((r) => ({
-    id: r.id,
-    label: r.label || r.id,
-    ready: selection.connected.includes(r.id),
-  }));
 }

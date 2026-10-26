@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { SECTION_HEADING_TEXT } from "./section-heading";
+import { SECTION_TITLE } from "./section-title";
 
 /**
  * THE FLAT SECTION — a labelled region whose header and content sit on ONE
@@ -30,7 +31,8 @@ import { SECTION_HEADING_TEXT } from "./section-heading";
  * "you have none" and "there are none to have" the same picture.
  *
  * `flat` is the one other face: no well at all, the header flush with the content and the heading
- * on the kit's `.title-chip`, for a section standing on a white pane (/home Identities).
+ * in the small card-title face (`section-title.ts › SECTION_TITLE`), for a section standing on a
+ * white pane (/home Identities).
  */
 /**
  * THE GROUND — a gray WELL, the frame model's last step (Samuel, 2026-08-30:
@@ -84,7 +86,7 @@ export function SectionPanel({
   /** ONE quiet line under the heading. ⚠ Minimal-copy ruling (INVARIANTS §5):
    *  a RULE the operator needs, never an explainer paragraph. */
   caption?: ReactNode;
-  /** No well: the section sits on the page and its heading wears the kit's `.title-chip`, so the
+  /** No well: the section sits on the page and its heading wears `SECTION_TITLE`, so the
    *  cards' own hairlines do the separating. */
   flat?: boolean;
   /** OVERRIDES the ground. See the docblock — the default is painted. */
@@ -110,7 +112,7 @@ export function SectionPanel({
             with the trial's promotion. */}
         <h2
           id={id}
-          className={cn("truncate", SECTION_HEADING_TEXT, flat && "title-chip")}
+          className={cn("truncate", flat ? SECTION_TITLE : SECTION_HEADING_TEXT)}
         >
           {label}
         </h2>

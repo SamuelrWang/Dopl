@@ -38,7 +38,6 @@ import { useStagingAttachableBases } from "../store/use-staging-attachable-bases
 import { useStagingIdentities } from "../store/use-staging-identities";
 import { useStagingIdentitySave } from "../store/use-staging-identity-save";
 
-export type ReadinessScenario = "ready" | "signin";
 
 const runtimeLabel = (id: string) => STAGING_RUNTIMES.find((r) => r.id === id)?.label ?? id;
 const names = new Map(STAGING_PEERS.map((p) => [p.userId, p.displayName]));
@@ -47,12 +46,10 @@ export function IdentitiesScene({
   channel,
   homeWorkspaceId,
   currentUserId,
-  readiness,
 }: {
   channel: StagingChannel | null;
   homeWorkspaceId: string | null;
   currentUserId: string;
-  readiness: ReadinessScenario;
 }) {
   const [editing, setEditing] = useState<{ where: IdentityHome; identity: AgentIdentity | null } | null>(null);
   const [attaching, setAttaching] = useState<AgentIdentity | null>(null);
@@ -107,11 +104,6 @@ export function IdentitiesScene({
         card={{ photoFor: (i) => photoOf(i.createdBy), runtimeLabel, catalogs: STAGING_CATALOGS }}
         sessions={sessions}
         agents={AGENT_RUN_PRESENTER}
-        readiness={STAGING_RUNTIMES.map((r, i) => ({
-          id: r.id,
-          label: r.label,
-          ready: readiness === "ready" || i === 0,
-        }))}
         runtimes={STAGING_RUNTIMES}
         currentUserId={currentUserId}
         viewerPhoto={photoOf(currentUserId)}

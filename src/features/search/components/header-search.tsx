@@ -5,10 +5,8 @@ import { Search } from "lucide-react";
 import type { SearchItem } from "../contracts";
 import type { SearchFetcher } from "../use-search";
 import { SearchPopup } from "./search-popup";
+import { SEARCH_PILL_FACE, SEARCH_PILL_INPUT } from "@/shared/ui/search-pill";
 import { Keycap } from "./search-popup-rows";
-
-const SEARCH_PILL =
-  "white-card raise-pill flex h-9 w-[260px] cursor-text items-center gap-2 rounded-full px-3.5 text-text-muted";
 
 /**
  * /home's header search: an always-open pill whose results arrive in a popup; typing never
@@ -45,12 +43,12 @@ export function HeaderSearch({
 
   return (
     <>
-      <label className={SEARCH_PILL}>
+      <label className={SEARCH_PILL_FACE}>
         <Search size={14} strokeWidth={2} aria-hidden="true" />
         <input
           id="home-search-field"
           ref={inputRef}
-          className="min-w-0 flex-1 bg-transparent text-small text-text-primary outline-none placeholder:text-text-muted"
+          className={SEARCH_PILL_INPUT}
           type="text"
           autoComplete="off"
           spellCheck={false}
