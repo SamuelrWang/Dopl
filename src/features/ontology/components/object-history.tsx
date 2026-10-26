@@ -48,6 +48,7 @@ export function ObjectHistory({
           hasMore={history.hasMore}
           isLoadingMore={history.isLoadingMore}
           onLoadMore={history.loadMore}
+          framed={false}
           canRestore={canEdit}
           onRestore={async (revision: Revision) => {
             await restore.mutateAsync({
