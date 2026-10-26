@@ -94,9 +94,15 @@ In the product these recipes are already kit and `src/shared/ui` primitives (202
 the white card `.white-card` (selectable: `+ .select-card`), the well `.card-well`, the header
 white pill `WHITE_PILL`, `StatusPill`, `ThinMeter`,
 `IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, the ink pill
-family (`INK_PILL_FACE`: `PAGE_ACTION_BTN`, `SMALL_PRIMARY_PILL`, `INK_PILL`, `QUIET_PILL`), and
-the 15px `text-heading` step, and `SECTION_TITLE` (a card's or panel section's small bold ink
-title: the Overview cards, the ontology object panel). The ontology board and object panel
+family (`INK_PILL_FACE`: `PAGE_ACTION_BTN`, `SMALL_PRIMARY_PILL`, `INK_PILL`, `QUIET_PILL`),
+the 15px `text-heading` step, the list of rows (one white card with a hairline between rows,
+`channels/components/bits.tsx › ROW_CARD`, the Tasks list) and the list of items (each item its own
+white card, title over one meta line led by small faces, actions centred right:
+`channels/components/item-card.tsx › ItemCard`, the Threads and Artifacts lists under quiet uppercase
+recency headings). An opened artifact reads as a
+document (breadcrumb, title, caption, meta line, then face + name + time rows over normal message
+bodies), never as one bubble. `SECTION_TITLE` is a card's or panel section's small bold ink title (the
+Overview cards, the ontology object panel); the ontology board and object panel
 (`src/features/ontology/components/`) are on this kit since 2026-10-26. A port imports them;
 DESIGN-SYSTEM.md lists each.
 

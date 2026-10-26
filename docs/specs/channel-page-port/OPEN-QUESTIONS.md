@@ -491,4 +491,115 @@ Workers append a `## <slice>` section per question: the question, what was chose
 5. **The Rows display moved onto kit and tokens.** The brief named `ontology-rows.css` for deletion;
    its literal neutral palette (DESIGN-LANGUAGE §2) is now the product tokens (`--text-primary`
    etc.), so Rows reads slightly cooler than it did. No shared token was retuned.
-6. **Ontology white background: trial per Samuel.** Record pane `--bg-overlay` on `/playground/ontology` only (`ui-staging/staging.css › .uis-onto-pane`); grid and cards unchanged.
+6. **Ontology white background: trial per Samuel.** Record pane `--bg-overlay` on `/playground/ontology` only (`ui-staging/staging.css › .uis-white-pane`, shared with /playground/knowledge since); grid and cards unchanged.
+## Threads + Artifacts overhaul (branch `ui/threads-artifacts-overhaul`)
+
+1. **The Threads wells lost their gray box.** Samuel ruled the gray boxes onto the Threads tab on
+   2026-09-13 and "same as the channel picker" on 2026-09-17; the picker has since moved to the
+   plain uppercase heading, and the brief asked for that heading. Chosen: Threads and Artifacts
+   pass the plain `heading` variant (one card per item since round 2, item 8); the Agents tab
+   keeps the gray `well`. Open: should the Agents tab follow? Where: `recency-wells.tsx ›
+   RecencyWells`.
+2. **The Threads ↔ Artifacts switch stays one button**, the white page pill beside New thread,
+   labelled with where it goes. It was never a segmented control, and Samuel ruled the flip
+   wording on 2026-09-16, so it was not turned into an underline pair. Where: `threads-tab.tsx`.
+3. **Copy got shorter (minimal-copy ruling).** Clip notes are now one muted caption under the
+   list ("Showing the most recently active threads" / "Showing the most recent artifacts"); empty
+   and failed reads are `EmptyState` wells ("No threads yet", "No artifacts yet", "Could not load
+   artifacts"). The empty artifacts note no longer explains that an artifact is made by folding
+   messages in the transcript. Restore it as an `EmptyState` description if Samuel wants the how.
+4. **No Launch agent on a thread row.** The Threads tab never had one (the transcript's thread
+   card does); a row shows the thread's agents in its face stack and a live "N running" pill only.
+   No per-thread activity squares exist (the strip is channel-level), so none are drawn.
+5. **The in-transcript fold card is untouched.** `artifact-card.tsx › ArtifactCard` (black header
+   strip, gray run box, Show more) is a separate face from the opened artifact; per the granular
+   rule it was not reskinned here. Its member rows could adopt `artifact-detail.tsx`'s message row
+   next, which would need face facts on `view-model-artifacts.ts › ArtifactMember`.
+6. **The jump is the message's number.** Each opened-artifact message prints its `#n`; with a
+   host jump wired it is a quiet button ("Show #n in the transcript") that lands through the same
+   `sel.jumpToMessage` the Mentions inbox uses, opening the message's thread when it has one. The
+   staging page wires its local equivalent; the landing demo passes none, so numbers are text.
+7. **The artifact list's face is the folder** (`createdBy` / `createdByAgent`), not every author:
+   the list payload carries no member authors. The opened artifact's meta line stacks every author
+   from the members read.
+
+## Overview column heights (branch `ui/overview-column-heights`)
+
+1. **Fixed card heights, last card takes the rest; one column relaxes to content height.** Both columns are `--ove-cols-h` (900px) tall: Needs you 212 + Agents 336 + Activity (rest, 324) + 2 gaps of 14 = Credits 288 + Tokens 160 + Devices (rest, 424) + 2 gaps; without the Devices preview the columns are Credits + gap + Tokens (462) and Needs fills them; People/MCP tools are `--ove-pair-h` (332). Heights are estimates from the type scale (no browser per the worker rules) and may want a nudge once Samuel sees it. Where: `overview-staging/pages/home/overview/overview.css › .ove`.
+
+## Knowledge staging overhaul (branch `ui/knowledge-overhaul`)
+
+1. **"The overview little panel" read as the document's head.** Opening an entry showed a grey
+   "OVERVIEW" strip over an inset well holding the title and the agent description. It is now one
+   `.white-card` head: the title edited in place with the save state, presence and write-rule
+   labels on its row, the description under it on the kit's quiet underline. If Samuel meant
+   something else by "overview", say which.
+2. **The base's resting face lost its two grey wells.** The name and description moved out of
+   boxed fields into the head of the column (edited in place, same autosave); Details is a
+   label/value grid in one white card; Changelog is one white card of day-grouped hairline rows.
+3. **Tree selection is a fill, not ink.** A selected file is `--surface-raised-2` with a medium
+   label (the agent rail's `ROW_SELECTED_FACE`), hover the quieter raised-1. The /home channel
+   row's ink fill would shout in a tree; the 2026-09-29 ruling made hover and selected ONE gray,
+   and this separates them by a step.
+4. **New in the tree:** indent guides under open folders, a child count on each folder (hidden
+   while the row's actions show), Enter/Space on a focused row. The root create stays at the
+   bottom of the tree as two outlined pills ("New file", "New folder").
+5. **The settings popup became the profile popup's shape**: the wide card with the underline rail
+   (General, Sharing, Folders, Agents). Advanced (URL slug) folded into General behind "Edit URL
+   slug"; Channels sits under Sharing because it renders nothing in a standard workspace and a rail
+   entry must not open an empty pane; Folders is drawn only when the base has folders. All panes
+   stay mounted while the popup is open, so a switch keeps half-typed edits.
+6. **Choices became bare menus**: team access None/Read/Edit and channel sharing
+   None/Agent only/Visible are `SelectMenu variant="bare"` with one-line descriptions (they were
+   uppercase segmented radios). The None option reads "No access" / "Not shared".
+7. **Copy trimmed** in the popup to label + control (minimal-copy ruling): the agent-write and
+   folder-description explainer paragraphs became one meta line / one caption. The conflict
+   banner and the delete confirmations keep their wording.
+8. **The changelog redesign is knowledge-staging only.** `src/features/revisions` is shared with the
+   ontology, and `ontology-staging/revisions/` keeps its own verbatim copy; on port the one list
+   changes for both surfaces.
+9. **Pre-existing red, not this branch:** `src/features/ui-staging/staging-frame.test.tsx ›
+   opens every frame-level popup on any face` looks the profile popup's sections up as `button`s,
+   but the rail has been `role="tab"` since the profile popup restyle.
+8. **Round 2 (Samuel: "each item should be a separate box").** Threads and artifacts are now one
+   `.white-card` each (`item-card.tsx › ItemCard`), title over one meta line with a 20px face stack,
+   actions centred right; the wells are the plain `heading` variant and the `card` well variant is
+   deleted. Tasks keeps its one-card list (`ROW_CARD`): it is still the Tasks design, and the Tasks
+   quick view's rows sit inside one pop-up card rather than being per-item cards, so neither moved.
+   An artifact card keeps its one-line summary between title and meta, so artifacts with a summary
+   are one line taller than threads and than artifacts without one.
+10. **Follow-up (Samuel): white pane and text-link creates.** /playground/knowledge wears the ontology's white record pane (one shared `.uis-white-pane`); the tree's New file / New folder are `TEXT_LINK_BUTTON` text links (muted, ink + underline on hover), the Tasks title's recipe, not pills.
+
+## Search pop-up (playground mimic + contents overhaul, branch `ui/search-popup`)
+
+1. **One pill, not a copy.** /home's search pill moved from `apps/desktop-ui/src/pages/home/home-search.tsx`
+   to `src/features/search/components/header-search.tsx › HeaderSearch` (fetcher as a prop), so the
+   desktop header and the playground top bar mount the same component. The playground's
+   click-to-swap copy (`popups-staging › StagingSearchField`, `popups-staging/pages/home/home-search.tsx`,
+   the stub `apiSearchFetcher`, the provider's `searchOpen`/`closeSearch`) is deleted; the catalog's
+   "Search popup" now focuses the pill.
+2. **Kinds.** The product search returns nine kinds; on /home (account scope) members, skills and
+   chats never appear (`CONTAINER_ONLY_SEARCH_GROUPS`). Ontology objects and tasks are not search
+   kinds, so the staged answers (`ui-staging/data/search-results.ts`) hold channels, messages,
+   threads, artifacts, knowledge and identities, and no row uses `StatusPill` (no task row exists
+   to tick). Adding a tasks or ontology arm is a server change, not done here.
+3. **Width.** "Content-fit with a sensible max" sat against two locked widths (2026-09-17 sidebar
+   280px, 2026-09-29 /home pill-left to Profile-right). Chosen: `w-max`, floored at those widths
+   (sidebar 280px; /home `min-w-full` of the action group), capped at `min(440px, 100vw - 2rem)`;
+   right-anchored on /home so a wide answer grows leftward over the tabs, never off the window.
+4. **Opens on focus.** The card now opens whenever the field has focus: recents, else
+   `EmptyState` "Type to search". It used to stay shut until two characters or a recent existed,
+   which is why the playground pill looked dead. The sidebar host inherits this.
+5. **Card surface.** `.white-card` + `--shadow-card-lift` instead of `.menu-card` (gradient, three
+   drops), so the sticky section headings sit on the same flat white. The kit's dropdowns are
+   unchanged.
+6. **Highlighting.** `server/snippet.ts` became the isomorphic `search/highlight.ts` (+ new
+   `splitMatches`), so titles and subtitles are marked client-side with the server's own terms;
+   the fixture fetcher mints snippets with the server's builder. `SearchItem.color` was deleted:
+   the server never sent it and identities now lead with `IdentityFace` on the neutral ring.
+7. **Kept as they were:** the per-section scroll (locked 2026-09-17; headings are now also sticky
+   inside the card's own scroll), one-line channels/threads with the italic description, the
+   cross-container-only container name (now quiet text, not a bordered chip), `Loading results`,
+   `No results`, the 2-character server threshold, Escape clears, ↑/↓ wrap, Enter takes.
+8. **Staging navigation** stays a toast ("Staging: would open …"): the playground has no router
+   seam to land a row on its face.

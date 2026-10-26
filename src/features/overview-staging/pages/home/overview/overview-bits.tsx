@@ -7,7 +7,7 @@ import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import type { MockStatus } from "@/features/overview-staging/overview-mock-data";
 import { RUNTIME_LOGO } from "./overview-data";
 
-/** One white card with a plain title row; `aside` sits at the title row's right end. */
+/** One white card: a fixed title row (`aside` at its right end) over the body, which scrolls when the card's height is set. */
 export function ECard({
   title,
   count,
@@ -28,7 +28,7 @@ export function ECard({
         {count !== undefined && <span className="ove-card-count">{count}</span>}
         {aside && <span className="ove-card-aside">{aside}</span>}
       </header>
-      {children}
+      <div className="ove-card-body">{children}</div>
     </section>
   );
 }

@@ -57,7 +57,6 @@ a.lp-demo-top-tab {
 /* Frame triggers (the demo draws them as inert spans; here they open the staged popups via
    `staging-popups-provider.tsx`). Same faces; only the button resets + pointer. */
 button.uis-rail-create,
-button.lp-demo-top-search,
 button.lp-demo-top-profile {
   cursor: pointer;
   font: inherit;
@@ -65,10 +64,6 @@ button.lp-demo-top-profile {
 button.uis-rail-create {
   border: 0;
   color: inherit;
-}
-button.lp-demo-top-search {
-  font-size: var(--text-small);
-  text-align: left;
 }
 button.lp-demo-top-profile {
   font-size: var(--text-small);
@@ -147,7 +142,6 @@ button.lp-demo-top-profile {
 .uis-window .lp-demo-sw-row {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.08);
 }
-.uis-window .lp-demo-top-search,
 .uis-window .lp-demo-top-profile {
   box-shadow: var(--shadow-card-lift);
 }
@@ -157,23 +151,20 @@ button.lp-demo-top-profile {
 
 /* ── HOVER LIFT (Samuel, 2026-10-22) ─────────────────────────────────
    Anything clickable that sits on the panel as a raised object (channel
-   rows, New channel, search, profile) rises 2px on hover so it reads as
+   rows, New channel, profile; the search pill's `.raise-pill` does its own) rises 2px on hover so it reads as
    clickable. Shadow deepens with it. */
 .uis-window .lp-demo-sw-row,
 .uis-window button.lp-demo-top-new,
-.uis-window button.lp-demo-top-search,
 .uis-window button.lp-demo-top-profile {
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease;
 }
 .uis-window .lp-demo-sw-row:hover,
 .uis-window button.lp-demo-top-new:hover,
-.uis-window button.lp-demo-top-search:hover,
 .uis-window button.lp-demo-top-profile:hover {
   transform: translateY(-2px);
 }
 .uis-window .lp-demo-sw-row:hover,
-.uis-window button.lp-demo-top-search:hover,
 .uis-window button.lp-demo-top-profile:hover {
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 10px 22px rgba(0, 0, 0, 0.12);
 }
@@ -183,7 +174,6 @@ button.lp-demo-top-profile {
 @media (prefers-reduced-motion: reduce) {
   .uis-window .lp-demo-sw-row:hover,
   .uis-window button.lp-demo-top-new:hover,
-  .uis-window button.lp-demo-top-search:hover,
   .uis-window button.lp-demo-top-profile:hover {
     transform: none;
   }
@@ -364,10 +354,13 @@ button.lp-demo-top-profile {
 }
 
 
-/* ── ONTOLOGY: WHITE PANE ─────────────────────────────────────────────
-   /playground/ontology only (`recordClassName="uis-onto-pane"`): the frame's
-   twin of the desktop's `home.module.css › .page[data-face="ontology"] .pane`,
-   a white record pane behind the board. */
-.uis-window .lp-demo-record.uis-onto-pane {
+/* ── WHITE PANE (Samuel: ontology, then knowledge) ─────────────────────
+   A face that passes `recordClassName="uis-white-pane"` (/playground/ontology,
+   /playground/knowledge) gets a white record pane instead of `--home-card`.
+   The surrounding panel stays as the frame paints it; the pane's hairline
+   keeps its edge, and white cards keep theirs and the soft shadow. Port target:
+   `home.module.css` → `.page[data-face="ontology"] .pane` and
+   `.page[data-face="knowledge"] .pane`. */
+.uis-window .lp-demo-record.uis-white-pane {
   background: var(--bg-overlay);
 }

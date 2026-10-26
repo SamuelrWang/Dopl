@@ -1,8 +1,14 @@
 "use client";
 
-/** STAGING COPY of `src/features/knowledge/components/kb-sharing-section.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
+/** STAGING COPY of `src/features/knowledge/components/kb-sharing-section.tsx` — redesigned ahead of its source (PORTING.md). */
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/shared/lib/utils";
+import {
+  SettingsCard,
+  SettingsPanel,
+} from "@/shared/layout/settings-modal/sections/settings-panel";
+import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { toast } from "@/shared/ui/toast";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { useTeams } from "@/features/knowledge-staging/stubs/use-teams";
@@ -28,7 +34,7 @@ interface Props {
 }
 
 /**
- * Settings → Sharing: three-way scope picker + per-team grant editor. Editable
+ * Settings → Sharing → Workspace access: three-way scope picker + per-team grant editor. Editable
  * by the KB owner or a workspace admin only, mirroring the service-side
  * `ScopeChangeForbiddenError` rule; everyone else gets a read-only summary.
  */
@@ -120,18 +126,22 @@ export function KbSharingSection({
 
   if (!canManage) {
     return (
-      <p className="text-caption text-text-secondary leading-relaxed">
-        {kbScope(base) === "team"
-          ? "Shared with specific teams. Only the owner or a workspace admin can change sharing."
-          : kbScope(base) === "private"
-            ? "Private to its owner."
-            : "Public to the whole workspace. Only the owner or a workspace admin can change sharing."}
-      </p>
+      <SettingsPanel id="kb-settings-workspace" label="Workspace access">
+        <SettingsCard>
+          <p className="text-caption text-text-secondary">
+            {kbScope(base) === "team"
+              ? "Shared with specific teams. Only the owner or a workspace admin can change sharing."
+              : kbScope(base) === "private"
+                ? "Private to its owner."
+                : "Public to the whole workspace. Only the owner or a workspace admin can change sharing."}
+          </p>
+        </SettingsCard>
+      </SettingsPanel>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <SettingsPanel id="kb-settings-workspace" label="Workspace access">
       <ScopeSelector
         value={scope}
         onChange={setScope}
@@ -141,9 +151,9 @@ export function KbSharingSection({
 
       {scope === "team" ? (
         teamsLoading ? (
-          <p className="text-small text-text-secondary">Loading teams…</p>
+          <p className="px-1 text-caption text-text-muted">Loading teams…</p>
         ) : teamsError ? (
-          <p className="text-small text-danger">{teamsError}</p>
+          <p className="px-1 text-caption text-danger">{teamsError}</p>
         ) : (
           <>
             <TeamGrantEditor
@@ -154,7 +164,7 @@ export function KbSharingSection({
               lockedTeamIds={lockedTeamIds}
             />
             {grants.length === 0 ? (
-              <p className="text-caption text-warning">
+              <p className="px-1 text-caption text-warning">
                 No teams granted — only you and workspace admins will see
                 this knowledge base. Consider switching to Private instead.
               </p>
@@ -164,7 +174,7 @@ export function KbSharingSection({
       ) : null}
 
       {scope === "private" && kbScope(base) !== "private" ? (
-        <p className="text-caption text-text-secondary">
+        <p className="px-1 text-caption text-text-muted">
           Making this private removes all team grants — only you (and
           workspace admins via settings) will see it.
         </p>
@@ -175,12 +185,12 @@ export function KbSharingSection({
           type="button"
           onClick={handleSave}
           disabled={!dirty || saving}
-          className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-not-allowed disabled:opacity-40")}
         >
           {saving ? "Saving…" : "Update sharing"}
         </button>
       </div>
-    </div>
+    </SettingsPanel>
   );
 }
 

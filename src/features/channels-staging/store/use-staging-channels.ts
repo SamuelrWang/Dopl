@@ -101,6 +101,10 @@ export function useStagingChannels(onNewChannel?: (channelId: string) => void) {
 
   const jumpTo = (messageId: string) =>
     setScrollTarget((t) => ({ messageId, nonce: (t?.nonce ?? 0) + 1 }));
+  const jumpToMessage = (inThread: string | null, messageId: string) => {
+    setThreadId(inThread);
+    jumpTo(messageId);
+  };
 
   const launchAgent: AgentLaunchControls["launchAgent"] = async (
     launchThreadId,
@@ -163,8 +167,7 @@ export function useStagingChannels(onNewChannel?: (channelId: string) => void) {
     exitThread: () => setThreadId(null),
     openAgent: setOpenAgentKey,
     openMention: (m: ChannelMention) => {
-      setThreadId(m.threadId);
-      jumpTo(m.messageId);
+      jumpToMessage(m.threadId, m.messageId);
       update((f) => ({
         ...f,
         mentions: f.mentions.map((x) => (x.messageId === m.messageId ? { ...x, read: true } : x)),
@@ -172,6 +175,7 @@ export function useStagingChannels(onNewChannel?: (channelId: string) => void) {
     },
     markMentionsRead: () =>
       update((f) => ({ ...f, mentions: f.mentions.map((x) => ({ ...x, read: true })) })),
+    jumpToMessage,
     jumpToSeq: (seq) => {
       const hit = fixture?.messages.find((m) => m.seq === seq);
       if (hit) jumpTo(hit.id);

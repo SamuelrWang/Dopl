@@ -281,6 +281,7 @@ function ThreadsTabHarness() {
         truncated={false}
         loading={false}
         index={index}
+        feeds={{ sessions: null, peers: [] }}
         openThreadId={null}
         onOpenThread={() => {}}
         onNewThread={sel.requestNewThread}

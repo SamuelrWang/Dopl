@@ -2,8 +2,6 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import type { Role, Workspace } from "@/features/workspaces/types";
-import type { SearchFetcher } from "@/features/search/use-search";
-import { fixtureSearchFetcher } from "@/features/search/search-fixtures";
 import { ApiError } from "@/shared/api/api-client";
 import {
   StagingSettingsModal,
@@ -20,10 +18,6 @@ import { MY_SESSIONS } from "@/features/channels-staging/data/demo-imports";
 /**
  * STUBS of the desktop-only modules the staged popups import. Each names what it stands in for.
  */
-
-/* `@/features/search/search-client › apiSearchFetcher` → the search fixtures (the same table the
-   popup's own tests and its pre-API afternoon used). No `/api/search` call. */
-export const apiSearchFetcher: SearchFetcher = fixtureSearchFetcher;
 
 /* `apps/desktop-ui/src/pages/boot/use-boot-state.ts › BootPayload` (the fields the popups read). */
 export interface BootPayload {

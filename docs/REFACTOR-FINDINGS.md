@@ -9777,7 +9777,7 @@ open search pill, and the landing page's scripted /home demo"*, which is how it 
 2026-09-15 ruling that took it off /home's channel row. **Neither reader exists, and they stopped
 existing on different days.**
 
-- **The search pill never wore it.** `apps/desktop-ui/src/pages/home/home-search.tsx` composes
+- **The search pill never wore it.** /home's search pill (now `src/features/search/components/header-search.tsx`) composed
   `.search-expand` over `.auth-btn-3d-light`; the "held focus" look it borrows is the KIT's own
   `.search-expand[data-open="true"] .search-expand-shell:focus-within`, which names `--focus-line`
   and `--raised-light-focus` directly. The class is nowhere in that file or its kit rules. That half
@@ -9890,7 +9890,7 @@ did not exist yet would have made the route BROKEN rather than SLOW until somebo
 file, and `20260822170000_overview_time_range_indexes.sql` states that rule for this directory in
 as many words. The same argument is why there is no `SECURITY DEFINER` search RPC and why
 `ts_rank` / `ts_headline` are computed in TypeScript instead (`service-groups.ts › rankHits`,
-`snippet.ts › buildSnippet` — the second of which is also the safer place, since `ts_headline`
+`highlight.ts › buildSnippet` — the second of which is also the safer place, since `ts_headline`
 copies the source body through verbatim). **A new search arm gets the same treatment.**
 
 **The discharge was the one line the migration's footer spelled out:**

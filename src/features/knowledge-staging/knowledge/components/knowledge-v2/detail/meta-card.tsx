@@ -1,14 +1,13 @@
 "use client";
 
-/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/detail/meta-card.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
-import { CalendarCheck, CalendarDays, Flag, Users, UsersRound } from "lucide-react";
+/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/detail/meta-card.tsx` — redesigned ahead of its source (PORTING.md). */
+import type { ReactNode } from "react";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
-import { cn } from "@/shared/lib/utils";
-import { SectionPanel } from "@/shared/ui/section-panel";
-import { RAISED_INPUT } from "@/shared/ui/wells";
+import { SettingsPanel } from "@/shared/layout/settings-modal/sections/settings-panel";
+import { StatusPill } from "@/shared/ui/status-pill";
 import { TeamChip } from "@/features/members/components/team-bits";
+import { DOC_TITLE_INPUT, DescriptionField } from "../../doc-pane-chrome";
 import { StorageMeter } from "../storage-meter";
-import styles from "../knowledge-v2.module.css";
 
 export interface MetaTeamRef {
   name: string;
@@ -40,18 +39,10 @@ export interface MetaCardProps {
 }
 
 /**
- * The base's details — the resting face of the detail column: two editable
- * fields (name + description) over a read-only meta grid and the storage bar.
- * Name/description persist via the base PATCH route; the rest is derived.
- *
- * Flat `SectionPanel`, not a card (Samuel's ruling, 2026-08-28).
- * R-38/R-39 (2026-09-17): the ground is the component's own — one flat gray on
- * every host — so this file never names that palette.
- *
- * Fields are raised, not pressed in: they wear
- * `shared/ui/wells.ts › RAISED_INPUT` with height and padding supplied HERE.
- * Do not add a `.concave-*` class back — a pressed-in well on a flat panel is
- * the mismatch the overhaul removed.
+ * The base's head and details — the resting face of the detail column. The name
+ * and description are edited in place (the document head's faces, persisted via
+ * the base PATCH route); the derived facts are a label/value grid in one white
+ * card, storage last.
  */
 export function MetaCard({
   name,
@@ -69,95 +60,66 @@ export function MetaCard({
   storageLimit,
 }: MetaCardProps) {
   return (
-    <SectionPanel id="kb-details" label="Details">
-      <div className="flex flex-col gap-4 px-1 pt-0.5">
-        <label className={styles.fieldGroup}>
-          <span className={styles.fieldLabel}>Name</span>
-          <input
-            type="text"
-            className={cn(RAISED_INPUT, "h-9 px-3 font-medium")}
-            value={name}
-            readOnly={!canEdit}
-            onChange={(e) => onNameChange(e.target.value)}
-            onBlur={onFlush}
-            placeholder="Untitled knowledge base"
-          />
-        </label>
+    <>
+      <header className="flex flex-col gap-1 px-1">
+        <input
+          type="text"
+          className={DOC_TITLE_INPUT}
+          value={name}
+          readOnly={!canEdit}
+          onChange={(e) => onNameChange(e.target.value)}
+          onBlur={onFlush}
+          placeholder="Untitled knowledge base"
+          aria-label="Name"
+        />
+        <DescriptionField
+          value={description}
+          onChange={onDescriptionChange}
+          onBlur={onFlush}
+          max={KB_BASE_DESCRIPTION_MAX}
+          readOnly={!canEdit}
+          placeholder="What's in this knowledge base? Agents see this when listing bases."
+        />
+      </header>
 
-        <label className={styles.fieldGroup}>
-          <span className={styles.fieldLabelRow}>
-            <span className={styles.fieldLabel}>Description</span>
-            {canEdit ? (
-              <span className={styles.fieldCount}>
-                {description.length}/{KB_BASE_DESCRIPTION_MAX}
-              </span>
+      <SettingsPanel id="kb-details" label="Details">
+        <div className="white-card px-3.5 py-1">
+          <dl>
+            <Fact label="Visibility">
+              <StatusPill>{scopeLabel}</StatusPill>
+            </Fact>
+            <Fact label="Access">{accessLabel}</Fact>
+            {teams && teams.length > 0 ? (
+              <Fact label="Teams">
+                <span className="flex flex-wrap gap-1.5">
+                  {teams.map((t) => (
+                    <TeamChip key={t.name} name={t.name} color={t.color} />
+                  ))}
+                </span>
+              </Fact>
             ) : null}
-          </span>
-          <textarea
-            className={cn(RAISED_INPUT, "px-3 py-2", styles.fieldBlock)}
-            value={description}
-            readOnly={!canEdit}
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            onBlur={onFlush}
-            rows={3}
-            placeholder="What's in this knowledge base? Agents see this when listing bases."
-          />
-        </label>
-
-        <div className={styles.metaFields}>
-          <div className={styles.metaRow}>
-            <span className={styles.metaKey}>
-              <CalendarDays size={16} /> Date Created:
-            </span>
-            <span className={styles.metaVal}>{createdAt}</span>
-          </div>
-
-          <div className={styles.metaRow}>
-            <span className={styles.metaKey}>
-              <Flag size={15} /> Visibility:
-            </span>
-            <span className={styles.metaVal}>
-              <span className={styles.pillBlue}>{scopeLabel}</span>
-            </span>
-          </div>
-
-          <div className={styles.metaRow}>
-            <span className={styles.metaKey}>
-              <Users size={16} /> Access:
-            </span>
-            <span className={styles.metaVal}>{accessLabel}</span>
-          </div>
-
-          {teams && teams.length > 0 ? (
-            <div className={styles.metaRowTop}>
-              <span className={styles.metaKey}>
-                <UsersRound size={16} /> Teams:
-              </span>
-              <span className={styles.metaTeams}>
-                {teams.map((t) => (
-                  <TeamChip key={t.name} name={t.name} color={t.color} />
-                ))}
-              </span>
-            </div>
-          ) : null}
-
-          <div className={styles.metaRow}>
-            <span className={styles.metaKey}>
-              <CalendarCheck size={16} /> Last Updated:
-            </span>
-            <span className={styles.metaVal}>{updatedAt}</span>
+            <Fact label="Created">{createdAt}</Fact>
+            <Fact label="Last updated">{updatedAt}</Fact>
+          </dl>
+          {/* Collapses when the meter renders nothing (either half unknown). */}
+          <div className="border-t border-border-default py-3 empty:hidden">
+            <StorageMeter
+              usedBytes={storageBytes ?? null}
+              limitBytes={storageLimit ?? null}
+            />
           </div>
         </div>
+      </SettingsPanel>
+    </>
+  );
+}
 
-        {/* storage sits under the meta grid: the grid's key/value rows have
-            nowhere to put a bar. Renders nothing when either half is
-            unknown. */}
-        <StorageMeter
-          usedBytes={storageBytes ?? null}
-          limitBytes={storageLimit ?? null}
-          className="mt-0"
-        />
-      </div>
-    </SectionPanel>
+/** One label / value row of the details grid; each row draws its own hairline, none on the first. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-x-3 border-t border-border-default py-2.5 first:border-t-0">
+      <dt className="text-caption text-text-muted">{label}</dt>
+      <dd className="min-w-0 text-body text-text-primary">{children}</dd>
+    </div>
   );
 }

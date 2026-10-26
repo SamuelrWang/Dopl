@@ -5,18 +5,24 @@
  * No writes here — folding happens over messages in the transcript (`op="artifact"`).
  */
 
-import { useState } from "react";
-import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import {
-  useChannelArtifact,
-  useChannelArtifacts,
-} from "../hooks/use-channel-artifacts";
-import { CARD_BUTTON, PANEL_CARD } from "./bits";
+import { useMemo, useState } from "react";
+import { Layers, TriangleAlert } from "lucide-react";
+import { formatRelativeTime } from "@/shared/lib/format-time";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { QUIET_PILL } from "@/shared/ui/small-action-button";
+import { useChannelArtifacts } from "../hooks/use-channel-artifacts";
+import { actorKey } from "../lib/task-model";
+import { artifactSpanLabel } from "./artifact-card";
+import { ArtifactDetail } from "./artifact-detail";
+import { ItemCard } from "./item-card";
+import { bodyContextOf, TextOnlyLinks } from "./message-markdown";
+import { MessageMarkdownInline } from "./message-markdown-inline";
+import type { BodyContext } from "./message-markdown-context";
 import { RecencyWells, type RecencyWellItem } from "./recency-wells";
-import { ArtifactCard, artifactSpanLabel } from "./artifact-card";
-import { labelFor, type AuthorIndex } from "./view-model";
-import type { ArtifactMember } from "./view-model-artifacts";
-import type { ChannelFoldedArtifact, ChannelMessage } from "../types";
+import { useTaskFaces, type TaskFaceOf } from "./task-faces";
+import type { AgentFeeds } from "./agent-face";
+import type { AuthorIndex } from "./view-model";
+import type { ChannelFoldedArtifact, TaskActor } from "../types";
 
 /** This face's own wells key — never shared with `dopl.threads.wells`. */
 const ARTIFACT_WELLS_STORAGE_KEY = "dopl.artifacts.wells";
@@ -29,192 +35,141 @@ function artifactFoldedAt(folded: ChannelFoldedArtifact): number | null {
 }
 
 /** Clip note: asserts neither direction — a page at the ceiling counts as clipped (INVARIANTS §9). */
-export const ARTIFACTS_CLIPPED_NOTE =
-  "Showing the most recently created artifacts, up to this list's limit. Nothing here was deleted; anything not listed is simply below the cut.";
+export const ARTIFACTS_CLIPPED_NOTE = "Showing the most recent artifacts";
 
-/** Says how an artifact is made, since this face has no control that makes one. */
-export const ARTIFACTS_EMPTY_NOTE =
-  "No artifacts in this channel yet. An artifact is made by folding messages in the transcript.";
+export const ARTIFACTS_EMPTY_NOTE = "No artifacts yet";
 
 /** A failed read, kept distinct from "asked, nothing there" (INVARIANTS §9). */
-export const ARTIFACTS_UNREAD_NOTE =
-  "Could not load this channel's artifacts.";
+export const ARTIFACTS_UNREAD_NOTE = "Could not load artifacts";
+
+/** Who folded it: the agent that made it, else the member who did. */
+function folderOf({ artifact }: ChannelFoldedArtifact): TaskActor {
+  return artifact.createdByAgent
+    ? { kind: "agent", userId: artifact.createdBy, agentId: artifact.createdByAgent }
+    : { kind: "person", userId: artifact.createdBy };
+}
 
 /** Dissolved and member-less artifacts are dropped server-side (`service-artifacts-list.ts › listChannelArtifacts`). */
 export function ArtifactsTab({
   channelId,
   workspaceId,
   index,
+  feeds,
+  onJumpToMessage,
 }: {
   channelId: string;
   workspaceId: string;
   /** The transcript's roster index, so authors read the same ("You") here. */
   index: AuthorIndex;
+  feeds: AgentFeeds;
+  /** Moves the transcript to an opened artifact's message; absent draws no jump. */
+  onJumpToMessage?: (threadId: string | null, messageId: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const { artifacts, truncated, loading, error } = useChannelArtifacts(
-    channelId,
-    workspaceId
-  );
-
+  const { artifacts, truncated, loading, error } = useChannelArtifacts(channelId, workspaceId);
+  const faceOf = useTaskFaces(index, feeds);
+  // Walks the roster: built once for every summary on the face.
+  const summaryCtx = useMemo(() => bodyContextOf({ index, mentionsMe: false }), [index]);
   const open = artifacts.find((a) => a.artifact.id === openId) ?? null;
+  const empty = artifacts.length === 0;
 
   return (
-    /* No top padding: the toggle row in `threads-tab.tsx` owns the face's top gap. */
     <div className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-6">
       {open ? (
-        <OpenArtifact
+        <ArtifactDetail
           folded={open}
           channelId={channelId}
           workspaceId={workspaceId}
           index={index}
+          faceOf={faceOf}
+          summaryCtx={summaryCtx}
           onBack={() => setOpenId(null)}
+          onJumpToMessage={onJumpToMessage}
         />
+      ) : loading && empty ? (
+        <p role="status" aria-busy="true" className="sr-only">
+          Loading artifacts
+        </p>
+      ) : error && empty ? (
+        // Only with nothing on screen: a failed refetch keeps the previous list.
+        <EmptyState variant="well" icon={TriangleAlert} title={ARTIFACTS_UNREAD_NOTE} />
+      ) : empty ? (
+        <EmptyState variant="well" icon={Layers} title={ARTIFACTS_EMPTY_NOTE} />
       ) : (
-        <>
+        <div className="flex flex-col gap-2">
+          <RecencyWells
+            storageKey={ARTIFACT_WELLS_STORAGE_KEY}
+            variant="heading"
+            items={artifacts.map(
+              (folded): RecencyWellItem => ({
+                key: folded.artifact.id,
+                at: artifactFoldedAt(folded),
+                node: (
+                  <ArtifactItem
+                    folded={folded}
+                    faceOf={faceOf}
+                    summaryCtx={summaryCtx}
+                    onOpen={() => setOpenId(folded.artifact.id)}
+                  />
+                ),
+              })
+            )}
+          />
           {truncated && (
-            <p className="mb-3 rounded-[8px] border border-border-default bg-card-surface-subtle px-2.5 py-2 text-caption text-text-secondary">
-              {ARTIFACTS_CLIPPED_NOTE}
-            </p>
+            <p className="px-0.5 text-caption text-text-muted">{ARTIFACTS_CLIPPED_NOTE}</p>
           )}
-          {loading && artifacts.length === 0 ? (
-            <p role="status" aria-busy="true" className="sr-only">
-              Loading artifacts
-            </p>
-          ) : error && artifacts.length === 0 ? (
-            /* Only with nothing on screen: a failed refetch keeps the previous list. */
-            <p
-              role="status"
-              className="px-1 pt-4 text-center text-caption text-text-muted"
-            >
-              {ARTIFACTS_UNREAD_NOTE}
-            </p>
-          ) : artifacts.length === 0 ? (
-            <p className="px-1 pt-4 text-center text-caption text-text-muted">
-              {ARTIFACTS_EMPTY_NOTE}
-            </p>
-          ) : (
-            <RecencyWells
-              storageKey={ARTIFACT_WELLS_STORAGE_KEY}
-              items={artifacts.map(
-                (folded): RecencyWellItem => ({
-                  key: folded.artifact.id,
-                  at: artifactFoldedAt(folded),
-                  node: (
-                    <ArtifactListCard
-                      folded={folded}
-                      onOpen={() => setOpenId(folded.artifact.id)}
-                    />
-                  ),
-                })
-              )}
-            />
-          )}
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-/** One list row; the span is `artifactSpanLabel`, shared with the opened card. */
-function ArtifactListCard({
+/** One artifact: its name, a one-line summary, then the folder's face, its span and age. */
+function ArtifactItem({
   folded,
+  faceOf,
+  summaryCtx,
   onOpen,
 }: {
   folded: ChannelFoldedArtifact;
+  faceOf: TaskFaceOf;
+  summaryCtx: BodyContext;
   onOpen: () => void;
 }) {
   const { artifact, count, firstSeq, lastSeq } = folded;
+  const actor = folderOf(folded);
+  const folder = faceOf(actor);
   return (
-    <div className={PANEL_CARD}>
-      <span className="min-w-0 truncate text-body font-semibold text-text-primary">
-        {artifact.name}
-      </span>
-      {artifact.summary !== "" && (
-        <span className="wrap-anywhere line-clamp-2 text-caption text-text-secondary">
-          {artifact.summary}
-        </span>
-      )}
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-caption text-text-muted">
-          {artifactSpanLabel(count, firstSeq, lastSeq)}
-        </span>
-        <button type="button" onClick={onOpen} className={CARD_BUTTON}>
+    <ItemCard
+      title={artifact.name}
+      detail={
+        artifact.summary !== "" && (
+          <p className="truncate text-caption text-text-secondary">
+            <TextOnlyLinks>
+              <MessageMarkdownInline text={artifact.summary} ctx={summaryCtx} />
+            </TextOnlyLinks>
+          </p>
+        )
+      }
+      faces={[{ key: actorKey(actor), ...folder }]}
+      facesLabel={`Folded by ${folder.name}`}
+      meta={
+        <>
+          <span className="min-w-0 truncate">{artifactSpanLabel(count, firstSeq, lastSeq)}</span>
+          <span aria-hidden="true">·</span>
+          <span className="flex-none">{formatRelativeTime(artifact.createdAt)}</span>
+        </>
+      }
+      actions={
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Open ${artifact.name}`}
+          className={QUIET_PILL}
+        >
           Open
         </button>
-      </div>
-    </div>
+      }
+    />
   );
-}
-
-/** The opened run, read-only by construction (`ArtifactCard` mounts no write control). */
-function OpenArtifact({
-  folded,
-  channelId,
-  workspaceId,
-  index,
-  onBack,
-}: {
-  folded: ChannelFoldedArtifact;
-  channelId: string;
-  workspaceId: string;
-  index: AuthorIndex;
-  onBack: () => void;
-}) {
-  const { artifact, count, firstSeq, lastSeq } = folded;
-  const { messages, truncated, loading, error } = useChannelArtifact(
-    channelId,
-    artifact.id,
-    workspaceId
-  );
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center">
-        <button type="button" onClick={onBack} className={CARD_BUTTON}>
-          Back
-        </button>
-      </div>
-      {loading && messages.length === 0 && (
-        <p role="status" aria-busy="true" className="sr-only">
-          Loading artifact
-        </p>
-      )}
-      <ArtifactCard
-        id={artifact.id}
-        name={artifact.name}
-        summary={artifact.summary}
-        count={count}
-        firstSeq={firstSeq}
-        lastSeq={lastSeq}
-        members={members(messages, index)}
-      />
-      {truncated && (
-        <p className="text-caption text-text-muted">
-          This run is longer than one read returns; the newest members may not be
-          shown.
-        </p>
-      )}
-      {/* The card's list payload still draws; only the members read failed, so say so. */}
-      {error && messages.length === 0 && (
-        <p role="status" className="text-caption text-text-muted">
-          {ARTIFACTS_UNREAD_NOTE}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Wire messages → card members via the transcript's own `labelFor`/`formatChannelTimestamp`; server seq order kept. */
-function members(
-  messages: ChannelMessage[],
-  index: AuthorIndex
-): ArtifactMember[] {
-  return messages.map((message) => ({
-    id: message.id,
-    seq: message.seq,
-    authorLabel: labelFor(message, index),
-    time: formatChannelTimestamp(message.createdAt),
-    body: message.body,
-  }));
 }

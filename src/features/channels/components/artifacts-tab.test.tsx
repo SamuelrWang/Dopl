@@ -1,28 +1,14 @@
 // @vitest-environment jsdom
 /**
- * THE ARTIFACTS FACE OF THE THREADS PANEL — the toggle, and both view states
- * (Samuel, 2026-09-16).
+ * The Threads panel's artifacts face: the toggle (drawn on `ThreadsTab`), the list and one opened
+ * artifact (read on `ArtifactsTab`). The heading flip is pinned in `info-panel.test.tsx`.
  *
- * ⚠ **THE TRANSPORT IS MOCKED, NOT THE HOOKS** — this tree's standing rule,
- * and it buys the same thing here: the real path (`/api/channels/<id>/artifacts`),
- * the real `?artifact=<id>` variant and the real cache keys are part of what is
- * under test, because the whole reason this face exists is that the LIST is a
- * server lane rather than a slice of the transcript in hand. A stubbed hook would
- * assert that React renders an array.
- *
- * ⚠ **THE TOGGLE IS TESTED ON `ThreadsTab`, WHERE IT IS DRAWN, AND THE FACE IS
- * TESTED ON `ArtifactsTab`, WHERE IT IS READ.** The flag that joins them is
- * `info-panel.tsx`'s, and the heading flip is pinned in `info-panel.test.tsx`
- * beside the rest of that row — three files, three reasons to change.
- *
- * MUTATION-VERIFY: draw the toggle after the spacer and the left-alignment case
- * fails; keep "New thread" in the artifacts face and the hide case fails; point
- * the list at the transcript's `entries` and the path case fails; drop
- * `truncated` from the face and the clip case fails.
+ * The transport is mocked, not the hooks: the real path, its `?artifact=<id>` arm and the cache
+ * keys are under test, because the list is a server lane rather than a slice of the transcript.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const { request } = vi.hoisted(() => ({
@@ -40,11 +26,8 @@ import {
   ARTIFACTS_UNREAD_NOTE,
   ArtifactsTab,
 } from "./artifacts-tab";
-import {
-  ARTIFACTS_FACE_LABEL,
-  THREADS_FACE_LABEL,
-  ThreadsTab,
-} from "./threads-tab";
+import { ARTIFACT_MESSAGES_CLIPPED_NOTE, ARTIFACT_MESSAGES_UNREAD_NOTE } from "./artifact-detail";
+import { ARTIFACTS_FACE_LABEL, THREADS_FACE_LABEL, ThreadsTab } from "./threads-tab";
 import { indexMembers } from "./view-model";
 import { member, message, thread, ME, PEER } from "./test-fixtures";
 import type { ChannelFoldedArtifact } from "../types";
@@ -52,6 +35,7 @@ import type { ChannelFoldedArtifact } from "../types";
 const CHANNEL = "44444444-4444-4444-8444-444444444444";
 const WS = "33333333-3333-4333-8333-333333333333";
 const ART = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const NO_FEEDS = { sessions: null, peers: [] };
 
 const INDEX = indexMembers(
   [
@@ -68,15 +52,11 @@ function folded(over: Partial<ChannelFoldedArtifact> = {}): ChannelFoldedArtifac
       channelId: CHANNEL,
       workspaceId: WS,
       name: "Toggle wave wrap-up",
-      summary: "What the wave landed",
-      createdBy: ME,
+      summary: "What the wave **landed**",
+      createdBy: PEER,
       createdByAgent: null,
       dissolvedAt: null,
-      // ⚠ **FRESH, NOT A FIXED DATE (2026-09-20).** The list files cards into the
-      // four recency wells now (`artifactFoldedAt`), and only **Recent** is open
-      // on a device that has never chosen — so a hard-coded stamp aged out of
-      // every assertion below the moment the calendar passed it. The WELLS have
-      // their own case; these read the card.
+      // Fresh: only Recent is open on a device that has never chosen.
       createdAt: new Date(Date.now() - 60_000).toISOString(),
     },
     count: 3,
@@ -92,13 +72,10 @@ let lane: { list?: unknown; card?: unknown } = {};
 beforeEach(() => {
   request.mockReset();
   request.mockImplementation(async (path, opts) => {
-    if (!path.endsWith("/artifacts")) {
-      throw new Error(`the face asked for an unexpected path: ${path}`);
-    }
+    if (!path.endsWith("/artifacts")) throw new Error(`unexpected path: ${path}`);
     const query = (opts?.query ?? {}) as { artifact?: string };
     const body = query.artifact ? lane.card : lane.list;
     if (body === undefined) throw new Error(`no fixture for ${path}`);
-    // A fixture that IS an error is the arm refusing — the 403 case below.
     if (body instanceof Error) throw body;
     return body;
   });
@@ -107,7 +84,13 @@ beforeEach(() => {
     card: {
       messages: [
         message({ id: "m-11", seq: 11, body: "first of the run", authorUserId: ME }),
-        message({ id: "m-14", seq: 14, body: "last of the run", authorUserId: PEER }),
+        message({
+          id: "m-14",
+          seq: 14,
+          body: "- one\n- two",
+          authorUserId: PEER,
+          metadata: { threadId: "t-x" },
+        }),
       ],
       truncated: false,
     },
@@ -115,75 +98,56 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function mountFace() {
+function mountFace(onJumpToMessage?: (threadId: string | null, messageId: string) => void) {
   return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <ArtifactsTab channelId={CHANNEL} workspaceId={WS} index={INDEX} />
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <ArtifactsTab
+        channelId={CHANNEL}
+        workspaceId={WS}
+        index={INDEX}
+        feeds={NO_FEEDS}
+        onJumpToMessage={onJumpToMessage}
+      />
     </QueryClientProvider>
   );
 }
 
-function renderThreads(
+async function openArtifact() {
+  fireEvent.click(await screen.findByRole("button", { name: "Open Toggle wave wrap-up" }));
+  await screen.findByText("first of the run");
+}
+
+function threadsProps(
   over: Partial<React.ComponentProps<typeof ThreadsTab>> = {}
-) {
-  const props: React.ComponentProps<typeof ThreadsTab> = {
+): React.ComponentProps<typeof ThreadsTab> {
+  return {
     threads: [thread({ id: "t-a", title: "Alpha audit" })],
     truncated: false,
     loading: false,
     index: INDEX,
+    feeds: NO_FEEDS,
     openThreadId: null,
     onOpenThread: vi.fn(),
     onNewThread: vi.fn(),
     ...over,
   };
-  render(<ThreadsTab {...props} />);
-  return props;
 }
 
-/* ──────────────────────────────── THE TOGGLE ─────────────────────────────── */
-
 describe("the face toggle", () => {
-  /** 🔒 Samuel: the tab sits "on the SAME LINE as the New Thread button,
-   *  LEFT-aligned". Both halves, and the ORDER is the left-alignment. */
   it("shares the New thread button's row and comes FIRST in it", () => {
-    renderThreads({ onToggleFace: vi.fn() });
+    render(<ThreadsTab {...threadsProps({ onToggleFace: vi.fn() })} />);
     const toggle = screen.getByRole("button", { name: ARTIFACTS_FACE_LABEL });
     const create = screen.getByRole("button", { name: "New thread" });
     expect(toggle.parentElement).toBe(create.parentElement);
-    expect(
-      toggle.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(toggle.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  /** ⚠ THE LABEL IS WHERE THE PRESS GOES, never where you are. */
-  it("reads Artifacts on the thread face and Threads on the artifact face", () => {
-    const { rerender } = render(
-      <ThreadsTab
-        threads={[]}
-        truncated={false}
-        loading={false}
-        index={INDEX}
-        openThreadId={null}
-        onOpenThread={vi.fn()}
-        onNewThread={vi.fn()}
-        onToggleFace={vi.fn()}
-      />
-    );
+  it("names where the press goes: Artifacts on the thread face, Threads on the artifact face", () => {
+    const { rerender } = render(<ThreadsTab {...threadsProps({ onToggleFace: vi.fn() })} />);
     expect(screen.getByRole("button", { name: ARTIFACTS_FACE_LABEL })).toBeTruthy();
     rerender(
       <ThreadsTab
-        threads={[]}
-        truncated={false}
-        loading={false}
-        index={INDEX}
-        openThreadId={null}
-        onOpenThread={vi.fn()}
-        onNewThread={vi.fn()}
-        onToggleFace={vi.fn()}
-        artifactsFace
-        artifacts={<p>the artifacts face</p>}
+        {...threadsProps({ onToggleFace: vi.fn(), artifactsFace: true, artifacts: <p>face</p> })}
       />
     );
     expect(screen.getByRole("button", { name: THREADS_FACE_LABEL })).toBeTruthy();
@@ -191,122 +155,62 @@ describe("the face toggle", () => {
 
   it("asks the panel to flip, and owns no state of its own", () => {
     const onToggleFace = vi.fn();
-    renderThreads({ onToggleFace });
+    render(<ThreadsTab {...threadsProps({ onToggleFace })} />);
     fireEvent.click(screen.getByRole("button", { name: ARTIFACTS_FACE_LABEL }));
     expect(onToggleFace).toHaveBeenCalledTimes(1);
-    // ⚠ STILL THE THREAD FACE: the flag is the panel's, so an un-driven rerender
-    // must not have switched anything by itself.
     expect(screen.getByText("Alpha audit")).toBeTruthy();
   });
 
-  /** 🔒 A HOST WITHOUT THE CAPABILITY IS UNCHANGED, BYTE FOR BYTE — the workspace
-   *  channel page and the guest lane pass no `onToggleFace`. */
   it("is absent where the capability is off", () => {
-    renderThreads();
+    render(<ThreadsTab {...threadsProps()} />);
     expect(screen.queryByRole("button", { name: ARTIFACTS_FACE_LABEL })).toBeNull();
     expect(screen.getByRole("button", { name: "New thread" })).toBeTruthy();
   });
-});
 
-/* ───────────────────────────── THE TWO VIEW STATES ───────────────────────── */
-
-describe("the thread face", () => {
-  it("lists threads and keeps the New thread button", () => {
-    renderThreads({ onToggleFace: vi.fn() });
-    expect(screen.getByText("Alpha audit")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "New thread" })).toBeTruthy();
-  });
-});
-
-describe("the artifact face", () => {
-  /** 🔒 Samuel's approved default: nothing on this face is creatable FROM here. */
-  it("HIDES the New thread button and renders the artifacts body instead", () => {
-    renderThreads({
-      onToggleFace: vi.fn(),
-      artifactsFace: true,
-      artifacts: <p>the artifacts face</p>,
-    });
+  it("hides New thread on the artifact face and restores it on the way back", () => {
+    const onNewThread = vi.fn();
+    const face = { onToggleFace: vi.fn(), onNewThread };
+    const { rerender } = render(
+      <ThreadsTab {...threadsProps({ ...face, artifactsFace: true, artifacts: <p>face</p> })} />
+    );
     expect(screen.queryByRole("button", { name: "New thread" })).toBeNull();
     expect(screen.queryByText("Alpha audit")).toBeNull();
-    expect(screen.getByText("the artifacts face")).toBeTruthy();
-  });
-
-  /** ⚠ THE CALLBACK IS NOT WITHDRAWN, ONLY THE BUTTON — flipping back restores it
-   *  with no re-wiring, which is what makes the hide safe. */
-  it("keeps the create reachable again on the way back", () => {
-    const onNewThread = vi.fn();
-    const { rerender } = render(
-      <ThreadsTab
-        threads={[]}
-        truncated={false}
-        loading={false}
-        index={INDEX}
-        openThreadId={null}
-        onOpenThread={vi.fn()}
-        onNewThread={onNewThread}
-        onToggleFace={vi.fn()}
-        artifactsFace
-        artifacts={<p>the artifacts face</p>}
-      />
-    );
-    rerender(
-      <ThreadsTab
-        threads={[]}
-        truncated={false}
-        loading={false}
-        index={INDEX}
-        openThreadId={null}
-        onOpenThread={vi.fn()}
-        onNewThread={onNewThread}
-        onToggleFace={vi.fn()}
-      />
-    );
+    expect(screen.getByText("face")).toBeTruthy();
+    rerender(<ThreadsTab {...threadsProps(face)} />);
     fireEvent.click(screen.getByRole("button", { name: "New thread" }));
     expect(onNewThread).toHaveBeenCalledTimes(1);
   });
 });
 
-/* ─────────────────────────────── THE LIST FACE ───────────────────────────── */
-
 describe("the artifacts list", () => {
-  it("lists the CHANNEL's cards, with the name and the span", async () => {
+  it("lists the channel's artifacts with the name, the summary's markdown, the span and the folder", async () => {
     mountFace();
     expect(await screen.findByText("Toggle wave wrap-up")).toBeTruthy();
-    expect(screen.getByText("What the wave landed")).toBeTruthy();
+    expect(screen.getByText("landed")).toBeTruthy();
+    expect(screen.queryByText(/\*\*/)).toBeNull();
     expect(screen.getByText("3 messages · #11–#14")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Folded by Diana Taylor" })).toBeTruthy();
   });
 
-  /** 🔒 THE REAL LANE, NOT THE TRANSCRIPT'S PAGE ENVELOPE. A list built off the
-   *  loaded window would wear "this channel's artifacts" over whatever the scroll
-   *  position bought — the defect this read exists to avoid. */
   it("reads the channel's own artifacts route", async () => {
     mountFace();
     await screen.findByText("Toggle wave wrap-up");
-    expect(request.mock.calls.map(([path]) => path)).toEqual([
-      `/api/channels/${CHANNEL}/artifacts`,
-    ]);
+    expect(request.mock.calls.map(([path]) => path)).toEqual([`/api/channels/${CHANNEL}/artifacts`]);
   });
 
   it("says so when the list CLIPPED, and does not read as an absence", async () => {
     lane.list = { artifacts: [folded()], truncated: true };
     mountFace();
     const note = await screen.findByText(ARTIFACTS_CLIPPED_NOTE);
-    expect(note.textContent).toMatch(/up to this list's limit/i);
     expect(note.textContent).not.toMatch(/no artifacts/i);
   });
 
-  it("says how one is made when there are none, because this face makes none", async () => {
+  it("draws the empty state when there are none", async () => {
     lane.list = { artifacts: [], truncated: false };
     mountFace();
     expect(await screen.findByText(ARTIFACTS_EMPTY_NOTE)).toBeTruthy();
   });
 
-  /** 🔒 A READ THAT REFUSED IS NOT AN EMPTY CHANNEL. Found reviewing wave 2, which
-   *  gave this face a second host: both hooks returned an `error` nothing read, so
-   *  a 403 — the reader's access went away mid-session — printed "No artifacts in
-   *  this channel yet", a claim about the channel made from a failure to ask it.
-   *  MUTATION-VERIFY: drop the `error &&` arm and this goes red on the second
-   *  assertion while every other case here stays green. */
   it("🔒 says the read FAILED rather than claiming the channel is empty", async () => {
     lane.list = new Error("403");
     mountFace();
@@ -315,25 +219,35 @@ describe("the artifacts list", () => {
   });
 });
 
-/* ─────────────────────────── THE OPENED CARD, READ-ONLY ──────────────────── */
-
-describe("opening one card", () => {
-  it("opens the folded run with every member's body, author and seq", async () => {
+describe("one opened artifact", () => {
+  it("heads the document with a breadcrumb, the title, the summary and the meta line", async () => {
     mountFace();
-    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
-    expect(await screen.findByText("first of the run")).toBeTruthy();
-    expect(screen.getByText("last of the run")).toBeTruthy();
-    // ⚠ THE TRANSCRIPT'S OWN LABEL RULE — "You" for the viewer, the roster name
-    // otherwise (`view-model.ts › labelFor`), asked rather than re-spelled.
-    expect(screen.getByText("You")).toBeTruthy();
-    expect(screen.getByText("Diana Taylor")).toBeTruthy();
-    expect(screen.getByText("#11")).toBeTruthy();
+    await openArtifact();
+    const doc = screen.getByRole("article", { name: "Toggle wave wrap-up" });
+    expect(within(doc).getByRole("navigation", { name: "Breadcrumb" })).toBeTruthy();
+    expect(within(doc).getByRole("heading", { name: "Toggle wave wrap-up" })).toBeTruthy();
+    expect(within(doc).getByText("3 messages · #11–#14")).toBeTruthy();
+    expect(within(doc).getByRole("img", { name: "By You, Diana Taylor" })).toBeTruthy();
   });
 
-  it("asks the SINGLE-CARD arm of the same route", async () => {
+  it("reads each message as a row: author, number and the body's own markdown", async () => {
     mountFace();
-    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
-    await screen.findByText("first of the run");
+    await openArtifact();
+    const list = screen.getByRole("list", { name: "Messages" });
+    const rows = [...list.querySelectorAll<HTMLElement>(":scope > li")];
+    expect(rows.map((r) => r.getAttribute("data-artifact-member"))).toEqual(["11", "14"]);
+    expect(within(rows[0]).getByText("You")).toBeTruthy();
+    expect(within(rows[0]).getByText("#11")).toBeTruthy();
+    expect(within(rows[1]).getByText("Diana Taylor")).toBeTruthy();
+    expect(within(rows[1]).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "one",
+      "two",
+    ]);
+  });
+
+  it("asks the SINGLE-ARTIFACT arm of the same route", async () => {
+    mountFace();
+    await openArtifact();
     const card = request.mock.calls.find(
       ([, opts]) => (opts?.query as { artifact?: string } | undefined)?.artifact
     );
@@ -341,35 +255,51 @@ describe("opening one card", () => {
     expect((card?.[1]?.query as { artifact: string }).artifact).toBe(ART);
   });
 
-  /** ⚠ READ-ONLY IS A PROPERTY OF WHAT IS RENDERED: the opened run mounts no
-   *  control that writes — no dissolve, no un-box, no create. */
+  it("jumps to a message in its own thread, and prints numbers as text with no jump", async () => {
+    const onJump = vi.fn();
+    mountFace(onJump);
+    await openArtifact();
+    fireEvent.click(screen.getByRole("button", { name: "Show #14 in the transcript" }));
+    expect(onJump).toHaveBeenCalledWith("t-x", "m-14");
+    fireEvent.click(screen.getByRole("button", { name: "Show #11 in the transcript" }));
+    expect(onJump).toHaveBeenLastCalledWith(null, "m-11");
+
+    cleanup();
+    mountFace();
+    await openArtifact();
+    expect(screen.queryByRole("button", { name: /in the transcript/ })).toBeNull();
+    expect(screen.getByText("#14")).toBeTruthy();
+  });
+
   it("offers nothing that writes", async () => {
     mountFace();
-    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
-    await screen.findByText("first of the run");
-    const labels = screen
-      .getAllByRole("button")
-      .map((b) => (b.textContent ?? "").toLowerCase());
+    await openArtifact();
+    const labels = screen.getAllByRole("button").map((b) => (b.textContent ?? "").toLowerCase());
     for (const forbidden of ["dissolve", "remove", "delete", "new thread", "fold"]) {
       expect(labels.some((l) => l.includes(forbidden))).toBe(false);
     }
   });
 
-  /** 🔒 THE CARD'S OWN NUMBERS ARE THE LIST'S AND SURVIVE; the MEMBERS read is what
-   *  failed, and a card printing a span over an empty body must say so. */
-  it("🔒 says so when the members arm refuses, and keeps the card", async () => {
-    lane.card = new Error("403");
+  it("says so when the member ceiling cut the run", async () => {
+    lane.card = { ...(lane.card as object), truncated: true };
     mountFace();
-    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
-    expect(await screen.findByText(ARTIFACTS_UNREAD_NOTE)).toBeTruthy();
-    expect(screen.getByText("Toggle wave wrap-up")).toBeTruthy();
+    await openArtifact();
+    expect(screen.getByText(ARTIFACT_MESSAGES_CLIPPED_NOTE)).toBeTruthy();
   });
 
-  it("goes back to the list", async () => {
+  it("🔒 says so when the members arm refuses, and keeps the header", async () => {
+    lane.card = new Error("403");
     mountFace();
-    fireEvent.click(await screen.findByRole("button", { name: "Open" }));
-    await screen.findByText("first of the run");
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Toggle wave wrap-up" }));
+    expect(await screen.findByText(ARTIFACT_MESSAGES_UNREAD_NOTE)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Toggle wave wrap-up" })).toBeTruthy();
+  });
+
+  it("goes back to the list through the breadcrumb", async () => {
+    mountFace();
+    await openArtifact();
+    fireEvent.click(screen.getByRole("button", { name: "Back to artifacts" }));
     expect(await screen.findByText("3 messages · #11–#14")).toBeTruthy();
+    expect(screen.queryByText("first of the run")).toBeNull();
   });
 });

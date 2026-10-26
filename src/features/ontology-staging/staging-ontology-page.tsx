@@ -77,7 +77,7 @@ export function StagingOntologyPage() {
   const [scenario, setScenario] = useState<StagingScenario>("board");
   return (
     <>
-      <StagingFrame tab="ontology" recordClassName="uis-onto-pane">
+      <StagingFrame tab="ontology" recordClassName="uis-white-pane">
         {/* A scenario is a fresh server and a fresh cache. */}
         <Pane key={scenario} scenario={scenario} />
       </StagingFrame>

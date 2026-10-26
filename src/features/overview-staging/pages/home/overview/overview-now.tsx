@@ -65,7 +65,7 @@ export function NeedsCard({
   const agents = agentIndex();
   const count = needs.length + (creditsOut ? 1 : 0);
   return (
-    <ECard title="Needs you" count={count}>
+    <ECard title="Needs you" count={count} className="ove-slot-needs">
       {count === 0 ? (
         <EEmpty>Nothing waiting</EEmpty>
       ) : (
@@ -128,7 +128,7 @@ export function NeedsCard({
 export function AgentsCard({ hosts }: { hosts: readonly MockHost[] }) {
   const total = hosts.reduce((n, h) => n + h.agents.length, 0);
   return (
-    <ECard title="Agents" count={total}>
+    <ECard title="Agents" count={total} className="ove-slot-agents">
       <div className="ove-groups">
         {hosts.map((h) => (
           <div key={h.id} className="ove-group" role="group" aria-label={h.name}>

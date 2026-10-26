@@ -10,8 +10,7 @@ instances through `useStagingPopups()`.
 
 Every copied file starts with a `STAGING COPY of …` line. Only import paths differ from the source:
 data hooks, desktop libs and the unstaged channel bodies point at `./stubs`. Each copy's first line
-names the tree it was taken from (`home-search` and `home-settings-control` were re-synced on
-2026-10-26). The Next tree cannot import `apps/`, so a page that reads `#/` modules stays a copy. The Settings modal lives in `src/features/settings-staging/` (its own
+names the tree it was taken from (`home-settings-control` was re-synced on 2026-10-26). The Next tree cannot import `apps/`, so a page that reads `#/` modules stays a copy. The Settings modal lives in `src/features/settings-staging/` (its own
 PORTING.md).
 
 ## Copied UI (port these back)
@@ -19,7 +18,6 @@ PORTING.md).
 | Staging file | Source | Opens from `/popups` |
 |---|---|---|
 | `pages/home/new-channel-dialog.tsx` | `apps/desktop-ui/src/pages/home/new-channel-dialog.tsx` | "New channel" (= the frame's top-bar pill on every page) |
-| `pages/home/home-search.tsx` | `apps/desktop-ui/src/pages/home/home-search.tsx` | "Search popup" (= the frame's search pill; type to see fixture results) |
 | `pages/home/home-settings-control.tsx` | `apps/desktop-ui/src/pages/home/home-settings-control.tsx` | the black "Profile" pill; its `openHomeSettings` registry drives the seven Settings buttons |
 | `pages/home/add-person-dialog.tsx` | `apps/desktop-ui/src/pages/home/add-person-dialog.tsx` | "Add person" inside the People card (also `/channels`' Info tab) |
 | `pages/home/person-roster-actions.tsx` | `apps/desktop-ui/src/pages/home/person-roster-actions.tsx` | Remove / Leave confirms in the People card |
@@ -41,7 +39,8 @@ exposes `onStagingChannelCreated` / `onStagingLinkRevoked` listeners (`/channels
 
 ## Imported, not copied
 
-`@/features/search/components/search-popup` (+ rows/sections, fed by `search-fixtures.ts`),
+`@/features/search/components/header-search` (the search pill + popup the frame's top bar mounts, fed by
+`ui-staging/data/search-results.ts`; the catalog's "Search popup" focuses it),
 `@/features/channels/components/agent-window-shell` (+ chrome, rail, frame), `agents-model`,
 `use-agent-launch`, `launch-agent-dialog` (the agent window's "+"), `view-model › indexMembers`,
 `@/shared/ui/{form-dialog,standard-dialog,confirm-dialog,toast,select-menu,…}`,
@@ -58,10 +57,10 @@ body is the landing demo's `marketing/components/banner-demo/demo-agent-view.tsx
 | Staging file | Stands in for |
 |---|---|
 | `stubs/home-writes.ts` | `apps/desktop-ui/src/pages/home/home-writes.ts` (create channel, mint/revoke link, remove member; in-memory) + the page listeners above |
-| `stubs/desktop-shell.tsx` | `search-client › apiSearchFetcher` (→ fixtures), `use-boot-state › BootPayload`, `#/components/settings-modal` (→ `StagingSettingsModal`), `#/hooks/use-workspace-access`, `react-router` (the window route = the demo's own agent in its open thread, `STAGING_WINDOW_ROUTE`), `signed-out-screen` |
+| `stubs/desktop-shell.tsx` | `use-boot-state › BootPayload`, `#/components/settings-modal` (→ `StagingSettingsModal`), `#/hooks/use-workspace-access`, `react-router` (the window route = the demo's own agent in its open thread, `STAGING_WINDOW_ROUTE`), `signed-out-screen` |
 | `stubs/channel-windows.tsx` | `use-desktop-sessions`, `agents-controls`, `spa-bridge-window` tab ops, and the window bodies `ChannelsThreadWindow`, `ChannelsAgentWindow`, `AgentWindowLaunch`, built from `/channels` staging (one in-memory store per open window) |
 | `stubs/spa-bridge.ts` | `@/shared/lib/spa-bridge › getSpaBridge` (notifications pair) + `pushStagingToast` + `setStagingToastOpener` (the frame routes toast clicks to the windows) |
-| `staging-popups.tsx` | the `{ open, onClose }` wrappers, `StagingSearchField` (the top bar's in-place search), fake channel/member/link, the window stand-in |
+| `staging-popups.tsx` | the `{ open, onClose }` wrappers, fake channel/member/link, the window stand-in |
 | `popups-staging.css` | staging chrome (`.pps-*`) |
 | `popups-catalog-page.tsx`, `src/app/popups/page.tsx` | the catalog route |
 | `popups-catalog-page.test.tsx` | render smoke test (opens everything, the windows' bodies + "+", the frame triggers, no fetch) |
@@ -75,6 +74,7 @@ body is the landing demo's `marketing/components/banner-demo/demo-agent-view.tsx
   `AgentWorkingOn` line or held-gate strip. Port from the product files, not from here.
 - **Signed-out screen**: it bundles the login journey and a dozen packaged desktop images.
 - **The /home header strip** (`home-header.tsx`): the frame's top bar (`ui-staging/staging-top-bar.tsx`)
-  owns that slot. Its two popups, search and Profile, are staged here and wired onto that top bar.
+  owns that slot. Its search pill is the product's own (no copy); Profile is staged here and wired onto
+  that top bar.
 - **Workspace switcher / account menu**: the desktop's account rail has neither (tiles, then the gated
   "+"); there is nothing to stage.

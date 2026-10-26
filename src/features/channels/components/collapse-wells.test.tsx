@@ -136,7 +136,7 @@ describe("collapse-wells — `variant` and `showEmpty`", () => {
     expect(within(shell).getByText("lima")).toBeTruthy();
   });
 
-  it("hides an empty well by DEFAULT — the Agents and Threads rule, unchanged", () => {
+  it("hides an empty well by DEFAULT — the Agents rule, unchanged", () => {
     renderSet([ITEMS[1]]);
     expect(screen.queryAllByRole("heading").map((h) => h.textContent)).toEqual([
       "Live",

@@ -70,6 +70,11 @@ export function threadCardAgents(
   return feeds.sessions === null && all.length === 0 ? null : all;
 }
 
+/** How many of a thread's agents are working right now. */
+export function runningCount(agents: readonly ThreadCardAgent[]): number {
+  return agents.filter((a) => a.liveness.tone === "working").length;
+}
+
 /**
  * The footer's attribution. An agent posts on its operator's account (INVARIANTS §5), so the row's
  * author is always a person and only the opening message's `authorKind` says an agent wrote it.

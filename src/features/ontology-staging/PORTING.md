@@ -32,5 +32,6 @@ directly), `cap-near` / `cap-over` (the object cap from `/api/billing/status`).
 
 ## Frame
 
-The white record pane is `ui-staging/staging.css › .uis-onto-pane`, the frame's twin of
+The white record pane is `ui-staging/staging.css › .uis-white-pane` (shared with the knowledge
+playground), the frame's twin of
 `apps/desktop-ui/src/pages/home/home.module.css › .page[data-face="ontology"] .pane`.

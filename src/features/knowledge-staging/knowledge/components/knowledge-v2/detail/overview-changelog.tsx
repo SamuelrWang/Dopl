@@ -1,8 +1,8 @@
 "use client";
 
-/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/detail/overview-changelog.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
-import { SectionPanel } from "@/shared/ui/section-panel";
-import { ChangelogList } from "@/features/revisions/components/changelog-list";
+/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/detail/overview-changelog.tsx` — redesigned ahead of its source (PORTING.md). */
+import { SettingsPanel } from "@/shared/layout/settings-modal/sections/settings-panel";
+import { ChangelogList } from "@/features/knowledge-staging/revisions/components/changelog-list";
 import { useRevisionHistory } from "@/features/knowledge-staging/stubs/revisions-hooks";
 import { restoreEntryRevision } from "@/features/knowledge-staging/stubs/revisions-api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -37,7 +37,7 @@ export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
   }
 
   return (
-    <SectionPanel id="kb-changelog" label="Changelog">
+    <SettingsPanel id="kb-changelog" label="Changelog">
       <ChangelogList
         days={history.days}
         status={history.status}
@@ -47,6 +47,6 @@ export function OverviewChangelog({ baseId, workspaceId, canEdit }: Props) {
         canRestore={canEdit}
         onRestore={restore}
       />
-    </SectionPanel>
+    </SettingsPanel>
   );
 }

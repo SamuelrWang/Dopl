@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { StatusPill } from "@/shared/ui/status-pill";
-import { TASK_CARD } from "./task-list";
+import { ROW_CARD, ROW_CARD_ROW } from "./bits";
 import { STATUS_TONE, SUBTASK_STATE_LABEL, type TaskFaceOf } from "./task-faces";
 import type { ChannelTaskSubtask } from "../types";
 
@@ -37,7 +37,7 @@ export function TaskSubtasks({
           {done}/{subtasks.length}
         </span>
       </h4>
-      <ol className={TASK_CARD}>
+      <ol className={ROW_CARD}>
         {subtasks.map((s) => {
           const owner = s.owner ? faceOf(s.owner) : null;
           const checked = s.state === "done";
@@ -46,7 +46,10 @@ export function TaskSubtasks({
             <li
               key={s.id}
               data-state={s.state}
-              className="grid min-h-11 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-border-default py-1.75 first:border-t-0"
+              className={cn(
+                ROW_CARD_ROW,
+                "grid min-h-11 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 py-1.75"
+              )}
             >
               {onToggle ? (
                 <button

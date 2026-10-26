@@ -1,9 +1,14 @@
 "use client";
 
-/** STAGING COPY of `src/features/knowledge/components/agent-write-toggle.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
+/** STAGING COPY of `src/features/knowledge/components/agent-write-toggle.tsx` — redesigned ahead of its source (PORTING.md). */
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
+import {
+  SettingsPanel,
+  SettingsRow,
+  SettingsRows,
+} from "@/shared/layout/settings-modal/sections/settings-panel";
 import { Switch } from "@/shared/ui/switch";
 import { toast } from "@/shared/ui/toast";
 import { updateBase } from "../client/api";
@@ -15,8 +20,9 @@ interface Props {
 }
 
 /**
- * `agent_write_enabled` toggle: ON lets MCP-origin callers
- * create/edit/move/delete in this base; OFF (default) is read-only.
+ * The settings popup's Agents pane: the `agent_write_enabled` switch. ON lets
+ * MCP-origin callers create/edit/move/delete in this base; OFF (default) is
+ * read-only.
  *
  * Enforcement is server-side in
  * [service.ts#assertAgentWriteAllowed](src/features/knowledge/server/service.ts).
@@ -54,34 +60,26 @@ export function AgentWriteToggle({
   }
 
   return (
-    <div className="rounded-lg border border-border-default p-4 bg-surface-raised-1">
-      <div className="flex items-start gap-4">
-        <div className="flex-1">
-          <p className="text-title font-medium text-text-primary">
-            Allow agent writes
-          </p>
-          <p className="mt-1 text-caption text-text-secondary leading-relaxed">
-            Lets your connected agent (e.g. Claude Code via MCP) create,
-            edit, move, and delete folders + entries in this knowledge
-            base. Reads are always allowed regardless. Off by default
-            for safety.
-          </p>
-          {enabled ? (
-            <div className="mt-2 flex items-center gap-1.5 text-caption text-warning/80">
-              <AlertTriangle size={11} />
-              <span>
-                Agent edits land directly. There&rsquo;s no review step.
-              </span>
-            </div>
-          ) : null}
-        </div>
-        <Switch
-          checked={enabled}
-          disabled={submitting}
-          onChange={(next) => void handleToggle(next)}
-          aria-label="Allow agent writes"
-        />
-      </div>
-    </div>
+    <SettingsPanel id="kb-settings-agents" label="Agent access">
+      <SettingsRows label="Agent access">
+        <SettingsRow
+          title="Allow agent writes"
+          meta="Create, edit, move and delete files. Reads are always allowed."
+        >
+          <Switch
+            checked={enabled}
+            disabled={submitting}
+            onChange={(next) => void handleToggle(next)}
+            aria-label="Allow agent writes"
+          />
+        </SettingsRow>
+      </SettingsRows>
+      {enabled ? (
+        <p className="flex items-center gap-1.5 px-1 text-caption text-warning">
+          <AlertTriangle size={11} aria-hidden="true" />
+          Agent edits land directly. There&rsquo;s no review step.
+        </p>
+      ) : null}
+    </SettingsPanel>
   );
 }

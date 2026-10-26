@@ -102,7 +102,7 @@ describe("/channels staging", () => {
       [...panel.querySelectorAll("section")].filter((s) => s.querySelector(":scope > button h3"));
     const titlesIn = (label: string) => {
       const well = wells().find((s) => s.querySelector("h3")?.textContent === label);
-      return [...(well?.querySelectorAll(".text-body.font-semibold") ?? [])].map((n) => n.textContent);
+      return [...(well?.querySelectorAll(".text-body.font-medium") ?? [])].map((n) => n.textContent);
     };
     const openWells = () => {
       for (const well of wells()) {
@@ -110,11 +110,11 @@ describe("/channels staging", () => {
         if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header);
       }
     };
-    const cardButton = (title: string, label: string) => {
-      const card = [...panel.querySelectorAll(".text-body.font-semibold")].find(
+    const rowOpen = (title: string) => {
+      const row = [...panel.querySelectorAll(".text-body.font-medium")].find(
         (n) => n.textContent === title
-      )?.parentElement;
-      return within(card!).getByRole("button", { name: label });
+      )?.closest<HTMLElement>(".white-card");
+      return within(row!).getByRole("button", { name: /^Open/ });
     };
 
     const threadsTab = screen
@@ -130,8 +130,8 @@ describe("/channels staging", () => {
     expect(titlesIn("Last 7 days")).toEqual(["Retry backoff constants", "Unused dependencies"]);
     expect(titlesIn("Last 30 days")).toEqual(["Dead feature flags"]);
 
-    // A card's Open opens its thread in the pane.
-    fireEvent.click(cardButton("Logger migration", "Open"));
+    // A row's Open opens its thread in the pane.
+    fireEvent.click(rowOpen("Logger migration"));
     await waitFor(() => expect(text()).toContain("do billing last"));
     fireEvent.click(
       screen.getAllByRole("button", { name: "tech-debt" }).find((b) => b.tagName === "BUTTON")!
@@ -150,12 +150,12 @@ describe("/channels staging", () => {
     expect(titlesIn("Last 7 days")).toEqual(["Retry backoff decision", "Dependency audit"]);
     expect(titlesIn("Last 30 days")).toEqual(["Feature flag cleanup"]);
 
-    // Open reads the card's run from the seeded `?artifact=` arm.
-    fireEvent.click(cardButton("Retry backoff decision", "Open"));
+    // Open reads the artifact's run from the seeded `?artifact=` arm.
+    fireEvent.click(rowOpen("Retry backoff decision"));
     await waitFor(() =>
-      expect(panel.querySelector('[data-artifact-id="stg-art-backoff"]')).toBeTruthy()
+      expect(panel.querySelector('article[aria-label="Retry backoff decision"]')).toBeTruthy()
     );
-    expect(panel.querySelectorAll("[data-artifact-member]").length).toBe(4);
+    await waitFor(() => expect(panel.querySelectorAll("[data-artifact-member]").length).toBe(4));
     expect(panel.textContent).toContain("keep the upload one, it's the only one with tests");
 
     expect(fetchSpy).not.toHaveBeenCalled();

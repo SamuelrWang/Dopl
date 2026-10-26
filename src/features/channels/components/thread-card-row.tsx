@@ -22,7 +22,7 @@ import { AuthoredRow } from "./authored-row";
 import { TextOnlyLinks } from "./message-markdown";
 import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { BodyContext } from "./message-markdown-context";
-import { openedByLabel, type ThreadCardAgent } from "./thread-card-agents";
+import { openedByLabel, runningCount, type ThreadCardAgent } from "./thread-card-agents";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { ThreadCardRow } from "./view-model-rows";
 
@@ -77,7 +77,7 @@ function ThreadAgents({
   onOpenAgent?: (key: string) => void;
 }) {
   if (agents.length === 0) return <EmptyState variant="well" icon={Users} title="No agents yet" />;
-  const running = agents.filter((a) => a.liveness.tone === "working").length;
+  const running = runningCount(agents);
   return (
     <div className="card-well flex min-h-0 flex-col gap-[5px] p-2">
       <p className="flex items-baseline justify-between gap-2 text-label font-semibold uppercase tracking-wide text-text-muted">

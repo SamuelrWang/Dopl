@@ -7,7 +7,7 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
+import { IDENTITY_NAME_TEXT, QUIET_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { cn } from "@/shared/lib/utils";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
@@ -51,9 +51,10 @@ const WELL_HEADER =
   "flex min-h-[30px] w-full min-w-0 cursor-pointer items-center justify-between gap-2 pl-1 text-left";
 
 /**
- * `"well"`: the gray box with the header inside it (the Agents and Threads tabs). `"heading"`: no
- * box, a quiet uppercase heading over the rows (/home's channel column, whose rows are cards).
- * Both share the collapse and its bleed geometry. Exported for the loading ghosts' geometry.
+ * `"well"`: the gray box with the header inside it (the Agents tab). `"heading"`: no box, a quiet
+ * uppercase heading over the rows (/home's channel column and the Threads and Artifacts lists,
+ * whose rows are cards). Both share the collapse and its bleed geometry. Exported for the loading
+ * ghosts' geometry.
  */
 export type WellVariant = "well" | "heading";
 
@@ -72,7 +73,7 @@ export const WELL_FACES: Record<
   heading: {
     box: "flex min-w-0 flex-col gap-2",
     header:
-      "flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-1 pt-1.5 text-left text-label font-medium uppercase tracking-[0.02em] text-text-muted",
+      `flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-1 pt-1.5 text-left ${QUIET_HEADING_TEXT}`,
     title: "",
     chevronBox: "flex shrink-0",
     chevron: 13,

@@ -1,30 +1,28 @@
 "use client";
 
 /**
- * The search popup: one floating card under the header search field, holding a
- * text search across the whole space, split into sections.
+ * The search popup: one floating card under the host's search field, holding a text search
+ * across the whole space, split into sections.
  *
- * (2026-09-17) Samuel's rulings: a popup rather than sidebar filtering; sections
- * per kind; no Cmd-K and no scope toggle; one step smaller than it first shipped.
+ * One component, two hosts. The host contract is `{ scope, containerId?, onNavigate }` and
+ * nothing about a host leaks in here — no router, no workspace read, no page state.
  *
- * One component, two hosts. The host contract is `{ scope, containerId?,
- * onNavigate }` and nothing about a host leaks in here — no router, no workspace
- * read, no page state.
- *
- * The field is the host's pill, so there is no input inside the card: two inputs
- * over one query is two places for the caret to be. Dismissal is shared — Escape
- * calls `onClose`, and outside-pointer dismissal belongs to the host, which is
- * the only side that knows where the pill ends.
+ * The field is the host's, so there is no input inside the card: two inputs over one query is
+ * two places for the caret to be. Dismissal is shared — Escape calls `onClose`, and the card
+ * is open exactly while the field has focus.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Clock3, CornerDownLeft } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CircleAlert, CornerDownLeft, Search, SearchX } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { QUIET_HEADING_TEXT } from "@/shared/ui/section-heading";
 import {
   SEARCH_MIN_QUERY_LENGTH,
   type SearchItem,
   type SearchScope,
 } from "../contracts";
+import { highlightPattern, highlightTerms } from "../highlight";
 import { useRecentSearches, useSearch, type SearchFetcher } from "../use-search";
 import {
   GROUP_LABEL,
@@ -32,7 +30,7 @@ import {
   moveIndex,
   orderedGroups,
 } from "./search-popup-sections";
-import { SearchResultRow } from "./search-popup-rows";
+import { Keycap, RecentRow, SearchResultRow } from "./search-popup-rows";
 
 export interface SearchPopupProps {
   /** The host field's live value. */
@@ -57,49 +55,39 @@ export interface SearchPopupProps {
   className?: string;
 }
 
-/** Small white key box — the footer legend and the field's return affordance.
- *  18px (`docs/DESIGN-SYSTEM.md` › Search popup › KEYCAP). */
-function Keycap({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-micro inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-border-default bg-bg-elevated px-1 leading-none text-text-secondary">
-      {children}
-    </span>
-  );
-}
+/**
+ * The card fits its rows, floored at the field it hangs from and capped so a long snippet
+ * truncates instead of widening it. The floor is the sidebar field's 260px pill plus the
+ * body's padding; /home's header raises it to its whole action group (`header-search.tsx`).
+ */
+export const SEARCH_CARD_W = "w-max min-w-[280px] max-w-[min(440px,calc(100vw-2rem))]";
 
-/** Hairline with the section's name sitting IN it, gaps either side. */
-function LabelledRule({ label }: { label: string }) {
+/**
+ * Each section is about five rows tall and scrolls itself. Applied to the LIST, not the
+ * section — the heading is a sibling above the scroller so it stays put while its rows move.
+ */
+export const SEARCH_SECTION_MAX_H = "max-h-[160px]";
+
+/** Rows on hairlines; the row's hover face floats between them. */
+const ROW_LIST = "divide-y divide-border-subtle [&>*]:py-0.5";
+
+/** Sticky inside the card's own scroll, so a long answer keeps its section named. */
+function SectionHeading({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 py-1.5">
-      <span className="h-px flex-1 bg-border-subtle" aria-hidden />
-      <span className="text-label uppercase tracking-wide font-semibold text-text-muted">
-        {label}
-      </span>
-      <span className="h-px flex-1 bg-border-subtle" aria-hidden />
+    <div className={cn("sticky top-0 z-10 bg-bg-overlay px-2 pt-2.5 pb-1", QUIET_HEADING_TEXT)}>
+      {label}
     </div>
   );
 }
 
-/**
- * (2026-09-17) The card is the pill's width plus its own padding, nothing wider.
- * The kit's open pill is 260px and the body carries `px-2.5` a side, so 280px
- * puts the rows on the pill's own edges.
- *
- * ⚠ (2026-09-29) The DEFAULT, not every host's: /home's header pill spans the
- * card from the pill's left edge to the Profile button's right edge by passing
- * `left-0 w-auto` and anchoring on the group both sit in (`home-search.tsx`).
- */
-export const SEARCH_CARD_W = "w-[280px]";
-
-/**
- * (2026-09-17) Each section is five rows tall and scrolls itself. A one-line row
- * is 20px of tile inside `py-1`, so five are 160px; taller rows scroll, which is
- * the ceiling doing its job.
- *
- * Applied to the LIST, not the section — the heading is a sibling above the
- * scroller so it stays put while its rows move under it.
- */
-export const SEARCH_SECTION_MAX_H = "max-h-[160px]";
+function Hint({ keys, label }: { keys: ReactNode; label: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      {keys}
+      <span className="text-caption text-text-muted">{label}</span>
+    </span>
+  );
+}
 
 export function SearchPopup({
   query,
@@ -122,19 +110,18 @@ export function SearchPopup({
   });
   const { recents, remember } = useRecentSearches(userId, seedRecents);
   /**
-   * The cursor is a row id, not an index, so the reset is free: an id the new
-   * list does not contain resolves to the first row by itself. An index would
-   * need an effect calling `setState` synchronously.
+   * The cursor is a row id, not an index, so the reset is free: an id the new list does not
+   * contain resolves to the first row by itself.
    */
   const [activeId, setActiveId] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const typed = query.trim();
   const searching = typed.length >= SEARCH_MIN_QUERY_LENGTH;
-  const showRecents = !searching && recents.length > 0;
 
   const sections = useMemo(() => orderedGroups(groups), [groups]);
   const items = useMemo(() => flatItems(groups), [groups]);
+  const pattern = useMemo(() => highlightPattern(highlightTerms(typed)), [typed]);
   const found = items.findIndex((item) => item.id === activeId);
   const active = found === -1 ? 0 : found;
 
@@ -147,17 +134,10 @@ export function SearchPopup({
     [remember, typed, onNavigate, onClose]
   );
 
-  /**
-   * Focus is the whole dismissal rule, which is why there is no outside-click
-   * listener: the card suppresses its own `mousedown` default, so the only way
-   * focus leaves is the reader looking elsewhere.
-   */
-  const open = focused && (searching || showRecents);
-
-  // On the window, not the card: the caret stays in the host's pill, so a
-  // handler bound here would never run.
+  // On the window, not the card: the caret stays in the host's field, so a handler bound
+  // here would never run.
   useEffect(() => {
-    if (!open) return;
+    if (!focused) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -167,11 +147,7 @@ export function SearchPopup({
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         if (items.length === 0) return;
         event.preventDefault();
-        const next = moveIndex(
-          active,
-          event.key === "ArrowDown" ? 1 : -1,
-          items.length
-        );
+        const next = moveIndex(active, event.key === "ArrowDown" ? 1 : -1, items.length);
         setActiveId(items[next].id);
         return;
       }
@@ -184,130 +160,117 @@ export function SearchPopup({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, items, active, take, onClose]);
+  }, [focused, items, active, take, onClose]);
 
-  // Keep the cursor visible past the card's fold or its own section's:
-  // `block: "nearest"` scrolls every scrollable ancestor, so one call serves both.
-  // `?.` on the method too — jsdom does not implement `scrollIntoView`, and a
-  // bare call would redden every mounted test of this card.
+  // `block: "nearest"` scrolls every scrollable ancestor, so one call keeps the cursor inside
+  // both its section and the card. `?.` on the method too: jsdom has no `scrollIntoView`.
   useEffect(() => {
     const row = bodyRef.current?.querySelector('[data-active="true"]');
     row?.scrollIntoView?.({ block: "nearest" });
   }, [active]);
 
-  if (!open) return null;
+  if (!focused) return null;
 
   return (
     <div
-      /* `.menu-card` is the container recipe. `!p-0` + `overflow-hidden` because
-         the legend bar runs edge to edge and clips to the card's corners. */
       className={cn(
-        "menu-card absolute top-full right-0 z-50 mt-2 !p-0 overflow-hidden",
+        "white-card absolute top-full right-0 z-50 mt-2 overflow-hidden shadow-[var(--shadow-card-lift)]",
         SEARCH_CARD_W,
-        "max-w-[calc(100vw-2rem)]",
         className
       )}
-      data-origin="right"
       data-search-popup=""
       role="listbox"
       aria-label="Search results"
       aria-busy={loading || undefined}
-      /* The card is part of the control: a press inside it must not read as a
-         blur out of the field before the click lands. */
+      /* The card is part of the control: a press inside it must not read as a blur out of
+         the field before the click lands. */
       onMouseDown={(event) => event.preventDefault()}
     >
       <div
         ref={bodyRef}
-        // The card's own ceiling stays under the per-section one: five rows
-        // apiece still stacks past the screen once enough sections match.
-        className="scrollbar-discreet max-h-[min(60vh,380px)] overflow-y-auto px-2.5 py-2"
+        className="scrollbar-discreet max-h-[min(60vh,380px)] overflow-y-auto px-1.5 pb-1.5"
       >
-        {showRecents ? (
-          <>
-            <LabelledRule label="Recent" />
-            {recents.map((term) => (
-              <button
-                key={term}
-                type="button"
-                onClick={() => onQueryChange(term)}
-                className="menu-row flex w-full items-center gap-2 px-1.5 py-1 text-left"
-              >
-                <Clock3 size={12} className="shrink-0 text-text-muted" aria-hidden />
-                <span className="text-small truncate text-text-primary">{term}</span>
-              </button>
-            ))}
-          </>
+        {!searching ? (
+          recents.length > 0 ? (
+            <>
+              <SectionHeading label="Recent" />
+              <div className={ROW_LIST}>
+                {recents.map((term) => (
+                  <div key={term}>
+                    <RecentRow term={term} onTake={() => onQueryChange(term)} />
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <EmptyState icon={Search} title="Type to search" className="py-6" />
+          )
         ) : (
           <>
             {sections.map((group) => (
-              <div key={group.kind}>
-                <LabelledRule label={GROUP_LABEL[group.kind]} />
+              <Fragment key={group.kind}>
+                <SectionHeading label={GROUP_LABEL[group.kind]} />
                 <div
                   data-search-section={group.kind}
-                  className={cn(
-                    SEARCH_SECTION_MAX_H,
-                    "scrollbar-discreet overflow-y-auto"
-                  )}
+                  className={cn(SEARCH_SECTION_MAX_H, "scrollbar-discreet overflow-y-auto", ROW_LIST)}
                 >
                   {group.items.map((item) => {
                     const index = items.indexOf(item);
                     return (
-                      <SearchResultRow
-                        key={`${group.kind}:${item.id}`}
-                        item={item}
-                        active={index === active}
-                        scope={scope}
-                        containerId={containerId}
-                        onActivate={() => take(item)}
-                        onHover={() => setActiveId(item.id)}
-                      />
+                      <div key={`${group.kind}:${item.id}`}>
+                        <SearchResultRow
+                          item={item}
+                          active={index === active}
+                          pattern={pattern}
+                          scope={scope}
+                          containerId={containerId}
+                          onActivate={() => take(item)}
+                          onHover={() => setActiveId(item.id)}
+                        />
+                      </div>
                     );
                   })}
                 </div>
-              </div>
+              </Fragment>
             ))}
-            {/* (2026-09-29, Samuel: "show … something that says loading
-                results") — one label line from the keystroke until this
-                query's answer lands; `use-search.ts` never hands back another
-                query's rows in the meantime. */}
+            {/* From the keystroke until THIS query's answer lands; `use-search.ts` never hands
+                back another query's rows in the meantime. */}
             {loading && (
-              <p
-                className="text-caption px-1.5 py-2 text-text-muted"
-                data-search-loading=""
-              >
+              <p className="text-caption px-2 py-2.5 text-text-muted" data-search-loading="">
                 Loading results
               </p>
             )}
-            {/* Only once the answer is in: "No results" mid-flight is a claim the
-                client cannot make yet. */}
+            {/* Only once the answer is in: "No results" mid-flight is a claim the client
+                cannot make yet. */}
             {sections.length === 0 && !loading && (
-              <p className="text-caption px-1.5 py-2 text-text-muted">
-                {error ?? "No results"}
-              </p>
+              <EmptyState
+                icon={error ? CircleAlert : SearchX}
+                title={error ?? "No results"}
+                className="py-6"
+              />
             )}
           </>
         )}
       </div>
 
-      {/* The legend bar, flush to the card's edges. */}
-      <div className="flex h-9 items-center justify-between bg-card-surface-subtle px-2.5">
-        <div className="flex items-center gap-2.5">
-          <span className="flex items-center gap-1">
+      <div className="flex h-8 items-center gap-3 border-t border-border-subtle px-3">
+        <Hint
+          keys={
             <Keycap>
               <CornerDownLeft size={10} aria-hidden />
             </Keycap>
-            <span className="text-micro text-text-secondary">Select</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <Keycap>↑</Keycap>
-            <Keycap>↓</Keycap>
-            <span className="text-micro text-text-secondary">Move</span>
-          </span>
-        </div>
-        <span className="flex items-center gap-1">
-          <Keycap>Esc</Keycap>
-          <span className="text-micro text-text-secondary">Exit</span>
-        </span>
+          }
+          label="Open"
+        />
+        <Hint
+          keys={
+            <>
+              <Keycap>↑</Keycap>
+              <Keycap>↓</Keycap>
+            </>
+          }
+          label="Move"
+        />
       </div>
     </div>
   );

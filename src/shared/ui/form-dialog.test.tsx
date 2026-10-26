@@ -26,7 +26,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { FormDialog, FormSection, PillChoice, UnderlineField } from "./form-dialog";
+import {
+  FormDialog,
+  FormSection,
+  InlineUnderlineField,
+  PillChoice,
+  UnderlineField,
+} from "./form-dialog";
 
 afterEach(cleanup);
 
@@ -195,6 +201,31 @@ describe("UnderlineField — gray at rest, ink on focus", () => {
       fireEvent.keyDown(field({ onEnter }), { key: "Enter", isComposing: true });
       expect(onEnter).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("InlineUnderlineField — multiline", () => {
+  it("is a growing textarea with the same line, ceiling and blur", () => {
+    const onBlur = vi.fn();
+    render(
+      <InlineUnderlineField
+        label="Description"
+        value=""
+        onChange={vi.fn()}
+        onBlur={onBlur}
+        multiline
+        quiet
+        maxLength={300}
+      />
+    );
+    const area = screen.getByLabelText("Description");
+    expect(area.tagName).toBe("TEXTAREA");
+    expect(area.className).toMatch(/inputMultiline/);
+    expect(area.getAttribute("maxlength")).toBe("300");
+    fireEvent.focus(area);
+    expect((area.parentElement as HTMLElement).className).toMatch(/lineActive/);
+    fireEvent.blur(area);
+    expect(onBlur).toHaveBeenCalledOnce();
   });
 });
 
