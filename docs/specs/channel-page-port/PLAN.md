@@ -27,7 +27,29 @@ Anchors are `path › symbol`.
 7. Max 2 Opus workers at once, one worktree each, gates under `lockf /tmp/dopl-gate.lock`, commit
    by path, no push, no migration applied, no release without Samuel's word.
 
-## 2. Rulings needed before code (recommendation first)
+## 2. Rulings (RULED by Samuel 2026-10-26, these override the table below)
+
+- **R1/R13 rename:** thread storage stops being called `task`. Rename EVERYTHING that means a
+  thread to `thread`: tables (`channel_tasks` → `channel_threads` and its FKs/columns/indexes/
+  policies/functions), routes (`/api/channels/[channelId]/tasks/**` → `/threads/**`), message kinds
+  (`task_*` → `thread_*`, stored rows migrated), metadata keys (`taskId` → `threadId`, stored rows
+  migrated), types/services/repos/errors/tests/SDK/MCP/desktop main, docs (INVARIANTS §5 "task ==
+  thread" bullet is removed, not kept). **No aliases, no back-compat shims.** Raise the minimum
+  app version floor. The new feature then owns `task` everywhere (`channel_tasks` table for tasks,
+  `/tasks` routes, `dopl_manage_task`).
+- **R3:** staging look, including the white Profile photo + first-name pill.
+- **R12 scope:** edit the Home channel page and app background as normal, shared components
+  included. If that bleeds into the workspace channels page, fine. Do NOT do any work whose only
+  purpose is the workspace channels page or other workspace surfaces.
+- **R14 migrations:** test locally (`supabase db reset` replay + live rls-redteam where Docker is
+  available, plus schema tests). If green, the orchestrator APPLIES to production by name,
+  byte-exact, md5-verified. Commit locally. **Never push, never deploy, never release.** A broken
+  live app in between is accepted.
+- R4, R5, R6, R7, R8, R9, R10, R11 as recommended below.
+- Overnight: no questions; work around unknowns and log each in `docs/specs/channel-page-port/
+  OPEN-QUESTIONS.md` for the morning.
+
+## 2a. Original recommendations
 
 | # | Question | Recommendation |
 |---|---|---|
