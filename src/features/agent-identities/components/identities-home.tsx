@@ -6,7 +6,7 @@ import type { AgentRunPresenter } from "@/shared/lib/agent-run-presenter";
 import type { AvatarStackUser } from "@/shared/ui/avatar-stack";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { CreateButton } from "@/shared/ui/page-action-button";
+import { CreateButton } from "@/shared/ui/pill-button";
 import { agentIdentityErrorMessage } from "../client/api";
 import type { AgentIdentity } from "../client/types";
 import type { UseAgentIdentitiesResult } from "../hooks/use-agent-identities";

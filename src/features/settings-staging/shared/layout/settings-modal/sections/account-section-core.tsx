@@ -10,7 +10,7 @@ import { useApiQuery } from "@/features/settings-staging/stubs/api";
 import type { Role } from "@/features/workspaces/types";
 import { Avatar } from "@/shared/ui/avatar";
 import { UnderlineField } from "@/shared/ui/form-dialog";
-import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { cn } from "@/shared/lib/utils";
 import { SettingsCard, SettingsPane, SettingsPanel } from "@/shared/layout/settings-modal/sections/settings-panel";
 import { AccountSubscription } from "./account-subscription";
@@ -129,7 +129,7 @@ export function AccountSectionCore({
               type="button"
               disabled={!dirty || saving}
               onClick={handleSave}
-              className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-not-allowed disabled:opacity-40")}
+              className={cn(pillButton("ink", "md"), "disabled:cursor-not-allowed disabled:opacity-40")}
             >
               {saving ? "Saving…" : "Save"}
             </button>

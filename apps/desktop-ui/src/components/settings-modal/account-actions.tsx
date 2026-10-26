@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
+import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import {
   SettingsPanel,
   SettingsRow,
@@ -29,7 +29,7 @@ export function AccountActions({ workspaceSegment }: { workspaceSegment: string 
             <button
               type="button"
               onClick={() => void bridge?.signOut?.()}
-              className={SMALL_PILL_BUTTON}
+              className={pillButton("outline", "md")}
             >
               Sign out
             </button>
@@ -40,10 +40,10 @@ export function AccountActions({ workspaceSegment }: { workspaceSegment: string 
           <button
             type="button"
             onClick={() => openInBrowser(accountPagePath(workspaceSegment))}
-            className={cn(SMALL_PILL_BUTTON, "text-danger")}
+            className={cn(pillButton("outline", "md"), "text-danger")}
           >
             Open in browser
-            <ExternalLink size={SMALL_PILL_ICON} aria-hidden="true" />
+            <ExternalLink size={PILL_ICON.md} aria-hidden="true" />
           </button>
         </SettingsRow>
       </SettingsRows>

@@ -17,7 +17,7 @@ import {
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
 import { monthKey, monthLabel, shiftMonthKey, utcDayLabel } from "@/features/home/overview-period";
-import { CARD_PILL, INK_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { Bars, OverviewCard } from "./overview-card";
 import type { HomeOverviewReads, OverviewRead } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
@@ -197,7 +197,7 @@ export function CreditsCard({
         !wallet.isPaid && (
           <button
             type="button"
-            className={over ? INK_PILL : CARD_PILL}
+            className={over ? pillButton("ink", "sm") : pillButton("outline", "sm")}
             onClick={onGetCredits}
           >
             Get more credits

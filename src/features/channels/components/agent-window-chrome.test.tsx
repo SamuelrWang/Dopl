@@ -115,7 +115,7 @@ describe("the chrome, left to right", () => {
     expect(second!.getAttribute("aria-selected")).toBe("false");
     // ⚠ THE UNDERLINE IS AN ELEMENT, so it can be counted: exactly one on screen. Marked with a
     // `data-` attribute rather than matched on a class fragment — the class is a geometry constant
-    // now (`agent-window-frame.ts › TAB_UNDERLINE`) and a test that greps its spelling fails on
+    // now (`shared/ui/tab-underline.tsx › TAB_UNDERLINE`) and a test that greps its spelling fails on
     // every re-position of a rule it is not about.
     expect(document.querySelectorAll("[data-tab-underline]").length).toBe(1);
   });

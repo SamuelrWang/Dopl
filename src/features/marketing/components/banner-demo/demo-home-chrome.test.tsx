@@ -16,7 +16,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { cleanup, render, screen } from "@testing-library/react";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
 import { DemoScene } from "./demo-scene";
 import { HOME_ROW_ID, homeRowsAt } from "./demo-home-rows";
@@ -149,7 +149,7 @@ describe("the record pane plays /home's channel record", () => {
       expect(screen.getByText(row)).toBeTruthy();
     }
     // …and the one ACTION on the tab, under the roster it changes.
-    expect(screen.getByText("Add person").className).toBe(PAGE_ACTION_BTN);
+    expect(screen.getByText("Add person").className).toBe(pillButton("ink", "lg"));
   });
 
   it("🔒 the composer addresses NOBODY BY SAYING SO, and carries the Bot glyph", () => {

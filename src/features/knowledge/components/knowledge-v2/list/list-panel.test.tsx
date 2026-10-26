@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { KnowledgeBase } from "../../../types";
 import type { BaseTree } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-controller";
-import { TEXT_LINK_BUTTON } from "@/shared/ui/small-action-button";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { ListPanel } from "./list-panel";
 
 /**

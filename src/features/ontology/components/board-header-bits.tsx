@@ -7,7 +7,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Pencil, Settings, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { InlineUnderlineField } from "@/shared/ui/form-dialog";
-import { WHITE_PILL } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { useBoardDisplay, type BoardDisplay } from "../hooks/use-board-display";
@@ -100,7 +100,7 @@ export function BoardSettingsMenu({
           const rect = triggerRef.current?.getBoundingClientRect();
           if (rect) setAnchor({ x: rect.right - 200, y: rect.bottom + 6 });
         }}
-        className={cn(WHITE_PILL, "w-9 shrink-0 justify-center")}
+        className={cn(pillButton("white", "lg"), "w-9 shrink-0 justify-center px-0")}
       >
         <Settings size={14} />
       </button>

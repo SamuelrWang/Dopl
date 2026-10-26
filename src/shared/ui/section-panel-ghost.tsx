@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
+import { PILL_ICON } from "@/shared/ui/pill-button";
 import { SECTION_PANEL_GROUND, SECTION_PANEL_SHELL } from "@/shared/ui/section-panel";
 import { SkeletonBar, SkeletonLine } from "@/shared/ui/skeleton";
 
@@ -49,7 +49,7 @@ export function SectionPanelGhost({
 export const HEADING_W = 148;
 
 /**
- * A section header's create-button ghost: `page-action-button.tsx › CreateButton` is `PAGE_ACTION_BTN`
+ * A section header's create-button ghost: `pill-button.tsx › CreateButton` is `pillButton("ink", "lg")`
  * (`h-9 rounded-full px-3.75`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
  * sized from the label the real button prints, and two sections with one label ghost one width.
  */
@@ -57,7 +57,7 @@ export function CreateGhost({ label }: { label: string }) {
   return (
     <SkeletonBar
       h={36}
-      w={`calc(${label.length}ch + ${15 * 2 + PAGE_ACTION_ICON + 6}px)`}
+      w={`calc(${label.length}ch + ${15 * 2 + PILL_ICON.lg + 6}px)`}
       className="rounded-full"
     />
   );

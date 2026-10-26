@@ -11,11 +11,8 @@ import {
   SettingsRows,
 } from "@/shared/layout/settings-modal/sections/settings-panel";
 import { UnderlineField } from "@/shared/ui/form-dialog";
-import {
-  SMALL_PILL_BUTTON,
-  SMALL_PRIMARY_PILL,
-  SMALL_TEXT_BUTTON,
-} from "@/shared/ui/small-action-button";
+import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { toast } from "@/shared/ui/toast";
 import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { updateBase } from "../client/api";
@@ -157,7 +154,7 @@ export function BaseGeneralPane({
               type="button"
               onClick={handleSave}
               disabled={!dirty || saving}
-              className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-not-allowed disabled:opacity-40")}
+              className={cn(pillButton("ink", "md"), "disabled:cursor-not-allowed disabled:opacity-40")}
             >
               {saving ? "Saving…" : "Save changes"}
             </button>
@@ -175,7 +172,7 @@ export function BaseGeneralPane({
               type="button"
               onClick={() => setConfirmDeleteOpen(true)}
               disabled={deleting}
-              className={cn(SMALL_PILL_BUTTON, "text-danger")}
+              className={cn(pillButton("outline", "md"), "text-danger")}
             >
               {deleting ? "Deleting…" : "Delete"}
             </button>

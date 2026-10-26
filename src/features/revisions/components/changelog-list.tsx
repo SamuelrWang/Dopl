@@ -6,11 +6,8 @@ import { cn } from "@/shared/lib/utils";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { IdentityFace } from "@/shared/ui/identity-face";
-import {
-  SMALL_PILL_BUTTON,
-  SMALL_PILL_ICON,
-  SMALL_TEXT_BUTTON,
-} from "@/shared/ui/small-action-button";
+import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import type { Revision, RevisionDay } from "../types";
 import { bundleOf, fieldLineOf, NO_VALUE } from "../lib/field-format";
 import { isRestorable } from "../lib/restorable";
@@ -252,9 +249,9 @@ export function ChangelogList({
                           <button
                             type="button"
                             onClick={() => setConfirming(revision)}
-                            className={cn(SMALL_PILL_BUTTON, "self-start")}
+                            className={cn(pillButton("outline", "md"), "self-start")}
                           >
-                            <RotateCcw size={SMALL_PILL_ICON} aria-hidden="true" />
+                            <RotateCcw size={PILL_ICON.md} aria-hidden="true" />
                             Restore
                           </button>
                         ) : null}

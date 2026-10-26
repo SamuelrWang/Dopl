@@ -5,21 +5,20 @@
 import type { ReactNode } from "react";
 import { Bot, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
-import { INK_PILL_FACE } from "@/shared/ui/small-action-button";
-import { PAGE_ACTION_BTN, PAGE_ACTION_BTN_LIGHT } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./icon-button";
 export { IconButton };
 
 /** A right-panel tab's own action ("New thread", "Launch agent") at the 36px dark scale. Split controls use
  *  {@link TAB_ACTION_SHELL} + {@link TAB_ACTION_INK} (pinned against the whole by bits-tab-action.test.ts). */
-export const TAB_ACTION = cn(PAGE_ACTION_BTN, "shrink-0 gap-1");
+export const TAB_ACTION = cn(pillButton("ink", "lg"), "shrink-0 gap-1");
 /** {@link TAB_ACTION}'s white twin. */
-export const TAB_ACTION_LIGHT = cn(PAGE_ACTION_BTN_LIGHT, "shrink-0 gap-1");
-/** The face and the box: the ink pill at 36px. */
-export const TAB_ACTION_SHELL = cn(INK_PILL_FACE, "h-9");
-/** The label's own type and pad — everything inside the shell. */
-export const TAB_ACTION_INK = "gap-1 px-3.75 text-small";
+export const TAB_ACTION_LIGHT = cn(pillButton("white", "lg"), "shrink-0 gap-1");
+/** The face and the box: the ink pill at 36px, its pad moved onto each half. */
+export const TAB_ACTION_SHELL = cn(pillButton("ink", "lg"), "gap-0 px-0");
+/** One half's pad — everything inside the shell. */
+export const TAB_ACTION_INK = "gap-1 px-3.75";
 
 /** The white card of hairline-separated rows: the Tasks list and a task's subtasks. */
 export const ROW_CARD = "white-card m-0 flex min-w-0 list-none flex-col px-3";

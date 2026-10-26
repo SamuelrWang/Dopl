@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
 import { IdentityStack } from "@/shared/ui/avatar-stack";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
-import { QUIET_PILL } from "@/shared/ui/small-action-button";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { byTaskOrder, isActiveTask } from "../lib/task-model";
 import { TASK_TICK, TaskAssignees, TaskTickMark } from "./task-bits";
 import { workingTaskFaces, type TaskFaceOf } from "./task-faces";
@@ -99,7 +99,11 @@ export function TasksQuickView({
           <header className="flex h-9.5 flex-none items-center gap-1.5 border-b border-border-default pl-3 pr-1">
             <span className="text-body font-semibold text-text-primary">Tasks</span>
             {!unknown && <span className="text-caption text-text-muted">{active.length}</span>}
-            <button type="button" onClick={() => go(null)} className={cn(QUIET_PILL, "ml-auto")}>
+            <button
+              type="button"
+              onClick={() => go(null)}
+              className={cn(TEXT_LINK_BUTTON, "ml-auto px-1 text-caption font-medium text-text-primary")}
+            >
               See all
             </button>
             <button

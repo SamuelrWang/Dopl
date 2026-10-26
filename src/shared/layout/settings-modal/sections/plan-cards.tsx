@@ -18,7 +18,7 @@ import {
 import type { CheckoutPlan } from "@/features/billing/url";
 import { formatDate } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 
 /**
  * ⚠ THE PLAN UNION IS `features/billing/url.ts › CheckoutPlan`, RE-EXPORTED,
@@ -172,7 +172,7 @@ export function PlanColumn({ plan, ...actions }: CardActions & { plan: PlanDef }
 }
 
 const PRIMARY = cn(
-  SMALL_PRIMARY_PILL,
+  pillButton("ink", "md"),
   "w-full justify-center disabled:cursor-default disabled:opacity-60"
 );
 const CURRENT =

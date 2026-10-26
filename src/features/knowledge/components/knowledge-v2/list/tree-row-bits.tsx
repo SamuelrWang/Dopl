@@ -3,7 +3,7 @@
 import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { FilePlus, FolderPlus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { TEXT_LINK_BUTTON } from "@/shared/ui/small-action-button";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import styles from "../knowledge-v2.module.css";
 
 type CreateFolder = (parentId: string | null, name: string) => Promise<string>;

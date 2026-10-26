@@ -9,7 +9,7 @@
 
 import { cn } from "@/shared/lib/utils";
 import type { RuntimeCredentialStatus } from "@/shared/lib/spa-bridge";
-import { SMALL_PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { StatusPill, type StatusTone } from "@/shared/ui/status-pill";
 import { SIGN_IN_BUSY } from "@/features/channels/lib/runtime-copy";
 import {
@@ -58,7 +58,7 @@ export function RuntimeCredentialBars({ className }: { className?: string }) {
                   disabled={busy}
                   aria-busy={busy}
                   aria-label={busy ? undefined : `Sign in to ${r.label}`}
-                  className={SMALL_PILL_BUTTON}
+                  className={pillButton("outline", "md")}
                 >
                   {busy ? SIGN_IN_BUSY : "Sign in"}
                 </button>
@@ -72,7 +72,7 @@ export function RuntimeCredentialBars({ className }: { className?: string }) {
                   onClick={() => void signInFullToRuntime(r.runtimeId)}
                   disabled={r.full === "signing-in"}
                   aria-busy={r.full === "signing-in"}
-                  className={SMALL_PILL_BUTTON}
+                  className={pillButton("outline", "md")}
                 >
                   {r.full === "signing-in" ? SIGN_IN_BUSY : FULL_LABEL}
                 </button>
@@ -82,7 +82,7 @@ export function RuntimeCredentialBars({ className }: { className?: string }) {
                   type="button"
                   onClick={() => cancelRuntimeSignIn(r.runtimeId)}
                   aria-label={`Cancel ${r.label} sign-in`}
-                  className={SMALL_PILL_BUTTON}
+                  className={pillButton("outline", "md")}
                 >
                   Cancel
                 </button>

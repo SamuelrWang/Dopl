@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { formatTokens } from "@/shared/lib/format-tokens";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { agentModelShortLabel } from "../lib/agent-models";
@@ -35,7 +35,7 @@ import {
 const CARD = "white-card flex flex-col px-3 py-2.5";
 /** Under the name, clear of the 30px face and its gap. */
 const UNDER_HEAD = "mt-1.5 ml-[39px] min-w-0 truncate text-caption";
-const OPEN_BUTTON = cn(PILL_BUTTON, "h-[26px] px-3");
+const OPEN_BUTTON = cn(pillButton("outline", "sm"), "px-3");
 
 /** The operator's description, read off a widened local type (older desktops omit it); own agents only. */
 function agentDescription(

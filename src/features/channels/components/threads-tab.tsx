@@ -12,7 +12,7 @@ import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { IdentityStackFace } from "@/shared/ui/avatar-stack";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useRuntimeLogo } from "@/shared/ui/runtime-logo";
-import { QUIET_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { TAB_ACTION, TAB_ACTION_LIGHT } from "./bits";
 import { agentIdentity, type AgentFeeds } from "./agent-face";
@@ -212,7 +212,7 @@ function ThreadItem({
             type="button"
             aria-current={viewing ? "true" : undefined}
             onClick={onOpen}
-            className={cn(QUIET_PILL, viewing && "border-border-default text-text-primary")}
+            className={cn(pillButton("quiet", "sm"), viewing && "border-border-default text-text-primary")}
           >
             {viewing ? "Viewing" : "Open"}
           </button>

@@ -6,7 +6,7 @@ import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { IdentityFace } from "@/shared/ui/identity-face";
-import { TEXT_LINK_BUTTON } from "@/shared/ui/small-action-button";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { byTaskOrder, isActiveTask } from "../lib/task-model";
 import {

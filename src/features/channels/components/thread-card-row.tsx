@@ -13,7 +13,7 @@
 
 import { ChevronRight, MessagesSquare, Users } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { INK_PILL, QUIET_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { cn } from "@/shared/lib/utils";
 import { AgentStatusPill } from "./agent-bits";
 import { AgentFace } from "./agent-face";
@@ -172,11 +172,11 @@ export function ThreadCardMessage({
           </span>
           <span className="flex flex-none gap-1.5">
             {canLaunchAgent && (
-              <button type="button" disabled={launchBusy} onClick={onLaunch} className={QUIET_PILL}>
+              <button type="button" disabled={launchBusy} onClick={onLaunch} className={pillButton("quiet", "sm")}>
                 Launch agent
               </button>
             )}
-            <button type="button" onClick={onOpen} className={INK_PILL}>
+            <button type="button" onClick={onOpen} className={pillButton("ink", "sm")}>
               Open thread
             </button>
           </span>

@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { apiRequest } from "@/shared/api/api-client";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
+import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import {
   RowAction,
   SettingsCard,
@@ -50,9 +50,9 @@ export function AgentsPanel() {
           type="button"
           onClick={() => setConnecting((open) => !open)}
           aria-expanded={connecting}
-          className={SMALL_PILL_BUTTON}
+          className={pillButton("outline", "md")}
         >
-          <Plus size={SMALL_PILL_ICON} aria-hidden="true" />
+          <Plus size={PILL_ICON.md} aria-hidden="true" />
           Connect an agent
         </button>
       }

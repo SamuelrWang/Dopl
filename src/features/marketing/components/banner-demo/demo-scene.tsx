@@ -13,7 +13,7 @@ import type { AgentLaunchControls } from "@/features/channels/components/use-age
 import type { ChannelThread } from "@/features/channels/types";
 import { ChannelsMessagePane } from "@/features/channels/components/message-pane";
 import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { indexMembers } from "@/features/channels/components/view-model";
 import {
   channelRows,
@@ -327,7 +327,7 @@ export function DemoScene({
                       infoExtras={{
                         belowRoster: (
                           <div className="px-3.5 pt-2.5">
-                            <span className={PAGE_ACTION_BTN}>Add person</span>
+                            <span className={pillButton("ink", "lg")}>Add person</span>
                           </div>
                         ),
                       }}

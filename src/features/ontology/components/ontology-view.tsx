@@ -5,7 +5,7 @@ import { Network } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { CreateButton, PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { CreateButton, pillButton } from "@/shared/ui/pill-button";
 import { InPlaceDescription } from "@/shared/ui/in-place-fields";
 import { pendingRow } from "@/shared/ui/pending";
 import { useOntology } from "../hooks/use-ontology";
@@ -330,7 +330,7 @@ export function OntologyView({
           }
         >
           {canEdit && (
-            <button type="button" onClick={handleCreateOntology} className={PAGE_ACTION_BTN}>
+            <button type="button" onClick={handleCreateOntology} className={pillButton("ink", "lg")}>
               New ontology
             </button>
           )}
