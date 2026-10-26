@@ -14,7 +14,7 @@ import {
 import { TaskActionSchema, TaskQuerySchema } from "@/features/channels/schema";
 
 // Channel tasks: GET lists (or reads one with `?task=`), POST applies one action. The service holds
-// every gate; there is no DELETE (R10).
+// every gate; tasks are never deleted, so there is no DELETE.
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const query = parseQuery(request.nextUrl.searchParams, TaskQuerySchema, ["task", "status"]);
@@ -44,6 +44,6 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// Both at guest: the floor is a tripwire; the service admits a guest to reads and notes only (R8).
+// Both at guest: the floor is a tripwire; the service admits a guest to reads and notes only.
 export const GET = withWorkspaceAuth(handleGet, { workspaceFromParams: channelWorkspace, minRole: "guest" });
 export const POST = withWorkspaceAuth(handlePost, { workspaceFromParams: channelWorkspace, minRole: "guest" });

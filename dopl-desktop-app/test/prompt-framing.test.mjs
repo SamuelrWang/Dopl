@@ -329,12 +329,12 @@ test("FIX F4: sanitizing an id can no longer RECONSTRUCT a fence token (the belt
 // mints when a request arrives without create_thread, not only for first-class UUIDs.
 //
 // FIX S1 (Q5 review) — THE ARGUMENT NAME. The first version of this fix emitted
-// `task "<id>"`, and dopl_channel HAS NO `task` PARAMETER: the 1.7.11 cutover made the
+// `task "<id>"`, but a thread reply takes `thread`: the 1.7.11 cutover made the
 // agent-facing argument `thread` (channel.ts) and kept `threadId` only as the storage key the
-// op folds it into (channel-ops-write.ts). So the prompt taught an argument the server
+// op folds it into (channel-ops-write.ts). So the prompt taught an argument the post op
 // would never honor and the tagging fix was inert on the window path — the same untagged
 // reply, behind a prompt that read as correct. These assertions pin the REAL parameter name
-// and, below, that no prompt text teaches `task=` again.
+// and, below, that no prompt text teaches `task=` for a reply again.
 
 const LEGACY = `thread-${CH}-42`;
 const THREAD = "cccccccc-3333-4ddd-8eee-ffffffffffff";
@@ -415,11 +415,12 @@ test("no built line of the turn carries an em dash (§H-13 house voice, every bl
   }
 });
 
-// ── NO PROMPT TEXT MAY TEACH A PARAMETER THAT DOES NOT EXIST (FIX S1) ────────────
-// dopl_channel's post op takes `thread` (`threadId` is storage, `thread_*` are message KINDS), so a
-// `task=`/`task "` anywhere in a built turn teaches a parameter that does not exist (F-081).
+// ── THREAD REPLIES USE `thread=` (FIX S1) ────────────────────────────────────────
+// dopl_channel's post op takes `thread` (`threadId` is storage, `thread_*` are message KINDS). `task=`
+// is the tasks op's argument, which no built turn teaches, so a `task=`/`task "` in one is a reply
+// threaded by the wrong name (F-081).
 
-test("no built turn teaches a `task` ARGUMENT anywhere (kinds are still allowed)", () => {
+test("no built turn teaches a `task` ARGUMENT: thread replies use `thread=` (kinds are still allowed)", () => {
   for (const side of ["responder", "requester"]) {
     for (const threadId of [undefined, LEGACY, THREAD]) {
       const out = buildFencedTurn({

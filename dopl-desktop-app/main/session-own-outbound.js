@@ -157,7 +157,7 @@ const OWN_CHANNEL_ARTIFACT_OPS = [
   'artifact.dissolve',
 ];
 
-// ── CHANNEL TASKS (2026-10-26) ──────────────────────────────────────────────────────────────
+// ── CHANNEL TASKS ───────────────────────────────────────────────────────────────────────────
 //
 // `op="task"` admits on the fold's argument: an act on this session's own channel, governed by the
 // outbound half of the message axis like a post into it. Resolving is not terminal (`set_status`

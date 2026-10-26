@@ -8,7 +8,7 @@
 // and popped an "INCOMING REQUEST" window for the answer to its own question.
 //
 // The delivery prompt had already been fixed to NAME the thread (prompt-framing.deliveryCall,
-// plus FIX S1 which corrected the argument from the non-existent `task` to the real `thread`).
+// plus FIX S1, which made the prompt teach the `thread` argument).
 // This capture is the proof that a correct prompt is not enough: the agent simply omitted the
 // argument. A prompt is a request; the tag is an INVARIANT. So main enforces it.
 //
@@ -102,8 +102,8 @@ function outboundConsentShape(name, input, sessionChannelId) {
 // ─── BEGIN OUTBOUND-THREAD-TAG (pure; unit-tested via source extraction) ──────
 //
 // The dopl_channel argument that threads a post. `thread` since the 1.7.11 hard cutover;
-// the server folds it into the STORAGE key `metadata.threadId` (channel-ops-write.ts). Passing
-// `task` — which is what the prompt used to teach, FIX S1 — names nothing.
+// the server folds it into the STORAGE key `metadata.threadId` (channel-ops-write.ts). `task` names
+// a channel task (`op="task"`), never a thread.
 const THREAD_ARG = 'thread';
 
 // The thread id the AGENT put on this call, from either place the op reads one, or ''.

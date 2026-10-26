@@ -97,7 +97,7 @@ const GATE_REASONS = [
   //                             argument, and WHICH action ran is already on the same diag line
   //                             (`session-gate-bridge.js › channelOpLabel` prints
   //                             `op=artifact.dissolve`).
-  'auto-outbound-task', //       2026-10-26: the same outbound half on an own-channel `task` write
+  'auto-outbound-task', //       the same outbound half on an own-channel `op="task"` write
   //                             (any of its eight actions). One code, as for the fold: one
   //                             admission argument, and `channelOpLabel` names the action.
   'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an

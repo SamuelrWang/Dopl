@@ -50,7 +50,7 @@ describe("HOLD_UNNAMED_NOTICE — a wake that names nobody", () => {
 
   it("still refuses another member's request", () => {
     expect(HOLD_UNNAMED_NOTICE).toContain("aimed at another member");
-    expect(HOLD_UNNAMED_NOTICE).toContain("adopt an unaddressed message as a task you were assigned");
+    expect(HOLD_UNNAMED_NOTICE).toContain("adopt an unaddressed message as work you were given");
   });
 });
 

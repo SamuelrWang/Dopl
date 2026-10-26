@@ -262,8 +262,8 @@ test("HOUSE: every addressing branch is fence-safe, newline-free and em-dash-fre
       assert.ok(!line.includes("—"), `em dash in: ${line}`);
       assert.ok(!/BEGIN-REQUEST|END-REQUEST/i.test(line), `fence token in: ${line}`);
       assert.ok(!line.includes("\n"), `raw newline in: ${JSON.stringify(line)}`);
-      // FIX S1: `thread` is the argument, the removed `task` is not one — nowhere, not even in prose.
-      assert.ok(!/\btask\s*=/.test(line) && !/\btask "/.test(line), `teaches a task argument: ${line}`);
+      // FIX S1: thread replies use `thread=`; addressing never names the tasks op's `task` argument.
+      assert.ok(!/\btask\s*=/.test(line) && !/\btask "/.test(line), `teaches task= where a reply takes thread=: ${line}`);
     }
   }
 });

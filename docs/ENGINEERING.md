@@ -6997,7 +6997,9 @@ meanings: *"threads be threads, and don't just call channel work items tasks"*, 
   migration and `author_kind` still in `20260725120000`, so each family names its newest migration and
   the later-redefinition check is per column.
 - **The floor moved** to 1.43.0 (`desktop-floor.ts › DEFAULT_MIN_VERSION`): a desktop below it calls
-  `/tasks` routes and reads `task_id` off realtime rows that no longer exist.
+  `/tasks` routes and reads `task_id` off realtime rows that no longer exist. The desktop package
+  went to 1.43.0 in the same branch (port review), since a floor above the shipped version tells a
+  cold start with the feed unreachable to upgrade to a build that does not exist.
 
 ## 2026-10-26 — Channel tasks: the backend
 
@@ -7017,7 +7019,15 @@ assigns it, and people and agents close it together); PLAN.md R5–R10 ruled the
 - **An assignment wakes an agent with an ordinary addressed post (R7), through `postMessage`.** The
   wake machinery, the `to=` carve and the insert funnel are all reused rather than restated, which is
   also why an agent credential may not assign a peer's agent: the post could not address it.
-  `metadata.taskId` is reserved so a caller cannot tie its own post to a task.
+  `metadata.assignedTaskId` is reserved so a caller cannot tie its own post to a task. It first
+  shipped as `taskId`, the key the thread rename had just retired, and was renamed in the port review
+  so the one key never carries two meanings across stored rows. The same review made the pair
+  atomic in effect: a failed wake post deletes the row it just inserted, because an existing
+  assignment posts nothing and a retry would otherwise never wake the agent.
+- **The MCP schema budget rose by 1,265 to 10,445** (`channel-schema.ts › SCHEMA_MAX_CHARS`) for
+  `op="task"`, its actions and seven params, with the rules pulled into `task-doctrine.ts`; ruled
+  with R5/R10. The previous raise, +25 over 9,155 (2026-10-13, F-774), was the Muse and Grok runtime
+  tool words in `channel-schema-launch-fields.ts › POSTURE_WORDS`, ruled per new runtime.
 - **`src/shared/supabase/types.ts` was merged, not regenerated.** It is generated from production,
   which has neither migration yet; the four tables and the one column were lifted from a local
   `gen types` after `db reset`. Regenerate with `--linked` once both are applied.
