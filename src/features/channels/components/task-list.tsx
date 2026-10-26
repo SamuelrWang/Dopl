@@ -6,6 +6,7 @@ import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { IdentityFace } from "@/shared/ui/identity-face";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/small-action-button";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { byTaskOrder, isActiveTask } from "../lib/task-model";
 import {
@@ -75,7 +76,8 @@ function TaskRow({
           aria-label={`Open ${task.title}`}
           onClick={() => onOpen(task.id)}
           className={cn(
-            "p-0 text-left text-body font-medium leading-[1.35] underline-offset-2 hover:underline",
+            "p-0 text-left text-body font-medium leading-[1.35]",
+            TEXT_LINK_BUTTON,
             done ? "text-text-muted" : "text-text-primary"
           )}
         >

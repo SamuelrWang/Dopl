@@ -26,7 +26,7 @@ What the redesign is, per area:
   `--surface-raised-1`, selected `--surface-raised-2` + medium label (the agent rail's
   `ROW_SELECTED_FACE`), muted icons, a 1px `--border-subtle` indent guide under each open folder,
   a caption child count that gives way to the row actions, Enter/Space on a focused row, the
-  root create pills on `SMALL_PILL_BUTTON`. One create flow (`useTreeCreate`) serves the root and
+  root New file / New folder as muted text links on `small-action-button.ts › TEXT_LINK_BUTTON`. One create flow (`useTreeCreate`) serves the root and
   every folder.
 - **Info face** (`detail/base-overview.tsx`, `detail/meta-card.tsx`): one `.infoColumn`; the
   name and description edited in place (`doc-pane-chrome.tsx › DOC_TITLE_INPUT` /
@@ -48,6 +48,10 @@ What the redesign is, per area:
   are folders), Agents (`agent-write-toggle.tsx`). Panes stay mounted while the popup is open.
   Text entry is `UnderlineField`, choices are `SelectMenu variant="bare"`, rows are
   `SettingsRows`, verbs are `SMALL_PRIMARY_PILL` / `SMALL_PILL_BUTTON`.
+- **Ground** (`knowledge-staging-page.tsx` passes `recordClassName="uis-white-pane"`,
+  `ui-staging/staging.css › .uis-white-pane`, shared with the ontology face): the record pane is
+  `--bg-overlay` white, not the frame's `--home-card`; cards keep their hairline and shadow. Port
+  target: `apps/desktop-ui/src/pages/home/home.module.css` → `.page[data-face="knowledge"] .pane`.
 
 `base-settings-form.tsx` and `settings-section.tsx` have NO staging copy any more: on port, the
 source `base-settings-form.tsx` splits into `base-settings-general.tsx` and

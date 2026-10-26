@@ -177,13 +177,13 @@
   font-size: var(--text-caption);
   color: var(--text-muted);
 }
-/* The row wraps so the pills never do: two labelled pills do not fit the 180px floor. */
+/* The root create links, their icons on the rows' icon column (8px margin + 6px pad). */
 .addRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 8px 8px 4px;
+  gap: 6px 16px;
+  padding: 10px 14px 4px;
 }
 
 /* ───────────────────────── Detail column (right) ───────────────────────── */

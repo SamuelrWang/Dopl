@@ -76,3 +76,11 @@ export const SMALL_PILL_BUTTON = cn(
 
 /** Glyph size inside {@link SMALL_PILL_BUTTON}. */
 export const SMALL_PILL_ICON = 12;
+
+/**
+ * THE TEXT LINK BUTTON: plain text that takes the ink underline on hover and on keyboard focus (the
+ * Tasks tab's title, the knowledge tree's New file / New folder). No face and no fill; type, ink and
+ * layout stay with the caller.
+ */
+export const TEXT_LINK_BUTTON =
+  "decoration-text-primary underline-offset-2 hover:underline focus-visible:underline";

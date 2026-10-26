@@ -55,7 +55,7 @@ export function KnowledgeStagingPage() {
 
   return (
     <QueryClientProvider client={client}>
-      <StagingFrame tab="knowledge">
+      <StagingFrame tab="knowledge" recordClassName="uis-white-pane">
         <HomeKnowledgePanels
           // `home-panes.tsx` keys this face by the selected row; the staging states join the key
           // so a flip starts the face fresh, as a channel switch does on desktop.

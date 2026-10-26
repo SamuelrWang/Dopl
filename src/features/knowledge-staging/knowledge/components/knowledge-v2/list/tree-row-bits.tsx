@@ -3,7 +3,8 @@
 /** STAGING (new with the overhaul, PORTING.md): the tree rows' small parts, split from `tree-rows.tsx` for the 500-line cap. */
 import { useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { FilePlus, FolderPlus } from "lucide-react";
-import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
+import { cn } from "@/shared/lib/utils";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/small-action-button";
 import styles from "../knowledge-v2.module.css";
 
 type CreateFolder = (parentId: string | null, name: string) => Promise<string>;
@@ -57,7 +58,12 @@ export function pressOnKey(onPress: (() => void) | undefined) {
   };
 }
 
-/** Base-root create affordance, on the kit's outlined pill. Folder rows handle their own children on hover. */
+const ADD_LINK = cn(
+  TEXT_LINK_BUTTON,
+  "inline-flex items-center gap-1.5 text-caption font-medium text-text-muted transition-colors hover:text-text-primary disabled:opacity-60"
+);
+
+/** Base-root create affordance: quiet text links that underline on hover. Folder rows handle their own children on hover. */
 export function AddRow({
   onCreateFolder,
   onCreateEntry,
@@ -77,19 +83,19 @@ export function AddRow({
     <div className={styles.addRow}>
       <button
         type="button"
-        className={SMALL_PILL_BUTTON}
+        className={ADD_LINK}
         disabled={busy}
         onClick={() => create("entry")}
       >
-        <FilePlus size={SMALL_PILL_ICON} aria-hidden="true" /> New file
+        <FilePlus size={12} aria-hidden="true" /> New file
       </button>
       <button
         type="button"
-        className={SMALL_PILL_BUTTON}
+        className={ADD_LINK}
         disabled={busy}
         onClick={() => create("folder")}
       >
-        <FolderPlus size={SMALL_PILL_ICON} aria-hidden="true" /> New folder
+        <FolderPlus size={12} aria-hidden="true" /> New folder
       </button>
     </div>
   );

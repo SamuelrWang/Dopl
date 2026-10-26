@@ -491,7 +491,7 @@ Workers append a `## <slice>` section per question: the question, what was chose
 5. **The Rows display moved onto kit and tokens.** The brief named `ontology-rows.css` for deletion;
    its literal neutral palette (DESIGN-LANGUAGE §2) is now the product tokens (`--text-primary`
    etc.), so Rows reads slightly cooler than it did. No shared token was retuned.
-6. **Ontology white background: trial per Samuel.** Record pane `--bg-overlay` on `/playground/ontology` only (`ui-staging/staging.css › .uis-onto-pane`); grid and cards unchanged.
+6. **Ontology white background: trial per Samuel.** Record pane `--bg-overlay` on `/playground/ontology` only (`ui-staging/staging.css › .uis-white-pane`, shared with /playground/knowledge since); grid and cards unchanged.
 ## Threads + Artifacts overhaul (branch `ui/threads-artifacts-overhaul`)
 
 1. **The Threads wells lost their gray box.** Samuel ruled the gray boxes onto the Threads tab on
@@ -568,3 +568,4 @@ Workers append a `## <slice>` section per question: the question, what was chose
    quick view's rows sit inside one pop-up card rather than being per-item cards, so neither moved.
    An artifact card keeps its one-line summary between title and meta, so artifacts with a summary
    are one line taller than threads and than artifacts without one.
+10. **Follow-up (Samuel): white pane and text-link creates.** /playground/knowledge wears the ontology's white record pane (one shared `.uis-white-pane`); the tree's New file / New folder are `TEXT_LINK_BUTTON` text links (muted, ink + underline on hover), the Tasks title's recipe, not pills.

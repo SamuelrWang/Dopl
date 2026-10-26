@@ -364,12 +364,13 @@ button.lp-demo-top-profile {
 }
 
 
-/* ── ONTOLOGY: WHITE PANE (trial) ─────────────────────────────────────
-   /playground/ontology only (`recordClassName="uis-onto-pane"`): the record
-   pane behind the Canvas and Rows displays is white instead of `--home-card`.
+/* ── WHITE PANE (Samuel: ontology, then knowledge) ─────────────────────
+   A face that passes `recordClassName="uis-white-pane"` (/playground/ontology,
+   /playground/knowledge) gets a white record pane instead of `--home-card`.
    The surrounding panel stays as the frame paints it; the pane's hairline
-   keeps its edge. Port target if approved: `home.module.css` →
-   `.page[data-face="ontology"] .pane`. */
-.uis-window .lp-demo-record.uis-onto-pane {
+   keeps its edge, and white cards keep theirs and the soft shadow. Port target:
+   `home.module.css` → `.page[data-face="ontology"] .pane` and
+   `.page[data-face="knowledge"] .pane`. */
+.uis-window .lp-demo-record.uis-white-pane {
   background: var(--bg-overlay);
 }
