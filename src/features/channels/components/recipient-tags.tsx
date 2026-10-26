@@ -7,7 +7,7 @@ import type { RecipientTag } from "../lib/recipient-tags";
 
 /** One shape for agents and people; explicit height + `items-center` centres the text box. */
 const TAG_FACE =
-  "inline-flex h-[16px] min-w-0 max-w-[14rem] items-center rounded-full bg-bg-inset px-1.5 text-micro font-medium leading-none text-link";
+  "inline-flex h-4 min-w-0 max-w-[14rem] items-center rounded-full bg-bg-inset px-1.5 text-micro font-medium leading-none text-link";
 
 /** The delivered-to faces, in order; empty draws nothing (never a marker). */
 export function RecipientTags({ tags }: { tags: readonly RecipientTag[] }) {

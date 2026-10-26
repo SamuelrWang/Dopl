@@ -4,7 +4,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import type { ConnectedDevice } from "@/features/devices/types";
-import { CARD_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { devicePresence } from "@/features/devices/merge";
 import { OverviewCard } from "./overview-card";
 import { GhostRows } from "./overview-skeleton";
@@ -48,7 +48,7 @@ export function DevicesCard({
       title="Devices"
       count={devices && !failed ? `${online}/${devices.length} online` : undefined}
       aside={
-        <button type="button" className={CARD_PILL} onClick={onAddDevice}>
+        <button type="button" className={pillButton("outline", "sm")} onClick={onAddDevice}>
           <Plus size={12} aria-hidden="true" />
           Add device
         </button>

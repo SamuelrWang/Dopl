@@ -4,6 +4,7 @@ import { Plus, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { BARE_TRIGGER_FACE } from "@/shared/ui/select-menu";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import type { GraphState } from "../graph-state";
 import type { ObjectAttribute, OntologyObject } from "../types";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
@@ -58,7 +59,7 @@ export function ChipStrip({
       {items.map((item) => (
         <span key={item.id} className={VALUE_CHIP} title={item.name}>
           {onOpen ? (
-            <button type="button" onClick={() => onOpen(item.id)} className={cn(CHIP_TEXT, "hover:underline")}>
+            <button type="button" onClick={() => onOpen(item.id)} className={cn(CHIP_TEXT, TEXT_LINK_BUTTON)}>
               {item.name}
             </button>
           ) : (

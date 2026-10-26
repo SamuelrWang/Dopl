@@ -7,7 +7,7 @@ import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { toast } from "@/shared/ui/toast";
 import { cn } from "@/shared/lib/utils";
 import { InlineUnderlineField } from "@/shared/ui/form-dialog";
-import { SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import {
   PAIRING_CODE_LENGTH,
   claimPairing,
@@ -67,7 +67,7 @@ export function PairGlasses() {
           type="button"
           disabled={!ready}
           onClick={() => void pair()}
-          className={cn(SMALL_PRIMARY_PILL, "shrink-0 disabled:cursor-not-allowed disabled:opacity-40")}
+          className={cn(pillButton("ink", "md"), "shrink-0 disabled:cursor-not-allowed disabled:opacity-40")}
         >
           {busy ? "Pairing…" : "Pair"}
         </button>

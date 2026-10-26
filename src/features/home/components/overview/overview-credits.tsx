@@ -17,14 +17,19 @@ import {
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
 import { monthKey, monthLabel, shiftMonthKey, utcDayLabel } from "@/features/home/overview-period";
-import { CARD_PILL, INK_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
+import type { HomeChannelRowFace } from "@/shared/ui/home-channel-row";
 import { Bars, OverviewCard } from "./overview-card";
 import type { HomeOverviewReads, OverviewRead } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
 
 export interface HomeChannelOption {
   id: string;
+  /** The channel's container, which the Channels table's rows are keyed by. */
+  workspaceId: string;
   name: string;
+  /** Everybody else in the channel; empty when the viewer is alone in it. */
+  faces: readonly HomeChannelRowFace[];
 }
 
 /**
@@ -197,7 +202,7 @@ export function CreditsCard({
         !wallet.isPaid && (
           <button
             type="button"
-            className={over ? INK_PILL : CARD_PILL}
+            className={over ? pillButton("ink", "sm") : pillButton("outline", "sm")}
             onClick={onGetCredits}
           >
             Get more credits
@@ -206,7 +211,7 @@ export function CreditsCard({
       }
     >
       {wallet.loading ? (
-        <Skeleton className="h-[54px] w-full rounded-md" />
+        <Skeleton className="h-13.5 w-full rounded-md" />
       ) : (
         <Allowance credits={wallet.credits} />
       )}

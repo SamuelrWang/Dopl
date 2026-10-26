@@ -268,7 +268,7 @@ function Block({
         <pre
           className={cn(
             top && "max-w-[92%]",
-            "overflow-x-auto rounded-[8px] border border-border-default bg-bg-inset px-2.5 py-2"
+            "overflow-x-auto rounded-md border border-border-default bg-bg-inset px-2.5 py-2"
           )}
         >
           <code className="font-mono text-caption text-text-primary">{t.text}</code>
@@ -444,7 +444,7 @@ export function Inline({ tokens, ctx }: { tokens?: Token[]; ctx: BodyContext }):
             return (
               <code
                 key={i}
-                className="rounded-[4px] border border-border-subtle bg-bg-inset px-1 py-px font-mono text-caption"
+                className="rounded-mark border border-border-subtle bg-bg-inset px-1 py-px font-mono text-caption"
               >
                 {(token as Tokens.Codespan).text}
               </code>

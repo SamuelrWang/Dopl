@@ -140,7 +140,7 @@ function HeldGateCard({
   return (
     <div
       data-agent-held-gate={gate.requestId}
-      className="flex flex-col gap-1.5 rounded-[10px] border border-border-default px-2 py-1.5"
+      className="flex flex-col gap-1.5 rounded-lg border border-border-default px-2 py-1.5"
     >
       {/* ⚠ `wrap-anywhere` AND NOT `truncate`: the operator is deciding on this string, and a
           command clipped mid-path is a decision made on half the question. The desktop already

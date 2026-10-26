@@ -17,6 +17,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { SectionBox } from "@/shared/ui/section-box";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { useLiveMembers, type PaneAccessRow, type PaneMember, type PaneRole } from "./members-pane-live";
+import { CHROME_ICON_BUTTON } from "@/shared/ui/chrome-icon-button";
 
 /**
  * Playground clone of the members console (two-pane master-detail of
@@ -80,9 +81,6 @@ const SCOPE: Record<PaneAccessRow["level"], { label: string; className: string }
   read: { label: "Read only", className: "bg-surface-raised-2 border-border-default text-text-secondary" },
 };
 
-const ICON_BTN =
-  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
-
 const SEARCH_PLACEHOLDER: Record<TabKey, string> = {
   members: "Search members",
   teams: "Search teams",
@@ -124,7 +122,7 @@ export function MembersPane() {
   return (
     <div className="page-float flex antialiased">
       {/* ── Left list pane ─────────────────────────────────────────── */}
-      <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
+      <div className="flex w-93 shrink-0 flex-col border-r border-border-default">
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
           <h1 className="text-title font-semibold tracking-tight text-text-primary">
             Members
@@ -133,15 +131,15 @@ export function MembersPane() {
             {members.length}
           </span>
           <span className="flex-1" />
-          <button type="button" className={ICON_BTN} aria-label="New team" title="New team">
+          <button type="button" className={CHROME_ICON_BUTTON} aria-label="New team" title="New team">
             <Users size={16} />
           </button>
-          <button type="button" className={ICON_BTN} aria-label="Add members" title="Add members">
+          <button type="button" className={CHROME_ICON_BUTTON} aria-label="Add members" title="Add members">
             <UserPlus size={16} />
           </button>
         </div>
 
-        <div className="concave-field relative mx-3.5 mb-3 rounded-[9px]">
+        <div className="concave-field relative mx-3.5 mb-3 rounded-field">
           <Search
             size={15}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
@@ -151,7 +149,7 @@ export function MembersPane() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={SEARCH_PLACEHOLDER[tab]}
             spellCheck={false}
-            className="h-9 w-full bg-transparent pl-[33px] pr-3 text-body text-text-primary outline-none placeholder:text-text-muted"
+            className="h-9 w-full bg-transparent pl-8.25 pr-3 text-body text-text-primary outline-none placeholder:text-text-muted"
           />
         </div>
 
@@ -234,7 +232,7 @@ function RowShell({
       )}
     >
       {selected && (
-        <span className="absolute bottom-1.5 left-0 top-1.5 w-[3px] rounded-r-[3px] bg-text-primary" />
+        <span className="absolute bottom-1.5 left-0 top-1.5 w-0.75 rounded-r-[3px] bg-text-primary" />
       )}
       {children}
     </button>
@@ -339,7 +337,7 @@ function Pill({ className, children }: { className: string; children: React.Reac
 function MemberDetail({ member: m }: { member: PaneMember }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
+      <div className="flex h-13 shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
         <span className="shrink-0 text-small font-medium text-text-secondary">
           Members
         </span>
@@ -352,8 +350,8 @@ function MemberDetail({ member: m }: { member: PaneMember }) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
-        <div className="mx-auto flex max-w-[760px] flex-col gap-4">
-          <section className="flex items-center gap-4 rounded-[14px] border border-border-strong bg-bg-elevated px-5 py-4">
+        <div className="mx-auto flex max-w-190 flex-col gap-4">
+          <section className="flex items-center gap-4 rounded-xl border border-border-strong bg-bg-elevated px-5 py-4">
             <AvatarWithPresence person={m.person} online={m.online} size="md" />
             <div className="min-w-0 flex-1">
               <h2 className="flex items-center gap-2 truncate text-display font-semibold tracking-tight text-text-primary">
@@ -426,7 +424,7 @@ function ResourceDetail({ resource: r }: { resource: DemoResource }) {
   const Icon = r.icon;
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
+      <div className="flex h-13 shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
         <span className="shrink-0 text-small font-medium text-text-secondary">
           Access
         </span>
@@ -442,13 +440,13 @@ function ResourceDetail({ resource: r }: { resource: DemoResource }) {
           ]}
           value="workspace"
           onChange={() => {}}
-          className="w-[190px]"
+          className="w-47.5"
         />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
-        <div className="mx-auto flex max-w-[760px] flex-col gap-4">
-          <section className="flex items-center gap-4 rounded-[14px] border border-border-strong bg-bg-elevated px-5 py-4">
+        <div className="mx-auto flex max-w-190 flex-col gap-4">
+          <section className="flex items-center gap-4 rounded-xl border border-border-strong bg-bg-elevated px-5 py-4">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-inset text-text-secondary">
               <Icon size={15} />
             </span>

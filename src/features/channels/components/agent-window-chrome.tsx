@@ -38,6 +38,7 @@ import {
   closeOwnWindow,
   toggleOwnWindowMaximize,
 } from "@/shared/lib/spa-bridge-window";
+import { TabUnderline } from "@/shared/ui/tab-underline";
 import { IconButton } from "./icon-button";
 import {
   AGENT_TAB_TEXT,
@@ -46,7 +47,6 @@ import {
   RAIL_COLLAPSED,
   RAIL_PAD,
   TAB_MAX,
-  TAB_UNDERLINE,
   TILE,
   TILE_RADIUS,
 } from "./agent-window-frame";
@@ -91,7 +91,7 @@ export interface AgentTabView {
 const TAB_WIDTH = `${TAB_MAX} shrink-0`;
 
 /**
- * THE ACTIVE TAB'S MARK IS AN UNDERLINE, at the POPUP FIELD's thickness — `agent-window-frame.ts ›
+ * THE ACTIVE TAB'S MARK IS AN UNDERLINE, at the POPUP FIELD's thickness — `shared/ui/tab-underline.tsx ›
  * TAB_UNDERLINE` carries Samuel's *"it should be that thickness"* and the cross-file check that
  * holds it there. ⚠ NOT a raised chip and not a fill: this row sits on the window's gray chrome,
  * where an elevated face would read as a second kind of control beside the mark.
@@ -262,13 +262,7 @@ export function AgentWindowChrome({
                   <X size={12} aria-hidden="true" />
                 </button>
               ) : null}
-              {/* ⚠ `data-tab-underline` IS FOR THE PIN, and it is an attribute rather than a class
-                  fragment on purpose: the rule's geometry is a constant now, and a test that
-                  grepped its spelling would fail on every re-position of something it is not
-                  about. */}
-              {active ? (
-                <span aria-hidden="true" data-tab-underline="" className={TAB_UNDERLINE} />
-              ) : null}
+              {active ? <TabUnderline /> : null}
             </div>
           );
         })}

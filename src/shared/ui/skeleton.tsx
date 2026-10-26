@@ -17,7 +17,7 @@ export function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
  * (skeletons are flat — shimmer blocks only). `border-transparent`, never a dropped border: the
  * background paints under the border box and dropping it would move every block in by a pixel.
  */
-export const GHOST_FLAT_FACE = "rounded-[14px] border border-transparent";
+export const GHOST_FLAT_FACE = "rounded-xl border border-transparent";
 
 /** Sized shimmer bar. px numbers or CSS sizes; radius via className. */
 export function SkeletonBar({
@@ -110,7 +110,7 @@ export function TranscriptSkeleton({
           <div
             key={i}
             className={cn(
-              "rounded-[10px] border px-3.5 py-2.5",
+              "rounded-lg border px-3.5 py-2.5",
               fromUser
                 ? "ml-12 border-border-default bg-card-surface-subtle"
                 : "border-border-subtle bg-bg-elevated"
@@ -160,8 +160,8 @@ export function TwoPaneListSkeleton({
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
           <SkeletonLine w={84} h={14} />
         </div>
-        <Skeleton className="mx-3.5 mb-3 h-9 rounded-[9px]" />
-        <Skeleton className="mx-3.5 mb-3 h-[35px] rounded-[10px]" />
+        <Skeleton className="mx-3.5 mb-3 h-9 rounded-field" />
+        <Skeleton className="mx-3.5 mb-3 h-8.75 rounded-lg" />
         <div className="min-h-0 flex-1 border-t border-border-default">
           {Array.from({ length: rows }).map((_, i) => (
             <SkeletonRow
@@ -182,7 +182,7 @@ export function TwoPaneListSkeleton({
 export function DetailPaneSkeleton({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-default px-4">
+      <div className="flex h-13 shrink-0 items-center gap-3 border-b border-border-default px-4">
         <SkeletonLine w={176} h={13} />
         <span className="flex-1" />
         <Skeleton className="h-7 w-7 rounded-md" />
@@ -197,10 +197,10 @@ export function DetailDocSkeleton() {
   return (
     <DetailPaneSkeleton>
       <div className="flex-1 overflow-hidden px-14 pt-9">
-        <div className="mx-auto max-w-[760px] space-y-6">
+        <div className="mx-auto max-w-190 space-y-6">
           <SkeletonBar h={26} w="52%" className="rounded-md" />
           <SkeletonText lines={3} />
-          <div className="overflow-hidden rounded-[14px] border border-border-strong">
+          <div className="overflow-hidden rounded-xl border border-border-strong">
             <div className="flex items-center gap-2 border-b border-border-default bg-card-surface-subtle px-4 py-2.5">
               <SkeletonLine w={92} h={9} />
             </div>
@@ -230,7 +230,7 @@ export function PageShellSkeleton({ label = "Loading" }: { label?: string }) {
     >
       <span className="sr-only">{label}</span>
 
-      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border-default px-4">
+      <div className="flex h-13 shrink-0 items-center gap-3 border-b border-border-default px-4">
         <SkeletonLine w={132} h={14} />
         <span className="flex-1" />
         <Skeleton className="h-7 w-7 rounded-md" />
@@ -238,14 +238,14 @@ export function PageShellSkeleton({ label = "Loading" }: { label?: string }) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden px-6 pt-6">
-        <div className="mx-auto max-w-[960px] space-y-4">
-          <Skeleton className="h-[76px] w-full rounded-[14px]" />
+        <div className="mx-auto max-w-240 space-y-4">
+          <Skeleton className="h-19 w-full rounded-xl" />
           <div className="grid grid-cols-3 gap-4">
-            <Skeleton className="h-[104px] rounded-[14px]" />
-            <Skeleton className="h-[104px] rounded-[14px]" />
-            <Skeleton className="h-[104px] rounded-[14px]" />
+            <Skeleton className="h-26 rounded-xl" />
+            <Skeleton className="h-26 rounded-xl" />
+            <Skeleton className="h-26 rounded-xl" />
           </div>
-          <div className="overflow-hidden rounded-[14px] border border-border-strong">
+          <div className="overflow-hidden rounded-xl border border-border-strong">
             <div className="flex items-center gap-2 border-b border-border-default bg-card-surface-subtle px-4 py-2.5">
               <SkeletonLine w={92} h={9} />
             </div>

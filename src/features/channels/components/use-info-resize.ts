@@ -24,7 +24,7 @@
  * {@link INFO_WIDTH_DEFAULT}, the width the column has always had — *"a max
  * distance thing so that it doesn't collapse too much"*. **The column never gets
  * narrower than it is today**, which is also why nothing inside it can break: the
- * only fixed width in the pane (`info-card-rows.tsx`'s `w-[150px]` value field)
+ * only fixed width in the pane (`info-card-rows.tsx`'s `w-37.5` value field)
  * was measured at 380 and this floor is 380. The transcript only ever SHRINKS, and
  * it already absorbs that (`message-pane.tsx › section` carries
  * `contain: inline-size`; §5).

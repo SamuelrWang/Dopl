@@ -70,7 +70,7 @@ export function OntologySwitcher({
           const rect = triggerRef.current?.getBoundingClientRect();
           if (rect) setAnchor({ x: rect.left, y: rect.bottom + 6 });
         }}
-        className={cn(BARE_TRIGGER_FACE, "flex h-9 max-w-[260px] items-center gap-1.5", IDENTITY_NAME_TEXT)}
+        className={cn(BARE_TRIGGER_FACE, "flex h-9 max-w-65 items-center gap-1.5", IDENTITY_NAME_TEXT)}
       >
         <span className="min-w-0 truncate">{active?.name || "Untitled"}</span>
         <ChevronDown size={13} className="shrink-0 text-text-muted" />

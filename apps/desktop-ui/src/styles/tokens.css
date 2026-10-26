@@ -138,6 +138,13 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
+  /* Off-ramp radii that repeat across the kit (docs/specs/design-system/AUDIT.md):
+     mark 4px (inline code, mention chips, ticks), tile 7px (28px icon tiles and buttons),
+     field 9px (concave fields, 40px dialog buttons), card 12px (the identity look's cards). */
+  --radius-mark: 4px;
+  --radius-tile: 7px;
+  --radius-field: 9px;
+  --radius-card: 12px;
   /* THE SMALL ACTION HEIGHT — one number, so it cannot drift (2026-09-08, Samuel):
      Open / Launch / Discard share it; New agent / New channel stay `h-9` (36px). */
   --action-h-sm: 30px;
@@ -263,7 +270,7 @@
      card it stands on (see the `--color-chart-bar` note in the theme block). */
   --chart-bar: #e8e8e8;
   --surface-selected: oklch(0 0 0 / 8%);
-  /* THE menu-option hover face — see `--color-menu-item-hover-bg` above. */
+  /* THE menu-option highlight — see `--color-menu-item-hover-bg` above. */
   --menu-item-hover-bg: var(--surface-raised-1);
   /* THE dropdown width rule — see globals.css beside `--menu-item-hover-bg`. */
   --menu-min-width: 128px;
@@ -403,6 +410,25 @@
   /* IS the frame colour, read from it, so the body behind the shell matches —
      else a dark flash on route transitions. Was a hand-copied `#2c3640`, one
      hex off the frame, until 2026-08-30. */
+  /* THE DOCUMENT READING SCALE — a knowledge entry or skill body reads above the UI ramp, like the
+     legal pages. Font-size only (`text-(length:--doc-text)`): the prose plugin owns line height. */
+  --doc-text: 16px;
+  --doc-h1: 24px;
+  --doc-h2: 19px;
+  --doc-h4: 15px;
+  --doc-table: 13px;
+  --doc-code: 12.5px;
+
+  /* THE STACKING LAYERS, lowest first. A new overlay picks one of these, never a fresh number. */
+  --layer-raised: 2;
+  --layer-float: 5;
+  --layer-menu-scrim: 999;
+  --layer-menu: 1000;
+  --layer-top: 9999;
+
+  /* A raised well's or chip's one-pixel drop (RAISED_WELL, CHIP). */
+  --shadow-hairline: 0 1px 2px rgba(0, 0, 0, 0.04);
+
   --body-bg: var(--home-frame);
 
   --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),

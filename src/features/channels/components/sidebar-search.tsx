@@ -47,7 +47,7 @@ export function SidebarSearchHeader({
     // ⚠ `relative` IS WHAT ANCHORS THE POPUP, exactly as `.search-expand`'s own
     // `position: relative` anchors /home's — the card is a child of the field's
     // row and lands on its edges with a plain `left-0 right-0`.
-    <div className="relative flex h-[52px] shrink-0 items-center gap-2 px-3">
+    <div className="relative flex h-13 shrink-0 items-center gap-2 px-3">
       {open ? (
         <SearchField
           value={query}

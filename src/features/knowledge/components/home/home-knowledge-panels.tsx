@@ -6,7 +6,7 @@ import { BookOpen } from "lucide-react";
 import { EmptyLine, EmptyState } from "@/shared/ui/empty-state";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { PageError } from "@/shared/ui/page-error";
-import { CreateButton } from "@/shared/ui/page-action-button";
+import { CreateButton } from "@/shared/ui/pill-button";
 import { EMPTY_WORKSPACE_ROLE, type Channel } from "@/features/channels/types";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { EMPTY_GRANTS, fetchBaseList } from "../../client/api";
@@ -58,7 +58,7 @@ export type HomeKnowledgeChannel = Pick<Channel, "id" | "workspaceId" | "myWorks
  *
  * 🔒 **BOTH SECTION BUTTONS READ "+ Knowledge base"** (Samuel, 2026-09-09:
  * *"have it for both, say, + Knowledge base. for both"*), on the page's black
- * `h-9` pill (`page-action-button.tsx › CreateButton`) — the SECTION names the
+ * `h-9` pill (`pill-button.tsx › CreateButton`) — the SECTION names the
  * destination, so the button says only what it makes. **The two accessible names
  * are identical on purpose**: reach them through their section
  * (`getByRole("region", { name: … })`), as the desktop's `pages/home/knowledge-panels.test.tsx` does.

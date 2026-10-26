@@ -213,7 +213,7 @@ export function ComposerRecipients({
             : REACH_NOBODY_LABEL}
         </span>
         {note && (
-          <span className="shrink-0 rounded-[6px] bg-surface-raised-1 px-1.5 text-micro">
+          <span className="shrink-0 rounded-sm bg-surface-raised-1 px-1.5 text-micro">
             {note}
           </span>
         )}

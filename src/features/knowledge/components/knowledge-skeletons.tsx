@@ -60,7 +60,7 @@ export function KnowledgeHomeSkeleton({
           <SkeletonLine w={168} h={20} />
           <div className={kv.headSpacer} />
           {/* The search well is `w-64` on the real head. */}
-          <Skeleton className="h-9 w-64 rounded-[9px]" />
+          <Skeleton className="h-9 w-64 rounded-field" />
         </div>
 
         {/* ONE rounded container: the 210px image band, then the chat panel
@@ -71,15 +71,15 @@ export function KnowledgeHomeSkeleton({
 
         {/* Filter pills sit under the hero's hairline. */}
         <div className={cn(kv.homeFilters, "flex gap-2")}>
-          <Skeleton className="h-8 w-[74px] rounded-full" />
-          <Skeleton className="h-8 w-[92px] rounded-full" />
-          <Skeleton className="h-8 w-[68px] rounded-full" />
+          <Skeleton className="h-8 w-18.5 rounded-full" />
+          <Skeleton className="h-8 w-23 rounded-full" />
+          <Skeleton className="h-8 w-17 rounded-full" />
         </div>
 
         <div className={kv.homeBody}>
           <div className={kv.cardGrid}>
             {Array.from({ length: GRID_CARDS }).map((_, i) => (
-              <Skeleton key={i} className="h-full w-full rounded-[14px]" />
+              <Skeleton key={i} className="h-full w-full rounded-xl" />
             ))}
           </div>
         </div>
@@ -117,7 +117,7 @@ export function KnowledgeBaseSkeleton({
         <SkeletonLine w={10} h={10} />
         <SkeletonLine w={132} h={12} />
         <div className={kv.headSpacer} />
-        <Skeleton className="mr-1 hidden h-8 w-52 rounded-[9px] lg:block" />
+        <Skeleton className="mr-1 hidden h-8 w-52 rounded-field lg:block" />
         {Array.from({ length: 3 }).map((_, i) => (
           <Skeleton key={i} className="m-2 size-3.5 shrink-0 rounded" />
         ))}
@@ -155,7 +155,7 @@ export function KnowledgeBaseSkeleton({
 function InfoPanelGhost({ lines }: { lines: number }) {
   return (
     <div>
-      <div className="flex min-h-[22px] items-center px-1 pb-2">
+      <div className="flex min-h-5.5 items-center px-1 pb-2">
         <SkeletonLine w={72} h={10} />
       </div>
       <div className="white-card px-3.5 py-3">
@@ -174,7 +174,7 @@ export function KbCardsGhost() {
     <div className={home.kbCards}>
       {Array.from({ length: 3 }).map((_, i) => (
         <div key={i} className={home.kbCell}>
-          <Skeleton className="h-full w-full rounded-[14px]" />
+          <Skeleton className="h-full w-full rounded-xl" />
         </div>
       ))}
     </div>

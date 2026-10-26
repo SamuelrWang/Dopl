@@ -102,7 +102,7 @@ export default function BootPage() {
  * ⚠ THE LOADING FACE IS /home's FRAME, NOT A WHITE BOX (Samuel, 2026-09-10:
  * *"the loading skeleton for when i first open the app … doesnt look at all like
  * the actual UI"*). This rendered `PageLoading` on `fixed inset-0 bg-white` —
- * a 52px bar over a centred `max-w-[960px]` column on WHITE, where a cold launch
+ * a 52px bar over a centred `max-w-240` column on WHITE, where a cold launch
  * resolves into a DARK frame holding the account rail, a gray panel, a 290px
  * relationship list and a bordered record pane. Nothing in that ghost survived
  * the swap, so the first paint of the app was a surface the app does not have.

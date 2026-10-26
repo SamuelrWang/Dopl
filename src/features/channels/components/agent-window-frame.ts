@@ -41,10 +41,6 @@ export const TAB_MAX = "max-w-[200px]";
 /** The second line of a rail row — the agent's state, never a timestamp. */
 export const AGENT_STATE_TEXT = "text-caption text-text-secondary";
 
-/** Matches `form-dialog.module.css › .line::after` (height read by the test): black, full-bleed, square-ended. */
-export const TAB_UNDERLINE_HEIGHT = "h-[2px]";
-export const TAB_UNDERLINE = `absolute inset-x-0 bottom-0 ${TAB_UNDERLINE_HEIGHT} bg-text-primary`;
-
 /**
  * The `.bento` card at the window's radius. `min-w-0` must be on every ancestor up to the window too, or
  * the panel cannot shrink when the rail expands; `min-h-0` + `overflow-hidden` let the transcript scroll.

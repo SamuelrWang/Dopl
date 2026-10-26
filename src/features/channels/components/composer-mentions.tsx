@@ -182,7 +182,7 @@ export function MentionPopover({
     <div
       role="listbox"
       aria-label="Mention a member"
-      className="bento absolute bottom-[calc(100%-4px)] left-4 z-10 w-[220px] p-1.5"
+      className="bento absolute bottom-[calc(100%-4px)] left-4 z-10 w-55 p-1.5"
     >
       <p className="px-2 pb-1 pt-0.5 text-label font-semibold uppercase tracking-wide text-text-muted">
         Mention
@@ -206,7 +206,7 @@ export function MentionPopover({
               onPick(suggestion);
             }}
             className={cn(
-              "flex h-8 w-full items-center gap-2 rounded-[8px] px-2 text-left text-small",
+              "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-small",
               i === active
                 ? "bg-surface-raised-3 font-medium text-text-primary"
                 // ⚠ THE SHARED OPTION-HOVER TOKEN (Samuel, 2026-09-10), not a gray of
@@ -222,7 +222,7 @@ export function MentionPopover({
               <Avatar
                 person={memberPerson(suggestion.member)}
                 size="xs"
-                className="h-[20px] w-[20px] text-micro"
+                className="h-5 w-5 text-micro"
               />
             ) : (
               <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />

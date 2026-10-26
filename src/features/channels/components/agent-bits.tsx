@@ -81,7 +81,7 @@ export function AgentStatusPill({ tone, label }: AgentLivenessState) {
  * instead of eliding, and three pills on a 380px recipient line have to elide.
  */
 export const AGENT_PILL_FACE =
-  "shrink-0 rounded-[6px] px-2 py-px text-micro font-medium bg-surface-cta text-text-on-cta";
+  "shrink-0 rounded-sm px-2 py-px text-micro font-medium bg-surface-cta text-text-on-cta";
 
 /**
  * THE BLACK PILL'S FACE, and nothing about what it MEANS (extracted 2026-09-15).

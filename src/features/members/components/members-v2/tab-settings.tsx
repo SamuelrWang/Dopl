@@ -65,7 +65,7 @@ export function SettingsTab({
       {visibility.showDangerZone && (
         <SectionPanel id="member-danger" label="Danger zone">
           <div className="flex items-center gap-3 px-1 py-1">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-danger/10 text-danger">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-danger/10 text-danger">
               <Trash2 size={13} aria-hidden />
             </span>
             <span className="min-w-0 flex-1">

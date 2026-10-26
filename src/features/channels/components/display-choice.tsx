@@ -40,7 +40,7 @@ function OptionRow({
   const note = chosen ? "text-text-on-cta/70" : "text-text-tertiary";
   const body = (
     <>
-      <span className="flex items-center gap-[7px]">
+      <span className="flex items-center gap-1.75">
         <span
           className={cn(
             "min-w-0 flex-1 font-medium",

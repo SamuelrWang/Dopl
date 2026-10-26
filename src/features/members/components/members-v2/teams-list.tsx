@@ -34,7 +34,7 @@ export function TeamsList({
         <button
           type="button"
           onClick={onCreate}
-          className="btn-light flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-[9px] text-small font-medium text-text-primary"
+          className="btn-light flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-field text-small font-medium text-text-primary"
         >
           <Plus size={13} aria-hidden />
           Create team
@@ -85,7 +85,7 @@ export function TeamsList({
                 {open && (
                   <span
                     aria-hidden
-                    className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-[3px] bg-text-primary"
+                    className="absolute inset-y-1.5 left-0 w-0.75 rounded-r-[3px] bg-text-primary"
                   />
                 )}
                 <TeamColorTile color={team.color} size="sm" />

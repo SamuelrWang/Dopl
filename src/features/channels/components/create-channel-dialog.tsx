@@ -24,6 +24,7 @@ import type { WorkspaceMemberView } from "@/features/members/types";
 import type { Channel, ChannelVisibility } from "../types";
 import { addChannelMember, createChannel } from "../client/api";
 import { seedAgentDefaults } from "../lib/agent-defaults-seed";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 interface Props {
   workspaceId: string;
@@ -243,7 +244,7 @@ export function CreateChannelDialog({
           </div>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Name
             </span>
             <input
@@ -255,7 +256,7 @@ export function CreateChannelDialog({
               maxLength={120}
               autoFocus
               placeholder="e.g. Release planning"
-              className="concave-field h-9 rounded-[9px] px-3 text-body text-text-primary outline-none placeholder:text-text-muted"
+              className="concave-field h-9 rounded-field px-3 text-body text-text-primary outline-none placeholder:text-text-muted"
             />
           </label>
 
@@ -264,7 +265,7 @@ export function CreateChannelDialog({
                 Samuel, 2026-09-15)** — one word for one thing across the product.
                 The state, the payload key and the column stay `topic`: a label
                 change, not a migration. */}
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Description{" "}
               <span className="font-normal normal-case text-text-muted">
                 (optional)
@@ -275,12 +276,12 @@ export function CreateChannelDialog({
               onChange={(e) => setTopic(e.target.value)}
               maxLength={2000}
               placeholder="What is this channel about?"
-              className="concave-field h-9 rounded-[9px] px-3 text-body text-text-primary outline-none placeholder:text-text-muted"
+              className="concave-field h-9 rounded-field px-3 text-body text-text-primary outline-none placeholder:text-text-muted"
             />
           </label>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Visibility
             </span>
             <SegmentedControl
@@ -299,7 +300,7 @@ export function CreateChannelDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Members{" "}
               <span className="font-normal normal-case text-text-muted">
                 (optional)
@@ -310,7 +311,7 @@ export function CreateChannelDialog({
               onChange={setMemberQuery}
               placeholder="Search members"
             />
-            <div className="flex max-h-[180px] flex-col overflow-y-auto rounded-[10px] border border-border-strong">
+            <div className="flex max-h-45 flex-col overflow-y-auto rounded-lg border border-border-strong">
               {addableMembers.length === 0 ? (
                 <p className="px-3 py-4 text-center text-caption text-text-muted">
                   {mq ? "No members match." : "No other members to add."}
@@ -373,7 +374,7 @@ export function CreateChannelDialog({
             <button
               type="button"
               onClick={close}
-              className="auth-btn-3d-light h-10 rounded-[9px] px-4 text-body font-medium text-text-primary"
+              className="auth-btn-3d-light h-10 rounded-field px-4 text-body font-medium text-text-primary"
             >
               Cancel
             </button>
@@ -381,7 +382,7 @@ export function CreateChannelDialog({
               type="button"
               onClick={() => void submit()}
               disabled={submitting || name.trim() === ""}
-              className="auth-btn-3d h-10 rounded-[9px] px-4 text-body font-medium text-white disabled:opacity-40"
+              className="auth-btn-3d h-10 rounded-field px-4 text-body font-medium text-white disabled:opacity-40"
             >
               {submitting ? "Creating…" : "Create channel"}
             </button>
@@ -400,10 +401,10 @@ export function CreateChannelDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className={LABEL_TEXT}>
               Folder
             </span>
-            <div className="truncate rounded-[9px] border border-border-subtle bg-bg-inset px-3 py-2 text-body text-text-secondary">
+            <div className="truncate rounded-field border border-border-subtle bg-bg-inset px-3 py-2 text-body text-text-secondary">
               {/* ⚠ THE EFFECTIVE FOLDER, whatever it is, and NOTHING INVENTED while
                   the answer is outstanding — an empty box for one frame is honest
                   where "Sandbox (default)" never was (INVARIANTS §11). */}
@@ -414,7 +415,7 @@ export function CreateChannelDialog({
                 type="button"
                 onClick={() => void chooseFolder()}
                 disabled={folderBusy}
-                className="btn-light flex h-8 items-center gap-1.5 rounded-[9px] px-3 text-small font-medium text-text-primary disabled:opacity-40"
+                className="btn-light flex h-8 items-center gap-1.5 rounded-field px-3 text-small font-medium text-text-primary disabled:opacity-40"
               >
                 {hasCustomFolder ? (
                   <FolderOpen size={14} />
@@ -440,7 +441,7 @@ export function CreateChannelDialog({
             <button
               type="button"
               onClick={close}
-              className="auth-btn-3d h-10 rounded-[9px] px-4 text-body font-medium text-white"
+              className="auth-btn-3d h-10 rounded-field px-4 text-body font-medium text-white"
             >
               {hasCustomFolder ? "Done" : "Skip"}
             </button>

@@ -19,6 +19,9 @@ import { extendTailwindMerge } from "tailwind-merge";
  */
 const twMerge = extendTailwindMerge({
   extend: {
+    // The off-ramp radius tokens (`--radius-mark|tile|field|card`): unknown names fall out of the
+    // `rounded-*` group, so `cn("rounded-tile", "rounded-full")` would keep both.
+    theme: { radius: ["mark", "tile", "field", "card"] },
     classGroups: {
       "font-size": [
         {

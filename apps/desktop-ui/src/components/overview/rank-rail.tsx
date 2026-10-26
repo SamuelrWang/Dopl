@@ -211,7 +211,7 @@ export function RailsGhost() {
   return (
     <div className="grid grid-cols-2 gap-3">
       {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-40 rounded-[14px]" />
+        <Skeleton key={index} className="h-40 rounded-xl" />
       ))}
     </div>
   );

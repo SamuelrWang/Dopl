@@ -107,7 +107,7 @@ export function ToastHost() {
       <div
         role="status"
         aria-live="polite"
-        className="fixed bottom-4 right-4 z-[9999] max-w-xs rounded-lg bg-surface-invert px-3 py-2 text-caption text-text-on-invert shadow-[var(--shadow-elevated)] animate-in fade-in slide-in-from-right-4 duration-200"
+        className="fixed bottom-4 right-4 z-(--layer-top) max-w-xs rounded-lg bg-surface-invert px-3 py-2 text-caption text-text-on-invert shadow-[var(--shadow-elevated)] animate-in fade-in slide-in-from-right-4 duration-200"
       >
         <span className="block truncate" title={active.title}>
           {active.title}
@@ -137,7 +137,7 @@ export function ToastHost() {
       // ⚠ THE WHOLE CARD, which is the ruling — not just the text block. The two buttons inside
       // stop propagation, so this can only ever be reached by a click on the card itself.
       onClick={clickable ? fireBody : undefined}
-      className={`fixed bottom-4 right-4 z-[9999] max-w-sm rounded-lg border border-border-strong bg-modal-surface shadow-[var(--shadow-elevated)] px-4 py-3 flex items-start gap-3 text-text-primary animate-in fade-in slide-in-from-bottom-2 duration-200${
+      className={`fixed bottom-4 right-4 z-(--layer-top) max-w-sm rounded-lg border border-border-strong bg-modal-surface shadow-[var(--shadow-elevated)] px-4 py-3 flex items-start gap-3 text-text-primary animate-in fade-in slide-in-from-bottom-2 duration-200${
         clickable ? " cursor-pointer" : ""
       }`}
     >

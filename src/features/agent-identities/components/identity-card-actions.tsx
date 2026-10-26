@@ -2,7 +2,7 @@
 
 import { Loader2, Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { INK_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import type { AgentIdentity, IdentityKnowledgeRef } from "../client/types";
 import { EMPTY_KNOWLEDGE } from "../lib/knowledge-scopes";
 import { IDENTITY_ROW_ADD } from "./identity-section";
@@ -95,7 +95,7 @@ export function LaunchIntoChannelButton({
       type="button"
       onClick={onClick}
       disabled={disabled || busy}
-      className={cn(INK_PILL, "gap-1.5 self-end disabled:cursor-not-allowed disabled:opacity-60")}
+      className={cn(pillButton("ink", "sm"), "gap-1.5 self-end disabled:cursor-not-allowed disabled:opacity-60")}
     >
       {busy && <Loader2 size={12} aria-hidden="true" className="animate-spin" />}
       Launch

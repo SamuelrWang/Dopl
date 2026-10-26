@@ -11,7 +11,7 @@ import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 import { monthKey, monthLabel, shiftMonthKey } from "@/features/home/overview-period";
 import { HomeOverview } from "./home-overview";
 import type { HomeOverviewReadArgs, HomeOverviewReads } from "./use-home-overview-reads";
-import { CREDITS, SERIES, read, reads, spendToday } from "./overview-test-fixtures";
+import { CREDITS, HOME_CHANNELS, SERIES, read, reads, spendToday } from "./overview-test-fixtures";
 
 afterEach(cleanup);
 
@@ -21,8 +21,9 @@ function mount(state: Partial<HomeOverviewReads> = {}) {
   render(
     <HomeOverview
       homeWorkspaceId="ws-home"
-      homeChannels={[{ id: "ch-1", name: "Priya Shah" }]}
+      homeChannels={HOME_CHANNELS}
       onOpenSettings={onOpenSettings}
+      onOpenChannel={vi.fn()}
       useReads={(args) => {
         calls.push(args);
         return reads(state);

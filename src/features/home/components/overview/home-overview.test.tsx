@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { HomeOverview } from "./home-overview";
 import type { HomeOverview as HomeOverviewPayload } from "@/features/home/overview-types";
 import type { HomeOverviewReads } from "./use-home-overview-reads";
-import { CREDITS, DEVICES, OVERVIEW, read, reads } from "./overview-test-fixtures";
+import { CREDITS, DEVICES, HOME_CHANNELS, OVERVIEW, read, reads } from "./overview-test-fixtures";
 
 afterEach(cleanup);
 
@@ -13,8 +13,9 @@ function mount(state: HomeOverviewReads = reads()) {
   render(
     <HomeOverview
       homeWorkspaceId="ws-home"
-      homeChannels={[{ id: "ch-1", name: "Priya Shah" }]}
+      homeChannels={HOME_CHANNELS}
       onOpenSettings={onOpenSettings}
+      onOpenChannel={vi.fn()}
       useReads={() => state}
     />
   );

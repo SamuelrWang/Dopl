@@ -12,7 +12,7 @@
  * strip are absolutely positioned out of that zero-width track, straddling the
  * divider. It carries the ref (`attach`), and its parent is the row.
  *
- * ⚠ **`z-[2]` IS BETWEEN TWO EXISTING LAYERS** on the channels surface (info
+ * ⚠ **`z-(--layer-raised)` IS BETWEEN TWO EXISTING LAYERS** on the channels surface (info
  * column `z-index: 1`, agent overlay `z-20`) — above a column's own border, below
  * an overlay that covers the column it would resize.
  */
@@ -59,7 +59,7 @@ export function SplitResizeHandle({
   const arrows = showArrows || dragging;
 
   return (
-    <div ref={attach} className="relative z-[2] w-0 shrink-0">
+    <div ref={attach} className="relative z-(--layer-raised) w-0 shrink-0">
       <div
         role="separator"
         aria-orientation="vertical"

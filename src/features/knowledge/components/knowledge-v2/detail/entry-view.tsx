@@ -3,7 +3,7 @@
 import { FileWarning } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { SMALL_PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { DocPane } from "../../doc-pane";
 import { DocBodySkeleton } from "../../doc-pane-chrome";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
@@ -53,7 +53,7 @@ export function EntryView({
           <button
             type="button"
             onClick={onFocusRefetch}
-            className={SMALL_PILL_BUTTON}
+            className={pillButton("outline", "md")}
           >
             Retry
           </button>

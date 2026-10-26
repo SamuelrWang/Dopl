@@ -75,8 +75,8 @@ describe("chats DetailPane — transcript loading", () => {
   it("caps the ghost column so a 200-message chat doesn't fill the screen", () => {
     const big = render({ messageCount: 200 });
     const five = render({ messageCount: 5 });
-    expect((big.match(/rounded-\[10px\] border/g) ?? []).length).toBe(
-      (five.match(/rounded-\[10px\] border/g) ?? []).length
+    expect((big.match(/rounded-lg border/g) ?? []).length).toBe(
+      (five.match(/rounded-lg border/g) ?? []).length
     );
   });
 

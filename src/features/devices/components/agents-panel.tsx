@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { apiRequest } from "@/shared/api/api-client";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
+import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import {
   RowAction,
   SettingsCard,
@@ -20,11 +20,12 @@ import { RuntimeCredentialBars } from "@/features/channels/components/runtime-cr
 import { useRuntimeCredentials } from "@/features/channels/components/runtime-signin";
 import { AGENT_APPS_PATH, type AgentApp } from "../types";
 import { useAgentApps, useInvalidateAgentApps } from "./use-devices";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /** A card's own small heading — Overview's `RailCard` label face. */
 function CardHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+    <h3 className={LABEL_TEXT}>
       {children}
     </h3>
   );
@@ -50,9 +51,9 @@ export function AgentsPanel() {
           type="button"
           onClick={() => setConnecting((open) => !open)}
           aria-expanded={connecting}
-          className={SMALL_PILL_BUTTON}
+          className={pillButton("outline", "md")}
         >
-          <Plus size={SMALL_PILL_ICON} aria-hidden="true" />
+          <Plus size={PILL_ICON.md} aria-hidden="true" />
           Connect an agent
         </button>
       }

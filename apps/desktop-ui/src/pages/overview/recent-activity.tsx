@@ -1,5 +1,6 @@
 import type { OverviewActivityRow } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /**
  * Chip faces by kind. Severity colours come from the token ramp, never a hex;
@@ -49,7 +50,7 @@ function activityTime(iso: string, now: Date = new Date()): string {
 export function RecentActivity({ rows }: { rows: OverviewActivityRow[] }) {
   return (
     <section className="bento flex flex-col p-3.5">
-      <h2 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+      <h2 className={LABEL_TEXT}>
         Recent activity
       </h2>
       {rows.length === 0 ? (

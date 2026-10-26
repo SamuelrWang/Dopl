@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { toast } from "@/shared/ui/toast";
 import { SettingsPanel, SettingsRow, SettingsRows } from "./settings-panel";
 
@@ -70,7 +70,7 @@ export function DeleteAccount() {
           <button
             type="button"
             onClick={() => setConfirmOpen(true)}
-            className={cn(SMALL_PILL_BUTTON, "text-danger")}
+            className={cn(pillButton("outline", "md"), "text-danger")}
           >
             Delete
           </button>

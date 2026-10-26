@@ -30,7 +30,7 @@ export function ObjectHoverCard({
 
   return createPortal(
     <div
-      className="white-card pointer-events-none fixed z-[9999] w-[22rem] max-w-[80vw] overflow-hidden shadow-[var(--shadow-card-lift)]"
+      className="white-card pointer-events-none fixed z-(--layer-top) w-[22rem] max-w-[80vw] overflow-hidden shadow-[var(--shadow-card-lift)]"
       style={{ left: Math.min(x + 14, vw - 366), top: Math.min(y + 14, vh - 340) }}
     >
       <div className="flex items-center gap-2 px-3.5 pt-3">

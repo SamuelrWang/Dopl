@@ -105,7 +105,7 @@ function PermissionDetails({ selection }: { selection: LaunchSelectionState }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-[3px] self-start text-caption text-text-muted hover:text-text-secondary"
+        className="flex items-center gap-0.75 self-start text-caption text-text-muted hover:text-text-secondary"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         Details

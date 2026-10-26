@@ -86,7 +86,7 @@ export function ThreadInfoTab({
         <MetaRow icon={Hash} label="Title">
           <span
             title={thread.title}
-            className="max-w-[180px] truncate text-body text-text-primary"
+            className="max-w-45 truncate text-body text-text-primary"
           >
             {thread.title}
           </span>
@@ -196,7 +196,7 @@ function PartyRow({
 }) {
   if (!member) {
     return (
-      <div className="flex h-[46px] items-center gap-2.5 rounded-[8px] px-2">
+      <div className="flex h-11.5 items-center gap-2.5 rounded-md px-2">
         <Fallback size={16} aria-hidden className="shrink-0 text-text-muted" />
         <span className="min-w-0 flex-1 truncate text-body text-text-muted">
           {missing}
@@ -229,7 +229,7 @@ function SidePill({ label }: { label: string }) {
  *  Agents tab owns the CARD with the meters; this is the glance. */
 function AgentStateRow({ agent }: { agent: ThreadCardAgent }) {
   return (
-    <div className="flex h-[38px] items-center gap-[9px] px-2">
+    <div className="flex h-9.5 items-center gap-2.25 px-2">
       <AgentFace
         size={26}
         photo={agent.photo}

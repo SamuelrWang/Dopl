@@ -47,8 +47,9 @@ import { StagingPopupsContext, useStagingPopupsState } from "./staging-popups-pr
 export interface StagingFrameProps {
   /** The staged face: what the record pane holds. */
   children: ReactNode;
-  /** Which /home tab the top bar underlines. Default `ontology`. */
-  tab?: HomeTab;
+  /** Which /home tab the top bar underlines. Default `ontology`; `null` for a page that is no
+   *  /home face (`/playground/system`). */
+  tab?: HomeTab | null;
   /**
    * Draw /home's 290px channel column left of the pane. **ON by default since
    * 2026-10-22** (Samuel: "across all five pages in the actual desktop app, the

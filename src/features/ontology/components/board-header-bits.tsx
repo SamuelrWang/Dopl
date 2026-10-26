@@ -7,7 +7,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Pencil, Settings, Trash2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { InlineUnderlineField } from "@/shared/ui/form-dialog";
-import { WHITE_PILL } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { useBoardDisplay, type BoardDisplay } from "../hooks/use-board-display";
@@ -40,7 +40,7 @@ export function NameField({
       label="Name"
       value={draft}
       onChange={setDraft}
-      className="w-[220px] shrink-0"
+      className="w-55 shrink-0"
       inputClassName="font-medium"
       autoFocus
       onBlur={commit}
@@ -100,7 +100,7 @@ export function BoardSettingsMenu({
           const rect = triggerRef.current?.getBoundingClientRect();
           if (rect) setAnchor({ x: rect.right - 200, y: rect.bottom + 6 });
         }}
-        className={cn(WHITE_PILL, "w-9 shrink-0 justify-center")}
+        className={cn(pillButton("white", "lg"), "w-9 shrink-0 justify-center px-0")}
       >
         <Settings size={14} />
       </button>
@@ -108,7 +108,7 @@ export function BoardSettingsMenu({
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={close}
-        className="min-w-[200px]"
+        className="min-w-50"
       >
         {onRename && (
           <MenuItem
@@ -148,15 +148,11 @@ export function BoardSettingsMenu({
 }
 
 const DISPLAY_OPTIONS: ReadonlyArray<SelectMenuOption<BoardDisplay>> = [
-  { value: "canvas", label: "Canvas", description: "Each object type is a lane of cards." },
-  {
-    value: "rows",
-    label: "Rows",
-    description: "Each object type spans the page, with every object as a row of its details.",
-  },
+  { value: "canvas", label: "Canvas" },
+  { value: "rows", label: "Rows" },
 ];
 
-/** The board's display picker, a white pill left of the gear. A view preference on this device,
+/** The board's display picker, a text link left of the gear. A view preference on this device,
  *  not an edit, so everyone may switch; the board reads the same store. */
 export function BoardDisplayMenu() {
   const [value, onChange] = useBoardDisplay();
@@ -166,7 +162,7 @@ export function BoardDisplayMenu() {
       options={DISPLAY_OPTIONS}
       onChange={onChange}
       ariaLabel="Board display"
-      variant="pill"
+      variant="link"
       className="shrink-0"
     />
   );

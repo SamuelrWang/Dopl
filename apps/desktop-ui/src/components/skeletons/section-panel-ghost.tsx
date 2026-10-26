@@ -17,7 +17,7 @@ export function IdentityCardsGhost({
   return (
     <div className={grid}>
       {Array.from({ length: count }).map((_, i) => (
-        <Skeleton key={i} className="h-[104px] rounded-xl" />
+        <Skeleton key={i} className="h-26 rounded-xl" />
       ))}
     </div>
   );

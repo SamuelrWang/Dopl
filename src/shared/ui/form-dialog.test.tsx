@@ -315,7 +315,7 @@ describe("FormDialog — one exit, two buttons, one height", () => {
     for (const name of ["Discard", "Create"]) {
       const btn = await screen.findByRole("button", { name });
       expect(btn.className).toContain("h-[var(--action-h-sm)]");
-      expect(btn.className).toContain("rounded-[8px]");
+      expect(btn.className).toContain("rounded-md");
     }
     // The verb is the kit's black CTA; Discard is the text face beside it.
     expect((await screen.findByRole("button", { name: "Create" })).className).toContain(

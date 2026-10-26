@@ -6,7 +6,7 @@ import { formatRelativeTime } from "@/shared/lib/format-time";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { IdentityFace } from "@/shared/ui/identity-face";
-import { TEXT_LINK_BUTTON } from "@/shared/ui/small-action-button";
+import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { byTaskOrder, isActiveTask } from "../lib/task-model";
 import {
@@ -51,7 +51,7 @@ function TaskRow({
       data-status={task.status}
       className={cn(
         ROW_CARD_ROW,
-        "grid min-h-[52px] grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 py-2"
+        "grid min-h-13 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 py-2"
       )}
     >
       {onSetStatus ? (

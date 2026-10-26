@@ -27,10 +27,9 @@ import {
   RAIL_PAD,
   RAIL_PAD_COLLAPSED,
   TAB_MAX,
-  TAB_UNDERLINE,
-  TAB_UNDERLINE_HEIGHT,
   TILE,
 } from "./agent-window-frame";
+import { TAB_UNDERLINE } from "@/shared/ui/tab-underline";
 
 /** `pl-4 pr-1` → `[16, 4]`, on the tree's 4px step. ⚠ The COLLAPSED pad is asymmetric by ruling
  *  (2026-09-15), so it cannot be read with `RAIL_PAD`'s single-number `px-*` parse. */
@@ -81,7 +80,7 @@ describe("the active tab's underline is the popup field's underline", () => {
     // ⚠ THE READ ITSELF IS AN ASSERTION: a renamed class silently matches nothing and `slice`
     // returns the rest of the file, so the capture must have produced a number.
     expect(height, "the popup field's underline rule moved or was renamed").toBeTruthy();
-    expect(TAB_UNDERLINE_HEIGHT).toBe(`h-[${height}px]`);
+    expect(TAB_UNDERLINE).toContain(`h-[${height}px]`);
   });
 
   it("is BLACK, FULL-BLEED and SQUARE-ENDED — the other three halves of that recipe", () => {

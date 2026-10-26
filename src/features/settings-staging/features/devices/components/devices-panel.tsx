@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { formatRelativeTime } from "@/shared/lib/format-time";
-import { SMALL_PILL_BUTTON, SMALL_PILL_ICON } from "@/shared/ui/small-action-button";
+import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import {
   SettingsCard,
   SettingsPanel,
@@ -40,9 +40,9 @@ export function DevicesPanel() {
           type="button"
           onClick={() => setPairing((open) => !open)}
           aria-expanded={pairing}
-          className={SMALL_PILL_BUTTON}
+          className={pillButton("outline", "md")}
         >
-          <Plus size={SMALL_PILL_ICON} aria-hidden="true" />
+          <Plus size={PILL_ICON.md} aria-hidden="true" />
           Pair glasses
         </button>
       }

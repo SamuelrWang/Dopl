@@ -37,13 +37,13 @@ export function attributionName({
 export function ProvenanceChip({ via = null }: { via?: MessageVia | null }) {
   // Explicit height + `items-center` centres the text box at every font size.
   const shape =
-    "inline-flex h-[16px] shrink-0 items-center justify-center rounded-full bg-bg-inset px-1.5 text-micro leading-none text-text-muted";
+    "inline-flex h-4 shrink-0 items-center justify-center rounded-full bg-bg-inset px-1.5 text-micro leading-none text-text-muted";
   if (!via) return <span className={shape}>outside session</span>;
   return (
     <span
       data-via-verified={via.verified ? "" : undefined}
       title={via.detail || undefined}
-      className={cn(shape, "max-w-[160px] gap-0.5")}
+      className={cn(shape, "max-w-40 gap-0.5")}
     >
       <span className="truncate">via {via.label}</span>
       {via.verified && (
@@ -95,7 +95,7 @@ export function AttributionPill({
     // Replaces rather than layers: `tailwind-merge` keeps both `rounded-full` and `rounded-r-none`.
     radius ?? "rounded-full",
     "inline-flex max-w-full items-center gap-2 pr-3.5",
-    agent ? "py-[5px] pl-[5px]" : "py-1 pl-1",
+    agent ? "py-1.25 pl-1.25" : "py-1 pl-1",
     !framed && "bento",
     !framed && agentId && agentAccent(agentId),
     // Neutralisers last: of `agentAccent`'s triple only the border colour survives.

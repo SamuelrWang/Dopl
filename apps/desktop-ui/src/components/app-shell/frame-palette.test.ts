@@ -165,7 +165,7 @@ describe("ONE gray panel, with the page floating inside it", () => {
     expect(card).toMatch(/border:\s*2px solid var\(--home-panel-line\)/);
     expect(card).toMatch(/border-radius:\s*14px/);
     expect(code(read(HOME_FRAME))).toContain(
-      "rounded-[14px] border border-home-panel-line"
+      "rounded-xl border border-home-panel-line"
     );
     // The inset lets the panel show around the card; /home's pane takes `mb-3 mr-3`.
     expect(card).toMatch(/margin:\s*12px 12px 12px 0/);

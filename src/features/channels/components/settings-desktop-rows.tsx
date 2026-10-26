@@ -16,7 +16,7 @@
 
 import { cn } from "@/shared/lib/utils";
 import { BARE_TRIGGER_FACE, SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
-import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { SettingRow } from "./settings-agent-rows";
 import type { AgentFolderState } from "./settings-agent";
 
@@ -43,7 +43,7 @@ export function AgentFolderRows({ folder }: { folder: AgentFolderState }) {
             type="button"
             onClick={folder.onClear}
             disabled={folder.busy}
-            className={cn(PILL_BUTTON, "disabled:opacity-60")}
+            className={cn(pillButton("outline", "fit"), "disabled:opacity-60")}
           >
             Use default
           </button>

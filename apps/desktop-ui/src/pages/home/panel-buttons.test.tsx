@@ -14,7 +14,7 @@
  *
  * Three claims:
  *
- *   1. `CreateButton` wears `PAGE_ACTION_BTN` — the "New channel" button's own
+ *   1. `CreateButton` wears `pillButton("ink", "lg")` — the "New channel" button's own
  *      class list — by RENDERING it, not by reading its source.
  *   2. That constant is the only declaration of the recipe in `pages/home`: the
  *      three call sites that spelled it out by hand read it now, so a restyle
@@ -35,8 +35,7 @@ import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import { LaunchIntoChannelButton } from "@/features/agent-identities/components/identity-card-actions";
-import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
-import { INK_PILL } from "@/shared/ui/small-action-button";
+import { CreateButton, PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 
 /** This directory, and the knowledge module up in the web tree. See the note
  *  in the scan below for why neither is written inline. */
@@ -62,14 +61,13 @@ function faceOf(name: RegExp | string): Set<string> {
 }
 
 describe("the /home section button IS the page's black action button", () => {
-  it("🔒 wears `PAGE_ACTION_BTN`, class for class", () => {
+  it("🔒 wears the ink lg pill, class for class", () => {
     render(<CreateButton onClick={() => {}}>Knowledge base</CreateButton>);
 
     // Each adds exactly what a section header needs of it and nothing else:
     // the glyph gap, and the disabled ink it already had.
     const expected = new Set([
-      ...PAGE_ACTION_BTN.split(/\s+/),
-      "gap-1.5",
+      ...pillButton("ink", "lg").split(/\s+/),
       "disabled:opacity-60",
     ]);
     expect(faceOf("Knowledge base")).toEqual(expected);
@@ -87,7 +85,7 @@ describe("the /home section button IS the page's black action button", () => {
       .getByRole("button", { name: "Knowledge base" })
       .querySelector("svg");
     expect(svg).not.toBeNull();
-    expect(svg?.getAttribute("width")).toBe(String(PAGE_ACTION_ICON));
+    expect(svg?.getAttribute("width")).toBe(String(PILL_ICON.lg));
   });
 });
 
@@ -152,10 +150,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
       .filter(([, text]) => /"(auth-btn-3d|raise-ink) /.test(text))
       .map(([file]) => file);
     expect(local).toEqual([]);
-    expect(PAGE_ACTION_BTN.startsWith("raise-ink ")).toBe(true);
-    expect(readFileSync(`${SHARED_UI}page-action-button.tsx`, "utf8")).toContain(
-      "cn(INK_PILL_FACE, "
-    );
+    expect(pillButton("ink", "lg").startsWith("raise-ink ")).toBe(true);
   });
 
   it("🔒 `CreateButton` is declared exactly once", () => {
@@ -163,7 +158,7 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
       .filter(([, text]) => /function CreateButton\b/.test(text))
       .map(([file]) => file);
     expect(declaring).toEqual([]);
-    expect(readFileSync(`${SHARED_UI}page-action-button.tsx`, "utf8")).toMatch(
+    expect(readFileSync(`${SHARED_UI}pill-button.tsx`, "utf8")).toMatch(
       /function CreateButton\b/
     );
   });
@@ -188,7 +183,7 @@ describe("the CARD-scale pill survives where the ruling did not reach", () => {
   it("🔒 `LaunchIntoChannelButton` is the small ink pill, not a 3D or full-width face", () => {
     render(<LaunchIntoChannelButton onClick={() => {}} disabled={false} busy={false} />);
     const launch = faceOf("Launch");
-    for (const cls of INK_PILL.split(/\s+/)) expect(launch.has(cls)).toBe(true);
+    for (const cls of pillButton("ink", "sm").split(/\s+/)) expect(launch.has(cls)).toBe(true);
     expect(launch.has("w-full")).toBe(false);
     expect(launch.has("btn-light")).toBe(false);
   });

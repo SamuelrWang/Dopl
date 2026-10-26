@@ -13,7 +13,7 @@ import { SkeletonChrome } from "./skeleton-surface";
  *
  * ⚠ WHAT IT REPLACES. `components/app-shell/app-shell.tsx`'s `isPending` gate
  * rendered `PageLoading` inside a bare `flex h-screen w-screen flex-col`: a
- * white 52px top bar over a centred `max-w-[960px]` column, with NO account
+ * white 52px top bar over a centred `max-w-240` column, with NO account
  * rail, NO dark frame, NO sidebar and NO page card. Every one of those four
  * survives a workspace switch on screen — the rail is even still CLICKABLE —
  * so the ghost was tearing down the whole app frame and building a different
@@ -81,7 +81,7 @@ export function ShellChromeSkeleton({
  * `.tile` and `.workspaces`, so the width, the `calc()` top pad that lands the
  * first tile flush with the panel, the 7px gutter and the 4px account/container
  * break are all inherited rather than re-typed. The 2026-08-28 ghost restated
- * `pt-[7px]` and drifted off the rail's `calc(--shell-gap-top + --page-float-gap-top)`
+ * `pt-1.75` and drifted off the rail's `calc(--shell-gap-top + --page-float-gap-top)`
  * the day 2026-09-09 fixed that alignment; this cannot.
  *
  * ⚠ THE FILL IS `.homeMark`'s NUMBERS (36px / 11px radius) rather than the
@@ -132,7 +132,7 @@ function ShellSidebarSkeleton() {
             padding, gap and radius by wearing its own class and loses its
             gradient, its line and its four shadows to that rule. */}
         <div className={shell.brandPill} data-skeleton>
-          <Skeleton className="h-[22px] w-[22px] shrink-0 rounded-[6px]" />
+          <Skeleton className="h-5.5 w-5.5 shrink-0 rounded-sm" />
           <div className={shell.brandPillText}>
             <SkeletonLine w={96} h={10} />
             <SkeletonLine w={52} h={8} />
@@ -154,12 +154,12 @@ function ShellSidebarSkeleton() {
           the sidebar's, not this file's; `data-skeleton` drops the fill and the
           1px line the loaded card keeps. */}
       <div className={shell.wordsCard} data-skeleton>
-        <SkeletonLine w={128} h={14} className="mb-[9px]" />
+        <SkeletonLine w={128} h={14} className="mb-2.25" />
         <div className="mb-4 space-y-2">
           <SkeletonLine w="100%" h={9} />
           <SkeletonLine w="76%" h={9} />
         </div>
-        <Skeleton className="h-[35px] w-full rounded-lg" />
+        <Skeleton className="h-8.75 w-full rounded-lg" />
       </div>
 
       <div className={shell.foot}>

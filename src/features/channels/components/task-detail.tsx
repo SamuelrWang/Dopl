@@ -5,7 +5,7 @@ import { cn } from "@/shared/lib/utils";
 import { Breadcrumb } from "@/shared/ui/breadcrumb";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { StatusPill } from "@/shared/ui/status-pill";
-import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { ThinMeter } from "@/shared/ui/usage-meter";
 import { actorKey } from "../lib/task-model";
 import { TaskAssignees, TaskLinkChip, nextStatus } from "./task-bits";
@@ -117,7 +117,7 @@ export function TaskDetail({
             <button
               type="button"
               onClick={() => onSetStatus(task, next.status)}
-              className={cn(PILL_BUTTON, "ml-auto h-5.5 py-0")}
+              className={cn(pillButton("outline", "xs"), "ml-auto")}
             >
               {next.verb}
             </button>

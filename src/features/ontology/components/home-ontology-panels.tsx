@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { History, Share2, Trash2 } from "lucide-react";
 import { EmptyLine } from "@/shared/ui/empty-state";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
-import { CreateButton } from "@/shared/ui/page-action-button";
+import { CreateButton } from "@/shared/ui/pill-button";
 import { PageError } from "@/shared/ui/page-error";
 import { MenuDivider, MenuItem } from "@/shared/ui/popover-menu";
 import { SectionPanel } from "@/shared/ui/section-panel";

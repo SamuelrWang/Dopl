@@ -8,7 +8,7 @@
 import { useState } from "react";
 import type { Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { InviteDialog } from "./invite-dialog";
 import { useChannelHeaderWrite } from "../hooks/use-channel-header-writes";
 import { useChannelInfoCardWrite } from "../hooks/use-channel-info-card-writes";
@@ -175,7 +175,7 @@ export function SurfaceInfoPanel({
               type="button"
               onClick={() => setInviteOpen(true)}
               // The recipe is face and scale only; spacing stays at the call site.
-              className={cn(PAGE_ACTION_BTN, "ml-auto")}
+              className={cn(pillButton("ink", "lg"), "ml-auto")}
             >
               Add member
             </button>

@@ -18,7 +18,7 @@ export function IconTile({
       aria-hidden="true"
       className={cn(
         "raised-tab flex h-7 w-7 shrink-0 items-center justify-center text-text-secondary",
-        round ? "rounded-full" : "rounded-[8px]"
+        round ? "rounded-full" : "rounded-md"
       )}
     >
       {children}

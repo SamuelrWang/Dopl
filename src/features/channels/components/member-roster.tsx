@@ -53,7 +53,7 @@ export function MemberRow({
   return (
     <div
       className={cn(
-        "flex h-[46px] items-center gap-2.5 rounded-[8px] px-2",
+        "flex h-11.5 items-center gap-2.5 rounded-md px-2",
         !online && "opacity-60"
       )}
     >

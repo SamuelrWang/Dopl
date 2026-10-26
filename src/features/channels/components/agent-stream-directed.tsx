@@ -127,7 +127,7 @@ export function DirectedBox({
   return (
     <div
       className={cn(
-        "min-w-0 overflow-hidden rounded-[12px] border bg-card-surface-subtle",
+        "min-w-0 overflow-hidden rounded-card border bg-card-surface-subtle",
         // ⚠ THE OUTBOUND SIDE IS THE QUIETER BORDER. Within one exchange the
         // INBOUND box is the one carrying a fact the operator did not already
         // have — somebody else's words arrived — and the answer is their own
@@ -135,7 +135,7 @@ export function DirectedBox({
         outbound ? "border-border-subtle" : "border-border-default"
       )}
     >
-      <div className="flex items-center gap-1.5 bg-bg-inset px-2.5 py-[5px]">
+      <div className="flex items-center gap-1.5 bg-bg-inset px-2.5 py-1.25">
         <span className="min-w-0 truncate text-micro font-medium text-text-secondary">
           {banner}
         </span>
@@ -145,7 +145,7 @@ export function DirectedBox({
           </span>
         )}
       </div>
-      <StreamProse text={text} className="px-3 py-[9px]" />
+      <StreamProse text={text} className="px-3 py-2.25" />
     </div>
   );
 }

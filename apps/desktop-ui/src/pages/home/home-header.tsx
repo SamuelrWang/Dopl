@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { SearchItem } from "@/features/search/contracts";
 import { HeaderSearch } from "@/features/search/components/header-search";
@@ -10,7 +10,7 @@ import { HomeHeaderRow } from "./home-frame";
 import { HomeSettingsControl, type HomeViewer } from "./home-settings-control";
 import { HOME_TABS, type HomeTab } from "./home-tabs";
 
-const NEW_CHANNEL_BTN = cn(PAGE_ACTION_BTN, "gap-1.5 pl-3");
+const NEW_CHANNEL_BTN = cn(pillButton("ink", "lg"), "pl-3");
 
 /**
  * /home's header strip: New channel over the channel column, the face tabs, then search and the

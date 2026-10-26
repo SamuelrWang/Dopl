@@ -109,7 +109,7 @@ export function ChannelBranch({
                 : `Hide threads in ${label}`
             }
             onClick={() => onToggleThreads(channel.id)}
-            className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] text-text-muted transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+            className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-text-muted transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
           >
             <ChevronDown
               size={13}

@@ -28,7 +28,7 @@ export function ChannelsSkeleton() {
       detail={
         <DetailPaneSkeleton>
           <div className="flex-1 overflow-hidden px-14 pt-8">
-            <TranscriptSkeleton bubbles={3} className="mx-auto max-w-[760px]" />
+            <TranscriptSkeleton bubbles={3} className="mx-auto max-w-190" />
           </div>
         </DetailPaneSkeleton>
       }

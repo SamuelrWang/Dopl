@@ -5,7 +5,7 @@ import { SendButton } from "./send-button";
 const noop = () => {};
 
 /** The round ink send: the kit's `.send-round` at 30px. */
-const FACE = ["send-round", "h-[30px]", "w-[30px]"];
+const FACE = ["send-round", "h-7.5", "w-7.5"];
 
 describe("SendButton (the one shared send affordance)", () => {
   it("wears the round ink kit face at 30px", () => {

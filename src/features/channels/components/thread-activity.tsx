@@ -119,7 +119,7 @@ function ActivityCells({
           key={i}
           title={titles?.[i]}
           className={cn(
-            "h-3.5 w-3.5 rounded-[4px]",
+            "h-3.5 w-3.5 rounded-mark",
             level < 0
               ? "bg-bg-inset"
               : ACTIVITY_SHADE[level]

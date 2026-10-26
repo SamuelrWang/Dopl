@@ -17,12 +17,12 @@ describe("PENDING_ROW", () => {
 
 describe("pendingRow", () => {
   it("adds the class and the data attribute only while pending", () => {
-    const on = pendingRow(true, "rounded-[10px] border");
+    const on = pendingRow(true, "rounded-lg border");
     expect(on.className).toContain("opacity-60");
     expect(on[PENDING_ATTR]).toBe("");
 
-    const off = pendingRow(false, "rounded-[10px] border");
-    expect(off.className).toBe("rounded-[10px] border");
+    const off = pendingRow(false, "rounded-lg border");
+    expect(off.className).toBe("rounded-lg border");
     expect(PENDING_ATTR in off).toBe(false);
   });
 

@@ -29,7 +29,7 @@ export function SendButton({
       disabled={disabled}
       aria-label={label}
       title={title ?? label}
-      className="send-round flex h-[30px] w-[30px] shrink-0 items-center justify-center p-0"
+      className="send-round flex h-7.5 w-7.5 shrink-0 items-center justify-center p-0"
     >
       <svg viewBox="0 0 16 16" width={16} height={16} aria-hidden focusable="false" className="block">
         <path

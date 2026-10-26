@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { Layers, TriangleAlert } from "lucide-react";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { QUIET_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { useChannelArtifacts } from "../hooks/use-channel-artifacts";
 import { actorKey } from "../lib/task-model";
 import { artifactSpanLabel } from "./artifact-card";
@@ -165,7 +165,7 @@ function ArtifactItem({
           type="button"
           onClick={onOpen}
           aria-label={`Open ${artifact.name}`}
-          className={QUIET_PILL}
+          className={pillButton("quiet", "sm")}
         >
           Open
         </button>

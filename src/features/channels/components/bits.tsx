@@ -5,21 +5,21 @@
 import type { ReactNode } from "react";
 import { Bot, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
-import { INK_PILL_FACE } from "@/shared/ui/small-action-button";
-import { PAGE_ACTION_BTN, PAGE_ACTION_BTN_LIGHT } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./icon-button";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 export { IconButton };
 
 /** A right-panel tab's own action ("New thread", "Launch agent") at the 36px dark scale. Split controls use
  *  {@link TAB_ACTION_SHELL} + {@link TAB_ACTION_INK} (pinned against the whole by bits-tab-action.test.ts). */
-export const TAB_ACTION = cn(PAGE_ACTION_BTN, "shrink-0 gap-1");
+export const TAB_ACTION = cn(pillButton("ink", "lg"), "shrink-0 gap-1");
 /** {@link TAB_ACTION}'s white twin. */
-export const TAB_ACTION_LIGHT = cn(PAGE_ACTION_BTN_LIGHT, "shrink-0 gap-1");
-/** The face and the box: the ink pill at 36px. */
-export const TAB_ACTION_SHELL = cn(INK_PILL_FACE, "h-9");
-/** The label's own type and pad — everything inside the shell. */
-export const TAB_ACTION_INK = "gap-1 px-3.75 text-small";
+export const TAB_ACTION_LIGHT = cn(pillButton("white", "lg"), "shrink-0 gap-1");
+/** The face and the box: the ink pill at 36px, its pad moved onto each half. */
+export const TAB_ACTION_SHELL = cn(pillButton("ink", "lg"), "gap-0 px-0");
+/** One half's pad — everything inside the shell. */
+export const TAB_ACTION_INK = "gap-1 px-3.75";
 
 /** The white card of hairline-separated rows: the Tasks list and a task's subtasks. */
 export const ROW_CARD = "white-card m-0 flex min-w-0 list-none flex-col px-3";
@@ -32,7 +32,7 @@ export function IconTile({ children }: { children: ReactNode }) {
   return (
     <span
       aria-hidden
-      className="btn-light pointer-events-none flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] text-caption text-text-secondary"
+      className="btn-light pointer-events-none flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-tile text-caption text-text-secondary"
     >
       {children}
     </span>
@@ -60,7 +60,7 @@ export function agentAccent(agentId: string): string {
 /** Right-aligned count pill on a nav row; render only where a real count exists. */
 export function CountBadge({ value }: { value: number }) {
   return (
-    <span className="ml-auto inline-flex h-[16px] min-w-[16px] shrink-0 items-center justify-center rounded-full bg-bg-inset px-1.5 text-micro font-semibold text-text-secondary">
+    <span className="ml-auto inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-bg-inset px-1.5 text-micro font-semibold text-text-secondary">
       {value}
     </span>
   );
@@ -137,7 +137,7 @@ export function SectionHeader({
           type="button"
           onClick={onToggle}
           aria-expanded={open !== false}
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-[6px] py-0.5 text-left transition-colors hover:text-text-primary"
+          className="flex min-w-0 flex-1 items-center gap-1 rounded-sm py-0.5 text-left transition-colors hover:text-text-primary"
         >
           <span className="truncate text-label font-semibold uppercase tracking-wide text-text-secondary">
             {title}
@@ -145,7 +145,7 @@ export function SectionHeader({
         </button>
       ) : (
         <>
-          <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <span className={LABEL_TEXT}>
             {title}
           </span>
           <span className="flex-1" />
@@ -177,7 +177,7 @@ export function MetaRow({
   return (
     <div
       className={cn(
-        "group/meta flex h-9 items-center gap-2 rounded-[8px] px-2",
+        "group/meta flex h-9 items-center gap-2 rounded-md px-2",
         className
       )}
     >

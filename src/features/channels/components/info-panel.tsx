@@ -288,7 +288,7 @@ export function ChannelsInfoPanel({
       // `--info-w` is the draggable width (`use-info-resize.ts`); `shrink-0` keeps the slide from reflowing.
       className="flex w-[var(--info-w,380px)] shrink-0 flex-col border-l border-border-default"
     >
-      <div className="flex h-[56px] shrink-0 items-center px-3">
+      <div className="flex h-14 shrink-0 items-center px-3">
         <SegmentedControl
           options={options.map((t) => {
             // Badge dropped by face + slot, never by label text.

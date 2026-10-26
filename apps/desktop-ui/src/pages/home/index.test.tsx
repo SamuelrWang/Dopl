@@ -80,7 +80,7 @@ describe("home page", () => {
   /**
    * ⚠ THE GATE PAINTS /home's OWN FRAME, NOT A GENERIC PAGE (Samuel,
    * 2026-08-28: the old ghosts were "way off"). It was `PageLoading` in a bare
-   * `h-screen` box — a 52px bar over a centred `max-w-[960px]` column, a
+   * `h-screen` box — a 52px bar over a centred `max-w-240` column, a
    * surface this page has never had — and is `HomePageSkeleton` now: the rail,
    * the header, the 290px list and the bordered record pane, at the page's own
    * width var. The width class is the assertion because it is the ONE number
@@ -94,7 +94,7 @@ describe("home page", () => {
     const { container } = view;
     expect(container.querySelector(".w-\\[var\\(--home-list-w\\)\\]")).not.toBeNull();
     expect(container.querySelector(".border-home-panel-line")).not.toBeNull();
-    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
+    expect(container.querySelector(".max-w-240")).toBeNull();
   });
 
   /** The record pane is bounded by its line, not floated: it has no top or left gap for a

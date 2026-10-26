@@ -34,14 +34,14 @@ function RosterPaneGhost() {
           <SkeletonLine w={112} h={20} />
           <SkeletonLine w={244} h={10} />
         </div>
-        <Skeleton className="h-8 w-[76px] shrink-0 rounded-full" />
+        <Skeleton className="h-8 w-19 shrink-0 rounded-full" />
       </div>
 
-      <Skeleton className="mx-4 mb-3 h-8 rounded-[9px]" />
+      <Skeleton className="mx-4 mb-3 h-8 rounded-field" />
 
       <div className="mx-4 mb-3 flex items-center gap-1.5">
-        <Skeleton className="h-[27px] w-[104px] rounded-full" />
-        <Skeleton className="h-[27px] w-[88px] rounded-full" />
+        <Skeleton className="h-6.75 w-26 rounded-full" />
+        <Skeleton className="h-6.75 w-22 rounded-full" />
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden border-t border-border-default pt-3">
@@ -96,8 +96,8 @@ function MemberDetailGhost() {
         <div className="flex items-start gap-3.5">
           <OnInvert className="h-10 w-10 shrink-0 rounded-full" />
           <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-            <OnInvert className="h-5 w-[196px] rounded-full" />
-            <OnInvert className="h-2.5 w-[148px] rounded-full" />
+            <OnInvert className="h-5 w-49 rounded-full" />
+            <OnInvert className="h-2.5 w-37 rounded-full" />
           </div>
           <div className="flex shrink-0 items-start gap-6 pt-0.5">
             <StatBlockGhost />
@@ -106,9 +106,9 @@ function MemberDetailGhost() {
         </div>
         {/* The tab row: inert blocks, no `<button>`. */}
         <div className="mt-3 flex items-center gap-3 pb-2.5 pt-1">
-          <OnInvert className="h-3 w-[44px] rounded-full" />
-          <OnInvert className="h-3 w-[48px] rounded-full" />
-          <OnInvert className="h-3 w-[52px] rounded-full" />
+          <OnInvert className="h-3 w-11 rounded-full" />
+          <OnInvert className="h-3 w-12 rounded-full" />
+          <OnInvert className="h-3 w-13 rounded-full" />
         </div>
       </div>
 
@@ -133,8 +133,8 @@ function MemberDetailGhost() {
 function StatBlockGhost() {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <OnInvert className="h-2 w-[58px] rounded-full" />
-      <OnInvert className="h-3 w-[46px] rounded-full" />
+      <OnInvert className="h-2 w-14.5 rounded-full" />
+      <OnInvert className="h-3 w-11.5 rounded-full" />
     </div>
   );
 }

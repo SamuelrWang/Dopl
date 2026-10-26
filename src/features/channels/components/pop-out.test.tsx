@@ -175,7 +175,7 @@ describe("the header slot", () => {
     // `.raised-tab` on the pressed state.
     expect(info.className).not.toMatch(/rounded-|bg-|raised-tab/);
     // …and the pop-out beside it still does.
-    expect(popOut.className).toMatch(/rounded-\[7px\]/);
+    expect(popOut.className).toMatch(/rounded-tile/);
   });
 
   it("leaves NOTHING else on the right of the header", () => {

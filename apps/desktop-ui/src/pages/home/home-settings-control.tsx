@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { firstNameOf } from "@/shared/lib/person-name";
+import { cn } from "@/shared/lib/utils";
 import { IdentityFace } from "@/shared/ui/identity-face";
+import { pillButton } from "@/shared/ui/pill-button";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
 
@@ -10,8 +12,7 @@ export interface HomeViewer {
   avatarUrl: string | null;
 }
 
-const PROFILE_PILL =
-  "white-card raise-pill flex h-9 cursor-pointer items-center gap-2 rounded-full pl-1 pr-3.5 text-small font-medium text-text-primary";
+const PROFILE_PILL = cn(pillButton("white", "lg"), "gap-2 pl-1 pr-3.5");
 
 /**
  * Opens /home's settings modal from anywhere on the page (the credit bar's "Upgrade" is a

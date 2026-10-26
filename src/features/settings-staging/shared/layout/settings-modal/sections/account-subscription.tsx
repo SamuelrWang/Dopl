@@ -16,7 +16,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { formatDate } from "@/shared/lib/format-time";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { SettingsPanel, SettingsRows } from "@/shared/layout/settings-modal/sections/settings-panel";
 
 /**
@@ -121,7 +121,7 @@ function SubscriptionRow({
             type="button"
             disabled={cancel.pending}
             onClick={() => void run(true)}
-            className={SMALL_PILL_BUTTON}
+            className={pillButton("outline", "md")}
           >
             {cancel.pending ? "Resuming…" : "Resume plan"}
           </button>
@@ -130,7 +130,7 @@ function SubscriptionRow({
             type="button"
             disabled={cancel.pending}
             onClick={() => setConfirming(true)}
-            className={cn(SMALL_PILL_BUTTON, "text-danger")}
+            className={cn(pillButton("outline", "md"), "text-danger")}
           >
             {cancel.pending ? "Cancelling…" : "Cancel plan"}
           </button>

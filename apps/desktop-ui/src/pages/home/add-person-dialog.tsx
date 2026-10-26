@@ -11,7 +11,7 @@ import {
   StandardDialog,
 } from "@/shared/ui/standard-dialog";
 import { RAISED_WELL } from "@/shared/ui/wells";
-import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { displayUrl } from "./home-rows";
 import {
   expiresAtFrom,
@@ -96,9 +96,7 @@ export function AddPersonDialog({ workspaceId }: { workspaceId: string }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
-        // ⚠ THE SHARED RECIPE (2026-09-09), not a fourth hand-written copy of
-        // it — same class list, one declaration (`page-action-button.tsx`).
-        className={PAGE_ACTION_BTN}
+        className={pillButton("ink", "lg")}
       >
         Add person
       </button>

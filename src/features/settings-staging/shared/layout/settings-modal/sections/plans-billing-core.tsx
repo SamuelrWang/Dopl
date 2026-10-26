@@ -32,7 +32,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
 import { UsageMeter } from "@/shared/ui/usage-meter";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
-import { SMALL_PILL_BUTTON, SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { CHIP } from "@/shared/ui/wells";
 import {
   isLegacySolo,
@@ -436,7 +436,7 @@ function BillingSummary({
                 type="button"
                 disabled={portalLoading}
                 onClick={onManage}
-                className={SMALL_PILL_BUTTON}
+                className={pillButton("outline", "md")}
               >
                 {portalLoading ? "Loading…" : "Manage billing"}
               </button>
@@ -445,7 +445,7 @@ function BillingSummary({
                   type="button"
                   disabled={switching}
                   onClick={onSwitchToTeam}
-                  className={cn(SMALL_PRIMARY_PILL, "disabled:cursor-default disabled:opacity-60")}
+                  className={cn(pillButton("ink", "md"), "disabled:cursor-default disabled:opacity-60")}
                 >
                   {switching
                     ? "Switching…"
@@ -463,7 +463,7 @@ function BillingSummary({
             <button
               type="button"
               onClick={() => onUpgrade("pro")}
-              className={SMALL_PRIMARY_PILL}
+              className={pillButton("ink", "md")}
             >
               Upgrade to Pro — {formatMoney(PRO_PRICE)}/month
             </button>
@@ -471,7 +471,7 @@ function BillingSummary({
             <button
               type="button"
               onClick={() => onUpgrade("team")}
-              className={SMALL_PRIMARY_PILL}
+              className={pillButton("ink", "md")}
             >
               Upgrade to Team — {formatMoney(TEAM_SEAT_PRICE)}/seat
             </button>

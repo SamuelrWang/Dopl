@@ -99,7 +99,7 @@ export function MentionText({ text, ctx }: { text: string; ctx: BodyContext }) {
               userId !== null &&
                 ctx.mentionsMe &&
                 userId === ctx.index.currentUserId &&
-                "rounded-[4px] bg-link/10 px-0.5"
+                "rounded-mark bg-link/10 px-0.5"
             )}
           >
             {shown}

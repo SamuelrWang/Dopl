@@ -104,7 +104,7 @@ describe("the agents in the thread", () => {
     );
     draw({ sessions, peers: [] });
     const list = screen.getByRole("button", { name: "Open Coder 1" }).parentElement as HTMLElement;
-    expect(list.className).toContain("max-h-[146px]");
+    expect(list.className).toContain("max-h-36.5");
     expect(list.className).toContain("overflow-y-auto");
   });
 

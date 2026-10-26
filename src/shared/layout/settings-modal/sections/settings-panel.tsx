@@ -33,7 +33,7 @@ export function SettingsPanel({
 }) {
   return (
     <section aria-labelledby={id}>
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2">
+      <div className="flex min-h-5.5 items-center justify-between gap-2 px-1 pb-2">
         <h2 id={id} className={cn("truncate", IDENTITY_NAME_TEXT)}>
           {label}
         </h2>
@@ -118,7 +118,7 @@ function SettingsEmpty({ children }: { children: ReactNode }) {
 export function SettingsRowsSkeleton() {
   return (
     <li className="py-2.5" aria-busy="true">
-      <div className="h-8 animate-pulse rounded-[10px] bg-surface-raised-1" />
+      <div className="h-8 animate-pulse rounded-lg bg-surface-raised-1" />
     </li>
   );
 }

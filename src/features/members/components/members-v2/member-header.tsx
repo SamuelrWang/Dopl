@@ -2,6 +2,7 @@
 
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
+import { TabUnderline } from "@/shared/ui/tab-underline";
 import { formatDate, formatLastActive } from "@/shared/lib/format-time";
 import type { WorkspaceMemberView } from "../../types";
 import { RolePillOnInvert, StatBlock } from "./bits";
@@ -70,12 +71,7 @@ export function MemberHeader({
             )}
           >
             {DETAIL_TAB_LABEL[key]}
-            {tab === key && (
-              <span
-                aria-hidden
-                className="absolute inset-x-2 bottom-0 h-[2px] rounded-t-full bg-text-on-invert"
-              />
-            )}
+            {tab === key && <TabUnderline className="inset-x-2 bg-text-on-invert" />}
           </button>
         ))}
       </div>

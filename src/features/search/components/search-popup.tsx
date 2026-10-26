@@ -61,13 +61,13 @@ export interface SearchPopupProps {
  * is the sidebar field's 260px pill plus the body's padding; /home's header passes
  * `left-0 w-auto` to span its action group, pill-left to Profile-right (`header-search.tsx`).
  */
-export const SEARCH_CARD_W = "w-[280px] max-w-[calc(100vw-2rem)]";
+export const SEARCH_CARD_W = "w-70 max-w-[calc(100vw-2rem)]";
 
 /**
  * Each section is about five rows tall and scrolls itself. Applied to the LIST, not the
  * section — the heading is a sibling above the scroller so it stays put while its rows move.
  */
-export const SEARCH_SECTION_MAX_H = "max-h-[160px]";
+export const SEARCH_SECTION_MAX_H = "max-h-40";
 
 /** Rows on hairlines; the row's hover face floats between them. */
 const ROW_LIST = "divide-y divide-border-subtle [&>*]:py-0.5";

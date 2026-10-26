@@ -36,7 +36,7 @@ describe("TwoPaneListSkeleton", () => {
     const html = renderToStaticMarkup(<TwoPaneListSkeleton />);
     expect(html).toContain("page-float");
     expect(html).toContain("border-r border-border-default");
-    expect(html).toContain("max-w-[760px]");
+    expect(html).toContain("max-w-190");
   });
 
   it("announces itself with the caller's label", () => {
@@ -102,12 +102,12 @@ describe("DetailPaneSkeleton", () => {
         <div id="body" />
       </DetailPaneSkeleton>
     );
-    expect(html).toContain("h-[52px]");
+    expect(html).toContain("h-13");
     expect(html).toContain('id="body"');
   });
 
   it("is what the default document ghost is built from", () => {
-    expect(renderToStaticMarkup(<DetailDocSkeleton />)).toContain("h-[52px]");
+    expect(renderToStaticMarkup(<DetailDocSkeleton />)).toContain("h-13");
   });
 });
 
@@ -115,7 +115,7 @@ describe("PageShellSkeleton", () => {
   it("is a shaped page surface, never a line of copy", () => {
     const html = renderToStaticMarkup(<PageShellSkeleton label="Loading skills" />);
     expect(html).toContain("page-float");
-    expect(html).toContain("h-[52px]");
+    expect(html).toContain("h-13");
     expect(ghosts(html).length).toBeGreaterThan(5);
   });
 

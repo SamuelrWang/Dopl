@@ -20,6 +20,7 @@ import { Avatar } from "@/shared/ui/avatar";
 import type { Chat } from "../types";
 import { FORMAT_LABELS, SOURCE_LABELS } from "../constants";
 import { formatDate } from "@/shared/lib/format-time";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /** Chat header box: title, overview, meta line (plus owner when shared), and
  *  the agent-filled detail as collapsed disclosure strips below. */
@@ -34,7 +35,7 @@ export function HeaderCard({
   const isMine = chat.owner.userId === currentUserId;
 
   return (
-    <section className="overflow-hidden rounded-[14px] border border-border-strong bg-bg-elevated">
+    <section className="overflow-hidden rounded-xl border border-border-strong bg-bg-elevated">
       <div className="px-5 pb-4 pt-4">
         <h2 className="break-words text-display font-semibold tracking-tight text-text-primary">
           {chat.title}
@@ -166,7 +167,7 @@ function Disclosure({
             open && "rotate-90"
           )}
         />
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        <span className={LABEL_TEXT}>
           {label}
         </span>
         {meta && <span className="text-caption text-text-muted">{meta}</span>}

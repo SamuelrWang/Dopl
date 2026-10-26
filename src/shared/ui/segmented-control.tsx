@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/shared/lib/utils";
+import { TabUnderline } from "./tab-underline";
 
 export interface SegmentedOption<K extends string = string> {
   key: K;
@@ -26,7 +27,8 @@ export function segmentedIds(prefix: string, key: string): { tab: string; panel:
  * - `"pills"` (default): trackless filter row of hug-width `.seg-pill`s. Radius stays on the
  *   button and both faces draw rings, not borders, so selecting never shifts layout.
  * - `"track"`: the page-header selector, one flat `.seg-track`.
- * - `"underline"`: text only, the current option marked by a black rule. At `size="lg"` it is the
+ * - `"underline"`: THE TAB UNDERLINE — text only, the current option marked by
+ *   `tab-underline.tsx › TabUnderline`. At `size="lg"` it is the
  *   /home header's tab bar: 13px ink labels that dim on hover. `orientation="vertical"` stacks the
  *   same tabs as a rail (the profile popup's) one type step up, 14px on 32px rows, each hugging
  *   its word so the rule sits under it.
@@ -83,9 +85,9 @@ export function SegmentedControl<K extends string>({
       ? "h-[var(--action-h-sm)] px-3 text-caption"
       : size === "lg"
         ? tracked
-          ? "h-[30px] px-[15px] text-small"
+          ? "h-7.5 px-3.75 text-small"
           : "h-9 px-3 text-small"
-        : "h-[27px] px-3 text-caption";
+        : "h-6.75 px-3 text-caption";
   return (
     <div
       role="tablist"
@@ -97,7 +99,7 @@ export function SegmentedControl<K extends string>({
           : vertical
             ? "flex flex-col items-start gap-2"
             : underlined
-              ? cn("flex items-center", tabBar ? "gap-[22px]" : "gap-5")
+              ? cn("flex items-center", tabBar ? "gap-5.5" : "gap-5")
               : "flex items-center gap-1.5",
         className
       )}
@@ -125,8 +127,7 @@ export function SegmentedControl<K extends string>({
             option,
             value === key
               ? underlined
-                // The underline is the only selected-state mark.
-                ? "text-text-primary after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-full after:bg-text-primary"
+                ? "text-text-primary"
                 : "raised-tab text-text-primary"
               : cn(
                   tabBar
@@ -140,11 +141,12 @@ export function SegmentedControl<K extends string>({
           )}
         >
           {label}
+          {underlined && value === key && <TabUnderline />}
           {/* Inside the button, so the hint reaches the accessible name. */}
           {hint && <span className="text-micro font-normal text-text-muted">{hint}</span>}
           {count !== undefined &&
             (value === key ? (
-              <span className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-surface-cta px-1.5 text-micro font-semibold text-text-on-cta">
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-cta px-1.5 text-micro font-semibold text-text-on-cta">
                 {count}
               </span>
             ) : (

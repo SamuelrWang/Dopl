@@ -6,15 +6,15 @@ import { cn } from "@/shared/lib/utils";
 const SIZE = {
   sm: {
     icon: 13,
-    well: "rounded-[8px]",
+    well: "rounded-md",
     iconPos: "left-2.5",
-    input: "h-8 pl-[30px] pr-2.5 text-small",
+    input: "h-8 pl-7.5 pr-2.5 text-small",
   },
   md: {
     icon: 15,
-    well: "rounded-[9px]",
+    well: "rounded-field",
     iconPos: "left-3",
-    input: "h-9 pl-[33px] pr-3 text-body",
+    input: "h-9 pl-8.25 pr-3 text-body",
   },
 } as const;
 

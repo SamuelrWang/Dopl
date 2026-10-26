@@ -3,7 +3,7 @@
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { SMALL_PILL_BUTTON, SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
+import { pillButton } from "@/shared/ui/pill-button";
 import { toast } from "@/shared/ui/toast";
 import { SkeletonBar } from "@/shared/ui/skeleton";
 import { kbBodyIsUnsectioned, kbSummaryFault } from "@/shared/knowledge/write-rules";
@@ -67,7 +67,7 @@ export function ConflictBanner({
           type="button"
           onClick={onDiscardMine}
           disabled={resolving}
-          className={SMALL_PILL_BUTTON}
+          className={pillButton("outline", "md")}
         >
           Discard mine, reload
         </button>
@@ -75,7 +75,7 @@ export function ConflictBanner({
           type="button"
           onClick={onKeepMine}
           disabled={resolving}
-          className={cn(SMALL_PRIMARY_PILL, "disabled:opacity-40")}
+          className={cn(pillButton("ink", "md"), "disabled:opacity-40")}
         >
           {resolving ? "Saving…" : "Save mine, overwrite"}
         </button>

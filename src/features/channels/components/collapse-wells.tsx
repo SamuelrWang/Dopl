@@ -48,7 +48,7 @@ function useWellContent(open: boolean): boolean {
 
 /** Verbatim, not composed with `cn()`: suites assert this exact string. */
 const WELL_HEADER =
-  "flex min-h-[30px] w-full min-w-0 cursor-pointer items-center justify-between gap-2 pl-1 text-left";
+  "flex min-h-7.5 w-full min-w-0 cursor-pointer items-center justify-between gap-2 pl-1 text-left";
 
 /**
  * `"well"`: the gray box with the header inside it (the Agents tab). `"heading"`: no box, a quiet

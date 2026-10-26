@@ -110,7 +110,7 @@ describe("the shell's own loading state mirrors the shell", () => {
     const { container } = render(
       <ShellChromeSkeleton>{sectionSkeleton("overview")}</ShellChromeSkeleton>
     );
-    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
+    expect(container.querySelector(".max-w-240")).toBeNull();
   });
 
   /**
@@ -147,7 +147,7 @@ describe("the shell's own loading state mirrors the shell", () => {
 
   /**
    * ⚠ THE RAIL IS THE RAIL'S OWN MODULE. The 2026-08-28 /home ghost restated
-   * `pt-[7px]` and silently stopped being the rail's shape when 2026-09-09 moved
+   * `pt-1.75` and silently stopped being the rail's shape when 2026-09-09 moved
    * that pad to `calc(--shell-gap-top + --page-float-gap-top)`; reading `.rail`,
    * `.tile` and `.workspaces` is what makes that impossible.
    */
@@ -158,7 +158,7 @@ describe("the shell's own loading state mirrors the shell", () => {
     for (const cls of ["rail.rail", "rail.tile", "rail.workspaces"]) {
       expect(SHELL_SKELETON).toContain(cls);
     }
-    expect(code("./shell-skeleton.tsx")).not.toContain("pt-[7px]");
+    expect(code("./shell-skeleton.tsx")).not.toContain("pt-1.75");
     const { container } = render(<AccountRailSkeleton />);
     expect(container.querySelectorAll('[class*="tile"]')).toHaveLength(5);
   });
@@ -171,7 +171,7 @@ describe("the shell's own loading state mirrors the shell", () => {
    * four shadows) and the Pro card (`--home-card` over `--border-strong`) — and
    * both are stripped by an ATTRIBUTE rule, not by dropping their class: the
    * class is the only statement of their padding, radius and margin, and the
-   * ghost restating those is the drift `pt-[7px]` already cost this file once.
+   * ghost restating those is the drift `pt-1.75` already cost this file once.
    *
    * ⚠ THE FRAME IS NOT A SKELETON CONTAINER. `.root` / `.surface` / `.pageCard`
    * and the rail are the app's own chrome, on screen before and after the read;
@@ -193,7 +193,7 @@ describe("the shell's own loading state mirrors the shell", () => {
     expect(shellCss).toContain(".wordsCard[data-skeleton]");
     // 🚫 and the ghost still names no inset of its own.
     const ghost = code("./shell-skeleton.tsx");
-    for (const inset of ["p-[18px]", "rounded-[10px]", "px-[10px]"]) {
+    for (const inset of ["p-4.5", "rounded-[10px]", "px-2.5"]) {
       expect(ghost).not.toContain(inset);
     }
   });
@@ -247,7 +247,7 @@ describe("the /home shapes are /home's own geometry", () => {
     ).toHaveLength(2);
     expect(container.querySelector(".border-home-panel-line[data-frame-skin]")).not.toBeNull();
     expect(container.querySelector("main")?.getAttribute("data-face")).toBe(HOME_DEFAULT_TAB);
-    expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
+    expect(container.querySelector(".max-w-240")).toBeNull();
   });
 
   it("paints the face it is handed, which the page passes as the remembered one", () => {
@@ -266,7 +266,7 @@ describe("the /home shapes are /home's own geometry", () => {
   it("ghosts one tab label per face, without offering anything to press", () => {
     const { container } = render(<HomePageSkeleton />);
     expect(
-      container.querySelectorAll('.py-3.pr-3 .gap-\\[22px\\] > [data-slot="skeleton"]')
+      container.querySelectorAll('.py-3.pr-3 .gap-5\\.5 > [data-slot="skeleton"]')
     ).toHaveLength(HOME_TABS.length);
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.querySelectorAll("a")).toHaveLength(0);

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { SettingsSection } from "@/shared/layout/settings-modal/settings-modal-core";
 import { cn } from "@/shared/lib/utils";
 import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
+import { STAGING_CHANNELS_HREF } from "@/features/ui-staging/staging-channel-rail";
 import { STAGING_HOME_WORKSPACE_ID } from "@/features/ui-staging/staging-stubs";
 import { StagingSettingsModal } from "@/features/settings-staging/staging-settings-modal";
 import { HOME_CHANNELS, type StagingPlan } from "./overview-mock-data";
@@ -26,6 +28,7 @@ export function OverviewStagingPage() {
   const [state, setState] = useState<StagingState>(DEFAULT_STAGING_STATE);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("billing");
+  const router = useRouter();
 
   return (
     <StagingStateProvider value={state}>
@@ -37,6 +40,7 @@ export function OverviewStagingPage() {
             setSection(next);
             setSettingsOpen(true);
           }}
+          onOpenChannel={() => router.push(STAGING_CHANNELS_HREF)}
           useReads={useStagingOverviewReads}
         />
       </StagingFrame>

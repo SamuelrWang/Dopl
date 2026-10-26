@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
 
 /** THE search pill's face: /home's header search, and every field that should look like it. */
 export const SEARCH_PILL_FACE =
-  "white-card raise-pill flex h-9 w-[260px] cursor-text items-center gap-2 rounded-full px-3.5 text-text-muted";
+  "white-card raise-pill flex h-9 w-65 cursor-text items-center gap-2 rounded-full px-3.5 text-text-muted";
 
 /** The input inside {@link SEARCH_PILL_FACE}. */
 export const SEARCH_PILL_INPUT =

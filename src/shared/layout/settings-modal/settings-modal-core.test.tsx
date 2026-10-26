@@ -92,7 +92,7 @@ describe("settings modal core rail", () => {
       expect(tab.className).not.toMatch(/nav-chip|raised-tab/);
       expect(tab.querySelector("svg")).toBeNull();
     }
-    expect(selected[0].className).toContain("after:bg-text-primary");
+    expect(selected[0].querySelector("[data-tab-underline]")).not.toBeNull();
   });
 
   it("renders each section's own pane", async () => {

@@ -9,6 +9,7 @@ import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
 import { SECTION_HEADING_TEXT } from "./section-heading";
+import { LABEL_TEXT } from "@/shared/ui/section-heading";
 
 /**
  * The standard dialog: one width, one heading, one footer row; every dialog composes it.
@@ -104,7 +105,7 @@ export function DialogField({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={htmlFor}
-        className="text-label font-semibold uppercase tracking-wide text-text-secondary"
+        className={LABEL_TEXT}
       >
         {label}
         {hint && (
