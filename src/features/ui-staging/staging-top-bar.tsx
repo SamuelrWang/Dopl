@@ -6,18 +6,21 @@
  * Copied, not imported, because the original hard-codes the selected tab to
  * "channels" and renders every tab as an inert `<span>`. Here the selected tab is
  * a prop and each staged face is a real link to its staging route, so Samuel can
- * hop between the staged pages. The search and profile pills are buttons: search swaps in the
- * desktop's search field + popup (`popups-staging › StagingSearchField`) in place, profile opens
- * Settings (both wired by `staging-frame.tsx` through `staging-popups-provider.tsx`). Markup and
- * class names are otherwise identical (`marketing.css › .lp-demo-top*`).
+ * hop between the staged pages. The search pill is the product's own (`search/components/
+ * header-search.tsx`), fed by the staged story's answers (`data/search-results.ts`); the profile
+ * pill opens Settings (wired by `staging-frame.tsx` through `staging-popups-provider.tsx`).
+ * Markup and class names are otherwise identical (`marketing.css › .lp-demo-top*`).
  */
 
 import Link from "next/link";
-import { Plus, Search } from "lucide-react";
+import { useState } from "react";
+import { Plus } from "lucide-react";
 import { HOME_TABS, type HomeTab } from "@/features/home/tabs";
+import { HeaderSearch } from "@/features/search/components/header-search";
 import { firstNameOf } from "@/shared/lib/person-name";
 import type { AvatarPerson } from "@/shared/ui/avatar";
-import { StagingSearchField } from "@/features/popups-staging/staging-popups";
+import { toast } from "@/shared/ui/toast";
+import { STAGING_SEARCH_RECENTS, stagingSearchFetcher } from "./data/search-results";
 
 /** DEFAULT staged route for each /home face (overridable via `tabHrefs`). A tab
  *  with no href renders as an inert span. */
@@ -38,9 +41,6 @@ export function StagingTopBar({
   onNew,
   newLabel = "New channel",
   tabHrefs = STAGING_ROUTES,
-  searchOpen = false,
-  onSearch,
-  onSearchClose,
   onProfile,
 }: {
   viewer: AvatarPerson;
@@ -51,11 +51,6 @@ export function StagingTopBar({
   newLabel?: string;
   /** Where each tab links. Default `STAGING_ROUTES`; pass `{}` for inert tabs. */
   tabHrefs?: Partial<Record<HomeTab, string>>;
-  /** STAGING: the search field is open in place of the pill. */
-  searchOpen?: boolean;
-  /** STAGING: the search pill's click (absent = inert pill). */
-  onSearch?: () => void;
-  onSearchClose?: () => void;
   /** STAGING: the profile pill's click (absent = inert pill). */
   onProfile?: () => void;
 }) {
@@ -104,21 +99,9 @@ export function StagingTopBar({
         </span>
       </div>
       {/* `uis-top-trail` makes this `home-header.tsx`'s positioned action group: the search
-          popup spans pill-left to Profile-right. */}
+          popup is floored at pill-left to Profile-right. */}
       <div className="lp-demo-top-trail uis-top-trail">
-        {searchOpen && onSearchClose ? (
-          <StagingSearchField onClose={onSearchClose} />
-        ) : onSearch ? (
-          <button type="button" className="lp-demo-top-search" onClick={onSearch}>
-            <Search size={14} strokeWidth={2} aria-hidden />
-            Search…
-          </button>
-        ) : (
-          <span className="lp-demo-top-search">
-            <Search size={14} strokeWidth={2} aria-hidden />
-            Search…
-          </span>
-        )}
+        <StagingSearch userId={viewer.userId} />
         {onProfile ? (
           <button type="button" className="lp-demo-top-profile" title="Profile" onClick={onProfile}>
             <ProfileFace viewer={viewer} first={first} />
@@ -130,6 +113,21 @@ export function StagingTopBar({
         )}
       </div>
     </div>
+  );
+}
+
+/** The product pill over the story's answers; a taken row says where it would land. */
+function StagingSearch({ userId }: { userId: string }) {
+  const [query, setQuery] = useState("");
+  return (
+    <HeaderSearch
+      query={query}
+      onQueryChange={setQuery}
+      onNavigate={(item) => toast({ title: `Staging: would open ${item.title}` })}
+      fetcher={stagingSearchFetcher}
+      userId={userId}
+      seedRecents={STAGING_SEARCH_RECENTS}
+    />
   );
 }
 

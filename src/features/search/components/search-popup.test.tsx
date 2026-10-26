@@ -120,13 +120,22 @@ const type = (value: string) =>
 
 const card = () => screen.findByRole("listbox", { name: "Search results" });
 
-describe("the search popup opens on the TYPING, with no ⌘K and no toggle", () => {
-  it("stays shut at one character and asks the server nothing", async () => {
+/** One row by its stamp: a title the query matches is split by its `<mark>`. */
+const row = (id: string) =>
+  waitFor(() => {
+    const el = document.querySelector<HTMLElement>(`[data-search-row="${id}"]`);
+    if (!el) throw new Error(`no row ${id}`);
+    return el;
+  });
+
+describe("the search popup opens with the field's focus, with no ⌘K and no toggle", () => {
+  it("asks the server nothing at one character and says what to do", async () => {
     const { fetcher, calls } = stubFetcher();
     render(<Host fetcher={fetcher} />);
     type("o");
     await new Promise((r) => setTimeout(r, SEARCH_DEBOUNCE_MS + 60));
-    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(await card()).not.toBeNull();
+    expect(screen.getByText("Type to search")).not.toBeNull();
     expect(calls).toEqual([]);
   });
 
@@ -306,7 +315,7 @@ describe("the keyboard", () => {
     type("orch");
     await card();
 
-    fireEvent.click(await screen.findByText("Desktop Orchestrator Protocol"));
+    fireEvent.click(await row("kb-1"));
     expect(onNavigate).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "knowledge", id: "kb-1" })
     );
@@ -401,10 +410,14 @@ describe("the fixture table, which the hosts no longer mount", () => {
     type("orchestrator");
     await card();
 
-    // A real match, its section, and the agent-identity row's own colour value.
-    expect(await screen.findByText("Desktop Orchestrator Protocol")).not.toBeNull();
+    // A real match, its section, and the word marked in its title the way the server marks a
+    // snippet.
+    expect((await row("kb-orch")).textContent).toContain("Desktop Orchestrator Protocol");
     expect(screen.getByText("Knowledge")).not.toBeNull();
-    expect(screen.getByText("Orchestrator")).not.toBeNull();
+    const marked = (id: string) =>
+      document.querySelector(`[data-search-row="${id}"] mark`)?.textContent;
+    expect(marked("tpl-orch")).toBe("Orchestrator");
+    expect(marked("msg-4821")).toBe("orchestrator");
 
     // Payload order, not a sort: the renderer walks the groups as given
     // (`contracts.ts › SEARCH_GROUP_ORDER`), so an out-of-order table shows here.

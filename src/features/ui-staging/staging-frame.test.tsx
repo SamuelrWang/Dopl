@@ -49,21 +49,26 @@ describe("StagingFrame popup triggers", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close new channel form" }));
     await tick();
 
-    fireEvent.click(top.getByRole("button", { name: /Search/ }));
-    await tick();
-    const field = screen.getByLabelText("Search");
+    // The product search pill: focus opens the popup on the seeded recents, typing answers
+    // from the story's fixtures, Escape clears and closes.
+    const field = top.getByLabelText("Search");
     fireEvent.focus(field);
-    fireEvent.change(field, { target: { value: "launch" } });
+    expect(screen.getByRole("listbox", { name: "Search results" })).toBeTruthy();
+    expect(screen.getByText("rollback")).toBeTruthy();
+    fireEvent.change(field, { target: { value: "upload" } });
     await tick(600);
+    expect(document.querySelector('[data-search-row="stg-art-uploads"]')).toBeTruthy();
+    expect(document.querySelector('[data-search-row="stg-msg-9012"] mark')?.textContent).toBe("upload");
     fireEvent.keyDown(field, { key: "Escape" });
     await tick();
-    expect(screen.queryByLabelText("Search")).toBeNull();
+    expect(screen.queryByRole("listbox", { name: "Search results" })).toBeNull();
+    expect((field as HTMLInputElement).value).toBe("");
 
     fireEvent.click(top.getByTitle("Profile"));
     await tick();
     const settings = screen.getByRole("dialog", { name: "Settings" });
     expect(within(settings).getAllByText("Display name").length).toBeGreaterThan(0);
-    fireEvent.click(within(settings).getByRole("button", { name: /Devices/ }));
+    fireEvent.click(within(settings).getByRole("tab", { name: /Devices/ }));
     await tick();
     expect(within(settings).getAllByText("Daniel’s MacBook Pro").length).toBeGreaterThan(0);
     fireEvent.keyDown(document, { key: "Escape" });

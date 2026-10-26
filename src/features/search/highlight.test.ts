@@ -20,7 +20,8 @@ import {
   highlightPattern,
   highlightTerms,
   SNIPPET_CHARS,
-} from "./snippet";
+  splitMatches,
+} from "./highlight";
 
 const patternFor = (q: string) => highlightPattern(highlightTerms(q));
 
@@ -126,5 +127,22 @@ describe("🔒 buildSnippet — the only markup is <mark>", () => {
 
   it("collapses whitespace so a snippet is one line", () => {
     expect(buildSnippet("a\n\n  b", null)).toBe("a b");
+  });
+});
+
+describe("splitMatches", () => {
+  it("cuts plain text into marked and unmarked runs on the snippet's word-start rule", () => {
+    expect(splitMatches("Rollback the deploy", patternFor("roll dep"))).toEqual([
+      { text: "Roll", match: true },
+      { text: "back the ", match: false },
+      { text: "dep", match: true },
+      { text: "loy", match: false },
+    ]);
+    // `can` must start a word: the `can` inside `scan` stays bare.
+    expect(splitMatches("scan", patternFor("can"))).toEqual([{ text: "scan", match: false }]);
+  });
+
+  it("is one unmarked run with no pattern, and leaves markup as text", () => {
+    expect(splitMatches("<b>x</b>", null)).toEqual([{ text: "<b>x</b>", match: false }]);
   });
 });

@@ -1,4 +1,5 @@
 import "server-only";
+import { APOSTROPHES } from "../highlight";
 
 /**
  * The one place a caller-supplied string becomes a PostgREST filter value in this
@@ -16,20 +17,11 @@ export function escapeLikeLiteral(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
-/**
- * Every apostrophe a person or a keyboard produces: ASCII, the two curly quotes
- * (macOS smart punctuation turns `can't` into `can’t`) and the modifier letter.
- * One class, used on BOTH sides (here and `snippet.ts`), so `can't` finds
- * `can’t` and the reverse.
- */
-export const APOSTROPHE_CLASS = "['\u2018\u2019\u02BC]";
-export const APOSTROPHES = new RegExp(APOSTROPHE_CLASS, "g");
-
 /** `…q…` — the popup's CANDIDATE matcher. The leading `%` means no b-tree index
  *  can serve it, so every read using it is bounded by a fence plus a `limit`.
  *
  *  (2026-09-29) An apostrophe becomes `_` (one character, any character) so
- *  `can't` also reaches a title spelled `can’t`; `snippet.ts › queryMatcher`
+ *  `can't` also reaches a title spelled `can’t`; `highlight.ts › queryMatcher`
  *  then drops every candidate that does not actually say the word. */
 export function containsPattern(query: string): string {
   return `%${escapeLikeLiteral(query).replace(APOSTROPHES, "_")}%`;
@@ -88,7 +80,7 @@ export const MAX_TSQUERY_TOKENS = 8;
  * reads `can't` (and `can’t`) as two ADJACENT lexemes, `can` then `t`. ANDing
  * them (`can & t:*`, "ANY word starting with *t* anywhere") matches nearly every
  * message (Samuel, 2026-09-29); the phrase `can <-> t:*` is what the text
- * contains. `snippet.ts › queryMatcher` then holds every candidate to
+ * contains. `highlight.ts › queryMatcher` then holds every candidate to
  * the literal word, so `can <-> t:*` reaching *can take* is dropped.
  *
  * @returns `null` when the query has no token at all, signalling the caller to run
