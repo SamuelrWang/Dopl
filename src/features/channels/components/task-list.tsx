@@ -17,11 +17,9 @@ import {
   TaskTickMark,
   nextStatus,
 } from "./task-bits";
+import { ROW_CARD, ROW_CARD_ROW } from "./bits";
 import { STATUS_TONE, TASK_STATUS_LABEL, type TaskFaceOf } from "./task-faces";
 import type { ChannelTask, TaskLink, TaskStatus } from "../types";
-
-/** The white card every task list draws (rows with a hairline between them). */
-export const TASK_CARD = "white-card m-0 list-none px-3";
 
 export interface TaskListProps {
   tasks: readonly ChannelTask[];
@@ -50,7 +48,10 @@ function TaskRow({
   return (
     <li
       data-status={task.status}
-      className="grid min-h-[52px] grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-border-default py-2 first:border-t-0"
+      className={cn(
+        ROW_CARD_ROW,
+        "grid min-h-[52px] grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2.5 py-2"
+      )}
     >
       {onSetStatus ? (
         <button
@@ -121,7 +122,7 @@ export function TaskList({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {active.length > 0 ? (
-        <ul aria-label="Active tasks" className={TASK_CARD}>
+        <ul aria-label="Active tasks" className={ROW_CARD}>
           {rows(active)}
         </ul>
       ) : (
@@ -144,7 +145,7 @@ export function TaskList({
             <span className="text-text-muted">{resolved.length}</span>
           </button>
           {resolvedOpen && (
-            <ul aria-label="Resolved tasks" className={TASK_CARD}>
+            <ul aria-label="Resolved tasks" className={ROW_CARD}>
               {rows(resolved)}
             </ul>
           )}

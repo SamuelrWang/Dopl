@@ -492,3 +492,33 @@ Workers append a `## <slice>` section per question: the question, what was chose
    its literal neutral palette (DESIGN-LANGUAGE §2) is now the product tokens (`--text-primary`
    etc.), so Rows reads slightly cooler than it did. No shared token was retuned.
 6. **Ontology white background: trial per Samuel.** Record pane `--bg-overlay` on `/playground/ontology` only (`ui-staging/staging.css › .uis-onto-pane`); grid and cards unchanged.
+## Threads + Artifacts overhaul (branch `ui/threads-artifacts-overhaul`)
+
+1. **The Threads wells lost their gray box.** Samuel ruled the gray boxes onto the Threads tab on
+   2026-09-13 and "same as the channel picker" on 2026-09-17; the picker has since moved to the
+   plain uppercase heading, and the brief asked for that heading. Chosen: Threads and Artifacts
+   pass `RecencyWells variant="card"` (heading over one white card of hairline rows); the Agents
+   tab keeps the gray `well`. Open: should the Agents tab follow? Where: `collapse-wells.tsx ›
+   WELL_FACES.card`, `recency-wells.tsx › RecencyWells`.
+2. **The Threads ↔ Artifacts switch stays one button**, the white page pill beside New thread,
+   labelled with where it goes. It was never a segmented control, and Samuel ruled the flip
+   wording on 2026-09-16, so it was not turned into an underline pair. Where: `threads-tab.tsx`.
+3. **Copy got shorter (minimal-copy ruling).** Clip notes are now one muted caption under the
+   list ("Showing the most recently active threads" / "Showing the most recent artifacts"); empty
+   and failed reads are `EmptyState` wells ("No threads yet", "No artifacts yet", "Could not load
+   artifacts"). The empty artifacts note no longer explains that an artifact is made by folding
+   messages in the transcript. Restore it as an `EmptyState` description if Samuel wants the how.
+4. **No Launch agent on a thread row.** The Threads tab never had one (the transcript's thread
+   card does); a row shows the thread's agents in its face stack and a live "N running" pill only.
+   No per-thread activity squares exist (the strip is channel-level), so none are drawn.
+5. **The in-transcript fold card is untouched.** `artifact-card.tsx › ArtifactCard` (black header
+   strip, gray run box, Show more) is a separate face from the opened artifact; per the granular
+   rule it was not reskinned here. Its member rows could adopt `artifact-detail.tsx`'s message row
+   next, which would need face facts on `view-model-artifacts.ts › ArtifactMember`.
+6. **The jump is the message's number.** Each opened-artifact message prints its `#n`; with a
+   host jump wired it is a quiet button ("Show #n in the transcript") that lands through the same
+   `sel.jumpToMessage` the Mentions inbox uses, opening the message's thread when it has one. The
+   staging page wires its local equivalent; the landing demo passes none, so numbers are text.
+7. **The artifact list's face is the folder** (`createdBy` / `createdByAgent`), not every author:
+   the list payload carries no member authors. The opened artifact's meta line stacks every author
+   from the members read.

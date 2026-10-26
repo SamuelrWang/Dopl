@@ -5,18 +5,11 @@
 import type { ReactNode } from "react";
 import { Bot, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
-import { INK_PILL_FACE, SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+import { INK_PILL_FACE } from "@/shared/ui/small-action-button";
 import { PAGE_ACTION_BTN, PAGE_ACTION_BTN_LIGHT } from "@/shared/ui/page-action-button";
 import { cn } from "@/shared/lib/utils";
 import { IconButton } from "./icon-button";
 export { IconButton };
-
-/** A card's action ("Open thread", "Open") — {@link SMALL_TEXT_BUTTON} plus centring and disabled ink;
- *  always on the card's last row, right-aligned. */
-export const CARD_BUTTON = cn(
-  SMALL_TEXT_BUTTON,
-  "cursor-pointer justify-center disabled:cursor-default disabled:text-text-muted disabled:hover:bg-transparent"
-);
 
 /** A right-panel tab's own action ("New thread", "Launch agent") at the 36px dark scale. Split controls use
  *  {@link TAB_ACTION_SHELL} + {@link TAB_ACTION_INK} (pinned against the whole by bits-tab-action.test.ts). */
@@ -28,8 +21,10 @@ export const TAB_ACTION_SHELL = cn(INK_PILL_FACE, "h-9");
 /** The label's own type and pad — everything inside the shell. */
 export const TAB_ACTION_INK = "gap-1 px-3.75 text-small";
 
-/** The right panel's card face (the Threads and Artifacts tabs' cards). */
-export const PANEL_CARD = "bento flex flex-col gap-2 px-3 py-2.5";
+/** The white card of hairline-separated rows: the Tasks list, the Threads and Artifacts wells. */
+export const ROW_CARD = "white-card m-0 flex min-w-0 list-none flex-col px-3";
+/** One {@link ROW_CARD} row: a hairline above every row but the first. */
+export const ROW_CARD_ROW = "border-t border-border-default first:border-t-0";
 
 /** The raised square behind a sidebar row's glyph. `pointer-events-none` suppresses `.btn-light`'s hover
  *  lift so the row stays the only hover target. */

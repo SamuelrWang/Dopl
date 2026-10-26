@@ -230,8 +230,7 @@ export function SentToChannelBox({
           deciding about, and an expired draft is the last chance to read what never went. That
           also keeps the collapse control and the Post button apart: `canPost` requires `pending`. */}
       <SentBody text={text} collapsible={!pending} />
-      {/* The action sits on the last row, right-aligned, the corner every card in this tree keeps
-          (`bits.tsx › CARD_BUTTON`). No label, no explainer, no second verb beside it. */}
+      {/* The action sits on the last row, right-aligned. No label, no explainer, no second verb. */}
       {canPost && (
         <div className="flex justify-end px-3 pb-2.5">
           <button

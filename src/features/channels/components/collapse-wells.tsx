@@ -11,6 +11,7 @@ import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { cn } from "@/shared/lib/utils";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
+import { ROW_CARD } from "./bits";
 import { useWells, type WellSpec, type WellStore } from "./well-state";
 
 /** One item, already filed into a well by the caller. */
@@ -51,16 +52,36 @@ const WELL_HEADER =
   "flex min-h-[30px] w-full min-w-0 cursor-pointer items-center justify-between gap-2 pl-1 text-left";
 
 /**
- * `"well"`: the gray box with the header inside it (the Agents and Threads tabs). `"heading"`: no
- * box, a quiet uppercase heading over the rows (/home's channel column, whose rows are cards).
- * Both share the collapse and its bleed geometry. Exported for the loading ghosts' geometry.
+ * `"well"`: the gray box with the header inside it (the Agents tab). `"heading"`: no box, a quiet
+ * uppercase heading over the rows (/home's channel column, whose rows are cards). `"card"`: that
+ * heading over one {@link ROW_CARD} holding the rows (the Threads and Artifacts lists, whose rows
+ * wear `ROW_CARD_ROW`). All share the collapse and its bleed geometry. Exported for the
+ * loading ghosts' geometry.
  */
-export type WellVariant = "well" | "heading";
+export type WellVariant = "well" | "heading" | "card";
 
-export const WELL_FACES: Record<
-  WellVariant,
-  { box: string; header: string; title: string; chevronBox: string; chevron: number; rows: string }
-> = {
+interface WellFace {
+  box: string;
+  header: string;
+  title: string;
+  chevronBox: string;
+  chevron: number;
+  rows: string;
+  /** Wraps a non-empty body, so an empty well draws no card. */
+  card?: string;
+}
+
+const HEADING_FACE: WellFace = {
+  box: "flex min-w-0 flex-col gap-2",
+  header:
+    "flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-1 pt-1.5 text-left text-label font-medium uppercase tracking-[0.02em] text-text-muted",
+  title: "",
+  chevronBox: "flex shrink-0",
+  chevron: 13,
+  rows: "flex min-w-0 flex-col gap-1.5",
+};
+
+export const WELL_FACES: Record<WellVariant, WellFace> = {
   well: {
     box: PANEL_WELL,
     header: WELL_HEADER,
@@ -69,15 +90,8 @@ export const WELL_FACES: Record<
     chevron: NAKED_ICON,
     rows: PANEL_ROWS,
   },
-  heading: {
-    box: "flex min-w-0 flex-col gap-2",
-    header:
-      "flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-1 pt-1.5 text-left text-label font-medium uppercase tracking-[0.02em] text-text-muted",
-    title: "",
-    chevronBox: "flex shrink-0",
-    chevron: 13,
-    rows: "flex min-w-0 flex-col gap-1.5",
-  },
+  heading: HEADING_FACE,
+  card: { ...HEADING_FACE, card: ROW_CARD },
 };
 
 /**
@@ -133,7 +147,7 @@ function Well({
       >
         {/* `pt-2` only with a body: a padded empty column can't collapse below its padding. */}
         <div className={cn(face.rows, "px-3", body !== null && "pt-2")}>
-          {body}
+          {body !== null && face.card ? <div className={face.card}>{body}</div> : body}
         </div>
       </div>
     </section>
