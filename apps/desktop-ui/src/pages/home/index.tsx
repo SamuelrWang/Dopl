@@ -183,6 +183,7 @@ export default function HomePage() {
               shown={shown}
               rows={rows}
               identity={identity.data}
+              viewer={profile.data ?? null}
               jump={jump}
               onChannelDeleted={() => {
                 setSelectedId(null);

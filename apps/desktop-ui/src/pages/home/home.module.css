@@ -17,6 +17,10 @@
 .page[data-face="channels"] .pane {
   background: var(--bg-overlay);
 }
+/* Identities is all white: its sections are flat and the cards' hairlines separate them. */
+.page[data-face="identities"] .pane {
+  background: var(--bg-overlay);
+}
 
 /* The Knowledge tab's card grid. `knowledge-v2/home/base-card.tsx` is reused verbatim and reads
    knowledge-v2's `--kv-*` aliases, which that module binds on a `.shell` this pane does not

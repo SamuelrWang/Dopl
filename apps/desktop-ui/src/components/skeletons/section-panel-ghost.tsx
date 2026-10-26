@@ -15,6 +15,7 @@ export function SectionPanelGhost({
   action,
   caption = false,
   ground = SECTION_PANEL_GROUND,
+  flat = false,
 }: {
   children: ReactNode;
   headingWidth: number;
@@ -24,15 +25,18 @@ export function SectionPanelGhost({
   caption?: boolean;
   /** The loaded `SectionPanel` paints this ground itself, so a ghost without it flashes white. */
   ground?: string;
+  /** `SectionPanel flat`: no well, the heading flush with the content. */
+  flat?: boolean;
 }) {
+  const inset = flat ? undefined : "px-1";
   return (
-    <div data-section-panel className={cn(SECTION_PANEL_SHELL, ground)}>
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
+    <div data-section-panel className={cn(!flat && SECTION_PANEL_SHELL, !flat && ground)}>
+      <div className={cn("flex min-h-[22px] items-center justify-between gap-2 pb-2.5", inset)}>
         <SkeletonLine w={headingWidth} h={10} />
         {action}
       </div>
       {caption && (
-        <div className="px-1 pb-2.5">
+        <div className={cn("pb-2.5", inset)}>
           <SkeletonLine w="58%" h={9} />
         </div>
       )}
@@ -46,7 +50,7 @@ export function IdentityCardsGhost({ count }: { count: number }) {
   return (
     <div className={IDENTITY_GRID}>
       {Array.from({ length: count }).map((_, i) => (
-        <Skeleton key={i} className="h-[92px] rounded-[14px]" />
+        <Skeleton key={i} className="h-[104px] rounded-xl" />
       ))}
     </div>
   );

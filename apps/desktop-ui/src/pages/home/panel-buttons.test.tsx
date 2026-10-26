@@ -34,7 +34,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
-import { LaunchIntoChannelButton } from "./identity-card-launch";
+import { LaunchIntoChannelButton } from "@/features/agent-identities/components/identity-card-actions";
 import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
 
 /** This directory, and the knowledge module up in the web tree. See the note
@@ -191,7 +191,7 @@ describe("the CARD-scale pill survives where the ruling did not reach", () => {
     // ⚠ THE LAYOUT GAP IS THE CALLER'S, exactly as `open-scale-button.tsx`
     // says: the pill is the FACE and the spinner's spacing is not part of it.
     expect(faceOf("Launch")).toEqual(
-      new Set([...open, "gap-1.5", "disabled:opacity-60"])
+      new Set([...open, "w-full", "justify-center", "gap-1.5", "disabled:opacity-60"])
     );
     expect(open.has("btn-light")).toBe(true);
     expect(open.size).toBeGreaterThan(1);

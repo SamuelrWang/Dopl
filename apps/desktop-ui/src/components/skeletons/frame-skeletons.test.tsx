@@ -344,12 +344,13 @@ describe("the /home shapes are /home's own geometry", () => {
   });
 
   it("keeps both faces on the panel hook the record pane repaints through", () => {
-    for (const el of [
-      <HomeKnowledgePanelsSkeleton key="k" />,
-      <HomeIdentityPanelsSkeleton key="a" />,
-    ]) {
+    // Knowledge: two sections. Identities: Shared, Personal and the Activity rail.
+    for (const [el, sections] of [
+      [<HomeKnowledgePanelsSkeleton key="k" />, 2],
+      [<HomeIdentityPanelsSkeleton key="a" />, 3],
+    ] as const) {
       const { container } = render(el);
-      expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(2);
+      expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(sections);
     }
   });
 });

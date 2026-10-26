@@ -76,6 +76,15 @@ async function startNewAgent(
   );
 }
 
+/** A card opens the read-only view; its Edit hands the row to the editor. */
+async function editRow(name: string): Promise<void> {
+  fireEvent.click(await screen.findByText(name));
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  await waitFor(() =>
+    expect(document.querySelector("#agent-identity-name")).not.toBeNull()
+  );
+}
+
 /** The create call, or `undefined` — POST only, either workspace. */
 function createCall() {
   return bridgeCalls(apiRequest).find(
@@ -309,8 +318,7 @@ describe("editing an existing row", () => {
     renderHome();
     await openIdentities();
 
-    fireEvent.click(await screen.findByText("Fundraise analyst"));
-    await screen.findByRole("dialog");
+    await editRow("Fundraise analyst");
     expect(
       document.querySelector<HTMLInputElement>("#agent-identity-name")!.value
     ).toBe("Fundraise analyst");
@@ -341,8 +349,7 @@ describe("editing an existing row", () => {
     // to be phrased against a scope pill that no longer exists, but the claim is
     // the same: which SECTION a row is in decides its workspace, and the two
     // sections are on screen together.
-    fireEvent.click(screen.getByText("Priya's intake bot"));
-    await screen.findByRole("dialog");
+    await editRow("Priya's intake bot");
     // The container mount, so the one-option scope set — proof enough that the
     // Personal section did not decide this.
     expect(screen.getByRole("tab", { name: "Shared in this channel" })).toBeTruthy();

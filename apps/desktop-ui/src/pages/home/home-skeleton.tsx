@@ -59,13 +59,10 @@ function FaceGhost({ face }: { face: HomeTab }) {
   if (face === "overview") return <OverviewFaceGhost />;
   if (face === "channels") return <ChannelRecordGhost />;
   if (face === "ontology") return null;
+  if (face === "identities") return <IdentitiesGhost />;
   return (
     <div className={PANELS}>
-      {face === "knowledge" ? (
-        <PanelsGhost label="Knowledge base" cards={<KbCardsGhost />} />
-      ) : (
-        <PanelsGhost label="Agent Identity" cards={<IdentityCardsGhost count={4} />} />
-      )}
+      <PanelsGhost label="Knowledge base" cards={<KbCardsGhost />} />
     </div>
   );
 }
@@ -100,17 +97,45 @@ export function HomeKnowledgePanelsSkeleton({
   );
 }
 
-/** /home → Identities while the container list is in flight: the identities' own four-column grid
- *  (not the Knowledge grid). */
+/** /home → Identities while the container list is in flight. */
 export function HomeIdentityPanelsSkeleton({
   label = "Loading identities",
 }: {
   label?: string;
 }) {
   return (
-    <SkeletonSurface label={label} className={PANELS}>
-      <PanelsGhost label="Agent Identity" cards={<IdentityCardsGhost count={4} />} />
+    <SkeletonSurface label={label} className="flex min-w-0 flex-1">
+      <IdentitiesGhost />
     </SkeletonSurface>
+  );
+}
+
+/** `identities-home.tsx`'s frame by its own kit classes: the head lines and two flat sections in
+ *  the 3/4 column, the Activity rail in the 1/4. */
+function IdentitiesGhost() {
+  const create = <CreateGhost label="Agent Identity" />;
+  return (
+    <div className="rail-layout">
+      <div className="rail-layout-cols">
+        <div className="rail-layout-main">
+          <div className="flex flex-col gap-3">
+            <SkeletonLine w={220} h={10} />
+            <SkeletonBar h={36} w={260} className="rounded-full" />
+          </div>
+          <SectionPanelGhost flat headingWidth={HEADING_W} action={create}>
+            <IdentityCardsGhost count={3} />
+          </SectionPanelGhost>
+          <SectionPanelGhost flat headingWidth={HEADING_W} action={create}>
+            <IdentityCardsGhost count={3} />
+          </SectionPanelGhost>
+        </div>
+        <div className="rail-layout-aside">
+          <SectionPanelGhost flat headingWidth={72}>
+            <Skeleton className="h-[62px] rounded-xl" />
+          </SectionPanelGhost>
+        </div>
+      </div>
+    </div>
   );
 }
 

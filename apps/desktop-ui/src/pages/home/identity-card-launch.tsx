@@ -1,6 +1,4 @@
 import { useCallback, useState } from "react";
-import { Loader2 } from "lucide-react";
-import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { toast } from "@/shared/ui/toast";
 import {
   canLaunchAgents,
@@ -22,38 +20,9 @@ import { channelTitle } from "./home-rows";
 /**
  * The personal card's one-click Launch: the identity as-is into the selected channel, no form.
  * The payload is `use-launch-controls.ts › buildLaunchPayload` with only the identity id, so it is
- * byte-for-byte the composer's one-click launch.
+ * byte-for-byte the composer's one-click launch. The button is
+ * `agent-identities/components/identity-card-actions.tsx › LaunchIntoChannelButton`.
  */
-
-/** The card control. A `<button>` inside the card's face, never over it
- *  (`identity-section.tsx › IdentityCard`). */
-export function LaunchIntoChannelButton({
-  onClick,
-  busy,
-  disabled,
-}: {
-  onClick: () => void;
-  /** The launch in flight is on THIS row. */
-  busy: boolean;
-  disabled: boolean;
-}) {
-  return (
-    <OpenScaleButton
-      onClick={onClick}
-      disabled={disabled || busy}
-      className="gap-1.5 disabled:opacity-60"
-    >
-      {busy && (
-        <Loader2
-          size={OPEN_SCALE_ICON}
-          aria-hidden="true"
-          className="animate-spin"
-        />
-      )}
-      Launch
-    </OpenScaleButton>
-  );
-}
 
 /** Which row is launching, and the one line a refusal gets. */
 export interface CardLaunch {

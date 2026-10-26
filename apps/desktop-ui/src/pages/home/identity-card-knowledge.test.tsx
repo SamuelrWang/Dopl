@@ -28,7 +28,7 @@ vi.mock("@/features/knowledge/client/hooks", async () => ({
     .useKnowledgeTree,
 }));
 
-import { IdentityKnowledgeDialog } from "./identity-card-knowledge";
+import { HomeKnowledgeDialog } from "./identity-card-knowledge";
 
 const IDENTITY: AgentIdentity = {
   id: "tpl-1",
@@ -56,7 +56,7 @@ const ready = (list: Array<{ id: string; name: string }>) => ({
 /** ⚠ `await`ed because the dialog shell mounts a FRAME after it opens. */
 async function open() {
   const onClose = vi.fn();
-  render(<IdentityKnowledgeDialog identity={IDENTITY} workspaceId="ws-home" onClose={onClose} />);
+  render(<HomeKnowledgeDialog identity={IDENTITY} workspaceId="ws-home" onClose={onClose} />);
   await screen.findByRole("dialog");
   return { onClose };
 }

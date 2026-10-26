@@ -154,8 +154,8 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     // 2026-09-13: the grid is an EXPORTED constant now (`IDENTITY_GRID`), so the
     // skeletons import it instead of copying the string; the pin is that both
     // read the import and that the constant still spells a real grid.
-    // 🔒 FOUR PER ROW, FIXED (Samuel, 2026-09-13) — never auto-fill.
-    expect(IDENTITY_GRID).toBe("grid grid-cols-4 gap-2.5");
+    // 🔒 FIXED, never auto-fill: three across since the Activity rail took a quarter of /home.
+    expect(IDENTITY_GRID).toBe("grid grid-cols-3 gap-2.5");
     expect(file("./section-panel-ghost.tsx")).toContain("className={IDENTITY_GRID}");
     for (const skeleton of [HOME_SKELETON, AGENTS_SKELETON]) {
       expect(skeleton).toContain("<IdentityCardsGhost count={");

@@ -9,6 +9,7 @@ import { HomeOntologyPanels } from "./ontology-panels";
 import { HomeOverviewPanels } from "./overview-panels";
 import type { ActivityJump } from "./use-activity-jump";
 import type { HomeRow } from "./home-rows";
+import type { HomeViewer } from "./home-settings-control";
 import {
   IDENTITIES_PANE,
   EMPTY_PANE,
@@ -39,6 +40,8 @@ export interface HomePaneProps {
   /** Every row the operator has. */
   rows: HomeRow[];
   identity: BootPayload;
+  /** The operator's own profile (photo, name); `null` when the read failed. */
+  viewer: HomeViewer | null;
   jump: ActivityJump;
   /** The selected channel was deleted. */
   onChannelDeleted: () => void;
@@ -53,6 +56,7 @@ export function HomePane({
   shown,
   rows,
   identity,
+  viewer,
   jump,
   onChannelDeleted,
 }: HomePaneProps) {
@@ -89,6 +93,7 @@ export function HomePane({
         // `POST /api/boot`'s home workspace; null until onboarded.
         homeWorkspaceId={identity.workspace?.id ?? null}
         currentUserId={identity.userId}
+        viewer={viewer}
       />
     );
   }
