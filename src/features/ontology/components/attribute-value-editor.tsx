@@ -29,7 +29,7 @@ export const PICK_TRIGGER = cn(
   "inline-flex shrink-0 items-center gap-0.5 text-text-muted hover:text-text-primary"
 );
 
-export interface ChipItem {
+interface ChipItem {
   id: string;
   name: string;
 }

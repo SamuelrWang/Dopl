@@ -104,7 +104,7 @@ staging stand-ins never enter the product.
 |---|---|
 | `ontology-staging/ontology/components/*` vs `src/features/ontology/components/*` | product carries the look; staging copies deleted |
 | `field-list.tsx`, `object-type-actions.tsx`, `attribute-value-editor.tsx` (staging only) | one copy each, in the product |
-| `ontology-staging/home/{ontology-panels,ontology-share,home-panes}.tsx` vs the desktop hosts (data-only diffs) | the host moves DOWN to `src/features/ontology/components/home/` and both trees mount it (INVARIANTS §1 "A /home face that two trees render is declared in `src/`"); the SPA derivation (`useHomeChannels`) stays in the SPA and is passed in |
-| `ontology-staging/home/page-states.tsx`, `knowledge-panel-cards.tsx › EmptyLine` copies | `PageError` / `EmptyLine` move to `src/shared/ui/` with SPA re-exports |
+| `ontology-staging/home/{ontology-panels,ontology-share,home-panes}.tsx` vs the desktop hosts (data-only diffs) | the host moves DOWN to `src/features/ontology/components/{home-ontology-panels,ontology-share}.tsx` and both trees mount it (INVARIANTS §1 "A /home face that two trees render is declared in `src/`"); the SPA derivation (`useHomeChannels`) stays in the SPA and is passed in |
+| `ontology-staging/home/page-states.tsx`, `knowledge-panel-cards.tsx › EmptyLine` copies | `PageError` moves to `src/shared/ui/page-error.tsx` (the SPA's `page-states.tsx` re-exports it), `EmptyLine` into `src/shared/ui/empty-state.tsx` |
 | staging stand-in hooks (`use-ontology`, `use-ontologies`, `use-ontology-shares`, `use-workspace-resources`, revisions hooks, billing hooks, `use-home-channels`) | replaced by one fake server behind the SPA bridge's `apiRequest` seam (`shared/lib/spa-bridge.ts`), which every product hook already calls through |
 | marketing `/playground` `ontology-pane.tsx` (hand clone of the old board) | out of scope (public marketing surface, not a product face); logged |

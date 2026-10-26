@@ -13,7 +13,7 @@ export interface StagedRevision {
   ontologyId: string;
 }
 
-export const OPERATOR_ACTOR: RevisionActor = {
+const OPERATOR_ACTOR: RevisionActor = {
   userId: STAGING_VIEWER.userId,
   kind: "user",
   agentSessionId: null,
@@ -21,7 +21,7 @@ export const OPERATOR_ACTOR: RevisionActor = {
   avatarUrl: STAGING_VIEWER.avatarUrl,
 };
 
-export const AGENT_ACTOR: RevisionActor = {
+const AGENT_ACTOR: RevisionActor = {
   userId: STAGING_VIEWER.userId,
   kind: "agent",
   agentSessionId: "sess-pipeline-scout",

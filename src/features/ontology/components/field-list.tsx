@@ -20,7 +20,7 @@ interface FieldRow {
 
 /** An object's attributes, then its relationships as `ref` values: one shape for "points at
  *  something in this graph". */
-export function objectFieldRows(object: OntologyObject): FieldRow[] {
+function objectFieldRows(object: OntologyObject): FieldRow[] {
   return [
     ...object.attributes.map((attr) => ({
       key: `a:${attr.key}`,

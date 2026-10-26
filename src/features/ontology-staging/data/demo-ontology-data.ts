@@ -348,7 +348,7 @@ const ontology = (
   sharing: { agentsMayEdit: boolean; sharedChannelCount: number }
 ): Ontology => ({ id, slug, name, purpose, columnIds, layout: {}, ...sharing });
 
-export const DEMO_ONTOLOGIES: Ontology[] = [
+const DEMO_ONTOLOGIES: Ontology[] = [
   ontology(
     "ont-sales",
     "sales-pipeline",
