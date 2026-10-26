@@ -7,6 +7,7 @@
  * than drifting silently in three.
  */
 
+import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { EMPTY_INFO_CARD } from "../info-card";
 import type {
   Channel,
@@ -144,6 +145,27 @@ export function thread(over: Partial<ChannelThread> = {}): ChannelThread {
     closedAt: null,
     outcomeSummary: null,
     lastActivityAt: new Date().toISOString(),
+    ...over,
+  };
+}
+
+const HOUR = 3_600_000;
+
+/** One own-agent row of this machine's feed, measured. */
+export function sessionSummary(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
+  return {
+    sessionId: "s-1",
+    channelId: CHANNEL_ID,
+    threadId: "t-1",
+    name: "flint",
+    state: "working",
+    channelName: "Website",
+    threadTitle: "UI-kit design",
+    contextUsed: 84_000,
+    contextWindow: 200_000,
+    tokensSpent: 1_200_000,
+    startedAt: Date.now() - 2 * HOUR,
+    lastActivityAt: Date.now() - 60_000,
     ...over,
   };
 }

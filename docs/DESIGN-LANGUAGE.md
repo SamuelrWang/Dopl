@@ -77,7 +77,7 @@ Sentence case everywhere. Titles are short noun/verb phrases.
 | Component | Recipe | Reference |
 |---|---|---|
 | **Message card** (received / posted) | White, 12px radius, **1.5px border in the sender's agent colour all the way round** (black for a person, `--border-strong` fallback), soft shadow. Header row: identity face + "Received from @x · time" / "Posted to <thread> · time", grey addressee pills. Body = normal message rendering. No filled colour banners. | `channels/components/agent-stream-card.tsx` (product) |
-| **Agent card** | White, hairline, 12px, soft shadow. Header: PairedAvatar + name (600) + **status pill** (grey `--bg-inset`, dot + word, green dot when running). "↳ thread · identity" muted. **Context** label + "38k / 200k" right-aligned over a **3px meter** in the agent colour. Footer: muted "tokens spent", quiet icon, outlined pill button. | `banner-demo/demo-agent-card.tsx`, `.lp-demo-ac*`; `ontology-agent-rail.tsx` |
+| **Agent card** | White card (`.white-card`), 12px. Header: `IdentityFace` d=30 (owner photo, agent-colour ring, runtime badge) + name (600) + **status pill** (`StatusPill`, green dot when running). "↳ thread · identity · model · permission" muted. **Context** label + "38k / 200k" right-aligned over a **3px meter** in the agent colour (`ThinMeter`). Footer: muted "tokens spent", quiet delete icon, outlined Open / Viewing pill. | `channels/components/agents-tab-cards.tsx`; `ontology-agent-rail.tsx` |
 | **Thread card** | White card, hairline, 14px, soft shadow. Header: small raised mark tile + the thread's name at 15/500; the opening ask as a muted 2-line description; addressee pills; a well listing the agents in the thread (identity face, name, whose agent, status pill; the viewer's own rows open their view; "N running" on the count line; three rows then it scrolls); a hairline-fenced footer with "Opened by…", a quiet Launch agent and an ink Open thread pill. | `channels/components/thread-card-row.tsx`, `thread-card-agents.ts` |
 | **Info well** (agent detail) | Grey well, 4 columns: Context (value + 3px meter), Permission (**dropdown face**: "Auto" + chevron, not a segmented Ask/Auto/Full), Runtime (logo + name), Parent (face + name). | `ontology-command.tsx`, `.lp-ont-info`, `.lp-ont-select` |
 | **Breadcrumb** | Sits ABOVE the agent box, not inside: tiny faces + names, `›` separators in `#c9c9c9`, current item ink 500. | `.lp-ont-crumbs` |
@@ -118,10 +118,10 @@ list device types as if they were the only ones. Headings two balanced lines max
 
 - **Granular, not big-bang.** Two whole-app reskins were rejected. Change one named
   component, let Samuel review live, then the next.
-- **Prototype demo-only first.** Shared product components are swapped inside the
-  landing's hero demo via `banner-demo/demo-swap.ts` (product element hidden,
-  redesigned face placed in the same spot) so the real app is untouched until he
-  approves. Then port properly: tokens + kit in the product, both channel UIs
-  (web `src/features/channels` and the desktop SPA) together.
+- **Prototype demo-only first.** Shared product components are re-faced inside the
+  landing's hero demo only (product element hidden, redesigned face placed in the same
+  spot) so the real app is untouched until he approves. Then port properly: tokens + kit
+  in the product, both channel UIs (web `src/features/channels` and the desktop SPA)
+  together, and delete the demo face.
 - Match a real product screen when designing a mockup; simplify it, don't invent.
 - No screenshots as sign-off; Samuel reviews live.

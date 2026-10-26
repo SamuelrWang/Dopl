@@ -107,7 +107,7 @@ export function AgentPill({
    * 2026-09-15: *"have the black pill be in the color of that agent"*).
    *
    * ⚠ **`null` IS THE BLACK ONE, AND IT IS NOT A FALLBACK FOR A FAILURE.** The
-   * Agents-tab ended pill has no agent colour to wear and must not acquire one —
+   * ended pill has no agent colour to wear and must not acquire one —
    * an ENDED agent is deliberately uncoloured everywhere (`agent-color-dot.tsx`
    * states that rule) — and a live agent in a room whose sixteen keys are all out
    * runs uncoloured too. Both are ordinary, both get the CTA face.
@@ -154,7 +154,7 @@ export function AgentEndedPill({
    * should be the badge."*).
    *
    * ⚠ **THE DEFAULT IS THE ONLY THING THE LIST SURFACES MAY SAY, AND IT IS WHY THIS IS A PROP
-   * RATHER THAN A SECOND PILL.** An Agents-tab card and the slide-out header know only
+   * RATHER THAN A SECOND PILL.** The slide-out header knows only
    * `state === "ended"`; the agent WINDOW additionally has main's own sentence for WHICH end it
    * was (`main/session-effects.js › endedStatusText` — "Ended by you", "Ended after going
    * inactive", "Ended because a person joined this channel", "Ended after being left parked").

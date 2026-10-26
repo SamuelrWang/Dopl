@@ -35,7 +35,6 @@ describe("/channels staging mounts the product faces", () => {
   it("draws the decision as the product card, answerable in memory", async () => {
     await mountPage();
     const card = document.querySelector("[data-display-id]") as HTMLElement;
-    expect(card.closest("[data-lp-swapped]")).toBeNull();
     expect(card.textContent).toContain("Needs your decision");
     expect(card.textContent).toMatch(/Ship the teardown fix behind a flag/);
     expect(card.querySelectorAll("button[data-option-index]").length).toBe(3);
@@ -44,7 +43,7 @@ describe("/channels staging mounts the product faces", () => {
 
   it("draws thread cards with their agents, and agent badges without the word agent", async () => {
     await mountPage();
-    expect(document.querySelector(".uis-tc, .uis-dc, .uis-ap, [data-lp-swapped] [data-attribution-pill]")).toBeNull();
+    expect(document.querySelector(".uis-tc, .uis-dc, .uis-ap")).toBeNull();
     expect(document.body.textContent).toMatch(/agents? in this thread/);
     const badge = document.querySelector("[data-attribution-pill][data-agent-id]") as HTMLElement;
     expect(badge).toBeTruthy();

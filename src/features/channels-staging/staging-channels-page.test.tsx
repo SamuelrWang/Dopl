@@ -15,9 +15,7 @@ afterEach(cleanup);
 
 const text = () => document.body.textContent ?? "";
 const row = (name: string) => screen.getByRole("button", { name });
-/** Buttons the reader sees: the product elements the demo re-faces are hidden (`demo-swap.ts`). */
-const visible = (name: string) =>
-  screen.getAllByRole("button", { name }).filter((b) => !b.closest("[data-lp-swapped]"));
+const visible = (name: string) => screen.getAllByRole("button", { name });
 const agentView = () => document.querySelector('aside[aria-label="Agent view"]');
 
 describe("/channels staging", () => {

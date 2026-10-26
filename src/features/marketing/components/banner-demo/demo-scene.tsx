@@ -6,7 +6,7 @@
  * can mount one step without starting the clock, resize fit or scripted cursor.
  */
 
-import { useMemo, useRef, useState, type RefObject } from "react";
+import { useMemo, useState, type RefObject } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MutationGate } from "@/shared/hooks/use-api-mutation";
 import type { AgentLaunchControls } from "@/features/channels/components/use-agents-panel";
@@ -61,7 +61,6 @@ import { DemoAccountRail } from "./demo-home-chrome";
 import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
 import { identityFace } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
-import { DemoAgentCards, DemoAgentStateRows } from "./demo-agent-card";
 
 /** The composer's writes never fire (the slot is inert), so the gate is a stub. */
 const DEMO_GATE: MutationGate = { begin() {}, end() {} };
@@ -115,9 +114,6 @@ export function DemoScene({
   typedWords?: number;
 }) {
   const [qc] = useState(() => new QueryClient());
-  // Tests mount the scene without the banner's ref; the thread-card swap still needs a pane.
-  const ownPane = useRef<HTMLDivElement>(null);
-  const pane = paneRef ?? ownPane;
   // The typed line is cut in the DATA, so the real transcript renders it as is.
   const messages = useMemo(() => {
     const all = messagesAt(step);
@@ -237,7 +233,7 @@ export function DemoScene({
                 {/* The record pane: a line-bounded card, not an elevation, as on /home.
                     `data-frame-skin` applies the kit's account palette; the pane is
                     the agent view's containing block. */}
-                <div className="lp-demo-record" data-frame-skin ref={pane}>
+                <div className="lp-demo-record" data-frame-skin ref={paneRef}>
                   <ChannelsMessagePane
                     key={`pane-${run}`}
                     channelId={CHANNEL_ID}
@@ -315,19 +311,10 @@ export function DemoScene({
                       }}
                     />
                   </div>
-                  <DemoAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
-                  <DemoAgentCards
-                    paneRef={pane}
-                    sessions={sessions}
-                    peers={peers}
-                    index={index}
-                    openAgent={agentOpen ? agentKey(MY_SESSION) : null}
-                    onOpenAgent={onOpenAgent}
-                  />
                   <DemoAgentView
                     open={agentOpen}
                     agent={MY_SESSION}
-                    owner={identityFace(MY_SESSION.agentId)}
+                    ownerPhoto={identityFace(MY_SESSION.agentId).photo}
                     entries={narration}
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}

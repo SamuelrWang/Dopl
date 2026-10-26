@@ -140,13 +140,13 @@ export function UsageMeter({
 export function ThinMeter({
   used,
   limit,
-  fill,
+  color,
   className,
 }: {
   used: number;
   limit: number;
-  /** A CSS colour for the bar (an agent's `var(--agent-color-NN)`); absent is ink. */
-  fill?: string;
+  /** A CSS colour for the fill (an agent's `agentColorVar`); ink without one. */
+  color?: string | null;
   className?: string;
 }) {
   return (
@@ -156,7 +156,7 @@ export function ThinMeter({
     >
       <span
         className="absolute inset-y-0 left-0 rounded-full bg-text-primary transition-[width] duration-200"
-        style={{ width: `${percentOf(used, limit)}%`, background: fill }}
+        style={{ width: `${percentOf(used, limit)}%`, background: color ?? undefined }}
       />
     </span>
   );

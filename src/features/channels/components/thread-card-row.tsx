@@ -13,10 +13,10 @@
 
 import { ChevronRight, MessagesSquare, Users } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { IdentityFace } from "@/shared/ui/identity-face";
 import { PILL_BUTTON } from "@/shared/ui/small-action-button";
 import { cn } from "@/shared/lib/utils";
 import { AgentStatusPill } from "./agent-bits";
+import { AgentFace } from "./agent-face";
 import { AddresseePill } from "./bits";
 import { AuthoredRow } from "./authored-row";
 import { TextOnlyLinks } from "./message-markdown";
@@ -46,7 +46,13 @@ function AgentRow({
 }) {
   const body = (
     <>
-      <IdentityFace size={26} photo={agent.photo} name={agent.name} ring={agent.color ?? "neutral"} />
+      <AgentFace
+        size={26}
+        photo={agent.photo}
+        name={agent.name}
+        color={agent.color}
+        runtime={agent.runtime}
+      />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-small font-medium text-text-primary">{agent.name}</span>
         <span className="truncate text-micro text-text-muted">{agent.owner}</span>

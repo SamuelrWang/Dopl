@@ -5,9 +5,8 @@
 every post, thread, session and 1:1 turn, no typing, no auto-play), inside the UI-staging window
 (`src/features/ui-staging/staging-frame.tsx`), and makes it clickable on in-memory data.
 
-The demo itself mounts the PRODUCT's channel components (`src/features/channels/components/*`)
-and re-faces a few of them by portal (`banner-demo/demo-swap.ts`). Staging does the same, so
-there are three layers to port to:
+The demo itself mounts the PRODUCT's channel components (`src/features/channels/components/*`),
+with no face swaps left. Staging does the same, so there are three layers to port to:
 
 1. **Product components** (`src/features/channels/components/*`) — imported, not copied. A
    change there changes the web app AND the desktop (it imports them by `@/…`).
@@ -21,9 +20,8 @@ there are three layers to port to:
 |---|---|---|
 | `home/channel-scene.tsx` | `demo-scene.tsx › DemoScene` (record-pane half) | `pages/home/relationship-record.tsx` (record pane: message pane + info slide + agent view), mounting `channels/components/message-pane.tsx`, `info-panel.tsx` |
 | `home/channel-switcher.tsx` → **moved 2026-10-22** to `ui-staging/staging-channel-rail.tsx` (this file is now a thin wrapper that passes this page's `onSelect`); port from there | `demo-home-faces.tsx › DemoChannelSwitcher` | `pages/home/channel-wells.ts` + `relationship-list.tsx` (wells + rows), `shared/ui/home-channel-row.tsx` |
-| `home/settings-tab.tsx` + `home/settings-dialogs.tsx` **(new 2026-10-24)** | — | `channels/components/settings-slot.tsx` → `settings-tab.tsx` (+ `settings-agent.tsx`, `settings-agent-launch-rows.tsx`, `settings-agent-rows.tsx`, `settings-desktop-rows.tsx`, `settings-channel-agents.tsx`) for channel view; `thread-settings-tab.tsx` for thread view; dialogs from `channel-manage.tsx` / `thread-manage.tsx` |
+| `home/settings-tab.tsx` (stub HOST, not a copy) | — | Mounts the product's `channels/components/settings-tab.tsx › ChannelsSettingsTab`, `settings-agent.tsx › ChannelAgentSettingsView`, `settings-channel-agents.tsx` and `thread-settings-tab.tsx` over local state, standing in only for the write hosts (`channel-manage.tsx`, `thread-manage.tsx`, `settings-agent-container.tsx`); the launch record is `settings-staging/stubs/use-launch-selection.ts` |
 | `home/task-list.tsx` + `home/tasks-info-panel.tsx` + `home/tasks-popover.tsx` + (round 4) `home/task-panel.tsx`, `home/task-detail.tsx`, `home/task-subtasks.tsx`, `home/task-notes.tsx` **(new 2026-10-26, channel tasks)** | — (row recipe from the landing `marketing/components/ontology-windows.tsx › TasksWindow`) | NO product counterpart yet. BOTH ship together (round 2, 2026-10-26). Tasks tab (full view) → a `tasks` key in `channels/components/info-panel-tabs.ts › TABS` + `tabCount` + a body branch in `info-panel.tsx`, plus a nonce prop that switches to it. Quick view → a right-end slot on `channels/components/composer-recipients.tsx`'s row (the `working` line above the composer card) for the pill, and a pop-up anchored to `composer.tsx`'s wrapper, right edge on the card's. Both need a tasks read/write and an MCP tool for agents to open/assign/resolve tasks |
-| `home/agent-card.tsx` | `demo-agent-card.tsx` | `channels/components/agents-tab-cards.tsx`, `thread-info-tab.tsx › AgentStateRow` |
 
 **Desktop dialogs live in `popups-staging/` (deduped 2026-10-22).** "Add person" (the Info tab),
 "New channel" (the frame's top-bar pill, via `ui-staging/staging-popups-provider.tsx`) and the link
@@ -34,7 +32,7 @@ changed for the store) are deleted. The page sees their writes through
 (subscribed in `staging-channels-page.tsx`), so a new channel still lands in the column and a
 revoked link row still leaves it. Port those dialogs from `popups-staging/PORTING.md`.
 
-Imported from the demo as-is (no copy): `demo-swap.ts`, `demo-agent-view.tsx` (the agent view,
+Imported from the demo as-is (no copy): `demo-agent-view.tsx` (the agent view,
 with this page's in-memory 1:1 send), `demo-data.ts`, `demo-transcript.ts`, `demo-narration.ts`,
 `demo-info-data.ts`, `demo-identities.ts`, `demo-home-rows.ts`, `demo-steps.ts`, and
 `marketing.css` (via the staging frame).
@@ -46,6 +44,15 @@ activity squares are the product's own faces now (`channels/components/thread-ca
 `agent-activity.tsx`, `thread-activity.tsx`). The staged copies, their face swaps and their CSS are
 deleted; the scene mounts the product components directly.
 
+**Ported to the product (2026-10-26, channel page slice 2, the info column)**: the Agents-tab
+cards, the thread Info tab's agent rows and both Settings faces are the product's own faces now
+(`channels/components/agents-tab-cards.tsx`, `thread-info-tab.tsx`, `settings-agent-rows.tsx ›
+SettingsSection`, `select-menu.tsx`'s `bare` face). `home/agent-card.tsx`, `home/settings-dialogs.tsx`,
+the demo's `demo-agent-card.tsx` swap and their `.uis-st*` / `.lp-demo-ac*` / `.lp-demo-asr*` CSS
+are deleted; the scene mounts the product cards and rows, and the settings tab mounts the product
+views with /home's capabilities (no Add members, no Delete channel). Faces carry the runtime badge
+off the sessions' own `runtimeId` / `runtime` (`data/staging-builders.ts`).
+
 **Ported to the product (2026-10-26, channel page slice 3)**: the agent view's header, its stats
 well (the context well's grey), the received / posted cards and the 1:1 composer pill are the
 product's own faces (`channels/components/agent-panel-header.tsx`, `agent-stats.tsx`,
@@ -53,41 +60,10 @@ product's own faces (`channels/components/agent-panel-header.tsx`, `agent-stats.
 deleted; the scene and `/popups`' agent window mount `demo-agent-view.tsx › DemoAgentView`.
 
 Edits made in the copies (marked `STAGING` in comments):
-- `agent-card.tsx`: "Open" opens that card's agent (the demo had one agent to open).
-- `agent-card.tsx`: faces via `data/staging-agents.ts`.
 - **Surfaces (Samuel, 2026-10-24, "perfect", keep)**: on the channels page the record pane is
   #ffffff and the panel under the top bar / channel column takes the pane's old `--home-card`
   (`ui-staging/staging.css › .uis-ch-pane`). Port target: desktop `pages/home` record pane +
   `.page-float` panel surfaces.
-- **Settings tab (Samuel, 2026-10-24: "the settings tab is blank. We need to mirror it in there.
-  Also, have the agent mirror it with the new UI design.")**: it was blank because the scene
-  passed no `settings` to `ChannelsInfoPanel`; the product's `ChannelsSettingsSlot` needs live
-  mutations, the desktop bridge and roster reads, so `home/settings-tab.tsx` is a face over local
-  state in the same slot. Mirrored row for row: channel view = Agent Settings (Runtime,
-  Permissions + Details, Messaging, Tool access + shared-channel caption, Use my tools on shared
-  channels, Working folder + Use default, Launch agents, Direct agents, Responder) then Channel
-  (Add members, Make public/private, Delete channel, Leave channel); thread view = Thread (Mode,
-  Delete thread). The product gates are kept, so the staged viewer (owner of every staged
-  channel) has no Leave row, as in the product. Options, labels and help copy are the product's
-  own constants, imported; Details readings are the desktop adapters' real tables, copied.
-  Interactions: dropdowns and Use default change local state; Make public confirms
-  (`GoPublicDialog`) then flips local visibility; Delete channel / Leave / Delete thread open the
-  product's `ConfirmDialog` copy and do nothing; Add members is a STAND-IN dialog (the product
-  `InviteDialog` writes memberships over the API) listing members + two staged people.
-  DESIGN DELTAS vs product (port as kit recipes, `ui-staging/staging.css › .uis-st*`):
-  plain text section titles, flush with the cards (2026-10-24: Samuel removed the grey chip and
-  asked for "Agent Settings", capital S, as the product already spells it); each
-  section is ONE white card (hairline, 12px, soft shadow) with a hairline between rows, instead of
-  bare rows on the panel; dropdowns are value + chevron (`identities-staging/page/select-menu.tsx
-  › bare`) instead of `SelectMenu variant="text"`; the Details well is `--home-card` (the grey
-  Samuel picked for the context well) instead of `bg-bg-inset` + border; "Use default" is the
-  outlined pill button; "Working Folder" becomes sentence case. Responder sits
-  as the last row of the Agent Settings card (in the product it is a separate slot with no
-  heading, directly under that block). The product's per-row help eye is kept.
-- **Avatar sizes (ask 6d)**: agent card head `d=30`; thread-info agent rows `d=26`. The ring and
-  white frame cost a fixed 4px at ANY size
-  (`shared/ui/identity-face.tsx › IDENTITY_RING_PX`), so d=22 left a 14px photo and a ~7px runtime logo — that
-  fixed cost is why small `d` values read as dots, and it is the thing to remember on port.
 - **Channel tasks: tab + quick view, ONE state (Samuel, 2026-10-26; round 1 built two variants
   behind `?tasks=`, round 2: "I actually think it might make sense to have both ... just have
   one state with both of them")**. Both always render:

@@ -51,7 +51,7 @@ export function AgentStats({
           {window > 0 ? `${formatTokens(used)} / ${formatTokens(window)}` : formatTokens(used)}
         </span>
       </p>
-      <ThinMeter used={used} limit={window} fill={color ? agentColorVar(color) : undefined} />
+      <ThinMeter used={used} limit={window} color={color ? agentColorVar(color) : null} />
       {line.length > 0 && (
         <p className="mt-2 text-label text-text-muted">{line.join(" · ")}</p>
       )}

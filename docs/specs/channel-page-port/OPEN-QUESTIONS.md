@@ -230,15 +230,75 @@ Workers append a `## <slice>` section per question: the question, what was chose
 11. **`channel-addressing-rule.test.ts`** banned a `status` param (the retired agent-status op). It
     now asserts `status` is only the task status enum.
 
+## Phase 3.2 info column (branch `ui/port-info-column`)
+
+1. **Runtime badge assets per host.** There was no product runtime → logo map, and the packaged SPA
+   is a `file://` document with no `/img/` root. Chose: one table in `src/shared/ui/runtime-logo.tsx`
+   (`claude`, `codex` → the ChatGPT mark, `grok`, `muse`; anything else, e.g. `cursor`, draws no
+   badge) and a per-host resolver: the web default serves `public/img/onboarding/`, the SPA provides
+   `apps/desktop-ui/src/lib/runtime-logos.ts › spaRuntimeLogo` (bundled `?inline` SVGs) at
+   `app.tsx`. Own agents read `runtimeId`, falling back to their server row's `runtime`; `''` (the
+   default adapter) names no runtime here, so it draws no badge until the push carries one (S5).
+   The thread card's agent rows (slice 1, OQ 3.1 #2) now wear the badge too, through the same
+   `channels/components/agent-face.tsx › AgentFace`.
+2. **Grok's badge is the onboarding `grok-logo.svg` everywhere**, including the landing demo, whose
+   own faces used `/img/logos/grok-bot.png`. The demo and staging face tables now read the shared
+   table (`webRuntimeLogo`), so the demo's swapped boxes and the product cards cannot disagree.
+3. **One status pill: `StatusPill` (Phase 1 geometry, regular weight).** The Agents-tab cards, the
+   thread Info rows, the thread card rows and both agent-view face swaps wear it through
+   `agent-bits.tsx › AgentStatusPill` (`working` → green dot, else neutral). Deltas vs the demo's
+   `.lp-demo-ac-status` (deleted): weight 400 not 500, and `waiting` no longer has a darker dot than
+   `idle`. The thread Info tab's "Opened by" / "Addressed to" side pill is the same pill, dotless.
+4. **An ended own agent's card says "Ended" on that status pill**, not the black `AgentEndedPill`
+   (staging draws it so). The slide-out header and the agent window keep the black pill (slice 3).
+5. **Settings values are `bare` (caption, medium weight), against the 2026-09-10 "unbold the
+   values" and 2026-09-13 "gray highlight on hover" rulings.** Staging (the newer spec) draws the
+   value + muted chevron with an ink-only hover; names stay regular weight. `text` keeps the grey
+   hover for its other callers (ontology editors, Usage filter). The face is pinned by
+   `settings-agent-face.test.tsx` and `shared/ui/select-menu-face.test.tsx`.
+6. **The bleed of the shared rows.** `AgentLaunchPostureRows` and `SettingRow` are also the profile
+   popup's Configuration pane and the notifications panel: those rows now wear the `bare` values,
+   the 40px row with its `px-2`, and the full-width `--border-default` hairline. Accepted under R12
+   (one implementation); the Configuration pane's own "Launch agents" row moved to `bare` too so the
+   pane reads as one face.
+7. **`SettingRow`'s `continues` / `SettingDivider`'s `always` are deleted**: Responder is the last row
+   of the Agent Settings card now, so its leading line shows by the ordinary rule.
+8. **`hasActions` no longer counts `canManage` alone.** A manager of a DM with fixed membership had
+   a "Channel" heading over no rows; now that card is absent and the empty state decides.
+9. **The "where" line indent is 39px** (the 30px face plus its 9px gap, under the name); staging's
+   33px was left from the 24px avatar it had before ask 6d.
+10. **Staging settings mounts the product views, not `ChannelsSettingsSlot`.** The slot's hosts
+    (`channel-manage.tsx`, `thread-manage.tsx`, the settings container) hold live writes and the
+    bridge, so `channels-staging/home/settings-tab.tsx` is a stub HOST over local state with
+    `settings-staging`'s launch-record stub and /home's `memberManagement: false`. Consequence:
+    staging no longer shows Add members / Delete channel (R4), and its stand-in invite dialog is
+    deleted. The thread delete confirm's copy is restated there (the product's lives inside
+    `thread-manage.tsx`'s host).
+11. **InviteDialog is not restyled.** It is unreachable on /home (`memberManagement: false`), so a
+    restyle would be workspace-only work (R12). The channel/thread dialogs are already the product's
+    `ConfirmDialog` / `GoPublicDialog`, which staging used verbatim.
+12. **Info tab / roster unchanged.** Staging mounts the product `ChannelsInfoPanel` for it, so there
+    was no visual delta to port; every listed keep (headerEdit, infoCardEdit, infoExtras, launch,
+    mention marks, label swap, signal resets) is untouched.
+13. **`ThreadInfoTab` takes the surface's `index` instead of `currentUserId`**, so its agent rows are
+    the thread card's own list (`thread-card-agents.ts › threadCardAgents`: faces, colours, runtime,
+    "Yours" / "Diana's agent"). Peers now print their display name, not the instance id.
+14. **Not done here (left for their slices):** `--channel-divider-w` and `info-resize-handle.tsx ›
+    DIVIDER_WIDTH_VAR` (OQ Phase 2 #7) still have no declarer; retiring them reaches
+    `split-resize-handle.tsx`, its suites and an INVARIANTS paragraph. `PANEL_CARD` / `CARD_BUTTON`
+    remain for the Threads and Artifacts tabs. The stale pointer in `use-info-resize.ts` (OQ Phase 2
+    #8) is fixed.
+15. **Pre-existing, unchanged:** `src/shared/ui/clickable-cursor.test.ts` red on
+    `ontology-staging/.../kanban-column-header.tsx`; `check-doc-refs` asks for
+    `docs/ENGINEERING.md::task-panel.tsx` to leave its baseline.
 ## Phase 3.3 agent view (branch `ui/port-agent-view`)
 
-1. **No runtime badge in the product.** `AgentPanelHeader` takes `face: IdentityFacts` and draws the
-   badge only when the host hands a `runtimeLogo`. The product has no runtime → logo source that
-   loads on both hosts (the SPA's logos are `#/assets/*.svg?inline` imports, the web's are
-   `/img/onboarding/*` URLs the SPA does not serve), so `ChannelsAgentPanel` passes none; the landing
-   demo, /channels and /popups pass their scripted logos. Same call as Phase 3.1 item 2. A shared
-   logo map (data URIs, or a per-host provider) would light it up everywhere.
-   `channels/components/agent-panel-header.tsx`, `agent-panel.tsx`.
+1. **Runtime badge through slice 2's map.** `AgentPanelHeader` takes `face: IdentityFacts`; the panel
+   and `DemoAgentView` build it with `agent-face.tsx › useAgentIdentity` (owner photo, colour ring,
+   `useRuntimeLogo()(agent.runtimeId)`), the hook `AgentFace` now renders through, so the header and
+   the posted cards wear the badge on both hosts. A session with no `runtimeId` (the `''` default
+   adapter, an older main) draws none. Only the open agent's own sessions are read, not the peer
+   projection's `runtime` (`ownAgentRuntime` needs the peer list, which the panel is not handed).
 2. **Whose photo.** The open agent is always the viewer's own, so its face is the viewer's photo
    (`viewerPerson`) in the agent's colour ring. The stream cards: a posted box wears that same face;
    an arriving one wears the operator's photo only when `fromOperator` (their words, or their own
@@ -256,8 +316,8 @@ Workers append a `## <slice>` section per question: the question, what was chose
    `agent-stream-card.tsx › StreamCard`.
 5. **Stats well on the same ground.** `AgentStats` is `.card-well` (`--home-card`) on the panel's
    `--home-card` ground, exactly as staged (#fbfcfc on #fbfcfd there), so the well reads by its
-   padding and radius, not by contrast. The meter is `ThinMeter` with a new `fill` prop (the agent's
-   colour; ink in the window, which threads no colour). The agent view and window no longer draw
+   padding and radius, not by contrast. The meter is `ThinMeter` in the agent's colour (slice 2's
+   `color` prop; ink in the window, which threads no colour). The agent view and window no longer draw
    `UsageMeter` (the ramp fill is gone there); the window's `meterClassName=""` prop is deleted.
 6. **The window shares every face.** The agent window's stats, stream cards and composer pill are
    the new faces (one implementation); its own chrome, posture row and held-gate card are untouched.
@@ -266,10 +326,9 @@ Workers append a `## <slice>` section per question: the question, what was chose
    `banner-demo/demo-agent-view.tsx › DemoAgentView`, which /channels and /popups now mount. It
    stays because the product panel reads narration over the bridge. It mounts the real
    `AgentControls` (no bridge: the box holds only the stats) instead of restating its box.
-8. **`AgentStatusPill`** (`agent-bits.tsx`) maps liveness to `StatusPill` (working → live dot, else
-   neutral) for the header and the thread card's agent rows. The info-column slice may want it for
-   the Agents-tab cards instead of inlining the same ternary.
-9. **`colorSlot` / `useDemoSwap` stay in `demo-swap.ts`**: `demo-agent-card.tsx` (info-column slice)
-   still uses both. Whichever slice removes the last caller deletes them.
+8. **Merge with slice 2**: one `AgentStatusPill` (both slices added the same one), one `ThinMeter`
+   colour prop (slice 2's `color`; this slice's `fill` dropped), one face helper (`agent-face.tsx`).
+9. **The demo has no face swaps left**, so `banner-demo/demo-swap.ts` (`useDemoSwap`, `colorSlot`),
+   the `.lp-demo-record [data-lp-swapped]` rule and every `data-lp-swapped` filter are deleted.
 10. **Pre-existing red, unchanged:** `src/shared/ui/clickable-cursor.test.ts` on
     `ontology-staging/.../kanban-column-header.tsx`.

@@ -205,6 +205,17 @@ export const AGENT_IDS = {
   wake: "wreplay1",
 } as const;
 
+/** What each agent runs on, mixed across owners so the room shows more than one runtime; the
+ *  sessions carry it as a real room's do (`runtimeId` own, `runtime` peer). */
+export const AGENT_RUNTIME: Readonly<Record<string, string>> = {
+  [AGENT_IDS.planner]: "claude",
+  [AGENT_IDS.teardown]: "claude",
+  [AGENT_IDS.triage]: "codex",
+  [AGENT_IDS.notice]: "codex",
+  [AGENT_IDS.scout]: "grok",
+  [AGENT_IDS.wake]: "grok",
+};
+
 /**
  * ONE COLOUR PER AGENT, AND NOT HAND-PICKED (Samuel, 2026-10-12: every agent gets
  * its own colour, in the real app's palette).
@@ -352,6 +363,7 @@ function ownSession(
     channelName: CHANNEL_NAME,
     threadTitle: openThread,
     identityName: identity.displayName,
+    runtimeId: AGENT_RUNTIME[agentId],
     contextUsed,
     contextWindow: 200_000,
     tokensSpent: Math.round(contextUsed * 2.4),
@@ -407,6 +419,7 @@ function peer(
     name: agentId,
     displayName: identity.displayName,
     color: AGENT_COLORS[agentId as keyof typeof AGENT_COLORS],
+    runtime: AGENT_RUNTIME[agentId],
     state: "working",
     channelName: CHANNEL_NAME,
     threadTitle: threadId === OPEN_THREAD_ID ? OPEN_THREAD.title : null,

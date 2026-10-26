@@ -25,6 +25,7 @@ import {
   postDestination,
 } from "@/features/channels/components/agents-model";
 import { AgentStream } from "@/features/channels/components/agent-stream";
+import { useAgentIdentity } from "@/features/channels/components/agent-face";
 import { agentSentMessages } from "@/features/channels/components/agent-panel";
 import { AgentPanelHeader } from "@/features/channels/components/agent-panel-header";
 import { AgentControls } from "@/features/channels/components/agent-panel-controls";
@@ -38,7 +39,7 @@ export function DemoAgentView({
   layout = "slide",
   open,
   agent,
-  owner,
+  ownerPhoto,
   entries,
   messages,
   currentUserId,
@@ -52,8 +53,8 @@ export function DemoAgentView({
   layout?: "slide" | "fill";
   open: boolean;
   agent: DesktopSessionSummary;
-  /** The scene's identity table: the owner's photo and the runtime's logo. */
-  owner: { photo: string | null; logo: string };
+  /** The agent owner's photo, off the scene's identity table. */
+  ownerPhoto: string | null;
   /** The scripted 1:1 lane — what the bridge would have pushed. */
   entries: DesktopNarrationEntry[];
   /** The channel transcript — source of the agent's Sent lane. */
@@ -69,12 +70,12 @@ export function DemoAgentView({
   onSend?: (text: string) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const face = {
-    photo: owner.photo,
+  const face = useAgentIdentity({
+    photo: ownerPhoto,
     name: agentDisplayName(agent),
-    ring: color ?? ("neutral" as const),
-    runtimeLogo: owner.logo,
-  };
+    color,
+    runtime: agent.runtimeId,
+  });
   const text = draft.trim();
   return (
     <aside

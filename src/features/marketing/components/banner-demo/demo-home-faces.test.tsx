@@ -57,14 +57,11 @@ describe("the demo channel switcher", () => {
 });
 
 describe("the composer's working chips", () => {
-  it("are the product's own pills, not swapped faces", () => {
+  it("are the product's own pills", () => {
     const { container } = render(<DemoScene step={HOLD} />);
     const chips = [...container.querySelectorAll('[aria-label="Recipients"] [role="status"]')];
     expect(chips.length).toBeGreaterThan(0);
-    for (const chip of chips) {
-      expect(chip.hasAttribute("data-lp-swapped")).toBe(false);
-      expect(chip.className).toContain("rounded-full");
-    }
+    for (const chip of chips) expect(chip.className).toContain("rounded-full");
     expect(chips.map((c) => c.textContent)).toContain("Teardown Order Fix...");
   });
 });

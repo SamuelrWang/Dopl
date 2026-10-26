@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { useAgentIdentity } from "./agent-face";
 import { AgentPanelHeader } from "./agent-panel-header";
 import { NO_THREAD_LABEL } from "./agents-model";
 import { CHANNEL_ID } from "./test-fixtures";
@@ -52,6 +53,17 @@ describe("AgentPanelHeader", () => {
       />
     );
     expect(container.querySelector("[data-identity-face] img[src='/logo.svg']")).not.toBeNull();
+  });
+
+  it("badges the session's runtime through the shared logo map", () => {
+    function Host() {
+      const face = useAgentIdentity({ photo: null, name: "Flint", color: "agent-05", runtime: "claude" });
+      return <AgentPanelHeader agent={agent({ runtimeId: "claude" })} face={face} onClose={() => {}} />;
+    }
+    const { container } = render(<Host />);
+    expect(
+      container.querySelector("[data-identity-face] img[src='/img/onboarding/claude-logo.svg']")
+    ).not.toBeNull();
   });
 
   it("replaces the status with the ended pill, and names a threadless agent's place", () => {

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The Settings tab's agent half — the VIEW. It renders without a bridge; hooks live in
+ * The Settings tab's agent rows — the VIEW, drawn inside the tab's "Agent Settings" card
+ * (`settings-tab.tsx`). It renders without a bridge; hooks live in
  * `settings-agent-container.tsx`. Desktop-only rows are absent without their bridge (INVARIANTS §5).
  */
 
@@ -9,7 +10,6 @@ import { AgentFolderRows, DirectAgentsRow, LaunchAgentsRow, UseMyToolsRow } from
 import { isSharedChannel } from "../lib/tool-profile-resolve";
 import type { MessageMode } from "../lib/permission-modes";
 import type { LaunchSelectionState } from "../hooks/use-launch-selection";
-import { PanelHeading } from "./bits";
 import { usePostureWarning } from "./posture-warning";
 // Re-exported so callers and suites keep importing the container from here.
 export { ChannelAgentSettings } from "./settings-agent-container";
@@ -94,35 +94,32 @@ export function ChannelAgentSettingsView({
 
   return (
     <>
-      <PanelHeading title="Agent Settings" />
-      <div className="flex flex-col gap-1 px-3.5">
-        {launch && (
-          <AgentLaunchPostureRows
-            selection={launch}
-            // Only Messaging can flip the warning; the group's other writes reach the record directly.
-            onChangeMessages={warning.changePosture}
-          />
-        )}
-
-        <ToolAccessRow
-          profile={profile}
-          shared={shared}
-          busy={toolProfileBusy}
-          onChange={warning.setToolProfile}
+      {launch && (
+        <AgentLaunchPostureRows
+          selection={launch}
+          // Only Messaging can flip the warning; the group's other writes reach the record directly.
+          onChangeMessages={warning.changePosture}
         />
-        {useMyTools && shared && <UseMyToolsRow useMyTools={useMyTools} />}
+      )}
 
-        {folder && <AgentFolderRows folder={folder} />}
-        {/* Needs both bridges: a row that could set only one of the two records would offer picks
-            that do half of what they say. */}
-        {agentChain && orchestrator && (
-          <LaunchAgentsRow agentChain={agentChain} orchestrator={orchestrator} />
-        )}
-        {/* Independent of the launch row: gating it there would hide an armed lane. */}
-        {orchestratorDirect && (
-          <DirectAgentsRow orchestratorDirect={orchestratorDirect} />
-        )}
-      </div>
+      <ToolAccessRow
+        profile={profile}
+        shared={shared}
+        busy={toolProfileBusy}
+        onChange={warning.setToolProfile}
+      />
+      {useMyTools && shared && <UseMyToolsRow useMyTools={useMyTools} />}
+
+      {folder && <AgentFolderRows folder={folder} />}
+      {/* Needs both bridges: a row that could set only one of the two records would offer picks
+          that do half of what they say. */}
+      {agentChain && orchestrator && (
+        <LaunchAgentsRow agentChain={agentChain} orchestrator={orchestrator} />
+      )}
+      {/* Independent of the launch row: gating it there would hide an armed lane. */}
+      {orchestratorDirect && (
+        <DirectAgentsRow orchestratorDirect={orchestratorDirect} />
+      )}
       {warning.dialog}
     </>
   );

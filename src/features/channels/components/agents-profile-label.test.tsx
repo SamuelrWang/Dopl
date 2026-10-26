@@ -69,7 +69,7 @@ describe("the profile on the agent header and card", () => {
         onOpenAgent={noop}
       />
     );
-    expect(screen.getByText("· Shared-channel")).toBeTruthy();
+    expect(screen.getByText(/· Shared-channel$/)).toBeTruthy();
   });
 
   it("an unreported profile renders nothing", () => {

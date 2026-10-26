@@ -123,8 +123,8 @@ export function ChannelsThreadWindow({
     );
   }
   return (
-    // `.lp-demo-record` is the box the scene's face swaps hide their product twins under
-    // (`marketing.css › .lp-demo-record [data-lp-swapped]`); the window drops its card chrome.
+    // `.lp-demo-record` is the scene's record-pane box (`marketing.css`); the window drops its
+    // card chrome.
     <div className="lp-demo-record antialiased" style={WINDOW_RECORD} data-frame-skin>
       <StagingChannelScene
         fixture={fixture}
@@ -183,7 +183,7 @@ export function ChannelsAgentWindow({
       layout="fill"
       open
       agent={agent}
-      owner={stagingIdentityFace(agent.agentId)}
+      ownerPhoto={stagingIdentityFace(agent.agentId).photo}
       entries={channel.narration[agent.agentId ?? ""] ?? []}
       messages={channel.messages}
       currentUserId={CURRENT_USER_ID}

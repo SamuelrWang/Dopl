@@ -34,7 +34,6 @@
 
 import { useMemo, useState } from "react";
 import { cn } from "@/shared/lib/utils";
-import type { IdentityFacts } from "@/shared/ui/identity-face";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
 import {
@@ -45,6 +44,7 @@ import {
   parseAgentPostStamp,
 } from "./agents-model";
 import { AgentComposer } from "./agent-composer";
+import { useAgentIdentity } from "./agent-face";
 import { AgentStream } from "./agent-stream";
 import { useAgentNarration } from "./use-agent-narration";
 import { indexMembers, viewerPerson, type AuthorIndex } from "./view-model";
@@ -231,13 +231,13 @@ export function ChannelsAgentPanel({
     () => viewerPerson(messages, currentUserId),
     [messages, currentUserId]
   );
-  // The agent's identity: its owner is the viewer (own agents only), in its colour ring. No
-  // runtime badge: this tree has no runtime logo it can load on both hosts.
-  const face: IdentityFacts = {
+  // The agent's identity: its owner is the viewer (own agents only), in its colour ring.
+  const face = useAgentIdentity({
     photo: viewer?.avatarUrl ?? null,
     name: agent ? agentDisplayName(agent) : null,
-    ring: color ?? "neutral",
-  };
+    color,
+    runtime: agent?.runtimeId,
+  });
   // WHICH DECISIONS ALREADY HAVE AN ANSWER — off the SAME transcript, through the SAME derivation
   // the channel view uses, so one question cannot read answered in one pane and open in the other.
   // ⚠ `indexMembers` with NO ROSTER: the viewer is what gates the buttons; who chose is labelled

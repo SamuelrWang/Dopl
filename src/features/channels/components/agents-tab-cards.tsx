@@ -1,25 +1,27 @@
 "use client";
 
 /**
- * The Agents tab's two card shapes: my own agent and a peer's, on the shared `PANEL_CARD` face.
- * Every absent number renders as absent, never `0` (INVARIANTS §11) — except the context meter.
+ * The Agents tab's two card shapes: my own agent and a peer's, on the identity look's white card
+ * (DESIGN-LANGUAGE §4). Every absent number renders as absent, never `0` (INVARIANTS §11), except
+ * the context meter.
  */
 
-import { Bot, CornerDownRight } from "lucide-react";
-import { AgentColorDot } from "./agent-color-dot";
-import { agentColorOrNull } from "../lib/agent-colors";
-import type { AgentColorKey } from "../types";
-import { AgentName } from "./agent-rename";
-import { AgentDeleteButton } from "./agent-delete";
-import { Avatar } from "@/shared/ui/avatar";
-import { UsageMeter } from "@/shared/ui/usage-meter";
+import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
+import { formatTokens } from "@/shared/lib/format-tokens";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { ThinMeter } from "@/shared/ui/usage-meter";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
-import type { ChannelMember } from "../types";
-import { memberPerson } from "./view-model";
-import { CARD_BUTTON, PANEL_CARD } from "./bits";
-import { AgentEndedPill, AgentLiveness } from "./agent-bits";
+import { agentColorOrNull, agentColorVar } from "../lib/agent-colors";
+import { agentModelShortLabel } from "../lib/agent-models";
+import type { ModelCatalogs } from "../lib/model-catalog";
+import type { AgentColorKey, ChannelMember } from "../types";
+import { AgentStatusPill } from "./agent-bits";
+import { AgentDeleteButton } from "./agent-delete";
+import { AgentFace } from "./agent-face";
+import { metric } from "./agent-metrics";
+import { AgentName } from "./agent-rename";
 import {
   agentDisplayName,
   agentLiveness,
@@ -29,10 +31,11 @@ import {
   NO_THREAD_LABEL,
   peerRowStale,
 } from "./agents-model";
-import { formatTokens } from "@/shared/lib/format-tokens";
-import { metric } from "./agent-metrics";
-import { agentModelShortLabel } from "../lib/agent-models";
-import type { ModelCatalogs } from "../lib/model-catalog";
+
+const CARD = "white-card flex flex-col px-3 py-2.5";
+/** Under the name, clear of the 30px face and its gap. */
+const UNDER_HEAD = "mt-1.5 ml-[39px] min-w-0 truncate text-caption";
+const OPEN_BUTTON = cn(PILL_BUTTON, "h-[26px] px-3");
 
 /** The operator's description, read off a widened local type (older desktops omit it); own agents only. */
 function agentDescription(
@@ -40,6 +43,34 @@ function agentDescription(
 ): string | null {
   const value = typeof session.description === "string" ? session.description.trim() : "";
   return value || null;
+}
+
+function CardHead({
+  owner,
+  color,
+  runtime,
+  name,
+  status,
+}: {
+  owner: ChannelMember | null;
+  color: AgentColorKey | null;
+  runtime: string | null;
+  name: ReactNode;
+  status: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-[9px]">
+      <AgentFace
+        size={30}
+        photo={owner?.avatarUrl}
+        name={owner?.displayName}
+        color={color}
+        runtime={runtime}
+      />
+      {name}
+      {status}
+    </div>
+  );
 }
 
 /**
@@ -58,36 +89,32 @@ export function PeerCards({
     <>
       {peers.map((peer) => {
         const owner = byUser.get(peer.userId) ?? null;
-        const ownerName = owner?.displayName || "A teammate";
         const stale = peerRowStale(peer);
+        const color = agentColorOrNull(peer.color);
         return (
           <div
             key={`${peer.userId}:${peer.name}:${peer.threadId ?? ""}`}
             data-stale={stale ? "true" : undefined}
-            className={cn(PANEL_CARD, stale && "opacity-60")}
+            data-agent-color={color ?? undefined}
+            className={cn(CARD, stale && "opacity-60")}
           >
-            <div className="flex items-center gap-2">
-              {owner ? (
-                <Avatar person={memberPerson(owner)} size="xs" />
-              ) : (
-                <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
-              )}
-              {/* No liveness gate: ended rows never reach the wire. */}
-              <AgentColorDot color={agentColorOrNull(peer.color)} />
-              <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-                {peer.displayName?.trim() || peer.name}
-              </span>
-              {/* Peer rows carry coarse state only (INVARIANTS §11), so this degrades to Running / Idle. */}
-              <AgentLiveness {...agentLiveness(peer)} />
-            </div>
-            <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
-              <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
-              <span className="min-w-0 truncate">
-                {ownerName}&apos;s agent
-                {peer.threadTitle ? ` · ${peer.threadTitle}` : ""}
-                {/* No timestamp on a peer card, by ruling; don't derive one from `updatedAt`. */}
-              </span>
-            </div>
+            <CardHead
+              owner={owner}
+              color={color}
+              runtime={peer.runtime ?? null}
+              name={
+                <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
+                  {peer.displayName?.trim() || peer.name}
+                </span>
+              }
+              // Peer rows carry coarse state only (INVARIANTS §11), so this degrades to Running / Idle.
+              status={<AgentStatusPill {...agentLiveness(peer)} />}
+            />
+            {/* No timestamp on a peer card, by ruling; don't derive one from `updatedAt`. */}
+            <p className={cn(UNDER_HEAD, "text-text-muted")}>
+              ↳ {owner?.displayName || "A teammate"}&apos;s agent
+              {peer.threadTitle ? ` · ${peer.threadTitle}` : ""}
+            </p>
           </div>
         );
       })}
@@ -95,105 +122,93 @@ export function PeerCards({
   );
 }
 
-/** One own-agent card. `UsageMeter` gets no `over`: a full context window is not an entitlement event. */
+/** One own-agent card. */
 export function AgentCard({
   agent,
   owner = null,
   viewing,
   color = null,
+  runtime = null,
   catalogs = null,
   onOpen,
 }: {
   agent: DesktopSessionSummary;
-  /** Model catalogs, so the chip uses the runtime's own model name. */
+  /** Model catalogs, so the line uses the runtime's own model name. */
   catalogs?: ModelCatalogs | null;
-  /** Server-assigned colour from the host (this machine's feed can't know it); `null` draws nothing. */
+  /** Server-assigned colour from the host (this machine's feed can't know it); `null` rings neutral. */
   color?: AgentColorKey | null;
+  /** `agent-face.tsx › ownAgentRuntime`, resolved by the host; `null` draws no badge. */
+  runtime?: string | null;
   owner?: ChannelMember | null;
   viewing: boolean;
   onOpen: () => void;
 }) {
-  // A channel-level agent is on the room: a place with a name, not a missing field.
-  const threadTitle = agent.threadTitle ?? NO_THREAD_LABEL;
-  const contextUsed = metric(agent.contextUsed);
-  const contextWindow = metric(agent.contextWindow);
+  const contextUsed = metric(agent.contextUsed) ?? 0;
+  const contextWindow = metric(agent.contextWindow) ?? 0;
   const tokensSpent = metric(agent.tokensSpent);
-  const ended = agent.state === "ended";
   const description = agentDescription(agent);
-  // The session's running model, never the channel's stored pick; labelled from the runtime's catalog.
-  const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
   const permissionLabel = agentPermissionLabel(agent);
-  const profileLabel = agentProfileLabel(agent);
   // Spawn-time snapshot; own cards only — on a peer card a private identity's name is an existence oracle.
   const identityName = agent.identityName?.trim() || null;
+  // The session's running model, never the channel's stored pick; labelled from the runtime's catalog.
+  const modelLabel = agentModelShortLabel(agentRunningModel(agent), catalogs);
+  const profileLabel = agentProfileLabel(agent);
+  // A channel-level agent is on the room: a place with a name, not a missing field.
+  const where = [agent.threadTitle ?? NO_THREAD_LABEL, identityName, modelLabel];
 
   return (
-    // `group/card` is the pencil's hover scope — see `AgentName`.
-    <div className={cn(PANEL_CARD, "group/card", viewing && "border-border-highlight")}>
-      <div className="flex items-center gap-2">
-        {owner ? (
-          <Avatar person={memberPerson(owner)} size="xs" />
-        ) : (
-          <Bot size={14} aria-hidden className="shrink-0 text-text-secondary" />
-        )}
-        {/* Ended agents get `null` from the host (`view-model.ts › indexAgents`), so no gate here. */}
-        <AgentColorDot color={color} />
-        {/* Own cards only: the rename reaches only this machine. */}
-        <AgentName agentId={agent.agentId} name={agentDisplayName(agent)} />
-        {ended ? <AgentEndedPill /> : <AgentLiveness {...agentLiveness(agent)} />}
-      </div>
+    // `group/card` is the pencil's and the delete's hover scope.
+    <div
+      data-viewing={viewing ? "true" : undefined}
+      data-agent-color={color ?? undefined}
+      className={cn(CARD, "group/card", viewing && "border-border-highlight")}
+    >
+      <CardHead
+        owner={owner}
+        color={color}
+        runtime={runtime}
+        // Own cards only: the rename reaches only this machine.
+        name={<AgentName agentId={agent.agentId} name={agentDisplayName(agent)} />}
+        status={<AgentStatusPill {...agentLiveness(agent)} />}
+      />
 
       {/* Main's failure reason (F-692); `state` can't carry it. Own cards only. */}
       {agent.diag && (
-        <p
-          className="min-w-0 truncate text-caption text-danger"
-          title={agent.diag}
-        >
+        <p className={cn(UNDER_HEAD, "text-danger")} title={agent.diag}>
           {agent.diag}
         </p>
       )}
-
       {description && (
-        <p className="min-w-0 truncate text-caption text-text-secondary" title={description}>
+        <p className={cn(UNDER_HEAD, "text-text-secondary")} title={description}>
           {description}
         </p>
       )}
 
-      <div className="flex min-w-0 items-center gap-1.5 text-caption text-text-secondary">
-        <CornerDownRight size={12} aria-hidden className="shrink-0 text-text-muted" />
-        <span className="min-w-0 truncate">{threadTitle}</span>
-        {/* Unreported renders nothing — never "Default". */}
-        {identityName && (
-          <span className="min-w-0 truncate text-text-muted">· {identityName}</span>
-        )}
-        {modelLabel && (
-          <span className="shrink-0 text-text-muted">· {modelLabel}</span>
-        )}
-        {permissionLabel && (
-          <span className="shrink-0 text-text-muted" title={agent.permission?.setting}>
-            · {permissionLabel}
-          </span>
-        )}
-        {profileLabel && (
-          <span className="shrink-0 text-text-muted">· {profileLabel}</span>
-        )}
-      </div>
+      {/* Unreported parts render nothing — never "Default". */}
+      <p className={cn(UNDER_HEAD, "text-text-muted")}>
+        ↳ {where.filter(Boolean).join(" · ")}
+        {permissionLabel && <span title={agent.permission?.setting}> · {permissionLabel}</span>}
+        {profileLabel && ` · ${profileLabel}`}
+      </p>
 
       {/* Draws at 0 when unmeasured (matches `agent-stats.tsx`); a rendering choice — never default the data. */}
-      <UsageMeter
-        label="Context tokens"
-        used={contextUsed ?? 0}
-        limit={contextWindow ?? 0}
-        tone="ramp"
-        formatValue={formatTokens}
-        className="mt-0.5"
+      <p className="mb-[5px] mt-2.5 flex items-center justify-between gap-2 text-label text-text-muted">
+        Context tokens
+        <span className="whitespace-nowrap font-medium tabular-nums text-text-primary">
+          {formatTokens(contextUsed)} / {formatTokens(contextWindow)}
+        </span>
+      </p>
+      <ThinMeter
+        used={contextUsed}
+        limit={contextWindow}
+        color={color ? agentColorVar(color) : null}
       />
 
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-caption text-text-muted">
+      <div className="mt-2.5 flex items-center gap-1.5">
+        <span className="min-w-0 flex-1 truncate text-label text-text-muted">
           {tokensSpent === null
             ? "Tokens spent: not measured yet"
-            : `Tokens spent: ${formatTokens(tokensSpent)}`}
+            : `${formatTokens(tokensSpent)} tokens spent`}
         </span>
         {/* Own cards only: the delete reaches only local stores. */}
         <AgentDeleteButton agent={agent} />
@@ -201,7 +216,7 @@ export function AgentCard({
           type="button"
           onClick={onOpen}
           aria-current={viewing ? "true" : undefined}
-          className={CARD_BUTTON}
+          className={OPEN_BUTTON}
         >
           {viewing ? "Viewing" : "Open"}
         </button>

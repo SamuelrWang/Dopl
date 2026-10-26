@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 /**
- * THE AGENT SETTINGS BLOCK'S TYPE FACE — weight and underline, and nothing else.
+ * THE AGENT SETTINGS ROWS' TYPE FACE — weight, underline and the value face, and nothing else.
  *
- * ⚠ ITS OWN FILE FOR `settings-agent-harness.tsx`'s REASON, not a new one:
- * `settings-tab.test.tsx` is over the 500-line cap already (INVARIANTS §1), and the
- * harness exists precisely so a new agent-half suite splits off instead of growing
- * it. The cases split by what they are ABOUT — that file keeps the rows, profiles
- * and folder BEHAVIOUR; this one is the FACE.
+ * Its own file for `settings-agent-harness.tsx`'s reason: the cases split by what they are ABOUT —
+ * `settings-tab-agent.test.tsx` keeps the rows' behaviour; this one is the FACE.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -18,42 +15,44 @@ afterEach(cleanup);
 const noop = () => {};
 
 /**
- * 🔒 NOTHING IN THE AGENT SETTINGS BLOCK IS BOLD OR UNDERLINED (Samuel, 2026-09-10):
- * *"unbold these things: Runtime Default, Tool use Bypass, Messaging Automatic,
- * Model Sonnet 5, Tool access Full access, Working Folder ~/Downloads, Launch agents
- * In every channel. also remove the underline."*
- *
- * ⚠ IT IS A MEASUREMENT OVER THE WHOLE BLOCK, NOT A LIST OF ROWS — the same shape as
- * `› a settings panel, not documentation` above. Every row here is built from ONE
- * recipe (`settings-agent-rows.tsx › SettingRow`) whose value is one `SelectMenu`
- * face (`select-menu.tsx › TRIGGER_FACE.text`), so a sweep goes red for a row nobody
- * thought to name — including a row added later.
- * ⚠ THE HEADING IS DELIBERATELY EXCLUDED: "Agent Settings" is a `PanelHeading` and
- * is NOT in his list, so it keeps its weight, and a sweep that included it could
- * only be satisfied by unbolding something he did not ask for.
+ * A MEASUREMENT OVER THE WHOLE BLOCK, NOT A LIST OF ROWS: every row is one recipe
+ * (`settings-agent-rows.tsx › SettingRow`) and every value one face (`select-menu.tsx ›
+ * BARE_TRIGGER_FACE`, which the folder path wears too), so a row added later is in scope.
  */
-describe("the Agent Settings rows — no bold, no underline", () => {
-  /** The desktop-only rows too, so the Working Folder path is in scope. */
+describe("the Agent Settings rows — the identity look's face", () => {
+  /** The desktop-only rows too, so the Working folder path is in scope. */
   const FOLDER = { label: "~/Downloads", custom: true, busy: false, onChoose: noop, onClear: noop };
 
-  /** Every node inside the block except the `PanelHeading`'s own `<h2>`, which is
-   *  NOT in his list and keeps its `font-semibold`. */
-  const blockNodes = (container: HTMLElement) =>
-    [...container.querySelectorAll<HTMLElement>("*")].filter((el) => el.tagName !== "H2");
+  /** Every setting's NAME: the row's first column. */
+  const names = (container: HTMLElement) =>
+    [...container.querySelectorAll<HTMLElement>("[data-settings-row] > span:first-child > span")];
 
-  it("no label and no value wears a bold weight", () => {
+  /** Every setting's VALUE control: menus and the folder path, never "Use default" or the help eye. */
+  const values = (container: HTMLElement) =>
+    [...container.querySelectorAll<HTMLButtonElement>("[data-settings-row] button")].filter(
+      (b) => b.textContent !== "Use default" && !b.getAttribute("aria-label")?.startsWith("What ")
+    );
+
+  it("names are regular weight (Samuel, 2026-09-10: unbold the labels)", () => {
     const { container } = agentView({ folder: FOLDER });
-    const bold = blockNodes(container)
-      .filter((el) => /\bfont-(medium|semibold|bold)\b/.test(el.className))
-      .map((el) => `${el.tagName}:${el.textContent?.slice(0, 32)}`);
-    // ⚠ "Use default" is a small ACTION BUTTON, not a label or a value, and it is
-    // not in his list — it keeps `font-medium`.
-    expect(bold.filter((d) => !d.includes("Use default"))).toEqual([]);
+    expect(names(container).length).toBeGreaterThanOrEqual(4);
+    for (const name of names(container)) {
+      expect(name.className).not.toMatch(/\bfont-(medium|semibold|bold)\b/);
+    }
+  });
+
+  it("every value is the bare face: the value and a chevron, no pill and no fill", () => {
+    const { container } = agentView({ folder: FOLDER });
+    expect(values(container).length).toBeGreaterThanOrEqual(4);
+    for (const value of values(container)) {
+      expect(value.className).toContain("text-caption");
+      expect(value.className).not.toMatch(/(^|\s)(bg-|border(\s|$)|border-)/);
+    }
   });
 
   it("no label and no value is underlined, at rest or on hover or on focus", () => {
     const { container } = agentView({ folder: FOLDER });
-    const lined = blockNodes(container)
+    const lined = [...container.querySelectorAll<HTMLElement>("*")]
       .filter((el) => /(^|\s|:)(underline|decoration-)/.test(el.className))
       .map((el) => `${el.tagName}:${el.textContent?.slice(0, 32)}`);
     expect(lined).toEqual([]);

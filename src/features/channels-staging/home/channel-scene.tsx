@@ -4,8 +4,7 @@
  * STAGING COPY of `marketing/components/banner-demo/demo-scene.tsx › DemoScene`, the RECORD
  * PANE half only (the rail, top bar and column are `ui-staging/staging-frame.tsx`'s). Same
  * product mounts in the same order with the same props: `ChannelsMessagePane`, the
- * `.channel-info-slide` holding `ChannelsInfoPanel`, then the remaining face swaps (agent
- * state rows, agent view faces, agent cards, stream boxes) and the agent view.
+ * `.channel-info-slide` holding `ChannelsInfoPanel`, then the agent view.
  *
  * What differs (all marked STAGING):
  *  - it renders ONE CHANNEL FIXTURE (`../data/*`) instead of the demo's step-gated script, so
@@ -44,7 +43,6 @@ import { DemoAgentView } from "@/features/marketing/components/banner-demo/demo-
 import { CURRENT_USER_ID, VIEWER } from "../data/demo-imports";
 import { stagingAgentIndex, stagingIdentityFace } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
-import { StagingAgentCards, StagingAgentStateRows } from "./agent-card";
 import { StagingSettingsTab } from "./settings-tab";
 import { AddPersonDialog } from "@/features/popups-staging/pages/home/add-person-dialog";
 import { StagingInfoPanel } from "./tasks-info-panel";
@@ -223,7 +221,7 @@ export function StagingChannelScene({
 
   return (
     // `display: contents`: the product mounts stay direct flex items of `.lp-demo-record`;
-    // this element is only the face swaps' search root and the capture boundary.
+    // this element is only the capture boundary.
     <div
       ref={pane}
       className="contents"
@@ -308,8 +306,8 @@ export function StagingChannelScene({
           mentionsLayout="category"
           activityBins={fixture.activity}
           activityLoading={false}
-          // STAGING: the product's `settings-slot.tsx` is wired to live writes; this is its face
-          // over local state (`./settings-tab.tsx`). Without it the tab body was blank.
+          // STAGING: `settings-slot.tsx`'s hosts are wired to live writes; `./settings-tab.tsx`
+          // mounts the product views over local state instead.
           settings={
             <StagingSettingsTab
               channel={channel}
@@ -328,21 +326,12 @@ export function StagingChannelScene({
           }}
         />
       </div>
-      <StagingAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
-      <StagingAgentCards
-        paneRef={pane}
-        sessions={sessions}
-        peers={peers}
-        index={index}
-        openAgent={openSession ? agentKey(openSession) : null}
-        onOpenAgent={(key) => actions.openAgent(key)}
-      />
       {viewAgent && (
         <DemoAgentView
           key={agentKey(viewAgent)}
           open={openSession !== null}
           agent={viewAgent}
-          owner={stagingIdentityFace(viewAgent.agentId)}
+          ownerPhoto={stagingIdentityFace(viewAgent.agentId).photo}
           entries={fixture.narration[viewAgent.agentId ?? ""] ?? []}
           messages={messages}
           currentUserId={CURRENT_USER_ID}

@@ -76,9 +76,6 @@ interface ChannelAgentsSettingsProps {
   currentUserId: string;
   busy?: boolean;
   onSetUnaddressedResponder: (setting: UnaddressedResponderSetting) => void;
-  // ⚠ `sessions` REMOVED 2026-09-07: the old picker offered the room's live agents as options
-  // and this control names no agent, so the panel no longer justifies a peer poll of its own.
-  // ⚠ `onSetCeiling` REMOVED 2026-09-06 (items 12, 13, 14) with the channel posture ceiling.
 }
 
 export function ChannelAgentsSettings({
@@ -95,50 +92,17 @@ export function ChannelAgentsSettings({
   // "you chose nobody", which is a claim, not an absence.
   const value = viewerUnaddressedResponder(members, currentUserId);
 
+  // Its scope ("MY" messages) rides the accessible name, which `SelectMenu` also shows as the title.
   return (
-    // ⚠ THE "AGENTS" GROUP LABEL IS DELETED (Samuel, 2026-09-13: *"also remove the header
-    // line Agents"*), and the HAIRLINE is what separates this row from the block above it now
-    // — `SettingRow`'s `continues`, because this row is the first child of its own container
-    // and would otherwise have its leading line suppressed. The label was the last group
-    // heading left on this tab; 2026-09-06 (item 2) deleted the other three.
-    // ⚠ `px-3.5` MATCHES THE AGENT SETTINGS COLUMN, and it has to: the hairline is inset
-    // `mx-2` inside whatever padding its container has, so a `px-2` group here would draw the
-    // same line 6px wider than every line above it. It was `px-2` while the heading made this
-    // a visually separate group.
-    <div className="flex flex-col gap-1 px-3.5">
-      {/* ⚠ "Answers my unaddressed messages" → "Responder" (Samuel, 2026-09-13: *"this line
-          is really long and sticks out, is there a better way to phrase this more
-          concisely"*). The scope the old label carried in the word "MY" is NOT lost: it rides
-          the control's accessible name — "Who answers my unaddressed messages in this
-          channel" — which `SelectMenu` also renders as the trigger's `title`, so the long
-          sentence is one hover away and is what a screen reader still announces. */}
-      <SettingRow name="Responder" continues>
-        <SelectMenu<UnaddressedResponderSetting>
-          variant="text"
-          value={value}
-          options={RESPONDER_OPTIONS}
-          onChange={onSetUnaddressedResponder}
-          ariaLabel="Who answers my unaddressed messages in this channel"
-          disabled={busy}
-        />
-      </SettingRow>
-    </div>
+    <SettingRow name="Responder">
+      <SelectMenu<UnaddressedResponderSetting>
+        variant="bare"
+        value={value}
+        options={RESPONDER_OPTIONS}
+        onChange={onSetUnaddressedResponder}
+        ariaLabel="Who answers my unaddressed messages in this channel"
+        disabled={busy}
+      />
+    </SettingRow>
   );
 }
-
-// ⚠ **THE POSTURE CEILING'S THREE ROWS WERE DELETED FROM THIS FILE ON 2026-09-06** (Samuel's
-// rulings on items 12, 13 and 14; *"Make sure all the logic is deleted."* Tools: *"all agents
-// launched should just inherit the original tools' permissions."*). The argument is kept here
-// rather than left to be inferred from an absence, because all three were CONTAINMENT controls
-// and he was told so before ruling: they were a room MANAGER's clamps over EVERY member's
-// agents in this channel — the widest tool mode a launch here could run, how freely those
-// agents could auto-send, and whether they could launch further agents (`agent_chain_allowed`
-// REFUSED at creation rather than clamping, because a clamped chain hits a bound mid-run).
-//
-// ⚠ NONE OF THEM DUPLICATED THE OPERATOR'S OWN TAB, which governs the operator's OWN agents on
-// their OWN machine; these governed everybody's. **So this room no longer bounds a peer's agent
-// on any axis** — a member's agents here run at whatever that member set on their own machine.
-//
-// ⚠ AND WITH THE RESPONDER PIN GONE TOO (2026-09-07), THIS PANEL NO LONGER DECIDES ANYTHING
-// ABOUT ANOTHER MEMBER'S MACHINE AT ALL. That is why it moved off the manage gate; a reader
-// finding `canManage` restored around it should treat that as a regression, not a tightening.
