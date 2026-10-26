@@ -31,6 +31,18 @@ function threadKeyPrefix(channelId, threadId) {
   return String(channelId || '') + ':' + String(threadId || '') + ':';
 }
 
+// A record's thread. One written before the thread rename has no `threadId`, but its key still names the thread
+// it ran on: the key minus its known channel and agent ends (so a thread id is never split on a colon).
+function recordThreadId(key, rec) {
+  const r = rec || {};
+  if (typeof r.threadId === 'string' && r.threadId) return r.threadId;
+  const k = String(key || '');
+  const head = String(r.channelId || '') + ':';
+  const tail = ':' + String(r.agentId || '');
+  if (!r.channelId || k.length < head.length + tail.length || !k.startsWith(head) || !k.endsWith(tail)) return '';
+  return k.slice(head.length, k.length - tail.length);
+}
+
 function isTerminalPhase(phase) {
   return phase === 'ended';
 }
@@ -59,7 +71,7 @@ function durableSessionRecord(rec) {
     key: r.key,
     sessionId: r.sessionId,
     channelId: r.channelId,
-    threadId: r.threadId || '',
+    threadId: recordThreadId(r.key, r),
     workspaceId: r.workspaceId,
     side: r.side,
     profile: r.profile,
@@ -153,8 +165,14 @@ function prunableKeys(all, opts) {
 
 // ─── END SESSION-STORE-PURE ──────────────────────────────────────────────────
 
+// Every reader gets a record's thread back, including a pre-rename record's (`recordThreadId`).
 function loadRecords() {
-  return store.get(RECORDS_KEY) || {};
+  const all = store.get(RECORDS_KEY) || {};
+  for (const key of Object.keys(all)) {
+    const rec = all[key];
+    if (rec && typeof rec === 'object') rec.threadId = recordThreadId(key, rec);
+  }
+  return all;
 }
 
 // The park stamp is written at BOTH writes that can leave a record parked (here and `setRecordPhase`), so a

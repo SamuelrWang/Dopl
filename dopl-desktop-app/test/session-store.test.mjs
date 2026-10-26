@@ -24,9 +24,9 @@ const RUNTIME_TRUTH = createRequire(import.meta.url)(join(HERE, "..", "main", "s
 
 const BLOCK = sentinelBlock(SRC, "SESSION-STORE-PURE");
 
-const { sessionKey, slotKey, threadKeyPrefix, isTerminalPhase, reloadDisposition, durableName, durableSessionRecord } = new Function(
+const { sessionKey, slotKey, threadKeyPrefix, isTerminalPhase, reloadDisposition, durableName, durableSessionRecord, recordThreadId } = new Function(
   `${BLOCK}
-   return { sessionKey, slotKey, threadKeyPrefix, isTerminalPhase, reloadDisposition, durableName, durableSessionRecord };`
+   return { sessionKey, slotKey, threadKeyPrefix, isTerminalPhase, reloadDisposition, durableName, durableSessionRecord, recordThreadId };`
 )();
 
 // ── sessionKey ───────────────────────────────────────────────────────────────
@@ -302,13 +302,14 @@ test("durableSessionRecord defaults threadId->'' and never carries the conversat
 const storeWrites = (() => {
   const fake = { data: {} };
   const api = new Function(
-    "store", "RECORDS_KEY", "durableSessionRecord", "runtimeTruth",
+    "store", "RECORDS_KEY", "durableSessionRecord", "recordThreadId", "runtimeTruth",
     `${fnOf(SRC, "stampParked")}\n${fnOf(SRC, "loadRecords")}\n${fnOf(SRC, "saveRecord")}\n${fnOf(SRC, "setRecordPhase")}\n` +
       ` return { saveRecord, setRecordPhase, stampParked };`
   )(
     { get: (k) => fake.data[k], set: (k, v) => { fake.data[k] = v; } },
     "sessionRecords",
     durableSessionRecord,
+    recordThreadId,
     // ⚠ THE REAL U10 WHITELIST (2026-09-21), required rather than faked: `session-runtime-truth.js`
     // requires nothing, so a plain require works here, and what `saveRecord` has to be driven
     // against is the SHIPPED coercion — a fake would let a widened whitelist pass unnoticed.
