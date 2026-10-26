@@ -176,6 +176,10 @@ export function ChannelSurface({
     }
     return out;
   }, [liveAgents]);
+  const agentFeeds = useMemo(
+    () => ({ sessions: agentSessions, peers: agentsPanel.peerSessions }),
+    [agentSessions, agentsPanel.peerSessions]
+  );
 
   const messagePane = (viewSelect?: ReactNode) => (
     <ChannelsMessagePane
@@ -218,6 +222,7 @@ export function ChannelSurface({
       // un-taggable for a full 30s poll period — Samuel's *"I have to wait a minute"*.
       // Never narrow this back to `agentsPanel.peerSessions`.
       liveAgents={liveAgents}
+      agentFeeds={agentFeeds}
       // The composer's New Agent icon (2026-08-21) — handed down whole,
       // never re-mounted: a second `useAgentsPanel` is a second peer poll.
       newAgent={agentsPanel}

@@ -1,29 +1,16 @@
 // @vitest-environment jsdom
 /**
- * THE DECISION CARD'S FACE — the bar, the badges and the buttons (Samuel,
- * 2026-09-20).
- *
- * Its own file rather than a suite inside `escalation-card.test.tsx`, which sat
- * at the 500-line cap when this wave landed — `thread-card-actions.test.tsx`'s
- * seam, and the same split this family already uses twice. That file keeps what
- * the card DOES: who may answer, what a press reports, how it degrades. This
- * keeps what it LOOKS LIKE, which is a different reason to change.
+ * THE DECISION CARD'S FACE in the transcript: the tag, the question, the option rows. What the
+ * card DOES (who may answer, what a press reports) is `display-card.test.tsx`.
  *
  * The properties that fail quietly:
  *
- *  - **THE BAR IS THE POSTING AGENT'S COLOUR**, black only when that agent has
- *    ended or was never coloured — and black here is `--surface-cta`, NOT the
- *    row accent's neutral `--border-strong`. Two greys for one state is how a
- *    ruling gets half-applied.
- *  - **THE BAR'S TYPE IS THE ATTRIBUTION PILL'S NAME TYPE.** The pill spells it
- *    inline with no constant to import, so only an assertion can hold them
- *    together.
- *  - **THE CARD IS ATTRIBUTED TO THE AGENT THAT ASKED.** It was not, for three
- *    weeks: one hard-coded `agent={false}` made a named agent's question draw its
- *    operator's bare pill.
- *  - **THE CHOSEN BUTTON STAYS BLACK AND THE REST TAKE `--seg-fill`**, the
- *    switcher's own variable — and that state is derived from the ANSWER
- *    MESSAGE, never held here, which is what makes it survive a reload.
+ *  - **THE TAG IS THE POSTING AGENT'S COLOUR**, ink only when that agent has ended or was never
+ *    coloured — `--surface-cta`, NOT the row accent's neutral `--border-strong`.
+ *  - **THE CARD IS ATTRIBUTED TO THE AGENT THAT ASKED**, not to its bare operator.
+ *  - **AN OPTION IS ONE ROW CARRYING ITS CONSEQUENCE**, with no letter strip to map it onto.
+ *  - **THE ANSWER IS A STATE OF THE ROWS DERIVED FROM THE ANSWER MESSAGE**, never held here,
+ *    which is what makes it survive a reload.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -88,39 +75,28 @@ function draw(
   );
 }
 
-describe("the 2026-09-20 face — the bar, and the buttons", () => {
-  const bar = (container: HTMLElement) =>
+describe("the decision face", () => {
+  const card = (container: HTMLElement) =>
     container.querySelector("[data-escalation-id='m-esc']") as HTMLElement;
-  const strip = (container: HTMLElement) =>
-    Array.from(
-      container.querySelectorAll("[data-escalation-id='m-esc'] [data-option-index]")
-    ) as HTMLElement[];
+  const tag = (container: HTMLElement) =>
+    card(container).querySelector("[data-display-tag]") as HTMLElement;
+  const rows = (container: HTMLElement) =>
+    Array.from(card(container).querySelectorAll("[data-option-index]")) as HTMLElement[];
 
-  it("the bar says Needs Your Decision, in the PILL's own name type", () => {
-    // ⚠ Samuel: *"make the font styling of that header to be the same as that of
-    // the bolded text that's in the badge for the name of the agent"* — the pill
-    // spells it inline (`attribution-pill.tsx`), so the pairing can only be held
-    // by asserting both faces carry the same three classes.
-    draw([escalationMessage()], { onAnswerDisplay: ANSWER });
-    const label = screen.getByText("Needs Your Decision");
-    for (const face of ["text-body", "font-semibold", "leading-tight"]) {
-      expect(label.className).toContain(face);
-    }
-    expect(screen.queryByText("Needs a decision")).toBeNull();
+  it("is a white card whose content-width tag says Needs your decision", () => {
+    const { container } = draw([escalationMessage()], { onAnswerDisplay: ANSWER });
+    expect(card(container).className).toContain("white-card");
+    expect(tag(container).textContent).toBe("Needs your decision");
+    expect(tag(container).className).toContain("rounded-full");
+    expect(screen.queryByText("Needs Your Decision")).toBeNull();
   });
 
-  it("the bar wears the POSTING AGENT's colour", () => {
-    // The fixture's `client_msg_id` stamps agent `k3wpf7c5`; the index is what
-    // says which key that session currently holds.
+  it("the tag wears the POSTING AGENT's colour", () => {
+    // The fixture's `client_msg_id` stamps agent `k3wpf7c5`; the index says which key it holds.
     const index = indexMembers(
       [member({ userId: ME, displayName: "Sam Wang" })],
       ME,
-      new Map([
-        [
-          "k3wpf7c5",
-          { displayName: "Builder", description: null, color: "agent-04" as const },
-        ],
-      ])
+      new Map([["k3wpf7c5", { displayName: "Builder", description: null, color: "agent-04" as const }]])
     );
     const { container } = render(
       <Transcript
@@ -131,38 +107,20 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
         onAnswerDisplay={ANSWER}
       />
     );
-    expect(bar(container).style.backgroundColor).toBe("var(--agent-color-04)");
+    expect(tag(container).style.backgroundColor).toBe("var(--agent-color-04)");
   });
 
-  it("an ENDED or UNKNOWN agent's card turns BLACK, not the row's neutral grey", () => {
-    // ⚠ NOT `--border-strong`: Samuel ruled the ENDED face for this card
-    // literally black, which is also the face every card wore before the
-    // restyle. The row's ring keeps its own neutral; they are different marks.
-    const { container } = draw([escalationMessage()], {
-      onAnswerDisplay: ANSWER,
-    });
-    expect(bar(container).style.backgroundColor).toBe("var(--surface-cta)");
+  it("an ENDED or UNKNOWN agent's tag turns ink, not the row's neutral grey", () => {
+    const { container } = draw([escalationMessage()], { onAnswerDisplay: ANSWER });
+    expect(tag(container).style.backgroundColor).toBe("var(--surface-cta)");
   });
 
   it("ATTRIBUTES THE CARD TO THE AGENT THAT ASKED, not to the bare operator", () => {
-    // 🔒 Samuel, 2026-09-20, on the first live card: *"I see the decision card as
-    // being sent from me? Is that a bug…"* — it was. The card passed
-    // `agent={false}` and no agent id, so a question written by a NAMED agent
-    // drew its operator's bare pill while that agent's ordinary posts, three
-    // rows up, drew the name, the chip and the colour. The row data was right the
-    // whole time; only this component refused to say so.
     const index = indexMembers(
       [member({ userId: ME, displayName: "Sam Wang" })],
       ME,
       new Map([
-        [
-          "k3wpf7c5",
-          {
-            displayName: "Decision Card Coder",
-            description: null,
-            color: "agent-09" as const,
-          },
-        ],
+        ["k3wpf7c5", { displayName: "Decision Card Coder", description: null, color: "agent-09" as const }],
       ])
     );
     const { container } = render(
@@ -175,52 +133,32 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
       />
     );
     expect(screen.getByText("Decision Card Coder")).toBeTruthy();
-    // ⚠ AND THE ROW WEARS THE ACCENT, so the card is not a second opinion about
-    // which agent posted: one key reaches the bar, the side bar and the chip.
     expect(container.querySelector("[data-agent-color='agent-09']")).toBeTruthy();
-    // ⚠ THE SIDE DOES NOT MOVE. An agent posts on its OPERATOR's account
-    // (INVARIANTS §5), so this still hangs on the viewer's side — the same as
-    // every other agent post, and NOT part of the bug.
-    expect(bar(container).closest("article")?.className).toContain(
-      "flex-row-reverse"
-    );
+    // An agent posts on its OPERATOR's account (INVARIANTS §5), so it hangs on the viewer's side.
+    expect(card(container).closest("article")?.className).toContain("flex-row-reverse");
   });
 
-  it("names each option in the ENDED badge's face, with its words UNDER it and no dash", () => {
-    // 🔒 Samuel, 2026-09-20: *"it should be a black badge similar to what you
-    // have on the agents, where you have the ended badge … the badge and then
-    // under it is the text … No more dashes"*.
-    const { container } = draw([escalationMessage()], {
-      onAnswerDisplay: ANSWER,
-    });
-    const panel = container.querySelector(
-      "[data-escalation-id='m-esc']"
-    ) as HTMLElement;
-    // ⚠ THE FACE IS `agent-bits.tsx › AgentPill`'s, BY IMPORT — asserted on the
-    // classes so a hand-rolled copy of them in this file would fail here.
-    const badge = Array.from(panel.querySelectorAll("span")).find(
-      (el) => el.textContent === "Option A" && el.className.includes("rounded-[6px]")
-    );
-    expect(badge).toBeTruthy();
-    expect(badge!.className).toContain("bg-surface-cta");
-    expect(badge!.className).toContain("text-text-on-cta");
-    // The words sit in their own block UNDER the badge, and no em dash joins them.
-    const row = badge!.closest("li") as HTMLElement;
-    expect(row.className).toContain("flex-col");
-    expect(row.textContent).toBe("Option AShip now: Live in ten minutes.");
-    expect(panel.textContent).not.toContain(" — ");
+  it("puts the question first at the heading step, and each consequence inside its option", () => {
+    const { container } = draw([escalationMessage()], { onAnswerDisplay: ANSWER });
+    const [ship, wait] = rows(container);
+    expect(ship.textContent).toContain("Ship now");
+    expect(ship.textContent).toContain("Live in ten minutes.");
+    expect(ship.textContent).toContain("Recommended");
+    expect(ship.textContent).toContain("Reversible, nothing depends on it.");
+    expect(wait.textContent).toContain("Blocked until tomorrow.");
+    expect(card(container).textContent).not.toMatch(/Option [AB]/);
+    expect(card(container).textContent).not.toContain(" — ");
   });
 
-  it("every option is BLACK before a press, and they are named Option A / Option B", () => {
-    const { container } = draw([escalationMessage()], {
-      onAnswerDisplay: ANSWER,
-    });
-    const options = strip(container);
-    expect(options.map((el) => el.textContent)).toEqual(["Option A", "Option B"]);
-    for (const el of options) expect(el.className).toContain("auth-btn-3d");
+  it("every option is a pressable row before an answer", () => {
+    const { container } = draw([escalationMessage()], { onAnswerDisplay: ANSWER });
+    for (const row of rows(container)) {
+      expect(row.tagName).toBe("BUTTON");
+      expect(row.hasAttribute("data-quiet")).toBe(false);
+    }
   });
 
-  it("AFTER a press the chosen one stays black and the rest go the switcher's grey", () => {
+  it("AFTER an answer the chosen row goes ink and the rest go quiet", () => {
     const { container } = draw(
       [
         escalationMessage(),
@@ -241,25 +179,15 @@ describe("the 2026-09-20 face — the bar, and the buttons", () => {
       ],
       { onAnswerDisplay: ANSWER }
     );
-    const [chosen, rest] = strip(container);
-    expect(chosen.className).toContain("auth-btn-3d");
-    // ⚠ `--seg-fill` BY NAME — the same variable `shared/ui/segmented-control.tsx`
-    // reads for Overview / Channel / Knowledge / Agents, which is the gray Samuel
-    // pointed at. A literal here would be a second grey the day that token moves.
-    expect(rest.className).toContain("bg-[var(--seg-fill)]");
-    expect(chosen.className).not.toContain("bg-[var(--seg-fill)]");
+    const [chosen, rest] = rows(container);
+    expect(chosen.getAttribute("data-chosen")).toBe("true");
+    expect(chosen.className).toContain("bg-surface-cta");
+    expect(rest.getAttribute("data-quiet")).toBe("true");
+    expect(rest.tagName).toBe("DIV");
   });
 
   it("THE CHOICE IS THE ANSWER MESSAGE, so it survives a reload by construction", () => {
-    // ⚠ The card holds NO selection state: the grey/black split above is derived
-    // from a second ROW in the page (`answersByEscalation`). This is the same
-    // card drawn with that row absent — the state cannot be stale because there
-    // is none to keep.
-    const { container } = draw([escalationMessage()], {
-      onAnswerDisplay: ANSWER,
-    });
-    for (const el of strip(container)) {
-      expect(el.className).not.toContain("bg-[var(--seg-fill)]");
-    }
+    const { container } = draw([escalationMessage()], { onAnswerDisplay: ANSWER });
+    for (const row of rows(container)) expect(row.hasAttribute("data-chosen")).toBe(false);
   });
 });

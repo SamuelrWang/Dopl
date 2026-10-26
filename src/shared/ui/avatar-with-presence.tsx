@@ -12,7 +12,7 @@
  */
 
 import { cn } from "@/shared/lib/utils";
-import { Avatar, type AvatarPerson } from "./avatar";
+import { Avatar, type AvatarPerson, type AvatarSize } from "./avatar";
 
 export function AvatarWithPresence({
   person,
@@ -23,7 +23,7 @@ export function AvatarWithPresence({
 }: {
   person: AvatarPerson;
   online: boolean;
-  size?: "xs" | "sm" | "md";
+  size?: AvatarSize;
   /** Tooltip (e.g. "Agent listening" / "Agent offline"). */
   title?: string;
   className?: string;

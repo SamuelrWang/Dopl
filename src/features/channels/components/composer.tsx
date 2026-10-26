@@ -270,9 +270,8 @@ export function ChannelsComposer({
         cancelled={addressOff}
         working={working}
       />
-      {/* The agent pill's face; no `bg-*` (it would flatten the kit gradient). The 1px ring lives in the
-          `13px`/`11px` padding — scale values shrink the card 2px. No row gap. */}
-      <div className="raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]">
+      {/* The white card; its 1px hairline plus this padding puts the content 13px/11px in. */}
+      <div data-composer-card="" className="white-card flex flex-col rounded-[20px] px-3 py-2.5">
         <div className="flex flex-col gap-2">
 
           <ComposerInputRow

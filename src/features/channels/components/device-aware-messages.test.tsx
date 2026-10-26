@@ -144,7 +144,7 @@ describe("the display card", () => {
 
   it("answers a v1 selectable list (read as a choice) on the message's display route", async () => {
     renderMessages([agentDisplay()]);
-    expect(screen.getByText("Needs Your Decision")).toBeTruthy();
+    expect(screen.getByText("Needs your decision")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() =>
       expect(request).toHaveBeenCalledWith(

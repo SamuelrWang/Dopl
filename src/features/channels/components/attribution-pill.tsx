@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * Channels — the pill heading every message group (avatar, name over time), one face for every
- * author. An agent wears its operator's avatar (INVARIANTS §5). Display only: inputs are derived
- * in `view-model-rows.ts › toMessageRow`.
+ * Channels — the pill heading every message group: a face, then name over time. An agent wears its
+ * operator's photo (INVARIANTS §5) inside its row's accent frame; a person's avatar sits on the
+ * bento capsule. Display only: inputs are derived in `view-model-rows.ts › toMessageRow`.
  */
 
 import { BadgeCheck } from "lucide-react";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
+import { IdentityFace } from "@/shared/ui/identity-face";
 import { cn } from "@/shared/lib/utils";
 import { agentFaceName } from "@/shared/lib/agent-name";
 import { agentAccent } from "./bits";
@@ -31,51 +32,23 @@ export function attributionName({
   return agentId ? agentFaceName(agentName) : "Agent";
 }
 
-/** The "agent" (or "outside session" / "via <client>") chip beside the name, filled with the
- *  agent's paint. */
-export function AgentChip({
-  paint,
-  external = false,
-  via = null,
-}: {
-  paint?: string | null;
-  /** An outside session wrote the row: replaces the word, always grey (it holds no colour). */
-  external?: boolean;
-  /** Which client that outside session was (`lib/message-via.ts › viaOf`); `null` keeps
-   *  "outside session". Label + tooltip only; React escapes the (already scrubbed) text. */
-  via?: MessageVia | null;
-}) {
+/** An outside session's provenance beside the name: the client it declared ("via <client>", the
+ *  verified ones marked), else "outside session". Grey: an outside session holds no colour. */
+export function ProvenanceChip({ via = null }: { via?: MessageVia | null }) {
   // Explicit height + `items-center` centres the text box at every font size.
   const shape =
-    "inline-flex h-[16px] shrink-0 items-center justify-center rounded-full px-1.5 text-micro leading-none";
-  if (external && via) {
-    return (
-      <span
-        data-via-verified={via.verified ? "" : undefined}
-        title={via.detail || undefined}
-        className={cn(shape, "max-w-[160px] gap-0.5 bg-bg-inset text-text-muted")}
-      >
-        <span className="truncate">via {via.label}</span>
-        {via.verified && (
-          <BadgeCheck size={10} strokeWidth={2.25} aria-label="verified" className="shrink-0" />
-        )}
-      </span>
-    );
-  }
-  if (external) {
-    return (
-      <span className={cn(shape, "bg-bg-inset text-text-muted")}>
-        outside session
-      </span>
-    );
-  }
-  if (!paint) {
-    return <span className={cn(shape, "bg-bg-inset text-text-muted")}>agent</span>;
-  }
-  // `paint` is a caller-resolved `var()` reference; inline because the palette key is data.
+    "inline-flex h-[16px] shrink-0 items-center justify-center rounded-full bg-bg-inset px-1.5 text-micro leading-none text-text-muted";
+  if (!via) return <span className={shape}>outside session</span>;
   return (
-    <span style={{ backgroundColor: paint }} className={cn(shape, "text-text-on-cta")}>
-      agent
+    <span
+      data-via-verified={via.verified ? "" : undefined}
+      title={via.detail || undefined}
+      className={cn(shape, "max-w-[160px] gap-0.5")}
+    >
+      <span className="truncate">via {via.label}</span>
+      {via.verified && (
+        <BadgeCheck size={10} strokeWidth={2.25} aria-label="verified" className="shrink-0" />
+      )}
     </span>
   );
 }
@@ -91,7 +64,6 @@ export function AttributionPill({
   via = null,
   agentId = null,
   agentName = null,
-  agentPaint = null,
   radius,
   framed = false,
   time,
@@ -101,7 +73,7 @@ export function AttributionPill({
   authorLabel: string;
   /** An outside session wrote it — narrows {@link agent}, never a sibling. */
   external?: boolean;
-  /** That outside session's client — see {@link AgentChip}. */
+  /** That outside session's client — see {@link ProvenanceChip}. */
   via?: MessageVia | null;
   /** Display claim off `authorKind` — never a side, never an identity. */
   agent: boolean;
@@ -109,8 +81,6 @@ export function AttributionPill({
   agentId?: string | null;
   /** Its current operator-given name, resolved at render from `AuthorIndex.agents`. */
   agentName?: string | null;
-  /** `var()` paint from `agent-box-rule.ts › agentPostAccent`; `null` keeps the grey chip. */
-  agentPaint?: string | null;
   /** Replaces `rounded-full` (bar-side corners squared); a radius, not a className escape hatch. */
   radius?: string;
   /** The row's frame draws stroke + shadow: drop `.bento` and the `agentAccent` hairline. */
@@ -124,7 +94,8 @@ export function AttributionPill({
   const face = cn(
     // Replaces rather than layers: `tailwind-merge` keeps both `rounded-full` and `rounded-r-none`.
     radius ?? "rounded-full",
-    "inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
+    "inline-flex max-w-full items-center gap-2 pr-3.5",
+    agent ? "py-[5px] pl-[5px]" : "py-1 pl-1",
     !framed && "bento",
     !framed && agentId && agentAccent(agentId),
     // Neutralisers last: of `agentAccent`'s triple only the border colour survives.
@@ -133,15 +104,24 @@ export function AttributionPill({
     // framed (`agentBoxOf` ⊇ openable) — a second transform would double it.
     openable && "cursor-pointer text-left"
   );
-  const body = (
+  // An agent wears its operator's photo on the neutral hairline: the frame is its one coloured line.
+  const body = agent ? (
     <>
-      <Avatar person={author} size="sm" />
+      <IdentityFace size={32} photo={author.avatarUrl} name={author.displayName ?? author.email} />
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
           {/* `wrap-anywhere`: an unbroken name must not size the pill past the pane. */}
-          <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
-          {agent && <AgentChip paint={agentPaint} external={external} via={via} />}
+          <span className="wrap-anywhere text-lead font-semibold leading-tight">{label}</span>
+          {external && <ProvenanceChip via={via} />}
         </span>
+        <span className="text-micro leading-tight text-text-muted">{time}</span>
+      </span>
+    </>
+  ) : (
+    <>
+      <Avatar person={author} size="px36" />
+      <span className="flex min-w-0 flex-col">
+        <span className="wrap-anywhere text-body font-semibold leading-tight">{label}</span>
         <span className="text-micro leading-tight text-text-muted">{time}</span>
       </span>
     </>

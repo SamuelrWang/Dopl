@@ -5,12 +5,7 @@
  * rest, pause while the agent is mid-turn. Glyphs are inline SVG — no external
  * asset, nothing built from a string.
  *
- * ⚠ Raised/hover/active/disabled recipe is `.auth-btn-3d` from globals.css,
- * never re-derived here; glyph colour is the `text-on-cta` token.
- * ⚠ THE CSS TWIN IS GONE (2026-08-20). The desktop session window shipped one
- * because it was a plain-`<script>` sandbox that could not import React; that
- * whole tree was deleted with the window, so **this is the only face** and there
- * is nothing left to keep it in sync with.
+ * The face is the kit's `.send-round` (globals.css / kit.css), never re-derived here.
  */
 
 import { cn } from "@/shared/lib/utils";
@@ -58,7 +53,7 @@ export function SendButton({
       aria-label={label ?? sendButtonLabel(mode)}
       title={title ?? label ?? sendButtonLabel(mode)}
       className={cn(
-        "auth-btn-3d flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] p-0 text-text-on-cta",
+        "send-round flex h-[30px] w-[30px] shrink-0 items-center justify-center p-0",
         className
       )}
     >

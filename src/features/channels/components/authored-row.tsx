@@ -105,8 +105,6 @@ export function AuthoredRow({
       via={via}
       agentId={agentId}
       agentName={agentName}
-      // The same paint as the bar and frame, so one agent cannot show two hues.
-      agentPaint={accent?.paint ?? null}
       radius={accent ? ACCENT_RADIUS[edge] : undefined}
       framed={accent !== null}
       time={time}

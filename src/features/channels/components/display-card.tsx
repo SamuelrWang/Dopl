@@ -6,12 +6,8 @@
  * (`metadata.escalation` only) and v1 glasses displays arrive here through the one read-time
  * adapter (`display/core/adapt.ts › displayOf`), so there is one card and no second face.
  *
- * Hosts: `transcript.tsx` (inside `AuthoredRow`: the channels page, the desktop workspace pages and
- * the /home pane) at the `row` step, and `agent-stream.tsx` at the `stream` step.
- *
- * ⚠ **THE SHELL IS THE DECISION CARD'S** (`escalation-card-face.ts › AGENT_CARD_FACE`): the bar in
- * the posting agent's paint (black when ended), the white panel inset under it. The bar says
- * `Needs Your Decision` when the display has a choice, else `Display`.
+ * Hosts: `transcript.tsx` (inside `AuthoredRow`) at the `row` step, and `agent-stream.tsx` at the
+ * `stream` step.
  *
  * ⚠ **LIVE BY CONSTRUCTION.** A replace rewrites the SAME message's `metadata.display`; the
  * transcript's re-read redraws this card, which holds no copy of the blocks — only the press in
@@ -19,18 +15,17 @@
  */
 
 import { useState } from "react";
-import { cn } from "@/shared/lib/utils";
 import { choiceOf, type Display } from "@/features/display/core/types";
 import { useDisplaySave, type AnswerDisplay } from "../hooks/use-display-writes";
 import { DisplayBlocks } from "./display-blocks";
-import { DisplayChoice, isDecisionFace } from "./display-choice";
+import { DisplayChoice } from "./display-choice";
 import {
   AGENT_CARD_FACE,
   DECISION_CARD_LABEL,
+  DISPLAY_CARD_LABEL,
   type AgentCardSize,
 } from "./escalation-card-face";
 
-const DISPLAY_CARD_LABEL = "Display";
 const DISPLAY_REPLACED_LABEL = "Replaced";
 
 /** What a host knows about a display beyond its blocks — built once in the view model. */
@@ -80,34 +75,30 @@ export function DisplayCard({
       data-escalation-id={display.decision ? messageId : undefined}
       data-superseded={closed || undefined}
       className={face.shell}
-      style={{ backgroundColor: paint }}
     >
-      <div className={face.bar}>
-        <span className={cn(face.barType, "flex-1")}>
+      <div className="flex items-center justify-between gap-2">
+        <span data-display-tag="" className={face.tag} style={{ backgroundColor: paint }}>
           {choice ? DECISION_CARD_LABEL : DISPLAY_CARD_LABEL}
         </span>
         {view.saveable && <SaveButton channelId={channelId} messageId={messageId} />}
       </div>
-      <div className={face.panel}>
-        <DisplayBlocks
-          display={display}
-          face={face}
-          choice={
-            choice && (
-              <DisplayChoice
-                choice={choice}
-                decisionFace={isDecisionFace(choice, display.from === "escalation")}
-                answer={display.answer}
-                answeredBy={view.answeredBy}
-                pendingIndex={pendingIndex}
-                face={face}
-                onChoose={choose}
-              />
-            )
-          }
-        />
-        {closed && <p className="text-caption text-text-muted">{DISPLAY_REPLACED_LABEL}</p>}
-      </div>
+      <DisplayBlocks
+        display={display}
+        face={face}
+        choice={
+          choice && (
+            <DisplayChoice
+              choice={choice}
+              answer={display.answer}
+              answeredBy={view.answeredBy}
+              pendingIndex={pendingIndex}
+              face={face}
+              onChoose={choose}
+            />
+          )
+        }
+      />
+      {closed && <p className="text-caption text-text-muted">{DISPLAY_REPLACED_LABEL}</p>}
     </div>
   );
 }
@@ -119,7 +110,7 @@ function SaveButton({ channelId, messageId }: { channelId: string; messageId: st
       type="button"
       disabled={writes.busy || writes.saved}
       onClick={() => void writes.save()}
-      className="shrink-0 text-caption font-medium text-text-on-cta/80 transition-colors hover:text-text-on-cta disabled:cursor-default"
+      className="shrink-0 text-caption font-medium text-text-muted transition-colors hover:text-text-primary disabled:cursor-default"
     >
       {writes.saved ? "Saved" : "Save"}
     </button>

@@ -27,7 +27,7 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
  * one is `composer.tsx`'s `relative shrink-0 px-4 pt-1` + `COMPOSER_BOTTOM`
  * around a card that carries **no row gap of its own** (that file's own ⚠: "a
  * `gap-2` here once grew the card visibly"), a SIX-glyph toolbar and the 30px
- * squared `SendButton`. The offset is imported rather than retyped for the
+ * round `SendButton`. The offset is imported rather than retyped for the
  * reason the constant exists: the channel and agent composers align on it.
  */
 export function ChannelsSkeleton({
@@ -87,8 +87,8 @@ export function ChannelsSkeleton({
                   <Skeleton key={i} className="h-6 w-6 rounded-[7px]" />
                 ))}
                 <span className="flex-1" />
-                {/* `shared/ui/send-button.tsx` — 30px, squared at 8px. */}
-                <Skeleton className="h-[30px] w-[30px] shrink-0 rounded-[8px]" />
+                {/* `shared/ui/send-button.tsx` — the 30px round send. */}
+                <Skeleton className="h-[30px] w-[30px] shrink-0 rounded-full" />
               </div>
             </div>
           </div>

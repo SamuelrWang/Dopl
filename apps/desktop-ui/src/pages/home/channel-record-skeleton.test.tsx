@@ -137,12 +137,8 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     const geometry = 'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)';
     expect(v2("composer.tsx")).toContain(geometry);
     expect(GHOST).toContain(geometry);
-    expect(v2("composer.tsx")).toContain(
-      "raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]"
-    );
-    expect(GHOST).toContain(
-      'cn(GHOST_FLAT_FACE, "flex flex-col px-[13px] py-[11px]")'
-    );
+    expect(v2("composer.tsx")).toContain("white-card flex flex-col rounded-[20px] px-3 py-2.5");
+    expect(GHOST).toContain('cn(GHOST_FLAT_FACE, "flex flex-col rounded-[20px] px-3 py-2.5")');
     expect(GHOST).toContain("COMPOSER_BOTTOM");
     expect(GHOST_CODE).not.toContain('"pb-4"');
     expect(COMPOSER_BOTTOM).toBe("pb-4");
@@ -151,7 +147,7 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
     const column = container.querySelector(
       ".flex-1.flex-col.\\[contain\\:inline-size\\]"
     );
-    const card = container.querySelector(".px-\\[13px\\].py-\\[11px\\]");
+    const card = container.querySelector(".rounded-\\[20px\\].px-3.py-2\\.5");
     expect(card).not.toBeNull();
     // LAST child of the transcript column — a composer above the transcript is
     // a different surface.
@@ -238,8 +234,10 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
         // own conditional slot. The GEOMETRY is what is byte-shared; the face is asserted
         // just below, on the arm this ghost is actually in.
         "attribution-pill.tsx",
-        "inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5",
+        "inline-flex max-w-full items-center gap-2 pr-3.5",
       ],
+      // The person arm's inset (an agent's badge is 5px); the ghost is a person's pill.
+      ["attribution-pill.tsx", '"py-1 pl-1"'],
       ["transcript.tsx", "wrap-anywhere max-w-[92%]"],
       ["transcript.tsx", '"flex flex-col gap-5"'],
       ["message-pane.tsx", "px-8 py-5"],
@@ -255,9 +253,9 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
     // IS NOT — it keeps the geometry on `GHOST_FLAT_FACE`'s invisible border box.
     expect(v2("attribution-pill.tsx")).toContain('!framed && "bento"');
     expect(GHOST).toContain("GHOST_FLAT_FACE,");
-    // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.sm`.
-    expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('sm: "w-8 h-8');
-    expect(GHOST).toContain("w-8 h-8");
+    // The pill's avatar slot is the size the pill asks for — `avatar.tsx › SIZE.px36`.
+    expect(file("../../../../../src/shared/ui/avatar.tsx")).toContain('px36: "w-9 h-9');
+    expect(GHOST).toContain("w-9 h-9");
 
     const { container } = render(<ChannelRecordSkeleton />);
     // Three to four groups, each a pill over its body lines.
@@ -278,9 +276,9 @@ describe("the bubble transcript is gone, and the row shape is the real one", () 
    * names what it dropped.
    */
   it("paints no raised face, while the real surface still does", () => {
-    expect(v2("composer.tsx")).toContain("raised-tab");
+    expect(v2("composer.tsx")).toContain("white-card");
     expect(v2("attribution-pill.tsx")).toContain('"bento"');
-    for (const face of ["bento", "raised-tab", "shadow", "bg-gradient", "inset", "concave"]) {
+    for (const face of ["bento", "raised-tab", "white-card", "shadow", "bg-gradient", "inset", "concave"]) {
       expect(GHOST_CODE).not.toContain(face);
     }
     // The face is the shared kit's one flat face, not a local copy.

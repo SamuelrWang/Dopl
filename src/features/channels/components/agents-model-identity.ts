@@ -89,9 +89,8 @@ export function agentDisplayId(session: {
  * mechanism.
  *
  * ⚠ THE WORD "agent" IS STILL NOT IN THE NAME'S SEAT for a NAMED agent: agent-ness is stated by
- * the grey borderless chip beside it (`attribution-pill.tsx › AgentChip`). The unnamed face
- * carries the word because there is nothing else to say, and a chip beside "New Agent" reads as
- * a label on a thing, not as the word twice.
+ * the row's accent frame and bar (`authored-row.tsx › ACCENT_FRAME`). The unnamed face carries
+ * the word because there is nothing else to say.
  * ⚠ PRECEDENCE, unchanged in shape: operator's OWN name, then the canonical unnamed face, then
  * — only where no name and no id were reported at all — the legacy pool handle, which is a real
  * label a pre-2026-08-21 main emitted and is not an id.

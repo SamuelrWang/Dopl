@@ -144,8 +144,9 @@ describe("4. the cursor's agent target is the one the private chat belongs to", 
     const { container } = mount(OPEN_THREAD);
     const name = AGENT_INDEX.get(AGENT_IDS.teardown)?.displayName;
     expect(name).toBeTruthy();
-    const agentRows = labelled(container, (l) =>
-      l.includes("agent") && l.length > "agent".length
+    // An agent's message badge is a button named "Open agent <name>" (`attribution-pill.tsx`).
+    const agentRows = domButtons(container).filter((b) =>
+      (b.getAttribute("aria-label") ?? "").startsWith("Open agent ")
     );
     expect(agentRows.length).toBeGreaterThan(0);
     const first = agentRows.find((b) =>

@@ -79,9 +79,9 @@ export function AgentColorDot({
  * `agent-color-circles.tsx › CIRCLE` is `h-5 w-5`. On the tree's spacing scale, not an arbitrary
  * `w-[20px]`, and it sits inside the rail's 36px `TILE` with room for the selected row's tint.
  *
- * ⚠ **THE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN** — `attribution-pill.tsx ›
- * AgentChip` states the rule (*"not `text-white`: a literal white is a colour a restyle cannot
- * follow"*), and it is safe across the WHOLE bank rather than per hue: all sixteen
+ * ⚠ **THE INK IS `--text-on-cta`, THE APP'S ONE ON-DARK TOKEN** — not `text-white`, a literal
+ * white being a colour a restyle cannot follow — and it is safe across the WHOLE bank rather than
+ * per hue: all sixteen
  * `--agent-color-NN` values are `oklch(0.44 …)`, one lightness, so one on-colour ink is correct
  * for every key by construction.
  */

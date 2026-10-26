@@ -142,12 +142,10 @@ function Pill({
       // `transition` from Tailwind would race it in the cascade and drop the
       // hover lift. Unselected keeps the colour transition it needs.
       //
-      // UNSELECTED wears the SAME skin an unchosen option wears on an in-chat
-      // decision card — `DECISION_BTN_GREY` in
-      // `features/channels/components/escalation-card-face.ts`, i.e. the
-      // `--seg-fill` switcher gray. Read through the same variable rather than
-      // copied, so the two cannot drift; the old `#d7d7d7` was a darker gray
-      // this surface had minted for itself.
+      // UNSELECTED wears the `--seg-fill` switcher gray, read through the same
+      // variable `shared/ui/segmented-control.tsx` reads rather than copied, so
+      // the two cannot drift; the old `#d7d7d7` was a darker gray this surface
+      // had minted for itself.
       // ⚠ UNSELECTED CARRIES A TRANSPARENT 1px BORDER AND MUST KEEP IT.
       // `.auth-btn-3d` brings `border: 1px solid #000`, so without this the
       // selected pill is 2px wider and 2px taller than every other pill and

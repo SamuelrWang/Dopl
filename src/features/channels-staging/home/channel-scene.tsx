@@ -4,9 +4,8 @@
  * STAGING COPY of `marketing/components/banner-demo/demo-scene.tsx › DemoScene`, the RECORD
  * PANE half only (the rail, top bar and column are `ui-staging/staging-frame.tsx`'s). Same
  * product mounts in the same order with the same props: `ChannelsMessagePane`, the
- * `.channel-info-slide` holding `ChannelsInfoPanel`, then the demo's face swaps (thread
- * cards, composer chips, agent state rows, agent view faces, agent cards, stream boxes) and
- * the agent view.
+ * `.channel-info-slide` holding `ChannelsInfoPanel`, then the remaining face swaps (agent
+ * state rows, agent view faces, agent cards, stream boxes) and the agent view.
  *
  * What differs (all marked STAGING):
  *  - it renders ONE CHANNEL FIXTURE (`../data/*`) instead of the demo's step-gated script, so
@@ -42,7 +41,6 @@ import { agentColorVar } from "@/features/channels/lib/agent-colors";
 import { liveAgentsFromKey, liveAgentsKey } from "@/features/channels/lib/live-agents";
 import { agentNameHandle } from "@/features/channels/lib/agent-mentions";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { DemoComposerChips } from "@/features/marketing/components/banner-demo/demo-composer-chips";
 import {
   DemoStreamBoxes,
   type StreamFace,
@@ -50,9 +48,6 @@ import {
 import { CURRENT_USER_ID, VIEWER } from "../data/demo-imports";
 import { stagingAgentIndex, stagingIdentityFace } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
-import { StagingThreadCards } from "./thread-card";
-import { StagingDecisionCards } from "./decision-card";
-import { StagingAttributionPills } from "./attribution-pill";
 import { StagingAgentCards, StagingAgentStateRows } from "./agent-card";
 import { StagingAgentViewFaces } from "./agent-view-faces";
 import { StagingAgentView } from "./agent-view";
@@ -75,6 +70,9 @@ export type SceneTasks = {
 
 /** The composer's writes are intercepted before they reach the gate, so it is a stub. */
 const STAGING_GATE: MutationGate = { begin() {}, end() {} };
+
+/** A decision answered here lands as the product's in-flight press; nothing is written. */
+const ANSWER_IN_MEMORY = async () => true;
 
 const CHANNEL_COMPOSER = 'textarea[aria-label="Message"]';
 const AGENT_VIEW = 'aside[aria-label="Agent view"]';
@@ -153,9 +151,11 @@ export function StagingChannelScene({
   const openSession = sessions.find((s) => agentKey(s) === openAgentKey) ?? null;
   const viewAgent = openSession ?? sessions[0] ?? null;
 
-  /** The transcript's attribution pill names an agent id; open it if it is one of ours. */
+  const agentFeeds = useMemo(() => ({ sessions, peers }), [sessions, peers]);
+
+  /** A pill names an agent id and a thread card's row an `agentKey`; open it if it is one of ours. */
   const openAgentById = (agentId: string) => {
-    const own = sessions.find((s) => s.agentId === agentId);
+    const own = sessions.find((s) => s.agentId === agentId || agentKey(s) === agentId);
     if (own) actions.openAgent(agentKey(own));
   };
 
@@ -261,6 +261,7 @@ export function StagingChannelScene({
         gate={STAGING_GATE}
         newAgent={actions.launch}
         liveAgents={live}
+        agentFeeds={agentFeeds}
         agentActivity={
           taskList ? (
             <StagingTasksBar
@@ -280,6 +281,7 @@ export function StagingChannelScene({
         onExitThread={actions.exitThread}
         onOpenThread={actions.openThread}
         onOpenAgent={openAgentById}
+        onAnswerDisplay={ANSWER_IN_MEMORY}
         onJumpToSeq={actions.jumpToSeq}
       />
       <div className="channel-info-slide" data-open={infoOpen ? "true" : "false"}>
@@ -341,25 +343,6 @@ export function StagingChannelScene({
           }}
         />
       </div>
-      <StagingThreadCards
-        paneRef={pane}
-        rows={rows}
-        index={index}
-        channelId={channel.id}
-        sessions={sessions}
-        peers={peers}
-        onOpenThread={actions.openThread}
-        onOpenAgent={(key) => actions.openAgent(key)}
-        onLaunchAgent={(threadId) => void actions.launch.launchAgent(threadId)}
-      />
-      <StagingDecisionCards paneRef={pane} messages={messages} index={index} />
-      <StagingAttributionPills
-        paneRef={pane}
-        rows={rows}
-        index={index}
-        onOpenAgent={openAgentById}
-      />
-      <DemoComposerChips paneRef={pane} />
       <StagingAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
       {viewAgent && (
         <StagingAgentViewFaces

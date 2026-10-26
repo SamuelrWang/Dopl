@@ -116,9 +116,9 @@ describe("channels transcript — an unbroken body wraps", () => {
     expect(bodyFor(UNBROKEN).className).toContain("wrap-anywhere");
   });
 
-  it("wraps a thread card's title and its preview", () => {
-    // The card's `.bento` is `max-w-[460px]`; without this the title runs past
-    // its edge and the clamped preview is merely hidden, not contained.
+  it("contains a thread card's title and wraps its preview", () => {
+    // The card is `max-w-[460px]`; an unbroken title truncates inside its `min-w-0` slot and the
+    // clamped preview wraps, so neither sizes the card past its edge.
     renderRows(
       channelRows(
         [message({ id: "open", body: UNBROKEN, metadata: { threadId: "t-1" } })],
@@ -127,15 +127,12 @@ describe("channels transcript — an unbroken body wraps", () => {
         formatChannelTimestamp
       )
     );
-    const drawn = screen.getAllByText(UNBROKEN);
-    expect(drawn.length).toBeGreaterThan(1); // the title AND the preview
-    // ⚠ **THE NEAREST ANCESTOR THAT OWNS THE RULE, NOT THE ELEMENT THE TEXT LANDED IN**
-    // (2026-10-10). The preview renders through `message-markdown-inline.tsx` now, so its
-    // text sits in a leaf `<span>` the renderer built while the `wrap-anywhere` stays on
-    // the `<p>` around it — and `overflow-wrap` is an INHERITED property, so the token
-    // still wraps. Asserting on the leaf's own `className` would have pinned the DOM shape
-    // of the renderer rather than the containment this test is about.
-    for (const el of drawn) expect(el.closest(".wrap-anywhere")).not.toBeNull();
+    const [title, preview] = screen.getAllByText(UNBROKEN);
+    expect(title.className).toContain("truncate");
+    expect(title.className).toContain("min-w-0");
+    // The preview's text sits in a leaf `<span>` of the inline renderer; `overflow-wrap` is
+    // inherited, so the rule is on the nearest ancestor that owns it.
+    expect(preview.closest(".wrap-anywhere")).not.toBeNull();
   });
 
   it("wraps a roster name with no spaces in it", () => {
@@ -257,7 +254,7 @@ describe("the column's other prose lanes render emphasis", () => {
     const bold = screen.getByText("today");
     expect(bold.closest("strong")).not.toBeNull();
     // The clamp is still the caller's, on the element around the run.
-    expect(bold.closest(".line-clamp-3")).not.toBeNull();
+    expect(bold.closest(".line-clamp-2")).not.toBeNull();
   });
 
   it("a system row, which is prose a peer needs and printed its own asterisks", () => {

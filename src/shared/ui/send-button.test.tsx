@@ -4,11 +4,11 @@ import { SendButton, sendButtonLabel } from "./send-button";
 
 const noop = () => {};
 
-/** The desktop session window's `.send-btn` recipe, which this component IS. */
-const FACE = ["auth-btn-3d", "h-[30px]", "w-[30px]", "rounded-[8px]", "text-text-on-cta"];
+/** The round ink send: the kit's `.send-round` at 30px. */
+const FACE = ["send-round", "h-[30px]", "w-[30px]"];
 
 describe("SendButton (the one shared send affordance)", () => {
-  it("wears the session window's face: 30px, 8px radius, raised black kit class", () => {
+  it("wears the round ink kit face at 30px", () => {
     const markup = renderToStaticMarkup(<SendButton onClick={noop} />);
     for (const cls of FACE) expect(markup).toContain(cls);
   });
@@ -18,6 +18,7 @@ describe("SendButton (the one shared send affordance)", () => {
     expect(markup).not.toMatch(/#[0-9a-f]{3,6}/i);
     expect(markup).not.toContain("shadow-[");
     expect(markup).not.toContain("linear-gradient");
+    expect(markup).not.toContain("auth-btn-3d");
   });
 
   it("shows the up-arrow glyph at rest and the pause bars while running", () => {

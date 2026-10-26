@@ -13,6 +13,7 @@ import { useStickToBottom } from "./use-stick-to-bottom";
 import { useJumpPageBack } from "./use-jump-page-back";
 import { useLoadOlder } from "./use-load-older";
 import { Transcript } from "./transcript";
+import type { ThreadCardAgentFeeds } from "./thread-card-agents";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import {
   TRANSCRIPT_FILTER_ALL,
@@ -83,6 +84,7 @@ export function ChannelsMessagePane({
   favorited = false,
   gate,
   liveAgents,
+  agentFeeds,
   newAgent,
   popOut,
   agentActivity,
@@ -129,6 +131,8 @@ export function ChannelsMessagePane({
   /** Every member's live agent sessions, for the composer. Handed down: a second
    *  `use-channel-agent-sessions.ts` mount is a second poll. */
   liveAgents?: readonly LiveAgentSession[];
+  /** Who works each thread card's thread (the Agents tab's own feeds, handed down). */
+  agentFeeds?: ThreadCardAgentFeeds;
   /** Launch controls for the composer's New Agent icon, handed down (a second `useAgentsPanel` is a
    *  second peer poll); absent renders no button. */
   newAgent?: AgentLaunchControls;
@@ -327,6 +331,7 @@ export function ChannelsMessagePane({
             rows={visibleRows}
             index={index}
             flashId={flashId}
+            agentFeeds={agentFeeds}
             canLaunchAgent={newAgent?.canLaunch ?? false}
             launchBusy={newAgent?.launchBusy ?? false}
             onLaunchAgent={(id) => void newAgent?.launchAgent(id)}

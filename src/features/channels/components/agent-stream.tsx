@@ -384,7 +384,7 @@ function OperatorTurn({
         text={text}
         className="max-w-[80%] rounded-[10px] bg-bg-inset px-2.5 py-1.5"
       />
-      {viewer && <Avatar person={viewer} size="xs" />}
+      {viewer && <Avatar person={viewer} size="px30" />}
     </div>
   );
 }

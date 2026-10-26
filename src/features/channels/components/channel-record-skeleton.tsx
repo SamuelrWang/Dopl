@@ -112,11 +112,12 @@ function MessageRowGhost({
         className={cn(
           GHOST_FLAT_FACE,
           "rounded-full",
-          "inline-flex max-w-full items-center gap-2 py-1 pl-1 pr-3.5"
+          "inline-flex max-w-full items-center gap-2 pr-3.5",
+          "py-1 pl-1"
         )}
       >
-        {/* `avatar.tsx › SIZE.sm`. */}
-        <Skeleton className="w-8 h-8 shrink-0 rounded-full" />
+        {/* `avatar.tsx › SIZE.px36`. */}
+        <Skeleton className="w-9 h-9 shrink-0 rounded-full" />
         <span className="flex min-w-0 flex-col gap-1">
           <SkeletonLine w={name} h={10} />
           <SkeletonLine w={40} h={7} />
@@ -140,7 +141,7 @@ function MessageRowGhost({
 function ComposerGhost() {
   return (
     <div className={cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)}>
-      <div className={cn(GHOST_FLAT_FACE, "flex flex-col px-[13px] py-[11px]")}>
+      <div className={cn(GHOST_FLAT_FACE, "flex flex-col rounded-[20px] px-3 py-2.5")}>
         <div className="flex flex-col gap-2">
           <SkeletonLine w="52%" h={11} />
           <div className="flex items-center gap-0.5">
@@ -149,7 +150,7 @@ function ComposerGhost() {
             ))}
             <span className="flex-1" />
             {/* `shared/ui/send-button.tsx`. */}
-            <Skeleton className="h-[30px] w-[30px] shrink-0 rounded-[8px]" />
+            <Skeleton className="h-[30px] w-[30px] shrink-0 rounded-full" />
           </div>
         </div>
       </div>
@@ -208,12 +209,12 @@ function InfoColumnGhost() {
           </div>
         </div>
 
-        {/* `member-roster.tsx`: `MemberRow`s (`h-[46px]`, avatar `sm`, name over email). */}
+        {/* `member-roster.tsx`: `MemberRow`s (`h-[46px]`, avatar `px36`, name over email). */}
         <HeadingGhost w={SECTION_HEADINGS.members} />
         <div className="flex flex-col gap-px px-2">
           {Array.from({ length: MEMBER_ROWS }).map((_, i) => (
             <div key={i} className="flex h-[46px] items-center gap-2.5 rounded-[8px] px-2">
-              <Skeleton className="w-8 h-8 shrink-0 rounded-full" />
+              <Skeleton className="w-9 h-9 shrink-0 rounded-full" />
               <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <SkeletonLine w={i === 0 ? 96 : 120} h={10} />
                 <SkeletonLine w={i === 0 ? 140 : 112} h={8} />

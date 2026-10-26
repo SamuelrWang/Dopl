@@ -26,16 +26,14 @@
  * ⚠ THE INSET RIDES WITH THE FACE, AND ONLY WITH IT (Samuel, live review 2026-08-28). It used to
  * be unconditional and that was wrong in `"bare"`: the padding exists to hold content off a BOX'S
  * EDGE, and in bare mode there is no box here — the CARD is the box and the card already pays that
- * inset once (`composer.tsx`, `px-[13px] py-[11px]`). Paying it twice pushed the field 12px right
+ * inset once (`composer.tsx`). Paying it twice pushed the field 12px right
  * of and 6px below the toolbar icons directly under it, which is what Samuel was pointing at.
  * **So {@link PILL_FACE} carries the face AND the inset together** — one box, one inset — while
  * {@link ROW_GEOMETRY} (the axis, the alignment, the gap) and the FIELD's own recipe stay
  * unconditional, which is what keeps the two surfaces one row and not two trees.
  *
- * ⚠ THE FACE IS `.raised-tab`, THE APP-WIDE RAISED IDIOM (docs/DESIGN-SYSTEM.md), which draws its
- * own 1px ring from `--raised-light-line`. That ring IS the border both surfaces now wear — in
- * main it is worn by the CARD, which mounts THIS SAME class, the whole raised material and not an
- * extracted layer of it.
+ * ⚠ THE PILL FACE IS `.raised-tab`, THE APP-WIDE RAISED IDIOM (docs/DESIGN-SYSTEM.md), which draws
+ * its own 1px ring from `--raised-light-line`. Main's card is the kit's `.white-card` instead.
  * ⚠ `.raised-tab` SUPPLIES THE FILL, so no `bg-*` utility may ride along: the utility layer
  * outranks the kit layer and a stray background flattens the gradient to nothing.
  *

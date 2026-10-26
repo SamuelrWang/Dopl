@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The demo's redesigned top bar, channel switcher and composer chips
- * (`demo-home-faces.tsx`, `demo-composer-chips.tsx`): same items, same order, same marks.
+ * The demo's redesigned top bar and channel switcher (`demo-home-faces.tsx`): same items, same
+ * order, same marks. The composer's working chips are the product's own.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { HOME_TABS } from "@/features/home/tabs";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
 import { DemoScene } from "./demo-scene";
@@ -56,18 +56,15 @@ describe("the demo channel switcher", () => {
   });
 });
 
-describe("the demo composer chips", () => {
-  it("re-faces every working-agent chip with its name", async () => {
+describe("the composer's working chips", () => {
+  it("are the product's own pills, not swapped faces", () => {
     const { container } = render(<DemoScene step={HOLD} />);
-    const products = container.querySelectorAll('[aria-label="Recipients"] [role="status"]');
-    await waitFor(() =>
-      expect(container.querySelectorAll(".lp-demo-chip")).toHaveLength(products.length)
-    );
-    expect(products.length).toBeGreaterThan(0);
-    for (const p of products) expect(p.hasAttribute("data-lp-swapped")).toBe(true);
-    const names = [...container.querySelectorAll(".lp-demo-chip-name")].map(
-      (n) => n.textContent
-    );
-    expect(names).toContain("Teardown Order Fix");
+    const chips = [...container.querySelectorAll('[aria-label="Recipients"] [role="status"]')];
+    expect(chips.length).toBeGreaterThan(0);
+    for (const chip of chips) {
+      expect(chip.hasAttribute("data-lp-swapped")).toBe(false);
+      expect(chip.className).toContain("rounded-full");
+    }
+    expect(chips.map((c) => c.textContent)).toContain("Teardown Order Fix...");
   });
 });

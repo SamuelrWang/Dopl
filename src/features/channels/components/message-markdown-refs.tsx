@@ -30,7 +30,7 @@ import { cn } from "@/shared/lib/utils";
 import type { BodyContext } from "./message-markdown-context";
 
 /**
- * ⚠ **THE CHIP RECIPE IS `AgentChip`'s, NOT A NEW ONE** (`attribution-pill.tsx`):
+ * ⚠ **THE CHIP RECIPE IS `ProvenanceChip`'s, NOT A NEW ONE** (`attribution-pill.tsx`):
  * a small flat grey capsule at `text-micro`, which is what every inline marker in
  * this transcript already looks like. What it adds is PRESSABILITY — the 1px
  * press the app expresses everywhere — and `tabular-nums`, so a column of

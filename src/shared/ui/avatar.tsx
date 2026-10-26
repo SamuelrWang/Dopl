@@ -17,7 +17,9 @@ export interface AvatarPerson {
 
 const SIZE = {
   xs: "w-6 h-6 text-micro",
+  px30: "w-[30px] h-[30px] text-caption",
   sm: "w-8 h-8 text-caption",
+  px36: "w-9 h-9 text-small",
   md: "w-10 h-10 text-body",
 } as const;
 
@@ -26,13 +28,15 @@ export function initialFor(name: string | null, email: string | null): string {
   return source.charAt(0).toUpperCase() || "?";
 }
 
+export type AvatarSize = keyof typeof SIZE;
+
 export function Avatar({
   person,
   size = "sm",
   className,
 }: {
   person: AvatarPerson;
-  size?: keyof typeof SIZE;
+  size?: AvatarSize;
   className?: string;
 }) {
   // ⚠ OAuth avatars sit on provider CDNs the packaged desktop CSP cannot name;

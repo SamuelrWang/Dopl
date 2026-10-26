@@ -29,8 +29,8 @@ type CardRect = GlassCardContext["regions"]["main"];
  *   - authored row: `authored-row.tsx` — 3px agent-colour bar on the outer
  *     side, the header pill framed in that colour, body under it; the user's
  *     own row mirrored to the right with a plain bento pill.
- *   - header pill: `attribution-pill.tsx` — avatar, bold name, the coloured
- *     "agent" chip (`AgentChip`).
+ *   - header pill: `attribution-pill.tsx` — avatar, bold name, and here a
+ *     coloured "agent" chip.
  *   - launch line: `transcript.tsx`'s system row — one centred muted line.
  *   - @-mention: `message-markdown-mentions.tsx` — medium weight, `--link`.
  *   - working pills: `agent-activity.tsx › AgentActivityRows` — agent-colour

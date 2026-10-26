@@ -606,14 +606,13 @@ their tests. No Dopl-repo files.
 
 ### 7.3 Renderer spec (desktop + web)
 
-- `DisplayCard` renders any `Display`. Bar: `Needs Your Decision` (`DECISION_CARD_LABEL`) when the
-  display has a `choice`, else `Display`; paint = `decisionCardPaint` (posting agent, black when ended).
-  Save button: own agent's displays (`row.side === "me"`), as today.
-- Decision face (`display-choice.tsx`), exactly today's escalation card when ANY option has a
-  `description`, `recommended` or `why`: per option `AgentPill Option A` + `label: description`;
-  `Recommended: [Option X]` + `why` LAST; button strip `Option A…` (aria-label `Option A: label`);
-  after an answer the chosen button black, the rest `DECISION_BTN_GREY`, then `You chose` /
-  `<Name> chose` + label. Otherwise the inline face (today's display list buttons with labels).
+- `DisplayCard` renders any `Display` as a white card. Tag: `Needs your decision` (`DECISION_CARD_LABEL`)
+  when the display has a `choice`, else `Display`; paint = `decisionCardPaint` (posting agent, ink when ended).
+  Save button: own agent's displays (`row.side === "me"`), at the tag row's far end.
+- Choice (`display-choice.tsx`): every option is one row (accessible name = its label) carrying its
+  `description`; the `recommended` one carries a "Recommended" marker and its `why`. After an answer
+  the chosen row is ink, the rest quiet, then `You chose` / `<Name> chose` + label. A legacy decision
+  draws the same rows.
 - Buttons only when the viewer ∈ `answerersOf` AND the host passes an answer handler
   (absent-not-disabled: read-only spans). Pending choice shows chosen until the stamp/pre-pass lands.
 - Legacy decision rows render through the same card (adapter), keep `data-escalation-id`
