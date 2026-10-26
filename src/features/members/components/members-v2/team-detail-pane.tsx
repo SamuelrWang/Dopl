@@ -209,7 +209,7 @@ function AddMemberMenu({
         <Plus size={11} aria-hidden />
         Add
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} align="right" className="w-56">
+      <Popover open={open} onClose={() => setOpen(false)} align="right">
         {members.map((m) => (
           <MenuItem
             key={m.userId}

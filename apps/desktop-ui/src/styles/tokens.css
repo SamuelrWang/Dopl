@@ -296,6 +296,10 @@
   --surface-selected: oklch(0 0 0 / 8%);
   /* THE menu-option hover face — see `--color-menu-item-hover-bg` above. */
   --menu-item-hover-bg: var(--surface-raised-1);
+  /* THE dropdown width rule — see globals.css beside `--menu-item-hover-bg`. */
+  --menu-min-width: 128px;
+  --menu-max-width: 320px;
+  --menu-viewport-gutter: 8px;
   --modal-surface: #fefefe;
   --scrim: oklch(0 0 0 / 40%);
 

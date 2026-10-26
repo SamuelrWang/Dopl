@@ -58,9 +58,6 @@ export function useKindOptions(current: Kind): ReadonlyArray<SelectMenuOption<Ki
   return kinds.map((value) => ({ value, label: KIND_LABELS[value] }));
 }
 
-/** One-word options: the menu hugs them instead of the select kit's 280px floor. */
-export const KIND_MENU_CLASS = "min-w-[132px] w-max";
-
 /**
  * The column's object template — default fields (label + kind, no values) every
  * new child is born with. Not the attributes editor: rows are field definitions,
@@ -198,7 +195,6 @@ function FieldRow({
       <SelectMenu
         value={row.kind}
         options={kindOptions}
-        menuClassName={KIND_MENU_CLASS}
         disabled={!canEdit}
         onChange={(kind) => onChange({ ...row, kind })}
         variant="text"

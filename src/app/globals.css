@@ -244,6 +244,12 @@
   --surface-selected: oklch(0 0 0 / 8%);
   /* The menu-option hover face (see `--color-menu-item-hover-bg`). */
   --menu-item-hover-bg: var(--surface-raised-1);
+  /* THE dropdown width rule (`.menu-card`): fit the widest row, never under this floor (or the
+     trigger's width when `Popover` is handed one), never over this cap; long labels truncate.
+     The gutter keeps any menu off the viewport edge (same 8px `useClampedFixedPosition` uses). */
+  --menu-min-width: 128px;
+  --menu-max-width: 320px;
+  --menu-viewport-gutter: 8px;
   --modal-surface: #fefefe;
   --scrim: oklch(0 0 0 / 40%);
 
@@ -890,6 +896,16 @@ html {
     0 20px 46px rgba(0, 0, 0, 0.16);
   transform-origin: top left;
   animation: menuCardIn 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Width = the widest row (Samuel, 2026-10-26: popups "way wider than the maximum text width").
+     Floor: `--menu-min-width`, or the trigger's width when `Popover` sets `--menu-trigger-width`.
+     Cap: `--menu-max-width`; both bounded by the viewport minus a gutter each side. A caller's
+     `w-*` / `min-w-*` / `max-w-*` utility still wins (utilities layer over components). */
+  width: max-content;
+  min-width: min(
+    max(var(--menu-min-width), var(--menu-trigger-width, 0px)),
+    calc(100vw - 2 * var(--menu-viewport-gutter))
+  );
+  max-width: min(var(--menu-max-width), calc(100vw - 2 * var(--menu-viewport-gutter)));
 }
 .menu-card[data-origin="right"] { transform-origin: top right; }
 /* Exit must be pointer-events: none — the backdrop is already gone, so a card still taking
@@ -915,6 +931,20 @@ html {
 /* The PRESS is the same gray, one step down the ramp — flat, no inset bevel. */
 .menu-row:active {
   background: var(--surface-raised-3);
+}
+
+
+/* A `MenuItem` label: one line, truncated at the card's cap. `Popover wrap` opts a menu into
+   wrapping instead. Descriptions are not labels and always wrap. */
+.menu-row-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-card[data-wrap="true"] .menu-row-label {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Section rule inside `.menu-card` — inset so it stops short of the rounded corners. */

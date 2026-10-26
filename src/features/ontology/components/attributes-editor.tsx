@@ -29,7 +29,7 @@ import {
   ROW_REMOVE_BUTTON,
   useDraftRows,
 } from "./panel-section";
-import { KIND_MENU_CLASS, useKindOptions } from "./template-editor";
+import { useKindOptions } from "./template-editor";
 import { PickMenu } from "./pick-menu";
 
 /** A row's editable half. The persisted attribute carries a `key` beside it; a
@@ -271,7 +271,6 @@ function AttrRow({
       <SelectMenu
         value={row.value.kind}
         options={kindOptions}
-        menuClassName={KIND_MENU_CLASS}
         disabled={!canEdit}
         onChange={(kind) => {
           const value = convertValue(kind, row.value, options);

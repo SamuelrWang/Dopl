@@ -90,7 +90,6 @@ export function OntologySwitcher({
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={close}
-        className="min-w-[220px] max-w-[320px]"
       >
         {entries.map((entry) => (
           <MenuItem

@@ -11,14 +11,31 @@
  * HOVER FACE. Samuel's global rule flattened `.menu-row:hover` to
  * `var(--menu-item-hover-bg)` in the two APP copies; `.lp-nav-menu-item` keeps the
  * raised gradient because marketing is exempt from this kit (DESIGN-SYSTEM.md says
- * so on the `.menu-card` row). Everything else about the three still moves together.
+ * so on the `.menu-card` row). A second since 2026-10-26: the WIDTH rule below is the
+ * two app copies' only; the landing nav sizes its own card. Everything else about the
+ * three still moves together.
  *
  * Trigger-anchored (default) needs a `relative` wrapper. Coordinate
  * (`at={{x,y}}`) portals to <body>, viewport-clamped. Backdrop swallows the
  * dismiss-click so it can't fall through to whatever sits under the cursor.
+ *
+ * WIDTH IS THE KIT'S, not the caller's (Samuel, 2026-10-26: dropdowns "way wider
+ * than the maximum text width"). `.menu-card` sizes to its widest row, floored at
+ * `--menu-min-width` or `triggerWidth`, capped at `--menu-max-width`, both inside
+ * the viewport; `MenuItem` labels truncate at the cap unless `wrap`. Pass a
+ * `className` width only when the content needs a stable one (a search field, a
+ * form, an accordion that grows as it opens, a right-edge anchor computed from it).
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 import { useClampedFixedPosition } from "@/shared/hooks/use-clamped-fixed-position";
@@ -27,7 +44,8 @@ import { cn } from "@/shared/lib/utils";
 /** Exit animation length — keep in sync with `menuCardOut` in globals.css. */
 const EXIT_MS = 140;
 
-const SURFACE = "menu-card min-w-[160px]";
+/** Sizing lives on the class itself (`.menu-card`'s width rule); no width utility here. */
+const SURFACE = "menu-card";
 
 /** Panel attrs that differ between open and closing. */
 type PanelChrome = {
@@ -35,7 +53,38 @@ type PanelChrome = {
   inert?: boolean;
   "data-state": "open" | "closing";
   "data-origin": "left" | "right";
+  "data-wrap"?: "true";
 };
+
+/** The trigger-width floor, as the custom property `.menu-card`'s `min-width` reads. */
+function floorStyle(triggerWidth?: number): CSSProperties | undefined {
+  if (!triggerWidth || triggerWidth <= 0) return undefined;
+  return { "--menu-trigger-width": `${Math.round(triggerWidth)}px` } as CSSProperties;
+}
+
+/**
+ * Trigger-anchored panels are `absolute`, so nothing else keeps a content-sized card
+ * on screen: shift it with `translate` (composes with the entrance `transform`
+ * instead of fighting it) until both edges clear the gutter. Edges come from
+ * `offsetWidth` off the origin edge, not the rect's width: mid-entrance the rect is
+ * the keyframe's `scale(0.98)` box.
+ */
+function useViewportNudge(ref: RefObject<HTMLDivElement | null>, active: boolean) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !active) return;
+    el.style.translate = "";
+    const gutter =
+      parseFloat(getComputedStyle(el).getPropertyValue("--menu-viewport-gutter")) || 8;
+    const rect = el.getBoundingClientRect();
+    const left = el.dataset.origin === "right" ? rect.right - el.offsetWidth : rect.left;
+    const right = left + el.offsetWidth;
+    let dx = 0;
+    if (right > window.innerWidth - gutter) dx = window.innerWidth - gutter - right;
+    if (left + dx < gutter) dx = gutter - left;
+    if (dx !== 0) el.style.translate = `${Math.round(dx)}px 0`;
+  }, [ref, active]);
+}
 
 /** Read at event time, not subscribed: only gates whether a close waits on an
  *  animation. OS setting flipping mid-interaction isn't worth a listener. */
@@ -52,6 +101,8 @@ export function Popover({
   onClose,
   align = "left",
   at,
+  triggerWidth,
+  wrap,
   className,
   children,
 }: {
@@ -60,6 +111,11 @@ export function Popover({
   align?: "left" | "right";
   /** Coordinate mode: open at these viewport px, portaled + clamped. */
   at?: { x: number; y: number };
+  /** The trigger's px width: the card never opens narrower than what opened it. */
+  triggerWidth?: number;
+  /** Long `MenuItem` labels wrap instead of truncating at the width cap. */
+  wrap?: boolean;
+  /** Width overrides only, for content that needs a stable box (see header). */
   className?: string;
   children: ReactNode;
 }) {
@@ -103,6 +159,9 @@ export function Popover({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const anchoredRef = useRef<HTMLDivElement | null>(null);
+  useViewportNudge(anchoredRef, open && !at && !lastAt);
+
   if (!open && !closing) return null;
 
   const panelProps: PanelChrome = {
@@ -110,6 +169,7 @@ export function Popover({
     inert: closing,
     "data-state": closing ? "closing" : "open",
     "data-origin": align,
+    ...(wrap ? { "data-wrap": "true" as const } : {}),
   };
 
   const anchor = at ?? lastAt;
@@ -121,6 +181,7 @@ export function Popover({
         onClose={onClose}
         closing={closing}
         panelProps={panelProps}
+        triggerWidth={triggerWidth}
         className={className}
       >
         {children}
@@ -136,6 +197,8 @@ export function Popover({
       {!closing && <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />}
       <div
         {...panelProps}
+        ref={anchoredRef}
+        style={floorStyle(triggerWidth)}
         className={cn(
           "absolute top-full z-50 mt-2.5",
           SURFACE,
@@ -156,6 +219,7 @@ function CoordinatePanel({
   onClose,
   closing,
   panelProps,
+  triggerWidth,
   className,
   children,
 }: {
@@ -163,6 +227,7 @@ function CoordinatePanel({
   onClose: () => void;
   closing: boolean;
   panelProps: PanelChrome;
+  triggerWidth?: number;
   className?: string;
   children: ReactNode;
 }) {
@@ -181,7 +246,12 @@ function CoordinatePanel({
           aria-hidden
         />
       )}
-      <div {...panelProps} ref={ref} style={style} className={cn("z-[1000]", SURFACE, className)}>
+      <div
+        {...panelProps}
+        ref={ref}
+        style={{ ...style, ...floorStyle(triggerWidth) }}
+        className={cn("z-[1000]", SURFACE, className)}
+      >
         {children}
       </div>
     </>
@@ -251,8 +321,13 @@ export function MenuItem({
         />
       )}
       {icon && <span className="mt-0.5 shrink-0">{icon}</span>}
-      <span className="min-w-0">
-        <span className={cn("block", destructive ? "text-danger" : "text-text-primary")}>
+      <span className="min-w-0 flex-1">
+        {/* `.menu-row-label`: one truncated line at the card's cap (wrapped under
+            `Popover wrap`); `title` carries the full text a truncated label hides. */}
+        <span
+          className={cn("menu-row-label", destructive ? "text-danger" : "text-text-primary")}
+          title={typeof children === "string" ? children : undefined}
+        >
           {children}
         </span>
         {description && (

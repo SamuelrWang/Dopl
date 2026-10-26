@@ -57,7 +57,7 @@ export function SettingHelp({ name, copy }: { name: string; copy: SettingHelpCop
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={() => setAnchor(null)}
-        className="min-w-[240px] max-w-[300px]"
+        className="max-w-[300px]"
       >
         <div role="note" className="flex flex-col gap-1.5 px-3 py-2.5">
           <p className="text-caption font-semibold text-text-primary">{name}</p>

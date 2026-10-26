@@ -294,7 +294,6 @@ export function TranscriptFilterSelect({
         open={anchor !== null}
         at={anchor ?? undefined}
         onClose={() => setAnchor(null)}
-        className="min-w-[180px] max-w-[280px]"
       >
         {/* "All" clears rather than being a member; its tick is derived. */}
         <MenuItem

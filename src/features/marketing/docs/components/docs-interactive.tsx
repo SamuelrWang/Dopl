@@ -186,7 +186,7 @@ export function CopyPageButton({ markdown, url }: { markdown: string; url: strin
       >
         <ChevronDown size={14} aria-hidden />
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} align="right" className="w-[220px]">
+      <Popover open={open} onClose={() => setOpen(false)} align="right">
         <MenuItem
           description="Copy this page as Markdown"
           onSelect={() => {

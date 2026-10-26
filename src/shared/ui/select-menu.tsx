@@ -5,6 +5,7 @@
  * explanation (a native `<select>` cannot show per-option descriptions). Composes `Popover` +
  * `MenuItem`, in coordinate mode, not trigger-anchored: these controls sit in scrolling,
  * overflow-clipping panes where an anchored panel renders as a clipped sliver.
+ * The menu fits its options (no fixed width): floored at the trigger's width, capped by the kit.
  * Each `variant` owns its whole trigger face (weight, size, padding included), so faces never
  * compose and a caller's `className` never fights them in the same layer.
  */
@@ -68,10 +69,12 @@ export function SelectMenu<T extends string>({
   /** Trigger face. `"raised"` is the dialog dropdown. */
   variant?: keyof typeof TRIGGER_FACE;
   className?: string;
+  /** Width override for the menu. Omit it: the kit fits the menu to its options, floored at
+   *  this trigger's width (`popover-menu.tsx` header). */
   menuClassName?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [anchor, setAnchor] = useState<{ x: number; y: number; width: number } | null>(null);
   const selected = options.find((o) => o.value === value) ?? options[0];
 
   function toggle() {
@@ -80,7 +83,7 @@ export function SelectMenu<T extends string>({
       return;
     }
     const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setAnchor({ x: rect.left, y: rect.bottom + 4 });
+    if (rect) setAnchor({ x: rect.left, y: rect.bottom + 4, width: rect.width });
   }
 
   return (
@@ -112,8 +115,9 @@ export function SelectMenu<T extends string>({
       <Popover
         open={anchor !== null}
         at={anchor ?? undefined}
+        triggerWidth={anchor?.width}
         onClose={() => setAnchor(null)}
-        className={cn("min-w-[280px] max-w-[340px]", menuClassName)}
+        className={menuClassName}
       >
         {options.map((option) => (
           <MenuItem
