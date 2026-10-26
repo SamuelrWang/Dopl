@@ -41,6 +41,15 @@
 .cardVisible { opacity: 1; transform: none; }
 .card *, .card *::before, .card *::after { box-sizing: border-box; }
 
+/* Panel variant — a fixed white box; the content owns the scroll (the identity view). */
+.cardPanel {
+  width: 720px;
+  height: 560px;
+  max-height: 86vh;
+  flex-direction: column;
+  background: var(--bg-overlay);
+}
+
 /* Narrow variant — single-pane dialog (e.g. per-KB settings). */
 .cardNarrow {
   display: block;

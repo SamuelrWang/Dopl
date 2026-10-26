@@ -70,6 +70,7 @@ export function SectionPanel({
   label,
   action,
   caption,
+  flat = false,
   className,
   children,
 }: {
@@ -81,6 +82,9 @@ export function SectionPanel({
   /** ONE quiet line under the heading. ⚠ Minimal-copy ruling (INVARIANTS §5):
    *  a RULE the operator needs, never an explainer paragraph. */
   caption?: ReactNode;
+  /** No well: the section sits on the page and its heading wears the kit's `.title-chip`, so the
+   *  cards' own hairlines do the separating. */
+  flat?: boolean;
   /** OVERRIDES the ground. See the docblock — the default is painted. */
   className?: string;
   children: ReactNode;
@@ -89,9 +93,14 @@ export function SectionPanel({
     <section
       aria-labelledby={id}
       data-section-panel
-      className={cn(SECTION_PANEL_SHELL, SECTION_PANEL_GROUND, className)}
+      className={cn(!flat && SECTION_PANEL_SHELL, !flat && SECTION_PANEL_GROUND, className)}
     >
-      <div className="flex min-h-[22px] items-center justify-between gap-2 px-1 pb-2.5">
+      <div
+        className={cn(
+          "flex min-h-[22px] items-center justify-between gap-2 pb-2.5",
+          !flat && "px-1"
+        )}
+      >
         {/* ⚠ ONE HEADING FACE, EVERY PAGE — `section-heading.ts ›
             SECTION_HEADING_TEXT` (Samuel, 2026-09-13: the /home "Usage" trial
             is the rule now, "applied to each of the headers for each section").
@@ -99,14 +108,14 @@ export function SectionPanel({
             with the trial's promotion. */}
         <h2
           id={id}
-          className={cn("truncate", SECTION_HEADING_TEXT)}
+          className={cn("truncate", SECTION_HEADING_TEXT, flat && "title-chip")}
         >
           {label}
         </h2>
         {action}
       </div>
       {caption && (
-        <p className="px-1 pb-2.5 text-caption text-text-muted">{caption}</p>
+        <p className={cn("pb-2.5 text-caption text-text-muted", !flat && "px-1")}>{caption}</p>
       )}
       {children}
     </section>
