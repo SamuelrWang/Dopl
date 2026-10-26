@@ -927,6 +927,7 @@ export type Database = {
           last_wake_seq: number | null
           model: string | null
           name: string
+          runtime: string | null
           session_key: string
           stale: boolean | null
           started_at: string | null
@@ -959,6 +960,7 @@ export type Database = {
           last_wake_seq?: number | null
           model?: string | null
           name: string
+          runtime?: string | null
           session_key: string
           stale?: boolean | null
           started_at?: string | null
@@ -991,6 +993,7 @@ export type Database = {
           last_wake_seq?: number | null
           model?: string | null
           name?: string
+          runtime?: string | null
           session_key?: string
           stale?: boolean | null
           started_at?: string | null
@@ -1029,6 +1032,225 @@ export type Database = {
           },
           {
             foreignKeyName: "channel_sessions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_task_assignees: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_task_assignees_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_task_notes: {
+        Row: {
+          author_agent_id: string | null
+          author_user_id: string
+          body: string
+          client_msg_id: string | null
+          created_at: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          author_agent_id?: string | null
+          author_user_id: string
+          body: string
+          client_msg_id?: string | null
+          created_at?: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          author_agent_id?: string | null
+          author_user_id?: string
+          body?: string
+          client_msg_id?: string | null
+          created_at?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_task_notes_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_task_subtasks: {
+        Row: {
+          client_msg_id: string | null
+          created_at: string
+          created_by: string | null
+          detail: string | null
+          id: string
+          owner_agent_id: string | null
+          owner_user_id: string | null
+          position: number
+          state: string
+          task_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_msg_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          detail?: string | null
+          id?: string
+          owner_agent_id?: string | null
+          owner_user_id?: string | null
+          position: number
+          state?: string
+          task_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_msg_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          detail?: string | null
+          id?: string
+          owner_agent_id?: string | null
+          owner_user_id?: string | null
+          position?: number
+          state?: string
+          task_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_task_subtasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "channel_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      channel_tasks: {
+        Row: {
+          channel_id: string
+          client_msg_id: string | null
+          created_at: string
+          created_by: string
+          created_by_agent: string | null
+          description: string
+          due_at: string | null
+          id: string
+          linked_message_id: string | null
+          linked_thread_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_by_agent: string | null
+          status: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          channel_id: string
+          client_msg_id?: string | null
+          created_at?: string
+          created_by: string
+          created_by_agent?: string | null
+          description?: string
+          due_at?: string | null
+          id?: string
+          linked_message_id?: string | null
+          linked_thread_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_agent?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          channel_id?: string
+          client_msg_id?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_agent?: string | null
+          description?: string
+          due_at?: string | null
+          id?: string
+          linked_message_id?: string | null
+          linked_thread_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_agent?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_tasks_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_linked_message_id_fkey"
+            columns: ["linked_message_id"]
+            isOneToOne: false
+            referencedRelation: "channel_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_linked_thread_id_fkey"
+            columns: ["linked_thread_id"]
+            isOneToOne: false
+            referencedRelation: "channel_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_linked_thread_id_fkey"
+            columns: ["linked_thread_id"]
+            isOneToOne: false
+            referencedRelation: "channel_threads_activity"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_tasks_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
