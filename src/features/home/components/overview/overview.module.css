@@ -208,6 +208,20 @@
   color: var(--text-secondary);
   text-transform: capitalize;
 }
+/* a row that opens something: the button's `::after` covers the row, hover and focus share the
+   menu-row face (as the Channels table's rows) */
+.openRow {
+  position: relative;
+  margin: 0 -8px;
+  padding-inline: 8px;
+}
+.openRow:has(.open:hover),
+.openRow:has(.open:focus-visible) {
+  background: var(--menu-item-hover-bg);
+}
+.tick {
+  margin: 4px;
+}
 /* a row's leading mark: a device glyph, a person's initial, a need's icon */
 .mark {
   display: grid;

@@ -41,6 +41,8 @@ export function OverviewStagingPage() {
             setSettingsOpen(true);
           }}
           onOpenChannel={() => router.push(STAGING_CHANNELS_HREF)}
+          onOpenMessage={() => router.push(STAGING_CHANNELS_HREF)}
+          onOpenTask={() => router.push(STAGING_CHANNELS_HREF)}
           useReads={useStagingOverviewReads}
         />
       </StagingFrame>

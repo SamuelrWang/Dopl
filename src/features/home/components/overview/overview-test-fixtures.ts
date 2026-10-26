@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
 import type { ConnectedDevice } from "@/features/devices/types";
 import type { HomeOverview, HomeOverviewSeries } from "@/features/home/overview-types";
+import type { HomeNeeds } from "@/features/home/needs-types";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 import type { HomeChannelOption } from "./overview-credits";
 import type { HomeOverviewReads, OverviewRead } from "./use-home-overview-reads";
@@ -74,6 +75,38 @@ export const DEVICES: ConnectedDevice[] = [
   },
 ];
 
+export const NEEDS: HomeNeeds = {
+  decisions: [
+    {
+      channelId: "ch-1",
+      workspaceId: "ws-1",
+      channelName: "Priya Shah",
+      messageId: "m-1",
+      seq: 42,
+      threadId: "th-1",
+      question: "Ship the migration tonight?",
+      author: { kind: "agent", name: "Sam Wang" },
+      postedAt: "2026-09-02T10:00:00.000Z",
+    },
+  ],
+  tasks: [
+    {
+      channelId: "ch-1",
+      workspaceId: "ws-1",
+      channelName: "Priya Shah",
+      taskId: "t-1",
+      title: "Review the pricing page",
+      status: "in_progress",
+      dueAt: "2026-09-05T00:00:00.000Z",
+      progress: { done: 1, total: 3 },
+      updatedAt: "2026-09-02T09:00:00.000Z",
+    },
+  ],
+  truncated: { decisions: false, tasks: false },
+};
+
+export const NO_NEEDS: HomeNeeds = { decisions: [], tasks: [], truncated: { decisions: false, tasks: false } };
+
 export function read<T>(data: T | undefined, more: Partial<OverviewRead<T>> = {}): OverviewRead<T> {
   return {
     data,
@@ -94,6 +127,7 @@ export function reads(over: Partial<HomeOverviewReads> = {}): HomeOverviewReads 
     overview: read(OVERVIEW),
     series: read(SERIES),
     spend: read(spendToday([1_260_000])),
+    needs: read(NO_NEEDS),
     wallet: { loading: false, credits: CREDITS, isPaid: false },
     devices: { devices: DEVICES, failed: false },
     ...over,

@@ -25,7 +25,7 @@ describe("the Overview's two columns end on one line (Samuel's ruling)", () => {
   });
 
   it("slots the first card of each column", () => {
-    const face = read("./overview-summary.tsx") + read("./overview-credits.tsx");
+    const face = read("./overview-needs.tsx") + read("./overview-credits.tsx");
     expect(face).toContain("className={styles.slotNeeds}");
     expect(face).toContain("className={styles.slotCredits}");
   });

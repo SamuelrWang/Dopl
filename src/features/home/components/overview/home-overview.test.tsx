@@ -16,6 +16,8 @@ function mount(state: HomeOverviewReads = reads()) {
       homeChannels={HOME_CHANNELS}
       onOpenSettings={onOpenSettings}
       onOpenChannel={vi.fn()}
+      onOpenMessage={vi.fn()}
+      onOpenTask={vi.fn()}
       useReads={() => state}
     />
   );

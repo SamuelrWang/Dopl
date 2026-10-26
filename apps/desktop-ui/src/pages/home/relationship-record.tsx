@@ -32,6 +32,7 @@ export function RelationshipRecord({
   currentUserId,
   initialThreadId = null,
   initialSeq = null,
+  initialTaskId = null,
   onDeleted,
 }: {
   homeChannel: Channel;
@@ -54,6 +55,8 @@ export function RelationshipRecord({
    * history" notice rather than scrolling nowhere in silence.
    */
   initialSeq?: number | null;
+  /** A task to open on the Tasks tab — how a Needs you task row lands. INITIAL, like the two above. */
+  initialTaskId?: string | null;
   /** The container's channel was deleted from Settings — drop the selection. */
   onDeleted: () => void;
 }) {
@@ -109,6 +112,7 @@ export function RelationshipRecord({
       role={homeChannel.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE}
       initialThreadId={initialThreadId}
       initialSeq={initialSeq}
+      initialTaskId={initialTaskId}
       onDeleted={onDeleted}
       // 🔒 /home RENDERS THE SHARED Info BODY AND ADDS ONE REGION TO IT (wave
       // 1A, 2026-09-17). It used to inject a whole tab through the

@@ -76,7 +76,7 @@ export function TaskLinkChip({
 }
 
 /** "2/4" subtasks done. */
-export function TaskProgress({ task }: { task: ChannelTask }) {
+export function TaskProgress({ task }: { task: Pick<ChannelTask, "progress"> }) {
   if (!task.progress) return null;
   const { done, total } = task.progress;
   return (

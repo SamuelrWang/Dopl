@@ -13,6 +13,7 @@ import {
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
 import { usageSeriesPath } from "@/features/home/overview-period";
+import type { HomeNeeds } from "@/features/home/needs-types";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 
 export interface OverviewRead<T> {
@@ -30,6 +31,7 @@ export interface HomeOverviewReads {
   overview: OverviewRead<HomeOverview>;
   series: OverviewRead<HomeOverviewSeries>;
   spend: OverviewRead<TokenSpendReport>;
+  needs: OverviewRead<HomeNeeds>;
   wallet: { loading: boolean; credits: WorkspaceCreditsStatus; isPaid: boolean };
   devices: { devices: ConnectedDevice[] | null; failed: boolean };
 }
@@ -57,12 +59,14 @@ export function useHomeOverviewReads({
     keepPreviousData: true,
   });
   const spend = useApiQuery<TokenSpendReport>("/api/home/token-spend");
+  const needs = useApiQuery<HomeNeeds>("/api/home/needs");
   const entitlements = useWorkspaceEntitlements(homeWorkspaceId ?? undefined);
   const devices = useConnectedDevices({ live: false });
   return {
     overview,
     series,
     spend,
+    needs,
     wallet: {
       loading: entitlements.loading || !homeWorkspaceId,
       credits: entitlements.credits,

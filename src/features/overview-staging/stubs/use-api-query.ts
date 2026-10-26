@@ -6,6 +6,7 @@ import {
   HOME_OVERVIEW_EMPTY,
   overviewSeries,
   tokenSpendReport,
+  homeNeeds,
 } from "../overview-mock-data";
 import { USAGE_SCOPE_ALL } from "@/features/home/overview-types";
 import { monthKey } from "@/features/home/overview-period";
@@ -33,6 +34,8 @@ function resolvePath(path: string, load: StagingLoad): unknown {
       );
     case "/api/home/token-spend":
       return tokenSpendReport(empty);
+    case "/api/home/needs":
+      return homeNeeds(empty);
     default:
       throw new Error(`No staging fixture for ${url.pathname}`);
   }

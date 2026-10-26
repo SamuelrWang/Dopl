@@ -24,6 +24,8 @@ function mount(state: Partial<HomeOverviewReads> = {}) {
       homeChannels={HOME_CHANNELS}
       onOpenSettings={onOpenSettings}
       onOpenChannel={vi.fn()}
+      onOpenMessage={vi.fn()}
+      onOpenTask={vi.fn()}
       useReads={(args) => {
         calls.push(args);
         return reads(state);

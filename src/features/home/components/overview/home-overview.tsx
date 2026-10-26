@@ -9,7 +9,8 @@ import { CreditsCard, type HomeChannelOption } from "./overview-credits";
 import { DevicesCard } from "./overview-devices";
 import { ChannelsTable, ClippedLine, PeopleCard, ToolsCard } from "./overview-ledger";
 import { OverviewSkeleton } from "./overview-skeleton";
-import { NeedsCard, SummaryStrip } from "./overview-summary";
+import { NeedsCard, type NeedsNavigation } from "./overview-needs";
+import { SummaryStrip } from "./overview-summary";
 import { TokensCard } from "./overview-tokens";
 import { useHomeOverviewReads, type HomeOverviewReads, type HomeOverviewReadArgs } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
@@ -25,8 +26,10 @@ export function HomeOverview({
   homeChannels,
   onOpenSettings,
   onOpenChannel,
+  onOpenMessage,
+  onOpenTask,
   useReads = useHomeOverviewReads,
-}: {
+}: NeedsNavigation & {
   homeWorkspaceId: string | null;
   /** The operator's home channels, for the usage scope and the Channels table's faces. */
   homeChannels: readonly HomeChannelOption[];
@@ -52,10 +55,15 @@ export function HomeOverview({
   return (
     <div className={styles.root}>
       <div className={styles.inner}>
-        <SummaryStrip wallet={reads.wallet} devices={reads.devices} />
+        <SummaryStrip wallet={reads.wallet} devices={reads.devices} needs={reads.needs} />
         <div className={styles.grid}>
           <div className={styles.col}>
-            <NeedsCard wallet={reads.wallet} />
+            <NeedsCard
+              wallet={reads.wallet}
+              needs={reads.needs}
+              onOpenMessage={onOpenMessage}
+              onOpenTask={onOpenTask}
+            />
             <DevicesCard devices={reads.devices} onAddDevice={() => onOpenSettings("devices")} />
           </div>
           <div className={styles.col}>

@@ -101,9 +101,12 @@ export interface ChannelsSelection {
 export function useChannelsSelection({
   initialChannelId = null,
   initialThreadId = null,
+  initialTaskId = null,
 }: {
   initialChannelId?: string | null;
   initialThreadId?: string | null;
+  /** A task to open on mount, on the Tasks tab: `openTask`'s state, seeded. */
+  initialTaskId?: string | null;
 }): ChannelsSelection {
   const [selectedId, setSelectedId] = useState<string | null>(initialChannelId);
   const [createOpen, setCreateOpen] = useState(false);
@@ -116,8 +119,8 @@ export function useChannelsSelection({
   const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
   const [newThreadSignal, setNewThreadSignal] = useState(0);
   const [infoTabSignal, setInfoTabSignal] = useState(0);
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const [tasksTabSignal, setTasksTabSignal] = useState(0);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(initialTaskId);
+  const [tasksTabSignal, setTasksTabSignal] = useState(initialTaskId ? 1 : 0);
 
   // A SECOND notification, with the page already mounted, changes the route but
   // not the component — the initial `useState` above would never see it. So the

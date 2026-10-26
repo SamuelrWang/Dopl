@@ -8,6 +8,7 @@
  *   GET /api/home/overview            → `HOME_OVERVIEW`
  *   GET /api/home/overview-series     → `overviewSeries(scope, month)`
  *   GET /api/home/token-spend         → `tokenSpendReport()`
+ *   GET /api/home/needs               → `homeNeeds()`
  *   GET /api/billing/status (credits) → `creditState(plan)`
  *   devices (computers + glasses)     → `connectedDevices()`
  *   usage scopes                      → `HOME_CHANNELS`
@@ -21,6 +22,7 @@ import { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP } from "@/features/home/overview-t
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
 import type { ConnectedDevice } from "@/features/devices/types";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
+import type { HomeNeeds } from "@/features/home/needs-types";
 import type { HomeChannelOption } from "@/features/home/components/overview/overview-credits";
 import { STAGING_PEOPLE } from "@/features/ui-staging/staging-stubs";
 
@@ -165,6 +167,68 @@ export function tokenSpendReport(empty = false): TokenSpendReport {
     }
   }
   return { marks, truncated: false };
+}
+
+/* ──────────────────────────────── needs you ──────────────────────────────── */
+
+function hoursAgo(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
+/** Two open decisions and two tasks assigned to the reader. */
+export function homeNeeds(empty = false): HomeNeeds {
+  if (empty) return { decisions: [], tasks: [], truncated: { decisions: false, tasks: false } };
+  return {
+    decisions: [
+      {
+        channelId: "ch-api-v2",
+        workspaceId: "demo-ws-apiv2",
+        channelName: "api-v2-migration",
+        messageId: "demo-msg-cutover",
+        seq: 611,
+        threadId: null,
+        question: "Cut over the v1 endpoints this week or next?",
+        author: { kind: "agent", name: "Sam Wang" },
+        postedAt: hoursAgo(2),
+      },
+      {
+        channelId: "ch-flaky-tests",
+        workspaceId: "demo-ws-flakes",
+        channelName: "flaky-tests",
+        messageId: "demo-msg-quarantine",
+        seq: 3920,
+        threadId: null,
+        question: "Quarantine the three retrying suites?",
+        author: { kind: "person", name: GRACE.displayName },
+        postedAt: hoursAgo(26),
+      },
+    ],
+    tasks: [
+      {
+        channelId: "ch-tech-debt",
+        workspaceId: "demo-ws-q4",
+        channelName: "tech-debt",
+        taskId: "demo-task-auth",
+        title: "Retire the legacy auth middleware",
+        status: "in_progress",
+        dueAt: hoursAgo(-72),
+        progress: { done: 2, total: 5 },
+        updatedAt: hoursAgo(1),
+      },
+      {
+        channelId: "ch-deploys",
+        workspaceId: "demo-ws-weekly",
+        channelName: "deploys",
+        taskId: "demo-task-rollback",
+        title: "Write the rollback runbook",
+        status: "open",
+        dueAt: null,
+        progress: null,
+        updatedAt: hoursAgo(30),
+      },
+    ],
+    truncated: { decisions: false, tasks: false },
+  };
 }
 
 /* ─────────────────────────────── credit wallet ─────────────────────────────── */

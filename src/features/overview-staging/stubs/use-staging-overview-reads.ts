@@ -8,6 +8,7 @@ import {
 } from "@/features/home/overview-types";
 import { usageSeriesPath } from "@/features/home/overview-period";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
+import type { HomeNeeds } from "@/features/home/needs-types";
 import type {
   HomeOverviewReadArgs,
   HomeOverviewReads,
@@ -37,6 +38,7 @@ export function useStagingOverviewReads({
     keepPreviousData: true,
   });
   const spend = useApiQuery<TokenSpendReport>("/api/home/token-spend");
+  const needs = useApiQuery<HomeNeeds>("/api/home/needs");
   const wallet = useWorkspaceEntitlements(homeWorkspaceId ?? undefined);
 
   const key = `${load}|${epoch}`;
@@ -51,6 +53,7 @@ export function useStagingOverviewReads({
     overview,
     series,
     spend,
+    needs,
     wallet,
     devices: {
       devices: devicesKey === key ? connectedDevices(load === "empty") : null,

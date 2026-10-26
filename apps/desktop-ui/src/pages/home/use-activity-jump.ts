@@ -4,13 +4,10 @@ import { channelRowId } from "./home-rows";
 /**
  * JUMPING FROM A ROW TO THE THING IT NAMES (2026-09-01).
  *
- * ⚠ **THE OVERVIEW FACE IS NO LONGER A CALLER (2026-09-20).** The Activity
- * panel and its agent board were deleted from `/home`, so the one surface left
- * holding {@link OpenActivity} is the SEARCH popup (`index.tsx ›
- * openSearchHit`). **The hook did not die with it** — the three moves below are
- * exactly what a search hit needs, and `threadFor`/`seqFor` are read by the
- * record pane on every render (`home-panes.tsx`), caller or no caller. The name
- * is kept because the MOVE is what it describes, not the card that starts it.
+ * Two callers: the SEARCH popup (`index.tsx › openSearchHit`) and the
+ * Overview's Needs you card (a decision lands on its message, a task on the
+ * Tasks tab). `threadFor`/`seqFor`/`taskFor` are read by the record pane on
+ * every render (`home-panes.tsx`).
  *
  * 🔒 **ON /home A JUMP IS A SELECTION, NOT A ROUTE, AND THAT IS FORCED BY THE
  * MODEL RATHER THAN CHOSEN.** A home channel lives in a `kind='link'`
@@ -47,17 +44,15 @@ export type OpenActivity = (
   /** `null` opens the channel with no thread raised. */
   threadId: string | null,
   /**
-   * A `channel_messages.seq` to land the transcript ON (F-714, 2026-09-17) —
-   * a SEARCH row on a message is the only caller that has one, and since
-   * 2026-09-20 it is the only caller at all. `null`/absent leaves the
-   * transcript where the surface puts it, which is every other jump byte for
-   * byte.
+   * A `channel_messages.seq` to land the transcript ON (F-714) — a search row
+   * on a message, or a Needs you decision. `null`/absent leaves the transcript
+   * where the surface puts it.
    */
   seq?: number | null
 ) => void;
 
 export interface ActivityJump {
-  /** Hand to whatever opens a row — the SEARCH popup. See {@link OpenActivity}. */
+  /** Hand to whatever opens a row. See {@link OpenActivity}. */
   open: OpenActivity;
   /** The thread to raise when THIS row's record pane mounts, or `null`. */
   threadFor: (rowId: string) => string | null;
@@ -65,6 +60,10 @@ export interface ActivityJump {
    *  by the row for `threadFor`'s reason: a seq is a coordinate INSIDE one
    *  channel's transcript and means nothing in another's. */
   seqFor: (rowId: string) => number | null;
+  /** Open a channel on its Tasks tab, on one task — a Needs you task row. */
+  openTask: (workspaceId: string, taskId: string) => void;
+  /** The task to open when THIS row's record pane mounts, or `null`. Keyed by the row, like `threadFor`. */
+  taskFor: (rowId: string) => string | null;
   /** Drop the held thread — the operator picked a row themselves. */
   clear: () => void;
 }
@@ -82,20 +81,25 @@ export function useActivityJump({
     rowId: string;
     threadId: string | null;
     seq: number | null;
+    taskId: string | null;
   } | null>(null);
 
+  const land = (workspaceId: string, target: Omit<NonNullable<typeof jump>, "rowId">) => {
+    // ⚠ THE ROW ID IS MINTED, NEVER THE CONTAINER ID BARE. Home rows are
+    // `rel:`/`link:`-prefixed (`home-rows.ts`), and the page's selection —
+    // and its pane tokens — are keyed by that id.
+    const rowId = channelRowId(workspaceId);
+    setJump({ rowId, ...target });
+    onSelect(rowId);
+    onRaise();
+  };
+
   return {
-    open: (workspaceId, threadId, seq = null) => {
-      // ⚠ THE ROW ID IS MINTED, NEVER THE CONTAINER ID BARE. Home rows are
-      // `rel:`/`link:`-prefixed (`home-rows.ts`), and the page's selection —
-      // and its pane tokens — are keyed by that id.
-      const rowId = channelRowId(workspaceId);
-      setJump({ rowId, threadId, seq });
-      onSelect(rowId);
-      onRaise();
-    },
+    open: (workspaceId, threadId, seq = null) => land(workspaceId, { threadId, seq, taskId: null }),
+    openTask: (workspaceId, taskId) => land(workspaceId, { threadId: null, seq: null, taskId }),
     threadFor: (rowId) => (jump?.rowId === rowId ? jump.threadId : null),
     seqFor: (rowId) => (jump?.rowId === rowId ? jump.seq : null),
+    taskFor: (rowId) => (jump?.rowId === rowId ? jump.taskId : null),
     clear: () => setJump(null),
   };
 }

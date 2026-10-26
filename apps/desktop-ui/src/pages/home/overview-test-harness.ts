@@ -115,7 +115,7 @@ export const BILLING_STATUS = {
 };
 
 /**
- * The Overview face's three reads.
+ * The Overview face's reads.
  *
  * ⚠ **ONE BODY FOR `/api/home/overview`, WHATEVER THE QUERY.** There is no
  * scoped variant to answer — see this file's header.
@@ -132,6 +132,9 @@ export function overviewRoutes(path: string): Promise<BridgeResponse> | null {
         ? "mcp"
         : "credits";
     return Promise.resolve(ok({ ...HOME_SERIES, metric }));
+  }
+  if (bare === "/api/home/needs") {
+    return Promise.resolve(ok({ decisions: [], tasks: [], truncated: { decisions: false, tasks: false } }));
   }
   if (bare === "/api/billing/status") {
     return Promise.resolve(ok(BILLING_STATUS));

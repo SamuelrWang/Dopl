@@ -70,7 +70,9 @@ export function HomePane({
   const rowFor = (id: string) =>
     rows.find((candidate) => candidate.id === id) ?? null;
 
-  if (shown === OVERVIEW_PANE) return <OverviewPane identity={identity} onOpenRow={onOpenRow} />;
+  if (shown === OVERVIEW_PANE) {
+    return <OverviewPane identity={identity} jump={jump} onOpenRow={onOpenRow} />;
+  }
   if (shown === ONTOLOGY_PANE) return <OntologyPane identity={identity} />;
   if (shown.startsWith(IDENTITIES_PANE)) {
     const shownRow = rowFor(shown.slice(IDENTITIES_PANE.length));
@@ -123,6 +125,7 @@ export function HomePane({
       initialThreadId={jump.threadFor(row.id)}
       // The message a search row named (F-714).
       initialSeq={jump.seqFor(row.id)}
+      initialTaskId={jump.taskFor(row.id)}
       onDeleted={onChannelDeleted}
     />
   );
@@ -133,9 +136,11 @@ export function HomePane({
  *  and give the Channels table its faces and rows to open. */
 function OverviewPane({
   identity,
+  jump,
   onOpenRow,
 }: {
   identity: BootPayload;
+  jump: ActivityJump;
   onOpenRow: (rowId: string) => void;
 }) {
   const homeChannels = useHomeChannels();
@@ -155,6 +160,8 @@ function OverviewPane({
       homeChannels={options}
       onOpenSettings={openHomeSettings}
       onOpenChannel={(workspaceId) => onOpenRow(channelRowId(workspaceId))}
+      onOpenMessage={jump.open}
+      onOpenTask={jump.openTask}
     />
   );
 }
