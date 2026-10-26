@@ -1,9 +1,16 @@
 "use client";
 
 import { userFacingMessage } from "@/shared/api/user-facing-message";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Hash, MessageSquare } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import {
+  SettingsCard,
+  SettingsPanel,
+  SettingsRows,
+  SettingsRowsEmpty,
+  SettingsRowsSkeleton,
+} from "@/shared/layout/settings-modal/sections/settings-panel";
+import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { Switch } from "@/shared/ui/switch";
 import { pendingRow } from "@/shared/ui/pending";
 import { toast } from "@/shared/ui/toast";
@@ -12,7 +19,6 @@ import {
   useChannelGrantSettings,
   useSetChannelGrant,
 } from "../client/hooks-channel-grants";
-import { SettingsSection } from "./settings-section";
 import type {
   ChannelGrantChannelRef,
   ChannelGrantLevelInput,
@@ -20,8 +26,8 @@ import type {
 } from "../types";
 
 /**
- * Settings → Channels: which CHANNELS this knowledge base is shared into, one
- * row per channel, three states per row.
+ * Settings → Sharing → Channels: which CHANNELS this knowledge base is shared
+ * into, one row per channel, three states per row.
  *
  * The three states are `None` (no grant row), `Agent only` (the channel's
  * agents read it, no human does) and `Visible` (everyone in the channel,
@@ -42,9 +48,8 @@ import type {
  * cannot render an editor for somebody the write will refuse.
  *
  * Ruling 2026-09-17: in a standard workspace it renders nothing, heading
- * included, on the server's `channelScopeAllowed`. It owns its own
- * `SettingsSection` for that; with the frame in the parent the refusal left an
- * empty Channels heading.
+ * included, on the server's `channelScopeAllowed`. It owns its own panel for
+ * that; with the frame in the parent the refusal left an empty Channels heading.
  */
 export function KbChannelGrantsSection({
   baseId,
@@ -74,16 +79,20 @@ export function KbChannelGrantsSection({
 
   if (loading) {
     return (
-      <SettingsSection title="Channels">
-        <p className="text-small text-text-secondary">Loading channels…</p>
-      </SettingsSection>
+      <Panel>
+        <SettingsRows label="Channels">
+          <SettingsRowsSkeleton />
+        </SettingsRows>
+      </Panel>
     );
   }
   if (error) {
     return (
-      <SettingsSection title="Channels">
-        <p className="text-small text-danger">{error}</p>
-      </SettingsSection>
+      <Panel>
+        <SettingsRows label="Channels">
+          <SettingsRowsEmpty failed={error}>{null}</SettingsRowsEmpty>
+        </SettingsRows>
+      </Panel>
     );
   }
   if (!data) return null;
@@ -96,46 +105,58 @@ export function KbChannelGrantsSection({
 
   if (!data.canManage) {
     return (
-      <SettingsSection title="Channels">
-        <p className="text-caption text-text-secondary leading-relaxed">
-          {granted.length === 0
-            ? "Not shared into any channel."
-            : `Shared into ${granted.length} channel${granted.length === 1 ? "" : "s"}. Only the owner or a workspace admin can change this.`}
-        </p>
-      </SettingsSection>
-    );
-  }
-
-  if (data.channels.length === 0) {
-    return (
-      <SettingsSection title="Channels">
-        <p className="text-small text-text-secondary">No channels available.</p>
-      </SettingsSection>
+      <Panel>
+        <SettingsCard>
+          <p className="text-caption text-text-secondary">
+            {granted.length === 0
+              ? "Not shared into any channel."
+              : `Shared into ${granted.length} channel${granted.length === 1 ? "" : "s"}. Only the owner or a workspace admin can change this.`}
+          </p>
+        </SettingsCard>
+      </Panel>
     );
   }
 
   return (
-    <SettingsSection title="Channels">
-      <div className="flex flex-col gap-2">
-        {data.channels.map((channel) => (
-          <GrantRow
-            key={channel.id}
-            channel={channel}
-            grant={data.grants[channel.id] ?? null}
-            workspaceId={workspaceId}
-            pending={pendingChannelId === channel.id}
-            disabled={pendingChannelId !== null}
-            onChange={write}
-          />
-        ))}
-      </div>
-    </SettingsSection>
+    <Panel>
+      <SettingsRows label="Channels">
+        {data.channels.length === 0 ? (
+          <SettingsRowsEmpty>No channels available.</SettingsRowsEmpty>
+        ) : (
+          data.channels.map((channel) => (
+            <GrantRow
+              key={channel.id}
+              channel={channel}
+              grant={data.grants[channel.id] ?? null}
+              workspaceId={workspaceId}
+              pending={pendingChannelId === channel.id}
+              disabled={pendingChannelId !== null}
+              onChange={write}
+            />
+          ))
+        )}
+      </SettingsRows>
+    </Panel>
   );
 }
 
+function Panel({ children }: { children: ReactNode }) {
+  return (
+    <SettingsPanel id="kb-settings-channels" label="Channels">
+      {children}
+    </SettingsPanel>
+  );
+}
+
+const LEVELS: ReadonlyArray<SelectMenuOption<ChannelGrantLevelInput>> = [
+  { value: "none", label: "Not shared" },
+  { value: "agent_only", label: "Agent only", description: "The channel's agents read it; no person does" },
+  { value: "visible", label: "Visible", description: "Everyone in the channel, guests included" },
+];
+
 /**
- * One channel's row: the three-state control, plus the guest-write toggle when
- * — and only when — there is a guest to hand a pen to.
+ * One channel's row: the three-state menu, plus the guest-write switch when —
+ * and only when — there is a guest to hand a pen to.
  */
 function GrantRow({
   channel,
@@ -172,20 +193,18 @@ function GrantRow({
   const Icon = channel.isDirect ? MessageSquare : Hash;
 
   return (
-    <div
-      {...pendingRow(
-        pending,
-        "flex flex-col gap-2 rounded-lg border border-border-default bg-surface-raised-1 px-3 py-2"
-      )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-2 text-body font-medium text-text-primary">
-          <Icon size={13} className="shrink-0 text-text-muted" />
-          <span className="truncate">{channel.name}</span>
+    <li {...pendingRow(pending, "flex flex-col gap-2 py-2.5")}>
+      <div className="flex min-w-0 items-center gap-3">
+        <Icon size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate text-body font-medium text-text-primary">
+          {channel.name}
         </span>
-        <GrantLevelControl
+        <SelectMenu<ChannelGrantLevelInput>
+          variant="bare"
           value={level}
+          options={LEVELS}
           disabled={disabled}
+          ariaLabel={`${channel.name} sharing`}
           onChange={(next) =>
             // Dropping to `none`/`agent_only` sends `guestWrite: false`; the
             // server forces it too, but the wire states the end state asked for.
@@ -195,10 +214,8 @@ function GrantRow({
       </div>
 
       {level === "visible" && hasGuest ? (
-        <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-2">
-          <span className="text-caption text-text-secondary">
-            Let guests edit
-          </span>
+        <div className="flex items-center justify-between gap-3 pl-6.5">
+          <span className="text-caption text-text-muted">Let guests edit</span>
           <Switch
             checked={guestWrite}
             disabled={disabled}
@@ -207,60 +224,6 @@ function GrantRow({
           />
         </div>
       ) : null}
-    </div>
-  );
-}
-
-const LEVELS: Array<{ key: ChannelGrantLevelInput; label: string }> = [
-  { key: "none", label: "None" },
-  { key: "agent_only", label: "Agent only" },
-  { key: "visible", label: "Visible" },
-];
-
-/**
- * Three-state segmented radio, the shape of `members/components/team-bits.tsx ›
- * AccessLevelControl`.
- *
- * Not that component reused: its segments are None/Read/Edit, and widening it
- * would put "Agent only" inside the team access control, where it means
- * nothing. Same tokens, same kit-free recipe.
- */
-function GrantLevelControl({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: ChannelGrantLevelInput;
-  onChange: (next: ChannelGrantLevelInput) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      className="inline-flex shrink-0 items-center overflow-hidden rounded-md border border-border-default"
-    >
-      {LEVELS.map((seg) => {
-        const active = value === seg.key;
-        return (
-          <button
-            key={seg.key}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => !active && onChange(seg.key)}
-            className={cn(
-              "px-2.5 py-1 text-label uppercase tracking-wider transition-colors",
-              active
-                ? "bg-surface-selected text-text-primary"
-                : "text-text-muted hover:bg-surface-raised-2 hover:text-text-primary",
-              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-            )}
-          >
-            {seg.label}
-          </button>
-        );
-      })}
-    </div>
+    </li>
   );
 }

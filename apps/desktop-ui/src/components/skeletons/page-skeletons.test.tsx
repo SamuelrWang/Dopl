@@ -189,24 +189,18 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
   });
 
   /**
-   * ⚠ THE OPENED BASE'S TWO SECTIONS ARE WELLS, and the level decides the face:
-   * they are drawn inside the shell's white `.pageCard` (or /home's record
-   * pane), so they take `SECTION_PANEL_GROUND` exactly as `detail/meta-card.tsx`
-   * and `detail/overview-changelog.tsx` do. Flat shimmer blocks resolved into a
-   * gray panel appearing under the reader.
+   * The opened base's info face is one reading column (`.infoColumn`): the name and
+   * description, then Details and Changelog, each a heading over a white card. The
+   * ghost mounts the same column and the same card, so neither section flashes in.
    */
-  it("the opened-base ghost grounds its info sections as SECTION_PANEL wells", () => {
-    expect(KNOWLEDGE_SKELETONS).toContain("SECTION_PANEL_GROUND");
-    // ⚠ THE REAL SECTION NAMES THE GROUND BY MOUNTING `SectionPanel`, NOT BY
-    // PASSING IT (R-38, 2026-09-17): the component paints the one flat gray, so
-    // the ghost — a plain `div`, because a loading state must not print a
-    // heading STRING — is the only side left that reads the constant by name.
+  it("the opened-base ghost draws the info face's column and its two white cards", () => {
+    expect(KNOWLEDGE_SKELETONS).toContain("kv.infoColumn");
     expect(
-      shared("features/knowledge/components/knowledge-v2/detail/meta-card.tsx")
-    ).toContain("SectionPanel");
+      shared("features/knowledge/components/knowledge-v2/detail/base-overview.tsx")
+    ).toContain("styles.infoColumn");
 
     const { container } = render(<KnowledgeBaseSkeleton />);
-    expect(container.querySelectorAll("[data-section-panel]")).toHaveLength(2);
+    expect(container.querySelectorAll(".white-card")).toHaveLength(2);
   });
 
   /**

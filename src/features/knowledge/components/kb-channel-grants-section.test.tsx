@@ -84,32 +84,36 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the three states", () => {
-  it("renders one row per channel with None selected when there is no grant", () => {
+  /** A row's level menu trigger, which prints the current level. */
+  const trigger = (channel: string) =>
+    screen.getByRole("button", { name: `${channel} sharing` });
+
+  function choose(channel: string, level: string) {
+    fireEvent.click(trigger(channel));
+    fireEvent.click(screen.getByRole("menuitem", { name: new RegExp(`^${level}`) }));
+  }
+
+  it("renders one row per channel with Not shared selected when there is no grant", () => {
     renderSection();
 
     expect(screen.getByText("engineering")).toBeTruthy();
     expect(screen.getByText("design")).toBeTruthy();
-    // Two rows × three segments.
-    const radios = screen.getAllByRole("radio");
-    expect(radios).toHaveLength(6);
-    // Absence renders as None, not as a missing selection.
-    const checked = radios.filter((r) => r.getAttribute("aria-checked") === "true");
-    expect(checked.map((r) => r.textContent)).toEqual(["None", "None"]);
+    // Absence renders as a level of its own, not as a missing selection.
+    expect(trigger("engineering").textContent).toBe("Not shared");
+    expect(trigger("design").textContent).toBe("Not shared");
   });
 
   it("reflects a stored grant on the right row only", () => {
     settings = base({ grants: { "chan-1": { level: "agent_only", guestWrite: false } } });
     renderSection();
 
-    const checked = screen
-      .getAllByRole("radio")
-      .filter((r) => r.getAttribute("aria-checked") === "true");
-    expect(checked.map((r) => r.textContent)).toEqual(["Agent only", "None"]);
+    expect(trigger("engineering").textContent).toBe("Agent only");
+    expect(trigger("design").textContent).toBe("Not shared");
   });
 
   it("writes the chosen level for the chosen channel", async () => {
     renderSection();
-    fireEvent.click(screen.getAllByRole("radio", { name: "Visible" })[1]);
+    choose("design", "Visible");
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({
@@ -124,7 +128,7 @@ describe("the three states", () => {
     settings = base({ grants: { "chan-1": { level: "visible", guestWrite: true } } });
     renderSection();
 
-    fireEvent.click(screen.getAllByRole("radio", { name: "None" })[0]);
+    choose("engineering", "Not shared");
 
     // `none` is a value on the wire, and `guestWrite` drops with the level.
     await waitFor(() =>
@@ -258,7 +262,7 @@ describe("🔒 channelScopeAllowed", () => {
   });
 
   it("…including the CHANNELS heading — the section owns its own frame", () => {
-    // Catches putting the frame back in `base-settings-form.tsx`: the refusal
+    // Catches putting the frame back in `base-settings-modal.tsx`: the refusal
     // then renders as a bare heading over nothing.
     settings = base({ channelScopeAllowed: false });
     renderSection();

@@ -56,7 +56,7 @@ export function TreeContextMenu({
       </MenuItem>
       {canEdit ? (
         <>
-          <div className="mx-1 my-1 h-px bg-surface-raised-3" />
+          <div className="mx-1 my-1 h-px bg-border-default" />
           <MenuItem
             icon={<Edit2 size={12} />}
             onSelect={() => {
@@ -75,7 +75,7 @@ export function TreeContextMenu({
           >
             Move to…
           </MenuItem>
-          <div className="mx-1 my-1 h-px bg-surface-raised-3" />
+          <div className="mx-1 my-1 h-px bg-border-default" />
           <MenuItem
             destructive
             icon={<Trash2 size={12} />}
@@ -88,7 +88,7 @@ export function TreeContextMenu({
           </MenuItem>
         </>
       ) : (
-        <div className="px-3 py-1.5 text-label text-text-secondary/70">
+        <div className="px-3 py-1.5 text-caption text-text-muted">
           Read-only — ask an admin for edit access.
         </div>
       )}

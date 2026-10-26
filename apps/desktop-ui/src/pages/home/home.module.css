@@ -18,19 +18,22 @@
   background: var(--bg-overlay);
 }
 
+/* The Knowledge face whitens the record pane too; its cards keep their hairline and shadow. */
+.page[data-face="knowledge"] .pane {
+  background: var(--bg-overlay);
+}
+
 /* The Knowledge tab's card grid. `knowledge-v2/home/base-card.tsx` is reused verbatim and reads
    knowledge-v2's `--kv-*` aliases, which that module binds on a `.shell` this pane does not
    mount: an unresolved `var()` drops the declaration, so the same aliases are bound here onto
    the same tokens. The clamp rebind keeps the change /home-scoped (the workspace page never
    mounts `.kbCards`). Row height follows the card's fixed content stack at a 2-line clamp. */
 .kbCards {
-  --kv-panel: var(--panel-surface);
   --kv-border: var(--border-default);
   --kv-border-strong: var(--border-strong);
   --kv-text: var(--text-primary);
   --kv-text-2: var(--text-secondary);
   --kv-text-3: var(--text-muted);
-  --kv-accent: var(--text-primary);
   --kv-row-hover: var(--surface-raised-1);
   --kv-card-desc-lines: 2;
 
