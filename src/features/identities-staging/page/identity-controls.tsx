@@ -12,7 +12,7 @@
  * 1. **The field is the app's own search pill**, not a bordered box — `./identity-search-field.tsx`
  *    wears /home's `.search-expand` recipe verbatim (*"Look at the other search bars. The other
  *    search bar is kind of rounded"*).
- * 2. **The menus have no pill**: `./select-menu.tsx › bare`, label + chevron (*"For dropdowns, it
+ * 2. **The menus have no pill**: `shared/ui/select-menu.tsx`'s `bare` face, label + chevron (*"For dropdowns, it
  *    should just be the arrow. We don't need the whole pill around it"*).
  * 3. **No `--bg-inset` anywhere on the row.** The old field and both menus were `bg-bg-inset`
  *    (`#f1f1f1`), the grey Samuel named: *"I don't like that gray color. I actually want to not
@@ -25,7 +25,7 @@
  * answer to that and is what this row uses.
  */
 
-import { SelectMenu } from "./select-menu";
+import { SelectMenu } from "@/shared/ui/select-menu";
 import { IdentitySearchField } from "./identity-search-field";
 import { STAGING_RUNTIMES } from "../data";
 import { SORT_OPTIONS, type SortKey } from "./identity-page-data";
@@ -58,6 +58,7 @@ export function IdentityControls({
       <IdentitySearchField value={query} onChange={onQuery} />
 
       <SelectMenu
+        variant="bare"
         value={runtime}
         options={[
           { value: "all", label: "Any runtime" },
@@ -72,6 +73,7 @@ export function IdentityControls({
       />
 
       <SelectMenu
+        variant="bare"
         value={sort}
         options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         onChange={onSort}

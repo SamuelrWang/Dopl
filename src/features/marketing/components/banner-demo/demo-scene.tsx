@@ -61,7 +61,6 @@ import { DemoAccountRail } from "./demo-home-chrome";
 import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
 import { identityFace } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
-import { DemoAgentCards, DemoAgentStateRows } from "./demo-agent-card";
 import { DemoAgentViewFaces } from "./demo-agent-view-faces";
 import { DemoStreamBoxes, type StreamFace } from "./demo-stream-boxes";
 import { agentNameHandle } from "@/features/channels/lib/agent-mentions";
@@ -118,7 +117,7 @@ export function DemoScene({
   typedWords?: number;
 }) {
   const [qc] = useState(() => new QueryClient());
-  // Tests mount the scene without the banner's ref; the thread-card swap still needs a pane.
+  // Tests mount the scene without the banner's ref; the face swaps still need a pane.
   const ownPane = useRef<HTMLDivElement>(null);
   const pane = paneRef ?? ownPane;
   // The typed line is cut in the DATA, so the real transcript renders it as is.
@@ -329,16 +328,7 @@ export function DemoScene({
                       }}
                     />
                   </div>
-                  <DemoAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
                   <DemoAgentViewFaces paneRef={pane} agent={MY_SESSION} onClose={NOOP} />
-                  <DemoAgentCards
-                    paneRef={pane}
-                    sessions={sessions}
-                    peers={peers}
-                    index={index}
-                    openAgent={agentOpen ? agentKey(MY_SESSION) : null}
-                    onOpenAgent={onOpenAgent}
-                  />
                   <DemoStreamBoxes
                     paneRef={pane}
                     faces={streamFaces}

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * The staged Settings tab (Samuel, 2026-10-24: "the settings tab is blank. We need to mirror
- * it in there"): every row the product's channel and thread faces draw, on local state, and
- * the destructive rows confirm without doing anything.
+ * The staged Settings tab: the PRODUCT's channel and thread faces over local state, with /home's
+ * capabilities (no Add members, no Delete channel) and destructive rows that confirm without
+ * doing anything.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -16,23 +16,27 @@ const fixture = techDebtFixture();
 
 function rowNames(): string[] {
   return [...document.querySelectorAll("[data-settings-row]")].map(
-    (row) => (row.querySelector(".uis-st-name") ?? row).textContent?.trim() ?? ""
+    (row) => (row.querySelector(":scope > span:first-child") ?? row).textContent?.trim() ?? ""
+  );
+}
+
+function channelTab() {
+  render(
+    <StagingSettingsTab
+      channel={fixture.channel}
+      members={fixture.members}
+      thread={null}
+      currentUserId={CURRENT_USER_ID}
+    />
   );
 }
 
 describe("the staged Settings tab", () => {
-  it("mirrors the channel face: agent settings, responder and the channel actions", () => {
-    render(
-      <StagingSettingsTab
-        channel={fixture.channel}
-        members={fixture.members}
-        thread={null}
-        currentUserId={CURRENT_USER_ID}
-      />
-    );
+  it("draws the product's channel face: agent settings with Responder, then the channel", () => {
+    channelTab();
     expect(screen.getByRole("heading", { name: "Agent Settings" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Channel" })).toBeTruthy();
-    const names = rowNames();
+    const agent = within(screen.getByRole("region", { name: "Agent Settings" }));
     for (const name of [
       "Runtime",
       "Permissions",
@@ -42,49 +46,39 @@ describe("the staged Settings tab", () => {
       "Launch agents",
       "Direct agents",
       "Responder",
-      "Add members",
-      "Delete channel",
     ]) {
-      expect(names).toContain(name);
+      expect(agent.getByText(name)).toBeTruthy();
     }
+    const names = rowNames();
     // A shared channel (more than one member) also offers Use my tools.
     if ((fixture.channel.memberCount ?? 0) > 1) expect(names).toContain("Use my tools");
-    // The staged viewer owns the channel, so, as in the product, there is no Leave row.
-    expect(names).not.toContain("Leave channel");
+    // /home's capabilities: membership is fixed, and the viewer owns the channel (no Leave).
+    for (const gone of ["Add members", "Delete channel", "Leave channel"]) {
+      expect(names).not.toContain(gone);
+    }
+    expect(names).toContain("Make public");
   });
 
-  it("changes a setting on local state and opens the Details readings", () => {
-    render(
-      <StagingSettingsTab
-        channel={fixture.channel}
-        members={fixture.members}
-        thread={null}
-        currentUserId={CURRENT_USER_ID}
-      />
-    );
+  it("changes a setting on local state and opens the Details readings", async () => {
+    channelTab();
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     const well = screen.getByRole("list", { name: "Permissions by runtime" });
-    expect(within(well).getByText(/Claude Code · Auto/)).toBeTruthy();
+    expect(within(well).getByText(/Claude · Accept edits/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use default" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Use default" })).toBeNull());
+    expect(screen.getByText("~/Dopl")).toBeTruthy();
   });
 
-  it("confirms Delete channel without deleting anything", async () => {
-    render(
-      <StagingSettingsTab
-        channel={fixture.channel}
-        members={fixture.members}
-        thread={null}
-        currentUserId={CURRENT_USER_ID}
-      />
-    );
-    fireEvent.click(screen.getByRole("button", { name: /Delete channel/ }));
+  it("confirms Make public, then flips the staged visibility", async () => {
+    channelTab();
+    fireEvent.click(screen.getByRole("button", { name: "Make public" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Delete channel?")).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByRole("button", { name: /Delete channel/ })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: /public/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Make private" })).toBeTruthy());
   });
 
-  it("mirrors the thread face: Mode and Delete thread", () => {
+  it("draws the product's thread face: Mode and Delete thread", async () => {
     const thread = { ...fixture.threads[0], createdBy: CURRENT_USER_ID };
     render(
       <StagingSettingsTab
@@ -97,5 +91,11 @@ describe("the staged Settings tab", () => {
     expect(screen.getByRole("heading", { name: "Thread" })).toBeTruthy();
     expect(rowNames()).toEqual(["Mode", "Delete thread"]);
     expect(screen.queryByRole("heading", { name: "Agent Settings" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete thread" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("button", { name: "Delete thread" })).toBeTruthy();
   });
 });

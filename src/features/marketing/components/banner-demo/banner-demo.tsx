@@ -139,7 +139,7 @@ export function BannerDemo() {
         // The count badge concatenates into textContent ("Agents3").
         return findButton(pane, (l) => l.startsWith("Agents"));
       if (at(step, "cursor-to-agent") || at(step, "click-agent"))
-        // The demo's agent card face (`demo-agent-card.tsx`).
+        // The Agents-tab card's own Open (`channels/components/agents-tab-cards.tsx`).
         return findButton(pane, (l) => l === "Open");
       if (at(step, "cursor-to-crumb") || at(step, "click-crumb"))
         // The breadcrumb's channel crumb, which is a button in thread view only

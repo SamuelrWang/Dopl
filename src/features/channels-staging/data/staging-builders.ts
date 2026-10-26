@@ -29,7 +29,7 @@ import {
   minsAgo,
 } from "@/features/marketing/components/banner-demo/demo-data";
 import { mentionMetadata } from "@/features/marketing/components/banner-demo/demo-transcript";
-import { stagingAgentIndex } from "./staging-agents";
+import { stagingAgentIndex, stagingAgentRuntime } from "./staging-agents";
 
 export { U, minsAgo, NOW_MS, WORKSPACE_ID };
 
@@ -181,6 +181,7 @@ export function ownSessionOf(
     channelName,
     threadTitle: thread?.title ?? null,
     identityName: name,
+    runtimeId: stagingAgentRuntime(agentId),
     contextUsed,
     contextWindow: 200_000,
     tokensSpent: Math.round(contextUsed * 2.4),
@@ -204,6 +205,7 @@ export function peerOf(
     name: agentId,
     displayName: agentName(agentId),
     color: entry?.color ?? undefined,
+    runtime: stagingAgentRuntime(agentId),
     state,
     channelName,
     threadTitle: thread?.title ?? null,

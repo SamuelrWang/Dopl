@@ -3,9 +3,9 @@
  * docs/specs/agent-colors.md item 8: *"the Agents-tab card and the pop-out rail row show a
  * small colour dot before the name for live agents"*).
  *
- * ⚠ **ITS OWN FILE BECAUSE FOUR SURFACES DRAW IT AND A DOT THAT DRIFTS IS WORSE THAN NO
- * DOT.** The Agents-tab cards, the pop-out rail rows and the transcript filter's option
- * rows all answer the same question — *which agent is this* — and the whole value of the
+ * ⚠ **ITS OWN FILE BECAUSE SEVERAL SURFACES DRAW IT AND A DOT THAT DRIFTS IS WORSE THAN NO
+ * DOT.** The pop-out rail rows and the transcript filter's option rows (the Agents-tab cards
+ * carry the colour as their identity face's ring) all answer the same question — *which agent is this* — and the whole value of the
  * answer is that the reader has already learned the hue somewhere else. Four local
  * `<span className="size-2 rounded-full">`s is four chances for one of them to end up 10px
  * or square, at which point it stops reading as the same mark.

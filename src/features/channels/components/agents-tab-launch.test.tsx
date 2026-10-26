@@ -282,9 +282,12 @@ describe("the identity name on an own-agent card", () => {
     );
   }
 
+  const whereLine = () =>
+    [...document.querySelectorAll("p")].find((p) => p.textContent?.startsWith("↳ "))!;
+
   it("names the identity it launched as, before the model", () => {
     card({ identityName: "Code auditor", model: "claude-opus-5" });
-    const line = screen.getByText("UI-kit design").parentElement!;
+    const line = whereLine();
     expect(line.textContent).toContain("· Code auditor");
     // WHO it is reads before WHAT it runs on.
     expect(line.textContent!.indexOf("Code auditor")).toBeLessThan(
@@ -294,15 +297,11 @@ describe("the identity name on an own-agent card", () => {
 
   it("renders NOTHING for a blank agent, and nothing on a main that omits the field", () => {
     card({ identityName: null, model: "claude-opus-5" });
-    expect(screen.getByText("UI-kit design").parentElement!.textContent).toBe(
-      "UI-kit design· Claude Opus 5"
-    );
+    expect(whereLine().textContent).toBe("↳ UI-kit design · Claude Opus 5");
     cleanup();
     // ⚠ Absent and `null` are the same answer — an older main has no field, and
     // "Default" would be this build claiming to know (INVARIANTS §11).
     card({ model: "claude-opus-5" });
-    expect(screen.getByText("UI-kit design").parentElement!.textContent).toBe(
-      "UI-kit design· Claude Opus 5"
-    );
+    expect(whereLine().textContent).toBe("↳ UI-kit design · Claude Opus 5");
   });
 });

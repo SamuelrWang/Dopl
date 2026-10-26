@@ -28,7 +28,7 @@ export const TAB_ACTION_SHELL = "auth-btn-3d flex h-9 rounded-full";
 /** The label's own type, pad and ink — everything inside the shell. */
 export const TAB_ACTION_INK = "gap-1 px-[15px] text-small font-semibold text-text-on-cta";
 
-/** The right panel's card face (thread cards and agent cards). */
+/** The right panel's card face (the Threads and Artifacts tabs' cards). */
 export const PANEL_CARD = "bento flex flex-col gap-2 px-3 py-2.5";
 
 /** The raised square behind a sidebar row's glyph. `pointer-events-none` suppresses `.btn-light`'s hover

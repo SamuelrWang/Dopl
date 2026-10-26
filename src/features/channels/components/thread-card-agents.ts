@@ -9,6 +9,7 @@ import {
   peerCardsFor,
   type AgentLivenessState,
 } from "./agents-model";
+import { ownAgentRuntime } from "./agent-face";
 import type { AuthorIndex } from "./view-model";
 
 /** One agent working a thread, as the thread card draws it. */
@@ -19,6 +20,7 @@ export interface ThreadCardAgent {
   owner: string;
   photo: string | null;
   color: AgentColorKey | null;
+  runtime: string | null;
   liveness: AgentLivenessState;
   /** The viewer's own agents only: a peer's agent runs on their machine, with no view to open here. */
   own: boolean;
@@ -54,6 +56,7 @@ export function threadCardAgents(
       owner: "Yours",
       photo: viewerPhoto,
       color: (s.agentId ? index.agents.get(s.agentId)?.color : null) ?? null,
+      runtime: ownAgentRuntime(s, feeds.peers),
       liveness: agentLiveness(s),
       own: true,
     })
@@ -67,6 +70,7 @@ export function threadCardAgents(
         owner: `${firstName(owner?.displayName)}'s agent`,
         photo: owner?.avatarUrl ?? null,
         color: p.color ?? index.agents.get(p.name)?.color ?? null,
+        runtime: p.runtime ?? null,
         liveness: agentLiveness(p),
         own: false,
       };

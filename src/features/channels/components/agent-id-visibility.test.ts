@@ -120,7 +120,7 @@ describe("no surface renders a raw agent id", () => {
     for (const [file, what] of [
       ["agent-window.tsx", "the pop-out's title, header and composer placeholder"],
       ["agent-panel.tsx", "the slide-out's header and composer placeholder"],
-      ["thread-info-tab.tsx", "the thread Info tab's agent rows"],
+      ["thread-card-agents.ts", "the thread card's and the thread Info tab's agent rows"],
     ] as const) {
       expect(codeOf(file), `${what} stopped resolving the display name`).toContain(
         "agentDisplayName("

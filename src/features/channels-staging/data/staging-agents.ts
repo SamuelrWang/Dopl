@@ -12,13 +12,13 @@
 import type { AgentColorKey } from "@dopl/contracts";
 import type { AgentRosterEntry } from "@/features/channels/components/view-model";
 import { pickAgentColor } from "@/features/channels/lib/agent-color-pick";
+import { webRuntimeLogo } from "@/shared/ui/runtime-logo";
 import {
   AGENT_COLORS,
-  AGENT_IDS,
   AGENT_INDEX,
+  AGENT_RUNTIME,
   FACE,
   PRIOR_AGENT_COLOR,
-  SERVER_SESSIONS,
   U,
 } from "@/features/marketing/components/banner-demo/demo-data";
 import {
@@ -57,12 +57,8 @@ type Extra = {
   entry: AgentRosterEntry;
 };
 
-const RUNTIMES = {
-  claude: { name: "Claude", logo: "/img/onboarding/claude-logo.svg" },
-  chatgpt: { name: "ChatGPT", logo: "/img/onboarding/chatgpt-logo.svg" },
-  grok: { name: "Grok", logo: "/img/logos/grok-bot.png" },
-} as const;
-type RuntimeKey = keyof typeof RUNTIMES;
+/** Product runtime ids (`shared/ui/runtime-logo.tsx` badges them). */
+type RuntimeKey = "claude" | "codex" | "grok";
 
 const EXTRAS: Extra[] = [
   {
@@ -108,7 +104,7 @@ const EXTRAS: Extra[] = [
   {
     id: EXTRA_AGENT_IDS.uiCritic,
     owner: U.grace,
-    runtime: "chatgpt",
+    runtime: "codex",
     entry: {
       displayName: "UI Critic",
       description: "Reviews a screen against the design language",
@@ -152,35 +148,18 @@ export function registerLaunchedAgent(
   LAUNCHED.set(id, { id, owner, runtime: "claude", entry });
 }
 
+/** What an agent runs on: an extra's own pick, else the demo's. */
+export function stagingAgentRuntime(agentId: string): string {
+  return extraAgent(agentId)?.runtime ?? AGENT_RUNTIME[agentId] ?? "claude";
+}
+
 /** `demo-identities.ts › identityFace`, extended to the extras. */
 export function stagingIdentityFace(agentId: string | null | undefined): IdentityFace {
   const extra = agentId ? extraAgent(agentId) : undefined;
   if (!extra) return demoIdentityFace(agentId);
-  const runtime = RUNTIMES[extra.runtime];
   return {
     photo: FACE[extra.owner as keyof typeof FACE] ?? null,
     color: extra.entry.color ?? null,
-    logo: runtime.logo,
-    runtime: runtime.name,
+    logo: webRuntimeLogo(extra.runtime) ?? undefined,
   };
 }
-
-/** The agent behind a display name (thread-info rows label agents by name). */
-export function stagingAgentIdByLabel(label: string): string | null {
-  const t = label.trim();
-  for (const [id, entry] of stagingAgentIndex()) {
-    if (id === t || entry.displayName === t) return id;
-  }
-  return null;
-}
-
-/** Owner of an agent (demo's server projection, else the extras table). */
-export function agentOwner(agentId: string): string | null {
-  return (
-    SERVER_SESSIONS.find((r) => r.name === agentId)?.userId ??
-    extraAgent(agentId)?.owner ??
-    null
-  );
-}
-
-export { AGENT_IDS };
