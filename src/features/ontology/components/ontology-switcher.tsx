@@ -2,29 +2,17 @@
 
 import { useRef, useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
+import { BARE_TRIGGER_FACE } from "@/shared/ui/select-menu";
 import { ontologyObjectIds, type GraphState } from "../graph-state";
 
 /**
- * The ontology picker: the ontology's name is the trigger (2026-09-10). One face
- * for both boards — /home's pane and `/[ws]/ontology` — so there is no second
- * picker vocabulary in the same header.
+ * The ontology picker: the ontology's name is the trigger, the `bare` select face at the header's
+ * heading step. The object count is in the menu rows and is the graph walk (an object can sit in
+ * several ontologies), never `columnIds.length`. "+ Ontology" is the last row.
  *
- * No pill, no border, no fill at rest: plain text in the channel list's own name
- * recipe (`relationship-list.tsx`: `text-body font-medium text-text-primary`) with
- * a chevron beside it. The ruling is explicit about the weight, so it lives here
- * rather than at a caller.
- *
- * The object count is in the menu rows, not the trigger, and it is the graph walk
- * (R5 — an object can sit in several ontologies), never `columnIds.length`. That is
- * the mistake `use-ontologies.ts › ontologyListRows` carries its own warning about.
- *
- * "+ Ontology" is the last row and a `MenuItem`, so the kit's hover face lands on
- * it like any other option.
- *
- * The dropdown opens in coordinate mode, like `shared/ui/select-menu.tsx` and for
- * its reason: inside `.page-float`, an overflow-clipping pane, a trigger-anchored
- * panel renders as a clipped sliver.
+ * Coordinate mode: inside `.page-float` a trigger-anchored panel renders as a clipped sliver.
  */
 
 export interface OntologySwitcherEntry {
@@ -81,7 +69,7 @@ export function OntologySwitcher({
           const rect = triggerRef.current?.getBoundingClientRect();
           if (rect) setAnchor({ x: rect.left, y: rect.bottom + 6 });
         }}
-        className="flex max-w-[260px] items-center gap-1.5 bg-transparent text-body font-medium text-text-primary"
+        className={cn(BARE_TRIGGER_FACE, "flex h-9 max-w-[260px] items-center gap-1.5 text-heading")}
       >
         <span className="min-w-0 truncate">{active?.name || "Untitled"}</span>
         <ChevronDown size={13} className="shrink-0 text-text-muted" />

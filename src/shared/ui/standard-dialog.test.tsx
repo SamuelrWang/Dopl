@@ -69,7 +69,7 @@ describe("the heading", () => {
    * which words are the operator's, so "Share iPhone leads" rendered as "Share
    * IPhone Leads" — the dialog misspelling the row it is about. Samuel's Title
    * Case ruling is about the AUTHORED titles, which is why the default stays
-   * `true` and `titleCase={false}` is the exception (`pages/home/ontology-share.tsx`).
+   * `true` and `titleCase={false}` is the exception (`ontology/components/ontology-share.tsx`).
    */
   it("drops `capitalize` — and nothing else — when `titleCase` is false", async () => {
     render(

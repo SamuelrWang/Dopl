@@ -952,34 +952,6 @@ html {
   background-attachment: local;
 }
 
-/* While-dragging lift — applied by the drag layer to the node under the pointer. */
-
-/* Connection port — drag-to-connect handle on a node edge. Scales on hover and while a
-   connect-drag is live (`data-active`); the feature toggles visibility with opacity utilities. */
-/* Output handle — inked centre dot so it never reads as the hollow input socket. */
-/* Live drop target during a connect-drag — filled ink dot. */
-
-/* Kanban card — three states: resting, hover lift, `data-selected="true"` ring. Shell stays in
-   the component; this sets border COLOR + shadow. Deliberately flatter than `.bento`: these
-   sit on an inset lane, where a deep ambient shadow reads as dirt. (It was flatter than
-   `.graph-node` too, until that recipe was deleted as dead on 2026-10-12.) */
-.kanban-card {
-  border-color: var(--border-default);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition:
-    box-shadow 0.12s ease-out,
-    border-color 0.12s ease-out;
-}
-.kanban-card:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-.kanban-card[data-selected="true"] {
-  border-color: var(--border-highlight);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.12),
-    0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
 /* Menu card — THE dropdown surface. Duplicated, not imported, from `marketing.css ›
    .lp-nav-menu-card` (the app never loads marketing.css): edit both copies together.
    Composed only by `src/shared/ui/popover-menu.tsx`. */

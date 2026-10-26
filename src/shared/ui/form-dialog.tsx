@@ -167,13 +167,11 @@ export function InlineUnderlineField({
   label: string;
   /** The hint, when the row already SAYS the label beside the line (the pairing code). */
   placeholder?: string;
-  /** Extra class on the input itself (the kit's `.inputAction` for a 36px row). */
+  /** Extra class on the input itself (the kit's `.inputSecondary` for secondary ink). */
   inputClassName?: string;
   /**
-   * No rule at rest, black line only while focused (Samuel, 2026-09-14, over the
-   * object panel's rows). The kit's `.inputQuiet` is a resting state of this same
-   * recipe, not a second field, so only the gray goes transparent. Panel row fields
-   * wear it; the two Description fields keep their gray→black line.
+   * No rule at rest, black line only while focused. The kit's `.inputQuiet` is a resting state
+   * of this same recipe, not a second field, so only the gray goes transparent.
    */
   quiet?: boolean;
   value: string;

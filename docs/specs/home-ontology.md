@@ -1,3 +1,5 @@
+> Paths predate the ontology port (2026-10-26): the /home host is now `src/features/ontology/components/home-ontology-panels.tsx` and `ontology-share.tsx`.
+
 # Ontology in the home space — SPEC
 
 **Authored 2026-09-09** against `ui/agents-tab-polish`. Sizes and counts are measurements of that date — re-derive, never quote. Anchors are `path › symbol`.

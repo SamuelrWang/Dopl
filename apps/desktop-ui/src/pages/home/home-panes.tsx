@@ -5,11 +5,12 @@ import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
 import { HomeKnowledgePanels } from "./knowledge-panels";
 import { HomeIdentityPanels } from "./identity-panels";
-import { HomeOntologyPanels } from "./ontology-panels";
+import { HomeOntologyPanels } from "@/features/ontology/components/home-ontology-panels";
 import { HomeOverviewPanels } from "./overview-panels";
 import type { ActivityJump } from "./use-activity-jump";
 import type { HomeRow } from "./home-rows";
 import type { HomeViewer } from "./home-settings-control";
+import { useHomeChannels } from "./use-home-channels";
 import {
   IDENTITIES_PANE,
   EMPTY_PANE,
@@ -71,17 +72,7 @@ export function HomePane({
       <HomeOverviewPanels homeWorkspaceId={identity.workspace?.id ?? null} />
     );
   }
-  if (shown === ONTOLOGY_PANE) {
-    // An ontology is a personal item lent into channels, so this face takes the home space.
-    return (
-      <HomeOntologyPanels
-        homeWorkspaceId={identity.workspace?.id ?? null}
-        homeWorkspaceSegment={identity.segment}
-        // Scopes the pane's last-opened memory to the reader (`last-opened.ts`).
-        currentUserId={identity.userId}
-      />
-    );
-  }
+  if (shown === ONTOLOGY_PANE) return <OntologyPane identity={identity} />;
   if (shown.startsWith(IDENTITIES_PANE)) {
     const shownRow = rowFor(shown.slice(IDENTITIES_PANE.length));
     return (
@@ -134,6 +125,21 @@ export function HomePane({
       // The message a search row named (F-714).
       initialSeq={jump.seqFor(row.id)}
       onDeleted={onChannelDeleted}
+    />
+  );
+}
+
+/** The Ontology face: an ontology is a personal item lent into channels, so it takes the home
+ *  space, and the operator's home channels for its share and delete dialogs. */
+function OntologyPane({ identity }: { identity: BootPayload }) {
+  const homeChannels = useHomeChannels();
+  return (
+    <HomeOntologyPanels
+      homeWorkspaceId={identity.workspace?.id ?? null}
+      homeWorkspaceSegment={identity.segment}
+      // Scopes the pane's last-opened memory to the reader (`last-opened.ts`).
+      currentUserId={identity.userId}
+      homeChannels={homeChannels}
     />
   );
 }

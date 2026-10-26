@@ -101,11 +101,13 @@ white card, title over one meta line led by small faces, actions centred right:
 `channels/components/item-card.tsx › ItemCard`, the Threads and Artifacts lists under quiet uppercase
 recency headings). An opened artifact reads as a
 document (breadcrumb, title, caption, meta line, then face + name + time rows over normal message
-bodies), never as one bubble. A page on a white pane uses flat sections (`SectionPanel flat`, the
-`.title-chip` heading) and, with a rail, `.rail-layout` (/home Identities); identity cards carry one concept per
-fact chip (`agent-identities/components/identity-section.tsx › IDENTITY_ROW`), and a read-only record opens in
-`ModalShell size="panel"` with underline tabs (`identity-view-dialog.tsx`). A port imports them; DESIGN-SYSTEM.md
-lists each.
+bodies), never as one bubble. `SECTION_TITLE` is a card's or panel section's small bold ink title (the
+Overview cards, the ontology object panel); the ontology board and object panel
+(`src/features/ontology/components/`) are on this kit since 2026-10-26. A page on a white pane uses flat
+sections (`SectionPanel flat`, the `.title-chip` heading) and, with a rail, `.rail-layout` (/home Identities);
+identity cards carry one concept per fact chip (`agent-identities/components/identity-section.tsx ›
+IDENTITY_ROW`), and a read-only record opens in `ModalShell size="panel"` with underline tabs
+(`identity-view-dialog.tsx`). A port imports them; DESIGN-SYSTEM.md lists each.
 
 ## 5. Motion
 

@@ -245,7 +245,7 @@ function homeSpaceOntologyIds(
  * One ontology row → the wire shape.
  *
  * It carries `agentsMayEdit` and `sharedChannelCount`, both read by the
- * /home card (`pages/home/ontology-panels.tsx › OntologyCard` through
+ * /home host (`components/home-ontology-panels.tsx` through
  * `../hooks/use-ontologies.ts › ontologyListRows`). Emitting neither renders
  * the FALLBACKS — "agents may edit" for an ontology whose owner turned that off
  * — which exist for a STALE CACHE, never as this mapper's output.

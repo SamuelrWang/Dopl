@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { BARE_TRIGGER_FACE } from "@/shared/ui/select-menu";
 import type { GraphState } from "../graph-state";
 import { OntologySwitcher, ontologySwitcherEntries } from "./ontology-switcher";
 
@@ -88,9 +89,11 @@ describe("the trigger", () => {
     expect(trigger.textContent).toBe("Pipeline");
     // no pill and no bold weight (Samuel, 2026-09-10).
     expect(trigger.className).not.toMatch(/raised-tab|rounded-full|seg-pill/);
-    // it wears the channel row's name recipe (`relationship-list.tsx`).
-    expect(trigger.className).toMatch(/\btext-body\b/);
-    expect(trigger.className).toMatch(/\bfont-medium\b/);
+    // the `bare` select face at the header's heading step.
+    for (const c of BARE_TRIGGER_FACE.split(" ")) {
+      if (c !== "text-caption") expect(trigger.classList).toContain(c);
+    }
+    expect(trigger.className).toMatch(/\btext-heading\b/);
     expect(trigger.className).not.toMatch(/text-title|font-semibold|font-bold/);
     expect(trigger.querySelector("svg")).toBeTruthy();
     // a dropdown, not tabs — the other ontology is behind it, never beside it.

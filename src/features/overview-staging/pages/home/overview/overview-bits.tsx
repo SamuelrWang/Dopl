@@ -2,6 +2,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { SECTION_TITLE } from "@/shared/ui/section-title";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import type { MockStatus } from "@/features/overview-staging/overview-mock-data";
 import { RUNTIME_LOGO } from "./overview-data";
@@ -23,7 +24,7 @@ export function ECard({
   return (
     <section className={`white-card ove-card ${className ?? ""}`} aria-label={title}>
       <header className="ove-card-head">
-        <h3 className="ove-card-title">{title}</h3>
+        <h3 className={SECTION_TITLE}>{title}</h3>
         {count !== undefined && <span className="ove-card-count">{count}</span>}
         {aside && <span className="ove-card-aside">{aside}</span>}
       </header>

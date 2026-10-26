@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
-import { EmptyState } from "@/shared/ui/empty-state";
+import { EmptyLine, EmptyState } from "@/shared/ui/empty-state";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { EMPTY_GRANTS, fetchBaseList } from "@/features/knowledge/client/api";
 import {
@@ -21,7 +21,6 @@ import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
 import { CreateButton } from "@/shared/ui/page-action-button";
 import {
   BaseCell,
-  EmptyLine,
   channelBasesQueryKey,
   useStarToggle,
 } from "./knowledge-panel-cards";

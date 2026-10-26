@@ -2,7 +2,7 @@
  * THE STAGING ONTOLOGY'S FAKE DATA — one file, hard-coded, no fetch.
  *
  * Shapes are the real wire shapes (`@/features/ontology/types`,
- * `@/features/revisions/types`), so the copied components render them exactly as
+ * `@/features/revisions/types`), so the product components render them exactly as
  * they render `GET /api/ontology`. Four ontologies in the operator's home space:
  * a full sales pipeline (every field kind, relationships, actions), a product
  * roadmap, a hiring board, and a near-empty reading list (empty lane).
@@ -348,7 +348,7 @@ const ontology = (
   sharing: { agentsMayEdit: boolean; sharedChannelCount: number }
 ): Ontology => ({ id, slug, name, purpose, columnIds, layout: {}, ...sharing });
 
-export const DEMO_ONTOLOGIES: Ontology[] = [
+const DEMO_ONTOLOGIES: Ontology[] = [
   ontology(
     "ont-sales",
     "sales-pipeline",
@@ -388,7 +388,7 @@ export function demoSnapshot(): OntologySnapshot {
 
 /* ── home channels + share rows ────────────────────────────────────── */
 
-/** The operator's home channels the share popup lists (`use-home-channels.ts`). */
+/** The operator's home channels the share popup lists (the desktop's `useHomeChannels`). */
 export const DEMO_HOME_CHANNELS = [
   { id: "ch-tech-debt", name: "tech-debt" },
   { id: "ch-outbound", name: "outbound" },
