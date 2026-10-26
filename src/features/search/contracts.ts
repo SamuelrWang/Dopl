@@ -53,7 +53,7 @@ export interface SearchItem {
   kind: SearchGroupKind;
   title: string;
   subtitle?: string;
-  /** Only `<mark>` survives escaping (`server/snippet.ts`): the one field safe as HTML. */
+  /** Only `<mark>` survives escaping (`highlight.ts`): the one field safe as HTML. */
   snippet?: string;
   /** Always present: the fence's key, and the /home popup groups rows by it. */
   containerId: string;
@@ -63,7 +63,6 @@ export interface SearchItem {
   seq?: number;
   threadId?: string;
   avatarUrls?: string[];
-  color?: string;
   updatedAt?: string;
 }
 

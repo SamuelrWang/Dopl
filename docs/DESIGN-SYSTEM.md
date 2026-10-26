@@ -364,7 +364,7 @@ deleted, not mirrored** — `.hairline` / `.hairline-strong` went that way in th
 | `.graph-substrate` | Dotted world surface (24px pitch) behind a board or graph view. THE dot recipe. ⚠ **THE ONTOLOGY BOARD LEFT IT ON 2026-09-10 AND CAME BACK ON 2026-09-11** (Samuel: *"I don't see the dots, the dotted grid. I want to bring that dotted grid back"*). The 09-10 removal read the grid as the inner panel of a *"double panel"*; what he objected to was the FILL, and this recipe paints dots and no background — so `kanban-board.tsx` and `ontology-skeleton.tsx` compose it again on a board that is still the page panel itself. Consumers, measured 2026-09-11: `grep -rn 'graph-substrate' src apps`. |
 | `.kanban-substrate` | Modifier on `.graph-substrate`: halves the pitch to 12px so a lane board's geometry lands on the grid (288px lanes = 24 tiles, 12px gutter = 1, 24px board padding = 2), and `background-attachment: local` so the dots cover the whole scrollable area and travel with the lanes. ⚠ **BACK ON THE LIVE ONTOLOGY BOARD SINCE 2026-09-11** — see the row above. ⚠ **AND IT BRINGS NO FILL WITH IT**: `pages/home/ontology-panels.test.tsx` pins both halves in one test — the grid IS on the scroller and the scroller carries no `bg-*`, because the white panel is still a ruling. |
 | ~~`.graph-node` / `-selected` / `-target` / `-lift`, `.graph-port`~~ | **DELETED 2026-10-12 (X01 cleanup) — the deliberate deletion pass this row was waiting for.** Graph card resting / selected-ring / drop-target surfaces, the while-dragging lift, and the drag-to-connect port dot, 10 rules across both kits. They had been DEAD since the Workflows page was deleted 2026-08-11 (b2c52768) and that was measured here on 2026-08-30; re-measured on 2026-10-12 across **all 352 refs**, not just master, and no branch adds a reader either. ⚠ The substrates did NOT go with them: `.graph-substrate` / `.kanban-substrate` are still live, on the playground pane AND on the ontology board (`kanban-board.tsx:83`, `ontology-skeleton.tsx:34`) — that warning was the point of keeping this row, so it stays. |
-| `.search-expand` / `-shell` / `-toggle` / `-input` | THE collapsing search: a 36px round button that GROWS to a 260px pill (2026-08-24; the channels sidebar's field). /home's header stopped wearing it on 2026-10-26: its always-open pill is `.white-card` + `.raise-pill` at a fixed 260px (`pages/home/home-search.tsx`). Port of `src/features/marketing/marketing.css › .lp-nav-search*` scaled to 6/7 of the landing's own measurements (landing 42/300/42/42+16px pad/14px text → 36/260/36/36+14px pad/`text-small`). The RATIO is what is held: 42÷14 and 36÷12 are both 3.0, so it reads as the same control a notch down. Only colour comes from tokens. Same overlay trick (the slot stays one button wide, the shell is pinned `right: 0` and grows leftward, so no sibling moves) and the same delayed-in/instant-out input reveal. The shell composes `.auth-btn-3d-light` in the TSX and is never swapped for a field; while `[data-open]` its hover/press face is suppressed and only `.concave-field`'s FOCUS signal is borrowed. Marketing.css is page-scoped and the app never loads it — edit both together. |
+| `.search-expand` / `-shell` / `-toggle` / `-input` | THE collapsing search: a 36px round button that GROWS to a 260px pill (2026-08-24; the channels sidebar's field). /home's header stopped wearing it on 2026-10-26: its always-open pill is `.white-card` + `.raise-pill` at a fixed 260px (`search/components/header-search.tsx`). Port of `src/features/marketing/marketing.css › .lp-nav-search*` scaled to 6/7 of the landing's own measurements (landing 42/300/42/42+16px pad/14px text → 36/260/36/36+14px pad/`text-small`). The RATIO is what is held: 42÷14 and 36÷12 are both 3.0, so it reads as the same control a notch down. Only colour comes from tokens. Same overlay trick (the slot stays one button wide, the shell is pinned `right: 0` and grows leftward, so no sibling moves) and the same delayed-in/instant-out input reveal. The shell composes `.auth-btn-3d-light` in the TSX and is never swapped for a field; while `[data-open]` its hover/press face is suppressed and only `.concave-field`'s FOCUS signal is borrowed. Marketing.css is page-scoped and the app never loads it — edit both together. |
 | `.channel-info-slide` | The channels info column's slide shell (2026-08-24) — 0 ↔ **`var(--info-w, 380px)`** on a 200ms width transition. ⚠ **THE OPEN WIDTH IS THE OPERATOR'S SINCE 2026-09-13** (`channels/components/use-info-resize.ts` writes `--info-w` on the SURFACE ROOT; `InfoResizeHandle` in the components table is its face), and `[data-info-resizing="true"] .channel-info-slide` drops the transition for the length of a drag so the column does not lag the pointer by 200ms. **380px is now the FALLBACK and the FLOOR, not the width** — the pane never gets narrower than it was, and never wider than half the surface, `overflow: hidden`. WIDTH, not transform: the column is a flex sibling of the message pane, and a transform would slide it over the transcript instead of handing the space back. The panel inside keeps its own `w-[380px] shrink-0` so it never squashes mid-slide. ⚠ **380 IS A MATCH, NOT A TASTE (2026-08-25, Samuel): it is `channels/components/agent-panel.tsx`'s width** — which is the SAME `var(--info-w, 380px)` expression since 2026-09-13, so the match is kept by construction rather than by two literals**, and that panel is absolutely positioned against the SAME right edge — at 340 the divider jumped 40px sideways the moment an agent view opened. Change one and change the other. ⚠ Coupled to `channels/components/use-info-slide.ts › useInfoSlide` (which holds `INFO_SLIDE_MS`; it stood in `channel-surface.tsx` until 2026-09-04, when the web's one-column layout took that file to the cap), which keeps the panel mounted one transition past close, and to the `prefers-reduced-motion` block that turns the transition off. |
 | `.collapse-grid` | **THE COLLAPSE (2026-09-13, Samuel, over the Agents tab's gray wells: *"I want the drop-downs collapsing and expanding to be a smooth animation … like the gray box increases in size"*)** — `grid-template-rows: 0fr → 1fr` over `overflow: hidden`, 200ms on the app's own `cubic-bezier(0.22,0.61,0.36,1)`, the same duration and curve as `.channel-info-slide` above and `.menu-card`'s unfold. ⚠ **IT ANIMATES TO THE CONTENT'S HEIGHT WITH NO MEASURED PIXEL**, which is the whole reason for the `fr` trick: `height: auto` does not transition and a `max-height` is a number somebody has to keep true. ⚠ **`min-height: 0` ON THE CHILD IS LOAD-BEARING** — a grid item's automatic minimum size floors the track at its content height, so without it `0fr` animates nothing at all; the recipe states it (`.collapse-grid > *`). 🔒 ⚠ **`overflow: hidden` CLIPS EVERY SHADOW INSIDE, AND THE CONSUMER MUST GIVE IT BLEED ROOM ON THE THREE EDGES THAT ARE NOT THE GROWTH EDGE.** This row read *"accepted, because every alternative reintroduces a measured height"* until 2026-09-15, when Samuel saw what it costs: *"there are these like weird vertical shadows/the shadows are being cut off."* With the clip box exactly as wide as its content, each card's drop shadow is sliced flush with its own left and right edges — a hard vertical rule down the list, which is worse the heavier the elevation (`HOME_CARD_FACE`'s hovered `0 10px 20px` reaches **10px** sideways; a `.bento` card's `0 6px 18px` reaches **9px**). **The fix costs no measured height: widen the CLIP BOX with a negative margin and re-inset the content by the same amount** — `channels/components/collapse-wells.tsx › Well` is the worked example, `-mx-3` on the `.collapse-grid` against `px-3` on its column, i.e. the WELL'S OWN `p-3`, so the clip lands on the well's border box and nothing moved. ⚠ **12px is also the MAXIMUM there**: a wider bleed would paint shadow outside the gray. 🔒 ⚠ **AND THE GROWTH EDGE — the BOTTOM — TAKES THE SAME 12px SINCE 2026-09-17.** This row read *"the bottom still clips tight, and that is structural"* and listed three fixes it had ruled out; **two of them put the padding INSIDE THE TRACK**, where `box-sizing: border-box` floors a collapsed box 12px taller than its header, which is the same arithmetic as the `pt-2` note below. **Samuel, over /home's channel column:** *"the last box or last channel in each box gets cut off at the bottom by the end of the thing. The shadowing and the bottom border get cut off. … It should not be getting cut off."* **The fix is the SAME PAIR one edge round, on the CLIP BOX rather than in it**: `pb-3` on the `.collapse-grid` itself — `overflow: hidden` clips at the PADDING box, so the clip edge drops 12px while the `0fr → 1fr` track is untouched — against `-mb-3`, which takes those 12px back out of the flex column, so the pair is layout-neutral and nothing moved. ⚠ **ONLY WHILE `open`**: a consumer's content outlives `open` by one transition, so a permanent bottom bleed paints a 12px strip of the FIRST card under the header for the last frames of a close; dropping the pair on the click costs nothing, because padding and margin cancel. ⚠ Drive it with `data-open`; LAYOUT (the gap, the column) is the consumer's, as with `.crossfade`. ⚠ A consumer that UNMOUNTS its content on close must wait exactly 200ms and drop that wait under reduced motion, where the `prefers-reduced-motion` block turns the transition off — `channels/components/collapse-wells.tsx › WELL_COLLAPSE_MS` / `› useWellContent` is the worked example (ONE module, THREE surfaces since 2026-09-15 — the Agents tab, the Threads tab and /home's channel list; ⚠ **it was `recency-wells.tsx` until that day**, when the box was split off the four time spans so a caller could bring its own well set), and it also shows the `-mt-2` / `pt-2` pair that moves a well's own `gap-2` INSIDE the animated box (a permanent zero-height flex child would otherwise leave a collapsed section 8px taller than it was). 🔒 ⚠ **THAT `pt-2` IS CONDITIONAL ON THERE BEING A BODY (2026-09-15), AND THE REASON IS `box-sizing: border-box`: a padded box CANNOT BE SHORTER THAN ITS OWN PADDING.** An empty column — a section rendered with no rows, or one whose rows are unmounted behind a closed header — therefore still stood 8px inside a zero track and hung a dead band under the heading, which is Samuel's *"when the gray box is retracted, the text isn't vertically centered"*: 12px of padding above the label and 20px below it. **Padding belongs to the content it separates; with no content there is none**, and the collapsed box is padding + header + padding with the header in the same place it holds when open. |
 | `.crossfade`     | THE content swap: `opacity` 150ms each way, `[data-out]` is the way out. Recipe only — layout belongs to the consumer, because a swap happens in panes and in columns alike. Driven by `Crossfade` (below); coupled to its `FADE_MS` and to the `prefers-reduced-motion` block that drops both. |
@@ -764,73 +764,69 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   - **MINIMAL COPY.** Label and control; no explainer paragraph about what a revision is. Empty,
     loading and error states are one `text-caption text-text-muted` line each.
 - **Search popup** (2026-09-17, Samuel: *"it should be a pop up like this"*, over a
-  reference card). **NO NEW RECIPE — it is `.menu-card` holding `.menu-row` rows**, which
-  is why a dropdown of results and every other dropdown in the app share one face.
-  `src/features/search/components/search-popup.tsx`, mounted by /home's header pill and
-  by the workspace channels column's field.
-  - 🔒 **ON /home THE CARD SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29:**
+  reference card; contents overhauled to the identity look 2026-10-26, Samuel: *"overhaul what
+  that pop up looks like in terms of contents to look better"*).
+  `src/features/search/components/search-popup.tsx`, mounted by /home's header pill
+  (`search/components/header-search.tsx › HeaderSearch`, which the desktop header and the
+  playground's top bar both mount) and by the workspace channels column's field
+  (`channels/components/sidebar-search.tsx`). Composed from kit + primitives only: no new recipe.
+  - **CARD**: `.white-card` + `shadow-[var(--shadow-card-lift)]` (the floating white card, as the
+    ontology staging hover card), `overflow-hidden`, open exactly while the field has focus.
+  - 🔒 **ON /home IT STARTS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29:**
     *"have it start at the same place that the search bar starts. so it's aligned
     flush. and have it extend on the right, so that it is flush with the end of the
-    profile button"*). The card is `absolute top-full mt-2`; /home renders it as a
-    SIBLING of the pill and passes `left-0 w-auto`, so it fills the header's `relative`
-    trail group (`pages/home/home-frame.tsx › HomeHeaderRow`), whose first child is the
-    pill and last is Profile — edges by construction, no measured width. The workspace sidebar host
-    keeps `SEARCH_CARD_W` below. `!p-0` + `overflow-hidden`, because the legend bar runs
-    edge to edge and clips to the card's corners.
-  - 🔒 **IT IS THE PILL'S WIDTH PLUS ITS OWN PADDING, AND THE WHOLE CARD IS ONE STEP
-    SMALLER THAN IT SHIPPED (Samuel, 2026-09-17:** *"right now, the search bar, i feel
-    like it's too big. Can we scale it down in its entirety, meaning, I think we scale
-    down fontsizes and stuff like that too."*) — `search-popup.tsx › SEARCH_CARD_W` is
-    **280px** (the DEFAULT; /home's header overrides it since 2026-09-29, above): the open pill is a flat 260px (`.search-expand[data-open="true"]`, and /home's own pill)
-    and the body carries `px-2.5` a side, so the ROWS land on the pill's own edges. It
-    was `w-[420px]`, i.e. the card overhung the control it hangs from by 160px, and the
-    channels sidebar carried a SECOND copy of that number (`!w-[420px]`, now the pin
-    only). **No new token and no new size** — every step is one rung down the ramp
-    above: title `text-body` → `text-small`, the right-hand facts `text-caption` →
-    `text-micro`, tile 24 → 20px, legend bar 44 → 36px, row pad `py-1.5` → `py-1`.
-  - 🔒 **EACH SECTION IS A FIXED HEIGHT AND SCROLLS ITSELF (Samuel, same review:**
+    profile button"*). The card is `absolute top-full right-0 mt-2`; `HeaderSearch` renders it
+    as a SIBLING of the pill and passes `min-w-full`, so its floor is the header's `relative`
+    trail group (`pages/home/home-frame.tsx › HomeHeaderRow`; the playground's `.uis-top-trail`),
+    whose first child is the pill and last is Profile.
+  - **WIDTH FITS THE CONTENT (Samuel, 2026-10-26, the popup-width ruling):** `search-popup.tsx ›
+    SEARCH_CARD_W` is `w-max`, floored at 280px (the sidebar's 260px pill plus the body's padding;
+    /home raises the floor to its group) and capped at `min(440px, 100vw - 2rem)`, so a long
+    snippet truncates rather than widening the card. Right-anchored on /home, it grows leftward;
+    the sidebar pins it left (`!right-auto left-3`) and it grows into the page.
+  - 🔒 **EACH SECTION IS A FIXED HEIGHT AND SCROLLS ITSELF (Samuel, 2026-09-17:**
     *"each section is a fixed height, and if there's more items in it, it's
-    scrollable."*) — `search-popup.tsx › SEARCH_SECTION_MAX_H` (`max-h-[160px]`, five
-    one-line rows) + `overflow-y-auto` + the kit's `.scrollbar-discreet`, on the LIST
-    and not on the section: the hairline heading is a sibling ABOVE it and stays put
-    while its rows move. The card keeps its own ceiling under that, because enough
-    matching sections still stack past the screen. ⚠ The keyboard cursor's
-    `scrollIntoView({block:"nearest"})` walks every scrollable ancestor, so one call
+    scrollable."*) — `search-popup.tsx › SEARCH_SECTION_MAX_H` (`max-h-[160px]`) +
+    `overflow-y-auto` + `.scrollbar-discreet`, on the LIST and not on the section. The card body
+    keeps its own ceiling (`min(60vh, 380px)`) and the headings are `sticky top-0` on
+    `bg-bg-overlay` inside it, so a long answer keeps its section named. ⚠ The keyboard
+    cursor's `scrollIntoView({block:"nearest"})` walks every scrollable ancestor, so one call
     serves the section and the card.
-  - **SECTION RULE**: a hairline with the section's name sitting IN it, gaps either side
-    — `h-px flex-1 bg-border-subtle` on both sides of a `text-label` uppercase
-    `text-text-muted`. That is the reference's own divider at the kit's label face.
-  - **ROW**: `.menu-row` + `px-1.5 py-1`, a 20px `rounded-[5px] bg-surface-raised-2` glyph
-    tile, a `text-small font-semibold` title, then `AvatarStack` (`2xs`) and the trailing
-    chip. ⚠ **THE KEYBOARD CURSOR WEARS `bg-menu-item-hover-bg`** — the token the kit's own
-    `:hover` paints, never a second gray, so an ↓ landing and a pointer hover are one face.
+  - **SECTION HEADING**: plain and muted, no rule and no well —
+    `shared/ui/section-heading.ts › QUIET_HEADING_TEXT`, the face /home's recency headings wear
+    (`channels/components/collapse-wells.tsx` reads the same constant).
+  - **ROWS ON HAIRLINES**: each section's list is `divide-y divide-border-subtle`; the row is
+    `.menu-row` + `px-2 py-1.5` floating between the lines, title `text-small font-medium`.
+    ⚠ **THE KEYBOARD CURSOR WEARS `bg-menu-item-hover-bg`** — the token the kit's own `:hover`
+    paints, never a second gray — and carries the Enter keycap at its right edge.
+  - **LEADING VISUAL BY KIND** (`search-popup-rows.tsx › Lead`): members and agent identities are
+    a 20px `IdentityFace` (a member ringless, an identity on the `neutral` ring, a saved identity
+    having no colour); every other kind is its glyph on a 20px `.mark-tile`.
   - 🔒 **TWO ROW SHAPES, AND WHICH ONE A KIND TAKES IS A SET (Samuel, 2026-09-17:**
-    *"For channels it like repeats the name of the channel in like 3 places it doesn't
-    make any sense. For channels and threads, it should be one line, it should be the
-    name of the channel in black, and then to the right the description of the channel
-    in gray italics."*) — `search-popup-rows.tsx › ONE_LINE_KINDS` is `channels` +
-    `threads`: the title in `text-text-primary`, then the row's own description beside
-    it at `text-caption italic text-text-muted`, truncated, **and omitted entirely when
-    there is none** (an empty span still eats the row's free space). Every other kind
-    keeps the stacked title + `text-caption` snippet, so prose found by its body still
-    shows the words that matched.
-  - 🔒 **THE CONTAINER IS A TRAILING CHIP, ONLY WHERE IT ANSWERS A QUESTION** —
-    `search-popup-rows.tsx › containerChip`: account scope AND a container other than
-    the host's own. In container scope every row is in the container being looked at,
-    so naming it is the third copy of a word the row already carries. The chip is the
-    Pills/chips recipe at `text-micro`; a relative time takes the slot only on a
-    stacked row that has no chip.
-  - **KEYCAP**: `h-[18px] min-w-[18px] rounded-[5px] border-border-default bg-bg-elevated`
-    at `text-micro` — the legend bar's `Enter / ↑ ↓ / Esc` hints, on
-    `bg-card-surface-subtle` flush to the card's edges. ⚠ It was 22px at `text-caption`
-    until 2026-09-17; the legend came down with the card.
-  - **MINIMAL COPY.** Section labels are nouns, never counts; an empty answer is the one
-    line `No results`; loading is the one line `Loading results` (Samuel, 2026-09-29),
-    shown from the keystroke until THIS query's answer lands — never an empty card, and
-    never the previous query's rows (`use-search.ts › useSearch` keys each answer to
-    its request). ⚠ **AND THE SECTION ORDER IS THE WIRE'S, NOT THE CARD'S**
-    (`features/search/contracts.ts › SEARCH_GROUP_ORDER`) — the renderer draws the groups
-    in the order they arrive.
+    *"For channels and threads, it should be one line, it should be the name of the channel in
+    black, and then to the right the description of the channel in gray italics."*) —
+    `search-popup-rows.tsx › ONE_LINE_KINDS` is `channels` + `threads`: the title, then the row's
+    own description beside it at `text-caption italic text-text-muted`, truncated, **and omitted
+    entirely when there is none**. Every other kind stacks the title over ONE line of context:
+    the server's snippet when the row has one, else its subtitle.
+  - **THE MATCH IS HIGHLIGHTED IN BOTH LINES BY ONE RULE**: the snippet's `<mark>` comes from the
+    server (`search/highlight.ts › buildSnippet`), and the popup marks the title and subtitle
+    with the same terms (`› splitMatches` over `› highlightPattern`) as React nodes, so no new
+    innerHTML. Both paint `bg-caution/25` on `text-text-primary`.
+  - 🔒 **THE CONTAINER IS NAMED ONLY WHERE IT ANSWERS A QUESTION** —
+    `search-popup-rows.tsx › containerLabel`: account scope AND a container other than the
+    host's own. It is quiet `text-micro text-text-muted` text on the right, not a chip; a stacked
+    row with no container takes its relative time in the same slot.
+  - **KEYCAP**: `search-popup-rows.tsx › Keycap`, `h-[18px] min-w-[18px] rounded-[5px]
+    border-border-default bg-bg-elevated` at `text-micro`. The pill shows `Esc` while focused;
+    the footer is a hairline-topped strip with `Enter Open` and `↑ ↓ Move` in `text-caption`
+    muted.
+  - **MINIMAL COPY.** Section labels are nouns, never counts. An empty field with no recents is
+    `EmptyState` *Type to search*; an empty answer is `EmptyState` *No results* (an error says
+    its one line instead); loading is the one line `Loading results` (Samuel, 2026-09-29), shown
+    from the keystroke until THIS query's answer lands — never the previous query's rows
+    (`use-search.ts › useSearch` keys each answer to its request). ⚠ **AND THE SECTION ORDER IS
+    THE WIRE'S, NOT THE CARD'S** (`features/search/contracts.ts › SEARCH_GROUP_ORDER`).
 - **Pills/chips**: `rounded-full border border-border-strong` +
   `bg-bg-elevated` (raised, on inset bodies) or `bg-bg-inset` (flat, on
   cards), `text-caption`/`text-small` medium.
