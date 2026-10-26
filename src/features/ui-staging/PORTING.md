@@ -44,7 +44,7 @@ names its port target. For the picker:
 | Staging block | Port target |
 |---|---|
 | "THE SHARED CHANNEL PICKER" (scroll, link reset, well-heading button) | `pages/home/relationship-list.tsx` |
-| "LIFT ON THE WHITE PANEL" / "HOVER LIFT" (`.lp-demo-sw-row`) | `shared/ui/home-channel-row.tsx` + `globals.css` (a shadow/hover recipe, as a token, not a literal) |
+| "LIFT ON THE WHITE PANEL" / "HOVER LIFT" (`.lp-demo-sw-row`) | `shared/ui/home-channel-row.tsx` + the kit's `.raise` (ported: the staged row wears it) |
 | "WHITE PANEL TRIAL" | `globals.css › .page-float` / `--home-panel` |
 | "TOP TABS" | `marketing.css › .lp-demo-top-tab` → `pages/home/home-header.tsx`'s `SegmentedControl` |
 

@@ -3,9 +3,9 @@
 // Samuel, 2026-10-26: the cursor *"will start flashing and glitching in between the hand and the
 // normal arrow cursor a ton"*. Root cause: every lift recipe translated the hovered element, and
 // the hit box moves with a transform, so a cursor on the bottom `--lift` px left the element, lost
-// `:hover`, the element dropped back under it and was hovered again — a loop. The kit fills the
-// vacated strip with a transparent `::after` band while hovered; this file pins that every lift
-// is a kit recipe that has the band.
+// `:hover`, the element dropped back under it and was hovered again — a loop. A transparent
+// `::after` band fills the vacated strip while hovered; this file pins that every `:hover` lift in
+// either tree (the kit, and the page-scoped landing CSS that restates it) has the band.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -28,49 +28,17 @@ function rules(css: string) {
 }
 
 const LIFT = /transform:\s*translateY\(\s*(-|calc\(-)/;
+const BAND_SUFFIX = ":hover:not(:disabled)::after";
+const isLift = (r: { selector: string; body: string }) => r.selector.includes(":hover") && LIFT.test(r.body);
 
-function hitBoxClasses(css: string) {
-  const band = rules(css).find((r) => r.selector.endsWith(":hover:not(:disabled)::after"));
-  expect(band, "the hit band rule").toBeTruthy();
-  return { band: band!, classes: [...band!.selector.matchAll(/\.([\w-]+)/g)].map((m) => m[1]) };
+/** The banded recipes' compound selectors (`.raise`, `.lp-audio-toggle[data-on-dark]`), or null. */
+function band(css: string) {
+  const rule = rules(css).find((r) => r.selector.endsWith(BAND_SUFFIX));
+  if (!rule) return null;
+  const head = rule.selector.slice(0, -BAND_SUFFIX.length);
+  const list = /^:where\((.*)\)$/.exec(head)?.[1] ?? "";
+  return { rule, head, members: list.split(",").map((m) => m.trim()) };
 }
-
-describe("the kit's lift recipes keep a still hit box", () => {
-  for (const file of KITS) {
-    const css = readFileSync(join(ROOT, file), "utf8");
-    const { band, classes } = hitBoxClasses(css);
-
-    it(`${file}: the band fills the vacated strip below the face`, () => {
-      expect(band.body).toContain('content: ""');
-      expect(band.body).toContain("position: absolute");
-      expect(band.body).toContain("top: 100%");
-      expect(band.body).toContain("height: calc(var(--lift) + 1px)");
-      const anchor = rules(css).find((r) => r.selector === band.selector.replace(":hover:not(:disabled)::after", ""));
-      expect(anchor?.body, "the band's containing block").toContain("position: relative");
-    });
-
-    it(`${file}: every hover lift is a banded recipe that rises by its own --lift`, () => {
-      const lifts = rules(css).filter((r) => r.selector.includes(":hover") && LIFT.test(r.body));
-      expect(lifts.length).toBeGreaterThan(0);
-      for (const r of lifts) {
-        expect(r.body, r.selector).toContain("translateY(calc(-1 * var(--lift)))");
-        for (const sel of r.selector.split(",")) {
-          const cls = /^\.([\w-]+):hover/.exec(sel.trim())?.[1];
-          expect(cls && classes.includes(cls), `${sel.trim()} is in the hit band`).toBe(true);
-        }
-      }
-      for (const cls of classes) {
-        const declared = rules(css).some(
-          (r) => r.selector.split(",").some((s) => s.trim() === `.${cls}`) && /--lift:\s*\dpx/.test(r.body)
-        );
-        expect(declared, `.${cls} declares --lift`).toBe(true);
-      }
-    });
-  }
-});
-
-// Marketing, the landing-scene staging and install animations are page-scoped and outside the kit.
-const EXEMPT = /\/(marketing|ui-staging|get-started)\//;
 
 function walk(dir: string, acc: string[] = []) {
   for (const name of readdirSync(dir)) {
@@ -82,19 +50,68 @@ function walk(dir: string, acc: string[] = []) {
   return acc;
 }
 
-describe("no surface hand-rolls a hover lift outside the kit", () => {
-  it("no CSS module lifts on :hover and no TSX uses a hover translate utility", () => {
-    const offenders: string[] = [];
-    for (const path of [...walk(join(ROOT, "src")), ...walk(join(ROOT, "apps/desktop-ui/src"))]) {
-      const rel = relative(ROOT, path);
-      if (EXEMPT.test(path) || KITS.includes(rel)) continue;
-      const text = readFileSync(path, "utf8");
-      if (path.endsWith(".css")) {
-        for (const r of rules(text)) if (r.selector.includes(":hover") && LIFT.test(r.body)) offenders.push(`${rel} ${r.selector}`);
-      } else if (/hover:-translate-y-/.test(text)) {
-        offenders.push(rel);
+const FILES = [...walk(join(ROOT, "src")), ...walk(join(ROOT, "apps/desktop-ui/src"))];
+const CSS = FILES.filter((p) => p.endsWith(".css")).map((p) => ({
+  rel: relative(ROOT, p),
+  css: readFileSync(p, "utf8"),
+}));
+
+describe("the kit's lift recipes keep a still hit box", () => {
+  for (const file of KITS) {
+    it(`${file}: every kit lift recipe is in the band`, () => {
+      const b = band(CSS.find((c) => c.rel === file)!.css);
+      expect(b, "the hit band rule").toBeTruthy();
+      expect(b!.members).toEqual(
+        expect.arrayContaining([
+          ".auth-btn-3d",
+          ".auth-btn-3d-light",
+          ".btn-light",
+          ".card-lift",
+          ".raise",
+          ".raise-pill",
+          ".raise-ink",
+        ])
+      );
+    });
+  }
+});
+
+describe("every hover lift in either tree is banded", () => {
+  const lifting = CSS.filter((c) => rules(c.css).some(isLift));
+
+  it("finds the kit and the landing lifts", () => {
+    const rels = lifting.map((c) => c.rel);
+    for (const file of KITS) expect(rels).toContain(file);
+    expect(rels).toContain("src/features/marketing/marketing.css");
+  });
+
+  for (const { rel, css } of lifting) {
+    it(`${rel}: each lift rises by --lift over a banded, positioned recipe`, () => {
+      const b = band(css);
+      expect(b, "the file declares the hit band").toBeTruthy();
+      expect(b!.rule.body).toContain('content: ""');
+      expect(b!.rule.body).toContain("position: absolute");
+      expect(b!.rule.body).toContain("top: 100%");
+      expect(b!.rule.body).toContain("height: calc(var(--lift) + 1px)");
+      const anchor = rules(css).find((r) => r.selector === b!.head);
+      expect(anchor?.body, "the band's containing block").toContain("position: relative");
+
+      for (const r of rules(css).filter(isLift)) {
+        expect(r.body, r.selector).toContain("translateY(calc(-1 * var(--lift)))");
+        for (const sel of r.selector.split(",").filter((x) => x.includes(":hover"))) {
+          const compound = sel.trim().split(":hover")[0];
+          expect(b!.members, `${compound} is in the hit band`).toContain(compound);
+          const declared = rules(css).some(
+            (x) => x.selector.split(",").some((s) => s.trim() === compound) && /--lift:\s*\dpx/.test(x.body)
+          );
+          expect(declared, `${compound} declares --lift`).toBe(true);
+        }
       }
-    }
-    expect(offenders).toEqual([]);
+    });
+  }
+
+  it("no TSX uses a hover translate utility", () => {
+    const offenders = FILES.filter((p) => !p.endsWith(".css") && /hover:-translate-y-/.test(readFileSync(p, "utf8")));
+    expect(offenders.map((p) => relative(ROOT, p))).toEqual([]);
   });
 });

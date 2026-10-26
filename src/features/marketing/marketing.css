@@ -173,7 +173,7 @@
 .lp-btn--3d:hover,
 .lp-audio-toggle[data-on-dark]:hover {
   filter: brightness(1.1);
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.45),
@@ -209,7 +209,7 @@
 .lp-btn--3d-light:hover,
 .lp-icon-btn:hover,
 .lp-menu-btn:hover {
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   filter: brightness(0.99);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -432,7 +432,7 @@
 .lp-nav-menu-item:hover,
 .lp-nav-menu-item:focus-visible {
   outline: none;
-  transform: translateY(-1px);
+  transform: translateY(calc(-1 * var(--lift)));
   background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -442,6 +442,29 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 0 0 2px rgba(24, 24, 24, 0.28);
+}
+
+/* The kit's still hit box (`src/app/globals.css`, THE LIFT'S STILL HIT BOX), restated because the
+   landing is outside the kit: while hovered, a transparent band fills the strip the lift vacated,
+   so a cursor on the bottom edge does not flicker between the hand and the arrow. */
+.lp-btn--3d,
+.lp-audio-toggle[data-on-dark],
+.lp-btn--3d-light,
+.lp-icon-btn,
+.lp-menu-btn,
+.lp-nav-menu-item {
+  --lift: 1px;
+}
+:where(.lp-btn--3d, .lp-audio-toggle[data-on-dark], .lp-btn--3d-light, .lp-icon-btn, .lp-menu-btn, .lp-nav-menu-item) {
+  position: relative;
+}
+:where(.lp-btn--3d, .lp-audio-toggle[data-on-dark], .lp-btn--3d-light, .lp-icon-btn, .lp-menu-btn, .lp-nav-menu-item):hover:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(var(--lift) + 1px);
 }
 .lp-nav-menu-item:active {
   transform: translateY(1px);

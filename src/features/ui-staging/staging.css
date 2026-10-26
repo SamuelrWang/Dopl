@@ -140,43 +140,25 @@ button.lp-demo-top-profile {
    With the panel white, the white channel rows and top-bar pills lost
    their edge. Stronger cast shadows instead of a grey fill. */
 .uis-window .lp-demo-sw-row {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-raise);
 }
 .uis-window .lp-demo-top-profile {
   box-shadow: var(--shadow-card-lift);
 }
 .uis-window .lp-demo-top-new {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--shadow-raise-ink);
 }
 
 /* ── HOVER LIFT (Samuel, 2026-10-22) ─────────────────────────────────
-   Anything clickable that sits on the panel as a raised object (channel
-   rows, New channel, profile; the search pill's `.raise-pill` does its own) rises 2px on hover so it reads as
-   clickable. Shadow deepens with it. */
-.uis-window .lp-demo-sw-row,
-.uis-window button.lp-demo-top-new,
-.uis-window button.lp-demo-top-profile {
-  cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease;
-}
-.uis-window .lp-demo-sw-row:hover,
-.uis-window button.lp-demo-top-new:hover,
-.uis-window button.lp-demo-top-profile:hover {
-  transform: translateY(-2px);
-}
+   The clickable rows and pills wear the kit's `.raise` / `.raise-pill` / `.raise-ink` (the lift,
+   its still hit box and the motion). Only the shadows are restated, here and above, because
+   marketing.css's unlayered rest shadows outrank the kit's layered ones. */
 .uis-window .lp-demo-sw-row:hover,
 .uis-window button.lp-demo-top-profile:hover {
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08), 0 10px 22px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-raise-hover);
 }
 .uis-window button.lp-demo-top-new:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 12px 26px rgba(0, 0, 0, 0.2);
-}
-@media (prefers-reduced-motion: reduce) {
-  .uis-window .lp-demo-sw-row:hover,
-  .uis-window button.lp-demo-top-new:hover,
-  .uis-window button.lp-demo-top-profile:hover {
-    transform: none;
-  }
+  box-shadow: var(--shadow-raise-ink-hover);
 }
 
 /* ── CHANNELS: WHITE PANE ON A TINTED SHELL (Samuel, 2026-10-24) ──────
