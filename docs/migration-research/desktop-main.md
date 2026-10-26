@@ -1,4 +1,5 @@
 > Historical record (2026-08-03) — cited for rationale; may not match current code.
+> Pre-rename: `task` here means a thread; since 2026-10-26 storage, routes and kinds say `thread` (ENGINEERING.md, "Threads stop being stored as `task`").
 
 # Desktop main process — migration map
 

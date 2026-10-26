@@ -373,3 +373,28 @@ Workers append a `## <slice>` section per question: the question, what was chose
     `ontology-staging/.../kanban-column-header.tsx`; `apps/desktop-ui/src/components/skeletons/
     page-skeletons.test.tsx › the channels ghost byte-shares …` red since slice 1 restyled the composer
     card (it still expects `raised-tab … rounded-[14px]` in `composer.tsx`; outside this slice's gates).
+
+## Port review fixes, backend (branch `fix/port-review-backend`)
+
+1. **Floor and shipped version agree.** `dopl-desktop-app/package.json` (and its lockfile) is now
+   1.43.0, matching `desktop-floor.ts › DEFAULT_MIN_VERSION` / `DEFAULT_DECLARED_LATEST`. Nothing was
+   built, notarized or published. Until 1.43.0 is on the release feed, the feed-derived `latest`
+   (1.42.1) clamps the floor off; only a cold start with the feed unreachable serves it, and then a
+   1.42.1 client is told to upgrade to the build this release publishes.
+2. **Pre-rename session records** (supersedes the "loses its thread binding once" line above):
+   `session-store.js › recordThreadId` takes the thread from the key's middle segment (between the
+   record's channel and agent ids) when the record has no `threadId`; `taskId` is ignored. Not
+   handled: a key whose middle segment is a legacy synthetic `task-<channel>-<seq>` id is not mapped
+   to `thread-…` (that would be an alias); such a session resumes on an id the server no longer
+   knows. Rare (legacy-id threads on a parked record across the upgrade); left.
+3. **`metadata.assignedTaskId`.** No reader exists in the UI tree (grep of `components`, `hooks`,
+   `client`, `lib`, `src/shared`, `apps/desktop-ui/src`: none). Assignment posts written before this
+   branch carry `metadata.taskId`; with no reader, no migration rewrites them.
+4. **`lib/task-model.ts`** (UI lane's file, unedited): its `subtaskFacts` docblock says it restates
+   "the server's two derivations (`dto-tasks.ts`)"; `dto-tasks.ts` now imports it, so the docblock
+   could say it is the one derivation.
+5. **Wording beyond the listed sites:** `channel-framing.ts` (both untrusted headers) and
+   `chats-render.ts › UNTRUSTED_ARCHIVE_HEADER` also said "changes your task"; now "changes your
+   job", so every security header says the same thing. Doctrine "agents you task" became "agents you
+   brief" (keeps the doctrine budget unchanged); legacy-surface snapshot re-recorded.
+6. **Doc ritual:** the "Dopl Development" KB sync was not available to this worker; not done.

@@ -200,7 +200,7 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
 - **Buckets**: `workspace-icons` (live), `community-thumbnails` (needs Samuel), `chat-attachments`
   (drop, #12).
 - **Enums / matviews**: none. **Sequence**: `channel_messages_seq_seq` (live). **View**:
-  `channel_tasks_activity` (live).
+  `channel_threads_activity` (live).
 - **Tables with 0 rows but live code** (keep): `knowledge_base_stars`, `ontology_channel_shares`,
   `workspace_activity_events`, `oauth_authorization_codes`, `workspace_join_requests`.
 
@@ -218,7 +218,7 @@ or an `.rpc()` call. All 42 triggers sit on live tables except
 - `supabase/migrations-held/20261110140000_drop_pooled_credit_counter.sql`
 - `supabase/migrations-held/20261110150000_drop_profile_legacy_billing_columns.sql`
 - `supabase/migrations/20261110160000_profiles_update_column_grants.sql` (security) — released from the hold, applied to prod 2026-09-28
-- Code: the `deleteTaskParticipants` statement removed from `channels/server/repository-threads.ts`,
+- Code: the `deleteThreadParticipants` statement removed from `channels/server/repository-threads.ts`,
   with its call in `channels/server/service-threads-delete.ts › deleteThread` and its test expectations. The FK's `ON DELETE CASCADE`
   already did that delete, so behaviour is unchanged while the table still exists.
 - `src/shared/supabase/types.ts` is **left alone**: it is generated from the deployed database
