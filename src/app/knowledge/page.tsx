@@ -7,8 +7,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * UI STAGING: desktop /home → Knowledge on fake data, inside the landing demo's window. No auth,
- * no fetch. See `src/features/knowledge-staging/PORTING.md`.
+ * UI STAGING: desktop /home → Knowledge on fake data, inside the landing demo's window. No auth;
+ * the API is answered in memory. See `src/features/knowledge-staging/PORTING.md`.
  */
 export default function KnowledgeStagingRoute() {
   return <KnowledgeStagingPage />;

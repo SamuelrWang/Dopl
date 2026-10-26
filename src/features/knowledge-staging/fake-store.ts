@@ -1,8 +1,7 @@
 /**
- * UI-STAGING IN-MEMORY DB for /knowledge. Every "server" write the copied components make lands
- * here (via the staging `knowledge/client/api.ts` and `stubs/revisions-api.ts`) and nowhere else —
- * no Supabase, no fetch, no Electron bridge. `resetKnowledgeStore()` runs on page mount, so a
- * reload is always the seed in `data.ts`.
+ * UI-STAGING IN-MEMORY DB for /knowledge. Every request the product components make lands here
+ * through `fetch-shim.ts` and `server/*`; no API request leaves the page.
+ * `resetKnowledgeStore()` runs on page mount, so a reload is always the seed in `data.ts`.
  */
 
 import type {
@@ -58,11 +57,6 @@ export function knowledgeDb(): KnowledgeDb {
 
 export function resetKnowledgeStore(): void {
   db = seed();
-}
-
-/** A short pause so busy states ("Saving…", spinners, pending rows) are visible. */
-export function latency(ms = 160): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 let idSeq = 0;

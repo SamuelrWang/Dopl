@@ -4,13 +4,13 @@
  * UI STAGING — desktop /home → Knowledge, on fake data, inside the landing demo's window.
  *
  * What mounts here is the desktop's own face (`home/knowledge-panels.tsx`, a copy of
- * `apps/desktop-ui/src/pages/home/knowledge-panels.tsx`) with the props `home-panes.tsx ›
- * HomePane` hands it. Everything under it is a staged copy whose data layer is the in-memory
- * store (`fake-store.ts`). A private QueryClient keeps the staged cache off the app's own
- * (persisted) one; a reload re-seeds from `data.ts`.
+ * `apps/desktop-ui/src/pages/home/knowledge-panels.tsx`, which the Next tree cannot import) with
+ * the props `home-panes.tsx › HomePane` hands it, over the PRODUCT knowledge components. Their
+ * requests are answered in memory by `fetch-shim.ts` → `server/routes.ts`. A private QueryClient
+ * keeps the staged cache off the app's own (persisted) one; a reload re-seeds from `data.ts`.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Role } from "@/features/workspaces/types";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
@@ -22,6 +22,7 @@ import {
   STAGING_USER_ID,
 } from "./data";
 import { resetKnowledgeStore } from "./fake-store";
+import { installKnowledgeFetch } from "./fetch-shim";
 import { StagingScenarioSwitch } from "@/features/ui-staging/staging-scenario-switch";
 
 type ChannelChoice = "tech-debt" | "none";
@@ -38,11 +39,15 @@ function makeClient(): QueryClient {
 }
 
 export function KnowledgeStagingPage() {
-  // Seed the in-memory DB and the cache once per mount (a reload is a clean slate).
+  // Seed the in-memory DB and the cache once per mount (a reload is a clean slate). The shim goes
+  // in before the first render, because the face's queries fire from its children's effects,
+  // which run before this component's.
   const [client] = useState(() => {
     resetKnowledgeStore();
+    installKnowledgeFetch();
     return makeClient();
   });
+  useEffect(() => installKnowledgeFetch(), []);
   const [channelChoice, setChannelChoice] = useState<ChannelChoice>("tech-debt");
   const [role, setRole] = useState<RoleChoice>("owner");
   const [home, setHome] = useState<HomeChoice>("ready");
@@ -55,7 +60,7 @@ export function KnowledgeStagingPage() {
 
   return (
     <QueryClientProvider client={client}>
-      <StagingFrame tab="knowledge" recordClassName="uis-white-pane">
+      <StagingFrame tab="knowledge" recordClassName="uis-kb-pane">
         <HomeKnowledgePanels
           // `home-panes.tsx` keys this face by the selected row; the staging states join the key
           // so a flip starts the face fresh, as a channel switch does on desktop.

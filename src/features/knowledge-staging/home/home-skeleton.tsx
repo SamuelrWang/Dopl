@@ -1,14 +1,11 @@
 /**
  * STAGING COPY (trimmed) of `apps/desktop-ui/src/pages/home/home-skeleton.tsx`: only the
- * record-pane face skeletons this staging page mounts. The page-frame skeleton (rail, header,
+ * Knowledge face's skeleton. The page-frame skeleton (rail, header,
  * channel list, overview face) is the staging frame's job and is not copied.
  */
 import { Skeleton, SkeletonBar } from "@/shared/ui/skeleton";
 import { PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
-import {
-  IdentityCardsGhost,
-  SectionPanelGhost,
-} from "@/features/knowledge-staging/desktop/components/skeletons/section-panel-ghost";
+import { SectionPanelGhost } from "@/features/knowledge-staging/desktop/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "@/features/knowledge-staging/desktop/components/skeletons/skeleton-surface";
 import home from "./home.module.css";
 
@@ -29,28 +26,6 @@ export function HomeKnowledgePanelsSkeleton({
       </SectionPanelGhost>
       <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
         <KbCardsGhost />
-      </SectionPanelGhost>
-    </SkeletonSurface>
-  );
-}
-
-/** /home → Identities while the container list is in flight: the same two sections over the
- *  identities' own four-column grid (not the Knowledge grid). */
-export function HomeIdentityPanelsSkeleton({
-  label = "Loading identities",
-}: {
-  label?: string;
-}) {
-  return (
-    <SkeletonSurface
-      label={label}
-      className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
-    >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
-        <IdentityCardsGhost count={4} />
-      </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
-        <IdentityCardsGhost count={4} />
       </SectionPanelGhost>
     </SkeletonSurface>
   );

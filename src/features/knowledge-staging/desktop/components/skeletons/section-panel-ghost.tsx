@@ -1,9 +1,8 @@
-/** STAGING COPY of `apps/desktop-ui/src/components/skeletons/section-panel-ghost.tsx` — verbatim. */
+/** STAGING COPY (trimmed) of `apps/desktop-ui/src/components/skeletons/section-panel-ghost.tsx`: `SectionPanelGhost` only. */
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
+import { SkeletonLine } from "@/shared/ui/skeleton";
 import { SECTION_PANEL_GROUND, SECTION_PANEL_SHELL } from "@/shared/ui/section-panel";
-import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 
 /**
  * A `SectionPanel`'s ghost: its box, its `data-section-panel` hook and its ground, with a heading
@@ -38,17 +37,6 @@ export function SectionPanelGhost({
         </div>
       )}
       {children}
-    </div>
-  );
-}
-
-/** `IdentityGrid`'s cards; the grid class is imported so the column count cannot drift. */
-export function IdentityCardsGhost({ count }: { count: number }) {
-  return (
-    <div className={IDENTITY_GRID}>
-      {Array.from({ length: count }).map((_, i) => (
-        <Skeleton key={i} className="h-[92px] rounded-[14px]" />
-      ))}
     </div>
   );
 }

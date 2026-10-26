@@ -1,13 +1,13 @@
-/** STAGING COPY of `apps/desktop-ui/src/pages/home/knowledge-panel-cards.tsx` — verbatim; imports point at staging copies. */
+/** STAGING COPY of `apps/desktop-ui/src/pages/home/knowledge-panel-cards.tsx` — verbatim. */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import {
   EMPTY_SHARED,
   setBaseStar,
   type KnowledgeBaseList,
-} from "@/features/knowledge-staging/knowledge/client/api";
-import { knowledgeBasesQueryKey } from "@/features/knowledge-staging/knowledge/client/hooks";
-import { BaseCard } from "@/features/knowledge-staging/knowledge/components/knowledge-v2/home/base-card";
+} from "@/features/knowledge/client/api";
+import { knowledgeBasesQueryKey } from "@/features/knowledge/client/hooks";
+import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import home from "./home.module.css";
 

@@ -1,7 +1,7 @@
-/** STAGING COPY of `apps/desktop-ui/src/components/skeletons/knowledge-skeletons.tsx` — the opened-base ghost redesigned with the view (PORTING.md). */
+/** STAGING COPY of `apps/desktop-ui/src/components/skeletons/knowledge-skeletons.tsx` — verbatim. */
 import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonLine, SkeletonText } from "@/shared/ui/skeleton";
-import kv from "@/features/knowledge-staging/knowledge/components/knowledge-v2/knowledge-v2.module.css";
+import kv from "@/features/knowledge/components/knowledge-v2/knowledge-v2.module.css";
 import { SkeletonSurface } from "./skeleton-surface";
 
 /**

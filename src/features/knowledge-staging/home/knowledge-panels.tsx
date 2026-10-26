@@ -1,19 +1,19 @@
 /**
  * STAGING COPY of `apps/desktop-ui/src/pages/home/knowledge-panels.tsx` (the shipping desktop
- * /home → Knowledge face). Markup, classes and logic verbatim; the data layer underneath is the
- * staging in-memory client (`../knowledge/client/*`). Only change: `Channel` is `StagingChannel`.
+ * /home → Knowledge face): verbatim over the product components, `#/` imports pointed at the
+ * staging copies. Only change: `Channel` is `StagingChannel`.
  */
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { SectionPanel } from "@/shared/ui/section-panel";
-import { EMPTY_GRANTS, fetchBaseList } from "@/features/knowledge-staging/knowledge/client/api";
+import { EMPTY_GRANTS, fetchBaseList } from "@/features/knowledge/client/api";
 import {
   invalidateKnowledgeBaseLists,
   knowledgeBasesQueryKey,
-} from "@/features/knowledge-staging/knowledge/client/hooks";
-import { CreateBaseDialog } from "@/features/knowledge-staging/knowledge/components/create-base-dialog";
+} from "@/features/knowledge/client/hooks";
+import { CreateBaseDialog } from "@/features/knowledge/components/create-base-dialog";
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import { EMPTY_WORKSPACE_ROLE } from "@/features/channels/types";
 // STAGING: the channel is the staged subset of `Channel` (`../data.ts › StagingChannel`).

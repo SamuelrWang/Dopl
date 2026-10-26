@@ -1,18 +1,18 @@
-/** STAGING COPY of `apps/desktop-ui/src/pages/home/knowledge-base-view.tsx` — verbatim; imports point at staging copies. */
+/** STAGING COPY of `apps/desktop-ui/src/pages/home/knowledge-base-view.tsx` — verbatim; `#/` imports point at the staging copies. */
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   invalidateKnowledgeBaseLists,
   useKnowledgeTree,
-} from "@/features/knowledge-staging/knowledge/client/hooks";
-import type { KnowledgeBaseList } from "@/features/knowledge-staging/knowledge/client/api";
-import { MyAccessProvider } from "@/features/knowledge-staging/stubs/use-my-access";
-import { KnowledgeV2PreviewCore } from "@/features/knowledge-staging/knowledge/components/knowledge-v2/landing-preview-core";
+} from "@/features/knowledge/client/hooks";
+import type { KnowledgeBaseList } from "@/features/knowledge/client/api";
+import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
+import { KnowledgeV2PreviewCore } from "@/features/knowledge/components/knowledge-v2/landing-preview-core";
 import type {
   KnowledgeRouting,
   KnowledgeUrlSync,
-} from "@/features/knowledge-staging/knowledge/components/knowledge-v2/routing";
-import type { BaseTree } from "@/features/knowledge-staging/knowledge/components/knowledge-v2/types";
+} from "@/features/knowledge/components/knowledge-v2/routing";
+import type { BaseTree } from "@/features/knowledge/components/knowledge-v2/types";
 import type { KbShelf, KnowledgeBase } from "@/features/knowledge/types";
 import type { Role } from "@/features/workspaces/types";
 import { PageError } from "@/features/knowledge-staging/desktop/components/page-states";
@@ -185,7 +185,7 @@ export function HomeKnowledgeBaseView({
         shelf={shelf}
         // ⚠ /home, so the audience is already decided by the section the
         // operator came from — no visibility picker in the create dialog
-        // (`@/features/knowledge-staging/knowledge/components/create-base-dialog.tsx ›
+        // (`@/features/knowledge/components/create-base-dialog.tsx ›
         // Props.audienceFixed`). It also could not be answered honestly on a
         // container mount: a link container has no teams (§4A).
         audienceFixed
