@@ -22,8 +22,11 @@ import type {
   ChannelSurfaceCapabilities,
   ChannelSurfaceSlots,
 } from "./channel-surface-contract";
-import type { Channel, ChannelMention } from "../types";
+import type { Channel, ChannelMention, TaskLink } from "../types";
 import { launchAllowedInView } from "./launch-view-gate";
+import { ChannelTasksTab } from "./tasks-tab";
+import { citationScrollTargetId } from "../lib/message-refs";
+import { isActiveTask } from "../lib/task-model";
 
 export function SurfaceInfoPanel({
   channel,
@@ -100,6 +103,12 @@ export function SurfaceInfoPanel({
     }
     sel.jumpToMessage(mention.threadId, mention.messageId);
     showChannel();
+  };
+
+  // A message link is a main-room seq: from a thread view the sentinel pages the channel back to it.
+  const openTaskLink = (link: TaskLink) => {
+    if (link.kind === "thread") sel.openThread(link.threadId);
+    else sel.jumpToMessage(null, citationScrollTargetId(openThread ? [] : data.rows, link.seq));
   };
 
   // Sends the displayed unread ids, never an "all" flag: the list is bounded (INVARIANTS §9).
@@ -200,6 +209,27 @@ export function SurfaceInfoPanel({
           onMarkAllRead: markAllMentionsRead,
         },
       })}
+      tasks={
+        capabilities?.tasks ? (
+          <ChannelTasksTab
+            channelId={channel.id}
+            workspaceId={workspaceId}
+            index={index}
+            feeds={{ sessions: agentSessions, peers: agentsPanel.peerSessions }}
+            gate={gate}
+            tasks={data.tasks}
+            truncated={data.tasksTruncated}
+            loading={data.tasksLoading}
+            // R8: a guest reads tasks and adds notes, nothing else.
+            canEdit={role !== "guest"}
+            openTaskId={sel.openTaskId}
+            onOpenTask={sel.setOpenTaskId}
+            onOpenLink={openTaskLink}
+          />
+        ) : undefined
+      }
+      activeTaskCount={capabilities?.tasks ? data.tasks.filter(isActiveTask).length : undefined}
+      tasksTabSignal={sel.tasksTabSignal}
       settings={
         <ChannelsSettingsSlot
           channel={channel}

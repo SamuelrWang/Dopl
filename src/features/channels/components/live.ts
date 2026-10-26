@@ -28,19 +28,30 @@ import { useRefetchGate, type MutationGate } from "@/shared/hooks/use-api-mutati
 import { PRESENCE_REFETCH_DEBOUNCE_MS } from "../constants";
 import { useChannelsRealtime, usePresenceRealtime } from "../client/realtime";
 
-/** The one table whose events cannot change a transcript, thread or mention (TABLE-AWARE DOORBELL). */
-const MEMBERS_TABLE = "channel_members";
+/**
+ * The tables whose events can change one read only (TABLE-AWARE DOORBELL): `channel_members` (the
+ * read watermark, a join/leave, a favourite, a role) the roster, `channel_tasks` the tasks.
+ */
+const SCOPED_TABLES: Readonly<Record<string, "roster" | "tasks">> = {
+  channel_members: "roster",
+  channel_tasks: "tasks",
+};
 
 /**
- * WHAT A COALESCED BATCH OF DOORBELLS INVALIDATES. `"roster"` only when EVERY signal in the batch
- * named `channel_members` — the read watermark (`last_read_at`), a join/leave, a favourite or a
- * role. Anything else, an unnamed catch-up (`null`), or an empty batch is `"all"`: the safe answer
- * is today's full refetch.
+ * WHAT A COALESCED BATCH OF DOORBELLS INVALIDATES: one scope when EVERY signal in the batch named
+ * a table of that scope. Any other table, a `null` catch-up, a batch mixing scopes or an empty
+ * batch is `"all"`: the safe answer is today's full refetch.
  */
-export function doorbellScope(tables: ReadonlySet<string | null>): "roster" | "all" {
-  if (tables.size === 0) return "all";
-  for (const t of tables) if (t !== MEMBERS_TABLE) return "all";
-  return "roster";
+export function doorbellScope(
+  tables: ReadonlySet<string | null>
+): "roster" | "tasks" | "all" {
+  let scope: "roster" | "tasks" | null = null;
+  for (const t of tables) {
+    const own = t === null ? undefined : SCOPED_TABLES[t];
+    if (!own || (scope !== null && scope !== own)) return "all";
+    scope = own;
+  }
+  return scope ?? "all";
 }
 
 export function useChannelsLive({
@@ -48,6 +59,7 @@ export function useChannelsLive({
   refetchAll,
   refetchMembers,
   refetchRoster,
+  refetchTasks,
 }: {
   workspaceId: string;
   /** Everything a content change can invalidate — channels, messages, members, threads, mentions. */
@@ -61,6 +73,8 @@ export function useChannelsLive({
    * channel open re-read the whole transcript each time ANYONE opened that channel.
    */
   refetchRoster?: () => void;
+  /** What a `channel_tasks`-only batch refetches; absent, such a batch runs `refetchAll`. */
+  refetchTasks?: () => void;
 }): { gate: MutationGate } {
   // ⚠ The refs are written in an EFFECT, not during render — the same shape
   // `use-api-mutation.ts › useRefetchGate` uses for its own `runRef`. A ref assigned in the
@@ -69,10 +83,12 @@ export function useChannelsLive({
   const refetchRef = useRef<() => void>(() => {});
   const membersRefetchRef = useRef<() => void>(() => {});
   const rosterRefetchRef = useRef<(() => void) | undefined>(undefined);
+  const tasksRefetchRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     refetchRef.current = refetchAll;
     membersRefetchRef.current = refetchMembers;
     rosterRefetchRef.current = refetchRoster;
+    tasksRefetchRef.current = refetchTasks;
   });
 
   // The tables named since the last run. The gate coalesces many signals into ONE run, so the
@@ -81,8 +97,13 @@ export function useChannelsLive({
   const { signal, gate } = useRefetchGate(() => {
     const scope = doorbellScope(pendingTablesRef.current);
     pendingTablesRef.current = new Set();
-    const roster = rosterRefetchRef.current;
-    if (scope === "roster" && roster) roster();
+    const scoped =
+      scope === "roster"
+        ? rosterRefetchRef.current
+        : scope === "tasks"
+          ? tasksRefetchRef.current
+          : undefined;
+    if (scoped) scoped();
     else refetchRef.current();
   });
   useChannelsRealtime(workspaceId, (table) => {

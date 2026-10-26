@@ -29,8 +29,8 @@ const MESSAGE_GHOSTS = [
   { name: 110, lines: ["70%"] },
 ] as const;
 
-/** Tab label widths in row order: Info, Threads, Agents, Settings. */
-const TAB_WIDTHS = [26, 48, 44, 48] as const;
+/** Tab label widths in row order: Info, Threads, Agents, Tasks, Settings. */
+const TAB_WIDTHS = [26, 48, 44, 36, 48] as const;
 
 /** Info-card rows (`info-tab-card.tsx`: Name, Description, Creator, Created — `bits.tsx › MetaRow`, `h-9` each). */
 const CARD_ROWS = 4;
@@ -164,7 +164,7 @@ function ComposerGhost() {
  * selected tab — a ghost must not claim which face resolves.
  */
 function InfoColumnGhost() {
-  const tabs = channelPaneTabs(false);
+  const tabs = channelPaneTabs(false, true);
   return (
     <aside className="flex w-[var(--info-w,380px)] shrink-0 flex-col border-l border-border-default">
       <div className="flex h-[56px] shrink-0 items-center px-3">

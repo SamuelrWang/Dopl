@@ -116,6 +116,7 @@ export function ComposerRecipients({
   threadOtherParty = null,
   cancelled = false,
   working = null,
+  trailing = null,
 }: {
   body: string;
   members: ChannelMember[];
@@ -129,6 +130,9 @@ export function ComposerRecipients({
    *  reports the DRAFT's reach and must not learn to read a session feed.
    *  `channel-surface.tsx` builds it, `agent-activity.tsx` draws it. */
   working?: ReactNode;
+  /** THE LINE'S RIGHT END, outside the status `<p>` so it may hold a pop-up: the tasks quick
+   *  view (`tasks-quick-view.tsx`). Positioned, and its right edge is the composer card's. */
+  trailing?: ReactNode;
   /** RR3 arm 3's input, derived once from the transcript this pane already
    *  holds (`derivations.ts`). ⚠ A STABLE reference — see {@link EMPTY_RECENT}. */
   recentAgentIds?: readonly string[];
@@ -188,43 +192,46 @@ export function ComposerRecipients({
       : VIA_NOTE[reach.via]
     : undefined;
   return (
-    <p
-      role="status"
-      aria-label="Recipients"
-      // ⚠ `justify-start` — half of the ABOVE-THE-CARD, top-left placement Samuel called on
-      // 2026-09-08 (`composer.tsx` owns the other half). It was `justify-end` for the 2026-09-04
-      // top-RIGHT placement, and the two halves move together.
-      // The element still stretches the card's full width, so `min-w-0` + `truncate` keep a long
-      // recipient list shrinking rather than pushing the card wider.
-      className="flex min-w-0 items-center justify-start gap-1 px-0.5 pb-1 text-caption text-text-muted"
-    >
-      {/* ⚠ THE ARROW IS UNCONDITIONAL NOW — it is the row's own shape, and the
-          empty state is a NAME in it ({@link REACH_NOBODY_LABEL}), not a missing
-          one. */}
-      <span aria-hidden>→</span>
-      <span className="truncate">
-        {addressed
-          ? reach.recipients.map((r) => r.label).join(", ")
-          : REACH_NOBODY_LABEL}
-      </span>
-      {note && (
-        <span className="shrink-0 rounded-[6px] bg-surface-raised-1 px-1.5 text-micro">
-          {note}
+    <div className="flex min-w-0 items-center gap-2 pb-1">
+      <p
+        role="status"
+        aria-label="Recipients"
+        // ⚠ `justify-start` — half of the ABOVE-THE-CARD, top-left placement Samuel called on
+        // 2026-09-08 (`composer.tsx` owns the other half). It was `justify-end` for the 2026-09-04
+        // top-RIGHT placement, and the two halves move together.
+        // The element still stretches the card's full width, so `min-w-0` + `truncate` keep a long
+        // recipient list shrinking rather than pushing the card wider.
+        className="flex min-w-0 flex-1 items-center justify-start gap-1 px-0.5 text-caption text-text-muted"
+      >
+        {/* ⚠ THE ARROW IS UNCONDITIONAL NOW — it is the row's own shape, and the
+            empty state is a NAME in it ({@link REACH_NOBODY_LABEL}), not a missing
+            one. */}
+        <span aria-hidden>→</span>
+        <span className="truncate">
+          {addressed
+            ? reach.recipients.map((r) => r.label).join(", ")
+            : REACH_NOBODY_LABEL}
         </span>
-      )}
-      {/* **THE WORKING STRIP FOLLOWS THE BADGE, PACKED LEFT** (Samuel,
-          2026-09-20, twice: first *"put agents working to the right"* — out of
-          its own band above the line — then *"I want it to be left aligned,
-          except after the most recent agent thingy"*, once he saw it pinned to
-          the far edge).
-          ⚠ **SO THERE IS NO `ml-auto`, AND ITS ABSENCE IS THE RULING.** This row
-          is `justify-start`; the strip is simply the last item in it, one gap
-          after the badge. A spacer would push it to the pane's right edge, which
-          is what he corrected — the two facts read as one line together, not as
-          two things at opposite ends of the pane.
-          ⚠ `min-w-0` + `shrink` so the strip is what elides (`…`) when the room
-          runs out, rather than the recipients it follows. */}
-      {working && <span className="min-w-0 shrink">{working}</span>}
-    </p>
+        {note && (
+          <span className="shrink-0 rounded-[6px] bg-surface-raised-1 px-1.5 text-micro">
+            {note}
+          </span>
+        )}
+        {/* **THE WORKING STRIP FOLLOWS THE BADGE, PACKED LEFT** (Samuel,
+            2026-09-20, twice: first *"put agents working to the right"* — out of
+            its own band above the line — then *"I want it to be left aligned,
+            except after the most recent agent thingy"*, once he saw it pinned to
+            the far edge).
+            ⚠ **SO THERE IS NO `ml-auto`, AND ITS ABSENCE IS THE RULING.** This row
+            is `justify-start`; the strip is simply the last item in it, one gap
+            after the badge. A spacer would push it to the pane's right edge, which
+            is what he corrected — the two facts read as one line together, not as
+            two things at opposite ends of the pane.
+            ⚠ `min-w-0` + `shrink` so the strip is what elides (`…`) when the room
+            runs out, rather than the recipients it follows. */}
+        {working && <span className="min-w-0 shrink">{working}</span>}
+      </p>
+      {trailing && <div className="relative flex-none empty:hidden">{trailing}</div>}
+    </div>
   );
 }

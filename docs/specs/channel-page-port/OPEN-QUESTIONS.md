@@ -291,3 +291,44 @@ Workers append a `## <slice>` section per question: the question, what was chose
 15. **Pre-existing, unchanged:** `src/shared/ui/clickable-cursor.test.ts` red on
     `ontology-staging/.../kanban-column-header.tsx`; `check-doc-refs` asks for
     `docs/ENGINEERING.md::task-panel.tsx` to leave its baseline.
+
+## Phase 4 tasks UI (branch `ui/port-tasks`)
+
+1. **Which hosts draw tasks.** Chose: a `tasks` capability that ADDS (default `false`,
+   `channel-surface-contract.ts`), passed by /home only (`relationship-record.tsx`). The workspace
+   channels page does not pass it (R12: no workspace-only work; it is a one-line opt-in), and the
+   guest web lane does not, because its one column (`channel-single-column.tsx`) has no Tasks face.
+   A host without it reads nothing. A guest member on /home is gated by the workspace role
+   (`surface-info-panel.tsx`, `role !== "guest"`): list, detail and notes, no tick / Resolve / check.
+2. **Five tabs in 380px.** No tighter-layout branch was written (INVARIANTS had asked for one): the
+   row is the staging row Samuel approved, at the `underline` 22px gap, with `overflow-x-auto`.
+   Measure on :3100 / the desktop; if it scrolls at 380px with three badges, the deleted `gap-1`
+   tightening is the fix.
+3. **The tab ask when the column is closed.** The panel mounts with the column, so a nonce it seeds
+   itself misses the ask that opened it. Chose: `tasksTabSignal` counts asks since the column last
+   closed (`use-channels-selection.ts › setInfoOpen` zeroes it) and the panel seeds 0 and switches
+   on a RISE (`info-panel.tsx`). `openTask` also closes an open agent view, which covers the column.
+4. **A message From chip in thread view.** The link carries a main-room `seq`; chose to leave the
+   thread and land with the `seq:<n>` sentinel (`citationScrollTargetId([], seq)`), so the page-back
+   hunt finds it if it is not loaded. In channel view it is `jumpToSeq`'s own resolution.
+5. **The pill's seat.** `ComposerRecipients` now wraps its status `<p>` in a row `<div>` with a
+   `trailing` slot after it (the `pb-1` moved to the row), so the pop-up is valid markup and its right
+   edge is the card's with no negative margin. The slot hides when the quick view renders nothing.
+6. **What a row shows for its author.** Kept staging's: the opener (or, once resolved, the resolver)
+   face + "<name> opened|resolved <time>". A person is named `displayName ?? email ?? "Member"` (no
+   "You"); an agent `agentFaceName` off the author index, so an agent outside the feeds reads "New
+   Agent", never its id.
+7. **No create / assign / due-date UI.** Agents open and assign tasks (MCP); the UI exposes only
+   Resolve / Reopen, the subtask check and notes. `dueAt` is not drawn (the meta line was removed).
+8. **Notes are not optimistic.** The note composer keeps the draft until the write lands
+   (`mutateAsync`) and the answer's task carries the note; a refusal toasts and leaves the words.
+9. **Staging is not a full API fake.** The product container (`tasks-tab.tsx`) writes over
+   `useApiMutation`, so staging renders the product's presentational `TasksPanel` / `TasksQuickView`
+   over its in-memory store, whose writes reuse the product's `statusExpectation` /
+   `subtaskExpectation`. Staging's fake `TaskStatus` / `SubtaskState` / `TaskActor` / `TaskLink` are
+   gone (it uses the contracts), so OQ tasks-backend #9's census can now list them; not done here
+   (backend lane's file).
+10. **Pre-existing, unchanged:** `src/shared/ui/clickable-cursor.test.ts` red on
+    `ontology-staging/.../kanban-column-header.tsx`; `apps/desktop-ui/src/components/skeletons/
+    page-skeletons.test.tsx › the channels ghost byte-shares …` red since slice 1 restyled the composer
+    card (it still expects `raised-tab … rounded-[14px]` in `composer.tsx`; outside this slice's gates).

@@ -2,8 +2,8 @@
 /**
  * TABLE-AWARE DOORBELL, consumer half (`live.ts › useChannelsLive`). A batch of realtime signals
  * whose every table is `channel_members` (the read watermark, a join, a favourite) refetches the
- * ROSTER only; anything else — another table, a catch-up (`null`), a mixed coalesced batch — runs
- * the full refetch, as before. The realtime hook is replaced by a recorder so each case drives the
+ * ROSTER only, an all-`channel_tasks` batch the TASKS only; anything else — another table, a
+ * catch-up (`null`), a mixed coalesced batch — runs the full refetch, as before. The realtime hook is replaced by a recorder so each case drives the
  * exact table sequence; the refetch gate is the real one.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -28,17 +28,18 @@ afterEach(() => {
 function mount(withRoster = true) {
   const all = vi.fn();
   const roster = vi.fn();
+  const tasks = vi.fn();
   const { result } = renderHook(() =>
     useChannelsLive({
       workspaceId: "ws1",
       refetchAll: all,
       refetchMembers: () => {},
-      ...(withRoster ? { refetchRoster: roster } : {}),
+      ...(withRoster ? { refetchRoster: roster, refetchTasks: tasks } : {}),
     })
   );
   expect(rt.channels, "control: the channels doorbell was subscribed").toBeTypeOf("function");
   const ring = (table: string | null) => act(() => rt.channels!(table));
-  return { all, roster, ring, gate: () => result.current.gate };
+  return { all, roster, tasks, ring, gate: () => result.current.gate };
 }
 
 describe("useChannelsLive — table-aware doorbell", () => {
@@ -84,8 +85,25 @@ describe("useChannelsLive — table-aware doorbell", () => {
     expect(h.all).toHaveBeenCalledTimes(1);
   });
 
-  it("doorbellScope: roster only for a non-empty all-members batch", () => {
+  it("a channel_tasks-only signal refetches the tasks, nothing else", () => {
+    const h = mount();
+    h.ring("channel_tasks");
+    expect(h.tasks).toHaveBeenCalledTimes(1);
+    expect(h.all).not.toHaveBeenCalled();
+    expect(h.roster).not.toHaveBeenCalled();
+  });
+
+  it("no refetchTasks supplied: a tasks-only signal falls back to the full refetch", () => {
+    const h = mount(false);
+    h.ring("channel_tasks");
+    expect(h.all).toHaveBeenCalledTimes(1);
+  });
+
+  it("doorbellScope: one scope only for a non-empty batch of that scope's table", () => {
     expect(doorbellScope(new Set(["channel_members"]))).toBe("roster");
+    expect(doorbellScope(new Set(["channel_tasks"]))).toBe("tasks");
+    expect(doorbellScope(new Set(["channel_members", "channel_tasks"]))).toBe("all");
+    expect(doorbellScope(new Set(["channel_tasks", "channel_messages"]))).toBe("all");
     expect(doorbellScope(new Set())).toBe("all");
     expect(doorbellScope(new Set([null]))).toBe("all");
     expect(doorbellScope(new Set(["channel_members", null]))).toBe("all");

@@ -108,12 +108,12 @@ describe("the ghost is the surface's two columns, not a bare transcript", () => 
   });
 
   /** ⚠ ONE SLOT PER REAL TAB, ASKED RATHER THAN COUNTED — `channelPaneTabs` is
-   *  the row's own answer for channel view with no Knowledge capability, which is
-   *  what /home mounts (F-340). A fifth tab moves the ghost with it. */
+   *  the row's own answer for channel view with the `tasks` capability, which is
+   *  what /home mounts. A tab added to the row moves the ghost with it. */
   it("ghosts the tab row slot for slot, off channelPaneTabs itself", () => {
-    const tabs = channelPaneTabs(false);
-    expect(tabs).toHaveLength(4);
-    expect(GHOST).toContain("channelPaneTabs(false)");
+    const tabs = channelPaneTabs(false, true);
+    expect(tabs.map((t) => t.key)).toEqual(["info", "threads", "agents", "tasks", "settings"]);
+    expect(GHOST).toContain("channelPaneTabs(false, true)");
 
     const { container } = render(<ChannelRecordSkeleton />);
     // The `underline` control's own row (`segmented-control.tsx`): text only,

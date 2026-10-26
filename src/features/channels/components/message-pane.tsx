@@ -88,6 +88,7 @@ export function ChannelsMessagePane({
   newAgent,
   popOut,
   agentActivity,
+  tasksQuickView,
   peerActivity,
   chrome = "page",
   onToggleInfo = NOOP,
@@ -140,6 +141,8 @@ export function ChannelsMessagePane({
   popOut?: ReactNode;
   /** My agents mid-turn, drawn at the end of the composer's recipient line. */
   agentActivity?: ReactNode;
+  /** The tasks quick view (`tasks-quick-view.tsx`), at the end of the same line. */
+  tasksQuickView?: ReactNode;
   /** Peer agents working (`peer-activity.tsx › PeerActivityRow`), between the send box and the composer. */
   peerActivity?: ReactNode;
   /** `"window"` is the pop-out thread window: no info panel, no sidebar. */
@@ -353,6 +356,7 @@ export function ChannelsMessagePane({
       {peerActivity}
       <ChannelsComposer
         working={agentActivity}
+        tasksQuickView={tasksQuickView}
         newThreadSignal={newThreadSignal}
         channelId={channelId}
         workspaceId={workspaceId}
