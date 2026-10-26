@@ -3916,7 +3916,7 @@ the former `recordCreditUsageEvent` in `src/features/billing/server/credit-ledge
   and argued it from link CONTAINERS: no team grants there, so `my-access` resolves to the role
   default, and the one role it would refuse (`guest`) never reaches a base. **Every word of that is
   true of containers and none of it is true of the second target the same component mounts for.**
-  `pages/home/knowledge-base-view.tsx` mounts for BOTH `containerTarget` and `homeTarget`, and
+  `knowledge/components/home/home-knowledge-base-view.tsx` mounts for BOTH `containerTarget` and `homeTarget`, and
   `homeTarget` is the caller's HOME workspace — an ordinary standard workspace that CAN be
   teams-mode. It is handed `list.bases`, the WHOLE base list rather than the private subset the pane
   offered, so the grid behind the detail pane rendered team-visible bases with every edit control
@@ -4228,7 +4228,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
 
 **What was done in the meantime, and deliberately nothing more:**
 
-- The UI copy now states the CURRENT truth — `pages/home/knowledge-panels.tsx`'s scope-B caption
+- The UI copy now states the CURRENT truth — `knowledge/components/home/home-knowledge-panels.tsx`'s scope-B caption
   reads *"Yours alone — your agent in this channel can't read these, shared or not"*, replacing
   *"Yours alone UNTIL YOU SHARE IT"*. `kb-channel-grants-section.tsx`'s docblock says the same of
   its `Agent only` state, which does work for a `public` base.
@@ -4293,7 +4293,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   projected, so a dropped column is invisible to it — while against real PostgREST it makes every
   locked credential read as UNLOCKED. Measured, not assumed (the mutation run is in the report).
   **The projection string is now asserted directly**, for both columns.
-- **UI copy and docs reversed to the true rule.** `pages/home/knowledge-panels.tsx`'s scope-B caption
+- **UI copy and docs reversed to the true rule.** `knowledge/components/home/home-knowledge-panels.tsx`'s scope-B caption
   goes back to an "until" (*"Yours alone until you give your agent access."*), and
   `kb-channel-grants-section.tsx`'s docblock records that `Agent only` reaches a private base again,
   keeping the day it did not as the record. INVARIANTS §4, §5A, §10 and §12 restate the rule.
@@ -4449,7 +4449,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   FOUR tabs its width budget was measured against and the tightening / scroll residual never
   engages there.
   - 🔑 **THE DUPLICATE VIEW GAVE WAY, NOT THE CAPABILITY, AND THAT IS THE WHOLE SHAPE OF THE
-    RULING.** The operator loses nothing: `pages/home/knowledge-panels.tsx` is a FULL Knowledge
+    RULING.** The operator loses nothing: `knowledge/components/home/home-knowledge-panels.tsx` is a FULL Knowledge
     face on the header's own segmented control, over the same bases, one click away — the tab was
     the smaller of two views. **The guest has no second surface**: `ChannelKnowledgeTab` has one
     consumer (`info-panel.tsx`), and `/api/channels/[channelId]/knowledge/**` has no other client
@@ -4514,7 +4514,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   three were considered together.
 - **The split.** `GET /api/knowledge/bases?shelf=home|workspace` narrows the list to one shelf, and
   an ABSENT `shelf` means BOTH. Two surfaces now name a shelf (`apps/desktop-ui/src/pages/home/
-  knowledge-panels.tsx › HOME_SHELF`, `apps/desktop-ui/src/pages/knowledge/index.tsx ›
+  home-knowledge-panels.tsx › HOME_SHELF`, `apps/desktop-ui/src/pages/knowledge/index.tsx ›
   WORKSPACE_SHELF`). These three readers do not:
   1. **MCP `kb_list_bases`** (rides the route with no param). **Right, and it must stay right** — an
      operator's agent asking "what knowledge is here" should see the operator's whole workspace, not
@@ -4582,7 +4582,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
   container's `workspaceId`, its channel, its peers and its `linkOut`. **It does not carry the
   CALLER'S OWN ROLE in that container.** A claimed link can land its peer as a `guest` or a
   `member` (`HomePendingLink.grantedRole`), and both of them see the channel on their /home.
-- **Consequence 1 — the new "New shared base" button** (`pages/home/knowledge-panels.tsx`).
+- **Consequence 1 — the new "New shared base" button** (`knowledge/components/home/home-knowledge-panels.tsx`).
   `POST /api/knowledge/bases` is `minRole: "member"`, so a GUEST who clicks it gets a 403 that the
   dialog surfaces as an error. Correct, and ugly: a live button that cannot work. It is shown to
   both because the pane has nothing to branch on.
@@ -4616,7 +4616,7 @@ visibility gate has already answered 404. Plan RULING 2 (Samuel, confirmed) says
     Derived server-side from the membership row by
     `channels/server/repository-list-extras.ts › listMyContainerRoles` — ONE bounded query in the
     tier that already reads peers, never a client param.
-  - **The hardcode is gone.** `pages/home/knowledge-panels.tsx › containerTarget` takes the real
+  - **The hardcode is gone.** `knowledge/components/home/home-knowledge-panels.tsx › containerTarget` takes the real
     role, so the base settings modal stops believing every reader is an owner.
   - **The four controls, each mirroring the floor the server already applies:** Add person
     (`member`+, `service-writes.ts › mintContainerLink`), the Knowledge face's shared create
@@ -10554,7 +10554,7 @@ already wrong — `channel-dispatch-agents.ts` does pass `waitMs` — so do not 
 
 - Location: `src/app/globals.css` and `apps/desktop-ui/src/styles/kit.css` (`.fade-swap-in` and its reduced-motion twin); `scripts/check-css-token-drift.ts` compares only selectors INSIDE `@layer components` (INVARIANTS §14).
 - Found during: the w2-spa pass of the 2026-09-23 review (P9-09/P9-10).
-- **Same class, second site:** `apps/desktop-ui/src/components/skeletons/knowledge-skeletons.tsx › InfoPanelGhost` is a fourth hand copy of the section-panel ghost that `components/skeletons/section-panel-ghost.tsx › SectionPanelGhost` now owns for home, identities and members.
+- **Same class, second site:** `src/features/knowledge/components/knowledge-skeletons.tsx › InfoPanelGhost` is a fourth hand copy of the section-panel ghost that `components/skeletons/section-panel-ghost.tsx › SectionPanelGhost` now owns for home, identities and members.
 - Proposed resolution: move the fade-swap rule into the layer in both files (needs `fade-swap.tsx`'s owner), and have the knowledge skeleton wear `SectionPanelGhost`.
 - Status: OPEN (low).
 
