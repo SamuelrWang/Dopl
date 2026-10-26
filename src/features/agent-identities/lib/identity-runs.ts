@@ -1,14 +1,12 @@
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { formatRelativeTime } from "@/shared/lib/format-time";
-import { agentEndedAt } from "@/features/channels/components/agents-model";
 import type { RuntimeDescriptor } from "@/features/channels/lib/runtime-capability";
 import type { AgentIdentity } from "../client/types";
 
 /**
  * What the Identities page knows about its roles' agents, from this machine's session feed
- * (`channels/components/use-desktop-sessions.ts`). A session names the identity it launched as by
- * NAME, a spawn-time snapshot, so the join is on the name. `null` sessions = could not ask, which
- * every reader keeps apart from "nothing ran" (INVARIANTS §11).
+ * (`channels/components/use-desktop-sessions.ts`). `null` sessions = could not ask, which every
+ * reader keeps apart from "nothing ran" (INVARIANTS §11).
  */
 
 export type Sessions = ReadonlyArray<DesktopSessionSummary> | null;
@@ -19,39 +17,49 @@ export interface IdentityRun {
   session: DesktopSessionSummary;
 }
 
-function launchedAs(identity: AgentIdentity, session: DesktopSessionSummary): boolean {
-  const name = session.identityName?.trim();
-  return !!name && name === identity.name.trim();
+/** `main/session-summary-text.js › displayText`'s collapse, so a name compares as the desktop wrote it. */
+function normalName(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
-export function runsOf(identity: AgentIdentity, sessions: Sessions): DesktopSessionSummary[] {
-  return (sessions ?? []).filter((s) => launchedAs(identity, s));
+/**
+ * The identity a session ran as: by the id stamped at spawn, else (a session from a desktop older
+ * than the stamp) by name, where a shared row must also be in the session's own workspace.
+ */
+function identityOf(
+  identities: ReadonlyArray<AgentIdentity>,
+  session: DesktopSessionSummary
+): AgentIdentity | undefined {
+  if (session.identityId) return identities.find((i) => i.id === session.identityId);
+  const name = normalName(session.identityName);
+  if (!name) return undefined;
+  return identities.find(
+    (i) =>
+      normalName(i.name) === name &&
+      (i.visibility === "private" || i.workspaceId === session.workspaceId)
+  );
 }
 
-/** Each session joined to the FIRST identity wearing its name, so a session is never listed twice
- *  when two shelves hold a role of the same name. */
-function joinRuns(
+/** Every session credited to exactly one identity, or to none. */
+export function joinRuns(
   identities: ReadonlyArray<AgentIdentity>,
   sessions: Sessions
 ): IdentityRun[] {
   return (sessions ?? []).flatMap((session) => {
-    const identity = identities.find((i) => launchedAs(i, session));
+    const identity = identityOf(identities, session);
     return identity ? [{ identity, session }] : [];
   });
 }
 
 /** When an agent last did anything: its last activity, else when it ended, else when it started. */
 function touchedAt(session: DesktopSessionSummary): number | null {
-  return session.lastActivityAt ?? agentEndedAt(session) ?? session.startedAt ?? null;
+  return session.lastActivityAt ?? session.endedAt ?? session.startedAt ?? null;
 }
 
 /** Working before idle, then the most recently started. Ended agents never appear. */
-export function liveRuns(
-  identities: ReadonlyArray<AgentIdentity>,
-  sessions: Sessions
-): IdentityRun[] {
+export function liveRuns(runs: ReadonlyArray<IdentityRun>): IdentityRun[] {
   const rank = (s: DesktopSessionSummary) => (s.state === "working" ? 0 : 1);
-  return joinRuns(identities, sessions)
+  return runs
     .filter((run) => run.session.state !== "ended")
     .sort(
       (a, b) =>
@@ -61,27 +69,37 @@ export function liveRuns(
 }
 
 /** Finished agents, most recently ended first. */
-export function endedRuns(
-  identities: ReadonlyArray<AgentIdentity>,
-  sessions: Sessions,
-  limit = 7
-): IdentityRun[] {
-  return joinRuns(identities, sessions)
+export function endedRuns(runs: ReadonlyArray<IdentityRun>, limit = 7): IdentityRun[] {
+  return runs
     .filter((run) => run.session.state === "ended")
     .sort((a, b) => (touchedAt(b.session) ?? 0) - (touchedAt(a.session) ?? 0))
     .slice(0, limit);
 }
 
-export function runningCount(identity: AgentIdentity, sessions: Sessions): number {
-  return runsOf(identity, sessions).filter((s) => s.state !== "ended").length;
+export interface IdentityUse {
+  running: number;
+  /** Epoch ms; `null` = nothing on record, which is not "never used". */
+  lastUsed: number | null;
 }
 
-/** The latest moment any of this identity's agents was seen, or `null` when none is on record. */
-export function lastUsedAt(identity: AgentIdentity, sessions: Sessions): number | null {
-  const times = runsOf(identity, sessions)
-    .map(touchedAt)
-    .filter((t): t is number => t !== null);
-  return times.length > 0 ? Math.max(...times) : null;
+const NO_USE: IdentityUse = { running: 0, lastUsed: null };
+
+/** Each identity's live count and last use, keyed by identity id. */
+export function usageOf(runs: ReadonlyArray<IdentityRun>): ReadonlyMap<string, IdentityUse> {
+  const use = new Map<string, IdentityUse>();
+  for (const { identity, session } of runs) {
+    const prev = use.get(identity.id) ?? NO_USE;
+    const at = touchedAt(session);
+    use.set(identity.id, {
+      running: prev.running + (session.state === "ended" ? 0 : 1),
+      lastUsed: at === null ? prev.lastUsed : Math.max(prev.lastUsed ?? at, at),
+    });
+  }
+  return use;
+}
+
+export function usageFor(use: ReadonlyMap<string, IdentityUse>, identity: AgentIdentity): IdentityUse {
+  return use.get(identity.id) ?? NO_USE;
 }
 
 /** "5m ago" from epoch ms. */
@@ -107,14 +125,14 @@ export interface IdentityArrangement {
 export const DEFAULT_ARRANGEMENT: IdentityArrangement = { query: "", runtime: "all", sort: "recent" };
 
 /**
- * Search, runtime filter, then sort. Search reads the name, description and runtime, never the
- * instructions, which would match half the list on a common word. A stable sort, so rows with no
- * history keep the server's order.
+ * Search, runtime filter, then sort by `use`. Search reads the name, description and runtime,
+ * never the instructions, which would match half the list on a common word. A stable sort, so rows
+ * with no history keep the server's order.
  */
 export function arrangeIdentities(
   identities: ReadonlyArray<AgentIdentity>,
   { query, runtime, sort }: IdentityArrangement,
-  sessions: Sessions
+  use: ReadonlyMap<string, IdentityUse>
 ): AgentIdentity[] {
   const needle = query.trim().toLowerCase();
   const found = identities.filter((identity) => {
@@ -127,11 +145,9 @@ export function arrangeIdentities(
   });
   if (sort === "name") return found.sort((a, b) => a.name.localeCompare(b.name));
   if (sort === "running") {
-    return found.sort((a, b) => runningCount(b, sessions) - runningCount(a, sessions));
+    return found.sort((a, b) => usageFor(use, b).running - usageFor(use, a).running);
   }
-  return found.sort(
-    (a, b) => (lastUsedAt(b, sessions) ?? -1) - (lastUsedAt(a, sessions) ?? -1)
-  );
+  return found.sort((a, b) => (usageFor(use, b).lastUsed ?? -1) - (usageFor(use, a).lastUsed ?? -1));
 }
 
 export interface RuntimeReadiness {

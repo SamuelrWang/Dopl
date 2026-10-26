@@ -46,9 +46,16 @@ export function SectionPanelGhost({
 }
 
 /** `IdentityGrid`'s cards; the grid class is imported so the column count cannot drift. */
-export function IdentityCardsGhost({ count }: { count: number }) {
+export function IdentityCardsGhost({
+  count,
+  grid = IDENTITY_GRID,
+}: {
+  count: number;
+  /** The grid the loaded page passes `IdentityGrid` (/home: `IDENTITY_GRID_RAIL`). */
+  grid?: string;
+}) {
   return (
-    <div className={IDENTITY_GRID}>
+    <div className={grid}>
       {Array.from({ length: count }).map((_, i) => (
         <Skeleton key={i} className="h-[104px] rounded-xl" />
       ))}

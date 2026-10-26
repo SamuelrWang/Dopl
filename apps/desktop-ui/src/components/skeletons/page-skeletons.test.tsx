@@ -12,7 +12,10 @@ import { OverviewSkeleton } from "#/pages/overview/overview-skeleton";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
 import { IdentitiesPageSkeleton } from "#/pages/identities/identities-skeleton";
 import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
-import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
+import {
+  IDENTITY_GRID,
+  IDENTITY_GRID_RAIL,
+} from "@/features/agent-identities/components/identity-section";
 import {
   KnowledgeBaseSkeleton,
   KnowledgeHomeSkeleton,
@@ -146,20 +149,17 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     expect(container.querySelectorAll('[class*="kbCell"]').length).toBeGreaterThan(0);
   });
 
-  /**
-   * ⚠ A TAILWIND ARBITRARY VALUE CANNOT BE IMPORTED, so the agents grid is one
-   * copied string in two skeletons — and this is what keeps the copy honest.
-   */
+  // The ghosts import the grid constants rather than copying them, and each names its page's grid.
   it("the Agents ghosts carry IdentityGrid's grid class verbatim", () => {
-    // 2026-09-13: the grid is an EXPORTED constant now (`IDENTITY_GRID`), so the
-    // skeletons import it instead of copying the string; the pin is that both
-    // read the import and that the constant still spells a real grid.
-    // 🔒 FIXED, never auto-fill: three across since the Activity rail took a quarter of /home.
-    expect(IDENTITY_GRID).toBe("grid grid-cols-3 gap-2.5");
-    expect(file("./section-panel-ghost.tsx")).toContain("className={IDENTITY_GRID}");
+    // 🔒 FOUR PER ROW, FIXED (Samuel, 2026-09-13), never auto-fill; /home alone is three across.
+    expect(IDENTITY_GRID).toBe("grid grid-cols-4 gap-2.5");
+    expect(IDENTITY_GRID_RAIL).toBe("grid grid-cols-3 gap-2.5");
+    expect(file("./section-panel-ghost.tsx")).toContain("grid = IDENTITY_GRID");
     for (const skeleton of [HOME_SKELETON, AGENTS_SKELETON]) {
       expect(skeleton).toContain("<IdentityCardsGhost count={");
     }
+    expect(HOME_SKELETON).toContain("grid={IDENTITY_GRID_RAIL}");
+    expect(AGENTS_SKELETON).not.toContain("IDENTITY_GRID_RAIL");
   });
 
   /**

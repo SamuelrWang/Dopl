@@ -1,5 +1,5 @@
 /* The identity view popup (`identity-view-dialog.tsx`) inside `ModalShell size="panel"`: a head
-   that never changes with the tab, an underline tab strip, and the body, which alone scrolls. */
+   that never changes with the tab, the kit's underline tabs, and the body, which alone scrolls. */
 
 .head {
   display: flex;
@@ -40,29 +40,6 @@
 .close:hover {
   background: var(--surface-raised-2);
   color: var(--text-secondary);
-}
-
-/* The active tab's underline sits on the strip's own border. */
-.tabs {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 16px;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border-default);
-}
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: -1px;
-  padding: 10px 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  transition: color 0.14s ease;
-}
-.tabOn {
-  border-bottom-color: var(--text-primary);
 }
 
 .body {

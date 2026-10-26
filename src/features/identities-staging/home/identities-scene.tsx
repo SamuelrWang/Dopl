@@ -10,15 +10,15 @@
 import { useState } from "react";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
 import { authorMarker } from "@/features/agent-identities/components/identity-picker";
-import { IdentitiesHome, type IdentityHome } from "@/features/agent-identities/components/identities-home";
 import {
-  AddKnowledgeRow,
-  LaunchIntoChannelButton,
-} from "@/features/agent-identities/components/identity-card-actions";
+  IdentitiesHome,
+  personalState,
+  type IdentityHome,
+} from "@/features/agent-identities/components/identities-home";
+import { AGENT_RUN_PRESENTER } from "@/features/channels/components/agent-run-presenter";
 import { IdentityEditor } from "@/features/agent-identities/components/identity-editor";
 import { IdentityKnowledgeDialog } from "@/features/agent-identities/components/identity-knowledge-dialog";
 import { draftFromIdentity } from "@/features/agent-identities/lib/identity-draft";
-import { EMPTY_KNOWLEDGE } from "@/features/agent-identities/lib/knowledge-scopes";
 import {
   SECTIONS,
   SECTIONS_CONTAINER,
@@ -32,7 +32,7 @@ import {
   STAGING_RUNTIMES,
   type StagingChannel,
 } from "../data";
-import { STAGING_WORN_BY, nameOf, photoOf, stagingSessions } from "../data-agents";
+import { STAGING_PEERS, nameOf, photoOf, stagingSessions } from "../data-agents";
 import { latency } from "../store/identity-store";
 import { useStagingAttachableBases } from "../store/use-staging-attachable-bases";
 import { useStagingIdentities } from "../store/use-staging-identities";
@@ -41,7 +41,7 @@ import { useStagingIdentitySave } from "../store/use-staging-identity-save";
 export type ReadinessScenario = "ready" | "signin";
 
 const runtimeLabel = (id: string) => STAGING_RUNTIMES.find((r) => r.id === id)?.label ?? id;
-const names = new Map(STAGING_WORN_BY.map((p) => [p.userId, p.displayName]));
+const names = new Map(STAGING_PEERS.map((p) => [p.userId, p.displayName]));
 
 export function IdentitiesScene({
   channel,
@@ -85,42 +85,28 @@ export function IdentitiesScene({
             identities: shared,
             markerFor: (identity) => authorMarker(identity, currentUserId, names),
             canCreate: meetsMinRole(channel.myWorkspaceRole, "member"),
-            wornBy: STAGING_WORN_BY,
+            peers: STAGING_PEERS,
           }
         }
         personal={{
           identities: personal,
-          state:
-            homeWorkspaceId === null
-              ? { kind: "unavailable", message: "Finish setting up your home space to keep identities there." }
-              : homeList.error
-                ? { kind: "failed", message: "Couldn't load your own identities.", onRetry: homeList.refetch }
-                : { kind: "ready" },
+          state: personalState(homeWorkspaceId, homeList),
           canCreate: homeWorkspaceId !== null,
-          cardActionFor: channel
-            ? (identity) => (
-                <>
-                  <AddKnowledgeRow
-                    refs={identity.knowledge ?? EMPTY_KNOWLEDGE}
-                    identityName={identity.name}
-                    onClick={() => setAttaching(identity)}
-                  />
-                  {refusal?.identityId === identity.id && (
-                    <p role="alert" className="text-caption text-danger">
-                      {refusal.message}
-                    </p>
-                  )}
-                  <LaunchIntoChannelButton
-                    busy={launching === identity.id}
-                    disabled={launching !== null}
-                    onClick={() => void launch(identity)}
-                  />
-                </>
-              )
+          footer: channel
+            ? {
+                launch: {
+                  canLaunch: true,
+                  busyId: launching,
+                  error: refusal,
+                  launch: (identity) => void launch(identity),
+                },
+                onAddKnowledge: setAttaching,
+              }
             : undefined,
         }}
         card={{ photoFor: (i) => photoOf(i.createdBy), runtimeLabel, catalogs: STAGING_CATALOGS }}
         sessions={sessions}
+        agents={AGENT_RUN_PRESENTER}
         readiness={STAGING_RUNTIMES.map((r, i) => ({
           id: r.id,
           label: r.label,

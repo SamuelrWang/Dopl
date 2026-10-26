@@ -17,7 +17,7 @@ export function nameOf(userId: string): string | null {
 }
 
 /** The channel's people besides the viewer: who can wear a shared identity. */
-export const STAGING_WORN_BY: ReadonlyArray<AvatarStackUser> = STAGING_PEOPLE.filter(
+export const STAGING_PEERS: ReadonlyArray<AvatarStackUser> = STAGING_PEOPLE.filter(
   (p) => p.userId !== STAGING_USER_ID
 ).map((p) => ({
   userId: p.userId,
@@ -28,6 +28,8 @@ export const STAGING_WORN_BY: ReadonlyArray<AvatarStackUser> = STAGING_PEOPLE.fi
 const MIN = 60_000;
 
 interface AgentSeed {
+  /** Absent = a session from a desktop older than the id stamp: joined by name. */
+  identityId?: string;
   identityName: string;
   agent: string;
   channel: string;
@@ -40,14 +42,14 @@ interface AgentSeed {
 }
 
 const AGENTS: ReadonlyArray<AgentSeed> = [
-  { identityName: "Release Captain", agent: "Release Captain", channel: "releases", thread: "Cut 1.7.24", state: "working", ago: 40, color: "agent-03", runtime: "claude" },
-  { identityName: "SQL Reviewer", agent: "SQL Reviewer", channel: "tech-debt", thread: "Teardown order fix", state: "working", ago: 15, color: "agent-11", runtime: "codex" },
-  { identityName: "SQL Reviewer", agent: "Schema Diff", channel: "api-v2-migration", thread: "Payload parity", state: "idle", ago: 6, color: "agent-07", runtime: "codex" },
-  { identityName: "Coder", agent: "Identity Cards", channel: "tech-debt", thread: "Card overhaul", state: "working", ago: 5, color: "agent-14", runtime: "claude" },
-  { identityName: "Flake Hunter", agent: "Flake Hunter", channel: "flaky-tests", thread: "Device token expiry", state: "working", ago: 3, color: "agent-05", runtime: "codex" },
-  { identityName: "Chief of Staff", agent: "Chief of Staff", channel: "tech-debt", thread: "Monday digest", state: "ended", ago: 20, color: "agent-09", runtime: "claude" },
-  { identityName: "Release Captain", agent: "Release Captain", channel: "releases", thread: "Cut 1.7.23", state: "ended", ago: 180, color: "agent-03", runtime: "claude" },
-  { identityName: "SQL Reviewer", agent: "Schema Diff", channel: "tech-debt", thread: "Index audit", state: "ended", ago: 300, color: "agent-07", runtime: "codex" },
+  { identityId: "id-release", identityName: "Release Captain", agent: "Release Captain", channel: "releases", thread: "Cut 1.7.24", state: "working", ago: 40, color: "agent-03", runtime: "claude" },
+  { identityId: "id-sql", identityName: "SQL Reviewer", agent: "SQL Reviewer", channel: "tech-debt", thread: "Teardown order fix", state: "working", ago: 15, color: "agent-11", runtime: "codex" },
+  { identityId: "id-sql", identityName: "SQL Reviewer", agent: "Schema Diff", channel: "api-v2-migration", thread: "Payload parity", state: "idle", ago: 6, color: "agent-07", runtime: "codex" },
+  { identityId: "id-coder", identityName: "Coder", agent: "Identity Cards", channel: "tech-debt", thread: "Card overhaul", state: "working", ago: 5, color: "agent-14", runtime: "claude" },
+  { identityId: "id-flake", identityName: "Flake Hunter", agent: "Flake Hunter", channel: "flaky-tests", thread: "Device token expiry", state: "working", ago: 3, color: "agent-05", runtime: "codex" },
+  { identityId: "id-chief", identityName: "Chief of Staff", agent: "Chief of Staff", channel: "tech-debt", thread: "Monday digest", state: "ended", ago: 20, color: "agent-09", runtime: "claude" },
+  { identityId: "id-release", identityName: "Release Captain", agent: "Release Captain", channel: "releases", thread: "Cut 1.7.23", state: "ended", ago: 180, color: "agent-03", runtime: "claude" },
+  { identityId: "id-sql", identityName: "SQL Reviewer", agent: "Schema Diff", channel: "tech-debt", thread: "Index audit", state: "ended", ago: 300, color: "agent-07", runtime: "codex" },
   { identityName: "Researcher", agent: "Pricing notes", channel: "tech-debt", thread: "Agent pricing", state: "ended", ago: 2880, color: "agent-12", runtime: "codex" },
 ];
 
@@ -67,6 +69,7 @@ export function stagingSessions(now: number): DesktopSessionSummary[] {
       channelName: a.channel,
       threadTitle: a.thread,
       identityName: a.identityName,
+      identityId: a.identityId ?? null,
       color: a.color,
       runtimeId: a.runtime,
       startedAt: ended ? at - 30 * MIN : at,

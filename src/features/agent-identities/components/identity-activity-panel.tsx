@@ -1,12 +1,8 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { cn } from "@/shared/lib/utils";
-import { agentColorOrNull } from "@/shared/lib/agent-colors";
-import { AgentFace } from "@/features/channels/components/agent-face";
-import { agentLiveness } from "@/features/channels/components/agents-model";
-import { agentDisplayName } from "@/features/channels/components/agents-model-identity";
-import { IdentityFace } from "@/shared/ui/identity-face";
+import type { AgentRunPresenter } from "@/shared/lib/agent-run-presenter";
+import { SegmentedControl, segmentedIds } from "@/shared/ui/segmented-control";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { StatusPill } from "@/shared/ui/status-pill";
 import type { AgentIdentity } from "../client/types";
@@ -18,25 +14,27 @@ type Tab = "now" | "recent";
 /** `"all"` · `"mine"` · a member's user id. */
 type OwnerFilter = string;
 
+const PANEL_IDS = "identity-activity";
+
 /**
  * WHAT YOUR ROLES ARE DOING: the page's right rail. Active now is one small white card per live
  * agent (two lines: face, name, when it started; state, thread); Recent is rows, because a logged
- * event in a card face reads as one more agent. Every card and row opens its identity's view.
+ * event in a card face reads as one more agent. Every agent here is the operator's own (this
+ * machine's feed), so every face is theirs. Each card and row opens its identity's view.
  */
 export function IdentityActivityPanel({
   active,
   recent,
+  agents,
   viewerPhoto,
-  photoFor,
   currentUserId,
   ownerName,
   onOpen,
 }: {
   active: ReadonlyArray<IdentityRun>;
   recent: ReadonlyArray<IdentityRun>;
-  /** The operator's own photo: every agent on this machine's feed is theirs. */
+  agents: AgentRunPresenter;
   viewerPhoto: string | null;
-  photoFor: (identity: AgentIdentity) => string | null;
   currentUserId: string;
   /** A member's display name, or `null` when the roster cannot name them. */
   ownerName: (userId: string) => string | null;
@@ -54,9 +52,11 @@ export function IdentityActivityPanel({
       ),
     [active, recent, currentUserId, ownerName]
   );
-  const mine = (run: IdentityRun) => ownedBy(run.identity, owner, currentUserId);
-  const activeShown = active.filter(mine);
-  const recentShown = recent.filter(mine);
+  const shown = (tab === "now" ? active : recent).filter((run) =>
+    ownedBy(run.identity, owner, currentUserId)
+  );
+  const all = tab === "now" ? active : recent;
+  const ids = segmentedIds(PANEL_IDS, tab);
 
   return (
     <IdentityPanel
@@ -75,61 +75,68 @@ export function IdentityActivityPanel({
         ) : null
       }
     >
-      <div role="tablist" aria-label="Activity view" className="flex items-center gap-1 pb-2.5">
-        <TabButton on={tab === "now"} onClick={() => setTab("now")} count={active.length}>
-          Active now
-        </TabButton>
-        <TabButton on={tab === "recent"} onClick={() => setTab("recent")}>
-          Recent
-        </TabButton>
-      </div>
-      {tab === "now" ? (
-        activeShown.length === 0 ? (
+      <SegmentedControl
+        options={[
+          { key: "now", label: "Active now", count: active.length || undefined },
+          { key: "recent", label: "Recent" },
+        ]}
+        value={tab}
+        onChange={setTab}
+        ariaLabel="Activity view"
+        panelIdPrefix={PANEL_IDS}
+        className="pb-2.5"
+      />
+      <div role="tabpanel" id={ids.panel} aria-labelledby={ids.tab}>
+        {shown.length === 0 ? (
           <Quiet>
-            {active.length === 0
-              ? "No agents running from your identities right now."
-              : "Nothing running matches this filter."}
+            {all.length > 0
+              ? "Nothing matches this filter."
+              : tab === "now"
+                ? "No agents running from your identities right now."
+                : "Nothing finished yet."}
           </Quiet>
-        ) : (
+        ) : tab === "now" ? (
           <div className="flex flex-col gap-2">
-            {activeShown.map((run) => (
-              <RunCard key={run.session.sessionId} run={run} photo={viewerPhoto} onOpen={onOpen} />
+            {shown.map((run) => (
+              <RunCard
+                key={run.session.sessionId}
+                run={run}
+                agents={agents}
+                photo={viewerPhoto}
+                onOpen={onOpen}
+              />
             ))}
           </div>
-        )
-      ) : recentShown.length === 0 ? (
-        <Quiet>
-          {recent.length === 0 ? "Nothing finished yet." : "Nothing finished matches this filter."}
-        </Quiet>
-      ) : (
-        <div className="flex flex-col gap-0.5">
-          {recentShown.map((run) => (
-            <RecentRow
-              key={run.session.sessionId}
-              run={run}
-              photo={photoFor(run.identity)}
-              onOpen={onOpen}
-            />
-          ))}
-        </div>
-      )}
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {shown.map((run) => (
+              <RecentRow
+                key={run.session.sessionId}
+                run={run}
+                agents={agents}
+                photo={viewerPhoto}
+                onOpen={onOpen}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </IdentityPanel>
   );
 }
 
-/** The live state rides line 2: on line 1 a pill beside the name leaves the name no room. */
-function RunCard({
-  run,
-  photo,
-  onOpen,
-}: {
+interface RunProps {
   run: IdentityRun;
+  agents: AgentRunPresenter;
   photo: string | null;
   onOpen: (identity: AgentIdentity) => void;
-}) {
+}
+
+/** The live state rides line 2: on line 1 a pill beside the name leaves the name no room. */
+function RunCard({ run, agents, photo, onOpen }: RunProps) {
   const { session } = run;
-  const name = agentDisplayName(session);
-  const liveness = agentLiveness(session);
+  const name = agents.name(session);
+  const state = agents.state(session);
   return (
     <button
       type="button"
@@ -137,12 +144,7 @@ function RunCard({
       className="white-card select-card flex w-full min-w-0 cursor-pointer flex-col gap-1.5 px-3 py-2.5 text-left"
     >
       <span className="flex w-full min-w-0 items-center gap-2">
-        <AgentFace
-          size={28}
-          photo={photo}
-          color={agentColorOrNull(session.color)}
-          runtime={session.runtimeId || null}
-        />
+        {agents.face(session, photo, 28)}
         <span className="min-w-0 flex-1 truncate text-small font-semibold text-text-primary" title={name}>
           {name}
         </span>
@@ -153,8 +155,8 @@ function RunCard({
         )}
       </span>
       <span className="flex w-full min-w-0 items-center gap-1.5">
-        <StatusPill dot tone={liveness.tone === "working" ? "live" : "neutral"}>
-          {liveness.label}
+        <StatusPill dot tone={state.live ? "live" : "neutral"}>
+          {state.label}
         </StatusPill>
         {session.threadTitle && (
           <span className="min-w-0 flex-1 truncate text-caption text-text-muted" title={session.threadTitle}>
@@ -166,24 +168,16 @@ function RunCard({
   );
 }
 
-function RecentRow({
-  run,
-  photo,
-  onOpen,
-}: {
-  run: IdentityRun;
-  photo: string | null;
-  onOpen: (identity: AgentIdentity) => void;
-}) {
+function RecentRow({ run, agents, photo, onOpen }: RunProps) {
   const { session, identity } = run;
-  const what = session.threadTitle ?? session.channelName ?? agentDisplayName(session);
+  const what = session.threadTitle ?? session.channelName ?? agents.name(session);
   return (
     <button
       type="button"
       onClick={() => onOpen(identity)}
       className="flex w-full min-w-0 cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-surface-raised-1"
     >
-      <IdentityFace size={22} photo={photo} ring="neutral" />
+      {agents.face(session, photo, 22)}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="line-clamp-2 text-small font-medium text-text-primary" title={what}>
           {what}
@@ -227,41 +221,6 @@ function ownerFilterOptions(
 function ownedBy(identity: AgentIdentity, filter: OwnerFilter, currentUserId: string): boolean {
   if (filter === "all") return true;
   return identity.createdBy === (filter === "mine" ? currentUserId : filter);
-}
-
-function TabButton({
-  on,
-  onClick,
-  count,
-  children,
-}: {
-  on: boolean;
-  onClick: () => void;
-  count?: number;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={on}
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-caption font-medium transition-colors",
-        on
-          ? "border-border-default bg-bg-overlay text-text-primary"
-          : "border-transparent text-text-muted hover:text-text-secondary"
-      )}
-    >
-      {children}
-      {count !== undefined && count > 0 && (
-        <span className="flex items-center gap-1 text-micro font-semibold text-text-secondary">
-          <span className="size-1 rounded-full bg-success" aria-hidden="true" />
-          {count}
-        </span>
-      )}
-    </button>
-  );
 }
 
 function Quiet({ children }: { children: ReactNode }) {

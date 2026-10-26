@@ -24,10 +24,10 @@ into desktop /home → Identities. Method and rules: `docs/specs/channel-page-po
 | # | Staging piece | Product target |
 |---|---|---|
 | D1 | Card rebuild: white 12px card, 38px `IdentityFace` (owner photo, runtime badge, neutral ring), name + owner line, 2-line description, one-concept chips (runtime/model, knowledge count), scope line, state line (running + last used), worn-by stack, footer action block on a hairline | `identity-section.tsx › IdentityCard` restyled in place; `IDENTITY_ROW` / `IDENTITY_ROW_ADD` exported |
-| D2 | Grid 4 → 3 across (the rail takes a quarter) | `IDENTITY_GRID` |
+| D2 | Grid 4 → 3 across on /home only (the rail takes a quarter); the workspace page stays 4 | `IDENTITY_GRID_RAIL`, passed by `identities-home.tsx` |
 | D3 | Read-only view popup with tabs; card click opens VIEW, Edit hands to the editor; create still opens the editor | new `components/identity-view-dialog.tsx` + `identity-view-parts.tsx` + `identity-view.module.css`, shell is `ModalShell size="panel"` (port target named by staging) |
-| D4 | Page head: counts line + runtime readiness | new `components/identity-page-head.tsx` |
-| D5 | Grid controls: search pill (`.search-expand` recipe), runtime filter, sort (`SelectMenu variant="bare"`) | new `components/identity-controls.tsx` |
+| D4 | Page head: counts line + runtime readiness | `components/identity-page-controls.tsx › IdentityPageHead` |
+| D5 | Grid controls: search pill (`.search-expand` recipe), runtime filter, sort (`SelectMenu variant="bare"`) | `components/identity-page-controls.tsx › IdentityControls` over `shared/ui/search-pill.tsx › SearchPill` |
 | D6 | Activity right rail 3/4 \| 1/4 (container query at 760px), Active now run cards + Recent rows, owner filter | new `components/identity-activity-panel.tsx`; layout kit recipe `.rail-layout*` in both CSS copies |
 | D7 | All-white pane, sections flat (no well), heading as a snug grey title chip, 28px between sections | `SectionPanel flat` + kit `.title-chip`; `home.module.css` identities pane |
 | D8 | Dashed "Add knowledge" row (no attachment list), full-width Launch at the card foot | `components/identity-card-actions.tsx` |
@@ -42,7 +42,7 @@ into desktop /home → Identities. Method and rules: `docs/specs/channel-page-po
 | Two reads, two workspaces, entry-key writes (F-331), shelf matching | host `identity-panels.tsx` (unchanged hooks) |
 | Shared section only with a channel; "No channel selected" empty state; Personal renders with no channel | host + `identities-home.tsx` |
 | `canCreateShared` gate (workspace role ≥ member, hidden not disabled) | host |
-| Personal create disabled until onboarded (`homeWorkspaceId === null`) + `SCOPE_UNAVAILABLE` sentence | host + `identity-home-sections.tsx` |
+| Personal create disabled until onboarded (`homeWorkspaceId === null`) + `SCOPE_UNAVAILABLE` sentence | `identities-home.tsx › personalState` (both hosts) |
 | Personal failure outranks pending (F-339), retry in place; container error → `PageError`; container pending → skeleton | host + sections |
 | Author marker on every row the viewer did not write (INVARIANTS §5A security signal) | `identity-section.tsx` (owner line) + view popup head |
 | Create opens the editor directly; edit opens where the row lives (`where`) | `identities-home.tsx` view → `onEdit(target)` → host editor mounts |
@@ -68,7 +68,7 @@ reach, the Tools-and-rules tab, an action log per identity, runtime re-auth stat
 | owner photo | `viewer.avatarUrl` (`/api/user/profile`, now passed down `HomePane`) for mine, `channel.peers[].avatarUrl` for a peer |
 | runtime badge / logo | `shared/ui/runtime-logo.tsx › useRuntimeLogo` |
 | runtime label, readiness, catalogs | `useLaunchSelection({kind:"defaults"})`: `runtimes`, `connected`, `connectedKnown`, `catalogs` |
-| running count, Active now, Running tab | `useDesktopSessions()` live sessions joined on `identityName === identity.name` (spawn-time snapshot) |
+| running count, Active now, Running tab | `useDesktopSessions()` sessions joined by the spawn-time `identityId` (`lib/identity-runs.ts › joinRuns`; name only for an older desktop) |
 | last used, Recent, Activity tab | the same feed's ended sessions (`main/agent-history.js` keeps them seven days), `endedAt` |
 | worn by (shared) | `channel.peers` |
 

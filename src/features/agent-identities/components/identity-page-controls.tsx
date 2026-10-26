@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef } from "react";
-import { AlertTriangle, Search, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import { SearchPill } from "@/shared/ui/search-pill";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import {
   SORT_OPTIONS,
@@ -75,7 +75,11 @@ export function IdentityControls({
   const set = (patch: Partial<IdentityArrangement>) => onArrangement({ ...arrangement, ...patch });
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-4">
-      <IdentitySearchField value={arrangement.query} onChange={(query) => set({ query })} />
+      <SearchPill
+        label="Search identities"
+        value={arrangement.query}
+        onChange={(query) => set({ query })}
+      />
       {runtimes.length > 0 && (
         <SelectMenu
           variant="bare"
@@ -105,60 +109,6 @@ export function IdentityControls({
           {showing} of {total}
         </p>
       )}
-    </div>
-  );
-}
-
-/**
- * The app's own search pill (`.search-expand`, the recipe /home's search wears), held open: a
- * filter has no collapsed state, and it carries a clear because a filter you cannot drop traps
- * the grid. Not the kit's `SearchField`, which is concave and banned on /home.
- */
-function IdentitySearchField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  return (
-    <div className="search-expand" data-open="true">
-      <div className="auth-btn-3d-light search-expand-shell">
-        <span className="search-expand-toggle" aria-hidden="true">
-          <Search size={15} strokeWidth={2} />
-        </span>
-        <input
-          ref={inputRef}
-          className="search-expand-input"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="Search identities"
-          aria-label="Search identities"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Escape") return;
-            event.preventDefault();
-            onChange("");
-            inputRef.current?.blur();
-          }}
-        />
-        {value !== "" && (
-          <button
-            type="button"
-            aria-label="Clear search"
-            onClick={() => {
-              onChange("");
-              inputRef.current?.focus();
-            }}
-            className="mr-3 flex size-5 flex-none items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary"
-          >
-            <X size={12} strokeWidth={2.5} />
-          </button>
-        )}
-      </div>
     </div>
   );
 }

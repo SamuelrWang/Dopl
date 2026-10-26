@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { AgentRunPresenter } from "@/shared/lib/agent-run-presenter";
 import { identity } from "./identity-editor-harness";
 import { IdentitiesHome, type IdentitiesHomeProps } from "./identities-home";
 
@@ -22,9 +23,17 @@ const LIVE = {
   state: "working",
   channelName: "releases",
   threadTitle: "Cut 1.7",
+  identityId: "id-p",
   identityName: "Scout",
   startedAt: Date.now() - 60_000,
 } as DesktopSessionSummary;
+
+const AGENTS: AgentRunPresenter = {
+  name: (s) => s.displayName ?? "New Agent",
+  state: (s) => ({ label: s.state, live: s.state === "working" }),
+  face: () => null,
+};
+const PEER = { userId: "user-2", displayName: "Priya", avatarUrl: null };
 const ENDED: DesktopSessionSummary = {
   ...LIVE,
   sessionId: "s2",
@@ -35,10 +44,11 @@ const ENDED: DesktopSessionSummary = {
 
 function mount(over: Partial<IdentitiesHomeProps> = {}) {
   const props: IdentitiesHomeProps = {
-    shared: { identities: [SHARED], markerFor: () => "by Priya", canCreate: true, wornBy: [] },
+    shared: { identities: [SHARED], markerFor: () => "by Priya", canCreate: true, peers: [PEER] },
     personal: { identities: [MINE], state: { kind: "ready" }, canCreate: true },
     card: {},
     sessions: [LIVE, ENDED],
+    agents: AGENTS,
     readiness: null,
     runtimes: [],
     currentUserId: "user-1",
@@ -60,6 +70,8 @@ describe("the identities face", () => {
     fireEvent.click(screen.getByRole("button", { name: /Intake bot/ }));
     const view = await screen.findByRole("dialog", { name: "Intake bot" });
     expect(within(view).getByText("by Priya")).toBeTruthy();
+    // One peer plus the viewer.
+    expect(within(view).getByText("2 people can wear this")).toBeTruthy();
     expect(view.querySelectorAll("input, textarea")).toHaveLength(0);
     fireEvent.click(within(view).getByRole("button", { name: "Edit" }));
     expect(props.onEdit).toHaveBeenCalledWith("container", SHARED);
@@ -100,6 +112,15 @@ describe("the identities face", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Scout/ }));
     const view = await screen.findByRole("dialog", { name: "Scout" });
     expect(within(view).queryByRole("tab")).toBeNull();
+  });
+
+  it("says No matches when a search hides every row, never the empty-shelf line", () => {
+    mount();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search identities" }), {
+      target: { value: "zzz" },
+    });
+    const personal = screen.getByRole("region", { name: "Personal" });
+    expect(within(personal).getByText("No matches.")).toBeTruthy();
   });
 
   it("states no channel in place of the shared section, and keeps Personal", () => {

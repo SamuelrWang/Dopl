@@ -14,26 +14,16 @@ import {
 } from "@/features/channels/components/use-agent-launch";
 import { useChannelLaunchPosture } from "@/features/channels/hooks/use-channel-launch-posture";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
+import type { CardLaunch } from "@/features/agent-identities/components/identity-card-actions";
 import type { Channel } from "@/features/channels/types";
 import { channelTitle } from "./home-rows";
 
 /**
  * The personal card's one-click Launch: the identity as-is into the selected channel, no form.
  * The payload is `use-launch-controls.ts › buildLaunchPayload` with only the identity id, so it is
- * byte-for-byte the composer's one-click launch. The button is
- * `agent-identities/components/identity-card-actions.tsx › LaunchIntoChannelButton`.
+ * byte-for-byte the composer's one-click launch. The card's controls are
+ * `agent-identities/components/identity-card-actions.tsx › PersonalCardFooter`.
  */
-
-/** Which row is launching, and the one line a refusal gets. */
-export interface CardLaunch {
-  /** The bridge op exists on this build; the caller renders no button otherwise. */
-  canLaunch: boolean;
-  /** The identity id with a launch in flight, or `null`. */
-  busyId: string | null;
-  /** The last refusal, on the row that earned it (a refusal is not a push). */
-  error: { identityId: string; message: string } | null;
-  launch: (identity: AgentIdentity) => void;
-}
 
 export function useCardLaunch(channel: Channel | null): CardLaunch {
   const posture = useChannelLaunchPosture(channel?.id ?? "");

@@ -17,6 +17,7 @@ import {
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
+import { IDENTITY_GRID_RAIL } from "@/features/agent-identities/components/identity-section";
 import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
 import { HomeFrame, HomeHeaderRow, HomeListColumn } from "./home-frame";
 import { HOME_DEFAULT_TAB, HOME_TABS, type HomeTab } from "./home-tabs";
@@ -123,10 +124,10 @@ function IdentitiesGhost() {
             <SkeletonBar h={36} w={260} className="rounded-full" />
           </div>
           <SectionPanelGhost flat headingWidth={HEADING_W} action={create}>
-            <IdentityCardsGhost count={3} />
+            <IdentityCardsGhost count={3} grid={IDENTITY_GRID_RAIL} />
           </SectionPanelGhost>
           <SectionPanelGhost flat headingWidth={HEADING_W} action={create}>
-            <IdentityCardsGhost count={3} />
+            <IdentityCardsGhost count={3} grid={IDENTITY_GRID_RAIL} />
           </SectionPanelGhost>
         </div>
         <div className="rail-layout-aside">

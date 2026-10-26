@@ -22,11 +22,13 @@ import type { IdentitySectionDef } from "../lib/visibility";
  * face composes the same parts. An empty section keeps its header and says one line.
  */
 
-/** Three cards per row, fixed (not auto-fill); the skeletons import it. */
-export const IDENTITY_GRID = "grid grid-cols-3 gap-2.5";
+/** Four cards per row, fixed (Samuel, 2026-09-13; not auto-fill); the skeletons import it. */
+export const IDENTITY_GRID = "grid grid-cols-4 gap-2.5";
+/** /home's three across: the Activity rail takes a quarter of the pane. */
+export const IDENTITY_GRID_RAIL = "grid grid-cols-3 gap-2.5";
 
 /** Whether a role is in use: live agents, when it was last seen, who else can wear it. */
-export interface IdentityCardStats {
+interface IdentityCardStats {
   running: number;
   /** Epoch ms; `null` = nothing on record, which is not "never used". */
   lastUsed: number | null;
@@ -54,7 +56,6 @@ export function IdentityPanel({
   id,
   label,
   action,
-  caption,
   flat,
   children,
 }: {
@@ -63,13 +64,12 @@ export function IdentityPanel({
   label: string;
   /** Header-right control (a create button). */
   action?: ReactNode;
-  caption?: ReactNode;
   /** No well: the section sits on the page (/home). */
   flat?: boolean;
   children: ReactNode;
 }) {
   return (
-    <SectionPanel id={id} label={label} action={action} caption={caption} flat={flat}>
+    <SectionPanel id={id} label={label} action={action} flat={flat}>
       {children}
     </SectionPanel>
   );
@@ -82,9 +82,12 @@ export function IdentityGrid({
   onOpen,
   pendingIds,
   actionFor,
+  grid = IDENTITY_GRID,
   ...host
 }: IdentityCardHost & {
   identities: ReadonlyArray<AgentIdentity>;
+  /** The grid's class; the host picks the column count for its own layout. */
+  grid?: string;
   /** Rendered only against a resolved read; absent = an empty grid renders nothing. */
   emptyLine?: string;
   /** Absent = the cards are not openable on this surface. */
@@ -98,7 +101,7 @@ export function IdentityGrid({
     return emptyLine ? <p className="pb-1 text-caption text-text-muted">{emptyLine}</p> : null;
   }
   return (
-    <div className={IDENTITY_GRID}>
+    <div className={grid}>
       {identities.map((identity) => (
         <IdentityCard
           key={identity.id}
@@ -144,7 +147,7 @@ export function IdentitySection({
  * 🔒 One concept per chip: what a role runs on and what it knows are two chips, and nothing is
  * appended to a chip that is not its own concept.
  */
-export const IDENTITY_ROW =
+const IDENTITY_ROW =
   "inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-[7px] border border-border-default bg-bg-elevated pl-1.5 pr-2 text-caption text-text-primary";
 
 /** The quiet add row on a personal card: the chip's geometry, dashed. */

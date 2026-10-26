@@ -5,16 +5,16 @@ import { BookOpen, Pencil, UserRound, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { agentModelShortLabel } from "@/features/channels/lib/agent-models";
 import type { ModelCatalogs } from "@/features/channels/lib/model-catalog";
-import { agentLiveness } from "@/features/channels/components/agents-model";
-import { agentDisplayName } from "@/features/channels/components/agents-model-identity";
 import { ModalShell } from "@/shared/layout/settings-modal/modal-shell";
+import type { AgentRunPresenter } from "@/shared/lib/agent-run-presenter";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { useRuntimeLogo } from "@/shared/ui/runtime-logo";
+import { SegmentedControl, segmentedIds } from "@/shared/ui/segmented-control";
 import { StatusPill } from "@/shared/ui/status-pill";
 import type { AgentIdentity } from "../client/types";
-import { agoLabel, runsOf, type Sessions } from "../lib/identity-runs";
+import { agoLabel } from "../lib/identity-runs";
 import { EMPTY_KNOWLEDGE, refKey, scopeChipLabel } from "../lib/knowledge-scopes";
 import { FactChip, RuntimeMark } from "./identity-section";
 import {
@@ -32,6 +32,8 @@ import styles from "./identity-view.module.css";
 
 type TabKey = "identity" | "activity" | "running";
 
+const PANEL_IDS = "identity-view";
+
 /**
  * THE IDENTITY VIEW: read-only, a fixed box whose body alone scrolls, one tab per question (what
  * it is, what it has done, where it is working now), and Edit one button away. Nothing here is a
@@ -45,7 +47,8 @@ export function IdentityViewDialog({
   scopeLabel,
   wearers,
   catalogs,
-  sessions,
+  runs,
+  agents,
   onClose,
   onEdit,
 }: {
@@ -56,27 +59,20 @@ export function IdentityViewDialog({
   /** The card's own authorship marker (INVARIANTS §5A), carried in unchanged. */
   marker: string | null;
   scopeLabel?: string | null;
-  /** How many members can wear it (a shared row). */
+  /** How many members can wear it, the viewer included (a shared row). */
   wearers: number;
   catalogs?: ModelCatalogs | null;
-  sessions: Sessions;
+  /** The sessions credited to this identity (`lib/identity-runs.ts › joinRuns`); `null` = could not ask. */
+  runs: ReadonlyArray<DesktopSessionSummary> | null;
+  agents: AgentRunPresenter;
   onClose: () => void;
   onEdit: () => void;
 }) {
   const [tab, setTab] = useState<TabKey>("identity");
   const logo = useRuntimeLogo()(identity.runtime);
-  const runs = runsOf(identity, sessions);
-  const live = runs.filter((s) => s.state !== "ended");
-  const ended = runs.filter((s) => s.state === "ended");
-
-  const tabs: ReadonlyArray<{ key: TabKey; label: string; count?: number }> =
-    sessions === null
-      ? [{ key: "identity", label: "Identity" }]
-      : [
-          { key: "identity", label: "Identity" },
-          { key: "activity", label: "Activity" },
-          { key: "running", label: "Running", count: live.length },
-        ];
+  const live = (runs ?? []).filter((s) => s.state !== "ended");
+  const ended = (runs ?? []).filter((s) => s.state === "ended");
+  const ids = segmentedIds(PANEL_IDS, tab);
 
   return (
     <ModalShell open onClose={onClose} label={identity.name} size="panel">
@@ -102,36 +98,26 @@ export function IdentityViewDialog({
         </button>
       </div>
 
-      {tabs.length > 1 && (
-        <div role="tablist" aria-label="Identity sections" className={styles.tabs}>
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.key}
-              onClick={() => setTab(t.key)}
-              className={cn(
-                styles.tab,
-                "text-small font-medium",
-                tab === t.key
-                  ? cn(styles.tabOn, "text-text-primary")
-                  : "text-text-muted hover:text-text-secondary"
-              )}
-            >
-              {t.label}
-              {t.count !== undefined && t.count > 0 && (
-                <span className="flex items-center gap-1 text-micro font-semibold text-text-secondary">
-                  <span className="size-1 rounded-full bg-success" aria-hidden="true" />
-                  {t.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+      {runs !== null && (
+        <SegmentedControl
+          variant="underline"
+          options={[
+            { key: "identity", label: "Identity" },
+            { key: "activity", label: "Activity" },
+            { key: "running", label: "Running", count: live.length || undefined },
+          ]}
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Identity sections"
+          panelIdPrefix={PANEL_IDS}
+          className="flex-none border-b border-border-default px-5"
+        />
       )}
 
-      <div className={styles.body}>
+      <div
+        className={styles.body}
+        {...(runs !== null ? { role: "tabpanel", id: ids.panel, "aria-labelledby": ids.tab } : {})}
+      >
         {tab === "identity" && (
           <IdentityTab
             identity={identity}
@@ -140,8 +126,8 @@ export function IdentityViewDialog({
             catalogs={catalogs}
           />
         )}
-        {tab === "activity" && <ActivityTab ended={ended} />}
-        {tab === "running" && <RunningTab live={live} />}
+        {tab === "activity" && <ActivityTab ended={ended} agents={agents} />}
+        {tab === "running" && <RunningTab live={live} agents={agents} />}
       </div>
     </ModalShell>
   );
@@ -233,7 +219,11 @@ function placeOf(session: DesktopSessionSummary): string | undefined {
   return parts.length > 0 ? parts.join(" › ") : undefined;
 }
 
-function ActivityTab({ ended }: { ended: ReadonlyArray<DesktopSessionSummary> }) {
+interface AgentTabProps {
+  agents: AgentRunPresenter;
+}
+
+function ActivityTab({ ended, agents }: AgentTabProps & { ended: ReadonlyArray<DesktopSessionSummary> }) {
   if (ended.length === 0) {
     return <Empty>Nothing finished yet. An agent shows up here once it ends.</Empty>;
   }
@@ -243,7 +233,7 @@ function ActivityTab({ ended }: { ended: ReadonlyArray<DesktopSessionSummary> })
         {ended.map((session) => (
           <EventRow
             key={session.sessionId}
-            title={agentDisplayName(session)}
+            title={agents.name(session)}
             middle={placeOf(session)}
             trail={
               session.endedAt != null && (
@@ -259,22 +249,22 @@ function ActivityTab({ ended }: { ended: ReadonlyArray<DesktopSessionSummary> })
   );
 }
 
-function RunningTab({ live }: { live: ReadonlyArray<DesktopSessionSummary> }) {
+function RunningTab({ live, agents }: AgentTabProps & { live: ReadonlyArray<DesktopSessionSummary> }) {
   if (live.length === 0) return <Empty>Not running anywhere right now.</Empty>;
   return (
     <Group label="Running now">
       <Rows>
         {live.map((session) => {
-          const liveness = agentLiveness(session);
+          const state = agents.state(session);
           return (
             <EventRow
               key={session.sessionId}
-              title={agentDisplayName(session)}
+              title={agents.name(session)}
               middle={placeOf(session)}
               trail={
                 <>
-                  <StatusPill dot tone={liveness.tone === "working" ? "live" : "neutral"}>
-                    {liveness.label}
+                  <StatusPill dot tone={state.live ? "live" : "neutral"}>
+                    {state.label}
                   </StatusPill>
                   {session.startedAt != null && (
                     <span className="text-caption tabular-nums text-text-muted">
@@ -290,3 +280,4 @@ function RunningTab({ live }: { live: ReadonlyArray<DesktopSessionSummary> }) {
     </Group>
   );
 }
+

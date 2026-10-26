@@ -2,13 +2,58 @@
 
 import { Loader2, Plus } from "lucide-react";
 import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
-import type { IdentityKnowledgeRef } from "../client/types";
+import type { AgentIdentity, IdentityKnowledgeRef } from "../client/types";
+import { EMPTY_KNOWLEDGE } from "../lib/knowledge-scopes";
 import { IDENTITY_ROW_ADD } from "./identity-section";
 
-/** The personal card's footer controls, inside the card's face and never over it. */
+/** Which row is launching, and the one line a refusal gets. The host owns the launch itself. */
+export interface CardLaunch {
+  /** The launch op exists on this build; no button otherwise. */
+  canLaunch: boolean;
+  /** The identity id with a launch in flight, or `null`. */
+  busyId: string | null;
+  /** The last refusal, on the row that earned it (a refusal is not a push). */
+  error: { identityId: string; message: string } | null;
+  launch: (identity: AgentIdentity) => void;
+}
+
+/** A personal card's footer: add knowledge, the row's refusal line, and Launch. */
+export function PersonalCardFooter({
+  identity,
+  launch,
+  onAddKnowledge,
+}: {
+  identity: AgentIdentity;
+  launch: CardLaunch;
+  onAddKnowledge: () => void;
+}) {
+  return (
+    <>
+      <AddKnowledgeRow
+        // Stale-cache fallback: `knowledge` joined an already-persisted payload (INVARIANTS §8).
+        refs={identity.knowledge ?? EMPTY_KNOWLEDGE}
+        identityName={identity.name}
+        onClick={onAddKnowledge}
+      />
+      {launch.error?.identityId === identity.id && (
+        <p role="alert" className="text-caption text-danger">
+          {launch.error.message}
+        </p>
+      )}
+      {launch.canLaunch && (
+        <LaunchIntoChannelButton
+          busy={launch.busyId === identity.id}
+          // The double-submit guard is the pane's, so every other row is inert.
+          disabled={launch.busyId !== null}
+          onClick={() => launch.launch(identity)}
+        />
+      )}
+    </>
+  );
+}
 
 /** The dashed add row. The paths themselves are an editor question; `refs` only words the row. */
-export function AddKnowledgeRow({
+function AddKnowledgeRow({
   refs,
   identityName,
   onClick,

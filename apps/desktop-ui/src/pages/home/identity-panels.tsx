@@ -1,20 +1,15 @@
 import { useMemo, useState } from "react";
-import { agentIdentityErrorMessage } from "@/features/agent-identities/client/api";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
 import {
   IdentitiesHome,
+  personalState,
   type IdentityHome,
-  type PersonalState,
 } from "@/features/agent-identities/components/identities-home";
-import {
-  AddKnowledgeRow,
-  LaunchIntoChannelButton,
-} from "@/features/agent-identities/components/identity-card-actions";
 import { authorMarker } from "@/features/agent-identities/components/identity-picker";
 import { useAgentIdentities } from "@/features/agent-identities/hooks/use-agent-identities";
 import { runtimeReadiness } from "@/features/agent-identities/lib/identity-runs";
-import { EMPTY_KNOWLEDGE } from "@/features/agent-identities/lib/knowledge-scopes";
 import { groupByVisibility } from "@/features/agent-identities/lib/visibility";
+import { AGENT_RUN_PRESENTER } from "@/features/channels/components/agent-run-presenter";
 import { useDesktopSessions } from "@/features/channels/components/use-desktop-sessions";
 import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
 import { EMPTY_PEERS, EMPTY_WORKSPACE_ROLE, type Channel } from "@/features/channels/types";
@@ -105,7 +100,7 @@ export function HomeIdentityPanels({
                 identities: shared,
                 markerFor: roster.markerFor,
                 canCreate: canCreateShared,
-                wornBy: roster.wornBy,
+                peers: roster.others,
               }
         }
         personal={{
@@ -113,36 +108,12 @@ export function HomeIdentityPanels({
           state: personalState(homeWorkspaceId, homeList),
           canCreate: homeWorkspaceId !== null,
           // No channel = no launch target, so a personal card has no footer.
-          cardActionFor:
-            channel === null
-              ? undefined
-              : (identity) => (
-                  <>
-                    <AddKnowledgeRow
-                      // Stale-cache fallback: `knowledge` joined an already-persisted payload (INVARIANTS §8).
-                      refs={identity.knowledge ?? EMPTY_KNOWLEDGE}
-                      identityName={identity.name}
-                      onClick={() => setAttaching(identity)}
-                    />
-                    {cardLaunch.error?.identityId === identity.id && (
-                      <p role="alert" className="text-caption text-danger">
-                        {cardLaunch.error.message}
-                      </p>
-                    )}
-                    {/* No launch op on this build (a plain browser) = no button. */}
-                    {cardLaunch.canLaunch && (
-                      <LaunchIntoChannelButton
-                        busy={cardLaunch.busyId === identity.id}
-                        // The double-submit guard is the pane's, so every other row is inert.
-                        disabled={cardLaunch.busyId !== null}
-                        onClick={() => cardLaunch.launch(identity)}
-                      />
-                    )}
-                  </>
-                ),
+          footer:
+            channel === null ? undefined : { launch: cardLaunch, onAddKnowledge: setAttaching },
         }}
         card={{ photoFor: roster.photoFor, runtimeLabel, catalogs: launch.catalogs }}
         sessions={sessions}
+        agents={AGENT_RUN_PRESENTER}
         readiness={runtimeReadiness(launch)}
         runtimes={runtimes}
         currentUserId={currentUserId}
@@ -187,26 +158,6 @@ interface EditorTarget {
   identity: AgentIdentity | null;
 }
 
-/** No home workspace yet — a different sentence from "none here". */
-const SCOPE_UNAVAILABLE = "Finish setting up your home space to keep identities there.";
-
-/** A failed read is a settled answer: `resolved` stays false forever on a 4xx/5xx, so failure
- *  outranks pending (F-339). */
-function personalState(
-  homeWorkspaceId: string | null,
-  list: ReturnType<typeof useAgentIdentities>
-): PersonalState {
-  if (homeWorkspaceId === null) return { kind: "unavailable", message: SCOPE_UNAVAILABLE };
-  if (list.error != null) {
-    return {
-      kind: "failed",
-      message: agentIdentityErrorMessage(list.error, "Couldn't load your own identities."),
-      onRetry: () => list.refetch(),
-    };
-  }
-  return list.resolved ? { kind: "ready" } : { kind: "pending" };
-}
-
 /**
  * Who the channel's people are, off the payload (no request): the authorship marker, owner
  * photos, names and the members who can wear a shared row. The marker is a security signal
@@ -226,7 +177,7 @@ function useRoster(channel: Channel | null, currentUserId: string, viewer: HomeV
           ? (viewer?.avatarUrl ?? null)
           : (peers.find((p) => p.userId === identity.createdBy)?.avatarUrl ?? null),
       ownerName: (userId: string) => names.get(userId) ?? null,
-      wornBy: peers.map((p) => ({
+      others: peers.map((p) => ({
         userId: p.userId,
         displayName: p.displayName ?? p.email ?? "Member",
         avatarUrl: p.avatarUrl,

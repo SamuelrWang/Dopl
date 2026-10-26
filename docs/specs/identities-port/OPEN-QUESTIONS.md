@@ -24,11 +24,16 @@ Each one: the question, the conservative choice made, and where it lives.
 
 ## Choices worth a look
 
-6. **Join on the identity's NAME.** Sessions carry `identityName` (a spawn-time snapshot), not an id,
-   so a renamed identity loses its history and two rows of one name share it. Each session is listed
-   once, under the first match. An `identityId` on the session summary would make it exact.
-7. **Grid 4 → 3 across**, as staging did for the rail. `IDENTITY_GRID` also sets the workspace
-   Agents page, which has no rail (allowed by the bleed ruling).
+6. **Join by id (resolved in review).** Main now stamps the identity id at spawn and publishes
+   `identityId` on the session summary (local only); the page joins on it. Sessions from a desktop
+   older than this fall back to the name (whitespace-collapsed; a shared row must be in the
+   session's workspace), so until the desktop ships a renamed identity's older agents are unmatched.
+7. **FOR SAMUEL: grid width.** Your 2026-09-13 ruling is four per row; the staging look beside the
+   Activity rail is three. Chose: three on /home only (`IDENTITY_GRID_RAIL`, passed by the host),
+   four on the workspace Agents page, which has no rail. Say if /home should be four too.
+13. **"Recently used" as the default sort.** Kept. The order reads a usage snapshot that refreshes
+   only when the rows, the search/filter/sort or the feed's availability change, so cards do not
+   jump on each session push; they do re-sort the next time one of those changes.
 8. **Status pill face.** Staging drew a white hairline pill (the page's grey ban); the product's one
    `StatusPill` is the kit's grey `.status-pill`, kept so the app has one pill. Retint the kit if the
    grey ban should hold everywhere.
