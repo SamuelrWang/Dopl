@@ -10,7 +10,7 @@ import { toast } from "@/shared/ui/toast";
 import { DESCRIPTION_MAX } from "@/config";
 import { updateFolder } from "../client/api";
 import type { KnowledgeFolder } from "../types";
-import { DescriptionField } from "./doc-pane-chrome";
+import { InPlaceDescription } from "@/shared/ui/in-place-fields";
 
 /** Agent-facing folder summaries, shown in MCP tree listings: one row per folder, saved on blur. */
 export function FolderDescriptions({
@@ -100,8 +100,9 @@ function FolderDescriptionRow({
   return (
     <li className="flex flex-col gap-0.5 py-2.5">
       <span className="truncate text-body font-medium text-text-primary">{pathLabel}</span>
-      <DescriptionField
+      <InPlaceDescription
         label={`${pathLabel} description`}
+        multiline
         value={value}
         onChange={setValue}
         onBlur={handleBlur}

@@ -3,71 +3,16 @@
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { InlineUnderlineField } from "@/shared/ui/form-dialog";
-import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import { SMALL_PILL_BUTTON, SMALL_PRIMARY_PILL } from "@/shared/ui/small-action-button";
 import { toast } from "@/shared/ui/toast";
 import { SkeletonBar } from "@/shared/ui/skeleton";
 import { kbBodyIsUnsectioned, kbSummaryFault } from "@/shared/knowledge/write-rules";
 
 /**
- * Presentational chrome for DocPane: the in-place title and description, the
- * body-loading skeleton and the 412-conflict banner. Split from `doc-pane.tsx`
- * for the §2 file-size cap; the base's info face edits its name and description
- * with the same two faces.
+ * Presentational chrome for DocPane: the body-loading skeleton, the 412-conflict
+ * banner and the write-rule labels. Split from `doc-pane.tsx` for the §2
+ * file-size cap.
  */
-
-/** A title edited in place: the page-title step, no box, no line. */
-export const DOC_TITLE_INPUT =
-  "w-full min-w-0 bg-transparent text-display font-semibold leading-snug tracking-tight " +
-  "text-text-primary placeholder:text-text-muted focus:outline-none";
-
-/**
- * The agent-facing description, edited in place: the kit's quiet underline
- * (no rule at rest, the ink sweep while focused) on a textarea that grows, in
- * secondary ink, with its count when editable.
- */
-export function DescriptionField({
-  label = "Description for agents",
-  value,
-  onChange,
-  onBlur,
-  max,
-  placeholder,
-  readOnly = false,
-}: {
-  /** The accessible name, where several sit on one page. */
-  label?: string;
-  value: string;
-  onChange: (next: string) => void;
-  onBlur?: () => void;
-  max: number;
-  placeholder: string;
-  readOnly?: boolean;
-}) {
-  return (
-    <div className="flex items-end gap-3">
-      <InlineUnderlineField
-        label={label}
-        placeholder={placeholder}
-        value={value}
-        onChange={(next) => onChange(next.slice(0, max))}
-        onBlur={onBlur}
-        readOnly={readOnly}
-        maxLength={max}
-        multiline
-        quiet
-        className="flex-1"
-        inputClassName={fieldStyles.inputSecondary}
-      />
-      {readOnly ? null : (
-        <span className="shrink-0 pb-1 font-mono text-micro text-text-muted">
-          {value.length}/{max}
-        </span>
-      )}
-    </div>
-  );
-}
 
 /**
  * The document's placeholder while the per-entry body fetch is in flight: the

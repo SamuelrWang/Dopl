@@ -197,6 +197,7 @@ export function CreateTeamDialog({
                       <AccessLevelControl
                         value={grants.get(key) ?? null}
                         onChange={(level) => setGrant(key, level)}
+                        ariaLabel={`${r.name} access`}
                       />
                     </li>
                   );

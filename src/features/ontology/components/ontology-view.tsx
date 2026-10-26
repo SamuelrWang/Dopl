@@ -6,6 +6,7 @@ import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { CreateButton, PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
+import { InPlaceDescription } from "@/shared/ui/in-place-fields";
 import { pendingRow } from "@/shared/ui/pending";
 import { useOntology } from "../hooks/use-ontology";
 import {
@@ -15,7 +16,7 @@ import {
 } from "../hooks/use-last-opened";
 import { useObjectDraft } from "../hooks/use-object-draft";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
-import { BoardDisplayMenu, BoardSettingsMenu, DescriptionField, NameField } from "./board-header-bits";
+import { BoardDisplayMenu, BoardSettingsMenu, NameField } from "./board-header-bits";
 import { CapNotice } from "./cap-notice";
 import { OntologySwitcher, ontologySwitcherEntries } from "./ontology-switcher";
 import { DeleteOntologyDialog } from "./delete-ontology-dialog";
@@ -366,7 +367,8 @@ export function OntologyView({
           {/* Inert until the ontology is real: an edit on a provisional row would
               debounce a PATCH at an id the server has never seen. */}
           <div {...pendingRow(ontologyPending, "mx-2 flex min-w-0 flex-1 items-center")}>
-            <DescriptionField
+            <InPlaceDescription
+              className="flex-1"
               value={ontology.purpose}
               onChange={(purpose) =>
                 dispatch({

@@ -15,10 +15,9 @@ import type { KnowledgeEntry } from "../types";
 import { toast } from "@/shared/ui/toast";
 import type { Editor } from "@tiptap/react";
 import { DocEditor, SaveStatusIndicator, type SaveStatus } from "@/shared/editor/doc-editor";
+import { InPlaceDescription, InPlaceTitle } from "@/shared/ui/in-place-fields";
 import {
   ConflictBanner,
-  DOC_TITLE_INPUT,
-  DescriptionField,
   WriteRuleWarnings,
   reportError,
   writeRuleLabels,
@@ -373,27 +372,26 @@ export function DocPane({
           listings), both edited in place, with the save state beside the name. */}
       <header className="white-card mb-6 flex flex-col gap-1 px-6 pt-4 pb-3">
         <div className="flex items-center gap-3">
-          <input
-            type="text"
+          <InPlaceTitle
+            label="Title"
             value={title}
-            onChange={(e) => {
-              const next = e.target.value;
+            onChange={(next) => {
               setTitle(next);
               scheduleSave(next, body);
             }}
             placeholder="Untitled"
-            aria-label="Title"
-            className={DOC_TITLE_INPUT}
           />
           <WriteRuleWarnings labels={ruleLabels} />
           <AvatarStack users={otherEditors} size="2xs" />
           <SaveStatusIndicator state={status} />
         </div>
-        <DescriptionField
+        <InPlaceDescription
+          label="Description for agents"
           value={description}
           onChange={setDescription}
           onBlur={handleDescriptionBlur}
           max={DESCRIPTION_MAX}
+          multiline
           placeholder="Add a short description for agents browsing the tree"
         />
       </header>

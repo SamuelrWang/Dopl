@@ -5,7 +5,7 @@ import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { SettingsPanel } from "@/shared/layout/settings-modal/sections/settings-panel";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { TeamChip } from "@/features/members/components/team-bits";
-import { DOC_TITLE_INPUT, DescriptionField } from "../../doc-pane-chrome";
+import { InPlaceDescription, InPlaceTitle } from "@/shared/ui/in-place-fields";
 import { StorageMeter } from "../storage-meter";
 
 export interface MetaTeamRef {
@@ -61,17 +61,17 @@ export function MetaCard({
   return (
     <>
       <header className="flex flex-col gap-1 px-1">
-        <input
-          type="text"
-          className={DOC_TITLE_INPUT}
+        <InPlaceTitle
+          label="Name"
           value={name}
           readOnly={!canEdit}
-          onChange={(e) => onNameChange(e.target.value)}
+          onChange={onNameChange}
           onBlur={onFlush}
           placeholder="Untitled knowledge base"
-          aria-label="Name"
         />
-        <DescriptionField
+        <InPlaceDescription
+          label="Description for agents"
+          multiline
           value={description}
           onChange={onDescriptionChange}
           onBlur={onFlush}

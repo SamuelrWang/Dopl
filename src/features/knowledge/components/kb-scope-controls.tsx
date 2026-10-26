@@ -2,9 +2,8 @@
 
 import { Building2, Check, Lock, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import type { TeamView } from "@/features/teams/types";
-import { TeamColorTile } from "@/features/members/components/team-bits";
+import { AccessLevelControl, TeamColorTile } from "@/features/members/components/team-bits";
 import type { KbScope } from "../scope";
 
 /** One drafted grant row. Mirrors `KbTeamGrantSchema`. */
@@ -82,16 +81,8 @@ export function ScopeSelector({
   );
 }
 
-type LevelChoice = "none" | TeamGrantDraft["level"];
-
-const LEVEL_OPTIONS: ReadonlyArray<SelectMenuOption<LevelChoice>> = [
-  { value: "none", label: "No access" },
-  { value: "read", label: "Read", description: "Can open every file" },
-  { value: "edit", label: "Edit", description: "Can open and change every file" },
-];
-
 /**
- * Per-team grant editor: one row per team with a bare level menu, "No access" =
+ * Per-team grant editor: one row per team with `team-bits.tsx › AccessLevelControl`, "No access" =
  * no grant. The caller passes only the teams the user may grant (all for admins,
  * own teams for members).
  */
@@ -112,9 +103,9 @@ export function TeamGrantEditor({
 }) {
   const byTeam = new Map(grants.map((g) => [g.teamId, g.level]));
 
-  function setLevel(teamId: string, level: LevelChoice) {
+  function setLevel(teamId: string, level: TeamGrantDraft["level"] | null) {
     const next = grants.filter((g) => g.teamId !== teamId);
-    if (level !== "none") next.push({ teamId, level });
+    if (level !== null) next.push({ teamId, level });
     onChange(next);
   }
 
@@ -139,10 +130,8 @@ export function TeamGrantEditor({
               {team.memberCount} member{team.memberCount === 1 ? "" : "s"}
             </span>
           </span>
-          <SelectMenu<LevelChoice>
-            variant="bare"
-            value={byTeam.get(team.id) ?? "none"}
-            options={LEVEL_OPTIONS}
+          <AccessLevelControl
+            value={byTeam.get(team.id) ?? null}
             onChange={(level) => setLevel(team.id, level)}
             disabled={disabled || lockedTeamIds?.has(team.id)}
             ariaLabel={`${team.name} access`}
