@@ -8,14 +8,13 @@ import {
   tokenSpendReport,
 } from "../overview-mock-data";
 import { USAGE_SCOPE_ALL } from "@/features/home/overview-types";
-import { monthKeyOf } from "../pages/home/overview/overview-data";
+import { monthKey } from "@/features/home/overview-period";
 import { useStagingState, type StagingLoad } from "./staging-state";
 
 /**
- * STUB of `apps/desktop-ui/src/hooks/use-api-query.ts › useApiQuery`. Same call shape
- * (`useApiQuery<T>(path, { keepPreviousData })`) and the same result fields the Overview reads
- * (`data`, `error`, `isPending`, `refetch`), answered from `overview-mock-data.ts`. A path change
- * waits a short fake latency so the dim-while-loading and kept-previous-data states are visible.
+ * STUB of `@/shared/hooks/use-api-query › useApiQuery`. Same call shape and the result fields the
+ * Overview reads (`data`, `error`, `isPending`, `refetch`), answered from `overview-mock-data.ts`.
+ * A path change waits a short fake latency so the kept-previous-data state is visible.
  */
 const FAKE_LATENCY_MS = 350;
 
@@ -35,7 +34,7 @@ function resolvePath(path: string, load: StagingLoad): unknown {
     case "/api/home/overview-series":
       return overviewSeries(
         url.searchParams.get("channel") ?? USAGE_SCOPE_ALL,
-        url.searchParams.get("month") ?? monthKeyOf(),
+        url.searchParams.get("month") ?? monthKey(),
         empty
       );
     case "/api/home/token-spend":

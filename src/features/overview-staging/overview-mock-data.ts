@@ -1,17 +1,16 @@
 /**
  * STAGING DATA for `/overview` — every value here is made up. THE ONE DATA FILE.
  *
- * The desktop Overview reads three API paths and one hook; the staging stubs
- * (`./stubs/*`) answer each of them out of this file and nothing else. No
- * Supabase, no fetch, no Electron IPC.
+ * The product Overview (`home/components/overview/home-overview.tsx`) reads
+ * through one reads hook; the staging stubs (`./stubs/*`) answer each of its
+ * reads out of this file and nothing else. No Supabase, no fetch, no IPC.
  *
  *   GET /api/home/overview            → `HOME_OVERVIEW`
  *   GET /api/home/overview-series     → `overviewSeries(scope, month)`
  *   GET /api/home/token-spend         → `tokenSpendReport()`
  *   GET /api/billing/status (credits) → `creditState(plan)`
+ *   devices (computers + glasses)     → `connectedDevices()`
  *   usage scopes                      → `HOME_CHANNELS`
- *
- * The Devices section's types and `DEVICES_MOCK` live only here; there is no product twin yet.
  */
 import type {
   HomeOverview,
@@ -20,6 +19,8 @@ import type {
 } from "@/features/home/overview-types";
 import { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP } from "@/features/home/overview-types";
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
+import type { ConnectedDevice } from "@/features/devices/types";
+import type { TokenSpendReport } from "@/features/home/token-spend-days";
 
 /* ────────────────────────────── home channels ────────────────────────────── */
 
@@ -149,12 +150,6 @@ export function overviewSeries(scope: string, month: string, empty = false): Hom
 
 /* ──────────────────────────────── token spend ──────────────────────────────── */
 
-/** One entry per run, newest first. Mirrors the server report shape. */
-export interface TokenSpendReport {
-  marks: Array<{ at: string; tokens: number }>;
-  truncated: boolean;
-}
-
 /** ~60 agent runs over the last 31 local days, newest first. */
 export function tokenSpendReport(empty = false): TokenSpendReport {
   if (empty) return { marks: [], truncated: false };
@@ -214,191 +209,46 @@ export function creditState(plan: StagingPlan): {
   };
 }
 
-/* ──────────────── DEVICES ──────────────── */
-/*
- * MOCK DATA for the Overview "Devices" preview. Every value here is made up.
- *
- * Model: a HOST is a Mac running the desktop app; it runs the agents. An ENDPOINT is a device
- * an agent on that host can reach (glasses, phone, ...) to show something, ask, or take input.
- */
+/* ─────────────────────────────────── devices ─────────────────────────────────── */
 
-/** Only this account sees the preview (Samuel). Everyone else gets Overview unchanged. */
-export const DEVICES_MOCK_USER_ID = "2dac1943-da3b-4fd9-aee6-1716ddfc25f9";
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
-export type MockStatus = "active" | "away" | "offline";
-export type EndpointKind = "glasses" | "phone" | "watch" | "web";
-export type LogLevel = "info" | "warn" | "error";
-
-export interface MockAgent {
-  id: string;
-  name: string;
-  channel: string;
-  runtime: string;
-  /** Minutes since start. */
-  runningFor: number;
-  state: "working" | "waiting";
-}
-
-export interface MockEndpoint {
-  id: string;
-  kind: EndpointKind;
-  name: string;
-  model: string;
-  status: MockStatus;
-  /** Minutes ago. */
-  lastSeen: number;
-  /** The one the routing view picks right now. */
-  inUse?: boolean;
-  battery?: number;
-}
-
-export interface MockHost {
-  id: string;
-  name: string;
-  model: string;
-  status: MockStatus;
-  lastSeen: number;
-  appVersion: string;
-  thisComputer?: boolean;
-  runtimes: string[];
-  agents: MockAgent[];
-  endpoints: MockEndpoint[];
-}
-
-export interface MockLog {
-  id: string;
-  /** "HH:MM:SS" today. */
-  at: string;
-  deviceId: string;
-  level: LogLevel;
-  event: string;
-  detail: string;
-}
-
-export interface MockRoute {
-  id: string;
-  at: string;
-  kind: "Question" | "Message" | "Decision" | "Notice";
-  from: string;
-  summary: string;
-  /** Endpoint ids tried, in order; the last one is where it landed. */
-  tried: string[];
-  landedOn: string;
-  why: string;
-}
-
-export interface DevicesMock {
-  hosts: MockHost[];
-  /** The order the router walks when the device you are on does not answer. */
-  fallbackChain: string[];
-  routes: MockRoute[];
-  logs: MockLog[];
-}
-
-export const DEVICES_MOCK: DevicesMock = {
-  hosts: [
+/** `useConnectedDevices`' merged list: this computer first, then online, then by last seen. */
+export function connectedDevices(empty = false): ConnectedDevice[] {
+  if (empty) return [];
+  return [
     {
       id: "mac-mbp",
-      name: "Samuel's MacBook Pro",
-      model: "MacBook Pro 14, macOS 26.1",
-      status: "active",
-      lastSeen: 0,
-      appVersion: "1.42.0",
-      thisComputer: true,
-      runtimes: ["Claude", "Codex", "Grok"],
-      agents: [
-        { id: "a1", name: "Orchestrator", channel: "Dopl", runtime: "Claude", runningFor: 184, state: "waiting" },
-        { id: "a2", name: "Devices Dashboard Mock", channel: "Dopl", runtime: "Claude", runningFor: 22, state: "working" },
-        { id: "a3", name: "Landing Copy Fix", channel: "Dopl", runtime: "Claude", runningFor: 9, state: "working" },
-      ],
-      endpoints: [
-        { id: "ep-g2", kind: "glasses", name: "Even G2", model: "Even Realities G2", status: "active", lastSeen: 0, inUse: true, battery: 64 },
-        { id: "ep-iphone", kind: "phone", name: "Samuel's iPhone", model: "iPhone 17 Pro", status: "away", lastSeen: 12, battery: 81 },
-      ],
+      kind: "computer",
+      name: "Daniel's MacBook Pro",
+      platform: "macos",
+      platformLabel: "macOS",
+      online: true,
+      lastSeen: minutesAgo(0),
+      createdAt: "2026-09-01T00:00:00.000Z",
+      current: true,
+      appVersion: "1.43.0",
+    },
+    {
+      id: "g2",
+      kind: "glasses",
+      name: "Even G2",
+      platform: "even_g2",
+      platformLabel: "Even G2",
+      online: true,
+      lastSeen: minutesAgo(0),
+      createdAt: "2026-10-02T00:00:00.000Z",
     },
     {
       id: "mac-studio",
+      kind: "computer",
       name: "Studio Mac",
-      model: "Mac Studio, macOS 26.1",
-      status: "away",
-      lastSeen: 6,
-      appVersion: "1.41.0",
-      runtimes: ["Claude", "Codex"],
-      agents: [
-        { id: "a4", name: "Nightly Audit", channel: "AI Ops Outreach", runtime: "Codex", runningFor: 47, state: "working" },
-      ],
-      endpoints: [
-        { id: "ep-web", kind: "web", name: "Dopl web", model: "Chrome on Studio Mac", status: "offline", lastSeen: 190 },
-      ],
+      platform: "macos",
+      platformLabel: "macOS",
+      online: false,
+      lastSeen: minutesAgo(190),
+      createdAt: "2026-09-12T00:00:00.000Z",
+      appVersion: "1.42.0",
     },
-  ],
-  fallbackChain: ["ep-g2", "ep-iphone", "mac-mbp"],
-  routes: [
-    {
-      id: "r1",
-      at: "14:32",
-      kind: "Question",
-      from: "Landing Copy Fix",
-      summary: "Keep the SDK section or hide it?",
-      tried: ["ep-g2"],
-      landedOn: "ep-g2",
-      why: "You're wearing your glasses and they answered.",
-    },
-    {
-      id: "r2",
-      at: "14:05",
-      kind: "Decision",
-      from: "Orchestrator",
-      summary: "Start page fixes and devices together?",
-      tried: ["ep-g2", "ep-iphone"],
-      landedOn: "ep-iphone",
-      why: "Glasses didn't answer in 30 seconds, so it moved to your phone.",
-    },
-    {
-      id: "r3",
-      at: "13:48",
-      kind: "Message",
-      from: "Nightly Audit",
-      summary: "Audit finished, 3 issues found",
-      tried: ["mac-mbp"],
-      landedOn: "mac-mbp",
-      why: "Not urgent, so it waited on your Mac.",
-    },
-    {
-      id: "r4",
-      at: "12:10",
-      kind: "Notice",
-      from: "Studio Mac",
-      summary: "Studio Mac went to sleep",
-      tried: ["ep-iphone"],
-      landedOn: "ep-iphone",
-      why: "Your phone was the last device you used.",
-    },
-    {
-      id: "r5",
-      at: "11:02",
-      kind: "Question",
-      from: "Orchestrator",
-      summary: "Which account should the outreach go from?",
-      tried: ["ep-g2", "ep-iphone", "mac-mbp"],
-      landedOn: "mac-mbp",
-      why: "Glasses and phone were offline, so it fell back to your Mac.",
-    },
-  ],
-  logs: [
-    { id: "l1", at: "14:32:07", deviceId: "ep-g2", level: "info", event: "Answer received", detail: "Tapped option 1 for Landing Copy Fix" },
-    { id: "l2", at: "14:31:52", deviceId: "ep-g2", level: "info", event: "Question shown", detail: "From Landing Copy Fix, 2 options" },
-    { id: "l3", at: "14:30:11", deviceId: "mac-mbp", level: "info", event: "Agent started", detail: "Devices Dashboard Mock on Claude" },
-    { id: "l4", at: "14:05:40", deviceId: "ep-iphone", level: "info", event: "Decision answered", detail: "Picked Both at once" },
-    { id: "l5", at: "14:05:31", deviceId: "ep-g2", level: "warn", event: "No answer", detail: "Timed out after 30 seconds, handed to phone" },
-    { id: "l6", at: "13:58:02", deviceId: "mac-studio", level: "info", event: "Went idle", detail: "No input for 5 minutes" },
-    { id: "l7", at: "13:48:19", deviceId: "mac-studio", level: "info", event: "Agent finished", detail: "Nightly Audit, 47 minutes" },
-    { id: "l8", at: "13:20:44", deviceId: "mac-mbp", level: "warn", event: "Permission asked", detail: "Landing Copy Fix wants to post in Dopl" },
-    { id: "l9", at: "12:10:03", deviceId: "mac-studio", level: "warn", event: "Lost connection", detail: "Heartbeat missed twice" },
-    { id: "l10", at: "11:58:27", deviceId: "ep-web", level: "error", event: "Sign-in expired", detail: "Signed out after 30 days" },
-    { id: "l11", at: "11:02:15", deviceId: "ep-iphone", level: "error", event: "Delivery failed", detail: "Phone offline, retried twice" },
-    { id: "l12", at: "11:02:09", deviceId: "ep-g2", level: "warn", event: "Not reachable", detail: "Glasses were off" },
-    { id: "l13", at: "10:41:56", deviceId: "ep-g2", level: "info", event: "Paired", detail: "Connected through MacBook Pro" },
-    { id: "l14", at: "09:15:00", deviceId: "mac-mbp", level: "info", event: "Updated", detail: "Dopl 1.41.0 to 1.42.0" },
-  ],
-};
+  ];
+}
