@@ -5,8 +5,7 @@ import {
   SkeletonBar,
   SkeletonLine,
 } from "@/shared/ui/skeleton";
-import { PANEL_ROWS, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
-import { NAKED_ICON } from "@/shared/ui/naked-icon-button";
+import { WELL_FACES } from "@/features/channels/components/collapse-wells";
 import { PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import {
@@ -17,46 +16,28 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
 import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
-import { HOME_TABS } from "./home-tabs";
+import { HomeFrame, HomeHeaderRow, HomeListColumn } from "./home-frame";
+import { HOME_DEFAULT_TAB, HOME_TABS } from "./home-tabs";
 import home from "./home.module.css";
 
 /**
  * /home's loading shapes: the page frame, and one per record-pane face. Geometry is the page's own
- * classes by reference (`--home-list-w`, `home.kbCards`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
+ * by reference (`HomeFrame`, `--home-list-w`, `home.kbCards`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
  * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
 
 /** The whole /home frame while the page reads are in flight: rail, header, list, record pane. */
 export function HomePageSkeleton({ label = "Opening home" }: { label?: string }) {
   return (
-    // `!ml-0`: the panel butts flush against the rail, as on the page (`index.tsx`).
     <SkeletonSurface label={label} className={shell.root}>
-      <div className={shell.body}>
-        <AccountRailSkeleton />
-        <div className={shell.surface}>
-          <main
-            className={cn(
-              "page-float !ml-0 flex flex-1 flex-col overflow-hidden bg-home-panel",
-              home.page
-            )}
-          >
-            <HomeHeaderGhost />
-
-            <div className="flex min-h-0 flex-1">
-              <HomeListGhost />
-              <div
-                className={cn(
-                  // The record pane's own frame, verbatim from `index.tsx` — a ROW, not a column.
-                  "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card"
-                )}
-                data-frame-skin
-              >
-                <OverviewFaceGhost />
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
+      <HomeFrame
+        face={HOME_DEFAULT_TAB}
+        rail={<AccountRailSkeleton />}
+        header={<HomeHeaderGhost />}
+        list={<HomeListGhost />}
+      >
+        <OverviewFaceGhost />
+      </HomeFrame>
     </SkeletonSurface>
   );
 }
@@ -135,35 +116,26 @@ function KbCardsGhost() {
   );
 }
 
-/**
- * `home-header.tsx`'s three boxes: the list-width cell (a cell, not a `pl-`), one inert pill per
- * `HOME_TABS` entry sized from its label, then search + Profile.
- */
+/** `home-header.tsx`'s cells: the New channel pill, one label bar per `HOME_TABS` entry sized
+ *  from its label, then the 260px search pill and Profile. */
 function HomeHeaderGhost() {
   return (
-    <div className="flex items-center justify-between gap-3 py-3 pr-3">
-      <div className="flex min-w-0 items-center">
-        <div className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3">
-          {/* The "New channel" pill: hug-width and left-aligned, as the real `PAGE_ACTION_BTN`. */}
-          <Skeleton className="h-9 w-[112px] rounded-full" />
-        </div>
-        <div className="flex items-center gap-1.5">
+    <HomeHeaderRow
+      lead={<Skeleton className="h-9 w-[124px] rounded-full" />}
+      tabs={
+        <div className="flex h-9 items-center gap-[22px]">
           {HOME_TABS.map(({ key, label }) => (
-            <SkeletonBar
-              key={key}
-              h={36}
-              w={`calc(${label.length}ch + 24px)`}
-              className="rounded-full"
-            />
+            <SkeletonLine key={key} w={`calc(${label.length}ch)`} h={12} />
           ))}
         </div>
-      </div>
-      <div className="flex items-center gap-2.5">
-        {/* 260px = `kit.css › .search-expand[data-open="true"]`: /home renders the search open. */}
-        <Skeleton className="h-9 w-[260px] rounded-full" />
-        <Skeleton className="h-9 w-[72px] rounded-full" />
-      </div>
-    </div>
+      }
+      trail={
+        <>
+          <Skeleton className="h-9 w-[260px] rounded-full" />
+          <Skeleton className="h-9 w-[88px] rounded-full" />
+        </>
+      }
+    />
   );
 }
 
@@ -228,7 +200,7 @@ function OverviewFaceGhost() {
  *  `NAKED_ICON_BUTTON`'s `p-2` box. */
 const MONTH_ARROW = 16;
 
-/* ── The channel column: the gray wells and the rows inside them ── */
+/* ── The channel column: the well headings and the rows under them ── */
 
 /** Rows each OPEN well stands in for — per well, because a list is mostly Recent. */
 const WELL_ROWS: Record<HomeChannelWellId, number> = {
@@ -237,47 +209,35 @@ const WELL_ROWS: Record<HomeChannelWellId, number> = {
   earlier: 3,
 };
 
-/**
- * The column's wells, read from `HOME_CHANNEL_WELLS` (set, order and `defaultOpen`), never
- * re-typed. The well's gray is geometry, not elevation; the column and scroller classes are
- * `relationship-list.tsx`'s and `collapse-wells.tsx › WellsColumn`'s own.
- */
+/** The column's wells, read from `HOME_CHANNEL_WELLS` (set, order and `defaultOpen`). */
 function HomeListGhost() {
   return (
-    <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
-      <div className="flex flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-1">
-        <div className="flex flex-col gap-2">
-          {HOME_CHANNEL_WELLS.map((well) => (
-            <WellGhost
-              key={well.id}
-              label={well.label}
-              // A closed well ghosts its header only, as the loaded column opens it.
-              rows={well.defaultOpen ? WELL_ROWS[well.id] : 0}
-            />
-          ))}
-        </div>
+    <HomeListColumn>
+      <div className="flex flex-col gap-2">
+        {HOME_CHANNEL_WELLS.map((well) => (
+          <WellGhost
+            key={well.id}
+            label={well.label}
+            // A closed well ghosts its heading only, as the loaded column opens it.
+            rows={well.defaultOpen ? WELL_ROWS[well.id] : 0}
+          />
+        ))}
       </div>
-    </div>
+    </HomeListColumn>
   );
 }
 
-/**
- * One well: a heading bar with its chevron, then the rows. A `<section>` with no button in it.
- * The header box restates `collapse-wells.tsx › WELL_HEADER` minus the pointer (that constant is
- * file-private); its 30px is what the chevron's `p-2` box makes. The heading bar is sized from
- * the label, so each well resolves into its own heading width.
- */
+/** One well: the heading bar and its caret, then the rows, on `WellsColumn`'s heading geometry. */
 function WellGhost({ label, rows }: { label: string; rows: number }) {
+  const face = WELL_FACES.heading;
   return (
-    <section aria-hidden className={PANEL_WELL_ON_PANEL}>
-      <div className="flex min-h-[30px] w-full min-w-0 items-center justify-between gap-2 pl-1">
-        <SkeletonLine w={`calc(${label.length}ch)`} h={12} />
-        <span className="flex shrink-0 items-center justify-center p-2">
-          <SkeletonBar h={NAKED_ICON} w={NAKED_ICON} className="rounded-[4px]" />
-        </span>
+    <section aria-hidden className={face.box}>
+      <div className="flex w-full min-w-0 items-center justify-between gap-2 px-1 pt-1.5">
+        <SkeletonLine w={`calc(${label.length}ch)`} h={10} />
+        <SkeletonBar h={face.chevron} w={face.chevron} className="rounded-[4px]" />
       </div>
       {rows > 0 && (
-        <div className={PANEL_ROWS}>
+        <div className={face.rows}>
           {Array.from({ length: rows }).map((_, i) => (
             <HomeRowGhost key={i} />
           ))}
@@ -287,30 +247,23 @@ function WellGhost({ label, rows }: { label: string; rows: number }) {
   );
 }
 
-/**
- * One channel row, on the pane's flat white — never the loaded row's raised `HOME_CARD_FACE`
- * (skeletons are flat). Two `h-5` lines (title + time, then the peer stack) inside the row's own
- * `py-2.5`. No ghost for unread marks: only some rows carry one.
- */
+/** One channel row, flat (skeletons carry no elevation): the row's two 18px lines in its padding. */
 function HomeRowGhost() {
   return (
     <div
       aria-hidden
       className={cn(
         GHOST_FLAT_FACE,
-        "bg-home-card",
-        "flex w-full items-start gap-2.5 px-2.5 py-2.5"
+        "flex w-full flex-col gap-1 rounded-xl bg-home-card px-[11px] py-[9px]"
       )}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex h-5 items-center justify-between gap-2">
-          <SkeletonLine w="58%" h={11} />
-          <SkeletonLine w={30} h={8} />
-        </div>
-        <div className="mt-0.5 flex h-5 items-center gap-1.5">
-          <Skeleton className="h-5 w-5 rounded-full" />
-          <Skeleton className="h-5 w-5 rounded-full" />
-        </div>
+      <div className="flex h-[18px] items-center justify-between gap-2">
+        <SkeletonLine w="58%" h={11} />
+        <SkeletonLine w={30} h={8} />
+      </div>
+      <div className="flex h-[18px] items-center gap-1">
+        <Skeleton className="h-5 w-5 rounded-full" />
+        <Skeleton className="h-5 w-5 rounded-full" />
       </div>
     </div>
   );

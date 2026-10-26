@@ -16,7 +16,7 @@
  *     panel under them. **The dark is FRAME ONLY**: the margin around panels,
  *     never a surface content sits on.
  *   ✗ `.sidebar` given its own panel face — sidebar and page as two SIBLING
- *     floats with a 2px line between them. **The panels NEST**: *"the right
+ *     floats with a line between them. **The panels NEST**: *"the right
  *     panel sits ON TOP OF the gray panel that holds the sidebar."*
  *   ✓ ONE gray float spanning rail → right edge, the nav standing directly on
  *     it, the routed page a white card floating inside — `pages/home/index.tsx`
@@ -28,9 +28,8 @@
  *   2. the STRUCTURE — one panel composed from the kit's `.page-float`, a
  *      sidebar that paints nothing, a page card that is /home's record pane
  *      class for class, and levels 2/3 alternating white → gray;
- *   3. the EDGE — `.page-float` wears `--home-panel-line` at the SAME 2px the
- *      /home record pane wears, read out of both files rather than asserted
- *      twice by hand;
+ *   3. the EDGE — `.page-float` and the /home record pane both wear a 1px
+ *      `--home-panel-line`;
  *   4. the FLOAT — /home and the workspace shell share ONE geometry because they
  *      share ONE recipe: `.page-float`'s margins reveal the frame around the
  *      panel on both surfaces.
@@ -60,6 +59,7 @@ const SPA_TOKENS = "apps/desktop-ui/src/styles/tokens.css";
 const SHELL_TSX = "apps/desktop-ui/src/components/app-shell/app-shell.tsx";
 const RAIL_TSX = "apps/desktop-ui/src/components/app-shell/account-rail.tsx";
 const HOME_PAGE = "apps/desktop-ui/src/pages/home/index.tsx";
+const HOME_FRAME = "apps/desktop-ui/src/pages/home/home-frame.tsx";
 const HOME_SKELETON = "apps/desktop-ui/src/pages/home/home-skeleton.tsx";
 const LAYOUT_SHELL = "src/shared/layout/layout-shell.tsx";
 const HOME_CSS_MODULE = "apps/desktop-ui/src/pages/home/home.module.css";
@@ -131,82 +131,6 @@ describe("the app frame is ONE ground", () => {
 
 });
 
-/**
- * THE CHANNEL INFO COLUMN KEEPS ITS TRACK WHEN THE WINDOW NARROWS (Samuel,
- * 2026-09-06: "when I decrease the width of the window it starts to cover the
- * right panel").
- *
- * ⚠ THIS IS A SOURCE PIN, NOT A LAYOUT TEST, AND THAT IS THE HONEST CHOICE.
- * jsdom computes no layout and paints nothing: a "render at 700px and assert the
- * panel is 380 wide" case passes whatever the CSS says, including the broken
- * CSS it is supposed to catch. What CAN fail is the rule text itself — the two
- * properties that make the column unshrinkable, and the layer that stops the
- * transcript being painted over it.
- *
- * ⚠ BOTH COPIES, WHICH IS HALF THE POINT (F-074). `kit.css` is a hand-copy of
- * the web `globals.css` kit, and the DESKTOP renders the copy — a fix that lands
- * only on the web file is invisible to the app Samuel filed this from.
- */
-describe("the channel info column is fixed-width, and paints above the transcript", () => {
-  it.each([
-    ["web", WEB_KIT_CSS],
-    ["desktop", KIT_CSS],
-  ])("%s: the shell cannot shrink and owns a stacking layer", (_host, file) => {
-    const body = rule(code(read(file)), "\n.channel-info-slide {");
-    // The TRACK: `flex: 0 0 auto` is what makes the MAIN area absorb every pixel
-    // of a narrowing window. Change it and the panel starts shrinking instead.
-    expect(body, "the column became shrinkable").toContain("flex: 0 0 auto");
-    // The LAYER: the transcript's positioned children (composer, popovers) paint
-    // in CSS step 8 and would otherwise cover a later, non-positioned sibling.
-    expect(body, "the paint-order fix is gone").toContain("position: relative");
-    expect(body, "the paint-order fix is gone").toMatch(/z-index:\s*1\b/);
-    // ⚠ And it must stay CLIPPED, or the layer covers the transcript in return.
-    expect(body, "the layer without the clip is a new bug").toContain(
-      "overflow: hidden"
-    );
-  });
-
-  it("stays UNDER the agent overlay — the pane that is meant to cover it", () => {
-    // ⚠ `agent-panel.tsx` is `z-20` and absolutely positioned against the same
-    // right edge. The column's z-index is 1 ON PURPOSE: high enough to beat the
-    // transcript's `auto`, low enough that opening an agent still covers this.
-    // A future bump here silently puts the info column over the agent pane.
-    expect(
-      code(read("src/features/channels/components/agent-panel.tsx"))
-    ).toContain("z-20");
-  });
-
-  it("the open width still matches the agent panel's, on both copies", () => {
-    // The pairing `agent-panel.tsx` names in as many words — a mismatch makes
-    // the divider jump sideways the moment an agent view opens.
-    // ⚠ IT IS A VARIABLE SINCE 2026-09-13 AND THE PAIRING IS UNCHANGED — the operator
-    // DRAGS this width (`channels/components/use-info-resize.ts`), so a literal in either place
-    // is the same jump for a resized column. What is pinned is that all three sites state
-    // the SAME expression, fallback included: the two kit copies here, `info-panel.tsx`'s
-    // own `w-[…]`, and the agent overlay's.
-    const EXPR = "var(--info-w, 380px)";
-    for (const file of [WEB_KIT_CSS, KIT_CSS]) {
-      expect(
-        rule(code(read(file)), '\n.channel-info-slide[data-open="true"] {'),
-        `${file} drifted off ${EXPR}`
-      ).toContain(`width: ${EXPR}`);
-    }
-    // The TSX halves carry it without the space Prettier puts in the CSS one.
-    for (const file of [
-      "src/features/channels/components/agent-panel.tsx",
-      "src/features/channels/components/info-panel.tsx",
-    ]) {
-      expect(code(read(file)), `${file} drifted off --info-w`).toContain(
-        "w-[var(--info-w,380px)]"
-      );
-    }
-    // And the hook's floor is the same number, so "never narrower than today" stays true.
-    expect(
-      code(read("src/features/channels/components/use-info-resize.ts"))
-    ).toContain("INFO_WIDTH_DEFAULT = 380");
-  });
-});
-
 describe("ONE gray panel, with the page floating inside it", () => {
   const shellTsx = code(read(SHELL_TSX));
 
@@ -235,18 +159,15 @@ describe("ONE gray panel, with the page floating inside it", () => {
     expect(body).toContain("var(--shell-sidebar-w)");
   });
 
-  it("the routed page is /home's record pane, class for class", () => {
+  it("the routed page is a white card on the panel, like /home's record pane", () => {
     const card = rule(shellCss, "\n.pageCard {");
     expect(card).toContain("background: var(--home-card)");
     expect(card).toMatch(/border:\s*2px solid var\(--home-panel-line\)/);
     expect(card).toMatch(/border-radius:\s*14px/);
-    // ⚠ READ AGAINST /home's OWN LINE, not asserted twice by hand — the two
-    // surfaces match because they say the same three things.
-    expect(code(read(HOME_PAGE))).toContain(
-      "rounded-[14px] border-2 border-home-panel-line bg-home-card"
+    expect(code(read(HOME_FRAME))).toContain(
+      "rounded-[14px] border border-home-panel-line"
     );
-    // The inset is what lets the gray show around the card; /home's pane takes
-    // `mb-3 mr-3`, this adds the top its panel has no header strip to supply.
+    // The inset lets the panel show around the card; /home's pane takes `mb-3 mr-3`.
     expect(card).toMatch(/margin:\s*12px 12px 12px 0/);
     expect(shellTsx).toContain("styles.pageCard");
   });
@@ -343,7 +264,7 @@ describe("the rail reads the same on both hosts", () => {
       expect(code(read(file))).toContain("--shell-gap-left: 0px");
     }
     expect(rule(shellCss, "\n.panel {")).toContain("margin-left: 0");
-    expect(code(read(HOME_PAGE))).toContain("page-float !ml-0");
+    expect(code(read(HOME_FRAME))).toContain("page-float !ml-0");
     // And the surface's own override is GONE on both — the token does that now.
     for (const file of [HOME_PAGE, HOME_SKELETON]) {
       expect(code(read(file)), `${file} still overrides the surface margin`).not.toContain(
@@ -415,48 +336,56 @@ describe("the rail reads the same on both hosts", () => {
   });
 });
 
-describe("the selected channel row's line is its own step", () => {
-  /** ⚠ **THE ROW'S FACE LEFT `relationship-list.tsx` ON 2026-09-17** — the hero
-   *  demo renders the same row; the list still owns the column and the reads. */
-  const ROW_TSX = "src/shared/ui/home-channel-row.tsx";
-
-  /** 🔒 **SAMUEL RETRACTED THE RULING THIS CASE PINNED (2026-09-15):** /home's
-   *  selected row is the page's BLACK BUTTON now, so `--home-row-line-selected`,
-   *  `.rowSelected` and the row's `selected-ring` are deleted. ⚠ **THE HALF THAT
-   *  WAS ALWAYS THE POINT SURVIVES** — /home's selection must not move
-   *  `--focus-line`, which the search pill and the landing demo wear.
-   *  `docs/DESIGN-SYSTEM.md › HOME_CARD_FACE_SELECTED` carries it. */
-  it("leaves the shared focus line untouched, /home's second name deleted", () => {
+describe("the selected channel row moves no shared line", () => {
+  it("leaves `--focus-line` untouched and wears no ring", () => {
     for (const file of [SPA_TOKENS, WEB_KIT_CSS]) {
       const src = code(read(file));
       expect(src).toContain("--focus-line: rgba(24, 24, 24, 0.22)");
       expect(src).not.toContain("--home-row-line-selected:");
     }
-    expect(read(HOME_CSS_MODULE)).not.toContain(".rowSelected {");
-    // ⚠ AND THE ROW WEARS THE BLACK BUTTON, BY THE CONSTANT.
-    const row = code(read(ROW_TSX));
-    expect(row).toContain("HOME_CARD_FACE_SELECTED");
+    const row = code(read("src/shared/ui/home-channel-row.tsx"));
     expect(row).not.toContain("selected-ring");
     expect(row).not.toContain("rowSelected");
   });
 });
 
-describe("the panel's fill and edge match /home's record pane", () => {
+describe("the panel's edge matches /home's record pane", () => {
   it.each([KIT_CSS, WEB_KIT_CSS])(
-    "%s: .page-float is --home-panel behind a 2px --home-panel-line",
+    "%s: .page-float is --home-panel behind a 1px --home-panel-line",
     (file) => {
       const body = rule(read(file), "\n.page-float {");
       expect(body).toContain("background: var(--home-panel)");
-      expect(body).toMatch(/border:\s*2px solid var\(--home-panel-line\)/);
+      expect(body).toMatch(/border:\s*1px solid var\(--home-panel-line\)/);
     }
   );
 
-  it("and that is the RECORD PANE's own statement, read from /home", () => {
-    // ⚠ THE POINT OF READING BOTH. Item 3 of the ruling is "the border blue
-    // matched, SAME WIDTH" — a number agreeing with a number by luck is what
-    // this prevents. The pane says `border-2 border-home-panel-line`; the kit
-    // recipe above says `2px solid var(--home-panel-line)`. Same token, same 2.
-    expect(code(read(HOME_PAGE))).toContain("border-2 border-home-panel-line");
+  it("and the record pane states the same line", () => {
+    expect(code(read(HOME_FRAME))).toContain("border border-home-panel-line");
+    expect(code(read(HOME_FRAME))).not.toContain("border-2");
+  });
+});
+
+/** The record pane hosts all five faces; the fills are a per-face seam on `data-face`. */
+describe("/home's panel and pane fills follow the face", () => {
+  const css = code(read(HOME_CSS_MODULE));
+
+  it("paints a white panel over the warm pane on every face but Channels", () => {
+    expect(rule(css, "\n.page {")).toContain("background: var(--bg-overlay)");
+    expect(rule(css, "\n.pane {")).toContain("background: var(--home-card)");
+  });
+
+  it("swaps the two on Channels", () => {
+    expect(rule(css, '\n.page[data-face="channels"] {')).toContain(
+      "background: var(--home-card)"
+    );
+    expect(rule(css, '\n.page[data-face="channels"] .pane {')).toContain(
+      "background: var(--bg-overlay)"
+    );
+    const frame = code(read(HOME_FRAME));
+    expect(frame).toContain("data-face={face}");
+    expect(frame).toContain("home.pane");
+    // The fill is the module's alone: no utility repaints the panel or the pane.
+    expect(frame).not.toMatch(/bg-home-(panel|card)/);
   });
 });
 
@@ -468,7 +397,7 @@ describe("the float geometry is shared, not copied", () => {
     // "THE full-page surface" for the mounts that supply their own — /home's
     // `<main>`, the pop-out thread window, the web playground. Stripping it from
     // sixteen files would have stripped it from those three too.
-    expect(code(read(HOME_PAGE))).toContain("page-float");
+    expect(code(read(HOME_FRAME))).toContain("page-float");
     for (const page of [
       "apps/desktop-ui/src/pages/overview/index.tsx",
       "apps/desktop-ui/src/pages/settings/index.tsx",

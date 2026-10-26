@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * (2026-09-17) The hero demo's /home chrome is the product's UI, not a look-alike.
+ * The hero demo's record pane is the product's UI, not a look-alike.
  *
  * This suite is not "the demo renders". The scene it replaced looked right the day
  * it was written and was a year of rulings behind by the time anyone noticed —
@@ -15,145 +15,31 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
-import {
-  HOME_CARD_FACE,
-  HOME_CARD_FACE_SELECTED,
-} from "@/shared/ui/home-card-marks";
-import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
-import { HOME_TABS } from "@/features/home/tabs";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
-import { DemoChannelList, DemoHomeHeader } from "./demo-home-chrome";
 import { DemoScene } from "./demo-scene";
 import { HOME_ROW_ID, homeRowsAt } from "./demo-home-rows";
 import { stepIndex } from "./demo-steps";
 import {
-  CHANNEL_NAME,
-} from "./demo-data";
-import {
   messagesAt,
 } from "./demo-transcript";
 
-const CHROME_SRC = "src/features/marketing/components/banner-demo/demo-home-chrome.tsx";
 const ROWS_SRC = "src/features/marketing/components/banner-demo/demo-home-rows.ts";
-
-/** The header's list-width cell, as a `closest` selector — the same one
- *  `relationship-list.test.tsx` uses against the real page. */
-const CELL = ".w-\\[var\\(--home-list-w\\)\\]";
 
 /** The scene at its last beat, where every row and every mark is on stage. */
 const rows = () => homeRowsAt(stepIndex("hold"));
 
 afterEach(cleanup);
 
-describe("the header strip is /home's, control for control", () => {
-  it("🔒 heads the list column with `New channel` and closes the row with `Profile`", () => {
-    render(<DemoHomeHeader />);
-
-    // Asserted against the CONSTANT, not a class list typed here, so a restyle of
-    // the page action moves this case with it rather than breaking it.
-    const create = screen.getByText("New channel");
-    const profile = screen.getByText("Profile");
-    for (const el of [create, profile]) {
-      expect(el.className).toBe(PAGE_ACTION_BTN);
-    }
-    // (2026-09-15) The pill's left edge lands on the channel rows'; the
-    // operator's control is not in that cell.
-    expect(create.closest(CELL)).not.toBeNull();
-    expect(profile.closest(CELL)).toBeNull();
-    expect(create.className).not.toMatch(/w-full/);
-  });
-
-  it("🔒 names the five faces `HOME_TABS` names, in its order, on `Channel`", () => {
-    render(<DemoHomeHeader />);
-    // The product's own set, so a sixth or relabelled face reaches this scene
-    // without an edit.
-    const labels = HOME_TABS.map((tab) => tab.label);
-    expect(labels).toContain("Channel");
-    for (const label of labels) expect(screen.getByText(label)).toBeTruthy();
-    // And no marketing list of its own — the old one outlived two renames.
-    expect(screen.queryByText("Chat")).toBeNull();
-  });
-
-  it("🔒 renders the search pill OPEN, which is what /home renders", () => {
-    const { container } = render(<DemoHomeHeader />);
-    const pill = container.querySelector(".search-expand");
-    // The closed 36px face is still the kit's; this scene is not its caller
-    // (`pages/home/home-search.test.ts` carries both halves).
-    expect(pill?.getAttribute("data-open")).toBe("true");
-    expect(within(pill as HTMLElement).getByText("Search…")).toBeTruthy();
-  });
-
-  it("🚫 nothing in the chrome is focusable, and no face is re-spelled", () => {
-    const src = readFileSync(CHROME_SRC, "utf8");
-    const code = src
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "")
-      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
-    // The slot is decorative and `aria-hidden`; a control a screen reader can
-    // still reach inside it is worse than a visible one.
-    expect(code).not.toContain("<button");
-    expect(code).not.toContain("<input");
-    // The anti-copy fence: every face in this file arrives by import, and a
-    // literal kit recipe is the drift the extraction was made to stop.
-    expect(code).not.toMatch(/"auth-btn-3d[ "]/);
-    expect(code).not.toContain("rounded-[14px]");
-  });
-});
-
-describe("the channel column is the product's three wells over the product's row", () => {
-  it("🔒 draws every well in `HOME_CHANNEL_WELLS`, empty or not, at the on-panel fill", () => {
-    const { container } = render(
-      <DemoChannelList rows={rows()} selectedId={HOME_ROW_ID} />
-    );
-    for (const well of HOME_CHANNEL_WELLS) {
-      expect(screen.getByRole("heading", { name: well.label })).toBeTruthy();
-    }
-    // `PANEL_WELL_ON_PANEL`, not `PANEL_WELL`: this column stands on
-    // `--home-panel`, so the default fill would be gray on the same gray.
-    const boxes = [...container.querySelectorAll("section")];
-    expect(boxes).toHaveLength(HOME_CHANNEL_WELLS.length);
-    for (const box of boxes) expect(box.className).toBe(PANEL_WELL_ON_PANEL);
-  });
-
-  it("🔒 gives the live channel the black card and everything else the white one", () => {
-    render(<DemoChannelList rows={rows()} selectedId={HOME_ROW_ID} />);
-    const live = screen.getByText(CHANNEL_NAME).closest("button");
-    expect(live?.className).toContain(HOME_CARD_FACE_SELECTED);
-    expect(live?.className).not.toContain(HOME_CARD_FACE);
-
-    const other = screen.getByText("flaky-tests").closest("button");
-    expect(other?.className).toContain(HOME_CARD_FACE);
-    expect(other?.className).not.toContain(HOME_CARD_FACE_SELECTED);
-  });
-
-  it("🔒 shows the marks the row can carry, and the solo row's description", () => {
-    render(<DemoChannelList rows={rows()} selectedId={HOME_ROW_ID} />);
-    // The `@ N` pill and the dot are exclusive — one row takes each.
-    expect(screen.getByTitle("2 unread mentions")).toBeTruthy();
-    expect(screen.getByLabelText("Unread messages")).toBeTruthy();
-    // (2026-10-15) The landing says "Invited" as a black pill, not "Link out".
-    expect(screen.getAllByText("Invited").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Link out")).toBeNull();
-    // (2026-09-15) A solo channel's description takes line two, in italic — the
-    // faces' alternative in that one slot, never stacked with them.
-    const solo = screen.getByText(/Build and release notices/);
-    expect(solo.className).toContain("italic");
-  });
-
+describe("the demo's channel rows", () => {
   it("🚫 no row carries a last-message preview, and none has a leading glyph", () => {
-    const rowsNow = rows();
-    // The fact is enforced by the TYPE — `HomeChannelRowFacts` has no slot for a
-    // preview — so the honest pin is on the data this scene authors.
-    for (const row of rowsNow) {
+    for (const row of rows()) {
       expect(Object.keys(row)).not.toContain("lastLine");
       expect(Object.keys(row)).not.toContain("subline");
     }
-    // (2026-09-01) No identity glyph in the leading slot: a channel is not a DM
-    // and must not be dressed as one.
-    const code = readFileSync(ROWS_SRC, "utf8");
-    expect(code).not.toContain("Bot");
+    // A channel is not a DM and must not be dressed as one.
+    expect(readFileSync(ROWS_SRC, "utf8")).not.toContain("Bot");
   });
 
   it("🔒 files every row into a well the product's own set declares", () => {

@@ -9,7 +9,7 @@ import { useBannerScrub } from "./use-banner-scrub";
  * 🔒 **THE SCENE IS CLIENT-ONLY, AND THAT IS A CORRECTNESS FENCE RATHER THAN A
  * PERFORMANCE ONE (2026-09-17).** Server-rendering it threw
  * *"Hydration failed because the server rendered text didn't match the client"*
- * on every fresh load, naming `DemoChannelList → WellsColumn`.
+ * on every fresh load, in the channel column's row stamps.
  *
  * ⚠ **THREE INDEPENDENT CLOCKS MAKE IT UNFIXABLE ON THE SERVER, not one bug.**
  * The scene prints channel-row timestamps through the product's own

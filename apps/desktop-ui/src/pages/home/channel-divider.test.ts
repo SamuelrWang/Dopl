@@ -1,28 +1,9 @@
 /**
- * THE SKINNED PANE'S DIVIDER IS 2px, AND IT HAS TO TELL THE RESIZE PILL SO
- * (Samuel, 2026-09-13: *"for the black vertical line that we're using so that the
- * user can use it to drag … right now it's sitting to the left. I want it to be
- * perfectly on the vertical line."*).
- *
- * ⚠ **WHY THIS IS A TEST AND NOT A COMMENT.** `channels/components/info-resize-handle.tsx`
- * centres the pill on the divider by offsetting the hit strip half a border width,
- * read from `--channel-divider-w` with a **1px fallback** — the kit hairline a host
- * that does not wear the skin keeps. The skin widens exactly that structural
- * `border-l` to 2px, so if the rule ever stops declaring the variable the pill goes
- * back to sitting a pixel LEFT of the line, and nothing else fails: no type error,
- * no missing class, no console warning. That is the whole class of bug this file
- * exists for.
- *
- * ⚠ **THE TWO DECLARATIONS MUST STAY ADJACENT.** Asserting they are both merely
- * *present* would pass a change that moved the border to 3px and left the variable
- * at 2 — so the width the border takes and the width it TELLS the handle are read
- * as one pair.
- *
- * ⚠ **BOTH KIT COPIES, WHICH IS HALF THE POINT SINCE R-38 (2026-09-17).** The kit
- * is hand-mirrored (F-074) and the drift gate's class half only sees
- * `@layer components`, which this block is deliberately outside of. The DESKTOP
- * renders `kit.css`, so a fix landing only on the web file is invisible in the app
- * Samuel filed this from.
+ * THE SKINNED PANE'S DIVIDERS ARE THE KIT HAIRLINE. `split-resize-handle.tsx` centres the resize
+ * pill on half of `--channel-divider-w`, falling back to 1px — the kit's `border-l` — so the skin
+ * must not widen a structural divider without declaring that variable beside it. It declares
+ * neither: the pane, its dividers and the pill all agree at 1px. Both kit copies, because the
+ * skin sits outside `@layer components` and the drift gate does not compare it (F-074).
  */
 
 import { readFileSync } from "fs";
@@ -41,64 +22,38 @@ const COPIES: [string, string][] = [
 const code = (rel: string) =>
   readFileSync(resolve(REPO, rel), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** The declared value of one property inside the FIRST rule that carries both. */
-function declared(css: string, selector: string, property: string): string | null {
-  const block = css
-    .split("}")
-    .find((chunk) => chunk.includes(selector) && chunk.includes(property));
-  if (!block) return null;
-  const match = new RegExp(`${property}\\s*:\\s*([^;]+);`).exec(block);
-  return match ? match[1]!.trim() : null;
-}
+/** Every rule block that selects on the skin. */
+const skinRules = (css: string) =>
+  css.split("}").filter((chunk) => chunk.includes("[data-frame-skin]"));
 
-describe.each(COPIES)(
-  "%s: the account palette skin tells the resize handle how wide its divider is",
-  (_host, rel) => {
-    it("widens the structural `border-l` to 2px", () => {
-      expect(
-        declared(code(rel), ".border-l.border-border-default", "border-left-width")
-      ).toBe("2px");
-    });
+describe.each(COPIES)("%s: the account palette skin keeps the hairline", (_host, rel) => {
+  it("widens no divider", () => {
+    for (const block of skinRules(code(rel))) {
+      expect(block).not.toMatch(/border-(left|bottom)-width/);
+    }
+  });
 
-    it("declares `--channel-divider-w` at the SAME width, on the skin hook", () => {
-      expect(declared(code(rel), "[data-frame-skin]", "--channel-divider-w")).toBe(
-        "2px"
-      );
-    });
+  it("so it declares no divider width for the resize pill either", () => {
+    expect(code(rel)).not.toContain("--channel-divider-w");
+  });
 
-    /** ⚠ ADJACENT RULES, so the pair cannot drift — see the header. */
-    it("keeps the two next to each other", () => {
-      const css = code(rel);
-      const widthAt = css.indexOf("border-left-width");
-      const varAt = css.indexOf("--channel-divider-w");
-      expect(widthAt).toBeGreaterThan(-1);
-      expect(varAt).toBeGreaterThan(-1);
-      // Nothing but the closing brace, the hook selector and whitespace between.
-      expect(css.slice(widthAt, varAt)).toMatch(
-        /border-left-width:\s*2px;\s*}\s*\[data-frame-skin\]\s*{\s*$/
-      );
-    });
-  }
-);
+  it("still repaints the dividers in the panel line", () => {
+    const block = skinRules(code(rel)).find((b) => b.includes(".border-border-default"));
+    expect(block).toContain("border-color: var(--home-panel-line)");
+  });
+});
 
-/**
- * 🔒 **AND THE HOSTS THAT WEAR IT ARE NAMED** — the rule is inert without the
- * attribute, and an inert skin looks like a design change nobody made. /home's
- * record pane and its ghost, and the workspace channels page: R-38's *"the two
- * surfaces must match"* is exactly this list being longer than one.
- */
-describe("the two hosts that wear the skin", () => {
+/** The rule is inert without the attribute: /home's record pane (page and ghost share
+ *  `HomeFrame`) and the workspace channels page wear it. */
+describe("the hosts that wear the skin", () => {
   it.each([
-    "apps/desktop-ui/src/pages/home/index.tsx",
-    "apps/desktop-ui/src/pages/home/home-skeleton.tsx",
+    "apps/desktop-ui/src/pages/home/home-frame.tsx",
     "src/features/channels/components/channels-core.tsx",
   ])("%s carries data-frame-skin", (rel) => {
     expect(readFileSync(resolve(REPO, rel), "utf-8")).toContain("data-frame-skin");
   });
 
-  it("and the page module no longer fences a second copy", () => {
-    expect(code("apps/desktop-ui/src/pages/home/home.module.css")).not.toContain(
-      ":global("
-    );
+  it("and the page module fences no second copy", () => {
+    expect(code("apps/desktop-ui/src/pages/home/home.module.css")).not.toContain(":global(");
   });
 });

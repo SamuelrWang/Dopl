@@ -7,14 +7,10 @@
  *
  * In `docs/DESIGN-LANGUAGE.md`'s look: white surfaces, hairlines, one soft shadow, an
  * underline tab bar, quiet section headings, and every channel its own bounded white card
- * (the selected one the same card filled solid ink).
- *
- * ⚠ **THE PRODUCT-FAITHFUL VERSIONS ARE KEPT.** `demo-home-chrome.tsx › DemoHomeHeader` /
- * `DemoChannelList` still mirror /home control for control (and their tests still pin
- * that); `demo-scene.tsx` mounts these faces in their place, so reverting is one swap there.
- * Same items, same order, same positions: the five `HOME_TABS`, the three
- * `HOME_CHANNEL_WELLS` with Earlier collapsed, every row's marks. Nothing here is a
- * control: the scene is decorative and the cursor never presses the chrome.
+ * (the selected one the same card filled solid ink). The desktop /home shell wears the same
+ * look (`apps/desktop-ui/src/pages/home/home-header.tsx`, `shared/ui/home-channel-row.tsx`).
+ * Same items, same order: the five `HOME_TABS`, the three `HOME_CHANNEL_WELLS` with Earlier
+ * collapsed, every row's marks. Nothing here is a control: the scene is decorative.
  */
 
 import { ChevronDown, Plus, Search } from "lucide-react";
@@ -24,7 +20,7 @@ import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 import type { HomeRowMock } from "./demo-home-rows";
 
-/** The header: same cells as `DemoHomeHeader`, re-faced. */
+/** The header: New channel, the tabs, search and Profile. */
 export function DemoTopBar({ viewer }: { viewer: AvatarPerson }) {
   const first = (viewer.displayName ?? "").split(/\s+/)[0] || "Profile";
   return (
@@ -104,7 +100,7 @@ function Row({ row, selected }: { row: HomeRowMock; selected: boolean }) {
   );
 }
 
-/** The channel column: same wells, same rows, same order as `DemoChannelList`. */
+/** The channel column: the wells as headings over the row cards. */
 export function DemoChannelSwitcher({
   rows,
   selectedId,
