@@ -125,12 +125,12 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   // `direct_agent` IS **NOT** HERE AND MUST NOT BE — that op starts a TURN on a running process,
   // so it takes the two-axis conjunction in `session-own-direct.js`, and the case below that
   // walks `ALWAYS_GATED` is what would catch it being mistaken for a read.
-  // ⚠ FOUR KEYS SINCE THE COLLAPSE (F-578), and the mapping adds nothing: `read` absorbed
+  // ⚠ FOUR KEYS CAME OUT OF THE COLLAPSE (F-578), and the mapping adds nothing: `read` absorbed
   // `await` and `get_thread`; `status` is `read_sessions` + `read_directions`; `rooms.threads`
   // and `rooms.members` were `list_threads` and `members`. ⚠ THE `rooms` ENTRIES ARE DOTTED —
   // four of that op's actions WRITE, so a bare one would hand the INBOUND half a lane that
-  // opens channels and invites people into them.
-  assert.deepEqual(READS, ["read", "status", "rooms.threads", "rooms.members"]);
+  // opens channels and invites people into them. `rooms.tasks` (2026-10-26) reads a channel's tasks.
+  assert.deepEqual(READS, ["read", "status", "rooms.threads", "rooms.members", "rooms.tasks"]);
   for (const shape of ALWAYS_GATED.concat(MARKERS, THREAD_OPENS, ESCALATES, [{ op: "send" }])) {
     assert.equal(profiles.isOwnChannelRead(shape, CH), false, JSON.stringify(shape));
   }
@@ -159,17 +159,23 @@ test("M3: the read set is exactly the own-channel READ-ONLY ops, and nothing els
   assert.deepEqual(profiles.OWN_CHANNEL_SEND_OPS, ["send"]);
   assert.deepEqual(profiles.OWN_CHANNEL_ARTIFACT_OPS,
     ["artifact.create", "artifact.add", "artifact.remove", "artifact.dissolve"]);
+  assert.deepEqual(profiles.OWN_CHANNEL_TASK_OPS, [
+    "task.create_task", "task.update_task", "task.set_status", "task.assign", "task.unassign",
+    "task.add_subtask", "task.update_subtask", "task.add_note",
+  ]);
   assert.deepEqual(profiles.OWN_CHANNEL_OUTBOUND_OPS,
-    profiles.OWN_CHANNEL_SEND_OPS.concat(profiles.OWN_CHANNEL_ARTIFACT_OPS));
+    profiles.OWN_CHANNEL_SEND_OPS.concat(profiles.OWN_CHANNEL_ARTIFACT_OPS, profiles.OWN_CHANNEL_TASK_OPS));
   assert.ok(!READS.includes("send"), "the outbound op is not a read");
-  // ⚠ THE FOLD IS NOT A READ EITHER, and it is DOTTED for the reason `rooms` is: a bare
-  // `artifact` entry anywhere would carry every action the op grows later, unread and unargued.
-  for (const key of profiles.OWN_CHANNEL_ARTIFACT_OPS) {
-    assert.ok(!READS.includes(key), `${key} writes`);
-    assert.ok(key.startsWith("artifact."), `${key} is keyed <op>.<action>`);
+  // ⚠ THE FOLD AND THE TASK WRITES ARE NOT READS EITHER, and they are DOTTED for the reason `rooms`
+  // is: a bare entry anywhere would carry every action the op grows later, unread and unargued.
+  for (const [op, keys] of [["artifact", profiles.OWN_CHANNEL_ARTIFACT_OPS], ["task", profiles.OWN_CHANNEL_TASK_OPS]]) {
+    for (const key of keys) {
+      assert.ok(!READS.includes(key), `${key} writes`);
+      assert.ok(key.startsWith(`${op}.`), `${key} is keyed <op>.<action>`);
+    }
+    assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes(op),
+      `the bare ${op} dispatcher is not on the lane — named actions are`);
   }
-  assert.ok(!profiles.OWN_CHANNEL_OUTBOUND_OPS.includes("artifact"),
-    "the bare dispatcher is not on the lane — four named actions are");
 });
 
 test("M3: an own-channel read is ALLOWED under auto_inbound / auto_both and GATES under ask", () => {

@@ -97,6 +97,9 @@ const GATE_REASONS = [
   //                             argument, and WHICH action ran is already on the same diag line
   //                             (`session-gate-bridge.js › channelOpLabel` prints
   //                             `op=artifact.dissolve`).
+  'auto-outbound-task', //       2026-10-26: the same outbound half on an own-channel `task` write
+  //                             (any of its eight actions). One code, as for the fold: one
+  //                             admission argument, and `channelOpLabel` names the action.
   'auto-outbound-thread-open', //2026-08-24 (Samuel's ruling): the same outbound half on an
   //                             own-channel `create_thread`. Its own code, for the reason the
   //                             marker has one: "the agent opened an exchange with a member" is not
@@ -252,6 +255,7 @@ function makeGateReason(deps) {
       // `listener.log`. Its predicate is disjoint from all three above (they match `op="send"`
       // only), so the order among the four buys nothing.
       if (d.isOwnChannelArtifact && d.isOwnChannelArtifact(a.input, a.channelId)) return 'auto-outbound-artifact';
+      if (d.isOwnChannelTask && d.isOwnChannelTask(a.input, a.channelId)) return 'auto-outbound-task';
       return 'auto-outbound';
     }
     if (decision !== 'gate') return null; // an unknown verdict explains nothing, honestly
