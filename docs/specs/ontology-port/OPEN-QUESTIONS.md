@@ -54,3 +54,11 @@ Each: the question, what was chosen, where.
     `OntologyBoardSkeleton` directly, as the page's own pre-mount state does.
 12. **Pre-existing red, not this slice:** `src/features/ui-staging/staging-frame.test.tsx › opens
     every frame-level popup` cannot find the settings modal's "Devices" button (settings-staging).
+
+## Type sizes (Samuel: "the text size is too big")
+
+13. One step down the scale, weights unchanged: ontology switcher `text-heading` → `text-title`
+    (the channel header's 14px), lane header type name `text-title` → `text-lead`, Rows group
+    header type name `text-heading` → `text-lead` (two steps, so both displays name a type alike),
+    card and Rows record title `text-heading` → `text-title` (now the hover card's size); skeleton
+    name line 18 → 14px. The object panel title stays `text-display` as the panel heading.

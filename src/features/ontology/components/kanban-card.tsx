@@ -56,7 +56,7 @@ export function KanbanCard({
         onClick={() => onSelect(objectId)}
         className="flex w-full flex-col items-start px-3.5 pt-3 pb-2.5 text-left"
       >
-        <span className="block w-full truncate text-heading font-medium tracking-tight text-text-primary">
+        <span className="block w-full truncate text-title font-medium tracking-tight text-text-primary">
           {object.name}
         </span>
         {object.subtitle && (

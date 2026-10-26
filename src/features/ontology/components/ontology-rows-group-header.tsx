@@ -28,7 +28,7 @@ interface Props {
   onCreateObject: (columnId: string) => void;
 }
 
-const NAME = "min-w-0 max-w-80 flex-none bg-transparent text-heading font-medium tracking-tight text-text-primary outline-none placeholder:text-text-muted";
+const NAME = "min-w-0 max-w-80 flex-none bg-transparent text-lead font-medium tracking-tight text-text-primary outline-none placeholder:text-text-muted";
 const DESCRIPTION = "min-w-0 flex-1 truncate bg-transparent text-lead text-text-secondary outline-none placeholder:text-text-muted";
 
 /**

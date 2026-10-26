@@ -79,7 +79,7 @@ export function KanbanColumnHeader({
           onChange={(e) =>
             dispatch({ type: "OBJECT_UPDATE", id: column.id, patch: { name: e.target.value } })
           }
-          className="min-w-0 flex-1 bg-transparent text-title font-medium tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-lead font-medium tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
           placeholder="Object name"
           aria-label="Object name"
         />

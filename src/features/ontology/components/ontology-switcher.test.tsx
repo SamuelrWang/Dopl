@@ -89,12 +89,12 @@ describe("the trigger", () => {
     expect(trigger.textContent).toBe("Pipeline");
     // no pill and no bold weight (Samuel, 2026-09-10).
     expect(trigger.className).not.toMatch(/raised-tab|rounded-full|seg-pill/);
-    // the `bare` select face at the header's heading step.
+    // the `bare` select face at the header's title step.
     for (const c of BARE_TRIGGER_FACE.split(" ")) {
       if (c !== "text-caption") expect(trigger.classList).toContain(c);
     }
-    expect(trigger.className).toMatch(/\btext-heading\b/);
-    expect(trigger.className).not.toMatch(/text-title|font-semibold|font-bold/);
+    expect(trigger.className).toMatch(/\btext-title\b/);
+    expect(trigger.className).not.toMatch(/text-heading|text-display|font-semibold|font-bold/);
     expect(trigger.querySelector("svg")).toBeTruthy();
     // a dropdown, not tabs — the other ontology is behind it, never beside it.
     expect(screen.queryByText("Roster")).toBeNull();

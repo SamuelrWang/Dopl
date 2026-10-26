@@ -11,7 +11,7 @@ export function OntologyBoardSkeleton() {
 
       {/* Name picker, description, display pill, gear, "+ Object". */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-4 py-3">
-        <SkeletonLine w={140} h={18} />
+        <SkeletonLine w={140} h={14} />
         <div className="mx-2 flex min-w-0 flex-1 items-center">
           <SkeletonLine w="40%" h={11} />
         </div>
