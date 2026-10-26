@@ -148,6 +148,7 @@ function endInterrupted(key, rec, why, opts) {
     channelName: rec.channelName,
     threadTitle: rec.threadTitle,
     identityName: rec.identityName || rec.templateName, // `templateName`: pre-rename record (P3-10)
+    identityId: rec.identityId || null,
     startedAt: rec.startedAt,
     endedAt: Date.now(),
     diag: null,

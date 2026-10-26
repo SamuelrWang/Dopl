@@ -101,6 +101,7 @@ function durableSessionRecord(rec) {
     // The identity NAME only (F-288), at the column's 120: without it a crash resume erased
     // `channel_sessions.identity_name`. The body is never persisted (no reader after spawn).
     identityName: durableName(r.identityName, 120),
+    identityId: durableName(r.identityId, 36),
     // Display only; a whitelist drops the retired cost/cap fields of an older record on read.
     turns: Number(r.turns) || 0,
     // The post counter feeds client_msg_ids (idempotency), so it is coerced harder: finite, >= 0, integral.

@@ -171,7 +171,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     // keys is the proof that a record written by an older build drops the field on read rather
     // than carrying it forward — the same treatment `turnCap` got when the caps went.
     "agentId", "bind", "channelId", "channelName", "counterpartyId",
-    "counterpartyName", "direct", "identityName", "key", "launchChain", "launchDepth", "mode", "model",
+    "counterpartyName", "direct", "identityId", "identityName", "key", "launchChain", "launchDepth", "mode", "model",
     // "operatorTools" (2026-09-25): the "Use my tools" launch scope, a strict enum ('' otherwise).
     "operatorTools", "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sessionId",
     "side", "startedAt", "threadId", "threadTitle", "turns", "workspaceId",

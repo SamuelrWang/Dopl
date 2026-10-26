@@ -170,15 +170,17 @@ test("the resolve is a GET on the launch contract, 5s, no-store, workspace-scope
 });
 
 test("the payload is NARROWED to a literal whitelist — a new server field is DROPPED", async () => {
-  const m = boot({ body: { ...RESOLVED, createdBy: "user-9", id: IDENTITY_ID, visibility: "team" } });
+  const m = boot({ body: { ...RESOLVED, createdBy: "user-9", id: "server-said-id", visibility: "team" } });
   await m.launchFromButton(payload({ identityId: IDENTITY_ID }));
   const t = m.launches[0].context.identity;
-  // ⚠ NINE: `knowledge` (`launch-identity-scopes.test.mjs` owns that narrowing) and `runtime`
-  // (C4). The list is CLOSED; dropping `createdBy`/`id`/`visibility` IS the case.
+  // ⚠ `knowledge` (`launch-identity-scopes.test.mjs` owns that narrowing) and `runtime` (C4). The
+  // list is CLOSED; dropping `createdBy`/`visibility` IS the case. `id` is the REQUESTED id, stamped
+  // after the narrowing, never the body's.
   assert.deepEqual(Object.keys(t).sort(), [
-    "authoredByCaller", "fields", "instructions", "knowledge", "knowledgeBases", "model", "name",
+    "authoredByCaller", "fields", "id", "instructions", "knowledge", "knowledgeBases", "model", "name",
     "runtime", "unreachableKnowledgeBaseCount",
   ]);
+  assert.equal(t.id, IDENTITY_ID);
   // ⚠ OWNERSHIP MUST NOT RIDE A LAUNCH PAYLOAD — `authoredByCaller` is a COMPUTED boolean
   // precisely so a raw creator id never has to.
   assert.equal("createdBy" in t, false);
@@ -432,8 +434,10 @@ test("F-288: the identity NAME is projected, whitelisted and rehydrated — all 
   assert.match(read("session-store.js"), /identityName: durableName\(r\.identityName, 120\)/,
     "the durable whitelist must name it — at 120, the column's own bound, not the 80 display default");
   assert.match(read("session-park.js"),
-    /identity: \(r\.identityName \|\| r\.templateName\) \? \{ name: r\.identityName \|\| r\.templateName \} : null/,
-    "contextFromRecord must rebuild it, or the resumed session reports a blank identity");
+    /\{ name: r\.identityName \|\| r\.templateName, \.\.\.\(r\.identityId \? \{ id: r\.identityId \} : \{\}\) \}/,
+    "contextFromRecord must rebuild it, id included, or the resumed session reports a blank identity");
+  assert.match(read("session-store.js"), /identityId: durableName\(r\.identityId, 36\)/,
+    "the id rides the durable record too, so a resumed session still joins its identity row");
   // ⚠ THE NAME ONLY. Persisting another member's prompt text to answer a question nothing asks
   // after spawn would be a real cost for no reader — see `contextFromRecord`'s own note.
   const store = read("session-store.js");

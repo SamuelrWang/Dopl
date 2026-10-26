@@ -164,6 +164,8 @@ function baseRecord(s) {
     counterpartyId: s.counterpartyId || null, direct: s.direct === true, bind: s.bind === 'room' ? 'room' : 'pair', agentId: s.agentId || null,
     counterpartyName: s.counterpartyName || null, channelName: (s.context && s.context.channelName) || null,
     threadTitle: (s.context && s.context.threadTitle) || null, identityName: (s.context && s.context.identity && s.context.identity.name) || null,
+    identityId: (s.context && s.context.identity && s.context.identity.id) || null,
+    identityId: (s.context && s.context.identity && s.context.identity.id) || null,
     turns: s.state.turns,
     ownPostSeq: s.ownPostSeq,
     model: s.model || null,

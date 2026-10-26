@@ -80,7 +80,8 @@ test("REPORT: `list()` narrows the report-only `key` back off — `workspaceId` 
     "heldGates",
     // `identityName` (2026-08-22, `templateName` until the 2026-09-22 rename) is named in
     // `reportRow` on purpose — Phase 4 added the column.
-    "identityName",
+    // `identityId` (2026-10-26) is local only: the Identities page joins sessions to rows by it.
+    "identityId", "identityName",
     "lastActivityAt", "lastDeniedTool", "lastWakeAt", "lastWakeSeq", "listening", "messageMode",
     "model",
     "name", "permission", "profileLabel", "runtimeId", "sessionId", "stale", "startedAt", "state", "threadId",

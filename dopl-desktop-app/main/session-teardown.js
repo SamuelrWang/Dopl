@@ -45,6 +45,7 @@ function settle(s, outcome) {
       threadTitle: (s.context && s.context.threadTitle) || null,
       // A snapshot of what it RAN AS; `durableHistory` is a whitelist, so an omitted field is dropped.
       identityName: (s.context && s.context.identity && s.context.identity.name) || null,
+      identityId: (s.context && s.context.identity && s.context.identity.id) || null,
       endedAt: Date.now(),
       diag: s.mcpDiag || null,
       // The structured end code and its runtime: `session-detail.js › endReasonFor` re-says it at read time.

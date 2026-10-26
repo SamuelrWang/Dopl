@@ -50,6 +50,7 @@ function durableHistory(rec) {
     threadTitle: historyName(r.threadTitle),
     // At the column's 120, not the 80 display default: clipping at the write reports a name no identity has (F-287).
     identityName: historyName(r.identityName, 120),
+    identityId: historyName(r.identityId, 36),
     endedAt: Number(r.endedAt) || 0,
     // Why the run stopped, when not the operator's doing (F-692).
     diag: historyName(r.diag, 200),

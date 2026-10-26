@@ -72,6 +72,8 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
       // above it DOES reach the server, onto `channel_sessions.identity_name`, which is
       // operator-only by construction on that side (`collab-dto.ts › mapOwnSessionStateRow`).
       identityName: null,
+      // `identityId` (2026-10-26): the same capture's row id, LOCAL only (`reportRow` names no such column).
+      identityId: null,
       // `color` (2026-09-13, docs/specs/agent-colors.md) is THE ASK, not the assignment:
       // uniqueness is per channel across EVERY member and no machine can evaluate that, so the
       // server may substitute. It DOES reach the server (`channel_sessions.color`), peer-visible

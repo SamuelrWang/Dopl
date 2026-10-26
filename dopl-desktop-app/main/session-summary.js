@@ -59,6 +59,7 @@ function liveSummary(s, name) {
     threadTitle: displayText(ctx.threadTitle),
     // A spawn-time capture, so it can ride the STATE half of the server digest.
     identityName: displayText(ctx.identity && ctx.identity.name, IDENTITY_NAME_MAX),
+    identityId: displayText(ctx.identity && ctx.identity.id, 36),
     // The colour this session ASKED for; `null` is "none reported" and cannot erase one server-side.
     color: (s && s.color) || null,
     // The spawn stamp; `reportRow` sends it as the peer-visible `runtime`.
@@ -101,6 +102,7 @@ function endedSummary(e, name) {
     channelName: displayText(e && e.channelName),
     threadTitle: displayText(e && e.threadTitle),
     identityName: displayText(e && e.identityName, IDENTITY_NAME_MAX),
+    identityId: displayText(e && e.identityId, 36),
     contextUsed: metricOrNull(e && e.contextUsed),
     contextWindow: metricOrNull(e && e.contextWindow),
     tokensSpent: metricOrNull(e && e.tokensSpent),

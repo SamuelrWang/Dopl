@@ -98,6 +98,11 @@ export interface DesktopSessionSummary {
    */
   identityName?: string | null;
   /**
+   * That identity's row id, stamped at the same spawn (`main/identity-resolve.js`). Local only, never
+   * pushed. `null`/absent = no identity, or a session from a desktop older than the field.
+   */
+  identityId?: string | null;
+  /**
    * The colour key this agent ASKED for. The server resolves per-channel uniqueness and may
    * substitute (`channels/server/session-colors.ts › resolveReportedColors`), so the peer projection
    * outranks this wherever both exist. A string narrowed by the reader (`src/shared/` may not
