@@ -1,7 +1,8 @@
 /**
- * The staged API: every `/api/**` route the /home Knowledge face calls, answered from the
- * in-memory DB (`../fake-store.ts`). A handler's value is the route's JSON body; `undefined` is a
- * 204; a `Response` is sent as is.
+ * The staged API: every `/api/**` route the /home Knowledge face calls through `apiRequest`,
+ * answered from the in-memory DB (`../fake-store.ts`). A handler's value is the route's JSON body;
+ * `undefined` is a 204. The export download is a plain `fetch`, not `apiRequest`, so it has no
+ * route here.
  */
 import * as bases from "./bases";
 import * as entries from "./entries";
@@ -31,18 +32,15 @@ const ROUTES: Array<[method: string, pattern: string, handler: Handler]> = [
   ["PUT", "/api/knowledge/bases/:id/channel-grants", (r) => bases.setChannelGrant(r.params[0], r.body)],
   ["GET", "/api/knowledge/bases/:id/tree", (r) => bases.tree(r.params[0])],
   ["GET", "/api/knowledge/bases/:id/revisions", (r) => extras.baseRevisions(r.params[0], r.query.get("cursor"))],
-  ["GET", "/api/knowledge/bases/:id/export", (r) => extras.exportMarkdown("base", r.params[0])],
   ["POST", "/api/knowledge/bases/:id/folders", (r) => entries.createFolder(r.params[0], r.body, r.workspaceId)],
   ["POST", "/api/knowledge/bases/:id/entries", (r) => entries.createEntry(r.params[0], r.body, r.workspaceId)],
   ["PATCH", "/api/knowledge/folders/:id", (r) => entries.updateFolder(r.params[0], r.body)],
   ["DELETE", "/api/knowledge/folders/:id", (r) => entries.deleteFolder(r.params[0])],
   ["POST", "/api/knowledge/folders/:id/move", (r) => entries.moveFolder(r.params[0], r.body)],
-  ["GET", "/api/knowledge/folders/:id/export", (r) => extras.exportMarkdown("folder", r.params[0])],
   ["GET", "/api/knowledge/entries/:id", (r) => entries.getEntry(r.params[0])],
   ["PATCH", "/api/knowledge/entries/:id", (r) => entries.updateEntry(r.params[0], r.body)],
   ["DELETE", "/api/knowledge/entries/:id", (r) => entries.deleteEntry(r.params[0])],
   ["POST", "/api/knowledge/entries/:id/move", (r) => entries.moveEntry(r.params[0], r.body)],
-  ["GET", "/api/knowledge/entries/:id/export", (r) => extras.exportMarkdown("entry", r.params[0])],
   ["GET", "/api/knowledge/entries/:id/revisions", (r) => extras.entryRevisions(r.params[0], r.query.get("cursor"))],
   [
     "POST",

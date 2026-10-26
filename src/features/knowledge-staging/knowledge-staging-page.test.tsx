@@ -14,7 +14,7 @@ vi.mock("next/link", () => ({
 afterEach(cleanup);
 
 describe("/knowledge staging", () => {
-  it("mounts the product face over the in-memory API and opens a base and a file", async () => {
+  it("mounts the product face over the in-memory bridge and opens a base and a file", async () => {
     globalThis.ResizeObserver ??= class {
       observe() {}
       disconnect() {}
@@ -23,7 +23,7 @@ describe("/knowledge staging", () => {
     Element.prototype.scrollIntoView ??= () => {};
     const network = vi.spyOn(globalThis, "fetch");
 
-    render(<KnowledgeStagingPage />);
+    const { unmount } = render(<KnowledgeStagingPage />);
 
     const shared = await screen.findByRole("region", { name: "Shared in this channel" });
     expect(await within(shared).findByText("Platform Runbooks")).toBeTruthy();
@@ -42,5 +42,10 @@ describe("/knowledge staging", () => {
 
     const apiCalls = network.mock.calls.filter(([input]) => String(input).includes("/api/"));
     expect(apiCalls).toEqual([]);
+
+    // The bridge is the page's alone: unmounting puts back what was there.
+    expect((window as { dopl?: unknown }).dopl).toBeDefined();
+    unmount();
+    expect((window as { dopl?: unknown }).dopl).toBeUndefined();
   });
 });

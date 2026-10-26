@@ -1,4 +1,4 @@
-/** The staged search, export and revision routes. */
+/** The staged search and revision routes. */
 import type { KnowledgeSearchHit } from "@/features/knowledge/client/api";
 import type { KnowledgeEntry } from "@/features/knowledge/types";
 import type { RevisionPage } from "@/features/revisions/types";
@@ -34,31 +34,6 @@ export function search(q: string, baseSlug: string | null, limit: number): { hit
     });
   }
   return { hits: hits.sort((a, b) => b.rank - a.rank).slice(0, limit) };
-}
-
-/** The export routes as one `.md` file: the real routes zip a base or folder, staging concatenates. */
-export function exportMarkdown(kind: "base" | "folder" | "entry", id: string): Response {
-  const db = knowledgeDb();
-  const entries =
-    kind === "entry"
-      ? db.entries.filter((e) => e.id === id)
-      : kind === "folder"
-        ? db.entries.filter((e) => e.folderId === id)
-        : db.entries.filter((e) => e.knowledgeBaseId === id);
-  const name =
-    kind === "entry"
-      ? (entries[0]?.title ?? "entry")
-      : kind === "folder"
-        ? (db.folders.find((f) => f.id === id)?.name ?? "folder")
-        : (db.bases.find((b) => b.id === id)?.name ?? "knowledge");
-  const text = entries.map((e) => `# ${e.title}\n\n${e.body}`).join("\n\n---\n\n");
-  return new Response(text, {
-    status: 200,
-    headers: {
-      "content-type": "text/markdown",
-      "content-disposition": `attachment; filename="${name}.md"`,
-    },
-  });
 }
 
 /** Pages of 8, so "Load more" is reachable on the seeded bases. */

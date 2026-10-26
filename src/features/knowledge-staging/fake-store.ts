@@ -1,6 +1,6 @@
 /**
  * UI-STAGING IN-MEMORY DB for /knowledge. Every request the product components make lands here
- * through `fetch-shim.ts` and `server/*`; no API request leaves the page.
+ * through `staging-bridge.ts` and `server/*`; no API request leaves the page.
  * `resetKnowledgeStore()` runs on page mount, so a reload is always the seed in `data.ts`.
  */
 
