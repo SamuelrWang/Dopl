@@ -92,9 +92,9 @@ Sentence case everywhere. Titles are short noun/verb phrases.
 
 In the product these recipes are already kit and `src/shared/ui` primitives (2026-10-26):
 the white card `.white-card` (selectable: `+ .select-card`), the well `.card-well`, the header
-white pill `WHITE_PILL`, `StatusPill`, `ThinMeter`,
-`IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, the ink pill
-family (`INK_PILL_FACE`: `PAGE_ACTION_BTN`, `SMALL_PRIMARY_PILL`, `INK_PILL`, `QUIET_PILL`),
+white pill and every other pill (`pill-button.tsx › pillButton`: `outline`, `quiet`, `white`, `ink` at
+22/26/30/36px; DESIGN-SYSTEM.md "The three control kinds"), `StatusPill`, `ThinMeter`,
+`IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`,
 the 15px `text-heading` step, the list of rows (one white card with a hairline between rows,
 `channels/components/bits.tsx › ROW_CARD`, the Tasks list) and the list of items (each item its own
 white card, title over one meta line led by small faces, actions centred right:
