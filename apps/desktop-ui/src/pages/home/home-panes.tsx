@@ -5,7 +5,7 @@ import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
 import { HomeKnowledgePanels } from "./knowledge-panels";
 import { HomeIdentityPanels } from "./identity-panels";
-import { HomeOntologyPanels } from "./ontology-panels";
+import { HomeOntologyPanels } from "@/features/ontology/components/home-ontology-panels";
 import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import type { ActivityJump } from "./use-activity-jump";
 import type { HomeRow } from "./home-rows";
@@ -58,33 +58,12 @@ export function HomePane({
   jump,
   onChannelDeleted,
 }: HomePaneProps) {
-  const homeChannels = useHomeChannels();
   /** The row a pane token names, read out of the token, never the page's selection. */
   const rowFor = (id: string) =>
     rows.find((candidate) => candidate.id === id) ?? null;
 
-  if (shown === OVERVIEW_PANE) {
-    // The caller's `kind='home'` container, so the credit figures read their PERSONAL wallet
-    // (`credits-service.ts › resolveBillingTarget`). Null until onboarded.
-    return (
-      <HomeOverview
-        homeWorkspaceId={identity.workspace?.id ?? null}
-        homeChannels={homeChannels}
-        onOpenSettings={openHomeSettings}
-      />
-    );
-  }
-  if (shown === ONTOLOGY_PANE) {
-    // An ontology is a personal item lent into channels, so this face takes the home space.
-    return (
-      <HomeOntologyPanels
-        homeWorkspaceId={identity.workspace?.id ?? null}
-        homeWorkspaceSegment={identity.segment}
-        // Scopes the pane's last-opened memory to the reader (`last-opened.ts`).
-        currentUserId={identity.userId}
-      />
-    );
-  }
+  if (shown === OVERVIEW_PANE) return <OverviewPane identity={identity} />;
+  if (shown === ONTOLOGY_PANE) return <OntologyPane identity={identity} />;
   if (shown.startsWith(IDENTITIES_PANE)) {
     const shownRow = rowFor(shown.slice(IDENTITIES_PANE.length));
     return (
@@ -136,6 +115,34 @@ export function HomePane({
       // The message a search row named (F-714).
       initialSeq={jump.seqFor(row.id)}
       onDeleted={onChannelDeleted}
+    />
+  );
+}
+
+/** The Overview face: the credit figures read the caller's `kind='home'` container, their PERSONAL
+ *  wallet (`credits-service.ts › resolveBillingTarget`); the home channels scope the daily credits. */
+function OverviewPane({ identity }: { identity: BootPayload }) {
+  const homeChannels = useHomeChannels();
+  return (
+    <HomeOverview
+      homeWorkspaceId={identity.workspace?.id ?? null}
+      homeChannels={homeChannels}
+      onOpenSettings={openHomeSettings}
+    />
+  );
+}
+
+/** The Ontology face: an ontology is a personal item lent into channels, so it takes the home
+ *  space, and the operator's home channels for its share and delete dialogs. */
+function OntologyPane({ identity }: { identity: BootPayload }) {
+  const homeChannels = useHomeChannels();
+  return (
+    <HomeOntologyPanels
+      homeWorkspaceId={identity.workspace?.id ?? null}
+      homeWorkspaceSegment={identity.segment}
+      // Scopes the pane's last-opened memory to the reader (`last-opened.ts`).
+      currentUserId={identity.userId}
+      homeChannels={homeChannels}
     />
   );
 }

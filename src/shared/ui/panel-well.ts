@@ -1,8 +1,8 @@
 /**
  * The gray well: `SECTION_PANEL_SHELL`'s radius + padding filled with `--home-panel`, with the
- * label inside it. Shared by ontology panel sections and the Agents tab (INVARIANTS §1 forbids the
- * cross-feature import). No hairline on purpose. Constants only: the label row, column and
- * collapse stay with each caller. Never re-type the radius/padding locally.
+ * label inside it. Shared by the channel page's collapsible wells. No hairline on purpose.
+ * Constants only: the label row, column and collapse stay with each caller. Never re-type the
+ * radius/padding locally.
  */
 
 import { cn } from "@/shared/lib/utils";

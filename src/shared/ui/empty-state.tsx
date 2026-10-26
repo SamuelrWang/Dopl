@@ -65,3 +65,9 @@ export function EmptyState({
     </div>
   );
 }
+
+/** A section body with nothing in it: one muted, centred line. Render it only against a RESOLVED
+ *  read, never while the list is still loading. */
+export function EmptyLine({ children }: { children: string }) {
+  return <p className="px-4 py-6 text-center text-caption text-text-muted">{children}</p>;
+}

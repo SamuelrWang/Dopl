@@ -1,3 +1,5 @@
+> Paths predate the ontology port (2026-10-26): the /home host is now `src/features/ontology/components/home-ontology-panels.tsx` and `ontology-share.tsx`.
+
 > Historical record (2026-09-17) — cited for rationale; may not match current code.
 
 # 08 — THE SLOT-REPLACING-HOST AUDIT

@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
-import { FormDialog, FormSection, UnderlineField } from "@/shared/ui/form-dialog";
+import {
+  FormDialog,
+  FormSection,
+  InlineUnderlineField,
+  UnderlineField,
+} from "@/shared/ui/form-dialog";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
+import { FIELD_WELL } from "@/shared/ui/wells";
 import { fieldKey } from "../field-kinds";
 import { NEW_COLUMN_NAME, type ColumnDraftPatch } from "../optimistic-create";
 import type { TemplateField } from "../types";
-import { InlineUnderlineField } from "./board-header-bits";
-import { FIELD_WELL } from "./ontology-bits";
 import { useKindOptions } from "./template-editor";
 
 /**

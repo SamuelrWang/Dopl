@@ -56,12 +56,11 @@ export const SECTION_PANEL_GROUND =
  * THE WELL'S GEOMETRY — radius + padding, the half `SectionPanel` paints for
  * every caller regardless of the ground it is handed.
  *
- * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT** (2026-09-13,
- * the object panel's field sections). `ontology/components/panel-section.tsx ›
- * PANEL_WELL` is the gray well — `bg-home-panel` on this geometry, no
- * hairline (the same face `SECTION_PANEL_GROUND` has carried on every page since
- * R-39 flattened it) — reached by IMPORT rather than by retyping `rounded-[14px] p-3`, so the day
- * the well's radius or padding moves it moves on both surfaces at once.
+ * ⚠ **EXPORTED SO THE WELL IS ONE RECIPE AND NOT A MEASUREMENT.** `shared/ui/panel-well.ts ›
+ * PANEL_WELL` is the gray well — `bg-home-panel` on this geometry, no hairline (the same
+ * face `SECTION_PANEL_GROUND` has carried on every page since R-39 flattened it) — reached by
+ * IMPORT rather than by retyping `rounded-[14px] p-3`, so the day the well's radius or padding
+ * moves it moves on every surface at once.
  */
 export const SECTION_PANEL_SHELL = "rounded-[14px] p-3";
 

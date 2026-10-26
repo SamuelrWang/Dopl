@@ -1,36 +1,60 @@
 "use client";
 
 /**
- * /ontology — the desktop /home ONTOLOGY face inside the landing demo's window,
- * on fake in-memory data. Mounted by `src/app/ontology/page.tsx`.
+ * /ontology — the desktop /home Ontology face (the PRODUCT's `HomeOntologyPanels`) inside the
+ * landing demo's window, over the in-memory staging server. Mounted by `src/app/ontology/page.tsx`.
  */
 
 import { useEffect, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HomeOntologyPanels } from "@/features/ontology/components/home-ontology-panels";
+import { OntologyBoardSkeleton } from "@/features/ontology/components/ontology-skeleton";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
 import {
   STAGING_HOME_SEGMENT,
   STAGING_HOME_WORKSPACE_ID,
   STAGING_USER_ID,
 } from "@/features/ui-staging/staging-stubs";
-import { HomePane } from "./home/home-panes";
-import { OntologyBoardSkeleton } from "./ontology/components/ontology-skeleton";
+import { DEMO_HOME_CHANNELS } from "./data/demo-ontology-data";
 import { StagingScenarioPanel } from "./staging-scenario-panel";
-import {
-  StagingOntologyProvider,
-  useStagingOntologyStore,
-} from "./store/staging-ontology-store";
+import { createStagingServer, type StagingScenario } from "./store/staging-server";
 
 /**
- * ⚠ CLIENT-ONLY PANE: the desktop never server-renders, and its "last opened"
- * memory reads `localStorage` during render, so a server pass would hydrate
- * against a different selection. The server paints the board's own skeleton.
+ * Installs the staging server as `window.dopl` (the SPA bridge) for this mount and restores what
+ * was there on unmount. Client-only: the desktop never server-renders, and the face's last-opened
+ * memory reads `localStorage` during render.
  */
-function Pane() {
-  const { scenario } = useStagingOntologyStore();
-  const [mounted, setMounted] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot mount flag
-  useEffect(() => setMounted(true), []);
-  if (!mounted) {
+function useStagingBridge(scenario: StagingScenario): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const host = window as { dopl?: unknown };
+    const previous = host.dopl;
+    host.dopl = {
+      ...createStagingServer(scenario),
+      getAuthState: async () => ({ signedIn: true, userId: STAGING_USER_ID }),
+      openExternal: async (url: string) => {
+        window.open(url, "_blank", "noopener");
+        return { ok: true };
+      },
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot: children wait for the bridge
+    setReady(true);
+    return () => {
+      host.dopl = previous;
+    };
+  }, [scenario]);
+  return ready;
+}
+
+function Pane({ scenario }: { scenario: StagingScenario }) {
+  const ready = useStagingBridge(scenario);
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+      })
+  );
+  if (!ready || scenario === "board-loading") {
     return (
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <OntologyBoardSkeleton />
@@ -38,23 +62,26 @@ function Pane() {
     );
   }
   return (
-    <HomePane
-      identity={{
-        workspace: scenario === "not-onboarded" ? null : { id: STAGING_HOME_WORKSPACE_ID },
-        segment: STAGING_HOME_SEGMENT,
-        userId: STAGING_USER_ID,
-      }}
-    />
+    <QueryClientProvider client={client}>
+      <HomeOntologyPanels
+        homeWorkspaceId={scenario === "not-onboarded" ? null : STAGING_HOME_WORKSPACE_ID}
+        homeWorkspaceSegment={STAGING_HOME_SEGMENT}
+        currentUserId={STAGING_USER_ID}
+        homeChannels={DEMO_HOME_CHANNELS}
+      />
+    </QueryClientProvider>
   );
 }
 
 export function StagingOntologyPage() {
+  const [scenario, setScenario] = useState<StagingScenario>("board");
   return (
-    <StagingOntologyProvider>
+    <>
       <StagingFrame tab="ontology" recordClassName="uis-white-pane">
-        <Pane />
+        {/* A scenario is a fresh server and a fresh cache. */}
+        <Pane key={scenario} scenario={scenario} />
       </StagingFrame>
-      <StagingScenarioPanel />
-    </StagingOntologyProvider>
+      <StagingScenarioPanel scenario={scenario} onChange={setScenario} />
+    </>
   );
 }

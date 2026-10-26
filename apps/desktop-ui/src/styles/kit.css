@@ -385,36 +385,6 @@
   background-attachment: local;
 }
 
-/* While-dragging lift — applied by a graph drag layer to the node under
-   the pointer. */
-
-/* Drag-to-connect handle on a graph node edge. Scales on hover and while a
-   connect-drag is live (`data-active`). Feature toggles visibility with
-   opacity utilities. */
-/* Inked centre dot marks the drag-FROM side vs the hollow input socket. */
-
-/* Card floating inside a flat inset lane. Shell (radius, border WIDTH, bg,
-   layout) stays in the component; this sets border COLOR + shadow.
-   Deliberately flatter than `.bento` — on an inset lane a deep ambient shadow
-   reads as dirt in the gutter. (It was flatter than `.graph-node` too, until
-   that recipe was deleted as dead on 2026-10-12.) */
-.kanban-card {
-  border-color: var(--border-default);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition:
-    box-shadow 0.12s ease-out,
-    border-color 0.12s ease-out;
-}
-.kanban-card:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-}
-.kanban-card[data-selected="true"] {
-  border-color: var(--border-highlight);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.12),
-    0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
 /* The one dropdown surface; only `src/shared/ui/popover-menu.tsx` composes it. Hand copy of
    `marketing.css › .lp-nav-menu-*` + `lpMenuIn`/`lpMenuOut` (page-scoped there): edit both. */
 .menu-card {

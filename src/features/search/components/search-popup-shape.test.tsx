@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The search popup's shape: which kinds are one line, what the right-hand slot
- * says, and the per-section scroll.
+ * The search popup's shape: which kinds are one line, what leads a row, what the
+ * right-hand slot says, the highlight, and the per-section scroll.
  *
  * Its own file (INVARIANTS §1, `eslint.config.mjs › max-lines`): this changes when
  * the ROW ANATOMY does, `search-popup.test.tsx` when the card's BEHAVIOUR does.
@@ -10,7 +10,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import type {
   SearchItem,
@@ -137,9 +137,7 @@ describe("the row shape", () => {
     render(<Host fetcher={fetcher} {...extra} />);
     type("q4");
     await card();
-    // `findAll` — the word is the channel's name and the thread's parent, so it
-    // is legitimately on two rows.
-    await screen.findAllByText("q4-outbound");
+    await waitFor(() => expect(row("ch-desc")).not.toBeNull());
   }
 
   it("🔒 a CHANNEL is ONE LINE — the name once, then its description in muted italic", async () => {
@@ -172,10 +170,8 @@ describe("the row shape", () => {
   it("a THREAD is one line too, with its parent channel in the italic slot", async () => {
     await open();
     const el = row("th-1");
-    const parent = screen.getByText("q4-outbound", {
-      selector: "[data-search-row='th-1'] span",
-    });
-    expect(parent.className).toContain("italic");
+    const parent = el.querySelector(".italic");
+    expect(parent?.textContent).toBe("q4-outbound");
     expect(el.textContent).toContain("Pricing page rewrite");
   });
 
@@ -189,13 +185,63 @@ describe("the row shape", () => {
     expect(stack?.textContent).toContain("Desktop Orchestrator Protocol");
   });
 
-  it("🔒 the container is a CHIP on account scope, and is absent in the host's own container", async () => {
+  it("🔒 the container is named on account scope, and is absent in the host's own container", async () => {
     await open();
     expect(screen.getAllByText("Original").length).toBeGreaterThan(0);
 
     cleanup();
     await open({ scope: "container", containerId: "ws-1" });
     expect(screen.queryByText("Original")).toBeNull();
+  });
+
+  it("marks the typed word in the title, as the server marks a snippet", async () => {
+    await open();
+    expect(row("ch-desc").querySelector("mark")?.textContent).toBe("q4");
+    expect(row("kb-1").querySelector("mark")).toBeNull();
+  });
+
+  it("puts the Enter hint on the active row only", async () => {
+    await open();
+    expect(row("ch-desc").getAttribute("data-active")).toBe("true");
+    expect(row("ch-desc").querySelector("svg.lucide-corner-down-left")).not.toBeNull();
+    expect(row("ch-bare").querySelector("svg.lucide-corner-down-left")).toBeNull();
+  });
+});
+
+describe("what leads a row", () => {
+  const PEOPLE: SearchResponse = {
+    q: "pr",
+    scope: "container",
+    tookMs: 1,
+    groups: [
+      { kind: "channels", total: 1, items: [BARE_CHANNEL] },
+      {
+        kind: "agentIdentities",
+        total: 1,
+        items: [{ id: "id-1", kind: "agentIdentities", title: "Release Captain", containerId: "ws-1" }],
+      },
+      {
+        kind: "members",
+        total: 1,
+        items: [{ id: "mem-1", kind: "members", title: "Priya Shah", containerId: "ws-1" }],
+      },
+    ],
+  };
+
+  it("a face for identities and members, a glyph tile for everything else", async () => {
+    const { fetcher } = stubFetcher(PEOPLE);
+    render(<Host fetcher={fetcher} scope="container" containerId="ws-1" />);
+    type("pr");
+    await card();
+    const lead = async (id: string) =>
+      (await waitFor(() => {
+        const el = document.querySelector(`[data-search-row="${id}"]`);
+        if (!el) throw new Error(id);
+        return el;
+      })).firstElementChild;
+    expect((await lead("ch-bare"))?.className).toContain("mark-tile");
+    expect((await lead("id-1"))?.hasAttribute("data-identity-face")).toBe(true);
+    expect((await lead("mem-1"))?.hasAttribute("data-identity-face")).toBe(true);
   });
 });
 
@@ -208,7 +254,7 @@ describe("the sections scroll one at a time", () => {
     render(<Host fetcher={fetcher} />);
     type("orch");
     await card();
-    await screen.findAllByText("q4-outbound");
+    await waitFor(() => expect(document.querySelectorAll("[data-search-section]").length).toBe(3));
 
     const lists = document.querySelectorAll("[data-search-section]");
     expect(lists.length).toBe(3);

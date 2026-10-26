@@ -10,11 +10,13 @@
 .pane {
   background: var(--home-card);
 }
-/* The Channels face swaps the two: a white record pane on the warm panel. */
+/* The Channels face swaps the two: a white record pane on the warm panel. The Ontology face keeps
+   the white panel and whitens the pane behind the board too. */
 .page[data-face="channels"] {
   background: var(--home-card);
 }
-.page[data-face="channels"] .pane {
+.page[data-face="channels"] .pane,
+.page[data-face="ontology"] .pane {
   background: var(--bg-overlay);
 }
 

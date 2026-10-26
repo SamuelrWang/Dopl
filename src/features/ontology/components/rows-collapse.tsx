@@ -5,27 +5,26 @@ import { ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * The Rows display's fold: the repo's height-slide recipe
- * (`kanban-column-header.tsx` details: grid rows 0fr ↔ 1fr over an
- * `overflow-hidden` child), plus an opacity fade. Children stay mounted so they
- * slide out rather than vanish; `inert` takes the folded content off the tab
- * order and the a11y tree, which `overflow: hidden` alone does not.
- *
- * No first-paint animation: the folded state comes from storage synchronously
- * (`use-rows-collapsed.ts`), and a CSS transition never runs on a node's initial
- * values, so a reload paints closed lanes closed.
+ * The board's fold: grid rows 0fr ↔ 1fr over an `overflow-hidden` child, plus a fade. Children stay
+ * mounted so they slide rather than vanish; `inert` takes folded content off the tab order and the
+ * a11y tree, which `overflow: hidden` alone does not. A transition never runs on a node's initial
+ * values, so state restored from storage paints without animating.
  */
 export function RowsCollapse({
+  id,
   open,
   className,
   children,
 }: {
+  /** For the toggle's `aria-controls`. */
+  id?: string;
   open: boolean;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <div
+      id={id}
       inert={!open}
       className={cn(
         "grid w-full transition-[grid-template-rows,opacity] duration-[220ms] ease-out motion-reduce:transition-none",

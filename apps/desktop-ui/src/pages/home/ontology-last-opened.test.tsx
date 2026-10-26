@@ -14,7 +14,7 @@ import {
   resetOntologyRoutes,
 } from "./ontology-test-harness";
 
-/** Same scaffolding as `ontology-panels.test.tsx`; split out for `max-lines`. */
+/** Same scaffolding as `home-ontology-panels.test.tsx`; split out for `max-lines`. */
 const apiRequest = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/channels/components/channel-surface-standalone", () => ({
