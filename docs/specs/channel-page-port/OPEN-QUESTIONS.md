@@ -145,3 +145,6 @@ Workers append a `## <slice>` section per question: the question, what was chose
 11. **List order** is `updated_at` descending, unfiltered or by `?status=`; any grouping is the UI's.
 12. **Local live redteam** needed the rename worker's ES256 service-role JWT (CLI 2.75); 8 files, 111
     tests green including the new `channels/server/rls-redteam-tasks.test.ts`.
+- Applied `channel_tasks` (history 20261026111318, md5 9fa479ac472602ecc05360e47ab5a1e2) and `channel_sessions_runtime` (20261026111323, md5 ed33512e1bb161bb8ba3e9c40ab33bc9) to production; both match their files.
+- ⚠ History now holds TWO rows named `channel_tasks`: 20260727150000 (the original thread table, now `channel_threads`) and 20261026111318 (the new tasks feature). Locally the files are `20260727150000_channel_tasks.sql` and `20261121190000_channel_tasks.sql`. Anything that joins history on NAME must also match the md5. Left as is (applied files are never renamed).
+- `src/shared/supabase/types.ts` was merged in place by workers; regenerate from production (`--linked`) now that all three migrations are live.
