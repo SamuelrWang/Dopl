@@ -10,8 +10,6 @@ import { CHIP_TEXT, VALUE_CHIP } from "./ontology-bits";
 /** Fields the quick view lists before "+N more". */
 const HOVER_FIELDS = 6;
 
-const noop = () => {};
-
 /** Cursor-following quick view: a white card portalled at cursor + 14px, clamped to the viewport,
  *  `pointer-events-none`. */
 export function ObjectHoverCard({
@@ -48,7 +46,6 @@ export function ObjectHoverCard({
         <FieldList
           object={object}
           graph={graph}
-          onSelect={noop}
           limit={HOVER_FIELDS}
           className="border-t border-border-subtle"
         />

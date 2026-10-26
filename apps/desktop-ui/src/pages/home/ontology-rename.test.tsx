@@ -17,7 +17,7 @@ import {
 /**
  * THE BOARD HEADER'S **GEAR MENU AND ITS RENAME**, on /home — its own file for
  * the 500-line cap
- * (`ontology-panels.test.tsx` is the rest of this face, and the twin assertions
+ * (`home-ontology-panels.test.tsx` is the rest of this face, and the twin assertions
  * on `/[ws]/ontology` live in `pages/ontology/index.test.tsx`).
  *
  * ⚠ THE CHANNEL SURFACE IS STUBBED — `vi.mock` is hoisted per file and its

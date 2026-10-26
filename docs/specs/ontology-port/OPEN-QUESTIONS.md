@@ -28,8 +28,10 @@ Each: the question, what was chosen, where.
 5. **Both Descriptions are quiet** (no rule at rest, secondary ink), as staging has it; the 36px
    `form-dialog.module.css › .inputAction` face lost its last callers and was deleted.
 6. **Rows display: the selected type header** used to wear `data-selected` (it was a
-   `KanbanColumnHeader`); the staging group header (`ontology-rows-group-header.tsx`) has no
-   selected face. Kept staging's. Opening the type's settings still works through its `⋯`.
+   `KanbanColumnHeader`); the group header (`ontology-rows-group-header.tsx`) is a line, not a
+   card, and the kit has no selected face for a line, so none was invented. Opening the type's
+   settings still works through its `⋯`. Its read-only Default fields fold was restored in review
+   (`object-type-actions.tsx › TypeDefaultFields`, shared with the canvas lane header).
 7. **"+ Object" on a pending ontology** is `CreateButton disabled` (staging) instead of
    `pendingRow`'s inert dim. Same effect (no click lands), different face while pending.
 8. **The type actions' click-swallowing wrapper** (`object-type-actions.tsx`) wore
@@ -43,10 +45,10 @@ Each: the question, what was chosen, where.
 
 ## Left alone
 
-10. **Marketing `/playground` ontology pane** (`src/features/playground/components/panes/ontology-pane.tsx`)
-    is a public hand clone of the OLD board and the last wearer of `.kanban-card`. Not restyled
-    (public marketing surface, not a product face). Ruling wanted: delete it, or mount the product
-    board there; `.kanban-card` goes with it.
+10. **RESOLVED (Samuel: "Let's delete that … Delete the code for it, for the handmade board.").**
+    The marketing `/playground` ontology pane and its data file are deleted, the Ontology entry is
+    gone from the playground shell's nav (it opens on Knowledge), and `.kanban-card` is deleted
+    from both kit copies with the orphaned graph-node tombstone comments beside it.
 11. **Scenarios the real host cannot reach** were dropped from the "States" panel: "Board load
     error" (a failed snapshot is the host's `PageError`, i.e. "Load error") and "Ontology no longer
     here" (needs an edited board plus an outside delete). "Board skeleton" mounts

@@ -9,13 +9,13 @@ import type { GraphAction, GraphState } from "../graph-state";
 import { convertValue, fieldKey } from "../field-kinds";
 import type { OntologyObject, TemplateField } from "../types";
 import { AttrValueEditor, type AttrRowValue } from "./attribute-value-editor";
-import { InlineUnderlineField } from "./board-header-bits";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import { FieldDescription, withDescription } from "./field-description";
 import { FieldMenu } from "./field-menu";
 import {
   PANEL_GRID,
   PANEL_ROW,
-  PANEL_ROWS,
+  SECTION_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -92,7 +92,7 @@ export function AttributesEditor({
 
   return (
     <PanelSection label="Attributes">
-      <div className={PANEL_ROWS}>
+      <div className={SECTION_ROWS}>
         {object.attributes.map((attr, i) => {
           const source = templateFieldOf(object, graph, attr.key);
           const upsert = (row: AttrRowValue) =>

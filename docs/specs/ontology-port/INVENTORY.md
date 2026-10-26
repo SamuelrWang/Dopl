@@ -15,7 +15,7 @@ commits `4445dc42c` + `0e838e379`) into the product. Method: `docs/specs/channel
 | Revisions UI | `src/features/revisions/components/{changelog-list,revision-diff}.tsx`, `client/hooks.ts` | `ontology-changelog.tsx`, `object-history.tsx` (and the knowledge/skills changelogs) |
 | Shared kit | `src/shared/ui/*` (`white-card`/`select-card`, `WHITE_PILL`, `CreateButton`, `SelectMenu` `pill`/`bare`, `BARE_TRIGGER_FACE`, `StatusPill`, `EmptyState`, `NAKED_ICON_BUTTON`, `PILL_BUTTON`, `InlineUnderlineField` `quiet`, `form-dialog.module.css › .inputSecondary`) | everything |
 | Staging (spec) | `src/features/ontology-staging/**` (copies + stand-ins), `ui-staging/staging.css › .uis-onto-pane` | `src/app/ontology/page.tsx`, `/playground/ontology` alias |
-| Marketing /playground mirror | `src/features/playground/components/panes/ontology-pane.tsx` (hand clone of the OLD board, `.kanban-card`) | `/playground` (public) |
+| Marketing /playground mirror | `playground/components/panes/ontology-pane.tsx`, a hand clone of the OLD board (DELETED in this port by Samuel's ruling) | `/playground` (public) |
 
 Blast radius of a product edit: the /home Ontology face, the workspace ontology route, and (after
 step 3) the staging playground. The landing hero demo mounts no ontology component (`grep -rn
@@ -84,8 +84,8 @@ staging stand-ins never enter the product.
 
 ## 4. Dead code after the port
 
-- `.kanban-card` kit class (`globals.css`, `kit.css`): last product users are the board, lane
-  header and Rows record. The marketing `/playground` pane still wears it (§5).
+- `.kanban-card` kit class (`globals.css`, `kit.css`): last users were the board, lane header,
+  Rows record and the marketing `/playground` pane. Deleted with the pane.
 - `panel-section.tsx`'s re-exports of `PANEL_WELL` / `PANEL_ROWS` from `shared/ui/panel-well.ts`
   (the Agents tab keeps the well itself).
 - `ontology-bits.tsx › CHIP` re-export (`shared/ui/wells.ts › CHIP` stays if anything else reads it).
@@ -107,4 +107,4 @@ staging stand-ins never enter the product.
 | `ontology-staging/home/{ontology-panels,ontology-share,home-panes}.tsx` vs the desktop hosts (data-only diffs) | the host moves DOWN to `src/features/ontology/components/{home-ontology-panels,ontology-share}.tsx` and both trees mount it (INVARIANTS §1 "A /home face that two trees render is declared in `src/`"); the SPA derivation (`useHomeChannels`) stays in the SPA and is passed in |
 | `ontology-staging/home/page-states.tsx`, `knowledge-panel-cards.tsx › EmptyLine` copies | `PageError` moves to `src/shared/ui/page-error.tsx` (the SPA's `page-states.tsx` re-exports it), `EmptyLine` into `src/shared/ui/empty-state.tsx` |
 | staging stand-in hooks (`use-ontology`, `use-ontologies`, `use-ontology-shares`, `use-workspace-resources`, revisions hooks, billing hooks, `use-home-channels`) | replaced by one fake server behind the SPA bridge's `apiRequest` seam (`shared/lib/spa-bridge.ts`), which every product hook already calls through |
-| marketing `/playground` `ontology-pane.tsx` (hand clone of the old board) | out of scope (public marketing surface, not a product face); logged |
+| marketing `/playground` `ontology-pane.tsx` (hand clone of the old board) | deleted (Samuel's ruling, OPEN-QUESTIONS #10) |

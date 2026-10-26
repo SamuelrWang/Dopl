@@ -30,7 +30,7 @@ export function PanelSection({
 }
 
 /** The rows' column: each row draws its own leading hairline, kept off the first. */
-export const PANEL_ROWS = "flex min-w-0 flex-col";
+export const SECTION_ROWS = "flex min-w-0 flex-col";
 
 /** One row's line: the hairline above it (none on the first) and the row's own height. */
 export const PANEL_ROW = "group min-w-0 border-t border-border-subtle py-1 first:border-t-0";

@@ -364,7 +364,7 @@ describe("home page", () => {
    * their picker. Re-pointing a face is the header selector's job, one click away.
    * ⚠ BOTH BRANCHES OF THE OLD CONDITIONAL ARE ASSERTED — the face it already
    * moved from, and a face it did not — so a re-narrowing fails here. The
-   * ONTOLOGY face's own case is next door (`ontology-panels.test.tsx`), where that
+   * ONTOLOGY face's own case is next door (`home-ontology-panels.test.tsx`), where that
    * face's read table is wired.
    */
   it("picking a channel from OVERVIEW raises that channel's own face", async () => {

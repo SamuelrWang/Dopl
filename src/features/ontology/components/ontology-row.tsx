@@ -6,6 +6,7 @@ import { pendingRow } from "@/shared/ui/pending";
 import type { GraphState } from "../graph-state";
 import { FieldList } from "./field-list";
 import { TYPE_ICON_BUTTON } from "./object-type-actions";
+import { CHIP_MARK, CHIP_TEXT, VALUE_CHIP } from "./ontology-bits";
 import { RowsChevron, RowsCollapse } from "./rows-collapse";
 
 interface Props {
@@ -39,6 +40,8 @@ export function OntologyRow({
 }: Props) {
   const object = graph.objects[objectId];
   if (!object) return null;
+  const summaryId = `record-summary-${objectId}`;
+  const fieldsId = `record-fields-${objectId}`;
 
   return (
     <div
@@ -61,7 +64,7 @@ export function OntologyRow({
             {object.name}
           </span>
           {object.subtitle && (
-            <RowsCollapse open={open}>
+            <RowsCollapse id={summaryId} open={open}>
               <span className="mt-0.5 line-clamp-2 w-full text-lead text-text-secondary">
                 {object.subtitle}
               </span>
@@ -73,6 +76,7 @@ export function OntologyRow({
             type="button"
             onClick={onToggleOpen}
             aria-expanded={open}
+            aria-controls={object.subtitle ? `${summaryId} ${fieldsId}` : fieldsId}
             aria-label={`${open ? "Collapse" : "Expand"} ${object.name || "object"}`}
             title={open ? "Collapse" : "Expand"}
             className={cn(TYPE_ICON_BUTTON, "mt-2 mr-2")}
@@ -82,7 +86,7 @@ export function OntologyRow({
         )}
       </div>
 
-      <RowsCollapse open={open}>
+      <RowsCollapse id={fieldsId} open={open}>
         <FieldList
           object={object}
           graph={graph}
@@ -93,13 +97,9 @@ export function OntologyRow({
           <div className="mx-3.5 flex flex-wrap items-center gap-1.5 border-t border-dashed border-border-default py-2.25">
             <span className="flex-none text-caption text-text-muted">Actions</span>
             {object.methods.map((m) => (
-              <span
-                key={m.name}
-                className="inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-overlay px-2 py-0.5 text-caption font-medium text-text-secondary"
-                title={m.description || undefined}
-              >
-                <Zap size={10} aria-hidden className="flex-none text-text-muted" />
-                {m.name}
+              <span key={m.name} className={VALUE_CHIP} title={m.description || undefined}>
+                <Zap size={11} aria-hidden className={CHIP_MARK} />
+                <span className={CHIP_TEXT}>{m.name}</span>
               </span>
             ))}
           </div>

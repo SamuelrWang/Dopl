@@ -40,7 +40,8 @@ function objectFieldRows(object: OntologyObject): FieldRow[] {
 /**
  * An object's fields as a key / value list on hairlines: key muted left, value ink right, each value
  * in its kind's face. `limit` keeps the first N and says how many more there are, except at the
- * canvas card's `compact` step, whose footer carries the counts.
+ * canvas card's `compact` step, whose footer carries the counts. Without `onSelect` the list is
+ * static (no ref button, no link anchor), for a surface nothing on it can be pressed in.
  */
 export function FieldList({
   object,
@@ -52,7 +53,7 @@ export function FieldList({
 }: {
   object: OntologyObject;
   graph: GraphState;
-  onSelect: (id: string) => void;
+  onSelect?: (id: string) => void;
   limit?: number;
   compact?: boolean;
   className?: string;
@@ -120,7 +121,7 @@ function FieldValue({
   value: AttributeValue;
   graph: GraphState;
   nameOf: (id: string) => string | null;
-  onSelect: (id: string) => void;
+  onSelect?: (id: string) => void;
 }) {
   switch (value.kind) {
     case "ref": {
@@ -131,21 +132,32 @@ function FieldValue({
       });
       return (
         <>
-          {targets.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={VALUE_CHIP}
-              title={t.name}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(t.id);
-              }}
-            >
-              <Sparkles size={11} aria-hidden className={CHIP_MARK} />
-              <span className={CHIP_TEXT}>{t.name}</span>
-            </button>
-          ))}
+          {targets.map((t) => {
+            const face = (
+              <>
+                <Sparkles size={11} aria-hidden className={CHIP_MARK} />
+                <span className={CHIP_TEXT}>{t.name}</span>
+              </>
+            );
+            return onSelect ? (
+              <button
+                key={t.id}
+                type="button"
+                className={VALUE_CHIP}
+                title={t.name}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(t.id);
+                }}
+              >
+                {face}
+              </button>
+            ) : (
+              <span key={t.id} className={VALUE_CHIP} title={t.name}>
+                {face}
+              </span>
+            );
+          })}
           <Unresolved count={value.value.length - targets.length} />
         </>
       );
@@ -178,15 +190,24 @@ function FieldValue({
       if (value.value === "") return <Empty />;
       // The caller owns the scheme check (`external-anchor.tsx`).
       if (!isHttpUrl(value.value)) return <span>{value.value}</span>;
-      return (
+      const face = (
+        <>
+          <ExternalLink size={11} aria-hidden className={CHIP_MARK} />
+          <span className={CHIP_TEXT}>{hostOf(value.value)}</span>
+        </>
+      );
+      return onSelect ? (
         <ExternalAnchor
           href={value.value}
           title={value.value}
           className={cn(VALUE_CHIP, "text-text-primary no-underline")}
         >
-          <ExternalLink size={11} aria-hidden className={CHIP_MARK} />
-          <span className={CHIP_TEXT}>{hostOf(value.value)}</span>
+          {face}
         </ExternalAnchor>
+      ) : (
+        <span className={VALUE_CHIP} title={value.value}>
+          {face}
+        </span>
       );
     }
     case "date":

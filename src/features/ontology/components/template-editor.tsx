@@ -9,13 +9,13 @@ import { fieldKey } from "../field-kinds";
 import type { GraphAction } from "../graph-state";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { OntologyObject, TemplateField } from "../types";
-import { InlineUnderlineField } from "./board-header-bits";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import { FieldDescription, withDescription } from "./field-description";
 import { FieldMenu } from "./field-menu";
 import {
   PANEL_GRID,
   PANEL_ROW,
-  PANEL_ROWS,
+  SECTION_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -102,7 +102,7 @@ export function TemplateEditor({
       label="Default fields"
       caption="New objects of this type start with these fields, ready to fill."
     >
-      <div className={PANEL_ROWS}>
+      <div className={SECTION_ROWS}>
         {column.template.map((field, i) => (
           <FieldRow
             key={`row-${i}`}

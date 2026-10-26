@@ -4,9 +4,13 @@ import { useState } from "react";
 import type { Dispatch } from "react";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
-import { ObjectTypeActions, TYPE_ICON_BUTTON } from "./object-type-actions";
+import {
+  ObjectTypeActions,
+  TYPE_ICON_BUTTON,
+  TypeDefaultFields,
+  typeLabel,
+} from "./object-type-actions";
 import { RowsChevron, RowsCollapse } from "./rows-collapse";
-import { KIND_LABELS } from "./template-editor";
 
 interface Props {
   column: OntologyObject;
@@ -39,7 +43,7 @@ export function KanbanColumnHeader({
   onCreateObject,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const label = column.name || "untitled object";
+  const label = typeLabel(column);
   const detailsId = `column-details-${column.id}`;
 
   return (
@@ -111,37 +115,9 @@ export function KanbanColumnHeader({
             className="w-full bg-transparent text-caption text-text-secondary placeholder:text-text-muted focus:outline-none"
             aria-label="Object description"
           />
-          <TemplatePreview column={column} />
+          <TypeDefaultFields column={column} />
         </div>
       </RowsCollapse>
     </div>
-  );
-}
-
-/** Read-only echo of the column's default fields — the editor is the panel's. */
-function TemplatePreview({ column }: { column: OntologyObject }) {
-  return (
-    <>
-      <p className="mt-3 text-caption font-medium text-text-muted">Default fields</p>
-      {column.template.length === 0 ? (
-        <p className="mt-1 text-caption text-text-muted">No template fields yet</p>
-      ) : (
-        <ul className="mt-1 flex flex-col">
-          {column.template.map((field, i) => (
-            <li
-              key={`${field.key}-${i}`}
-              className="flex min-h-7 items-center gap-2 border-t border-border-subtle first:border-t-0"
-            >
-              <span className="min-w-0 flex-1 truncate text-caption text-text-primary">
-                {field.label}
-              </span>
-              <span className="shrink-0 text-caption text-text-muted">
-                {KIND_LABELS[field.kind]}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
   );
 }

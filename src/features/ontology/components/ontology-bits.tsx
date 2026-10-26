@@ -1,8 +1,6 @@
 import { cn } from "@/shared/lib/utils";
 import { PILL_BUTTON, SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 
-export { FIELD_WELL } from "@/shared/ui/wells";
-
 /** A value that points at something (an object, a knowledge base, a skill, a link): the outlined
  *  pill, never wider than its cell. Its label goes in a `CHIP_TEXT` span so it truncates. */
 export const VALUE_CHIP = cn(PILL_BUTTON, "min-w-0 max-w-full gap-1 pl-1.5 pr-2");

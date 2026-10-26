@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { FormDialog, FormSection, PillChoice } from "@/shared/ui/form-dialog";
-import type { Channel } from "@/features/channels/types";
 import { deleteOntology } from "../client/api";
 import { LEVEL_OPTIONS, useOntologyShares } from "../hooks/use-ontology-shares";
 import type { OntologyLevel, OntologyShare } from "../types";
@@ -26,7 +25,11 @@ export interface ShareTarget {
   name: string;
 }
 
-export type ShareChannel = Pick<Channel, "id" | "name">;
+/** A home channel the ontology can be lent into: all the two dialogs read of one. */
+export interface ShareChannel {
+  id: string;
+  name: string;
+}
 
 export function OntologyShareDialog({
   workspaceId,

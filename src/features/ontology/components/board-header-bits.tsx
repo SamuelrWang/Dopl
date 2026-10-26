@@ -13,9 +13,6 @@ import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { SelectMenu, type SelectMenuOption } from "@/shared/ui/select-menu";
 import { useBoardDisplay, type BoardDisplay } from "../hooks/use-board-display";
 
-/** Re-exported for the ontology callers that import it from here. */
-export { InlineUnderlineField };
-
 /**
  * The ontology's description as quiet inline text: no rule at rest, the ink line while it is being
  * edited. Saves through `ONTOLOGY_UPDATE` at `purpose`, which is what agents read.

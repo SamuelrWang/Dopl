@@ -11,11 +11,54 @@ import {
   type GraphAction,
   type GraphState,
 } from "../graph-state";
+import { NEW_COLUMN_NAME } from "../optimistic-create";
 import type { OntologyObject } from "../types";
 import { deleteObjectMessage } from "./object-panel";
+import { KIND_LABELS } from "./template-editor";
 
 /** The type header's glyph buttons: the naked icon at the header line's tighter box. */
 export const TYPE_ICON_BUTTON = cn(NAKED_ICON_BUTTON, "p-1.5");
+
+/** A type's display name: the name the lane is born with while it has none. `trim`, not `||`: a
+ *  whitespace-only name is truthy. */
+export function typeLabel(column: OntologyObject): string {
+  return column.name.trim() === "" ? NEW_COLUMN_NAME : column.name;
+}
+
+/** Read-only echo of a type's default fields, shown by both type headers' folds; the editor is
+ *  the panel's. `titled={false}` where the fold's own toggle already names it. */
+export function TypeDefaultFields({
+  column,
+  titled = true,
+}: {
+  column: OntologyObject;
+  titled?: boolean;
+}) {
+  return (
+    <>
+      {titled && <p className="mt-3 text-caption font-medium text-text-muted">Default fields</p>}
+      {column.template.length === 0 ? (
+        <p className="mt-1 text-caption text-text-muted">No template fields yet</p>
+      ) : (
+        <ul className="mt-1 flex flex-col">
+          {column.template.map((field, i) => (
+            <li
+              key={`${field.key}-${i}`}
+              className="flex min-h-7 items-center gap-2 border-t border-border-subtle first:border-t-0"
+            >
+              <span className="min-w-0 flex-1 truncate text-caption text-text-primary">
+                {field.label}
+              </span>
+              <span className="shrink-0 text-caption text-text-muted">
+                {KIND_LABELS[field.kind]}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
 
 /**
  * An object type's trailing controls, shared by the canvas lane header and the rows group header:

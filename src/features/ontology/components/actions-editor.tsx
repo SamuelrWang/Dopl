@@ -6,10 +6,10 @@ import { cn } from "@/shared/lib/utils";
 import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import type { GraphAction } from "../graph-state";
 import type { ObjectMethod, OntologyObject } from "../types";
-import { InlineUnderlineField } from "./board-header-bits";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import {
   PANEL_ROW,
-  PANEL_ROWS,
+  SECTION_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -48,7 +48,7 @@ export function ActionsEditor({
 
   return (
     <PanelSection label="Actions">
-      <div className={PANEL_ROWS}>
+      <div className={SECTION_ROWS}>
         {object.methods.map((m, i) => (
           <ActionRow
             key={`row-${i}`}

@@ -7,12 +7,12 @@ import fieldStyles from "@/shared/ui/form-dialog.module.css";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { ObjectRelationship, OntologyObject } from "../types";
 import { ChipStrip, PICK_TRIGGER } from "./attribute-value-editor";
-import { InlineUnderlineField } from "./board-header-bits";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import { ObjectPickMenu } from "./object-pick-menu";
 import {
   PANEL_GRID,
   PANEL_ROW,
-  PANEL_ROWS,
+  SECTION_ROWS,
   PanelAddButton,
   PanelSection,
   ROW_REMOVE_BUTTON,
@@ -52,7 +52,7 @@ export function RelationshipsEditor({
 
   return (
     <PanelSection label="Relationships">
-      <div className={PANEL_ROWS}>
+      <div className={SECTION_ROWS}>
         {object.relationships.map((rel, i) => (
           <RelRow
             key={`row-${i}`}

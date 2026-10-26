@@ -13,7 +13,7 @@ import {
   type GraphAction,
   type GraphState,
 } from "../graph-state";
-import { InlineUnderlineField } from "./board-header-bits";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import { ActionsEditor } from "./actions-editor";
 import { ObjectHistory } from "./object-history";
 import { AttributesEditor } from "./attributes-editor";

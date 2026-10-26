@@ -117,6 +117,7 @@ function Column({
   onToggleCollapsed: (id: string) => void;
 }) {
   const laneOpen = !rows || !collapsed.has(col.id);
+  const recordsId = `type-records-${col.id}`;
   /** `+ Lead` once named; `+ Untitled object` while the type still is not. */
   const addLabel = col.name || NEW_COLUMN_NAME;
   const items = (
@@ -176,6 +177,7 @@ function Column({
           canEdit={canEdit}
           open={laneOpen}
           onToggleOpen={() => onToggleCollapsed(col.id)}
+          recordsId={recordsId}
           onSelect={onSelect}
           onCreateObject={onCreateObject}
         />
@@ -192,7 +194,7 @@ function Column({
       )}
       {rows ? (
         // `-mx-1 px-1`: the fold clips, so give the records' shadows and the selected bar room.
-        <RowsCollapse open={laneOpen} className="-mx-1 flex flex-col gap-2.5 px-1 pt-3 pb-1">
+        <RowsCollapse id={recordsId} open={laneOpen} className="-mx-1 flex flex-col gap-2.5 px-1 pt-3 pb-1">
           {items}
         </RowsCollapse>
       ) : (

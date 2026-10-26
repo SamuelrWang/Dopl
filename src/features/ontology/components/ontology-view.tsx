@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Network } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
-import { Network } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { CreateButton, PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import { pendingRow } from "@/shared/ui/pending";

@@ -7,7 +7,7 @@ import { BARE_TRIGGER_FACE } from "@/shared/ui/select-menu";
 import type { GraphState } from "../graph-state";
 import type { ObjectAttribute, OntologyObject } from "../types";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
-import { InlineUnderlineField } from "./board-header-bits";
+import { InlineUnderlineField } from "@/shared/ui/form-dialog";
 import {
   DateValueEditor,
   EnumValueEditor,
