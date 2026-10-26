@@ -353,13 +353,6 @@ button.lp-demo-top-profile {
   background: var(--home-card);
 }
 
-/* ── KNOWLEDGE: WHITE PANE ────────────────────────────────────────────
-   /playground/knowledge only (`recordClassName="uis-kb-pane"`): the frame's twin
-   of the desktop's `home.module.css › .page[data-face="knowledge"] .pane`. */
-.uis-window .lp-demo-record.uis-kb-pane {
-  background: var(--bg-overlay);
-}
-
 
 /* ── WHITE PANE (Samuel: ontology, then knowledge) ─────────────────────
    A face that passes `recordClassName="uis-white-pane"` (/playground/ontology,

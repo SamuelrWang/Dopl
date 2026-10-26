@@ -98,16 +98,6 @@ const EMPTY_BASE_STATS: Readonly<
 > = Object.freeze({});
 const EMPTY_STARRED: readonly string[] = Object.freeze([]);
 
-/** A section body with nothing in it. ⚠ Only ever rendered against a RESOLVED
- *  read — see the loading gates in `knowledge-panels.tsx`. */
-export function EmptyLine({ children }: { children: string }) {
-  return (
-    <p className="px-4 py-6 text-center text-caption text-text-muted">
-      {children}
-    </p>
-  );
-}
-
 /**
  * Star one base, optimistically, ON A GIVEN CACHE ENTRY.
  *

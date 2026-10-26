@@ -1,12 +1,13 @@
 /**
  * STAGING COPY of `apps/desktop-ui/src/pages/home/knowledge-panels.tsx` (the shipping desktop
  * /home → Knowledge face): verbatim over the product components, `#/` imports pointed at the
- * staging copies. Only change: `Channel` is `StagingChannel`.
+ * staging copies or, for `PageError`, at `@/shared/ui/page-error` (which the SPA's `page-states`
+ * re-exports). Only change: `Channel` is `StagingChannel`.
  */
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
-import { EmptyState } from "@/shared/ui/empty-state";
+import { EmptyLine, EmptyState } from "@/shared/ui/empty-state";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { EMPTY_GRANTS, fetchBaseList } from "@/features/knowledge/client/api";
 import {
@@ -19,13 +20,12 @@ import { EMPTY_WORKSPACE_ROLE } from "@/features/channels/types";
 // STAGING: the channel is the staged subset of `Channel` (`../data.ts › StagingChannel`).
 import type { StagingChannel as Channel } from "../data";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
-import { PageError } from "@/features/knowledge-staging/desktop/components/page-states";
+import { PageError } from "@/shared/ui/page-error";
 import { HomeKnowledgeBaseView } from "./knowledge-base-view";
 import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
 import { CreateButton } from "@/shared/ui/page-action-button";
 import {
   BaseCell,
-  EmptyLine,
   channelBasesQueryKey,
   useStarToggle,
 } from "./knowledge-panel-cards";

@@ -15,7 +15,7 @@ import type {
 import type { BaseTree } from "@/features/knowledge/components/knowledge-v2/types";
 import type { KbShelf, KnowledgeBase } from "@/features/knowledge/types";
 import type { Role } from "@/features/workspaces/types";
-import { PageError } from "@/features/knowledge-staging/desktop/components/page-states";
+import { PageError } from "@/shared/ui/page-error";
 import { KnowledgeBaseSkeleton } from "@/features/knowledge-staging/desktop/components/skeletons/knowledge-skeletons";
 
 /**

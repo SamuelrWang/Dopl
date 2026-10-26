@@ -29,12 +29,12 @@ does not serve answers 404 in the API's error envelope.
 | `home/knowledge-base-view.tsx` | `pages/home/knowledge-base-view.tsx` | Verbatim. |
 | `home/home.module.css` | `pages/home/home.module.css` | Trimmed to `.kbCards` / `.kbCell`. |
 | `home/home-skeleton.tsx` | `pages/home/home-skeleton.tsx` | Trimmed to `HomeKnowledgePanelsSkeleton`. |
-| `desktop/components/page-states.tsx` | `components/page-states.tsx` | Trimmed to `PageError`. |
 | `desktop/components/skeletons/knowledge-skeletons.tsx` | `components/skeletons/knowledge-skeletons.tsx` | Verbatim. |
 | `desktop/components/skeletons/section-panel-ghost.tsx` | `components/skeletons/section-panel-ghost.tsx` | Trimmed to `SectionPanelGhost`. |
 | `desktop/components/skeletons/skeleton-surface.tsx` | `components/skeletons/skeleton-surface.tsx` | Verbatim (a re-export). |
 
-`#/` imports in the copies point at the staging copies; every other import is the product's.
+`#/` imports in the copies point at the staging copies (`PageError` at `@/shared/ui/page-error`,
+which the SPA's `page-states.tsx` re-exports); every other import is the product's.
 
 ## Stand-ins (never ported)
 
@@ -52,5 +52,5 @@ What the shim does not stand in for: the product face's realtime subscription
 (`shared/auth/use-current-profile.ts`). Signed out, the profile is null, so the doc pane shows no
 peers, and the realtime channel carries nothing for the staged workspace ids.
 
-On this page the record pane is white (`ui-staging/staging.css › .uis-kb-pane`), the twin of the
-desktop's `home.module.css › .page[data-face="knowledge"] .pane`.
+On this page the record pane is white (`ui-staging/staging.css › .uis-white-pane`, shared with the
+ontology face), the twin of the desktop's `home.module.css › .page[data-face="knowledge"] .pane`.
