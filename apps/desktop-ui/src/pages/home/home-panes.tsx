@@ -6,9 +6,11 @@ import { PendingLinkCard } from "./link-out-panel";
 import { HomeKnowledgePanels } from "./knowledge-panels";
 import { HomeIdentityPanels } from "./identity-panels";
 import { HomeOntologyPanels } from "./ontology-panels";
-import { HomeOverviewPanels } from "./overview-panels";
+import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import type { ActivityJump } from "./use-activity-jump";
 import type { HomeRow } from "./home-rows";
+import { openHomeSettings } from "./home-settings-control";
+import { useHomeChannels } from "./use-home-channels";
 import {
   IDENTITIES_PANE,
   EMPTY_PANE,
@@ -56,15 +58,20 @@ export function HomePane({
   jump,
   onChannelDeleted,
 }: HomePaneProps) {
+  const homeChannels = useHomeChannels();
   /** The row a pane token names, read out of the token, never the page's selection. */
   const rowFor = (id: string) =>
     rows.find((candidate) => candidate.id === id) ?? null;
 
   if (shown === OVERVIEW_PANE) {
-    // The caller's `kind='home'` container, so the credit bar reads their PERSONAL wallet
+    // The caller's `kind='home'` container, so the credit figures read their PERSONAL wallet
     // (`credits-service.ts › resolveBillingTarget`). Null until onboarded.
     return (
-      <HomeOverviewPanels homeWorkspaceId={identity.workspace?.id ?? null} />
+      <HomeOverview
+        homeWorkspaceId={identity.workspace?.id ?? null}
+        homeChannels={homeChannels}
+        onOpenSettings={openHomeSettings}
+      />
     );
   }
   if (shown === ONTOLOGY_PANE) {

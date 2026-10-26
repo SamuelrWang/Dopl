@@ -47,19 +47,20 @@ describe("no concave surfaces", () => {
     "home-test-harness.tsx",
   ]);
 
-  // The one sanctioned concave surface: the credit bar clones the billing pane's `UsageMeter`.
-  // The exception is the (file, recipe) pair; the file is still swept for everything else.
-  const HOME_CONCAVE_SANCTIONED: ReadonlyMap<string, string> = new Map([
-    ["overview-sections.tsx", "UsageMeter"],
-  ]);
-
   const HOME_FILES = readdirSync(HOME_DIR)
     .filter((name) => name.endsWith(".tsx") && !name.endsWith(".test.tsx"))
     .filter((name) => !HOME_NOT_SURFACES.has(name))
     .sort()
     .map((name) => path.join(HOME_DIR, name));
 
-  const FILES = [...UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir))), ...HOME_FILES];
+  // /home faces declared in `src/` (the Overview) are swept with the SPA's.
+  const HOME_SRC_FILES = sources(path.join(REPO, "src", "features", "home", "components"));
+
+  const FILES = [
+    ...UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir))),
+    ...HOME_FILES,
+    ...HOME_SRC_FILES,
+  ];
 
   it("finds source files to check (a silent empty sweep would pass forever)", () => {
     expect(FILES.length).toBeGreaterThan(5);
@@ -79,22 +80,10 @@ describe("no concave surfaces", () => {
 
   it.each(FILES)("%s wears no pressed-in recipe", (file) => {
     const code = readCode(file);
-    const sanctioned = HOME_CONCAVE_SANCTIONED.get(path.basename(file));
     for (const forbidden of FORBIDDEN) {
-      if (forbidden === sanctioned) continue;
       expect(code, `${file} must not use ${forbidden}`).not.toContain(forbidden);
     }
   });
-
-  // The carve-out must go when the credit bar stops using the meter, or it is just a hole.
-  it.each([...HOME_CONCAVE_SANCTIONED])(
-    "the sanctioned concave surface %s really does use %s",
-    (name, recipe) => {
-      const file = path.join(HOME_DIR, name);
-      expect(existsSync(file)).toBe(true);
-      expect(readCode(file)).toContain(recipe);
-    }
-  );
 
   // A repo-wide census, not a ban: the web keeps the concave recipe, the desktop may not take it
   // back. The lists may only shrink, and each entry says why it stays (`shared/ui/section-box.tsx`

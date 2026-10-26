@@ -11,7 +11,7 @@ const SOURCE = "api/home/token-spend";
 
 /**
  * ⚠ Fixed 31-day window, no `range` param: the face has no switcher
- * (`overview-panels.tsx`), and 31 matches `ThreadActivityStrip`'s window.
+ * (`home/components/overview/overview-tokens.tsx`), and 31 matches `ThreadActivityStrip`'s window.
  */
 const WINDOW_DAYS = 31;
 

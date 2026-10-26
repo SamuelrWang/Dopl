@@ -84,7 +84,8 @@ describe("the Overview's white panels rest on `.bento`'s own shadow", () => {
    */
   it("leaves no `data-overview-face` stamp on the face or its skeleton", () => {
     for (const file of [
-      "apps/desktop-ui/src/pages/home/overview-panels.tsx",
+      "src/features/home/components/overview/overview-card.tsx",
+      "src/features/home/components/overview/overview-skeleton.tsx",
       "apps/desktop-ui/src/pages/home/home-skeleton.tsx",
     ]) {
       expect(read(file)).not.toContain("data-overview-face>");
