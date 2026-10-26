@@ -3,11 +3,12 @@
 import { useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { SECTION_TITLE } from "@/shared/ui/section-title";
 import { SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 
 /**
- * One section of the object panel: a muted caption title over hairline rows that sit directly on
- * the panel's white card. The title is an `h3`, so each section is reachable by role.
+ * One section of the object panel: the shared section title over hairline rows that sit directly
+ * on the panel's white card. The title is an `h3`, so each section is reachable by role.
  */
 export function PanelSection({
   label,
@@ -21,7 +22,7 @@ export function PanelSection({
 }) {
   return (
     <section className="flex min-w-0 flex-col">
-      <h3 className="pb-1 text-caption font-medium text-text-muted">{label}</h3>
+      <h3 className={cn(SECTION_TITLE, "pb-1")}>{label}</h3>
       {caption && <p className="pb-1 text-caption text-text-muted">{caption}</p>}
       {children}
     </section>

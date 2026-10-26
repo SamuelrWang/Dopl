@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The object panel's face: one white card; the type as a quiet eyebrow beside naked delete and
- * close; name and description edited in place; each section a muted caption title over hairline
- * rows on the card, keyed rows on the label / value grid. Asserted against the imported constants,
+ * close; name and description edited in place; each section the shared section title over
+ * hairline rows on the card, keyed rows on the label / value grid. Asserted against the imported constants,
  * so a local copy of a recipe fails. Both the workspace ontology page and /home mount it.
  *
  * jsdom loads no stylesheet, so the CSS-module half is a class read (`line` / `input…`).
@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
+import { SECTION_TITLE } from "@/shared/ui/section-title";
 import type { GraphState } from "../graph-state";
 import type { Ontology, OntologyObject } from "../types";
 import { ObjectPanel } from "./object-panel";
@@ -131,12 +132,11 @@ describe("the card and its header", () => {
 });
 
 describe("each section is a caption title over hairline rows", () => {
-  it("titles the section in muted caption ink, with no count and no frame", () => {
+  it("titles the section in the shared section title, with no count and no frame", () => {
     renderPanel();
     for (const label of SECTIONS) {
       const heading = screen.getByRole("heading", { name: label });
-      expect(heading.className).toContain("text-caption");
-      expect(heading.className).toContain("text-text-muted");
+      for (const c of SECTION_TITLE.split(" ")) expect(heading.classList).toContain(c);
       expect(heading.textContent).toBe(label);
       expect(sectionOf(label).className).not.toMatch(/\bborder|shadow|bg-|rounded/);
     }
