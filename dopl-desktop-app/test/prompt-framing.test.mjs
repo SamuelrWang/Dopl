@@ -416,9 +416,8 @@ test("no built line of the turn carries an em dash (§H-13 house voice, every bl
 });
 
 // ── THREAD REPLIES USE `thread=` (FIX S1) ────────────────────────────────────────
-// dopl_channel's post op takes `thread` (`threadId` is storage, `thread_*` are message KINDS). `task=`
-// is the tasks op's argument, which no built turn teaches, so a `task=`/`task "` in one is a reply
-// threaded by the wrong name (F-081).
+// The post op takes `thread` (`threadId` is storage, `thread_*` are KINDS); `task=` is the tasks op's
+// argument, which no built turn teaches, so one in a turn is a reply threaded by the wrong name (F-081).
 
 test("no built turn teaches a `task` ARGUMENT: thread replies use `thread=` (kinds are still allowed)", () => {
   for (const side of ["responder", "requester"]) {
