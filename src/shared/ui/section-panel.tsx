@@ -28,6 +28,9 @@ import { SECTION_HEADING_TEXT } from "./section-heading";
  *
  * ⚠ AN EMPTY SECTION KEEPS ITS HEADER. A panel that vanished when empty makes
  * "you have none" and "there are none to have" the same picture.
+ *
+ * `flat` is the one other face: no well at all, the header flush with the content and the heading
+ * on the kit's `.title-chip`, for a section standing on a white pane (/home Identities).
  */
 /**
  * THE GROUND — a gray WELL, the frame model's last step (Samuel, 2026-08-30:

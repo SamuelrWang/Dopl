@@ -15,6 +15,11 @@ export interface SegmentedOption<K extends string = string> {
   hint?: string;
 }
 
+/** The tab's and its panel's ids for a row given `panelIdPrefix`. */
+export function segmentedIds(prefix: string, key: string): { tab: string; panel: string } {
+  return { tab: `${prefix}-tab-${key}`, panel: `${prefix}-panel-${key}` };
+}
+
 /**
  * The segmented-tabs primitive — compose it for any scope/filter tab row, never hand-roll the
  * pill recipe. The active option is always `.raised-tab`. Forms:
@@ -39,6 +44,7 @@ export function SegmentedControl<K extends string>({
   orientation = "horizontal",
   className,
   ariaLabel,
+  panelIdPrefix,
 }: {
   options: ReadonlyArray<SegmentedOption<K>>;
   value: K;
@@ -58,6 +64,9 @@ export function SegmentedControl<K extends string>({
   /** Accessible name for the `role="tablist"`; needed wherever a visible word outside the row
    *  labels it, since that text is not attached to the tablist. */
   ariaLabel?: string;
+  /** When the row switches panels: each tab gets `id` + `aria-controls` from this prefix
+   *  ({@link segmentedIds}), and the host gives its panel the matching `role="tabpanel"`. */
+  panelIdPrefix?: string;
 }) {
   const tracked = variant === "track";
   const underlined = variant === "underline";
@@ -99,6 +108,12 @@ export function SegmentedControl<K extends string>({
           type="button"
           role="tab"
           aria-selected={value === key}
+          {...(panelIdPrefix
+            ? {
+                id: segmentedIds(panelIdPrefix, key).tab,
+                "aria-controls": segmentedIds(panelIdPrefix, key).panel,
+              }
+            : {})}
           disabled={disabled}
           onClick={() => value !== key && onChange(key)}
           className={cn(
