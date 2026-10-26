@@ -192,7 +192,8 @@ export function useStagingChannels(onNewChannel?: (channelId: string) => void) {
         const t = threadOf(f.channel.id, nextId("stg-th-"), title || "New thread", CURRENT_USER_ID, 0);
         return {
           ...f,
-          threads: [...f.threads, t],
+          // Newest first, as the server lists them.
+          threads: [t, ...f.threads],
           messages: [...f.messages, post(f, body || title, { threadId: t.id })],
         };
       }),

@@ -4,8 +4,9 @@
  * demo's own step-gated selectors (`banner-demo/demo-transcript.ts › messagesAt` etc.). Nothing
  * is retyped, so a reworded demo line shows up here on the next reload.
  *
- * The one addition: a short 1:1 lane for Cleanup Planner (the demo only scripts Teardown Order
- * Fix's), so opening either of the viewer's agents shows a conversation.
+ * The additions: the channel's older threads ahead of the script (`staging-history.ts`), and a
+ * short 1:1 lane for Cleanup Planner (the demo only scripts Teardown Order Fix's), so opening
+ * either of the viewer's agents shows a conversation.
  */
 
 import {
@@ -27,7 +28,8 @@ import {
   mentionsAt,
 } from "@/features/marketing/components/banner-demo/demo-info-data";
 import { stepIndex } from "@/features/marketing/components/banner-demo/demo-steps";
-import { dmOf, inboundOf } from "./staging-builders";
+import { dmOf, inboundOf, minsAgo, postsFor, settleThreads } from "./staging-builders";
+import { techDebtHistory } from "./staging-history";
 import { decisionMessage } from "./decision-fixture";
 import type { ChannelFixture } from "./staging-fixture-types";
 
@@ -35,12 +37,16 @@ import type { ChannelFixture } from "./staging-fixture-types";
 export const FINAL_STEP = stepIndex("hold");
 
 export function techDebtFixture(): ChannelFixture {
-  const scripted = messagesAt(FINAL_STEP);
+  const past = techDebtHistory(DEMO_CHANNEL.id, postsFor(DEMO_CHANNEL.id, "debt"));
+  // The script numbers from 1; it moves up past the older threads it follows.
+  const lift = past.messages.length;
+  const scripted = messagesAt(FINAL_STEP).map((m) => ({ ...m, seq: m.seq + lift }));
   // STAGING (ask 6b): one hardcoded "needs your decision" post at the bottom, so the
   // restyled card is visible on /playground/channels. See `./decision-fixture.ts`.
   const messages = [
+    ...past.messages,
     ...scripted,
-    decisionMessage(scripted[scripted.length - 1]?.seq ?? 0),
+    decisionMessage(scripted[scripted.length - 1]?.seq ?? lift),
   ];
   const split = messages.find((m) => m.body.startsWith("@debt-triage you have"));
   return {
@@ -51,14 +57,14 @@ export function techDebtFixture(): ChannelFixture {
     mentionsPill: 0,
     // The demo passes `favorited` to the pane.
     favorited: true,
-    channel: DEMO_CHANNEL,
+    channel: { ...DEMO_CHANNEL, createdAt: minsAgo(60 * 24 * 60) },
     members: MEMBERS,
     messages,
-    threads: threadsAt(FINAL_STEP),
+    threads: settleThreads([...threadsAt(FINAL_STEP), ...past.threads], messages),
     sessions: [...MY_SESSIONS],
     peers: [PEER_TRIAGE, PEER_SCOUT, PEER_NOTICE, PEER_WAKE],
     serverSessions: [...SERVER_SESSIONS],
-    mentions: mentionsAt(FINAL_STEP),
+    mentions: mentionsAt(FINAL_STEP).map((m) => ({ ...m, seq: m.seq + lift })),
     narration: {
       [AGENT_IDS.teardown]: narrationAt(FINAL_STEP),
       [AGENT_IDS.planner]: [

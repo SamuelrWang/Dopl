@@ -428,3 +428,18 @@ Workers append a `## <slice>` section per question: the question, what was chose
    `docs/REFACTOR-FINDINGS.md` (`use-writes-shared.ts`, `page-action-button.tsx`). Not touched:
    comments naming `channels/lib/agent-colors.ts` in `dopl-desktop-app/main/*` and
    `scripts/check-css-token-drift.ts`'s header line naming the deleted landing rules.
+
+## Staging threads + artifacts (feat/staging-threads-artifacts)
+
+1. **The brief asked for artifacts "across the kinds the product supports (documents, code, links,
+   images)". The product has no artifact kinds.** An artifact is a named, folded run of channel
+   messages (`channels/types-artifacts.ts › ChannelArtifact`: name, summary, author, span), and the
+   Artifacts face draws only name, summary, span and the opened run. Chose: seed 6 to 7 folded runs
+   per channel whose member posts carry the variety (markdown, inline code, numbers), authored by
+   people and agents from each channel's story. Where: `channels-staging/data/staging-artifacts.ts`.
+2. **The Threads tab card shows title, parties (opener and target) and last activity only**; it has
+   no opener preview, agent faces or activity squares. Data only was in scope, so nothing was added
+   to the product card; the older threads' agents show as post authors inside each thread.
+3. **#tech-debt's scripted posts are renumbered** (`seq` lifted by the count of older posts), so its
+   older threads can sit below the script in seq order. Mentions are lifted with them. Where:
+   `channels-staging/data/tech-debt-fixture.ts`.

@@ -120,8 +120,15 @@ const DEVICE = {
   glasses: { kind: "glasses", device_id: "stg-dev-g2", label: "Even G2", platform: "even_g2" },
 } as const;
 
+export type Post = (
+  author: string | null,
+  body: string,
+  minutesAgo: number,
+  opts?: PostOpts
+) => ChannelMessage;
+
 /** A per-channel post factory: ids `<prefix>-m<n>`, seq ascending. */
-export function postsFor(channelId: string, prefix: string) {
+export function postsFor(channelId: string, prefix: string): Post {
   let seq = 0;
   const perAgent = new Map<string, number>();
   return (
@@ -152,6 +159,21 @@ export function postsFor(channelId: string, prefix: string) {
       authorAvatarUrl: null,
     };
   };
+}
+
+/** Each thread dated by its newest post, newest first: the order the server lists them in. */
+export function settleThreads(
+  threads: readonly ChannelThread[],
+  messages: readonly ChannelMessage[]
+): ChannelThread[] {
+  const newest = new Map<string, string>();
+  for (const m of messages) {
+    const id = m.metadata?.threadId;
+    if (typeof id === "string" && m.createdAt > (newest.get(id) ?? "")) newest.set(id, m.createdAt);
+  }
+  return threads
+    .map((t) => ({ ...t, lastActivityAt: newest.get(t.id) ?? t.lastActivityAt }))
+    .sort((a, b) => (b.lastActivityAt ?? "").localeCompare(a.lastActivityAt ?? ""));
 }
 
 function agentName(agentId: string): string {

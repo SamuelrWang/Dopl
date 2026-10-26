@@ -47,9 +47,7 @@ function useWindowStore(): WindowStore {
 
 /** STAGING ONLY — the channels store + seeded QueryClient a staged window body reads. */
 export function StagingChannelWindowsProvider({ children }: { children: ReactNode }) {
-  const [qc] = useState(() =>
-    stagingQueryClient(initialRows().flatMap((r) => (r.kind === "channel" ? [r.channel.id] : [])))
-  );
+  const [qc] = useState(() => stagingQueryClient(initialRows()));
   const store = useStagingChannels((id) => seedChannel(qc, id));
   return (
     <QueryClientProvider client={qc}>
