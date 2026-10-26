@@ -136,25 +136,6 @@ describe("collapse-wells — `variant` and `showEmpty`", () => {
     expect(within(shell).getByText("lima")).toBeTruthy();
   });
 
-  it("draws `card` as the heading over ONE white card of rows, and an empty well with no card", () => {
-    render(
-      <WellsColumn
-        wells={SET}
-        items={[ITEMS[1], { key: "l2", well: "live", node: <p>mike</p> }]}
-        storageKey="dopl.test.card"
-        variant="card"
-        showEmpty
-      />
-    );
-    const live = screen.getByRole("heading", { name: "Live" }).closest("section")!;
-    expect(live.className).toBe(WELL_FACES.card.box);
-    const card = within(live).getByText("lima").parentElement!;
-    expect(card.className).toBe(WELL_FACES.card.card);
-    expect(within(card).getByText("mike")).toBeTruthy();
-    const pinned = screen.getByRole("heading", { name: "Pinned" }).closest("section")!;
-    expect(pinned.querySelector(".white-card")).toBeNull();
-  });
-
   it("hides an empty well by DEFAULT — the Agents rule, unchanged", () => {
     renderSet([ITEMS[1]]);
     expect(screen.queryAllByRole("heading").map((h) => h.textContent)).toEqual([

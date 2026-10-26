@@ -129,8 +129,8 @@ export interface RecencyWellItem {
  * ⚠ **`now` IS A PARAMETER WITH A DEFAULT**, so a test can state an age instead of
  * arranging for one; the render passes nothing.
  * ⚠ **THE FACE IS THE CALLER'S** (`collapse-wells.tsx › WellVariant`): the Agents tab keeps the
- * gray `well`; the Threads and Artifacts lists pass `card`, the /home channel rail's heading over
- * one white card of rows.
+ * gray `well`; the Threads and Artifacts lists pass `heading`, the /home channel rail's heading
+ * over one card per item.
  *
  * 🔒 ⚠ **EVERY WELL DRAWS, EMPTY OR NOT, SINCE 2026-09-17 (Samuel, verbatim):**
  * *"in the Threads and Agents view, i want to have the gray boxes kept there even

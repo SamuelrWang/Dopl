@@ -16,7 +16,7 @@ import { ROW_CARD_ROW } from "./bits";
 import { MessageMarkdown, TextOnlyLinks } from "./message-markdown";
 import { MessageMarkdownInline } from "./message-markdown-inline";
 import type { BodyContext } from "./message-markdown-context";
-import type { TaskFaceOf } from "./task-faces";
+import type { TaskFace, TaskFaceOf } from "./task-faces";
 import { labelFor, personFor, threadIdOf, type AuthorIndex } from "./view-model";
 import type { ChannelFoldedArtifact, ChannelMessage, TaskActor } from "../types";
 
@@ -28,31 +28,35 @@ export const ARTIFACT_MESSAGES_CLIPPED_NOTE = "Later messages are not shown";
 
 const AUTHOR_FACES = 4;
 
-type AuthorFace = IdentityStackFace & { name: string };
+interface Author {
+  key: string;
+  face: TaskFace;
+}
 
 /** A member's author: an agent as its owner's photo in its ring with its runtime badge, a person
  *  under the transcript's own label ("You" for the viewer). */
-function authorFace(message: ChannelMessage, index: AuthorIndex, faceOf: TaskFaceOf): AuthorFace {
+function authorOf(message: ChannelMessage, index: AuthorIndex, faceOf: TaskFaceOf): Author {
   const agentId = message.authorKind === "agent" ? authorAgentIdOf(message) : null;
   if (agentId && message.authorUserId) {
     const actor: TaskActor = { kind: "agent", userId: message.authorUserId, agentId };
-    return { key: actorKey(actor), ...faceOf(actor) };
+    return { key: actorKey(actor), face: faceOf(actor) };
   }
   return {
     key: message.authorUserId ? actorKey({ kind: "person", userId: message.authorUserId }) : message.id,
-    name: labelFor(message, index),
-    photo: personFor(message, index).avatarUrl,
+    face: { name: labelFor(message, index), photo: personFor(message, index).avatarUrl },
   };
 }
 
-/** Each author once, in the order they first spoke. */
-function uniqueFaces(faces: readonly AuthorFace[]): AuthorFace[] {
+/** Each author once, in the order they first spoke, as stack faces. */
+function stackFaces(authors: readonly Author[]): IdentityStackFace[] {
   const seen = new Set<string>();
-  return faces.filter((f) => {
-    if (seen.has(f.key)) return false;
-    seen.add(f.key);
-    return true;
-  });
+  const out: IdentityStackFace[] = [];
+  for (const { key, face } of authors) {
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, ...face });
+  }
+  return out;
 }
 
 function ArtifactMessage({
@@ -62,7 +66,7 @@ function ArtifactMessage({
   onJump,
 }: {
   message: ChannelMessage;
-  face: AuthorFace;
+  face: TaskFace;
   index: AuthorIndex;
   onJump?: () => void;
 }) {
@@ -136,8 +140,8 @@ export function ArtifactDetail({
     artifact.id,
     workspaceId
   );
-  const faces = messages.map((m) => authorFace(m, index, faceOf));
-  const authors = uniqueFaces(faces);
+  const authors = messages.map((m) => authorOf(m, index, faceOf));
+  const faces = stackFaces(authors);
 
   return (
     <article aria-label={artifact.name} className="flex min-w-0 max-w-2xl flex-col gap-5">
@@ -168,10 +172,10 @@ export function ArtifactDetail({
         )}
         <div className="flex min-w-0 items-center gap-2 border-t border-border-default pt-2.5 text-caption text-text-muted">
           <IdentityStack
-            faces={authors}
+            faces={faces}
             size={22}
             max={AUTHOR_FACES}
-            label={authors.length > 0 ? `By ${authors.map((a) => a.name).join(", ")}` : undefined}
+            label={faces.length > 0 ? `By ${faces.map((f) => f.name).join(", ")}` : undefined}
           />
           <span className="min-w-0 truncate">{artifactSpanLabel(count, firstSeq, lastSeq)}</span>
           <span className="ml-auto flex-none">{formatRelativeTime(artifact.createdAt)}</span>
@@ -192,7 +196,7 @@ export function ArtifactDetail({
             <ArtifactMessage
               key={message.id}
               message={message}
-              face={faces[i]}
+              face={authors[i].face}
               index={index}
               onJump={
                 onJumpToMessage && (() => onJumpToMessage(threadIdOf(message), message.id))

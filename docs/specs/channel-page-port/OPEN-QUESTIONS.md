@@ -497,9 +497,9 @@ Workers append a `## <slice>` section per question: the question, what was chose
 1. **The Threads wells lost their gray box.** Samuel ruled the gray boxes onto the Threads tab on
    2026-09-13 and "same as the channel picker" on 2026-09-17; the picker has since moved to the
    plain uppercase heading, and the brief asked for that heading. Chosen: Threads and Artifacts
-   pass `RecencyWells variant="card"` (heading over one white card of hairline rows); the Agents
-   tab keeps the gray `well`. Open: should the Agents tab follow? Where: `collapse-wells.tsx ›
-   WELL_FACES.card`, `recency-wells.tsx › RecencyWells`.
+   pass the plain `heading` variant (one card per item since round 2, item 8); the Agents tab
+   keeps the gray `well`. Open: should the Agents tab follow? Where: `recency-wells.tsx ›
+   RecencyWells`.
 2. **The Threads ↔ Artifacts switch stays one button**, the white page pill beside New thread,
    labelled with where it goes. It was never a segmented control, and Samuel ruled the flip
    wording on 2026-09-16, so it was not turned into an underline pair. Where: `threads-tab.tsx`.
@@ -522,3 +522,10 @@ Workers append a `## <slice>` section per question: the question, what was chose
 7. **The artifact list's face is the folder** (`createdBy` / `createdByAgent`), not every author:
    the list payload carries no member authors. The opened artifact's meta line stacks every author
    from the members read.
+8. **Round 2 (Samuel: "each item should be a separate box").** Threads and artifacts are now one
+   `.white-card` each (`item-card.tsx › ItemCard`), title over one meta line with a 20px face stack,
+   actions centred right; the wells are the plain `heading` variant and the `card` well variant is
+   deleted. Tasks keeps its one-card list (`ROW_CARD`): it is still the Tasks design, and the Tasks
+   quick view's rows sit inside one pop-up card rather than being per-item cards, so neither moved.
+   An artifact card keeps its one-line summary between title and meta, so artifacts with a summary
+   are one line taller than threads and than artifacts without one.
