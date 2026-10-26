@@ -6998,3 +6998,26 @@ meanings: *"threads be threads, and don't just call channel work items tasks"*, 
   the later-redefinition check is per column.
 - **The floor moved** to 1.43.0 (`desktop-floor.ts › DEFAULT_MIN_VERSION`): a desktop below it calls
   `/tasks` routes and reads `task_id` off realtime rows that no longer exist.
+
+## 2026-10-26 — Channel tasks: the backend
+
+**Why.** The staging channel page grew a Tasks tab (an agent recognises work in the conversation,
+assigns it, and people and agents close it together); PLAN.md R5–R10 ruled the server shape.
+
+**Decisions worth keeping.**
+- **An actor is a user id plus a nullable agent id, with no kind column.** An agent acts under its
+  operator's account everywhere else in the channel model, so `{person, userId}` and `{agent, userId,
+  agentId}` fall out of two columns and there is no third field to disagree with them. The agent half
+  is never caller-posed: the caller's comes from the server-stamped session key, an assignee's
+  operator is read off that agent's session in the channel.
+- **One published table for four.** Children carry no policy and no `authenticated` privilege; a
+  trigger bumps the parent's `updated_at` on every child write, so the parent's UPDATE frame is the
+  doorbell for all of them (R6). That keeps one SELECT policy to keep right, on the arms
+  `channel_messages` already proves.
+- **An assignment wakes an agent with an ordinary addressed post (R7), through `postMessage`.** The
+  wake machinery, the `to=` carve and the insert funnel are all reused rather than restated, which is
+  also why an agent credential may not assign a peer's agent: the post could not address it.
+  `metadata.taskId` is reserved so a caller cannot tie its own post to a task.
+- **`src/shared/supabase/types.ts` was merged, not regenerated.** It is generated from production,
+  which has neither migration yet; the four tables and the one column were lifted from a local
+  `gen types` after `db reset`. Regenerate with `--linked` once both are applied.

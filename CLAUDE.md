@@ -142,7 +142,9 @@ is a TYPECHECK and not one of the twelve:
    type: the SDK's copy and its committed `dist/` re-export it now, so neither can
    disagree. Every field on this set is `optional` AND `nullable` by design (an
    older desktop must not 400 its whole push), so drift here fails no build and no
-   test: the field just never arrives.
+   test: the field just never arrives. ⚠ **A SECOND FAMILY SINCE 2026-10-26, same script
+   and step (the count does not move)**: `PEER_FIELDS` (`runtime`) across the zod schema,
+   both `ChannelSessionState` declarations and its migration column.
 7. `npx tsx scripts/check-message-kind-drift.ts` — the `channel_messages` **kind** and
    **author_kind** SETS across `@dopl/contracts › channels.ts` and the column `CHECK`. The zod half
    needs no step: `closedEnum` over an `Exclude`d type makes that pair a compile error, and the SDK

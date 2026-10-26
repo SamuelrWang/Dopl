@@ -74,3 +74,36 @@ Workers append a `## <slice>` section per question: the question, what was chose
 - Applied `rename_task_to_thread` to production 2026-10-26 (history version 20261026103134, statements md5 c63d4e13fd0e302d23eca782d7c8b763 = file). Pre-check: every task-named prod object was covered by the migration.
 - NOT applied, not part of this port: `20261121170000_workspace_billing_plan_max.sql` is absent from production history and prod `workspace_billing_plan_check` has no `max`. Left for you.
 - `drop_channels_archived_at` has no recorded prod row; its file only carries the drop as a comment, prod still has `channels.archived_at`. Left as is.
+
+## Tasks backend (S1–S3), branch `feat/tasks-backend`
+
+1. **An agent credential assigning a PEER's agent.** The R7 wake goes through `postMessage`, whose `to=`
+   carve lets an agent address only its own operator's agents, so the post would 400. Chose: refuse the
+   assignment (`ChannelForbiddenError`, `server/service-tasks-assign.ts › assertAssignable`). A person may
+   assign anyone's agent. Alternative if wanted: assign without the wake.
+2. **Which agents can be named as assignee or subtask owner.** Chose: an agent with a `channel_sessions`
+   row in this channel; its operator is read off that row (`service-tasks-shared.ts › resolveTaskActor`).
+   Unassign matches the agent id alone, so an ended agent can still be taken off.
+3. **The wake post.** Body `Task assigned to you: <title>`, main room even when the task is linked to a
+   thread, idempotency key `task-<taskId>-assign-<assigneeRowId>` (a re-assign after an unassign wakes
+   again). No post for a person, for an agent assigning itself, or for an existing assignment.
+4. **Subtask states do not move the task status.** Chose: none of that automation; status moves only by
+   `set_status`.
+5. **A guest assignee cannot resolve its own task** (R8: guests read and add notes only). Kept as ruled.
+6. **Publication ahead of its subscriber.** `channel_tasks` is published by the migration, so
+   `dopl-desktop-app/test/ui-sync-tables.test.mjs › nothing is published that no consumer binds` is red
+   on this branch until slice S5 adds it to `main/ui-sync-core.js › SYNC_TABLES` (and the UI slice adds it
+   to `channels/constants.ts › CHANNEL_TABLES` with a `live.ts` arm; `guest-realtime-rls.test.ts` then
+   checks its guest arm, which the migration already has). They must ship in one release (INVARIANTS §7).
+7. **`channel_sessions.runtime` has no column GRANT** — peer-visible through the DTO only, the `color`
+   precedent; PostgREST cannot read it. The desktop push that fills it is S5; the MCP render is S4.
+8. **Contracts now hold DTOs** (`packages/contracts/src/tasks.ts`), because both trees would otherwise
+   declare the same shapes. The index header says so.
+9. **The census** (`src/shared/contracts/canonical-sets.test.ts`) leaves out `TaskStatus`,
+   `SubtaskState`, `TaskActor` and `TaskLink` while `features/channels-staging` declares fakes of them.
+   Add them when staging retires.
+10. **`src/shared/supabase/types.ts`** was merged in place from a local `gen types` (production lacks both
+    migrations). Regenerate with `--linked` after the orchestrator applies them.
+11. **List order** is `updated_at` descending, unfiltered or by `?status=`; any grouping is the UI's.
+12. **Local live redteam** needed the rename worker's ES256 service-role JWT (CLI 2.75); 8 files, 111
+    tests green including the new `channels/server/rls-redteam-tasks.test.ts`.
