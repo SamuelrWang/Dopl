@@ -526,3 +526,38 @@ Workers append a `## <slice>` section per question: the question, what was chose
 ## Overview column heights (branch `ui/overview-column-heights`)
 
 1. **Fixed card heights, last card takes the rest; one column relaxes to content height.** Both columns are `--ove-cols-h` (900px) tall: Needs you 212 + Agents 336 + Activity (rest, 324) + 2 gaps of 14 = Credits 288 + Tokens 160 + Devices (rest, 424) + 2 gaps; without the Devices preview the columns are Credits + gap + Tokens (462) and Needs fills them; People/MCP tools are `--ove-pair-h` (332). Heights are estimates from the type scale (no browser per the worker rules) and may want a nudge once Samuel sees it. Where: `overview-staging/pages/home/overview/overview.css › .ove`.
+
+## Knowledge staging overhaul (branch `ui/knowledge-overhaul`)
+
+1. **"The overview little panel" read as the document's head.** Opening an entry showed a grey
+   "OVERVIEW" strip over an inset well holding the title and the agent description. It is now one
+   `.white-card` head: the title edited in place with the save state, presence and write-rule
+   labels on its row, the description under it on the kit's quiet underline. If Samuel meant
+   something else by "overview", say which.
+2. **The base's resting face lost its two grey wells.** The name and description moved out of
+   boxed fields into the head of the column (edited in place, same autosave); Details is a
+   label/value grid in one white card; Changelog is one white card of day-grouped hairline rows.
+3. **Tree selection is a fill, not ink.** A selected file is `--surface-raised-2` with a medium
+   label (the agent rail's `ROW_SELECTED_FACE`), hover the quieter raised-1. The /home channel
+   row's ink fill would shout in a tree; the 2026-09-29 ruling made hover and selected ONE gray,
+   and this separates them by a step.
+4. **New in the tree:** indent guides under open folders, a child count on each folder (hidden
+   while the row's actions show), Enter/Space on a focused row. The root create stays at the
+   bottom of the tree as two outlined pills ("New file", "New folder").
+5. **The settings popup became the profile popup's shape**: the wide card with the underline rail
+   (General, Sharing, Folders, Agents). Advanced (URL slug) folded into General behind "Edit URL
+   slug"; Channels sits under Sharing because it renders nothing in a standard workspace and a rail
+   entry must not open an empty pane; Folders is drawn only when the base has folders. All panes
+   stay mounted while the popup is open, so a switch keeps half-typed edits.
+6. **Choices became bare menus**: team access None/Read/Edit and channel sharing
+   None/Agent only/Visible are `SelectMenu variant="bare"` with one-line descriptions (they were
+   uppercase segmented radios). The None option reads "No access" / "Not shared".
+7. **Copy trimmed** in the popup to label + control (minimal-copy ruling): the agent-write and
+   folder-description explainer paragraphs became one meta line / one caption. The conflict
+   banner and the delete confirmations keep their wording.
+8. **The changelog redesign is knowledge-staging only.** `src/features/revisions` is shared with the
+   ontology, and `ontology-staging/revisions/` keeps its own verbatim copy; on port the one list
+   changes for both surfaces.
+9. **Pre-existing red, not this branch:** `src/features/ui-staging/staging-frame.test.tsx ›
+   opens every frame-level popup on any face` looks the profile popup's sections up as `button`s,
+   but the rail has been `role="tab"` since the profile popup restyle.

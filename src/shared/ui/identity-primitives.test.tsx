@@ -73,4 +73,9 @@ describe("Breadcrumb", () => {
     expect(screen.getByText("Fix the leak").closest("[aria-current]")?.getAttribute("aria-current")).toBe("page");
     expect(screen.queryByRole("button", { name: "Fix the leak" })).toBeNull();
   });
+
+  it("takes the caller's name for the trail", () => {
+    render(<Breadcrumb ariaLabel="Knowledge base breadcrumb" items={[{ key: "kb", label: "Docs" }]} />);
+    expect(screen.getByRole("navigation", { name: "Knowledge base breadcrumb" })).toBeTruthy();
+  });
 });

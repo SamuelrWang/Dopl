@@ -1,6 +1,6 @@
 "use client";
 
-/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/list/base-tree.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
+/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/list/base-tree.tsx` — redesigned ahead of its source (PORTING.md). */
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import type { BaseTree as BaseTreeData } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-trees";
@@ -19,9 +19,8 @@ interface Props {
 
 /**
  * Folder/file tree for one expanded base; binds the controller's per-base
- * mutation handlers. Rows read the v2 palette directly — the lightScope
- * wrapper only reaches the context menu + inline-rename input, which render
- * off semantic tokens.
+ * mutation handlers. The lightScope wrapper reaches the context menu and the
+ * inline-rename input, which render off semantic tokens.
  */
 export function BaseTree({
   base,

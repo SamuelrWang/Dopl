@@ -1,6 +1,6 @@
 "use client";
 
-/** STAGING COPY of `src/features/knowledge/components/knowledge-search.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
+/** STAGING COPY of `src/features/knowledge/components/knowledge-search.tsx` — redesigned ahead of its source (PORTING.md). */
 /**
  * Debounced server-side full-text search over the workspace's knowledge bases.
  * Clicking a hit calls `onSelectEntry`; the parent decides what that means.
@@ -11,7 +11,6 @@
 
 import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/shared/lib/utils";
 import { SearchField } from "@/shared/ui/search-field";
 import {
   searchKnowledge,
@@ -101,19 +100,17 @@ export function KnowledgeSearch({
       />
 
       {open && query.trim().length > 0 ? (
-        <div
-          className="absolute z-30 left-0 right-0 mt-1 rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-2xl shadow-black/60 max-h-80 overflow-y-auto"
-        >
+        <div className="white-card absolute right-0 left-0 z-30 mt-1.5 max-h-80 overflow-y-auto p-1">
           {loading && hits === null ? (
-            <p className="px-3 py-2 text-small text-text-secondary">
+            <p className="px-2.5 py-2 text-caption text-text-muted">
               Searching…
             </p>
           ) : null}
           {error ? (
-            <p className="px-3 py-2 text-small text-danger">{error}</p>
+            <p className="px-2.5 py-2 text-caption text-danger">{error}</p>
           ) : null}
           {hits && hits.length === 0 ? (
-            <p className="px-3 py-2 text-small text-text-secondary">
+            <p className="px-2.5 py-2 text-caption text-text-muted">
               No results.
             </p>
           ) : null}
@@ -125,14 +122,12 @@ export function KnowledgeSearch({
                 onSelectEntry(hit.entryId, hit.knowledgeBaseId);
                 setOpen(false);
               }}
-              className={cn(
-                "w-full text-left px-3 py-2 hover:bg-surface-raised-2 cursor-pointer border-b border-border-subtle last:border-b-0"
-              )}
+              className="w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-menu-item-hover-bg"
             >
               <p className="text-small font-medium text-text-primary truncate">
                 {hit.title}
               </p>
-              <p className="mt-0.5 text-label text-text-secondary leading-relaxed line-clamp-2">
+              <p className="mt-0.5 line-clamp-2 text-caption leading-relaxed text-text-muted">
                 {renderSnippet(hit.snippet)}
               </p>
             </button>

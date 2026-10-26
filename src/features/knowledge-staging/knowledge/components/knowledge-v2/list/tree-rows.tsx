@@ -1,30 +1,13 @@
 "use client";
 
-/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/list/tree-rows.tsx` — verbatim; imports point at staging copies (data layer = in-memory). */
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-} from "react";
-import {
-  FilePlus,
-  FileText,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  MoreHorizontal,
-} from "lucide-react";
+/** STAGING COPY of `src/features/knowledge/components/knowledge-v2/list/tree-rows.tsx` — redesigned ahead of its source (PORTING.md). */
+import { createContext, useContext, useMemo, useState, type MouseEvent } from "react";
+import { FilePlus, FileText, Folder, FolderOpen, FolderPlus, MoreHorizontal } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
-import {
-  OPEN_SCALE_ICON,
-  OpenScaleButton,
-} from "@/shared/ui/open-scale-button";
 import type { KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import { TreeContextMenu, type ContextMenuItem } from "../../tree-context-menu";
+import { AddRow, RowIconBtn, pressOnKey, useTreeCreate } from "./tree-row-bits";
 import styles from "../knowledge-v2.module.css";
 
 interface Props {
@@ -82,10 +65,14 @@ function indexByFolder(entries: KnowledgeEntry[]) {
   return map;
 }
 
-/** Row indent: 6px inside the row's inset fill (`.treeRow` margin) + 15px per level.
+const INDENT = 15;
+const ICON = 14;
+/** Row indent: 6px inside the row's inset fill (`.treeRow` margin) + one step per level.
  *  No disclosure chevron (Samuel, 2026-09-29): folder and file icons share the root x;
  *  a folder signals open/closed by Folder/FolderOpen alone. */
-const pad = (depth: number) => ({ paddingLeft: 6 + depth * 15 });
+const pad = (depth: number) => ({ paddingLeft: 6 + depth * INDENT });
+/** A folder's indent guide, under the centre of its icon: the row's 8px margin, its pad, half the icon. */
+const guideX = (depth: number) => ({ left: 8 + pad(depth).paddingLeft + ICON / 2 });
 
 /**
  * Folder/entry tree for one knowledge base. Right-click (or hover "⋯") opens
@@ -183,7 +170,11 @@ export function TreeRows({
           openMenu={openMenu}
         />
         {canEdit ? (
-          <AddRow onCreateFolder={onCreateFolder} onCreateEntry={onCreateEntry} />
+          <AddRow
+            onCreateFolder={onCreateFolder}
+            onCreateEntry={onCreateEntry}
+            beginStubEdit={inline.beginStubEdit}
+          />
         ) : childFolders.size === 0 && childEntries.size === 0 ? (
           <p className={styles.treeEmpty}>Empty knowledge base</p>
         ) : null}
@@ -229,9 +220,20 @@ function Children(props: ChildrenProps) {
     <>
       {folders.map((folder) => (
         <div key={folder.id}>
-          <FolderRow {...props} folder={folder} isOpen={expanded.has(folder.id)} />
+          <FolderRow
+            {...props}
+            folder={folder}
+            isOpen={expanded.has(folder.id)}
+            childCount={
+              (childFolders.get(folder.id)?.length ?? 0) +
+              (childEntries.get(folder.id)?.length ?? 0)
+            }
+          />
           {expanded.has(folder.id) ? (
-            <Children {...props} parentId={folder.id} depth={depth + 1} />
+            <div className={styles.treeGroup}>
+              <span aria-hidden="true" className={styles.treeGuide} style={guideX(depth)} />
+              <Children {...props} parentId={folder.id} depth={depth + 1} />
+            </div>
           ) : null}
         </div>
       ))}
@@ -253,49 +255,41 @@ function FolderRow({
   folder,
   depth,
   isOpen,
+  childCount,
   toggle,
   onCreateFolder,
   onCreateEntry,
   openMenu,
-}: ChildrenProps & { folder: KnowledgeFolder; isOpen: boolean }) {
+}: ChildrenProps & { folder: KnowledgeFolder; isOpen: boolean; childCount: number }) {
   const inline = useInline();
   const item: ContextMenuItem = { type: "folder", id: folder.id, label: folder.name };
   const isEditing = inline.editingId === folder.id;
-  const [busy, setBusy] = useState(false);
+  const { busy, create } = useTreeCreate({
+    parentId: folder.id,
+    onCreateFolder,
+    onCreateEntry,
+    beginStubEdit: inline.beginStubEdit,
+    beforeCreate: () => {
+      if (!isOpen) toggle(folder.id);
+    },
+  });
 
-  const create = async (kind: "entry" | "folder") => {
-    if (busy) return;
-    setBusy(true);
-    // reveal first: creating inside a collapsed folder would hide the child.
-    if (!isOpen) toggle(folder.id);
-    try {
-      if (kind === "folder") {
-        // stub-marked so Escape removes the empty placeholder.
-        const id = await onCreateFolder(folder.id, "Untitled folder");
-        inline.beginStubEdit(id);
-      } else {
-        await onCreateEntry(folder.id, "Untitled entry");
-      }
-    } catch {
-      // Parent toasts.
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  const onPress = isEditing ? undefined : () => toggle(folder.id);
   return (
     <div
       role="button"
       tabIndex={0}
-      className={cn(styles.treeRow, styles.treeRowGroup)}
+      aria-expanded={isOpen}
+      className={styles.treeRow}
       style={pad(depth)}
-      onClick={isEditing ? undefined : () => toggle(folder.id)}
+      onClick={onPress}
+      onKeyDown={pressOnKey(onPress)}
       onContextMenu={(e) => openMenu(e, item)}
     >
       {isOpen ? (
-        <FolderOpen size={14} className="leaf" />
+        <FolderOpen size={ICON} className={styles.treeIcon} />
       ) : (
-        <Folder size={14} className="leaf" />
+        <Folder size={ICON} className={styles.treeIcon} />
       )}
       {isEditing ? (
         <RowEditor folder={folder} item={item} />
@@ -303,21 +297,24 @@ function FolderRow({
         <span className={styles.treeLabel}>{folder.name}</span>
       )}
       {!isEditing ? (
-        <span className={styles.treeRowActions}>
-          {inline.canEdit ? (
-            <>
-              <RowIconBtn title="New entry" disabled={busy} onClick={() => create("entry")}>
-                <FilePlus size={13} />
-              </RowIconBtn>
-              <RowIconBtn title="New folder" disabled={busy} onClick={() => create("folder")}>
-                <FolderPlus size={13} />
-              </RowIconBtn>
-            </>
-          ) : null}
-          <RowIconBtn title="More" onClick={(e) => openMenu(e, item)}>
-            <MoreHorizontal size={13} />
-          </RowIconBtn>
-        </span>
+        <>
+          {childCount > 0 ? <span className={styles.treeCount}>{childCount}</span> : null}
+          <span className={styles.treeRowActions}>
+            {inline.canEdit ? (
+              <>
+                <RowIconBtn title="New entry" disabled={busy} onClick={() => create("entry")}>
+                  <FilePlus size={13} />
+                </RowIconBtn>
+                <RowIconBtn title="New folder" disabled={busy} onClick={() => create("folder")}>
+                  <FolderPlus size={13} />
+                </RowIconBtn>
+              </>
+            ) : null}
+            <RowIconBtn title="More" onClick={(e) => openMenu(e, item)}>
+              <MoreHorizontal size={13} />
+            </RowIconBtn>
+          </span>
+        </>
       ) : null}
     </div>
   );
@@ -340,20 +337,19 @@ function EntryRow({
   const item: ContextMenuItem = { type: "entry", id: entry.id, label: entry.title };
   const isEditing = inline.editingId === entry.id;
 
+  const onPress = isEditing ? undefined : onSelect;
   return (
     <div
       role="button"
       tabIndex={0}
-      className={cn(
-        styles.treeRow,
-        styles.treeRowGroup,
-        isSelected && styles.treeRowActive
-      )}
+      aria-current={isSelected ? "true" : undefined}
+      className={cn(styles.treeRow, isSelected && styles.treeRowActive)}
       style={pad(depth)}
-      onClick={isEditing ? undefined : onSelect}
+      onClick={onPress}
+      onKeyDown={pressOnKey(onPress)}
       onContextMenu={(e) => openMenu(e, item)}
     >
-      <FileText size={14} className="leaf" />
+      <FileText size={ICON} className={styles.treeIcon} />
       {isEditing ? (
         <RowEditor entry={entry} item={item} />
       ) : (
@@ -403,87 +399,5 @@ function RowEditor({
       }
       onExit={() => inline.exitEdit(item.id)}
     />
-  );
-}
-
-/**
- * Base-root create affordance: parentless folders/entries. Folder rows handle
- * their own children on hover.
- *
- * Ruling 2026-08-28: the create pills are the global
- * `shared/ui/open-scale-button.tsx › OpenScaleButton`, not a local recipe; only
- * the row's layout is local.
- */
-function AddRow({
-  onCreateFolder,
-  onCreateEntry,
-}: {
-  onCreateFolder: (parentId: string | null, name: string) => Promise<string>;
-  onCreateEntry: (folderId: string | null, title: string) => Promise<string>;
-}) {
-  const inline = useInline();
-  const [busy, setBusy] = useState(false);
-  const create = async (kind: "entry" | "folder") => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      if (kind === "folder") {
-        const id = await onCreateFolder(null, "Untitled folder");
-        inline.beginStubEdit(id);
-      } else {
-        await onCreateEntry(null, "Untitled entry");
-      }
-    } catch {
-      // Parent toasts.
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className={styles.addRow}>
-      <OpenScaleButton
-        className="disabled:opacity-60"
-        disabled={busy}
-        onClick={() => create("entry")}
-      >
-        <FilePlus size={OPEN_SCALE_ICON} aria-hidden="true" /> New file
-      </OpenScaleButton>
-      <OpenScaleButton
-        className="disabled:opacity-60"
-        disabled={busy}
-        onClick={() => create("folder")}
-      >
-        <FolderPlus size={OPEN_SCALE_ICON} aria-hidden="true" /> New folder
-      </OpenScaleButton>
-    </div>
-  );
-}
-
-/** Icon button kept out of the row's own button semantics: no nesting. */
-function RowIconBtn({
-  title,
-  disabled,
-  onClick,
-  children,
-}: {
-  title: string;
-  disabled?: boolean;
-  onClick: (e: MouseEvent) => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={title}
-      title={title}
-      disabled={disabled}
-      className={cn(styles.treeActionBtn, disabled && styles.treeActionDisabled)}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!disabled) onClick(e);
-      }}
-    >
-      {children}
-    </button>
   );
 }

@@ -15,15 +15,18 @@ export interface BreadcrumbItem {
 export function Breadcrumb({
   items,
   className,
+  ariaLabel = "Breadcrumb",
 }: {
   items: readonly BreadcrumbItem[];
   /** The type step, for a trail that heads a pane rather than sitting above a box. */
   className?: string;
+  /** Names the trail where a page holds more than one. */
+  ariaLabel?: string;
 }) {
   const last = items.length - 1;
   return (
     <nav
-      aria-label="Breadcrumb"
+      aria-label={ariaLabel}
       className={cn("flex min-w-0 items-center gap-1.5 text-caption text-text-muted", className)}
     >
       {items.map((item, i) => (

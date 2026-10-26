@@ -67,13 +67,11 @@
    stack, which is where 244px → 224px comes from. Change a rebind below and
    this number moves with it. */
 .kbCards {
-  --kv-panel: var(--panel-surface);
   --kv-border: var(--border-default);
   --kv-border-strong: var(--border-strong);
   --kv-text: var(--text-primary);
   --kv-text-2: var(--text-secondary);
   --kv-text-3: var(--text-muted);
-  --kv-accent: var(--text-primary);
   --kv-row-hover: var(--surface-raised-1);
 
   /* 🔒 ⚠ **THE TITLE REBINDS ARE DELETED (Samuel, 2026-09-01) AND THAT IS THE
