@@ -369,18 +369,21 @@ describe("the panel's edge matches /home's record pane", () => {
 describe("/home's panel and pane fills follow the face", () => {
   const css = code(read(HOME_CSS_MODULE));
 
-  it("paints a white panel over the warm pane on every face but Channels", () => {
+  it("paints a white panel over the warm pane by default", () => {
     expect(rule(css, "\n.page {")).toContain("background: var(--bg-overlay)");
     expect(rule(css, "\n.pane {")).toContain("background: var(--home-card)");
   });
 
-  it("swaps the two on Channels", () => {
+  it("swaps the two on Channels, and whitens the pane on Ontology", () => {
     expect(rule(css, '\n.page[data-face="channels"] {')).toContain(
       "background: var(--home-card)"
     );
-    expect(rule(css, '\n.page[data-face="channels"] .pane {')).toContain(
-      "background: var(--bg-overlay)"
-    );
+    for (const face of ["channels", "ontology"]) {
+      expect(rule(css, `\n.page[data-face="${face}"] .pane`)).toContain(
+        "background: var(--bg-overlay)"
+      );
+    }
+    expect(css).not.toContain('.page[data-face="ontology"] {');
     const frame = code(read(HOME_FRAME));
     expect(frame).toContain("data-face={face}");
     expect(frame).toContain("home.pane");

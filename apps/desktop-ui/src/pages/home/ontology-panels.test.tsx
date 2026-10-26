@@ -369,7 +369,7 @@ describe("the switcher", () => {
 
 /**
  * ⚠ MUTATION-VERIFIED — one revert, one failure: dropping `setSelectedId(ontology.id)`
- * from `ontology-panels.tsx › create` (the POST still lands and the ontology
+ * from `home-ontology-panels.tsx › create` (the POST still lands and the ontology
  * still exists, so every other assertion here passes while the operator is left
  * looking at the ontology they were already on).
  */

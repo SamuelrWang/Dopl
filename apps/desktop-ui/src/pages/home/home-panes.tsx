@@ -5,10 +5,11 @@ import { RelationshipRecord } from "./relationship-record";
 import { PendingLinkCard } from "./link-out-panel";
 import { HomeKnowledgePanels } from "./knowledge-panels";
 import { HomeIdentityPanels } from "./identity-panels";
-import { HomeOntologyPanels } from "./ontology-panels";
+import { HomeOntologyPanels } from "@/features/ontology/components/home-ontology-panels";
 import { HomeOverviewPanels } from "./overview-panels";
 import type { ActivityJump } from "./use-activity-jump";
 import type { HomeRow } from "./home-rows";
+import { useHomeChannels } from "./use-home-channels";
 import {
   IDENTITIES_PANE,
   EMPTY_PANE,
@@ -56,6 +57,7 @@ export function HomePane({
   jump,
   onChannelDeleted,
 }: HomePaneProps) {
+  const homeChannels = useHomeChannels();
   /** The row a pane token names, read out of the token, never the page's selection. */
   const rowFor = (id: string) =>
     rows.find((candidate) => candidate.id === id) ?? null;
@@ -75,6 +77,7 @@ export function HomePane({
         homeWorkspaceSegment={identity.segment}
         // Scopes the pane's last-opened memory to the reader (`last-opened.ts`).
         currentUserId={identity.userId}
+        homeChannels={homeChannels}
       />
     );
   }
