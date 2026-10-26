@@ -4,9 +4,10 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import {
   TOKEN_SPEND_WINDOW_DAYS,
   bucketByLocalDay,
+  localDayLabel,
   windowDays,
   type TokenSpendReport,
-} from "@/features/home/token-spend-days";
+} from "@/shared/lib/token-spend-days";
 import { Bars, OverviewCard } from "./overview-card";
 import type { OverviewRead } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
@@ -31,7 +32,10 @@ function TokenDays({ report }: { report: TokenSpendReport }) {
         </span>
       </div>
       <Bars
-        values={days.map((day) => byDay.get(day) ?? 0)}
+        bars={days.map((day) => {
+          const tokens = byDay.get(day) ?? 0;
+          return { key: day, value: tokens, label: `${localDayLabel(day)} · ${formatTokens(tokens)} tokens` };
+        })}
         label={`Tokens per day, last ${TOKEN_SPEND_WINDOW_DAYS} days`}
       />
       {report.truncated && (

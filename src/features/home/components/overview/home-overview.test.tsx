@@ -55,14 +55,14 @@ describe("/home Overview face", () => {
     expect(within(card("Credits")).queryByText("Get more credits")).toBeNull();
   });
 
-  it("puts a spent allowance in Needs you", () => {
-    const { onOpenSettings } = mount(
-      reads({ wallet: { loading: false, credits: { ...CREDITS, used: 500, remaining: 0 }, isPaid: false } })
-    );
+  it("puts a spent allowance in Needs you, with the offer and the paused note once", () => {
+    mount(reads({ wallet: { loading: false, credits: { ...CREDITS, used: 500, remaining: 0 }, isPaid: false } }));
     const needs = card("Needs you");
     expect(within(needs).getByText("Out of credits")).toBeTruthy();
-    fireEvent.click(within(needs).getByRole("button", { name: "Get more credits" }));
-    expect(onOpenSettings).toHaveBeenCalledWith("billing");
+    expect(within(needs).getByText(/^Resets /)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Get more credits" })).toHaveLength(1);
+    expect(within(card("Credits")).getByRole("button", { name: "Get more credits" })).toBeTruthy();
+    expect(screen.getAllByText(/Tool calls are paused/)).toHaveLength(1);
     expect(within(card("Summary")).getByText("Need you").nextSibling?.textContent).toContain("1");
   });
 

@@ -1,6 +1,6 @@
 /**
- * 🔒 THE WHITE PANELS ON THE OVERVIEW'S GRAY WEAR `.bento`'S OWN RESTING
- * ELEVATION — ONE STEP, NOT TWO (Samuel, 2026-09-17: *"on the overview page, we
+ * 🔒 THE OVERVIEW'S WHITE CARDS (`.white-card`, which reads the same token as `.bento`) WEAR THE
+ * ONE RESTING ELEVATION — ONE STEP, NOT TWO (Samuel, 2026-09-17: *"on the overview page, we
  * made it earlier where the white panels sitting on the gray background is more
  * elevated and has more shadow. I want to revert it to the old amount of
  * shadow."*).
@@ -43,15 +43,19 @@ const SPA_KIT = "apps/desktop-ui/src/styles/kit.css";
 const BENTO_SHADOW =
   "--shadow-bento: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.05);";
 
-describe("the Overview's white panels rest on `.bento`'s own shadow", () => {
+describe("the Overview's white cards rest on `--shadow-bento`", () => {
   it("declares the resting pair, byte for byte, in both token copies", () => {
     expect(read(WEB_KIT)).toContain(BENTO_SHADOW);
     expect(read(SPA_TOKENS)).toContain(BENTO_SHADOW);
   });
 
-  it("has `.bento` read that token and nothing else", () => {
+  it("has `.bento` and `.white-card` read that token and nothing else", () => {
     for (const file of [WEB_KIT, SPA_KIT]) {
-      expect(read(file)).toContain("box-shadow: var(--shadow-bento);");
+      for (const recipe of [".bento", ".white-card"]) {
+        expect(read(file)).toMatch(
+          new RegExp(`\\n\\${recipe} \\{[^}]*box-shadow: var\\(--shadow-bento\\);`)
+        );
+      }
     }
   });
 

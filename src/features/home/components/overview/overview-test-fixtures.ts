@@ -2,7 +2,7 @@ import { vi } from "vitest";
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
 import type { ConnectedDevice } from "@/features/devices/types";
 import type { HomeOverview, HomeOverviewSeries } from "@/features/home/overview-types";
-import type { TokenSpendReport } from "@/features/home/token-spend-days";
+import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 import type { HomeOverviewReads, OverviewRead } from "./use-home-overview-reads";
 
 export const OVERVIEW: HomeOverview = {
@@ -70,7 +70,14 @@ export const DEVICES: ConnectedDevice[] = [
 ];
 
 export function read<T>(data: T | undefined, more: Partial<OverviewRead<T>> = {}): OverviewRead<T> {
-  return { data, error: null, isPending: data === undefined, refetch: vi.fn(), ...more };
+  return {
+    data,
+    error: null,
+    isPending: data === undefined,
+    isPlaceholderData: false,
+    refetch: vi.fn(),
+    ...more,
+  };
 }
 
 export function spendToday(tokens: number[]): TokenSpendReport {

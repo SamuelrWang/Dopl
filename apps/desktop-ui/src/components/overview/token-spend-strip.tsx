@@ -6,7 +6,7 @@
  * (`session-state-push.js › liveForWire` drops ended rows). A spend figure that looks exact is one
  * somebody will reconcile against a bill, so the honesty line stays.
  *
- * The day arithmetic is `src/features/home/token-spend-days.ts`, shared with /home's Tokens card.
+ * The day arithmetic is `src/shared/lib/token-spend-days.ts`, shared with /home's Tokens card.
  */
 
 import { formatTokens } from "@/shared/lib/format-tokens";
@@ -15,7 +15,7 @@ import {
   bucketByLocalDay,
   windowDays,
   type TokenSpendReport,
-} from "@/features/home/token-spend-days";
+} from "@/shared/lib/token-spend-days";
 
 export function TokenSpendStrip({
   report,

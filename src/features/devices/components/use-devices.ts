@@ -29,13 +29,17 @@ const EMPTY_APPS: readonly AgentApp[] = [];
 const selectComputers = (body: ComputerDeviceList) => body.devices ?? EMPTY_COMPUTERS;
 const selectApps = (body: AgentAppList) => body.apps ?? EMPTY_APPS;
 
-/** Every device connected to the caller's agents; `null` until the computer read lands. */
-export function useConnectedDevices(): { devices: ConnectedDevice[] | null; failed: boolean } {
-  const computers = useApiQuery(COMPUTERS.path, {
-    select: selectComputers,
-    refetchInterval: PRESENCE_REFRESH_MS,
-  });
-  const glasses = useGlassesDevices({ refetchInterval: PRESENCE_REFRESH_MS });
+/**
+ * Every device connected to the caller's agents; `null` until the computer read lands. `live`
+ * (default) re-reads presence every half minute; a cold surface (the /home Overview) passes false.
+ */
+export function useConnectedDevices({ live = true }: { live?: boolean } = {}): {
+  devices: ConnectedDevice[] | null;
+  failed: boolean;
+} {
+  const refetchInterval = live ? PRESENCE_REFRESH_MS : undefined;
+  const computers = useApiQuery(COMPUTERS.path, { select: selectComputers, refetchInterval });
+  const glasses = useGlassesDevices({ refetchInterval });
   const devices = useMemo(
     () =>
       computers.data || computers.isError

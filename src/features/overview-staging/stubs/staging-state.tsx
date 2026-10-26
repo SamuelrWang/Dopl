@@ -12,7 +12,7 @@ export type StagingLoad = "ready" | "loading" | "error" | "empty";
 export interface StagingState {
   load: StagingLoad;
   plan: StagingPlan;
-  /** Bumped by "Try again" so a stubbed read re-runs its fake latency. */
+  /** Bumped on every Reads switch so a stubbed read re-runs its fake latency. */
   epoch: number;
 }
 

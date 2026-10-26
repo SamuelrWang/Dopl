@@ -4,7 +4,8 @@ import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { ThinMeter } from "@/shared/ui/usage-meter";
-import { CARD_INK_PILL, OverviewCard } from "./overview-card";
+import { formatShortDate } from "@/shared/lib/format-time";
+import { OverviewCard } from "./overview-card";
 import { OVER_METER, creditAllowance } from "./overview-credits";
 import type { HomeOverviewReads } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
@@ -69,14 +70,9 @@ export function SummaryStrip({
   );
 }
 
-/** What is waiting on the operator. The product's one such state is a spent allowance. */
-export function NeedsCard({
-  wallet,
-  onGetCredits,
-}: {
-  wallet: HomeOverviewReads["wallet"];
-  onGetCredits: () => void;
-}) {
+/** What is waiting on the operator. The product's one such state is a spent allowance; its offer
+ *  and the paused note are the Credits card's, so they appear once. */
+export function NeedsCard({ wallet }: { wallet: HomeOverviewReads["wallet"] }) {
   const over = !wallet.loading && creditAllowance(wallet.credits).over;
   return (
     <OverviewCard
@@ -94,13 +90,12 @@ export function NeedsCard({
             </span>
             <span className={styles.rowMain}>
               <span className={styles.rowTitle}>Out of credits</span>
-              <span className={styles.rowMeta}>Tool calls are paused until the next period</span>
+              {wallet.credits.periodEnd && (
+                <span className={styles.rowMeta}>
+                  Resets {formatShortDate(wallet.credits.periodEnd)}
+                </span>
+              )}
             </span>
-            {!wallet.isPaid && (
-              <button type="button" className={CARD_INK_PILL} onClick={onGetCredits}>
-                Get more credits
-              </button>
-            )}
           </li>
         </ul>
       ) : (

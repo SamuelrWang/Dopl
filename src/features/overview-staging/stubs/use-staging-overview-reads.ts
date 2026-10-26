@@ -7,7 +7,7 @@ import {
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
 import { usageSeriesPath } from "@/features/home/overview-period";
-import type { TokenSpendReport } from "@/features/home/token-spend-days";
+import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 import type {
   HomeOverviewReadArgs,
   HomeOverviewReads,

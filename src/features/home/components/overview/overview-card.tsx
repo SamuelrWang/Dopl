@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { SECTION_TITLE } from "@/shared/ui/section-title";
-import { INK_PILL, PILL_BUTTON } from "@/shared/ui/small-action-button";
 import styles from "./overview.module.css";
-
-/** The card's actions at the 26px card scale: the outlined pill and its ink twin. */
-export const CARD_PILL = cn(PILL_BUTTON, "h-6.5 cursor-pointer gap-1 px-2.75");
-export const CARD_INK_PILL = cn(INK_PILL, "gap-1");
 
 /** One white card: the title row (count beside it, `aside` at its right end) over the body. */
 export function OverviewCard({
@@ -34,24 +29,26 @@ export function OverviewCard({
   );
 }
 
-/** A bar strip scaled to its tallest bar; a measured zero still draws a tick. */
-export function Bars({
-  values,
-  label,
-  dim = false,
-}: {
-  values: readonly number[];
+export interface Bar {
+  key: string;
+  value: number;
+  /** "Sep 3 · 120 credits": the bar's hover title and its accessible name. */
   label: string;
-  dim?: boolean;
-}) {
-  const peak = Math.max(1, ...values);
+}
+
+/** A bar strip scaled to its tallest bar; a measured zero still draws a tick. */
+export function Bars({ bars, label, dim = false }: { bars: readonly Bar[]; label: string; dim?: boolean }) {
+  const peak = Math.max(1, ...bars.map((bar) => bar.value));
   return (
-    <span className={styles.bars} role="img" aria-label={label} data-dim={dim || undefined}>
-      {values.map((value, i) => (
+    <span className={styles.bars} role="list" aria-label={label} data-dim={dim || undefined}>
+      {bars.map((bar) => (
         <i
-          key={i}
-          data-zero={value === 0 || undefined}
-          style={{ height: `${Math.max(value > 0 ? 6 : 2, (value / peak) * 100)}%` }}
+          key={bar.key}
+          role="listitem"
+          aria-label={bar.label}
+          title={bar.label}
+          data-zero={bar.value === 0 || undefined}
+          style={{ height: `${Math.max(bar.value > 0 ? 6 : 2, (bar.value / peak) * 100)}%` }}
         />
       ))}
     </span>

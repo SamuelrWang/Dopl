@@ -27,6 +27,11 @@ export function monthLabel(key: string): string {
   });
 }
 
+/** A UTC bin's `at` → `"Sep 3"`, read in UTC so a bin never names its neighbour's day. */
+export function utcDayLabel(at: string): string {
+  return new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 /** The histogram's read. A default selection sends neither param, so the first read is the one
  *  cache entry the face always had. */
 export function usageSeriesPath(scope: string, month: string): string {

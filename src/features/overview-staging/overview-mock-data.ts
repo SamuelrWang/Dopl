@@ -20,7 +20,7 @@ import type {
 import { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP } from "@/features/home/overview-types";
 import type { WorkspaceCreditsStatus } from "@/features/billing/components/use-workspace-entitlements";
 import type { ConnectedDevice } from "@/features/devices/types";
-import type { TokenSpendReport } from "@/features/home/token-spend-days";
+import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 
 /* ────────────────────────────── home channels ────────────────────────────── */
 

@@ -16,8 +16,9 @@ import {
   USAGE_SCOPE_DESKTOP,
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
-import { monthKey, monthLabel, shiftMonthKey } from "@/features/home/overview-period";
-import { Bars, CARD_INK_PILL, CARD_PILL, OverviewCard } from "./overview-card";
+import { monthKey, monthLabel, shiftMonthKey, utcDayLabel } from "@/features/home/overview-period";
+import { CARD_PILL, INK_PILL } from "@/shared/ui/small-action-button";
+import { Bars, OverviewCard } from "./overview-card";
 import type { HomeOverviewReads, OverviewRead } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
 
@@ -75,7 +76,7 @@ function ScopeMenu({
 }
 
 /** `‹ September 2026 ›`: next is disabled at the current month; there is no lower bound. */
-export function MonthStepper({
+function MonthStepper({
   month,
   onChange,
 }: {
@@ -153,9 +154,13 @@ function DailyCredits({
   return (
     <>
       <Bars
-        values={points.map((point) => point.count)}
+        bars={points.map((point) => ({
+          key: point.at,
+          value: point.count,
+          label: `${utcDayLabel(point.at)} · ${point.count.toLocaleString()} credits`,
+        }))}
         label={`Daily credits, ${monthLabel(month)}`}
-        dim={series.isPending}
+        dim={series.isPlaceholderData}
       />
       {series.data.truncated && <p className={styles.note}>Newest rows only.</p>}
     </>
@@ -192,7 +197,7 @@ export function CreditsCard({
         !wallet.isPaid && (
           <button
             type="button"
-            className={over ? CARD_INK_PILL : CARD_PILL}
+            className={over ? INK_PILL : CARD_PILL}
             onClick={onGetCredits}
           >
             Get more credits

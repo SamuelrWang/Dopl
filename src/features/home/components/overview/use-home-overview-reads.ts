@@ -13,12 +13,14 @@ import {
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
 import { usageSeriesPath } from "@/features/home/overview-period";
-import type { TokenSpendReport } from "@/features/home/token-spend-days";
+import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 
 export interface OverviewRead<T> {
   data: T | undefined;
   error: unknown;
   isPending: boolean;
+  /** The previous key's data, shown while this key's read lands (`keepPreviousData`). */
+  isPlaceholderData: boolean;
   refetch: () => unknown;
 }
 
@@ -39,8 +41,9 @@ export interface HomeOverviewReadArgs {
   homeWorkspaceId: string | null;
 }
 
-/** The face's reads: cold, no realtime. Overview and series keep the previous payload across a key
- *  change, so a scope or month flip dims the bars instead of blanking the card. */
+/** The face's reads: cold, no realtime and no poll. Overview and series keep the previous payload
+ *  across a key change (`isPlaceholderData`), so a scope or month flip dims the bars instead of
+ *  blanking the card. */
 export function useHomeOverviewReads({
   scope,
   month,
@@ -55,7 +58,7 @@ export function useHomeOverviewReads({
   });
   const spend = useApiQuery<TokenSpendReport>("/api/home/token-spend");
   const entitlements = useWorkspaceEntitlements(homeWorkspaceId ?? undefined);
-  const devices = useConnectedDevices();
+  const devices = useConnectedDevices({ live: false });
   return {
     overview,
     series,

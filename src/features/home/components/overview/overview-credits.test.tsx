@@ -7,7 +7,7 @@ import {
   USAGE_SCOPE_DESKTOP,
   type HomeOverviewSeries,
 } from "@/features/home/overview-types";
-import type { TokenSpendReport } from "@/features/home/token-spend-days";
+import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 import { monthKey, monthLabel, shiftMonthKey } from "@/features/home/overview-period";
 import { HomeOverview } from "./home-overview";
 import type { HomeOverviewReadArgs, HomeOverviewReads } from "./use-home-overview-reads";
@@ -44,7 +44,44 @@ describe("the Credits card", () => {
     expect(within(credits).getByText("180 left")).toBeTruthy();
     expect(within(credits).getByText(/^Resets /)).toBeTruthy();
     expect(within(credits).getByText("210")).toBeTruthy();
-    expect(within(credits).getByRole("img", { name: /^Daily credits/ })).toBeTruthy();
+    const bars = within(credits).getByRole("list", { name: /^Daily credits/ });
+    expect(within(bars).getAllByRole("listitem")).toHaveLength(SERIES.points.length);
+    const third = within(bars).getByRole("listitem", { name: "Sep 3 · 20 credits" });
+    expect(third.getAttribute("title")).toBe("Sep 3 · 20 credits");
+  });
+
+  it("dims the previous key's bars while the next scope or month lands", () => {
+    mount({ series: read(SERIES, { isPlaceholderData: true }) });
+    expect(screen.getByRole("list", { name: /^Daily credits/ }).getAttribute("data-dim")).toBe("true");
+    cleanup();
+    mount();
+    expect(screen.getByRole("list", { name: /^Daily credits/ }).getAttribute("data-dim")).toBeNull();
+  });
+
+  it("draws a full month of zero bars, not an empty state", () => {
+    const zeros = { ...SERIES, points: SERIES.points.map((point) => ({ ...point, count: 0 })) };
+    mount({ series: read(zeros) });
+    const bars = screen.getByRole("list", { name: /^Daily credits/ });
+    expect(within(bars).getAllByRole("listitem")).toHaveLength(SERIES.points.length);
+    expect(screen.queryByText("No credits spent")).toBeNull();
+  });
+
+  it("reads a persisted series with no points as no bars", () => {
+    mount({ series: read({ ...SERIES, points: undefined } as never) });
+    expect(screen.getByText("No credits spent")).toBeTruthy();
+  });
+
+  it("says nothing when the wallet and the ledger agree", () => {
+    const { credits } = mount();
+    expect(within(credits).queryByText("Unreconciled")).toBeNull();
+    expect(within(credits).queryByText("Unmetered")).toBeNull();
+  });
+
+  it("tracks credits.used when only the wallet changes", () => {
+    const { credits } = mount(wallet({ used: 400, remaining: 100 }));
+    expect(within(credits).getByText("400")).toBeTruthy();
+    expect(within(credits).getByText("100 left")).toBeTruthy();
+    expect(within(credits).getByText("210")).toBeTruthy();
   });
 
   it("falls back to the personal free allowance when the payer never resolved", () => {
@@ -116,6 +153,16 @@ describe("the Tokens card", () => {
     const tokens = screen.getByRole("region", { name: "Tokens" });
     expect(within(tokens).getByText("At least 1.2M")).toBeTruthy();
     expect(within(tokens).getByText("2 sessions")).toBeTruthy();
+  });
+
+  it("labels each day, and reads a persisted report with no marks as empty", () => {
+    mount({ spend: read(spendToday([1_260_000])) });
+    const days = screen.getByRole("list", { name: /^Tokens per day/ });
+    expect(within(days).getAllByRole("listitem")).toHaveLength(31);
+    expect(within(days).getAllByRole("listitem").at(-1)?.getAttribute("title")).toMatch(/ · 1\.2M tokens$/);
+    cleanup();
+    mount({ spend: read({ truncated: false } as never) });
+    expect(screen.getByText("No agent has spent tokens")).toBeTruthy();
   });
 
   it("tells empty from failed", () => {

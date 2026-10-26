@@ -46,14 +46,13 @@ export function HomeOverview({
   }
   if (!overview.data) return <OverviewSkeleton />;
 
-  const openBilling = () => onOpenSettings("billing");
   return (
     <div className={styles.root}>
       <div className={styles.inner}>
         <SummaryStrip wallet={reads.wallet} devices={reads.devices} />
         <div className={styles.grid}>
           <div className={styles.col}>
-            <NeedsCard wallet={reads.wallet} onGetCredits={openBilling} />
+            <NeedsCard wallet={reads.wallet} />
             <DevicesCard devices={reads.devices} onAddDevice={() => onOpenSettings("devices")} />
           </div>
           <div className={styles.col}>
@@ -65,7 +64,7 @@ export function HomeOverview({
               channels={homeChannels}
               onScope={setScope}
               onMonth={setMonth}
-              onGetCredits={openBilling}
+              onGetCredits={() => onOpenSettings("billing")}
             />
             <TokensCard spend={reads.spend} />
           </div>

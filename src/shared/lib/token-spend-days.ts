@@ -20,6 +20,15 @@ export function localDayKey(at: Date): string {
   return `${at.getFullYear()}-${month}-${day}`;
 }
 
+/** A local day key → `"Sep 3"`, built from its parts so no zone shifts it. */
+export function localDayLabel(key: string): string {
+  const [year = "", month = "", day = ""] = key.split("-");
+  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 /** The window's day keys, oldest first. Built by day arithmetic, not by subtracting 86 400 000ms,
  *  which drifts across a DST boundary and repeats a day. */
 export function windowDays(count: number = TOKEN_SPEND_WINDOW_DAYS): string[] {

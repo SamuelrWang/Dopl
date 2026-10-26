@@ -4,7 +4,9 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import type { ConnectedDevice } from "@/features/devices/types";
-import { CARD_PILL, OverviewCard } from "./overview-card";
+import { CARD_PILL } from "@/shared/ui/small-action-button";
+import { devicePresence } from "@/features/devices/merge";
+import { OverviewCard } from "./overview-card";
 import { GhostRows } from "./overview-skeleton";
 import type { HomeOverviewReads } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
@@ -25,15 +27,9 @@ function DeviceRow({ device }: { device: ConnectedDevice }) {
         </span>
         {meta && <span className={styles.rowMeta}>{meta}</span>}
       </span>
-      {device.online ? (
-        <StatusPill bare dot tone="live">
-          Online
-        </StatusPill>
-      ) : (
-        <StatusPill bare dot>
-          {device.lastSeen ? formatRelativeTime(device.lastSeen) : "Offline"}
-        </StatusPill>
-      )}
+      <StatusPill bare dot tone={device.online ? "live" : "neutral"}>
+        {devicePresence(device, formatRelativeTime(device.lastSeen))}
+      </StatusPill>
     </li>
   );
 }
