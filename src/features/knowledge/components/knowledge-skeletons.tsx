@@ -1,13 +1,16 @@
 import { cn } from "@/shared/lib/utils";
+import { PanelsGhost } from "@/shared/ui/section-panel-ghost";
 import { Skeleton, SkeletonLine, SkeletonText } from "@/shared/ui/skeleton";
-import kv from "@/features/knowledge/components/knowledge-v2/knowledge-v2.module.css";
-import { SkeletonSurface } from "./skeleton-surface";
+import { SkeletonSurface } from "@/shared/ui/skeleton-surface";
+import home from "./home/home-knowledge.module.css";
+import kv from "./knowledge-v2/knowledge-v2.module.css";
 
 /**
- * THE TWO KNOWLEDGE-V2 SHAPES, GHOSTED — and they live HERE rather than beside
- * one page because BOTH hosts of that surface load through them:
+ * THE KNOWLEDGE SHAPES, GHOSTED — and they live HERE rather than beside one
+ * page because every host of the surface loads through them: the desktop's
  * `pages/knowledge/index.tsx` (the workspace page, at `.page-float`) and
- * `pages/home/knowledge-base-view.tsx` (the /home record pane, `embedded`).
+ * `home/home-knowledge-base-view.tsx` (the /home record pane, `embedded`), on
+ * the desktop and in the UI-staging playground.
  * One geometry, two mounts, exactly as the surface itself is (INVARIANTS §7).
  *
  * ⚠ THE GEOMETRY IS THE REAL MODULE'S CLASSES, NOT NUMBERS COPIED OUT OF IT.
@@ -164,3 +167,25 @@ function InfoPanelGhost({ lines }: { lines: number }) {
 
 /** Tree rows taper — a folder list is not a column of equal bars. */
 const RAIL_ROW_WIDTHS = ["78%", "62%", "88%", "54%", "70%", "46%"];
+
+/** /home → Knowledge's card grid, three ghost cards in the face's own `.kbCards` cells. */
+export function KbCardsGhost() {
+  return (
+    <div className={home.kbCards}>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className={home.kbCell}>
+          <Skeleton className="h-full w-full rounded-[14px]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** /home → Knowledge while the base list is in flight: the face's two sections over its grid. */
+export function HomeKnowledgePanelsSkeleton({ label = "Loading knowledge" }: { label?: string }) {
+  return (
+    <SkeletonSurface label={label} className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3">
+      <PanelsGhost label="Knowledge base" cards={<KbCardsGhost />} />
+    </SkeletonSurface>
+  );
+}

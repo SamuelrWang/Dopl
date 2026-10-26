@@ -1,21 +1,17 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  invalidateKnowledgeBaseLists,
-  useKnowledgeTree,
-} from "@/features/knowledge/client/hooks";
-import type { KnowledgeBaseList } from "@/features/knowledge/client/api";
+import { PageError } from "@/shared/ui/page-error";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
-import { KnowledgeV2PreviewCore } from "@/features/knowledge/components/knowledge-v2/landing-preview-core";
-import type {
-  KnowledgeRouting,
-  KnowledgeUrlSync,
-} from "@/features/knowledge/components/knowledge-v2/routing";
-import type { BaseTree } from "@/features/knowledge/components/knowledge-v2/types";
-import type { KbShelf, KnowledgeBase } from "@/features/knowledge/types";
 import type { Role } from "@/features/workspaces/types";
-import { PageError } from "#/components/page-states";
-import { KnowledgeBaseSkeleton } from "#/components/skeletons/knowledge-skeletons";
+import type { KnowledgeBaseList } from "../../client/api";
+import { invalidateKnowledgeBaseLists, useKnowledgeTree } from "../../client/hooks";
+import type { KbShelf, KnowledgeBase } from "../../types";
+import { KnowledgeBaseSkeleton } from "../knowledge-skeletons";
+import { KnowledgeV2PreviewCore } from "../knowledge-v2/landing-preview-core";
+import type { KnowledgeRouting, KnowledgeUrlSync } from "../knowledge-v2/routing";
+import type { BaseTree } from "../knowledge-v2/types";
 
 /**
  * ONE knowledge base, opened from /home's Knowledge panels.
@@ -38,7 +34,7 @@ import { KnowledgeBaseSkeleton } from "#/components/skeletons/knowledge-skeleton
  * (corrected 2026-08-26). This said "NO `MyAccessProvider` (plan §5.3)" and
  * justified it with an argument about link CONTAINERS — true of containers,
  * FALSE of this component, because **this same view mounts for the HOME
- * workspace too** (`knowledge-panels.tsx › homeTarget`, scope C). That is an
+ * workspace too** (`home-knowledge-panels.tsx › homeTarget`, scope C). That is an
  * ordinary standard workspace which CAN be teams-mode, and `list.bases` handed
  * in is the WHOLE base list, not the private subset the pane offered — so the
  * grid behind the detail pane renders team-visible bases and `canEdit` fell OPEN
@@ -89,7 +85,7 @@ export function HomeKnowledgeBaseView({
    *  pane renders from real data instead of a one-base stub. */
   list: KnowledgeBaseList;
   /**
-   * 🔒 WHICH SHELF `list` CAME FROM (`@/features/knowledge/types.ts › KbShelf`)
+   * 🔒 WHICH SHELF `list` CAME FROM (`../../types.ts › KbShelf`)
    * — `"home"` for a scope-C mount, `undefined` for a container one (a link
    * container has no shelves).
    *
@@ -184,7 +180,7 @@ export function HomeKnowledgeBaseView({
         shelf={shelf}
         // ⚠ /home, so the audience is already decided by the section the
         // operator came from — no visibility picker in the create dialog
-        // (`@/features/knowledge/components/create-base-dialog.tsx ›
+        // (`../create-base-dialog.tsx ›
         // Props.audienceFixed`). It also could not be answered honestly on a
         // container mount: a link container has no teams (§4A).
         audienceFixed

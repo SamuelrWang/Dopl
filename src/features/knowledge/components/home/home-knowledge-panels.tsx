@@ -1,30 +1,27 @@
+"use client";
+
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
 import { EmptyLine, EmptyState } from "@/shared/ui/empty-state";
 import { SectionPanel } from "@/shared/ui/section-panel";
-import { EMPTY_GRANTS, fetchBaseList } from "@/features/knowledge/client/api";
-import {
-  invalidateKnowledgeBaseLists,
-  knowledgeBasesQueryKey,
-} from "@/features/knowledge/client/hooks";
-import { CreateBaseDialog } from "@/features/knowledge/components/create-base-dialog";
-import type { KnowledgeBase } from "@/features/knowledge/types";
-import {
-  EMPTY_WORKSPACE_ROLE,
-  type Channel,
-} from "@/features/channels/types";
-import { meetsMinRole, type Role } from "@/features/workspaces/types";
-import { PageError } from "#/components/page-states";
-import { HomeKnowledgeBaseView } from "./knowledge-base-view";
-import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
+import { PageError } from "@/shared/ui/page-error";
 import { CreateButton } from "@/shared/ui/page-action-button";
-import {
-  BaseCell,
-  channelBasesQueryKey,
-  useStarToggle,
-} from "./knowledge-panel-cards";
-import home from "./home.module.css";
+import { EMPTY_WORKSPACE_ROLE, type Channel } from "@/features/channels/types";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import { EMPTY_GRANTS, fetchBaseList } from "../../client/api";
+import { invalidateKnowledgeBaseLists, knowledgeBasesQueryKey } from "../../client/hooks";
+import type { KnowledgeBase } from "../../types";
+import { CreateBaseDialog } from "../create-base-dialog";
+import { HomeKnowledgePanelsSkeleton } from "../knowledge-skeletons";
+import { HomeKnowledgeBaseView } from "./home-knowledge-base-view";
+import { BaseCell, channelBasesQueryKey, useStarToggle } from "./home-knowledge-cards";
+import home from "./home-knowledge.module.css";
+
+/** What the face reads off the selected channel. */
+export type HomeKnowledgeChannel = Pick<Channel, "id" | "workspaceId" | "myWorkspaceRole"> & {
+  container: Pick<Channel["container"], "segment">;
+};
 
 /**
  * /home → Knowledge. TWO SECTIONS, NO SCOPE PILL (Samuel, 2026-08-27,
@@ -64,7 +61,7 @@ import home from "./home.module.css";
  * `h-9` pill (`page-action-button.tsx › CreateButton`) — the SECTION names the
  * destination, so the button says only what it makes. **The two accessible names
  * are identical on purpose**: reach them through their section
- * (`getByRole("region", { name: … })`), as `knowledge-panels.test.tsx` does.
+ * (`getByRole("region", { name: … })`), as the desktop's `pages/home/knowledge-panels.test.tsx` does.
  *
  * 🔒 **THE SECTIONS ARE FLAT (Samuel, 2026-08-27, over a screenshot).** The old
  * `SectionBox` — header strip over a `bg-bg-inset` body with a concave inset
@@ -85,7 +82,7 @@ export function HomeKnowledgePanels({
 }: {
   /** `null` when the selected row is a legacy unbound LINK, or when there is
    *  no row at all — both are "no container to read knowledge from". */
-  channel: Channel | null;
+  channel: HomeKnowledgeChannel | null;
   /** ⚠ `POST /api/boot`'s `workspace`, which is NULL until the caller is
    *  onboarded (plan §0.1). Personal is unavailable, not empty, when it is. */
   homeWorkspaceId: string | null;
@@ -199,7 +196,7 @@ export function HomeKnowledgePanels({
           role: containerRole,
           // ⚠ NO `my-access` READ AGAINST A CONTAINER: it has no teams, so the
           // answer is the plain role default and the request buys nothing. See
-          // `knowledge-base-view.tsx`'s docblock for what that costs and why it
+          // `home-knowledge-base-view.tsx`'s docblock for what that costs and why it
           // is acceptable HERE and not on the home mount.
           accessSegment: null,
         };

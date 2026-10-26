@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * 🔒 THE READER'S KEY AND THE WRITER'S PATCH TARGET ARE THE SAME KEY — the pin
  * that was missing while they were two different shapes.
@@ -25,16 +26,18 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { QueryClient } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import type { KnowledgeBaseList } from "@/features/knowledge/client/api";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import type { KnowledgeBaseList } from "../../client/api";
 import {
   knowledgeBasesCacheSegment,
   knowledgeBasesQueryKey,
-} from "@/features/knowledge/client/hooks";
-import { patchChannelGrantInCache } from "@/features/knowledge/client/hooks-channel-grants";
-import type { KnowledgeBase } from "@/features/knowledge/types";
-import { BaseCell, channelBasesQueryKey } from "./knowledge-panel-cards";
+} from "../../client/hooks";
+import { patchChannelGrantInCache } from "../../client/hooks-channel-grants";
+import type { KnowledgeBase } from "../../types";
+import { BaseCell, channelBasesQueryKey } from "./home-knowledge-cards";
+
+afterEach(cleanup);
 
 const WS = "ws-container";
 const CHANNEL = "chan-1";
@@ -143,9 +146,7 @@ describe("a grant write reaches the entry the PANE mounted", () => {
  * ⚠ SOURCE READ, for the reason `agent-identities/components/identity-editor.
  * test.tsx › no concave surfaces` states: jsdom loads no stylesheet and CSS
  * modules arrive as opaque class names, so the only honest place to pin a CSS
- * RULING is the declaration text. Paths resolve off `import.meta.url`, not
- * `process.cwd()` — this suite is run with `--root apps/desktop-ui` and reaches
- * into the repo-root web tree.
+ * RULING is the declaration text. Paths resolve off `import.meta.url`.
  *
  * ⚠ THE SECOND ASSERTION IS THE ONE THAT KEEPS IT /home-ONLY. The card is
  * `knowledge-v2/home/base-card.tsx`, shared with the workspace knowledge page
@@ -157,9 +158,9 @@ describe("a grant write reaches the entry the PANE mounted", () => {
 describe("the /home card face is a rebind, not a fork", () => {
   const read = (rel: string) =>
     readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-  const homeCss = read("./home.module.css");
+  const homeCss = read("./home-knowledge.module.css");
   const cardCss = read(
-    "../../../../../src/features/knowledge/components/knowledge-v2/knowledge-v2.module.css"
+    "../knowledge-v2/knowledge-v2.module.css"
   );
   /** `.kbCards`'s own block — the aliases below must be rebound THERE, not
    *  loose in the file where they would reach the whole page. */
@@ -205,7 +206,7 @@ describe("the /home card face is a rebind, not a fork", () => {
     );
     expect(cardName).not.toContain("letter-spacing");
     const identityCard = read(
-      "../../../../../src/shared/ui/section-heading.ts"
+      "../../../../shared/ui/section-heading.ts"
     );
     expect(identityCard).toContain(
       'IDENTITY_NAME_TEXT = "text-title font-medium text-text-primary"'
@@ -275,7 +276,7 @@ describe("BaseCell — §8 stale cache, read out of the CACHE and not off the wi
         onToggleStar={() => {}}
       />
     );
-    expect(screen.getByText("Renewals")).toBeInTheDocument();
+    expect(screen.getByText("Renewals")).toBeTruthy();
   });
 
   it("a missing ownerNames degrades to the NEUTRAL label, never to 'You'", () => {
@@ -291,8 +292,8 @@ describe("BaseCell — §8 stale cache, read out of the CACHE and not off the wi
         onToggleStar={() => {}}
       />
     );
-    expect(screen.getByText(/Someone else/)).toBeInTheDocument();
-    expect(screen.queryByText(/By You/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Someone else/)).toBeTruthy();
+    expect(screen.queryByText(/By You/)).toBeNull();
   });
 
   it("an ABSENT list (the other scope's read in flight) still paints", () => {
@@ -307,6 +308,6 @@ describe("BaseCell — §8 stale cache, read out of the CACHE and not off the wi
         onToggleStar={() => {}}
       />
     );
-    expect(screen.getByText("Renewals")).toBeInTheDocument();
+    expect(screen.getByText("Renewals")).toBeTruthy();
   });
 });

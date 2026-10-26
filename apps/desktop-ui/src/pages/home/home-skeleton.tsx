@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { ChannelRecordGhost } from "@/features/channels/components/channel-record-skeleton";
 import {
@@ -8,23 +7,24 @@ import {
   SkeletonLine,
 } from "@/shared/ui/skeleton";
 import { WELL_FACES } from "@/features/channels/components/collapse-wells";
-import { PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import {
-  IdentityCardsGhost,
+  PanelsGhost,
+  SECTION_GHOST_HEADING_W as HEADING_W,
   SectionPanelGhost,
-} from "#/components/skeletons/section-panel-ghost";
+} from "@/shared/ui/section-panel-ghost";
+import { KbCardsGhost } from "@/features/knowledge/components/knowledge-skeletons";
+import { IdentityCardsGhost } from "#/components/skeletons/section-panel-ghost";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
 import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
 import { HomeFrame, HomeHeaderRow, HomeListColumn } from "./home-frame";
 import { HOME_DEFAULT_TAB, HOME_TABS, type HomeTab } from "./home-tabs";
-import home from "./home.module.css";
 
 /**
  * /home's loading shapes: the page frame, and one per record-pane face. Geometry is the page's own
- * by reference (`HomeFrame`, `--home-list-w`, `home.kbCards`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
+ * by reference (`HomeFrame`, `--home-list-w`, `KbCardsGhost`, `IDENTITY_GRID`, `PLOT_HEIGHT_CLASS`),
  * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
 
@@ -72,34 +72,6 @@ function FaceGhost({ face }: { face: HomeTab }) {
 
 const PANELS = "flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3";
 
-/** Two flat sections over a card grid. No caption under either heading — the real panels print
- *  label + control only. */
-function PanelsGhost({ label, cards }: { label: string; cards: ReactNode }) {
-  return (
-    <>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label={label} />}>
-        {cards}
-      </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label={label} />}>
-        {cards}
-      </SectionPanelGhost>
-    </>
-  );
-}
-
-/** /home → Knowledge while the base list is in flight. */
-export function HomeKnowledgePanelsSkeleton({
-  label = "Loading knowledge",
-}: {
-  label?: string;
-}) {
-  return (
-    <SkeletonSurface label={label} className={PANELS}>
-      <PanelsGhost label="Knowledge base" cards={<KbCardsGhost />} />
-    </SkeletonSurface>
-  );
-}
-
 /** /home → Identities while the container list is in flight: the identities' own four-column grid
  *  (not the Knowledge grid). */
 export function HomeIdentityPanelsSkeleton({
@@ -111,36 +83,6 @@ export function HomeIdentityPanelsSkeleton({
     <SkeletonSurface label={label} className={PANELS}>
       <PanelsGhost label="Agent Identity" cards={<IdentityCardsGhost count={4} />} />
     </SkeletonSurface>
-  );
-}
-
-/** Every /home section heading ghost is one width. */
-const HEADING_W = 148;
-
-/**
- * A section header's create-button ghost: `page-action-button.tsx › CreateButton` is `PAGE_ACTION_BTN`
- * (`h-9 rounded-full px-3.75`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
- * sized from the label the real button prints, and two sections with one label ghost one width.
- */
-function CreateGhost({ label }: { label: string }) {
-  return (
-    <SkeletonBar
-      h={36}
-      w={`calc(${label.length}ch + ${15 * 2 + PAGE_ACTION_ICON + 6}px)`}
-      className="rounded-full"
-    />
-  );
-}
-
-function KbCardsGhost() {
-  return (
-    <div className={home.kbCards}>
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className={home.kbCell}>
-          <Skeleton className="h-full w-full rounded-[14px]" />
-        </div>
-      ))}
-    </div>
   );
 }
 

@@ -3,10 +3,7 @@ import { fileURLToPath } from "node:url";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { HomePageSkeleton } from "#/pages/home/home-skeleton";
-import {
-  HomeIdentityPanelsSkeleton,
-  HomeKnowledgePanelsSkeleton,
-} from "#/pages/home/home-skeleton";
+import { HomeIdentityPanelsSkeleton } from "#/pages/home/home-skeleton";
 import { ChannelRecordSkeleton } from "#/pages/home/channel-record-skeleton";
 import { OverviewSkeleton } from "#/pages/overview/overview-skeleton";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
@@ -14,9 +11,10 @@ import { IdentitiesPageSkeleton } from "#/pages/identities/identities-skeleton";
 import { MembersPageSkeleton } from "#/pages/members/members-skeleton";
 import { IDENTITY_GRID } from "@/features/agent-identities/components/identity-section";
 import {
+  HomeKnowledgePanelsSkeleton,
   KnowledgeBaseSkeleton,
   KnowledgeHomeSkeleton,
-} from "./knowledge-skeletons";
+} from "@/features/knowledge/components/knowledge-skeletons";
 
 /**
  * THE POINT OF THESE SKELETONS IS THAT THEY MATCH THE PAGE (Samuel, 2026-08-28:
@@ -54,7 +52,7 @@ const AGENTS_SKELETON = file("../../pages/identities/identities-skeleton.tsx");
 const OVERVIEW_SKELETON = file("../../pages/overview/overview-skeleton.tsx");
 const CHANNELS_SKELETON = file("../../pages/channels/channels-skeleton.tsx");
 const MEMBERS_SKELETON = file("../../pages/members/members-skeleton.tsx");
-const KNOWLEDGE_SKELETONS = file("./knowledge-skeletons.tsx");
+const KNOWLEDGE_SKELETONS = file("../../../../../src/features/knowledge/components/knowledge-skeletons.tsx");
 
 /** A file in the SHARED tree (`src/`), which is where four of these pages live. */
 const shared = (rel: string) => file(`../../../../../src/${rel}`);
@@ -131,15 +129,16 @@ describe("every per-page skeleton", () => {
 
 describe("skeleton grids REUSE the real page's grid, they do not restate it", () => {
   /**
-   * ⚠ THE HOME KNOWLEDGE GRID IS `home.module.css › .kbCards` ITSELF. That rule
+   * ⚠ THE HOME KNOWLEDGE GRID IS `home-knowledge.module.css › .kbCards` ITSELF. That rule
    * owns the 3 columns, the 224px row height, the 14px gap and the 1080px
    * step-down, plus the `--kv-*` rebinds the card reads. Restating any of it in
    * the skeleton is the drift this pins.
    */
   it("the /home Knowledge ghost mounts the page's own .kbCards", () => {
-    const page = file("../../pages/home/knowledge-panels.tsx");
+    const page = shared("features/knowledge/components/home/home-knowledge-panels.tsx");
     expect(page).toContain("home.kbCards");
-    expect(HOME_SKELETON).toContain("home.kbCards");
+    expect(KNOWLEDGE_SKELETONS).toContain("home.kbCards");
+    expect(HOME_SKELETON).toContain("<KbCardsGhost");
 
     const { container } = render(<HomeKnowledgePanelsSkeleton />);
     expect(container.querySelectorAll('[class*="kbCards"]').length).toBe(2);
@@ -168,9 +167,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
    * module is retyped here, so the ghost follows a re-tune of the real view.
    */
   it("the knowledge ghosts mount knowledge-v2's own classes", () => {
-    expect(KNOWLEDGE_SKELETONS).toContain(
-      'from "@/features/knowledge/components/knowledge-v2/knowledge-v2.module.css"'
-    );
+    expect(KNOWLEDGE_SKELETONS).toContain('from "./knowledge-v2/knowledge-v2.module.css"');
     for (const cls of [
       "kv.cardGrid",
       "kv.baseHead",
@@ -183,7 +180,7 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       expect(KNOWLEDGE_SKELETONS).toContain(cls);
     }
     // …and nothing re-states the geometry those rules own.
-    const body = code("./knowledge-skeletons.tsx");
+    const body = code("../../../../../src/features/knowledge/components/knowledge-skeletons.tsx");
     expect(body).not.toContain("232px");
     expect(body).not.toContain("244px");
   });
@@ -389,9 +386,9 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
 describe("the wrong ghosts are gone, and only those", () => {
   const PAGES = [
     "../../pages/home/index.tsx",
-    "../../pages/home/knowledge-panels.tsx",
+    "../../../../../src/features/knowledge/components/home/home-knowledge-panels.tsx",
     "../../pages/home/identity-panels.tsx",
-    "../../pages/home/knowledge-base-view.tsx",
+    "../../../../../src/features/knowledge/components/home/home-knowledge-base-view.tsx",
     "../../pages/overview/index.tsx",
     "../../pages/channels/index.tsx",
     "../../pages/identities/index.tsx",
@@ -411,9 +408,9 @@ describe("the wrong ghosts are gone, and only those", () => {
    */
   it.each([
     ["../../pages/home/index.tsx", "HomePageSkeleton"],
-    ["../../pages/home/knowledge-panels.tsx", "HomeKnowledgePanelsSkeleton"],
+    ["../../../../../src/features/knowledge/components/home/home-knowledge-panels.tsx", "HomeKnowledgePanelsSkeleton"],
     ["../../pages/home/identity-panels.tsx", "HomeIdentityPanelsSkeleton"],
-    ["../../pages/home/knowledge-base-view.tsx", "KnowledgeBaseSkeleton"],
+    ["../../../../../src/features/knowledge/components/home/home-knowledge-base-view.tsx", "KnowledgeBaseSkeleton"],
     ["../../pages/overview/index.tsx", "OverviewSkeleton"],
     ["../../pages/channels/index.tsx", "ChannelsSkeleton"],
     ["../../pages/identities/index.tsx", "IdentitiesPageSkeleton"],

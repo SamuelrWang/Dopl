@@ -59,16 +59,24 @@ describe("no concave surfaces", () => {
     .sort()
     .map((name) => path.join(HOME_DIR, name));
 
-  const FILES = [...UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir))), ...HOME_FILES];
+  // The /home Knowledge face is declared in `src/` (both trees mount it), so it is swept there.
+  const KNOWLEDGE_FACE = sources(path.join(REPO, "src", "features", "knowledge", "components", "home"));
+
+  const FILES = [
+    ...UI_DIRS.flatMap((dir) => sources(path.join(ROOT, dir))),
+    ...HOME_FILES,
+    ...KNOWLEDGE_FACE,
+  ];
 
   it("finds source files to check (a silent empty sweep would pass forever)", () => {
     expect(FILES.length).toBeGreaterThan(5);
+    expect(KNOWLEDGE_FACE.length).toBeGreaterThan(2);
   });
 
   // A derivation that answered `[]` would make every /home case vacuously green.
   it("derives the /home surfaces, and reaches BOTH tabs' files", () => {
     expect(HOME_FILES.length).toBeGreaterThan(10);
-    for (const name of ["knowledge-panels.tsx", "identity-panels.tsx", "link-out-panel.tsx"]) {
+    for (const name of ["home-panes.tsx", "identity-panels.tsx", "link-out-panel.tsx"]) {
       expect(HOME_FILES).toContain(path.join(HOME_DIR, name));
     }
   });

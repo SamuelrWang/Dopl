@@ -1,19 +1,17 @@
+"use client";
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
-import {
-  EMPTY_SHARED,
-  setBaseStar,
-  type KnowledgeBaseList,
-} from "@/features/knowledge/client/api";
-import { knowledgeBasesQueryKey } from "@/features/knowledge/client/hooks";
-import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
-import type { KnowledgeBase } from "@/features/knowledge/types";
-import home from "./home.module.css";
+import { EMPTY_SHARED, setBaseStar, type KnowledgeBaseList } from "../../client/api";
+import { knowledgeBasesQueryKey } from "../../client/hooks";
+import type { KnowledgeBase } from "../../types";
+import { BaseCard } from "../knowledge-v2/home/base-card";
+import home from "./home-knowledge.module.css";
 
 /**
  * The Knowledge panels' CARD CELL and the one write it carries.
  *
- * Split from `knowledge-panels.tsx` for the reason
+ * Split from `home-knowledge-panels.tsx` for the reason
  * `use-knowledge-v2-trees.ts` was split from its controller — to keep both
  * halves clear of the 500-line cap (INVARIANTS §1) with room for the next
  * entry, rather than at it.

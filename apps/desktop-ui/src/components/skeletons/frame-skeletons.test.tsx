@@ -3,10 +3,10 @@ import { fileURLToPath } from "node:url";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { NAV } from "@/shared/layout/app-shell/app-sidebar-core";
+import { HomeKnowledgePanelsSkeleton } from "@/features/knowledge/components/knowledge-skeletons";
 import { ChannelsSkeleton } from "#/pages/channels/channels-skeleton";
 import {
   HomeIdentityPanelsSkeleton,
-  HomeKnowledgePanelsSkeleton,
   HomePageSkeleton,
 } from "#/pages/home/home-skeleton";
 import { HOME_DEFAULT_TAB, HOME_TABS } from "#/pages/home/home-tabs";

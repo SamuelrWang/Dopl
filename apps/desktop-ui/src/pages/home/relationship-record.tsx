@@ -149,7 +149,7 @@ export function RelationshipRecord({
       // 2026-09-17). This surface stopped passing it on 2026-08-27 (F-340) and
       // the guest lane on 2026-09-04 (F-666), which left the tab with no host —
       // so it is deleted rather than parked. The /home Knowledge FACE
-      // (`knowledge-panels.tsx`, the header's own segmented control) is the full
+      // (`home-knowledge-panels.tsx`, the header's own segmented control) is the full
       // surface over the same bases and is untouched.
       // 🔒 `peerNamedHeader: false` — THE PANE'S HEADER IS THE CHANNEL'S NAME
       // (Samuel, 2026-09-01). The list row and the Info tab were fixed at
