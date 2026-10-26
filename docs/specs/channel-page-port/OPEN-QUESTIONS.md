@@ -603,3 +603,7 @@ Workers append a `## <slice>` section per question: the question, what was chose
    `No results`, the 2-character server threshold, Escape clears, ↑/↓ wrap, Enter takes.
 8. **Staging navigation** stays a toast ("Staging: would open …"): the playground has no router
    seam to land a row on its face.
+9. **Width, resolved (Samuel, 2026-10-26, follow-up):** item 3 is reversed. His words: "I want
+   the new to only change the way stuff looks inside not the dimensions of it". The card is back to
+   its original dimensions: /home spans pill-left to Profile-right (`left-0 w-auto`), the sidebar
+   280px, same max-height; no content-fit growth. The footer stays "Open" / "Move".

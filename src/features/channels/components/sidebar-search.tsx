@@ -91,9 +91,9 @@ export function SidebarSearchHeader({
              fixture table it opened on is test and dev data now. */
           fetcher={apiSearchFetcher}
           /* ⚠ **THE PIN ONLY — THE WIDTH IS THE CARD'S OWN**
-             (`search-popup.tsx › SEARCH_CARD_W`: fits its rows, 280px floor).
+             (`search-popup.tsx › SEARCH_CARD_W`, 280px).
              The column is 260px and the card is wider, so it stays pinned to
-             the column's LEFT edge and grows into the page rather than
+             the column's LEFT edge and opens into the page rather than
              off-screen. */
           className="!right-auto left-3"
         />
