@@ -1,5 +1,5 @@
 /* STAGING ONLY. Overview. Tokens only (no hex, no shadow recipe: `--shadow-bento` is
- * the one soft shadow). The channel-tasks voice (`ui-staging/staging.css › .uis-tk*`): white cards,
+ * the one soft shadow). The channel-tasks voice (`channels/components/task-list.tsx`): white cards,
  * hairlines between rows, caption-scale meta, compact rows. Overview grey ban (PORTING.md): no grey
  * fill behind content; a 3px meter track and a bar strip's zero ticks keep a translucent tone. */
 

@@ -22,7 +22,6 @@ there are three layers to port to:
 | `home/channel-scene.tsx` | `demo-scene.tsx › DemoScene` (record-pane half) | `pages/home/relationship-record.tsx` (record pane: message pane + info slide + agent view), mounting `channels/components/message-pane.tsx`, `info-panel.tsx` |
 | `home/channel-switcher.tsx` → **moved 2026-10-22** to `ui-staging/staging-channel-rail.tsx` (this file is now a thin wrapper that passes this page's `onSelect`); port from there | `demo-home-faces.tsx › DemoChannelSwitcher` | `pages/home/channel-wells.ts` + `relationship-list.tsx` (wells + rows), `shared/ui/home-channel-row.tsx` |
 | `home/settings-tab.tsx` (stub HOST, not a copy) | — | Mounts the product's `channels/components/settings-tab.tsx › ChannelsSettingsTab`, `settings-agent.tsx › ChannelAgentSettingsView`, `settings-channel-agents.tsx` and `thread-settings-tab.tsx` over local state, standing in only for the write hosts (`channel-manage.tsx`, `thread-manage.tsx`, `settings-agent-container.tsx`); the launch record is `settings-staging/stubs/use-launch-selection.ts` |
-| `home/task-list.tsx` + `home/tasks-info-panel.tsx` + `home/tasks-popover.tsx` + (round 4) `home/task-panel.tsx`, `home/task-detail.tsx`, `home/task-subtasks.tsx`, `home/task-notes.tsx` **(new 2026-10-26, channel tasks)** | — (row recipe from the landing `marketing/components/ontology-windows.tsx › TasksWindow`) | NO product counterpart yet. BOTH ship together (round 2, 2026-10-26). Tasks tab (full view) → a `tasks` key in `channels/components/info-panel-tabs.ts › TABS` + `tabCount` + a body branch in `info-panel.tsx`, plus a nonce prop that switches to it. Quick view → a right-end slot on `channels/components/composer-recipients.tsx`'s row (the `working` line above the composer card) for the pill, and a pop-up anchored to `composer.tsx`'s wrapper, right edge on the card's. Both need a tasks read/write and an MCP tool for agents to open/assign/resolve tasks |
 | `home/agent-view-faces.tsx` | `demo-agent-view-faces.tsx` | `channels/components/agent-panel.tsx › AgentPanelHeader`, `agent-stats.tsx` |
 | `home/agent-view.tsx` | `demo-agent-view.tsx` | `channels/components/agent-panel.tsx` (+ `agent-composer.tsx`) |
 
@@ -56,6 +55,15 @@ are deleted; the scene mounts the product cards and rows, and the settings tab m
 views with /home's capabilities (no Add members, no Delete channel). Faces carry the runtime badge
 off the sessions' own `runtimeId` / `runtime` (`data/staging-builders.ts`).
 
+**Ported to the product (2026-10-26, channel tasks)**: the Tasks tab (list, detail, subtasks,
+notes) and the composer's quick view are the product's own (`channels/components/tasks-panel.tsx`,
+`task-list.tsx`, `task-detail.tsx`, `task-subtasks.tsx`, `task-notes.tsx`,
+`tasks-quick-view.tsx`; the tab via `info-panel.tsx`'s `tasks` slot, the pill via
+`composer-recipients.tsx`'s `trailing` slot). The staged copies and their `.uis-tk*` /
+`.uis-tkd*` CSS are deleted; the scene mounts the product components over the in-memory store,
+and holds the open task and the Tasks-tab ask that `use-channels-selection.ts` holds in the
+product.
+
 Edits made in the copies (marked `STAGING` in comments):
 - `agent-view-faces.tsx`: faces via `data/staging-agents.ts`.
 - `agent-view.tsx`: the 1:1 composer sends (in memory, with a canned reply); `layout="fill"` (no
@@ -69,48 +77,6 @@ Edits made in the copies (marked `STAGING` in comments):
   list's "Recent" heading (`--home-card`, #fbfcfc), instead of `--bg-inset` (#f1f1f1). Staging
   overrides `.lp-demo-avs-well` only on the channels page; the token is untouched. Port: the
   desktop agent panel's stats box background → the home panel surface.
-- **Channel tasks: tab + quick view, ONE state (Samuel, 2026-10-26; round 1 built two variants
-  behind `?tasks=`, round 2: "I actually think it might make sense to have both ... just have
-  one state with both of them")**. Both always render:
-  - FULL VIEW: `channel-scene.tsx` mounts `tasks-info-panel.tsx › StagingInfoPanel` in place of
-    `ChannelsInfoPanel`: its own five-tab row (product `SegmentedControl`, counts via the
-    product's `tabCount` / `activeAgentCount`), the product panel with `fullTab` for the four
-    product tabs, and `task-list.tsx` for Tasks (tick = Resolve/Reopen, title, opener face +
-    time, thread or message chip that opens it, assignee faces, status pill; Resolved collapsed
-    under a toggle). Known delta: the Threads tab keeps its label on the Artifacts face.
-  - QUICK VIEW: `tasks-popover.tsx › StagingTasksBar` is the pane's `agentActivity` node, so it
-    renders on the recipients line above the composer: the product's working pills (they elide,
-    never wrap) then a "4 tasks" pill at the line's right end, right edge on the composer card's.
-    It opens a concise pop-up upward (active tasks only: tick, title, assignee faces), right edge
-    on the card's; Hide or the pill folds it. A row opens the Info column (if closed) on the
-    Tasks tab, on that task's DETAIL; "See all" lands on the list (`tasksSignal` nonce switches
-    the tab; the open task is the scene's `openTaskId`, like the open thread). Round 3: the pill
-    face is round 1's again (working faces + "N tasks").
-  - TASK DETAIL **(round 4, Samuel 2026-10-26: subtasks, a header with description / dates /
-    who is on it, and notes)**: `task-panel.tsx` swaps the list for `task-detail.tsx` in place
-    (no in-panel drill-in existed in the product panel to reuse; the back control is a
-    DESIGN-LANGUAGE breadcrumb, "‹ Tasks › title"). Top to bottom: breadcrumb; header (title,
-    status pill, description, subtask meter + "2/4", then (round 5, Samuel: "this part looks
-    too jumbled") ONE muted meta line "opener face + name · Opened date · Due date · Updated
-    3m ago" and ONE hairline-fenced row: assignee avatar stack with a green presence dot on
-    whoever is active now (names on hover, "N assigned"), the From chip, Resolve/Reopen at the
-    right; the round-4 grey facts well and its Assigned / Active now rows are gone; round 6:
-    that row is one 22px caption line, the From chip is what elides, "N assigned" never does,
-    and the meta line is a `<div>`; round 8, Samuel: "i think this can be removed": the whole
-    meta line (opener, Opened, Due, Updated) is GONE from the header); `task-subtasks.tsx` (ordered checks,
-    title, one-line detail, owner face, state pill); `task-notes.tsx` (notes feed + pill
-    composer, in memory). The list row gained a "2/4" progress mark and its title opens the
-    detail. Seed content: `data/staging-task-details.ts`. Port needs subtasks + notes in the
-    tasks model and MCP tools for agents to write them.
-  - **Round 6 (Samuel: "Also 2 console errors")**: every face in the tasks UI is
-    `shared/ui/identity-face.tsx › IdentityFace`, which renders SPANS only, because the pill's
-    faces sit inside the product's recipients `<p>`.
-  - **Shared primitives (2026-10-26)**: the cards are the kit's `.white-card`, empty lists
-    `EmptyState variant="well"`, status words `StatusPill`, stacks `IdentityStack`, the subtask
-    meter `ThinMeter`, the back control `Breadcrumb`, Resolve and the settings pills
-    `PILL_BUTTON` (all `src/shared/ui`; DESIGN-SYSTEM.md lists them). Port by importing them.
-  CSS `ui-staging/staging.css › .uis-tk*` + `.uis-tkd*` (the bar's `:has()` reach into the
-  product row is staging-only; port it as a real slot).
 - `channel-switcher.tsx`: rows select, well headings toggle. The markup now lives once in
   `ui-staging/staging-channel-rail.tsx`, because the picker became frame-level on every face
   (see `ui-staging/PORTING.md`); this page is the only caller that passes `onSelect`.
@@ -132,7 +98,7 @@ Also imported by `/popups` (its thread and agent windows' bodies, `popups-stagin
 | `data/tech-debt-fixture.ts` | the demo channel at its final beat (read off the demo's own selectors) |
 | `data/decision-fixture.ts` | ONE hardcoded "needs your decision" post in #tech-debt (Samuel, ask 6b), as a real `metadata.display` v2 envelope with a `choice` block — the shape `dopl_request_decision` writes, drawn by the product card and answered in memory. |
 | `data/extra-fixtures.ts`, `data/staging-builders.ts`, `data/staging-agents.ts`, `data/staging-rows.ts`, `data/demo-imports.ts`, `data/staging-fixture-types.ts` | fake data (invented transcripts for the column's other channels, in the demo's voice) |
-| `data/staging-tasks.ts` + `data/staging-task-details.ts` (round 4) + `store/use-staging-tasks.ts` **(new 2026-10-26)** | the (not yet existing) channel tasks read + resolve/reopen writes; seeded for #tech-debt only, links read off the demo's own threads/messages |
+| `data/staging-tasks.ts` + `data/staging-task-details.ts` + `store/use-staging-tasks.ts` | `channels/hooks/use-channel-tasks.ts` + `use-task-writes.ts` (the tasks route); contract-shaped `ChannelTaskDetail`s seeded for #tech-debt only, links read off the demo's own threads/messages |
 | `staging-channels-page.tsx` | page root |
 
 ## Shared frame edits (`src/features/ui-staging/`)

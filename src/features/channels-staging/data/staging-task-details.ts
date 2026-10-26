@@ -1,44 +1,65 @@
 /**
  * STAGING DATA (round 4, 2026-10-26, task detail) — what each seeded #tech-debt task holds
- * inside: the opening agent's description, a due date where one was set, the agents' subtask
- * breakdown (ordered, mixed owners and states) and the notes posted on the task. Written in the
- * landing demo's voice and story (`banner-demo/demo-transcript.ts`): Cleanup Planner splits
- * teardown into three coders, Debt Triage takes the flakes, Backlog Scout takes uploads.
- * Merged into the tasks by id in `./staging-tasks.ts › task`. Fake; no product counterpart.
+ * inside, in the product's shapes (`@dopl/contracts › tasks.ts`): the opening agent's
+ * description, a due date where one was set, the agents' subtask breakdown (ordered, mixed owners
+ * and states) and the notes posted on the task. Written in the landing demo's voice and story
+ * (`banner-demo/demo-transcript.ts`): Cleanup Planner splits teardown into three coders, Debt
+ * Triage takes the flakes, Backlog Scout takes uploads. Merged into the tasks by id in
+ * `./staging-tasks.ts`. Fake.
  */
 
 import { AGENT_IDS, minsAgo } from "./demo-imports";
 import { U } from "@/features/marketing/components/banner-demo/demo-data";
+import { stagingAgentOwner } from "./staging-agents";
 import type {
-  StagingSubtask,
-  StagingTaskNote,
+  ChannelTaskNote,
+  ChannelTaskSubtask,
   SubtaskState,
   TaskActor,
-} from "./staging-tasks";
+} from "@/features/channels/types";
 
 type Details = {
   description: string;
   dueAt: string | null;
-  subtasks: StagingSubtask[];
-  notes: StagingTaskNote[];
+  subtasks: ChannelTaskSubtask[];
+  notes: ChannelTaskNote[];
 };
 
-const a = (agentId: string): TaskActor => ({ kind: "agent", agentId });
-const p = (userId: string): TaskActor => ({ kind: "person", userId });
+/** An agent acts under its operator's account. */
+export const agentActor = (agentId: string): TaskActor => ({
+  kind: "agent",
+  agentId,
+  userId: stagingAgentOwner(agentId),
+});
+export const personActor = (userId: string): TaskActor => ({ kind: "person", userId });
+
+const a = agentActor;
+const p = personActor;
 
 let n = 0;
-const sub = (title: string, owner: TaskActor, state: SubtaskState, detail?: string): StagingSubtask => ({
-  id: `sub-${(n += 1)}`,
-  title,
-  owner,
-  state,
-  ...(detail ? { detail } : {}),
-});
-const note = (author: TaskActor, minutesAgo: number, text: string): StagingTaskNote => ({
+const sub = (
+  title: string,
+  owner: TaskActor,
+  state: SubtaskState,
+  detail?: string
+): ChannelTaskSubtask => {
+  n += 1;
+  return {
+    id: `sub-${n}`,
+    title,
+    detail: detail ?? null,
+    owner,
+    state,
+    position: n,
+    createdAt: minsAgo(6),
+    updatedAt: minsAgo(3),
+  };
+};
+const note = (author: TaskActor, minutesAgo: number, body: string): ChannelTaskNote => ({
   id: `note-${(n += 1)}`,
   author,
-  at: minsAgo(minutesAgo),
-  text,
+  createdAt: minsAgo(minutesAgo),
+  body,
 });
 /** Days from now, for a due date. */
 const inDays = (d: number) => minsAgo(-d * 24 * 60);
