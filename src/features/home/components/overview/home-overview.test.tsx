@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { HomeOverview } from "./home-overview";
+import type { HomeOverview as HomeOverviewPayload } from "@/features/home/overview-types";
 import type { HomeOverviewReads } from "./use-home-overview-reads";
 import { CREDITS, DEVICES, OVERVIEW, read, reads } from "./overview-test-fixtures";
 
@@ -31,7 +32,7 @@ describe("/home Overview face", () => {
   });
 
   it("ghosts the face until the overview lands, and says so", () => {
-    mount(reads({ overview: read(undefined) }));
+    mount(reads({ overview: read<HomeOverviewPayload>(undefined) }));
     expect(screen.getByRole("status").textContent).toContain("Loading overview");
     expect(screen.queryByRole("region", { name: "Credits" })).toBeNull();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
@@ -39,7 +40,7 @@ describe("/home Overview face", () => {
 
   it("shows the error with Try again and Reload", () => {
     const refetch = vi.fn();
-    mount(reads({ overview: read(undefined, { error: new Error("boom"), refetch }) }));
+    mount(reads({ overview: read<HomeOverviewPayload>(undefined, { error: new Error("boom"), refetch }) }));
     expect(screen.getByRole("alert")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(refetch).toHaveBeenCalledOnce();

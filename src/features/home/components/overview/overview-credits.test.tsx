@@ -2,7 +2,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
-import { USAGE_SCOPE_ALL, USAGE_SCOPE_DESKTOP } from "@/features/home/overview-types";
+import {
+  USAGE_SCOPE_ALL,
+  USAGE_SCOPE_DESKTOP,
+  type HomeOverviewSeries,
+} from "@/features/home/overview-types";
+import type { TokenSpendReport } from "@/features/home/token-spend-days";
 import { monthKey, monthLabel, shiftMonthKey } from "@/features/home/overview-period";
 import { HomeOverview } from "./home-overview";
 import type { HomeOverviewReadArgs, HomeOverviewReads } from "./use-home-overview-reads";
@@ -75,7 +80,7 @@ describe("the Credits card", () => {
     mount({ series: read({ ...SERIES, truncated: true }) });
     expect(screen.getByText("Newest rows only.")).toBeTruthy();
     cleanup();
-    mount({ series: read(undefined, { error: new Error("x") }) });
+    mount({ series: read<HomeOverviewSeries>(undefined, { error: new Error("x") }) });
     expect(screen.getByText("Couldn't load daily credits.")).toBeTruthy();
   });
 
@@ -117,7 +122,7 @@ describe("the Tokens card", () => {
     mount({ spend: read(spendToday([])) });
     expect(screen.getByText("No agent has spent tokens")).toBeTruthy();
     cleanup();
-    mount({ spend: read(undefined, { error: new Error("x") }) });
+    mount({ spend: read<TokenSpendReport>(undefined, { error: new Error("x") }) });
     expect(screen.getByText("Couldn't load token spend.")).toBeTruthy();
   });
 });
