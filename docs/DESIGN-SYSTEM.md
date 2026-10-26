@@ -128,7 +128,7 @@ Utilities generated from `@theme` (values live in `:root`):
 | `bg-home-frame`                               | `#2f3542`        | THE APP FRAME — the dark slab behind shell root + surface + sidebar + account rail (darkened a notch 2026-08-25; scope widened to the workspace shell 2026-08-30) |
 | `bg-home-panel`                               | `#f1f3f5`        | THE PANEL — `.page-float`'s fill, i.e. every full-page card in the app. /home's panel takes its fill from the face instead (`pages/home/home.module.css`, 2026-10-26): `--bg-overlay` white, `--home-card` on Channels |
 | `border-home-panel-line`                      | `var(--border-default)` | THE PANEL LINE — `.page-float`'s 1px edge and the /home record pane's (both 1px since 2026-10-26, the staging look). Only the `border-` utility is live. |
-| `bg-home-card`                                | `#fbfcfc`        | THE CARD — the /home record pane's fill on every face but Channels, where the pane is white and the panel takes this (`home.module.css`'s `data-face` seam); also `.card-well` |
+| `bg-home-card`                                | `#fbfcfc`        | THE CARD — the /home record pane's fill on every face but Channels and Knowledge, where the pane is white (Channels' panel takes this; `home.module.css`'s `data-face` seam); also `.card-well` |
 | `--agent-color-01 … -16` (no utility) | `oklch(0.44 0.11 H)`, H every 22.5° | **THE AGENT COLOUR BANK** — one hue per LIVE agent in a channel (Samuel, 2026-09-13; docs/specs/agent-colors.md). ⚠ **THEY ARE IDENTITY, NEVER STATUS**: the severity RAMP two rows up (`success` → `danger`) says how an agent is DOING, and `agent-01` being red says nothing about its health. ⚠ **NO `text-*` / `bg-*` UTILITY, AND THAT IS DELIBERATE** — the member is chosen by DATA (a key off a peer's projection), and a Tailwind class cannot be built from a runtime key. `src/shared/lib/agent-colors.ts › agentColorVar` is the ONLY place the token name is spelled; consumers pass its `var(--agent-color-NN)` into an inline `style`. ⚠ ONE SATURATION AND ONE LIGHTNESS, HUE ONLY, so no two read as "the same colour, darker" and all sixteen carry equal weight against the transcript's white ground. ⚠ **THE VALUE ABOVE WAS WRITTEN `oklch(0.62 0.17 H)` HERE UNTIL 2026-10-10 AND BOTH STYLESHEETS SAID `0.44 0.11` THE WHOLE TIME** — a doc-only drift, corrected, and worth naming because the lightness is now LOAD-BEARING: the working strip fills a pill with these and puts white on them (below), so `0.62` would have promised a contrast nothing in the repo actually has. ⚠ **ONE LIGHTNESS IS ALSO WHAT BUYS A SINGLE INK RULE, AND IT IS MEASURED**: white (`--text-on-cta`) clears WCAG AA on every one of the sixteen with half again the margin — 6.99:1 at the worst hue (H=200), 8.26:1 at the best, i.e. AAA to within a rounding error — and `lib/agent-color-contrast.test.ts` fails the day a hue is lightened on its own, which is the one change that would break a filled label while breaking NOTHING ELSE in the repo. ⚠ **AND THERE IS NO SECOND THEME TO CHECK**: the bank is declared once in `:root` with no light/dark split (that same test asserts it), so "readable in both themes" has one answer. ⚠ NO `-soft` COMPANION SET: since 2026-09-14 the colour is a STROKE and a 3px BAR with no filled area at all **except the working strip's pill** (2026-10-10), so a tint would still have no consumer (⚠ the stroke was a `ring` until 2026-09-16 and is a 3px `border` now — one drawn shape, see "The AGENT POST ACCENT" below). ⚠ SIXTEEN is one more than the agent cap (15, 2026-09-01), so a full room still has a spare. ⚠ The key set is mirrored in four more places — re-derive with `src/features/channels/agent-color-schema.test.ts`, never by hand. |
 | `--shadow-card-lift` (no utility) | `0 2px 4px rgba(0,0,0,0.07), 0 12px 28px rgba(0,0,0,0.1)` | THE CARD HOVER LIFT's shadow — read by the kit's `.card-lift:hover` and `knowledge-v2.module.css`'s `.card:hover`, so both cards lift alike. Declared in `globals.css` and mirrored in `tokens.css` (2026-09-23). |
 | `--raised-light-drop` (no utility) | `var(--raised-light-bevel), 0 4px 7px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.08)` | A small raised face standing proud of what it overlaps: `IdentityFace`'s runtime badge and onboarding's `paired-avatar.tsx › Face` (2026-10-26). Declared in `globals.css`, mirrored in `tokens.css`. |
@@ -155,8 +155,8 @@ sidebar."* `pages/home/home-frame.tsx › HomeFrame` is the literal spec: a sing
 `page-float` `<main>` spanning everything right of the rail, the
 relationship list standing directly on it, the record pane a card
 floating inside. ⚠ **/home's own panel and pane fills follow the face (2026-10-26, the staging
-look)**: a white panel over the `--home-card` pane, swapped on Channels — `home.module.css`'s
-`data-face` seam, never a global token redefinition. The workspace shell is that structure with the nav where the
+look)**: a white panel over the `--home-card` pane, swapped on Channels, and a white pane on
+Knowledge — `home.module.css`'s `data-face` seam, never a global token redefinition. The workspace shell is that structure with the nav where the
 list is.
 
 | Level | Face | Who wears it |
@@ -400,7 +400,7 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `StatusPill` (`status-pill.tsx`) | THE status pill: `.status-pill` with `tone` and an optional `dot` (default off; the agent liveness pill turns it on). One word, never a sentence. An agent's liveness wears it through `channels/components/agent-bits.tsx › AgentStatusPill` (`working` → `live`, else `neutral`) on the Agents-tab cards, the thread Info tab's agent rows, the thread card's agent rows and the demo's agent view header. The profile popup wears it for a `SettingsRow` badge ("This computer") and a runtime sign-in's state (`runtime-credential-bars.tsx`: `live` + dot for Connected, `attention` for an expired sign-in). |
 | `Breadcrumb` (`breadcrumb.tsx`) | THE breadcrumb (DESIGN-LANGUAGE §4): `text-caption` muted crumbs, `›` between, the last item `aria-current="page"` in ink. A crumb with `onSelect` is a button (`ariaLabel` names it); `icon` leads it (a back chevron, a small face). The trail itself is the `Breadcrumb` navigation unless `ariaLabel` names it (the knowledge staging header's "Knowledge base breadcrumb", 2026-10-26). `className` sets the type step for a trail that heads a pane (`message-pane-header.tsx › PaneHeader`, `text-title`). |
 | `PILL_BUTTON` (`small-action-button.ts`) | THE identity look's OUTLINED PILL (DESIGN-LANGUAGE §4): hairline, `--bg-overlay`, `text-caption font-medium`, raised-1 hover, content height (a fixed row sets `h-*` through `cn`). The pill family, all in `small-action-button.ts` / `page-action-button.tsx`: `INK_PILL_FACE` is the one black face (flat `bg-surface-cta` on `.raise-ink`), worn at 36px by `PAGE_ACTION_BTN` (page verbs: New channel, `CreateButton`, `bits.tsx › TAB_ACTION`), at 30px by `SMALL_PRIMARY_PILL` (popup actions) and at 26px by `INK_PILL` (a card's Open thread), with `QUIET_PILL` its 26px hairline twin (Launch agent, the tasks quick view's See all); `PAGE_ACTION_BTN_LIGHT` and `OpenScaleButton` are the white faces, `WHITE_PILL` (`page-action-button.tsx`, 2026-10-26) is /home's header white pill — `.white-card` + `.raise-pill` at 36px, the face of the search and Profile pills — for page-header controls (the ontology staging board's gear and display picker), and this one sits inside cards. `SMALL_PILL_BUTTON` is this pill at the 30px action scale, the profile popup's secondary verb beside `SMALL_PRIMARY_PILL` (Sign out, Manage billing, Cancel / Resume plan, Connect an agent, Pair glasses, runtime Sign in), with `SMALL_PILL_ICON` its glyph size. The Agents-tab card's Open / Viewing wears it at 26px (`agents-tab-cards.tsx`); the Threads and Artifacts rows' Open / Viewing wear `QUIET_PILL` (`threads-tab.tsx`, `artifacts-tab.tsx`). |
-| `TEXT_LINK_BUTTON` (`small-action-button.ts`) | THE TEXT LINK (2026-10-26): plain text that takes the ink underline (`decoration-text-primary`, offset 2) on hover and on keyboard focus; no face, no fill. Type, ink and layout stay with the caller. Worn by the Tasks tab's title (`channels/components/task-list.tsx`) and the knowledge staging tree's New file / New folder (muted ink to ink, leading glyph). |
+| `TEXT_LINK_BUTTON` (`small-action-button.ts`) | THE TEXT LINK (2026-10-26): plain text that takes the ink underline (`decoration-text-primary`, offset 2) on hover and on keyboard focus; no face, no fill. Type, ink and layout stay with the caller. Worn by the Tasks tab's title (`channels/components/task-list.tsx`) and the knowledge tree's New file / New folder (`knowledge-v2/list/tree-row-bits.tsx › AddRow`; muted ink to ink, leading glyph). |
 | `HomeChannelRow` (`src/shared/ui/home-channel-row.tsx`) | /home's channel row (2026-10-26, the staging look): its OWN white card — `.white-card` + `.raise` on a `--border-subtle` hairline, 12px — and the SELECTED row is the same card filled `--surface-cta` (border included, so selecting moves nothing), name `font-semibold` in `--text-on-cta` and every quiet line `rowQuietInk`. Two 18px lines: name + stamp, then `LinkOutChip` / the pending line / a 20px `IdentityStack` (initial fallback) or a solo channel's description, with the unread marks right. A real `<button>`. The `.auth-btn-3d` selected face and the raised-light resting face it replaced are deleted with `HOME_CARD_FACE` / `HOME_CARD_FACE_SELECTED`. |
 | `MentionBadge` / `UnreadDot` (`src/shared/ui/home-card-marks.tsx`) | /home's channel-row UNREAD MARKS (Samuel, 2026-09-13): an **`@ N` pill** — `bg-surface-cta` + `text-text-on-cta`, `text-micro font-medium`, 18px, `rounded-full`, the same token pair `PAGE_ACTION_BTN` wears — and a 6px `bg-text-primary` **dot**. ⚠ **THE PILL IS HIDDEN AT ZERO**, never an inked `@ 0`, and **the two are EXCLUSIVE**: the pill already says the louder version of what the dot says. ⚠ **A NUMERIC badge is legitimate here ONLY because a real count backs it.** ⚠ **AND THE CHANNELS SIDEBAR WEARS BOTH MARKS SINCE R-28 / wave 4 — the older "the sidebar deliberately has none" note is SUPERSEDED.** The rule it stated is unchanged (`Channel.unread` is a BOOLEAN and inventing a number for it is forbidden); what changed is that the ruling BOUGHT the count (`Channel.mentionCount`). ⚠ **TWO INKS, ONE IMPLEMENTATION (2026-09-17):** `UnreadDot` takes `tone` — `"ink"` (`bg-text-primary`) is /home's, whose account palette has ink for its only accent, and `"link"` (`bg-link`) is the channels picker's, which keeps its own design under R-03. `onDark` OUTRANKS the tone: the face the dot stands on decides before the surface's accent does. **A third tone is a ruling, not a prop value**, and a second DECLARATION is the bug — `shared/ui/home-card-marks.test.tsx` source-scans `shared/ui` + `channels/components` for one. ⚠ **`LinkOutChip` LIVES HERE TOO** (an invitation is out on this row): a STATE, never a control — no `onClick`, because minting and revoking a link are the record pane's. ⚠ **THE "{Name}'s Home" BAR THIS ROW USED TO NAME AS THE SECOND WEARER IS DELETED** (Samuel, 2026-09-15 — the "New channel" pill heads that column now; `pages/home/relationship-list.test.tsx` asserts the bar's absence). ⚠ **THE MODULE MOVED TO `src/shared/ui/` ON 2026-09-17** so the root tree's row reads them; the `pages/home/` re-export shim was deleted as dead code on 2026-10-02, so SPA readers import `@/shared/ui/home-card-marks` directly. The ROW itself is `src/shared/ui/home-channel-row.tsx`. |
 | `AvatarWithPresence` (`avatar-with-presence.tsx`) | `Avatar` wrapped in a presence ring — `ring-success` online / `ring-text-disabled` offline, floated off the avatar by a transparent `p-0.5` gap so it reads on any surface. Prefer over a standalone presence dot wherever an avatar is shown. |
@@ -522,7 +522,7 @@ Re-derive rather than trusting the rows: `grep -rln 'FormDialog' src apps`.
 | `channels/components/invite-dialog.tsx` | CONFIRMATION | Done |
 | `chats/components/detail-pane.tsx` | CONFIRMATION ‡ | Done |
 | `chats/components/list-pane.tsx` | MENU ‡ | Done (out of scope) |
-| `knowledge/components/base-settings-modal.tsx` | INPUT FORM | Todo |
+| `knowledge/components/base-settings-modal.tsx` | INPUT FORM | Done (2026-10-26: the profile popup's chrome, `settings-modal.module.css`, panes from `settings-panel.tsx`) |
 | `knowledge/components/create-base-dialog.tsx` | INPUT FORM | Todo |
 | `knowledge/components/delete-base-confirm.tsx` | CONFIRMATION | Done |
 | `knowledge/components/knowledge-v2/knowledge-v2.tsx` | CONFIRMATION ‡ | Done |
@@ -718,7 +718,11 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
   object panel's **History** section and the /home ontology card's **Changelog** roll-up. **A
   second list would be two places for the day heading, the agent mark and the restore
   confirmation to drift.**
-  - **DAY HEADING** — `h4`, `text-label` uppercase `text-text-muted`, one per UTC day key.
+  - **CARD** (the identity look, 2026-10-26): ONE `.white-card` (`px-3.5`), days separated by a
+    `border-default` hairline, rows inside a day by `border-subtle`. `framed={false}` drops the card
+    for a host that already is one (the ontology object panel's History); the ontology changelog
+    and the knowledge base keep it.
+  - **DAY HEADING** — `h4`, `text-caption font-medium text-text-muted`, one per UTC day key.
     ⚠ **It LABELS the key `revisions/lib/group.ts › groupByDay` produced and never re-derives a
     date from a row's stamp**, or the heading and the rows under it can disagree.
   - **TWO ROW SHAPES, ONE LIST, CHOSEN FROM THE PAYLOAD** (2026-09-09, part 2). A KNOWLEDGE row
@@ -729,27 +733,26 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
     the payload HAS a `field` — never by `resourceType`**, because an ontology `create`/`delete`
     row is an `ontology_object` row too and carries a `{fields}` bundle instead; asking the type
     draws a line reading `undefined: — → —`. A bundle renders the op label plus the object's name,
-    and expands to a `dt`/`dd` list at `text-caption`.
-  - **ROW** — a full-width `button` at `px-1 py-1`, `rounded-md`, `hover:bg-surface-raised-1`,
-    reading **`who · what · when`**: a 13px chevron that rotates on open, the writer's FACE —
-    `shared/ui/avatar.tsx › Avatar` at `xs`, initials when they have no picture (Samuel,
-    2026-10-01: *"instead of it showing the green bot icon, can you show the profile image of the
-    user who did the change"*) — the actor name at `text-small text-text-primary`, the op + path at
-    `text-caption text-text-secondary`, an agent's session name at `text-caption text-text-muted`,
-    and the time pushed right with `ml-auto`. ⚠ **AN AGENT ROW IS ITS OPERATOR'S FACE** (`actor.userId`
-    is the user the agent acted for) **plus a 14px `bg-surface-cta` / `text-text-on-cta` bot badge
-    on the avatar's corner** (`role="img"`, `aria-label="agent"`) — one person, marked as acting
-    through an agent, never two marks side by side. The name and picture ride the row
-    (`RevisionActor.displayName` / `.avatarUrl`), joined server-side per page.
-  - **EXPANDED** — indented `pl-7`, holding the summary (when the row has one) and the word-level
+    and expands to a `dt`/`dd` list at `text-caption` in a `.card-well`.
+  - **ROW** — a full-width `button`, `rounded-lg`, `hover:bg-surface-raised-1`: the writer's FACE
+    (`shared/ui/identity-face.tsx › IdentityFace` at 22px, a person's plain photo, initials when
+    they have no picture; Samuel, 2026-10-01), then one `text-caption text-text-muted` line
+    **`who · session · time`** (the name `font-medium text-text-primary`, an agent's session name
+    only on an agent row) over the change at `text-body` (`what · path`, or the field line), and a
+    14px chevron on the right that turns on open. ⚠ **AN AGENT ROW IS ITS OPERATOR'S FACE**
+    (`actor.userId` is the user the agent acted for) **plus a 14px `bg-surface-cta` /
+    `text-text-on-cta` bot badge on the face's corner** (`role="img"`, `aria-label="agent"`) — one
+    person, marked as acting through an agent, never two marks side by side. The name and picture
+    ride the row (`RevisionActor.displayName` / `.avatarUrl`), joined server-side per page.
+  - **EXPANDED** — indented `pl-8`, holding the summary (when the row has one) and the word-level
     diff. **The diff's two washes are `bg-success/10` for an addition and `bg-danger/10` +
     `line-through` for a removal, taken BY REFERENCE from
     `skills/components/skill-history-panel.tsx › DiffCell`** so the app has one diff palette. Both
     keep `text-text-primary`: the diff is read as prose, not decoded as colour, and the
     strike-through is the second channel for a reader who cannot separate the two hues. The diff
-    body scrolls inside its own `max-h-64 overflow-auto` on `bg-bg-inset` — a markdown body carries
-    code blocks and long URLs and the page must never scroll sideways.
-  - **RESTORE** — a text control in the expanded row, behind `ConfirmDialog` (see **Popup forms**:
+    body scrolls inside its own `max-h-64 overflow-auto` in a `.card-well` — a markdown body
+    carries code blocks and long URLs and the page must never scroll sideways.
+  - **RESTORE** — `SMALL_PILL_BUTTON` (with the rotate glyph) in the expanded row, behind `ConfirmDialog` (see **Popup forms**:
     it collects nothing). ⚠ **The confirmation NAMES THE DATE**, because Restore over a list of
     near-identical rows is the one place a mis-click is invisible until the next read. ⚠ **AND ON
     AN ONTOLOGY ROW IT NAMES THE FIELD AND THE PRIOR VALUE** (2026-09-09, part 2) — title
@@ -761,8 +764,9 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
     counts as "nothing" is `revisions/lib/restorable.ts › isRestorable`, THE SAME PREDICATE the
     server refuses on, so the button and the refusal cannot disagree: a knowledge row with no
     body, an ontology association, a create/delete bundle, and every ontology row.
-  - **MINIMAL COPY.** Label and control; no explainer paragraph about what a revision is. Empty,
-    loading and error states are one `text-caption text-text-muted` line each.
+  - **MINIMAL COPY.** Label and control; no explainer paragraph about what a revision is. Empty is
+    `EmptyState variant="well"` ("No changes yet"); loading is a pulse bar and error one
+    `text-caption text-danger` line, both on the card. Load more is `SMALL_TEXT_BUTTON`.
 - **Search popup** (2026-09-17, Samuel: *"it should be a pop up like this"*, over a
   reference card; contents overhauled to the identity look 2026-10-26, Samuel: *"overhaul what
   that pop up looks like in terms of contents to look better"*).
