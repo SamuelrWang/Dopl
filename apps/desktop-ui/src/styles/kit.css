@@ -122,14 +122,14 @@
 /* Official global surface components. Compose these; never re-hardcode their recipes. */
 
 /* The one raised card a full-page view renders into, on the app frame palette (`--home-panel`
-   fill, the 2px `--home-panel-line` edge the /home record pane wears). */
+   fill, the 1px `--home-panel-line` edge the /home record pane wears). */
 .page-float {
   flex: 1;
   min-width: 0;
   /* Top is a token because the account rail reads it (`--page-float-gap-top`). */
   margin: var(--page-float-gap-top) 8px 9px 8px;
   background: var(--home-panel);
-  border: 2px solid var(--home-panel-line);
+  border: 1px solid var(--home-panel-line);
   border-radius: 14px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.05),
@@ -169,6 +169,46 @@
 .card-well {
   border-radius: 10px;
   background: var(--home-card);
+}
+
+/* THE RAISE: a pressable object standing on the /home shell's white panel, lifting 2px on hover.
+   Shadow and motion only; fill, border and radius stay with the caller. `.raise` is a channel row,
+   `.raise-pill` the search and Profile pills, `.raise-ink` the ink New channel pill. */
+.raise,
+.raise-pill,
+.raise-ink {
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.raise {
+  box-shadow: var(--shadow-raise);
+}
+.raise-pill {
+  box-shadow: var(--shadow-card-lift);
+}
+.raise-ink {
+  box-shadow: var(--shadow-raise-ink);
+}
+.raise:hover,
+.raise-pill:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raise-hover);
+}
+.raise-ink:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raise-ink-hover);
+}
+/* A pill holding a field stays put while it is typed in. */
+.raise-pill:focus-within {
+  transform: none;
+  border-color: var(--focus-line);
+  box-shadow: var(--shadow-card-lift);
+}
+@media (prefers-reduced-motion: reduce) {
+  .raise:hover,
+  .raise-pill:hover,
+  .raise-ink:hover {
+    transform: none;
+  }
 }
 
 /* THE STATUS PILL: an optional dot and one word. `data-tone` picks the ink. */
@@ -535,7 +575,7 @@
 .channel-info-slide[data-open="true"] {
   /* `--info-w` is written on the surface root by `use-info-resize.ts`, which owns the limits.
      The 380px fallback is shared with `agent-panel.tsx` and `info-panel.tsx` (same right edge;
-     pinned by `app-shell/frame-palette.test.ts`). */
+     pinned by `app-shell/info-column.test.ts`). */
   width: var(--info-w, 380px);
 }
 /* No transition while dragging (`use-info-resize.ts › INFO_RESIZING_ATTR` on the surface root). */
@@ -592,20 +632,6 @@
 [data-frame-skin] .border-border-default,
 [data-frame-skin] .border-border-subtle {
   border-color: var(--home-panel-line);
-}
-
-/* Structural dividers match the pane's 2px outer border; internal rules keep the hairline. `th`
-   is excluded: a markdown table header carries the same classes. */
-[data-frame-skin] .border-l.border-border-default {
-  border-left-width: 2px;
-}
-/* The same 2px, told to the resize pill (`info-resize-handle.tsx › DIVIDER_WIDTH_VAR`) so it
-   centres on the line; declared adjacent so the two cannot drift. */
-[data-frame-skin] {
-  --channel-divider-w: 2px;
-}
-[data-frame-skin] .border-b.border-border-default:not(th) {
-  border-bottom-width: 2px;
 }
 
 /* The sender pills wear the raised-light face here (the kit's `--raised-light-*` parts). Resting

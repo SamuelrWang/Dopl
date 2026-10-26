@@ -368,6 +368,14 @@
    * `knowledge-v2.module.css › .card:hover`, so both cards lift alike.
    */
   --shadow-card-lift: 0 2px 4px rgba(0, 0, 0, 0.07), 0 12px 28px rgba(0, 0, 0, 0.1);
+  /**
+   * The kit's `.raise*` steps. A white object on the /home shell's white panel has no fill edge,
+   * so it casts more than `--shadow-bento`; the ink pill casts more again.
+   */
+  --shadow-raise: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-raise-hover: 0 3px 6px rgba(0, 0, 0, 0.08), 0 10px 22px rgba(0, 0, 0, 0.12);
+  --shadow-raise-ink: 0 2px 4px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.16);
+  --shadow-raise-ink-hover: 0 4px 8px rgba(0, 0, 0, 0.2), 0 12px 26px rgba(0, 0, 0, 0.2);
 }
 
 /* One palette, from :root. No dark/light split. */
@@ -733,7 +741,7 @@ html {
    Every page composes these; never re-hardcode their recipes locally. */
 
 /* Floating page surface — the one raised card a full-page view renders into; margins reveal
-   the frame on every side. Wears the app frame palette (`--home-panel` fill, 2px
+   the frame on every side. Wears the app frame palette (`--home-panel` fill, 1px
    `--home-panel-line` edge) so /home and the workspace pages match. */
 .page-float {
   flex: 1;
@@ -741,7 +749,7 @@ html {
   /* Top is a token because the account rail reads it (`--page-float-gap-top`). */
   margin: var(--page-float-gap-top) 8px 9px 8px;
   background: var(--home-panel);
-  border: 2px solid var(--home-panel-line);
+  border: 1px solid var(--home-panel-line);
   border-radius: 14px;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.05),
@@ -780,6 +788,46 @@ html {
 .card-well {
   border-radius: 10px;
   background: var(--home-card);
+}
+
+/* THE RAISE: a pressable object standing on the /home shell's white panel, lifting 2px on hover.
+   Shadow and motion only; fill, border and radius stay with the caller. `.raise` is a channel row,
+   `.raise-pill` the search and Profile pills, `.raise-ink` the ink New channel pill. */
+.raise,
+.raise-pill,
+.raise-ink {
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.raise {
+  box-shadow: var(--shadow-raise);
+}
+.raise-pill {
+  box-shadow: var(--shadow-card-lift);
+}
+.raise-ink {
+  box-shadow: var(--shadow-raise-ink);
+}
+.raise:hover,
+.raise-pill:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raise-hover);
+}
+.raise-ink:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raise-ink-hover);
+}
+/* A pill holding a field stays put while it is typed in. */
+.raise-pill:focus-within {
+  transform: none;
+  border-color: var(--focus-line);
+  box-shadow: var(--shadow-card-lift);
+}
+@media (prefers-reduced-motion: reduce) {
+  .raise:hover,
+  .raise-pill:hover,
+  .raise-ink:hover {
+    transform: none;
+  }
 }
 
 /* THE STATUS PILL: an optional dot and one word. `data-tone` picks the ink. */
@@ -1144,7 +1192,7 @@ html {
 .channel-info-slide[data-open="true"] {
   /* `--info-w` is written on the surface root by `channels/components/use-info-resize.ts`.
      The 380px fallback must match `agent-panel.tsx` and `info-panel.tsx` (same right edge, or
-     the divider jumps); pinned by `app-shell/frame-palette.test.ts`. */
+     the divider jumps); pinned by `app-shell/info-column.test.ts`. */
   width: var(--info-w, 380px);
 }
 /* No transition while dragging, or the column lags the pointer
@@ -1202,20 +1250,6 @@ html {
 [data-frame-skin] .border-border-default,
 [data-frame-skin] .border-border-subtle {
   border-color: var(--home-panel-line);
-}
-
-/* Structural dividers match the pane's own 2px outer border; soft internal rules keep their
-   hairline. `th` is excluded: a markdown table's header cell carries the same classes. */
-[data-frame-skin] .border-l.border-border-default {
-  border-left-width: 2px;
-}
-/* Tells `channels/components/info-resize-handle.tsx › DIVIDER_WIDTH_VAR` the 2px border so
-   the resize pill centres on it; declared beside the width so the two cannot drift. */
-[data-frame-skin] {
-  --channel-divider-w: 2px;
-}
-[data-frame-skin] .border-b.border-border-default:not(th) {
-  border-bottom-width: 2px;
 }
 
 /* Sender pills wear the raised-light face under the skin, from the kit's `--raised-light-*`

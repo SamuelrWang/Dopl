@@ -4104,11 +4104,9 @@
 
 /* ── Banner demo — the /home account surface in the slot ──────────────
    Markup: components/banner-demo/. The RECORD PANE is the product's own
-   channels surface (which is what /home itself mounts); since 2026-09-17 the
-   /home CHROME around it composes the product's own recipes too — the black
-   page pill, the face selector's options, the three gray wells and the channel
-   ROW all moved into the root tree so this scene can read them
-   (`banner-demo/demo-home-chrome.tsx` lists them). /home's own PAGES still live
+   channels surface (which is what /home itself mounts); the /home chrome around
+   it is the demo's own faces (`banner-demo/demo-home-faces.tsx`) over the
+   product's tab and well sets. /home's own PAGES still live
    in `apps/desktop-ui`, which the Next tree cannot import. This file owns the
    demo's stage — the scale wrapper, the frame geometry, the scripted cursor and
    its click ripple.
@@ -4244,7 +4242,7 @@
   margin-top: 4px;
 }
 
-/* THE PANEL — the kit's `.page-float` (fill, 2px line, 14px radius, float
+/* THE PANEL — the kit's `.page-float` (fill, 1px line, 14px radius, float
    margins, shadow) composed in the TSX; this adds layout only, plus the
    flush-left margin. ⚠ `margin-left: 0` is `index.tsx`'s `!ml-0`: the dark
    column the eye reads must be the 54px rail and nothing wider, or the rail's
@@ -4263,7 +4261,7 @@
   overflow: hidden;
 }
 
-/* THE RECORD PANE — a white card bounded by the account palette's 2px line,
+/* THE RECORD PANE — a white card bounded by the account palette's line,
    NOT an elevation. ⚠ No shadow, deliberately (`index.tsx`): the pane has no
    top or left margin, so the upward half of a drop printed straight into the
    gap under the header as a gray smudge beside the info column's tab pills.
@@ -4276,8 +4274,6 @@
   min-width: 0;
   overflow: hidden;
   margin: 0 12px 12px 0;
-  /* 1px (Samuel, 2026-10-22: the lines around the channel were "too thick"); the
-     product's record pane is 2px. Demo-only, like every face in this block. */
   border: 1px solid var(--home-panel-line);
   border-radius: 14px;
   background: var(--home-card);
@@ -4634,9 +4630,8 @@
 }
 
 /* ── /home TOP BAR, the demo's own face (Samuel, 2026-10-22) ──────────
-   `banner-demo/demo-home-faces.tsx › DemoTopBar`. Same cells and 36px height as
-   the product-faithful `DemoHomeHeader`: the list-width lead cell, one segmented
-   track, search, profile. */
+   `banner-demo/demo-home-faces.tsx › DemoTopBar`, the same cells and 36px height as
+   desktop `home-header.tsx`: the list-width lead cell, the tabs, search, profile. */
 .lp-demo-top {
   display: flex;
   align-items: center;
@@ -4947,23 +4942,6 @@
 .lp-demo-chip-dots {
   flex: none;
   color: var(--text-on-cta);
-}
-
-/* ── THINNER FRAME LINES, demo-only (Samuel, 2026-10-22) ──────────────
-   The panel's float border and the account skin's structural dividers are 2px
-   in the product (`globals.css › .page-float`, `[data-frame-skin]`); the scene
-   draws them at 1px. More specific than the skin's own rules, so they win. */
-.lp-demo-panel.page-float {
-  border-width: 1px;
-}
-.lp-demo-record[data-frame-skin] {
-  --channel-divider-w: 1px;
-}
-.lp-demo-record[data-frame-skin] .border-l.border-border-default {
-  border-left-width: 1px;
-}
-.lp-demo-record[data-frame-skin] .border-b.border-border-default:not(th) {
-  border-bottom-width: 1px;
 }
 
 /* ── THREAD INFO AGENT ROWS, the demo's own face (Samuel, 2026-10-22) ──

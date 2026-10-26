@@ -21,7 +21,8 @@ export interface SegmentedOption<K extends string = string> {
  * - `"pills"` (default): trackless filter row of hug-width `.seg-pill`s. Radius stays on the
  *   button and both faces draw rings, not borders, so selecting never shifts layout.
  * - `"track"`: the page-header selector, one flat `.seg-track`.
- * - `"underline"`: text only, the current option marked by a black rule.
+ * - `"underline"`: text only, the current option marked by a black rule. At `size="lg"` it is the
+ *   /home header's tab bar: 13px ink labels that dim on hover.
  * - `"plain"`: `"pills"` without the hairline, for a form's selector.
  * `size="lg"` lands on the 36px header height: trackless the pill is the control; tracked, 30px
  * options + the track's 3px pad.
@@ -35,7 +36,6 @@ export function SegmentedControl<K extends string>({
   size = "sm",
   className,
   ariaLabel,
-  weight,
 }: {
   options: ReadonlyArray<SegmentedOption<K>>;
   value: K;
@@ -53,16 +53,17 @@ export function SegmentedControl<K extends string>({
   /** Accessible name for the `role="tablist"`; needed wherever a visible word outside the row
    *  labels it, since that text is not attached to the tablist. */
   ariaLabel?: string;
-  /** Overrides the form's own weight (the /home page switcher). */
-  weight?: "semibold";
 }) {
   const tracked = variant === "track";
   const underlined = variant === "underline";
   const plain = variant === "plain";
+  const tabBar = underlined && size === "lg";
   // Trackless `lg` takes a 12px side pad, not 15: the channel info column's four-option row
   // with count badges overflows at 15.
   const option = underlined
-    ? "relative h-9 px-1 text-small"
+    ? tabBar
+      ? "relative h-9 px-0.5 text-lead"
+      : "relative h-9 px-1 text-small"
     : size === "md"
       ? "h-[var(--action-h-sm)] px-3 text-caption"
       : size === "lg"
@@ -78,7 +79,7 @@ export function SegmentedControl<K extends string>({
         tracked
           ? "seg-track"
           : underlined
-            ? "flex items-center gap-5"
+            ? cn("flex items-center", tabBar ? "gap-[22px]" : "gap-5")
             : "flex items-center gap-1.5",
         className
       )}
@@ -93,12 +94,9 @@ export function SegmentedControl<K extends string>({
           onClick={() => value !== key && onChange(key)}
           className={cn(
             // `plain` pills are regular weight; every other form keeps medium.
-            "flex items-center justify-center gap-1.5 transition-colors",
-            weight === "semibold"
-              ? "font-semibold"
-              : variant === "plain"
-                ? "font-normal"
-                : "font-medium",
+            "flex items-center justify-center gap-1.5",
+            tabBar ? "transition-opacity" : "transition-colors",
+            plain ? "font-normal" : "font-medium",
             !underlined && "rounded-full",
             option,
             value === key
@@ -107,7 +105,9 @@ export function SegmentedControl<K extends string>({
                 ? "text-text-primary after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-full after:bg-text-primary"
                 : "raised-tab text-text-primary"
               : cn(
-                  "text-text-secondary hover:text-text-primary",
+                  tabBar
+                    ? "text-text-primary hover:opacity-70"
+                    : "text-text-secondary hover:text-text-primary",
                   // `plain` wears `.seg-pill`'s `--seg-fill` gray but not its ring.
                   plain && "bg-[var(--seg-fill)]",
                   !tracked && !underlined && !plain && "seg-pill"

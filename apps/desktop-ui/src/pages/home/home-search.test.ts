@@ -1,28 +1,11 @@
 /**
- * 🔒 /home's SEARCH PILL IS ALWAYS OPEN, AND THE KIT STILL HAS A CLOSED STATE
- * (Samuel, 2026-09-13: *"remove the expanding animation, just have the bar always
- * be expanded fixed"*).
+ * /home's search pill and the kit's expanding search, as SOURCE pins (jsdom loads no
+ * stylesheet and lays nothing out).
  *
- * ⚠ **THE TWO HALVES OF THAT RULING ARE NOT THE SAME FILE, AND CONFLATING THEM
- * BROKE A SECOND SURFACE.** The PAGE stopped toggling (`home-search.tsx` renders
- * `data-open="true"` unconditionally); the KIT was also flattened, to
- * `.search-expand { width: 260px }` with no `[data-open]` on it — which reserves
- * the open width for the CLOSED pill too. The landing banner's home chrome
- * (`src/features/marketing/components/banner-demo/demo-home-chrome.tsx`) rendered
- * exactly that closed pill, so its header grew 224px of dead space beside a 36px
- * button. The width belongs on the state, not on the box.
- *
- * ⚠ **THAT SCENE RENDERS THE OPEN PILL SINCE 2026-09-17** (the hero demo was
- * rebuilt on /home's current UI), so the CLOSED face has no caller today. **The
- * cases below do not change with it**: the closed width is still the kit's, the
- * next caller would inherit the same bug from a flattened rule, and a state whose
- * width lives on the box is wrong whether or not anyone is currently in it.
- *
- * ⚠ SOURCE SCAN, AND BOTH COPIES. jsdom loads no stylesheet, so a mounted
- * assertion sees no width at all; and the kit is hand-copied into
- * `apps/desktop-ui/src/styles/kit.css` (F-074 — the drift `check-css-token-drift`
- * exists for), which compares `--*` DECLARATIONS and never rules. Same shape as
- * `shared/ui/menu-item-hover.test.tsx` and `app-shell/frame-palette.test.ts`.
+ * /home renders a fixed 260px white pill (`home-search.tsx`); the kit's `.search-expand` keeps a
+ * closed and an open state for its other hosts (the channels sidebar), and its width belongs on
+ * the state, not the box: a width on the box reserved the open width for a closed pill once.
+ * Both kit copies, since the desktop renders `kit.css` (F-074).
  */
 
 import { describe, expect, it } from "vitest";
@@ -64,14 +47,6 @@ describe("🔒 the search pill's width lives on `[data-open]`, not on the box", 
     expect(open).toContain(`width: ${width}`);
   });
 
-  it("/home renders the pill OPEN and brings no toggle button", () => {
-    const src = read("apps/desktop-ui/src/pages/home/home-search.tsx");
-    expect(src).toContain('data-open="true"');
-    // The glyph is decoration now; a second focusable node in the pill would give
-    // the field two accessible entries (the 2026-09-13 ruling deleted the toggle).
-    expect(src).not.toMatch(/<button/);
-  });
-
   /** 🔒 **`.selected-ring` IS DELETED FROM BOTH KIT COPIES (Samuel, 2026-09-17:
    *  *"sure delete it"*; F-713 RESOLVED), AND THE PIN LIVES HERE BECAUSE THIS
    *  PILL IS THE READER THE DESIGN DOC INVENTED FOR IT.** The row claimed the
@@ -89,37 +64,40 @@ describe("🔒 the search pill's width lives on `[data-open]`, not on the box", 
   });
 });
 
+describe("🔒 /home's pill", () => {
+  const src = read("apps/desktop-ui/src/pages/home/home-search.tsx");
+
+  it("is a fixed 260px white pill with no toggle button", () => {
+    expect(src).toContain("white-card raise-pill");
+    expect(src).toContain("w-[260px]");
+    expect(src).not.toContain("search-expand");
+    expect(src).not.toMatch(/<button/);
+  });
+});
+
 /**
- * 🔒 THE POPUP SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29: "have it
- * start at the same place that the search bar starts … extend on the right, so
- * that it is flush with the end of the profile button"). Anchored, not measured:
- * the card is a SIBLING of `.search-expand` (whose `position: relative` would
- * otherwise be its containing block) and fills the header's `relative` action
- * group, whose first child is the pill and last is Profile. Source scan — jsdom
- * lays nothing out.
+ * 🔒 THE POPUP SPANS PILL-LEFT TO PROFILE-RIGHT (Samuel, 2026-09-29). Anchored, not measured:
+ * the card is the pill's SIBLING and fills the header's positioned action group, whose first
+ * child is the pill and last is Profile.
  */
 describe("🔒 the popup is anchored on the header's action group", () => {
-  it("home-search renders the popup OUTSIDE `.search-expand`, full-width", () => {
+  it("home-search renders the popup OUTSIDE the pill, full-width", () => {
     const src = read("apps/desktop-ui/src/pages/home/home-search.tsx");
-    const expandOpen = src.indexOf('<div className="search-expand"');
+    const pill = src.indexOf("<label className={SEARCH_PILL}>");
+    const close = src.indexOf("</label>");
     const popup = src.indexOf("<SearchPopup");
-    expect(expandOpen).toBeGreaterThan(-1);
-    expect(popup).toBeGreaterThan(expandOpen);
-    // Every div opened before the popup is closed before it.
-    const before = src.slice(expandOpen, popup);
-    const opened = before.match(/<div\b/g)?.length ?? 0;
-    const closed = before.match(/<\/div>/g)?.length ?? 0;
-    expect(closed).toBe(opened);
+    expect(pill).toBeGreaterThan(-1);
+    expect(close).toBeGreaterThan(pill);
+    expect(popup).toBeGreaterThan(close);
     expect(src).toMatch(/className="left-0 w-auto"/);
   });
 
-  it("home-header's group holding search + Profile is the positioned anchor", () => {
-    const src = read("apps/desktop-ui/src/pages/home/home-header.tsx");
-    const group = src.match(/<div className="relative flex items-center gap-2\.5">([\s\S]*?)\n {6}<\/div>/);
-    expect(group).not.toBeNull();
-    const body = group?.[1] ?? "";
-    // Pill first, Profile last, nothing else between the group's edges.
-    expect(body.indexOf("<HomeSearch")).toBeGreaterThan(-1);
-    expect(body.indexOf("<HomeSettingsControl")).toBeGreaterThan(body.indexOf("<HomeSearch"));
+  it("the header's trail group is the positioned anchor, search first and Profile last", () => {
+    const frame = read("apps/desktop-ui/src/pages/home/home-frame.tsx");
+    expect(frame).toContain('<div className="relative flex items-center gap-2.5">{trail}</div>');
+    const header = read("apps/desktop-ui/src/pages/home/home-header.tsx");
+    const trail = header.slice(header.indexOf("trail={"));
+    expect(trail.indexOf("<HomeSearch")).toBeGreaterThan(-1);
+    expect(trail.indexOf("<HomeSettingsControl")).toBeGreaterThan(trail.indexOf("<HomeSearch"));
   });
 });

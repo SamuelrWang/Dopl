@@ -485,6 +485,11 @@
   --shadow-raised-hover: 0 4px 7px rgba(0, 0, 0, 0.24), 0 10px 24px rgba(0, 0, 0, 0.24);
   /** THE CARD HOVER LIFT'S SHADOW — mirrored from `src/app/globals.css`, same change. */
   --shadow-card-lift: 0 2px 4px rgba(0, 0, 0, 0.07), 0 12px 28px rgba(0, 0, 0, 0.1);
+  /** The kit's `.raise*` steps — mirrored from `src/app/globals.css`, same change. */
+  --shadow-raise: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-raise-hover: 0 3px 6px rgba(0, 0, 0, 0.08), 0 10px 22px rgba(0, 0, 0, 0.12);
+  --shadow-raise-ink: 0 2px 4px rgba(0, 0, 0, 0.18), 0 8px 20px rgba(0, 0, 0, 0.16);
+  --shadow-raise-ink-hover: 0 4px 8px rgba(0, 0, 0, 0.2), 0 12px 26px rgba(0, 0, 0, 0.2);
 }
 
 html {

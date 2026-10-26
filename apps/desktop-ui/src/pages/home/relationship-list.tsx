@@ -6,7 +6,7 @@ import {
   type WellItem,
 } from "@/features/channels/components/collapse-wells";
 import { channelRowFaces } from "@/features/channels/lib/channel-display";
-import { PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
+import { HomeListColumn } from "./home-frame";
 import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
 import {
   HOME_CHANNEL_WELLS,
@@ -16,8 +16,8 @@ import {
 } from "./channel-wells";
 
 /**
- * Home's left pane: the channel list as three collapsible gray wells — Pinned, Recent (last 24h)
- * and Earlier. The box is `collapse-wells.tsx`, the set and the 24h cut are `channel-wells.ts`, the
+ * Home's left pane: the channel list under three collapsible headings — Pinned, Recent (last 24h)
+ * and Earlier. The wells are `collapse-wells.tsx`, the set and the 24h cut are `channel-wells.ts`, the
  * pin is `Channel.myFavoritedAt` (the header toggle patches the entry this column reads; no
  * per-device mirror). It renders `rows`; it does not narrow them.
  */
@@ -48,30 +48,25 @@ export function RelationshipList({
     [rows, selectedId, onSelect]
   );
   return (
-    // `--home-list-w`, shared with the header cell so the selector lands on the pane's left edge.
-    <div className="flex w-[var(--home-list-w)] shrink-0 flex-col">
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3 pt-1">
-        {/* The empty sentence sits beside the (always drawn) wells: empty boxes cannot say which
-            emptiness this is. */}
-        <WellsColumn
-          wells={HOME_CHANNEL_WELLS}
-          items={filed}
-          storageKey={HOME_CHANNEL_WELLS_KEY}
-          // Collapses survive navigation and reset on restart (Samuel's ruling); the tabs keep "device".
-          store="session"
-          // The Agents tab's well; only the fill differs, because this `<main>` is already
-          // `bg-home-panel` and `PANEL_WELL` would vanish on it.
-          face={PANEL_WELL_ON_PANEL}
-          // All three always drawn: they are the column's structure.
-          showEmpty
-        />
-        {rows.length === 0 && (
-          <p className="px-3 py-6 text-center text-caption text-text-muted">
-            No channels yet
-          </p>
-        )}
-      </div>
-    </div>
+    <HomeListColumn>
+      {/* The empty sentence sits beside the (always drawn) headings, which cannot say which
+          emptiness this is. */}
+      <WellsColumn
+        wells={HOME_CHANNEL_WELLS}
+        items={filed}
+        storageKey={HOME_CHANNEL_WELLS_KEY}
+        // Collapses survive navigation and reset on restart (Samuel's ruling); the tabs keep "device".
+        store="session"
+        variant="heading"
+        // All three always drawn: they are the column's structure.
+        showEmpty
+      />
+      {rows.length === 0 && (
+        <p className="px-3 py-6 text-center text-caption text-text-muted">
+          No channels yet
+        </p>
+      )}
+    </HomeListColumn>
   );
 }
 

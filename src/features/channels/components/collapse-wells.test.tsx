@@ -13,12 +13,9 @@
  *  - **THE WELL SET IS THE CALLER'S, defaults included.** A second caller with a
  *    different set, different labels and TWO wells open by default has to work
  *    without touching this module.
- *  - **`face` VARIES THE FILL AND NOTHING ELSE.** Samuel retracted the `"tab"`
- *    variant the day it shipped (*"just make the gray dropdowns match exactly
- *    those instead"*) but kept the darker fill, because /home's column stands on
- *    the very token the default paints. So the assertion worth holding is that a
- *    second `face` is the SAME BOX — same header, same geometry — and that the
- *    default is still `PANEL_WELL` to the character.
+ *  - **`variant` CHANGES THE FACE, NEVER THE COLLAPSE.** The default is still
+ *    `PANEL_WELL` to the character; `"heading"` (/home's column) drops the box
+ *    for a plain heading and keeps the same clip and bleed.
  *  - **`showEmpty` DRAWS A WELL WITH NOTHING IN IT, AND IT DEFAULTS OFF.** *"I
  *    want there to be something there, like the gray box … but I still want it to
  *    be there"* is a ruling about /home's column; the two tabs keep hide-when-empty.
@@ -33,9 +30,14 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { PANEL_ROWS, PANEL_WELL, PANEL_WELL_ON_PANEL } from "@/shared/ui/panel-well";
+import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
 import { SECTION_PANEL_SHELL } from "@/shared/ui/section-panel";
-import { WellsColumn, type WellItem } from "./collapse-wells";
+import {
+  WELL_FACES,
+  WellsColumn,
+  type WellItem,
+  type WellVariant,
+} from "./collapse-wells";
 import type { WellSpec } from "./well-state";
 
 afterEach(() => {
@@ -59,14 +61,14 @@ const ITEMS: WellItem<"pinned" | "live" | "old">[] = [
 
 function renderSet(
   items: readonly WellItem<"pinned" | "live" | "old">[] = ITEMS,
-  face?: string
+  variant?: WellVariant
 ) {
   return render(
     <WellsColumn
       wells={SET}
       items={items}
       storageKey="dopl.test.generic"
-      face={face}
+      variant={variant}
     />
   );
 }
@@ -104,7 +106,7 @@ describe("collapse-wells — the set is the caller's", () => {
   });
 });
 
-describe("collapse-wells — `face` and `showEmpty`", () => {
+describe("collapse-wells — `variant` and `showEmpty`", () => {
   it("defaults to the Agents tab's well, to the character", () => {
     renderSet();
     const shell = screen.getByRole("heading", { name: "Live" }).closest("section")!;
@@ -118,23 +120,20 @@ describe("collapse-wells — `face` and `showEmpty`", () => {
     expect(within(shell).getByText("lima")).toBeTruthy();
   });
 
-  it("swaps ONLY the fill on a `face` — same header, same geometry, same collapse", () => {
-    renderSet(ITEMS, PANEL_WELL_ON_PANEL);
+  it("draws `heading` as a plain uppercase heading over the rows, with no box", () => {
+    renderSet(ITEMS, "heading");
     const shell = screen.getByRole("heading", { name: "Live" }).closest("section")!;
-    expect(shell.className).toBe(PANEL_WELL_ON_PANEL);
-    // 🔒 **THE SHAPE IS UNCHANGED (Samuel, 2026-09-15: *"just make the gray
-    // dropdowns match exactly those instead"*)** — the header row's class string
-    // is the SAME one the default renders, and the box keeps the well's radius.
+    expect(shell.className).toBe(WELL_FACES.heading.box);
+    expect(shell.className).not.toContain("bg-");
+    expect(shell.className).not.toContain("rounded");
     const row = screen.getByRole("button", { name: "Live" });
-    const other = render(
-      <WellsColumn wells={SET} items={ITEMS} storageKey="dopl.test.face" />
-    );
-    const plain = within(other.container).getByRole("button", { name: "Live" });
-    expect(row.className).toBe(plain.className);
-    expect(PANEL_WELL_ON_PANEL).toContain("rounded-[14px]");
-    // ⚠ AND IT IS A DIFFERENT FILL, or there was no reason to pass one.
-    expect(PANEL_WELL_ON_PANEL).not.toContain("bg-home-panel");
-    expect(PANEL_WELL).toContain("bg-home-panel");
+    expect(row.className).toContain("uppercase");
+    expect(row.className).toContain("text-text-muted");
+    // The collapse and its bleed are the default's.
+    const box = row.parentElement!.querySelector(".collapse-grid")!;
+    expect(box.className).toContain("-mx-3");
+    expect(box.className).toContain("pb-3");
+    expect(within(shell).getByText("lima")).toBeTruthy();
   });
 
   it("hides an empty well by DEFAULT — the Agents and Threads rule, unchanged", () => {

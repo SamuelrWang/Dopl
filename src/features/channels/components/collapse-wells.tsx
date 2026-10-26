@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The collapsible gray well: a toggling header, a body animated by `.collapse-grid`, one
+ * The collapsible well: a toggling header, a body animated by `.collapse-grid`, one
  * spinning chevron. Well sets and persisted open state live in `well-state.ts`.
  */
 
@@ -51,6 +51,36 @@ const WELL_HEADER =
   "flex min-h-[30px] w-full min-w-0 cursor-pointer items-center justify-between gap-2 pl-1 text-left";
 
 /**
+ * `"well"`: the gray box with the header inside it (the Agents and Threads tabs). `"heading"`: no
+ * box, a quiet uppercase heading over the rows (/home's channel column, whose rows are cards).
+ * Both share the collapse and its bleed geometry. Exported for the loading ghosts' geometry.
+ */
+export type WellVariant = "well" | "heading";
+
+export const WELL_FACES: Record<
+  WellVariant,
+  { box: string; header: string; title: string; chevronBox: string; chevron: number; rows: string }
+> = {
+  well: {
+    box: PANEL_WELL,
+    header: WELL_HEADER,
+    title: IDENTITY_NAME_TEXT,
+    chevronBox: NAKED_ICON_BUTTON,
+    chevron: NAKED_ICON,
+    rows: PANEL_ROWS,
+  },
+  heading: {
+    box: "flex min-w-0 flex-col gap-2",
+    header:
+      "flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-1 pt-1.5 text-left text-label font-medium uppercase tracking-[0.02em] text-text-muted",
+    title: "",
+    chevronBox: "flex shrink-0",
+    chevron: 13,
+    rows: "flex min-w-0 flex-col gap-1.5",
+  },
+};
+
+/**
  * One well. The whole header row is the button (no nested button); its `h3` supplies the
  * accessible name. One rotated chevron, not a swapped pair, so the turn can animate.
  */
@@ -58,31 +88,31 @@ function Well({
   label,
   open,
   onToggle,
-  face = PANEL_WELL,
+  variant,
   children,
 }: {
   label: string;
   open: boolean;
   onToggle: () => void;
-  /** Fill only (`PANEL_WELL` or `PANEL_WELL_ON_PANEL`); both share `WELL_BOX` geometry. */
-  face?: string;
+  variant: WellVariant;
   children: ReactNode;
 }) {
+  const face = WELL_FACES[variant];
   const mounted = useWellContent(open);
   // `children` is undefined for an empty `showEmpty` well, so `body` is null and `pt-2` drops.
   const body = mounted ? (children ?? null) : null;
   return (
-    <section className={face}>
+    <section className={face.box}>
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className={WELL_HEADER}
+        className={face.header}
       >
-        <h3 className={cn("min-w-0 truncate", IDENTITY_NAME_TEXT)}>{label}</h3>
-        <span aria-hidden className={NAKED_ICON_BUTTON}>
+        <h3 className={cn("min-w-0 truncate", face.title)}>{label}</h3>
+        <span aria-hidden className={face.chevronBox}>
           <ChevronRight
-            size={NAKED_ICON}
+            size={face.chevron}
             data-well-chevron=""
             className={cn(
               "transition-transform duration-200 ease-out motion-reduce:transition-none",
@@ -102,7 +132,7 @@ function Well({
         aria-hidden={!open}
       >
         {/* `pt-2` only with a body: a padded empty column can't collapse below its padding. */}
-        <div className={cn(PANEL_ROWS, "px-3", body !== null && "pt-2")}>
+        <div className={cn(face.rows, "px-3", body !== null && "pt-2")}>
           {body}
         </div>
       </div>
@@ -116,7 +146,7 @@ export function WellsColumn<Id extends string>({
   items,
   storageKey,
   store,
-  face,
+  variant = "well",
   showEmpty = false,
   forceOpen = false,
 }: {
@@ -127,7 +157,7 @@ export function WellsColumn<Id extends string>({
   storageKey: string;
   /** `"device"` (default) survives a restart; `"session"` survives only a page change. */
   store?: WellStore;
-  face?: string;
+  variant?: WellVariant;
   /** Draw empty wells (header only, no placeholder copy). Default `false` is the safe default. */
   showEmpty?: boolean;
   /** Open every non-empty well regardless of stored state (e.g. while filtering); does not write the store. */
@@ -157,7 +187,7 @@ export function WellsColumn<Id extends string>({
               isOpen(well.id) || (forceOpen && (bucket?.length ?? 0) > 0)
             }
             onToggle={() => toggle(well.id)}
-            face={face}
+            variant={variant}
           >
             {bucket?.map((item) => (
               <Fragment key={item.key}>{item.node}</Fragment>

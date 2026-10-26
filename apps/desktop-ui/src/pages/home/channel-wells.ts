@@ -1,5 +1,5 @@
 /**
- * /home's CHANNEL LIST, IN THREE GRAY WELLS — **Pinned / Recent / Earlier.**
+ * /home's CHANNEL LIST, IN THREE WELLS — **Pinned / Recent / Earlier.**
  *
  * 🔒 **SAMUEL, 2026-09-15, verbatim:** *"look on the agents tab, there is the gray
  * box, for recents, 7 days, etc. I want to bring that over. Basically, one for

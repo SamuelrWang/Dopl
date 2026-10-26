@@ -12,7 +12,7 @@ import {
 import { HOME_DEFAULT_TAB, HOME_TABS } from "#/pages/home/home-tabs";
 // ⚠ THE WELL SET THE CHANNEL COLUMN'S GHOST MAPS (2026-09-22) — read, never re-typed.
 import { HOME_CHANNEL_WELLS } from "#/pages/home/channel-wells";
-import { HOME_CARD_FACE } from "@/shared/ui/home-card-marks";
+import { WELL_FACES } from "@/features/channels/components/collapse-wells";
 import { AccountRailSkeleton, ShellChromeSkeleton } from "./shell-skeleton";
 import { sectionSkeleton } from "./section-skeleton";
 
@@ -231,105 +231,49 @@ describe("the shell's own loading state mirrors the shell", () => {
 });
 
 describe("the /home shapes are /home's own geometry", () => {
-  /**
-   * ⚠ TWO CELLS OF ONE VAR, NOT A COLUMN AND A PAD (2026-09-10). The header
-   * stopped being `pl-[var(--home-list-w)]` on 2026-08-30, when the operator's
-   * face moved into that column and the pad became a real `w-[…] px-3` CELL
-   * holding it. The ghost still wore the pad, so its selector started one `px-3`
-   * left of the real one and the avatar had no slot.
-   */
-  it("sizes the list column and the header cell from ONE width var", () => {
+  /** The page and its ghost mount ONE frame (`home-frame.tsx`), so the header cell, the list
+   *  column and the record pane cannot drift apart. */
+  it("mounts the page's own frame, header row and list column", () => {
+    for (const symbol of ["<HomeFrame", "<HomeHeaderRow", "<HomeListColumn"]) {
+      expect(HOME_SKELETON).toContain(symbol);
+    }
+    expect(file("../../pages/home/index.tsx")).toContain("<HomeFrame");
+    expect(file("../../pages/home/home-header.tsx")).toContain("<HomeHeaderRow");
+    expect(file("../../pages/home/relationship-list.tsx")).toContain("<HomeListColumn");
+
     const { container } = render(<HomePageSkeleton />);
     expect(
       container.querySelectorAll(".w-\\[var\\(--home-list-w\\)\\]")
     ).toHaveLength(2);
-    // ⚠ `min-w-0` JOINED IT ON 2026-09-13, when the cell's content became
-    // full-width, and it stayed on 2026-09-15 when the content became the SEARCH
-    // FIELD (Samuel: "move the search bar at the top, to replace the Samuel's home
-    // button on top of the channel picker"): without it the cell's content could
-    // push the selector off the record pane's left edge, which is the one
-    // alignment this cell is for.
-    const CELL =
-      'className="flex w-[var(--home-list-w)] min-w-0 shrink-0 items-center px-3"';
-    expect(file("../../pages/home/home-header.tsx")).toContain(CELL);
-    expect(HOME_SKELETON).toContain(CELL);
-    // 🚫 THE PAD IS GONE, and that is half the pin: bidirectional.
-    expect(code("../../pages/home/home-skeleton.tsx")).not.toContain(
-      "pl-[var(--home-list-w)]"
-    );
-    // The generic page ghost's giveaway — a centred document column /home has
-    // never had.
+    expect(container.querySelector(".border-home-panel-line[data-frame-skin]")).not.toBeNull();
+    expect(container.querySelector("main")?.getAttribute("data-face")).toBe(HOME_DEFAULT_TAB);
     expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
   });
 
-  /** ⚠ BYTE-SHARED WITH `index.tsx`'s OWN PANE, and the `flex-col` is why it is
-   *  worth pinning: the real pane is a ROW holding one `Crossfade`, and the
-   *  ghost carried a column for as long as it drew a 52px pane header the
-   *  landing face does not have. */
-  it("draws the record pane as the page's own bordered column", () => {
-    const PANE =
-      "mb-3 mr-3 flex min-w-0 flex-1 overflow-hidden rounded-[14px] border-2 border-home-panel-line bg-home-card";
-    expect(file("../../pages/home/index.tsx")).toContain(PANE);
-    expect(HOME_SKELETON).toContain(PANE);
+  /** One label bar per `HOME_TABS` entry, read off the table so a sixth face moves the ghost. */
+  it("ghosts one tab label per face, without offering anything to press", () => {
     const { container } = render(<HomePageSkeleton />);
-    expect(container.querySelector(".border-home-panel-line")).not.toBeNull();
-  });
-
-  /** ⚠ ONE PILL PER `HOME_TABS` ENTRY — FIVE since the Ontology face landed
-   *  (2026-09-09) and the ghost still drew four, in a `.seg-track` the control
-   *  dropped on 2026-09-08 (Samuel: plain pills, no track). The count is read
-   *  off the table, so a sixth face cannot leave the ghost behind. */
-  it("ghosts one selector pill per face, without offering anything to press", () => {
-    const { container } = render(<HomePageSkeleton />);
-    expect(container.querySelector(".seg-track")).toBeNull();
-    // ⚠ SCOPED TO THE HEADER STRIP (`.py-3.pr-3`, which only it wears) SINCE
-    // 2026-09-13. The bare `.gap-1\.5` query counted the whole page, and the
-    // channel-row ghost's second line is a `gap-1.5` row of peer faces now — so an
-    // unscoped count reads 19 and says nothing about the selector.
     expect(
-      container.querySelectorAll(".py-3.pr-3 .gap-1\\.5 > [data-slot=\"skeleton\"]")
+      container.querySelectorAll('.py-3.pr-3 .gap-\\[22px\\] > [data-slot="skeleton"]')
     ).toHaveLength(HOME_TABS.length);
     expect(container.querySelectorAll("button")).toHaveLength(0);
     expect(container.querySelectorAll("a")).toHaveLength(0);
   });
 
-  /**
-   * 🔒 **THE CHANNEL COLUMN GHOSTS THE THREE GRAY WELLS, ONE PER
-   * `HOME_CHANNEL_WELLS` ENTRY (Samuel, 2026-09-22):** *"it doesn't include the
-   * gray boxes for Pin[ned], Recent and Earlier. It also doesn't include any
-   * component or skeleton for an actual channel. It just looks like little things
-   * are directly on the background color, which is bad."*
-   *
-   * ⚠ **THE SET IS READ, NOT RE-TYPED** — same argument as the selector pills
-   * above: a fourth well or a renamed one moves the ghost with it.
-   * ⚠ **STILL NOTHING TO PRESS** (the assertion above covers it for the whole
-   * page): the loaded well's header is a real `<button>` and the ghost's is a box.
-   * ⚠ **A GRAY FILL IS NOT ELEVATION** — the well wears the loaded column's own
-   * `PANEL_WELL_ON_PANEL`, which has no hairline and no shadow, and the rows inside
-   * stand on the flat `bg-home-card` rather than on `HOME_CARD_FACE`'s gradient.
-   * That is the 2026-09-21 flatness ruling kept, and the second half of this pin.
-   */
-  it("ghosts one gray well per channel well, flat and inert", () => {
+  /** One heading per `HOME_CHANNEL_WELLS` entry on the loaded column's heading geometry, and
+   *  flat rows: the page's lifted card face stays out of the ghost. */
+  it("ghosts one well heading per channel well, with flat rows", () => {
     const { container } = render(<HomePageSkeleton />);
-    const wells = container.querySelectorAll("section.bg-\\[var\\(--seg-fill\\)\\]");
-    expect(wells).toHaveLength(HOME_CHANNEL_WELLS.length);
-    // The two OPEN wells draw rows; the closed one draws its header alone.
-    expect(container.querySelectorAll(".bg-home-card.rounded-\\[14px\\]").length)
-      .toBeGreaterThan(0);
-    const ghost = HOME_SKELETON;
-    expect(ghost).toContain('from "@/shared/ui/panel-well"');
-    expect(ghost).toContain("HOME_CHANNEL_WELLS.map");
-    // 🚫 BIDIRECTIONAL: the raised row face stays on the PAGE and out of the ghost.
-    // ⚠ COMMENT-STRIPPED, on this suite's stated rule — the ghost's docblock NAMES
-    // the face it does not wear, and a raw scan would make the repair "delete the
-    // explanation".
-    const ghostCode = code("../../pages/home/home-skeleton.tsx");
-    expect(ghostCode).not.toContain("HOME_CARD_FACE");
-    expect(ghostCode).not.toContain("auth-btn-3d");
-    expect(code("../../../../../src/shared/ui/home-channel-row.tsx")).toContain(
-      "HOME_CARD_FACE"
+    const wells = [...container.querySelectorAll("section")].filter(
+      (el) => el.className === WELL_FACES.heading.box
     );
-    expect(HOME_CARD_FACE).toContain("auth-btn-3d");
+    expect(wells).toHaveLength(HOME_CHANNEL_WELLS.length);
+    expect(container.querySelectorAll(".bg-home-card.rounded-xl").length).toBeGreaterThan(0);
+    expect(HOME_SKELETON).toContain("HOME_CHANNEL_WELLS.map");
+    const ghostCode = code("../../pages/home/home-skeleton.tsx");
+    expect(ghostCode).not.toMatch(/\braise\b/);
+    expect(ghostCode).not.toContain("white-card");
+    expect(ghostCode).not.toContain("auth-btn-3d");
   });
 
   /** ⚠ THE LANDING FACE IS OVERVIEW (`home-tabs.ts › HOME_DEFAULT_TAB`), so the

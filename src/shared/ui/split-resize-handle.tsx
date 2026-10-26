@@ -27,10 +27,9 @@ import type { SplitResize } from "./use-split-resize";
  * 2026-09-13: *"I want it to be perfectly on the vertical line."*).
  *
  * The divider is a `border-l border-border-default` drawn INSIDE the column to the
- * handle's right, so its centre is half a border right of the wrapper's x. It is
- * 1px on the plain kit and 2px under `data-frame-skin`, which widens every
- * `.border-l.border-border-default` AND declares this variable in the adjacent rule
- * (`src/app/globals.css` + the desktop `kit.css` copy) — so the two cannot drift.
+ * handle's right, so its centre is half a border right of the wrapper's x. The
+ * kit's divider is 1px, the fallback; a host that widens its divider declares this
+ * variable beside the width.
  */
 export const DIVIDER_WIDTH_VAR = "--channel-divider-w";
 

@@ -97,45 +97,26 @@ describe("home page", () => {
     expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
   });
 
-  /**
-   * THE RECORD PANE IS A COLUMN, NOT A FLOATING CARD (Samuel, live review
-   * 2026-08-27 — the shadow seam beside the info column's tab pills).
-   *
-   * ⚠ WHY THIS IS PINNED AS A CLASS AND NOT A LOOK. `.bento` was painting exactly
-   * ONE thing on this element — its two drop shadows — because the utilities
-   * beside it already restate the fill, the border and the radius, and the
-   * utility layer outranks the kit layer. The pane has no top or left margin
-   * (the header selector is aligned to its left edge), so the upward half of an
-   * 18px blur printed a gray band into the gap under the page header. Re-adding
-   * the class is silent: nothing about the pane's geometry would change, and the
-   * band would come straight back.
-   */
-  it("gives the record pane NO drop shadow — the 2px line is its whole boundary", async () => {
+  /** The record pane is bounded by its line, not floated: it has no top or left gap for a
+   *  drop shadow to fall into (Samuel, 2026-08-27). */
+  it("gives the record pane NO drop shadow — its line is its whole boundary", async () => {
     renderHome();
     await openChannels();
     const pane = (await screen.findByTestId("channel-surface")).parentElement
       ?.parentElement;
-    expect(pane?.className).toMatch(/border-home-panel-line/);
+    expect(pane?.className).toMatch(/\bborder border-home-panel-line\b/);
     expect(pane?.className).not.toMatch(/\bbento\b/);
+    expect(pane?.closest("main")?.getAttribute("data-face")).toBe("channels");
   });
 
-  /**
-   * THE ONLY WAY INTO SETTINGS FROM /home (Samuel, 2026-08-30). The workspace
-   * shell reaches it through the sidebar's gear; this page has no sidebar, and
-   * before this it had no settings entry at all.
-   *
-   * ⚠ PINNED AS "THE CONTROL OPENS THE MODAL", not as a face rendering — but the
-   * SHAPE is Samuel's own words now (2026-09-15: "turn the profile button to be
-   * black, and have it say Profile"). ⚠ **IT ANSWERS TO "Profile", NOT "Settings",
-   * SINCE THAT SAME REVIEW**: it has visible text now, and an `aria-label` that did
-   * not contain it would break voice control. */
+  /** The only way into settings from /home: the operator's pill, their photo (initials here,
+   *  the fixture has no avatar) and first name, in the right-hand group. */
   it("opens settings from the operator's Profile pill", async () => {
     renderHome();
-    // Black face, ONE WORD, no glyph (Samuel, 2026-09-15: "remove the profile
-    // icon"), RIGHT GROUP. The role query proves text IS the accessible name.
-    const control = await screen.findByRole("button", { name: "Profile" });
-    expect(control.className).toMatch(/auth-btn-3d\b/);
-    expect(control.querySelector("svg")).toBeNull();
+    const control = await screen.findByTitle("Profile");
+    expect(control.tagName).toBe("BUTTON");
+    expect(control.textContent).toBe("SSam");
+    expect(control.className).toContain("white-card raise-pill");
     expect(control.closest(LIST_CELL)).toBeNull();
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

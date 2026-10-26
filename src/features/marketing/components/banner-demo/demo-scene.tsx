@@ -58,9 +58,6 @@ import { revealBody } from "./typed-reveal";
 import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
 import { DemoAccountRail } from "./demo-home-chrome";
-// The demo-only redesign of /home's header and channel column (`demo-home-faces.tsx`);
-// `demo-home-chrome.tsx › DemoHomeHeader` / `DemoChannelList` are the product-faithful
-// faces, kept so a revert is these two mounts.
 import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
 import { DemoComposerChips } from "./demo-composer-chips";
 import { identityFace } from "./demo-identities";

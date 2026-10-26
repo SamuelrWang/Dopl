@@ -12,10 +12,6 @@ import {
   renderHome,
   withHome,
 } from "./home-test-harness";
-import {
-  HOME_CARD_FACE,
-  HOME_CARD_FACE_SELECTED,
-} from "@/shared/ui/home-card-marks";
 
 /**
  * THE LIST COLUMN AS SAMUEL RE-SPECIFIED IT (live reviews 2026-09-13 and
@@ -88,9 +84,8 @@ describe("the list column's HEAD", () => {
   it("opens settings from the operator's Profile pill, which is NOT in the column", async () => {
     apiRequest.mockImplementation(withHome(HOME));
     renderHome();
-    // ⚠ "Profile", NOT "Settings", since 2026-09-15 — the control has a visible
-    // label now and the accessible name is it.
-    const control = await screen.findByRole("button", { name: "Profile" });
+    // The pill shows the operator's first name; "Profile" is its title.
+    const control = await screen.findByTitle("Profile");
     expect(control.closest(CELL)).toBeNull();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     control.click();
@@ -148,7 +143,7 @@ describe("the channel ROW's second line", () => {
 
 /**
  * 🔒 **THE DESCRIPTION LINE, AND THE RULE THAT DECIDES WHEN IT APPEARS AT ALL**
- * (Samuel, 2026-09-15): under the channel name, italic — but only on a channel
+ * (Samuel, 2026-09-15): under the channel name — but only on a channel
  * with NOBODY else in it. A channel with other people keeps the profile icons it
  * has today.
  *
@@ -177,13 +172,14 @@ describe("the row's DESCRIPTION line", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders it ITALIC, which is the whole of the styling ruling", async () => {
+  it("renders it as the row's quiet line", async () => {
     apiRequest.mockImplementation(withHome(onlyChannel(DESCRIBED)));
     renderHome();
     await openChannels();
 
     const line = await screen.findByText("Series B prep and the diligence room");
-    expect(line.className).toContain("italic");
+    expect(line.className).toContain("text-caption");
+    expect(line.className).toContain("truncate");
   });
 
   it("shows the FACES and not the description when the channel has other people", async () => {
@@ -203,13 +199,13 @@ describe("the row's DESCRIPTION line", () => {
 
   it("draws no line at all for a solo channel nobody described", async () => {
     // ⚠ `""` IS THE COLUMN DEFAULT, so this is every channel until somebody writes
-    // one — the row must keep today's look rather than open an empty italic slot.
+    // one — the row must keep today's look rather than open an empty slot.
     apiRequest.mockImplementation(withHome(onlyChannel({ ...SOLO_CHANNEL, topic: "" })));
     renderHome();
     await openChannels();
 
     const row = (await screen.findByText("Q3 Fundraise")).closest("button");
-    expect(row?.querySelector(".italic")).toBeNull();
+    expect(row?.querySelector(".text-caption")).toBeNull();
   });
 
   it("survives a cached payload written before `topic` existed", async () => {
@@ -302,21 +298,12 @@ describe("the row's UNREAD MARKS", () => {
 
 
 /**
- * 🔒 **THE SELECTED ROW IS THE PAGE'S BLACK BUTTON (Samuel, 2026-09-15):** *"for
- * the channel picker, for the selected channel, can we have it turn into like
- * the black button UI? And drop the shadow that currently goes on the
- * selected?"*
- *
- * ⚠ **THE ASSERTIONS ARE BIDIRECTIONAL ON PURPOSE.** "Drop the shadow" is a
- * NEGATIVE ruling — what makes it true is that `.selected-ring` and the module's
- * line are ABSENT, and a suite that only checked for the black face would pass on
- * a row wearing both.
+ * Every row is its own white card; the selected one is the same card in solid ink, so selecting
+ * a row moves nothing.
  */
 describe("the SELECTED row's face", () => {
-  /** The row button for a channel, by its name. ⚠ SCOPED TO THE WELLS — the
-   *  record pane names the same channel, so an unscoped query finds two, and the
-   *  header's own list-width cell matches `CELL` first. Every row lives inside a
-   *  well's animated box and nothing else on this page does. */
+  /** The row button for a channel, by its name, scoped to the wells (the record pane names the
+   *  same channel). */
   function rowFor(name: string): HTMLElement {
     const rows = Array.from(
       document.querySelectorAll<HTMLElement>(".collapse-grid")
@@ -328,7 +315,7 @@ describe("the SELECTED row's face", () => {
     throw new Error(`no row for ${name}`);
   }
 
-  it("turns black, and carries no ring, halo or white card face with it", async () => {
+  it("fills the selected card with ink on the same box", async () => {
     apiRequest.mockImplementation(withHome(onlyChannel(HOME.channels[0])));
     renderHome();
     await openChannels();
@@ -336,22 +323,15 @@ describe("the SELECTED row's face", () => {
     const row = rowFor("Priya Shah");
     // /home selects the first row on load, so this one IS the selected one.
     expect(row.getAttribute("aria-current")).toBe("true");
-    // ⚠ THE CONSTANT, not a copy of its value — and it is the kit recipe the
-    // page's own "New channel" pill wears.
-    expect(row.className).toContain(HOME_CARD_FACE_SELECTED);
-    expect(HOME_CARD_FACE_SELECTED).toContain("auth-btn-3d");
-    // 🚫 AND NOTHING OF THE OLD SELECTION SURVIVES.
-    expect(row.className).not.toContain("selected-ring");
-    expect(row.className).not.toContain("rowSelected");
-    expect(row.className).not.toContain(HOME_CARD_FACE);
-    // ⚠ GEOMETRY UNCHANGED, so selecting a row cannot shift the list: the box is
-    // the same padding on the same radius, only the paint moved.
-    expect(row.className).toContain("px-2.5 py-2.5");
-    expect(HOME_CARD_FACE_SELECTED).toContain("rounded-[14px]");
-    expect(HOME_CARD_FACE).toContain("rounded-[14px]");
+    expect(row.className).toContain("white-card");
+    expect(row.className).toContain("bg-surface-cta");
+    expect(row.className).toContain("border-surface-cta");
+    expect(row.className).not.toContain("border-border-subtle");
+    expect(row.className).not.toContain("auth-btn-3d");
+    expect(row.className).toContain("px-[11px] py-[9px]");
   });
 
-  it("keeps the WHITE raised face on every row that is not selected", async () => {
+  it("keeps the white lifted card on every row that is not selected", async () => {
     apiRequest.mockImplementation(
       withHome({
         channels: [
@@ -366,8 +346,9 @@ describe("the SELECTED row's face", () => {
 
     const other = rowFor("Cold Storage");
     expect(other.getAttribute("aria-current")).toBeNull();
-    expect(other.className).toContain(HOME_CARD_FACE);
-    expect(other.className).not.toContain(HOME_CARD_FACE_SELECTED);
+    expect(other.className).toContain("white-card raise border-border-subtle");
+    expect(other.className).not.toContain("bg-surface-cta");
+    expect(other.className).toContain("px-[11px] py-[9px]");
   });
 
   /**

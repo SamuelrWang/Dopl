@@ -9783,8 +9783,8 @@ existing on different days.**
   and `--raised-light-focus` directly. The class is nowhere in that file or its kit rules. That half
   of the claim appears never to have been true.
 - **The landing demo stopped wearing it on 2026-09-17**, when the hero scene was rebuilt on /home's
-  current UI: its channel rows are `shared/ui/home-card-marks.tsx › HOME_CARD_FACE` /
-  `› HOME_CARD_FACE_SELECTED`, which is the ruling that removed the ring in the first place.
+  current UI: its channel rows wore the `HOME_CARD_FACE` / `HOME_CARD_FACE_SELECTED` constants
+  (deleted 2026-10-26 with the staging port), the ruling that removed the ring in the first place.
 
 Re-derive before acting on this, rather than trusting the measurement:
 `grep -rn "selected-ring" src apps/desktop-ui/src | grep -v globals.css | grep -v kit.css` — on
