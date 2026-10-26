@@ -47,7 +47,7 @@ import {
 } from "./identity-editor";
 import { LaunchIntoChannelButton, useCardLaunch } from "./identity-card-launch";
 import { AddKnowledgeWell, IdentityKnowledgeDialog } from "./identity-card-knowledge";
-import { CreateButton } from "./panel-buttons";
+import { CreateButton } from "@/shared/ui/page-action-button";
 import {
   PrivateIdentitySection,
   SCOPE_UNAVAILABLE,

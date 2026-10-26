@@ -11,7 +11,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { indexMembers } from "@/features/channels/components/view-model";
 import { LaunchAgentDialog } from "@/features/channels/components/launch-agent-dialog";
 import type { AgentLaunchPanel } from "@/features/channels/components/use-agent-launch";
-import { agentColorOrNull } from "@/features/channels/lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { StagingChannelScene } from "@/features/channels-staging/home/channel-scene";
 import { DemoAgentView } from "@/features/marketing/components/banner-demo/demo-agent-view";
 import { useStagingChannels } from "@/features/channels-staging/store/use-staging-channels";

@@ -38,7 +38,7 @@ import { useChannelMembers } from "../hooks/use-channel-members";
 import { useChannelThreads } from "../hooks/use-channel-threads";
 import { useChannelAgentSessions } from "../hooks/use-channel-agent-sessions";
 import { liveAgentsFromKey, liveAgentsKey } from "../lib/live-agents";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useChannelPreferenceWrites } from "../hooks/use-channel-preference-writes";
 import { ChannelsMessagePane, type ScrollTarget } from "./message-pane";
@@ -117,6 +117,8 @@ export function ChannelsThreadWindow({
       void refetchThreads();
     },
     refetchMembers: () => void refetchMembers(),
+    // No tasks read here, so a tasks-only doorbell has nothing to refetch.
+    refetchTasks: () => {},
   });
 
   // The SEND BOX's whole diet: a draft this operator's agent is holding on the

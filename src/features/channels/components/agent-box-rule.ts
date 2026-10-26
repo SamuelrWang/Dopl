@@ -4,7 +4,7 @@
  * paints with it and the transcript filter's "People" option is its complement: one rule, one file.
  */
 
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 import type { AuthoredRowAccent } from "./authored-row";
 import type { AuthorIndex } from "./view-model";

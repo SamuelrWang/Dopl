@@ -48,7 +48,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import type { AgentColorKey } from "@dopl/contracts";
-import { AGENT_COLOR_KEYS } from "@/features/channels/lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { IdentityPanel } from "../agent-identities/components/identity-section";
 import { agoLabel } from "../view/identity-view-mocks";

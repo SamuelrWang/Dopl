@@ -4,7 +4,7 @@ import {
   SkeletonLine,
   TranscriptSkeleton,
 } from "@/shared/ui/skeleton";
-import { COMPOSER_BOTTOM } from "@/features/channels/components/composer-input";
+import { ComposerGhost } from "@/features/channels/components/channel-record-skeleton";
 import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 
 /**
@@ -22,13 +22,8 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
  * (`.channel-info-slide` at zero width until `data-open`), so a ghost third
  * column would resolve into a pane that then slid shut.
  *
- * ⚠ THE COMPOSER BLOCK WAS THE STALE HALF (re-measured 2026-08-30). It ghosted
- * an `px-8 pb-5` well holding a two-glyph toolbar and a round send dot; the real
- * one is `composer.tsx`'s `relative shrink-0 px-4 pt-1` + `COMPOSER_BOTTOM`
- * around a card that carries **no row gap of its own** (that file's own ⚠: "a
- * `gap-2` here once grew the card visibly"), a SIX-glyph toolbar and the 30px
- * round `SendButton`. The offset is imported rather than retyped for the
- * reason the constant exists: the channel and agent composers align on it.
+ * The composer is `channel-record-skeleton.tsx › ComposerGhost`, the one ghost of
+ * `composer.tsx`'s card.
  */
 export function ChannelsSkeleton({
   label = "Loading channels",
@@ -73,26 +68,7 @@ export function ChannelsSkeleton({
         <div className="min-h-0 flex-1 overflow-hidden px-8 py-5">
           <TranscriptSkeleton bubbles={5} />
         </div>
-        {/* The composer is a RAISED CARD, not a bare input row — and the card
-            takes no gap; the column INSIDE it does. */}
-        <div className={cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)}>
-          <div className="raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]">
-            <div className="flex flex-col gap-2">
-              <SkeletonLine w="52%" h={11} />
-              <div className="flex items-center gap-0.5">
-                {/* Six `h-6 w-6` glyphs — new thread, mention, shortcuts,
-                    emoji, attach, mic. The launch bot is bridge-gated and the
-                    Discard button needs a draft, so neither is ghosted. */}
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="h-6 w-6 rounded-[7px]" />
-                ))}
-                <span className="flex-1" />
-                {/* `shared/ui/send-button.tsx` — the 30px round send. */}
-                <Skeleton className="h-[30px] w-[30px] shrink-0 rounded-full" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <ComposerGhost />
       </div>
     </SkeletonSurface>
   );

@@ -35,7 +35,7 @@ import { describe, expect, it } from "vitest";
 import { BaseCard } from "@/features/knowledge/components/knowledge-v2/home/base-card";
 import type { KnowledgeBase } from "@/features/knowledge/types";
 import { LaunchIntoChannelButton } from "./identity-card-launch";
-import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "./panel-buttons";
+import { CreateButton, PAGE_ACTION_BTN, PAGE_ACTION_ICON } from "@/shared/ui/page-action-button";
 
 /** This directory, and the knowledge module up in the web tree. See the note
  *  in the scan below for why neither is written inline. */
@@ -74,7 +74,7 @@ describe("the /home section button IS the page's black action button", () => {
     expect(faceOf("Knowledge base")).toEqual(expected);
     // …and that face is really the black pill, not two empty class lists
     // agreeing with each other.
-    expect(expected.has("auth-btn-3d")).toBe(true);
+    expect(expected.has("raise-ink")).toBe(true);
     expect(expected.has("h-9")).toBe(true);
   });
 
@@ -145,14 +145,15 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
   });
 
   it("🔒 the black recipe is declared once, in the shared tree, and never in pages/home", () => {
-    // `auth-btn-3d` followed by a SPACE is the black face; `-light` is a different recipe.
+    // The black faces: `raise-ink` (the ink pill) and `auth-btn-3d` followed by a SPACE (`-light` is
+    // a different recipe).
     const local = sources
-      .filter(([, text]) => /"auth-btn-3d /.test(text))
+      .filter(([, text]) => /"(auth-btn-3d|raise-ink) /.test(text))
       .map(([file]) => file);
     expect(local).toEqual([]);
-    expect(PAGE_ACTION_BTN.startsWith("auth-btn-3d ")).toBe(true);
-    expect(readFileSync(`${SHARED_UI}page-action-button.ts`, "utf8")).toContain(
-      `"${PAGE_ACTION_BTN}"`
+    expect(PAGE_ACTION_BTN.startsWith("raise-ink ")).toBe(true);
+    expect(readFileSync(`${SHARED_UI}page-action-button.tsx`, "utf8")).toContain(
+      "cn(INK_PILL_FACE, "
     );
   });
 
@@ -160,7 +161,10 @@ describe("no page-local copy of either recipe is left in pages/home", () => {
     const declaring = sources
       .filter(([, text]) => /function CreateButton\b/.test(text))
       .map(([file]) => file);
-    expect(declaring).toEqual(["panel-buttons.tsx"]);
+    expect(declaring).toEqual([]);
+    expect(readFileSync(`${SHARED_UI}page-action-button.tsx`, "utf8")).toMatch(
+      /function CreateButton\b/
+    );
   });
 });
 

@@ -2,7 +2,7 @@
 
 import { UserRound } from "lucide-react";
 import type { AgentColorKey } from "@dopl/contracts";
-import { agentColorVar } from "@/features/channels/lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import { useBridgedImageSrc } from "@/shared/hooks/use-bridged-image-src";
 import { cn } from "@/shared/lib/utils";
 import { initialFor } from "./avatar";

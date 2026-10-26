@@ -11,6 +11,7 @@ import {
   statusExpectation,
   subtaskExpectation,
 } from "@/features/channels/hooks/use-task-writes";
+import { nextSubtaskState } from "@/features/channels/lib/task-model";
 import type { ChannelTaskDetail, TaskStatus } from "@/features/channels/types";
 import { CURRENT_USER_ID } from "../data/demo-imports";
 import { seedTasks } from "../data/staging-tasks";
@@ -55,7 +56,7 @@ export function useStagingTasks(rows: readonly StagingRow[]): TasksApi {
       ),
     toggleSubtask: (channelId, taskId, subtaskId) =>
       patch(channelId, taskId, (t) => {
-        const state = t.subtasks.find((s) => s.id === subtaskId)?.state === "done" ? "todo" : "done";
+        const state = nextSubtaskState(t.subtasks.find((s) => s.id === subtaskId)?.state);
         return subtaskExpectation(t, subtaskId, state, new Date().toISOString());
       }),
     addNote: async (channelId, taskId, body) => {

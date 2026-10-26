@@ -1,4 +1,4 @@
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import type {
   AgentColorKey,
   ChannelConsentRequest,

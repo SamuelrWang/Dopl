@@ -220,6 +220,7 @@ export function SurfaceInfoPanel({
             tasks={data.tasks}
             truncated={data.tasksTruncated}
             loading={data.tasksLoading}
+            failed={data.tasksFailed}
             // R8: a guest reads tasks and adds notes, nothing else.
             canEdit={role !== "guest"}
             openTaskId={sel.openTaskId}
@@ -228,7 +229,11 @@ export function SurfaceInfoPanel({
           />
         ) : undefined
       }
-      activeTaskCount={capabilities?.tasks ? data.tasks.filter(isActiveTask).length : undefined}
+      activeTaskCount={
+        capabilities?.tasks && !data.tasksLoading && !data.tasksFailed
+          ? data.tasks.filter(isActiveTask).length
+          : undefined
+      }
       tasksTabSignal={sel.tasksTabSignal}
       settings={
         <ChannelsSettingsSlot

@@ -223,6 +223,8 @@ export function ChannelsAgentWindow({
     refetchMembers: () => {
       void refetchMembers();
     },
+    // No tasks read here, so a tasks-only doorbell has nothing to refetch.
+    refetchTasks: () => {},
   });
   const { consent } = useChannelPreferenceWrites({ workspaceId, gate });
 

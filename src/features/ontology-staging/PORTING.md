@@ -18,7 +18,6 @@ the source.
 | `home/ontology-share.tsx` | `apps/desktop-ui/src/pages/home/ontology-share.tsx` |
 | `home/home-panes.tsx` | `apps/desktop-ui/src/pages/home/home-panes.tsx` (ontology branch only) |
 | `home/knowledge-panel-cards.tsx` | `apps/desktop-ui/src/pages/home/knowledge-panel-cards.tsx › EmptyLine` |
-| `home/panel-buttons.tsx` | `apps/desktop-ui/src/pages/home/panel-buttons.tsx` |
 | `home/page-states.tsx` | `apps/desktop-ui/src/components/page-states.tsx › PageError` |
 | `ontology/components/*.tsx` (29 files) | `src/features/ontology/components/<same name>.tsx` |
 | `ontology/components/ontology-row.tsx` ⚠ **REDESIGNED, ahead of its source** | `src/features/ontology/components/ontology-row.tsx` — see **Rows display overhaul** below before diffing |

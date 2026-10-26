@@ -1,14 +1,14 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, TriangleAlert } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { IdentityStack } from "@/shared/ui/avatar-stack";
 import { Breadcrumb } from "@/shared/ui/breadcrumb";
+import { EmptyState } from "@/shared/ui/empty-state";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { PILL_BUTTON } from "@/shared/ui/small-action-button";
 import { ThinMeter } from "@/shared/ui/usage-meter";
 import { actorKey } from "../lib/task-model";
-import { TaskLinkChip, nextStatus } from "./task-bits";
+import { TaskAssignees, TaskLinkChip, nextStatus } from "./task-bits";
 import { STATUS_TONE, TASK_STATUS_LABEL, type TaskFaceOf } from "./task-faces";
 import { TaskNotes } from "./task-notes";
 import { TaskSubtasks } from "./task-subtasks";
@@ -24,26 +24,29 @@ export interface TaskDetailProps {
   /** The list's row: the header paints from it while the detail read is in flight. */
   task: ChannelTask;
   detail: ChannelTaskDetail | null;
+  /** The detail read failed: the subtasks and notes are unknown, not empty. */
+  failed?: boolean;
   faceOf: TaskFaceOf;
   onBack: () => void;
   onOpenLink: (link: TaskLink) => void;
-  /** Absent (a guest) draws no Resolve / Reopen and no subtask checks (R8). */
+  /** Absent (a guest) draws no Resolve / Reopen and no subtask checks. */
   onSetStatus?: (task: ChannelTask, status: TaskStatus) => void;
   onToggleSubtask?: (task: ChannelTaskDetail, subtask: ChannelTaskSubtask) => void;
   onAddNote: (taskId: string, body: string) => Promise<unknown>;
 }
 
-/** The assignees as one stack; a green dot marks the owner of an in-progress subtask. */
-function AssigneeStack({ task, faceOf }: { task: ChannelTask; faceOf: TaskFaceOf }) {
-  if (task.assignees.length === 0) return null;
-  const active = new Set(task.active.map(actorKey));
-  const faces = task.assignees.map((a) => ({ ...faceOf(a), online: active.has(actorKey(a)) }));
-  const names = faces.map((f) => (f.online ? `${f.name} (active)` : f.name)).join(", ");
+function Assignees({ task, faceOf }: { task: ChannelTask; faceOf: TaskFaceOf }) {
+  const { assignees } = task;
+  if (assignees.length === 0) return null;
   return (
     <span className="inline-flex h-5.5 flex-none items-center">
-      <IdentityStack faces={faces} size={20} label={`Assigned to ${names}`} />
-      <span className="ml-2 whitespace-nowrap text-caption leading-[22px] text-text-secondary">
-        {faces.length === 1 ? faces[0].name : `${faces.length} assigned`}
+      <TaskAssignees
+        actors={assignees}
+        faceOf={faceOf}
+        active={new Set(task.active.map(actorKey))}
+      />
+      <span className="ml-2 whitespace-nowrap text-caption text-text-secondary">
+        {assignees.length === 1 ? faceOf(assignees[0]).name : `${assignees.length} assigned`}
       </span>
     </span>
   );
@@ -53,6 +56,7 @@ function AssigneeStack({ task, faceOf }: { task: ChannelTask; faceOf: TaskFaceOf
 export function TaskDetail({
   task: row,
   detail,
+  failed = false,
   faceOf,
   onBack,
   onOpenLink,
@@ -101,7 +105,7 @@ export function TaskDetail({
           </div>
         )}
         <div className="flex min-w-0 items-center gap-2.5 border-t border-border-default pt-2.5">
-          <AssigneeStack task={task} faceOf={faceOf} />
+          <Assignees task={task} faceOf={faceOf} />
           {task.link && (
             <TaskLinkChip
               link={task.link}
@@ -121,6 +125,13 @@ export function TaskDetail({
         </div>
       </header>
 
+      {!detail && failed && (
+        <EmptyState
+          variant="well"
+          icon={TriangleAlert}
+          title="Could not load this task's subtasks and notes"
+        />
+      )}
       {detail && (
         <>
           <TaskSubtasks

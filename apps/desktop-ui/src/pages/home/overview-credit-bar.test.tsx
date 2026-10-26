@@ -2,7 +2,7 @@ import { IDENTITY_NAME_TEXT, SECTION_HEADING_TEXT } from "@/shared/ui/section-he
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PERSONAL_MONTHLY_CREDITS } from "@/features/billing/credits";
-import { PAGE_ACTION_BTN } from "./panel-buttons";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import type { BridgeRequestOpts } from "#/lib/dopl-bridge";
 import { USER_ID, bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
 import { BILLING_STATUS, renderHome, routes } from "./home-test-harness";
@@ -311,7 +311,7 @@ describe("the /home credit capacity bar", () => {
    * 'Upgrade' or change it to 'Get more credits'"*).** It was a one-word
    * `Upgrade` text action in the caption row (2026-09-08, spec §11).
    *
-   * ⚠ **THE FACE IS ASSERTED AGAINST `panel-buttons.tsx › PAGE_ACTION_BTN`
+   * ⚠ **THE FACE IS ASSERTED AGAINST `page-action-button.tsx › PAGE_ACTION_BTN`
    * ITSELF, not against a class string spelled out here** — that constant IS the
    * "New channel" button, so this case fails the day the two part rather than the
    * day somebody notices.

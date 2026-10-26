@@ -1,37 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronDown, ListChecks } from "lucide-react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { Check, ChevronDown, ListChecks, TriangleAlert } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { IdentityStack } from "@/shared/ui/avatar-stack";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
+import { QUIET_PILL } from "@/shared/ui/small-action-button";
 import { byTaskOrder, isActiveTask } from "../lib/task-model";
 import { TASK_TICK, TaskAssignees, TaskTickMark } from "./task-bits";
 import { workingTaskFaces, type TaskFaceOf } from "./task-faces";
 import type { ChannelTask } from "../types";
 
-const QUIET_BUTTON =
-  "rounded-full text-caption text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary";
+/** Escape, or a press outside both the pill and the pop-up, closes it. */
+function useLightDismiss(
+  open: boolean,
+  setOpen: (open: boolean) => void,
+  pill: RefObject<HTMLElement | null>,
+  popup: RefObject<HTMLElement | null>
+) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!pill.current?.contains(target) && !popup.current?.contains(target)) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open, setOpen, pill, popup]);
+}
 
 /**
  * THE TASKS QUICK VIEW — a "N tasks" pill at the right end of the composer's recipient line, and
  * a concise pop-up of the ACTIVE tasks opening upward from it. A row, or "See all", opens the info
  * column on the Tasks tab (a row on that task's detail). Mounted in `composer-recipients.tsx ›
  * ComposerRecipients`'s `trailing` slot, whose right edge is the composer card's, so the pill and
- * the pop-up share it.
+ * the pop-up share it. Hidden only while the channel is known to have no tasks.
  */
 export function TasksQuickView({
   tasks,
+  failed = false,
   faceOf,
   onOpenTask,
 }: {
   tasks: readonly ChannelTask[];
+  /** The tasks read failed: the pill stays, without a count, and the pop-up says so. */
+  failed?: boolean;
   faceOf: TaskFaceOf;
   /** Open the Tasks tab: a task id lands on its detail, `null` on the list. */
   onOpenTask: (taskId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  if (tasks.length === 0) return null;
+  const pill = useRef<HTMLButtonElement>(null);
+  const popup = useRef<HTMLElement>(null);
+  useLightDismiss(open, setOpen, pill, popup);
+
+  const unknown = failed && tasks.length === 0;
+  if (tasks.length === 0 && !unknown) return null;
   const active = tasks.filter(isActiveTask).sort(byTaskOrder);
   const faces = workingTaskFaces(tasks, faceOf);
   const go = (taskId: string | null) => {
@@ -42,6 +74,7 @@ export function TasksQuickView({
   return (
     <>
       <button
+        ref={pill}
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -55,29 +88,32 @@ export function TasksQuickView({
         ) : (
           <ListChecks size={13} aria-hidden="true" />
         )}
-        {active.length === 1 ? "1 task" : `${active.length} tasks`}
+        {unknown ? "Tasks" : active.length === 1 ? "1 task" : `${active.length} tasks`}
       </button>
       {open && (
         <section
+          ref={popup}
           aria-label="Tasks"
           className="white-card absolute bottom-full right-0 z-20 mb-1 flex max-h-80 w-75 flex-col"
         >
-          <header className="flex h-9.5 flex-none items-center gap-1.5 border-b border-border-default pl-3 pr-1.5">
+          <header className="flex h-9.5 flex-none items-center gap-1.5 border-b border-border-default pl-3 pr-1">
             <span className="text-body font-semibold text-text-primary">Tasks</span>
-            <span className="text-caption text-text-muted">{active.length}</span>
-            <button type="button" onClick={() => go(null)} className={cn(QUIET_BUTTON, "ml-auto px-2 py-0.5")}>
+            {!unknown && <span className="text-caption text-text-muted">{active.length}</span>}
+            <button type="button" onClick={() => go(null)} className={cn(QUIET_PILL, "ml-auto")}>
               See all
             </button>
             <button
               type="button"
               aria-label="Hide tasks"
               onClick={() => setOpen(false)}
-              className={cn(QUIET_BUTTON, "grid size-6 place-items-center rounded-[8px] text-text-muted")}
+              className={NAKED_ICON_BUTTON}
             >
-              <ChevronDown size={14} aria-hidden="true" />
+              <ChevronDown size={NAKED_ICON} aria-hidden="true" />
             </button>
           </header>
-          {active.length > 0 ? (
+          {unknown ? (
+            <EmptyState variant="well" icon={TriangleAlert} title="Could not load tasks" className="m-2" />
+          ) : active.length > 0 ? (
             <ul aria-label="Active tasks, quick view" className="m-0 min-h-0 list-none overflow-y-auto p-1">
               {active.map((t) => (
                 <li key={t.id}>

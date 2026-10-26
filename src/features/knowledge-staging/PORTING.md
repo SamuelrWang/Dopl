@@ -26,7 +26,6 @@ view staged here covers it. Its card-grid "home" mode (the hero banner) is not r
 | `home/knowledge-panels.tsx` | `pages/home/knowledge-panels.tsx` | Only change: `Channel` → `StagingChannel` (`data.ts`). |
 | `home/knowledge-panel-cards.tsx` | `pages/home/knowledge-panel-cards.tsx` | Verbatim. |
 | `home/knowledge-base-view.tsx` | `pages/home/knowledge-base-view.tsx` | Verbatim. |
-| `home/panel-buttons.tsx` | `pages/home/panel-buttons.tsx` | Verbatim. |
 | `home/home.module.css` | `pages/home/home.module.css` | Verbatim (CSS module, scoped). |
 | `home/home-skeleton.tsx` | `pages/home/home-skeleton.tsx` | Trimmed to the two face skeletons. |
 | `desktop/components/page-states.tsx` | `components/page-states.tsx` | Trimmed to `PageError`. |

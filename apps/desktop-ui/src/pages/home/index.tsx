@@ -73,9 +73,10 @@ export default function HomePage() {
     queryFn: ({ signal }) => fetchBoot(null, signal),
   });
   // Gated with the page reads so the Profile pill paints with its photo and name; a failed read
-  // falls back to "Profile" rather than failing the page.
+  // falls back to "Profile" at once (no retries holding the skeleton) rather than failing the page.
   const profile = useApiQuery<ProfileBody, HomeViewer>("/api/user/profile", {
     select: selectViewer,
+    retry: false,
   });
 
   // Read once per signed-in user, never per render: a write after the restore
@@ -119,7 +120,7 @@ export default function HomePage() {
     homeMemory.write(homeScope(userId), { tab, rowId: rowToStore });
   }, [ready, userId, tab, rowToStore]);
 
-  if (pending) return <HomePageSkeleton />;
+  if (pending) return <HomePageSkeleton face={tab} />;
   if (isUnauthorized(error)) return <SignedOutScreen />;
   if (error || !identity.data) {
     return (

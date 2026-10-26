@@ -34,7 +34,7 @@ import {
   AgentActivityRows,
   ownAgentsWorking,
 } from "@/features/channels/components/agent-activity";
-import { agentColorVar } from "@/features/channels/lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import { liveAgentsFromKey, liveAgentsKey } from "@/features/channels/lib/live-agents";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { DemoAgentView } from "@/features/marketing/components/banner-demo/demo-agent-view";

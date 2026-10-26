@@ -35,7 +35,7 @@ import { summary } from "./agent-window-harness";
 import { CHANNEL_ID, ME } from "./test-fixtures";
 // ⚠ READ OFF THE BANK, NEVER TYPED — `AGENT_COLOR_KEYS`'s ORDER *is* the assignment policy, so a
 // literal "agent-02" would be this suite deciding what "the picked key" means.
-import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 
 const [FIRST, SECOND, THIRD] = AGENT_COLOR_KEYS;
 

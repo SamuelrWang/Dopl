@@ -24,7 +24,7 @@ import {
   AgentActivityRows,
   ownAgentsWorking,
 } from "@/features/channels/components/agent-activity";
-import { agentColorVar } from "@/features/channels/lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import {
   liveAgentsFromKey,
   liveAgentsKey,

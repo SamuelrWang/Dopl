@@ -22,7 +22,7 @@ import {
   messagesKey,
   threadsKey,
   type ThreadWriteDeps,
-} from "./use-thread-writes-shared";
+} from "./use-writes-shared";
 import type { ChannelThread } from "../types";
 
 /**

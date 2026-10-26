@@ -13,7 +13,7 @@
 
 import { ChevronRight, MessagesSquare, Users } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { PILL_BUTTON } from "@/shared/ui/small-action-button";
+import { INK_PILL, QUIET_PILL } from "@/shared/ui/small-action-button";
 import { cn } from "@/shared/lib/utils";
 import { AgentStatusPill } from "./agent-bits";
 import { AgentFace } from "./agent-face";
@@ -26,14 +26,6 @@ import { openedByLabel, type ThreadCardAgent } from "./thread-card-agents";
 import { shortName, type AuthorIndex } from "./view-model";
 import type { ThreadCardRow } from "./view-model-rows";
 
-const QUIET_BUTTON = cn(
-  PILL_BUTTON,
-  "h-[26px] border-border-subtle bg-transparent px-[11px] text-text-secondary",
-  "hover:bg-transparent hover:text-text-primary disabled:opacity-60"
-);
-const INK_BUTTON =
-  "raise-ink inline-flex h-[26px] flex-none items-center rounded-full bg-surface-cta px-[11px] " +
-  "text-caption font-medium text-text-on-cta";
 const AGENT_ROW =
   "white-card flex h-[42px] w-full flex-none items-center gap-2 rounded-[10px] border-border-subtle pl-[7px] pr-2 text-left";
 
@@ -180,11 +172,11 @@ export function ThreadCardMessage({
           </span>
           <span className="flex flex-none gap-1.5">
             {canLaunchAgent && (
-              <button type="button" disabled={launchBusy} onClick={onLaunch} className={QUIET_BUTTON}>
+              <button type="button" disabled={launchBusy} onClick={onLaunch} className={QUIET_PILL}>
                 Launch agent
               </button>
             )}
-            <button type="button" onClick={onOpen} className={INK_BUTTON}>
+            <button type="button" onClick={onOpen} className={INK_PILL}>
               Open thread
             </button>
           </span>

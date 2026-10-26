@@ -22,7 +22,7 @@ import type {
   ThreadStatus,
 } from "../types";
 import { authorAgentIdOf } from "../lib/agent-post-stamp";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 // ⚠ THE ONE COERCION, IMPORTED RATHER THAN REPEATED (2026-09-07). The rule that junk and
 // absence land on the DEFAULT and never on `"none"` is a ruling, and a mapper with its own
 // `as` cast would be a second place it lived — the shape this wave has now found four times.

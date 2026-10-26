@@ -32,7 +32,7 @@ import {
 import { LaunchIntoChannelButton, useCardLaunch } from "./identity-card-launch";
 import { AddKnowledgeWell, IdentityKnowledgeDialog } from "./identity-card-knowledge";
 import { channelPeople } from "./home-rows";
-import { CreateButton } from "./panel-buttons";
+import { CreateButton } from "@/shared/ui/page-action-button";
 import { HomeIdentityPanelsSkeleton } from "./home-skeleton";
 
 /**

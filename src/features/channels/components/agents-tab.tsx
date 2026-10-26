@@ -18,7 +18,7 @@ import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import { useChannelLaunchPosture } from "../hooks/use-channel-launch-posture";
 import type { AgentColorKey, ChannelMember } from "../types";
 import { TAB_ACTION_INK, TAB_ACTION_SHELL } from "./bits";
-import { ownAgentRuntime } from "./agent-face";
+import { agentRuntime } from "./agent-face";
 import { AgentCard, PeerCards } from "./agents-tab-cards";
 import {
   agentKey,
@@ -219,7 +219,7 @@ export function AgentsTab({
                   agent={agent}
                   // Server's key, never `agent.color` (that is only this machine's request).
                   color={colorOf(agent.agentId)}
-                  runtime={ownAgentRuntime(agent, peers)}
+                  runtime={agentRuntime({ sessions, peers }, agent.agentId, agent)}
                   catalogs={catalogs}
                   owner={me}
                   viewing={agentKey(agent) === openAgent}

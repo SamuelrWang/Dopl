@@ -17,12 +17,13 @@ import { ChevronDown, Plus, Search } from "lucide-react";
 import { HOME_TABS } from "@/features/home/tabs";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { firstNameOf } from "@/shared/lib/person-name";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 import type { HomeRowMock } from "./demo-home-rows";
 
 /** The header: New channel, the tabs, search and Profile. */
 export function DemoTopBar({ viewer }: { viewer: AvatarPerson }) {
-  const first = (viewer.displayName ?? "").split(/\s+/)[0] || "Profile";
+  const first = firstNameOf(viewer.displayName, "Profile");
   return (
     <div className="lp-demo-top">
       <div className="lp-demo-top-lead">

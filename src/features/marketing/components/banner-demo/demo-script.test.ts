@@ -27,7 +27,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isAgentColorKey } from "@/features/channels/lib/agent-colors";
+import { isAgentColorKey } from "@/shared/lib/agent-colors";
 import {
   MENTIONS_METADATA_KEY,
   mentionSlug,

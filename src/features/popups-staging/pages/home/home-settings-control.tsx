@@ -102,7 +102,7 @@ export function HomeSettingsControl({
        * ruling (`home-header.tsx`, 2026-08-25) still governs what may be ADDED.
        * ⚠ **ONE WORD AND NOTHING ELSE** (*"remove the profile icon"*), so
        * `PAGE_ACTION_BTN` is worn BARE — no `gap-1.5`, no `PAGE_ACTION_ICON`;
-       * those belong to `panel-buttons.tsx › CreateButton`. **Do not put a face
+       * those belong to `page-action-button.tsx › CreateButton`. **Do not put a face
        * back in it**: an avatar beside a page action is an identity BADGE and it
        * would flicker from an initial to a photo a round trip after paint.
        * ⚠ **NO `aria-label`** — the control has a VISIBLE label, and a name that

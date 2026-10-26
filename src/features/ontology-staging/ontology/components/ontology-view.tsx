@@ -6,8 +6,7 @@ import { UpgradeModal } from "../../billing/upgrade-modal";
 import { useWorkspaceEntitlements } from "../../billing/use-workspace-entitlements";
 import { cn } from "@/shared/lib/utils";
 import { pendingRow } from "@/shared/ui/pending";
-// The app's 36px black pill; `bits.tsx › TAB_ACTION` is its only declaration in
-// `src` (/home's `panel-buttons.tsx › PAGE_ACTION_BTN` is the desktop-ui twin).
+// The tab action: `page-action-button.tsx › PAGE_ACTION_BTN` as `bits.tsx › TAB_ACTION`.
 import { TAB_ACTION } from "@/features/channels/components/bits";
 import { useOntology } from "../hooks/use-ontology";
 import {

@@ -7,7 +7,7 @@
 
 import { useMemo } from "react";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { LaunchAgentDialog } from "./launch-agent-dialog";
 import type { AgentLaunchPanel } from "./use-agent-launch";
 import { useLaunchControls } from "./use-launch-controls";

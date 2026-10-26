@@ -16,7 +16,7 @@
  */
 
 import type { IdentityFacts } from "@/shared/ui/identity-face";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import { agentNameHandle } from "../lib/agent-mentions";
 import type { AgentColorKey } from "../types";
 import { StreamCard } from "./agent-stream-card";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { safeLabel } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
-import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { LAUNCH_RUNTIME_ID_MESSAGE, LAUNCH_RUNTIME_ID_RE } from "./schema-launch-modes";
 import type { AgentColorKey, MachineDelivery, SessionPillState } from "./types";
 

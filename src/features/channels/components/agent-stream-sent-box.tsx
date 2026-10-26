@@ -12,7 +12,7 @@
 
 import type { IdentityFacts } from "@/shared/ui/identity-face";
 import { cn } from "@/shared/lib/utils";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import type { RecipientTag } from "../lib/recipient-tags";
 import type { PostDestination } from "./agents-model";
 import { StreamCard } from "./agent-stream-card";

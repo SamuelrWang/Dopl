@@ -6,6 +6,8 @@
  * catch-up (`null`), a mixed coalesced batch — runs the full refetch, as before. The realtime hook is replaced by a recorder so each case drives the
  * exact table sequence; the refetch gate is the real one.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 
@@ -97,6 +99,14 @@ describe("useChannelsLive — table-aware doorbell", () => {
     const h = mount(false);
     h.ring("channel_tasks");
     expect(h.all).toHaveBeenCalledTimes(1);
+  });
+
+  it("every host passes refetchTasks, so a task change never full-refetches a pop-out", () => {
+    for (const file of ["channel-surface-data.ts", "thread-window.tsx", "agent-window.tsx"]) {
+      const src = readFileSync(join(import.meta.dirname, file), "utf8");
+      const call = src.slice(src.indexOf("useChannelsLive({"));
+      expect(call.slice(0, call.indexOf("});")), file).toContain("refetchTasks:");
+    }
   });
 
   it("doorbellScope: one scope only for a non-empty batch of that scope's table", () => {

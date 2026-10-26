@@ -20,7 +20,7 @@ import {
   threadsKey,
   type ThreadWriteDeps,
   type ThreadWritesParams,
-} from "./use-thread-writes-shared";
+} from "./use-writes-shared";
 import {
   fanOutThreadsConfig,
   type FanOutThreadsDraft,
@@ -82,7 +82,7 @@ interface OpenThreadDraft {
 // the route arms behind them are gone too, so a resurrected caller would 400 on
 // the discriminator rather than fail quietly.
 
-// ⚠ Re-exported, not re-declared: `use-thread-writes-shared.ts` is where these
+// ⚠ Re-exported, not re-declared: `use-writes-shared.ts` is where these
 // live now, and every existing importer keeps its import path.
 export type { ThreadWritesParams, ThreadWriteDeps };
 // ⚠ `fanOutThreadsConfig` was re-exported here and is NOT (2026-08-20) — it had no

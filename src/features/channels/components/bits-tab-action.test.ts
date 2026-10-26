@@ -7,7 +7,7 @@ const classes = (s: string) => [...new Set(s.split(/\s+/).filter(Boolean))].sort
 
 describe("TAB_ACTION is PAGE_ACTION_BTN, not a second cut of it (X10)", () => {
   it("composes the shared page-action face", () => {
-    expect(TAB_ACTION).toContain("auth-btn-3d");
+    expect(TAB_ACTION).toContain("raise-ink");
     for (const token of PAGE_ACTION_BTN.split(/\s+/)) {
       expect(classes(TAB_ACTION)).toContain(token);
     }

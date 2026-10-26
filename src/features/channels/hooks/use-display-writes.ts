@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/shared/api/api-client";
 import { toast } from "@/shared/ui/toast";
 import { channelKeys } from "../client/query-keys";
-import { failed, messagesKey } from "./use-thread-writes-shared";
+import { failed, messagesKey } from "./use-writes-shared";
 
 /** The message's display routes (docs/specs/unified-display.md §7.2 C2). */
 const displayPath = (channelId: string, messageId: string, verb: "answer" | "save") =>

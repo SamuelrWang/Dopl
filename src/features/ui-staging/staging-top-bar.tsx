@@ -15,6 +15,7 @@
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { HOME_TABS, type HomeTab } from "@/features/home/tabs";
+import { firstNameOf } from "@/shared/lib/person-name";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 import { StagingSearchField } from "@/features/popups-staging/staging-popups";
 
@@ -58,7 +59,7 @@ export function StagingTopBar({
   /** STAGING: the profile pill's click (absent = inert pill). */
   onProfile?: () => void;
 }) {
-  const first = (viewer.displayName ?? "").split(/\s+/)[0] || "Profile";
+  const first = firstNameOf(viewer.displayName, "Profile");
   return (
     <div className="lp-demo-top">
       <div className="lp-demo-top-lead">

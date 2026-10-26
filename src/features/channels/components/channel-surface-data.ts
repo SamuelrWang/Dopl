@@ -98,6 +98,8 @@ export interface ChannelSurfaceData extends ChannelsDerivations {
   tasks: readonly ChannelTask[];
   tasksTruncated: boolean;
   tasksLoading: boolean;
+  /** The last tasks read failed, so `tasks` is not a count anyone can trust. */
+  tasksFailed: boolean;
   /** The viewer's pending OUTBOUND reviews, workspace-wide — see the note at the
    *  read below for why the scope is not the channel's. */
   requests: ChannelConsentRequest[];
@@ -389,6 +391,7 @@ export function useChannelSurfaceData({
     tasks: tasksRead.tasks,
     tasksTruncated: tasksRead.truncated,
     tasksLoading: tasksRead.loading,
+    tasksFailed: tasksRead.error != null,
     activityBins,
     activityLoading,
     requests,

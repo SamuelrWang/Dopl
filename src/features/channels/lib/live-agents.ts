@@ -11,7 +11,7 @@
 
 // ⚠ THE ONE MEMBERSHIP TEST FOR A COLOUR KEY — this file reconciles two untrusted
 // sources, so it narrows rather than casts. `lib/agent-colors.ts` says what a key is, once.
-import { agentColorOrNull } from "./agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 import type { LiveAgentSession } from "./draft-recipients";
 

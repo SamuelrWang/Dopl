@@ -13,7 +13,7 @@ import {
   monthDayLabel,
   type BarPoint,
 } from "#/components/charts/bar-series";
-import { PAGE_ACTION_BTN } from "./panel-buttons";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 
 /** The /home Overview Usage panel's contents: the capacity bar and the month histogram. */
 

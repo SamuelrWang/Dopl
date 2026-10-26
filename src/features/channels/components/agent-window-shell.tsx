@@ -32,7 +32,7 @@ import { cn } from "@/shared/lib/utils";
 // ⚠ THE ONE MEMBERSHIP TEST FOR A COLOUR KEY. The feed's `color` is a plain `string` on the wire
 // (`src/shared/` may not import `features/channels`, and a closed union there would let a newer
 // desktop's seventeenth key typecheck past the gate), so this file narrows rather than casts.
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { AgentWindowChrome, type AgentTabView } from "./agent-window-chrome";
 import { AgentWindowRail } from "./agent-window-rail";
 import {

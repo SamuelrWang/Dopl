@@ -8,7 +8,7 @@
 import { useCallback, useMemo, useRef } from "react";
 import { cn } from "@/shared/lib/utils";
 import { FormSection } from "@/shared/ui/form-dialog";
-import { AGENT_COLOR_KEYS, agentColorVar, freeAgentColors } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS, agentColorVar, freeAgentColors } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 
 /** Module-level so default props keep a stable identity and `free` is not recomputed per render. */

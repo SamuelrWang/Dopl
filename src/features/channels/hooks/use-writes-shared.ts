@@ -7,14 +7,9 @@ import { toast } from "@/shared/ui/toast";
 import { channelKeys } from "../client/query-keys";
 
 /**
- * What every channels write config is built from: the caller's identity, the
- * refetch gate, and the two per-channel cache keys.
- *
- * ⚠ Split out of `use-thread-writes.ts` because a SECOND config file now needs
- * them (`use-thread-writes-fanout.ts`), and the alternative was either a
- * circular import between two configs or a second copy of the key builders.
- * **A key that differs by one element is a silent no-op** (INVARIANTS §8), so a
- * second copy is exactly the shape not to make.
+ * What the channels write configs share: the caller's identity, the refetch gate, the failure
+ * toast and the two per-channel cache keys. One module, because **a key that differs by one
+ * element is a silent no-op** (INVARIANTS §8), so a second copy is exactly the shape not to make.
  */
 
 export interface ThreadWritesParams {

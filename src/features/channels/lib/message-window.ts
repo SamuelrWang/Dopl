@@ -11,7 +11,7 @@ import type {
  *
  * ⚠ **THE HISTORY LIVES HERE, NOT IN THE QUERY CACHE, AND THE REASON IS §8.** A
  * `?before=` cache entry per page sits under the SAME prefix key the optimistic
- * writes patch (`use-thread-writes-shared.ts › messagesKey` is
+ * writes patch (`use-writes-shared.ts › messagesKey` is
  * `channelKeys.messages(id).all`, matched by array prefix), so every send would
  * append its pending row into every loaded page, at a `nextSeq` derived from THAT
  * page's maximum — the message you just typed rendered in the middle of last week.

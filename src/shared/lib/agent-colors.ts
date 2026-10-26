@@ -1,7 +1,7 @@
 /**
  * **THE AGENT COLOUR BANK** — the sixteen keys and the token each one names (Samuel,
  * 2026-09-13; docs/specs/agent-colors.md). Which free key a new agent gets is
- * `agent-color-pick.ts` (most distinct from the live ones, 2026-10-08).
+ * `channels/lib/agent-color-pick.ts` (most distinct from the live ones, 2026-10-08).
  *
  * ⚠ **NO COLOUR VALUE APPEARS IN THIS FILE OR IN ANY COMPONENT.** A key maps to a
  * CSS custom property NAME and nothing else; the sixteen `oklch()` values live once
@@ -16,7 +16,7 @@
  * ⚠ **`AGENT_COLOR_KEYS`'s ORDER IS NO LONGER THE ASSIGNMENT POLICY** (2026-10-08). It
  * decides only the empty room's first key, the picker's last tie-break and the order the
  * New-agent popup draws its circles in. The pick itself measures colour distance
- * (`agent-color-pick.ts`), because neighbouring keys are neighbouring hues.
+ * (`channels/lib/agent-color-pick.ts`), because neighbouring keys are neighbouring hues.
  *
  * ⚠ **IT IS A PLAIN MODULE, NOT `@dopl/contracts`.** That package is TYPE-ONLY by
  * rule (its index carries the argument: one runtime export makes it a build input
@@ -97,7 +97,7 @@ export function agentColorVar(key: AgentColorKey): string {
 
 /** Every key nobody holds, in BANK order — what the New-agent popup renders as selectable and
  *  its arrow keys walk. ⚠ NOT the assignment order: the pick, and the list a 409 hands back,
- *  are `agent-color-pick.ts › rankFreeAgentColors` (best first). */
+ *  are `channels/lib/agent-color-pick.ts › rankFreeAgentColors` (best first). */
 export function freeAgentColors(
   taken: ReadonlySet<string>
 ): readonly AgentColorKey[] {

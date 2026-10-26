@@ -5,7 +5,7 @@
  * here.
  */
 
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 
 /** The tag on a display with a choice: the reader's job. */

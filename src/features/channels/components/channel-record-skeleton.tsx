@@ -50,14 +50,33 @@ const SECTION_HEADINGS = {
 /** Roster rows the Members section stands in for (`member-roster.tsx › MemberRow`). */
 const MEMBER_ROWS = 2;
 
+/** The surface root's row (`channel-surface-standalone.tsx`); no `min-w-0`, so the info ghost keeps its width. */
+const RECORD_ROW = "relative flex min-h-0 flex-1";
+
 export function ChannelRecordSkeleton({
   label = "Loading channel",
 }: {
   label?: string;
 }) {
   return (
-    // The surface root's row (`channel-surface-standalone.tsx`); no `min-w-0`, so the info ghost keeps its width.
-    <SkeletonSurface label={label} className="relative flex min-h-0 flex-1">
+    <SkeletonSurface label={label} className={RECORD_ROW}>
+      <RecordColumns />
+    </SkeletonSurface>
+  );
+}
+
+/** The same ghost inside a page skeleton that already announces the load. */
+export function ChannelRecordGhost() {
+  return (
+    <div className={RECORD_ROW}>
+      <RecordColumns />
+    </div>
+  );
+}
+
+function RecordColumns() {
+  return (
+    <>
       <TranscriptColumnGhost />
       {/* `info-resize-handle.tsx`'s zero-width sibling, so the row's box math is the real row's. */}
       <div className="relative z-[2] w-0 shrink-0">
@@ -66,7 +85,7 @@ export function ChannelRecordSkeleton({
         </span>
       </div>
       <InfoColumnGhost />
-    </SkeletonSurface>
+    </>
   );
 }
 
@@ -136,9 +155,9 @@ function MessageRowGhost({
 
 /**
  * The composer card (`composer.tsx`), at the shared `COMPOSER_BOTTOM` offset. The card's radius and padding ride
- * `GHOST_FLAT_FACE`; the loaded card's raised face does not.
+ * `GHOST_FLAT_FACE`; the loaded card's raised face does not. Every channel page ghost mounts this one.
  */
-function ComposerGhost() {
+export function ComposerGhost() {
   return (
     <div className={cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)}>
       <div className={cn(GHOST_FLAT_FACE, "flex flex-col rounded-[20px] px-3 py-2.5")}>

@@ -11,8 +11,9 @@ const NO_TASKS: ChannelTask[] = [];
 
 /**
  * The channel's tasks, in server order (`updated_at` descending); `null` asks for nothing.
- * `truncated` is carried through (INVARIANTS §9). `refetch` invalidates the whole path, so an open
- * detail re-reads on the same doorbell as the list.
+ * `truncated` is carried through (INVARIANTS §9), and `error` keeps a failed read distinct from an
+ * empty one. `refetch` invalidates the whole path, so an open detail re-reads on the same doorbell
+ * as the list.
  */
 export function useChannelTasks(channelId: string | null, workspaceId: string) {
   const client = useQueryClient();
@@ -29,6 +30,7 @@ export function useChannelTasks(channelId: string | null, workspaceId: string) {
     tasks: query.data?.tasks ?? NO_TASKS,
     truncated: query.data?.truncated === true,
     loading: query.isLoading,
+    error: query.error,
     refetch,
   };
 }
@@ -46,5 +48,6 @@ export function useChannelTask(
   return {
     task: query.data?.task ?? null,
     loading: query.isLoading,
+    error: query.error,
   };
 }

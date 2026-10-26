@@ -1,5 +1,5 @@
 import "server-only";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { pickAgentColor } from "../lib/agent-color-pick";
 import type { AgentColorKey } from "../types";
 import type { SessionStateUpsert } from "./collab-dto";

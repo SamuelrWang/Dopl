@@ -13,7 +13,7 @@ import { useStickToBottom } from "./use-stick-to-bottom";
 import { useJumpPageBack } from "./use-jump-page-back";
 import { useLoadOlder } from "./use-load-older";
 import { Transcript } from "./transcript";
-import type { ThreadCardAgentFeeds } from "./thread-card-agents";
+import type { AgentFeeds } from "./agent-face";
 import type { AnswerDisplay } from "../hooks/use-display-writes";
 import {
   TRANSCRIPT_FILTER_ALL,
@@ -133,7 +133,7 @@ export function ChannelsMessagePane({
    *  `use-channel-agent-sessions.ts` mount is a second poll. */
   liveAgents?: readonly LiveAgentSession[];
   /** Who works each thread card's thread (the Agents tab's own feeds, handed down). */
-  agentFeeds?: ThreadCardAgentFeeds;
+  agentFeeds?: AgentFeeds;
   /** Launch controls for the composer's New Agent icon, handed down (a second `useAgentsPanel` is a
    *  second peer poll); absent renders no button. */
   newAgent?: AgentLaunchControls;

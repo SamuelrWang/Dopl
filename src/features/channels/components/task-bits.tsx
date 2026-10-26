@@ -3,7 +3,8 @@
 import { Check, Hash, ListChecks, MessageSquare } from "lucide-react";
 import { IdentityStack } from "@/shared/ui/avatar-stack";
 import { cn } from "@/shared/lib/utils";
-import type { TaskFaceOf } from "./task-faces";
+import { actorKey } from "../lib/task-model";
+import { taskStackFace, type TaskFaceOf } from "./task-faces";
 import type { ChannelTask, TaskActor, TaskLink, TaskStatus } from "../types";
 
 /** The round status tick (the landing Tasks window's `.lp-ont-tick`): ring, half ring, filled. */
@@ -27,24 +28,22 @@ export function nextStatus(task: ChannelTask): { status: TaskStatus; verb: strin
     : { status: "resolved", verb: "Resolve" };
 }
 
+/** The assignees as one stack; an actor in `active` (on an in-progress subtask) gets the green dot. */
 export function TaskAssignees({
   actors,
   faceOf,
-  size = 22,
+  active,
 }: {
   actors: readonly TaskActor[];
   faceOf: TaskFaceOf;
-  size?: number;
+  active?: ReadonlySet<string>;
 }) {
-  const faces = actors.map(faceOf);
-  return (
-    <IdentityStack
-      faces={faces}
-      size={size}
-      max={3}
-      label={`Assigned to ${faces.map((f) => f.name).join(", ")}`}
-    />
-  );
+  const faces = actors.map((a) => ({
+    ...taskStackFace(a, faceOf),
+    online: active?.has(actorKey(a)) ?? false,
+  }));
+  const names = faces.map((f) => (f.online ? `${f.name} (active)` : f.name)).join(", ");
+  return <IdentityStack faces={faces} size={22} max={3} label={`Assigned to ${names}`} />;
 }
 
 /** The thread or message a task came from; pressing it opens that. */

@@ -6,7 +6,7 @@ import {
   safeOptionalLabel,
 } from "@/shared/lib/safe-label";
 import { closedEnum } from "@/shared/lib/closed-enum";
-import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import type {
   AgentColorKey,
   LaunchMessageMode,

@@ -1,4 +1,6 @@
 import { Plus } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
+import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { SearchItem } from "@/features/search/contracts";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
@@ -7,9 +9,7 @@ import { HomeSettingsControl, type HomeViewer } from "./home-settings-control";
 import { HomeSearch } from "./home-search";
 import { HOME_TABS, type HomeTab } from "./home-tabs";
 
-/** The page's one primary action: the flat ink pill, hugging its label at the column's head. */
-const NEW_CHANNEL_BTN =
-  "raise-ink flex h-9 cursor-pointer items-center gap-1.5 rounded-full bg-surface-cta pl-3 pr-[15px] text-small font-medium text-text-on-cta";
+const NEW_CHANNEL_BTN = cn(PAGE_ACTION_BTN, "gap-1.5 pl-3");
 
 /**
  * /home's header strip: New channel over the channel column, the face tabs, then search and the

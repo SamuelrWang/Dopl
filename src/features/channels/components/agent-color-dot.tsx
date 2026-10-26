@@ -18,7 +18,7 @@
  */
 
 import { cn } from "@/shared/lib/utils";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 
 /**

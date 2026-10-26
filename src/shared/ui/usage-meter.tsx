@@ -58,6 +58,9 @@ function percentOf(used: number, limit: number): number {
   return limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 }
 
+/** The ramp's warning band: where `ThinMeter warnNearFull` stops drawing its own colour. */
+const NEAR_FULL_PCT = 75;
+
 /**
  * `tone="ramp"` fill, by percent full. Four bands, not interpolation: the
  * thresholds are the takeaway, and an interpolated hue names no point.
@@ -66,7 +69,7 @@ function percentOf(used: number, limit: number): number {
  */
 function usageBandClass(pct: number): string {
   if (pct < 50) return "bg-success";
-  if (pct < 75) return "bg-caution";
+  if (pct < NEAR_FULL_PCT) return "bg-caution";
   if (pct < 90) return "bg-warning";
   return "bg-danger";
 }
@@ -141,22 +144,30 @@ export function ThinMeter({
   used,
   limit,
   color,
+  warnNearFull = false,
   className,
 }: {
   used: number;
   limit: number;
   /** A CSS colour for the fill (an agent's `agentColorVar`); ink without one. */
   color?: string | null;
+  /** From the ramp's warning band up, the fill takes its status colour over `color`. */
+  warnNearFull?: boolean;
   className?: string;
 }) {
+  const pct = percentOf(used, limit);
+  const warn = warnNearFull && pct >= NEAR_FULL_PCT;
   return (
     <span
       aria-hidden="true"
       className={cn("relative block h-0.75 overflow-hidden rounded-full bg-surface-raised-4", className)}
     >
       <span
-        className="absolute inset-y-0 left-0 rounded-full bg-text-primary transition-[width] duration-200"
-        style={{ width: `${percentOf(used, limit)}%`, background: color ?? undefined }}
+        className={cn(
+          "absolute inset-y-0 left-0 rounded-full transition-[width] duration-200",
+          warn ? usageBandClass(pct) : "bg-text-primary"
+        )}
+        style={{ width: `${pct}%`, background: warn ? undefined : (color ?? undefined) }}
       />
     </span>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { firstNameOf } from "@/shared/lib/person-name";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
@@ -68,7 +69,7 @@ export function HomeSettingsControl({
         className={PROFILE_PILL}
       >
         <IdentityFace size={26} photo={viewer?.avatarUrl} name={name} />
-        {name?.split(/\s+/)[0] ?? "Profile"}
+        {firstNameOf(name, "Profile")}
       </button>
       <SettingsModal
         open={open}

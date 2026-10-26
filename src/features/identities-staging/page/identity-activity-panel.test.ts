@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { readCode, readSource } from "@/shared/testing/source-text";
 import { SEED_IDENTITIES } from "../data";
 import { activeEverywhere, pageFeed } from "./identity-page-data";
-import { AGENT_COLOR_KEYS } from "@/features/channels/lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { agentColorKey } from "./identity-activity-panel";
 
 const PANEL = readCode(new URL("./identity-activity-panel.tsx", import.meta.url));

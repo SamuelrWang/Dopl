@@ -16,7 +16,7 @@ import {
   type MessagesCache,
   type ThreadsCache,
 } from "../lib/optimistic-cache";
-import { failed, messagesKey, threadsKey } from "./use-thread-writes-shared";
+import { failed, messagesKey, threadsKey } from "./use-writes-shared";
 import type { ChannelThread, ThreadMode } from "../types";
 
 /**
@@ -30,7 +30,7 @@ import type { ChannelThread, ThreadMode } from "../types";
  * idempotency key or renders a pending anything: these address a thread that
  * already exists, by id. Two reasons to change, two files (INVARIANTS §1); the
  * shared plumbing (`ThreadWritesParams`, the two per-channel keys, `failed`)
- * comes from `use-thread-writes-shared.ts` so no key is written twice — a key
+ * comes from `use-writes-shared.ts` so no key is written twice — a key
  * that differs by one element is a silent no-op (§8).
  *
  * ⚠ THIS IS NOT THREAD CLOSING COMING BACK. A thread still has no finished state
@@ -67,7 +67,7 @@ interface ThreadLifecycleParams {
 }
 
 /** What the failure path needs on top: the client it re-reads through. Same
- *  shape as `use-thread-writes-shared.ts › ThreadWriteDeps`, and for the same
+ *  shape as `use-writes-shared.ts › ThreadWriteDeps`, and for the same
  *  reason — the config is a pure function of its deps so a test can build one. */
 export interface ThreadLifecycleDeps extends ThreadLifecycleParams {
   client: QueryClient;

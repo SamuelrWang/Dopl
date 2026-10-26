@@ -22,7 +22,7 @@ import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { PageError } from "@/features/knowledge-staging/desktop/components/page-states";
 import { HomeKnowledgeBaseView } from "./knowledge-base-view";
 import { HomeKnowledgePanelsSkeleton } from "./home-skeleton";
-import { CreateButton } from "./panel-buttons";
+import { CreateButton } from "@/shared/ui/page-action-button";
 import {
   BaseCell,
   EmptyLine,
@@ -66,7 +66,7 @@ import home from "./home.module.css";
  *
  * 🔒 **BOTH SECTION BUTTONS READ "+ Knowledge base"** (Samuel, 2026-09-09:
  * *"have it for both, say, + Knowledge base. for both"*), on the page's black
- * `h-9` pill (`panel-buttons.tsx › CreateButton`) — the SECTION names the
+ * `h-9` pill (`page-action-button.tsx › CreateButton`) — the SECTION names the
  * destination, so the button says only what it makes. **The two accessible names
  * are identical on purpose**: reach them through their section
  * (`getByRole("region", { name: … })`), as `knowledge-panels.test.tsx` does.

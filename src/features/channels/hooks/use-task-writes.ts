@@ -9,8 +9,8 @@ import {
 import { channelRequest } from "../client/api";
 import { channelKeys, channelTasksPath } from "../client/query-keys";
 import { newClientMsgId } from "../lib/optimistic-cache";
-import { subtaskFacts } from "../lib/task-model";
-import { failed } from "./use-thread-writes-shared";
+import { nextSubtaskState, subtaskFacts } from "../lib/task-model";
+import { failed } from "./use-writes-shared";
 import type {
   ChannelTask,
   ChannelTaskAction,
@@ -120,7 +120,8 @@ export function taskWriteConfig(
   };
 }
 
-/** The three writes the Tasks tab offers; a guest is offered `addNote` only (R8). */
+/** The three writes the Tasks tab offers; a guest, who reads tasks without changing them, is
+ *  offered `addNote` only. */
 export function useTaskWrites({
   channelId,
   currentUserId,
@@ -139,7 +140,7 @@ export function useTaskWrites({
         expect: statusExpectation(status, currentUserId, now()),
       }),
     toggleSubtask: (task: ChannelTaskDetail, subtask: ChannelTaskSubtask) => {
-      const state: SubtaskState = subtask.state === "done" ? "todo" : "done";
+      const state = nextSubtaskState(subtask.state);
       write.mutate({
         channelId,
         action: { action: "update_subtask", task: task.id, subtask: subtask.id, state },

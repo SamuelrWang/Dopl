@@ -46,7 +46,7 @@ export { frameLane, type StreamLane } from "./agent-stream-lanes";
    every importer that reads it from this path, but `StreamItem` is where it was USED here and that
    now lives in `agent-stream-item.ts`. */
 import { frameLane } from "./agent-stream-lanes";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 
 /**
  * ⚠ THE TOOL-RUN GROUPING LIVES IN `agent-stream-groups.ts`, and this file stays its import

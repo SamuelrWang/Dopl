@@ -17,7 +17,7 @@ import { useStagingOntologyStore } from "../store/staging-ontology-store";
 
 import { PageError } from "./page-states";
 import { EmptyLine } from "./knowledge-panel-cards";
-import { CreateButton } from "./panel-buttons";
+import { CreateButton } from "@/shared/ui/page-action-button";
 import {
   DeleteOntologyConfirm,
   OntologyShareDialog,

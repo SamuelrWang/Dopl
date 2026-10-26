@@ -99,6 +99,7 @@ describe("AgentsTab — the cards", () => {
     // one spawn-idle agent looked different depending on where it was read and each surface had a
     // green test defending its own answer. The same finding as the thread-title case below.
     expect(screen.getByText("Context tokens")).toBeTruthy();
+    expect(screen.getByText("Context tokens").textContent).not.toContain("/");
     // ⚠ EVERY OTHER ABSENCE IS STILL AN ABSENCE. The ruling is about the BAR, not about inventing
     // facts: a number with no measurement says so, and a missing stamp renders nothing at all.
     expect(screen.getByText(/Tokens spent: not measured yet/)).toBeTruthy();

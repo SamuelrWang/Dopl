@@ -119,7 +119,11 @@ export function KanbanColumnHeader({
           </button>
         )}
         {canEdit && (
-          <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="relative shrink-0"
+            data-clickable=""
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               aria-label={`Object actions for ${label}`}

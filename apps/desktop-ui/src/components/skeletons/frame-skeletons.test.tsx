@@ -250,6 +250,18 @@ describe("the /home shapes are /home's own geometry", () => {
     expect(container.querySelector(".max-w-\\[960px\\]")).toBeNull();
   });
 
+  it("paints the face it is handed, which the page passes as the remembered one", () => {
+    expect(code("../../pages/home/index.tsx")).toContain("<HomePageSkeleton face={tab} />");
+    const { container } = render(<HomePageSkeleton face="knowledge" />);
+    expect(container.querySelector("main")?.getAttribute("data-face")).toBe("knowledge");
+    expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+    const asides = container.querySelectorAll("aside").length;
+    const channels = render(<HomePageSkeleton face="channels" />).container;
+    // The channel record's info column.
+    expect(channels.querySelectorAll("aside")).toHaveLength(asides + 1);
+    expect(channels.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+
   /** One label bar per `HOME_TABS` entry, read off the table so a sixth face moves the ghost. */
   it("ghosts one tab label per face, without offering anything to press", () => {
     const { container } = render(<HomePageSkeleton />);

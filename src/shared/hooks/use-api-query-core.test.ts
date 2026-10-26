@@ -66,6 +66,7 @@ describe("the client default survives an unspecified option", () => {
     expect("select" in built).toBe(false);
     expect("refetchInterval" in built).toBe(false);
     expect("placeholderData" in built).toBe(false);
+    expect("retry" in built).toBe(false);
   });
 
   it("leaves the rest of the default policy intact", () => {
@@ -92,10 +93,12 @@ describe("an explicit option still wins", () => {
       select,
       refetchInterval: 30_000,
       keepPreviousData: true,
+      retry: false,
     });
 
     expect(built.select).toBe(select);
     expect(built.refetchInterval).toBe(30_000);
+    expect(built.retry).toBe(false);
     expect(built.placeholderData).toBeDefined();
   });
 });

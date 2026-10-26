@@ -11,9 +11,8 @@ import { cn } from "@/shared/lib/utils";
 import { formatTokens } from "@/shared/lib/format-tokens";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import { PILL_BUTTON } from "@/shared/ui/small-action-button";
-import { ThinMeter } from "@/shared/ui/usage-meter";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
-import { agentColorOrNull, agentColorVar } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { agentModelShortLabel } from "../lib/agent-models";
 import type { ModelCatalogs } from "../lib/model-catalog";
 import type { AgentColorKey, ChannelMember } from "../types";
@@ -22,6 +21,7 @@ import { AgentDeleteButton } from "./agent-delete";
 import { AgentFace } from "./agent-face";
 import { metric } from "./agent-metrics";
 import { AgentName } from "./agent-rename";
+import { ContextMeter } from "./agent-stats";
 import {
   agentDisplayName,
   agentLiveness,
@@ -137,14 +137,12 @@ export function AgentCard({
   catalogs?: ModelCatalogs | null;
   /** Server-assigned colour from the host (this machine's feed can't know it); `null` rings neutral. */
   color?: AgentColorKey | null;
-  /** `agent-face.tsx › ownAgentRuntime`, resolved by the host; `null` draws no badge. */
+  /** `agent-face.tsx › agentRuntime`, resolved by the host; `null` draws no badge. */
   runtime?: string | null;
   owner?: ChannelMember | null;
   viewing: boolean;
   onOpen: () => void;
 }) {
-  const contextUsed = metric(agent.contextUsed) ?? 0;
-  const contextWindow = metric(agent.contextWindow) ?? 0;
   const tokensSpent = metric(agent.tokensSpent);
   const description = agentDescription(agent);
   const permissionLabel = agentPermissionLabel(agent);
@@ -191,18 +189,7 @@ export function AgentCard({
         {profileLabel && ` · ${profileLabel}`}
       </p>
 
-      {/* Draws at 0 when unmeasured (matches `agent-stats.tsx`); a rendering choice — never default the data. */}
-      <p className="mb-[5px] mt-2.5 flex items-center justify-between gap-2 text-label text-text-muted">
-        Context tokens
-        <span className="whitespace-nowrap font-medium tabular-nums text-text-primary">
-          {formatTokens(contextUsed)} / {formatTokens(contextWindow)}
-        </span>
-      </p>
-      <ThinMeter
-        used={contextUsed}
-        limit={contextWindow}
-        color={color ? agentColorVar(color) : null}
-      />
+      <ContextMeter agent={agent} color={color} className="mt-2.5" />
 
       <div className="mt-2.5 flex items-center gap-1.5">
         <span className="min-w-0 flex-1 truncate text-label text-text-muted">

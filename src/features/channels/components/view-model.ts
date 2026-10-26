@@ -8,7 +8,7 @@ import {
   parseEscalationAnswer,
   type ChannelEscalationAnswer,
 } from "../escalation";
-import { agentColorOrNull } from "../lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import type {
   AgentColorKey,
   Channel,

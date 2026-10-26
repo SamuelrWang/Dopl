@@ -24,7 +24,7 @@
  * launch directive, the push reconcile, the New-agent dialog's default — runs this one rule.
  */
 import type { AgentColorKey } from "@dopl/contracts";
-import { AGENT_COLOR_KEYS } from "./agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { AGENT_COLOR_VALUES, type Oklch } from "./agent-color-values";
 
 /** Ties closer than this are ties: the inputs are 2-3 decimal tokens, not measurements. */

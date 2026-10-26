@@ -11,7 +11,8 @@ import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
 import { Transcript } from "./transcript";
-import { openedByLabel, threadCardAgents, type ThreadCardAgentFeeds } from "./thread-card-agents";
+import type { AgentFeeds } from "./agent-face";
+import { openedByLabel, threadCardAgents } from "./thread-card-agents";
 import { indexMembers } from "./view-model";
 import { channelRows } from "./view-model-rows";
 import { CHANNEL_ID, ME, PEER, member, message, thread } from "./test-fixtures";
@@ -58,7 +59,7 @@ function peer(over: Partial<ChannelPeerSession> = {}): ChannelPeerSession {
   };
 }
 
-function draw(feeds: ThreadCardAgentFeeds | undefined, messages = [OPENER]) {
+function draw(feeds: AgentFeeds | undefined, messages = [OPENER]) {
   const onOpenAgent = vi.fn();
   const { container } = render(
     <Transcript

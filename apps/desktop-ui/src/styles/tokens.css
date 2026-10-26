@@ -259,7 +259,7 @@
      would have no consumer; a soft fill, if one is ever wanted, is `color-mix` at
      the call site and never a second 16 values to keep in step.
      ⚠ THE KEY SET IS MIRRORED IN THREE MORE PLACES and all four are pinned together:
-     `src/features/channels/lib/agent-colors.ts › AGENT_COLOR_KEYS`, the
+     `src/shared/lib/agent-colors.ts › AGENT_COLOR_KEYS`, the
      `channel_sessions.color` CHECK (`20261005120000_agent_session_colors.sql`) and
      `@dopl/contracts › AgentColorKey`. Adding a 17th means all four. */
   /* Richer + darker since 2026-09-13 evening (Samuel: "make the colors maybe a

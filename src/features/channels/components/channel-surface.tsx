@@ -27,7 +27,7 @@ import { useMessageJump } from "./use-message-jump";
 import { ChannelsMessagePane } from "./message-pane";
 import { PopOutThreadButton } from "./pop-out";
 import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import { ChannelSingleColumn } from "./channel-single-column";
 import { SurfaceAgentView } from "./surface-agent-view";
 import { SurfaceInfoPanel } from "./surface-info-panel";
@@ -262,7 +262,12 @@ export function ChannelSurface({
       }
       tasksQuickView={
         capabilities?.tasks && !webView ? (
-          <TasksQuickView tasks={data.tasks} faceOf={taskFaceOf} onOpenTask={sel.openTask} />
+          <TasksQuickView
+            tasks={data.tasks}
+            failed={data.tasksFailed}
+            faceOf={taskFaceOf}
+            onOpenTask={sel.openTask}
+          />
         ) : null
       }
       // "Anthony's agent is working…", off the peer projection the Agents tab

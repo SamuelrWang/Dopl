@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
+import { ChannelRecordGhost } from "@/features/channels/components/channel-record-skeleton";
 import {
   GHOST_FLAT_FACE,
   Skeleton,
@@ -17,7 +19,7 @@ import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { PLOT_HEIGHT_CLASS } from "#/components/charts/bar-series";
 import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
 import { HomeFrame, HomeHeaderRow, HomeListColumn } from "./home-frame";
-import { HOME_DEFAULT_TAB, HOME_TABS } from "./home-tabs";
+import { HOME_DEFAULT_TAB, HOME_TABS, type HomeTab } from "./home-tabs";
 import home from "./home.module.css";
 
 /**
@@ -26,62 +28,88 @@ import home from "./home.module.css";
  * never re-typed. No text and nothing pressable; the label is `SkeletonSurface`'s `sr-only` line.
  */
 
-/** The whole /home frame while the page reads are in flight: rail, header, list, record pane. */
-export function HomePageSkeleton({ label = "Opening home" }: { label?: string }) {
+/**
+ * The whole /home frame while the page reads are in flight: rail, header, list, and the record
+ * pane on the face the page will open on (the remembered one once boot names the user).
+ */
+export function HomePageSkeleton({
+  label = "Opening home",
+  face = HOME_DEFAULT_TAB,
+}: {
+  label?: string;
+  face?: HomeTab;
+}) {
   return (
     <SkeletonSurface label={label} className={shell.root}>
       <HomeFrame
-        face={HOME_DEFAULT_TAB}
+        face={face}
         rail={<AccountRailSkeleton />}
         header={<HomeHeaderGhost />}
         list={<HomeListGhost />}
       >
-        <OverviewFaceGhost />
+        <FaceGhost face={face} />
       </HomeFrame>
     </SkeletonSurface>
   );
 }
 
-/** /home → Knowledge while the base list is in flight: two flat sections over the card grid. No
- *  caption under either heading — the real panels print label + control only (2026-09-09). */
+/** One face's record pane, inside a surface that already announces the load. The ontology face
+ *  paints its own loading shape once mounted, so it ghosts an empty pane. */
+function FaceGhost({ face }: { face: HomeTab }) {
+  if (face === "overview") return <OverviewFaceGhost />;
+  if (face === "channels") return <ChannelRecordGhost />;
+  if (face === "ontology") return null;
+  return (
+    <div className={PANELS}>
+      {face === "knowledge" ? (
+        <PanelsGhost label="Knowledge base" cards={<KbCardsGhost />} />
+      ) : (
+        <PanelsGhost label="Agent Identity" cards={<IdentityCardsGhost count={4} />} />
+      )}
+    </div>
+  );
+}
+
+const PANELS = "flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3";
+
+/** Two flat sections over a card grid. No caption under either heading — the real panels print
+ *  label + control only. */
+function PanelsGhost({ label, cards }: { label: string; cards: ReactNode }) {
+  return (
+    <>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label={label} />}>
+        {cards}
+      </SectionPanelGhost>
+      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label={label} />}>
+        {cards}
+      </SectionPanelGhost>
+    </>
+  );
+}
+
+/** /home → Knowledge while the base list is in flight. */
 export function HomeKnowledgePanelsSkeleton({
   label = "Loading knowledge",
 }: {
   label?: string;
 }) {
   return (
-    <SkeletonSurface
-      label={label}
-      className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
-    >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
-        <KbCardsGhost />
-      </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Knowledge base" />}>
-        <KbCardsGhost />
-      </SectionPanelGhost>
+    <SkeletonSurface label={label} className={PANELS}>
+      <PanelsGhost label="Knowledge base" cards={<KbCardsGhost />} />
     </SkeletonSurface>
   );
 }
 
-/** /home → Identities while the container list is in flight: the same two sections over the
- *  identities' own four-column grid (not the Knowledge grid). */
+/** /home → Identities while the container list is in flight: the identities' own four-column grid
+ *  (not the Knowledge grid). */
 export function HomeIdentityPanelsSkeleton({
   label = "Loading identities",
 }: {
   label?: string;
 }) {
   return (
-    <SkeletonSurface
-      label={label}
-      className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3"
-    >
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
-        <IdentityCardsGhost count={4} />
-      </SectionPanelGhost>
-      <SectionPanelGhost headingWidth={HEADING_W} action={<CreateGhost label="Agent Identity" />}>
-        <IdentityCardsGhost count={4} />
-      </SectionPanelGhost>
+    <SkeletonSurface label={label} className={PANELS}>
+      <PanelsGhost label="Agent Identity" cards={<IdentityCardsGhost count={4} />} />
     </SkeletonSurface>
   );
 }
@@ -90,8 +118,8 @@ export function HomeIdentityPanelsSkeleton({
 const HEADING_W = 148;
 
 /**
- * A section header's create-button ghost: `panel-buttons.tsx › CreateButton` is `PAGE_ACTION_BTN`
- * (`h-9 rounded-full px-[15px]`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
+ * A section header's create-button ghost: `page-action-button.tsx › CreateButton` is `PAGE_ACTION_BTN`
+ * (`h-9 rounded-full px-3.75`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
  * sized from the label the real button prints, and two sections with one label ghost one width.
  */
 function CreateGhost({ label }: { label: string }) {
@@ -140,9 +168,9 @@ function HomeHeaderGhost() {
 }
 
 /**
- * The record pane on the face the page opens on (`HOME_DEFAULT_TAB`, Overview): Usage (the
- * credit card, then the histogram card with its control row) and the channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage cards
- * wear `GHOST_FLAT_FACE`, not the page's `.bento` (skeletons are flat).
+ * The Overview record pane: Usage (the credit card, then the histogram card with its control row)
+ * and the channel rails. Token spend is not ghosted — it folds away when no row exists. The Usage
+ * cards wear `GHOST_FLAT_FACE`, not the page's `.bento` (skeletons are flat).
  */
 function OverviewFaceGhost() {
   return (

@@ -8,7 +8,7 @@ import { useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { MenuDivider, MenuItem, Popover } from "@/shared/ui/popover-menu";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import { agentBoxOf } from "./agent-box-rule";
 import { attributionName } from "./attribution-pill";
 import type { AgentColorKey } from "../types";

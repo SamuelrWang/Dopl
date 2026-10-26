@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { AGENT_COLOR_KEYS } from "./lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import { stripSqlLineComments } from "@/shared/supabase/migration-files";
 import { readCode, readSource } from "@/shared/testing/source-text";
 

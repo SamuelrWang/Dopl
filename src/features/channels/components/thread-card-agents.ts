@@ -1,6 +1,5 @@
 import type { AgentColorKey } from "@dopl/contracts";
-import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
-import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
+import { firstNameOf } from "@/shared/lib/person-name";
 import {
   agentDisplayName,
   agentKey,
@@ -9,7 +8,7 @@ import {
   peerCardsFor,
   type AgentLivenessState,
 } from "./agents-model";
-import { ownAgentRuntime } from "./agent-face";
+import { agentRuntime, type AgentFeeds } from "./agent-face";
 import type { AuthorIndex } from "./view-model";
 
 /** One agent working a thread, as the thread card draws it. */
@@ -26,16 +25,7 @@ export interface ThreadCardAgent {
   own: boolean;
 }
 
-/** Who the agents on a thread are, read off the viewer's feed and the peer projection. */
-export interface ThreadCardAgentFeeds {
-  /** This machine's feed; `null` is "could not ask" and contributes no own rows. */
-  sessions: readonly DesktopSessionSummary[] | null;
-  peers: readonly ChannelPeerSession[];
-}
-
-function firstName(name: string | null | undefined): string {
-  return name?.trim().split(/\s+/)[0] || "A teammate";
-}
+const firstName = (name: string | null | undefined) => firstNameOf(name, "A teammate");
 
 /**
  * The viewer's agents on the thread, then everyone else's, through the Agents tab's own
@@ -43,7 +33,7 @@ function firstName(name: string | null | undefined): string {
  * when nothing can be said: no own feed and no peer on it is unknown, not empty (INVARIANTS §11).
  */
 export function threadCardAgents(
-  feeds: ThreadCardAgentFeeds,
+  feeds: AgentFeeds,
   channelId: string,
   threadId: string,
   index: AuthorIndex
@@ -56,7 +46,7 @@ export function threadCardAgents(
       owner: "Yours",
       photo: viewerPhoto,
       color: (s.agentId ? index.agents.get(s.agentId)?.color : null) ?? null,
-      runtime: ownAgentRuntime(s, feeds.peers),
+      runtime: agentRuntime(feeds, s.agentId, s),
       liveness: agentLiveness(s),
       own: true,
     })
@@ -70,7 +60,7 @@ export function threadCardAgents(
         owner: `${firstName(owner?.displayName)}'s agent`,
         photo: owner?.avatarUrl ?? null,
         color: p.color ?? index.agents.get(p.name)?.color ?? null,
-        runtime: p.runtime ?? null,
+        runtime: agentRuntime(feeds, p.name),
         liveness: agentLiveness(p),
         own: false,
       };

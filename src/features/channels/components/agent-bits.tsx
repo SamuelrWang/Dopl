@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { StatusPill } from "@/shared/ui/status-pill";
 import type { AgentLivenessState, AgentLivenessTone } from "./agents-model";
-import { agentColorVar } from "../lib/agent-colors";
+import { agentColorVar } from "@/shared/lib/agent-colors";
 import type { AgentColorKey } from "../types";
 
 /**

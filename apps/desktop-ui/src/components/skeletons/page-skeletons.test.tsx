@@ -300,10 +300,8 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
   });
 
   /**
-   * ⚠ THE CHANNELS GHOST IS THE SURFACE'S OWN COLUMN AND ROW METRICS. The
-   * composer offset is the one piece that CAN be imported — `COMPOSER_BOTTOM`
-   * exists precisely because the channel and agent composers must sit at one
-   * height — so the ghost imports it and the rest is byte-shared.
+   * ⚠ THE CHANNELS GHOST IS THE SURFACE'S OWN COLUMN AND ROW METRICS, byte-shared;
+   * its composer is the one shared `ComposerGhost`.
    */
   it("the channels ghost byte-shares the surface's columns, rows and composer", () => {
     const sidebar = shared("features/channels/components/sidebar.tsx");
@@ -333,12 +331,20 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       [header, "flex items-center gap-1 px-3 pb-1 pt-3"],
       [paneHeader, "flex h-[56px] shrink-0 items-center gap-1.5 border-b border-border-default px-4"],
       [pane, "px-8 py-5"],
-      // The composer CARD — and it takes no row gap of its own.
-      [composer, "raised-tab flex flex-col rounded-[14px] px-[13px] py-[11px]"],
-      [composer, 'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)'],
     ] as const) {
       expect(source).toContain(geometry);
       expect(CHANNELS_SKELETON).toContain(geometry);
+    }
+
+    // The composer is the record ghost's one `ComposerGhost`, which byte-shares the card.
+    const recordGhost = shared("features/channels/components/channel-record-skeleton.tsx");
+    expect(CHANNELS_SKELETON).toContain("<ComposerGhost />");
+    for (const geometry of [
+      "flex flex-col rounded-[20px] px-3 py-2.5",
+      'cn("relative shrink-0 px-4 pt-1", COMPOSER_BOTTOM)',
+    ]) {
+      expect(composer).toContain(geometry);
+      expect(recordGhost).toContain(geometry);
     }
 
     // One row shell, one height, one indent pair.
@@ -346,8 +352,6 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
     expect(rows).toContain('const DEPTH_PAD = ["pl-2", "pl-5"]');
     expect(CHANNELS_SKELETON).toContain("h-[36px]");
     expect(CHANNELS_SKELETON).toContain('indented ? "pl-5" : "pl-2"');
-    // The offset is IMPORTED, never retyped.
-    expect(CHANNELS_SKELETON).toContain("COMPOSER_BOTTOM");
     expect(code("../../pages/channels/channels-skeleton.tsx")).not.toContain("pb-4");
   });
 

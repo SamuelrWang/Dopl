@@ -19,6 +19,27 @@ export const SMALL_TEXT_BUTTON =
   "text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
 /**
+ * THE INK PILL FACE — flat `bg-surface-cta` on the `.raise-ink` lift, the identity look's one black
+ * pill (New channel, Open thread). Every black pill below is this face at a scale; extend it
+ * through `cn`, never by re-typing it.
+ */
+export const INK_PILL_FACE =
+  "raise-ink inline-flex flex-none cursor-pointer items-center rounded-full bg-surface-cta " +
+  "font-medium text-text-on-cta";
+
+/** The ink pill at a card's 26px action scale ("Open thread"). */
+export const INK_PILL = cn(INK_PILL_FACE, "h-6.5 px-2.75 text-caption");
+
+/**
+ * The quiet twin of {@link INK_PILL}: a subtle hairline, no fill, secondary ink that darkens on
+ * hover ("Launch agent" beside "Open thread", "See all" on the tasks quick view).
+ */
+export const QUIET_PILL =
+  "inline-flex h-6.5 flex-none items-center rounded-full border border-border-subtle px-2.75 " +
+  "text-caption font-medium text-text-secondary transition-colors hover:text-text-primary " +
+  "disabled:opacity-60";
+
+/**
  * THE 30px BLACK VERB — `.auth-btn-3d` at `--action-h-sm`, the popup form's primary
  * (`form-dialog.tsx › FormDialog`'s footer: New channel, Add person, New agent). It was that file's
  * private `PRIMARY_BTN` and moved here verbatim (Samuel, 2026-09-28: the profile popup's black
@@ -31,12 +52,11 @@ export const SMALL_PRIMARY_BUTTON =
   "font-semibold text-text-on-cta";
 
 /**
- * THE SAME 30px BLACK VERB AS A FULL PILL — the profile popup's black buttons (Samuel, 2026-09-28:
- * *"for those black buttons i want the pill"*): Pair, Save, Save changes, the plan buttons. By
- * reference, so face and scale cannot drift; `cn` drops the 8px radius. The popup FORMS
- * (`form-dialog.tsx`: New channel, Add person, New agent) keep {@link SMALL_PRIMARY_BUTTON}.
+ * The 30px black verb as a pill: the profile popup's black buttons (Pair, Save, Save changes, the
+ * plan buttons) on {@link INK_PILL_FACE}. The popup FORMS (`form-dialog.tsx`: New channel, Add
+ * person, New agent) keep {@link SMALL_PRIMARY_BUTTON}.
  */
-export const SMALL_PRIMARY_PILL = cn(SMALL_PRIMARY_BUTTON, "rounded-full");
+export const SMALL_PRIMARY_PILL = cn(INK_PILL_FACE, "h-[var(--action-h-sm)] px-3.5 text-caption");
 
 /**
  * THE IDENTITY LOOK'S OUTLINED PILL (DESIGN-LANGUAGE §4, the secondary pill on a white card):

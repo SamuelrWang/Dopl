@@ -43,6 +43,15 @@ describe("AgentStats", () => {
     expect(container.querySelector<HTMLElement>("[style*='width']")?.style.width).toBe("0%");
   });
 
+  it("hands the fill to the warning colour as the window fills", () => {
+    const { container } = render(
+      <AgentStats agent={agent({ contextUsed: 190_000, contextWindow: 200_000 })} color="agent-07" />
+    );
+    const fill = container.querySelector<HTMLElement>("[style*='width']");
+    expect(fill?.className).toContain("bg-danger");
+    expect(fill?.style.background).toBe("");
+  });
+
   it("drops the meta line when nothing on it was measured", () => {
     const { container } = render(<AgentStats agent={agent()} />);
     expect(container.querySelectorAll("p")).toHaveLength(1);

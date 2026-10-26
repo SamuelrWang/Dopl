@@ -19,7 +19,7 @@
  *
  * ⚠ **A `.ts` CONSTANTS MODULE, NOT A COMPONENT.** Behavioural state
  * (`disabled:`), layout and the `aria-label` stay with the caller — the same
- * division `panel-buttons.tsx › PAGE_ACTION_BTN` holds. A control with no text
+ * division `page-action-button.tsx › PAGE_ACTION_BTN` holds. A control with no text
  * has no name but its `aria-label`, so every caller must pass one.
  */
 export const NAKED_ICON_BUTTON =

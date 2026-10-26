@@ -49,7 +49,7 @@ export function HomeIdentityPanelsSkeleton({
 const HEADING_W = 148;
 
 /**
- * A section header's create-button ghost: `panel-buttons.tsx › CreateButton` is `PAGE_ACTION_BTN`
+ * A section header's create-button ghost: `page-action-button.tsx › CreateButton` is `PAGE_ACTION_BTN`
  * (`h-9 rounded-full px-[15px]`) holding a 13px plus, a `gap-1.5`, then its label — so the width is
  * sized from the label the real button prints, and two sections with one label ghost one width.
  */

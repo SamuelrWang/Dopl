@@ -14,24 +14,42 @@ interface AgentIdentity {
   runtime: string | null | undefined;
 }
 
+/** Who the agents in a channel are: this machine's feed and the peer projection. */
+export interface AgentFeeds {
+  /** This machine's feed; `null` is "could not ask" and contributes no own rows. */
+  sessions: readonly DesktopSessionSummary[] | null;
+  peers: readonly ChannelPeerSession[];
+}
+
 /** An agent as an identity (DESIGN-LANGUAGE §3): the owner's photo in the agent's colour ring,
- *  with its runtime's badge when the runtime is known. For a host that sizes the face itself. */
-export function useAgentIdentity({ photo, name, color, runtime }: AgentIdentity): IdentityFacts {
-  const logoFor = useRuntimeLogo();
+ *  with its runtime's badge when the runtime is known. */
+export function agentIdentity(
+  { photo, name, color, runtime }: AgentIdentity,
+  logoFor: (runtime: string | null | undefined) => string | null
+): IdentityFacts {
   return { photo, name, ring: color ?? "neutral", runtimeLogo: logoFor(runtime) };
+}
+
+/** {@link agentIdentity} for a host that sizes the face itself. */
+export function useAgentIdentity(agent: AgentIdentity): IdentityFacts {
+  return agentIdentity(agent, useRuntimeLogo());
 }
 
 export function AgentFace({ size, ...agent }: AgentIdentity & { size: number }) {
   return <IdentityFace size={size} {...useAgentIdentity(agent)} />;
 }
 
-/** An own agent's runtime: its spawn stamp, else its server row's. `''` (the default adapter) names
- *  no runtime on this side, so it falls through. */
-export function ownAgentRuntime(
-  session: DesktopSessionSummary,
-  peers: readonly ChannelPeerSession[]
+/**
+ * An agent's runtime: an own agent's spawn stamp, else its server row's. `''` (the default
+ * adapter) names no runtime on this side, so it falls through. `own` defaults to this machine's
+ * session with that id; a caller already holding the session passes it.
+ */
+export function agentRuntime(
+  feeds: AgentFeeds,
+  agentId: string | null | undefined,
+  own = agentId ? feeds.sessions?.find((s) => s.agentId === agentId) : undefined
 ): string | null {
-  if (session.runtimeId) return session.runtimeId;
-  const row = session.agentId ? peers.find((p) => p.name === session.agentId) : undefined;
+  if (own?.runtimeId) return own.runtimeId;
+  const row = agentId ? feeds.peers.find((p) => p.name === agentId) : undefined;
   return row?.runtime || null;
 }

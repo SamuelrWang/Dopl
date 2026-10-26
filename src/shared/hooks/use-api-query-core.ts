@@ -36,6 +36,8 @@ export interface UseApiQueryOpts<T, S = T>
   /** Keep prior key's data visible while a new key loads (TanStack
    *  `placeholderData: keepPreviousData`) — no blank flash on key change. */
   keepPreviousData?: boolean;
+  /** Override the provider's retry policy; `false` for a read whose failure has a fallback. */
+  retry?: boolean | number;
 }
 
 /** ⚠ Must match what `@/shared/api/query-keys` builds for the write side
@@ -97,6 +99,7 @@ export function buildApiQueryOptions<T, S = T>(
       select: opts.select,
       staleTime: opts.staleTime,
       refetchInterval: opts.refetchInterval,
+      retry: opts.retry,
       placeholderData: opts.keepPreviousData ? keepPreviousData : undefined,
     }),
   };

@@ -52,7 +52,7 @@ vi.mock("@/features/agent-identities/hooks/use-agent-identities", () => ({
 }));
 
 import { ChannelsComposer } from "./composer";
-import { AGENT_COLOR_KEYS } from "../lib/agent-colors";
+import { AGENT_COLOR_KEYS } from "@/shared/lib/agent-colors";
 import type { LiveAgentSession } from "../lib/draft-recipients";
 import type { AgentLaunchControls } from "./use-agents-panel";
 import { member, CHANNEL_ID, ME } from "./test-fixtures";

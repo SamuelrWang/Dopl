@@ -25,7 +25,6 @@ Private / Team / Public sections), is NOT staged. The Home pane never opens it. 
 | `home/identity-editor.tsx` | `pages/home/identity-editor.tsx` | Verbatim. |
 | `home/identity-card-launch.tsx` | `pages/home/identity-card-launch.tsx` | `LaunchIntoChannelButton` verbatim. `useCardLaunch` is SIMULATED (no bridge); do not port it. |
 | `home/identity-card-knowledge.tsx` | `pages/home/identity-card-knowledge.tsx` | Verbatim. |
-| `home/panel-buttons.tsx` | `pages/home/panel-buttons.tsx` | Verbatim. |
 | `home/home-skeleton.tsx` | `pages/home/home-skeleton.tsx` | Trimmed to `HomeIdentityPanelsSkeleton`. |
 | `desktop/components/page-states.tsx` | `components/page-states.tsx` | Trimmed to `PageError`. |
 | `desktop/components/skeletons/*.tsx` | `components/skeletons/*.tsx` | Verbatim. |

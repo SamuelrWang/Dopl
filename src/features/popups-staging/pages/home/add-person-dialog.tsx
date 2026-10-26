@@ -99,7 +99,7 @@ export function AddPersonDialog({ workspaceId }: { workspaceId: string }) {
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
         // ⚠ THE SHARED RECIPE (2026-09-09), not a fourth hand-written copy of
-        // it — same class list, one declaration (`panel-buttons.tsx`).
+        // it — same class list, one declaration (`page-action-button.tsx`).
         className={PAGE_ACTION_BTN}
       >
         Add person

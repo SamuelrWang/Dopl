@@ -15,7 +15,8 @@ import { DevicePill } from "./device-pill";
 import { DisplayCard } from "./display-card";
 import { decisionCardPaint } from "./escalation-card-face";
 import { ThreadCardMessage } from "./thread-card-row";
-import { threadCardAgents, type ThreadCardAgentFeeds } from "./thread-card-agents";
+import type { AgentFeeds } from "./agent-face";
+import { threadCardAgents } from "./thread-card-agents";
 import { MessageMarkdown, TextOnlyLinks, bodyContextOf } from "./message-markdown";
 import { MessageCiteChips } from "./message-cite-chips";
 import { MessageMarkdownInline } from "./message-markdown-inline";
@@ -43,7 +44,7 @@ export function Transcript({
   /** Briefly set right after a Tags-inbox click lands on a row. */
   flashId: string | null;
   /** Who is working each card's thread; absent draws no agents compartment on the cards. */
-  agentFeeds?: ThreadCardAgentFeeds;
+  agentFeeds?: AgentFeeds;
   /** The direct-launch bridge op exists; false renders no button, not a disabled one. */
   canLaunchAgent?: boolean;
   /** A launch is in flight — the double-submit guard, not a capability. */

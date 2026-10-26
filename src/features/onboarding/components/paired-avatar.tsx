@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { agentColorOrNull } from "@/features/channels/lib/agent-colors";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import { IDENTITY_RING_PX, IdentityFace } from "@/shared/ui/identity-face";
 import { Profile } from "./web-pieces";
 
