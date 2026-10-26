@@ -10,10 +10,10 @@ export const PEER = "u-grace";
 export const AGENT_ID = "scout001";
 export const T0 = "2026-10-26T10:00:00.000Z";
 
-export const agentActor: TaskActor = { kind: "agent", agentId: AGENT_ID, userId: PEER };
-export const personActor: TaskActor = { kind: "person", userId: VIEWER };
+const agentActor: TaskActor = { kind: "agent", agentId: AGENT_ID, userId: PEER };
+const personActor: TaskActor = { kind: "person", userId: VIEWER };
 
-export function makeSubtask(over: Partial<ChannelTaskSubtask> = {}): ChannelTaskSubtask {
+function makeSubtask(over: Partial<ChannelTaskSubtask> = {}): ChannelTaskSubtask {
   return {
     id: "s-1",
     title: "Read the retry doc",

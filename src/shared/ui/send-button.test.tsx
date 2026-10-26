@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SendButton, sendButtonLabel } from "./send-button";
+import { SendButton } from "./send-button";
 
 const noop = () => {};
 
@@ -21,25 +21,14 @@ describe("SendButton (the one shared send affordance)", () => {
     expect(markup).not.toContain("auth-btn-3d");
   });
 
-  it("shows the up-arrow glyph at rest and the pause bars while running", () => {
-    const send = renderToStaticMarkup(<SendButton onClick={noop} />);
-    expect(send).toContain("M8 13V3.6M8 3.2 3.9 7.3M8 3.2l4.1 4.1");
-    expect(send).not.toContain("<rect");
-
-    const pause = renderToStaticMarkup(<SendButton mode="pause" onClick={noop} />);
-    expect((pause.match(/<rect/g) ?? []).length).toBe(2);
-    expect(pause).not.toContain("M8 13V3.6");
+  it("shows the up-arrow glyph", () => {
+    expect(renderToStaticMarkup(<SendButton onClick={noop} />)).toContain(
+      "M8 13V3.6M8 3.2 3.9 7.3M8 3.2l4.1 4.1"
+    );
   });
 
-  it("names itself per mode, and the caller can override the name", () => {
-    expect(sendButtonLabel("send")).toBe("Send");
-    expect(sendButtonLabel("pause")).toBe("Pause the agent");
-    expect(renderToStaticMarkup(<SendButton onClick={noop} />)).toContain(
-      'aria-label="Send"'
-    );
-    expect(
-      renderToStaticMarkup(<SendButton mode="pause" onClick={noop} />)
-    ).toContain('aria-label="Pause the agent"');
+  it("names itself Send, and the caller can override the name", () => {
+    expect(renderToStaticMarkup(<SendButton onClick={noop} />)).toContain('aria-label="Send"');
     expect(
       renderToStaticMarkup(<SendButton onClick={noop} label="Send message" />)
     ).toContain('aria-label="Send message"');

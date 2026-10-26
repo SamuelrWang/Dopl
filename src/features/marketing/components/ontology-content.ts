@@ -205,12 +205,9 @@ export const RAIL_STATUS_LABEL: Record<RailStatus, string> = {
 
 // ── 3 · Track & finish work: the task tracker ─────────────────────────────
 
-// PLANNED: task tracker not shipped yet. Samuel is adding it; this window is a
-// plausible mock of it, so keep its vocabulary in step with the real feature
-// when it lands.
-export type TaskStatus = "queued" | "working" | "done" | "needs";
+export type MockTaskStatus = "queued" | "working" | "done" | "needs";
 
-export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
+export const MOCK_TASK_STATUS_LABEL: Record<MockTaskStatus, string> = {
   queued: "Queued",
   working: "In progress",
   done: "Done",
@@ -237,7 +234,7 @@ export const TASKS = {
     },
     { title: "Book 5 flights", owner: { agent: "booker" }, steps: [["queued", 0], ["working", 3800]] },
     { title: "Send itinerary", owner: { agent: "liaison" }, steps: [["queued", 0]] },
-  ] as { title: string; owner: Actor; steps: [TaskStatus, number][] }[],
+  ] as { title: string; owner: Actor; steps: [MockTaskStatus, number][] }[],
 } as const;
 
 // ── 4 · Direct at any depth: notifications + directing one sub-agent ──────

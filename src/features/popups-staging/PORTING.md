@@ -9,8 +9,9 @@ rail's "+", toast clicks (table in `ui-staging/README.md`). The catalog's button
 instances through `useStagingPopups()`.
 
 Every copied file starts with a `STAGING COPY of …` line. Only import paths differ from the source:
-data hooks, desktop libs and the unstaged channel bodies point at `./stubs`. Copies are of the tree
-as of 2026-10-22. The Settings modal lives in `src/features/settings-staging/` (its own
+data hooks, desktop libs and the unstaged channel bodies point at `./stubs`. Each copy's first line
+names the tree it was taken from (`home-search` and `home-settings-control` were re-synced on
+2026-10-26). The Next tree cannot import `apps/`, so a page that reads `#/` modules stays a copy. The Settings modal lives in `src/features/settings-staging/` (its own
 PORTING.md).
 
 ## Copied UI (port these back)

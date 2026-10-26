@@ -9,7 +9,7 @@ import type { ChannelTask, TaskActor, TaskLink, TaskStatus } from "../types";
 
 /** The round status tick (the landing Tasks window's `.lp-ont-tick`): ring, half ring, filled. */
 export const TASK_TICK =
-  "grid size-4 flex-none place-items-center rounded-full border-[1.5px] border-[var(--raised-light-line)] " +
+  "grid size-4 flex-none place-items-center rounded-full border-(length:--stroke-mark) border-[var(--raised-light-line)] " +
   "text-text-on-invert transition-colors data-[status=in_progress]:border-border-default " +
   "data-[status=in_progress]:border-t-text-primary data-[status=resolved]:border-text-primary " +
   "data-[status=resolved]:bg-text-primary";
@@ -61,7 +61,7 @@ export function TaskLinkChip({
       type="button"
       onClick={() => onOpen(link)}
       className={cn(
-        "inline-flex min-w-0 max-w-full items-center gap-0.75 rounded-full bg-bg-inset px-1.5 text-label leading-[18px] text-text-secondary transition-colors hover:bg-bg-inset-hover",
+        "inline-flex min-w-0 max-w-full items-center gap-0.75 rounded-full bg-bg-inset h-4.5 px-1.5 text-label text-text-secondary transition-colors hover:bg-bg-inset-hover",
         className
       )}
     >

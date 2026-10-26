@@ -53,7 +53,11 @@ function Catalog() {
         </OpenScaleButton>
         {/* The real control: `home-settings-control.tsx` owns the modal and the registry the
             buttons above call. (The frame's profile pill opens the provider's instance.) */}
-        <HomeSettingsControl identity={STAGING_IDENTITY} onWorkspaceChanged={() => {}} />
+        <HomeSettingsControl
+          identity={STAGING_IDENTITY}
+          viewer={null}
+          onWorkspaceChanged={() => {}}
+        />
       </Group>
 
       <Group title="/home header">

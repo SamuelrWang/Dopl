@@ -25,8 +25,7 @@
  *     (`index.tsx › onSelect` calls `setTab("channels")`); a staged face has no
  *     store to select into, so the equivalent is to go to that page.
  *
- * ⚠ One copy, two callers: `channels-staging/home/channel-switcher.tsx` delegates
- * here rather than keeping a second copy of this markup.
+ * ⚠ One copy: `/channels` (`channels-staging/staging-channels-page.tsx`) mounts it with `onSelect`.
  * ⚠ CLIENT-ONLY: the rows print clock-relative stamps off the demo's module-load
  * clock (`demo-data.ts › minsAgo`), so the frame mounts this after hydration and
  * holds the column's width with a placeholder until then.

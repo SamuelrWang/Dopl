@@ -34,7 +34,9 @@ export const BARE_TRIGGER_FACE = cn(
   "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary"
 );
 
-/** Trigger faces, whole: alternatives, not layers. */
+/** Trigger faces, whole: alternatives, not layers. `bare` and `text` both drop the pill and stay
+ *  two: `bare` is a value on a white card (caption, ink hover), `text` a value on a body-type
+ *  settings or editor row (the menu-hover fill). */
 const TRIGGER_FACE = {
   bare: BARE_TRIGGER_FACE,
   flat: cn(

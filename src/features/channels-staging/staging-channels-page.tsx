@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
-import { StagingChannelSwitcher } from "./home/channel-switcher";
+import { StagingChannelRail } from "@/features/ui-staging/staging-channel-rail";
 import { StagingChannelScene } from "./home/channel-scene";
 import { PendingLinkCard } from "@/features/popups-staging/pages/home/link-out-panel";
 import {
@@ -35,7 +35,7 @@ function Mounted() {
   );
   const store = useStagingChannels((id) => seedChannel(qc, id));
   const { selected, fixture, createChannel, revokeLink } = store;
-  // STAGING (2026-10-26, channel tasks): the product Tasks tab and quick view read this.
+  // The product Tasks tab and quick view read this.
   const tasksApi = useStagingTasks(store.rows);
 
   // The frame's "New channel" pill and a link card's Revoke are the shared popups-staging copies
@@ -63,7 +63,7 @@ function Mounted() {
            `ui-staging/staging.css › .uis-ch-pane`. */
         recordClassName="uis-ch-pane"
         channelColumn={
-          <StagingChannelSwitcher
+          <StagingChannelRail
             rows={store.rows.map(rowFacts)}
             selectedId={store.selectedId}
             onSelect={store.select}

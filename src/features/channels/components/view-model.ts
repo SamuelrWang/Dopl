@@ -9,6 +9,7 @@ import {
   type ChannelEscalationAnswer,
 } from "../escalation";
 import { agentColorOrNull } from "@/shared/lib/agent-colors";
+import { memberLabel } from "../lib/channel-display";
 import type {
   AgentColorKey,
   Channel,
@@ -234,9 +235,7 @@ export function labelFor(message: ChannelMessage, index: AuthorIndex): string {
   const member = message.authorUserId
     ? index.byId.get(message.authorUserId)
     : undefined;
-  return (
-    member?.displayName ?? member?.email ?? message.authorName ?? "Member"
-  );
+  return member ? memberLabel(member) : (message.authorName ?? "Member");
 }
 
 /** A thread's two parties (INVARIANTS §5), via the roster; unknown ids are dropped, not faked. */

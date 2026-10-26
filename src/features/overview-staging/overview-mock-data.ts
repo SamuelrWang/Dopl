@@ -11,9 +11,7 @@
  *   GET /api/billing/status (credits) → `creditState(plan)`
  *   usage scopes                      → `HOME_CHANNELS`
  *
- * The Devices section's types and `DEVICES_MOCK` are the branch
- * `devices-dashboard-mock` file `apps/desktop-ui/src/pages/home/devices-mock/devices-mock-data.ts`,
- * copied verbatim (shape AND values) so the preview reads exactly as on that branch.
+ * The Devices section's types and `DEVICES_MOCK` live only here; there is no product twin yet.
  */
 import type {
   HomeOverview,
@@ -216,7 +214,7 @@ export function creditState(plan: StagingPlan): {
   };
 }
 
-/* ──────────────── DEVICES (branch `devices-dashboard-mock`, verbatim) ──────────────── */
+/* ──────────────── DEVICES ──────────────── */
 /*
  * MOCK DATA for the Overview "Devices" preview. Every value here is made up.
  *

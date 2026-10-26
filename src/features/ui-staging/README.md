@@ -70,7 +70,7 @@ inside the scaled canvas (a fixed box under a `transform` is placed against it).
 | File | What |
 |---|---|
 | `staging-frame.tsx` | The window: hero stage + account rail + panel + top bar + channel picker + record pane + the popup provider. Imports `marketing.css` and the demo's rows. |
-| `staging-channel-rail.tsx` | The left-hand **channel picker**, on every face (desktop `relationship-list.tsx`). Copy of `banner-demo/demo-home-faces.tsx › DemoChannelSwitcher`, made clickable: wells toggle, and a row either selects in place (`onSelect`, which `/channels` passes) or links to `/playground/channels`, the way a desktop pick raises the channels face. The one copy: `channels-staging/home/channel-switcher.tsx` delegates here. |
+| `staging-channel-rail.tsx` | The left-hand **channel picker**, on every face (desktop `relationship-list.tsx`). Copy of `banner-demo/demo-home-faces.tsx › DemoChannelSwitcher`, made clickable: wells toggle, and a row either selects in place (`onSelect`, which `/channels` passes) or links to `/playground/channels`, the way a desktop pick raises the channels face. The one copy: `/channels` mounts it directly. |
 | `staging-top-bar.tsx` | Copy of `banner-demo/demo-home-faces.tsx › DemoTopBar` with a selectable tab; tabs are `next/link`s to the staging routes (`STAGING_ROUTES`); search + profile pills are buttons. |
 | `staging-account-rail.tsx` | Copy of `banner-demo/demo-home-chrome.tsx › DemoAccountRail`; the "+" is a button. |
 | `staging-popups-provider.tsx` | The frame's popups (table above) + `useStagingPopups()`. |

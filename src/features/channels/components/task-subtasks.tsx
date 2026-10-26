@@ -10,7 +10,7 @@ import type { ChannelTaskSubtask } from "../types";
 
 /** The square check: empty, or filled ink when done. */
 const CHECK =
-  "grid size-4 flex-none place-items-center rounded-[5px] border-[1.5px] border-[var(--raised-light-line)] " +
+  "grid size-4 flex-none place-items-center rounded-[5px] border-(length:--stroke-mark) border-[var(--raised-light-line)] " +
   "text-text-on-invert transition-colors data-[state=done]:border-text-primary data-[state=done]:bg-text-primary";
 
 export const TASK_SECTION_TITLE =
@@ -80,7 +80,7 @@ export function TaskSubtasks({
               </span>
               <span className="inline-flex items-center gap-2">
                 {!checked && (
-                  <StatusPill tone={STATUS_TONE[s.state]} dot={false}>
+                  <StatusPill tone={STATUS_TONE[s.state]}>
                     {SUBTASK_STATE_LABEL[s.state]}
                   </StatusPill>
                 )}

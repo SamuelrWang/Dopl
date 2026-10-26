@@ -12,8 +12,7 @@
    fix the drift. Until both import ONE file at build time, any edit to
    globals.css's token layers MUST be mirrored here, same change. Kit recipes
    live in the sibling `kit.css`.
-   NOT copied on purpose: landing/login-only rules (.design-grid, login orbs,
-   logo-scroll). */
+   NOT copied on purpose: the landing and login rules outside the token layers. */
 
 @theme inline {
   --color-bg-base: var(--bg-base);
@@ -34,8 +33,6 @@
   --color-text-disabled: var(--text-disabled);
 
   --color-accent-primary: var(--accent-primary);
-  --color-accent-glow: var(--accent-glow);
-  --color-accent-soft: var(--accent-soft);
 
   --color-success: var(--success);
   --color-caution: var(--caution);
@@ -79,9 +76,6 @@
   --color-link: var(--link);
   --color-accent-on: var(--accent-on);
 
-  /* Ontology/agent "active" green (Agent: on pills, attachment banner) */
-  --color-agent-on: var(--agent-on);
-
   /* Inverted affordance (menu rows flipping solid on hover/active) +
      active-state indicator border */
   --color-surface-invert: var(--surface-invert);
@@ -103,38 +97,16 @@
 
   /* ── Shadcn aliases (backward compat) ─────────────────────────── */
   --color-background: var(--bg-base);
-  --color-foreground: var(--text-primary);
   --color-card: var(--bg-elevated);
-  --color-card-foreground: var(--text-primary);
   --color-popover: var(--bg-overlay);
-  --color-popover-foreground: var(--text-primary);
   --color-primary: var(--accent-primary);
-  --color-primary-foreground: var(--accent-on);
   --color-secondary: var(--bg-inset);
-  --color-secondary-foreground: var(--text-primary);
   --color-muted: var(--bg-inset);
-  --color-muted-foreground: var(--text-muted);
   --color-accent: var(--bg-inset);
-  --color-accent-foreground: var(--text-primary);
   --color-destructive: var(--danger);
   --color-border: var(--border-default);
   --color-input: var(--border-default);
   --color-ring: var(--accent-primary);
-
-  --color-sidebar: var(--bg-elevated);
-  --color-sidebar-foreground: var(--text-primary);
-  --color-sidebar-primary: var(--accent-primary);
-  --color-sidebar-primary-foreground: var(--accent-on);
-  --color-sidebar-accent: var(--bg-inset);
-  --color-sidebar-accent-foreground: var(--text-primary);
-  --color-sidebar-border: var(--border-subtle);
-  --color-sidebar-ring: var(--accent-primary);
-
-  --color-chart-1: var(--accent-primary);
-  --color-chart-2: var(--text-secondary);
-  --color-chart-3: var(--text-muted);
-  --color-chart-4: var(--success);
-  --color-chart-5: var(--warning);
 
   /* ⚠ Every font var MUST end in a real system family. An undefined var with
      no fallback makes the whole declaration invalid at computed-value time:
@@ -229,14 +201,8 @@
   --text-muted: #98a2ad;
   --text-disabled: #c4cad1;
 
-  /* Accent — neutral UI ink. accent-glow/soft are legacy cyan effect tints.
-     ⚠ NEITHER HAS A READER (measured 2026-10-12, repo-wide): the glow and
-     gradient tokens they were cut for were deleted as dead the same day, and
-     the only thing keeping them is globals.css's unused `--color-accent-*`
-     `@theme` aliases, whose utilities nothing uses either. */
+  /* Accent — neutral UI ink. */
   --accent-primary: #3e3a3b;
-  --accent-glow: oklch(0.68 0.22 250);
-  --accent-soft: oklch(0.45 0.12 245);
 
   --success: oklch(0.55 0.15 155);
   --caution: oklch(0.72 0.15 95);
@@ -319,9 +285,6 @@
   --surface-cta: #1c2127;
   --text-on-cta: #ffffff;
   --border-active: #3e3a3b;
-  --hairline-shine: rgba(255, 255, 255, 0.06);
-
-  --agent-on: oklch(0.52 0.14 162);
 
   /* THE APP FRAME PALETTE (Samuel's wireframe 2026-08-24; SCOPE WIDENED by his
      live-review ruling 2026-08-30). Four values: the dark FRAME behind rail +
@@ -426,23 +389,10 @@
   --ink: var(--text-primary);
   --ink-soft: var(--text-secondary);
   --line: #d6dde5;
-  --black: var(--surface-cta);
-
-  /* Panel shine + selection — consumed by canvas-panel INLINE styles. */
-  --shine-top-gradient: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.3) 30%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0.3) 70%,
-    transparent 100%
-  );
-  --ring-selected: 0 0 0 2px rgba(255, 255, 255, 0.5);
-  /* ⚠ No inset top-edge highlight here on purpose — it reads as a second,
-     inner border on the panels. */
-  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.3);
 
   --radius: 0.625rem;
+  /* The identity look's marked stroke: a task tick, a subtask check, an author's message-card edge. */
+  --stroke-mark: 1.5px;
 
   /* ── Legacy named palette, down to its one live member ─────────── */
   /* `--forest` is the BODY INK (`body { color: var(--forest) }` below), which

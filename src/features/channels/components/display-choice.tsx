@@ -51,7 +51,7 @@ function OptionRow({
           {option.label}
         </span>
         {option.recommended && (
-          <StatusPill dot={false} className={cn(chosen && "bg-text-on-cta/15 text-text-on-cta")}>
+          <StatusPill className={cn(chosen && "bg-text-on-cta/15 text-text-on-cta")}>
             Recommended
           </StatusPill>
         )}

@@ -19,7 +19,7 @@ import { initialRows } from "@/features/channels-staging/data/staging-rows";
 import { seedChannel, stagingQueryClient } from "@/features/channels-staging/data/staging-query-seed";
 import {
   stagingAgentIndex,
-  stagingIdentityFace,
+  stagingOwnerPhoto,
 } from "@/features/channels-staging/data/staging-agents";
 import { CURRENT_USER_ID, VIEWER } from "@/features/channels-staging/data/demo-imports";
 
@@ -183,7 +183,7 @@ export function ChannelsAgentWindow({
       layout="fill"
       open
       agent={agent}
-      ownerPhoto={stagingIdentityFace(agent.agentId).photo}
+      ownerPhoto={stagingOwnerPhoto(agent.agentId)}
       entries={channel.narration[agent.agentId ?? ""] ?? []}
       messages={channel.messages}
       currentUserId={CURRENT_USER_ID}

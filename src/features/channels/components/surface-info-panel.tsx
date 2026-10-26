@@ -221,7 +221,7 @@ export function SurfaceInfoPanel({
             truncated={data.tasksTruncated}
             loading={data.tasksLoading}
             failed={data.tasksFailed}
-            // R8: a guest reads tasks and adds notes, nothing else.
+            // A guest reads tasks and adds notes, nothing else.
             canEdit={role !== "guest"}
             openTaskId={sel.openTaskId}
             onOpenTask={sel.setOpenTaskId}

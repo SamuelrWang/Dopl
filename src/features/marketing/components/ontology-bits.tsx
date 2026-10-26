@@ -30,7 +30,7 @@ export const accent = (color: number, style?: CSSProperties) =>
 /** An agent = an identity of the user: the user's photo ringed in the agent's
  *  colour, with the runtime's mark inset bottom-right, ringed the same — the
  *  onboarding demos' `PairedAvatar`, by import (Samuel, 2026-10-21). */
-export function AgentFace({ id, d = 22, thinFrame = true }: { id: AgentId; d?: number; thinFrame?: boolean }) {
+export function MockAgentFace({ id, d = 22, thinFrame = true }: { id: AgentId; d?: number; thinFrame?: boolean }) {
   const agent = AGENTS[id];
   return (
     <PairedAvatar d={d} photo={PEOPLE.sam.photo} agentLogo={agent.runtime.logo} color={agent.color} thinFrame={thinFrame} />
@@ -65,7 +65,7 @@ export function actorAgent(actor: Actor) {
 }
 
 export function ActorFace({ actor, d = 22 }: { actor: Actor; d?: number }) {
-  if ("agent" in actor) return <AgentFace id={actor.agent} d={d} />;
+  if ("agent" in actor) return <MockAgentFace id={actor.agent} d={d} />;
   if ("assistant" in actor) {
     const a = ASSISTANTS[actor.assistant];
     return (

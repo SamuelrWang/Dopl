@@ -62,8 +62,10 @@ const CANONICAL = [
   "MembershipStatus",
   "WorkspaceKind",
   "IdentityVisibility",
-  // `TaskStatus`, `SubtaskState`, `TaskActor` and `TaskLink` join once `features/channels-staging`
-  // (the frozen visual spec, which declares fakes of all four) is retired.
+  "TaskStatus",
+  "SubtaskState",
+  "TaskActor",
+  "TaskLink",
   "TaskActorRef",
   "ChannelTaskSubtask",
   "ChannelTaskNote",

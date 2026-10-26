@@ -16,7 +16,7 @@ export const IDENTITY_RING_PX = 2;
 
 /** An agent's colour key rings the face in that colour; `"neutral"` rings it in the raised hairline
  *  (a saved identity, which has no colour). No ring is a person: a plain photo on a hairline. */
-export type IdentityRing = AgentColorKey | "neutral";
+type IdentityRing = AgentColorKey | "neutral";
 
 export interface IdentityFaceProps {
   /** Diameter in px; the badge is half of it. */

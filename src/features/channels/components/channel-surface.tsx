@@ -23,11 +23,11 @@
 import { useMemo, type ReactNode } from "react";
 import type { Role } from "@/features/workspaces/types";
 import { channelDisplayName } from "../lib/channel-display";
+import { useWorkingColors } from "../lib/live-agents";
 import { useMessageJump } from "./use-message-jump";
 import { ChannelsMessagePane } from "./message-pane";
 import { PopOutThreadButton } from "./pop-out";
 import { AgentActivityRows, ownAgentsWorking } from "./agent-activity";
-import { agentColorVar } from "@/shared/lib/agent-colors";
 import { ChannelSingleColumn } from "./channel-single-column";
 import { SurfaceAgentView } from "./surface-agent-view";
 import { SurfaceInfoPanel } from "./surface-info-panel";
@@ -46,17 +46,12 @@ import type {
   ChannelSurfaceSlots,
 } from "./channel-surface-contract";
 
-/**
- * The host contract moved to `channel-surface-contract.ts` at §1's cap (wave
- * 1A, 2026-09-17) and is re-exported here so no caller moved. That file carries
- * every rule; this one composes panes.
- */
+/** The host contract lives in `channel-surface-contract.ts`; the types hosts read here are
+ *  re-exported. */
 export type {
   ChannelInfoTabContext,
-  ChannelInfoExtras,
   ChannelSurfaceSlots,
   ChannelSurfaceCapabilities,
-  MentionsLayout,
 } from "./channel-surface-contract";
 
 interface ChannelSurfaceProps {
@@ -161,23 +156,7 @@ export function ChannelSurface({
     channelId: channel.id,
     jumpToMessage: sel.jumpToMessage,
   });
-  /**
-   * **EACH LIVE AGENT'S PAINT, BY ID** — the working strip's dots (2026-09-20).
-   *
-   * ⚠ **RESOLVED HERE, MEMOISED ON THE SET'S OWN IDENTITY.** `liveAgents` is
-   * already derived from a stable key (`channel-surface-data.ts`), so this rebuilds
-   * only when the live set really moves — never per keystroke in the composer under it.
-   * ⚠ **AN AGENT WITH NO COLOUR IS ABSENT RATHER THAN MAPPED TO A FALLBACK**: the
-   * component owns what "no colour" looks like, and two places choosing that face is
-   * how one ended agent comes to wear two greys.
-   */
-  const workingColors = useMemo(() => {
-    const out = new Map<string, string>();
-    for (const agent of liveAgents) {
-      if (agent.color) out.set(agent.name, agentColorVar(agent.color));
-    }
-    return out;
-  }, [liveAgents]);
+  const workingColors = useWorkingColors(liveAgents);
   const agentFeeds = useMemo(
     () => ({ sessions: agentSessions, peers: agentsPanel.peerSessions }),
     [agentSessions, agentsPanel.peerSessions]
@@ -250,13 +229,6 @@ export function ChannelSurface({
             channel.id,
             openThread?.id ?? null
           )}
-          // ⚠ **THE DOT IS THE AGENT'S OWN COLOUR HERE** (Samuel, 2026-09-20) —
-          // resolved by this host, the way every other accent is, so
-          // `lib/agent-colors.ts › agentColorVar` stays the one place a token
-          // name is spelled and no colour reaches the component as a key.
-          // ⚠ THE SOURCE IS `liveAgents`, THE PEER ∪ OWN UNION this surface
-          // already holds (`lib/live-agents.ts`) — the same set the composer's
-          // picker and tint read, so one agent cannot be two hues on one screen.
           colors={workingColors}
         />
       }

@@ -27,7 +27,6 @@ function CardTags({ tags }: { tags: readonly RecipientTag[] }) {
   return tags.map((tag) => (
     <StatusPill
       key={`${tag.kind}:${tag.id}`}
-      dot={false}
       className="min-w-0 shrink font-medium text-text-primary"
     >
       <span
@@ -65,7 +64,7 @@ export function StreamCard({
   return (
     <div
       {...rest}
-      className="white-card min-w-0 overflow-hidden border-[1.5px]"
+      className="white-card min-w-0 overflow-hidden border-(length:--stroke-mark)"
       style={{ borderColor: edge ?? NEUTRAL_EDGE }}
     >
       <div className="flex min-w-0 items-center gap-1.75 px-3 pt-2.25">

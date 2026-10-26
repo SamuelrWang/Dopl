@@ -34,34 +34,22 @@ import type { PostDestination } from "./agents-model";
 import type { ChannelConsentRequest, ChannelMessage } from "../types";
 
 /**
- * ⚠ THE LANE VOCABULARY LIVES IN `agent-stream-lanes.ts` SINCE 2026-08-31 (§1),
- * and this file stays its import path of record — {@link StreamLane} and
- * {@link frameLane} are re-exported here, so no importer changed. The seam: that
- * file moves when the DESKTOP's `kind` / `lane` vocabulary moves, this one when
- * the stream's own arithmetic does (the echo dedupe, the held-draft join, the
- * TTL, the grouping) — and neither has ever needed the other's reason.
+ * The lane vocabulary lives in `agent-stream-lanes.ts` and {@link frameLane} is re-exported here.
+ * The seam: that file moves when the DESKTOP's `kind` / `lane` vocabulary moves, this one when the
+ * stream's own arithmetic does (the echo dedupe, the held-draft join, the TTL, the grouping).
  */
-export { frameLane, type StreamLane } from "./agent-stream-lanes";
-/* ⚠ VALUE-ONLY SINCE THE ROW SHAPE MOVED (2026-10-10): the type is still re-exported above, for
-   every importer that reads it from this path, but `StreamItem` is where it was USED here and that
-   now lives in `agent-stream-item.ts`. */
+export { frameLane } from "./agent-stream-lanes";
 import { frameLane } from "./agent-stream-lanes";
 import { agentColorOrNull } from "@/shared/lib/agent-colors";
 
 /**
  * ⚠ THE TOOL-RUN GROUPING LIVES IN `agent-stream-groups.ts`, and this file stays its import
- * path of record — {@link StreamGroup},
- * {@link groupStreamItems}, `toolUses` and {@link shortToolName} are re-exported here, so
- * no importer changed. The seam: that file moves when the RUN COUNT's arithmetic moves
+ * path of record — {@link StreamGroup}, {@link groupStreamItems} and {@link shortToolName} are
+ * re-exported here. The seam: that file moves when the RUN COUNT's arithmetic moves
  * (what main stamped vs what this side received past the ring's bounds), this one when the
  * stream's assembly does — the echo dedupe, the held-draft join, the TTL.
  */
-export {
-  groupStreamItems,
-  toolUses,
-  shortToolName,
-  type StreamGroup,
-} from "./agent-stream-groups";
+export { groupStreamItems, shortToolName, type StreamGroup } from "./agent-stream-groups";
 /**
  * ⚠ THE ROW SHAPE LIVES IN `agent-stream-item.ts`, and this file stays its import path of
  * record — {@link StreamItem} is re-exported here, so no

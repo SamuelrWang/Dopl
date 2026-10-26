@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { cn } from "@/shared/lib/utils";
 
 export interface BreadcrumbItem {
   key: string;
@@ -11,12 +12,19 @@ export interface BreadcrumbItem {
 }
 
 /** THE breadcrumb (DESIGN-LANGUAGE §4): muted crumbs, `›` between, the current one in ink. */
-export function Breadcrumb({ items }: { items: readonly BreadcrumbItem[] }) {
+export function Breadcrumb({
+  items,
+  className,
+}: {
+  items: readonly BreadcrumbItem[];
+  /** The type step, for a trail that heads a pane rather than sitting above a box. */
+  className?: string;
+}) {
   const last = items.length - 1;
   return (
     <nav
       aria-label="Breadcrumb"
-      className="flex min-w-0 items-center gap-1.5 text-caption text-text-muted"
+      className={cn("flex min-w-0 items-center gap-1.5 text-caption text-text-muted", className)}
     >
       {items.map((item, i) => (
         <Fragment key={item.key}>

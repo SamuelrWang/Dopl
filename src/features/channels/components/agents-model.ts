@@ -34,15 +34,10 @@ import { PRESENCE_ONLINE_WINDOW_MS } from "../constants";
 import { normalizeAgentModel } from "../lib/agent-models";
 import { metric } from "./agent-metrics";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
-// ⚠ THE IDENTITY VOCABULARY MOVED TO `agents-model-identity.ts` AT THE §1 CAP (2026-09-15) —
-// `isAgentActive`, `agentDisplayId` and `agentDisplayName`. They are RE-EXPORTED below because
-// this file is the path every caller already imports them from.
+// The identity vocabulary lives in `agents-model-identity.ts`; the names callers read here are
+// re-exported.
 import { isAgentActive } from "./agents-model-identity";
-export {
-  agentDisplayId,
-  agentDisplayName,
-  isAgentActive,
-} from "./agents-model-identity";
+export { agentDisplayId, agentDisplayName } from "./agents-model-identity";
 
 /**
  * THE PER-INSTANCE POST STAMP, as `dopl-desktop-app/main/session-outbound-tag.js

@@ -1,6 +1,6 @@
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { AvatarStack } from "@/shared/ui/avatar-stack";
+import { IdentityStack } from "@/shared/ui/avatar-stack";
 import {
   LinkOutChip,
   MentionBadge,
@@ -15,7 +15,7 @@ import {
  * and the `?? EMPTY_X` cache fallbacks (INVARIANTS §8) stay with the SPA's reader.
  */
 
-/** One face on line two. `displayName` is non-null: `AvatarStack` initials and titles it. */
+/** One face on line two. `displayName` is non-null: it is the face's initial and the stack's label. */
 export interface HomeChannelRowFace {
   userId: string;
   displayName: string;
@@ -94,9 +94,12 @@ export function HomeChannelRow({
           <span className={cn("truncate text-caption", quiet)}>{row.pendingLine}</span>
         )}
         {row.faces.length > 0 && (
-          <span className="flex shrink-0 items-center">
-            <AvatarStack size="2xs" max={3} users={row.faces} />
-          </span>
+          <IdentityStack
+            size={20}
+            max={3}
+            faces={row.faces.map((f) => ({ key: f.userId, photo: f.avatarUrl, name: f.displayName }))}
+            label={row.faces.map((f) => f.displayName).join(", ")}
+          />
         )}
         {showDescription && (
           <span className={cn("min-w-0 truncate text-caption", quiet)}>

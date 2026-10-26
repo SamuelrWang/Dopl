@@ -187,7 +187,7 @@ describe("the face", () => {
     // 🔒 THE HEADER BUTTON IS "+ Object" AND IT IS THE BLACK PAGE PILL (Samuel,
     // 2026-09-10). There is no "+ Column" anywhere on the board since 09-11.
     const object = screen.getByRole("button", { name: "Object" });
-    expect(object.className).toMatch(/auth-btn-3d/);
+    expect(object.className).toMatch(/raise-ink/);
     expect(object.className).toMatch(/h-9/);
     expect(screen.queryByRole("button", { name: "Column" })).toBeNull();
     // 🔒 The delete that names CHANNELS is the host's, in the gear menu — the

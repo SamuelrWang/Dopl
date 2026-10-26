@@ -24,10 +24,10 @@ import {
   AgentActivityRows,
   ownAgentsWorking,
 } from "@/features/channels/components/agent-activity";
-import { agentColorVar } from "@/shared/lib/agent-colors";
 import {
   liveAgentsFromKey,
   liveAgentsKey,
+  useWorkingColors,
 } from "@/features/channels/lib/live-agents";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { reached } from "./demo-steps";
@@ -59,7 +59,7 @@ import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
 import { DemoAccountRail } from "./demo-home-chrome";
 import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
-import { identityFace } from "./demo-identities";
+import { ownerPhoto } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
 
 /** The composer's writes never fire (the slot is inert), so the gate is a stub. */
@@ -213,13 +213,7 @@ export function DemoScene({
     [serverSessions, sessions]
   );
   /** `agentId` → a `var()` reference, resolved by the host exactly as the real one does. */
-  const workingColors = useMemo(() => {
-    const out = new Map<string, string>();
-    for (const agent of live) {
-      if (agent.color) out.set(agent.name, agentColorVar(agent.color));
-    }
-    return out;
-  }, [live]);
+  const workingColors = useWorkingColors(live);
 
   return (
     <QueryClientProvider client={qc}>
@@ -314,7 +308,7 @@ export function DemoScene({
                   <DemoAgentView
                     open={agentOpen}
                     agent={MY_SESSION}
-                    ownerPhoto={identityFace(MY_SESSION.agentId).photo}
+                    ownerPhoto={ownerPhoto(MY_SESSION.agentId)}
                     entries={narration}
                     messages={messages}
                     currentUserId={CURRENT_USER_ID}

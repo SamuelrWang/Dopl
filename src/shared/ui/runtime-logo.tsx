@@ -22,11 +22,6 @@ function logoOf(resolve: RuntimeLogoResolver, runtime: string | null | undefined
   return file ? resolve(file) : null;
 }
 
-/** The web's URL for a runtime's badge, for data that is built outside React (the landing demo). */
-export function webRuntimeLogo(runtime: string | null | undefined): string | null {
-  return logoOf(webLogo, runtime);
-}
-
 const RuntimeLogoContext = createContext<RuntimeLogoResolver>(webLogo);
 
 export const RuntimeLogoProvider = RuntimeLogoContext.Provider;

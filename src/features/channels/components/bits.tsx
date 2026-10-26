@@ -3,7 +3,7 @@
 /** Small presentational pieces shared by the channel page's columns. */
 
 import type { ReactNode } from "react";
-import { Bot, Check, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, X, type LucideIcon } from "lucide-react";
 import { CHIP } from "@/shared/ui/wells";
 import { INK_PILL_FACE, SMALL_TEXT_BUTTON } from "@/shared/ui/small-action-button";
 import { PAGE_ACTION_BTN, PAGE_ACTION_BTN_LIGHT } from "@/shared/ui/page-action-button";
@@ -107,32 +107,13 @@ export function AgentTargetPill({
 }
 
 /**
- * One party of a posted thread, not removable; flat on its card. `approved` is normally omitted: a missing
- * pending consent row does not distinguish approved from never-asked (INVARIANTS §6).
+ * One party of a posted thread, not removable; flat on its card. It states no approval: a missing pending
+ * consent row does not distinguish approved from never-asked (INVARIANTS §6).
  */
-export function AddresseePill({
-  label,
-  approved,
-}: {
-  label: string;
-  approved?: boolean;
-}) {
+export function AddresseePill({ label }: { label: string }) {
   return (
-    <span
-      className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-caption font-medium",
-        approved === false ? "text-text-muted" : "text-text-primary"
-      )}
-    >
-      {approved === true && (
-        <Check size={12} aria-hidden className="shrink-0 text-success" />
-      )}
+    <span className="inline-flex max-w-full items-center rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-caption font-medium text-text-primary">
       <span className="truncate">{label}</span>
-      {approved !== undefined && (
-        <span className="sr-only">
-          {approved ? " — approved" : " — awaiting approval"}
-        </span>
-      )}
     </span>
   );
 }

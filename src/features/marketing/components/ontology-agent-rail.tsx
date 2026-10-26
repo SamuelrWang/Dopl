@@ -1,6 +1,6 @@
 "use client";
 
-import { AgentFace, Sequence, accent, at } from "./ontology-bits";
+import { MockAgentFace, Sequence, accent, at } from "./ontology-bits";
 import {
   AGENTS,
   CHANNEL,
@@ -52,7 +52,7 @@ export function AgentRail() {
             <div>
               <div className="lp-ont-acard" style={accent(agent.color)}>
                 <div className="lp-ont-acard-head">
-                  <AgentFace id={card.agent} d={22} />
+                  <MockAgentFace id={card.agent} d={22} />
                   <span className="lp-ont-acard-name">{agent.name}</span>
                   <Sequence
                     className="lp-ont-stack lp-ont-stack--end"

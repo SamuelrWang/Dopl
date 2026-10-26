@@ -28,7 +28,7 @@ export interface TaskListProps {
   /** The read came back at its ceiling; said under the list (INVARIANTS §9). */
   truncated?: boolean;
   faceOf: TaskFaceOf;
-  /** Absent (a guest) draws the tick as a mark, not a control (R8). */
+  /** Absent (a guest) draws the tick as a mark, not a control. */
   onSetStatus?: (task: ChannelTask, status: TaskStatus) => void;
   onOpen: (taskId: string) => void;
   onOpenLink: (link: TaskLink) => void;
@@ -91,7 +91,7 @@ function TaskRow({
         <TaskAssignees actors={task.assignees} faceOf={faceOf} />
         <span className="inline-flex items-center gap-1.5">
           <TaskProgress task={task} />
-          <StatusPill tone={STATUS_TONE[task.status]} dot={false}>
+          <StatusPill tone={STATUS_TONE[task.status]}>
             {TASK_STATUS_LABEL[task.status]}
           </StatusPill>
         </span>

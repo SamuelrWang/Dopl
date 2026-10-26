@@ -219,7 +219,7 @@ const migration = base(
   "kb-migration",
   CONTAINER_WORKSPACE_ID,
   "Postgres 17 Migration",
-  "Working notes for the cluster upgrade. Not shared into any channel yet.",
+  "Working notes for the database upgrade. Not shared into any channel yet.",
   STAGING_USER_ID,
   { visibility: "public" }
 );

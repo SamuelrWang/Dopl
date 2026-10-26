@@ -73,7 +73,7 @@ export function SettingsSection({ title, children }: { title: string; children: 
  * line and `first:hidden` keeps it off the top of a card: rows are conditional (bridges, runtimes,
  * gates), so which one is first is a render-time fact no flag could state.
  */
-export function SettingDivider() {
+function SettingDivider() {
   return <div aria-hidden data-settings-divider className="border-t border-border-default first:hidden" />;
 }
 

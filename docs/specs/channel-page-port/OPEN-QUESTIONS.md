@@ -398,3 +398,33 @@ Workers append a `## <slice>` section per question: the question, what was chose
    job", so every security header says the same thing. Doctrine "agents you task" became "agents you
    brief" (keeps the doctrine budget unchanged); legacy-surface snapshot re-recorded.
 6. **Doc ritual:** the "Dopl Development" KB sync was not available to this worker; not done.
+
+## Port review fixes, UI (branch `fix/port-review-ui`)
+
+1. **Tasks pill while the first read is in flight.** The brief says the pill is hidden only when the
+   channel is known to have no tasks. Chosen: shown on a failed read ("Tasks", the pop-up says it
+   could not load), hidden while the first read is in flight, so an empty channel does not flash a
+   pill on every open (`tasks-quick-view.tsx`).
+2. **One ink pill family.** `PAGE_ACTION_BTN` and `SMALL_PRIMARY_PILL` moved from `.auth-btn-3d` to
+   the staging look (`small-action-button.ts › INK_PILL_FACE`, flat `bg-surface-cta` on `.raise-ink`),
+   so every page action (New channel, the /home section `CreateButton`s, Get more credits, the tab
+   actions) and the profile popup's black pills changed face together. `SMALL_PRIMARY_BUTTON` (the
+   popup FORMS' 8px-radius verb) and `PAGE_ACTION_BTN_LIGHT` were not in the brief and kept
+   `.auth-btn-3d` / `.auth-btn-3d-light`.
+3. **Staging copies of `apps/` pages are not mountable from `src/`.** The Next tree cannot import
+   `apps/` (its files resolve `#/`), so `popups-staging/pages/agent-window/index.tsx`,
+   `home-search.tsx` and `home-settings-control.tsx` stay copies: the agent window was already
+   in sync (only `agentTabKey`'s unused export removed, in both), the other two were re-synced from
+   the product.
+4. **`EmptyState.children` is NOT unused** (`src/app/c/[workspaceId]/guest-channel.tsx` and both
+   `knowledge-v2/detail/entry-view.tsx` pass a retry button): kept.
+5. **`playground/components/panes/channels-pane.tsx` is mounted** (`playground-shell.tsx › PANES`,
+   the public `/playground` page's Channels section): kept.
+6. **`AvatarStack` stays** for the presence surfaces (knowledge/skill editors, teams, search rows,
+   the workspace channel sidebar), justified in its docblock; /home's channel row moved to
+   `IdentityStack`. Its initials are now one letter (`avatar.tsx › initialFor`).
+7. **Other workers' files touched (import lines / anchors only):** `src/features/channels/server/*`
+   and `schema-*.ts` (the `agent-colors` move to `src/shared/lib`), and two anchors in
+   `docs/REFACTOR-FINDINGS.md` (`use-writes-shared.ts`, `page-action-button.tsx`). Not touched:
+   comments naming `channels/lib/agent-colors.ts` in `dopl-desktop-app/main/*` and
+   `scripts/check-css-token-drift.ts`'s header line naming the deleted landing rules.

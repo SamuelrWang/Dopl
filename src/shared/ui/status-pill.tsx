@@ -8,7 +8,7 @@ export type StatusTone = "neutral" | "live" | "attention" | "done";
 /** THE status pill (kit `.status-pill`): an optional dot and one word. */
 export function StatusPill({
   tone = "neutral",
-  dot = true,
+  dot = false,
   children,
   className,
 }: {

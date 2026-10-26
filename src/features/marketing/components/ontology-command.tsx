@@ -2,7 +2,7 @@
 
 import { ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import {
-  AgentFace,
+  MockAgentFace,
   PersonFace,
   Sequence,
   Typed,
@@ -91,7 +91,7 @@ export function CommandWindow() {
                 />
               ) : null}
               <span className="lp-ont-crumb-face">
-                <AgentFace id={crumb.agent} d={16} />
+                <MockAgentFace id={crumb.agent} d={16} />
               </span>
               {AGENTS[crumb.agent].name}
             </span>
@@ -105,7 +105,7 @@ export function CommandWindow() {
               steps={HEAD_STEPS}
               render={(id) => (
                 <span className="lp-ont-agent-id">
-                  <AgentFace id={id} d={28} />
+                  <MockAgentFace id={id} d={28} />
                   <span className="lp-ont-agent-name">{AGENTS[id].name}</span>
                 </span>
               )}
@@ -158,7 +158,7 @@ export function CommandWindow() {
             <div>
               <dt>{c.info.parent}</dt>
               <dd>
-                <AgentFace id={c.parent} d={16} />
+                <MockAgentFace id={c.parent} d={16} />
                 {parent.name}
               </dd>
             </div>
@@ -196,7 +196,7 @@ export function CommandWindow() {
             <div className="lp-ont-grow" style={at(c.reply.at)}>
               <div>
                 <div className="lp-ont-msg">
-                  <AgentFace id={c.focus} d={20} />
+                  <MockAgentFace id={c.focus} d={20} />
                   <p className="lp-ont-bubble">{c.reply.text}</p>
                 </div>
               </div>

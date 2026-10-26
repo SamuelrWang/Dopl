@@ -12,7 +12,7 @@ import type { AuthorIndex } from "./view-model";
 import type { ChannelTask, SubtaskState, TaskActor, TaskStatus } from "../types";
 
 /** `IdentityFace` props for one actor, plus the name the row prints. */
-export type TaskFace = IdentityFacts & { name: string };
+type TaskFace = IdentityFacts & { name: string };
 
 export type TaskFaceOf = (actor: TaskActor) => TaskFace;
 

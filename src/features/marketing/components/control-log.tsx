@@ -4,7 +4,7 @@ import { Bot, Pause } from "lucide-react";
 import { Face, Img, PairedAvatar, agentColor } from "@/features/onboarding/components/paired-avatar";
 import { LOG_COPY, LOG_ROWS, type LogIdentity, type LogRow } from "./control-content";
 import { AGENT } from "./multiplayer-content";
-import { AgentFace, Sequence, at } from "./ontology-bits";
+import { MockAgentFace, Sequence, at } from "./ontology-bits";
 import { ROBOT_AGENT } from "./robot-chat-content";
 import { useVisualPlay } from "./use-visual-play";
 
@@ -122,7 +122,7 @@ function IdentityFace({ who }: { who: LogIdentity }) {
     case "robot":
       return <RobotFace />;
     default:
-      return <AgentFace id={who} d={FACE} thinFrame />;
+      return <MockAgentFace id={who} d={FACE} thinFrame />;
   }
 }
 

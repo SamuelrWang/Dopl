@@ -1,5 +1,5 @@
 /**
- * STAND-IN (2026-10-26, channel tasks) — the in-memory task store the product tasks UI reads on
+ * STAND-IN — the in-memory task store the product tasks UI reads on
  * this page, in place of `channels/hooks/use-channel-tasks.ts` + `use-task-writes.ts` (network).
  * Keyed by channel id and held at the page, so a channel switch keeps what was resolved. The
  * writes land what the product's own optimistic patches paint (`statusExpectation`,

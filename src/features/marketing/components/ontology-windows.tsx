@@ -2,7 +2,7 @@
 
 import { Check, FileText, Hash, Plus } from "lucide-react";
 import {
-  AgentFace,
+  MockAgentFace,
   ActorFace,
   PersonFace,
   Sequence,
@@ -18,8 +18,8 @@ import {
   CHANNEL,
   CONTEXT,
   TASKS,
-  TASK_STATUS_LABEL,
-  type TaskStatus,
+  MOCK_TASK_STATUS_LABEL,
+  type MockTaskStatus,
 } from "./ontology-content";
 import { AgentRail } from "./ontology-agent-rail";
 import { GmailMark, NotionMark, SlackMark } from "./ontology-marks";
@@ -49,7 +49,7 @@ export function ContextWindow() {
         <h3 className="lp-ont-win-title">{c.kbTitle}</h3>
 
         <div className="lp-ont-writer" style={accent(writer.color)}>
-          <AgentFace id={c.writer} d={20} />
+          <MockAgentFace id={c.writer} d={20} />
           <span className="lp-ont-writer-name">{writer.name}</span>
           <Sequence
             steps={[
@@ -149,7 +149,7 @@ export function ChannelsWindow() {
         <span className="lp-ont-faces">
           <PersonFace id="sam" d={22} />
           {CHANNEL_FACES.map((id) => (
-            <AgentFace key={id} id={id} d={22} />
+            <MockAgentFace key={id} id={id} d={22} />
           ))}
         </span>
       </div>
@@ -218,9 +218,7 @@ export function ChannelsWindow() {
 
 // ── 3 · Tasks ───────────────────────────────────────────────────────────
 
-// PLANNED: task tracker not shipped yet (see ./ontology-content.ts › TASKS).
-
-function StatusMark({ status }: { status: TaskStatus }) {
+function StatusMark({ status }: { status: MockTaskStatus }) {
   if (status === "done")
     return (
       <span className="lp-ont-tick lp-ont-tick--done">
@@ -274,7 +272,7 @@ export function TasksWindow() {
             <Sequence
               className="lp-ont-stack lp-ont-stack--end"
               steps={row.steps}
-              render={(s) => <span className={`lp-ont-status lp-ont-status--${s}`}>{TASK_STATUS_LABEL[s]}</span>}
+              render={(s) => <span className={`lp-ont-status lp-ont-status--${s}`}>{MOCK_TASK_STATUS_LABEL[s]}</span>}
             />
           </li>
         ))}

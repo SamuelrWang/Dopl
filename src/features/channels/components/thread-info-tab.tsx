@@ -27,10 +27,8 @@
  */
 
 import { Calendar, Hash, Radio, UserRound, Users } from "lucide-react";
-import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { formatDate } from "@/shared/lib/format-time";
-import { cn } from "@/shared/lib/utils";
 import { THREAD_MODE_LABELS } from "../constants";
 import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
 import type { ChannelPeerSession } from "../hooks/use-channel-agent-sessions";
@@ -39,8 +37,9 @@ import type { ChannelMember, ChannelThread } from "../types";
 import { MetaRow, MetaRowDivider, PanelHeading } from "./bits";
 import { AgentStatusPill } from "./agent-bits";
 import { AgentFace } from "./agent-face";
+import { MemberRow } from "./member-roster";
 import { threadCardAgents, type ThreadCardAgent } from "./thread-card-agents";
-import { isPresentForViewer, memberPerson, type AuthorIndex } from "./view-model";
+import { isPresentForViewer, type AuthorIndex } from "./view-model";
 
 // ⚠ `MODE_LABEL` STOOD HERE and is now `constants.ts › THREAD_MODE_LABELS`
 // (2026-08-21): `thread-settings-tab.tsx` lets the creator CHOOSE the mode, and a
@@ -173,9 +172,8 @@ export function ThreadInfoTab({
 }
 
 /**
- * One party of the exchange, on the roster row's own recipe (`info-tab.tsx ›
- * MemberRow`): `AvatarWithPresence`'s ring for presence — never a standalone dot —
- * the email as subline, and a chip stating which side of the thread they are.
+ * One party of the exchange: the roster's own row (`member-roster.tsx › MemberRow`) with a chip
+ * stating which side of the thread they are.
  *
  * ⚠ AN UNRESOLVED PARTY RENDERS AS AN ABSENCE, NEVER AS A UUID: an id is not a
  * name (the rule the Creator row follows, and `view-model.ts › threadParties`
@@ -207,32 +205,12 @@ function PartyRow({
       </div>
     );
   }
-  const online = isPresentForViewer(member, viewerUserId);
   return (
-    <div
-      className={cn(
-        "flex h-[46px] items-center gap-2.5 rounded-[8px] px-2",
-        !online && "opacity-60"
-      )}
-    >
-      <AvatarWithPresence
-        person={memberPerson(member)}
-        online={online}
-        size="px36"
-        title={online ? "Agent listening" : "Agent offline"}
-      />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-semibold text-text-primary">
-          {member.displayName ?? member.email ?? "Member"}
-        </span>
-        {member.email && (
-          <span className="truncate text-caption text-text-muted">
-            {member.email}
-          </span>
-        )}
-      </span>
-      <SidePill label={side} />
-    </div>
+    <MemberRow
+      member={member}
+      online={isPresentForViewer(member, viewerUserId)}
+      chip={<SidePill label={side} />}
+    />
   );
 }
 
@@ -241,7 +219,7 @@ function PartyRow({
  *  read as a claim about permissions on the thread. */
 function SidePill({ label }: { label: string }) {
   return (
-    <StatusPill dot={false} className="shrink-0">
+    <StatusPill className="shrink-0">
       {label}
     </StatusPill>
   );

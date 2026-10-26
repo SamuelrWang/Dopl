@@ -17,6 +17,7 @@
 import type { ReactNode } from "react";
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { cn } from "@/shared/lib/utils";
+import { memberLabel } from "../lib/channel-display";
 import { RolePill } from "./bits";
 import { isPresentForViewer, memberPerson } from "./view-model";
 import type { ChannelMember } from "../types";
@@ -30,14 +31,20 @@ import type { ChannelMember } from "../types";
  *
  * The subline is the member's email, not a job title: the model has no such
  * field, and the chip states the one role a channel roster carries (INVARIANTS §5).
+ * The thread's Parties list wears this row with its own chip.
  */
-function MemberRow({
+export function MemberRow({
   member,
   online,
+  chip = (
+    <RolePill owner={member.role === "owner"} guest={member.workspaceRole === "guest"} />
+  ),
   action,
 }: {
   member: ChannelMember;
   online: boolean;
+  /** What the row states about the member; the channel role by default. */
+  chip?: ReactNode;
   /** The row's trailing control, INJECTED — never built here, on
    *  `info-tab.tsx › membersAction`'s reason exactly: it is write-bearing and
    *  this file fetches nothing (INVARIANTS §7). See `MemberRoster.rowAction`. */
@@ -58,16 +65,13 @@ function MemberRow({
       />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-body font-semibold text-text-primary">
-          {member.displayName ?? member.email ?? "Member"}
+          {memberLabel(member)}
         </span>
         {member.email && (
           <span className="truncate text-caption text-text-muted">{member.email}</span>
         )}
       </span>
-      <RolePill
-        owner={member.role === "owner"}
-        guest={member.workspaceRole === "guest"}
-      />
+      {chip}
       {action}
     </div>
   );

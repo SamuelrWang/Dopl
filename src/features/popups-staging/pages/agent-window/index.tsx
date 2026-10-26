@@ -120,7 +120,7 @@ export default function AgentWindowPage() {
  * CommonJS. ⚠ The two-part degradation is part of the rule: an absent agent id must produce the
  * SAME key on both sides or a tab main pushed would never match the one this page seeded.
  */
-export function agentTabKey(tab: {
+function agentTabKey(tab: {
   channelId: string;
   threadId: string;
   agentId?: string | null;

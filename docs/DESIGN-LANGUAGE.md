@@ -92,7 +92,8 @@ Sentence case everywhere. Titles are short noun/verb phrases.
 
 In the product these recipes are already kit and `src/shared/ui` primitives (2026-10-26):
 the white card `.white-card`, the well `.card-well`, `StatusPill`, `ThinMeter`,
-`IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, and
+`IdentityFace` / `IdentityStack`, `Breadcrumb`, `EmptyState variant="well"`, `PILL_BUTTON`, the ink pill
+family (`INK_PILL_FACE`: `PAGE_ACTION_BTN`, `SMALL_PRIMARY_PILL`, `INK_PILL`, `QUIET_PILL`), and
 the 15px `text-heading` step. A port imports them; DESIGN-SYSTEM.md lists each.
 
 ## 5. Motion

@@ -103,11 +103,9 @@ describe("the channel ROW's second line", () => {
     expect(
       screen.queryByText("Three renewals over $1k before October")
     ).not.toBeInTheDocument();
-    // THREE faces, from `peers` — `AvatarStack` titles each one, so the roster is
+    // THREE faces, from `peers` — the stack's label names them, so the roster is
     // assertable without reaching into its markup.
-    for (const name of ["Priya Shah", "Dana Ruiz", "Omar Idris"]) {
-      expect(screen.getAllByTitle(name).length).toBeGreaterThan(0);
-    }
+    expect(screen.getAllByTitle("Priya Shah, Dana Ruiz, Omar Idris").length).toBeGreaterThan(0);
   });
 
   it("caps the stack at three faces and counts the rest", async () => {
@@ -125,7 +123,7 @@ describe("the channel ROW's second line", () => {
     renderHome();
     await openChannels();
 
-    // ⚠ `+1` IS WHAT IS HIDDEN, NOT THE TOTAL (`AvatarStack`'s own rule).
+    // ⚠ `+1` IS WHAT IS HIDDEN, NOT THE TOTAL (`IdentityStack`'s own rule).
     expect(screen.getByText("+1")).toBeInTheDocument();
     expect(screen.queryByTitle("Ada Byron")).not.toBeInTheDocument();
   });
@@ -193,7 +191,7 @@ describe("the row's DESCRIPTION line", () => {
     renderHome();
     await openChannels();
 
-    expect(screen.getAllByTitle("Priya Shah").length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle("Priya Shah, Dana Ruiz, Omar Idris").length).toBeGreaterThan(0);
     expect(screen.queryByText("Series B prep")).not.toBeInTheDocument();
   });
 

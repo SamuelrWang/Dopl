@@ -20,7 +20,7 @@
  * | {@link EventRow} | something that happened or is happening: lead, a fact in the MIDDLE, a trail | the list, with the middle occupied |
  *
  * 🔒 **RULE 1, THE BLANK SPACE RULE, IS WHY THERE IS NO FULL-WIDTH BAR HERE.** 2d drew knowledge
- * and runtime as `IDENTITY_ROW_WIDE` bars: at 680px of popup body that is a 14px mark, nine
+ * and runtime as full-width bars: at 680px of popup body that is a 14px mark, nine
  * characters, and 600px of nothing. They are {@link Chip}s now, and the slack is filled by putting
  * the NEXT group beside them instead of under them.
  */

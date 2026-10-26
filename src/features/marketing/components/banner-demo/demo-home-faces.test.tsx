@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The demo's redesigned top bar and channel switcher (`demo-home-faces.tsx`): same items, same
+ * The demo's top bar and channel switcher (`demo-home-faces.tsx`): same items, same
  * order, same marks. The composer's working chips are the product's own.
  */
 

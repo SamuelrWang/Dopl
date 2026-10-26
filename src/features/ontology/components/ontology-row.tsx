@@ -175,8 +175,7 @@ export function OntologyRow({
                        this on `scripts/check-css-token-drift.ts`, which fails if
                        the globals.css and desktop tokens.css copies disagree.
                        A TEXT TOKEN AS A FILL IS ESTABLISHED HERE, not a liberty:
-                       `--color-chart-2` is `var(--text-secondary)` in BOTH trees,
-                       and `bg-text-primary` paints the selected-row marker in five
+                       `bg-text-primary` paints the selected-row marker in five
                        playground panes. Defined in globals.css:209 AND
                        desktop tokens.css:234, same value, so the badge survives
                        in the desktop SPA, which never loads globals.css.

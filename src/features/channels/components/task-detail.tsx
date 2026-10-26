@@ -84,7 +84,7 @@ export function TaskDetail({
       <header className="flex flex-col gap-2.5">
         <div className="flex items-start justify-between gap-2.5">
           <h3 className="text-title font-semibold leading-[1.3] text-text-primary">{task.title}</h3>
-          <StatusPill tone={STATUS_TONE[task.status]} dot={false}>
+          <StatusPill tone={STATUS_TONE[task.status]}>
             {TASK_STATUS_LABEL[task.status]}
           </StatusPill>
         </div>
@@ -110,7 +110,7 @@ export function TaskDetail({
             <TaskLinkChip
               link={task.link}
               onOpen={onOpenLink}
-              className="h-5.5 flex-[0_1_auto] px-2 text-caption leading-[22px]"
+              className="h-5.5 flex-[0_1_auto] px-2 text-caption"
             />
           )}
           {onSetStatus && (

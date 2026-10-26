@@ -4,15 +4,13 @@
  * the channels the demo only lists in its column (deploys, flaky-tests, api-v2-migration,
  * design-review). Same naming style as the demo: short Title Case, named for the job.
  *
- * Also the identity face table (owner photo + runtime badge + colour) that
- * `banner-demo/demo-identities.ts › identityFace` answers for the demo's six, extended to
- * the extras. Pure data: no fetch, no bridge.
+ * Also the owner photo `banner-demo/demo-identities.ts › ownerPhoto` answers for the demo's
+ * six, extended to the extras. Pure data: no fetch, no bridge.
  */
 
 import type { AgentColorKey } from "@dopl/contracts";
 import type { AgentRosterEntry } from "@/features/channels/components/view-model";
 import { pickAgentColor } from "@/features/channels/lib/agent-color-pick";
-import { webRuntimeLogo } from "@/shared/ui/runtime-logo";
 import {
   AGENT_COLORS,
   AGENT_INDEX,
@@ -22,12 +20,7 @@ import {
   SERVER_SESSIONS,
   U,
 } from "@/features/marketing/components/banner-demo/demo-data";
-import {
-  identityFace as demoIdentityFace,
-  type IdentityFace,
-} from "@/features/marketing/components/banner-demo/demo-identities";
-
-export type { IdentityFace };
+import { ownerPhoto } from "@/features/marketing/components/banner-demo/demo-identities";
 
 /** 8-char instance ids, `^[a-z][a-z0-9]{7}$`, like the demo's. */
 export const EXTRA_AGENT_IDS = {
@@ -163,13 +156,8 @@ export function stagingAgentRuntime(agentId: string): string {
   return extraAgent(agentId)?.runtime ?? AGENT_RUNTIME[agentId] ?? "claude";
 }
 
-/** `demo-identities.ts › identityFace`, extended to the extras. */
-export function stagingIdentityFace(agentId: string | null | undefined): IdentityFace {
+/** `demo-identities.ts › ownerPhoto`, extended to the extras. */
+export function stagingOwnerPhoto(agentId: string | null | undefined): string | null {
   const extra = agentId ? extraAgent(agentId) : undefined;
-  if (!extra) return demoIdentityFace(agentId);
-  return {
-    photo: FACE[extra.owner as keyof typeof FACE] ?? null,
-    color: extra.entry.color ?? null,
-    logo: webRuntimeLogo(extra.runtime) ?? undefined,
-  };
+  return extra ? (FACE[extra.owner as keyof typeof FACE] ?? null) : ownerPhoto(agentId);
 }

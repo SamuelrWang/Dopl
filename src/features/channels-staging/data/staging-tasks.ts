@@ -1,5 +1,5 @@
 /**
- * STAGING DATA (2026-10-26, channel tasks) — #tech-debt's seeded tasks in the product's own shape
+ * STAGING DATA — #tech-debt's seeded tasks in the product's own shape
  * (`@dopl/contracts › tasks.ts › ChannelTaskDetail`), drawn by the PRODUCT tasks UI
  * (`channels/components/tasks-panel.tsx`, `tasks-quick-view.tsx`) over the in-memory store
  * (`../store/use-staging-tasks.ts`). Links are read off the demo's own messages and threads (bodies

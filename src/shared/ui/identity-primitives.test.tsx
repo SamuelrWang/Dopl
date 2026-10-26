@@ -11,7 +11,7 @@ afterEach(cleanup);
 
 describe("StatusPill", () => {
   it("wears the kit pill with its tone and a dot by default", () => {
-    render(<StatusPill tone="live">Working</StatusPill>);
+    render(<StatusPill dot tone="live">Working</StatusPill>);
     const pill = screen.getByText("Working");
     expect(pill.className).toBe("status-pill");
     expect(pill.dataset.tone).toBe("live");
@@ -19,7 +19,7 @@ describe("StatusPill", () => {
   });
 
   it("drops the dot on request and defaults to neutral", () => {
-    render(<StatusPill dot={false}>Open</StatusPill>);
+    render(<StatusPill>Open</StatusPill>);
     const pill = screen.getByText("Open");
     expect(pill.dataset.tone).toBe("neutral");
     expect(pill.querySelector(".status-pill-dot")).toBeNull();

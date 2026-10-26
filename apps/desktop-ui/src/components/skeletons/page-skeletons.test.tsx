@@ -335,7 +335,6 @@ describe("skeleton grids REUSE the real page's grid, they do not restate it", ()
       expect(source).toContain(geometry);
       expect(CHANNELS_SKELETON).toContain(geometry);
     }
-
     // The composer is the record ghost's one `ComposerGhost`, which byte-shares the card.
     const recordGhost = shared("features/channels/components/channel-record-skeleton.tsx");
     expect(CHANNELS_SKELETON).toContain("<ComposerGhost />");

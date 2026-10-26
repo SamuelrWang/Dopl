@@ -30,8 +30,6 @@
 
   /* Accent */
   --color-accent-primary: var(--accent-primary);
-  --color-accent-glow: var(--accent-glow);
-  --color-accent-soft: var(--accent-soft);
 
   /* Status */
   --color-success: var(--success);
@@ -62,9 +60,6 @@
   --color-link: var(--link);
   --color-accent-on: var(--accent-on);
 
-  /* Agent "active" green (Agent: on pills, attachment banner). */
-  --color-agent-on: var(--agent-on);
-
   /* Inverted affordance (menu rows that flip to solid on hover/active) + active-state
      indicator border. */
   --color-surface-invert: var(--surface-invert);
@@ -83,42 +78,16 @@
 
   /* ── Shadcn aliases (backward compat) ─────────────────────────── */
   --color-background: var(--bg-base);
-  --color-foreground: var(--text-primary);
   --color-card: var(--bg-elevated);
-  --color-card-foreground: var(--text-primary);
   --color-popover: var(--bg-overlay);
-  --color-popover-foreground: var(--text-primary);
   --color-primary: var(--accent-primary);
-  /* Foreground on the accent/primary surface: `--accent-on`, so it stays legible on the
-     dark accent. */
-  --color-primary-foreground: var(--accent-on);
   --color-secondary: var(--bg-inset);
-  --color-secondary-foreground: var(--text-primary);
   --color-muted: var(--bg-inset);
-  --color-muted-foreground: var(--text-muted);
   --color-accent: var(--bg-inset);
-  --color-accent-foreground: var(--text-primary);
   --color-destructive: var(--danger);
   --color-border: var(--border-default);
   --color-input: var(--border-default);
   --color-ring: var(--accent-primary);
-
-  /* Sidebar (alias for shadcn compat) */
-  --color-sidebar: var(--bg-elevated);
-  --color-sidebar-foreground: var(--text-primary);
-  --color-sidebar-primary: var(--accent-primary);
-  --color-sidebar-primary-foreground: var(--accent-on);
-  --color-sidebar-accent: var(--bg-inset);
-  --color-sidebar-accent-foreground: var(--text-primary);
-  --color-sidebar-border: var(--border-subtle);
-  --color-sidebar-ring: var(--accent-primary);
-
-  /* Charts */
-  --color-chart-1: var(--accent-primary);
-  --color-chart-2: var(--text-secondary);
-  --color-chart-3: var(--text-muted);
-  --color-chart-4: var(--success);
-  --color-chart-5: var(--warning);
 
   /* Always fall back to a system sans, never the browser serif default. `--font-app`
      matches the landing — one lever for the whole app. */
@@ -204,10 +173,8 @@
   --text-muted: #98a2ad;
   --text-disabled: #c4cad1;
 
-  /* Accent — neutral UI ink. `--accent-glow` / `--accent-soft` are legacy blue tints. */
+  /* Accent — neutral UI ink. */
   --accent-primary: #3e3a3b;
-  --accent-glow: oklch(0.68 0.22 250);
-  --accent-soft: oklch(0.45 0.12 245);
 
   /* Status colors */
   --success: oklch(0.55 0.15 155);
@@ -269,10 +236,6 @@
   --surface-cta: #1c2127;
   --text-on-cta: #ffffff;
   --border-active: #3e3a3b;
-  --hairline-shine: rgba(255, 255, 255, 0.06);
-
-  /* Agent active green */
-  --agent-on: oklch(0.52 0.14 162);
 
   /* THE APP FRAME PALETTE: the dark frame behind rail + shell, the panel a full-page card
      fills with, its line, and the warm record card. Shared by /home and the workspace shell
@@ -323,23 +286,11 @@
   --ink: var(--text-primary);
   --ink-soft: var(--text-secondary);
   --line: #d6dde5;
-  --black: var(--surface-cta);
-
-  /* Panel shine + selection. */
-  --shine-top-gradient: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.3) 30%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0.3) 70%,
-    transparent 100%
-  );
-  --ring-selected: 0 0 0 2px rgba(255, 255, 255, 0.5);
-  /* Plain drop shadow only — an inset top-edge highlight reads as a second inner border. */
-  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.3);
 
   /* Radius base */
   --radius: 0.625rem;
+  /* The identity look's marked stroke: a task tick, a subtask check, an author's message-card edge. */
+  --stroke-mark: 1.5px;
 
   /* Legacy accent palette, down to its one live member: `--forest` is the
      BODY INK (`@layer base › body { color: var(--forest) }` below), which is
@@ -451,29 +402,6 @@ html {
   }
 }
 
-/* Background grid pattern (`.design-grid`) */
-
-.design-grid {
-  background-color: var(--bg-base);
-  background-image:
-    linear-gradient(to right, oklch(1 0 0 / 3%) 1px, transparent 1px),
-    linear-gradient(to bottom, oklch(1 0 0 / 3%) 1px, transparent 1px);
-  background-size: 80px 80px;
-  position: relative;
-}
-
-.design-grid::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 0%,
-    oklch(0 0 0 / 60%) 100%
-  );
-}
-
 /* App-frame background, themed via --body-bg. Intentionally NO grid or texture. */
 .mosaic-bg {
   background-color: var(--body-bg);
@@ -537,12 +465,6 @@ html {
   }
 }
 
-@keyframes loginOrbFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33%      { transform: translate(40px, -30px) scale(1.08); }
-  66%      { transform: translate(-30px, 25px) scale(0.95); }
-}
-
 /* Onboarding size slider — black fill set inline via background. */
 
 .dopl-slider {
@@ -583,35 +505,6 @@ html {
 .dopl-slider::-moz-range-track {
   height: 6px;
   border-radius: 9999px;
-}
-
-.login-orb {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  mix-blend-mode: screen;
-  pointer-events: none;
-  opacity: 0.55;
-  will-change: transform;
-}
-.login-orb-1 {
-  width: 420px; height: 420px;
-  top: -80px; left: -60px;
-  background: radial-gradient(circle, oklch(0.78 0.16 240) 0%, transparent 70%);
-  animation: loginOrbFloat 14s ease-in-out infinite;
-}
-.login-orb-2 {
-  width: 360px; height: 360px;
-  bottom: -100px; right: -40px;
-  background: radial-gradient(circle, oklch(0.72 0.18 320) 0%, transparent 70%);
-  animation: loginOrbFloat 18s ease-in-out infinite reverse;
-}
-.login-orb-3 {
-  width: 300px; height: 300px;
-  top: 45%; right: 20%;
-  background: radial-gradient(circle, oklch(0.82 0.14 70) 0%, transparent 70%);
-  animation: loginOrbFloat 22s ease-in-out infinite;
-  animation-delay: -6s;
 }
 
 /* Auth 3D controls (login / onboarding / oauth consent / reset), shared by every
@@ -1331,35 +1224,6 @@ html {
   }
 }
 
-/* Landing page styles */
-
-@keyframes logo-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
-.logo-carousel {
-  animation: logo-scroll 20s linear infinite;
-}
-
-.landing-hero-bg {
-  background: radial-gradient(ellipse 120% 80% at 50% 40%, #3d2a1a 0%, #1a0f08 40%, #000 70%);
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes ingest-glow {
-  0%, 100% { box-shadow: 0 0 15px 2px rgba(168, 85, 247, 0.15); }
-  50% { box-shadow: 0 0 25px 6px rgba(168, 85, 247, 0.35); }
-}
-
-.landing-fade-in {
-  animation: fadeInUp 0.6s ease-out forwards;
-}
-
 /* Hide mosaic grid and background on landing page */
 body.landing-active {
   background-color: #000 !important;
@@ -1369,11 +1233,6 @@ body.landing-active {
 body.landing-active::before,
 body.landing-active::after {
   display: none !important;
-}
-
-/* ── Chat sidebar toggle (data-open driven, no React re-render) ──── */
-[data-sidebar-wrapper][data-open] {
-  transform: translate3d(0, 0, 0) !important;
 }
 
 /* Discreet scrollbar — applied globally so every scrollable element matches. */

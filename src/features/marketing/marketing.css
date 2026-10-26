@@ -2644,7 +2644,7 @@
   color: var(--muted);
 }
 
-/* ── 3 · Tasks (PLANNED feature — see ontology-content.ts › TASKS) ──── */
+/* ── 3 · Tasks ──── */
 .lp-ont-win--tasks {
   flex-direction: column;
   gap: 4px;
@@ -3882,12 +3882,6 @@
   border-radius: 999px;
   padding: 4px 11px;
 }
-.lp-plan-badge--soft {
-  color: var(--ink);
-  background: #f0f0f0;
-  border: 1px solid var(--line);
-}
-
 .lp-plan-name {
   font-family: var(--grotesk);
   font-size: 34px;

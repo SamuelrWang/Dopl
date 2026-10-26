@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { agentColorOrNull } from "@/shared/lib/agent-colors";
+import { agentColorOrNull, agentColorVar } from "@/shared/lib/agent-colors";
 import { IDENTITY_RING_PX, IdentityFace } from "@/shared/ui/identity-face";
 import { Profile } from "./web-pieces";
 
@@ -16,11 +16,19 @@ import { Profile } from "./web-pieces";
  * are fine here: auth + onboarding are the design system's standing exemption.
  */
 
-export const agentColor = (n: number) => `var(--agent-color-${String(n).padStart(2, "0")})`;
+/** A bank slot (1–16) as its colour key; an out-of-bank slot has none. */
+const slotKey = (n: number) => agentColorOrNull(`agent-${String(n).padStart(2, "0")}`);
+
+/** A bank slot's colour, or the neutral hairline outside the bank. */
+export const agentColor = (n: number) => {
+  const key = slotKey(n);
+  return key ? agentColorVar(key) : "var(--raised-light-line)";
+};
 
 /**
- * `thinFrame` is the identity look (`@/shared/ui/identity-face › IdentityFace`, DESIGN-LANGUAGE §3);
- * without it the onboarding/login journey keeps its raised scaled frame (`Profile`).
+ * `thinFrame` is the identity look (`@/shared/ui/identity-face › IdentityFace`, DESIGN-LANGUAGE §3).
+ * Without it, the login and onboarding journeys keep their own raised scaled frame (`Profile`),
+ * which `IdentityFace` does not draw.
  */
 export function PairedAvatar({
   d,
@@ -38,8 +46,15 @@ export function PairedAvatar({
   color: number;
 }) {
   if (thinFrame) {
-    const ring = agentColorOrNull(`agent-${String(color).padStart(2, "0")}`) ?? "neutral";
-    return <IdentityFace size={d} photo={photo} runtimeLogo={agentLogo} ring={ring} className="block" />;
+    return (
+      <IdentityFace
+        size={d}
+        photo={photo}
+        runtimeLogo={agentLogo}
+        ring={slotKey(color) ?? "neutral"}
+        className="block"
+      />
+    );
   }
   const ring = agentColor(color);
   const rw = IDENTITY_RING_PX;

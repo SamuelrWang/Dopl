@@ -14,7 +14,7 @@
  *  - the composer's send and the New thread dialog's Create are caught in the CAPTURE phase
  *    and turned into in-memory writes, because the product hands both to `useThreadWrites`
  *    (a network mutation). Nothing here fetches.
- *  - (2026-10-26, channel tasks) the product's Tasks tab (`TasksPanel`) and composer quick view
+ *  - the product's Tasks tab (`TasksPanel`) and composer quick view
  *    (`TasksQuickView`) draw the page's in-memory tasks; the open task and the tab ask are held
  *    here, as the selection hook holds them in the product. With `tasks` absent, neither draws.
  */
@@ -34,12 +34,15 @@ import {
   AgentActivityRows,
   ownAgentsWorking,
 } from "@/features/channels/components/agent-activity";
-import { agentColorVar } from "@/shared/lib/agent-colors";
-import { liveAgentsFromKey, liveAgentsKey } from "@/features/channels/lib/live-agents";
+import {
+  liveAgentsFromKey,
+  liveAgentsKey,
+  useWorkingColors,
+} from "@/features/channels/lib/live-agents";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { DemoAgentView } from "@/features/marketing/components/banner-demo/demo-agent-view";
 import { CURRENT_USER_ID, VIEWER } from "../data/demo-imports";
-import { stagingAgentIndex, stagingIdentityFace } from "../data/staging-agents";
+import { stagingAgentIndex, stagingOwnerPhoto } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
 import { StagingSettingsTab } from "./settings-tab";
 import { AddPersonDialog } from "@/features/popups-staging/pages/home/add-person-dialog";
@@ -50,7 +53,7 @@ import { useTaskFaces } from "@/features/channels/components/task-faces";
 import { isActiveTask } from "@/features/channels/lib/task-model";
 import type { ChannelTaskDetail, TaskLink, TaskStatus } from "@/features/channels/types";
 
-/** STAGING (2026-10-26): the channel's tasks (the Tasks tab and the composer quick view). */
+/** The channel's tasks (the Tasks tab and the composer quick view). */
 export type SceneTasks = {
   list: readonly ChannelTaskDetail[];
   onSetStatus: (taskId: string, status: TaskStatus) => void;
@@ -93,7 +96,7 @@ export function StagingChannelScene({
   agentsVersion,
   tasks,
 }: {
-  /** STAGING (2026-10-26): absent draws no tasks UI (the /popups windows pass none). */
+  /** Absent draws no tasks UI (the /popups windows pass none). */
   tasks?: SceneTasks;
   fixture: ChannelFixture;
   thread: ChannelThread | null;
@@ -123,11 +126,7 @@ export function StagingChannelScene({
     () => liveAgentsFromKey(liveAgentsKey(serverSessions, sessions, channel.id)),
     [serverSessions, sessions, channel.id]
   );
-  const workingColors = useMemo(() => {
-    const out = new Map<string, string>();
-    for (const agent of live) if (agent.color) out.set(agent.name, agentColorVar(agent.color));
-    return out;
-  }, [live]);
+  const workingColors = useWorkingColors(live);
 
   const openSession = sessions.find((s) => agentKey(s) === openAgentKey) ?? null;
   const viewAgent = openSession ?? sessions[0] ?? null;
@@ -140,7 +139,7 @@ export function StagingChannelScene({
     if (own) actions.openAgent(agentKey(own));
   };
 
-  /** STAGING (2026-10-26): a task's thread opens it; its message is jumped to in channel view. */
+  /** A task's thread opens it; its message is jumped to in channel view. */
   const openTaskLink = (link: TaskLink) => {
     if (link.kind === "thread") {
       actions.openThread(link.threadId);
@@ -321,7 +320,7 @@ export function StagingChannelScene({
           key={agentKey(viewAgent)}
           open={openSession !== null}
           agent={viewAgent}
-          ownerPhoto={stagingIdentityFace(viewAgent.agentId).photo}
+          ownerPhoto={stagingOwnerPhoto(viewAgent.agentId)}
           entries={fixture.narration[viewAgent.agentId ?? ""] ?? []}
           messages={messages}
           currentUserId={CURRENT_USER_ID}

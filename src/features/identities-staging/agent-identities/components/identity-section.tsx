@@ -23,7 +23,6 @@ import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
-import type { IdentitySectionDef } from "@/features/agent-identities/lib/visibility";
 
 /**
  * One scope panel and its cards: a flat `SectionPanel` holding `.bento` cards — nothing pressed in
@@ -165,35 +164,6 @@ export function IdentityGrid({
   );
 }
 
-export function IdentitySection({
-  section,
-  identities,
-  onOpen,
-  pendingIds,
-  catalogs,
-}: {
-  section: IdentitySectionDef;
-  identities: ReadonlyArray<AgentIdentity>;
-  onOpen: (identity: AgentIdentity) => void;
-  pendingIds?: ReadonlySet<string>;
-  catalogs?: ModelCatalogs | null;
-}) {
-  return (
-    <IdentityPanel
-      id={`agent-identities-${section.visibility}`}
-      label={section.label}
-    >
-      <IdentityGrid
-        identities={identities}
-        emptyLine={section.emptyLine}
-        onOpen={onOpen}
-        pendingIds={pendingIds}
-        catalogs={catalogs}
-      />
-    </IdentityPanel>
-  );
-}
-
 /**
  * THE CARD'S FACT CHIP — a 24px box: hairline, near-white well, 7px radius, a 14px mark then the
  * text (`docs/DESIGN-LANGUAGE.md` §1 "grey is for small wells inside a card", §2's radius and type
@@ -213,21 +183,6 @@ const ROW_INK =
 
 /** The card's chip: as wide as its fact, 24px, one concept. */
 export const IDENTITY_ROW = `inline-flex h-6 max-w-full rounded-[7px] pl-1.5 pr-2 text-caption ${ROW_INK}`;
-
-/**
- * The same face, full width and one step taller — the view popup's value rows, where the popup has
- * the width to give and the rows read as a list.
- *
- * ⚠ **A WHOLE FACE, NOT A LAYER ON {@link IDENTITY_ROW}.** `cn(IDENTITY_ROW, "h-8 w-full")` puts
- * `h-6` and `h-8` in one class string and leaves which one wins to Tailwind's own output order.
- * The kit states this rule at `shared/ui/select-menu.tsx › TRIGGER_FACE` ("each variant owns its
- * whole trigger face… so faces never compose"); these three are alternatives, declared together so
- * an edit to the hairline or the fill reaches all of them.
- */
-export const IDENTITY_ROW_WIDE = `flex h-8 w-full rounded-[7px] pl-2 pr-2.5 text-caption ${ROW_INK}`;
-
-/** An EVENT row (the page's activity panel): two lines, so a bigger radius and real padding. */
-export const IDENTITY_ROW_EVENT = `flex w-full gap-2.5 rounded-[10px] px-2.5 py-2 text-left ${ROW_INK}`;
 
 function Row({
   mark,

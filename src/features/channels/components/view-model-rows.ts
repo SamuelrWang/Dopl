@@ -30,7 +30,7 @@ import type { ChannelMessage, ChannelThread } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
 /** An agent hangs on its operator's side — never a third column (INVARIANTS §5). */
-export type MessageSide = "peer" | "me";
+type MessageSide = "peer" | "me";
 
 export interface MessageRow {
   kind: "message";
@@ -88,7 +88,7 @@ export interface MessageRow {
 }
 
 /** A `system` row (joins, topic changes) — no side, avatar or author. */
-export interface SystemRow {
+interface SystemRow {
   kind: "system";
   id: string;
   seq: number;

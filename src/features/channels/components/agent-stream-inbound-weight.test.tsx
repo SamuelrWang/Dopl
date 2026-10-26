@@ -128,7 +128,7 @@ describe("the inbound card's author weight", () => {
     const { weight, cardStyle } = painted(container);
     expect(weight).toBe("human");
     // ⚠ THE TOKEN, NOT A HEX — docs/DESIGN-SYSTEM.md forbids a colour value in a component, and
-    // `--surface-cta` is the one black this tree has (`globals.css` aliases `--black` to it).
+    // `--surface-cta` is the one black this tree has.
     expect(cardStyle).toContain("var(--surface-cta)");
     expect(container.querySelector("[data-stream-inbound] [style*='background']")).toBeNull();
   });

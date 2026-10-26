@@ -185,7 +185,7 @@ describe("the record pane plays /home's channel record", () => {
     // (2026-09-17) The rail is image tiles — `WorkspaceGlyph` initials a
     // workspace only when it has no icon.
     for (const icon of DEMO_RAIL_ICONS) expect(srcs).toContain(icon);
-    // And no overflow bite: `AvatarStack` prints `+N` past its cap.
+    // And no overflow bite: `IdentityStack` prints `+N` past its cap.
     expect(container.textContent).not.toMatch(/\+\d/);
   });
 });

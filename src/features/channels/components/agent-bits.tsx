@@ -68,7 +68,7 @@ export function AgentLiveness({
 
 /** The same verdict on the kit's status pill (`StatusPill`): only a working agent greens the dot. */
 export function AgentStatusPill({ tone, label }: AgentLivenessState) {
-  return <StatusPill tone={tone === "working" ? "live" : "neutral"}>{label}</StatusPill>;
+  return <StatusPill dot tone={tone === "working" ? "live" : "neutral"}>{label}</StatusPill>;
 }
 
 /**
