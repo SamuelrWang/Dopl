@@ -82,7 +82,7 @@ function resumeArm(s) {
 
 /**
  * End where the operator can see it: the diag line, `s.mcpDiag` (the card's local `diag` field), the
- * vendor-neutral `s.endCode`, and the reducer's `crash` terminal (settle + `task_failed`, so a
+ * vendor-neutral `s.endCode`, and the reducer's `crash` terminal (settle + `thread_failed`, so a
  * waiting peer is told).
  */
 function failVisibly(s, status, attempt) {

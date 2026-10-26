@@ -1,9 +1,8 @@
 /**
- * Thread (task) lane of the channels write service. Repositories mocked;
+ * Thread lane of the channels write service. Repositories mocked;
  * `service-shared` real, `service-reads` mocked. Load-bearing rules:
- *   - authorization: createTask (member + addressee-member), setTaskMode
- *     (creator only). Close/reopen authz is
- *     `service-tasks-lifecycle.test.ts`;
+ *   - authorization: createThread (member + addressee-member), setThreadMode
+ *     (creator only);
  *   - ⚠ the SELF-TARGET guard — a thread addressed to its own creator has one
  *     party and can never be answered, and the guard sits IN FRONT of the
  *     `client_msg_id` short-circuit so a retry cannot be handed the dead thread
@@ -14,32 +13,32 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("./service-reads");
 // ⚠ `getChannel` MOVED TO `service-list.ts` (R-26) — the one row projection.
 vi.mock("./service-list");
 
 import * as repo from "./repository";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import * as list from "./service-list";
-import { createTask, setTaskMode } from "./service-tasks";
+import { createThread, setThreadMode } from "./service-threads";
 import {
   ChannelAddresseeNotMemberError,
   ChannelChatAddressedError,
   ChannelForbiddenError,
-  TaskForbiddenError,
-  TaskSelfTargetError,
+  ThreadForbiddenError,
+  ThreadSelfTargetError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
-import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
+import type { ChannelMemberRow, ChannelRow, ChannelThreadRow } from "./dto";
 
 const WS = "ws-1";
 const USER = "aaaaaaaa-e29b-41d4-a716-446655440000";
 const PEER = "bbbbbbbb-e29b-41d4-a716-446655440000";
 const CREATOR = "cccccccc-e29b-41d4-a716-446655440000";
 const TARGET = "dddddddd-e29b-41d4-a716-446655440000";
-const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+const THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
 
 const ctx: ChannelContext = {
   workspaceId: WS,
@@ -83,9 +82,9 @@ function memberRow(userId: string, role = "member"): ChannelMemberRow {
   };
 }
 
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+function threadRow(overrides: Partial<ChannelThreadRow> = {}): ChannelThreadRow {
   return {
-    id: TASK_ID,
+    id: THREAD_ID,
     channel_id: "chan-1",
     workspace_id: WS,
     title: "Ship it",
@@ -109,7 +108,7 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
     uid === USER ? memberRow(USER, "owner") : null
   );
-  // createTask also asserts the addressee is an ACTIVE workspace member.
+  // createThread also asserts the addressee is an ACTIVE workspace member.
   // Defaulted true; the departed-member test flips it.
   vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(true);
   vi.mocked(repo.touchChannel).mockResolvedValue(undefined);
@@ -132,23 +131,23 @@ beforeEach(() => {
   );
 });
 
-describe("createTask — authorization", () => {
+describe("createThread — authorization", () => {
   it("forbids a non-member (public channel, caller not a member)", async () => {
     vi.mocked(repo.findChannelBySlug).mockResolvedValue(
       channelRow({ visibility: "public" })
     );
     vi.mocked(repo.findMembership).mockResolvedValue(null);
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
+      createThread(ctx, "general", { title: "T", body: "b", toUserId: PEER })
     ).rejects.toBeInstanceOf(ChannelForbiddenError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoThreads.insertThread).not.toHaveBeenCalled();
   });
 
   it("rejects an addressee who is not a channel member", async () => {
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
+      createThread(ctx, "general", { title: "T", body: "b", toUserId: PEER })
     ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoThreads.insertThread).not.toHaveBeenCalled();
   });
 
   it("C-20: rejects a target who is a channel member but a DEPARTED workspace member", async () => {
@@ -160,39 +159,39 @@ describe("createTask — authorization", () => {
     );
     vi.mocked(repo.isActiveWorkspaceMember).mockResolvedValue(false);
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER })
+      createThread(ctx, "general", { title: "T", body: "b", toUserId: PEER })
     ).rejects.toBeInstanceOf(ChannelAddresseeNotMemberError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoThreads.insertThread).not.toHaveBeenCalled();
   });
 
-  it("creates the task + posts the initial request tagged with taskId", async () => {
+  it("creates the thread + posts the initial request tagged with threadId", async () => {
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
       uid === USER ? memberRow(USER, "owner") : memberRow(uid)
     );
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({
+    vi.mocked(repoThreads.insertThread).mockImplementation(async (row) =>
+      threadRow({
         created_by: row.created_by,
         target_user_id: row.target_user_id,
         title: row.title,
         mode: row.mode,
       })
     );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: USER, target_user_id: PEER })
     );
 
-    const { thread: task, openingSeq } = await createTask(ctx, "general", {
+    const { thread, openingSeq } = await createThread(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
     });
 
-    expect(task.createdBy).toBe(USER);
-    expect(task.targetUserId).toBe(PEER);
+    expect(thread.createdBy).toBe(USER);
+    expect(thread.targetUserId).toBe(PEER);
     // ⚠ The opening message's seq rides back out — it is the requester's `await`
     // cursor, and looking it up afterwards races the peer's reply.
     expect(openingSeq).toBe(1);
-    const insertArg = vi.mocked(repoTasks.insertTask).mock.calls[0][0];
+    const insertArg = vi.mocked(repoThreads.insertThread).mock.calls[0][0];
     expect(insertArg).toMatchObject({
       workspace_id: WS,
       title: "Ship it",
@@ -201,23 +200,23 @@ describe("createTask — authorization", () => {
       target_user_id: PEER,
     });
     const msgMeta = vi.mocked(repoMessages.insertMessage).mock.calls[0][0].metadata;
-    expect(msgMeta.taskId).toBe(TASK_ID);
+    expect(msgMeta.threadId).toBe(THREAD_ID);
   });
 
   // ⚠ The opening request is what the responder's desktop routes on, so the
-  // runtime stamp must reach it — only if createTask hands its own ctx down.
+  // runtime stamp must reach it — only if createThread hands its own ctx down.
   it("carries the caller's runtime onto the opening request", async () => {
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
       uid === USER ? memberRow(USER, "owner") : memberRow(uid)
     );
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    vi.mocked(repoThreads.insertThread).mockImplementation(async (row) =>
+      threadRow({ created_by: row.created_by, target_user_id: row.target_user_id })
     );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: USER, target_user_id: PEER })
     );
 
-    await createTask(
+    await createThread(
       { ...ctx, runtime: "desktop-session" },
       "general",
       { title: "Ship it", body: "please do X", toUserId: PEER }
@@ -231,14 +230,14 @@ describe("createTask — authorization", () => {
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
       uid === USER ? memberRow(USER, "owner") : memberRow(uid)
     );
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    vi.mocked(repoThreads.insertThread).mockImplementation(async (row) =>
+      threadRow({ created_by: row.created_by, target_user_id: row.target_user_id })
     );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: USER, target_user_id: PEER })
     );
 
-    await createTask(ctx, "general", {
+    await createThread(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
@@ -249,7 +248,7 @@ describe("createTask — authorization", () => {
   });
 });
 
-describe("createTask — self-target guard", () => {
+describe("createThread — self-target guard", () => {
   beforeEach(() => {
     // Everyone is a channel member, so only the self-target guard catches it.
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
@@ -261,9 +260,9 @@ describe("createTask — self-target guard", () => {
     // ⚠ Only creator and target may post. Self-addressed, they are one person,
     // so the thread is accepted silently and sits dead in the panel.
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: USER })
-    ).rejects.toBeInstanceOf(TaskSelfTargetError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+      createThread(ctx, "general", { title: "T", body: "b", toUserId: USER })
+    ).rejects.toBeInstanceOf(ThreadSelfTargetError);
+    expect(repoThreads.insertThread).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
@@ -271,41 +270,41 @@ describe("createTask — self-target guard", () => {
     // ⚠ ORDERING, not idempotency: the guard sits IN FRONT of the
     // client_msg_id short-circuit, so a retry errors identically instead of
     // being handed the stored dead thread as a success.
-    vi.mocked(repoTasks.findOwnTaskByClientId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: USER })
+    vi.mocked(repoThreads.findOwnThreadByClientId).mockResolvedValue(
+      threadRow({ created_by: USER, target_user_id: USER })
     );
 
     await expect(
-      createTask(ctx, "general", {
+      createThread(ctx, "general", {
         title: "T",
         body: "b",
         toUserId: USER,
         clientMsgId: "dedupe-self",
       })
-    ).rejects.toBeInstanceOf(TaskSelfTargetError);
+    ).rejects.toBeInstanceOf(ThreadSelfTargetError);
 
     // Short-circuit never reached — no lookup, no re-driven post.
-    expect(repoTasks.findOwnTaskByClientId).not.toHaveBeenCalled();
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoThreads.findOwnThreadByClientId).not.toHaveBeenCalled();
+    expect(repoThreads.insertThread).not.toHaveBeenCalled();
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("leaves a thread addressed to another member unaffected", async () => {
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    vi.mocked(repoThreads.insertThread).mockImplementation(async (row) =>
+      threadRow({ created_by: row.created_by, target_user_id: row.target_user_id })
     );
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: PEER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: USER, target_user_id: PEER })
     );
 
-    const { thread } = await createTask(ctx, "general", {
+    const { thread } = await createThread(ctx, "general", {
       title: "Ship it",
       body: "please do X",
       toUserId: PEER,
     });
 
     expect(thread.targetUserId).toBe(PEER);
-    expect(repoTasks.insertTask).toHaveBeenCalledTimes(1);
+    expect(repoThreads.insertThread).toHaveBeenCalledTimes(1);
     expect(repoMessages.insertMessage).toHaveBeenCalledTimes(1);
   });
 });
@@ -313,30 +312,30 @@ describe("createTask — self-target guard", () => {
 
 // 1.37.1: a thread needs no target. A one-member home channel could not open one
 // at all, because the only addressable member was the caller.
-describe("createTask — targetless thread", () => {
+describe("createThread — targetless thread", () => {
   beforeEach(() => {
-    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
-      taskRow({ created_by: row.created_by, target_user_id: row.target_user_id })
+    vi.mocked(repoThreads.insertThread).mockImplementation(async (row) =>
+      threadRow({ created_by: row.created_by, target_user_id: row.target_user_id })
     );
   });
 
   it("opens with no target in a one-member channel, addressed to nobody", async () => {
-    const { thread, openingSeq } = await createTask(ctx, "general", {
+    const { thread, openingSeq } = await createThread(ctx, "general", {
       title: "Log",
       body: "note",
     });
     expect(thread.targetUserId).toBeNull();
     expect(openingSeq).toBe(1);
-    expect(vi.mocked(repoTasks.insertTask).mock.calls[0][0].target_user_id).toBeNull();
+    expect(vi.mocked(repoThreads.insertThread).mock.calls[0][0].target_user_id).toBeNull();
     // There is no addressee to check.
     expect(repo.isActiveWorkspaceMember).not.toHaveBeenCalled();
     const opener = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
-    expect(opener.metadata.taskId).toBe(TASK_ID);
+    expect(opener.metadata.threadId).toBe(THREAD_ID);
     expect(opener.metadata.to_user_id).toBeUndefined();
   });
 
   it('stamps intent "chat" on the opener of a record thread', async () => {
-    await createTask(ctx, "general", { title: "Log", body: "note", intent: "chat" });
+    await createThread(ctx, "general", { title: "Log", body: "note", intent: "chat" });
     const opener = vi.mocked(repoMessages.insertMessage).mock.calls[0][0];
     expect(opener.metadata.intent).toBe("chat");
   });
@@ -346,38 +345,38 @@ describe("createTask — targetless thread", () => {
       uid === USER ? memberRow(USER, "owner") : memberRow(uid)
     );
     await expect(
-      createTask(ctx, "general", { title: "T", body: "b", toUserId: PEER, intent: "chat" })
+      createThread(ctx, "general", { title: "T", body: "b", toUserId: PEER, intent: "chat" })
     ).rejects.toBeInstanceOf(ChannelChatAddressedError);
-    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repoThreads.insertThread).not.toHaveBeenCalled();
   });
 });
 
-describe("setTaskMode — authorization", () => {
+describe("setThreadMode — authorization", () => {
   it("allows the creator and posts NO message", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: USER })
     );
-    vi.mocked(repoTasks.updateTask).mockResolvedValue(
-      taskRow({ created_by: USER, mode: "autonomous" })
+    vi.mocked(repoThreads.updateThread).mockResolvedValue(
+      threadRow({ created_by: USER, mode: "autonomous" })
     );
 
-    const task = await setTaskMode(ctx, "general", TASK_ID, "autonomous");
+    const thread = await setThreadMode(ctx, "general", THREAD_ID, "autonomous");
 
-    expect(task.mode).toBe("autonomous");
-    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toMatchObject({
+    expect(thread.mode).toBe("autonomous");
+    expect(vi.mocked(repoThreads.updateThread).mock.calls[0][1]).toMatchObject({
       mode: "autonomous",
     });
-    // ⚠ set_task_mode is realtime-invisible — it must not post a message.
+    // ⚠ set_thread_mode is realtime-invisible — it must not post a message.
     expect(repoMessages.insertMessage).not.toHaveBeenCalled();
   });
 
   it("forbids a non-creator (even the target)", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: CREATOR, target_user_id: USER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: CREATOR, target_user_id: USER })
     );
     await expect(
-      setTaskMode(ctx, "general", TASK_ID, "interactive")
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
+      setThreadMode(ctx, "general", THREAD_ID, "interactive")
+    ).rejects.toBeInstanceOf(ThreadForbiddenError);
+    expect(repoThreads.updateThread).not.toHaveBeenCalled();
   });
 });

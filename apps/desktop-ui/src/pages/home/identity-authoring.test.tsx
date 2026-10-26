@@ -422,11 +422,11 @@ describe("launch from the card", () => {
 
     await waitFor(() => expect(launch).toHaveBeenCalled());
     // 🔒 EXACT EQUALITY. An extra key here is a per-spawn DECISION the operator
-    // never made, and `taskId: null` is a CHANNEL-level agent rather than a
+    // never made, and `threadId: null` is a CHANNEL-level agent rather than a
     // missing value.
     expect(launch.mock.calls[0][0]).toEqual({
       channelId: CHANNEL_ID,
-      taskId: null,
+      threadId: null,
       // 🔒 THE IDENTITY'S OWN WORKSPACE, never the channel's container: main
       // resolves the row by `(workspace_id, id)`, so the container id would 404
       // every personal identity.

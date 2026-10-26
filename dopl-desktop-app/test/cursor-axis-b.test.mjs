@@ -45,11 +45,11 @@ function session(over) {
     runtimeId: "cursor",
     profile: "full",
     channelId: "chan-1",
-    taskId: "task-9",
+    threadId: "thread-9",
     agentId: "abcd1234",
     workspaceId: "",
     windowless: false,
-    state: { toolMode: "allowlist", messageMode: "ask", allowForTask: [] },
+    state: { toolMode: "allowlist", messageMode: "ask", allowForThread: [] },
     pendingPermissions: new Map(),
     pendingNames: new Map(),
     ...over,
@@ -164,7 +164,7 @@ test("⚠ AND AN ALLOWED POST CARRIES THE FORCED THREAD TAG, applied NATIVELY be
   const out = await byName("dopl_channel").execute({ op: "send", body: "hi" });
   assert.equal(sent.length, 1);
   assert.equal(sent[0].name, "dopl_channel");
-  assert.equal(sent[0].args.thread, "task-9", "the session's own task id, never off the wire");
+  assert.equal(sent[0].args.thread, "thread-9", "the session's own thread id, never off the wire");
   assert.equal(sent[0].args.client_msg_id, "agent-abcd1234-1", "…and the per-instance fan-out stamp");
   assert.equal(sent[0].args.body, "hi", "the rest of the call is untouched");
   assert.ok(!out.isError);
@@ -212,13 +212,13 @@ test("these implementations are NOT in any pre-approval list — the shadow is u
 test("⚠ F-382: the gate answers CORE's `{behavior}` shape, and only then is it translated", async () => {
   // ⚠ THE ORDER IS THE TRAP, NOT THE OUTCOME: core reads `verdict.behavior`, so the platform word
   // must come after it. Driven here on the raw gate rather than inferred.
-  const s = session({ state: { toolMode: "allowlist", messageMode: "auto_outbound", allowForTask: [] } });
+  const s = session({ state: { toolMode: "allowlist", messageMode: "auto_outbound", allowForThread: [] } });
   const gate = axisB.makeGate(s, () => {}, () => {});
   const verdict = await gate("mcp__dopl__dopl_channel", { op: "send", body: "hi" }, { toolUseID: "tc_1" });
   assert.equal(verdict.behavior, "allow", "the gate must answer core's vocabulary, not Cursor's");
   assert.ok(!("content" in verdict), "a tool result at this seam is a translation that happened too early");
   // The tag rides that allow as `updatedInput`, which is how core expresses a rewrite on a verdict.
-  assert.equal(verdict.updatedInput.thread, "task-9");
+  assert.equal(verdict.updatedInput.thread, "thread-9");
   // …and the translation to this platform's shape is a separate step, with the same information.
   const translated = require(join(MAIN, "runtime", "cursor", "approval.js")).answerApproval({ text: "ok" }, "allow");
   assert.ok(Array.isArray(translated.content));
@@ -251,7 +251,7 @@ test("after close(), every Dopl tool refuses — and it is a mitigation, not an 
 test("a forward that FAILS is reported as a refusal, not as a delivery", async () => {
   // ⚠ THE DIRECTION MATTERS. Telling an agent its post landed when it did not is how a thread goes
   // silent while everyone believes it was answered.
-  const s = session({ state: { toolMode: "allowlist", messageMode: "auto_outbound", allowForTask: [] } });
+  const s = session({ state: { toolMode: "allowlist", messageMode: "auto_outbound", allowForThread: [] } });
   const tools = await axisB.axisBTools({
     session: s, dispatch: () => {}, policy: null, deny: [],
     list: async () => SERVER_TOOLS,
@@ -299,7 +299,7 @@ test("GRANULAR: a post through dopl_send_message holds for consent like the lega
 test("GRANULAR: an allowed post leaves under its own name with its own args, tagged", async () => {
   const { byName, sent } = await surface({ answer: "allow", list: GRANULAR_TOOLS });
   await byName("dopl_send_message").execute({ body: "hi" });
-  assert.deepEqual(sent, [{ name: "dopl_send_message", args: { body: "hi", thread: "task-9", client_msg_id: "agent-abcd1234-1" } }],
+  assert.deepEqual(sent, [{ name: "dopl_send_message", args: { body: "hi", thread: "thread-9", client_msg_id: "agent-abcd1234-1" } }],
     "no op/action may leak into a granular call: the server's strict schema would refuse it");
 });
 

@@ -99,7 +99,7 @@ function body(value) {
  * ONE DIRECTION, narrowed to what this machine acts on.
  *
  * ⚠ **BOTH SPELLINGS OF EVERY FIELD.** A realtime frame is the RAW ROW (snake_case); a
- * polled or claimed row is the server's DTO (camelCase, and `task_id` renamed to `threadId`).
+ * polled or claimed row is the server's DTO (camelCase, and `thread_id` renamed to `threadId`).
  * A reader that knows one spelling works perfectly on one of the two lanes and silently
  * drops every row on the other — F-284, exactly.
  *
@@ -116,13 +116,13 @@ function directionFrom(raw, workspaceId) {
   const agentId = String(r.agent_id || r.agentId || '');
   if (!UUID_RE.test(id) || !UUID_RE.test(channelId)) return null;
   if (!AGENT_ID_RE.test(agentId)) return null;
-  const taskId = String(r.task_id || r.threadId || r.taskId || '');
+  const threadId = String(r.thread_id || r.threadId || '');
   const status = String(r.status || '');
   return {
     id: id,
     workspaceId: String(r.workspace_id || r.workspaceId || workspaceId || ''),
     channelId: channelId,
-    taskId: UUID_RE.test(taskId) ? taskId : '', // '' = channel-level
+    threadId: UUID_RE.test(threadId) ? threadId : '', // '' = channel-level
     // ⚠ THE OWNER RE-CHECK'S INPUT. Absent here means the local check compares against `''`
     // and drops every row — the failure F-284 shipped. Both spellings, always.
     operatorUserId: String(r.operator_user_id || r.operatorUserId || ''),

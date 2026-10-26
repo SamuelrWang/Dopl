@@ -151,11 +151,11 @@ export const CONSENT_TTL_MS = 24 * 60 * 60_000;
 export const MAX_METADATA_SERIALIZED_BYTES = 16_384;
 
 /**
- * Ceiling on one channel's thread list (`listTasksByChannel`). Threads never leave
+ * Ceiling on one channel's thread list (`listThreadsByChannel`). Threads never leave
  * the list, so the read needs a bound (INVARIANTS §9), and AT the ceiling counts as
  * CLIPPED. 200 mirrors {@link MAX_MESSAGE_LIMIT}; ⚠ NOT from a production
  * measurement — check
- * `SELECT channel_id, count(*) FROM channel_tasks GROUP BY 1 ORDER BY 2 DESC` first.
+ * `SELECT channel_id, count(*) FROM channel_threads GROUP BY 1 ORDER BY 2 DESC` first.
  */
 export const CHANNEL_THREAD_LIST_LIMIT = 200;
 
@@ -203,9 +203,9 @@ export const CHANNEL_MENTION_MARK_MAX = CHANNEL_MENTION_LIST_LIMIT;
 
 /**
  * Hard cap on the addressees of ONE request fan-out
- * (`server/service-tasks-broadcast.ts › createTaskFanOut`).
+ * (`server/service-threads-broadcast.ts › createThreadFanOut`).
  *
- * ⚠ A BOUND ON WORK, not a product rule: the fan-out is N sequential `createTask`
+ * ⚠ A BOUND ON WORK, not a product rule: the fan-out is N sequential `createThread`
  * calls through the channel's advisory lock, so an unbounded roster turns one Send
  * into an unbounded request — and it bites with a 400 rather than a timeout.
  * **Nothing about "how many agents may be addressed" is decided here**

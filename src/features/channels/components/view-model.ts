@@ -18,9 +18,9 @@ import type {
 } from "../types";
 import type { AvatarPerson } from "@/shared/ui/avatar";
 
-/** A message's thread, or null; `metadata.taskId` is its storage key (INVARIANTS §5). */
+/** A message's thread, or null; `metadata.threadId` is its storage key (INVARIANTS §5). */
 export function threadIdOf(message: ChannelMessage): string | null {
-  const value = message.metadata.taskId;
+  const value = message.metadata.threadId;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 

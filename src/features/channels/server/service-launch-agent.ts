@@ -78,7 +78,7 @@ export async function createAgentDirective(
     workspace_id: ctx.workspaceId,
     channel_id: channel.id,
     // An agent is addressed as an instance, never scoped to a thread.
-    task_id: null,
+    thread_id: null,
     goal: null,
     model: null,
     identity_id: null,

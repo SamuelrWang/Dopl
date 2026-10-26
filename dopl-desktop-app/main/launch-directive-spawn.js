@@ -121,7 +121,7 @@ async function spawn(d, deps) {
     return { refused: 'no-bridge' };
   }
   const targeting = require('./targeting');
-  const channelLevel = d.taskId === '';
+  const channelLevel = d.threadId === '';
 
   let identity = null;
   if (d.identityId) {
@@ -151,7 +151,7 @@ async function spawn(d, deps) {
   }
   const res = await deps.launch({
     channelId: d.channelId,
-    taskId: d.taskId,
+    threadId: d.threadId,
     workspaceId: d.workspaceId || null,
     runtime: runtime.id,
     goal: d.goal || require('./session-launch-op').defaultGoal(channelLevel, ''),
@@ -159,10 +159,10 @@ async function spawn(d, deps) {
     direct: false,
     context: {
       channelName: String(channel.name || '').slice(0, 120),
-      taskTitle: null,
+      threadTitle: null,
       channelId: d.channelId,
       workspaceId: d.workspaceId || null,
-      taskId: d.taskId,
+      threadId: d.threadId,
       scope: channelLevel ? 'channel' : 'thread',
       workspaceSegment: null,
       // Captured at spawn and never re-read: a later edit or deletion neither changes nor stops it.

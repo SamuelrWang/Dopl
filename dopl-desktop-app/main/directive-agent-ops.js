@@ -1,7 +1,7 @@
 // The NON-LAUNCH directive kinds — end, rename, set_agent_mode — dispatched from
 // `launch-directives.js › handle`. It implements no verb: each routes to the existing one
-// (`agent-self-ops.js › endVerdict` + `session-engine.js › controlByTask`, `agent-identity-commit.js
-// › commitRename`, `session-engine.js › setModeByTask`), so there is one stop path and one rename write.
+// (`agent-self-ops.js › endVerdict` + `session-engine.js › controlByThread`, `agent-identity-commit.js
+// › commitRename`, `session-engine.js › setModeByThread`), so there is one stop path and one rename write.
 // `end` and `rename` are NOT behind the launch toggle: a stop and a display-only rename widen nothing
 // and spend no compute (the toggle gates compute). That is one `if` in `handle` if Samuel overrules it.
 // The own-operator bound is free: `handle` re-checked the operator, and the registry holds only this
@@ -36,9 +36,9 @@ function endAgent(d) {
   let res = { ok: false };
   try {
     // Addressed from the RESOLVED registry row, never re-derived from wire fields.
-    res = require('./session-engine').controlByTask({
+    res = require('./session-engine').controlByThread({
       channelId: String(v.row.channelId || ''),
-      taskId: String(v.row.taskId || ''),
+      threadId: String(v.row.threadId || ''),
       agentId: String(v.row.agentId || ''),
       action: 'end',
     }) || { ok: false };
@@ -87,7 +87,7 @@ function renameAgent(d) {
 }
 
 /**
- * Move a running agent's posture through `setModeByTask` with `pinned: true` (C2, ruling R4): the
+ * Move a running agent's posture through `setModeByThread` with `pinned: true` (C2, ruling R4): the
  * engine validates in the SESSION's words, clamps to the channel's value for its runtime and floors
  * windowless messages, so a narrower ask sticks and nothing widens. Per agent, never per thread.
  * Nothing this build can apply (no axis, or a tool word the runtime lacks) is `no-bridge`, never a
@@ -111,7 +111,7 @@ function setAgentMode(d) {
   }
   const target = {
     channelId: String(row.channelId || ''),
-    taskId: String(row.taskId || ''),
+    threadId: String(row.threadId || ''),
     agentId: String(row.agentId || ''),
   };
 
@@ -134,7 +134,7 @@ function setAgentMode(d) {
     const engine = require('./session-engine');
     for (const [axis, mode] of [['tools', tools], ['messages', messages]]) {
       if (!mode) continue;
-      const r = engine.setModeByTask(Object.assign({ axis, mode, pinned: true }, target));
+      const r = engine.setModeByThread(Object.assign({ axis, mode, pinned: true }, target));
       if (!(r && r.ok)) continue;
       applied += 1;
       const now = axis === 'tools' ? r.tools : r.messages;

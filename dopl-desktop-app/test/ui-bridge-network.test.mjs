@@ -187,8 +187,8 @@ test("deliberate bridge refusals still reject", async () => {
 test("the log masks id- and token-like path segments", () => {
   assert.equal(net.logPath(`${API_BASE}/api/join/AbC123xyz?token=s`), "/api/join/:id");
   assert.equal(
-    net.logPath(`${API_BASE}/api/channels/3f0c2a1e-1111-2222-3333-444455556666/tasks`),
-    "/api/channels/:id/tasks"
+    net.logPath(`${API_BASE}/api/channels/3f0c2a1e-1111-2222-3333-444455556666/threads`),
+    "/api/channels/:id/threads"
   );
 });
 

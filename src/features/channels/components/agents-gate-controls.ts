@@ -60,7 +60,7 @@ export function canAnswerPermission(): boolean {
  */
 export async function answerAgentPermission(payload: {
   channelId: string;
-  taskId: string;
+  threadId: string;
   /** WHICH instance — `agents-controls.ts`'s header carries the rule. */
   agentId?: string;
   requestId: string;
@@ -72,7 +72,7 @@ export async function answerAgentPermission(payload: {
   }
   const res = await sessions.answerPermission(
     payload.channelId,
-    payload.taskId,
+    payload.threadId,
     payload.requestId,
     payload.allow,
     payload.agentId

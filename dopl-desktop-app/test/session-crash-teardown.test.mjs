@@ -2,7 +2,7 @@
 //
 // THE BUG. The reducer's `crash` branch settles the session (settle -> lifecycle -> error
 // emit) and, unlike every other end, does NOT abort the query first: `endEffects` and
-// `close_task` both emit `abortQuery`, `idle_timeout` parks with denyPending + abortQuery,
+// `close_thread` both emit `abortQuery`, `idle_timeout` parks with denyPending + abortQuery,
 // but a crash emitted neither. `settle` only dropped the handles. So the SDK child kept
 // running with its prompt iterator open and every awaited canUseTool promise unresolved —
 // the process could go on working, and posting into the channel, with the window destroyed

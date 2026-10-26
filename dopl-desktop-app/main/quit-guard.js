@@ -126,7 +126,7 @@ let waitTimer = null;
 
 /** One session, as a line a human can recognise. Never a bare count. */
 function describeSession(s) {
-  const thread = (s && s.taskTitle) || null;
+  const thread = (s && s.threadTitle) || null;
   const channel = (s && s.channelName) || (s && s.counterpartyName) || null;
   const where = channel ? ` in ${channel}` : '';
   const what = thread ? `“${thread}”` : 'an untitled thread';

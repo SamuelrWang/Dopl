@@ -91,7 +91,7 @@ describe("the describes that make claims this schema cannot enforce", () => {
 
   it("client_msg_id: ONE key rule — PER-AUTHOR on every op", () => {
     // ⚠ ONE PARAM, ONE RULE, SINCE 2026-09-02 (C14). It used to be two: while
-    // `channel_tasks` was unique on `(channel_id, client_msg_id)`, this copy had
+    // `channel_threads` was unique on `(channel_id, client_msg_id)`, this copy had
     // to teach that a peer's key handed you back THEIR thread — a documented
     // redirect into somebody else's exchange. `20260913120000` widened it to
     // `(channel_id, client_msg_id, created_by)`, matching

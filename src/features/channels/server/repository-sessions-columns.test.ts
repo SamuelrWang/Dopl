@@ -6,7 +6,7 @@ import type { SessionStateUpsert } from "./collab-dto";
 const UPSERT_KEYS: Record<keyof SessionStateUpsert, true> = {
   session_key: true,
   channel_id: true,
-  task_id: true,
+  thread_id: true,
   name: true,
   state: true,
   channel_name: true,

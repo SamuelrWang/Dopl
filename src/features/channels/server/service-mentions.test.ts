@@ -107,7 +107,7 @@ beforeEach(() => {
 describe("listMyChannelMentions", () => {
   it("projects the row, resolves the thread target and hydrates the author", async () => {
     vi.mocked(repoMentions.listMentionMessages).mockResolvedValue({
-      rows: [messageRow({ metadata: { taskId: "t-1" } })],
+      rows: [messageRow({ metadata: { threadId: "t-1" } })],
       truncated: false,
     });
     const { mentions, truncated } = await listMyChannelMentions(ctx, "room");

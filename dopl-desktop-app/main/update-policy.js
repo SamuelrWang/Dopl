@@ -186,7 +186,7 @@ function liveSessionSummary(sessions) {
   if (!list.length) return '';
   const names = [];
   for (const s of list) {
-    const name = (s && (s.channelName || s.taskTitle)) || '';
+    const name = (s && (s.channelName || s.threadTitle)) || '';
     if (name && !names.includes(String(name))) names.push(String(name));
     if (names.length === 3) break;
   }

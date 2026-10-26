@@ -127,7 +127,7 @@ describe("the card renders the four fields", () => {
 
   it("renders in the THREAD view too, off the same builder", () => {
     const rows = threadRows(
-      [escalationMessage({}, { taskId: "t-1" })],
+      [escalationMessage({}, { threadId: "t-1" })],
       "t-1",
       INDEX,
       formatChannelTimestamp
@@ -150,7 +150,7 @@ describe("the card renders the four fields", () => {
     // ⚠ A threaded message normally collapses into its thread CARD in the
     // channel view. A question waiting on a human is the one row that must not
     // be one click away from being seen.
-    draw([escalationMessage({}, { taskId: "t-1" })], {
+    draw([escalationMessage({}, { threadId: "t-1" })], {
       onAnswerDisplay: ANSWER,
     });
     expect(

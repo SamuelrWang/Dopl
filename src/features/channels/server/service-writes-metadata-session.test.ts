@@ -26,12 +26,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import {
   SESSION_ID_HEADER,
   narrowSessionId,
@@ -144,7 +144,7 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
       rows: [],
       truncated: false,
     });
@@ -156,7 +156,7 @@ describe("readSessionIdHeader — an id-shaped token, or nothing", () => {
     // PAIR key, which is the third slot the live incident produced.
     expect(readSessionIdHeader(withHeader(ROOM_SLOT))).toBe(ROOM_SLOT);
     expect(readSessionIdHeader(withHeader(PAIR_SLOT))).toBe(PAIR_SLOT);
-    const legacy = "dba90694-de4f-4950-83a9-f2d890c9ff3f:task-dba90694-de4f-4950-83a9-f2d890c9ff3f-345";
+    const legacy = "dba90694-de4f-4950-83a9-f2d890c9ff3f:thread-dba90694-de4f-4950-83a9-f2d890c9ff3f-345";
     expect(readSessionIdHeader(withHeader(legacy))).toBe(legacy);
     // A team session with no thread collapses its tail to '' — still a slot.
     expect(readSessionIdHeader(withHeader("chan-1:"))).toBe("chan-1:");

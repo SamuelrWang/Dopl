@@ -11,7 +11,7 @@
  * ⚠ **THIS MODULE WAS ORPHANED BETWEEN 2026-08-18 (Phase 5) AND THE WAVE-2 FIX
  * PASS, AND THAT WAS THE BUG.** Phase 5 deleted the session card that consumed
  * it and Phase 12's reader dropped every lifecycle kind on sight, so a consent
- * DENY — `task_failed{declined:true}`, still posted by `main/trigger-outcomes.js`
+ * DENY — `thread_failed{declined:true}`, still posted by `main/trigger-outcomes.js`
  * on THIS build — rendered as nothing at all. The vocabulary was kept at P5 for
  * exactly this re-use; (2) is what re-uses it.
  *
@@ -20,14 +20,14 @@
  * proves.
  *
  * ⚠ EVERY MESSAGE RENDERS STANDALONE NOW. This used to note that a message with
- * an explicit `metadata.taskId` grouped into a session card and so never reached
+ * an explicit `metadata.threadId` grouped into a session card and so never reached
  * this line; the card and its grouper are DELETED (wiring plan Phase 5,
- * 2026-08-18), so the task-linked shape is live rather than merely unit-tested.
+ * 2026-08-18), so the thread-linked shape is live rather than merely unit-tested.
  *
  * Pure + deterministic. Its terminal-wins precedence used to MIRROR the grouper's
  * `computeStatus`; with that gone this is the only statement of it left, and
  * {@link calmTerminalStatus} (`lib/calm-terminal.ts`, rehomed in the same change)
- * is what makes the flag reads strictly `=== true`. ⚠ Linkage by the DERIVABLE legacy `task-{channelId}-{seq}` id is
+ * is what makes the flag reads strictly `=== true`. ⚠ Linkage by the DERIVABLE legacy `thread-{channelId}-{seq}` id is
  * party-scoped (step 3) so only the two people in the exchange move my receipt.
  */
 
@@ -59,9 +59,9 @@ function metaToUserId(message: ChannelMessage): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/** The bound task id of a message (`metadata.taskId`), or null. */
-function metaTaskId(message: ChannelMessage): string | null {
-  const value = message.metadata.taskId;
+/** The bound thread id of a message (`metadata.threadId`), or null. */
+function metaThreadId(message: ChannelMessage): string | null {
+  const value = message.metadata.threadId;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
@@ -81,33 +81,33 @@ export function deriveMessageReceipt(
 
   // 2. An unaddressed broadcast never routed to anyone — nothing to report.
   const toUser = metaToUserId(message);
-  const taskId = metaTaskId(message);
-  if (toUser === null && taskId === null) return null;
+  const threadId = metaThreadId(message);
+  if (toUser === null && threadId === null) return null;
 
-  // 3. The deterministic legacy id the desktop spawner would mint for a task
+  // 3. The deterministic legacy id the desktop spawner would mint for a thread
   //    opened by THIS message, plus who is entitled to speak on it.
   //
   //    ⚠ That id is DERIVABLE by any channel member (the DTO exposes `seq`) and
-  //    the server does NOT gate a non-UUID `taskId` on participation, so string
+  //    the server does NOT gate a non-UUID `threadId` on participation, so string
   //    equality alone lets a third member stamp a red "Failed" or a fake
   //    "Replied" onto someone else's request. A legacy exchange has exactly two
   //    parties: me, and the addressee whose desktop mints the id. ⚠ Client-side
   //    render defence only — the row is still stored.
-  const legacyId = `task-${message.channelId}-${message.seq}`;
+  const legacyId = `thread-${message.channelId}-${message.seq}`;
   const isExchangeParty = (m: ChannelMessage): boolean =>
     m.authorUserId !== null &&
     (m.authorUserId === currentUserId || m.authorUserId === toUser);
 
-  // 4. Later events linked to this message: shared explicit task id, the legacy
+  // 4. Later events linked to this message: shared explicit thread id, the legacy
   //    deterministic id, or an addressed agent reply back to me (the pair-reply
-  //    a terminal-mode session self-posts without a task id).
-  //    ⚠ The no-taskId pair-reply binds to the NEAREST PRECEDING ask — without
+  //    a terminal-mode session self-posts without a thread id).
+  //    ⚠ The no-threadId pair-reply binds to the NEAREST PRECEDING ask — without
   //    that scoping one reply lights up "Replied" on every stacked ask before it.
   const linked = messages.filter((m) => {
     if (m.seq <= message.seq) return false;
-    const mTask = metaTaskId(m);
-    if (taskId !== null && mTask === taskId) return true;
-    if (mTask === legacyId && isExchangeParty(m)) return true;
+    const mThread = metaThreadId(m);
+    if (threadId !== null && mThread === threadId) return true;
+    if (mThread === legacyId && isExchangeParty(m)) return true;
     return (
       toUser !== null &&
       m.kind === "message" &&
@@ -133,19 +133,19 @@ export function deriveMessageReceipt(
   if (linked.some((m) => calmTerminalStatus(m) === "interrupted")) {
     return "interrupted";
   }
-  if (linked.some((m) => m.kind === "task_failed" && calmTerminalStatus(m) === null)) {
+  if (linked.some((m) => m.kind === "thread_failed" && calmTerminalStatus(m) === null)) {
     return "failed";
   }
   if (
     linked.some(
       (m) =>
         (m.kind === "message" && m.authorKind === "agent") ||
-        m.kind === "task_finished",
+        m.kind === "thread_finished",
     )
   ) {
     return "replied";
   }
-  if (linked.some((m) => m.kind === "task_started")) return "working";
+  if (linked.some((m) => m.kind === "thread_started")) return "working";
   return "sent";
 }
 
@@ -153,7 +153,7 @@ export function deriveMessageReceipt(
  * THE TRANSCRIPT'S LIFECYCLE RECEIPT — the status one terminal row announces,
  * or null when the row is machine noise the reader should drop.
  *
- * ⚠ **`task_started` IS NEVER A RECEIPT.** "Started working on this request." is
+ * ⚠ **`thread_started` IS NEVER A RECEIPT.** "Started working on this request." is
  * a fact about a runtime, and an agent's run state lives in the Agents tab, not
  * as transcript rows (INVARIANTS §5). Only the two
  * TERMINAL kinds can produce a line, because only an ending changes how the
@@ -171,13 +171,13 @@ export function deriveMessageReceipt(
 export function lifecycleReceiptStatus(
   message: ChannelMessage,
 ): ReceiptStatus | null {
-  if (message.kind !== "task_failed" && message.kind !== "task_finished") {
+  if (message.kind !== "thread_failed" && message.kind !== "thread_finished") {
     return null;
   }
   const calm = calmTerminalStatus(message);
   if (calm !== null) return calm;
   if (message.body.trim().length === 0) return null;
-  return message.kind === "task_finished" ? "finished" : "failed";
+  return message.kind === "thread_finished" ? "finished" : "failed";
 }
 
 /** Label for a receipt status. ⚠ No fabricated acks. */

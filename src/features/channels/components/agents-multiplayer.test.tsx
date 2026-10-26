@@ -43,7 +43,7 @@ function summary(over: Partial<Summary> = {}): Summary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -103,7 +103,7 @@ describe("the projections do not collapse a shared thread", () => {
     expect(ownAgentsFor(THREE, CHANNEL_ID, "t-1")).toHaveLength(3);
   });
 
-  it("counts them all under the one taskId", () => {
+  it("counts them all under the one threadId", () => {
     expect(agentsPerThread(THREE).get("t-1")).toBe(3);
   });
 });
@@ -172,7 +172,7 @@ describe("the Agents tab with three of mine on one thread", () => {
  * EVERY SESSION OP NAMES THE INSTANCE (2026-08-22 — F-239's SPA half).
  *
  * ⚠ THIS IS THE FAILURE MODE THE WHOLE `agentId` PARAMETER EXISTS FOR, and it is
- * silent from every angle. Main resolves `(channelId, taskId)` to a GROUP and,
+ * silent from every angle. Main resolves `(channelId, threadId)` to a GROUP and,
  * with no id, acts on the OLDEST live member of it. Every one of these controls is
  * clicked from a surface showing ONE agent, so an op that drops the id does not
  * fail — it succeeds against a DIFFERENT agent, reports `{ok:true}`, and the card
@@ -207,7 +207,7 @@ describe("the bridge ops address ONE agent", () => {
     const ops = bridge();
     await messageAgent({
       channelId: CHANNEL_ID,
-      taskId: "t-1",
+      threadId: "t-1",
       agentId: AGENT.agentId,
       text: "hi",
     });
@@ -218,7 +218,7 @@ describe("the bridge ops address ONE agent", () => {
     const ops = bridge();
     await setAgentMode({
       channelId: CHANNEL_ID,
-      taskId: "t-1",
+      threadId: "t-1",
       agentId: AGENT.agentId,
       axis: "tools",
       mode: "bypass",
@@ -257,7 +257,7 @@ describe("the bridge ops address ONE agent", () => {
     const ops = bridge();
     await messageAgent({
       channelId: CHANNEL_ID,
-      taskId: "t-1",
+      threadId: "t-1",
       agentId: summary().agentId,
       text: "hi",
     });

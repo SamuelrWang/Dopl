@@ -105,7 +105,7 @@ describe("channels transcript — an unbroken body wraps", () => {
             id: "t",
             body: UNBROKEN,
             authorUserId: PEER,
-            metadata: { taskId: "t-1" },
+            metadata: { threadId: "t-1" },
           }),
         ],
         "t-1",
@@ -121,7 +121,7 @@ describe("channels transcript — an unbroken body wraps", () => {
     // its edge and the clamped preview is merely hidden, not contained.
     renderRows(
       channelRows(
-        [message({ id: "open", body: UNBROKEN, metadata: { taskId: "t-1" } })],
+        [message({ id: "open", body: UNBROKEN, metadata: { threadId: "t-1" } })],
         [thread({ id: "t-1", title: UNBROKEN })],
         INDEX,
         formatChannelTimestamp
@@ -243,9 +243,9 @@ describe("the column's other prose lanes render emphasis", () => {
   it("a thread card's preview — the opening message, as the body would read it", () => {
     renderRows(
       channelRows(
-        // `taskId` is what makes this the THREAD CARD's opening message rather than an
+        // `threadId` is what makes this the THREAD CARD's opening message rather than an
         // ordinary row — the same link the wrapping case above uses.
-        [message({ id: "open", body: "ship **today**", metadata: { taskId: "t-1" } })],
+        [message({ id: "open", body: "ship **today**", metadata: { threadId: "t-1" } })],
         [thread({ id: "t-1", title: "Picker fix" })],
         INDEX,
         formatChannelTimestamp

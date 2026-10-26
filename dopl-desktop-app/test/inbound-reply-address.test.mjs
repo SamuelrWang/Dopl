@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { harness as dispatchHarness, verdictMsg, idle, agent, ME, PEER, A1, TASK } from "./_wake-dispatch-harness.mjs";
+import { harness as dispatchHarness, verdictMsg, idle, agent, ME, PEER, A1, THREAD } from "./_wake-dispatch-harness.mjs";
 
 const require = createRequire(import.meta.url);
 const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
@@ -54,12 +54,12 @@ function gate(session, pushed) {
 }
 
 // A main-room standby agent (the evidence shape) or a thread session, fresh and undirected.
-function session({ taskId = "", toolSet, agentId = A1, running = false } = {}) {
+function session({ threadId = "", toolSet, agentId = A1, running = false } = {}) {
   return {
     key: "k", settled: false, agentId, nonce: "n1", side: "requester",
-    channelId: CH, workspaceId: WS, taskId, doplToolSet: toolSet,
+    channelId: CH, workspaceId: WS, threadId, doplToolSet: toolSet,
     freshFraming: !running, launchGoal: "Stand by in this channel as my agent.", awaitingDirective: !running,
-    context: { channelName: "AI Glasses MCP", channelId: CH, workspaceId: WS, taskId, scope: taskId ? "thread" : "channel" },
+    context: { channelName: "AI Glasses MCP", channelId: CH, workspaceId: WS, threadId, scope: threadId ? "thread" : "channel" },
     state: { ...initialSessionState({ mode: "interactive", side: "requester", messageMode: "auto_inbound" }), phase: running ? "running" : "parked", parked: !running },
   };
 }
@@ -76,7 +76,7 @@ function deliver(msg, opts = {}) {
   return pushed[0];
 }
 
-const mainMsg = (over) => verdictMsg("agent", { taskId: "", recipientAgentIds: [A1], body: ASK, ...over });
+const mainMsg = (over) => verdictMsg("agent", { threadId: "", recipientAgentIds: [A1], body: ASK, ...over });
 
 test("a PERSON's main-room ask carries their user id and the ready call, as the turn's last line (granular)", () => {
   const turn = deliver(mainMsg({ authorUserId: SAM }), { toolSet: "granular" });
@@ -115,9 +115,9 @@ test("one of MY agents is answered by its @handle; a PEER's agent by its member'
 });
 
 test("a THREAD reply carries the thread and no to=", () => {
-  const msg = verdictMsg("thread_peer", { taskId: TASK, recipientUserIds: [ME], authorUserId: PEER, body: "here it is" });
-  const turn = deliver(msg, { taskId: TASK, toolSet: "granular", running: true });
-  assert.ok(turn.includes(`Answer IN THE CHANNEL, never in your final text: mcp__dopl__dopl_send_message channel "${CH}", container "${WS}", thread "${TASK}".`));
+  const msg = verdictMsg("thread_peer", { threadId: THREAD, recipientUserIds: [ME], authorUserId: PEER, body: "here it is" });
+  const turn = deliver(msg, { threadId: THREAD, toolSet: "granular", running: true });
+  assert.ok(turn.includes(`Answer IN THE CHANNEL, never in your final text: mcp__dopl__dopl_send_message channel "${CH}", container "${WS}", thread "${THREAD}".`));
 });
 
 test("no address, no wrong address: my unnamed agent degrades to the bare tool", () => {

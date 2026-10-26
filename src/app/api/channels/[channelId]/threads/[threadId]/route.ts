@@ -6,45 +6,44 @@ import {
 import { parseJson } from "@/shared/api/parse-json";
 import {
   requireChannelId,
-  requireTaskId,
+  requireThreadId,
   toChannelErrorResponse,
   channelWorkspace,
 } from "@/shared/api/channel-route";
 import {
   buildChannelContext,
-  deleteTask,
-  getChannelTask,
-  setTaskMode,
+  deleteThread,
+  getChannelThread,
+  setThreadMode,
 } from "@/features/channels/server/service";
-import { TaskUpdateSchema } from "@/features/channels/schema";
+import { ThreadUpdateSchema } from "@/features/channels/schema";
 
-// GET one task by id. ⚠ A task not in this channel collapses to 404 so the id cannot be probed.
-// NOT sessionOnly — reachable over the MCP device token like the other task reads.
+// GET one thread by id. ⚠ A thread not in this channel collapses to 404 so the id cannot be probed.
+// NOT sessionOnly — reachable over the MCP device token like the other thread reads.
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChannelContext(auth);
-    const task = await getChannelTask(
+    const thread = await getChannelThread(
       ctx,
       requireChannelId(auth.params),
-      requireTaskId(auth.params)
+      requireThreadId(auth.params)
     );
-    return NextResponse.json({ task });
+    return NextResponse.json({ thread });
   } catch (err) {
     return toChannelErrorResponse(err);
   }
 }
 
 // PATCH: set mode (creator only). NOT sessionOnly — the service enforces per-op authorization.
-// Threads do not close; a stale `{op:"close"}` is refused by `TaskUpdateSchema`.
+// Threads do not close; a stale `{op:"close"}` is refused by `ThreadUpdateSchema`.
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, TaskUpdateSchema);
+    const input = await parseJson(request, ThreadUpdateSchema);
     const ctx = buildChannelContext(auth);
     const channelId = requireChannelId(auth.params);
-    const taskId = requireTaskId(auth.params);
-    // `task` keeps the storage name — web + @dopl/client both read that key.
+    const threadId = requireThreadId(auth.params);
     return NextResponse.json({
-      task: await setTaskMode(ctx, channelId, taskId, input.mode),
+      thread: await setThreadMode(ctx, channelId, threadId, input.mode),
     });
   } catch (err) {
     return toChannelErrorResponse(err);
@@ -52,15 +51,15 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 // DELETE: hard-delete the thread and its dependents (creator or channel manager);
-// auth + cascade order live in `service-tasks-delete.ts › deleteTask`.
+// auth + cascade order live in `service-threads-delete.ts › deleteThread`.
 // ⚠ Not a close — threads have no finished state (INVARIANTS §5).
 async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChannelContext(auth);
-    await deleteTask(
+    await deleteThread(
       ctx,
       requireChannelId(auth.params),
-      requireTaskId(auth.params)
+      requireThreadId(auth.params)
     );
     return new NextResponse(null, { status: 204 });
   } catch (err) {

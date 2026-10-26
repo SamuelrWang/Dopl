@@ -37,7 +37,7 @@ function session(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSumma
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: THREAD,
+    threadId: THREAD,
     agentId: "ab12cd34",
     name: "flint",
     state: "working",
@@ -72,13 +72,13 @@ describe("ownAgentsWorking — what the strip is allowed to claim", () => {
     // ⚠ The row sits above the composer, so its scope has to be the composer's:
     // advertising a sibling thread's agent makes the reader wait on a transcript
     // they are not looking at.
-    const agents = [session(), session({ sessionId: "s-2", taskId: "t-2" })];
+    const agents = [session(), session({ sessionId: "s-2", threadId: "t-2" })];
     expect(ownAgentsWorking(agents, CHANNEL_ID, THREAD)).toHaveLength(1);
-    expect(ownAgentsWorking(agents, CHANNEL_ID, THREAD)[0].taskId).toBe(THREAD);
+    expect(ownAgentsWorking(agents, CHANNEL_ID, THREAD)[0].threadId).toBe(THREAD);
   });
 
   it("shows the whole CHANNEL's agents when the composer is not thread-scoped", () => {
-    const agents = [session(), session({ sessionId: "s-2", taskId: "t-2" })];
+    const agents = [session(), session({ sessionId: "s-2", threadId: "t-2" })];
     expect(ownAgentsWorking(agents, CHANNEL_ID, null)).toHaveLength(2);
   });
 

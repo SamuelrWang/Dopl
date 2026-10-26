@@ -416,7 +416,7 @@ async function resolveWaiting(
       seq,
       channelId: row.channel_id,
       threadId:
-        typeof metadata?.taskId === "string" ? metadata.taskId : null,
+        typeof metadata?.threadId === "string" ? metadata.threadId : null,
       authorUserId: row.author_user_id,
       authorName: profile?.display_name || profile?.email || null,
       preview: truncatePreview(row.body),

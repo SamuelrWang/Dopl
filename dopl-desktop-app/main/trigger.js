@@ -17,9 +17,9 @@ const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
 // ⚠ `notify-action` is no longer required here: the route decides the surface and builds the
 // same banner underneath (`notification-route.js › raiseActionable`).
-// The shared passive-mention copy. ⚠ No cycle: task-notify requires targeting + the route, never
+// The shared passive-mention copy. ⚠ No cycle: thread-notify requires targeting + the route, never
 // this module.
-const { mentionNotice, mentionAuthorLabel } = require('./task-notify');
+const { mentionNotice, mentionAuthorLabel } = require('./thread-notify');
 const { postCourtesy } = require('./channel-post');
 const queued = require('./queued-notice'); // the in-thread "queued, not ignored" milestone
 const outcomes = require('./trigger-outcomes');
@@ -29,8 +29,8 @@ const notificationPrefs = require('./notification-prefs'); // the operator's ban
 const notificationRoute = require('./notification-route'); // which surface a passive notice takes
 
 // Deterministic per (channel, seq) so a replay groups with its first delivery; a first-class id wins.
-function taskIdFor(entry, m) {
-  return targeting.firstClassTaskId(m) || `task-${entry.channel.id}-${m.seq}`;
+function threadIdFor(entry, m) {
+  return targeting.firstClassThreadId(m) || `thread-${entry.channel.id}-${m.seq}`;
 }
 
 /**
@@ -44,9 +44,9 @@ function sendFyi(entry, m, myUserId) {
     diag('mention notify muted', entry.channel.id.slice(0, 8), 'seq', m.seq, notificationPrefs.eventForMessage(m, entry));
     return;
   }
-  // ⚠ ONE BUILDER, TWO CALL SITES. A tag inside a thread reaches `task-notify.js` instead of
-  // here (classify ranks 'task-reply' above 'fyi'), and both must read the same, so the copy
-  // lives in `task-notify.js › mentionNotice` — pure, and tested without electron.
+  // ⚠ ONE BUILDER, TWO CALL SITES. A tag inside a thread reaches `thread-notify.js` instead of
+  // here (classify ranks 'thread-reply' above 'fyi'), and both must read the same, so the copy
+  // lives in `thread-notify.js › mentionNotice` — pure, and tested without electron.
   // ⚠ THE AUTHOR LABEL IS BUILT FROM THE MESSAGE, not from the author id alone. An agent posts
   // under its operator's `author_user_id`, so `displayNameFor` alone credited a PERSON for a
   // machine's words — "Samuel Wang mentioned you" for his own agent's post (Samuel, 2026-10-12).
@@ -65,12 +65,12 @@ function sendFyi(entry, m, myUserId) {
     title: notice.title,
     body: notice.body,
     onClick: () => targeting.openChannelForEntry(entry, {
-      threadId: targeting.metaStr(m, 'taskId') || null,
+      threadId: targeting.metaStr(m, 'threadId') || null,
       seq: m.seq,
     }),
   });
   diag('mention notify', entry.channel.id.slice(0, 8), 'seq', m.seq,
-    targeting.metaStr(m, 'taskTitle') ? 'titled' : 'channel', '→', went);
+    targeting.metaStr(m, 'threadTitle') ? 'titled' : 'channel', '→', went);
 }
 
 /**
@@ -113,8 +113,8 @@ async function handleTrigger(entry, m) {
   // Snapshot now — the banner must name the profile the session will start at, NARROWED for a shared
   // room (a peer's ask always comes from one; ruling B7).
   const toolProfile = targeting.resolveLaunchToolProfile(entry.channel);
-  const inboundTaskId = targeting.firstClassTaskId(m);
-  const taskId = taskIdFor(entry, m);
+  const inboundThreadId = targeting.firstClassThreadId(m);
+  const threadId = threadIdFor(entry, m);
   diag('ask notify:', entry.channel.id.slice(0, 8), 'seq', m.seq, 'profile', toolProfile);
 
   const raised = notifyAsk({
@@ -127,10 +127,10 @@ async function handleTrigger(entry, m) {
     capabilityHint: profileHint(toolProfile),
     // The message rides the closure: a notification does not outlive its process, so nothing refetches.
     onLaunch: () => {
-      void launchResponderSession(entry, m, { taskId, toolProfile, requesterName })
+      void launchResponderSession(entry, m, { threadId, toolProfile, requesterName })
         .catch((err) => diag('responder launch error', err && err.message));
     },
-    onOpen: () => targeting.openChannelForEntry(entry, { threadId: inboundTaskId || null }),
+    onOpen: () => targeting.openChannelForEntry(entry, { threadId: inboundThreadId || null }),
   });
   // ⚠ A MUTE SILENCES THE SURFACE AND NOTHING ELSE (Samuel's spec; @orchestrator, 2026-10-10).
   // `raiseActionable` runs the operator's switch, so muting `peer_ask` used to answer `null` here
@@ -158,16 +158,16 @@ async function handleTrigger(entry, m) {
  * Launch the responder session: the framed ask is its first turn, and the agent posts its own reply.
  * It ALWAYS answers — a launch, or a courtesy reply for every engine skip (there is no second executor).
  */
-async function launchResponderSession(entry, m, { taskId, toolProfile, requesterName }) {
-  // Mirror the requester task's mode when stamped; the session caps bound it either way.
-  const mode = targeting.metaStr(m, 'taskMode') || 'autonomous';
+async function launchResponderSession(entry, m, { threadId, toolProfile, requesterName }) {
+  // Mirror the requester thread's mode when stamped; the session caps bound it either way.
+  const mode = targeting.metaStr(m, 'threadMode') || 'autonomous';
   // No launcher pick and no identity here: the channel's runtime, else the default (ruling 5).
   const launch = await require('./runtime/launch-default').resolveLaunchRuntime({ channelId: entry.channel.id });
   const runtimeId = launch.runtimeId;
   const registry = require('./runtime');
   const res = await sessionEngine.launchResponderSession({
     channelId: entry.channel.id,
-    taskId,
+    threadId,
     workspaceId: entry.workspaceId,
     runtime: runtimeId,
     message: m.body,
@@ -180,14 +180,14 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
     // The concrete ids ride the context: prompt-framing fills `dopl_channel`'s call from it.
     context: {
       channelName: entry.channel.name, authorName: requesterName,
-      authorKind: m.authorKind, taskTitle: targeting.metaStr(m, 'taskTitle') || null,
+      authorKind: m.authorKind, threadTitle: targeting.metaStr(m, 'threadTitle') || null,
       // THE OPERATOR'S NAME FOR THE AGENT THAT TRIGGERED THIS LAUNCH, when an agent did
       // (2026-10-12). ⚠ FRAMING FOR THE LAUNCH CARD ONLY (`session-narration.js ›
       // noteLaunchMessage`): `authorKind` beside it is what decides whether it is read at all,
       // and `null` is the ordinary absence for a human author or an unresolved page.
       authorAgentName: (m.authorKind === 'agent' && m.authorAgentName) || null,
       authorAgentColor: (m.authorKind === 'agent' && m.authorAgentColor) || null,
-      channelId: entry.channel.id, workspaceId: entry.workspaceId, taskId,
+      channelId: entry.channel.id, workspaceId: entry.workspaceId, threadId,
       workspaceSegment: entry.workspaceSegment || null, // the outbound bridge's nav target
     },
     toolProfile,
@@ -208,7 +208,7 @@ async function launchResponderSession(entry, m, { taskId, toolProfile, requester
   }
   if (res && res.skipped === 'busy') {
     diag('responder session: skipped=busy');
-    await queued.announce(entry, m, taskId, 'session');
+    await queued.announce(entry, m, threadId, 'session');
     await postCourtesy(entry, m, RESEND); // P1-5: a no-op must not trigger the peer
     return true;
   }

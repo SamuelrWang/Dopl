@@ -239,9 +239,9 @@ test("THREAD OPEN: the gate diag tells the two outbound allows apart, and shares
 
 test("THREAD OPEN: a create_thread grant stays OP-SCOPED — it authorizes no other op", () => {
   // FIX F2 is untouched by the lane change: the KEY covers the shape the operator saw, so a
-  // "Allow for this task" taken on a thread open cannot open a DM or post a body.
+  // "Allow for this thread" taken on a thread open cannot open a DM or post a body.
   const openKey = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, { op: "send", thread: "new" }, CH);
-  const held = { toolName: DOPL_CHANNEL_TOOL, allowForTask: [openKey] };
+  const held = { toolName: DOPL_CHANNEL_TOOL, allowForThread: [openKey] };
   assert.equal(decide({ ...held, input: { op: "send", thread: "new" } }), "allow");
   assert.equal(decide({ ...held, input: { op: "send", body: "hi" } }), "gate");
   assert.equal(decide({ ...held, input: { op: "rooms", action: "open", direct: true } }), "gate");
@@ -255,7 +255,7 @@ test("M4: isOwnChannelMarker scopes by channel exactly as isOwnChannelPost does"
   assert.equal(profiles.isOwnChannelMarker({ ...M, channel: "OTHER" }, CH), false);
   // ⚠ THE KIND IS HALF THE PREDICATE NOW (F-578). An unmatched kind is an ordinary post,
   // answered by the post branch — the safe direction an unclassified op used to take.
-  for (const kind of [undefined, "message", "decision", "task_progress", 7]) {
+  for (const kind of [undefined, "message", "decision", "thread_progress", 7]) {
     assert.equal(profiles.isOwnChannelMarker({ op: "send", kind, channel: CH }, CH), false,
       `kind=${String(kind)} is not a marker`);
   }
@@ -390,12 +390,12 @@ test("FOLD: the BARE dispatcher and any UNKNOWN action are on NO lane, in every 
 
 test("FOLD: an artifact grant stays OP-SCOPED — it authorizes no send", () => {
   const foldKey = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, { op: "artifact", action: "create" }, CH);
-  const held = { toolName: DOPL_CHANNEL_TOOL, allowForTask: [foldKey] };
+  const held = { toolName: DOPL_CHANNEL_TOOL, allowForThread: [foldKey] };
   assert.equal(decide({ ...held, input: { op: "artifact", action: "create" } }), "allow");
   assert.equal(decide({ ...held, input: { op: "send", body: "hi" } }), "gate");
   assert.equal(decide({ ...held, input: { op: "rooms", action: "invite" } }), "gate");
   // ⚠ A KNOWN LIMIT, PINNED SO IT IS NOT MISTAKEN FOR A GUARANTEE: `session-grant-keys.js ›
-  // grantKeyFor` keys a non-`send` channel call on the BARE op, so ONE "Allow for this task" on a
+  // grantKeyFor` keys a non-`send` channel call on the BARE op, so ONE "Allow for this thread" on a
   // fold covers all four actions. It is not a widening introduced here — `rooms` and `manage` have
   // carried the same coarseness since F-578 dotted the CLASSIFIERS and not the KEYS — and on this
   // lane it is harmless (all four are auto-allowed together by argument). It is recorded because

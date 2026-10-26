@@ -6,7 +6,7 @@
 // even builds the copy for a muted event. Everything else is gated INSIDE the route
 // (`notification-route.js › raise` / `raiseActionable`, over `allowsIn`), so there is exactly one
 // place a notice can be raised and exactly one place the switch is read. This header named
-// `task-notify.js › notifyTaskReply` as a second direct caller until 2026-10-10; it is not one,
+// `thread-notify.js › notifyThreadReply` as a second direct caller until 2026-10-10; it is not one,
 // and `test/notification-prefs.test.mjs` now FORBIDS it from growing a copy of the gate back.
 //
 // ⚠ THE RECORD IS THE ACCOUNT'S, NOT THIS MAC'S (Samuel, 2026-10-09). One setting per user,

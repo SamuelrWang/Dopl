@@ -59,11 +59,11 @@ const sess = (over = {}) => ({
   key: `${CH}:${THREAD}:a1b2c3d4`,
   agentId: "a1b2c3d4",
   channelId: CH,
-  taskId: THREAD,
+  threadId: THREAD,
   nonce: "n0nce",
   profile: "full",
   settled: false,
-  state: { toolMode: "manual", messageMode: "auto_both", activity: "idle", allowForTask: [] },
+  state: { toolMode: "manual", messageMode: "auto_both", activity: "idle", allowForThread: [] },
   ...over,
 });
 
@@ -172,7 +172,7 @@ test("GATE: the turn ends and NORMAL MODE RESUMES — the next channel turn auto
 test("GATE: it moves AXIS B only — the TOOL axis is untouched", () => {
   // The v2.9 invariant: a message op branches to Axis B and never reaches Axis A, and no tool
   // posture can send a message. A private turn must not become a backdoor into either half.
-  const s = sess({ state: { toolMode: "bypass", messageMode: "auto_both", activity: "idle", allowForTask: [] } });
+  const s = sess({ state: { toolMode: "bypass", messageMode: "auto_both", activity: "idle", allowForThread: [] } });
   priv.openPrivateTurn(s);
   assert.equal(profiles.grantDecision(io.grantArgs(s, "Bash", { command: "ls" })), "allow",
     "Bash still answers to the TOOL axis, which a private turn does not touch");
@@ -272,12 +272,12 @@ test("LEAK: a torn-down query closes the window outright — it owes no results"
 // ⚠ THE REAL LANE, DRIVEN TWICE, THROUGH THE REAL REDUCER. The cases above use a static fixture
 // whose `activity` never moves, and that fixture is EXACTLY what hid this bug: the double-count
 // only happens when the first 1:1 message has already flipped the session to `working`, which is
-// something only the reducer does. This drives `session-reopen.js › messageByTask` — the shipped
+// something only the reducer does. This drives `session-reopen.js › messageByThread` — the shipped
 // op behind the agent view's composer — with a dispatch that runs the REAL reducer and stores its
 // state, so the second call reads the activity the first call produced.
 function composer() {
   const src = readFileSync(join(MAIN, "session-reopen.js"), "utf8");
-  const body = fnOf(src, "resolveSession") + "\n" + fnOf(src, "messageByTask");
+  const body = fnOf(src, "resolveSession") + "\n" + fnOf(src, "messageByThread");
   const { loadReducer } = require("./_reducer-block.mjs");
   const RED = loadReducer();
   const s = {
@@ -291,18 +291,18 @@ function composer() {
   };
   const sessions = new Map([[s.key, s]]);
   const fn = new Function(
-    // ⚠ `directedTurn` JOINED ON 2026-08-31: `messageByTask` reads a DIRECTION off its
+    // ⚠ `directedTurn` JOINED ON 2026-08-31: `messageByThread` reads a DIRECTION off its
     // argument now. The REAL module — these cases assert the PRIVATE depth, and the two
     // counters must be shown not to interfere.
     "deps", "store", "framing", "privateTurn", "directedTurn", "floorWindowlessMessage",
-    `${body}\n return messageByTask;`
+    `${body}\n return messageByThread;`
   )(
     {
       sessions,
       // THE REAL REDUCER, and its state really applied — the whole point of this harness.
       dispatch: (sess, ev) => { sess.state = RED.sessionReducer(sess.state, ev).state; },
     },
-    { slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+    { slotKey: (x) => `${x.channelId || ""}:${x.threadId || ""}:${x.agentId || ""}`,
       threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:` },
     seed,
     priv,
@@ -314,7 +314,7 @@ function composer() {
 
 test("LEAK: TWO 1:1 messages through the REAL op leave the window exactly two turns deep", () => {
   const h = composer();
-  const send = () => h.fn({ channelId: CH, taskId: THREAD, text: "what did they say?" });
+  const send = () => h.fn({ channelId: CH, threadId: THREAD, text: "what did they say?" });
   assert.deepEqual(send(), { ok: true });
   assert.equal(h.s.privateDepth, 1, "an IDLE agent: the message IS the next turn");
   assert.equal(h.s.state.activity, "working", "…and the reducer moved it, which the old fixture never did");
@@ -334,7 +334,7 @@ test("LEAK: a 1:1 message onto a CHANNEL turn in flight still over-covers by one
   // typed also has its posts held for approval. Bounded to that single turn.
   const h = composer();
   h.s.state.activity = "working"; // a channel turn is mid-flight, and it is NOT private
-  h.fn({ channelId: CH, taskId: THREAD, text: "quick question" });
+  h.fn({ channelId: CH, threadId: THREAD, text: "quick question" });
   assert.equal(h.s.privateDepth, 2);
 });
 

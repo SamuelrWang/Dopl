@@ -14,7 +14,7 @@ import type { ProfileRef } from "./dto";
  * these under their own `─── Workspace membership + profiles ───` banner,
  * separate from `─── Channels ───` and `─── Members ───`, precisely because they
  * answer a different question. Same shape as `repository-visibility.ts`,
- * `repository-messages.ts`, `repository-tasks.ts`, `repository-collab.ts`.
+ * `repository-messages.ts`, `repository-threads.ts`, `repository-collab.ts`.
  *
  * ⚠ RE-EXPORTED FROM `repository.ts` (§1: keep the barrel if callers import
  * through it) — every caller in this feature does `import * as repo from

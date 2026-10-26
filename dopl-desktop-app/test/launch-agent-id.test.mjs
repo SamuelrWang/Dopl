@@ -50,7 +50,7 @@ const MINE = "k3v7d2mq";
 // The engine answers its own id, never the one it was handed, so the assertions are about the forward.
 const boot = () => bootLaunchOp({ answer: { agentId: "zzzzzzzz", sessionId: "s-1" } });
 
-const payload = (over = {}) => ({ channelId: CH, taskId: THREAD, workspaceId: "ws-1", ...over });
+const payload = (over = {}) => ({ channelId: CH, threadId: THREAD, workspaceId: "ws-1", ...over });
 
 // ── 1. THE FORWARD ───────────────────────────────────────────────────────────
 

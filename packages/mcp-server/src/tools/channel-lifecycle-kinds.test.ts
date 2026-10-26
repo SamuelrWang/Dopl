@@ -4,7 +4,7 @@
  * (`channels/components/view-model.ts › isLifecycleEcho`, wiring plan Phase 5,
  * 2026-08-18; before that a session card folded the marker into its `endEvent`)
  * — so an ANSWER posted as
- * `kind:"task_finished"` appears NOWHERE. Two guards pinned here:
+ * `kind:"thread_finished"` appears NOWHERE. Two guards pinned here:
  *   1. ⚠ **THE THREE ARE UNSAYABLE, NOT MERELY REFUSED.** `kind` published five
  *      values of which three were refused; it publishes THREE — "message",
  *      "milestone", "decision" — and not one of them is a lifecycle marker. A
@@ -14,8 +14,8 @@
  *      `service-writes.assertLifecycleKindIsServerOwned` is now the only
  *      refusal, and the 403 it raises is still answered with the RULE.
  *   2. `op="send" kind="milestone"` exists, so the milestone lane is a different
- *      LANE at the routing seam, not a `task_*` value a caller may spell — and it
- *      is the ONLY writer of a `task_*` kind left on this tool.
+ *      LANE at the routing seam, not a `thread_*` value a caller may spell — and it
+ *      is the ONLY writer of a `thread_*` kind left on this tool.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -36,7 +36,7 @@ const CHANNEL = {
 const THREAD_ID = "79ce5325-f53e-4d00-a1c0-f48875000bc0";
 
 /** The three kinds that state a RUNTIME fact and are not an agent's to post. */
-const LIFECYCLE_KINDS = ["task_started", "task_finished", "task_failed"] as const;
+const LIFECYCLE_KINDS = ["thread_started", "thread_finished", "thread_failed"] as const;
 
 function stubClient(overrides: Record<string, unknown> = {}): DoplClient {
   return {
@@ -87,13 +87,13 @@ describe("the three lifecycle kinds are UNSAYABLE, not merely refused (C12)", ()
     // called with raw args.
     const client = stubClient();
     expect(
-      CHANNEL_INPUT_SHAPE.kind.safeParse("task_finished").success,
+      CHANNEL_INPUT_SHAPE.kind.safeParse("thread_finished").success,
     ).toBe(false);
     const res = await callTool(client)({
       op: "send",
       channel: "general",
       body: "Here is the finished analysis…",
-      kind: "task_finished",
+      kind: "thread_finished",
       // ⚠ 2026-09-18: `kind` is dropped by the strict shape, so what reaches the
       // router is a PLAIN send — and a plain send must address somebody.
       to: "u-peer",
@@ -128,10 +128,10 @@ describe("the three lifecycle kinds are UNSAYABLE, not merely refused (C12)", ()
 });
 
 describe("what the deletion must NOT catch", () => {
-  it("task_progress still posts: it is the milestone lane", async () => {
+  it("thread_progress still posts: it is the milestone lane", async () => {
     const client = stubClient();
     const res = await opPost(client, "general", "schema half landed", {
-      kind: "task_progress",
+      kind: "thread_progress",
       thread: THREAD_ID,
     });
     expect(res.isError).toBeFalsy();
@@ -151,7 +151,7 @@ describe("what the deletion must NOT catch", () => {
 // ── 2. the milestone op ────────────────────────────────────────────────────────
 
 describe('op="send" kind="milestone" — a different LANE, not a spellable kind (P0-3)', () => {
-  it("posts a task_progress threaded under the given thread", async () => {
+  it("posts a thread_progress threaded under the given thread", async () => {
     const client = stubClient();
     const res = await callTool(client)({
       op: "send",
@@ -165,9 +165,9 @@ describe('op="send" kind="milestone" — a different LANE, not a spellable kind 
     const [channelId, input] = vi.mocked(client.postChannelMessage).mock.calls[0];
     const sent = input as unknown as Record<string, unknown>;
     expect(channelId).toBe("chan-1");
-    expect(sent.kind).toBe("task_progress");
+    expect(sent.kind).toBe("thread_progress");
     expect(sent.body).toBe("schema half landed");
-    expect(sent.metadata).toMatchObject({ taskId: THREAD_ID });
+    expect(sent.metadata).toMatchObject({ threadId: THREAD_ID });
   });
 
   it("REQUIRES a thread, where a plain send leaves it optional", async () => {
@@ -209,7 +209,7 @@ describe('op="send" kind="milestone" — a different LANE, not a spellable kind 
     expect(sent.toUserId).toBeUndefined();
     // ⚠ …and it DID send thread and body, so the absence above is a ROUTING
     // decision, not a call that never happened.
-    expect((sent.metadata as Record<string, unknown>).taskId).toBe(THREAD_ID);
+    expect((sent.metadata as Record<string, unknown>).threadId).toBe(THREAD_ID);
     expect(sent.body).toBe("step two");
   });
 

@@ -92,15 +92,15 @@ function channelScopeFraming(ctx) {
 /**
  * The send's address args, or '' when either id is missing. `container=` (not the deprecated
  * `workspace=`) with the workspace UUID, never a slug; `thread` is the agent-facing argument (never
- * `task`). Tag EVERY reply: an untagged agent reply reads as a fresh request. A thread is its own
+ * `thread`). Tag EVERY reply: an untagged agent reply reads as a fresh request. A thread is its own
  * address, so `to` rides only a main-room send.
  */
 function sendArgs(ctx, to) {
   const channelId = idToken(ctx && ctx.channelId);
   const workspaceId = idToken(ctx && ctx.workspaceId);
   if (!channelId || !workspaceId) return '';
-  const taskId = idToken(ctx && ctx.taskId);
-  const tail = taskId ? `, thread "${taskId}"` : to ? `, to "${to}"` : '';
+  const threadId = idToken(ctx && ctx.threadId);
+  const tail = threadId ? `, thread "${threadId}"` : to ? `, to "${to}"` : '';
   return `channel "${channelId}", container "${workspaceId}"${tail}`;
 }
 
@@ -120,7 +120,7 @@ const ADDRESS_RE = /^@?[A-Za-z0-9_-]{1,64}$/;
 function replyCall(ctx, to) {
   const addr = ADDRESS_RE.test(String(to || '')) ? to : '';
   const args = sendArgs(ctx, addr);
-  if (!args || (!idToken(ctx.taskId) && !addr)) return '';
+  if (!args || (!idToken(ctx.threadId) && !addr)) return '';
   return doplCall(ctx.toolSet, 'channel.send', args);
 }
 
@@ -165,12 +165,12 @@ function firstActions(side, ctx) {
   }
   const channelId = idToken(ctx && ctx.channelId);
   const workspaceId = idToken(ctx && ctx.workspaceId);
-  const taskId = idToken(ctx && ctx.taskId);
+  const threadId = idToken(ctx && ctx.threadId);
   // Joining: not the requester, or a woken agent launched onto a thread it did not open.
-  if ((side !== 'requester' || (ctx && ctx.scope) === 'thread') && channelId && workspaceId && taskId) {
+  if ((side !== 'requester' || (ctx && ctx.scope) === 'thread') && channelId && workspaceId && threadId) {
     lines.push(
       `- Your SECOND action is to read the exchange you are joining: ${doplTool(set, 'channel.read')}`,
-      `  with ${doplArgs(set, 'channel.read', `channel "${channelId}", container "${workspaceId}", thread "${taskId}"`)}.`,
+      `  with ${doplArgs(set, 'channel.read', `channel "${channelId}", container "${workspaceId}", thread "${threadId}"`)}.`,
       `  That read is filtered to this one thread. You start with none of its earlier messages`,
       `  in context, so read it before you write anything. To catch up later, pass the since=`,
       `  a turn names (or the highest seq you have read) instead of reading it in full again.`
@@ -193,7 +193,7 @@ function deliverySection(side, ctx) {
   const set = ctx && ctx.toolSet;
   const tool = doplTool(set, 'channel.send');
   const [lead, reach] = DELIVERY_VOICE[side];
-  const thread = !!idToken(ctx && ctx.taskId);
+  const thread = !!idToken(ctx && ctx.threadId);
   const how = !call ? [`${lead} ${tool} MCP tool (${doplArgs(set, 'channel.send', 'this channel')}).`] : [
     `${lead} ${tool} MCP tool.`,
     // A main-room send also needs its `to=`, and every message fed to this session hands it over.
@@ -207,7 +207,7 @@ function deliverySection(side, ctx) {
 }
 
 // The opt-in one-line milestone marker, only when the profile can post; a milestone carries no content
-// (a `task_finished` body is never rendered).
+// (a `thread_finished` body is never rendered).
 function milestoneGuidance({ hasPostingTool, toolSet } = {}) {
   if (!hasPostingTool) return '';
   return (
@@ -233,7 +233,7 @@ function buildFencedTurn({ side, message, context, nonce } = {}) {
   if (side === 'requester') {
     // A channel-level launch (New Agent, a channel directive) STANDS BY in the main room; it drives no thread.
     const standby = ctx.scope === 'channel';
-    const title = sanitizeName(ctx.taskTitle);
+    const title = sanitizeName(ctx.threadTitle);
     const opening = standby ? [
       `You are a Dopl agent STANDING BY in the main room of the shared channel "${channel}", for your operator.`,
       `This is YOUR session, running on your operator's machine. Their GOAL is delimited below.`,

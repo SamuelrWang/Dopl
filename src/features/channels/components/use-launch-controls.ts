@@ -101,7 +101,7 @@ export function buildLaunchPayload(
   const thread = threadId ? site.thread(threadId) : null;
   return {
     channelId: site.channelId,
-    taskId: threadId,
+    threadId,
     workspaceId: site.workspaceId,
     channelName: site.channelName,
     threadTitle: thread?.title ?? null,

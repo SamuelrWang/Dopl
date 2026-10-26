@@ -31,7 +31,7 @@ const CTX: ChannelContext = {
 const CHAN = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 
-/** A session key as the desktop mints it — `<channelId>:<taskId>:<agentId>`. */
+/** A session key as the desktop mints it — `<channelId>:<threadId>:<agentId>`. */
 const KEY = `${CHAN}::a1b2c3d4`;
 const OTHER_KEY = `${OTHER}::e5f6a7b8`;
 

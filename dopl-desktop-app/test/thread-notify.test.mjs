@@ -1,12 +1,12 @@
 // Unit tests for the passive MENTION notice builder.
 //
-// ⚠ IT USED TO BE THE TASK-REPLY BUILDER (`taskReplyNotice`, "Reply in <thread>"). Samuel's spec
+// ⚠ IT USED TO BE THE THREAD-REPLY BUILDER ("Reply in <thread>"). Samuel's spec
 // of 2026-10-09 turns the reply notice off, but a tag inside my own thread still notifies — as a
-// MENTION — because classify ranks 'task-reply' above 'fyi' and such a post never reaches
+// MENTION — because classify ranks 'thread-reply' above 'fyi' and such a post never reaches
 // `trigger.js › sendFyi`. So the copy became `mentionNotice`, and BOTH call sites use it, which
 // is what these tests protect: one copy shape for a tag, wherever it landed.
 //
-// SAME source-extraction strategy as classify.test.mjs: task-notify.js is a
+// SAME source-extraction strategy as classify.test.mjs: thread-notify.js is a
 // CommonJS/Electron module, so instead of require()-ing it (which would drag in
 // electron and the whole listener graph) we read the source and evaluate the PURE
 // `mentionNotice` builder alongside the `metaStr`/`truncate` helpers it uses
@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TARGETING = readFileSync(join(HERE, "..", "main", "targeting.js"), "utf8");
-const NOTIFY = readFileSync(join(HERE, "..", "main", "task-notify.js"), "utf8");
+const NOTIFY = readFileSync(join(HERE, "..", "main", "thread-notify.js"), "utf8");
 
 // Brace-balance a top-level `function <name>(...) { ... }` out of `src`.
 function extractFn(src, name) {
@@ -51,12 +51,12 @@ const { mentionNotice, mentionAuthorLabel } = new Function(
 
 const withMeta = (metadata, body = "the answer body") => ({ body, metadata });
 
-test("headline prefers the server-stamped task title", () => {
-  const notice = mentionNotice(withMeta({ taskTitle: "Ship the docs" }), "General", "Ada");
+test("headline prefers the server-stamped thread title", () => {
+  const notice = mentionNotice(withMeta({ threadTitle: "Ship the docs" }), "General", "Ada");
   assert.equal(notice.title, "Ship the docs");
 });
 
-test("headline falls back to the channel name when no task title", () => {
+test("headline falls back to the channel name when no thread title", () => {
   assert.equal(mentionNotice(withMeta({}), "General", "Ada").title, "General");
 });
 
@@ -158,7 +158,7 @@ test("a missing message never credits the member name", () => {
 // every test above still passed, which is exactly how this shipped.
 test("both passive banner sites label the author from the MESSAGE, not from the user id alone", () => {
   const TRIGGER = readFileSync(join(HERE, "..", "main", "trigger.js"), "utf8");
-  for (const [file, src] of [["trigger.js", TRIGGER], ["task-notify.js", NOTIFY]]) {
+  for (const [file, src] of [["trigger.js", TRIGGER], ["thread-notify.js", NOTIFY]]) {
     // Every CALL of the builder, never its declaration.
     const calls = [...src.matchAll(/(?<!function )mentionNotice\(([\s\S]*?)\);/g)];
     assert.ok(calls.length > 0, `${file} does not call mentionNotice`);

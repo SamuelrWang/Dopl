@@ -43,7 +43,7 @@ import { CHANNEL_ID } from "./test-fixtures";
 // ⚠ THE RENDER MACHINERY IS A HARNESS since 2026-08-27 (§1) — the fake bridge, the
 // summary fixture and the mount. It moved WHOLE, unchanged; the cases below are
 // what this file is about. `agent-window-harness.tsx` carries why.
-import { TASK, WS, installBridge, mount, summary } from "./agent-window-harness";
+import { THREAD, WS, installBridge, mount, summary } from "./agent-window-harness";
 
 const { live, refetchMessages, refetchPending, consentMutate } = vi.hoisted(() => ({
   live: vi.fn<
@@ -212,7 +212,7 @@ describe("the work lane's two absences are worded differently", () => {
       });
       await mount();
       expect(await screen.findByText(NARRATION_EMPTY)).toBeTruthy();
-      await push(`${CHANNEL_ID}:${TASK}:a1b2c3d4`, [
+      await push(`${CHANNEL_ID}:${THREAD}:a1b2c3d4`, [
         { at: 9, kind: "tool", tool: "Bash", text: "npm run lint" },
       ]);
       fireEvent.click(await screen.findByRole("button", { name: toolRunLabel(1) }));
@@ -225,7 +225,7 @@ describe("the work lane's two absences are worded differently", () => {
         entries: [],
       });
       await mount();
-      await push(`${CHANNEL_ID}:${TASK}:e5f6g7h8`, [
+      await push(`${CHANNEL_ID}:${THREAD}:e5f6g7h8`, [
         { at: 9, kind: "assistant", text: "not this agent's work" },
       ]);
       expect(screen.queryByText("not this agent's work")).toBeNull();
@@ -238,7 +238,7 @@ describe("the work lane's two absences are worded differently", () => {
     it("still follows the prefix when the feed carries no instance id", async () => {
       const { push } = installBridge({ entries: [] });
       await mount();
-      await push(`${CHANNEL_ID}:${TASK}:whatever`, [
+      await push(`${CHANNEL_ID}:${THREAD}:whatever`, [
         { at: 9, kind: "assistant", text: "legacy main, one agent" },
       ]);
       expect(await screen.findByText("legacy main, one agent")).toBeTruthy();
@@ -248,7 +248,7 @@ describe("the work lane's two absences are worded differently", () => {
       const { push } = installBridge({ entries: [] });
       await mount();
       // ⚠ The trailing colon is what stops `t-1` also matching `t-12`.
-      await push(`${CHANNEL_ID}:${TASK}2:a1b2c3d4`, [
+      await push(`${CHANNEL_ID}:${THREAD}2:a1b2c3d4`, [
         { at: 9, kind: "assistant", text: "a different thread" },
       ]);
       expect(screen.queryByText("a different thread")).toBeNull();
@@ -263,7 +263,7 @@ describe("the work lane's two absences are worded differently", () => {
       });
       await mount();
       await waitFor(() =>
-        expect(narration).toHaveBeenCalledWith(CHANNEL_ID, TASK, "a1b2c3d4")
+        expect(narration).toHaveBeenCalledWith(CHANNEL_ID, THREAD, "a1b2c3d4")
       );
     });
   });
@@ -305,7 +305,7 @@ describe("the 1:1 composer", () => {
     });
     expect(message).toHaveBeenCalledWith(
       CHANNEL_ID,
-      TASK,
+      THREAD,
       "look at the failing test",
       "a1b2c3d4"
     );
@@ -322,7 +322,7 @@ describe("the 1:1 composer", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
     });
-    expect(message).toHaveBeenCalledWith(CHANNEL_ID, TASK, "hello", undefined);
+    expect(message).toHaveBeenCalledWith(CHANNEL_ID, THREAD, "hello", undefined);
   });
 
   it("submits on Enter and keeps Shift+Enter for a newline", async () => {
@@ -337,7 +337,7 @@ describe("the 1:1 composer", () => {
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter" });
     });
-    expect(message).toHaveBeenCalledWith(CHANNEL_ID, TASK, "one", undefined);
+    expect(message).toHaveBeenCalledWith(CHANNEL_ID, THREAD, "one", undefined);
   });
 
   it("clears on a real send and KEEPS the text on a refusal", async () => {

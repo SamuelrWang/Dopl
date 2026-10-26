@@ -299,7 +299,7 @@ describe("🔒 the composer's line and the server's verdict agree, case for case
     // two answers must still match, which is what this case pair proves.
     const metadata: Record<string, unknown> =
       c.threadOtherParty !== undefined && c.threadOtherParty !== null
-        ? { taskId: "t-1", taskCreatedBy: ME, taskTarget: c.threadOtherParty.userId }
+        ? { threadId: "t-1", threadCreatedBy: ME, threadTarget: c.threadOtherParty.userId }
         : {};
 
     // ⚠ **THE SERVER READS THE SETTING OFF THE AUTHOR'S MEMBERSHIP ROW, NOT OFF THE CHANNEL** —

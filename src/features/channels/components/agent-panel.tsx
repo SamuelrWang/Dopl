@@ -21,7 +21,7 @@
  *
  *  1. **Sent** — ✅ HERE. What this agent posted into its thread, captioned with
  *     where it went. The SAME strings the thread transcript carries, matched on
- *     `metadata.taskId` + an agent-authored row under the viewer's own account.
+ *     `metadata.threadId` + an agent-authored row under the viewer's own account.
  *     `agentSentMessages` below is the derivation, and the window IMPORTS it
  *     rather than writing a second one.
  *  2. **Work narration** ("scanning 14 components…") — ✅ BUILT, in
@@ -95,7 +95,7 @@ import { AgentStats } from "./agent-stats";
 /**
  * WHAT THIS AGENT POSTED. Pure and exported for the test.
  *
- * ⚠ THE MATCH IS `taskId` + AGENT-AUTHORED + THE VIEWER'S OWN ACCOUNT, all
+ * ⚠ THE MATCH IS `threadId` + AGENT-AUTHORED + THE VIEWER'S OWN ACCOUNT, all
  * three. The desktop posts its agent's words over the OPERATOR'S credential with
  * `authorKind: "agent"` (INVARIANTS §5), so the account is what separates my
  * agent from a peer's — and `authorKind` alone would put a teammate's agent in
@@ -129,7 +129,7 @@ import { AgentStats } from "./agent-stats";
  */
 export function agentSentMessages(
   messages: readonly ChannelMessage[],
-  taskId: string,
+  threadId: string,
   currentUserId: string,
   agentId?: string | null
 ): ChannelMessage[] {
@@ -144,14 +144,14 @@ export function agentSentMessages(
     }
     // The thread join, exactly as it always worked: same thread, and not
     // positively attributed to a SIBLING instance.
-    if (taskId && m.metadata.taskId === taskId) {
+    if (threadId && m.metadata.threadId === threadId) {
       if (!mine) return true;
       const stamped = parseAgentPostStamp(m.clientMsgId);
       return stamped === null || stamped === mine;
     }
     // ⚠ THE THREADLESS POST (2026-08-31, Samuel's attribution report — the
     // 2026-08-25 F-251 note measured this exact miss and fixed only the LANDING
-    // check). A main-room post carries no `metadata.taskId`, so the join above
+    // check). A main-room post carries no `metadata.threadId`, so the join above
     // can never admit it and the agent's own sent box showed nothing for it.
     // With no thread to join on, only a POSITIVE per-instance attribution may
     // admit the row — the writer's own stamp, or the `session_id` the desktop
@@ -258,7 +258,7 @@ export function ChannelsAgentPanel({
   // `<channel>:<thread>:<agent>`, and a two-segment filter matches nothing at all.
   const narration = useAgentNarration(
     agent?.channelId ?? "",
-    agent?.taskId ?? "",
+    agent?.threadId ?? "",
     agent?.agentId
   );
   // ⚠ THE VIEWER'S FACE, off the transcript this panel is already handed — no
@@ -364,9 +364,9 @@ export function ChannelsAgentPanel({
             liveness={agentLiveness(agent)}
             entries={narration.entries}
             supported={narration.supported}
-            sent={agentSentMessages(messages, agent.taskId, currentUserId, agent.agentId)}
+            sent={agentSentMessages(messages, agent.threadId, currentUserId, agent.agentId)}
             // ⚠ THE UNFILTERED TRANSCRIPT, BESIDE THE FILTERED ONE (2026-08-25).
-            // `agentSentMessages` requires `metadata.taskId`, which a threadless
+            // `agentSentMessages` requires `metadata.threadId`, which a threadless
             // post does not carry — so it cannot answer "did this draft land",
             // and a held card went on saying "Not sent" over a delivered post.
             delivered={messages}
@@ -399,7 +399,7 @@ export function ChannelsAgentPanel({
               agent instead would answer a click about a different agent. */}
           <AgentComposer
             channelId={agent.channelId}
-            taskId={agent.taskId}
+            threadId={agent.threadId}
             agentId={agent.agentId}
             runtimeId={agent.runtimeId}
             name={agentDisplayName(agent)}

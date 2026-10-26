@@ -25,8 +25,8 @@ async function liveAgent() {
 }
 
 function direct(agentId, id) {
-  return engine.messageByTask({
-    channelId: CHANNEL, taskId: "", agentId, text: "status?",
+  return engine.messageByThread({
+    channelId: CHANNEL, threadId: "", agentId, text: "status?",
     directed: { id, workspaceId: WORKSPACE, operatorUserId: ME },
   });
 }
@@ -50,7 +50,7 @@ test("pause mid-directed-turn: the interrupted turn's result reports nothing", a
   assert.deepEqual(direct(agentId, id), { ok: true });
   h.feed(frames.say("half an ans"));
   await settle();
-  assert.deepEqual(engine.controlByTask({ channelId: CHANNEL, taskId: "", agentId, action: "pause" }), { ok: true });
+  assert.deepEqual(engine.controlByThread({ channelId: CHANNEL, threadId: "", agentId, action: "pause" }), { ok: true });
   assert.equal(h.interrupts, 1, "the pause reached the runtime");
   h.feed(frames.result());
   await settle();

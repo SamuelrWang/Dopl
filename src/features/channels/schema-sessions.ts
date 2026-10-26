@@ -13,7 +13,7 @@ export const SessionStateQuerySchema = z.object({
 });
 export type SessionStateQuery = z.infer<typeof SessionStateQuerySchema>;
 
-// The desktop's `<channelId>:<taskId>:<agentId>` (`main/session-store.js › sessionKey`), never re-derived here.
+// The desktop's `<channelId>:<threadId>:<agentId>` (`main/session-store.js › sessionKey`), never re-derived here.
 // Tight charset: the reconcile deletes by key. Two-segment form kept for older desktops (INVARIANTS §13).
 // Keep on one line: `dopl-desktop-app/test/session-state-push.test.mjs` lifts this literal by regex.
 const SESSION_KEY_RE = /^[0-9a-fA-F-]{1,64}:[0-9a-fA-F-]{0,64}(?::[0-9a-zA-Z-]{0,64})?$/;

@@ -75,7 +75,7 @@ function parkedSessionFromRecord(key, rec, sdkId) {
     // Never re-read live: this conversation belongs to one runtime.
     runtimeId: rec.runtimeId || null,
     channelId: rec.channelId,
-    taskId: rec.taskId || '',
+    threadId: rec.threadId || '',
     workspaceId: rec.workspaceId,
     side: state.side,
     profile: profile,
@@ -133,8 +133,8 @@ function endInterrupted(key, rec, why, opts) {
   const quiet = !!(opts && opts.quiet);
   store.setRecordPhase(key, 'ended');
   if (!quiet) deps.runLifecycle(
-    { channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key: key, sdkSessionId: store.getSdkSessionId(key) },
-    'task_failed',
+    { channelId: rec.channelId, threadId: rec.threadId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key: key, sdkSessionId: store.getSdkSessionId(key) },
+    'thread_failed',
     { interrupted: true },
     sessionEffects.terminalBody({ interrupted: true }),
   );
@@ -143,10 +143,10 @@ function endInterrupted(key, rec, why, opts) {
     agentId: rec.agentId,
     sessionId: rec.sessionId,
     channelId: rec.channelId,
-    taskId: rec.taskId,
+    threadId: rec.threadId,
     workspaceId: rec.workspaceId,
     channelName: rec.channelName,
-    threadTitle: rec.taskTitle,
+    threadTitle: rec.threadTitle,
     identityName: rec.identityName || rec.templateName, // `templateName`: pre-rename record (P3-10)
     startedAt: rec.startedAt,
     endedAt: Date.now(),
@@ -154,7 +154,7 @@ function endInterrupted(key, rec, why, opts) {
     runtimeId: rec.runtimeId || null,
     entries: [],
   });
-  diag('session-boot: ended dormant agent —', why, '| agent', String(rec.agentId || ''), 'channel', String(rec.channelId || '').slice(0, 8), 'thread', String(rec.taskId || '').slice(0, 8));
+  diag('session-boot: ended dormant agent —', why, '| agent', String(rec.agentId || ''), 'channel', String(rec.channelId || '').slice(0, 8), 'thread', String(rec.threadId || '').slice(0, 8));
 }
 
 /** The boot pass, after `init()`'s interrupted scan and before the prune. Each record is independent: one that
@@ -203,7 +203,7 @@ function reparkOne(key, rec) {
   deps.sessions.set(key, s);
   // Arm the abandonment bound: no reducer event has run on this object to arm one.
   deps.scheduleIdle(s);
-  diag('session-boot: re-parked dormant agent (Idle; resumes on the next addressed message)', 'agent', String(s.agentId || ''), 'channel', String(s.channelId || '').slice(0, 8), 'thread', String(s.taskId || '').slice(0, 8));
+  diag('session-boot: re-parked dormant agent (Idle; resumes on the next addressed message)', 'agent', String(s.agentId || ''), 'channel', String(s.channelId || '').slice(0, 8), 'thread', String(s.threadId || '').slice(0, 8));
   return 'reparked';
 }
 

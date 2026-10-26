@@ -113,7 +113,7 @@ export const CHANNEL_INPUT_SHAPE = {
       'op="send" (optional): the messages this one CITES — their numbers become links; a #N you merely type does not. Give ONE of `no` (this room) or `seq` (table-wide) per entry.',
     ),
 
-  // Both routes dedupe per-author (`channel_messages` and `channel_tasks`).
+  // Both routes dedupe per-author (`channel_messages` and `channel_threads`).
   client_msg_id: z
     .string()
     .min(1)

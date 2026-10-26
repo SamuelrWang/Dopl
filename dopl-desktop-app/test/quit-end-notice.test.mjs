@@ -16,7 +16,7 @@
 //      exactly what `quitDetailTail` promises the operator out loud, and what the C-8 invariant
 //      claims the quit path does ("ends each through the calm `inactive` terminal so the peer is
 //      told"). THIS is the half that lost the notice.
-//   2. THE ENDS WERE ISSUED AFTER THE TRANSPORTS CAME DOWN. `postTaskEvent` goes out over
+//   2. THE ENDS WERE ISSUED AFTER THE TRANSPORTS CAME DOWN. `postThreadEvent` goes out over
 //      `listener-io.js › sendOnce`, which has no running-gate, so the POST itself was still
 //      legal — but presence had already declared this machine `away`/`offline`, and the ends got
 //      none of the bounded window the away post and the state flush were sharing. Ending FIRST
@@ -334,9 +334,9 @@ test("the calm inactive note is tracked — it is the post the peer is waiting o
   assert.match(
     onEnded,
     /terminalPosts\.track\(/,
-    "`void Promise.resolve(postTaskEvent(…))` is what app.quit() raced and won"
+    "`void Promise.resolve(postThreadEvent(…))` is what app.quit() raced and won"
   );
-  assert.match(onEnded, /postTaskEvent\(/, "…and it is still the same one post");
+  assert.match(onEnded, /postThreadEvent\(/, "…and it is still the same one post");
   assert.match(OUTCOMES, /require\('\.\/session-terminal-posts'\)/);
 });
 

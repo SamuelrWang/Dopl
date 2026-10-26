@@ -8,7 +8,7 @@
 //              the channel, parked on turn end, reaped by the 12h abandonment bound.
 //   `jsk2zowk` (Row Cap Fix) — posted a MILESTONE, ran tests that left two FAILING, parked, reaped
 //              12h later. No DONE.
-// Each wrote exactly one row: a `task_progress` lifecycle marker carrying "This session went
+// Each wrote exactly one row: a `thread_progress` lifecycle marker carrying "This session went
 // inactive." That marker is correct for its own job — a CALM note to a waiting counterparty, free
 // of local detail by design — and useless as a report: it addresses nobody, so it wakes no agent
 // and notifies no person; it names no agent; and it states no cause. The orchestrator that
@@ -157,7 +157,7 @@ function report(s, eff) {
     void require('./session-terminal-posts').track(require('./channel-post').postDropNotice(
       { channel: { id: s.channelId }, workspaceId: s.workspaceId },
       text,
-      { clientMsgId: key, summary: oneLine(text, 180), taskId: s.taskId || undefined, sessionId: s.key },
+      { clientMsgId: key, summary: oneLine(text, 180), threadId: s.threadId || undefined, sessionId: s.key },
     )).then((posted) => {
       if (!posted) diag('session-drop-notice: POST FAILED — the drop is on this machine only', code, s.agentId || '');
     }).catch((err) => diag('session-drop-notice: post error —', (err && err.message) || 'error'));

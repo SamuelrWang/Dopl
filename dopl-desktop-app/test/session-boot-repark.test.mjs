@@ -39,7 +39,7 @@ test("a parked record with an sdk id comes back as a registered PARKED session",
   assert.equal(s.startedAt, rec.startedAt);
   assert.equal(s.agentId, "y1uun32v");
   assert.equal(s.channelId, CHANNEL);
-  assert.equal(s.taskId, "");
+  assert.equal(s.threadId, "");
   assert.equal(s.workspaceId, rec.workspaceId);
   assert.equal(s.side, "responder");
   assert.equal(s.counterpartyId, "peer-1", "L1: the feed stays bound to the stored counterparty");
@@ -186,7 +186,7 @@ test("a parked record with NO sdk id is ENDED with a history entry, not dropped"
   assert.equal(h.sessions.has(key), false, "an unresumable agent must not hold a slot it can never use");
   assert.deepEqual(h.calls.phase, [[key, "ended"]]);
   assert.equal(h.calls.lifecycle.length, 1);
-  assert.equal(h.calls.lifecycle[0].kind, "task_failed");
+  assert.equal(h.calls.lifecycle[0].kind, "thread_failed");
   assert.deepEqual(h.calls.lifecycle[0].extra, { interrupted: true });
   assert.equal(h.calls.lifecycle[0].body, EFFECTS.terminalBody({ interrupted: true }), "a terminal says why, in the shared calm one-liner");
   assert.equal(h.calls.lifecycle[0].info.key, key);
@@ -219,7 +219,7 @@ test("a parked record on a runtime that REFUSES resume is ENDED, never left Idle
   assert.equal(h.sessions.has(KEY), false);
   assert.deepEqual(h.calls.phase, [[KEY, "ended"]]);
   assert.equal(h.calls.history.length, 1, "an Ended card with a readable reason is the floor");
-  assert.equal(h.calls.lifecycle[0].kind, "task_failed");
+  assert.equal(h.calls.lifecycle[0].kind, "thread_failed");
 });
 
 // ── 3. NON-PARKED RECORDS ARE UNTOUCHED (the two other dispositions) ────────────────────────

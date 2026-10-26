@@ -52,7 +52,7 @@ function consent(
 const OPENER = message({
   id: "op",
   seq: 2,
-  metadata: { taskId: "t-1", fanoutGroup: "grp-1" },
+  metadata: { threadId: "t-1", fanoutGroup: "grp-1" },
 });
 const PLAIN = message({ id: "chat", seq: 3 });
 
@@ -96,8 +96,8 @@ describe("pendingOutboundByThread", () => {
   it("takes the OLDEST pending draft when a thread carries two — first wins", () => {
     // Ascending seq, so the first match is the draft that has been waiting
     // longest. Last-wins would send a different draft than the one on screen.
-    const FIRST = message({ id: "m-first", seq: 2, metadata: { taskId: "t-1" } });
-    const SECOND = message({ id: "m-second", seq: 5, metadata: { taskId: "t-1" } });
+    const FIRST = message({ id: "m-first", seq: 2, metadata: { threadId: "t-1" } });
+    const SECOND = message({ id: "m-second", seq: 5, metadata: { threadId: "t-1" } });
     const map = pendingOutboundByThread(
       [FIRST, SECOND],
       [consent({ id: "o-old", messageSeq: 2 }), consent({ id: "o-new", messageSeq: 5 })]

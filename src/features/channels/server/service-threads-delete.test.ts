@@ -8,10 +8,10 @@
  *     destroy the record;
  *   - a non-member of a PUBLIC channel is refused before any thread row loads, so
  *     the read-visibility rule never becomes a delete;
- *   - ORDER: children first, the `channel_tasks` row LAST. Nothing else in the
+ *   - ORDER: children first, the `channel_threads` row LAST. Nothing else in the
  *     tree pins it, and the reverse order is silently destructive — the row's
- *     departure nulls `channel_sessions.task_id` (its FK is ON DELETE SET NULL)
- *     and strands every `metadata.taskId` message on an id resolving to nothing;
+ *     departure nulls `channel_sessions.thread_id` (its FK is ON DELETE SET NULL)
+ *     and strands every `metadata.threadId` message on an id resolving to nothing;
  *   - consent rows are EXPIRED against the seqs the message delete actually
  *     removed, never deleted and never guessed from a range.
  */
@@ -22,28 +22,28 @@ vi.mock("./repository");
 vi.mock("./repository-collab");
 vi.mock("./repository-messages");
 vi.mock("./repository-sessions");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 
 import * as repo from "./repository";
 import * as repoCollab from "./repository-collab";
 import * as repoMessages from "./repository-messages";
 import * as repoSessions from "./repository-sessions";
-import * as repoTasks from "./repository-tasks";
-import { deleteTask } from "./service-tasks-delete";
+import * as repoThreads from "./repository-threads";
+import { deleteThread } from "./service-threads-delete";
 import {
   ChannelForbiddenError,
-  TaskForbiddenError,
-  TaskNotFoundError,
+  ThreadForbiddenError,
+  ThreadNotFoundError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
-import type { ChannelMemberRow, ChannelRow, ChannelTaskRow } from "./dto";
+import type { ChannelMemberRow, ChannelRow, ChannelThreadRow } from "./dto";
 
 const WS = "ws-1";
 const CHAN = "chan-1";
 const USER = "aaaaaaaa-e29b-41d4-a716-446655440000";
 const CREATOR = "cccccccc-e29b-41d4-a716-446655440000";
 const TARGET = "dddddddd-e29b-41d4-a716-446655440000";
-const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+const THREAD_ID = "660e8400-e29b-41d4-a716-446655440111";
 
 function ctxWith(overrides: Partial<ChannelContext> = {}): ChannelContext {
   return {
@@ -90,9 +90,9 @@ function memberRow(userId: string, role = "member"): ChannelMemberRow {
   };
 }
 
-function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+function threadRow(overrides: Partial<ChannelThreadRow> = {}): ChannelThreadRow {
   return {
-    id: TASK_ID,
+    id: THREAD_ID,
     channel_id: CHAN,
     workspace_id: WS,
     title: "Ship it",
@@ -117,42 +117,42 @@ beforeEach(() => {
   vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
     uid === USER ? memberRow(USER, "member") : null
   );
-  vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRow());
+  vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(threadRow());
   vi.mocked(repoMessages.deleteMessagesByThread).mockResolvedValue([]);
   vi.mocked(repoCollab.expireConsentForMessageSeqs).mockResolvedValue(undefined);
   vi.mocked(repoSessions.deleteSessionStatesForThread).mockResolvedValue(
     undefined
   );
-  vi.mocked(repoTasks.deleteTask).mockResolvedValue(undefined);
+  vi.mocked(repoThreads.deleteThread).mockResolvedValue(undefined);
 });
 
 /** Nothing at all was written — the assertion every refusal case makes. */
 function expectNothingDeleted() {
   expect(repoMessages.deleteMessagesByThread).not.toHaveBeenCalled();
   expect(repoSessions.deleteSessionStatesForThread).not.toHaveBeenCalled();
-  expect(repoTasks.deleteTask).not.toHaveBeenCalled();
+  expect(repoThreads.deleteThread).not.toHaveBeenCalled();
 }
 
-describe("deleteTask — who may", () => {
+describe("deleteThread — who may", () => {
   it("allows the thread's CREATOR, whatever their channel role", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER, target_user_id: TARGET })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: USER, target_user_id: TARGET })
     );
-    await deleteTask(ctxWith(), "general", TASK_ID);
-    expect(repoTasks.deleteTask).toHaveBeenCalledWith(CHAN, TASK_ID);
+    await deleteThread(ctxWith(), "general", THREAD_ID);
+    expect(repoThreads.deleteThread).toHaveBeenCalledWith(CHAN, THREAD_ID);
   });
 
   it("allows the channel OWNER on somebody else's thread", async () => {
     vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
       uid === USER ? memberRow(USER, "owner") : null
     );
-    await deleteTask(ctxWith(), "general", TASK_ID);
-    expect(repoTasks.deleteTask).toHaveBeenCalledWith(CHAN, TASK_ID);
+    await deleteThread(ctxWith(), "general", THREAD_ID);
+    expect(repoThreads.deleteThread).toHaveBeenCalledWith(CHAN, THREAD_ID);
   });
 
   it("allows a WORKSPACE ADMIN who is only a plain channel member", async () => {
-    await deleteTask(ctxWith({ role: "admin" }), "general", TASK_ID);
-    expect(repoTasks.deleteTask).toHaveBeenCalledWith(CHAN, TASK_ID);
+    await deleteThread(ctxWith({ role: "admin" }), "general", THREAD_ID);
+    expect(repoThreads.deleteThread).toHaveBeenCalledWith(CHAN, THREAD_ID);
   });
 
   /**
@@ -161,19 +161,19 @@ describe("deleteTask — who may", () => {
    * "fixing" the gate to match the write gate lands here.
    */
   it("REFUSES the addressee, who may post in the very same thread", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: CREATOR, target_user_id: USER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: CREATOR, target_user_id: USER })
     );
     await expect(
-      deleteTask(ctxWith(), "general", TASK_ID)
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
+      deleteThread(ctxWith(), "general", THREAD_ID)
+    ).rejects.toBeInstanceOf(ThreadForbiddenError);
     expectNothingDeleted();
   });
 
   it("refuses a plain member who is neither party", async () => {
     await expect(
-      deleteTask(ctxWith(), "general", TASK_ID)
-    ).rejects.toBeInstanceOf(TaskForbiddenError);
+      deleteThread(ctxWith(), "general", THREAD_ID)
+    ).rejects.toBeInstanceOf(ThreadForbiddenError);
     expectNothingDeleted();
   });
 
@@ -185,27 +185,27 @@ describe("deleteTask — who may", () => {
     );
     vi.mocked(repo.findMembership).mockResolvedValue(null);
     await expect(
-      deleteTask(ctxWith(), "general", TASK_ID)
+      deleteThread(ctxWith(), "general", THREAD_ID)
     ).rejects.toBeInstanceOf(ChannelForbiddenError);
-    expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
+    expect(repoThreads.findThreadByChannelAndId).not.toHaveBeenCalled();
     expectNothingDeleted();
   });
 
   /** Channel-scoped load: a thread in another room reads as 404, so the id
    *  cannot be probed across channels. */
   it("404s a thread that is not in this channel", async () => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(null);
     await expect(
-      deleteTask(ctxWith(), "general", TASK_ID)
-    ).rejects.toBeInstanceOf(TaskNotFoundError);
+      deleteThread(ctxWith(), "general", THREAD_ID)
+    ).rejects.toBeInstanceOf(ThreadNotFoundError);
     expectNothingDeleted();
   });
 });
 
-describe("deleteTask — the cascade", () => {
+describe("deleteThread — the cascade", () => {
   beforeEach(() => {
-    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
-      taskRow({ created_by: USER })
+    vi.mocked(repoThreads.findThreadByChannelAndId).mockResolvedValue(
+      threadRow({ created_by: USER })
     );
   });
 
@@ -222,34 +222,34 @@ describe("deleteTask — the cascade", () => {
         order.push("sessions");
       }
     );
-    vi.mocked(repoTasks.deleteTask).mockImplementation(async () => {
-      order.push("task");
+    vi.mocked(repoThreads.deleteThread).mockImplementation(async () => {
+      order.push("thread");
     });
 
-    await deleteTask(ctxWith(), "general", TASK_ID);
+    await deleteThread(ctxWith(), "general", THREAD_ID);
 
-    expect(order).toEqual(["messages", "sessions", "task"]);
+    expect(order).toEqual(["messages", "sessions", "thread"]);
   });
 
   it("scopes every statement to the resolved channel / workspace", async () => {
-    await deleteTask(ctxWith(), "general", TASK_ID);
+    await deleteThread(ctxWith(), "general", THREAD_ID);
     expect(repoMessages.deleteMessagesByThread).toHaveBeenCalledWith(
       CHAN,
-      TASK_ID
+      THREAD_ID
     );
     expect(repoSessions.deleteSessionStatesForThread).toHaveBeenCalledWith(
       WS,
       CHAN,
-      TASK_ID
+      THREAD_ID
     );
-    expect(repoTasks.deleteTask).toHaveBeenCalledWith(CHAN, TASK_ID);
+    expect(repoThreads.deleteThread).toHaveBeenCalledWith(CHAN, THREAD_ID);
   });
 
   /** ⚠ The seqs come from the delete that actually happened — never a range and
    *  never the thread id, which the consent table does not carry. */
   it("expires consent against the seqs the message delete removed", async () => {
     vi.mocked(repoMessages.deleteMessagesByThread).mockResolvedValue([7, 9, 12]);
-    await deleteTask(ctxWith(), "general", TASK_ID);
+    await deleteThread(ctxWith(), "general", THREAD_ID);
     expect(repoCollab.expireConsentForMessageSeqs).toHaveBeenCalledWith(
       CHAN,
       [7, 9, 12]
@@ -259,19 +259,19 @@ describe("deleteTask — the cascade", () => {
   /** A thread whose transcript was already gone still deletes cleanly. */
   it("still removes the thread row when no message was tagged for it", async () => {
     vi.mocked(repoMessages.deleteMessagesByThread).mockResolvedValue([]);
-    await deleteTask(ctxWith(), "general", TASK_ID);
+    await deleteThread(ctxWith(), "general", THREAD_ID);
     expect(repoCollab.expireConsentForMessageSeqs).toHaveBeenCalledWith(CHAN, []);
-    expect(repoTasks.deleteTask).toHaveBeenCalledWith(CHAN, TASK_ID);
+    expect(repoThreads.deleteThread).toHaveBeenCalledWith(CHAN, THREAD_ID);
   });
 
   /**
    * ⚠ NOT A CLOSE. Threads have no finished state (INVARIANTS §5) and nothing
-   * here may start writing one — `updateTask` is the only writer of `status` /
+   * here may start writing one — `updateThread` is the only writer of `status` /
    * `mode` and this path must never reach it.
    */
   it("writes no thread STATUS on the way out", async () => {
-    await deleteTask(ctxWith(), "general", TASK_ID);
-    expect(repoTasks.updateTask).not.toHaveBeenCalled();
+    await deleteThread(ctxWith(), "general", THREAD_ID);
+    expect(repoThreads.updateThread).not.toHaveBeenCalled();
   });
 
   /** A mid-cascade failure must leave the thread row STANDING — re-clicking
@@ -280,9 +280,9 @@ describe("deleteTask — the cascade", () => {
     vi.mocked(repoSessions.deleteSessionStatesForThread).mockRejectedValue(
       new Error("boom")
     );
-    await expect(deleteTask(ctxWith(), "general", TASK_ID)).rejects.toThrow(
+    await expect(deleteThread(ctxWith(), "general", THREAD_ID)).rejects.toThrow(
       "boom"
     );
-    expect(repoTasks.deleteTask).not.toHaveBeenCalled();
+    expect(repoThreads.deleteThread).not.toHaveBeenCalled();
   });
 });

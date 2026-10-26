@@ -2,7 +2,7 @@
  * THE LEGACY THREAD ID, PARSED — the second survivor of `lib/group-thread.ts`,
  * which is deleted (wiring plan Phase 5, 2026-08-18).
  *
- * A `task-{channelId}-{seq}` id was minted per MESSAGE by desktops that predate
+ * A `thread-{channelId}-{seq}` id was minted per MESSAGE by desktops that predate
  * first-class threads, and installed builds still post them for lifecycle
  * events. The grouper used this to pull a legacy exchange's opening request into
  * its card; the card is gone, and the one caller left is server-side —
@@ -16,20 +16,20 @@
  */
 
 /**
- * Parse the trailing seq `N` from a legacy `task-{channelId}-{N}` id.
+ * Parse the trailing seq `N` from a legacy `thread-{channelId}-{N}` id.
  *
  * ⚠ ANCHOR ON THE KNOWN CHANNEL ID, NEVER SPLIT ON '-' — the channelId is a
  * UUID and contains hyphens, so a split-based parse reads a fragment of the
  * channel id as the seq. Null for any other shape, which is what keeps the
  * legacy-only path scoped to legacy exchanges.
  */
-export function parseLegacyTaskSeq(
-  taskId: string,
+export function parseLegacyThreadSeq(
+  threadId: string,
   channelId: string
 ): number | null {
-  const prefix = `task-${channelId}-`;
-  if (!taskId.startsWith(prefix)) return null;
-  const rest = taskId.slice(prefix.length);
+  const prefix = `thread-${channelId}-`;
+  if (!threadId.startsWith(prefix)) return null;
+  const rest = threadId.slice(prefix.length);
   if (!/^\d+$/.test(rest)) return null;
   return Number(rest);
 }

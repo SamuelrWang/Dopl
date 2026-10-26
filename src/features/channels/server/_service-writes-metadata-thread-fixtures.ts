@@ -16,12 +16,12 @@ import { vi } from "vitest";
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskRow,
+  ChannelThreadRow,
 } from "./dto";
 import type { ChannelContext } from "./service-shared";
 
@@ -29,10 +29,10 @@ export const WS = "ws-1";
 export const USER = "11111111-e29b-41d4-a716-446655440000";
 export const PEER = "22222222-e29b-41d4-a716-446655440000";
 export const THIRD = "33333333-e29b-41d4-a716-446655440000";
-export const TASK_ID = "44444444-e29b-41d4-a716-446655440000";
+export const THREAD_ID = "44444444-e29b-41d4-a716-446655440000";
 
-/** A legacy `task-{channelId}-{seq}` id — the shape the desktop still posts. */
-export const LEGACY_ID = "task-chan-1-7";
+/** A legacy `thread-{channelId}-{seq}` id — the shape the desktop still posts. */
+export const LEGACY_ID = "thread-chan-1-7";
 
 export const ctx: ChannelContext = {
   workspaceId: WS,
@@ -44,9 +44,9 @@ export const ctx: ChannelContext = {
 
 /**
  * The ctx a lifecycle post really arrives on. `postMessage` refuses
- * `task_started` / `task_finished` / `task_failed` from an AGENT-TOKEN caller,
+ * `thread_started` / `thread_finished` / `thread_failed` from an AGENT-TOKEN caller,
  * and the desktop's own echoes are not that lane:
- * `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the Electron
+ * `dopl-desktop-app/main/channel-post.postThreadEvent` posts on the Electron
  * session's Supabase cookies, so ctx is `source: "user"` with the body declaring
  * `authorKind: "agent"`.
  */
@@ -86,9 +86,9 @@ export function memberRow(userId: string, role = "member"): ChannelMemberRow {
   };
 }
 
-export function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+export function threadRow(overrides: Partial<ChannelThreadRow> = {}): ChannelThreadRow {
   return {
-    id: TASK_ID,
+    id: THREAD_ID,
     channel_id: "chan-1",
     workspace_id: WS,
     title: "Wire the listener",
@@ -174,7 +174,7 @@ export function installThreadMocks(): void {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
       rows: [],
       truncated: false,
     });

@@ -89,7 +89,7 @@ export { authorAgentIdOf } from "../lib/agent-post-stamp";
  * at once, and pointed the agent view at whichever happened to be first.
  *
  * ⚠ THE PAIR IS STILL THE ADDRESS THE BRIDGE OPS TAKE, and that is deliberate:
- * `pause` / `end` / `openAgentWindow` resolve `(channelId, taskId)` against
+ * `pause` / `end` / `openAgentWindow` resolve `(channelId, threadId)` against
  * main's own registry (`agents-controls.ts`), and they read it off the SESSION
  * OBJECT, never by parsing this string. Nothing anywhere splits this value —
  * it is compared and used as a React key and nothing else — which is what makes
@@ -100,11 +100,11 @@ export { authorAgentIdOf } from "../lib/agent-post-stamp";
  */
 export function agentKey(session: {
   channelId: string;
-  taskId: string;
+  threadId: string;
   agentId?: string | null;
 }): string {
   const id = typeof session.agentId === "string" ? session.agentId.trim() : "";
-  return id || `${session.channelId}:${session.taskId}`;
+  return id || `${session.channelId}:${session.threadId}`;
 }
 
 /**
@@ -123,9 +123,9 @@ export function agentsForChannel(
   channelId: string
 ): DesktopSessionSummary[] {
   const mine = sessions.filter((s) => s.channelId === channelId);
-  const order = [...new Set(mine.map((s) => s.taskId))];
+  const order = [...new Set(mine.map((s) => s.threadId))];
   return [...mine].sort(
-    (a, b) => order.indexOf(a.taskId) - order.indexOf(b.taskId)
+    (a, b) => order.indexOf(a.threadId) - order.indexOf(b.threadId)
   );
 }
 
@@ -147,7 +147,7 @@ export function ownAgentsFor(
 ): DesktopSessionSummary[] {
   const inChannel = agentsForChannel(sessions, channelId);
   return openThreadId
-    ? inChannel.filter((a) => a.taskId === openThreadId)
+    ? inChannel.filter((a) => a.threadId === openThreadId)
     : inChannel;
 }
 
@@ -243,7 +243,7 @@ export function activeAgentCount(
 }
 
 /**
- * How many of MY agents share each thread, keyed by `taskId`. Two on one thread
+ * How many of MY agents share each thread, keyed by `threadId`. Two on one thread
  * is the case the cards have to make obvious, and a count is the cheapest way to
  * say it without the reader comparing two `↳` lines.
  */
@@ -251,7 +251,7 @@ export function agentsPerThread(
   sessions: readonly DesktopSessionSummary[]
 ): Map<string, number> {
   const out = new Map<string, number>();
-  for (const s of sessions) out.set(s.taskId, (out.get(s.taskId) ?? 0) + 1);
+  for (const s of sessions) out.set(s.threadId, (out.get(s.threadId) ?? 0) + 1);
   return out;
 }
 
@@ -363,7 +363,7 @@ export function agentProfileLabel(session: DesktopSessionSummary): string | null
 
 /** WHERE AN AGENT IS ON NO THREAD (Samuel, 2026-08-27). ⚠ It read "no thread title" — a MISSING
  *  FIELD, where the truth is a PLACE: a channel-level agent is on the ROOM on purpose
- *  (`agents-controls.ts`: `taskId: null`). ⚠ ONE STATEMENT; THREE callers each spelled it out — the third (`agents-tab-cards.tsx › AgentCard`) was missed by the 2026-08-27 wave and converted 2026-08-28, so the card and the panel it opens no longer disagree. */
+ *  (`agents-controls.ts`: `threadId: null`). ⚠ ONE STATEMENT; THREE callers each spelled it out — the third (`agents-tab-cards.tsx › AgentCard`) was missed by the 2026-08-27 wave and converted 2026-08-28, so the card and the panel it opens no longer disagree. */
 export const NO_THREAD_LABEL = "main channel";
 
 /**
@@ -375,7 +375,7 @@ export const NO_THREAD_LABEL = "main channel";
  * ⚠ **KIND AND NAME ARE SEPARATE FACTS AND MUST STAY SO.** The stream used to carry ONE
  * string — the thread title, or `null` — so "a thread whose title did not come through"
  * and "the main channel" were the same value, and the second wording could only ever be a
- * fallback. `taskId` is what actually says WHICH PLACE (`""` is the wire spelling of "no
+ * fallback. `threadId` is what actually says WHICH PLACE (`""` is the wire spelling of "no
  * first-class thread", `spa-bridge-shapes.ts`), so the kind is read off it and the name is
  * allowed to be missing on its own.
  * ⚠ **`name: null` IS "CANNOT SAY", NEVER A BLANK** (INVARIANTS §11). An older main reports
@@ -391,16 +391,16 @@ export interface PostDestination {
 }
 
 /** Read {@link PostDestination} off a session summary. ⚠ Pure, and the ONE place the
- *  `taskId === ""` spelling is turned into a place — two readings of it is how the banner
+ *  `threadId === ""` spelling is turned into a place — two readings of it is how the banner
  *  and the header come to name different destinations for one post. */
 export function postDestination(session: {
-  taskId: string;
+  threadId: string;
   channelName?: string | null;
   threadTitle?: string | null;
 }): PostDestination {
   const trim = (v: string | null | undefined) =>
     (typeof v === "string" ? v.trim() : "") || null;
-  return session.taskId.trim()
+  return session.threadId.trim()
     ? { kind: "thread", name: trim(session.threadTitle) }
     : { kind: "channel", name: trim(session.channelName) };
 }

@@ -15,7 +15,7 @@ import { agentIsAnotherMembers } from "./repository-agent-owner";
 import * as directionRepo from "./repository-directions";
 import type { AgentDirectionRow } from "./repository-directions";
 import * as collab from "./repository-collab";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { loadVisibleChannel, type ChannelContext } from "./service-shared";
 // ⚠ THE RACE HALF OF G10, SHARED WITH THE LAUNCH LANE — see that module for why
 // the PROBE is not in it and this file states its own gate ordering instead.
@@ -76,7 +76,7 @@ function toDirection(row: AgentDirectionRow, now: number): AgentDirection {
     id: row.id,
     operatorUserId: row.operator_user_id,
     channelId: row.channel_id,
-    threadId: row.task_id,
+    threadId: row.thread_id,
     agentId: row.agent_id,
     // ⚠ A LABEL, UNVERIFIED, and `?? null` because a desktop or a row older than
     // the column simply has none — absent means UNKNOWN, never "the operator".
@@ -99,7 +99,7 @@ function toDirection(row: AgentDirectionRow, now: number): AgentDirection {
  * THE ONLY HONEST ONE AVAILABLE** (F-376a, 2026-08-31).
  *
  * ⚠ **READ THIS BEFORE USING THE VALUE FOR ANYTHING.** The input is
- * `X-Dopl-Session-Id`, the desktop's slot key `<channelId>:<taskId>:<agentId>`,
+ * `X-Dopl-Session-Id`, the desktop's slot key `<channelId>:<threadId>:<agentId>`,
  * and INVARIANTS §10 already records what that header is worth: *a routing hint,
  * not authorization — anything holding this device token can set it, so it PROVES
  * nothing about the caller. Nothing may be GRANTED on it.* This function does not
@@ -231,11 +231,11 @@ export async function createAgentDirection(
   }
 
   if (input.threadId) {
-    const task = await repoTasks.findTaskByChannelAndId(
+    const thread = await repoThreads.findThreadByChannelAndId(
       channel.id,
       input.threadId
     );
-    if (!task) throw new DirectionNotFoundError(input.threadId);
+    if (!thread) throw new DirectionNotFoundError(input.threadId);
   }
 
   // ⚠ **ABOVE PRESENCE, ON THE LAUNCH LANE'S ARGUMENT.** `offline` is a 200
@@ -260,7 +260,7 @@ export async function createAgentDirection(
     insert: () => directionRepo.insertAgentDirection(ctx.userId, {
       workspace_id: ctx.workspaceId,
       channel_id: channel.id,
-      task_id: input.threadId ?? null,
+      thread_id: input.threadId ?? null,
       agent_id: input.agentId,
       // ⚠ STAMPED FROM THE TRANSPORT, NEVER FROM THE PAYLOAD (F-376a). See
       // `senderAgentIdFrom` for what it is worth and what it must never be used

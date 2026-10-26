@@ -29,8 +29,8 @@ const codexTools = require("../main/runtime/codex/tools.js");
 
 const CH = "11111111-1111-4111-8111-111111111111";
 const WS = "22222222-2222-4222-8222-222222222222";
-const TASK = "33333333-3333-4333-8333-333333333333";
-const BASE = { channelId: CH, workspaceId: WS, taskId: TASK, channelName: "ops", profile: "dopl_only" };
+const THREAD = "33333333-3333-4333-8333-333333333333";
+const BASE = { channelId: CH, workspaceId: WS, threadId: THREAD, channelName: "ops", profile: "dopl_only" };
 const discFor = (id) => runtime.capability.mcpDiscovery(runtime.descriptorFor(id));
 const turn = (side, extra) => framing.buildFencedTurn({ side, message: "goal", context: { ...BASE, ...extra }, nonce: "n0nce" });
 

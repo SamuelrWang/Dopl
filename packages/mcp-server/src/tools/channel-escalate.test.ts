@@ -121,7 +121,7 @@ describe("the card DEGRADES — the body carries the whole question", () => {
 
   it("leaves `kind` at the default, because any other kind can never notify", async () => {
     // `dopl-desktop-app/main/targeting.js › classify` returns `ignore` for every
-    // `kind !== 'message'`, so a card on a `task_*` kind renders in the
+    // `kind !== 'message'`, so a card on a `thread_*` kind renders in the
     // transcript and pings nobody — half the feature, silently gone.
     const post = vi.fn(async () => POSTED);
     await run(channelStub({ postChannelMessage: post }), ASK);

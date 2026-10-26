@@ -2,7 +2,7 @@
 //
 // THE CAPTURE THIS EXISTS FOR (2026-07-31, a FIRST-CLASS thread — not the legacy case).
 // A requester created thread 300f2b7e at seq 141. The responder's session window answered
-// at seq 143, and that reply carried metadata {runtime, summary, to_user_id} and NO taskId
+// at seq 143, and that reply carried metadata {runtime, summary, to_user_id} and NO threadId
 // at all. On the requester's machine an addressed, agent-authored, thread-less message is
 // indistinguishable from a fresh request: it classified `trigger`, created a consent row,
 // and popped an "INCOMING REQUEST" window for the answer to its own question.
@@ -44,7 +44,7 @@ const AXIS_B = M("runtime/claude/axis-b.js");
 
 const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
 const UUID = "cccccccc-3333-4ddd-8eee-ffffffffffff";
-const LEGACY = `task-${CH}-42`;
+const LEGACY = `thread-${CH}-42`;
 const post = (extra) => Object.assign({ op: "send", body: "here is the answer" }, extra || {});
 
 // ── threadTagFor: the decision ───────────────────────────────────────────────────
@@ -53,7 +53,7 @@ test("INJECTS the session's thread id when the agent supplied none", () => {
   for (const id of [UUID, LEGACY]) {
     const r = tag.threadTagFor(post(), id);
     assert.equal(r.action, "inject", `${id}: the omission the incident is made of`);
-    assert.equal(r.input.thread, id, "the REAL parameter name (1.7.11 cutover), not `task`");
+    assert.equal(r.input.thread, id, "the REAL parameter name (1.7.11 cutover), not `thread`");
     assert.equal(r.input.body, "here is the answer", "everything else rides along untouched");
   }
 });
@@ -74,8 +74,8 @@ test("does NOTHING when the session has no thread id", () => {
 test("does NOTHING when the agent already tagged it correctly", () => {
   assert.equal(tag.threadTagFor(post({ thread: UUID }), UUID).action, "none");
   assert.equal(tag.threadTagFor(post({ thread: `  ${LEGACY}  ` }), LEGACY).action, "none", "trimmed");
-  // metadata.taskId is the OTHER place the op reads a thread id from, so it counts too.
-  assert.equal(tag.threadTagFor(post({ metadata: { taskId: UUID } }), UUID).action, "none");
+  // metadata.threadId is the OTHER place the op reads a thread id from, so it counts too.
+  assert.equal(tag.threadTagFor(post({ metadata: { threadId: UUID } }), UUID).action, "none");
 });
 
 test("NEVER OVERWRITES a different thread the agent deliberately chose", () => {
@@ -86,9 +86,9 @@ test("NEVER OVERWRITES a different thread the agent deliberately chose", () => {
   assert.equal(r.wanted, UUID);
   assert.equal(r.input, undefined, "and it produces no replacement input at all");
   // Same via the metadata spelling.
-  assert.equal(tag.threadTagFor(post({ metadata: { taskId: other } }), UUID).action, "conflict");
+  assert.equal(tag.threadTagFor(post({ metadata: { threadId: other } }), UUID).action, "conflict");
   // An explicit `thread` wins over a metadata copy, exactly as the MCP op resolves it.
-  assert.equal(tag.suppliedThreadId(post({ thread: UUID, metadata: { taskId: other } })), UUID);
+  assert.equal(tag.suppliedThreadId(post({ thread: UUID, metadata: { threadId: other } })), UUID);
 });
 
 test("a non-object input is left alone (nothing to copy, nothing to claim)", () => {
@@ -149,7 +149,7 @@ test("isOutboundPost is the gate: a cross-channel post or a non-post op is never
 
 // ── the wiring in session-io actually does all of the above ──────────────────────
 
-test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only reads it on ALLOW", () => {
+test("makeCanUseTool computes the tag from isOutboundPost + s.threadId, and only reads it on ALLOW", () => {
   const fn = fnOf(BRIDGE, "gateCall");
   // ⚠ A THIRD ARGUMENT JOINED THE TAG ON 2026-08-21: the PER-INSTANCE post stamp
   // (`agent-<agentId>-<n>`), which is what lets `session-dispatch.js`'s fan-out recognise a
@@ -159,7 +159,7 @@ test("makeCanUseTool computes the tag from isOutboundPost + s.taskId, and only r
   // A granular call classifies as its legacy call (DMP-013); the tag still rewrites what the agent sent.
   assert.match(fn, /const call = canonicalDoplCall\(name, input\);/);
   assert.match(fn, /const outbound = isOutboundPost\(call\.name, call\.input, s\.channelId\);/);
-  assert.match(fn, /const tag = outbound \? outboundTag\.threadTagFor\(input, s\.taskId, outboundTag\.nextOwnPostId\(s\)\) : null;/);
+  assert.match(fn, /const tag = outbound \? outboundTag\.threadTagFor\(input, s\.threadId, outboundTag\.nextOwnPostId\(s\)\) : null;/);
   // ⚠ THE STAMP IS MINTED ONLY FOR A REAL OWN-CHANNEL POST. Minting on every tool call would
   // spend ids the session never posts under and blunt the bounded lookback.
   assert.ok(!/nextOwnPostId\(s\)[^)]*\n[\s\S]*nextOwnPostId/.test(fn), "exactly one mint site");

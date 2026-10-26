@@ -100,7 +100,7 @@ export function harness(over = {}) {
 // surfaced a hidden window); one that still answered it would hide a re-added paint.
 export const session = (over = {}) => ({
   key: "c1:t1", sessionId: "s1", side: "responder", profile: "read_only", mode: "interactive",
-  channelId: "c1", taskId: "t1", context: { channelName: "Ops" }, counterpartyName: "David",
+  channelId: "c1", threadId: "t1", context: { channelName: "Ops" }, counterpartyName: "David",
   state: initialSessionState({ mode: "interactive", side: "responder" }),
   win: null, settled: false, firstTurn: "FRAMED FIRST TURN", ...over,
 });

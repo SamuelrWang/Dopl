@@ -31,11 +31,11 @@ const { diag } = require('./diag');
 
 // ─── BEGIN VERSION-SKEW-PURE (sliced verbatim by test/version-skew.test.mjs) ──
 // Free of requires on purpose: the truth table below evaluates this block as-is,
-// the same idiom classify / taskReplyNotice use.
+// the same idiom classify / mentionNotice use.
 
 // The oldest peer build that still speaks the CURRENT cross-machine contract.
 // Below this, a peer behaves differently in ways visible from this machine
-// (1.7.15 is where replies became thread-tagged, reopen became task-scoped, and
+// (1.7.15 is where replies became thread-tagged, reopen became thread-scoped, and
 // the listener stopped dying mid-exchange), so a peer under it is a live
 // explanation for "the fix is not working". Raise it when a release changes what
 // the two sides say to each other, never for a local-only change.

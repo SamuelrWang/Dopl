@@ -68,7 +68,7 @@ function toUpsert(entry: SessionStateEntryInput): SessionStateUpsert {
   return {
     session_key: entry.sessionKey,
     channel_id: entry.channelId,
-    task_id: entry.threadId ?? null,
+    thread_id: entry.threadId ?? null,
     name: entry.name,
     state: entry.state,
     channel_name: entry.channelName ?? null,

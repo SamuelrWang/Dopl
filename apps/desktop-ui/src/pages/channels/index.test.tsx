@@ -143,8 +143,8 @@ beforeEach(() => {
     if (channelId && path.endsWith("/members")) {
       return json({ members: channelId === CHANNEL_ID ? MEMBERS : [] });
     }
-    if (channelId && path.endsWith("/tasks")) {
-      return json({ tasks: channelId === CHANNEL_ID ? [THREAD] : [] });
+    if (channelId && path.endsWith("/threads")) {
+      return json({ threads: channelId === CHANNEL_ID ? [THREAD] : [] });
     }
     if (channelId && path.endsWith("/mentions")) return json({ mentions: [] });
     if (path === "/api/channels/consent") {
@@ -209,7 +209,7 @@ describe("channels page", () => {
       "/api/channels",
       `/api/channels/${CHANNEL_ID}/messages`,
       `/api/channels/${CHANNEL_ID}/members`,
-      `/api/channels/${CHANNEL_ID}/tasks`,
+      `/api/channels/${CHANNEL_ID}/threads`,
       `/api/channels/${CHANNEL_ID}/mentions`,
       "/api/channels/consent",
     ]) {

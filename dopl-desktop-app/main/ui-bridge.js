@@ -39,7 +39,7 @@ const AUTH_STATE_EVENT = 'dopl:auth-state-changed';
 
 // THE APP'S OWN UI, STAMPED. Without it a request the operator TYPES is indistinguishable
 // server-side from an external agent's post, and the listener can only open something inert on
-// a caller-asserted `authorKind`. targeting.requesterTaskOpen reads the resulting
+// a caller-asserted `authorKind`. targeting.requesterThreadOpen reads the resulting
 // `metadata.runtime` and launches a full requester session, as it does for `desktop-session`.
 // ⚠ STAMPED HERE AND NOWHERE ELSE: this is the ONE transport the SPA renderer has
 // (app-preload.js exposes no header surface, every handler is bound to the window's top frame),

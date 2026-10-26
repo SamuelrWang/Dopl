@@ -50,7 +50,7 @@ function summary(over: Partial<Summary> = {}): Summary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     agentId: "a1b2c3d4",
     name: "a1b2c3d4",
     state: "working",
@@ -222,7 +222,7 @@ describe("the 1:1 composer is GONE for an ended agent, not disabled", () => {
   it("still renders the refusal when the agent ends mid-send", async () => {
     bridge(vi.fn().mockResolvedValue({ ok: false }));
     const view = render(
-      <AgentComposer channelId={CHANNEL_ID} taskId="t-1" agentId="a1b2c3d4" name="a1b2c3d4" />
+      <AgentComposer channelId={CHANNEL_ID} threadId="t-1" agentId="a1b2c3d4" name="a1b2c3d4" />
     );
     fireEvent.change(screen.getByLabelText("Message a1b2c3d4"), {
       target: { value: "are you there" },
@@ -236,7 +236,7 @@ describe("the 1:1 composer is GONE for an ended agent, not disabled", () => {
     view.rerender(
       <AgentComposer
         channelId={CHANNEL_ID}
-        taskId="t-1"
+        threadId="t-1"
         agentId="a1b2c3d4"
         name="a1b2c3d4"
         ended
@@ -251,7 +251,7 @@ describe("the 1:1 composer is GONE for an ended agent, not disabled", () => {
     const { container } = render(
       <AgentComposer
         channelId={CHANNEL_ID}
-        taskId="t-1"
+        threadId="t-1"
         agentId="a1b2c3d4"
         name="a1b2c3d4"
         ended
@@ -281,7 +281,7 @@ describe("the agent window picks the agent the URL names", () => {
       sessions.find(
         (s) =>
           s.channelId === CHANNEL_ID &&
-          s.taskId === "t-1" &&
+          s.threadId === "t-1" &&
           (!agentId || s.agentId === agentId)
       ) ?? null
     );

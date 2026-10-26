@@ -1,7 +1,7 @@
 /**
  * WHAT A MESSAGE LINE CLAIMS ABOUT ITS EXCHANGE AND ITS AUTHOR.
  *
- * ⚠ A synthetic `task-<channel>-<seq>` id is NOT a thread — it is the label a
+ * ⚠ A synthetic `thread-<channel>-<seq>` id is NOT a thread — it is the label a
  * RECEIVING desktop mints for an untagged request, deterministic from
  * `(channel, seq)`. The mechanism stays (killing it strands every untagged
  * exchange); it must not RENDER like a real thread, or an agent is told to post
@@ -29,8 +29,8 @@ const CHANNEL_UUID = "dba90694-de4f-4950-83a9-f2d890c9ff3f";
 const THREAD_UUID = "79ce5325-f53e-4d00-a1c0-f48875000bc0";
 const AGENT_UUID = "6979e939-1587-40b8-90c2-4c8eac291333";
 /** What a receiving desktop mints for the untagged request at seq 345. */
-const SYNTHETIC = `task-${CHANNEL_UUID}-345`;
-const SYNTHETIC_2 = `task-${CHANNEL_UUID}-360`;
+const SYNTHETIC = `thread-${CHANNEL_UUID}-345`;
+const SYNTHETIC_2 = `thread-${CHANNEL_UUID}-360`;
 
 function msg(over: Record<string, unknown> = {}) {
   return {
@@ -61,7 +61,7 @@ const readText = async (messages: unknown[]) =>
 
 describe("shortRef — the half of an id that actually distinguishes it", () => {
   it("uses the trailing SEQ for a synthetic id, never the shared prefix", () => {
-    // ⚠ Every synthetic id in one channel begins `task-` + the SAME channel
+    // ⚠ Every synthetic id in one channel begins `thread-` + the SAME channel
     // uuid, so a blind slice(0,8) collapses two different exchanges.
     expect(SYNTHETIC.slice(0, 8)).toBe(SYNTHETIC_2.slice(0, 8));
     expect(shortRef(SYNTHETIC)).toBe("seq 345");
@@ -86,7 +86,7 @@ describe("shortRef — the half of an id that actually distinguishes it", () => 
 
 describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", () => {
   it("labels the message line `ad-hoc`, with the opening seq", async () => {
-    const text = await readText([msg({ metadata: { taskId: SYNTHETIC } })]);
+    const text = await readText([msg({ metadata: { threadId: SYNTHETIC } })]);
 
     expect(text).toContain("· ad-hoc `seq 345`");
     expect(text).not.toContain("· thread");
@@ -94,7 +94,7 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
 
   it("keeps `· thread` for a real first-class thread id", async () => {
     const text = await readText([
-      msg({ metadata: { taskId: THREAD_UUID, taskTitle: "Wire the listener" } }),
+      msg({ metadata: { threadId: THREAD_UUID, threadTitle: "Wire the listener" } }),
     ]);
 
     expect(text).toContain("· thread `79ce5325`");
@@ -102,7 +102,7 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
   });
 
   it("the legend says what an ad-hoc id IS, and what passing one really buys", async () => {
-    const text = await readText([msg({ metadata: { taskId: SYNTHETIC } })]);
+    const text = await readText([msg({ metadata: { threadId: SYNTHETIC } })]);
 
     expect(text).toContain("Ad-hoc exchanges above:");
     expect(text).toContain("These are NOT threads");
@@ -126,8 +126,8 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
 
   it("separates the two when a page carries both", async () => {
     const text = await readText([
-      msg({ seq: 1, metadata: { taskId: THREAD_UUID, taskTitle: "Real thread" } }),
-      msg({ seq: 2, metadata: { taskId: SYNTHETIC } }),
+      msg({ seq: 1, metadata: { threadId: THREAD_UUID, threadTitle: "Real thread" } }),
+      msg({ seq: 2, metadata: { threadId: SYNTHETIC } }),
     ]);
 
     expect(text).toContain("Threads above:");
@@ -142,7 +142,7 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
 
   it("still prints `· no thread` for a wholly untagged message beside tagged ones", async () => {
     const text = await readText([
-      msg({ seq: 1, metadata: { taskId: SYNTHETIC } }),
+      msg({ seq: 1, metadata: { threadId: SYNTHETIC } }),
       msg({ seq: 2, metadata: {} }),
     ]);
 
@@ -151,8 +151,8 @@ describe("F4 — a synthetic id renders as an AD-HOC exchange, not a thread", ()
 });
 
 describe("F4 — the POST result says the same thing the read render does", () => {
-  /** A post that landed carrying `taskId`, as the server stored it. */
-  function postClient(taskId: string, taskTitle?: string): DoplClient {
+  /** A post that landed carrying `threadId`, as the server stored it. */
+  function postClient(threadId: string, threadTitle?: string): DoplClient {
     return {
       listChannels: vi.fn(async () => [
         { id: "chan-1", slug: "general", name: "General", visibility: "private" },
@@ -162,12 +162,12 @@ describe("F4 — the POST result says the same thing the read render does", () =
         seq: 346,
         kind: "message",
         authorUserId: "u-me",
-        metadata: taskTitle ? { taskId, taskTitle } : { taskId },
+        metadata: threadTitle ? { threadId, threadTitle } : { threadId },
       })),
     } as unknown as DoplClient;
   }
-  const landed = async (taskId: string, opts: Record<string, unknown> = {}, title?: string) =>
-    (await opPost(postClient(taskId, title), "general", "reply", opts)).content[0].text;
+  const landed = async (threadId: string, opts: Record<string, unknown> = {}, title?: string) =>
+    (await opPost(postClient(threadId, title), "general", "reply", opts)).content[0].text;
   // ⚠ A LEGACY ID RENDERS WHOLE, and the case below is why the cap is 48 rather
   // than the 40 it shipped as for part of 2026-09-02.
 
@@ -186,7 +186,7 @@ describe("F4 — the POST result says the same thing the read render does", () =
   it("a legacy id survives WHOLE — two exchanges must never render the same line", async () => {
     // ⚠ THE REGRESSION THIS CATCHES ONCE COST TWO EXCHANGES THEIR IDENTITY.
     // `channel-facts.ts › FACT_VALUE_MAX` was 40, and a legacy
-    // `task-<channel uuid>-<seq>` id is 45: the 39 characters kept were `task-`
+    // `thread-<channel uuid>-<seq>` id is 45: the 39 characters kept were `thread-`
     // plus the CHANNEL uuid, which every ad-hoc id in one channel shares, and
     // the trailing seq — the only distinguishing half — was what got dropped.
     // The two ids below rendered byte-identical lines (measured 2026-09-02).
@@ -225,7 +225,7 @@ describe("F4 — the POST result says the same thing the read render does", () =
     // ⚠ THE "MOVED, NOT DELETED" HALF. Both remedies survive verbatim where a
     // reader meets an ad-hoc id in the first place: keep passing it (dropping it
     // forks the exchange), and open a real thread if the work needs one.
-    const text = await readText([msg({ metadata: { taskId: SYNTHETIC } })]);
+    const text = await readText([msg({ metadata: { threadId: SYNTHETIC } })]);
     expect(text).toContain("keeps a reply grouped with its request");
     expect(text).toContain("does not open a shared exchange");
     expect(text).toContain('dopl_channel(op="send", channel="general", thread="new"');
@@ -272,13 +272,13 @@ describe("F4 — the POST result says the same thing the read render does", () =
     expect(text).not.toContain("SECOND thread");
   });
 
-  it("stays identical when the caller named the thread through metadata.taskId", async () => {
+  it("stays identical when the caller named the thread through metadata.threadId", async () => {
     // ⚠ `metadata` is a caller-settable passthrough whose schema description
-    // tells agents to put `taskId` in it, and opPost forwards it untouched when
+    // tells agents to put `threadId` in it, and opPost forwards it untouched when
     // `thread` is absent. Reading `opts.thread` ALONE would make such a post look
     // unthreaded and produce a false `landed=dropped` — the one reading of this
     // field that would be actively wrong.
-    const text = await landed(THREAD_UUID, { metadata: { taskId: THREAD_UUID } }, "Wire the listener");
+    const text = await landed(THREAD_UUID, { metadata: { threadId: THREAD_UUID } }, "Wire the listener");
     expect(text).toContain(`thread=${THREAD_UUID} landed=thread`);
     expect(text).not.toContain("landed=dropped");
   });
@@ -331,7 +331,7 @@ describe("F2 — the session suffix on a message line", () => {
   });
 
   it("names the AGENT segment of a THREE-part multiplayer slot key", async () => {
-    // ⚠ `<channelId>:<taskId>:<agentId>` (`main/session-store.js › sessionKey`).
+    // ⚠ `<channelId>:<threadId>:<agentId>` (`main/session-store.js › sessionKey`).
     // The render sliced after the FIRST colon, which predates the third segment
     // and printed `<thread>:<agent>` — not a session identity, and a repeat of
     // the thread tag two clauses away. The AGENT id is the half that
@@ -384,7 +384,7 @@ describe("F2 — the session suffix on a message line", () => {
 
 /**
  * SESSION DEATH, AND WHY IT NEEDS ITS OWN CLAUSE. The desktop posts a session
- * ending as `kind='task_progress'` carrying `metadata.session_ended`
+ * ending as `kind='thread_progress'` carrying `metadata.session_ended`
  * (`main/session-effects.js`) — deliberately NON-TERMINAL, because one member's
  * window closing is not the thread failing. That is right for the thread and
  * wrong for a READER: "a step landed" and "the agent working this is gone"
@@ -393,9 +393,9 @@ describe("F2 — the session suffix on a message line", () => {
  */
 describe("the session_ended marker on a message line (2026-08-22)", () => {
   const progress = (over: Record<string, unknown> = {}) =>
-    msg({ kind: "task_progress", body: "Session ended", ...over });
+    msg({ kind: "thread_progress", body: "Session ended", ...over });
 
-  it("renders DISTINCTLY, not as an ordinary task_progress", async () => {
+  it("renders DISTINCTLY, not as an ordinary thread_progress", async () => {
     const text = await readText([
       progress({ metadata: { session_ended: true } }),
     ]);
@@ -403,15 +403,15 @@ describe("the session_ended marker on a message line (2026-08-22)", () => {
     expect(text).toContain("· SESSION ENDED");
     // ⚠ It REPLACES the kind tag: printing both says "a step landed · the
     // session died" in one clause, which is the ambiguity this fixes.
-    expect(text).not.toContain("· task_progress");
+    expect(text).not.toContain("· thread_progress");
   });
 
   it("leaves an ordinary milestone reading as a milestone", async () => {
-    // CONTROL: a marker that fired on every task_progress would tell a waiting
+    // CONTROL: a marker that fired on every thread_progress would tell a waiting
     // agent to stop on every step that landed.
     const text = await readText([progress({ body: "schema applied" })]);
 
-    expect(text).toContain("· task_progress");
+    expect(text).toContain("· thread_progress");
     expect(text).not.toContain("SESSION ENDED");
   });
 

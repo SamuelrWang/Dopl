@@ -63,7 +63,7 @@ test("every adapter declares an Axis-B ENFORCEMENT POINT, and a null one is REFU
 test("every Dopl profile carries a deny list IN THAT RUNTIME'S VOCABULARY, or the launch is refused", () => {
   // ⚠ THE ONE PLACE ABSENT DOES NOT MEAN HIDE, because the control here IS containment.
   // `grantDecision` step 1 reads the profile's deny list as the GATE's own first check — the
-  // verdict no task grant and no widest mode can open — so a restricted profile with no list has
+  // verdict no thread grant and no widest mode can open — so a restricted profile with no list has
   // no enforcement at all. A native sandbox bounds the filesystem; it does not deny the
   // delegation, exfil and persistence built-ins those lists exist for.
   for (const { descriptor } of ADAPTERS) {

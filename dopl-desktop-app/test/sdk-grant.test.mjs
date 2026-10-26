@@ -124,11 +124,11 @@ test("SHADOW INVARIANT: every pre-approved tool resolves to 'preapproved', never
   }
 });
 
-test("a pre-approved tool stays 'preapproved' even if it is (redundantly) in allowForTask", () => {
+test("a pre-approved tool stays 'preapproved' even if it is (redundantly) in allowForThread", () => {
   for (const profile of PROFILES) {
     const cfg = buildSessionToolConfig(profile);
     const tool = cfg.preApproved[0];
-    assert.equal(grantDecision({ profile, toolName: tool, allowForTask: [tool] }), "preapproved");
+    assert.equal(grantDecision({ profile, toolName: tool, allowForThread: [tool] }), "preapproved");
   }
 });
 
@@ -143,19 +143,19 @@ test("every disallowed tool resolves to 'deny' on its profile", () => {
   }
 });
 
-test("a hard-denied tool denies even when the operator tries to allow it for the task", () => {
-  assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", allowForTask: ["Bash"] }), "deny");
+test("a hard-denied tool denies even when the operator tries to allow it for the thread", () => {
+  assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", allowForThread: ["Bash"] }), "deny");
 });
 
 // ── Gate truth table ───────────────────────────────────────────────────────────
 
-test("under 'full', an ungranted work tool GATES; granting THAT SHAPE for the task -> 'allow'", () => {
+test("under 'full', an ungranted work tool GATES; granting THAT SHAPE for the thread -> 'allow'", () => {
   // v2.9 HIGH-1: the key is the call's shape (grantKeyFor), never the bare tool name.
   for (const tool of ["Bash", "Write", "Edit", "NotebookEdit", "WebFetch"]) {
     const input = { command: "ls", file_path: "/w/a.txt", notebook_path: "/w/n.ipynb", url: "https://x.test" };
     assert.equal(grantDecision({ profile: "full", toolName: tool, input }), "gate", `${tool} should gate under full`);
     const key = grantKeyFor(tool, input, "c1");
-    assert.equal(grantDecision({ profile: "full", toolName: tool, input, allowForTask: [key] }), "allow", `${tool} allowed-for-task`);
+    assert.equal(grantDecision({ profile: "full", toolName: tool, input, allowForThread: [key] }), "allow", `${tool} allowed-for-thread`);
   }
 });
 
@@ -206,9 +206,9 @@ test("F-177: full GATES the persistence/exfil/delegation set — and hard-denies
   }
   assert.deepEqual(buildSessionToolConfig("full").disallowedTools.slice().sort(),
     UNIVERSAL_HARD_DENY.slice().sort(), "…and the floor is the WHOLE hard-deny set under full");
-  // The floor is immovable, as it always was: no posture and no task grant opens it.
+  // The floor is immovable, as it always was: no posture and no thread grant opens it.
   for (const tool of DOPL_ADMIN_TOOLS) {
-    assert.equal(grantDecision({ profile: "full", toolName: tool, toolMode: "bypass", allowForTask: [tool] }),
+    assert.equal(grantDecision({ profile: "full", toolName: tool, toolMode: "bypass", allowForThread: [tool] }),
       "deny", `full must deny ${tool} even at bypass with a grant`);
   }
 });
@@ -294,7 +294,7 @@ test("no session workspace -> NO pin header at all (today's behavior, unchanged)
 // `runtime` as a RESERVED metadata key and stamps `metadata.runtime='desktop-session'` ONLY on this
 // exact header value, so a value smuggled in the message body cannot produce the stamp. It stays a
 // ROUTING HINT and never an authorization signal (any device-token holder can send it), so
-// `targeting.requesterTaskOpen` gates on it only alongside its identity conjuncts and fails CLOSED
+// `targeting.requesterThreadOpen` gates on it only alongside its identity conjuncts and fails CLOSED
 // without it. Absence is the external case, which is why the header rides EVERY spawned-session
 // call, pin or no pin.
 

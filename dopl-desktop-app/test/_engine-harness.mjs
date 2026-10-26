@@ -1,5 +1,5 @@
 // THE REAL SESSION ENGINE, IN PLAIN NODE — for cases that must go through its entry points
-// (`launch*Session`, `messageByTask`, `controlByTask`, `init`) rather than a sliced block.
+// (`launch*Session`, `messageByThread`, `controlByThread`, `init`) rather than a sliced block.
 //
 // Faked, and nothing else: `electron` and `electron-store` (one in-memory store file shared by every
 // `new Store()`), the network (`api.js › apiFetch` records and answers 503; global `fetch` rejects),
@@ -126,7 +126,7 @@ export const summary = require_(M("session-summary.js"));
 /** Every lifecycle the engine asked the host to post. */
 export const lifecycles = [];
 engine.setLifecycleHandlers({
-  onLaunched: (info) => lifecycles.push({ key: info && info.key, kind: "task_started" }),
+  onLaunched: (info) => lifecycles.push({ key: info && info.key, kind: "thread_started" }),
   onEnded: (info, kind, extra) => lifecycles.push({ key: info && info.key, kind, extra }),
 });
 
@@ -149,7 +149,7 @@ export function launchArgs(over = {}) {
   return {
     windowless: true,
     channelId: CHANNEL,
-    taskId: "",
+    threadId: "",
     workspaceId: WORKSPACE,
     runtime: "claude",
     toolProfile: "channel_agent",

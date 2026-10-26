@@ -3,8 +3,6 @@
  * ⚠ `channel-` filename prefix required by the parity split-scan
  * (parity.test.ts).
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`.
- *
  * ⚠ Every string below is server NARRATION, outside untrusted framing. What is
  * peer-controlled:
  *   - `ch.name` — creator-typed, and `resolveChannelOr` resolves PUBLIC channels
@@ -124,12 +122,12 @@ export async function opCreateThread(
   //
   // ⚠ HANDOFF IS A REQUEST, NOT AN OUTCOME. It is a metadata STAMP a desktop
   // listener may later act on; `session-dispatch.maybeOpenRequesterSession`
-  // silently answers false when window mode is off, when `requesterTaskOpen`
+  // silently answers false when window mode is off, when `requesterThreadOpen`
   // refuses, when the concurrency ceiling is spent, and (commonly) when the
   // operator's desktop is not running.
   //
   // ⚠ **AND SINCE F-228 THE ANSWER IS ALWAYS "NOTHING OPENED" (F-274,
-  // 2026-08-22).** `main/targeting.js › requesterTaskOpen` — the predicate that
+  // 2026-08-22).** `main/targeting.js › requesterThreadOpen` — the predicate that
   // consumed the stamp — has NO CALLER; its listener path died with the session
   // window. The server half still works perfectly and the last layer is missing,
   // which is the shape that produces the most confident wrong copy.
@@ -175,7 +173,7 @@ export async function opCreateThread(
  *    instead; there is not, and the words themselves now teach a feature that
  *    does not exist, so the op left the enum too.
  *  - `opProposeClose()` — the agent's terminal act, a marked non-terminal
- *    `task_progress` its operator confirmed. Nothing to confirm.
+ *    `thread_progress` its operator confirmed. Nothing to confirm.
  *
  * The rendering rules they demonstrated are still the file's: a peer-typed TITLE
  * goes in one inline code span with `channel-render.ts`'s

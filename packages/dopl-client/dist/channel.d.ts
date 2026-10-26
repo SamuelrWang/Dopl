@@ -116,7 +116,7 @@ export declare function postMessage(t: DoplTransport, channelId: string, input: 
 export declare function showDisplay(t: DoplTransport, input: ShowDisplayInput): Promise<ShowDisplayResult>;
 /**
  * A channel's threads, MOST RECENTLY ACTIVE FIRST — the server's order, which
- * is the only order (`repository-tasks.ts › listTasksByChannel`). ⚠ Do not
+ * is the only order (`repository-threads.ts › listThreadsByChannel`). ⚠ Do not
  * re-sort: the server's LIMIT clipped against that order, so a re-sorted list is
  * the wrong rows in a plausible order.
  *

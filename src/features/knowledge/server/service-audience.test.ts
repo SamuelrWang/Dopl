@@ -246,7 +246,7 @@ describe("resolveAgentAudience — §4.3, the session-id narrowing", () => {
     mockChannels.mockResolvedValue([CHANNEL_A, CHANNEL_B]);
     mockGrants.mockResolvedValue([]);
 
-    await resolveAgentAudience(ctx({ sessionId: `${CHANNEL_B}:task-1:agent-1` }));
+    await resolveAgentAudience(ctx({ sessionId: `${CHANNEL_B}:thread-1:agent-1` }));
 
     expect(mockGrants).toHaveBeenCalledWith(expect.anything(), [
       CHANNEL_B,

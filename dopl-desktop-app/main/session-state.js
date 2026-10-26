@@ -56,7 +56,7 @@ function initialSessionState(opts) {
     turns: 0,
     idleMs: idleMs,
     pendingPermissions: [],
-    allowForTask: [],
+    allowForThread: [],
     // The two axes as stamped: Axis A in the session runtime's words (never a message op), Axis B what crosses
     // between machines (never a work tool). The gate reads live on top (`session-private.js`). Never persisted.
     toolModes: toolModes,

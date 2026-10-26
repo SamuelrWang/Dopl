@@ -55,7 +55,7 @@ function ownRow(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummar
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     name: "Scout",
     state: "working",
     channelName: "Website",

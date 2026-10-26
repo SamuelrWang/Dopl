@@ -71,7 +71,7 @@ export function canLaunchAgents(): boolean {
   return true;
 }
 export async function openAgentWindow(
-  route: { channelId: string; taskId: string; agentId?: string },
+  route: { channelId: string; threadId: string; agentId?: string },
   _segment: string
 ) {
   toast({ title: `Staging: would open the agent in ${route.channelId}` });
@@ -145,12 +145,12 @@ const WINDOW_RECORD = { margin: 0, border: 0, borderRadius: 0 } as const;
  */
 export function ChannelsAgentWindow({
   channelId,
-  taskId,
+  threadId,
   agentId,
 }: {
   workspaceId: string;
   channelId: string;
-  taskId: string;
+  threadId: string;
   agentId: string | null;
   currentUserId: string;
 }) {
@@ -161,7 +161,7 @@ export function ChannelsAgentWindow({
   const channel = fixture?.kind === "channel" ? fixture : null;
   const agent =
     channel?.sessions.find(
-      (s) => s.taskId === taskId && (!agentId || s.agentId === agentId)
+      (s) => s.threadId === threadId && (!agentId || s.agentId === agentId)
     ) ?? null;
   const roster = useMemo(
     () => (channel ? indexMembers(channel.members, CURRENT_USER_ID, stagingAgentIndex()) : null),
@@ -203,14 +203,14 @@ const NO_ROSTER: ReadonlyArray<{ userId: string; displayName: string | null; ema
  */
 export function AgentWindowLaunch({
   panel,
-  taskId,
+  threadId,
   sessions,
 }: {
   panel: AgentLaunchPanel;
   workspaceId: string;
   currentUserId: string;
   channelId: string;
-  taskId: string;
+  threadId: string;
   sessions?: readonly DesktopSessionSummary[] | null;
   agent: DesktopSessionSummary | null;
 }) {
@@ -235,7 +235,7 @@ export function AgentWindowLaunch({
       panel={panel}
       newAgent={store.actions.launch}
       liveSessions={liveSessions}
-      openThreadId={taskId || null}
+      openThreadId={threadId || null}
       channelId={channelId}
       workspaceId={fixture.channel.workspaceId}
       currentUserId={CURRENT_USER_ID}

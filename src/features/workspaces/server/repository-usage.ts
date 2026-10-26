@@ -267,7 +267,7 @@ export interface WorkspaceSessionRow {
   id: string;
   channel_id: string | null;
   user_id: string;
-  task_id: string | null;
+  thread_id: string | null;
   name: string;
   display_name: string | null;
   state: string;
@@ -296,7 +296,7 @@ export async function listWorkspaceRunningSessions(
   const { data, error } = await supabaseAdmin()
     .from("channel_sessions")
     .select(
-      "id, channel_id, user_id, task_id, name, display_name, state, detail, channel_name, thread_title, updated_at"
+      "id, channel_id, user_id, thread_id, name, display_name, state, detail, channel_name, thread_title, updated_at"
     )
     .eq("workspace_id", workspaceId)
     .neq("state", "ended")

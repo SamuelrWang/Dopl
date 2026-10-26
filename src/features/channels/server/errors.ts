@@ -70,33 +70,33 @@ export class ConsentAlreadyDecidedError extends ChannelError {
   }
 }
 
-/** Task the caller can't act on. Wrong-channel and wrong-workspace collapse to one not-found so
+/** Thread the caller can't act on. Wrong-channel and wrong-workspace collapse to one not-found so
  *  ids can't be probed. */
-export class TaskNotFoundError extends ChannelError {
+export class ThreadNotFoundError extends ChannelError {
   constructor(public readonly ref: string) {
-    super(`Task not found: ${ref}`);
+    super(`Thread not found: ${ref}`);
   }
 }
 
-/** Lacks the task-scoped permission — set-mode: creator; close: creator or
+/** Lacks the thread-scoped permission — set-mode: creator; close: creator or
  *  target. */
-export class TaskForbiddenError extends ChannelError {
+export class ThreadForbiddenError extends ChannelError {
   constructor(action: string) {
     super(`Not allowed to ${action}`);
   }
 }
 
-/** A UUID `taskId` naming no task in this channel. 400 rather than dropping the stamp, so a bogus id
- *  can't fabricate a thread; legacy `task-<uuid>-<seq>` ids are not UUIDs and never reach it. */
-export class ChannelTaskNotInChannelError extends ChannelError {
-  constructor(public readonly taskId: string) {
-    super(`Task is not in this channel: ${taskId}`);
+/** A UUID `threadId` naming no thread in this channel. 400 rather than dropping the stamp, so a bogus id
+ *  can't fabricate a thread; legacy `thread-<uuid>-<seq>` ids are not UUIDs and never reach it. */
+export class ChannelThreadNotInChannelError extends ChannelError {
+  constructor(public readonly threadId: string) {
+    super(`Thread is not in this channel: ${threadId}`);
   }
 }
 
 /** A thread addressed to its own creator: 400, since it has one party and nobody's desktop would
  *  route it. `post to=self` is not guarded — a post is not a thread. */
-export class TaskSelfTargetError extends ChannelError {
+export class ThreadSelfTargetError extends ChannelError {
   constructor() {
     super(
       "Cannot open a thread addressed to yourself — a thread must be addressed to another member"
@@ -129,13 +129,13 @@ export class ChannelChatAddressedError extends ChannelError {
 
 /** An agent token (`ctx.source === "agent"`) posted a lifecycle kind: 403. Those kinds state a
  *  runtime fact and their body never renders (`view-model-rows.ts › isLifecycleKind`); the
- *  credential is the whole test, with no exemption. `task_progress` is allowed: it is the milestone lane. */
+ *  credential is the whole test, with no exemption. `thread_progress` is allowed: it is the milestone lane. */
 export class ChannelLifecycleKindForbiddenError extends ChannelError {
   constructor(public readonly kind: string) {
     super(
       `"${kind}" is a lifecycle marker posted by the runtime, not by an agent. ` +
         `Post your message with no kind (the default) — a body written into a lifecycle event is not rendered on the thread card at all. ` +
-        `To mark a step that landed, post kind "task_progress".`
+        `To mark a step that landed, post kind "thread_progress".`
     );
   }
 }
@@ -288,7 +288,7 @@ export class LaunchIdentityAmbiguousError extends ChannelError {
  * DELIBERATE HALF.** A dropped citation is a reference the author believes
  * landed: the post is stored, reads back as prose, and the one thing it was
  * pointing at is gone with nothing saying so. The nearest precedent cuts the
- * other way on purpose — `taskId` IS silently stripped when it is not the
+ * other way on purpose — `threadId` IS silently stripped when it is not the
  * poster's exchange, because a mistagged post is still a post worth keeping.
  * A citation is not decoration; it is the message's argument.
  *

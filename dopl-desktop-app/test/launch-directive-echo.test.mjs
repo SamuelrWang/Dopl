@@ -85,7 +85,7 @@ test("⚠ a REFUSAL carries no echo — nothing was applied, so nothing may be r
 });
 
 test("⚠ a RENAME's `done` carries no echo — that verb resolves no posture at all", async () => {
-  const h = boot({ live: [{ agentId: "a1b2c3d4", channelId: CH, taskId: "" }] });
+  const h = boot({ live: [{ agentId: "a1b2c3d4", channelId: CH, threadId: "" }] });
   await h.api.handle(
     row({ kind: "rename", channel_id: CH, target_agent_id: "a1b2c3d4", target_name: "Auditor" }),
     WS,
@@ -103,7 +103,7 @@ test("⚠ a CLAMPED set_agent_mode's `done` DOES carry the echo — it is the on
   // with the clamp visible only in this machine's own log — the very gap T24's echo closed on
   // the LAUNCH lane, left open on the lane whose whole job is moving a posture.
   const h = boot({
-    live: [{ agentId: "a1b2c3d4", channelId: CH, taskId: "" }],
+    live: [{ agentId: "a1b2c3d4", channelId: CH, threadId: "" }],
     ceiling: { tools: "auto", messages: "auto_inbound" },
   });
   await h.api.handle(
@@ -125,7 +125,7 @@ test("⚠ a CLAMPED set_agent_mode's `done` DOES carry the echo — it is the on
 
 test("⚠ an axis the set_agent_mode LEFT ALONE stays absent, never echoed as the ceiling", async () => {
   const h = boot({
-    live: [{ agentId: "a1b2c3d4", channelId: CH, taskId: "" }],
+    live: [{ agentId: "a1b2c3d4", channelId: CH, threadId: "" }],
     ceiling: { tools: "auto", messages: "auto_inbound" },
   });
   await h.api.handle(

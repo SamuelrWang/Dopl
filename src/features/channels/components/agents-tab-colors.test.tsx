@@ -49,7 +49,7 @@ function own(over: Partial<DesktopSessionSummary> = {}): DesktopSessionSummary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     agentId: "aa11bb22",
     name: "aa11bb22",
     displayName: "Scout",

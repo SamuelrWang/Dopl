@@ -206,7 +206,7 @@ test("LAUNCH: a goal-less directive falls back to the button's own sentence", as
   assert.match(h.cfg.lastSpec.goal, /Join this thread as my agent/);
   assert.equal(h.cfg.lastSpec.idle, true, "…and a synthesized sentence does NOT buy a `claude` child");
   const ch = boot();
-  await ch.api.handle(row({ goal: "", task_id: null }), WS);
+  await ch.api.handle(row({ goal: "", thread_id: null }), WS);
   assert.match(ch.cfg.lastSpec.goal, /Stand by in this channel/);
   assert.equal(ch.cfg.lastSpec.idle, true);
 });

@@ -1,11 +1,11 @@
 // Tests for the v1.7.5 D1 identity plumbing on the MAIN side:
 //
 //   1. session-io.baseRecord projects the header identity (counterpartyName /
-//      channelName / taskTitle) into the durable record, so a P2 recreate or an
+//      channelName / threadTitle) into the durable record, so a P2 recreate or an
 //      opt-in resume has something to rebuild the header from.
 //   2. the system/init payload carries the same three fields to the
 //      renderer, and persists the record on the way.
-//   3. The RESPONDER spawn path (trigger.js) threads taskTitle into the session
+//   3. The RESPONDER spawn path (trigger.js) threads threadTitle into the session
 //      context — the value already existed for the consent payload.
 //
 // session-io.js is electron-free (crypto + session-profiles + tool-profiles only), so
@@ -31,7 +31,7 @@ function liveSession(over = {}) {
     sessionId: "s1",
     sdkSessionId: "sdk-1",
     channelId: "c1",
-    taskId: "t1",
+    threadId: "t1",
     workspaceId: "w1",
     side: "responder",
     profile: "full",
@@ -39,7 +39,7 @@ function liveSession(over = {}) {
     startedAt: 123,
     counterpartyId: "peer-1",
     counterpartyName: "David",
-    context: { channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David" },
+    context: { channelName: "Ops", threadTitle: "Ship the invoice import", authorName: "David" },
     state: { phase: "running", turns: 3, costUsd: 0.25 }, // ⚠ `costUsd` is deleted (2026-09-22); handed in to prove `baseRecord` drops it
     ...over,
   };
@@ -51,7 +51,7 @@ test("baseRecord projects the header identity from the session + its context", (
   const rec = io.baseRecord(liveSession());
   assert.equal(rec.counterpartyName, "David", "the peer display name (derived at startSession)");
   assert.equal(rec.channelName, "Ops");
-  assert.equal(rec.taskTitle, "Ship the invoice import");
+  assert.equal(rec.threadTitle, "Ship the invoice import");
   // The pre-v1.7.5 fields are untouched (the park feature's rehydrate contract).
   assert.equal(rec.phase, "running");
   assert.equal(rec.turns, 3);
@@ -63,11 +63,11 @@ test("baseRecord defaults every identity field to null, never undefined", () => 
   const rec = io.baseRecord(liveSession({ counterpartyName: null, context: {} }));
   assert.equal(rec.counterpartyName, null);
   assert.equal(rec.channelName, null);
-  assert.equal(rec.taskTitle, null);
+  assert.equal(rec.threadTitle, null);
   // A session with NO context object at all must not throw (a parked shell can have one).
   const bare = io.baseRecord(liveSession({ counterpartyName: undefined, context: undefined }));
   assert.equal(bare.channelName, null);
-  assert.equal(bare.taskTitle, null);
+  assert.equal(bare.threadTitle, null);
 });
 
 test("baseRecord still copies NO live handle (the durability leak guard holds)", () => {
@@ -81,7 +81,7 @@ test("baseRecord still copies NO live handle (the durability leak guard holds)",
 
 // ── system/init: the renderer gets the same identity, and the record is saved ──
 
-test("the launch record carries taskTitle / channelName / from", () => {
+test("the launch record carries threadTitle / channelName / from", () => {
   const s = liveSession();
   const events = [];
   const saved = [];
@@ -100,14 +100,14 @@ test("the launch record carries taskTitle / channelName / from", () => {
   assert.ok(events.find((e) => e.type === "launched"), "the reducer is told");
   // The identity is persisted on the way, so a later reopen can rebuild it.
   assert.equal(saved.length, 1);
-  assert.equal(saved[0].taskTitle, "Ship the invoice import");
+  assert.equal(saved[0].threadTitle, "Ship the invoice import");
   assert.equal(saved[0].channelName, "Ops");
   assert.equal(saved[0].counterpartyName, "David");
 });
 
-// ── the responder spawn path threads taskTitle into the context ────────────────
+// ── the responder spawn path threads threadTitle into the context ────────────────
 
-test("trigger.js: the responder session context carries taskTitle", () => {
+test("trigger.js: the responder session context carries threadTitle", () => {
   const src = readFileSync(M("trigger.js"), "utf8");
   // ⚠ THE SLICE BOUND MOVED ON 2026-08-22 and the old one was `toolProfile: rec.toolProfile` —
   // both `rec.*` reads named a PERSISTED consent record, and the inbound consent lane is deleted
@@ -119,8 +119,8 @@ test("trigger.js: the responder session context carries taskTitle", () => {
   assert.ok(call.length > 0 && call.length < 3000, "the slice really bounds the call");
   assert.match(call, /channelName: entry\.channel\.name/, "the channel name still rides");
   assert.match(call, /authorName: requesterName/, "the peer name still rides");
-  assert.match(call, /taskTitle: targeting\.metaStr\(m, 'taskTitle'\) \|\| null/,
-    "the responder context now carries the SAME server-stamped taskTitle the consent payload reads");
+  assert.match(call, /threadTitle: targeting\.metaStr\(m, 'threadTitle'\) \|\| null/,
+    "the responder context now carries the SAME server-stamped threadTitle the consent payload reads");
 });
 
 // ── v2.x: the spawn context also carries the ids the framing addresses ─────────
@@ -158,16 +158,16 @@ test("session-engine: startSession merges the spec ids into the context for EVER
 });
 
 test("prompt-framing: a responder prompt is NOT changed by the new context field", () => {
-  // Only the REQUESTER branch reads ctx.taskTitle, so threading it into the responder
+  // Only the REQUESTER branch reads ctx.threadTitle, so threading it into the responder
   // context is display-only — the fenced first turn stays byte-for-byte identical.
   const framing = require(M("prompt-framing.js"));
   const base = { side: "responder", message: "please do X", nonce: "abcd1234" };
   const without = framing.buildFencedTurn({ ...base, context: { channelName: "Ops", authorName: "David" } });
   const withTitle = framing.buildFencedTurn({
-    ...base, context: { channelName: "Ops", authorName: "David", taskTitle: "Ship the invoice import" },
+    ...base, context: { channelName: "Ops", authorName: "David", threadTitle: "Ship the invoice import" },
   });
-  assert.equal(withTitle, without, "the responder framing must not gain the task title");
+  assert.equal(withTitle, without, "the responder framing must not gain the thread title");
   // The requester branch DOES use it (unchanged behavior, pinned here for contrast).
-  const req = framing.buildFencedTurn({ ...base, side: "requester", context: { channelName: "Ops", taskTitle: "Reconcile Q3" } });
+  const req = framing.buildFencedTurn({ ...base, side: "requester", context: { channelName: "Ops", threadTitle: "Reconcile Q3" } });
   assert.match(req, /"Reconcile Q3"/);
 });

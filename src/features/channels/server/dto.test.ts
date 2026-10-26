@@ -10,11 +10,11 @@ import {
   mapChannelRow,
   mapMemberRow,
   mapMessageRow,
-  mapTaskRow,
+  mapThreadRow,
   type ChannelMemberRow,
   type ChannelMessageRow,
   type ChannelRow,
-  type ChannelTaskRow,
+  type ChannelThreadRow,
   type ChannelViewerState,
   type ProfileRef,
 } from "./dto";
@@ -439,10 +439,10 @@ describe("mapMessageRow", () => {
   });
 });
 
-describe("mapTaskRow", () => {
-  function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+describe("mapThreadRow", () => {
+  function threadRow(overrides: Partial<ChannelThreadRow> = {}): ChannelThreadRow {
     return {
-      id: "task-1",
+      id: "thread-1",
       channel_id: "chan-1",
       workspace_id: "ws-1",
       title: "Ship it",
@@ -460,10 +460,10 @@ describe("mapTaskRow", () => {
   }
 
   it("maps outcome_summary to outcomeSummary", () => {
-    expect(mapTaskRow(taskRow()).outcomeSummary).toBe("Shipped v2 to prod");
+    expect(mapThreadRow(threadRow()).outcomeSummary).toBe("Shipped v2 to prod");
   });
 
   it("defaults a null outcome_summary to null", () => {
-    expect(mapTaskRow(taskRow({ outcome_summary: null })).outcomeSummary).toBeNull();
+    expect(mapThreadRow(threadRow({ outcome_summary: null })).outcomeSummary).toBeNull();
   });
 });

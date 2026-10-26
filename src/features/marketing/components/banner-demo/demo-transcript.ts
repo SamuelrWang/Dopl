@@ -76,7 +76,7 @@ function msg(
    * The thread this post belongs to, or `null` for a channel-level post.
    *
    * ⚠ **IT MERGES ONTO THE DERIVED MENTION SET, IT DOES NOT REPLACE IT.**
-   * `metadata.taskId` is the only join between a message and its thread
+   * `metadata.threadId` is the only join between a message and its thread
    * (`view-model.ts › threadIdOf`), and `metadata` is also where the mention set lives.
    * Writing one over the other would silently un-pill every tag inside a thread.
    */
@@ -104,7 +104,7 @@ function msg(
       body,
       metadata: {
         ...mentionMetadata(body, authorUserId),
-        ...(threadId === null ? {} : { taskId: threadId }),
+        ...(threadId === null ? {} : { threadId }),
         ...(extraMetadata ?? {}),
       },
       clientMsgId: null,
@@ -408,7 +408,7 @@ export function threadsAt(step: number): ChannelThread[] {
 
 /** `view-model.ts › threadIdOf`'s rule, applied to our own fixtures. */
 function threadIdOfMessage(message: ChannelMessage): string | null {
-  const value = message.metadata?.taskId;
+  const value = message.metadata?.threadId;
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 

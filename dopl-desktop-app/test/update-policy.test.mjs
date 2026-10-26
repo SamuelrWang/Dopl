@@ -231,7 +231,7 @@ test("a live session is NAMED, because restarting kills it mid turn", () => {
     "1 session is running right now (Design). Restarting ends it mid turn."
   );
   assert.equal(
-    liveSessionSummary([{ channelName: "Design" }, { taskTitle: "Ship the fix" }]),
+    liveSessionSummary([{ channelName: "Design" }, { threadTitle: "Ship the fix" }]),
     "2 sessions are running right now (Design, Ship the fix). Restarting ends them mid turn."
   );
 });

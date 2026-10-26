@@ -92,7 +92,7 @@ test("both shared fetch helpers put the version on every request", () => {
 });
 
 test("the desktop's direct post sites inherit the stamp instead of setting it", () => {
-  // channel-post.js (task lifecycle + headless replies) is the desktop's own writer to
+  // channel-post.js (thread lifecycle + headless replies) is the desktop's own writer to
   // /api/channels/:id/messages. It sets no header of its own — it posts through the seams
   // above, which is exactly why it cannot forget to.
   //
@@ -117,7 +117,7 @@ test("the stamp is a DIAGNOSTIC: its only reader cannot act on it", () => {
   // The framing that makes this safe (src/shared/auth/app-version-header.ts):
   // any device-token holder can set the header, so it can never be an authz
   // signal. The strongest available pin is the reader's DEPENDENCY set — the
-  // same one wake-external-requester.test.mjs uses on task-notify. version-skew
+  // same one wake-external-requester.test.mjs uses on thread-notify. version-skew
   // cannot spawn, gate, consent, or post, because it does not require any of it.
   const SKEW = M("version-skew.js");
   const deps = [...SKEW.matchAll(/require\('([^']+)'\)/g)].map((x) => x[1]).sort();
@@ -126,7 +126,7 @@ test("the stamp is a DIAGNOSTIC: its only reader cannot act on it", () => {
   assert.deepEqual(deps, ["./app-version", "./diag", "./listener-io", "./targeting"]);
   // And exactly ONE module reads the stamped key at all.
   const readers = ["channel-listener.js", "listener-messages.js", "targeting.js", "trigger.js",
-    "session-dispatch.js", "task-notify.js", "version-skew.js"]
+    "session-dispatch.js", "thread-notify.js", "version-skew.js"]
     .filter((f) => /'appVersion'/.test(M(f)));
   assert.deepEqual(readers, ["version-skew.js"]);
 });

@@ -36,12 +36,12 @@ const LIVE_MESSAGE_OPTIONS = MESSAGE_OPTIONS.filter((o) => o.value !== "ask");
 export function PostureControls({
   agent,
   channelId,
-  taskId,
+  threadId,
   stats,
 }: {
   agent: DesktopSessionSummary;
   channelId: string;
-  taskId: string;
+  threadId: string;
   /** The usage readout, rendered inside this box. */
   stats?: ReactNode;
 }) {
@@ -76,7 +76,7 @@ export function PostureControls({
     setBusy(true);
     setNotice(null);
     // `agentId` names the instance; without it main moves the oldest live agent on the thread.
-    void setAgentMode({ channelId, taskId, agentId: agent.agentId, axis, mode })
+    void setAgentMode({ channelId, threadId, agentId: agent.agentId, axis, mode })
       .then((res) => {
         if (!res.ok) setNotice(POSTURE_REFUSED);
       })
@@ -86,7 +86,7 @@ export function PostureControls({
   const applyModel = (next: string) => {
     setBusy(true);
     setNotice(null);
-    void setAgentModel({ channelId, taskId, agentId: agent.agentId, model: next })
+    void setAgentModel({ channelId, threadId, agentId: agent.agentId, model: next })
       .then((res) => {
         // Success says nothing (the feed is the confirmation); `no-model` carries main's sentence.
         if (!res.ok) setNotice(res.detail || POSTURE_REFUSED);

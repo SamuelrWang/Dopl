@@ -11,7 +11,7 @@ import { neutralizeInline } from "./channel-shared";
 /** Budget for one write result, held per op by `write-result-budget.test.ts` (the renderer bounds values, not lines). */
 export const WRITE_RESULT_MAX_CHARS = 300;
 
-/** Longest rendered value; ≥45 so a legacy `task-<uuid>-<seq>` id is never clipped (its seq is the distinguishing half). */
+/** Longest rendered value; ≥45 so a legacy `thread-<uuid>-<seq>` id is never clipped (its seq is the distinguishing half). */
 export const FACT_VALUE_MAX = 48;
 
 /** Differs from what `neutralizeInline` leaves alone only by `_`; widening it can forge `key=` pairs. */

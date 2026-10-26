@@ -20,7 +20,7 @@
  * EXISTING rather than mark it done.
  *
  * ⚠ NO DEAD ROWS (INVARIANTS §5). Mode is CREATOR-only, because the server is
- * (`service-tasks.ts › setTaskMode` — a mode governs the creator's own machine);
+ * (`service-threads.ts › setThreadMode` — a mode governs the creator's own machine);
  * Delete is creator-or-channel-manager. A reader entitled to neither gets the
  * empty state, not a heading over greyed-out controls. ⚠ These gates are a
  * DISPLAY convenience — the service refuses regardless, and it is the fence.

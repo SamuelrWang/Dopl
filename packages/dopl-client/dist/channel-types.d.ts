@@ -7,11 +7,6 @@
  * own, neither sees the other's. Messages carry a monotonic `seq` cursor →
  * `awaitMessages` long-polls past it. Mirrors the API DTOs (camelCase) in
  * `src/features/channels`.
- *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. Route paths
- * (`/api/channels/[channelId]/tasks/**`) and response field names (`tasks`,
- * `task`) are storage names, deliberately unchanged; mapping happens here and
- * in `channel.ts`.
  */
 import type { ChannelEscalationFields } from "./escalation-types.js";
 import type { ChannelContainer } from "./types.js";
@@ -301,9 +296,9 @@ export interface ReadMessagesOptions {
     /** Server caps at 200. */
     limit?: number;
     /**
-     * Scope the read to ONE thread — only messages tagged `metadata.taskId`. A
+     * Scope the read to ONE thread — only messages tagged `metadata.threadId`. A
      * FILTER, not a lookup: an id nothing carries returns `[]`, not 404, and
-     * legacy `task-<channelId>-<seq>` ids work as well as uuids. Composes with
+     * legacy `thread-<channelId>-<seq>` ids work as well as uuids. Composes with
      * `since` / `limit`.
      */
     thread?: string;

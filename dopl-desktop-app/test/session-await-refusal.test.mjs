@@ -57,13 +57,13 @@ test("T85: no standing grant can open it — the widest grant key is still a den
   const HELD = { op: "read", wait_ms: 30000 };
   const key = profiles.grantKeyFor(DOPL_CHANNEL_TOOL, HELD, CH);
   assert.equal(
-    decide({ toolName: DOPL_CHANNEL_TOOL, input: HELD, messageMode: "auto_both", allowForTask: [key] }),
+    decide({ toolName: DOPL_CHANNEL_TOOL, input: HELD, messageMode: "auto_both", allowForThread: [key] }),
     "deny",
-    "an operator's 'allow for this task' click must not resurrect it"
+    "an operator's 'allow for this thread' click must not resurrect it"
   );
   // ...and the tool-name-shaped key that a coarser grant would carry does not either.
   assert.equal(
-    decide({ toolName: DOPL_CHANNEL_TOOL, input: HELD, messageMode: "auto_both", allowForTask: [DOPL_CHANNEL_TOOL] }),
+    decide({ toolName: DOPL_CHANNEL_TOOL, input: HELD, messageMode: "auto_both", allowForThread: [DOPL_CHANNEL_TOOL] }),
     "deny"
   );
 });

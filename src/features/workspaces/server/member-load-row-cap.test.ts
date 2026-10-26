@@ -173,7 +173,7 @@ function mount(rows: Row[], opts: { rpcMissing?: boolean } = {}) {
       channel_messages: rows,
       channel_members: [{ workspace_id: WS, user_id: ADA, channel_id: CHAN }],
       channels: [{ id: CHAN, name: "General", workspace_id: WS, deleted_at: null }],
-      channel_tasks: [],
+      channel_threads: [],
       channel_sessions: [],
       workspace_members: [
         { workspace_id: WS, user_id: ADA, role: "admin", status: "active" },

@@ -35,9 +35,8 @@ export function channelMessagesPath(channelId: string): string {
   return channelPath(channelId, "/messages");
 }
 
-/** BOUNDARY: wire/storage name `task` == domain name `thread`. */
 export function channelThreadsPath(channelId: string): string {
-  return channelPath(channelId, "/tasks");
+  return channelPath(channelId, "/threads");
 }
 
 /**
@@ -45,8 +44,6 @@ export function channelThreadsPath(channelId: string): string {
  * it: nothing READS a single thread here (the page derives the open thread from
  * the bounded list), so the only callers are set-mode's PATCH and the DELETE. A
  * key for a query that does not exist invites a second source of thread truth.
- *
- * BOUNDARY: wire/storage name `task` == domain name `thread`.
  */
 export function channelThreadPath(
   channelId: string,
@@ -54,7 +51,7 @@ export function channelThreadPath(
 ): string {
   return channelPath(
     channelId,
-    `/tasks/${encodeURIComponent(threadId)}`
+    `/threads/${encodeURIComponent(threadId)}`
   );
 }
 

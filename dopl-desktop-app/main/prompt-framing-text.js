@@ -4,7 +4,7 @@
 // (`dopl_channel` takes `thread`); the suites scan every line. Pure.
 
 // Thread vs session, stated outside the fence. The four post KINDS are not a menu: three belong to
-// the runtime and the answer is a message (a `task_finished` body is not rendered — P0-1). The tag
+// the runtime and the answer is a message (a `thread_finished` body is not rendered — P0-1). The tag
 // rule is `lib/mentions.ts`' (exact match; ambiguity reaches nobody), and it promises the Tags inbox,
 // never a notification.
 const VOCAB_TERMS = [
@@ -18,9 +18,9 @@ const VOCAB_TERMS = [
   '  see the other member\'s session, only the messages it sends.',
   '- The tool ARGUMENT that names this thread is `thread=<id>`. Say "thread" in what you write.',
 ];
-const VOCAB_TASK_NAMES = [
-  '- The `task_` names are STORAGE words, not a menu. "task_started" / "task_finished" /',
-  '  "task_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session.',
+const VOCAB_THREAD_NAMES = [
+  '- The `thread_` names are STORAGE words, not a menu. "thread_started" / "thread_finished" /',
+  '  "thread_failed" are LIFECYCLE MARKERS owned by the runtime that starts and stops a session.',
   '  They are not yours to post and the server refuses them from you. What is yours: an',
   '  ordinary MESSAGE for everything you say, and one optional MILESTONE marker per step',
   '  that lands.',
@@ -54,17 +54,17 @@ const VOCAB_TAGS = [
   '  message in that person\'s Tags inbox, which is what your operator watches instead of',
   '  reading every message. It is not an address and it starts no agent.',
 ];
-const VOCABULARY = [...VOCAB_TERMS, ...VOCAB_TASK_NAMES, ...VOCAB_CHANNEL_POSTS, ...VOCAB_TAGS];
-const MAIN_ROOM_VOCABULARY = [...VOCAB_TERMS, ...VOCAB_TASK_NAMES, ...VOCAB_TAGS];
-// Context Economy W5 (2026-10-13): a GRANULAR session's send tool publishes no task_* kind (its `kind`
+const VOCABULARY = [...VOCAB_TERMS, ...VOCAB_THREAD_NAMES, ...VOCAB_CHANNEL_POSTS, ...VOCAB_TAGS];
+const MAIN_ROOM_VOCABULARY = [...VOCAB_TERMS, ...VOCAB_THREAD_NAMES, ...VOCAB_TAGS];
+// Context Economy W5 (2026-10-13): a GRANULAR session's send tool publishes no thread_* kind (its `kind`
 // is message | milestone | record), so the paragraph refusing them to it, and PROSE_RULE's tail, teach
 // a mistake it cannot make. It still READS those rows, so one line says what they are.
-const GRANULAR_TASK_NAMES = [
-  '- task_started / task_finished / task_failed rows in a read are the runtime\'s LIFECYCLE MARKERS, not messages.',
+const GRANULAR_THREAD_NAMES = [
+  '- thread_started / thread_finished / thread_failed rows in a read are the runtime\'s LIFECYCLE MARKERS, not messages.',
 ];
 function vocabularyFor(set, standby) {
   if (set !== 'granular') return standby ? MAIN_ROOM_VOCABULARY : VOCABULARY;
-  return [...VOCAB_TERMS, ...GRANULAR_TASK_NAMES, ...(standby ? [] : VOCAB_CHANNEL_POSTS), ...VOCAB_TAGS];
+  return [...VOCAB_TERMS, ...GRANULAR_THREAD_NAMES, ...(standby ? [] : VOCAB_CHANNEL_POSTS), ...VOCAB_TAGS];
 }
 
 // The failure mode, not a style rule: `kind` defaults to message, and a lifecycle kind's body is not
@@ -78,12 +78,12 @@ const PROSE_RULE_HEAD = [
 const PROSE_RULE = [
   ...PROSE_RULE_HEAD,
   `and that is correct: leave it that way. NEVER put prose`,
-  `into a task_started, task_finished or task_failed post. Those are lifecycle markers, the`,
+  `into a thread_started, thread_finished or thread_failed post. Those are lifecycle markers, the`,
   `server refuses them from you, and their body is not shown on the other member's thread`,
   `card at all, so an answer written into one is delivered nowhere. If it is meant to be`,
   `read, send it as a message.`,
 ];
-// The granular tail (W5, see GRANULAR_TASK_NAMES): the head and "leave it that way" stay.
+// The granular tail (W5, see GRANULAR_THREAD_NAMES): the head and "leave it that way" stay.
 function proseRuleFor(set) {
   return set === 'granular' ? [...PROSE_RULE_HEAD, `and that is correct: leave it that way.`] : PROSE_RULE;
 }

@@ -276,7 +276,7 @@ describe('TIER 1 — the real app-server defers Dopl, and `tool_search` is the w
 
   test('C1b: a channel POST hands the gate its FULL arguments — op-scoped, not whole-tool', async (t) => {
     if (skipLive(t, GATE)) return;
-    const args = { op: 'send', channel: 'chan-1', thread: 'task-1', kind: 'message', body: 'CXP3A-MARKER' };
+    const args = { op: 'send', channel: 'chan-1', thread: 'thread-1', kind: 'message', body: 'CXP3A-MARKER' };
     const run = await scriptedTurn('read_only', 'deny', { call: { fn: mcp.CHANNEL_TOOL, args } });
     assert.deepEqual(run.asked, [{ name: mcp.CHANNEL_TOOL, input: args }]);
     assert.equal(run.calls.length, 0);
@@ -362,7 +362,7 @@ describe('TIER 2 — a real model, given Dopl\'s REAL first turn, searches on it
           },
           onServerRequest: (m) => serverRequests.answer(m, async (name, input) => {
             asked.push({ name, input });
-            const verdict = profiles.grantDecision({ runtime: 'codex', profile: 'dopl_only', toolMode: 'on-request', messageMode: 'auto_outbound', channelId: CH, allowForTask: [], toolName: name, input });
+            const verdict = profiles.grantDecision({ runtime: 'codex', profile: 'dopl_only', toolMode: 'on-request', messageMode: 'auto_outbound', channelId: CH, allowForThread: [], toolName: name, input });
             return verdict === 'allow' ? 'allow' : 'deny';
           }),
         }),

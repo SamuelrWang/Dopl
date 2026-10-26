@@ -42,7 +42,7 @@ const BASE = "https://api.example.test";
  *        prior delta was a removal — so stated as one, not folded in.
  *   66 — less the TWO that went with thread closing (wiring plan Phase 4,
  *        2026-08-18): `closeChannelThread` and `proposeChannelThreadClose`.
- *        The `PATCH /tasks/[id]` route arms behind them are deleted too, so
+ *        The `PATCH /threads/[id]` route arms behind them are deleted too, so
  *        restoring either binding would 400 rather than fail quietly.
  *   70 — PLUS FOUR with the `AgentIdentityMethods` link (MCP surface v2 wave A,
  *        2026-08-28): `listAgentIdentities`, `getAgentIdentity`,

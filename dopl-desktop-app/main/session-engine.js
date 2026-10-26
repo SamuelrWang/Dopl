@@ -268,7 +268,7 @@ async function startSession(spec, rt) {
     // Stamped at spawn, never re-read: the conversation handle, tool vocabulary and modes are one runtime's.
     runtimeId: (rt && rt.id) || runtimeRegistry.DEFAULT_ID,
     channelId: spec.channelId,
-    taskId: spec.taskId || '',
+    threadId: spec.threadId || '',
     workspaceId: spec.workspaceId,
     side: state.side,
     // Containment stamps: absent `launchDepth` reads as the cap at the gate; `launchChain` only `=== true`.
@@ -369,7 +369,7 @@ async function startSession(spec, rt) {
   // abandonment bound, since no reducer event has run yet.
   if (spec.parkedShell) {
     scheduleIdle(s);
-    diag('session spawned IDLE (no query until the first message)', 'agent', String(s.agentId || ''), 'thread', String(s.taskId || '').slice(0, 8));
+    diag('session spawned IDLE (no query until the first message)', 'agent', String(s.agentId || ''), 'thread', String(s.threadId || '').slice(0, 8));
     return s;
   }
   await startQuery(s, rt);
@@ -413,7 +413,7 @@ async function init() {
     if (!rec || store.reloadDisposition(rec.phase) !== 'resume') continue;
     store.setRecordPhase(key, 'ended');
     const sdkId = store.getSdkSessionId(key);
-    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: sdkId }, 'task_failed', { interrupted: true }, sessionEffects.terminalBody({ interrupted: true }));
+    runLifecycle({ channelId: rec.channelId, threadId: rec.threadId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: sdkId }, 'thread_failed', { interrupted: true }, sessionEffects.terminalBody({ interrupted: true }));
     if (sdkId) sessionPark.offerResume(rec, sdkId);
   }
   try { sessionBoot.reparkDormant(); } catch (err) { diag('session-engine: repark failed', err && err.message); }
@@ -431,9 +431,9 @@ module.exports = {
   sessionOn,
   feedInbound: sessionGate.feedInbound,
   listLiveSessions: sessionReopen.listLiveSessions, listOrphanRisk: sessionReopen.listOrphanRisk, endLiveSessions: sessionReopen.endLiveSessions,
-  reopenByTask: sessionReopen.reopenByTask, controlByTask: sessionReopen.controlByTask, setModeByTask: sessionReopen.setModeByTask, messageByTask: sessionReopen.messageByTask,
-  setModelByTask: sessionReopen.setModelByTask,
-  answerPermissionByTask: sessionAnswerPermission.answerPermissionByTask,
+  reopenByThread: sessionReopen.reopenByThread, controlByThread: sessionReopen.controlByThread, setModeByThread: sessionReopen.setModeByThread, messageByThread: sessionReopen.messageByThread,
+  setModelByThread: sessionReopen.setModelByThread,
+  answerPermissionByThread: sessionAnswerPermission.answerPermissionByThread,
   // The work lane for an ADDRESS (channel, thread, agent), live or frozen.
   narrationFor,
 };

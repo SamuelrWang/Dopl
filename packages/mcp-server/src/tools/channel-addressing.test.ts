@@ -8,7 +8,7 @@
  *   ⚠ the ROSTER op's own block moved to `channel-addressing-members.test.ts`
  *     on 2026-09-02 (§1 cap) — same subject seam, a different op;
  *   - `await` is channel-wide, so a wake on other members' traffic says so
- *     rather than letting the agent read it as its own task;
+ *     rather than letting the agent read it as its own thread;
  *   - thread reads name BOTH parties, and the roster lookup is FAIL-SOFT —
  *     degrades to ids, never to an error.
  */

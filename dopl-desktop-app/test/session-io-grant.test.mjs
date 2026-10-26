@@ -36,7 +36,7 @@ function mkSession(over) {
   return {
     profile: "full",
     channelId: "ch1",
-    state: { allowForTask: [], toolMode: "manual", messageMode: "ask", ...(over || {}) },
+    state: { allowForThread: [], toolMode: "manual", messageMode: "ask", ...(over || {}) },
     pendingPermissions: new Map(),
     pendingNames: new Map(),
   };
@@ -205,11 +205,11 @@ test("THREAD OPEN: auto_outbound sends it with NO dispatch; a SLUG falls back to
 
 test("THREAD OPEN: it is NOT given the forced thread tag — there is no thread to tag it with", async () => {
   // ⚠ `outboundConsentShape` and `isOutboundPost` are deliberately different predicates
-  // (session-outbound-tag.js). Merging them would inject `thread: <taskId>` into a call whose
+  // (session-outbound-tag.js). Merging them would inject `thread: <threadId>` into a call whose
   // whole purpose is to MINT a thread id, and `updatedInput` on an allow is main rewriting what
   // the operator approved.
   const s = mkSession({ messageMode: "auto_outbound" });
-  s.taskId = "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
+  s.threadId = "0f5d1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
   const rec = recorder();
   const verdict = await axisB.makeCanUseTool(s, rec.dispatch)(
     CHANNEL_TOOL, { op: "send", thread: "new", title: "T", body: "x", to: "bob@x.com" }, { requestId: "r43" });
@@ -246,17 +246,17 @@ test("L3: a plain work tool still gets the DOCK payload, unchanged", () => {
   s.pendingPermissions.get("r17")({ behavior: "deny" });
 });
 
-test("D2: the allow-for-task grant recorded for a post is the SCOPED post key", async () => {
+test("D2: the allow-for-thread grant recorded for a post is the SCOPED post key", async () => {
   const s = mkSession();
   const rec = recorder();
   axisB.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, POST, { requestId: "r11" });
-  const grantName = rec.events[0].name; // what the reducer puts in allowForTask
+  const grantName = rec.events[0].name; // what the reducer puts in allowForThread
   // FIX F7: the key carries a digest of the EXACT body the operator read, so "for this session"
   // means the same for a post as for Bash: THIS shape, again.
   assert.ok(grantName.startsWith(CHANNEL_TOOL + "#post#body:"), "not the bare tool name");
   assert.equal(s.pendingNames.get("r11"), grantName, "session-ipc reads the same key back");
   // With that grant in hand, a later post allows with no button — but op=open still gates.
-  s.state.allowForTask = [grantName];
+  s.state.allowForThread = [grantName];
   const rec2 = recorder();
   const canUse2 = axisB.makeCanUseTool(s, rec2.dispatch);
   assert.deepEqual(await canUse2(CHANNEL_TOOL, POST, { requestId: "r12" }), { behavior: "allow" });
@@ -268,13 +268,13 @@ test("D2: the allow-for-task grant recorded for a post is the SCOPED post key", 
 
 // FIX F2: the bare tool name is NEVER recorded any more. A non-post op used to hand the
 // reducer `dopl_channel` itself, and grantDecision honored that for every op — so one
-// click on a read/list/create_task prompt silently authorized op=post AND op=open for the
-// rest of the task. Each op now earns its own key.
+// click on a read/list/create_thread prompt silently authorized op=post AND op=open for the
+// rest of the thread. Each op now earns its own key.
 test("FIX F2: a NON-post dopl_channel op records an OP-SCOPED grant, never the bare tool", () => {
   const s = mkSession();
   const rec = recorder();
-  axisB.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, { op: "create_task" }, { requestId: "r14" });
-  assert.equal(rec.events[0].name, CHANNEL_TOOL + "#op:create_task");
+  axisB.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, { op: "create_thread" }, { requestId: "r14" });
+  assert.equal(rec.events[0].name, CHANNEL_TOOL + "#op:create_thread");
   assert.notEqual(rec.events[0].name, CHANNEL_TOOL, "a bare-tool grant would cover every op");
   assert.equal(rec.events[0].payload.name, CHANNEL_TOOL, "the dock still shows the real tool name");
   s.pendingPermissions.get("r14")({ behavior: "deny" });
@@ -289,7 +289,7 @@ test("FIX F2: a grant taken on op=read does NOT let a later post or DM open thro
   assert.equal(readGrant, CHANNEL_TOOL + "#op:read");
   s.pendingPermissions.get("r20")({ behavior: "allow" });
   // The operator picked "Allow for this session" on that READ — the reducer stores this key.
-  s.state.allowForTask = [readGrant];
+  s.state.allowForThread = [readGrant];
   const rec2 = recorder();
   const canUse2 = axisB.makeCanUseTool(s, rec2.dispatch);
   canUse2(CHANNEL_TOOL, POST, { requestId: "r21" });

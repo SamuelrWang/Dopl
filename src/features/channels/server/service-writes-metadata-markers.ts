@@ -24,7 +24,7 @@ import "server-only";
  */
 
 /**
- * Calm-terminal flags a `task_failed` may carry (`declined`, `dropped`,
+ * Calm-terminal flags a `thread_failed` may carry (`declined`, `dropped`,
  * `interrupted`, `capped`, `ended` — read by `lib/calm-terminal.ts ›
  * calmTerminalStatus`, which is where they moved when the `group-thread*` family
  * was deleted, wiring plan Phase 5, 2026-08-18). They decide
@@ -45,11 +45,11 @@ const CALM_FLAG_KEYS = [
   "interrupted",
   "capped",
   "ended",
-  // ⚠ NON-TERMINAL session end: `session_ended` rides a `task_progress`, NOT a
-  // `task_failed`. Reserved on the same terms as its five siblings — it changes
+  // ⚠ NON-TERMINAL session end: `session_ended` rides a `thread_progress`, NOT a
+  // `thread_failed`. Reserved on the same terms as its five siblings — it changes
   // how the other member's card reads ("their session stopped", not "the thread
   // failed"). ⚠ NOT read by `calmTerminalStatus` (which answers only for a
-  // `task_failed`), and that is the point: a local session ending is not an
+  // `thread_failed`), and that is the point: a local session ending is not an
   // outcome for the shared thread.
   // ⚠ **WHICH IS ALSO WHY ITS RE-STAMP GATE IS THE SESSION, NOT THE THREAD**
   // (2026-10-11). Held to the five siblings' thread-tag gate, a CHANNEL-LEVEL
@@ -85,11 +85,10 @@ export function takeCalmFlags(
  * writer:
  *
  *  - `CLOSE_PROPOSAL_KEYS` = `closeProposed` / `closeOutcome`, stamped by the
- *    deleted service-tasks-propose.ts proposeTaskClose and by the deleted
- *    stale-threads cron. They raised a "Close?" prompt on a human's card.
- *  - `REOPEN_MARKER_KEY` = `threadReopened`, stamped by the deleted
- *    service-tasks-lifecycle.ts reopenTask as the echo that rang the
- *    `channel_messages` doorbell for a status change `channel_tasks` (in no
+ *    deleted propose op and by the deleted stale-threads cron. They raised a "Close?" prompt on a human's card.
+ *  - `REOPEN_MARKER_KEY` = `threadReopened`, stamped by the deleted reopen
+ *    as the echo that rang the
+ *    `channel_messages` doorbell for a status change `channel_threads` (in no
  *    realtime table set) could not deliver itself.
  *
  * ⚠ WHY THESE LEAVE AND {@link CALM_FLAG_KEYS} STAYS. The strip list exists to

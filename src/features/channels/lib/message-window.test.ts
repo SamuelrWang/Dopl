@@ -234,7 +234,7 @@ describe("appendOlderPage", () => {
 describe("dropThreadFromWindow", () => {
   it("drops history rows tagged for the deleted thread", () => {
     const win = windowOf(
-      [msg(1), msg(2, { metadata: { taskId: "t-1" } }), msg(3)],
+      [msg(1), msg(2, { metadata: { threadId: "t-1" } }), msg(3)],
       4
     );
     expect(dropThreadFromWindow(win, "t-1").older.map((m) => m.seq)).toEqual([
@@ -249,7 +249,7 @@ describe("dropThreadFromWindow", () => {
   });
 
   it("leaves the boundary and the exhausted flag alone", () => {
-    const win = windowOf([msg(1, { metadata: { taskId: "t-1" } })], 9, true);
+    const win = windowOf([msg(1, { metadata: { threadId: "t-1" } })], 9, true);
     const after = dropThreadFromWindow(win, "t-1");
     expect(after.older).toEqual([]);
     // ⚠ Deleting a thread does not un-load history: the window still reaches
@@ -333,7 +333,7 @@ describe("mergeEntries — hazard B, the sender's own message", () => {
   it("follows a RECONCILE and a RETAG with no patch of its own", () => {
     // The saved row replaces its pending twin in place, and a retag rewrites the
     // metadata. Both are `messages`-only patches; both land here for free.
-    const saved = msg(99, { id: "m-99", metadata: { taskId: "t-1" } });
+    const saved = msg(99, { id: "m-99", metadata: { threadId: "t-1" } });
     const entries = mergeEntries([saved], [], [folded("a-1")]);
     expect(entries).toBeNull(); // no member of a-1 present at all
     expect(
@@ -346,8 +346,8 @@ describe("mergeEntries — hazard B, the sender's own message", () => {
     // card has nothing left to stand for and stops being emitted. A ghost card
     // over deleted rows is the failure this replaces.
     const doomed = [
-      msg(10, { artifactId: "a-1", metadata: { taskId: "t-1" } }),
-      msg(11, { artifactId: "a-1", metadata: { taskId: "t-1" } }),
+      msg(10, { artifactId: "a-1", metadata: { threadId: "t-1" } }),
+      msg(11, { artifactId: "a-1", metadata: { threadId: "t-1" } }),
     ];
     const cards = [folded("a-1")];
     expect(cardIds(mergeEntries([msg(1), ...doomed], [], cards))).toEqual(["a-1"]);

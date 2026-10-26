@@ -17,7 +17,7 @@
  *
  * ⚠ The credential bound applies to `desktop-ui` ONLY (see {@link narrowRuntime});
  * `desktop-session` is reachable by any `dopl_at_*` holder, and
- * `targeting.requesterTaskOpen` accepts EITHER stamp. The real boundary is TOKEN
+ * `targeting.requesterThreadOpen` accepts EITHER stamp. The real boundary is TOKEN
  * CUSTODY plus the identity pair (authored by me AND thread created by me), not
  * this header — F-145.
  *

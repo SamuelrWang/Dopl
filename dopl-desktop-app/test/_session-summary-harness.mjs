@@ -148,14 +148,14 @@ export function fakeWindow() {
  */
 export function endedRecord(over = {}) {
   const channelId = over.channelId || "chan-1";
-  const taskId = over.taskId === undefined ? "task-1" : over.taskId;
+  const threadId = over.threadId === undefined ? "thread-1" : over.threadId;
   const agentId = over.agentId === undefined ? "a1b2c3d4" : over.agentId;
   return {
-    key: `${channelId}:${taskId}:${agentId}`,
+    key: `${channelId}:${threadId}:${agentId}`,
     agentId,
     sessionId: "sess-1",
     channelId,
-    taskId,
+    threadId,
     workspaceId: "ws-1",
     channelName: "General",
     threadTitle: "Ship the thing",
@@ -174,22 +174,22 @@ export function endedRecord(over = {}) {
 
 export function session(over = {}) {
   const channelId = over.channelId || "chan-1";
-  const taskId = over.taskId === undefined ? "task-1" : over.taskId;
+  const threadId = over.threadId === undefined ? "thread-1" : over.threadId;
     // The agent id is part of the key since 2026-08-21 (`main/session-store.js#sessionKey`) and is
     // also the NAME the pill wears. A case about several agents on one thread overrides the default,
     // and the key follows automatically.
   const agentId = over.agentId === undefined ? "a1b2c3d4" : over.agentId;
   return {
-    key: `${channelId}:${taskId}:${agentId}`,
+    key: `${channelId}:${threadId}:${agentId}`,
     agentId,
     sessionId: over.sessionId || "sess-1",
     channelId,
-    taskId,
+    threadId,
     workspaceId: over.workspaceId === undefined ? "ws-1" : over.workspaceId,
     settled: false,
     win: fakeWindow(),
     state: { phase: "running", activity: "working", parked: false },
-    context: { channelName: "general", taskTitle: "Ship the thing" },
+    context: { channelName: "general", threadTitle: "Ship the thing" },
     // The spawn-time tool profile (`session-launch.js` passes `profile`); labelled on the wire.
     profile: "dopl_only",
     // ── THE AGENT-VIEW MEASUREMENTS (wiring plan Phase 5, 2026-08-18) ──────────────

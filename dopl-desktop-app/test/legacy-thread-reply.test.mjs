@@ -1,9 +1,9 @@
 // The LEGACY thread registry — targeting.js, incident 2026-07-31.
 //
 // THE INCIDENT. User A's EXTERNAL Claude Code session posted an addressed plain message to
-// user B. With no create_thread there is no channel_tasks row, so B's desktop minted the
-// deterministic legacy id `task-<channelId>-<seq>` for it (trigger.js taskIdFor /
-// handleTrigger's futureTaskId) and ran a responder session under that id. B's session
+// user B. With no create_thread there is no channel_threads row, so B's desktop minted the
+// deterministic legacy id `thread-<channelId>-<seq>` for it (trigger.js threadIdFor /
+// handleTrigger's futureThreadId) and ran a responder session under that id. B's session
 // posted its answer with `to = A` and NO thread linkage, and on A's machine that reply —
 // addressed, agent-authored, untagged — was indistinguishable from a fresh request: consent
 // popped and a counter-session spawned against the answer to A's own question. The v1.3.1
@@ -11,13 +11,13 @@
 // the v1.9+ session-window path addresses them explicitly.
 //
 // WHAT THE WIRE CAN AND CANNOT SAY (src/features/channels/server/service-writes-metadata.ts,
-// resolvePostMetadata). `taskId` stays caller-settable, and a legacy id is passed straight
+// resolvePostMetadata). `threadId` stays caller-settable, and a legacy id is passed straight
 // through: only a UUID is resolved, and only an unresolved UUID is rejected. Because it
-// never resolves, `task` stays null and the four reserved task keys — taskMode,
-// taskCreatedBy, taskTitle, taskTarget — are deleted from caller metadata and NEVER
-// re-stamped. So a legacy exchange carries taskId plus whatever the server itself owns
+// never resolves, `thread` stays null and the four reserved thread keys — threadMode,
+// threadCreatedBy, threadTitle, threadTarget — are deleted from caller metadata and NEVER
+// re-stamped. So a legacy exchange carries threadId plus whatever the server itself owns
 // (to_user_id, summary, runtime), and NOTHING that says who the thread belongs to. The
-// first-class 'task-reply' branch, which needs taskCreatedBy + taskTarget + taskMode, can
+// first-class 'thread-reply' branch, which needs threadCreatedBy + threadTarget + threadMode, can
 // therefore never fire for one.
 //
 // THE ANSWER IS LOCAL. The legacy id is derived from (channel, seq) alone, so the operator's
@@ -48,22 +48,22 @@ const THIRD = "33333333-3333-3333-3333-333333333333";
 const entryFor = (channelId) => ({ channel: { id: channelId, name: "General", memberCount: 2 } });
 // MY OWN outbound request: seq `seq`, addressed to `to`.
 const ask = (seq, to = PEER) => ({ kind: "message", seq, authorUserId: ME, metadata: { to_user_id: to } });
-// A reply tagged with `taskId`, authored by `author`.
-const reply = (taskId, author = PEER) => ({
+// A reply tagged with `threadId`, authored by `author`.
+const reply = (threadId, author = PEER) => ({
   kind: "message", seq: 99, authorUserId: author, authorKind: "agent",
-  metadata: { to_user_id: ME, taskId },
+  metadata: { to_user_id: ME, threadId },
 });
 
 // ── the id itself ────────────────────────────────────────────────────────────────
 // It must stay byte-identical to what the RESPONDER's desktop mints, because matching is a
 // plain string lookup. trigger.js owns both of the other spellings.
 
-test("legacyThreadId matches trigger.js taskIdFor / futureTaskId, byte for byte", () => {
-  assert.equal(legacyThreadId("c1", 7), "task-c1-7");
+test("legacyThreadId matches trigger.js threadIdFor / futureThreadId, byte for byte", () => {
+  assert.equal(legacyThreadId("c1", 7), "thread-c1-7");
   // The real shape: a UUID channel id (full of hyphens) plus the opening message's seq.
   const ch = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
-  assert.equal(legacyThreadId(ch, 42), `task-${ch}-42`);
-  assert.equal(legacyThreadId(ch, 42), `task-${ch}-${42}`); // the identity trigger.js uses
+  assert.equal(legacyThreadId(ch, 42), `thread-${ch}-42`);
+  assert.equal(legacyThreadId(ch, 42), `thread-${ch}-${42}`); // the identity trigger.js uses
 });
 
 // ── what opens a thread this machine will trust ──────────────────────────────────
@@ -116,7 +116,7 @@ test("only the member the thread ADDRESSES may answer it", () => {
 test("an unknown, empty, or non-string tag is never a known reply", () => {
   const ch = "ch-match-2";
   noteMyLegacyThread(ask(7), entryFor(ch), ME);
-  for (const tag of ["", "   ", "task-ch-match-2-8", "task-other-7", legacyThreadId(ch, 70), 7, null, undefined, { id: 1 }]) {
+  for (const tag of ["", "   ", "thread-ch-match-2-8", "thread-other-7", legacyThreadId(ch, 70), 7, null, undefined, { id: 1 }]) {
     assert.equal(knownLegacyReply(reply(tag), ME), false, `tag ${JSON.stringify(tag)}`);
   }
   assert.equal(knownLegacyReply({ metadata: {} }, ME), false);
@@ -152,29 +152,29 @@ test("re-seeing the same message is idempotent, and a re-address wins", () => {
 // site and every terminal echo that still carries a tag.
 // ⚠ THERE USED TO BE TWO SPAWN SITES — see the first excision block below.
 // ⚠ AND A SECOND POSTING PATH: the HEADLESS lane posted through channel-post and had to read the
-// record's CONCRETE id rather than the first-class-only `rec.taskId`. `main/trigger-headless.js`
+// record's CONCRETE id rather than the first-class-only `rec.threadId`. `main/trigger-headless.js`
 // is deleted (2026-08-20, Samuel's ruling), and with it the desktop posting on the agent's
 // behalf at all — see the second excision block, at the case below.
 
 test("trigger.js: the responder spawn context carries the thread id (legacy ids included)", () => {
-  // ⚠ REPOINTED 2026-08-22, SAME INVARIANT. It used to read `taskId: rec.taskId || taskId` off a
+  // ⚠ REPOINTED 2026-08-22, SAME INVARIANT. It used to read `threadId: rec.threadId || threadId` off a
   // slice bounded by `toolProfile: rec.toolProfile` — both of those named a PERSISTED consent
   // record, and the inbound consent lane is deleted (Samuel's ruling; `main/trigger.js`'s
   // header). The id is resolved once, from the message in hand, and the SAME binding rides both
-  // the engine's `taskId` and the spawn `context` the framing reads.
+  // the engine's `threadId` and the spawn `context` the framing reads.
   const src = M("trigger.js");
   const from = src.indexOf("sessionEngine.launchResponderSession({");
   const call = src.slice(from, src.indexOf("startModes: {", from));
-  assert.match(call, /^\s*taskId,$/m, "the engine runs the session under the resolved id");
-  assert.match(call, /channelId: entry\.channel\.id, workspaceId: entry\.workspaceId, taskId,/,
+  assert.match(call, /^\s*threadId,$/m, "the engine runs the session under the resolved id");
+  assert.match(call, /channelId: entry\.channel\.id, workspaceId: entry\.workspaceId, threadId,/,
     "…and the spawn CONTEXT carries the same one, which is what the framing reads");
-  // taskIdFor is what resolves that id, and it falls back to the legacy shape.
-  assert.match(src, /return targeting\.firstClassTaskId\(m\) \|\| `task-\$\{entry\.channel\.id\}-\$\{m\.seq\}`;/);
+  // threadIdFor is what resolves that id, and it falls back to the legacy shape.
+  assert.match(src, /return targeting\.firstClassThreadId\(m\) \|\| `thread-\$\{entry\.channel\.id\}-\$\{m\.seq\}`;/);
 });
 
 // ⚠ THE SECOND SPAWN SITE IS GONE (2026-08-20, F-228). A test stood here —
 // "session-dispatch.js: the requester spawn context carries the thread id too" — and pinned
-// that `sessionEngine.launchRequesterSession({ … taskId … })` named the thread its context
+// that `sessionEngine.launchRequesterSession({ … threadId … })` named the thread its context
 // drove, for the same reason the responder pin above does: prompt-framing.deliverySection
 // reads ONLY the spawn context, so a requester spawned without the thread id posted its reply
 // to the peer as a brand-new request.
@@ -186,15 +186,15 @@ test("trigger.js: the responder spawn context carries the thread id (legacy ids 
 // requester spawn left on this machine to carry a thread id.
 //
 // ⚠ WHAT IT PROTECTED IS NOT ORPHANED. The invariant is "every outbound tag names the thread",
-// and the RESPONDER half — the surviving spawn site, plus `taskIdFor(rec)` on every headless
+// and the RESPONDER half — the surviving spawn site, plus `threadIdFor(rec)` on every headless
 // tag — is pinned by the two tests either side of this block. Those are the paths a legacy id
 // can still travel.
 
-// ⚠ "every terminal echo tags through taskIdFor(rec), never the raw rec.taskId" STOOD HERE AND
+// ⚠ "every terminal echo tags through threadIdFor(rec), never the raw rec.threadId" STOOD HERE AND
 // IS DELETED (2026-08-22, Samuel's INBOUND CONSENT RETIREMENT). It pinned that the three
 // surviving terminal echoes in `trigger-outcomes.js` — `outboundCancelled`, `inboundDenied`,
-// `onInterrupted` — each tagged through the injected `taskIdFor(rec)` rather than reading
-// `rec.taskId` raw, because `rec.taskId` is UNSET for a legacy inbound and an untagged echo
+// `onInterrupted` — each tagged through the injected `threadIdFor(rec)` rather than reading
+// `rec.threadId` raw, because `rec.threadId` is UNSET for a legacy inbound and an untagged echo
 // reaches the requester's machine as a brand-new request. All three are deleted with the
 // consent-watcher records they were resolvers for; `trigger-outcomes.js` posts only the calm
 // `session_ended` note now, and that note derives its own targets from the engine's flat
@@ -203,7 +203,7 @@ test("trigger.js: the responder spawn context carries the thread id (legacy ids 
 // ⚠ THE INVARIANT IS NOT ORPHANED AND ITS LAST LIVE CARRIER IS THE CASE ABOVE. "Every outbound
 // tag names the thread" now has exactly one path on this machine: the SPAWN CONTEXT, read by
 // `prompt-framing.deliverySection`, so the agent posts its own bytes already tagged. The
-// legacy-id half of the rule is pinned there too, on `taskIdFor`'s own fallback.
+// legacy-id half of the rule is pinned there too, on `threadIdFor`'s own fallback.
 
 // ── the bound, and the direction it fails in ─────────────────────────────────────
 
@@ -223,9 +223,9 @@ test("the registry is capped, and an evicted thread fails SAFE (back to the cons
 //   - it recorded EVERY addressed own message, and since v2.6 the server AUTO-ADDRESSES
 //     every post in a DM, so in the ordinary 1:1 case that is every message the operator
 //     sends — each one minting a legacy id a peer could later claim; and
-//   - `metadata.taskId` is caller-settable for a legacy id with NO participation check
+//   - `metadata.threadId` is caller-settable for a legacy id with NO participation check
 //     (F-083 leaves legacy ids un-gated for threading), so a peer could stamp a genuinely
-//     NEW request with an old id of mine and get 'task-reply' — a passive banner with no
+//     NEW request with an old id of mine and get 'thread-reply' — a passive banner with no
 //     consent row, no gate and no Accept — for as long as the process lived.
 // Openers-only + a TTL close both, and both miss toward 'trigger' (a consent prompt),
 // never toward silence.
@@ -233,11 +233,11 @@ test("the registry is capped, and an evicted thread fails SAFE (back to the cons
 const { classify, LEGACY_THREAD_TTL_MS } = require("../main/targeting.js");
 const HOUR = 60 * 60 * 1000;
 // My own message that already carries a thread id — a CONTINUATION, not an opener.
-const followUp = (seq, taskId, to = PEER) => ({
-  kind: "message", seq, authorUserId: ME, metadata: { to_user_id: to, taskId },
+const followUp = (seq, threadId, to = PEER) => ({
+  kind: "message", seq, authorUserId: ME, metadata: { to_user_id: to, threadId },
 });
 
-test("ONLY AN OPENER opens a thread: a message already carrying a taskId records nothing", () => {
+test("ONLY AN OPENER opens a thread: a message already carrying a threadId records nothing", () => {
   const ch = "ch-opener-1";
   noteMyLegacyThread(followUp(7, legacyThreadId(ch, 3)), entryFor(ch), ME);
   noteMyLegacyThread(followUp(8, "cccccccc-3333-4ddd-8eee-ffffffffffff"), entryFor(ch), ME);
@@ -276,15 +276,15 @@ test("the TTL is long enough for a real exchange and short enough to matter", ()
 // ── classify, both directions ────────────────────────────────────────────────────
 // The registry only matters through classify's verdict, so drive it end to end.
 
-const peerReply = (taskId) => ({
+const peerReply = (threadId) => ({
   kind: "message", seq: 99, authorUserId: PEER, authorKind: "agent",
-  metadata: { to_user_id: ME, taskId },
+  metadata: { to_user_id: ME, threadId },
 });
 
-test("classify: a reply on a recorded OPENER is passive news ('task-reply', no consent)", () => {
+test("classify: a reply on a recorded OPENER is passive news ('thread-reply', no consent)", () => {
   const ch = "ch-classify-1";
   noteMyLegacyThread(ask(7), entryFor(ch), ME);
-  assert.equal(classify(peerReply(legacyThreadId(ch, 7)), entryFor(ch), ME), "task-reply");
+  assert.equal(classify(peerReply(legacyThreadId(ch, 7)), entryFor(ch), ME), "thread-reply");
 });
 
 test("classify: a NEW request stamped with an id we never recorded still TRIGGERS", () => {

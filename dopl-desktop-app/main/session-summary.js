@@ -33,7 +33,7 @@ function liveSummary(s, name) {
   return {
     sessionId: String((s && s.sessionId) || ''),
     channelId: String((s && s.channelId) || ''), workspaceId: (s && s.workspaceId) || null,
-    taskId: String((s && s.taskId) || ''),
+    threadId: String((s && s.threadId) || ''),
     // The local address beside `name` (the server's column); they hold the same string, nothing may rely on it.
     agentId: name,
     name: name,
@@ -56,7 +56,7 @@ function liveSummary(s, name) {
     // The runtime's reported model first, then the pick; null is real (a spawn-idle agent started nothing).
     model: (s && s.liveModel) || modelPick(s),
     channelName: displayText(ctx.channelName),
-    threadTitle: displayText(ctx.taskTitle),
+    threadTitle: displayText(ctx.threadTitle),
     // A spawn-time capture, so it can ride the STATE half of the server digest.
     identityName: displayText(ctx.identity && ctx.identity.name, IDENTITY_NAME_MAX),
     // The colour this session ASKED for; `null` is "none reported" and cannot erase one server-side.
@@ -77,7 +77,7 @@ function endedSummary(e, name) {
   return {
     sessionId: String((e && e.sessionId) || ''),
     channelId: String((e && e.channelId) || ''), workspaceId: (e && e.workspaceId) || null,
-    taskId: String((e && e.taskId) || ''),
+    threadId: String((e && e.threadId) || ''),
     agentId: name,
     name: name,
     // Read LIVE, unlike the metrics: renaming while reading back a finished run is normal.

@@ -61,13 +61,13 @@ function frameContinuation(nonce, message, authorName, addressing, authorNote, s
  * revived sessions without one), so it never names a `since=` and its agent reads in full.
  */
 function initialCatchUp(spec) {
-  return spec && spec.taskId && !spec.resumeSdkId ? { through: null, gap: false } : null;
+  return spec && spec.threadId && !spec.resumeSdkId ? { through: null, gap: false } : null;
 }
 
 // The reply call for one inbound turn, addressed from the SESSION's own slot (a thread reply carries `thread`,
 // a main-room reply `to`) and spelled in its tool set.
 function replyFor(s, to) {
-  return framing.replyCall({ channelId: s.channelId, workspaceId: s.workspaceId, taskId: s.taskId, toolSet: s.doplToolSet }, to);
+  return framing.replyCall({ channelId: s.channelId, workspaceId: s.workspaceId, threadId: s.threadId, toolSet: s.doplToolSet }, to);
 }
 
 // The addressing verdict above the fence (ids are closed-charset and filtered to live sessions).

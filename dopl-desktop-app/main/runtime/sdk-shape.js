@@ -29,7 +29,7 @@ const { rosterKeyOf } = require('./roster-key');
 const TIERS = Object.freeze(['safety', 'core', 'cosmetic']);
 
 // The gate's name for a server request no adapter recognises (`<prefix><method>`). Runtime-agnostic, so the
-// gate can hold one rule for all of them (`session-profiles.js › grantDecision`): never a standing task
+// gate can hold one rule for all of them (`session-profiles.js › grantDecision`): never a standing thread
 // grant, and DENIED outright on any restricted profile.
 const UNRECOGNISED_REQUEST_PREFIX = 'unrecognised_request:';
 const REFUSING = Object.freeze(['safety', 'core']);

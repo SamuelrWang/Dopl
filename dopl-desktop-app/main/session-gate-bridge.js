@@ -140,7 +140,7 @@ function gateCall(s, name, input, opts, dispatch, log) {
   const op = channelOpLabel(call.name, call.input);
   logGateVerdict(log, s, name, verdict, op);
   const outbound = isOutboundPost(call.name, call.input, s.channelId);
-  const tag = outbound ? outboundTag.threadTagFor(input, s.taskId, outboundTag.nextOwnPostId(s)) : null;
+  const tag = outbound ? outboundTag.threadTagFor(input, s.threadId, outboundTag.nextOwnPostId(s)) : null;
   if (tag && tag.action === 'conflict' && typeof log === 'function') {
     log('session: outbound post names thread', String(tag.supplied).slice(0, 24),
       'but this session drives', String(tag.wanted).slice(0, 24), '— leaving the call as written');
@@ -156,7 +156,7 @@ function gateCall(s, name, input, opts, dispatch, log) {
   if (decision === 'deny') return { settled: true, verdict: 'deny', tag: null, message: denyMessageFor(verdict.reason) };
 
   const requestId = (opts && opts.requestId) || crypto.randomUUID();
-  // v2.5 D2: the GRANT KEY (not always the bare tool name) is what an "Allow for this task" click
+  // v2.5 D2: the GRANT KEY (not always the bare tool name) is what an "Allow for this thread" click
   // records, so a post grant stays scoped to own-channel posts. The renderer still sees the real
   // tool name in the payload.
   const grantName = grantKeyFor(call.name, call.input, s.channelId, s.runtimeId);

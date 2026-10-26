@@ -43,7 +43,7 @@ function terminalBody(extra) {
   return undefined;
 }
 
-// The closed set of end names a caller may pass (`session-reopen.js › controlByTask` forwards, never
+// The closed set of end names a caller may pass (`session-reopen.js › controlByThread` forwards, never
 // validates); an unknown name is the operator's own End, never silence.
 const END_EVENT_REASONS = ['claimed'];
 function endReasonOf(event) {
@@ -51,18 +51,18 @@ function endReasonOf(event) {
   return named && END_EVENT_REASONS.indexOf(named) !== -1 ? named : 'operator';
 }
 
-// The operator End posts a NON-TERMINAL `session_ended` marker (task_progress): `task_failed` would paint the
+// The operator End posts a NON-TERMINAL `session_ended` marker (thread_progress): `thread_failed` would paint the
 // shared thread failed, and `channel_messages.kind` has a CHECK, so the marker rides metadata.
 function endLifecycle(reason) {
-  if (reason === 'operator') return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: 'Session ended' };
+  if (reason === 'operator') return { type: 'lifecycle', kind: 'thread_progress', extra: { session_ended: true }, body: 'Session ended' };
   if (reason === 'claimed') {
-    return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: CLAIMED_NOTE };
+    return { type: 'lifecycle', kind: 'thread_progress', extra: { session_ended: true }, body: CLAIMED_NOTE };
   }
   if (reason === 'abandoned' || reason === 'inactive') {
-    return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: INACTIVE_NOTE };
+    return { type: 'lifecycle', kind: 'thread_progress', extra: { session_ended: true }, body: INACTIVE_NOTE };
   }
   if (reason === 'auth_hold') {
-    return { type: 'lifecycle', kind: 'task_progress', extra: { session_ended: true }, body: AUTH_HELD_NOTE };
+    return { type: 'lifecycle', kind: 'thread_progress', extra: { session_ended: true }, body: AUTH_HELD_NOTE };
   }
   return null;
 }
@@ -80,7 +80,7 @@ function endedStatusText(reason) {
 
 // ─── THE DROP NOTICE ─────────────────────────────────────────────────────────
 //
-// ⚠ THE LIFECYCLE MARKER ABOVE IS NOT A REPORT. `endLifecycle` posts a CALM `task_progress` note
+// ⚠ THE LIFECYCLE MARKER ABOVE IS NOT A REPORT. `endLifecycle` posts a CALM `thread_progress` note
 // for a waiting COUNTERPARTY: addressed to nobody, named after no agent, silent about the cause
 // (two runs vanished that way, 2026-10-10; evidence in test/session-drop-notice.test.mjs). So the
 // marker STAYS (the peer still needs it) and a REPORT for the launcher, `notice`, is added beside it.

@@ -4,7 +4,7 @@
 // outside it), so we slice and evaluate it verbatim — the electron-bound records /
 // resume-map wrappers around it are exercised in the manual E2E (§F), not here.
 //
-// What matters: the (channel,task) session key; the terminal-phase predicate; the
+// What matters: the (channel,thread) session key; the terminal-phase predicate; the
 // reload disposition that decides ignore-vs-resume on restart; and the durable
 // whitelist that guarantees a live handle can never leak into electron-store.
 
@@ -66,16 +66,16 @@ test("threadKeyPrefix matches every agent on ONE thread and nothing next door", 
 });
 
 test("slotKey composes the same three parts from a call's own argument object", () => {
-  assert.equal(slotKey({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }), "c1:t1:a1b2c3d4");
+  assert.equal(slotKey({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }), "c1:t1:a1b2c3d4");
   assert.equal(slotKey({ channelId: "c1", agentId: "a1b2c3d4" }), "c1::a1b2c3d4");
   assert.equal(slotKey({}), "::");
   assert.equal(slotKey(null), "::");
-  // ⚠ `agentId` NO LONGER REPLACES `taskId`. The old rule was a CHOICE between two key spaces
+  // ⚠ `agentId` NO LONGER REPLACES `threadId`. The old rule was a CHOICE between two key spaces
   // (pair vs room), "never blended"; multiplayer needs exactly what that forbade — two agents
   // told apart on the SAME thread.
   assert.notEqual(
-    slotKey({ channelId: "c1", taskId: "t1", agentId: "a1b2c3d4" }),
-    slotKey({ channelId: "c1", taskId: "", agentId: "a1b2c3d4" })
+    slotKey({ channelId: "c1", threadId: "t1", agentId: "a1b2c3d4" }),
+    slotKey({ channelId: "c1", threadId: "", agentId: "a1b2c3d4" })
   );
 });
 
@@ -91,7 +91,7 @@ test("only 'ended' is terminal; every live/awaiting/interrupted phase is non-ter
 test("reloadDisposition: terminal -> ignore; parked -> dormant; else -> resume", () => {
   assert.equal(reloadDisposition("ended"), "ignore");
   // P1 (v1.7.4): a parked record is EXEMPT from the interrupted echo — the init scan
-  // must NOT treat it as 'resume' (which would post task_failed{interrupted:true}); it
+  // must NOT treat it as 'resume' (which would post thread_failed{interrupted:true}); it
   // stays dormant + resumable via P2.
   assert.equal(reloadDisposition("parked"), "dormant");
   assert.notEqual(reloadDisposition("parked"), "resume", "parked never echoes interrupted");
@@ -109,18 +109,18 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     sessionId: "s1",
     sdkSessionId: "sdk1",
     channelId: "c1",
-    taskId: "t1",
+    threadId: "t1",
     workspaceId: "w1",
     side: "responder",
     profile: "full",
     mode: "interactive",
     phase: "running",
     startedAt: 123,
-    counterpartyId: "u2", // FIX L1: the task's other party, persisted for resume
+    counterpartyId: "u2", // FIX L1: the thread's other party, persisted for resume
     direct: true, // H2: whether the server addresses this session's posts (a DM), persisted with the binding
     counterpartyName: "David", // D1: the header identity, persisted for a reopen
     channelName: "Ops",
-    taskTitle: "Ship the invoice import",
+    threadTitle: "Ship the invoice import",
     identityName: "Code Auditor", // F-288: the agent identity it ran as, persisted for a resume
     turns: 7, // FIX #9: the running counter, persisted for a P2 rehydrate
     costUsd: 0.42, // ⚠ DELETED 2026-09-22 — still handed IN here, to prove the whitelist drops it
@@ -174,7 +174,7 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     "counterpartyName", "direct", "identityName", "key", "launchChain", "launchDepth", "mode", "model",
     // "operatorTools" (2026-09-25): the "Use my tools" launch scope, a strict enum ('' otherwise).
     "operatorTools", "ownPostSeq", "parkedAt", "phase", "profile", "runtimeId", "sessionId",
-    "side", "startedAt", "taskId", "taskTitle", "turns", "workspaceId",
+    "side", "startedAt", "threadId", "threadTitle", "turns", "workspaceId",
   ]);
   // ⚠ A PASSTHROUGH, AND **NULL IS OLD** — `durableSessionRecord` is in the PURE block and may not
   // read a clock; `saveRecord` / `setRecordPhase` stamp it at the two park writes.
@@ -218,16 +218,16 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
 test("durableSessionRecord persists the header identity (D1) so a reopen can rebuild it", () => {
   const rec = durableSessionRecord({
     key: "c1:t1", channelId: "c1", phase: "parked",
-    counterpartyName: "David", channelName: "Ops", taskTitle: "Ship the invoice import",
+    counterpartyName: "David", channelName: "Ops", threadTitle: "Ship the invoice import",
   });
   assert.equal(rec.counterpartyName, "David", "the peer display name survives");
   assert.equal(rec.channelName, "Ops");
-  assert.equal(rec.taskTitle, "Ship the invoice import");
+  assert.equal(rec.threadTitle, "Ship the invoice import");
   // A legacy record written before v1.7.5 has none of them — null, never undefined.
   const legacy = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });
   assert.equal(legacy.counterpartyName, null);
   assert.equal(legacy.channelName, null);
-  assert.equal(legacy.taskTitle, null);
+  assert.equal(legacy.threadTitle, null);
 });
 
 test("durableName bounds an identity string exactly like prompt-framing.sanitizeName", () => {
@@ -282,10 +282,10 @@ test("durableSessionRecord drops any live handle passed in an enriched record", 
   }
 });
 
-test("durableSessionRecord defaults taskId->'' and never carries the conversation id (the resume map does)", () => {
+test("durableSessionRecord defaults threadId->'' and never carries the conversation id (the resume map does)", () => {
   const rec = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching", sdkSessionId: "sdk1" });
   assert.equal("sdkSessionId" in rec, false, "P4-18: the record's copy had no reader");
-  assert.equal(rec.taskId, "");
+  assert.equal(rec.threadId, "");
 });
 
 // ── THE PARK STAMP (2026-09-13, F-694's REGRESSION) ──────────────────────────
@@ -320,7 +320,7 @@ const storeWrites = (() => {
 test("saveRecord stamps parkedAt when the phase it persists is 'parked' — and only then", () => {
   const { saveRecord, fake } = storeWrites;
   fake.data = {};
-  const base = { key: "c1:t1:a1", channelId: "c1", taskId: "t1", workspaceId: "w1", startedAt: 1 };
+  const base = { key: "c1:t1:a1", channelId: "c1", threadId: "t1", workspaceId: "w1", startedAt: 1 };
 
   const before = Date.now();
   saveRecord({ ...base, phase: "parked" });

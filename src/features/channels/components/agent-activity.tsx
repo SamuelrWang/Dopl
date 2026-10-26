@@ -221,7 +221,7 @@ export function AgentActivityRows({
             // ⚠ KEYED ON THE BLENDED SLOT, not `agentId` alone — `agents-model.ts ›
             // agentKey` is `(channel, thread, agent)`, and since multiplayer one
             // operator can run several agents whose ids collide across threads.
-            key={`${agent.channelId}:${agent.taskId}:${agent.agentId ?? agent.sessionId}`}
+            key={`${agent.channelId}:${agent.threadId}:${agent.agentId ?? agent.sessionId}`}
             role="status"
             // ⚠ **ONE ELEMENT NOW, NOT A ROW WRAPPING A DOT AND A NAME**: the pill IS
             // the row, so `role="status"` rides the thing a reader sees.

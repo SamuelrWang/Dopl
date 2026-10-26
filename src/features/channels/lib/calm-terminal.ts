@@ -1,5 +1,5 @@
 /**
- * THE CALM TERMINAL READ — what a `task_failed` row's metadata DECLARES about a
+ * THE CALM TERMINAL READ — what a `thread_failed` row's metadata DECLARES about a
  * session's ending, independent of its body.
  *
  * ⚠ THIS IS THE SURVIVOR OF `lib/group-thread-markers.ts`, WHICH IS DELETED
@@ -20,7 +20,7 @@
  *
  * ⚠ WHY THIS READ IS STILL LIVE, when the desktop stopped posting the terminal
  * kinds in this same phase. TWO writers survive and neither is the session
- * window: `main/trigger-outcomes.js` posts `task_failed{declined:true}` on a
+ * window: `main/trigger-outcomes.js` posts `thread_failed{declined:true}` on a
  * consent DENY and `{interrupted:true}` on a mid-spawn death, and every
  * INSTALLED desktop keeps posting the full set until the floor rises
  * (INVARIANTS §13). ⚠ **ONE READER now, not two:** the Declined receipt in
@@ -51,7 +51,7 @@ type CalmTerminalStatus =
 
 /**
  * Map a terminal marker to the calm status it announces, else null (a genuine
- * failure). The desktop encodes a non-failure ending as `task_failed` + a
+ * failure). The desktop encodes a non-failure ending as `thread_failed` + a
  * boolean flag: `declined` (consent denied), `dropped` (send cancelled),
  * `interrupted` (app died mid-spawn), `capped` (turn/cost cap), `ended`
  * (operator ended the agent).
@@ -64,7 +64,7 @@ type CalmTerminalStatus =
 export function calmTerminalStatus(
   message: ChannelMessage
 ): CalmTerminalStatus | null {
-  if (message.kind !== "task_failed") return null;
+  if (message.kind !== "thread_failed") return null;
   const { metadata } = message;
   if (metadata.declined === true) return "declined";
   if (metadata.dropped === true) return "dropped";

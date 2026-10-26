@@ -2,7 +2,7 @@
 //
 // ⚠ THIS FILE EXISTS BECAUSE THE LIST IS THE HARD PART, NOT THE TIMER. An agent's traces are
 // spread across five stores that grew independently, each keyed by the SAME session key
-// (`<channelId>:<taskId>:<agentId>`), and a retention rule that cleans four of them is not a
+// (`<channelId>:<threadId>:<agentId>`), and a retention rule that cleans four of them is not a
 // retention rule — it is a slow leak with a comforting name. The list is written out below,
 // with the owner of each, so the next person to add a per-agent store has somewhere obvious to
 // fail to add it.
@@ -119,8 +119,8 @@ function forgetKeys(keys) {
  * deleted thread takes its agents' local history with it, which is the same statement
  * `deleteSessionStatesForThread` makes on the server.
  */
-function forgetThread(channelId, taskId) {
-  const prefix = String(channelId || '') + ':' + String(taskId || '') + ':';
+function forgetThread(channelId, threadId) {
+  const prefix = String(channelId || '') + ':' + String(threadId || '') + ':';
   let keys = [];
   try { keys = agentHistory.keysForThread(prefix); }
   catch (_err) { return []; }

@@ -66,7 +66,7 @@ test("isOutboundPost: a cross-channel or slug-addressed post is NOT own-channel 
 });
 
 test("isOutboundPost: any non-post dopl_channel op gates and is NOT outbound (FALSE)", () => {
-  for (const op of ["open", "invite", "create_task", "close_task", "set_task_mode", "read", undefined]) {
+  for (const op of ["open", "invite", "create_thread", "close_thread", "set_thread_mode", "read", undefined]) {
     assert.equal(isOutboundPost(DOPL_CHANNEL_TOOL, { op, channel: "ch1" }, "ch1"), false, `op=${op} is not an outbound post`);
   }
 });

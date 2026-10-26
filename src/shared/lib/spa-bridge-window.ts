@@ -35,7 +35,7 @@ export interface AgentWindowTab {
   key: string;
   segment: string;
   channelId: string;
-  taskId: string;
+  threadId: string;
   /** `""` when the caller did not know it — the route degrades to the pair (see main's header). */
   agentId: string;
 }

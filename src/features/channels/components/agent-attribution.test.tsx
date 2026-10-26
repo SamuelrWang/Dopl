@@ -64,7 +64,7 @@ function byAgent(
     body: over.body ?? `BODY-${id}`,
     authorUserId: ME,
     authorKind: "agent",
-    metadata: { taskId: "t-1" },
+    metadata: { threadId: "t-1" },
     clientMsgId:
       over.agentId === null ? null : `agent-${over.agentId ?? A}-${seq}`,
   });
@@ -145,7 +145,7 @@ describe("authorAgentIdOf — the second door, for a post that brought its own k
           body: "FIRST",
           authorUserId: ME,
           authorKind: "agent",
-          metadata: { taskId: "t-1", session_id: `chan-1::${A}` },
+          metadata: { threadId: "t-1", session_id: `chan-1::${A}` },
           clientMsgId: "anthony-hello-reply-1",
         }),
         message({
@@ -154,7 +154,7 @@ describe("authorAgentIdOf — the second door, for a post that brought its own k
           body: "SECOND",
           authorUserId: ME,
           authorKind: "agent",
-          metadata: { taskId: "t-1", session_id: `chan-1::${B}` },
+          metadata: { threadId: "t-1", session_id: `chan-1::${B}` },
           clientMsgId: "anthony-hello-reply-2",
         }),
       ],
@@ -220,7 +220,7 @@ describe("parseAgentPostStamp — the one reader of the wire format", () => {
       seq: 3,
       authorUserId: ME,
       authorKind: "agent",
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
       clientMsgId: "agent-a1b2c3d4-5e6f-7890-abcd-ef1234567890-1",
     });
     expect(
@@ -257,7 +257,7 @@ describe("the transcript's attribution pill", () => {
       body: "COURTESY",
       authorUserId: ME,
       authorKind: "agent",
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
       clientMsgId: "agent-a1b2c3d4-5e6f-7890-abcd-ef1234567890-1",
     });
     renderThread([courtesy]);
@@ -274,7 +274,7 @@ describe("the transcript's attribution pill", () => {
       seq: 1,
       body: "HUMAN",
       authorUserId: ME,
-      metadata: { taskId: "t-1" },
+      metadata: { threadId: "t-1" },
       clientMsgId: `agent-${A}-1`,
     });
     renderThread([human]);
@@ -341,8 +341,8 @@ describe("a different agent breaks the run", () => {
   /** A HUMAN run is untouched — the stamp is only read on agent rows. */
   it("leaves a human run grouped", () => {
     renderThread([
-      message({ id: "h-1", seq: 1, body: "H1", authorUserId: ME, metadata: { taskId: "t-1" } }),
-      message({ id: "h-2", seq: 2, body: "H2", authorUserId: ME, metadata: { taskId: "t-1" } }),
+      message({ id: "h-1", seq: 1, body: "H1", authorUserId: ME, metadata: { threadId: "t-1" } }),
+      message({ id: "h-2", seq: 2, body: "H2", authorUserId: ME, metadata: { threadId: "t-1" } }),
     ]);
     expect(within(rowFor("H2")).queryByText("You")).toBeNull();
     expect(within(rowFor("H1")).getByText("You")).not.toBeNull();
@@ -416,7 +416,7 @@ describe("the attribution pill", () => {
   /** ⚠ A HUMAN ROW GETS THE SAME PILL. The transcript is one system. */
   it("heads a HUMAN row with the same capsule, name and time", () => {
     renderThread([
-      message({ id: "h", seq: 1, body: "HI", authorUserId: ME, metadata: { taskId: "t-1" } }),
+      message({ id: "h", seq: 1, body: "HI", authorUserId: ME, metadata: { threadId: "t-1" } }),
     ]);
     const pill = pillIn(rowFor("HI"));
     expect(pill.className).toContain("rounded-full");

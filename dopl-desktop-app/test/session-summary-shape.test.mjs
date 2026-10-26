@@ -22,13 +22,13 @@ test("SHAPE: a live summary carries exactly what the Agents tab and the agent vi
   // pill and never reaches the server — `session-state-push.js › reportRow` picks its columns BY
   // NAME, which is the property every field below relies on.
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   assert.deepEqual(m.list(), [
     {
       sessionId: "sess-1",
       channelId: "chan-1",
       workspaceId: "ws-1", // on the wire since 2026-09-14 — the pop-out rail routes by it
-      taskId: "task-1",
+      threadId: "thread-1",
       agentId: "a1b2c3d4",
       name: "a1b2c3d4",
       // `displayName` (2026-08-25, Samuel's rename ruling) rides BESIDE `agentId`/`name` and
@@ -216,7 +216,7 @@ test("SHAPE: counterparty-influenced text is bounded and single-line", () => {
   const m = load();
   m.bind({
     sessions: new Map([
-      ["chan-1:task-1", session({ context: { channelName: "a\nb\tc", taskTitle: "x".repeat(200) } })],
+      ["chan-1:thread-1", session({ context: { channelName: "a\nb\tc", threadTitle: "x".repeat(200) } })],
     ]),
   });
   const row = m.list()[0];
@@ -227,17 +227,17 @@ test("SHAPE: counterparty-influenced text is bounded and single-line", () => {
 
 test("SHAPE: a thread-less responder session is a real row, not a dropped one", () => {
   const m = load();
-  const s = session({ taskId: "", context: {} });
+  const s = session({ threadId: "", context: {} });
   m.bind({ sessions: new Map([[s.key, s]]) });
   const row = m.list()[0];
-  assert.equal(row.taskId, "");
+  assert.equal(row.threadId, "");
   assert.equal(row.threadTitle, null);
   assert.equal(row.channelName, null);
 });
 
 test("SHAPE: a settled registry entry is never listed", () => {
   const m = load();
-  m.bind({ sessions: new Map([["chan-1:task-1", session({ settled: true })]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session({ settled: true })]]) });
   assert.deepEqual(m.list(), []);
 });
 

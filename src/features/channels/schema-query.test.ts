@@ -53,12 +53,12 @@ describe("MessageReadQuerySchema", () => {
   });
 
   it("thread: optional, and ANY non-empty string when present", () => {
-    // Not `.uuid()` on purpose — legacy `task-<channelId>-<seq>` ids are real
-    // metadata.taskId values, and they are the hardest threads to isolate.
+    // Not `.uuid()` on purpose — legacy `thread-<channelId>-<seq>` ids are real
+    // metadata.threadId values, and they are the hardest threads to isolate.
     expect(MessageReadQuerySchema.parse({}).thread).toBeUndefined();
     expect(MessageReadQuerySchema.safeParse({ thread: UUID }).success).toBe(true);
     expect(
-      MessageReadQuerySchema.safeParse({ thread: `task-${UUID}-7` }).success
+      MessageReadQuerySchema.safeParse({ thread: `thread-${UUID}-7` }).success
     ).toBe(true);
     // Bounded and non-blank: a filter value is neither empty nor unbounded.
     expect(MessageReadQuerySchema.safeParse({ thread: "" }).success).toBe(false);

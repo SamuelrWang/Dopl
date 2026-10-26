@@ -127,7 +127,7 @@ test("the slot key rides the dopl entry beside the bearer, pin and runtime stamp
   // than one colon and the agent charset, so no schema moved for this.
   const AGENT = "a1b2c3d4";
   const servers = buildServers(null, "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee");
-  withSessionStamp(servers, slotKey({ channelId: CH, taskId: THREAD, agentId: AGENT }));
+  withSessionStamp(servers, slotKey({ channelId: CH, threadId: THREAD, agentId: AGENT }));
   assert.deepEqual(servers.dopl.headers, {
     Authorization: "Bearer device-token",
     "X-Dopl-Runtime": "desktop-session",
@@ -138,7 +138,7 @@ test("the slot key rides the dopl entry beside the bearer, pin and runtime stamp
   // TWO agents on ONE thread stamp two DIFFERENT values, which is the whole point of the
   // widening: nothing on the wire could otherwise tell their calls apart.
   const other = buildServers(null, "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee");
-  withSessionStamp(other, slotKey({ channelId: CH, taskId: THREAD, agentId: "z9y8x7w6" }));
+  withSessionStamp(other, slotKey({ channelId: CH, threadId: THREAD, agentId: "z9y8x7w6" }));
   assert.notEqual(other.dopl.headers["X-Dopl-Session-Id"], servers.dopl.headers["X-Dopl-Session-Id"]);
 });
 
@@ -234,16 +234,16 @@ test("no dopl entry (pre-sign-in) and junk input are no-ops, not throws", () => 
 // ── The value: every slot key this machine mints is sendable ───────────────────
 
 test("every slot shape passes the SERVER's regex, so the stamp is never dropped", () => {
-  // The desktop's ids are UUIDs and `task-<channel>-<seq>` legacy ids, all of which sit
+  // The desktop's ids are UUIDs and `thread-<channel>-<seq>` legacy ids, all of which sit
   // inside the server's character class — but that is a PROPERTY of today's id sources,
   // not a guarantee. Change how a thread / agent id is minted and this fails here rather
   // than by an attribution line quietly never appearing in production.
   const slots = {
-    "pair (channel, thread)": slotKey({ channelId: CH, taskId: THREAD }),
+    "pair (channel, thread)": slotKey({ channelId: CH, threadId: THREAD }),
     "room (channel, agent)": slotKey({ channelId: CH, agentId: AGENT }),
-    "team agent with no thread": slotKey({ channelId: CH, agentId: AGENT, taskId: "" }),
-    "responder with no first-class thread": slotKey({ channelId: CH, taskId: "" }),
-    "legacy thread id": slotKey({ channelId: CH, taskId: legacyThreadId(CH, 41) }),
+    "team agent with no thread": slotKey({ channelId: CH, agentId: AGENT, threadId: "" }),
+    "responder with no first-class thread": slotKey({ channelId: CH, threadId: "" }),
+    "legacy thread id": slotKey({ channelId: CH, threadId: legacyThreadId(CH, 41) }),
   };
   for (const [what, slot] of Object.entries(slots)) {
     assert.match(slot, SERVER_RE, `${what}: ${JSON.stringify(slot)} would be dropped by the server`);
@@ -256,16 +256,16 @@ test("every slot shape passes the SERVER's regex, so the stamp is never dropped"
   // The room and pair slots of ONE channel are DIFFERENT values, which is the entire
   // point: two concurrent sessions of one agent handle must be tellable apart.
   assert.notEqual(slots["pair (channel, thread)"], slots["room (channel, agent)"]);
-  assert.equal(slotKey({ channelId: CH, taskId: THREAD }), sessionKey(CH, THREAD), "no agent -> byte-for-byte the session key");
+  assert.equal(slotKey({ channelId: CH, threadId: THREAD }), sessionKey(CH, THREAD), "no agent -> byte-for-byte the session key");
 });
 
 test("a slot key built from a hostile id degrades to NO stamp, never to a bad header", () => {
-  // Defense in depth. Today `targeting.firstClassTaskId` UUID-narrows an inbound
-  // `metadata.taskId` (which is caller-settable) before it can ever key a session, so
+  // Defense in depth. Today `targeting.firstClassThreadId` UUID-narrows an inbound
+  // `metadata.threadId` (which is caller-settable) before it can ever key a session, so
   // this input is unreachable through the trigger path. If a future path ever lets one
   // through, the cost is a missing attribution hint — not a forged render line, and not
   // a failed spawn.
-  const slot = slotKey({ channelId: CH, taskId: "t1\nX-Dopl-Runtime: desktop-session" });
+  const slot = slotKey({ channelId: CH, threadId: "t1\nX-Dopl-Runtime: desktop-session" });
   assert.doesNotMatch(slot, SERVER_RE, "the harness input must actually be rejectable");
   const servers = buildServers();
   withSessionStamp(servers, slot);

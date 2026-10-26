@@ -26,8 +26,8 @@ export function sessionRow(over: Partial<SessionStateRow>): SessionStateRow {
     channel_id: "chan-1",
     workspace_id: "ws-1",
     user_id: "user-1",
-    session_key: "chan-1:task-1:k3v7d2mq",
-    task_id: null,
+    session_key: "chan-1:thread-1:k3v7d2mq",
+    thread_id: null,
     name: "k3v7d2mq",
     state: "working",
     channel_name: null,
@@ -104,7 +104,7 @@ function channelRow(over: Partial<ChannelRow> = {}): ChannelRow {
 }
 
 interface ResolveOpts {
-  kind?: "message" | "task_progress";
+  kind?: "message" | "thread_progress";
   authorKind?: string;
   /** Fixture convenience; the contract is `toAgentIds` (folds into a one-element list). */
   toAgentId?: string | null;

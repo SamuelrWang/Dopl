@@ -69,7 +69,7 @@ const CHAN = "dba90694-1111-4222-8333-444444444444";
 
 /** The real `dispatchMessage`, with the one surviving route replaced by a recorder. */
 function harness({ feedTakes = false } = {}) {
-  const seen = { feed: 0, trigger: [], fyi: [], taskNotify: [] };
+  const seen = { feed: 0, trigger: [], fyi: [], threadNotify: [] };
   // ⚠ ONE KEY, NOT FIVE. This object used to carry `maybeOpenRequesterSession`,
   // `maybeSurfaceRequesterReply`, `maybeReopenAddressedThread` and `noteRequestLifecycle`
   // beside it. session-dispatch.js exports `{ feedLiveSession }` and nothing else now, so a
@@ -79,7 +79,7 @@ function harness({ feedTakes = false } = {}) {
     feedLiveSession: () => { seen.feed += 1; return feedTakes; },
   };
   const { dispatchMessage } = new Function(
-    "versionSkew", "sessionDispatch", "targeting", "trigger", "taskNotify", "diag",
+    "versionSkew", "sessionDispatch", "targeting", "trigger", "threadNotify", "diag",
     `${extractAsyncFn(LISTENER, "dispatchMessage")}\n return { dispatchMessage };`
   )(
     { observe: () => {} },
@@ -89,7 +89,7 @@ function harness({ feedTakes = false } = {}) {
       handleTrigger: async (e, m) => seen.trigger.push(m.seq),
       sendFyi: (e, m) => seen.fyi.push(m.seq),
     },
-    { notifyTaskReply: (e, m) => seen.taskNotify.push(m.seq) },
+    { notifyThreadReply: (e, m) => seen.threadNotify.push(m.seq) },
     () => {}
   );
   return { dispatchMessage, seen };
@@ -128,7 +128,7 @@ test("a live session consuming chat short-circuits, exactly as for a request", a
   // which measured the short-circuit through a route that no longer exists. The short-circuit
   // itself is unchanged and is now measured where it still shows: a message route 1 claimed
   // never reaches classify, so no verdict is dispatched for it.
-  assert.deepEqual([seen.fyi, seen.trigger, seen.taskNotify], [[], [], []],
+  assert.deepEqual([seen.fyi, seen.trigger, seen.threadNotify], [[], [], []],
     "a message a live session took must not also notify, trigger or banner");
 });
 

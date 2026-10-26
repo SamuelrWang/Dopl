@@ -63,7 +63,7 @@ const GATE_REASONS = [
   // allow / preapproved (carried for the diag line, so "never landed" and "landed but not
   // covered" are distinguishable in the field without a source read)
   'profile-preapproved', //      shadowed via allowedTools; never actually reaches canUseTool
-  'granted-for-session', //      the operator's scoped allowForTask key covers this exact shape
+  'granted-for-session', //      the operator's scoped allowForThread key covers this exact shape
   'auto-outbound', //            AXIS B auto_outbound / auto_both on an own-channel post
   'auto-inbound-read', //        M3: AXIS B auto_inbound / auto_both on an own-channel READ
   'auto-outbound-marker', //     M4: the same outbound half on an own-channel milestone (its
@@ -115,7 +115,7 @@ const GATE_REASONS = [
 function makeGateReason(deps) {
   const d = deps || {};
   const grantedFor = function (a) {
-    const held = a.allowForTask || [];
+    const held = a.allowForThread || [];
     return held.indexOf(d.grantKeyFor(a.toolName, a.input, a.channelId, a.runtime)) !== -1;
   };
   // WHY did a CHANNEL call stop? The order MIRRORS grantDecision's own channel branch, which is

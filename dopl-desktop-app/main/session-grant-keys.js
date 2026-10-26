@@ -1,4 +1,4 @@
-// The SCOPED allowForTask GRANT KEY for one tool call (§2 SPLIT out of session-profiles.js,
+// The SCOPED allowForThread GRANT KEY for one tool call (§2 SPLIT out of session-profiles.js,
 // 2026-08-02, verbatim). session-profiles.js re-exports grantKeyFor / POST_GRANT, so no caller
 // moved; the split happened because that file hit the 500-line cap and the key machinery is the
 // one half of it that decides NOTHING — it only names the SHAPE a decision was taken on.
@@ -19,7 +19,7 @@ const { DOPL_CHANNEL_TOOL, WEB_TOOLS } = require('./tool-profiles');
 // width. It can. The COUNTERPARTY supplies the exact command / body text, and a review
 // benchmarked ~400k SHA-256/179ms on this machine, i.e. seconds to a 48-bit birthday
 // collision: precompute a benign/malicious pair sharing argv0 + digest, get the benign one
-// approved for the task, and the twin is auto-allowed with no card. A grant key is a Set
+// approved for the thread, and the twin is auto-allowed with no card. A grant key is a Set
 // MEMBER, never a rendered string, so its length costs nothing — use the FULL digest.
 function shaKey(value) {
   return crypto.createHash('sha256').update(String(value == null ? '' : value)).digest('hex');
@@ -29,14 +29,14 @@ function shaKey(value) {
 // own-channel op=post used to resolve 'preapproved' — the agent's message left this machine
 // with no operator click. It is the most consequential thing a session does, so it now GATES
 // like every other write: the dock shows the drafted body and the operator picks Allow once /
-// Allow for this task / Deny.
+// Allow for this thread / Deny.
 //
 // EVERY dopl_channel grant is OP-SCOPED (FIX F2). The narrow POST_GRANT existed, but a
 // grant taken on any other op recorded the BARE tool name and grantDecision honored the
 // bare name for ANY op — so an agent whose first channel call was op=read (or a
 // slug-addressed post, classified cross-channel) produced a dock entry with no drafted
 // body, and one "Allow for this session" click silently authorized every channel op for the
-// rest of the task, op=open direct:true included. That is exactly the cross-user exfil
+// rest of the thread, op=open direct:true included. That is exactly the cross-user exfil
 // path FIX H1 closed. Now each op earns its own key and nothing honors the bare name.
 // v2.9 review: POST_GRANT is the own-channel post BASE. A real key always extends it with
 // the to/kind segments (MEDIUM-2) and the body digest (FIX F7), so the bare constant matches
@@ -93,7 +93,7 @@ function bodyDigest(body) {
 
 // MEDIUM-2 — fold `to` and `kind` into the post key. `to` addresses ONE channel member and
 // `kind` turns a chat message into a structured lifecycle event, so one approved reply must
-// not also authorize a post aimed at a different member or a forged `task_finished`. Both are
+// not also authorize a post aimed at a different member or a forged `thread_finished`. Both are
 // digested (an email sanitizes down to a colliding token); `kind`'s DEFAULT adds no segment.
 function postScope(base, i) {
   const to = fieldSegment('#to:', i.to, true);
@@ -113,7 +113,7 @@ function targetSegment(channel) {
 // ── HIGH-1: EVERY tool is scoped, not just the channel ────────────────────────────
 // `grantKeyFor` used to op-scope ONLY dopl_channel and record the BARE NAME for everything
 // else, so one "Allow for this session" on `Bash("ls -la")` silently authorized every later Bash
-// for the rest of the task, including one the counterparty's message text steered the agent
+// for the rest of the thread, including one the counterparty's message text steered the agent
 // into proposing. Each class now earns a key for the SHAPE the operator saw. Keys are
 // in-memory, per-session, cleared on park (FIX F1 made that true), never persisted.
 const WEB_SCOPED = WEB_TOOLS.slice(); // WebFetch / WebSearch -> scoped by ORIGIN
@@ -177,14 +177,14 @@ function stableStringify(value, depth, seen) {
   return '{' + keys.map(function (k) { return JSON.stringify(k) + ':' + stableStringify(value[k], d + 1, next); }).join(',') + '}';
 }
 
-// The allowForTask KEY a call belongs to. Own-channel posts get `<tool>#post` (+ the
+// The allowForThread KEY a call belongs to. Own-channel posts get `<tool>#post` (+ the
 // MEDIUM-2 to/kind segments and the F7 body digest); every other channel call gets
 // `#op:<op>`, and a CROSS-channel post additionally carries its digested target, so a grant
 // to post into one other channel cannot post into a different one. Every OTHER tool is
 // scoped by the shape that was shown: Bash by argv0 + command digest, WebFetch/WebSearch by
 // origin, Write/Edit/NotebookEdit by resolved directory, anything else by a digest of its
 // whole input. The engine stores exactly this string when the operator picks "Allow for this
-// task" (session-io -> reducer allowForTask). The channel base is the REAL tool name, so a
+// thread" (session-io -> reducer allowForThread). The channel base is the REAL tool name, so a
 // versioned channel tool cannot inherit the canonical one's grants (and the canonical name
 // still produces the byte-identical `mcp__dopl__dopl_channel#post…` base it always did).
 // `deps` are session-profiles' own classifiers + `editToolsFor(runtimeId)`, the SESSION runtime's

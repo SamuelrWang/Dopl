@@ -54,7 +54,7 @@ function post(
     body,
     metadata: {
       ...mentionMetadata(body, author),
-      ...(threadId ? { taskId: threadId } : {}),
+      ...(threadId ? { threadId } : {}),
       ...(metadata ?? {}),
     },
     clientMsgId: null,

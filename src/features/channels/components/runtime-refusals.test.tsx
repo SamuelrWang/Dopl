@@ -76,7 +76,7 @@ function installBridge(channelRuntime: string, withRecord = true) {
 const agentOn = (runtimeId: string): DesktopSessionSummary =>
   ({
     channelId: CH,
-    taskId: "t1",
+    threadId: "t1",
     agentId: "abcd1234",
     state: "idle",
     runtimeId,
@@ -217,7 +217,7 @@ describe("the signed-out and no-runtime copy", () => {
 async function mountPosture(runtimeId: string) {
   installBridge(otherThan(runtimeId));
   await act(async () => {
-    render(<PostureControls agent={agentOn(runtimeId)} channelId={CH} taskId="t1" />);
+    render(<PostureControls agent={agentOn(runtimeId)} channelId={CH} threadId="t1" />);
   });
 }
 

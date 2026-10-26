@@ -83,7 +83,7 @@ function bootButton(identityModel) {
   // The real model rule over fake catalogs, not a passthrough.
   const op = bootLaunchOp({ apiFetch, launchDefault: launchDefaultStub({ identityModelFor: (rid, m, own) => identityOn(rid, m, own) }) });
   const launch = (extra = {}) => op.launchFromButton({
-    channelId: CH, taskId: "", workspaceId: "ws-1", identityId: IDENTITY_ID, ...extra,
+    channelId: CH, threadId: "", workspaceId: "ws-1", identityId: IDENTITY_ID, ...extra,
   });
   return { launch, launches: op.launches };
 }

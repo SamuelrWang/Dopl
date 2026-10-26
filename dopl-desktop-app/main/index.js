@@ -365,7 +365,7 @@ if (!gotLock) {
         // ⚠ THE SAME OP THE OPERATOR'S OWN COMPOSER USES (ruling R1) — one resolution, one
         // `steer`, one private-turn open. What the `directed` argument changes inside it is
         // the FRAMING (fenced data, never operator authority) and the reply capture.
-        direct: (spec) => require('./session-reopen').messageByTask(spec),
+        direct: (spec) => require('./session-reopen').messageByThread(spec),
         workspaces: () => require('./realtime').desiredWorkspaceIds(),
       });
     } catch (err) { diag('agentDirections.start error', err && err.message); }

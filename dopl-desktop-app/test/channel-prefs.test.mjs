@@ -321,7 +321,7 @@ function bootIpc() {
     }
     // Lazily required by ops this file does not drive, but stubbed so a typo in a
     // registration path surfaces here rather than as a mystery throw.
-    if (id === "./session-engine") return { reopenByTask: () => ({ ok: true }) };
+    if (id === "./session-engine") return { reopenByThread: () => ({ ok: true }) };
     if (id === "./deep-link-target") return { isSafeSegment: () => true };
     if (id === "./version-gate") return { isBlocked: () => false };
     if (id === "./popout-window") return { openThreadWindow: () => ({ ok: true }) };

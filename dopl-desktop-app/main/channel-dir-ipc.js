@@ -29,7 +29,7 @@ const setFlag = (set) => (_event, payload) => {
 };
 
 // A posture write applies to the agents already running in the room (Samuel, 2026-08-25), through
-// the existing live op (`setModeByTask`, where coercion and the windowless floor live). Axis A goes
+// the existing live op (`setModeByThread`, where coercion and the windowless floor live). Axis A goes
 // only to sessions whose OWN runtime's tool mode moved, in that runtime's words (a containment value
 // such as a sandbox is spawn-time and waits for the next launch); Axis B to every
 // session when it moved (P3-02). Unpinned, so a per-agent pick keeps narrowing (C2). Addressed per
@@ -39,17 +39,17 @@ function applyPostureToLive(channelId, before, after) {
   let applied = 0;
   try {
     const engine = require('./session-engine');
-    if (typeof engine.listLiveSessions !== 'function' || typeof engine.setModeByTask !== 'function') return 0;
+    if (typeof engine.listLiveSessions !== 'function' || typeof engine.setModeByThread !== 'function') return 0;
     const c = require('./runtime').selectionContext();
     const toolsOf = (sel, rt) => selectionShape.settingsFor(c, sel, rt).tools;
     for (const row of engine.listLiveSessions()) {
       if (!row || row.channelId !== channelId) continue;
-      const target = { channelId: channelId, taskId: row.taskId || '', agentId: row.agentId || '' };
+      const target = { channelId: channelId, threadId: row.threadId || '', agentId: row.agentId || '' };
       const rt = row.runtimeId || c.defaultId;
       const tools = toolsOf(after, rt);
       const results = [];
-      if (tools !== toolsOf(before, rt)) results.push(engine.setModeByTask({ axis: 'tools', mode: tools, ...target }));
-      if (after.messages !== before.messages) results.push(engine.setModeByTask({ axis: 'messages', mode: after.messages, ...target }));
+      if (tools !== toolsOf(before, rt)) results.push(engine.setModeByThread({ axis: 'tools', mode: tools, ...target }));
+      if (after.messages !== before.messages) results.push(engine.setModeByThread({ axis: 'messages', mode: after.messages, ...target }));
       if (results.some((r) => r && r.ok)) applied += 1;
     }
   } catch (err) {

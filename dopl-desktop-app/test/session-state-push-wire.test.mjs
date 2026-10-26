@@ -28,13 +28,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   load, entry, adHocEntry, armed, drained, bodies,
-  CHAN_A, TASK_A, TASK_B, ADHOC_TASK_ID,
+  CHAN_A, THREAD_A, THREAD_B, ADHOC_THREAD_ID,
   wire,
 } from "./_session-state-push-harness.mjs";
 
 // ── 4. C-2: THE AD-HOC SESSION IS FILTERED, AND THE REST OF THE SET SURVIVES ─────────
 //
-// THE DEFECT: an unthreaded inbound — the ordinary DM — keys as `task-<channel>-<seq>`, which the endpoint refuses.
+// THE DEFECT: an unthreaded inbound — the ordinary DM — keys as `thread-<channel>-<seq>`, which the endpoint refuses.
 // Zod validates the ARRAY, so ONE of those 400s the WHOLE `sessions` payload; `retryable(400)` is false and the
 // digest is not recorded, so every later push fails identically and `read_sessions` answers `[]` for the machine —
 // including its perfectly valid uuid-threaded sessions — while stale rows are never cleared.
@@ -42,10 +42,10 @@ import {
 test("C-2: the predicate is the server's contract restated, not a name sniff", () => {
   const m = wire.makeWireFilter(() => {});
   assert.equal(m.serverReportable(entry()), true);
-  assert.equal(m.serverReportable(entry({ taskId: "" })), true, "a thread-less responder is legal");
+  assert.equal(m.serverReportable(entry({ threadId: "" })), true, "a thread-less responder is legal");
   assert.equal(m.serverReportable(adHocEntry()), false, "…an ad-hoc THREAD ID is not");
   assert.equal(m.serverReportable(entry({ channelId: "chan-1" })), false, "a non-uuid channel is refused too");
-  assert.equal(m.serverReportable(entry({ taskId: "not-a-uuid" })), false);
+  assert.equal(m.serverReportable(entry({ threadId: "not-a-uuid" })), false);
   assert.equal(m.serverReportable(null), false, "and nothing at all fails closed");
 });
 
@@ -54,7 +54,7 @@ test("C-2: ONE ad-hoc session no longer poisons the whole workspace's push", asy
   summary.emit([entry(), adHocEntry()]);
   await drained();
   assert.equal(m.posts.length, 1, "the push happens");
-  assert.deepEqual(bodies(m)[0].map((r) => r.threadId), [TASK_A],
+  assert.deepEqual(bodies(m)[0].map((r) => r.threadId), [THREAD_A],
     "the valid uuid-threaded session is reported; the ad-hoc one is not on the wire");
   assert.equal(bodies(m)[0].length, 1);
 });
@@ -65,7 +65,7 @@ test("C-2: the filtering is VISIBLE — one line per dropped session, not silenc
   await drained();
   const said = m.logged.filter((l) => l.includes("SKIPPING ad-hoc session"));
   assert.equal(said.length, 1);
-  assert.ok(said[0].includes(ADHOC_TASK_ID), said[0]);
+  assert.ok(said[0].includes(ADHOC_THREAD_ID), said[0]);
   assert.ok(said[0].includes("read_sessions"), "it names the consequence, like every other failure line");
 });
 
@@ -138,7 +138,7 @@ test("ROW/ENDED: ended entries are dropped, and the live ones in the same set st
   const m = load();
   const rows = m.reportable([
     entry({ state: "working" }),
-    entry({ taskId: TASK_B, agentId: "z9y8x7w6", state: "ended" }),
+    entry({ threadId: THREAD_B, agentId: "z9y8x7w6", state: "ended" }),
   ]);
   assert.deepEqual(rows.map((r) => r.state), ["working"]);
 });
@@ -168,7 +168,7 @@ test("ROW/ENDED: a set of ONLY ended sessions reports the EMPTY set — which is
 test("NAME: a row whose handle the server would refuse never reaches the wire", () => {
   const m = load();
   assert.deepEqual(
-    m.reportable([entry(), entry({ taskId: TASK_B, agentId: "", name: "" })]).map((r) => r.name),
+    m.reportable([entry(), entry({ threadId: THREAD_B, agentId: "", name: "" })]).map((r) => r.name),
     ["a1b2c3d4"],
     "the nameless one is dropped; the rest of the set is reported normally"
   );
@@ -187,7 +187,7 @@ test("NAME: the predicate is `channel_sessions.name`'s CHECK, restated", () => {
 
 test("NAME: the drop is VISIBLE, once per session, and says what it would have cost", async () => {
   const { m, summary } = armed();
-  const nameless = entry({ taskId: TASK_B, agentId: "", name: "" });
+  const nameless = entry({ threadId: THREAD_B, agentId: "", name: "" });
   summary.emit([entry(), nameless]);
   await drained();
   summary.emit([entry({ state: "idle" }), nameless]); // the same bad row, a later state change

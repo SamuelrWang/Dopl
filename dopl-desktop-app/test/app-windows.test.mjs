@@ -251,7 +251,7 @@ test("NOTHING renderer-reachable can register a window", () => {
   //         link can mint one.
   //     ⚠ What is genuinely NEW is that this window's renderer can reach an op that STARTS
   //     A TURN (`sessions:message`). That is reviewed where it is registered
-  //     (`channel-dir-ipc.js`) and where it executes (`session-reopen.js › messageByTask`);
+  //     (`channel-dir-ipc.js`) and where it executes (`session-reopen.js › messageByThread`);
   //     registration is not what authorizes it — being an app window is.
   const callers = readdirSync(MAIN)
     .filter((f) => f.endsWith(".js"))

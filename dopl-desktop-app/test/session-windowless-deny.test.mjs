@@ -169,7 +169,7 @@ function arm(s, rid) {
   return { type: "permission_request", requestId: rid, name: "WebFetch" };
 }
 
-test("T25: the FIRST denial counts AND posts one task_progress naming tool and mode", async () => {
+test("T25: the FIRST denial counts AND posts one thread_progress naming tool and mode", async () => {
   timers.reset();
   const m = load({ notifyToolGate: () => null });
   const s = denialSession();
@@ -184,10 +184,10 @@ test("T25: the FIRST denial counts AND posts one task_progress naming tool and m
   // posture is too narrow (widenable) or the tool is unclassified (nothing widens it).
   // ⚠ ...AND ONLY WHEN IT IS: the payload here carries no `gateReason`, so the mode is the whole
   // account of the refusal. The case below is the other half (GATE-BUG-REPORT 2026-09-15, fix 1).
-  assert.equal(p.kind, "task_progress",
+  assert.equal(p.kind, "thread_progress",
     "never `message`: a lifecycle kind wakes nobody, so this cannot feed back into the session");
   assert.deepEqual(p.entry, { channel: { id: "chan-1" }, workspaceId: "ws-1" });
-  assert.equal(p.taskId, "task-1");
+  assert.equal(p.threadId, "thread-1");
   // ⚠ PER SESSION, NOT PER MESSAGE: the server's own client_msg_id uniqueness then guarantees the
   // same bound a second time, rather than a different one keyed on whatever seq happened to be up.
   assert.equal(p.opts.clientMsgId, "denied-chan-1-sess-1");

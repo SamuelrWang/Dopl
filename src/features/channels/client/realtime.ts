@@ -8,7 +8,7 @@ import {
 } from "../constants";
 
 /**
- * THE TWO TABLES THAT ARE NOT WATCHED, and why there is no hook for either.
+ * THE TABLE THAT IS NOT WATCHED, and why there is no hook for it.
  *
  * `channel_agents` was watched here until the channels rollback (§1): the chips
  * bar learned about a summon, a rename and a status flip only through that
@@ -18,12 +18,7 @@ import {
  * channel. It is still IN the publication (migration 20260731120000); dropping
  * it from there is a migration, and belongs with the later cleanup.
  *
- * `channel_task_participants` was never watched: migration 20260731130000 kept
- * it out of the publication on the F-072 grounds that publishing a
- * rarely-changing child table re-creates read amplification for no live
- * benefit. Breakout rooms are gone too, so nothing reads it at all now.
- *
- * A `useWorkspaceTablesRealtime` call naming either would register a channel
+ * A `useWorkspaceTablesRealtime` call naming it would register a channel
  * that never delivers an event, which is WORSE than no subscription because it
  * looks like coverage.
  */

@@ -250,7 +250,7 @@ test("CXP-4: CLAUDE's resume path is byte-for-byte what it was — the regressio
 
   // The record-driven door, unchanged for Claude: it still resumes, and it hands in no baseline.
   const g = harness();
-  const rec = { channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", runtimeId: "claude" };
+  const rec = { channelId: "c1", threadId: "t1", agentId: "a1b2c3d4", runtimeId: "claude" };
   assert.equal(await g.startResume(rec, "sdk-1", "continue"), true);
   assert.equal(g.calls.startSession[0].usageBaselineCost, undefined,
     "no cost baseline is handed in by any lane any more — the column is deleted");
@@ -270,7 +270,7 @@ test("CXP-4: the RECORD-driven door resumes Codex, and pairs no baseline it cann
   // this is where that omission would be caught.
   const h = harness();
   const rec = {
-    channelId: "c1", taskId: "t1", agentId: "a1b2c3d4", runtimeId: "codex",
+    channelId: "c1", threadId: "t1", agentId: "a1b2c3d4", runtimeId: "codex",
     usageBaseline: "continues",
   };
   const ok = await h.startResume(rec, "codex-thread-1", "continue");

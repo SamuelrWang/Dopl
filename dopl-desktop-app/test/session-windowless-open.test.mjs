@@ -57,7 +57,7 @@ test("the operator's Allow carries a way back: a failed decision's pop-up opens 
   decided[0].opts.onOpen();
   assert.deepEqual(opened, [{
     entry: { channel: { id: "chan-1", name: "Website" }, workspaceId: "ws-1", workspaceSegment: "acme" },
-    opts: { threadId: "task-1" },
+    opts: { threadId: "thread-1" },
   }]);
 
   // Navigation is best-effort here as everywhere: a dead window must not escape into the callback.
@@ -121,7 +121,7 @@ test("both banners' open action opens this session's thread, and navigation fail
   m.banners[0].onOpen();
   outbound[0].onOpen();
   const want = { entry: { channel: { id: "chan-1", name: "Website" }, workspaceId: "ws-1", workspaceSegment: "acme" },
-    opts: { threadId: "task-1" } };
+    opts: { threadId: "thread-1" } };
   assert.deepEqual(opened, [want, want]);
   nav.openChannelForEntry = () => { throw new Error("window gone"); };
   assert.doesNotThrow(() => m.banners[0].onOpen());

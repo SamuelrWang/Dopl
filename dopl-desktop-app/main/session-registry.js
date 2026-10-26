@@ -43,11 +43,11 @@ function bind(d) {
  * where an op that names no agent takes the OLDEST live one — which is byte-for-byte what every
  * caller got when a thread could hold only one session.
  *
- * ⚠ AN EMPTY `taskId` IS A REAL SCOPE, not a missing value: it selects the CHANNEL-LEVEL agents,
+ * ⚠ AN EMPTY `threadId` IS A REAL SCOPE, not a missing value: it selects the CHANNEL-LEVEL agents,
  * and `threadKeyPrefix`'s trailing colon is what stops it also matching every threaded one.
  */
 function liveOnThread(a) {
-  const prefix = store.threadKeyPrefix(String((a && a.channelId) || ''), String((a && a.taskId) || ''));
+  const prefix = store.threadKeyPrefix(String((a && a.channelId) || ''), String((a && a.threadId) || ''));
   const out = [];
   if (!deps.sessions) return out;
   for (const s of deps.sessions.values()) {
@@ -104,7 +104,7 @@ function sessionOn(a) {
   if (!deps.sessions) return null;
   if (agentId) {
     const s = deps.sessions.get(store.slotKey({
-      channelId: (a && a.channelId) || '', taskId: (a && a.taskId) || '', agentId: agentId,
+      channelId: (a && a.channelId) || '', threadId: (a && a.threadId) || '', agentId: agentId,
     }));
     return s && !s.settled ? s : null;
   }

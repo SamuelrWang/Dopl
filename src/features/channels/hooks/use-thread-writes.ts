@@ -169,7 +169,7 @@ export function sendConfig(
 
 export function openThreadConfig(
   deps: ThreadWritesParams
-): UseApiMutationConfig<OpenThreadDraft, { task: ChannelThread }> {
+): UseApiMutationConfig<OpenThreadDraft, { thread: ChannelThread }> {
   return {
     request: (draft) => ({
       path: channelThreadsPath(draft.channelId),
@@ -195,10 +195,10 @@ export function openThreadConfig(
               authorUserId: deps.currentUserId,
               authorName: deps.currentUserName,
               authorAvatarUrl: deps.currentUserAvatarUrl,
-              // `taskId` binds the row into its THREAD — the transcript's thread
+              // `threadId` binds the row into its THREAD — the transcript's thread
               // card; `to_user_id` draws the addressee line. ⚠ Wire spellings,
               // so the pending card is the real component.
-              metadata: { taskId: threadId, to_user_id: draft.toUserId },
+              metadata: { threadId, to_user_id: draft.toUserId },
             })
           )
         ),
@@ -223,10 +223,10 @@ export function openThreadConfig(
     // opening message arrives with the invalidated read.
     reconcile: (data, draft) => [
       patchCache<ThreadsCache>(threadsKey(draft.channelId), (cache) =>
-        upsertThread(cache, data.task, pendingMessageId(draft.clientMsgId))
+        upsertThread(cache, data.thread, pendingMessageId(draft.clientMsgId))
       ),
       patchCache<MessagesCache>(messagesKey(draft.channelId), (cache) =>
-        retagPendingMessage(cache, draft.clientMsgId, { taskId: data.task.id })
+        retagPendingMessage(cache, draft.clientMsgId, { threadId: data.thread.id })
       ),
     ],
     invalidate: (draft) => [
@@ -249,7 +249,7 @@ export function useThreadWrites(params: ThreadWritesParams) {
     channelRequest,
     sendConfig(deps)
   );
-  const openThread = useApiMutationWith<OpenThreadDraft, { task: ChannelThread }>(
+  const openThread = useApiMutationWith<OpenThreadDraft, { thread: ChannelThread }>(
     channelRequest,
     openThreadConfig(params)
   );

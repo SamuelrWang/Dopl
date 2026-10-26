@@ -43,7 +43,7 @@ export function canSetAgentMode(): boolean {
  */
 export async function setAgentMode(payload: {
   channelId: string;
-  taskId: string;
+  threadId: string;
   agentId?: string;
   axis: "tools" | "messages";
   mode: string;
@@ -52,7 +52,7 @@ export async function setAgentMode(payload: {
   if (typeof sessions?.setMode !== "function") return { ok: false, reason: "no-bridge" };
   const res = await sessions.setMode(
     payload.channelId,
-    payload.taskId,
+    payload.threadId,
     payload.axis,
     payload.mode,
     payload.agentId
@@ -68,7 +68,7 @@ export function canSetAgentModel(): boolean {
 /** Promises no timing: the confirmation is the feed (`DesktopSessionSummary.model`). */
 export async function setAgentModel(payload: {
   channelId: string;
-  taskId: string;
+  threadId: string;
   agentId?: string;
   /** A model id, or `""` (`AGENT_MODEL_DEFAULT`) for the runtime's default. */
   model: string;
@@ -79,7 +79,7 @@ export async function setAgentModel(payload: {
   }
   const res = await sessions.setModel(
     payload.channelId,
-    payload.taskId,
+    payload.threadId,
     payload.model,
     payload.agentId
   );
@@ -87,10 +87,10 @@ export async function setAgentModel(payload: {
 }
 
 /** The one op here that starts a turn; main owns its security shape
- *  (`session-reopen.js › messageByTask`). */
+ *  (`session-reopen.js › messageByThread`). */
 export async function messageAgent(payload: {
   channelId: string;
-  taskId: string;
+  threadId: string;
   agentId?: string;
   text: string;
 }): Promise<{ ok: boolean; reason?: string }> {
@@ -98,7 +98,7 @@ export async function messageAgent(payload: {
   if (typeof sessions?.message !== "function") return { ok: false, reason: "no-bridge" };
   const res = await sessions.message(
     payload.channelId,
-    payload.taskId,
+    payload.threadId,
     payload.text,
     payload.agentId
   );
@@ -117,7 +117,7 @@ export function canLaunchAgents(): boolean {
 export async function launchAgentOnThread(payload: {
   channelId: string;
   /** `null` = a channel-level agent — not `''`, a responder thread that never became first-class. */
-  taskId: string | null;
+  threadId: string | null;
   workspaceId: string;
   channelName: string;
   threadTitle: string | null;
@@ -183,12 +183,12 @@ export function useAgentControls() {
   return useCallback(
     async (
       control: AgentControl,
-      session: { channelId: string; taskId: string; agentId?: string }
+      session: { channelId: string; threadId: string; agentId?: string }
     ): Promise<boolean> => {
       const sessions = getSpaBridge()?.sessions;
       const op = control === "pause" ? sessions?.pause : sessions?.end;
       if (typeof op !== "function") return false;
-      const result = await op(session.channelId, session.taskId, session.agentId);
+      const result = await op(session.channelId, session.threadId, session.agentId);
       return result?.ok === true;
     },
     []
@@ -200,7 +200,7 @@ export function useAgentControls() {
  * workspace route segment main cannot derive; main re-checks it.
  */
 export async function openAgentWindow(
-  session: { channelId: string; taskId: string; agentId?: string },
+  session: { channelId: string; threadId: string; agentId?: string },
   segment: string
 ): Promise<{ ok: boolean; reason?: string }> {
   const sessions = getSpaBridge()?.sessions;
@@ -208,7 +208,7 @@ export async function openAgentWindow(
     const res = await sessions.openAgentWindow(
       segment,
       session.channelId,
-      session.taskId,
+      session.threadId,
       session.agentId
     );
     return { ok: res?.ok === true, reason: res?.reason };
@@ -217,7 +217,7 @@ export async function openAgentWindow(
   if (typeof sessions?.reopen !== "function") return { ok: false, reason: "no-bridge" };
   const res = await sessions.reopen(
     session.channelId,
-    session.taskId,
+    session.threadId,
     segment,
     session.agentId
   );

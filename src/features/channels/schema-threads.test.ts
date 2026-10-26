@@ -1,5 +1,5 @@
 /**
- * THE TASK SCHEMAS — the create, the REQUEST FAN-OUT, the one POST that accepts
+ * THE THREAD SCHEMAS — the create, the REQUEST FAN-OUT, the one POST that accepts
  * both, and the update union.
  *
  * ⚠ Split out of `schema.test.ts` when the fan-out arm landed (wiring plan
@@ -10,38 +10,38 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  TaskCreatePayloadSchema,
-  TaskCreateSchema,
-  TaskFanOutSchema,
-  TaskUpdateSchema,
-  isTaskFanOutInput,
+  ThreadCreatePayloadSchema,
+  ThreadCreateSchema,
+  ThreadFanOutSchema,
+  ThreadUpdateSchema,
+  isThreadFanOutInput,
 } from "./schema";
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
 
-describe("TaskCreateSchema", () => {
+describe("ThreadCreateSchema", () => {
   const base = { title: "Ship it", body: "please do X", toUserId: UUID };
 
   it("accepts a minimal valid create (title + body + toUserId)", () => {
-    expect(TaskCreateSchema.safeParse(base).success).toBe(true);
+    expect(ThreadCreateSchema.safeParse(base).success).toBe(true);
   });
 
   it("title: trimmed, 1..200 chars", () => {
-    expect(TaskCreateSchema.safeParse({ ...base, title: "" }).success).toBe(false);
-    expect(TaskCreateSchema.safeParse({ ...base, title: "   " }).success).toBe(false);
-    expect(TaskCreateSchema.safeParse({ ...base, title: "a".repeat(200) }).success).toBe(true);
-    expect(TaskCreateSchema.safeParse({ ...base, title: "a".repeat(201) }).success).toBe(false);
+    expect(ThreadCreateSchema.safeParse({ ...base, title: "" }).success).toBe(false);
+    expect(ThreadCreateSchema.safeParse({ ...base, title: "   " }).success).toBe(false);
+    expect(ThreadCreateSchema.safeParse({ ...base, title: "a".repeat(200) }).success).toBe(true);
+    expect(ThreadCreateSchema.safeParse({ ...base, title: "a".repeat(201) }).success).toBe(false);
   });
 
   it("body: 1..16000 chars; toUserId must be a UUID", () => {
-    expect(TaskCreateSchema.safeParse({ ...base, body: "" }).success).toBe(false);
-    expect(TaskCreateSchema.safeParse({ ...base, toUserId: "x" }).success).toBe(false);
+    expect(ThreadCreateSchema.safeParse({ ...base, body: "" }).success).toBe(false);
+    expect(ThreadCreateSchema.safeParse({ ...base, toUserId: "x" }).success).toBe(false);
   });
 
   it("mode: optional interactive|autonomous only", () => {
-    expect(TaskCreateSchema.safeParse({ ...base, mode: "interactive" }).success).toBe(true);
-    expect(TaskCreateSchema.safeParse({ ...base, mode: "autonomous" }).success).toBe(true);
-    expect(TaskCreateSchema.safeParse({ ...base, mode: "turbo" }).success).toBe(false);
+    expect(ThreadCreateSchema.safeParse({ ...base, mode: "interactive" }).success).toBe(true);
+    expect(ThreadCreateSchema.safeParse({ ...base, mode: "autonomous" }).success).toBe(true);
+    expect(ThreadCreateSchema.safeParse({ ...base, mode: "turbo" }).success).toBe(false);
   });
 
   /**
@@ -50,7 +50,7 @@ describe("TaskCreateSchema", () => {
    * than it is.
    */
   it("REFUSES participants with a message, not silence", () => {
-    const parsed = TaskCreateSchema.safeParse({
+    const parsed = ThreadCreateSchema.safeParse({
       ...base,
       participants: [{ kind: "agent", id: UUID }],
     });
@@ -60,7 +60,7 @@ describe("TaskCreateSchema", () => {
   });
 });
 
-describe("TaskFanOutSchema — the request fan-out's shape", () => {
+describe("ThreadFanOutSchema — the request fan-out's shape", () => {
   const UUID_B = "660e8400-e29b-41d4-a716-446655440111";
   const base = {
     title: "Sweep the docs",
@@ -70,9 +70,9 @@ describe("TaskFanOutSchema — the request fan-out's shape", () => {
   };
 
   it("accepts a minimal fan-out", () => {
-    expect(TaskFanOutSchema.safeParse(base).success).toBe(true);
+    expect(ThreadFanOutSchema.safeParse(base).success).toBe(true);
     expect(
-      TaskFanOutSchema.safeParse({ ...base, toUserIds: [UUID, UUID_B] }).success
+      ThreadFanOutSchema.safeParse({ ...base, toUserIds: [UUID, UUID_B] }).success
     ).toBe(true);
   });
 
@@ -83,17 +83,17 @@ describe("TaskFanOutSchema — the request fan-out's shape", () => {
    * request nobody received.
    */
   it("REFUSES an empty addressee list", () => {
-    const parsed = TaskFanOutSchema.safeParse({ ...base, toUserIds: [] });
+    const parsed = ThreadFanOutSchema.safeParse({ ...base, toUserIds: [] });
     expect(parsed.success).toBe(false);
     expect(parsed.error?.issues[0].path).toEqual(["toUserIds"]);
   });
 
   it("bounds the addressee list and requires UUIDs", () => {
     expect(
-      TaskFanOutSchema.safeParse({ ...base, toUserIds: ["nope"] }).success
+      ThreadFanOutSchema.safeParse({ ...base, toUserIds: ["nope"] }).success
     ).toBe(false);
     expect(
-      TaskFanOutSchema.safeParse({
+      ThreadFanOutSchema.safeParse({
         ...base,
         toUserIds: Array.from({ length: 26 }, () => UUID),
       }).success
@@ -105,47 +105,47 @@ describe("TaskFanOutSchema — the request fan-out's shape", () => {
   it("requires clientMsgId, bounded well under the derived key's own cap", () => {
     const noKey: Record<string, unknown> = { ...base };
     delete noKey.clientMsgId;
-    expect(TaskFanOutSchema.safeParse(noKey).success).toBe(false);
+    expect(ThreadFanOutSchema.safeParse(noKey).success).toBe(false);
     expect(
-      TaskFanOutSchema.safeParse({ ...base, clientMsgId: "a".repeat(121) })
+      ThreadFanOutSchema.safeParse({ ...base, clientMsgId: "a".repeat(121) })
         .success
     ).toBe(false);
   });
 });
 
-describe("TaskCreatePayloadSchema — one POST, two shapes", () => {
+describe("ThreadCreatePayloadSchema — one POST, two shapes", () => {
   it("routes a toUserIds body to the FAN-OUT arm", () => {
-    const parsed = TaskCreatePayloadSchema.safeParse({
+    const parsed = ThreadCreatePayloadSchema.safeParse({
       title: "Sweep",
       body: "go",
       toUserIds: [UUID],
       clientMsgId: "base-1",
     });
     expect(parsed.success).toBe(true);
-    expect(parsed.data && isTaskFanOutInput(parsed.data)).toBe(true);
+    expect(parsed.data && isThreadFanOutInput(parsed.data)).toBe(true);
   });
 
   it("routes a toUserId body to the SINGLE-TARGET arm, untouched", () => {
-    const parsed = TaskCreatePayloadSchema.safeParse({
+    const parsed = ThreadCreatePayloadSchema.safeParse({
       title: "Ship it",
       body: "please do X",
       toUserId: UUID,
     });
     expect(parsed.success).toBe(true);
-    expect(parsed.data && isTaskFanOutInput(parsed.data)).toBe(false);
+    expect(parsed.data && isThreadFanOutInput(parsed.data)).toBe(false);
   });
 
   it("accepts a body that names neither as a TARGETLESS single create", () => {
-    const parsed = TaskCreatePayloadSchema.safeParse({ title: "x", body: "y" });
+    const parsed = ThreadCreatePayloadSchema.safeParse({ title: "x", body: "y" });
     expect(parsed.success).toBe(true);
-    expect(parsed.data && isTaskFanOutInput(parsed.data)).toBe(false);
+    expect(parsed.data && isThreadFanOutInput(parsed.data)).toBe(false);
   });
 
   // Without the single arm's refusal, zod would strip the key and open a
   // targetless thread for what was a broken fan-out.
   it("still refuses a fan-out with no addressees", () => {
     expect(
-      TaskCreatePayloadSchema.safeParse({
+      ThreadCreatePayloadSchema.safeParse({
         title: "x",
         body: "y",
         toUserIds: [],
@@ -155,10 +155,10 @@ describe("TaskCreatePayloadSchema — one POST, two shapes", () => {
   });
 });
 
-describe("TaskUpdateSchema", () => {
+describe("ThreadUpdateSchema", () => {
   it("set_mode: requires mode interactive|autonomous", () => {
-    expect(TaskUpdateSchema.safeParse({ op: "set_mode", mode: "interactive" }).success).toBe(true);
-    expect(TaskUpdateSchema.safeParse({ op: "set_mode" }).success).toBe(false);
+    expect(ThreadUpdateSchema.safeParse({ op: "set_mode", mode: "interactive" }).success).toBe(true);
+    expect(ThreadUpdateSchema.safeParse({ op: "set_mode" }).success).toBe(false);
   });
 
   // ⚠ THE OTHER THREE OPS ARE GONE (wiring plan Phase 4, 2026-08-18): `close`
@@ -176,7 +176,7 @@ describe("TaskUpdateSchema", () => {
     "refuses the retired op %s, NAMING the replacement",
     (op) => {
       for (const body of [{ op }, { op, outcome: "completed" }]) {
-        const parsed = TaskUpdateSchema.safeParse(body);
+        const parsed = ThreadUpdateSchema.safeParse(body);
         expect(parsed.success).toBe(false);
         const message = parsed.error?.issues[0]?.message ?? "";
         expect(message).toBe(
@@ -190,7 +190,7 @@ describe("TaskUpdateSchema", () => {
 
   it("discriminated union: fields can't bleed across ops", () => {
     // Wrong op's field is stripped; a set_mode without `mode` still fails.
-    expect(TaskUpdateSchema.safeParse({ op: "set_mode", outcome: "completed" }).success).toBe(false);
-    expect(TaskUpdateSchema.safeParse({ op: "bogus", mode: "interactive" }).success).toBe(false);
+    expect(ThreadUpdateSchema.safeParse({ op: "set_mode", outcome: "completed" }).success).toBe(false);
+    expect(ThreadUpdateSchema.safeParse({ op: "bogus", mode: "interactive" }).success).toBe(false);
   });
 });

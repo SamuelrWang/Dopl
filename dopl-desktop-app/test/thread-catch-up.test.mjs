@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { harness as dispatchHarness, verdictMsg, agent, ME, A1, A2, TASK } from "./_wake-dispatch-harness.mjs";
+import { harness as dispatchHarness, verdictMsg, agent, ME, A1, A2, THREAD } from "./_wake-dispatch-harness.mjs";
 
 const require = createRequire(import.meta.url);
 const MAIN = join(dirname(fileURLToPath(import.meta.url)), "..", "main");
@@ -36,11 +36,11 @@ test("the engine's pushInbound is the expression this file drives", () => {
 });
 
 // A running thread session, as `startSession` builds one (`io.initialCatchUp`, the engine's call).
-function session(spec = { taskId: TASK }) {
+function session(spec = { threadId: THREAD }) {
   return {
     key: "k", settled: false, agentId: A1, nonce: "n1", side: "responder",
-    channelId: CH, workspaceId: WS, taskId: TASK, freshFraming: false, awaitingDirective: false,
-    context: { channelName: "Ops", channelId: CH, workspaceId: WS, taskId: TASK, scope: "thread" },
+    channelId: CH, workspaceId: WS, threadId: THREAD, freshFraming: false, awaitingDirective: false,
+    context: { channelName: "Ops", channelId: CH, workspaceId: WS, threadId: THREAD, scope: "thread" },
     catchUp: io.initialCatchUp(spec),
     state: { ...initialSessionState({ mode: "interactive", side: "responder", messageMode: "auto_inbound" }), phase: "running", parked: false },
   };
@@ -128,7 +128,7 @@ test("a peer's milestone is a gap: since= stays below it, so the re-read returns
   const s = session();
   const m = machine(s);
   m.send(toThread(10));
-  m.send(verdictMsg("thread", { seq: 11, kind: "task_progress", body: "step landed" }));
+  m.send(verdictMsg("thread", { seq: 11, kind: "thread_progress", body: "step landed" }));
   m.send(toThread(12));
   assert.equal(m.pushed.length, 2, "the milestone is not fed");
   const since = sinceOf(m.pushed[1]);
@@ -139,7 +139,7 @@ test("the run's OWN milestone is not a gap", () => {
   const s = session();
   const m = machine(s);
   m.send(toThread(10));
-  m.send(verdictMsg("thread", { seq: 11, kind: "task_progress", body: "mine", metadata: { session_id: "k" } }));
+  m.send(verdictMsg("thread", { seq: 11, kind: "thread_progress", body: "mine", metadata: { session_id: "k" } }));
   m.send(toThread(12));
   assert.deepEqual(m.pushed.map(sinceOf), [10, 12]);
 });
@@ -154,10 +154,10 @@ test("a gap before anything was delivered names no since= at all", () => {
 });
 
 test("a resumed run, or one with no thread, starts with no mark and never names since=", () => {
-  assert.equal(io.initialCatchUp({ taskId: TASK, resumeSdkId: "sdk-1" }), null);
-  assert.equal(io.initialCatchUp({ taskId: "" }), null);
-  assert.deepEqual(io.initialCatchUp({ taskId: TASK }), { through: null, gap: false });
-  const m = machine(session({ taskId: TASK, resumeSdkId: "sdk-1" }));
+  assert.equal(io.initialCatchUp({ threadId: THREAD, resumeSdkId: "sdk-1" }), null);
+  assert.equal(io.initialCatchUp({ threadId: "" }), null);
+  assert.deepEqual(io.initialCatchUp({ threadId: THREAD }), { through: null, gap: false });
+  const m = machine(session({ threadId: THREAD, resumeSdkId: "sdk-1" }));
   m.send(toThread(10));
   assert.equal(m.pushed.length, 1);
   assert.ok(!/since=/.test(m.pushed[0]));

@@ -100,7 +100,7 @@ function escalationAnswerers(row: ChannelMessageRow): string[] {
  *  4. the caller is in {@link escalationAnswerers} — **403**.
  *
  * ⚠ **403 HERE, WHERE A NON-PARTICIPANT'S THREAD TAG IS SILENTLY STRIPPED, AND
- * THE DIFFERENCE IS DELIBERATE.** §5 strips a foreign `taskId` because installed
+ * THE DIFFERENCE IS DELIBERATE.** §5 strips a foreign `threadId` because installed
  * desktops post legacy ids and a 403 would reject real posts from the field.
  * `escalationAnswer` has no installed writers at all, and the failure a silent
  * strip produces here is the exact one this feature exists to remove: a button

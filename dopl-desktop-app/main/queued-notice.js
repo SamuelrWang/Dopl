@@ -13,7 +13,7 @@
 //
 // WHAT THIS IS NOT. A notice, not a scheduler. Nothing here queues, spawns, settles or
 // retries — trigger.js still owns the defer and its outcome, and this cannot change it:
-// postTaskEvent swallows its own errors, `announce` swallows anything left, and its return
+// postThreadEvent swallows its own errors, `announce` swallows anything left, and its return
 // value is read by nobody in the flow.
 //
 // ONE PER (channel, thread), TWICE OVER. The clientMsgId is derived from the THREAD id, so
@@ -22,16 +22,16 @@
 // post in this process. The two agree on purpose: the server's dedupe is per-thread for
 // good, so the local guard is too.
 //
-// FIRST-CLASS THREADS ONLY. A legacy `task-<channel>-<seq>` id resolves to no channel_tasks
+// FIRST-CLASS THREADS ONLY. A legacy `thread-<channel>-<seq>` id resolves to no channel_threads
 // row, so a milestone tagged with it groups into nothing the requester is watching; skip it
 // and let the RESEND bubble be the whole answer, exactly as before.
 
-const { postTaskEvent } = require('./channel-post');
+const { postThreadEvent } = require('./channel-post');
 const { sessionKey } = require('./session-store'); // D1: THE (channel, thread) key definition
 const { diag } = require('./diag');
 
 // ─── BEGIN QUEUED-NOTICE-PURE (announce; unit-tested via source extraction) ────
-// Free vars: postTaskEvent / sessionKey / diag (required above, faked by the test), so the
+// Free vars: postThreadEvent / sessionKey / diag (required above, faked by the test), so the
 // behavior below is driven with no host binding of its own.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,11 +60,11 @@ function remember(key) {
   while (announced.size > MAX_ANNOUNCED) announced.delete(announced.values().next().value);
 }
 
-// Post the queued milestone into `taskId`'s thread for an ACCEPTED-but-deferred trigger.
+// Post the queued milestone into `threadId`'s thread for an ACCEPTED-but-deferred trigger.
 // `where` names the defer point and reaches the log only. Returns true on a confirmed
 // post; false on a skip or a failure. NEVER throws.
-async function announce(entry, m, taskId, where) {
-  const id = String(taskId || '');
+async function announce(entry, m, threadId, where) {
+  const id = String(threadId || '');
   if (!UUID.test(id)) {
     diag('queued notice skipped: not a first-class thread id', where);
     return false;
@@ -80,7 +80,7 @@ async function announce(entry, m, taskId, where) {
   remember(key);
   let ok = false;
   try {
-    ok = await postTaskEvent(entry, m, 'task_progress', id, undefined, QUEUED_BODY, {
+    ok = await postThreadEvent(entry, m, 'thread_progress', id, undefined, QUEUED_BODY, {
       clientMsgId: `queued-${id}`,
       summary: QUEUED_SUMMARY,
     });

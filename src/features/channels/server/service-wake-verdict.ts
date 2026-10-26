@@ -138,7 +138,7 @@ export interface WakeVerdictContext {
 /**
  * **THE VERDICT.** Runs on the write path, after `resolvePostMetadata` has
  * decided what `metadata` holds, so it reads the SERVER'S OWN stamps
- * (`to_user_id`, `taskId`, `taskCreatedBy`, `taskTarget`) and never the caller's
+ * (`to_user_id`, `threadId`, `threadCreatedBy`, `threadTarget`) and never the caller's
  * claim.
  *
  * PRECEDENCE — strongest reach first, because the verdict answers *what this
@@ -179,7 +179,7 @@ export interface WakeVerdictContext {
  * ⚠ **ONLY `kind: 'message'` CAN REACH A SESSION** (`main/session-dispatch.js ›
  * feedLiveSession`), so a lifecycle marker or a milestone resolves the MEMBER
  * half and stops. ⚠ **THE RESILIENCE ARMS ARE UNDER THE SAME GATE**: repairing
- * the address of a `task_progress` would aim a wake at a note about a run.
+ * the address of a `thread_progress` would aim a wake at a note about a run.
  *
  * ⚠ **THE LOOP FENCE IS STRUCTURAL, NOT A BRANCH.** An agent-authored message
  * cannot reach an agent that is not its own operator's, because the `to=`
@@ -206,7 +206,7 @@ export async function resolveWakeVerdict(
   const channelId = channel.id;
   const toUserId =
     typeof metadata.to_user_id === "string" ? metadata.to_user_id : null;
-  const threaded = typeof metadata.taskId === "string";
+  const threaded = typeof metadata.threadId === "string";
 
   // ⚠ **THE KIND GATE IS HELD IN A NAMED FLAG BECAUSE THE `delivery` ARM BELOW
   // NEEDS IT TOO.** `recipientAgentIds` is `null` for TWO different reasons —

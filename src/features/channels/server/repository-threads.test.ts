@@ -18,8 +18,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { listTasksByChannel } from "./repository-tasks";
-import type { ChannelTaskActivityRow } from "./dto";
+import { listThreadsByChannel } from "./repository-threads";
+import type { ChannelThreadActivityRow } from "./dto";
 import { CHANNEL_THREAD_LIST_LIMIT } from "../constants";
 
 const CHANNEL = "chan-1";
@@ -27,11 +27,11 @@ const CHANNEL = "chan-1";
 type Call = { op: string; args: unknown[] };
 type OrderKey = { column: string; ascending: boolean };
 
-function taskRow(
-  overrides: Partial<ChannelTaskActivityRow> = {}
-): ChannelTaskActivityRow {
+function threadRow(
+  overrides: Partial<ChannelThreadActivityRow> = {}
+): ChannelThreadActivityRow {
   return {
-    id: "task-1",
+    id: "thread-1",
     channel_id: CHANNEL,
     workspace_id: "ws-1",
     title: "Ship it",
@@ -54,7 +54,7 @@ function taskRow(
  * `order` is stacked and resolved together, the way PostgREST composes
  * `ORDER BY a, b`; the sort is stable, so a second key only breaks ties.
  */
-function makeAdmin(rows: ChannelTaskActivityRow[]) {
+function makeAdmin(rows: ChannelThreadActivityRow[]) {
   const calls: Call[] = [];
   const orders: OrderKey[] = [];
   let ceiling = Number.POSITIVE_INFINITY;
@@ -64,7 +64,7 @@ function makeAdmin(rows: ChannelTaskActivityRow[]) {
     calls.push({ op, args });
     return builder;
   };
-  const value = (row: ChannelTaskActivityRow, column: string) =>
+  const value = (row: ChannelThreadActivityRow, column: string) =>
     String((row as unknown as Record<string, unknown>)[column] ?? "");
   Object.assign(builder, {
     from: (t: string) => rec("from", [t]),
@@ -82,7 +82,7 @@ function makeAdmin(rows: ChannelTaskActivityRow[]) {
       return rec("limit", [n]);
     },
     then: (
-      resolve: (r: { data: ChannelTaskActivityRow[]; error: null }) => void
+      resolve: (r: { data: ChannelThreadActivityRow[]; error: null }) => void
     ) => {
       // ⚠ SORT, THEN SLICE — the order is what the ceiling clips against. A
       // stub that sliced first would return a plausible page of the wrong rows
@@ -105,7 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("listTasksByChannel — ordered by ACTIVITY, not by creation", () => {
+describe("listThreadsByChannel — ordered by ACTIVITY, not by creation", () => {
   /**
    * THE PHASE-1 ASSERTION. `stale` was opened this morning and nobody has said
    * anything in it; `live` was opened seven weeks ago and someone posted an
@@ -115,13 +115,13 @@ describe("listTasksByChannel — ordered by ACTIVITY, not by creation", () => {
    *
    * ⚠ Handed to the stub in CREATION order, so "no sort at all" fails here too.
    */
-  const live = taskRow({
+  const live = threadRow({
     id: "live",
     title: "Old thread, fresh traffic",
     created_at: "2026-07-01T00:00:00Z",
     last_activity_at: "2026-08-18T11:00:00Z",
   });
-  const stale = taskRow({
+  const stale = threadRow({
     id: "stale",
     title: "New thread, no traffic",
     created_at: "2026-08-18T10:00:00Z",
@@ -132,21 +132,21 @@ describe("listTasksByChannel — ordered by ACTIVITY, not by creation", () => {
   it("sorts a thread with old created_at and fresh traffic ABOVE a new, silent one", async () => {
     makeAdmin([stale, live]);
 
-    const { rows } = await listTasksByChannel(CHANNEL);
+    const { rows } = await listThreadsByChannel(CHANNEL);
 
     expect(rows.map((r) => r.id)).toEqual(["live", "stale"]);
   });
 
-  it("reads the derived clock off the ACTIVITY VIEW, never `channel_tasks.updated_at`", async () => {
+  it("reads the derived clock off the ACTIVITY VIEW, never `channel_threads.updated_at`", async () => {
     // `updated_at` moves only on close / set_mode / reopen (C-1), so a read
     // that ordered by it would call `set_thread_mode` "activity" and hourly
     // traffic silence.
     const calls = makeAdmin([stale, live]);
 
-    await listTasksByChannel(CHANNEL);
+    await listThreadsByChannel(CHANNEL);
 
     expect(calls.find((c) => c.op === "from")?.args).toEqual([
-      "channel_tasks_activity",
+      "channel_threads_activity",
     ]);
     const ordered = calls.filter((c) => c.op === "order").map((c) => c.args[0]);
     expect(ordered[0]).toBe("last_activity_at");
@@ -157,27 +157,27 @@ describe("listTasksByChannel — ordered by ACTIVITY, not by creation", () => {
     // Two threads opened in the same second with no traffic have the same
     // activity stamp; without the tie-break the LIMIT would drop one at random.
     const same = "2026-08-18T10:00:00Z";
-    const older = taskRow({
+    const older = threadRow({
       id: "older",
       created_at: "2026-08-17T10:00:00Z",
       last_activity_at: same,
     });
-    const newer = taskRow({
+    const newer = threadRow({
       id: "newer",
       created_at: "2026-08-18T09:00:00Z",
       last_activity_at: same,
     });
     makeAdmin([older, newer]);
 
-    const { rows } = await listTasksByChannel(CHANNEL);
+    const { rows } = await listThreadsByChannel(CHANNEL);
 
     expect(rows.map((r) => r.id)).toEqual(["newer", "older"]);
   });
 
   it("scopes to the one channel", async () => {
-    const calls = makeAdmin([taskRow()]);
+    const calls = makeAdmin([threadRow()]);
 
-    await listTasksByChannel(CHANNEL);
+    await listThreadsByChannel(CHANNEL);
 
     expect(calls.find((c) => c.op === "eq")?.args).toEqual([
       "channel_id",
@@ -186,11 +186,11 @@ describe("listTasksByChannel — ordered by ACTIVITY, not by creation", () => {
   });
 });
 
-describe("listTasksByChannel — bounded, and it says when it clipped", () => {
+describe("listThreadsByChannel — bounded, and it says when it clipped", () => {
   it("carries a limit, defaulting to CHANNEL_THREAD_LIST_LIMIT", async () => {
-    const calls = makeAdmin([taskRow()]);
+    const calls = makeAdmin([threadRow()]);
 
-    await listTasksByChannel(CHANNEL);
+    await listThreadsByChannel(CHANNEL);
 
     expect(calls.find((c) => c.op === "limit")?.args).toEqual([
       CHANNEL_THREAD_LIST_LIMIT,
@@ -198,35 +198,35 @@ describe("listTasksByChannel — bounded, and it says when it clipped", () => {
   });
 
   it("honours a caller's smaller limit", async () => {
-    const calls = makeAdmin([taskRow({ id: "a" }), taskRow({ id: "b" })]);
+    const calls = makeAdmin([threadRow({ id: "a" }), threadRow({ id: "b" })]);
 
-    const { rows } = await listTasksByChannel(CHANNEL, 1);
+    const { rows } = await listThreadsByChannel(CHANNEL, 1);
 
     expect(calls.find((c) => c.op === "limit")?.args).toEqual([1]);
     expect(rows).toHaveLength(1);
   });
 
   it("reports truncated AT the ceiling — at is indistinguishable from over", async () => {
-    makeAdmin([taskRow({ id: "a" }), taskRow({ id: "b" })]);
+    makeAdmin([threadRow({ id: "a" }), threadRow({ id: "b" })]);
 
-    const { rows, truncated } = await listTasksByChannel(CHANNEL, 2);
+    const { rows, truncated } = await listThreadsByChannel(CHANNEL, 2);
 
     expect(rows).toHaveLength(2);
     expect(truncated).toBe(true);
   });
 
   it("reports truncated:false for a channel under the ceiling", async () => {
-    makeAdmin([taskRow({ id: "a" })]);
+    makeAdmin([threadRow({ id: "a" })]);
 
-    const { truncated } = await listTasksByChannel(CHANNEL, 2);
+    const { truncated } = await listThreadsByChannel(CHANNEL, 2);
 
     expect(truncated).toBe(false);
   });
 
   it("selects COLUMNS, never `*` — and the derived one is among them", async () => {
-    const calls = makeAdmin([taskRow()]);
+    const calls = makeAdmin([threadRow()]);
 
-    await listTasksByChannel(CHANNEL);
+    await listThreadsByChannel(CHANNEL);
 
     const cols = String(calls.find((c) => c.op === "select")?.args[0]);
     expect(cols).not.toBe("*");

@@ -214,7 +214,7 @@ describe("resolveWakeVerdict — the recipient", () => {
   });
 
   it("answers `thread` for an unaddressed post that carries a thread tag", async () => {
-    const out = await resolve("status?", { taskId: "task-1" });
+    const out = await resolve("status?", { threadId: "thread-1" });
     expect(out).toMatchObject({ verdict: "thread", delivery: "idle" });
   });
 
@@ -315,7 +315,7 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
 
   it("does not resolve agents for a non-`message` kind", async () => {
     projection(sessionRow({ name: "k3v7d2mq" }));
-    const out = await resolve("@agent-k3v7d2mq done", {}, { kind: "task_progress" });
+    const out = await resolve("@agent-k3v7d2mq done", {}, { kind: "thread_progress" });
     // Only `message` reaches a session at all (`main/session-dispatch.js`'s kind
     // filter), so resolving one here would promise a wake that cannot happen.
     expect(out.recipientAgentIds).toBeNull();
@@ -329,18 +329,18 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     // 🔒 `recipientAgentIds` IS `null` FOR TWO REASONS AND THE COLUMN CANNOT TELL
     // THEM APART (fixed 2026-09-02): "handles were named and none resolved", and
     // "the kind gate never asked". Reading the null alone stamped `unreachable`
-    // on EVERY `task_progress` and `task_finished` row — so a thread's own
+    // on EVERY `thread_progress` and `thread_finished` row — so a thread's own
     // milestones read, to an orchestrator, as a room full of failed deliveries.
-    const threaded = await resolve("step two done", { taskId: "task-1" }, { kind: "task_progress" });
+    const threaded = await resolve("step two done", { threadId: "thread-1" }, { kind: "thread_progress" });
     expect(threaded.verdict).toBe("thread");
     expect(threaded.delivery).toBe("idle");
 
-    const bare = await resolve("done", {}, { kind: "task_progress" });
+    const bare = await resolve("done", {}, { kind: "thread_progress" });
     expect(bare.verdict).toBe("none");
     expect(bare.delivery).toBe("none");
 
     // …even when the body is full of handles: the gate ran before the resolver.
-    const named = await resolve("@agent-k3v7d2mq done", {}, { kind: "task_progress" });
+    const named = await resolve("@agent-k3v7d2mq done", {}, { kind: "thread_progress" });
     expect(named.delivery).toBe("none");
   });
 
@@ -349,7 +349,7 @@ describe("resolveWakeVerdict — what it does NOT do", () => {
     // `unreachable` exists for: a post whose whole point was a name, reaching
     // nothing this server can see (G15).
     projection(sessionRow({ name: "zzzzzzzz" }));
-    const out = await resolve("@agent-k3v7d2mq go", { taskId: "task-1" });
+    const out = await resolve("@agent-k3v7d2mq go", { threadId: "thread-1" });
     expect(out.recipientAgentIds).toBeNull();
     expect(out.delivery).toBe("unreachable");
   });
@@ -463,7 +463,7 @@ describe("the outcome and the verdict are separate answers", () => {
     // are both defensible — together they hid the fact that the post's whole point was a name
     // nobody here answers to.
     return expect(
-      resolve("@agent-zzzzzzzz please", { taskId: "task-1" })
+      resolve("@agent-zzzzzzzz please", { threadId: "thread-1" })
     ).resolves.toMatchObject({ verdict: "thread", delivery: "unreachable" });
   });
 

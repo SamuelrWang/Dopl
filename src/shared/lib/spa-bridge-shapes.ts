@@ -9,13 +9,13 @@ export type { DesktopNarrationEntry } from "./spa-bridge-narration";
  * One live session as the desktop projects it; the Agents tab renders from these.
  * ⚠ `state` is three-valued because it is filed as `channel_sessions.state` (CHECK + zod enum admit
  * exactly these; one bad row 400s the whole push). The finer signal is {@link detail}.
- * `taskId` is the wire spelling of thread; `""` is real (a responder session with no thread).
+ * `threadId` `""` is real (a responder session with no thread).
  */
 export interface DesktopSessionSummary {
   /** Opaque and not stable across park/recreate: a React key, never an address. */
   sessionId: string;
   channelId: string;
-  taskId: string;
+  threadId: string;
   /**
    * The agent instance's address, `^[a-z][a-z0-9]{7}$` (`main/agent-id.js`): the third coordinate of
    * every session op, and what `@<agentId>` names (parsed on the desktop, never by the server).

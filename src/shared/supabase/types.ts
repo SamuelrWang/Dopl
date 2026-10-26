@@ -231,7 +231,7 @@ export type Database = {
           reply: string | null
           sender_agent_id: string | null
           status: string
-          task_id: string | null
+          thread_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -249,7 +249,7 @@ export type Database = {
           reply?: string | null
           sender_agent_id?: string | null
           status?: string
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -267,7 +267,7 @@ export type Database = {
           reply?: string | null
           sender_agent_id?: string | null
           status?: string
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -279,17 +279,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_agent_directions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_agent_directions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks"
+            referencedRelation: "channel_threads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_agent_directions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_agent_directions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks_activity"
+            referencedRelation: "channel_threads_activity"
             referencedColumns: ["id"]
           },
           {
@@ -511,7 +511,7 @@ export type Database = {
           target_message_mode: string | null
           target_name: string | null
           target_tool_mode: string | null
-          task_id: string | null
+          thread_id: string | null
           workspace_id: string
         }
         Insert: {
@@ -552,7 +552,7 @@ export type Database = {
           target_message_mode?: string | null
           target_name?: string | null
           target_tool_mode?: string | null
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id: string
         }
         Update: {
@@ -593,7 +593,7 @@ export type Database = {
           target_message_mode?: string | null
           target_name?: string | null
           target_tool_mode?: string | null
-          task_id?: string | null
+          thread_id?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -612,17 +612,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_launch_directives_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_launch_directives_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks"
+            referencedRelation: "channel_threads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_launch_directives_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_launch_directives_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks_activity"
+            referencedRelation: "channel_threads_activity"
             referencedColumns: ["id"]
           },
           {
@@ -931,7 +931,7 @@ export type Database = {
           stale: boolean | null
           started_at: string | null
           state: string
-          task_id: string | null
+          thread_id: string | null
           thread_title: string | null
           tokens_delta: number | null
           tokens_spent: number | null
@@ -963,7 +963,7 @@ export type Database = {
           stale?: boolean | null
           started_at?: string | null
           state: string
-          task_id?: string | null
+          thread_id?: string | null
           thread_title?: string | null
           tokens_delta?: number | null
           tokens_spent?: number | null
@@ -995,7 +995,7 @@ export type Database = {
           stale?: boolean | null
           started_at?: string | null
           state?: string
-          task_id?: string | null
+          thread_id?: string | null
           thread_title?: string | null
           tokens_delta?: number | null
           tokens_spent?: number | null
@@ -1014,17 +1014,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_sessions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_sessions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks"
+            referencedRelation: "channel_threads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_sessions_task_id_fkey"
-            columns: ["task_id"]
+            foreignKeyName: "channel_sessions_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "channel_tasks_activity"
+            referencedRelation: "channel_threads_activity"
             referencedColumns: ["id"]
           },
           {
@@ -1036,7 +1036,7 @@ export type Database = {
           },
         ]
       }
-      channel_tasks: {
+      channel_threads: {
         Row: {
           channel_id: string
           client_msg_id: string | null
@@ -1087,14 +1087,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "channel_tasks_channel_id_fkey"
+            foreignKeyName: "channel_threads_channel_id_fkey"
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "channels"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_tasks_workspace_id_fkey"
+            foreignKeyName: "channel_threads_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3536,7 +3536,7 @@ export type Database = {
       }
     }
     Views: {
-      channel_tasks_activity: {
+      channel_threads_activity: {
         Row: {
           channel_id: string | null
           client_msg_id: string | null
@@ -3556,14 +3556,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "channel_tasks_channel_id_fkey"
+            foreignKeyName: "channel_threads_channel_id_fkey"
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "channels"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "channel_tasks_workspace_id_fkey"
+            foreignKeyName: "channel_threads_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3639,17 +3639,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      channel_tasks_stale: {
-        Args: { p_before: string; p_limit: number }
-        Returns: {
-          anchor_seq: number
-          channel_id: string
-          id: string
-          last_activity_at: string
-          title: string
-          workspace_id: string
-        }[]
       }
       channels_last_message: {
         Args: { p_channel_ids: string[] }

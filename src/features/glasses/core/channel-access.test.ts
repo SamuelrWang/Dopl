@@ -53,7 +53,7 @@ beforeEach(() => {
     channel_members: [LIVE, ARCHIVED, DELETED].map((c) => ({ channel_id: c, user_id: USER })),
     channel_messages: [
       { id: "m1", seq: 10, channel_id: LIVE, author_kind: "user", kind: "message", body: "hi", workspace_id: "ws-1", client_msg_id: null, metadata: null },
-      { id: "m2", seq: 11, channel_id: LIVE, author_kind: "agent", kind: "task_progress", body: "went idle", workspace_id: "ws-1", client_msg_id: null, metadata: null },
+      { id: "m2", seq: 11, channel_id: LIVE, author_kind: "agent", kind: "thread_progress", body: "went idle", workspace_id: "ws-1", client_msg_id: null, metadata: null },
       { id: "m3", seq: 12, channel_id: LIVE, author_kind: "agent", kind: "message", body: "pong", workspace_id: "ws-1", client_msg_id: null, metadata: { session_id: `${LIVE}::abcdefgh` } },
     ],
   });

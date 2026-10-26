@@ -131,7 +131,7 @@ export function AgentStream({
       buildAgentStream({
         entries,
         sent,
-        // The landing check is channel-wide: `sent` is filtered on `metadata.taskId`, which a threadless post lacks.
+        // The landing check is channel-wide: `sent` is filtered on `metadata.threadId`, which a threadless post lacks.
         delivered,
         pending,
         destination,

@@ -48,7 +48,7 @@
  * of these is the channel-membership fence in the service layer
  * (`loadVisibleChannel` hides a private channel from a non-member — and since
  * 2026-08-26 hides a PUBLIC one from a guest too, `service-shared.ts ›
- * mayReadPublicChannels`; `postMessage` / `createTaskFanOut` refuse
+ * mayReadPublicChannels`; `postMessage` / `createThreadFanOut` refuse
  * `!membership`). This pin guards the tripwire; the fence tests guard the gate.
  * Do not weaken either.
  *
@@ -147,9 +147,9 @@ const GUEST_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   [`${CHANNELS_REL}/[channelId]/messages/landed/route.ts`, "GET"],
   [`${CHANNELS_REL}/[channelId]/await/route.ts`, "GET"], // long-poll one channel
   [`${CHANNELS_REL}/await/route.ts`, "GET"], // long-poll workspace-wide
-  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "GET"], // list threads
-  [`${CHANNELS_REL}/[channelId]/tasks/route.ts`, "POST"], // create a thread (Q1)
-  [`${CHANNELS_REL}/[channelId]/tasks/[taskId]/route.ts`, "GET"], // read one thread
+  [`${CHANNELS_REL}/[channelId]/threads/route.ts`, "GET"], // list threads
+  [`${CHANNELS_REL}/[channelId]/threads/route.ts`, "POST"], // create a thread (Q1)
+  [`${CHANNELS_REL}/[channelId]/threads/[threadId]/route.ts`, "GET"], // read one thread
   [`${CHANNELS_REL}/[channelId]/members/route.ts`, "GET"], // see the roster
   [`${CHANNELS_REL}/presence/route.ts`, "POST"], // presence heartbeat (Q2)
   // ⚠ THE MENTIONS PAIR, AND THE COMMENT TABLE THAT USED TO SIT HERE HAD IT
@@ -365,7 +365,7 @@ describe("the floors guard a real gate, not just a list", () => {
     // `[\s\S]*?` and not `[^)]*`), and the last pin reads the helper itself so
     // the pair still proves a REFUSAL exists rather than just a function call.
     //
-    // ⚠ `service-tasks-broadcast.ts` NO LONGER NAMES `loadVisibleChannel` — the
+    // ⚠ `service-threads-broadcast.ts` NO LONGER NAMES `loadVisibleChannel` — the
     // dedupe took it out with the throw, so its old belt is asserted on the
     // helper it now calls: `requireMemberChannel` must both RESOLVE through
     // `loadVisibleChannel` and THROW on a null membership. Nothing was relaxed;
@@ -376,11 +376,11 @@ describe("the floors guard a real gate, not just a list", () => {
     // split; `service-writes.ts` keeps the message lane. Read the lane's file.
     const writes = readFileSync(join(featureRoot, "service-writes.ts"), "utf8");
     const header = readFileSync(join(featureRoot, "service-writes-channel.ts"), "utf8");
-    const fanout = readFileSync(join(featureRoot, "service-tasks-broadcast.ts"), "utf8");
+    const fanout = readFileSync(join(featureRoot, "service-threads-broadcast.ts"), "utf8");
     const shared = readFileSync(join(featureRoot, "service-shared.ts"), "utf8");
     expect(header).toMatch(/loadVisibleChannel/);
     expect(writes).toMatch(/requireMemberChannel\([\s\S]*?"post to this channel"\s*\)/);
-    expect(fanout).toMatch(/requireMemberChannel\([\s\S]*?"create a task in this channel"\s*\)/);
+    expect(fanout).toMatch(/requireMemberChannel\([\s\S]*?"create a thread in this channel"\s*\)/);
     expect(shared).toMatch(
       /function requireMemberChannel[\s\S]*?loadVisibleChannel\(ctx, ref\)/
     );

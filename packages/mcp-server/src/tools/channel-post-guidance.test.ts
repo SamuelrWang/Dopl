@@ -168,25 +168,25 @@ describe("Q13 · the not-threaded note, and the round-trip it cost", () => {
  * result and the sentence in the doctrine.
  */
 /**
- * A post that landed WHERE `taskId` says, with `mentions` as the SERVER stamped
+ * A post that landed WHERE `threadId` says, with `mentions` as the SERVER stamped
  * them — the point of `tags=` is that it reads the server's resolution, not the
  * request. ⚠ ONE helper for both blocks below: two copies of a stub is how two
  * blocks stop testing the same op.
  */
 async function resultOf(
-  body: string, taskId?: string, mentions?: unknown,
+  body: string, threadId?: string, mentions?: unknown,
 ): Promise<string> {
   const client = stubClient({
     postChannelMessage: vi.fn(async () => ({
       id: "m1", seq: 9, kind: "message", authorUserId: "u-me",
       metadata: {
-        ...(taskId ? { taskId } : {}),
+        ...(threadId ? { threadId } : {}),
         ...(mentions === undefined ? {} : { mentionedUserIds: mentions }),
       },
     })),
   });
   const res = await opPost(client, "eng", body, {
-    ...(taskId ? { thread: taskId } : {}),
+    ...(threadId ? { thread: threadId } : {}),
   });
   expect(res.isError).toBeFalsy();
   return res.content[0].text;
@@ -330,9 +330,9 @@ describe("P11 · what a post's result teaches about what to do NEXT", () => {
  */
 describe("chat + a thread tag — the branch that never read landedThread", () => {
   const THREAD = "44444444-4444-4444-4444-444444444444";
-  const LEGACY = "task-dba90694-de4f-4950-83a9-f2d890c9ff3f-345";
+  const LEGACY = "thread-dba90694-de4f-4950-83a9-f2d890c9ff3f-345";
 
-  const chatResult = (taskId?: string) => resultOf("thinking out loud", taskId);
+  const chatResult = (threadId?: string) => resultOf("thinking out loud", threadId);
 
   it("an UNTHREADED chat post reports BOTH halves — chat, and room", async () => {
     // CONTROL: the original claim is right for the case it was written for and
@@ -385,7 +385,7 @@ describe("chat + a thread tag — the branch that never read landedThread", () =
 
   it("a LEGACY tag is AD-HOC — it groups on a card and wakes nobody", async () => {
     // ⚠ Same predicate the non-chat path uses (`isFirstClassThreadId`): only a
-    // uuid id reaches a session. A `task-…` label routes nothing, and `adhoc`
+    // uuid id reaches a session. A `thread-…` label routes nothing, and `adhoc`
     // says so without guessing at the remedy.
     const text = await chatResult(LEGACY);
     expect(text).toContain("landed=adhoc");

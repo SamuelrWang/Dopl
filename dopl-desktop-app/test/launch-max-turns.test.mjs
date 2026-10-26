@@ -90,7 +90,7 @@ function assembled(s) {
   )(s);
 }
 
-const session = (over) => ({ profile: "full", channelId: "c1", workspaceId: "w1", taskId: "t1", ...over });
+const session = (over) => ({ profile: "full", channelId: "c1", workspaceId: "w1", threadId: "t1", ...over });
 
 test("a FRESH launch carries the brake", () => {
   assert.equal(assembled(session({})).maxTurns, SESSION_MAX_TURNS);

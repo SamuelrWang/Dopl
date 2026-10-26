@@ -112,7 +112,7 @@ describe("buildLaunchPayload (P6-10)", () => {
     const payload = buildLaunchPayload(SITE, null);
     expect(payload).toEqual({
       channelId: CH,
-      taskId: null,
+      threadId: null,
       workspaceId: "ws-1",
       channelName: "Website",
       threadTitle: null,
@@ -123,7 +123,7 @@ describe("buildLaunchPayload (P6-10)", () => {
   it("names the thread and its other party when the host knows them", () => {
     const payload = buildLaunchPayload(SITE, "t-1", "tpl-9", { model: "m" }, "k3v7d2mq", "codex", "agent-03");
     expect(payload).toMatchObject({
-      taskId: "t-1",
+      threadId: "t-1",
       threadTitle: "UI-kit design",
       counterpartyId: PEER,
       identityId: "tpl-9",

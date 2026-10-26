@@ -102,7 +102,7 @@ test("FIX 1: an ALLOW is explained too, so the diag can tell WHICH rule let it t
   assert.deepEqual(detail({ toolName: "Bash", input: { command: "ls" }, toolMode: "bypass" }),
     { decision: "allow", reason: "tool-mode" });
   const key = profiles.grantKeyFor("Bash", { command: "ls" }, CH);
-  assert.deepEqual(detail({ toolName: "Bash", input: { command: "ls" }, allowForTask: [key] }),
+  assert.deepEqual(detail({ toolName: "Bash", input: { command: "ls" }, allowForThread: [key] }),
     { decision: "allow", reason: "granted-for-session" });
   assert.deepEqual(detail({ toolName: DOPL_CHANNEL_TOOL, input: { op: "send", body: "hi" }, messageMode: "auto_outbound" }),
     { decision: "allow", reason: "auto-outbound" });
@@ -259,7 +259,7 @@ test("bypass covers the named read-only tools, and NOTHING interactive or plan-s
 function gateOnce(sessionOver, toolName, input) {
   const s = {
     profile: "full", channelId: CH, sessionId: "sess-1234-abcd-ef00", counterpartyName: "David",
-    state: { allowForTask: [], toolMode: "manual", messageMode: "ask" },
+    state: { allowForThread: [], toolMode: "manual", messageMode: "ask" },
     pendingPermissions: new Map(), pendingNames: new Map(), ...sessionOver,
   };
   const evs = [];
@@ -274,7 +274,7 @@ test("FIX 1: BOTH gate surfaces carry the code — the dock card and the inline 
   const dock = gateOnce({}, "Bash", { command: "ls" });
   assert.equal(dock.payload.type, "permission_request");
   assert.equal(dock.payload.gateReason, "awaiting-approval");
-  const bypassMiss = gateOnce({ state: { allowForTask: [], toolMode: "auto", messageMode: "ask" } },
+  const bypassMiss = gateOnce({ state: { allowForThread: [], toolMode: "auto", messageMode: "ask" } },
     "Bash", { command: "ls" });
   assert.equal(bypassMiss.payload.gateReason, "not-covered-by-bypass",
     "the one the operator reads as a broken toggle");
@@ -289,7 +289,7 @@ test("FIX 1: BOTH gate surfaces carry the code — the dock card and the inline 
 // ── FIX 3: the diag line ──────────────────────────────────────────────────────────
 
 test("FIX 3: ONE line per verdict, carrying the name, the verdict, the reason and both postures", () => {
-  const { logged } = gateOnce({ state: { allowForTask: [], toolMode: "auto", messageMode: "auto_both" } },
+  const { logged } = gateOnce({ state: { allowForThread: [], toolMode: "auto", messageMode: "auto_both" } },
     "Bash", { command: "ls -la /etc/shadow" });
   assert.equal(logged.length, 1, "exactly one line per verdict");
   const line = logged[0];
@@ -323,7 +323,7 @@ test("FIX 3: the line carries NO body, NO prompt text, NO tool input and NO full
 // invite and a DM open.
 
 test("M3: a channel verdict names the op; nothing else on the line moves", () => {
-  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
+  const modes = { allowForThread: [], toolMode: "bypass", messageMode: "auto_both" };
   const read = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "read" });
   assert.match(read.logged[0], /^session gate: dopl_channel op=read allow auto-inbound-read tool=bypass msg=auto_both session=sess-123$/);
   const open = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "rooms", action: "open", direct: true, member: "evil@x" });
@@ -342,7 +342,7 @@ test("M3: a channel verdict names the op; nothing else on the line moves", () =>
 // underscores (the old label regex was `[a-z0-9-]+?`, so it stripped nothing).
 
 test("F-139: a connector-named channel tool logs the SAME line as our own registration", () => {
-  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
+  const modes = { allowForThread: [], toolMode: "bypass", messageMode: "auto_both" };
   const SERVERS = ["mcp__dopl__", "mcp__claude_ai_Dopl__", "mcp__6a12c8bd-4187-40eb-9b21-eb230264f726__"];
   for (const server of SERVERS) {
     const read = gateOnce({ state: modes }, server + "dopl_channel", { op: "read" });
@@ -359,14 +359,14 @@ test("F-139: a connector-named channel tool logs the SAME line as our own regist
 });
 
 test("F-139: a Dopl tool's name is stripped for a server segment with underscores", () => {
-  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "ask" };
+  const modes = { allowForThread: [], toolMode: "bypass", messageMode: "ask" };
   const { logged } = gateOnce({ state: modes }, "mcp__claude_ai_Dopl__dopl_kb", { op: "write_file" });
   assert.match(logged[0], /^session gate: dopl_kb allow tool-mode /,
     "the label prints the tool, not the client's server name");
 });
 
 test("M4: the diag distinguishes a marker allow from a message allow", () => {
-  const modes = { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" };
+  const modes = { allowForThread: [], toolMode: "bypass", messageMode: "auto_both" };
   const milestone = gateOnce({ state: modes }, DOPL_CHANNEL_TOOL, { op: "send", kind: "milestone", thread: "T1", body: "step" });
   assert.match(milestone.logged[0], /^session gate: dopl_channel op=send allow auto-outbound-marker /);
   // A post keeps its OWN code: "did my agent send a message?" is a different audit question.
@@ -384,17 +384,17 @@ test("M4: the diag distinguishes a marker allow from a message allow", () => {
 test("M4: an own-channel marker that GATES says message approval, not 'this operation'", () => {
   // The old code claimed "message approval covers this channel's messages, not this operation",
   // which stopped being true for a marker the moment the axis started covering it.
-  const ask = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
+  const ask = gateOnce({ state: { allowForThread: [], toolMode: "bypass", messageMode: "ask" } },
     DOPL_CHANNEL_TOOL, { op: "send", kind: "milestone", thread: "T1", body: "one line" });
   assert.match(ask.logged[0], /op=send gate message-approval-required /);
   // A marker aimed elsewhere (a SLUG is the common case) gets the code that names the fix.
-  const away = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "auto_both" } },
+  const away = gateOnce({ state: { allowForThread: [], toolMode: "bypass", messageMode: "auto_both" } },
     DOPL_CHANNEL_TOOL, { op: "send", kind: "milestone", channel: "team-alpha", thread: "T1", body: "x" });
   assert.match(away.logged[0], /op=send gate cross-channel-post /);
 });
 
 test("M3: a NON-channel tool's line is byte-unchanged (no `op=` segment at all)", () => {
-  const { logged } = gateOnce({ state: { allowForTask: [], toolMode: "auto", messageMode: "auto_both" } },
+  const { logged } = gateOnce({ state: { allowForThread: [], toolMode: "auto", messageMode: "auto_both" } },
     "Bash", { command: "ls" });
   assert.match(logged[0], /^session gate: Bash gate not-covered-by-bypass tool=auto msg=auto_both session=sess-123$/);
   assert.ok(!logged[0].includes("op="), "a work tool has no channel op to name");
@@ -419,12 +419,12 @@ test("M3: the op is a NAME, never a value — hostile input cannot open the line
 });
 
 test("FIX 3: an ALLOW and a DENY are logged too, or the log answers only half the question", () => {
-  const allowed = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
+  const allowed = gateOnce({ state: { allowForThread: [], toolMode: "bypass", messageMode: "ask" } },
     "BashOutput", { bash_id: "b1" });
   assert.match(allowed.logged[0], /^session gate: BashOutput allow tool-mode tool=bypass msg=ask /);
   // F-177: driven on a UNIVERSAL-FLOOR tool now — `Task` gates under `full` rather than denying,
   // and the line this test is about is the one a HARD-DENY writes.
-  const denied = gateOnce({ state: { allowForTask: [], toolMode: "bypass", messageMode: "ask" } },
+  const denied = gateOnce({ state: { allowForThread: [], toolMode: "bypass", messageMode: "ask" } },
     "mcp__dopl__dopl_kb_admin", { op: "delete_base" });
   assert.match(denied.logged[0], /^session gate: dopl_kb_admin deny hard-denied tool=bypass msg=ask /);
 });
@@ -432,7 +432,7 @@ test("FIX 3: an ALLOW and a DENY are logged too, or the log answers only half th
 test("FIX 3: no log function, no throw — the diag is a diagnostic, never a dependency", () => {
   const s = {
     profile: "full", channelId: CH, sessionId: "s1",
-    state: { allowForTask: [], toolMode: "manual", messageMode: "ask" },
+    state: { allowForThread: [], toolMode: "manual", messageMode: "ask" },
     pendingPermissions: new Map(), pendingNames: new Map(),
   };
   const evs = [];

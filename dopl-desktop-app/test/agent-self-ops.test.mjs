@@ -66,8 +66,8 @@ test("renameTargetFor: omitted id means SELF; prefixed handles are accepted; gar
 
 test("endVerdict: self refused, absent refused, malformed refused, live sibling resolves", () => {
   const rows = [
-    { agentId: OTHER, channelId: "chan-1", taskId: "task-1", status: "running" },
-    { agentId: "cthird67", channelId: "chan-1", taskId: "", status: "parked" },
+    { agentId: OTHER, channelId: "chan-1", threadId: "thread-1", status: "running" },
+    { agentId: "cthird67", channelId: "chan-1", threadId: "", status: "parked" },
   ];
   // ⚠ SELF IS REFUSED BEFORE THE REGISTRY IS CONSULTED — ending the caller aborts the very
   // turn making the call, so the tool result could never be delivered.
@@ -78,7 +78,7 @@ test("endVerdict: self refused, absent refused, malformed refused, live sibling 
   const hit = ops.endVerdict(SELF, "@agent-" + OTHER, rows);
   assert.equal(hit.ok, true);
   assert.equal(hit.row.channelId, "chan-1");
-  assert.equal(hit.row.taskId, "task-1");
+  assert.equal(hit.row.threadId, "thread-1");
   // Empty / absent registry projections fail closed, never throw.
   assert.deepEqual(ops.endVerdict(SELF, OTHER, []), { ok: false, reason: "no-session" });
   assert.deepEqual(ops.endVerdict(SELF, OTHER, null), { ok: false, reason: "no-session" });

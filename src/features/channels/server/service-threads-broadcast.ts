@@ -1,18 +1,18 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import type { TaskFanOutInput } from "../schema";
+import type { ThreadFanOutInput } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
-  TaskSelfTargetError,
+  ThreadSelfTargetError,
 } from "./errors";
 import * as repo from "./repository";
-import { createTask, type TaskCreateResult } from "./service-tasks";
+import { createThread, type ThreadCreateResult } from "./service-threads";
 import { requireMemberChannel, type ChannelContext } from "./service-shared";
 
 /**
  * THE REQUEST BROADCAST — N addressees, N threads, ONE card.
  *
- * ⚠ **RENAMED FROM `service-tasks-fanout.ts` ON 2026-09-02 (v2 wave B slice B4,
+ * ⚠ **RENAMED FROM A `-fanout` MODULE ON 2026-09-02 (v2 wave B slice B4,
  * finding C16), AND ONLY THE NAME MOVED.** "Fan-out" named THREE unrelated
  * mechanisms with no shared code — this module, the desktop's
  * `session-dispatch.js` feeding live sessions, and a room-wide read — so a
@@ -28,19 +28,19 @@ import { requireMemberChannel, type ChannelContext } from "./service-shared";
  *
  * The "New agent thread" panel is the only surface that raises an agent
  * request, and each of its pills is an EXPLICIT addressee. Storage keeps a thread as ONE
- * requester + ONE target, so a three-pill send is three `channel_tasks` rows —
+ * requester + ONE target, so a three-pill send is three `channel_threads` rows —
  * this module is the CALLER that makes those three calls, and
- * `service-tasks.ts › createTask` is unchanged by it.
+ * `service-threads.ts › createThread` is unchanged by it.
  *
  * ⚠ TWO THINGS MAKE OR BREAK THIS, AND BOTH ARE ABOUT KEYS.
  *
- * 1. **The per-addressee idempotency key.** `channel_tasks` carries a partial
+ * 1. **The per-addressee idempotency key.** `channel_threads` carries a partial
  *    unique index on `(channel_id, client_msg_id)`
  *    (`20260729032037_channel_tasks_client_msg_id.sql`), so ONE key shared
  *    across N addressees makes rows 2..N converge on row 1 through
- *    `createTask`'s short-circuit — the caller is told all N succeeded and the
+ *    `createThread`'s short-circuit — the caller is told all N succeeded and the
  *    request silently reached one person. {@link addresseeClientMsgId} is what
- *    keeps the keys distinct, and `service-tasks-broadcast.test.ts` pins the count.
+ *    keeps the keys distinct, and `service-threads-broadcast.test.ts` pins the count.
  * 2. **The group id is DERIVED, never minted per attempt.** A `randomUUID()` per
  *    call would split a retried fan-out across two cards: the threads that
  *    landed on attempt 1 keep the old group (their opening messages dedup on
@@ -69,7 +69,7 @@ export function addresseeClientMsgId(base: string, toUserId: string): string {
  * reproduce their group id and splice a thread into their card. It is stamped
  * through the reserved-metadata seam on top of that
  * (`service-writes-metadata.ts › resolvePostMetadata`) — belt and braces, the
- * same treatment `taskTitle` / `taskTarget` get.
+ * same treatment `threadTitle` / `threadTarget` get.
  *
  * ⚠ A HASH, not the key itself: the base is caller-authored text and this value
  * is rendered into stored metadata that every channel member can read.
@@ -77,7 +77,7 @@ export function addresseeClientMsgId(base: string, toUserId: string): string {
  * ⚠ **WHY THE SEPARATOR HOLDS, stated correctly.** An earlier version of this
  * docblock said a caller-authored base cannot contain a NUL because
  * `service-shared.ts › stripNulDeep` removes them — **which is false HERE**:
- * the strip runs inside `createTask`, and this hash is taken from the caller's
+ * the strip runs inside `createThread`, and this hash is taken from the caller's
  * UNSTRIPPED `clientMsgId`, before any of that. What actually makes the two
  * halves unambiguous is the PREFIX: `createdBy` is `ctx.userId`, a
  * server-supplied fixed-format UUID with no NUL in it, so the split point is
@@ -101,14 +101,14 @@ export function fanoutGroupId(createdBy: string, base: string): string {
 
 /** What one fan-out hands back — the threads in addressee order, plus the
  *  group id the card is drawn from. */
-interface TaskFanOutResult {
-  threads: TaskCreateResult[];
+interface ThreadFanOutResult {
+  threads: ThreadCreateResult[];
   groupId: string;
 }
 
 /**
  * REFUSE THE WHOLE SEND BEFORE ANY OF IT HAPPENS — every deterministic reason
- * `createTask` would reject an addressee, hoisted ahead of the loop.
+ * `createThread` would reject an addressee, hoisted ahead of the loop.
  *
  * ⚠ **THIS IS THE ONLY THING STANDING BETWEEN "not atomic" AND "half a request
  * was raised against real people".** A refusal on addressee k used to leave
@@ -120,15 +120,15 @@ interface TaskFanOutResult {
  * between this check and the loop in a way that makes a re-run behave
  * differently, so checking them first turns a partial write into no write.
  *
- * ⚠ **NOT A REPLACEMENT FOR `createTask`'S OWN CHECKS, and must never become
- * one.** `createTask` is reachable directly (the single-target create, the MCP
+ * ⚠ **NOT A REPLACEMENT FOR `createThread`'S OWN CHECKS, and must never become
+ * one.** `createThread` is reachable directly (the single-target create, the MCP
  * lane, the desktop) and keeps all three checks as the authoritative gate; this
  * is a pre-flight over the same predicates. Two copies of a security check is
  * normally the smell — here the second one is the only one that runs on the
  * other three call paths, so the duplication is the point. If they ever
- * disagree, `createTask` wins and this one is the bug.
+ * disagree, `createThread` wins and this one is the bug.
  *
- * ⚠ Ordered channel-first, exactly as `createTask` orders them, so the
+ * ⚠ Ordered channel-first, exactly as `createThread` orders them, so the
  * workspace round-trip is only paid for an actual channel member.
  */
 async function assertAddresseesAreReachable(
@@ -137,9 +137,9 @@ async function assertAddresseesAreReachable(
   addressees: string[]
 ): Promise<void> {
   for (const toUserId of addressees) {
-    // ⚠ Same reason as `createTask`: a thread addressed to its own creator is
+    // ⚠ Same reason as `createThread`: a thread addressed to its own creator is
     // dead on arrival, since only creator and target may post.
-    if (toUserId === ctx.userId) throw new TaskSelfTargetError();
+    if (toUserId === ctx.userId) throw new ThreadSelfTargetError();
     if (
       !(
         (await repo.findMembership(channelId, toUserId)) &&
@@ -154,7 +154,7 @@ async function assertAddresseesAreReachable(
 /**
  * Raise ONE request against N addressees.
  *
- * ⚠ SEQUENTIAL, not `Promise.all`. Every `createTask` posts through the
+ * ⚠ SEQUENTIAL, not `Promise.all`. Every `createThread` posts through the
  * `channel_message_insert` RPC, which takes a per-channel advisory lock before
  * its insert (INVARIANTS §5), so concurrent members of one fan-out would queue
  * on that lock anyway — and running them in order makes the opening messages
@@ -180,27 +180,27 @@ async function assertAddresseesAreReachable(
  * UI accident, and left alone it would make the second create converge on the
  * first and report a thread twice.
  */
-export async function createTaskFanOut(
+export async function createThreadFanOut(
   ctx: ChannelContext,
   ref: string,
-  input: TaskFanOutInput
-): Promise<TaskFanOutResult> {
+  input: ThreadFanOutInput
+): Promise<ThreadFanOutResult> {
   const addressees = [...new Set(input.toUserIds)];
-  const threads: TaskCreateResult[] = [];
+  const threads: ThreadCreateResult[] = [];
   const groupId = fanoutGroupId(ctx.userId, input.clientMsgId);
 
   // ⚠ Resolves the ref ONCE and refuses the caller's own non-membership here,
-  // so the pre-flight tests the same channel every `createTask` below will.
+  // so the pre-flight tests the same channel every `createThread` below will.
   const { channel } = await requireMemberChannel(
     ctx,
     ref,
-    "create a task in this channel"
+    "create a thread in this channel"
   );
   await assertAddresseesAreReachable(ctx, channel.id, addressees);
 
   for (const toUserId of addressees) {
     threads.push(
-      await createTask(
+      await createThread(
         ctx,
         ref,
         {

@@ -137,7 +137,7 @@ function PagedPane({
           id: `m-${i + 1}`,
           seq: i + 1,
           body: `line ${i + 1}`,
-          metadata: inThread ? { taskId: THREAD.id } : {},
+          metadata: inThread ? { threadId: THREAD.id } : {},
         })
       ),
     [total, inThread]

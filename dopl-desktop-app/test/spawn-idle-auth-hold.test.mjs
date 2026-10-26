@@ -51,7 +51,7 @@ const runTail = new Function(
 
 function drive(spec, { credential }) {
   const calls = { queries: 0, idles: 0, touches: 0, holds: 0 };
-  const s = { key: "k1", agentId: "a1b2c3d4", taskId: "t1", state: {} };
+  const s = { key: "k1", agentId: "a1b2c3d4", threadId: "t1", state: {} };
   const sessions = new Map([[s.key, s]]);
   const sessionAuth = {
     async holdIfNoRuntimeCredential(sess) {

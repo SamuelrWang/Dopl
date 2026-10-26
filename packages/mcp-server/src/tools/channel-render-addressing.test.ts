@@ -217,7 +217,7 @@ describe("who asked — sibling, stranger's agent, or an outside session", () =>
   const AGENT = {
     authorKind: "agent",
     authorAgentName: "Bug Reviewer",
-    metadata: { session_id: "chan-1:task-1:deynelz3" },
+    metadata: { session_id: "chan-1:thread-1:deynelz3" },
   };
 
   const readerLine = async (over: Record<string, unknown>) => {

@@ -259,7 +259,7 @@ function mkSession(over) {
     channelId: CH,
     windowless: true, // the shape the defect was measured on: no surface, so a gate IS a deny
     launchDepth: o.launchDepth,
-    state: { allowForTask: [], toolMode: o.toolMode || "manual", messageMode: o.messageMode || "ask" },
+    state: { allowForThread: [], toolMode: o.toolMode || "manual", messageMode: o.messageMode || "ask" },
     pendingPermissions: new Map(),
     pendingNames: new Map(),
   };

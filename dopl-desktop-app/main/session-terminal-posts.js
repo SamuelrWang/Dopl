@@ -1,6 +1,6 @@
 // WHAT A SESSION'S END STILL OWES THE CHANNEL, and the one place a quit can wait for it.
 //
-// THE DEFECT (2026-10-12). A session ended at quit posts two things — the calm `task_progress`
+// THE DEFECT (2026-10-12). A session ended at quit posts two things — the calm `thread_progress`
 // "This session went inactive." note (`trigger-outcomes.js › onEnded`) and, for a windowless
 // agent, the drop report (`session-drop-notice.js › report`). BOTH were issued as
 // `void Promise.resolve(post…)`: fire-and-forget, which is right while the app is running and

@@ -12,7 +12,7 @@ import { vi } from "vitest";
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { ESCALATION_METADATA_KEY } from "../escalation";
 import type {
   ChannelMemberRow,
@@ -184,7 +184,7 @@ export function installEscalationMocks(): void {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
     rows: [],
     truncated: false,
   });

@@ -13,16 +13,16 @@ import type { ChannelContext } from "./service-shared";
 
 /**
  * The three kinds that STATE A RUNTIME FACT — session started / finished /
- * failed — and are therefore not an agent's to post. ⚠ `task_progress` is absent
- * on purpose: it claims nothing about a lifecycle, its body is the one `task_*`
+ * failed — and are therefore not an agent's to post. ⚠ `thread_progress` is absent
+ * on purpose: it claims nothing about a lifecycle, its body is the one `thread_*`
  * body a renderer shows, and it is the milestone lane. (⚠ The reader that used
  * to say so, `splitSessionEntries`, was deleted with the session card in wiring
  * plan Phase 5, 2026-08-18; the body is still rendered — INVARIANTS §5.)
  */
 const LIFECYCLE_KINDS: ReadonlySet<string> = new Set([
-  "task_started",
-  "task_finished",
-  "task_failed",
+  "thread_started",
+  "thread_finished",
+  "thread_failed",
 ]);
 
 /**
@@ -36,7 +36,7 @@ export interface PostMessageOptions {
    * ⚠ THREE OPTIONS ENDED HERE. `internalLifecycle` was the declared seam for
    * "this post is the server speaking"; it was deleted 2026-08-20 with no caller
    * and none in prospect. It had been documentary even before thread closing went
-   * (its only caller, `closeTask`, refused an agent ctx ahead of every lookup, so
+   * (its only caller, `closeThread`, refused an agent ctx ahead of every lookup, so
    * the flag was never what let a post through), and an exemption nothing spends
    * is a hole kept open for a visitor who never came. A future server-internal
    * lifecycle post should earn its pass the way the reopen echo did — post a kind
@@ -44,15 +44,14 @@ export interface PostMessageOptions {
    *
    * The other two went with thread closing (Phase 4, 2026-08-18):
    * `closeProposal` (stamped the close-proposal prompt keys for the deleted
-   * `service-tasks-propose.ts`) and `reopened` (stamped `threadReopened` for the
-   * deleted `reopenTask`). Both were reserved because the marker they wrote
+   * propose op) and `reopened` (stamped `threadReopened` for the deleted reopen). Both were reserved because the marker they wrote
    * changed how the OTHER member's card read; neither has a renderer left.
    */
   /**
    * SPAWN-WITH-HANDOFF (rollback §3.5). Stamp the reserved `metadata.handoff`
    * flag on this post's stored metadata. The one caller is
-   * `service-tasks.createTask` (via `postOpeningMessage`), which forwards the
-   * validated `TaskCreateInput.handoff` boolean. Reserved on the same terms as
+   * `service-threads.createThread` (via `postOpeningMessage`), which forwards the
+   * validated `ThreadCreateInput.handoff` boolean. Reserved on the same terms as
    * the runtime stamp: the desktop reads it to decide whether to OPEN A WINDOW,
    * so a caller that could set it in raw metadata could make its own post
    * masquerade as a declared handoff. It is stamped only onto a post that
@@ -62,8 +61,8 @@ export interface PostMessageOptions {
   /**
    * REQUEST FAN-OUT GROUP. Stamp the reserved `metadata.fanoutGroup` on this
    * post, so the N opening messages of one fanned-out request can be rendered
-   * as ONE card. The one caller is `service-tasks-broadcast.ts › createTaskFanOut`
-   * (through `service-tasks.ts › createTask`), which DERIVES the id server-side
+   * as ONE card. The one caller is `service-threads-broadcast.ts › createThreadFanOut`
+   * (through `service-threads.ts › createThread`), which DERIVES the id server-side
    * — see `fanoutGroupId` there.
    *
    * Reserved on the handoff stamp's terms: the group id decides which card a
@@ -84,7 +83,7 @@ export interface PostMessageOptions {
 /**
  * P0-2 — THE AUTHORITATIVE HALF OF "AN AGENT WRITES PROSE, NOT LIFECYCLE".
  *
- * Refuses `task_started` / `task_finished` / `task_failed` from an AGENT-TOKEN
+ * Refuses `thread_started` / `thread_finished` / `thread_failed` from an AGENT-TOKEN
  * caller. The MCP tool refuses the same three before the call is made
  * (`channel-ops-write.ts`), which is the fast, teaching feedback; this is the
  * one that holds when something posts straight at the route.
@@ -94,7 +93,7 @@ export interface PostMessageOptions {
  *     token, so `with-auth.ts` sets `agentTokenId` and `buildChannelContext`
  *     resolves `source: "agent"`. That is the lane being closed.
  *   - The DESKTOP RUNTIME's own lifecycle echoes (`main/session-window.js`
- *     onLaunched/onEnded → `channel-post.postTaskEvent`) go through
+ *     onLaunched/onEnded → `channel-post.postThreadEvent`) go through
  *     `listener-io.apiFetch`, which authenticates with the Electron session's
  *     SUPABASE COOKIES — no agent token, `source: "user"` — and declare
  *     `authorKind:"agent"` in the body. They are untouched.
@@ -104,7 +103,7 @@ export interface PostMessageOptions {
  *     removed in the wiring plan's Phase 4 (2026-08-18). The `internalLifecycle`
  *     exemption it would have used is deleted too. See {@link PostMessageOptions}.
  *   - The reopen echo that went with it deliberately did NOT use the exemption:
- *     it posted `task_progress`, not a lifecycle kind, so it passed the guard on
+ *     it posted `thread_progress`, not a lifecycle kind, so it passed the guard on
  *     its own merits. That is still the shape to copy — earn the pass, do not
  *     ask for one.
  *

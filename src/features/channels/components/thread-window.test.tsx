@@ -56,7 +56,7 @@ vi.mock("../hooks/use-channel-messages", () => ({
         seq: 1,
         authorUserId: PEER,
         body: "in the thread",
-        metadata: { taskId: "t-1" },
+        metadata: { threadId: "t-1" },
       }),
       message({ id: "m-2", seq: 2, body: "channel-level, not in the thread" }),
     ],

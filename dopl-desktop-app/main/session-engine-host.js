@@ -24,9 +24,9 @@ function readCaps(spec) {
 function refreshTray() { try { require('./tray').refresh(); } catch (_) { /* tray optional */ } }
 
 function runLifecycle(s, kind, extra, body) {
-  const info = { channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId, side: s.side, sessionId: s.sessionId, key: s.key, sdkSessionId: s.sdkSessionId }; // FIX #2: key+sdkSessionId (cycle) -> echoTargets dedup
+  const info = { channelId: s.channelId, threadId: s.threadId, workspaceId: s.workspaceId, side: s.side, sessionId: s.sessionId, key: s.key, sdkSessionId: s.sdkSessionId }; // FIX #2: key+sdkSessionId (cycle) -> echoTargets dedup
   try {
-    if (kind === 'task_started') {
+    if (kind === 'thread_started') {
       if (lifecycle.onLaunched) lifecycle.onLaunched(info);
     } else if (lifecycle.onEnded) {
       // P3: `body` is the calm one-liner a capped/ended lifecycle carries (undefined -> the handler derives one).

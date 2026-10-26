@@ -26,7 +26,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-messages");
 vi.mock("./repository-collab");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 vi.mock("./repository-artifacts");
 vi.mock("@/features/workspaces/server/repository");
 
@@ -191,7 +191,7 @@ describe("readTranscript — the page is sized in LINES", () => {
 
   it("reports hasMore at the ROW CEILING even when the budget trimmed nothing", async () => {
     // ⚠ AT the cap is indistinguishable from OVER it — the rule
-    // `listChannelTasks` already applies to `truncated`. It fails toward
+    // `listChannelThreads` already applies to `truncated`. It fails toward
     // allowing another fetch, which INVARIANTS §9 requires of a bounded read.
     vi.mocked(repoMessages.listMessages).mockResolvedValue(
       block(200, CHANNEL_TRANSCRIPT_PAGE_MAX_ROWS, 1)

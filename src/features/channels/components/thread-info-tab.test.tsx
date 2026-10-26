@@ -54,7 +54,7 @@ function summary(over: Partial<Summary> = {}): Summary {
   return {
     sessionId: "s-1",
     channelId: CHANNEL_ID,
-    taskId: "t-1",
+    threadId: "t-1",
     name: "flint",
     state: "working",
     channelName: "Website",
@@ -128,7 +128,7 @@ describe("the thread's own facts", () => {
     expect(screen.queryByText("Interactive")).toBeNull();
   });
 
-  // ⚠ `channel_tasks.status` is legacy and unread (types.ts › ThreadStatus).
+  // ⚠ `channel_threads.status` is legacy and unread (types.ts › ThreadStatus).
   // A Status row here would have to invent a state the product removed.
   it("carries no thread-closing vocabulary at all", () => {
     const { container } = render(
@@ -194,7 +194,7 @@ describe("the agents on this thread", () => {
   });
 
   it("narrows to THIS thread — an agent on another one is not here", () => {
-    renderTab({ agentSessions: [summary({ taskId: "t-other", name: "quartz" })] });
+    renderTab({ agentSessions: [summary({ threadId: "t-other", name: "quartz" })] });
     expect(screen.queryByText("quartz")).toBeNull();
     expect(screen.getByText("No agents on this thread.")).toBeTruthy();
   });

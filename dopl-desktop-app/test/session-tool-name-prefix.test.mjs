@@ -77,7 +77,7 @@ test("F-139: the HARD-DENY set cannot be escaped by ANY server prefix", () => {
         // Not 'gate' — DENY. A gate is one operator click away from running it, and the whole
         // point of the hard-deny set is that no click, no grant and no `bypass` can open it.
         assert.equal(decide({ profile, toolName: name, input: {}, toolMode: "bypass", messageMode: "auto_both",
-          allowForTask: [grantKeyFor(name, {}, CH)] }), "deny", `${name} @ ${profile}`);
+          allowForThread: [grantKeyFor(name, {}, CH)] }), "deny", `${name} @ ${profile}`);
       }
     }
   }

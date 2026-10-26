@@ -174,7 +174,7 @@ test("wake FENCE: a session is never woken by its OWN post", () => {
 });
 
 test("wake FENCE: a non-`message` kind and an authorless row wake nothing", () => {
-  for (const kind of ["task_started", "task_progress", "task_finished", "task_failed"]) {
+  for (const kind of ["thread_started", "thread_progress", "thread_finished", "thread_failed"]) {
     const h = harness({ agents: [idle(A1)] });
     assert.equal(h.feedLiveSession(entry, verdictMsg("agent", { kind, recipientAgentIds: [A1] }), ME), false, kind);
   }

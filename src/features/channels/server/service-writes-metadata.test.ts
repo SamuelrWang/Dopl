@@ -2,8 +2,8 @@
  * Post-metadata folds, driven through `postMessage` so the wiring is covered.
  *
  * ⚠ The bug this exists for: an agent reply posted over MCP into a DM carried NO
- * `to_user_id` and NO `taskId`, so the peer's desktop read it as an unaddressed
- * agent message (the deliberate loop brake → ignore) with no task id to route it
+ * `to_user_id` and NO `threadId`, so the peer's desktop read it as an unaddressed
+ * agent message (the deliberate loop brake → ignore) with no thread id to route it
  * to the waiting session. The server stamps both WITHOUT weakening the
  * anti-spoof strip.
  *
@@ -16,18 +16,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./repository");
 vi.mock("./repository-sessions");
 vi.mock("./repository-messages");
-vi.mock("./repository-tasks");
+vi.mock("./repository-threads");
 
 import * as repo from "./repository";
 import * as repoSessions from "./repository-sessions";
 import * as repoMessages from "./repository-messages";
-import * as repoTasks from "./repository-tasks";
+import * as repoThreads from "./repository-threads";
 import { postMessage } from "./service-writes";
 import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
-  ChannelTaskActivityRow,
+  ChannelThreadActivityRow,
 } from "./dto";
 import type { ChannelContext } from "./service-shared";
 
@@ -35,7 +35,7 @@ const WS = "ws-1";
 const USER = "11111111-e29b-41d4-a716-446655440000";
 const PEER = "22222222-e29b-41d4-a716-446655440000";
 const THIRD = "33333333-e29b-41d4-a716-446655440000";
-const TASK_ID = "44444444-e29b-41d4-a716-446655440000";
+const THREAD_ID = "44444444-e29b-41d4-a716-446655440000";
 const ctx: ChannelContext = {
   workspaceId: WS,
   userId: USER,
@@ -46,9 +46,9 @@ const ctx: ChannelContext = {
 
 /**
  * The ctx a lifecycle post really arrives on. `postMessage` refuses
- * `task_started` / `task_finished` / `task_failed` from an AGENT-TOKEN caller,
+ * `thread_started` / `thread_finished` / `thread_failed` from an AGENT-TOKEN caller,
  * and the desktop's own echoes are not that lane:
- * `dopl-desktop-app/main/channel-post.postTaskEvent` posts on the Electron
+ * `dopl-desktop-app/main/channel-post.postThreadEvent` posts on the Electron
  * session's Supabase cookies, so ctx is `source: "user"` with the body declaring
  * `authorKind: "agent"`.
  */
@@ -86,9 +86,9 @@ function memberRow(userId: string, role = "member"): ChannelMemberRow {
   };
 }
 
-function taskRow(overrides: Partial<ChannelTaskActivityRow> = {}): ChannelTaskActivityRow {
+function threadRow(overrides: Partial<ChannelThreadActivityRow> = {}): ChannelThreadActivityRow {
   return {
-    id: TASK_ID,
+    id: THREAD_ID,
     channel_id: "chan-1",
     workspace_id: WS,
     title: "Wire the listener",
@@ -162,7 +162,7 @@ beforeEach(() => {
   vi.mocked(repoMessages.insertMessage).mockImplementation(async (row) =>
     insertedRow(row)
   );
-  vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
+  vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
       rows: [],
       truncated: false,
     });
@@ -312,10 +312,10 @@ describe("postMessage — runtime stamp (WAKE-V1)", () => {
 
 describe("postMessage — spawn-with-handoff stamp (rollback §3.5)", () => {
   // Opener always carries a thread tag, so drive the stamp through DM
-  // inheritance: one open {author, peer} task gives the post its `taskId`.
+  // inheritance: one open {author, peer} thread gives the post its `threadId`.
   beforeEach(() => {
-    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue({
-      rows: [taskRow()],
+    vi.mocked(repoThreads.listThreadsByChannel).mockResolvedValue({
+      rows: [threadRow()],
       truncated: false,
     });
   });
@@ -328,7 +328,7 @@ describe("postMessage — spawn-with-handoff stamp (rollback §3.5)", () => {
       { handoff: true }
     );
     const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
+    expect(meta.threadId).toBe(THREAD_ID);
     expect(meta.handoff).toBe(true);
   });
 

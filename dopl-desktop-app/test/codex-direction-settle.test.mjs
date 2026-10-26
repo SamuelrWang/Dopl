@@ -1,7 +1,7 @@
 // CXP-3B — A COMPLETED CODEX DIRECT TURN SETTLES ITS DIRECTION `delivered`, EXACTLY ONCE.
 //
 // Live repro (2026-09-22): direction 73c88154 reached a Codex agent 13s after launch, while the
-// launch turn was still running. `messageByTask` read "in flight" and armed the capture at
+// launch turn was still running. `messageByThread` read "in flight" and armed the capture at
 // depth 2 (the Claude arithmetic: a queued push is its OWN later turn). Codex does not queue —
 // `launch-spec.js` sends `turn/steer`, which JOINS the active turn — so ONE `turn/completed`
 // arrived, the depth stopped at 1, the text was cleared, and nothing reported. The row sat
@@ -9,7 +9,7 @@
 //
 // These cases drive the SHIPPED chain end to end with only the network and the child faked:
 // `agent-directions.js › handle` (claim → deliverTo, which returns `null` = the MCP caller sees
-// `pending`) → the REAL `session-reopen.js › messageByTask` → the REAL `session-directed.js`
+// `pending`) → the REAL `session-reopen.js › messageByThread` → the REAL `session-directed.js`
 // capture → the REAL Codex `launch-spec.js` prompt pump → the REAL `normalize.js` → `observe`.
 
 import { test } from "node:test";
@@ -82,22 +82,22 @@ function directionsLane(direct) {
 
 function row(id, status = "pending") {
   return {
-    id, workspace_id: WS, channel_id: CH, task_id: TH, operator_user_id: ME, agent_id: AGENT,
+    id, workspace_id: WS, channel_id: CH, thread_id: TH, operator_user_id: ME, agent_id: AGENT,
     body: `question for ${id.slice(0, 2)}`, status,
   };
 }
 
-// ── The REAL `messageByTask`, sliced the way `session-direction-lane.test.mjs` does it ─────────
+// ── The REAL `messageByThread`, sliced the way `session-direction-lane.test.mjs` does it ─────────
 function reopenOps(sessions, dispatch) {
   const SRC = readFileSync(join(MAIN, "session-reopen.js"), "utf8");
   const BLOCK = sentinelBlock(SRC, "SESSION-REOPEN-PURE");
   const store = {
     sessionKey: (c, t, a) => `${c}:${t}:${a || ""}`,
-    slotKey: (x) => `${x.channelId || ""}:${x.taskId || ""}:${x.agentId || ""}`,
+    slotKey: (x) => `${x.channelId || ""}:${x.threadId || ""}:${x.agentId || ""}`,
     threadKeyPrefix: (c, t) => `${c || ""}:${t || ""}:`,
   };
   const api = new Function("store", "framing", "floorWindowlessMessage", "privateTurn", "directedTurn",
-    `${BLOCK}\n return { bind, messageByTask };`
+    `${BLOCK}\n return { bind, messageByThread };`
   )(store, framing, floorWindowlessMessage, privateTurn, directedTurn);
   api.bind({ sessions, refreshTray: () => {}, dispatch, openAgentWindow: null });
   return api;
@@ -202,7 +202,7 @@ function codexSession(serverOpts = {}) {
 
 function wired(serverOpts) {
   const c = codexSession(serverOpts);
-  const lane = directionsLane((spec) => c.ops.messageByTask(spec));
+  const lane = directionsLane((spec) => c.ops.messageByThread(spec));
   return { ...c, ...lane };
 }
 

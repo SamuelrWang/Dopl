@@ -242,6 +242,6 @@ test("SUMMARY: both projections carry `workspaceId`, `null` when the shape carri
     "absent is null — never '' and never a guess");
   assert.equal(m.endedSummary(endedRecord(), "a1b2c3d4").workspaceId, "ws-1");
   assert.equal(m.endedSummary(endedRecord({ workspaceId: "" }), "a1b2c3d4").workspaceId, null);
-  m.bind({ sessions: new Map([["chan-1:task-1", session()]]) });
+  m.bind({ sessions: new Map([["chan-1:thread-1", session()]]) });
   assert.equal(m.list()[0].workspaceId, "ws-1", "on the wire, not stripped");
 });

@@ -3,9 +3,7 @@
  * Resolve the addressing, make the call, map the 4xx, hand the outcome to the
  * modules that narrate it.
  *
- * ⚠ BOUNDARY: wire/storage name `task` == domain name `thread`. The `thread` op
- * param folds into `metadata.taskId` and `task_*` kinds keep their stored
- * names; only the agent-facing surface says `thread`.
+ * The `thread` op param folds into `metadata.threadId`.
  *
  * ⚠ PEER-CONTROLLED TEXT. Every string below is server NARRATION with no
  * untrusted framing, and one peer-authored value splices into it: `ch.name` —
@@ -111,7 +109,7 @@ interface PostOptions {
      * ⚠ **NOT A CALLER'S ARGUMENT ANY MORE** (C12, 2026-09-02). `kind` left the
      * published shape — three of its five values were refused, one had its own op
      * and one was the default — and the only writer left is `op="send" with kind="milestone"`,
-     * which fixes it to `task_progress` at the routing seam.
+     * which fixes it to `thread_progress` at the routing seam.
      */
     kind?: ChannelMessageInput["kind"];
     metadata?: Record<string, unknown>;
