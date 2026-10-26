@@ -86,6 +86,11 @@ Data edits in the copies (marked `STAGING` in comments):
   (ink leading bar when selected), canvas lanes have no grey fill on the dotted ground, a canvas
   card previews its first three fields, and an `enum` value is `StatusPill`. The Rows display is on
   the same kit and has no stylesheet of its own.
+- **Ground** (`staging-ontology-page.tsx` passes `recordClassName="uis-onto-pane"`,
+  `ui-staging/staging.css › .uis-onto-pane`): the record pane behind both Canvas and Rows is
+  `--bg-overlay` white, not the frame's `--home-card`. The dotted grid, the cards' hairline and
+  `--shadow-bento`, the selection bar and the hover hairline are unchanged. Port target:
+  `apps/desktop-ui/src/pages/home/home.module.css` → `.page[data-face="ontology"] .pane`.
 
 ## Port-time notes
 

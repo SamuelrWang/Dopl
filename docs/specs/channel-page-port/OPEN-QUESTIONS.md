@@ -490,3 +490,4 @@ Workers append a `## <slice>` section per question: the question, what was chose
 5. **The Rows display moved onto kit and tokens.** The brief named `ontology-rows.css` for deletion;
    its literal neutral palette (DESIGN-LANGUAGE §2) is now the product tokens (`--text-primary`
    etc.), so Rows reads slightly cooler than it did. No shared token was retuned.
+6. **Ontology white background: trial per Samuel.** Record pane `--bg-overlay` on `/playground/ontology` only (`ui-staging/staging.css › .uis-onto-pane`); grid and cards unchanged.

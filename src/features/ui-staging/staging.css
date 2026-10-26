@@ -363,3 +363,13 @@ button.lp-demo-top-profile {
   background: var(--home-card);
 }
 
+
+/* ── ONTOLOGY: WHITE PANE (trial) ─────────────────────────────────────
+   /playground/ontology only (`recordClassName="uis-onto-pane"`): the record
+   pane behind the Canvas and Rows displays is white instead of `--home-card`.
+   The surrounding panel stays as the frame paints it; the pane's hairline
+   keeps its edge. Port target if approved: `home.module.css` →
+   `.page[data-face="ontology"] .pane`. */
+.uis-window .lp-demo-record.uis-onto-pane {
+  background: var(--bg-overlay);
+}

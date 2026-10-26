@@ -51,7 +51,7 @@ function Pane() {
 export function StagingOntologyPage() {
   return (
     <StagingOntologyProvider>
-      <StagingFrame tab="ontology">
+      <StagingFrame tab="ontology" recordClassName="uis-onto-pane">
         <Pane />
       </StagingFrame>
       <StagingScenarioPanel />
