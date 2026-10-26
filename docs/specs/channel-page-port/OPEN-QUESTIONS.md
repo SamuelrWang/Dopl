@@ -148,3 +148,53 @@ Workers append a `## <slice>` section per question: the question, what was chose
 - Applied `channel_tasks` (history 20261026111318, md5 9fa479ac472602ecc05360e47ab5a1e2) and `channel_sessions_runtime` (20261026111323, md5 ed33512e1bb161bb8ba3e9c40ab33bc9) to production; both match their files.
 - ⚠ History now holds TWO rows named `channel_tasks`: 20260727150000 (the original thread table, now `channel_threads`) and 20261026111318 (the new tasks feature). Locally the files are `20260727150000_channel_tasks.sql` and `20261121190000_channel_tasks.sql`. Anything that joins history on NAME must also match the md5. Left as is (applied files are never renamed).
 - `src/shared/supabase/types.ts` was merged in place by workers; regenerate from production (`--linked`) now that all three migrations are live.
+
+## Phase 3.1 transcript + composer (branch `ui/port-transcript`)
+
+1. **No status dot in the thread card's header.** Staging drew `thread.status` ("Open"), but
+   `ThreadStatus` is legacy and unread (`@dopl/contracts › channels.ts`: "nothing may branch on
+   it"; INVARIANTS §5, threads do not close). Chose: no header status; liveness lives on the agent
+   rows and the "N running" count. `channels/components/thread-card-row.tsx`.
+2. **No runtime badge on the thread card's agent rows.** There is no product runtime → logo map,
+   the desktop SPA serves no `/img/onboarding/*` assets, and peers carry no runtime (R9). Chose:
+   `IdentityFace` with the agent-colour ring (neutral without one) and no badge.
+   `channels/components/thread-card-agents.ts`.
+3. **Agents compartment when the own feed is unknown.** A plain browser has no own feed
+   (`sessions: null`): with no peer on the thread the card draws no compartment (unknown is not
+   empty, INVARIANTS §11); with known feeds and nobody on it, "No agents yet". The pop-out thread
+   window passes no feeds (thread view has no cards).
+4. **"Opened by" for an agent** reads "Opened by your agent" / "Opened by Diana's agent", off the
+   opening message's `authorKind` (new `ThreadCardRow.agent`); it does not name the agent.
+5. **One choice face.** The decision face (letter badges + strip) and the inline face (labelled
+   buttons) are both replaced by option rows, so a bare choice and a legacy decision draw the same
+   rows; `isDecisionFace` is deleted. A row button's accessible name is its label, its consequence
+   is `aria-describedby`. Non-choice displays wear the same content-width tag, in the same paint,
+   reading "Display". `display-choice.tsx`, `escalation-card-face.ts`.
+6. **Pane avatar sizes, taken literally from staging's override:** a PERSON's message pill is now
+   36px (`Avatar px36`) while an AGENT's badge photo is 32px (`IdentityFace`), and the agent's name
+   is `text-lead` against a person's `text-body`. Staging rendered exactly this; flag if the two
+   pills should match. Roster + thread parties `px36`, peer activity + the agent stream's viewer
+   `px30`. Threads-tab and creator avatars carry their own size override and were left; Agents-tab
+   card avatars are slice 2's face.
+7. **The send button changed for both composers.** `SendButton` is one shared face, so the agent
+   bar's send is round now too (the demo's agent-view send CSS that faked it is deleted). The
+   workspace channels skeleton's send ghost (`apps/desktop-ui/src/pages/channels/
+   channels-skeleton.tsx`) was re-rounded to keep its pin true: a bleed, not workspace work.
+8. **Working chips** are full 18px pills in the agent colour; the cycling dots still sit right
+   after the name with no gap (the 2026-10-10 ruling), not the demo chip's 5px gap.
+9. **Composer card radius is 20px** (the demo's), on `.white-card` with the hairline inside
+   `px-3 py-2.5`, so the content box and height are unchanged.
+10. **The staged decision post stays** (`channels-staging/data/decision-fixture.ts`): it is the
+    page's only decision example. The scene answers it with an in-memory `async () => true`, so a
+    press shows the chosen row; "You chose" needs a stored answer and does not appear.
+11. **`cn` did not know `text-heading`** (Phase 1 added the step, not the merge group), so
+    `cn("text-heading", "text-text-primary")` would drop the size. Added to
+    `shared/lib/utils.ts`.
+12. **Not split:** `composer-recipients.test.tsx` and `composer-launch.test.tsx` (500 lines each)
+    are untouched by this slice and not over the cap; splitting would duplicate their mock setup.
+    `transcript.test.tsx` was split (fan-out → `thread-card-fanout.test.tsx`).
+13. **Still swapped in the landing demo** (later slices): `DemoAgentCards`, `DemoAgentStateRows`,
+    `DemoAgentViewFaces`, `DemoStreamBoxes`, and the demo agent-view composer's pill rule.
+14. **Pre-existing, unchanged:** `src/shared/ui/clickable-cursor.test.ts` red on
+    `ontology-staging/.../kanban-column-header.tsx`; `check-doc-refs` asks for
+    `docs/ENGINEERING.md::task-panel.tsx` to leave its baseline (not this slice's file).

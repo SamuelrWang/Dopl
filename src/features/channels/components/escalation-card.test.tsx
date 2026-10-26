@@ -108,11 +108,10 @@ describe("the card renders the four fields", () => {
     expect(
       screen.getByText("Reversible, nothing depends on it.")
     ).toBeTruthy();
-    // ⚠ THE RECOMMENDATION IS THE LAST LINE, NOT A BADGE BESIDE AN OPTION
-    // (Samuel, 2026-09-20) — and it names the option in the option's own BADGE,
-    // which is the only thing tying the prose to the control strip.
-    expect(screen.getByText("Recommended:")).toBeTruthy();
-    expect(screen.queryByText("Recommended")).toBeNull();
+    // The recommendation rides on the option it recommends, why included.
+    const recommended = screen.getByText("Recommended").closest("[data-option-index]");
+    expect(recommended?.getAttribute("data-option-index")).toBe("0");
+    expect(recommended?.textContent).toContain("Reversible, nothing depends on it.");
   });
 
   it("is a CARD, not a message bubble — and it is keyed on METADATA, not on `kind`", () => {
@@ -182,12 +181,12 @@ describe("who gets buttons — the server's rule, restated", () => {
         onAnswerDisplay={ANSWER}
       />
     );
-    expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ship now" })).toBeTruthy();
   });
 
   it("with NOBODY tagged, the AUTHOR's operator gets them", () => {
     draw([escalationMessage()], { onAnswerDisplay: ANSWER });
-    expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ship now" })).toBeTruthy();
   });
 
   it("a member the escalation did not tag gets NO buttons — absent, not disabled", () => {
@@ -231,7 +230,7 @@ describe("pressing an option", () => {
     const onAnswer = vi.fn(async () => true);
     draw([escalationMessage()], { onAnswerDisplay: onAnswer });
     fireEvent.click(
-      screen.getByRole("button", { name: "Option B: Wait for review" })
+      screen.getByRole("button", { name: "Wait for review" })
     );
     expect(onAnswer).toHaveBeenCalledWith({ channelId: CHANNEL_ID, messageId: "m-esc", index: 1 });
   });
@@ -240,15 +239,15 @@ describe("pressing an option", () => {
     let settle: (ok: boolean) => void = () => {};
     const onAnswer = vi.fn(() => new Promise<boolean>((resolve) => (settle = resolve)));
     const { container } = draw([escalationMessage()], { onAnswerDisplay: onAnswer });
-    fireEvent.click(screen.getByRole("button", { name: "Option A: Ship now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ship now" }));
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     const [chosen, rest] = Array.from(
       container.querySelectorAll("[data-escalation-id='m-esc'] [data-option-index]")
     ) as HTMLElement[];
-    expect(chosen.className).toContain("auth-btn-3d");
-    expect(rest.className).toContain("bg-[var(--seg-fill)]");
+    expect(chosen.getAttribute("data-chosen")).toBe("true");
+    expect(rest.getAttribute("data-quiet")).toBe("true");
     await act(async () => settle(false));
-    expect(screen.getByRole("button", { name: "Option A: Ship now" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ship now" })).toBeTruthy();
   });
 });
 

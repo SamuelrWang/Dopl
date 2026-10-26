@@ -59,10 +59,8 @@ import { ACTIVITY_BINS, mentionsAt } from "./demo-info-data";
 import { HOME_ROW_ID, VIEWER, homeRowsAt } from "./demo-home-rows";
 import { DemoAccountRail } from "./demo-home-chrome";
 import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
-import { DemoComposerChips } from "./demo-composer-chips";
 import { identityFace } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
-import { DemoThreadCards } from "./demo-thread-card";
 import { DemoAgentCards, DemoAgentStateRows } from "./demo-agent-card";
 import { DemoAgentViewFaces } from "./demo-agent-view-faces";
 import { DemoStreamBoxes, type StreamFace } from "./demo-stream-boxes";
@@ -212,6 +210,7 @@ export function DemoScene({
     }
     return out;
   }, [index]);
+  const agentFeeds = useMemo(() => ({ sessions, peers }), [sessions, peers]);
 
   /**
    * **THE COMPOSER'S LIVE SET** (Samuel, 2026-10-12: show the agents currently working
@@ -271,6 +270,7 @@ export function DemoScene({
                     // The composer's live set: the tint, the mention picker and the
                     // reach line ("→ @handle", the auto-tag control) all read it.
                     liveAgents={live}
+                    agentFeeds={agentFeeds}
                     // The working strip above the input, scoped to whatever the composer
                     // is pointed at — so it narrows to the thread's coders inside it.
                     agentActivity={
@@ -329,16 +329,6 @@ export function DemoScene({
                       }}
                     />
                   </div>
-                  {/* The demo's redesigned thread card, portalled over the product's
-                      (`demo-thread-card.tsx`): the pane itself is unchanged. */}
-                  <DemoThreadCards
-                    paneRef={pane}
-                    rows={rows}
-                    messages={messages}
-                    index={index}
-                    onOpenThread={onOpenThread}
-                  />
-                  <DemoComposerChips paneRef={pane} />
                   <DemoAgentStateRows paneRef={pane} sessions={sessions} peers={peers} />
                   <DemoAgentViewFaces paneRef={pane} agent={MY_SESSION} onClose={NOOP} />
                   <DemoAgentCards

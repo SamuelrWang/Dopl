@@ -104,6 +104,8 @@ export interface ThreadCardRow {
   side: MessageSide;
   author: AvatarPerson;
   authorLabel: string;
+  /** The opening message was an agent's (`authorKind`); the author is still its operator. */
+  agent: boolean;
   time: string;
   /** Every thread of the request, in addressee order. Never empty. */
   threads: ChannelThread[];
@@ -334,6 +336,7 @@ export function channelRows(
         side: message.authorUserId === index.currentUserId ? "me" : "peer",
         author: personFor(message, index),
         authorLabel: labelFor(message, index),
+        agent: message.authorKind === "agent",
         time: formatTime(message.createdAt),
         threads: cardThreads,
         openThreadId: ownThreadOf(cardThreads, index.currentUserId).id,

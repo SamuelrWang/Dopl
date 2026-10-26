@@ -51,7 +51,8 @@ export function DisplayBlocks({
   display: Display;
   /** The host's size step (`escalation-card-face.ts › AGENT_CARD_FACE`). */
   face: AgentCardFace;
-  /** What the `choice` block draws, in its place (at most one per display). */
+  /** What the `choice` block draws, in its place (at most one per display); its presence also
+   *  makes every text block the decision's muted context. */
   choice?: ReactNode;
 }) {
   return (
@@ -61,7 +62,7 @@ export function DisplayBlocks({
         switch (block.type) {
           case "heading":
             return (
-              <p key={key} data-block={key} className={cn(face.body, "font-semibold")}>
+              <p key={key} data-block={key} className={face.heading}>
                 {block.text}
               </p>
             );
@@ -71,7 +72,7 @@ export function DisplayBlocks({
                 key={key}
                 data-block={key}
                 className={cn(
-                  face.body,
+                  choice ? face.context : face.body,
                   "whitespace-pre-wrap",
                   inkOf(block),
                   block.border && "rounded-[8px] border border-border-default px-2 py-1"

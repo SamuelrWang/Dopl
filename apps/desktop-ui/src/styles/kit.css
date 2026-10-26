@@ -171,9 +171,35 @@
   background: var(--home-card);
 }
 
+/* THE MARK TILE: a small raised light square holding a glyph (the thread card's kind). Size stays
+   with the caller. */
+.mark-tile {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--raised-light-line);
+  border-radius: 6px;
+  background: var(--raised-light-face);
+  box-shadow: var(--raised-light-bevel);
+  color: var(--text-primary);
+}
+
+/* THE ROUND INK SEND: a flat ink disc with one small drop; disabled fades. Size stays with the
+   caller. */
+.send-round {
+  border-radius: 9999px;
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: opacity 140ms ease;
+}
+.send-round:disabled {
+  opacity: 0.35;
+}
+
 /* THE RAISE: a pressable object standing on the /home shell's white panel, lifting 2px on hover.
-   Shadow and motion only; fill, border and radius stay with the caller. `.raise` is a channel row,
-   `.raise-pill` the search and Profile pills, `.raise-ink` the ink New channel pill. */
+   Shadow and motion only; fill, border and radius stay with the caller. `.raise` is a white row
+   (channel rows, a thread card's agent rows), `.raise-pill` the search and Profile pills,
+   `.raise-ink` an ink pill (New channel, Open thread). */
 .raise,
 .raise-pill,
 .raise-ink {

@@ -21,9 +21,6 @@ there are three layers to port to:
 |---|---|---|
 | `home/channel-scene.tsx` | `demo-scene.tsx › DemoScene` (record-pane half) | `pages/home/relationship-record.tsx` (record pane: message pane + info slide + agent view), mounting `channels/components/message-pane.tsx`, `info-panel.tsx` |
 | `home/channel-switcher.tsx` → **moved 2026-10-22** to `ui-staging/staging-channel-rail.tsx` (this file is now a thin wrapper that passes this page's `onSelect`); port from there | `demo-home-faces.tsx › DemoChannelSwitcher` | `pages/home/channel-wells.ts` + `relationship-list.tsx` (wells + rows), `shared/ui/home-channel-row.tsx` |
-| `home/thread-card.tsx` | `demo-thread-card.tsx` | `channels/components/thread-card-row.tsx › ThreadCardMessage` |
-| `home/decision-card.tsx` **(new 2026-10-22, ask 6b)** | — (no demo face; this is the first) | `channels/components/display-card.tsx` + `display-choice.tsx` + `escalation-card-face.ts` (the face table) |
-| `home/attribution-pill.tsx` **(new 2026-10-22, ask 6c)** | — | `channels/components/attribution-pill.tsx` (the badge face); `authored-row.tsx › ACCENT_FRAME` (the flag frame) STAYS as it is (2026-10-23 reversal) |
 | `home/settings-tab.tsx` + `home/settings-dialogs.tsx` **(new 2026-10-24)** | — | `channels/components/settings-slot.tsx` → `settings-tab.tsx` (+ `settings-agent.tsx`, `settings-agent-launch-rows.tsx`, `settings-agent-rows.tsx`, `settings-desktop-rows.tsx`, `settings-channel-agents.tsx`) for channel view; `thread-settings-tab.tsx` for thread view; dialogs from `channel-manage.tsx` / `thread-manage.tsx` |
 | `home/task-list.tsx` + `home/tasks-info-panel.tsx` + `home/tasks-popover.tsx` + (round 4) `home/task-panel.tsx`, `home/task-detail.tsx`, `home/task-subtasks.tsx`, `home/task-notes.tsx` **(new 2026-10-26, channel tasks)** | — (row recipe from the landing `marketing/components/ontology-windows.tsx › TasksWindow`) | NO product counterpart yet. BOTH ship together (round 2, 2026-10-26). Tasks tab (full view) → a `tasks` key in `channels/components/info-panel-tabs.ts › TABS` + `tabCount` + a body branch in `info-panel.tsx`, plus a nonce prop that switches to it. Quick view → a right-end slot on `channels/components/composer-recipients.tsx`'s row (the `working` line above the composer card) for the pill, and a pop-up anchored to `composer.tsx`'s wrapper, right edge on the card's. Both need a tasks read/write and an MCP tool for agents to open/assign/resolve tasks |
 | `home/agent-card.tsx` | `demo-agent-card.tsx` | `channels/components/agents-tab-cards.tsx`, `thread-info-tab.tsx › AgentStateRow` |
@@ -39,44 +36,23 @@ changed for the store) are deleted. The page sees their writes through
 (subscribed in `staging-channels-page.tsx`), so a new channel still lands in the column and a
 revoked link row still leaves it. Port those dialogs from `popups-staging/PORTING.md`.
 
-Imported from the demo as-is (no copy): `demo-swap.ts`, `demo-composer-chips.tsx`,
+Imported from the demo as-is (no copy): `demo-swap.ts`,
 `demo-stream-boxes.tsx`, `demo-data.ts`, `demo-transcript.ts`, `demo-narration.ts`,
 `demo-info-data.ts`, `demo-identities.ts`, `demo-home-rows.ts`, `demo-steps.ts`, and
 `marketing.css` (via the staging frame).
 
+**Ported to the product (2026-10-26, channel page slice 1)**: the thread card, the decision card,
+the agent's message badge, the composer card + working chips, the pane's avatar sizes and the empty
+activity squares are the product's own faces now (`channels/components/thread-card-row.tsx`,
+`display-card.tsx` + `display-choice.tsx`, `attribution-pill.tsx`, `composer.tsx`,
+`agent-activity.tsx`, `thread-activity.tsx`). The staged copies, their face swaps and their CSS are
+deleted; the scene mounts the product components directly.
+
 Edits made in the copies (marked `STAGING` in comments):
-- `thread-card.tsx`: "Open thread" opens that card's thread; "Launch agent" launches into it.
 - `agent-card.tsx`: "Open" opens that card's agent (the demo had one agent to open).
-- `agent-card.tsx`, `thread-card.tsx`, `agent-view-faces.tsx`: faces via `data/staging-agents.ts`.
+- `agent-card.tsx`, `agent-view-faces.tsx`: faces via `data/staging-agents.ts`.
 - `agent-view.tsx`: the 1:1 composer sends (in memory, with a canned reply); `layout="fill"` (no
   slide, no header) is the body `/popups`' agent window imports.
-- `thread-card.tsx` **(restructured 2026-10-22, ask 6)**: the header is the thread's NAME at the
-  title's size (the literal "Agent thread" label is gone), the opening ask is the description, the
-  body is the agents inside the thread (an own agent's row opens its agent view; a peer's row has
-  no affordance), and both actions moved OUT of the agent rectangle into the card's footer, with
-  "Launch agent" understated. CSS: `ui-staging/staging.css › .uis-tc*`.
-- `thread-card.tsx` **(ask 6c)**: the box sizes to its content; the cap is on the AGENT LIST at
-  three rows (`--uis-tc-row`), so the max IS the 3-agent height and an empty box is small. The
-  list carries inner padding with a matching negative margin, which is what stops the scroll box
-  clipping a hovered row's shadow and the first row's top edge.
-- `attribution-pill.tsx` **(ask 6c, FINAL 2026-10-24: flag + photo + name + time)**: the agent's badge
-  on a message. Path there: 2026-10-22 flattened the flag for a ringed `PairedAvatar`;
-  2026-10-23 restored the flag ("I actually like the flag with the whole border line around the
-  whole thing") and dropped the "agent" chip ("Remove the pill that says the word "agent".
-  That's not needed."); 2026-10-24 dropped the small runtime icon and kept the photo ("no keep the user profile image
-  only the small agent icon move"). Final: the product's `ACCENT_FRAME` flag untouched (3px,
-  open on the bar side, joined to `ACCENT_BAR`), holding the operator's photo (32px, neutral
-  `--raised-light-line` hairline, NO agent-colour ring, NO runtime icon), then name over time.
-  Padding 5px left/top/bottom (every frame-edge → photo gap equal), 14px right; frame 48px;
-  name/time centred on the photo. Port = in `AttributionPill`, for AGENT pills only: drop the
-  `AgentChip`, keep the `Avatar` at 32px with the neutral hairline, padding `py-[5px] pl-[5px]
-  pr-3.5`. Person pills unchanged. Keep `ACCENT_FRAME` as it is.
-- **Channel activity squares (Samuel, 2026-10-24)**: the grey measured-zero squares lose their
-  outline ("for the squares that are gray bc they had no activity, can we remove the borderline
-  around it"). Staging makes the border transparent (`ui-staging/staging.css`, channels page
-  only), so the squares stay 14px. Port = drop `border border-border-subtle` from the empty
-  (`level < 0`) branch of `channels/components/thread-activity.tsx › ActivityCells`; the cell is
-  still 14px since Tailwind's border-box border was inside it.
 - **Surfaces (Samuel, 2026-10-24, "perfect", keep)**: on the channels page the record pane is
   #ffffff and the panel under the top bar / channel column takes the pane's old `--home-card`
   (`ui-staging/staging.css › .uis-ch-pane`). Port target: desktop `pages/home` record pane +
@@ -111,30 +87,10 @@ Edits made in the copies (marked `STAGING` in comments):
   outlined pill button; "Working Folder" becomes sentence case. Responder sits
   as the last row of the Agent Settings card (in the product it is a separate slot with no
   heading, directly under that block). The product's per-row help eye is kept.
-- **Avatar sizes (ask 6d)**: message badge photo `32px`, no runtime icon (2026-10-24, ask 6c final); agent card head `d=30`; thread
-  box and thread-info agent rows `d=26`. The ring and white frame cost a fixed 4px at ANY size
+- **Avatar sizes (ask 6d)**: agent card head `d=30`; thread-info agent rows `d=26`. The ring and
+  white frame cost a fixed 4px at ANY size
   (`shared/ui/identity-face.tsx › IDENTITY_RING_PX`), so d=22 left a 14px photo and a ~7px runtime logo — that
   fixed cost is why small `d` values read as dots, and it is the thing to remember on port.
-  The product's own `Avatar` instances still inside the pane (Info tab roster, thread Info tab,
-  peer activity, agent stream) are lifted by a SCOPED CSS rule in `ui-staging/staging.css`
-  (`xs` 24→30, `sm` 32→36), because both `shared/ui/avatar.tsx` and those call sites are out of
-  bounds from staging. ⚠ PORT AS THE `size` PROP AT THE CALL SITES, or a new step in
-  `Avatar`'s `SIZE` table — never as the CSS rule, which exists only to reach code staging
-  may not edit.
-- **Structure before font styling** (`KB orchestration-guidelines › Plans/UI Standing Rules › rule 5`, 2026-10-22): the thread box's agents region is a grey WELL
-  (the demo card's own `.lp-demo-tc-well` recipe, reused), its empty state is an icon + one
-  phrase inside that well, and the footer is fenced by a hairline. Before this the empty box
-  was three stacked lines in three font stylings with no skeleton, which is the rule's first
-  named instance. Port the structure, not just the copy.
-- **The Blank Space Rule** (same doc, rule 1, 2026-10-22): the decision card's full-bleed "Needs your
-  decision" bar is now a content-width tag, and the thread box's agent-count line carries
-  "N running" on its trailing end. Port both: a band with three words at its left edge is the
-  shape the rule forbids.
-- `decision-card.tsx` **(new 2026-10-22, ask 6b)**: question → context → options that each carry
-  their own consequence and are themselves the button. Replaces the product card's
-  `[Option A] label: description` list + `Recommended: [Option X]` paragraph + letter button strip.
-  The press is LOCAL STATE here; the product writes through `use-display-writes`. CSS:
-  `ui-staging/staging.css › .uis-dc*`. Fed by the hardcoded post in `data/decision-fixture.ts`.
 - **Channel tasks: tab + quick view, ONE state (Samuel, 2026-10-26; round 1 built two variants
   behind `?tasks=`, round 2: "I actually think it might make sense to have both ... just have
   one state with both of them")**. Both always render:
@@ -196,7 +152,7 @@ Also imported by `/popups` (its thread and agent windows' bodies, `popups-stagin
 | `store/use-staging-channels.ts` | the channels reads + `useThreadWrites`, the launch bridge (`use-launch-controls.ts`), the 1:1 bridge |
 | `data/staging-query-seed.ts` | `GET /api/agent-identities`, `GET /api/channels/:id/artifacts`, `GET /api/devices`, `GET /api/glasses/devices` (seeded into a private QueryClient, `staleTime: Infinity`) |
 | `data/tech-debt-fixture.ts` | the demo channel at its final beat (read off the demo's own selectors) |
-| `data/decision-fixture.ts` | ONE hardcoded "needs your decision" post in #tech-debt (Samuel, ask 6b), as a real `metadata.display` v2 envelope with a `choice` block — the shape `dopl_request_decision` writes. Staging-only: delete it when the restyle ports. |
+| `data/decision-fixture.ts` | ONE hardcoded "needs your decision" post in #tech-debt (Samuel, ask 6b), as a real `metadata.display` v2 envelope with a `choice` block — the shape `dopl_request_decision` writes, drawn by the product card and answered in memory. |
 | `data/extra-fixtures.ts`, `data/staging-builders.ts`, `data/staging-agents.ts`, `data/staging-rows.ts`, `data/demo-imports.ts`, `data/staging-fixture-types.ts` | fake data (invented transcripts for the column's other channels, in the demo's voice) |
 | `data/staging-tasks.ts` + `data/staging-task-details.ts` (round 4) + `store/use-staging-tasks.ts` **(new 2026-10-26)** | the (not yet existing) channel tasks read + resolve/reopen writes; seeded for #tech-debt only, links read off the demo's own threads/messages |
 | `staging-channels-page.tsx` | page root |

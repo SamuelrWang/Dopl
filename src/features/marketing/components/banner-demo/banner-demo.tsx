@@ -133,7 +133,7 @@ export function BannerDemo() {
       // is a demo-only hook, which is why the product's handlers run and the scene
       // reacts the way the app does.
       if (at(step, "cursor-to-thread") || at(step, "click-thread"))
-        // The thread card's own button (`demo-thread-card.tsx`, the demo's face).
+        // The thread card's own button (`channels/components/thread-card-row.tsx`).
         return findButton(pane, (l) => l === "Open thread");
       if (at(step, "cursor-to-tab") || at(step, "click-tab"))
         // The count badge concatenates into textContent ("Agents3").

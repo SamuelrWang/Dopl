@@ -8,7 +8,7 @@
  * `metadata.display` is a v2 display envelope with a `choice` block
  * (`display/core/types.ts`), which is exactly what `dopl_request_decision` writes. So the
  * product's own reader (`view-model-display.ts › displayViewOf`) builds the card's view from
- * it, and the staged face (`home/decision-card.tsx`) draws what a real decision would carry.
+ * it, and the product card (`channels/components/display-card.tsx`) draws it.
  *
  * ⚠ IT TAGS THE VIEWER, and that is what makes it answerable: `display/core/answerers.ts ›
  * answerersOf` reads the server's mention set, else the author account. Without the tag the

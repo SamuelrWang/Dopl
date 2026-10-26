@@ -10,8 +10,8 @@ import { ComposerSend } from "./composer-input";
 import type { Dictation } from "./use-dictation";
 import type { AgentLaunchControls } from "./use-agents-panel";
 
-/** The toolbar glyph face; the hover fill is `IconButton`'s own. */
-const TOOLBAR_ICON = "h-6 w-6 rounded-full";
+/** The toolbar glyph face: muted at rest; the hover fill and ink are `IconButton`'s own. */
+const TOOLBAR_ICON = "h-6 w-6 rounded-full text-text-muted";
 
 /**
  * **A GLYPH WHOSE POPUP IS OPEN IS THE BLACK BUTTON — a ROUNDED SQUARE, white glyph**

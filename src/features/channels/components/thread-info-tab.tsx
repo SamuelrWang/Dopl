@@ -232,7 +232,7 @@ function PartyRow({
       <AvatarWithPresence
         person={memberPerson(member)}
         online={online}
-        size="sm"
+        size="px36"
         title={online ? "Agent listening" : "Agent offline"}
       />
       <span className="flex min-w-0 flex-1 flex-col">
