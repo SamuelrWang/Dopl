@@ -71,6 +71,7 @@ export type SceneActions = {
   openAgent: (key: string | null) => void;
   openMention: (mention: ChannelMention) => void;
   markMentionsRead: () => void;
+  jumpToMessage: (threadId: string | null, messageId: string) => void;
   jumpToSeq: (seq: number) => void;
   sendMessage: (body: string) => void;
   createThread: (title: string, body: string) => void;
@@ -268,6 +269,7 @@ export function StagingChannelScene({
           mentionsLoading={false}
           onOpenMention={actions.openMention}
           onMarkAllMentionsRead={actions.markMentionsRead}
+          onJumpToMessage={actions.jumpToMessage}
           artifacts
           mentionsLayout="category"
           activityBins={fixture.activity}

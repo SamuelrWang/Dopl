@@ -93,7 +93,13 @@ export function SurfaceInfoPanel({
   // Single column: opening a transcript also switches the face. No-op on desktop.
   const showChannel = () => webView?.setView("channel");
 
-  // Optimistic mark-read, then jump (the scroll signal runs post-render).
+  // The scroll signal runs post-render.
+  const jumpToMessage = (threadId: string | null, messageId: string) => {
+    sel.jumpToMessage(threadId, messageId);
+    showChannel();
+  };
+
+  // Optimistic mark-read, then jump.
   const openMention = (mention: ChannelMention) => {
     if (!mention.read) {
       data.markRead.mutate({
@@ -101,8 +107,7 @@ export function SurfaceInfoPanel({
         messageIds: [mention.messageId],
       });
     }
-    sel.jumpToMessage(mention.threadId, mention.messageId);
-    showChannel();
+    jumpToMessage(mention.threadId, mention.messageId);
   };
 
   // A message link is a main-room seq: from a thread view the sentinel pages the channel back to it.
@@ -156,6 +161,7 @@ export function SurfaceInfoPanel({
       mentionsLoading={data.mentionsLoading}
       onOpenMention={openMention}
       onMarkAllMentionsRead={markAllMentionsRead}
+      onJumpToMessage={jumpToMessage}
       artifacts={capabilities?.artifacts}
       headerEdit={headerEdit}
       infoCardEdit={{ onSave: infoCardWrite.save }}

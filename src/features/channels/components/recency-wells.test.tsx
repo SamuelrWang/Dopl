@@ -5,8 +5,8 @@
  * the Threads tab).
  *
  * ⚠ **THIS SUITE DELIBERATELY DOES NOT RE-TEST THE WELLS' BEHAVIOUR.** The spans,
- * `wellFor`'s boundaries, the chevron's rotation, the one-transition unmount, the
- * `PANEL_WELL` face and the corrupt-write fallback are pinned once each, through a
+ * `wellFor`'s boundaries, the chevron's rotation, the one-transition unmount, each
+ * tab's face and the corrupt-write fallback are pinned once each, through a
  * real surface, in `agents-wells.test.tsx` and `threads-tab.test.tsx`. A third copy
  * of those assertions would be one more place to update and no more coverage.
  *

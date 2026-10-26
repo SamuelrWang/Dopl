@@ -69,6 +69,7 @@ export function ChannelsInfoPanel({
   mentionsLoading,
   onOpenMention,
   onMarkAllMentionsRead,
+  onJumpToMessage,
   artifacts = false,
   headerEdit,
   infoCardEdit,
@@ -118,6 +119,8 @@ export function ChannelsInfoPanel({
   mentionsLoading: boolean;
   onOpenMention: (mention: ChannelMention) => void;
   onMarkAllMentionsRead: () => void;
+  /** Moves the transcript to a message (an opened artifact's); absent draws no jump. */
+  onJumpToMessage?: (threadId: string | null, messageId: string) => void;
   /** The curated `channels.info_card` write, minted by the host; absent draws no rows. */
   infoCardEdit?: ChannelInfoCardEdit;
   /** Offer the Threads tab's Artifacts face (shares the slot: the row's width fits four tabs). */
@@ -150,6 +153,7 @@ export function ChannelsInfoPanel({
   const options = channelPaneTabs(threadView, tasks !== undefined);
   // The capability is ANDed in here only.
   const onArtifactsFace = artifacts && artifactsFace;
+  const feeds = { sessions: agentSessions, peers: peerSessions };
 
   // Opening a thread removes the Threads tab; fall back to Info during render (not an effect, to avoid a broken frame).
   const dead = !options.some((t) => t.key === tab);
@@ -221,6 +225,7 @@ export function ChannelsInfoPanel({
               truncated={threadsTruncated}
               loading={threadsLoading}
               index={index}
+              feeds={feeds}
               openThreadId={openThreadId}
               onOpenThread={onOpenThread}
               onNewThread={onNewThread}
@@ -235,6 +240,8 @@ export function ChannelsInfoPanel({
                     channelId={channel.id}
                     workspaceId={channel.workspaceId}
                     index={index}
+                    feeds={feeds}
+                    onJumpToMessage={onJumpToMessage}
                   />
                 ) : undefined
               }
