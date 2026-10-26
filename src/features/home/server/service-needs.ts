@@ -1,6 +1,6 @@
 import "server-only";
 import { answerersOf } from "@/features/display/core/answerers";
-import { displayOf } from "@/features/display/core/adapt";
+import { DISPLAY_METADATA_KEY } from "@/features/display/core/types";
 import { ESCALATION_METADATA_KEY, parseStoredEscalation } from "@/features/channels/escalation";
 import { mapTaskRow, type ChannelTaskReadRow } from "@/features/channels/server/dto-tasks";
 import { listAccountChannelRefs } from "@/features/channels/server/repository-account";
@@ -43,6 +43,13 @@ async function visibleHomeChannels(userId: string): Promise<Map<string, HomeChan
   );
 }
 
+/** A display already answered (`display.answer`) or withdrawn (`display.superseded_by`). */
+function isClosedDisplay(raw: unknown): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  const envelope = raw as { answer?: unknown; superseded_by?: unknown };
+  return Boolean(envelope.answer) || typeof envelope.superseded_by === "string";
+}
+
 /** Cards the reader may answer that are still open, newest first; deduplicated across both scans. */
 export function answerableDecisions(
   rows: readonly DecisionCandidateRow[],
@@ -52,8 +59,7 @@ export function answerableDecisions(
   for (const row of rows) {
     if (byId.has(row.id)) continue;
     if (!answerersOf(row.metadata, row.author_user_id).includes(userId)) continue;
-    const display = displayOf(row.metadata, { messageId: row.id });
-    if (display?.answer || display?.superseded_by) continue;
+    if (isClosedDisplay(row.metadata?.[DISPLAY_METADATA_KEY])) continue;
     if (!parseStoredEscalation(row.metadata?.[ESCALATION_METADATA_KEY])) continue;
     byId.set(row.id, row);
   }
