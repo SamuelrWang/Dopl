@@ -9,7 +9,12 @@
 
 import { AGENT_IDS, DEMO_CHANNEL, minsAgo } from "./demo-imports";
 import { THREAD_IDS, U } from "@/features/marketing/components/banner-demo/demo-data";
-import { subtaskFacts } from "@/features/channels/lib/task-model";
+import {
+  agentActor as agent,
+  channelTask,
+  personActor as person,
+  threadLink,
+} from "@/features/marketing/components/banner-demo/demo-tasks";
 import type {
   ChannelTaskDetail,
   TaskActor,
@@ -17,12 +22,7 @@ import type {
   TaskStatus,
 } from "@/features/channels/types";
 import type { ChannelFixture } from "./staging-fixture-types";
-import { agentActor as agent, personActor as person, taskDetails } from "./staging-task-details";
-
-function threadLink(f: ChannelFixture, threadId: string): TaskLink | null {
-  const t = f.threads.find((x) => x.id === threadId);
-  return t ? { kind: "thread", threadId, title: t.title } : null;
-}
+import { taskDetails } from "./staging-task-details";
 
 function messageLink(f: ChannelFixture, bodyPrefix: string): TaskLink | null {
   const m = f.messages.find((x) => x.body.startsWith(bodyPrefix));
@@ -30,7 +30,6 @@ function messageLink(f: ChannelFixture, bodyPrefix: string): TaskLink | null {
 }
 
 function task(
-  f: ChannelFixture,
   id: string,
   title: string,
   createdBy: TaskActor,
@@ -40,24 +39,17 @@ function task(
   minutesAgo: number,
   resolved?: { by: TaskActor; minutesAgo: number }
 ): ChannelTaskDetail {
-  const details = taskDetails(id);
-  return {
+  return channelTask({
     id,
-    channelId: f.channel.id,
-    workspaceId: f.channel.workspaceId,
     title,
-    ...details,
-    ...subtaskFacts(details.subtasks),
-    notesTruncated: false,
+    ...taskDetails(id),
     createdBy,
     assignees,
     status,
     link,
     createdAt: minsAgo(minutesAgo),
-    updatedAt: minsAgo(resolved?.minutesAgo ?? minutesAgo),
-    resolvedAt: resolved ? minsAgo(resolved.minutesAgo) : null,
-    resolvedBy: resolved?.by ?? null,
-  };
+    resolved: resolved && { by: resolved.by, at: minsAgo(resolved.minutesAgo) },
+  });
 }
 
 /** The channel's seeded tasks; `[]` for every channel but the demo's. */
@@ -65,37 +57,33 @@ export function seedTasks(f: ChannelFixture): ChannelTaskDetail[] {
   if (f.channel.id !== DEMO_CHANNEL.id) return [];
   return [
     task(
-      f,
       "task-teardown",
       "Fix session teardown leaks",
       agent(AGENT_IDS.planner),
       [agent(AGENT_IDS.teardown), agent(AGENT_IDS.notice), agent(AGENT_IDS.wake)],
       "in_progress",
-      threadLink(f, THREAD_IDS.teardown),
+      threadLink(THREAD_IDS.teardown),
       3
     ),
     task(
-      f,
       "task-flakes",
       "Stabilise the four flakiest tests",
       agent(AGENT_IDS.triage),
       [agent(AGENT_IDS.triage)],
       "in_progress",
-      threadLink(f, THREAD_IDS.flakes),
+      threadLink(THREAD_IDS.flakes),
       3
     ),
     task(
-      f,
       "task-uploads",
       "Fix upload retries timing out",
       agent(AGENT_IDS.scout),
       [agent(AGENT_IDS.scout), person(U.anthony)],
       "open",
-      threadLink(f, THREAD_IDS.uploads),
+      threadLink(THREAD_IDS.uploads),
       2
     ),
     task(
-      f,
       "task-flake-doc",
       "Write up the flaky suite in the knowledge base",
       agent(AGENT_IDS.scout),
@@ -105,7 +93,6 @@ export function seedTasks(f: ChannelFixture): ChannelTaskDetail[] {
       5
     ),
     task(
-      f,
       "task-eng-help",
       "Rank the complaints in #eng-help",
       person(U.grace),
@@ -116,7 +103,6 @@ export function seedTasks(f: ChannelFixture): ChannelTaskDetail[] {
       { by: agent(AGENT_IDS.triage), minutesAgo: 5 }
     ),
     task(
-      f,
       "task-split",
       "Split the cleanup between the orchestrators",
       person(U.samuel),

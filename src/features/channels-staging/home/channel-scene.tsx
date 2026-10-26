@@ -14,8 +14,8 @@
  *  - the composer's send and the New thread dialog's Create are caught in the CAPTURE phase
  *    and turned into in-memory writes, because the product hands both to `useThreadWrites`
  *    (a network mutation). Nothing here fetches.
- *  - the product's Tasks tab (`TasksPanel`) and composer quick view
- *    (`TasksQuickView`) draw the page's in-memory tasks; the open task and the tab ask are held
+ *  - the product's Tasks tab and composer quick view draw the page's in-memory tasks through
+ *    `banner-demo/scene-tasks.tsx`, the demo's own host; the open task and the tab ask are held
  *    here, as the selection hook holds them in the product. With `tasks` absent, neither draws.
  */
 
@@ -47,19 +47,11 @@ import type { ChannelFixture } from "../data/staging-fixture-types";
 import { StagingSettingsTab } from "./settings-tab";
 import { AddPersonDialog } from "@/features/popups-staging/pages/home/add-person-dialog";
 import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
-import { TasksPanel } from "@/features/channels/components/tasks-panel";
-import { TasksQuickView } from "@/features/channels/components/tasks-quick-view";
-import { useTaskFaces } from "@/features/channels/components/task-faces";
-import { isActiveTask } from "@/features/channels/lib/task-model";
-import type { ChannelTaskDetail, TaskLink, TaskStatus } from "@/features/channels/types";
-
-/** The channel's tasks (the Tasks tab and the composer quick view). */
-export type SceneTasks = {
-  list: readonly ChannelTaskDetail[];
-  onSetStatus: (taskId: string, status: TaskStatus) => void;
-  onToggleSubtask: (taskId: string, subtaskId: string) => void;
-  onAddNote: (taskId: string, body: string) => Promise<void>;
-};
+import type { TaskLink } from "@/features/channels/types";
+import {
+  useSceneTaskSlots,
+  type SceneTasks,
+} from "@/features/marketing/components/banner-demo/scene-tasks";
 
 /** The composer's writes are intercepted before they reach the gate, so it is a stub. */
 const STAGING_GATE: MutationGate = { begin() {}, end() {} };
@@ -148,7 +140,6 @@ export function StagingChannelScene({
     actions.exitThread();
     actions.jumpToSeq(link.seq);
   };
-  const taskFaceOf = useTaskFaces(index, agentFeeds);
   // STAGING: `use-channels-selection.ts`'s open task and Tasks-tab ask, held here.
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [tasksTabSignal, setTasksTabSignal] = useState(0);
@@ -157,6 +148,15 @@ export function StagingChannelScene({
     setOpenTaskId(taskId);
     setTasksTabSignal((n) => n + 1);
   };
+  const taskSlots = useSceneTaskSlots({
+    tasks,
+    index,
+    feeds: agentFeeds,
+    openTaskId,
+    onSelectTask: setOpenTaskId,
+    onOpenTask: openTask,
+    onOpenLink: openTaskLink,
+  });
 
   /** STAGING: the composer's send, done in memory. Clears via the toolbar's own Discard. */
   const sendFrom = (root: HTMLElement) => {
@@ -235,16 +235,7 @@ export function StagingChannelScene({
             colors={workingColors}
           />
         }
-        tasksQuickView={
-          tasks && (
-            <TasksQuickView
-              key={`tasks-${channel.id}`}
-              tasks={tasks.list}
-              faceOf={taskFaceOf}
-              onOpenTask={openTask}
-            />
-          )
-        }
+        tasksQuickView={taskSlots.quickView}
         onToggleInfo={actions.toggleInfo}
         onToggleFavorite={actions.toggleFavorite}
         onExitThread={actions.exitThread}
@@ -255,22 +246,8 @@ export function StagingChannelScene({
       />
       <div className="channel-info-slide" data-open={infoOpen ? "true" : "false"}>
         <ChannelsInfoPanel
-          tasks={
-            tasks && (
-              <TasksPanel
-                tasks={tasks.list}
-                faceOf={taskFaceOf}
-                openTaskId={openTaskId}
-                onOpenTask={setOpenTaskId}
-                detail={tasks.list.find((t) => t.id === openTaskId) ?? null}
-                onOpenLink={openTaskLink}
-                onSetStatus={(t, status) => tasks.onSetStatus(t.id, status)}
-                onToggleSubtask={(t, sub) => tasks.onToggleSubtask(t.id, sub.id)}
-                onAddNote={tasks.onAddNote}
-              />
-            )
-          }
-          activeTaskCount={tasks?.list.filter(isActiveTask).length}
+          tasks={taskSlots.panel}
+          activeTaskCount={taskSlots.activeTaskCount}
           tasksTabSignal={tasksTabSignal}
           key={`info-${channel.id}`}
           channel={channel}

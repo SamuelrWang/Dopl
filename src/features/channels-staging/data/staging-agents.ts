@@ -17,7 +17,6 @@ import {
   AGENT_RUNTIME,
   FACE,
   PRIOR_AGENT_COLOR,
-  SERVER_SESSIONS,
   U,
 } from "@/features/marketing/components/banner-demo/demo-data";
 import { ownerPhoto } from "@/features/marketing/components/banner-demo/demo-identities";
@@ -140,15 +139,6 @@ export function registerLaunchedAgent(
   entry: AgentRosterEntry
 ): void {
   LAUNCHED.set(id, { id, owner, runtime: "claude", entry });
-}
-
-/** Whose account an agent acts under: an extra's owner, else the demo session's. */
-export function stagingAgentOwner(agentId: string): string {
-  return (
-    extraAgent(agentId)?.owner ??
-    SERVER_SESSIONS.find((r) => r.name === agentId)?.userId ??
-    U.samuel
-  );
 }
 
 /** What an agent runs on: an extra's own pick, else the demo's. */

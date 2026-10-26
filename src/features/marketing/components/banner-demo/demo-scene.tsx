@@ -61,11 +61,14 @@ import { DemoAccountRail } from "./demo-home-chrome";
 import { DemoChannelSwitcher, DemoTopBar } from "./demo-home-faces";
 import { ownerPhoto } from "./demo-identities";
 import { DemoAgentView } from "./demo-agent-view";
+import { openTaskAt, tasksAt, tasksTabSignalAt } from "./demo-tasks";
+import { useSceneTaskSlots, type SceneTasks } from "./scene-tasks";
 
 /** The composer's writes never fire (the slot is inert), so the gate is a stub. */
 const DEMO_GATE: MutationGate = { begin() {}, end() {} };
 
 const NOOP = () => {};
+const NOOP_ASYNC = () => Promise.resolve();
 
 /** `canLaunch` draws the composer's Bot glyph, as desktop /home does; every handler refuses. */
 const DEMO_LAUNCH: AgentLaunchControls = {
@@ -215,6 +218,27 @@ export function DemoScene({
   /** `agentId` → a `var()` reference, resolved by the host exactly as the real one does. */
   const workingColors = useWorkingColors(live);
 
+  const tasks = useMemo<SceneTasks>(
+    () => ({
+      list: tasksAt(step),
+      onSetStatus: NOOP,
+      onToggleSubtask: NOOP,
+      onAddNote: NOOP_ASYNC,
+    }),
+    [step]
+  );
+  // The open task and the Tasks tab follow the step; the pressed controls only close their own pop-up.
+  const taskSlots = useSceneTaskSlots({
+    tasks,
+    index,
+    feeds: agentFeeds,
+    openTaskId: openTaskAt(step),
+    onSelectTask: NOOP,
+    onOpenTask: NOOP,
+    onOpenLink: NOOP,
+    defaultResolvedOpen: true,
+  });
+
   return (
     <QueryClientProvider client={qc}>
           {/* /home's frame: the panel sits flush on the rail, as `pages/home/index.tsx`'s `!ml-0`. */}
@@ -247,6 +271,7 @@ export function DemoScene({
                     // reach line ("→ @handle", the auto-tag control) all read it.
                     liveAgents={live}
                     agentFeeds={agentFeeds}
+                    tasksQuickView={taskSlots.quickView}
                     // The working strip above the input, scoped to whatever the composer
                     // is pointed at — so it narrows to the thread's coders inside it.
                     agentActivity={
@@ -269,6 +294,9 @@ export function DemoScene({
                   <div className="channel-info-slide" data-open="true">
                     <ChannelsInfoPanel
                       key={`info-${run}`}
+                      tasks={taskSlots.panel}
+                      activeTaskCount={taskSlots.activeTaskCount}
+                      tasksTabSignal={tasksTabSignalAt(step)}
                       channel={DEMO_CHANNEL}
                       channelName={CHANNEL_NAME}
                       members={MEMBERS}

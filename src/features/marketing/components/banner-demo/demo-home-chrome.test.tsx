@@ -20,7 +20,7 @@ import { PAGE_ACTION_BTN } from "@/shared/ui/page-action-button";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
 import { DemoScene } from "./demo-scene";
 import { HOME_ROW_ID, homeRowsAt } from "./demo-home-rows";
-import { stepIndex } from "./demo-steps";
+import { stepIndex, type StepId } from "./demo-steps";
 import {
   messagesAt,
 } from "./demo-transcript";
@@ -117,15 +117,15 @@ describe("the agent view is the product's panel, minus what needs a bridge", () 
  * the ABSENCE of what it replaced.
  */
 describe("the record pane plays /home's channel record", () => {
-  const scene = () => render(<DemoScene step={stepIndex("hold")} />);
+  const scene = (id: StepId = "hold") => render(<DemoScene step={stepIndex(id)} />);
 
-  it("🔒 the info column is Info · Threads · Agents · Settings, in channel view", () => {
+  it("🔒 the info column is Info · Threads · Agents · Tasks · Settings, in channel view", () => {
     const { container } = scene();
     const tabs = [...container.querySelectorAll('[role="tab"]')].map(
       (t) => t.textContent ?? ""
     );
-    // The five FACE tabs are the header's; the four after them are the column's.
-    expect(tabs.slice(-4)).toEqual(["Info", "Threads3", "Agents6", "Settings"]);
+    // The five FACE tabs are the header's; the five after them are the column's.
+    expect(tabs.slice(-5)).toEqual(["Info", "Threads3", "Agents6", "Tasks1", "Settings"]);
     // And the thread column is not there — `channelPaneTabs` drops Threads in
     // thread view and `ThreadInfoTab` heads itself "Thread info".
     expect(screen.queryByText("Thread info")).toBeNull();
@@ -133,7 +133,8 @@ describe("the record pane plays /home's channel record", () => {
   });
 
   it("🔒 the Info tab is the account card's four sections, in Samuel's order", () => {
-    scene();
+    // Before the tasks beat asks the column for its Tasks tab.
+    scene("concurrent-4");
     const headings = screen
       .getAllByRole("heading", { level: 2 })
       .map((h) => h.textContent);

@@ -10,7 +10,10 @@
 
 import { AGENT_IDS, minsAgo } from "./demo-imports";
 import { U } from "@/features/marketing/components/banner-demo/demo-data";
-import { stagingAgentOwner } from "./staging-agents";
+import {
+  agentActor,
+  personActor,
+} from "@/features/marketing/components/banner-demo/demo-tasks";
 import type {
   ChannelTaskNote,
   ChannelTaskSubtask,
@@ -24,14 +27,6 @@ type Details = {
   subtasks: ChannelTaskSubtask[];
   notes: ChannelTaskNote[];
 };
-
-/** An agent acts under its operator's account. */
-export const agentActor = (agentId: string): TaskActor => ({
-  kind: "agent",
-  agentId,
-  userId: stagingAgentOwner(agentId),
-});
-export const personActor = (userId: string): TaskActor => ({ kind: "person", userId });
 
 const a = agentActor;
 const p = personActor;

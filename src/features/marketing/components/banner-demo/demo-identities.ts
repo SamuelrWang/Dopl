@@ -5,7 +5,11 @@
 
 import { FACE, SERVER_SESSIONS } from "./demo-data";
 
+export function agentOwner(agentId: string | null | undefined): string | null {
+  return SERVER_SESSIONS.find((r) => r.name === (agentId ?? ""))?.userId ?? null;
+}
+
 export function ownerPhoto(agentId: string | null | undefined): string | null {
-  const owner = SERVER_SESSIONS.find((r) => r.name === (agentId ?? ""))?.userId;
+  const owner = agentOwner(agentId);
   return (owner ? FACE[owner as keyof typeof FACE] : null) ?? null;
 }

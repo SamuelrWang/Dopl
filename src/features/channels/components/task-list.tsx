@@ -27,6 +27,8 @@ export interface TaskListProps {
   tasks: readonly ChannelTask[];
   /** The read came back at its ceiling; said under the list (INVARIANTS §9). */
   truncated?: boolean;
+  /** The Resolved group starts expanded. */
+  defaultResolvedOpen?: boolean;
   faceOf: TaskFaceOf;
   /** Absent (a guest) draws the tick as a mark, not a control. */
   onSetStatus?: (task: ChannelTask, status: TaskStatus) => void;
@@ -101,8 +103,13 @@ function TaskRow({
 }
 
 /** Active tasks in one card, resolved ones collapsed under a "Resolved N" toggle. */
-export function TaskList({ tasks, truncated = false, ...row }: TaskListProps) {
-  const [resolvedOpen, setResolvedOpen] = useState(false);
+export function TaskList({
+  tasks,
+  truncated = false,
+  defaultResolvedOpen = false,
+  ...row
+}: TaskListProps) {
+  const [resolvedOpen, setResolvedOpen] = useState(defaultResolvedOpen);
   if (tasks.length === 0) {
     return <EmptyState variant="well" icon={Check} title="No tasks yet" />;
   }

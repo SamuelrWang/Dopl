@@ -428,3 +428,15 @@ Workers append a `## <slice>` section per question: the question, what was chose
    `docs/REFACTOR-FINDINGS.md` (`use-writes-shared.ts`, `page-action-button.tsx`). Not touched:
    comments naming `channels/lib/agent-colors.ts` in `dopl-desktop-app/main/*` and
    `scripts/check-css-token-drift.ts`'s header line naming the deleted landing rules.
+
+## Landing demo tasks
+
+1. **The end frame is the Tasks tab, not Info.** The brief asks the reduced-motion end frame to show
+   the resolved task, so `hold` lands the info column on Tasks (list, Resolved group expanded).
+   Chose: `demo-tasks.ts › tasksTabSignalAt` rises at `click-task`; `demo-home-chrome.test.tsx`
+   now reads the Info tab's sections at `concurrent-4`.
+2. **One product seam: `task-list.tsx › TaskList`'s `defaultResolvedOpen`.** A frame with no
+   clicks cannot open the Resolved group otherwise. The demo passes `true`; the staging page keeps
+   the product default through the same host (`banner-demo/scene-tasks.tsx`).
+3. **The task copy is not on Samuel's approved script** (`demo-tasks.ts`: three task titles, six
+   subtasks, two notes). No transcript line changed, so `demo-approved-copy.test.ts` is untouched.

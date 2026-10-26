@@ -79,6 +79,18 @@ export type StepId =
   | "dm-agent-2"
   | "concurrent-3"
   | "concurrent-4"
+  // 9. The cursor opens the flakes task from the composer's pill, and Debt Triage finishes it.
+  | "cursor-to-tasks"
+  | "click-tasks"
+  | "cursor-to-task"
+  | "click-task"
+  | "task-open"
+  | "task-tick-1"
+  | "task-tick-2"
+  | "task-note"
+  | "cursor-to-task-crumb"
+  | "click-task-crumb"
+  | "task-resolved"
   | "hold"
   | "reset-fade";
 
@@ -131,6 +143,17 @@ export const STEPS: ReadonlyArray<{ id: StepId; dur: number }> = [
   { id: "dm-agent-2", dur: 2200 },
   { id: "concurrent-3", dur: 1800 },
   { id: "concurrent-4", dur: 1500 },
+  { id: "cursor-to-tasks", dur: 1100 },
+  { id: "click-tasks", dur: 550 },
+  { id: "cursor-to-task", dur: 1000 },
+  { id: "click-task", dur: 550 },
+  { id: "task-open", dur: 1300 },
+  { id: "task-tick-1", dur: 1200 },
+  { id: "task-tick-2", dur: 1200 },
+  { id: "task-note", dur: 2000 },
+  { id: "cursor-to-task-crumb", dur: 1100 },
+  { id: "click-task-crumb", dur: 550 },
+  { id: "task-resolved", dur: 1900 },
   { id: "hold", dur: 2500 },
   { id: "reset-fade", dur: 450 },
 ];
