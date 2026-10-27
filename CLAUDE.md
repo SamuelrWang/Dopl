@@ -104,7 +104,7 @@ drove the machine to load 270 with swap full.)
 
 ## Definition of green
 
-**Six suites, TWO lints, THREE typechecks, and TWELVE non-suite gates.** Full table: docs/INVARIANTS.md §14.
+**Seven suites, TWO lints, FOUR typechecks, and TWELVE non-suite gates.** Full table: docs/INVARIANTS.md §14.
 Red CI is a P0.
 
 ⚠ **RE-DERIVE THE COUNT, NEVER QUOTE IT: `grep -n 'run:' .github/workflows/ci.yml`.** It has been wrong

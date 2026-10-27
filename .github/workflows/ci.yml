@@ -53,6 +53,10 @@ jobs:
       - name: Test @dopl/contracts
         run: npm test -w @dopl/contracts
 
+      # The Device SDK client + project MCP (mocked fetch). Includes the openapi.yaml drift test.
+      - name: Test @dopl/sdk
+        run: npm test -w @dopl/sdk
+
   # The desktop app is a separate npm project (own lockfile). Its suite is `node --test` over
   # source-extraction truth tables; no Electron binary is launched.
   desktop:
@@ -109,6 +113,9 @@ jobs:
       # `packages/` is outside the root program too; the contracts package has its own tsconfig.
       - name: Typecheck @dopl/contracts
         run: npm run typecheck -w @dopl/contracts
+
+      - name: Typecheck @dopl/sdk
+        run: npm run typecheck -w @dopl/sdk
 
       # 0 errors and 0 warnings.
       - name: Lint
