@@ -108,6 +108,11 @@ const EXEMPT: Record<string, string> = {
     "Device SDK — developer API key (features/device-sdk/server/with-developer-key.ts › withDeveloperKey), scope `connect`; the one route a publishable key may call.",
   "v1/connections/exchange/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `connect`.",
   "v1/connections/[id]/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `connect` (revoke).",
+  "v1/users/[external_user_id]/deliver/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `actions:write`.",
+  "v1/devices/[device_id]/actions/[capability]/route.ts":
+    "Device SDK — developer secret key via withDeveloperKey, scope `actions:write`.",
+  "v1/test/reset/route.ts":
+    "Device SDK — developer sk_test_ key via withDeveloperKey, scopes `connect` + `actions:write`; test env of the calling project only.",
   "connect/[token]/[step]/route.ts":
     "Device SDK hosted Connect page steps — authenticated by the connect token in the path (sha256-matched); the end user has no Dopl account (D1). Per-IP rate-limited.",
 };
