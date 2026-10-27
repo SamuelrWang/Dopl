@@ -96,6 +96,28 @@ export async function getAction(deps: DeliveryDeps, scope: Scope, id: string): P
   };
 }
 
+/**
+ * `GET /v1/devices/{id}` (C3) — one live device of this project + env, as its adapter describes it
+ * (capability descriptors; `online` from the adapter's health over `last_seen`). Another project's,
+ * another env's, a revoked or a prosumer (no project) device is `not_found` — never a hint it exists.
+ */
+export async function getDevice(deps: DeliveryDeps, scope: Scope, deviceId: string): Promise<ServiceResult> {
+  const decision: RouteDecision = { target: deviceId, reason: "device lookup", candidates: [] };
+  const row = await deps.store.getDevice(scope, deviceId);
+  const device = row ? await toDevice(deps, scope, row) : null;
+  if (!row || !device) {
+    return { ok: false, code: "not_found", message: `No device ${deviceId} in this project.`, decision, event: { device_id: deviceId } };
+  }
+  const externalUserId = await deps.store.externalUserId(scope, row.end_user_id);
+  return {
+    ok: true,
+    status: 200,
+    body: device as unknown as Record<string, unknown>,
+    decision,
+    event: { ...deviceEventFields(device), external_user_id: externalUserId },
+  };
+}
+
 export async function deviceAction(
   deps: DeliveryDeps,
   scope: Scope,
