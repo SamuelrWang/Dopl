@@ -39,7 +39,8 @@ export interface DeviceHandlerDeps extends Clock {
   /**
    * Device SDK G2s (A8): a bearer the prosumer lookup does not know is tried against
    * `device_credentials`, and an SDK device reaches inbox / answer / dismiss / unpair on ITS OWN lens
-   * queue. Absent = prosumer only. Every other device route stays prosumer-only (401 for an SDK token).
+   * queue. Absent = prosumer only. The menu and voice routes take the same port and answer an SDK device
+   * a fixed, data-free shape (`menu/handlers.ts › SDK_MENU`, `voice/handlers.ts › SDK_VOICE_REFUSAL`, A8b).
    */
   sdk?: SdkGlassesPort;
   /**
@@ -75,6 +76,25 @@ export async function authedDevice(
   return device;
 }
 
+/**
+ * The Device SDK G2 behind this bearer, stamped as seen (throttled); null when there is no bearer, no
+ * port, or no live SDK credential. Callers consult it ONLY after {@link authedDevice} missed, so a
+ * prosumer token never reaches `device_credentials` (A8).
+ */
+export async function authedSdkDevice(
+  deps: ResolvedDeps,
+  request: Request,
+): Promise<SdkGlassesDevice | null> {
+  const token = deps.sdk ? bearerOf(request) : null;
+  if (!deps.sdk || !token) return null;
+  const device = await deps.sdk.deviceFromTokenHash(hashCredential(token));
+  const now = nowOf(deps);
+  if (device && deps.touchThrottle.tryAcquire(device.id, now)) {
+    await deps.sdk.touch(device.id, iso(now));
+  }
+  return device;
+}
+
 export function resolveDeviceDeps<D extends DeviceHandlerDeps>(
   deps: D,
 ): D & ResolvedDeps {
@@ -104,18 +124,6 @@ const outcomeResponse = (request: Request, o: AnswerOutcome) =>
 export function createDeviceHandlers(input: DeviceHandlerDeps) {
   const deps = resolveDeviceDeps(input);
 
-  /** The SDK G2 behind this bearer, stamped as seen (throttled); null when none or no port. */
-  const sdkDevice = async (request: Request): Promise<SdkGlassesDevice | null> => {
-    const token = deps.sdk ? bearerOf(request) : null;
-    if (!deps.sdk || !token) return null;
-    const device = await deps.sdk.deviceFromTokenHash(hashCredential(token));
-    const now = nowOf(deps);
-    if (device && deps.touchThrottle.tryAcquire(device.id, now)) {
-      await deps.sdk.touch(device.id, iso(now));
-    }
-    return device;
-  };
-
   /**
    * Device-token auth, then `fn`; errors become `{error, code}`. A token the PROSUMER lookup does not
    * know is tried as an SDK device credential only when the route has an `sdkFn` and `deps.sdk` is
@@ -133,7 +141,7 @@ export function createDeviceHandlers(input: DeviceHandlerDeps) {
         if (!sdkFn || !deps.sdk) return json(request, UNAUTHORIZED, 401);
         const port = deps.sdk;
         try {
-          const sdk = await sdkDevice(request);
+          const sdk = await authedSdkDevice(deps, request);
           if (!sdk) return json(request, UNAUTHORIZED, 401);
           return await sdkFn(request, sdk, port);
         } catch (err) {
