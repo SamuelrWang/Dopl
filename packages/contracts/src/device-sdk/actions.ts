@@ -7,9 +7,9 @@
  */
 import { z } from "zod";
 
-import { CapabilityIdSchema, DeviceKindSchema } from "./capabilities.js";
-import { ChoiceOptionSchema, DisplayBlocksSchema } from "./display.js";
-import { ErrorBodySchema } from "./errors.js";
+import { CapabilityIdSchema, DeviceKindSchema } from "./capabilities";
+import { ChoiceOptionSchema, DisplayBlocksSchema } from "./display";
+import { ErrorBodySchema } from "./errors";
 
 export const DELIVER_INTENTS = ["message", "ask", "notify", "display"] as const;
 export const DeliverIntentSchema = z.enum(DELIVER_INTENTS);

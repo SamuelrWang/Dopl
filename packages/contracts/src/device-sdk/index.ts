@@ -7,12 +7,12 @@
  * ONLY through the `./device-sdk` subpath export; the root barrel re-exports their TYPES alone and
  * stays erasable for every existing consumer. The HTTP surface is `docs/specs/device-sdk/openapi.yaml`.
  */
-export * from "./keys.js";
-export * from "./capabilities.js";
-export * from "./connect.js";
-export * from "./actions.js";
-export * from "./context.js";
-export * from "./display.js";
-export * from "./events.js";
-export * from "./errors.js";
-export * from "./adapter.js";
+export * from "./keys";
+export * from "./capabilities";
+export * from "./connect";
+export * from "./actions";
+export * from "./context";
+export * from "./display";
+export * from "./events";
+export * from "./errors";
+export * from "./adapter";

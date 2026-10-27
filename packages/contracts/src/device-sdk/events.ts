@@ -8,11 +8,11 @@
  */
 import { z } from "zod";
 
-import { ActionStatusSchema, DeliverIntentSchema } from "./actions.js";
-import { CapabilityIdSchema, DeviceKindSchema, RiskTierSchema } from "./capabilities.js";
-import { CONNECT_WEBHOOK_EVENTS } from "./connect.js";
-import { ErrorCodeSchema } from "./errors.js";
-import { EnvironmentSchema } from "./keys.js";
+import { ActionStatusSchema, DeliverIntentSchema } from "./actions";
+import { CapabilityIdSchema, DeviceKindSchema, RiskTierSchema } from "./capabilities";
+import { CONNECT_WEBHOOK_EVENTS } from "./connect";
+import { ErrorCodeSchema } from "./errors";
+import { EnvironmentSchema } from "./keys";
 
 export const EVENT_OUTCOMES = ["ok", "error", "denied"] as const;
 export const EventOutcomeSchema = z.enum(EVENT_OUTCOMES);

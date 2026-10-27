@@ -8,10 +8,10 @@
  */
 import { z } from "zod";
 
-import type { ActionStatus } from "./actions.js";
-import type { CapabilityDescriptor, CapabilityId, Device, DeviceKind } from "./capabilities.js";
-import type { ErrorBody } from "./errors.js";
-import type { Environment } from "./keys.js";
+import type { ActionStatus } from "./actions";
+import type { CapabilityDescriptor, CapabilityId, Device, DeviceKind } from "./capabilities";
+import type { ErrorBody } from "./errors";
+import type { Environment } from "./keys";
 
 export const ADAPTER_TRANSPORTS = [
   "cloud_oauth",

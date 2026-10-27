@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-import { CapabilityScopeSchema, DeviceKindSchema, DeviceSchema } from "./capabilities.js";
+import { CapabilityScopeSchema, DeviceKindSchema, DeviceSchema } from "./capabilities";
 
 /** The developer's own id for their end user. */
 export const ExternalUserIdSchema = z.string().min(1).max(255);
