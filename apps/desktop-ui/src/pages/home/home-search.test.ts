@@ -86,7 +86,7 @@ describe("🔒 /home's pill", () => {
 describe("🔒 the popup is anchored on the header's action group", () => {
   it("header-search renders the popup OUTSIDE the pill, spanning the group", () => {
     const src = read("src/features/search/components/header-search.tsx");
-    const pill = src.indexOf("<label className={SEARCH_PILL}>");
+    const pill = src.indexOf("<label className={SEARCH_PILL_FACE}>");
     const close = src.indexOf("</label>");
     const popup = src.indexOf("<SearchPopup");
     expect(pill).toBeGreaterThan(-1);

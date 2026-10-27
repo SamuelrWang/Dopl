@@ -116,7 +116,8 @@ describe("home page", () => {
     const control = await screen.findByTitle("Profile");
     expect(control.tagName).toBe("BUTTON");
     expect(control.textContent).toBe("SSam");
-    expect(control.className).toContain("white-card raise-pill");
+    expect(control.classList).toContain("white-card");
+    expect(control.classList).toContain("raise-pill");
     expect(control.closest(LIST_CELL)).toBeNull();
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

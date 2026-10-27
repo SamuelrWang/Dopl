@@ -232,7 +232,7 @@ describe("the Agents face's shared create (F-343 consequence 1b)", () => {
     await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent Identity")).toBeNull();
+    expect(sharedCreate("Create new")).toBeNull();
   });
 
   it("is THERE for a member", async () => {
@@ -241,7 +241,7 @@ describe("the Agents face's shared create (F-343 consequence 1b)", () => {
     await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent Identity")).toBeTruthy();
+    expect(sharedCreate("Create new")).toBeTruthy();
   });
 
   it("FAILS CLOSED on a stale cached payload", async () => {
@@ -250,6 +250,6 @@ describe("the Agents face's shared create (F-343 consequence 1b)", () => {
     await openIdentities();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Agent Identity")).toBeNull();
+    expect(sharedCreate("Create new")).toBeNull();
   });
 });

@@ -299,20 +299,27 @@ describe("🔒 `peers` IS READ IN EXACTLY ONE PLACE (INVARIANTS §8's enforcemen
    * ⚠ COMMENTS ARE SKIPPED — several docblocks name the field while explaining
    * this very rule, and a pin that forbade discussing itself would be absurd.
    */
-  const DIR = import.meta.dirname;
+  /** The home page spans the SPA's page directory and the shared `features/home` tree. */
+  const ROOTS = [
+    import.meta.dirname,
+    join(import.meta.dirname, "../../../../../src/features/home"),
+  ];
+  const PRESENTER = join(ROOTS[1], "components/channels/home-rows.ts");
   /** The presenter itself, and the fixture builder that must CONSTRUCT the
    *  stale shape in order for the tests above to have anything to cover. */
-  const ALLOWED = new Set(["home-rows.ts", "home-test-harness.tsx"]);
+  const ALLOWED = new Set([PRESENTER, join(ROOTS[0], "home-test-harness.tsx")]);
 
+  function sources(dir: string): string[] {
+    return readdirSync(dir, { recursive: true, encoding: "utf8" })
+      .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
+      .map((file) => join(dir, file));
+  }
 
   it("no other file on the home page names `.peers` outside a comment", () => {
     const offenders: string[] = [];
-    for (const file of readdirSync(DIR)) {
-      if (!/\.tsx?$/.test(file) || file.endsWith(".test.ts") || file.endsWith(".test.tsx")) {
-        continue;
-      }
+    for (const file of ROOTS.flatMap(sources)) {
       if (ALLOWED.has(file)) continue;
-      readFileSync(join(DIR, file), "utf8")
+      readFileSync(file, "utf8")
         .split("\n")
         .forEach((line, i) => {
           const code = line.trim();
@@ -325,7 +332,7 @@ describe("🔒 `peers` IS READ IN EXACTLY ONE PLACE (INVARIANTS §8's enforcemen
 
   it("and the one place that DOES read it really is the presenter", () => {
     // Otherwise the absence above would be measuring a rule nothing implements.
-    const src = readFileSync(join(DIR, "home-rows.ts"), "utf8");
+    const src = readFileSync(PRESENTER, "utf8");
     expect(src).toMatch(/channel\.peers \?\? EMPTY_PEERS/);
   });
 });

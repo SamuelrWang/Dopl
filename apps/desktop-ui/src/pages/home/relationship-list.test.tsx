@@ -123,8 +123,10 @@ describe("the channel ROW's second line", () => {
     renderHome();
     await openChannels();
 
-    // ⚠ `+1` IS WHAT IS HIDDEN, NOT THE TOTAL (`IdentityStack`'s own rule).
-    expect(screen.getByText("+1")).toBeInTheDocument();
+    // ⚠ `+1` IS WHAT IS HIDDEN, NOT THE TOTAL (`IdentityStack`'s own rule). Scoped to the
+    // selected list row: the Overview's channel table draws the same stack.
+    const row = screen.getByRole("button", { current: true });
+    expect(within(row).getByText("+1")).toBeInTheDocument();
     expect(screen.queryByTitle("Ada Byron")).not.toBeInTheDocument();
   });
 

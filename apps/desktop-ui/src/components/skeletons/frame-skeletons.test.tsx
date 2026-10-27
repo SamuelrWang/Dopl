@@ -297,10 +297,12 @@ describe("the /home shapes are /home's own geometry", () => {
     );
     const OVERVIEW = "../../../../../src/features/home/components/overview/";
     const ghost = code(`${OVERVIEW}overview-skeleton.tsx`);
+    const face = ["home-overview", "overview-summary", "overview-needs", "overview-credits"]
+      .map((file) => code(`${OVERVIEW}${file}.tsx`))
+      .join("");
     for (const geometry of ["styles.grid", "styles.col", "styles.slotNeeds", "styles.slotCredits", "styles.pair"]) {
       expect(ghost).toContain(geometry);
-      expect(code(`${OVERVIEW}home-overview.tsx`) + code(`${OVERVIEW}overview-summary.tsx`) +
-        code(`${OVERVIEW}overview-credits.tsx`)).toContain(geometry);
+      expect(face).toContain(geometry);
     }
     expect(ghost).toContain("GHOST_FLAT_FACE");
     expect(ghost).not.toContain("white-card");

@@ -121,7 +121,7 @@ describe("the pop-out's painted stack", () => {
     );
     // The INSET is the app's own card recipe at the window's radius.
     expect(frameModule).toContain("bento");
-    expect(frameModule).toContain("rounded-xl");
+    expect(frameModule).toContain("rounded-[14px]");
     expect(frameModule).not.toContain("page-float");
     // ⚠ AND THE AGENT VIEW PAINTS NO GROUND OF ITS OWN — one painter per surface. A
     // `--panel-surface` fill there would sit inside the card and hide its radius, which is the
