@@ -76,7 +76,6 @@ test("every RESERVED_WORKSPACE_SLUG is handled, or allowlisted with a reason", (
     // such is the correct answer.
     browse: "no top-level route",
     build: "no top-level route",
-    connect: "no top-level route",
     design: "no top-level route",
     docs: "no top-level route",
     e: "no top-level route",

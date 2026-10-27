@@ -54,6 +54,8 @@ const WEB_ONLY_ROOTS = new Set([
   'api',
   'download',
   'link',
+  // `/connect/{token}` — the Device SDK hosted Connect page (A4).
+  'connect',
   'c',
   'authenticate',
   'signup',

@@ -2,7 +2,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { iso, nowOf, type Clock } from "../clock";
 import { deviceFromBearer, type ChannelLinker } from "../devices/service";
 import type { DeviceStore, GlassesDevice } from "../devices/types";
-import { pairingStatus, startPairing } from "../devices/pairing";
+import { pairingStatus, startPairing, type ConnectPairingPort } from "../devices/pairing";
 import { bearerOf, json, readJson } from "../http";
 import { Throttle } from "../ttl-cache";
 import type { ChannelGateway } from "../voice/utterance";
@@ -31,6 +31,8 @@ export interface DeviceHandlerDeps extends Clock {
   allowPairStart: (request: Request) => Promise<boolean>;
   touchThrottle?: Throttle<string>;
   mirrorThrottle?: Throttle<string>;
+  /** Device SDK Connect claims (A4): lets the status poll hand a token to an SDK-owned device. */
+  connect?: ConnectPairingPort;
   /**
    * A tap on a lens row linked to a channel decision posts the same answer there, as the device
    * owner from glasses (`display/server/answer.ts › answerFromLens`); absent = lens only (tests).

@@ -26,6 +26,25 @@ const CODE_ATTEMPTS = 5;
 export interface PairingDeps extends Clock {
   devices: DeviceStore;
   code?: () => string;
+  /**
+   * Device SDK Connect (A4): pairings claimed through a Connect session hand the glasses a token for
+   * an SDK-owned `devices` row. Absent = prosumer-only (every prosumer test and caller before A4).
+   */
+  connect?: ConnectPairingPort;
+}
+
+/**
+ * The Device SDK side of a G2 pairing claimed through a Connect session (no Dopl user).
+ * Implemented over `glasses_pairings.sdk_device_id` + `device_credentials`
+ * (`device-sdk/server/connect/pairing-port.ts`). Credentials cross it as HASHES only.
+ */
+export interface ConnectPairingPort {
+  /** pending → claimed, pointing at the SDK device; only if still pending and unexpired. */
+  claimPairing(pairingId: string, sdkDeviceId: string, now: string): Promise<boolean>;
+  /** The SDK device a Connect claim of this pairing created, or null (a prosumer pairing). */
+  sdkDeviceFor(pairingId: string): Promise<string | null>;
+  /** Store the device token's hash as the device's live `device_token` credential. */
+  setTokenHash(sdkDeviceId: string, hash: string, now: string): Promise<void>;
 }
 
 export async function startPairing(deps: PairingDeps) {
@@ -80,6 +99,16 @@ export async function pairingStatus(
     await deps.devices.setTokenHash(p.device_id, hashCredential(token));
     return { status: "claimed", device_id: p.device_id, device_token: token };
   }
+  // A Connect claim leaves `device_id` null and names an SDK device instead. A prosumer pairing
+  // never reaches this lookup with a device behind it, so its answer is unchanged.
+  if (!p.device_id && !p.token_issued_at && deps.connect) {
+    const sdkDeviceId = await deps.connect.sdkDeviceFor(p.id);
+    if (sdkDeviceId && (await deps.devices.markTokenIssued(p.id, iso(now)))) {
+      const token = mintDeviceToken();
+      await deps.connect.setTokenHash(sdkDeviceId, hashCredential(token), iso(now));
+      return { status: "claimed", device_id: sdkDeviceId, device_token: token };
+    }
+  }
   return { status: "claimed" };
 }
 
@@ -108,4 +137,32 @@ export async function claimPairing(deps: PairingDeps, userId: string, input: Cla
     throw new HttpError(409, "CODE_ALREADY_CLAIMED", "That code was just claimed or expired.");
   }
   return toDeviceDto(device, now);
+}
+
+/**
+ * Claim a glasses pairing code THROUGH A DEVICE SDK CONNECT SESSION (A4): the end user has no Dopl
+ * account (D1), so no `glasses_device_links` row is made. `createDevice` makes the SDK-owned
+ * `devices` row; the pairing is then claimed pointing at it, and the glasses' next status poll
+ * collects a token for it (`pairingStatus`, the `connect` branch). Same code normalisation, same
+ * expiry and same race rule as {@link claimPairing}: a lost race discards the device.
+ */
+export async function claimPairingForConnect(
+  deps: PairingDeps & { connect: ConnectPairingPort },
+  input: {
+    code: string;
+    createDevice: (now: string) => Promise<string>;
+    discardDevice: (deviceId: string, now: string) => Promise<void>;
+  },
+): Promise<{ device_id: string }> {
+  const code = normalizePairingCode(input.code);
+  if (!code) throw new HttpError(400, "INVALID_CODE", `Pairing codes are ${PAIRING_CODE_LENGTH} letters and digits.`);
+  const now = nowOf(deps);
+  const pairing = await deps.devices.findPendingPairingByCode(code, iso(now));
+  if (!pairing) throw new HttpError(404, "CODE_NOT_FOUND", "No pending pairing with that code; it may have expired.");
+  const deviceId = await input.createDevice(iso(now));
+  if (!(await deps.connect.claimPairing(pairing.id, deviceId, iso(now)))) {
+    await input.discardDevice(deviceId, iso(now));
+    throw new HttpError(409, "CODE_ALREADY_CLAIMED", "That code was just claimed or expired.");
+  }
+  return { device_id: deviceId };
 }

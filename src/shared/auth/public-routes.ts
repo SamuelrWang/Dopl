@@ -73,6 +73,11 @@ export const PUBLIC_ROUTES = [
   // behind the session gate.
   "/link/",
   "/api/home/link/",
+  // Device SDK hosted Connect (2026-10-27, A4): `/connect/{token}` is opened by a developer's END
+  // USER, who never has a Dopl account (D1). The raw connect token in the path is the credential;
+  // `/api/connect/{token}/{step}` checks it itself. `/connect` is a reserved workspace slug.
+  "/connect/",
+  "/api/connect/",
   // Remote MCP + OAuth surface. These self-authenticate: the /api/mcp handler
   // returns its own MCP-spec 401 + WWW-Authenticate (so clients can discover
   // the OAuth server and start the login dance); the OAuth endpoints are
@@ -119,6 +124,8 @@ export const SELF_AUTH_ROUTES = [
   // Device SDK `/v1`: developer API keys, checked by `withDeveloperKey`, which answers a missing key
   // with the C10 error shape (the proxy's own 401 body is not C10).
   "/api/v1/",
+  // The hosted Connect page's step routes: authenticated by the connect token in the path (A4).
+  "/api/connect/",
   // Playground machine surface: /session provisions anonymously (per-IP limited inside); /mcp/<token> self-authenticates by the guest bearer. The /playground PAGE is PUBLIC_ROUTES.
   "/api/playground",
   "/api/oauth",
