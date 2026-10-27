@@ -17,6 +17,7 @@ import { UTTERANCE_RPM, createVoiceHandlers } from "./core/voice/handlers";
 import { sttProviderFromEnv } from "./core/voice/stt";
 import { createHeyEvenHandlers } from "./platforms/even-g2/hey-even";
 import { connectPairingPort } from "@/features/device-sdk/server/connect/pairing-port";
+import { sdkGlassesPort } from "@/features/device-sdk/server/glasses/sdk-glasses-port";
 
 /**
  * The production wiring: real stores, the channels-service gateways and the
@@ -46,8 +47,9 @@ const voiceDeps = {
   chargeUtterance: utteranceCharger,
 };
 
-// `connect`: a pairing claimed through a Device SDK Connect session (A4) collects its token here too.
-export const deviceHandlers = createDeviceHandlers({ ...base, connect: connectPairingPort });
+// `connect`: a pairing claimed through a Device SDK Connect session (A4) collects its token here too;
+// `sdk`: that token then authenticates the inbox / answer / dismiss / unpair routes on the SDK device's own queue (A8).
+export const deviceHandlers = createDeviceHandlers({ ...base, connect: connectPairingPort, sdk: sdkGlassesPort });
 
 export const voiceHandlers = createVoiceHandlers(voiceDeps);
 

@@ -1,5 +1,5 @@
 import "server-only";
-import { ASK_HOLD_MAX_S, ERROR_CODE_INFO, type Action, type CapabilityId, type DeviceActionRequest, type RouteDecision } from "../types";
+import { ASK_HOLD_MAX_S, ERROR_CODE_INFO, type Action, type ActionResult, type CapabilityId, type DeviceActionRequest, type RouteDecision } from "../types";
 import { isAsk } from "../delivery/intents";
 import { checkRateLimit, DEFAULT_RATE_LIMIT, evaluatePolicy } from "../delivery/policy";
 import { postureOf, resolveProfile, scopesCover } from "../delivery/resolve-profile";
@@ -48,6 +48,21 @@ export async function holdForAnswer(deps: DeliveryDeps, scope: Scope, actionId: 
     if (cur.status === "done" || cur.status === "failed") return cur;
   }
   return null;
+}
+
+/**
+ * Hold an `ask.*` for its answer, then the status to store. A device moves the action while it is
+ * held (`glasses/lens-actions.ts`: queued → delivered when its inbox takes the ask, done on the
+ * answer), so an unsettled hold re-reads the row instead of writing back the adapter's first status:
+ * an answer that landed after the last poll is kept, and `delivered` never regresses to `queued`.
+ */
+export async function holdAndSettle(deps: DeliveryDeps, scope: Scope, actionId: string, res: ActionResult): Promise<ActionResult> {
+  const held = await holdForAnswer(deps, scope, actionId);
+  const cur = held ?? (await deps.store.getAction(scope, actionId));
+  if (!cur) return res;
+  if (cur.status === "done" || cur.status === "failed") return { status: cur.status, result: cur.result, error: cur.error };
+  if (cur.status === "delivered" && res.status === "queued") return { ...res, status: "delivered" };
+  return res;
 }
 
 export function toAction(a: StoredAction): Action {
@@ -168,10 +183,7 @@ export async function deviceAction(
     return { ok: false, code: res.error.code, message: res.error.message, decision, event: { ...evDone, latency_ms: latency } };
   }
   await deps.store.updateAction(scope, id, { status: res.status, result: res.result });
-  if (isAsk(capability) && (res.status === "queued" || res.status === "delivered")) {
-    const held = await holdForAnswer(deps, scope, id);
-    if (held) res = { status: held.status, result: held.result, error: held.error };
-  }
+  if (isAsk(capability) && (res.status === "queued" || res.status === "delivered")) res = await holdAndSettle(deps, scope, id, res);
   const out = await accept(res.status, res.result);
   return { ...out, event: { ...out.event, latency_ms: latency } };
 }
