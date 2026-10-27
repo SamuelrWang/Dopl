@@ -1,7 +1,17 @@
-import type { DocBlock, DocPage } from "./types";
+import type { DocBlock, DocPage, DocStatus } from "./types";
+
+/**
+ * ⚠ Status follows `docs/specs/device-sdk/SPEC-v1.md` §4. Show, ask and notify are live on Even
+ * G2 glasses through the hosted MCP; the Connect flow and multi device routing are planned.
+ */
+const PLANNED: DocBlock = {
+  type: "quote",
+  text: "Planned. This describes the Device SDK, which is in development. The steps below are not available yet.",
+};
 
 /** "Your agent can:" + bullets, then three steps that each end in a "Read more:" link. */
 function casePage(
+  status: DocStatus,
   slug: string,
   title: string,
   description: string,
@@ -11,6 +21,7 @@ function casePage(
 ): DocPage {
   const blocks: DocBlock[] = [
     { type: "hero", ...hero },
+    ...(status === "coming_soon" ? [PLANNED] : []),
     { type: "p", text: "Your agent can:" },
     { type: "list", items: can },
     {
@@ -24,147 +35,151 @@ function casePage(
       })),
     },
   ];
-  return { slug: `use-cases/${slug}`, tab: "about", group: "Use cases", title, description, blocks };
+  return { slug: `use-cases/${slug}`, tab: "about", group: "Use cases", title, description, status, blocks };
 }
 
 export const USE_CASE_PAGES: DocPage[] = [
   casePage(
+    "live",
     "show",
     "Show on a device",
     "Put a card, list or status on your user's screen",
     { label: "Show", lines: ["Flight UA 212", "Gate B14 · Boards 9:40"] },
     [
-      "Render text, lists, key–value cards and images with `show`",
-      "Update what is on screen in place as the work progresses",
-      "Stay within the layout each device supports — Dopl adapts the blocks",
+      "Put a title and up to four lines on the user's glasses with `glasses_show`",
+      "Update the same card in place as the work progresses",
+      "Build richer screens from display blocks with `glasses_render`, within the limits the lens reports",
     ],
     [
       {
-        title: "State the intent",
-        text: "Call `show` with a user ID and an array of blocks. You describe the content, not the device.",
-        more: "[Show](/docs/api-reference/show)",
+        title: "Connect your agent",
+        text: "Connect your MCP host to the hosted MCP server. Once the user has paired glasses, the glasses tools appear on the connection.",
+        more: "[Start here](/docs/start-here)",
       },
       {
-        title: "Dopl picks the device",
-        text: "Dopl routes to the device the user is on right now and renders the blocks for its screen.",
-        more: "[Route to the right device](/docs/use-cases/routing)",
+        title: "Show it",
+        text: "Call `glasses_show` with a title and lines. Pass a `card_id` to name the card.",
+        more: "[Even Realities G2 glasses](/docs/devices/even-realities-g2)",
       },
       {
-        title: "Update or clear",
-        text: "Send new blocks with the same display ID to update in place, or clear it when the task ends.",
-        more: "[Show](/docs/api-reference/show)",
+        title: "Update in place",
+        text: "Call `glasses_show` again with the same `card_id` and the card on the lens is replaced rather than stacked. The Device SDK will add a `show` helper with the same behaviour on every device.",
+        more: "[Deliver](/docs/api-reference/deliver)",
       },
     ]
   ),
   casePage(
+    "live",
     "ask",
     "Ask and get an answer",
     "Your agent asks a question and gets the user's pick back",
     { label: "Ask", lines: ["Book the 9:40 flight?", "Yes · No · Later"] },
     [
-      "Ask a question with up to six options",
-      "Wait for the answer, or poll for it later",
+      "Ask a question with two to four options on the user's glasses with `glasses_ask`",
+      "Wait for the answer in the same call, or collect it later",
       "Get the answer back as structured data, never free text to parse",
     ],
     [
       {
         title: "Ask",
-        text: "Call `ask` with a question and options. Dopl shows it on the user's current device.",
-        more: "[Ask](/docs/api-reference/ask)",
+        text: "Call `glasses_ask` with a question and options. The call holds for up to 200 seconds while the user decides.",
+        more: "[Even Realities G2 glasses](/docs/devices/even-realities-g2)",
       },
       {
         title: "The user answers",
-        text: "A tap on glasses, a button on the phone, a click in the notch — the answer is the same shape everywhere.",
-        more: "[Devices](/docs/devices/even-realities-g2)",
+        text: "The user picks an option from the touchpad. If they need longer than the call holds, read the answer afterwards with `glasses_get_answer`.",
+        more: "[Even Realities G2 glasses](/docs/devices/even-realities-g2)",
       },
       {
         title: "Act on it",
-        text: "The answer returns to the agent that asked, with the option picked and the device it came from.",
-        more: "[Ask](/docs/api-reference/ask)",
+        text: "The answer returns the chosen option, its index and when it was picked, or a timeout or dismissal status.",
+        more: "[Start here](/docs/start-here)",
       },
     ]
   ),
   casePage(
+    "live",
     "notify",
     "Notify",
-    "Tap your user on the shoulder, wherever they are",
+    "Tap your user on the shoulder",
     { label: "Notify", lines: ["Build finished", "main · 4m 12s"] },
     [
-      "Send a short notification with `notify`",
-      "Mark urgency so Dopl can pick a louder or quieter device",
-      "Respect the user's quiet hours automatically",
+      "Send a short title and body to the user's glasses with `glasses_notify`",
+      "Set how long it stays before it clears",
     ],
     [
       {
         title: "Notify",
-        text: "Call `notify` with a user ID and text.",
-        more: "[Notify](/docs/api-reference/notify)",
+        text: "Call `glasses_notify` with a title and a body.",
+        more: "[Even Realities G2 glasses](/docs/devices/even-realities-g2)",
       },
       {
-        title: "Dopl delivers",
-        text: "It lands on the device the user is wearing or holding, and falls back to phone push.",
-        more: "[Route to the right device](/docs/use-cases/routing)",
+        title: "It lands on the lens",
+        text: "The notification appears on the user's paired glasses and clears after its time to live, 60 seconds by default.",
+        more: "[Even Realities G2 glasses](/docs/devices/even-realities-g2)",
       },
       {
-        title: "Track it",
-        text: "Each notification returns an ID you can check for delivered and seen.",
-        more: "[Notify](/docs/api-reference/notify)",
+        title: "Next: any device",
+        text: "The Device SDK will add a `notify` helper that lets Dopl pick the device for you. It is planned, not live.",
+        more: "[Deliver](/docs/api-reference/deliver)",
       },
     ]
   ),
   casePage(
+    "coming_soon",
     "connect-devices",
     "Connect your users' devices",
     "Let your users link their hardware to your agent",
-    { label: "Connect Dopl", lines: ["Acme Agent wants to reach", "your glasses and phone"] },
+    { label: "Connect", lines: ["Acme Agent wants to reach", "your glasses"] },
     [
-      "Send users a **Connect Dopl** link from your product",
-      "Let them pick which devices your agent may reach",
-      "Know which devices are linked before you send anything",
+      "Open a white-label Connect flow from your own product",
+      "Let users approve exactly the scopes your agent requests",
+      "List each user's connections before you send anything",
     ],
     [
       {
-        title: "Send the Connect Dopl link",
-        text: "Create a connect link for your user and open it from your app or agent.",
-        more: "[List endpoints](/docs/api-reference/endpoints)",
+        title: "Create a Connect session",
+        text: "Your server creates a Connect session for the user and opens the returned URL or the Connect widget.",
+        more: "[Create a Connect session](/docs/api-reference/connect-sessions)",
       },
       {
         title: "The user approves",
-        text: "They sign in to Dopl, pick devices and approve your agent. Nothing is reachable until they do.",
+        text: "They pair a device and approve the requested scopes, with no Dopl account needed. Nothing is reachable until they do. Today, glasses pair with a code the user enters in their own Dopl account.",
         more: "[Security](/docs/security)",
       },
       {
         title: "Start sending",
-        text: "Their linked devices now appear on your endpoints list, and intents to that user are delivered.",
-        more: "[List endpoints](/docs/api-reference/endpoints)",
+        text: "The user's connections now appear on the connections list, and deliveries to that user can reach them.",
+        more: "[List connections](/docs/api-reference/connections)",
       },
     ]
   ),
   casePage(
+    "coming_soon",
     "routing",
     "Route to the right device",
     "Dopl picks the device your user is on right now",
     { label: "Route", lines: ["Glasses · active now", "Phone · fallback"] },
     [
-      "Leave the device out and let Dopl choose",
-      "Pin an intent to one device when you need to",
-      "See which device each intent was delivered to",
+      "Leave the target as `auto` and let Dopl choose",
+      "Pin a delivery to one device or device kind when you need to",
+      "See which device each delivery reached and why",
     ],
     [
       {
-        title: "Send without a device",
-        text: "Omit `device` and Dopl uses the user's most recently active, capable device.",
-        more: "[Show](/docs/api-reference/show)",
+        title: "Deliver without a device",
+        text: "With `target` set to `auto`, Dopl filters the user's devices by presence, capability and grants, then ranks them by your routing rules.",
+        more: "[Deliver](/docs/api-reference/deliver)",
       },
       {
         title: "Or pin one",
-        text: "Pass an endpoint ID from the endpoints list to target one device.",
-        more: "[List endpoints](/docs/api-reference/endpoints)",
+        text: "Pass a device ID or a device kind as `target`.",
+        more: "[Deliver](/docs/api-reference/deliver)",
       },
       {
-        title: "Fallbacks",
-        text: "If the device can't render the intent, Dopl falls back to the next capable one.",
-        more: "[Devices](/docs/devices/even-realities-g2)",
+        title: "Read the decision",
+        text: "Every delivery returns the device it was routed to and the reason. Today, Dopl already records which device each message came from, and replies to a message sent from glasses are kept short for the lens.",
+        more: "[Run a device action](/docs/api-reference/device-actions)",
       },
     ]
   ),

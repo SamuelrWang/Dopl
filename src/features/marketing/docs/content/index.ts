@@ -4,9 +4,10 @@ import { API_PAGES, CHANGELOG_PAGES } from "./pages-api";
 import { DEVICE_PAGES } from "./pages-devices";
 import { OVERVIEW_PAGES } from "./pages-overview";
 import { USE_CASE_PAGES } from "./pages-use-cases";
-import type { DocBlock, DocPage, DocTab, NavLink } from "./types";
+import { DOC_STATUS_LABEL } from "./types";
+import type { DocBlock, DocPage, DocStatus, DocTab, NavLink } from "./types";
 
-export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_TABS };
+export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_STATUS_LABEL, DOC_TABS };
 export type * from "./types";
 
 /** The landing page of `/docs` (bare `/docs` 308s here — `next.config.ts › redirects`). */
@@ -24,6 +25,11 @@ const BY_SLUG = new Map(DOC_PAGES.map((p) => [p.slug, p]));
 
 export function getDocPage(slug: string): DocPage | undefined {
   return BY_SLUG.get(slug);
+}
+
+/** The status of the page a nav slug points at (a `#fragment` row reads its page's status). */
+export function statusOf(slug: string): DocStatus | undefined {
+  return BY_SLUG.get(slug.split("#")[0])?.status;
 }
 
 export function docHref(slug: string): string {
@@ -111,12 +117,12 @@ function blockText(b: DocBlock): string[] {
         ...b.rows.map((r) => `| ${r.map(plain).join(" | ")} |`),
       ];
     case "changelog":
-      return b.entries.map((e) => `## ${e.date} — ${e.title}\n${plain(e.description)}`);
+      return b.entries.map((e) => `## ${e.date}: ${e.title}\n${plain(e.description)}`);
   }
 }
 
 /** The page as Markdown — what the "Copy page" button puts on the clipboard. */
 export function pageToMarkdown(page: DocPage): string {
-  const head = [`# ${page.title}`, page.description].filter(Boolean);
+  const head = [`# ${page.title}`, `Status: ${DOC_STATUS_LABEL[page.status]}`, page.description].filter(Boolean);
   return [...head, ...page.blocks.flatMap(blockText)].join("\n\n");
 }
