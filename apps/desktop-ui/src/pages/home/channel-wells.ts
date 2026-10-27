@@ -37,7 +37,7 @@ import {
   HOME_CHANNEL_WELLS_KEY,
   type HomeChannelWellId,
 } from "@/features/channels/components/home-channel-wells";
-import type { HomeRow } from "./home-rows";
+import type { HomeRow } from "@/features/home/components/channels/home-rows";
 
 /**
  * ⚠ **THE SET AND ITS KEY MOVED TO THE ROOT TREE ON 2026-09-17 AND ARE

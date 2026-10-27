@@ -11,7 +11,7 @@ import { ChannelRecordSkeleton } from "./channel-record-skeleton";
 import {
   PersonRosterActions,
   PersonRosterRowAction,
-} from "./person-roster-actions";
+} from "@/features/home/components/channels/person-roster-actions";
 
 /**
  * A home channel's RECORD — the whole channels surface, pinned to the one

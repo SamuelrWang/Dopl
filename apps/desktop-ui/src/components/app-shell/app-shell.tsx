@@ -110,7 +110,7 @@ export function AppShellLayout() {
    * because the effect above already owns it: any two of these firing in one
    * tick would race two `replace`s over one history entry.
    *
-   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295), as `pages/home/home-rows.ts`
+   * ⚠ POSITIVE KIND CHECK (INVARIANTS §4A, F-295), as `home/components/channels/home-rows.ts`
    * already spells it: `=== "link"`, so a kind added to the union later is
    * EXCLUDED rather than bounced out of the shell (2026-09-17).
    */
@@ -294,7 +294,7 @@ export function AppShellLayout() {
       </div>
 
       {/* 🔒 GATED (Samuel, 2026-10-15): the switcher's "Create workspace" opens the
-          same invite-only popup as the rail's create tile (`account-rail.tsx`). */}
+          same invite-only popup as the rail's create tile (`shared/layout/app-shell/account-rail-core.tsx`). */}
       <RequestWorkspaceAccessDialog open={createWsOpen} onOpenChange={setCreateWsOpen} />
 
       <SettingsModal

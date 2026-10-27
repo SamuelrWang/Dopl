@@ -104,9 +104,9 @@ describe("🔒 the popup is anchored on the header's action group", () => {
   });
 
   it("the header's trail group is the positioned anchor, search first and Profile last", () => {
-    const frame = read("apps/desktop-ui/src/pages/home/home-frame.tsx");
+    const frame = read("src/features/home/components/shell/home-frame.tsx");
     expect(frame).toContain('<div className="relative flex items-center gap-2.5">{trail}</div>');
-    const header = read("apps/desktop-ui/src/pages/home/home-header.tsx");
+    const header = read("src/features/home/components/shell/home-header.tsx");
     const trail = header.slice(header.indexOf("trail={"));
     expect(trail.indexOf("<HeaderSearch")).toBeGreaterThan(-1);
     expect(trail.indexOf("<HomeSettingsControl")).toBeGreaterThan(trail.indexOf("<HeaderSearch"));

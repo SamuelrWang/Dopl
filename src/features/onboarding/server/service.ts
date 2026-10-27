@@ -9,7 +9,7 @@ import {
 } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 /**
- * ⚠ Hand copy of `apps/desktop-ui/src/components/app-shell/account-rail.tsx ›
+ * ⚠ Hand copy of `src/shared/layout/app-shell/account-rail-core.tsx ›
  * HOME_PATH` (server can't import the SPA). `./service.test.ts` pins it.
  */
 const HOME_PATH = "/home";

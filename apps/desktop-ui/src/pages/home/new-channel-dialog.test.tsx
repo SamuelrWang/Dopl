@@ -4,7 +4,7 @@ import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok, renderWithProviders } from "#/test-utils/bridge";
 import { HomeChannelCreateSchema } from "@/features/home/schema";
 import { isAccountChannels } from "./home-test-harness";
-import { NewChannelDialog } from "./new-channel-dialog";
+import { NewChannelDialog } from "@/features/home/components/channels/new-channel-dialog";
 
 /**
  * THE NEW-CHANNEL POPUP, ON THE KIT (Samuel, 2026-09-15: *"Look at the new

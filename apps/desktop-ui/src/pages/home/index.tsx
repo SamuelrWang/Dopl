@@ -11,16 +11,16 @@ import { PageError, isUnauthorized } from "#/components/page-states";
 import { SignedOutScreen } from "#/pages/boot/signed-out-screen";
 import { bootQueryKey, fetchBoot } from "#/pages/boot/use-boot-state";
 import { AccountRail } from "#/components/app-shell";
-import { HomeFrame } from "./home-frame";
-import { HomeHeader } from "./home-header";
-import type { HomeViewer } from "./home-settings-control";
+import { HomeFrame } from "@/features/home/components/shell/home-frame";
+import { HomeHeader } from "@/features/home/components/shell/home-header";
+import type { HomeViewer } from "@/features/home/components/shell/home-settings-control";
 import { RelationshipList } from "./relationship-list";
-import { NewChannelDialog } from "./new-channel-dialog";
+import { NewChannelDialog } from "@/features/home/components/channels/new-channel-dialog";
 import { HomePageSkeleton } from "./home-skeleton";
 import { HomePane, paneToken } from "./home-panes";
 import { useActivityJump } from "./use-activity-jump";
 import { useHomeUnreadClear } from "./use-home-unread-clear";
-import { channelRowId, homeRows } from "./home-rows";
+import { channelRowId, homeRows } from "@/features/home/components/channels/home-rows";
 import type { SearchItem } from "@/features/search/contracts";
 import { HOME_DEFAULT_TAB, type HomeTab } from "./home-tabs";
 import { homeMemory, homeScope } from "./home-memory";
@@ -168,6 +168,7 @@ export default function HomePage() {
             onQueryChange={setQuery}
             onSearchNavigate={openSearchHit}
             onNewChannel={() => setNewChannelOpen(true)}
+            onNavigate={(path) => navigate(path)}
           />
         }
         list={

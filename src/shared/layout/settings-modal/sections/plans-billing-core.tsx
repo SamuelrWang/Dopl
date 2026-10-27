@@ -88,7 +88,7 @@ export interface PlansBillingCoreProps {
  * settings are open — without it the DEFAULT workspace leaks in.
  * Next- and Stripe-free core; Stripe hand-offs arrive as props.
  * `./plans-billing` = web binding, desktop's is
- * `apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`.
+ * `../desktop-billing-pane.tsx`.
  */
 export function PlansBillingCore({
   billingReturn = null,

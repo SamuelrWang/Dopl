@@ -20,7 +20,7 @@ describe("settings modal nav ground", () => {
 
   it("is the token /home's panel takes off the Channels face", () => {
     const home = readFileSync(
-      new URL("../../../../apps/desktop-ui/src/pages/home/home.module.css", import.meta.url),
+      new URL("../../../features/home/components/shell/home.module.css", import.meta.url),
       "utf8"
     );
     const page = home.slice(home.indexOf(".page {"), home.indexOf("}", home.indexOf(".page {")));

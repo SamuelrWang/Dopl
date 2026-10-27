@@ -9,7 +9,7 @@ import { openExternalPath, openExternalUrl } from "@/shared/lib/open-external";
  * over `@/shared/lib/open-external` — the shared bridge-or-`window.open`
  * helper the web tree uses, so ONE place decides how a link leaves the app.
  *
- * ⚠ Stays in `lib/`, not under `components/settings-modal/`: the boot screen's
+ * ⚠ Stays in `shared/lib/`, not beside the settings modal: the SPA boot screen's
  * public-page links need it too, and burying it under a feature folder is how
  * the signed-out screen grew its own copy.
  */
@@ -44,7 +44,7 @@ export function billingPath(
 /**
  * Same page, no intent — where account DELETION lives. Irreversible, and its
  * Supabase sign-out + redirect is not reproducible in the renderer, so it stays
- * on the web; `../components/settings-modal/account-actions.tsx` links here.
+ * on the web; `shared/layout/settings-modal/desktop-account-actions.tsx` links here.
  */
 export function accountPagePath(workspaceSegment: string): string {
   return webBillingPath({ segment: workspaceSegment });

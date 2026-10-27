@@ -3,7 +3,7 @@ import { cn } from "@/shared/lib/utils";
 import { Skeleton, SkeletonLine } from "@/shared/ui/skeleton";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
 import { NAV } from "@/shared/layout/app-shell/app-sidebar-core";
-import rail from "#/components/app-shell/account-rail.module.css";
+import rail from "@/shared/layout/app-shell/account-rail.module.css";
 import { SkeletonChrome } from "./skeleton-surface";
 
 /**

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { channelRowId } from "./home-rows";
+import { channelRowId } from "@/features/home/components/channels/home-rows";
 
 /**
  * JUMPING FROM A ROW TO THE THING IT NAMES (2026-09-01).

@@ -457,7 +457,7 @@ Workers append a `## <slice>` section per question: the question, what was chose
 ## Profile popup restyle (branch `ui/profile-popup`)
 
 1. **The New channel button's ground differs per face.** /home's panel is `--bg-overlay` on every
-   face but Channels, where it is `--home-card` (`pages/home/home.module.css`). The rail took
+   face but Channels, where it is `--home-card` (`home/components/shell/home.module.css`). The rail took
    `--bg-overlay`: the page opens on Overview (`home-tabs.ts › HOME_DEFAULT_TAB`) and four of five
    faces wear it. The popup's pane stays `--bg-elevated`, so rail and pane are near-equal whites
    split by the `--home-panel-line` hairline. Where: `settings-modal.module.css › .nav`.

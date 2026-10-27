@@ -16,7 +16,7 @@ import { useChannelLaunchPosture } from "@/features/channels/hooks/use-channel-l
 import type { AgentIdentity } from "@/features/agent-identities/client/types";
 import type { CardLaunch } from "@/features/agent-identities/components/identity-card-actions";
 import type { Channel } from "@/features/channels/types";
-import { channelTitle } from "./home-rows";
+import { channelTitle } from "@/features/home/components/channels/home-rows";
 
 /**
  * The personal card's one-click Launch: the identity as-is into the selected channel, no form.

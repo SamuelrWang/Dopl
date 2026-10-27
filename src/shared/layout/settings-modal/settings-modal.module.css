@@ -161,7 +161,7 @@
 .close:hover { background: var(--surface-raised-2); color: var(--text-secondary); }
 
 /* The rail stands on the ground /home's New channel button does: the panel's `--bg-overlay` on
-   every face but Channels (`pages/home/home.module.css`). */
+   every face but Channels (`home/components/shell/home.module.css`). */
 .nav {
   width: 192px;
   flex: 0 0 192px;

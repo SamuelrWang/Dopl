@@ -13,10 +13,10 @@ Product: desktop `/home` → Overview. Method: `docs/specs/channel-page-port/PLA
 | Scope + month | `pages/home/overview-usage-filter.tsx › UsageScopeMenu` (`SelectMenu variant="text"` over `use-home-channels.ts › useHomeChannels`), `› MonthStepper`, `› usageSeriesPath`, `› monthKey` | `overview-panels.tsx` |
 | Token spend | `pages/home/overview-token-spend.tsx › TokenSpendPanel` (`/api/home/token-spend`, folds away) over `components/overview/token-spend-strip.tsx › TokenSpendStrip` (+ local-day arithmetic) | `overview-panels.tsx`; the strip also by the WORKSPACE Overview (`pages/overview/token-spend.tsx`) |
 | Rails | `components/overview/rank-rail.tsx` (`ChannelCreditRail`, `ChannelMessageRail`, `PeopleRail`, `ToolRail`, `ClippedNote`, `RailsGhost`) | `overview-panels.tsx` and the workspace Overview (`pages/overview/usage-rails.tsx`) |
-| Ground | `shared/ui/section-panel.tsx › SectionPanel` wells + `.bento` cards; `pages/home/home.module.css › .pane` (`--home-card`) | |
+| Ground | `shared/ui/section-panel.tsx › SectionPanel` wells + `.bento` cards; `home/components/shell/home.module.css › .pane` (`--home-card`) | |
 | Loading | `pages/home/home-skeleton.tsx › OverviewFaceGhost` (frame ghost), `Skeleton`/`RailsGhost` in-face | `HomePageSkeleton` (boot + /home gate) |
 | Error | `#/components/page-states › PageError` (userFacingMessage, Try again, Reload) | `overview-panels.tsx` |
-| Settings | `pages/home/home-settings-control.tsx › openHomeSettings("billing")` | Get more credits |
+| Settings | `home/components/shell/home-settings-control.tsx › openHomeSettings("billing")` | Get more credits |
 | Devices (Settings only) | `src/features/devices/components/use-devices.ts › useConnectedDevices` (computers `/api/devices` + glasses, 30s presence refresh), `devices-panel.tsx`, `merge.ts › mergeDevices` | Settings › Devices |
 
 Tests: `pages/home/overview-{panels,credit-bar,unmetered-caption,usage-filter}.test.tsx`,

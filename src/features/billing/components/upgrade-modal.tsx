@@ -218,7 +218,7 @@ function CheckoutView({
 
 /**
  * Desktop leg of checkout — same handoff as
- * `apps/desktop-ui/src/components/settings-modal/billing-pane.tsx`. The
+ * `shared/layout/settings-modal/desktop-billing-pane.tsx`. The
  * packaged renderer cannot mount Stripe at all (`script-src 'self'`,
  * `connect-src 'none'`, `frame-src 'none'`, and a `file://` document), so the
  * paywall stops at the pitch and sends the purchase to the browser (GAP-9).

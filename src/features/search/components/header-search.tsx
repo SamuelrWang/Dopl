@@ -12,7 +12,7 @@ import { Keycap } from "./search-popup-rows";
  * /home's header search: an always-open pill whose results arrive in a popup; typing never
  * narrows the channel list. The query is the host's state. The popup is the pill's SIBLING so
  * its containing block is the header's positioned action group (desktop
- * `pages/home/home-frame.tsx › HomeHeaderRow`, the playground's `.uis-top-trail`), which
+ * `home/components/shell/home-frame.tsx › HomeHeaderRow`, the playground's `.uis-top-trail`), which
  * `left-0 w-auto` spans exactly, pill-left to Profile-right. Escape (the popup's, on the window) clears and blurs.
  */
 export function HeaderSearch({

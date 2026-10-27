@@ -10,7 +10,7 @@
    itself in, keeps the atom unforked: a skeleton still composes `Skeleton` for
    its fill, and gets the opt-out by standing inside `SkeletonSurface`.
 
-   ⚠ `:global()` FOR THE SAME REASON `pages/home/home.module.css` USES IT — the
+   ⚠ `:global()` FOR THE SAME REASON `home/components/shell/home.module.css` USES IT — the
    hook (`data-slot="skeleton"`) is emitted by a component in the OTHER package,
    so it can never be a locally-scoped class here. An attribute, not a utility
    class name, so a restyle of the atom cannot silently drop this.

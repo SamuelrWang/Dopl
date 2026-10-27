@@ -47,13 +47,13 @@ describe.each(COPIES)("%s: the account palette skin keeps the hairline", (_host,
  *  `HomeFrame`) and the workspace channels page wear it. */
 describe("the hosts that wear the skin", () => {
   it.each([
-    "apps/desktop-ui/src/pages/home/home-frame.tsx",
+    "src/features/home/components/shell/home-frame.tsx",
     "src/features/channels/components/channels-core.tsx",
   ])("%s carries data-frame-skin", (rel) => {
     expect(readFileSync(resolve(REPO, rel), "utf-8")).toContain("data-frame-skin");
   });
 
   it("and the page module fences no second copy", () => {
-    expect(code("apps/desktop-ui/src/pages/home/home.module.css")).not.toContain(":global(");
+    expect(code("src/features/home/components/shell/home.module.css")).not.toContain(":global(");
   });
 });

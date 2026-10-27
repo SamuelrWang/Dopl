@@ -21,9 +21,9 @@ S1/S2 gaps (signed-out screen, all-provider sign-in over the bridge, channels +
 notification click-through, onboarding, app-origin seam, avatars). What still
 tethers the desktop product to the web app tree is exactly two flows, and both
 funnel through the same page: **`/{segment}/canvas` in the browser is the
-desktop's payment surface** (`apps/desktop-ui/src/lib/open-in-browser.ts` →
+desktop's payment surface** (`src/shared/lib/open-in-browser.ts` →
 `billingPath()`) **and its account-deletion surface**
-(`apps/desktop-ui/src/components/settings-modal/account-actions.tsx`). Stripe's
+(`src/shared/layout/settings-modal/desktop-account-actions.tsx`). Stripe's
 `return_url`s and the API's 402 `upgrade_url` point at the same `/canvas?billing=…`
 target. Build one small replacement page, repoint four URL builders, and the
 entire `[workspaceSlug]` tree becomes deletable. Everything else is mechanics.
@@ -171,8 +171,8 @@ What it must absorb (all verified live today):
 
 | Current dependency on the web canvas page | Site |
 |---|---|
-| Desktop "Upgrade" opens `/{segment}/canvas?billing=upgrade` in browser | `apps/desktop-ui/src/lib/open-in-browser.ts:37` (`billingPath`) |
-| Desktop "Delete account in browser" opens `/{segment}/canvas` | `apps/desktop-ui/src/components/settings-modal/account-actions.tsx:46` |
+| Desktop "Upgrade" opens `/{segment}/canvas?billing=upgrade` in browser | `src/shared/lib/open-in-browser.ts:37` (`billingPath`) |
+| Desktop "Delete account in browser" opens `/{segment}/canvas` | `src/shared/layout/settings-modal/desktop-account-actions.tsx:46` |
 | Stripe checkout `return_url` = `/canvas?billing=success&session_id=…` | `src/features/billing/server/stripe.ts:112` |
 | Stripe portal `return_url` = `/canvas?billing=return` | `stripe.ts:145` |
 | 402/403 envelopes `upgrade_url` = `/canvas?billing=upgrade` | `src/features/billing/server/entitlements.ts:158-160`, `src/features/chats/server/retention.ts:54` |

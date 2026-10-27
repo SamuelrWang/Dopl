@@ -97,7 +97,7 @@ body and mints nothing; `infoTab` replaces a body the surface paid for.
 
 | # | Shared component | The slot | What it replaces | Host(s) | Minted-and-discarded | Verdict |
 |---|---|---|---|---|---|---|
-| R1 ✅ | **FIXED — wave 1A.** `src/features/channels/components/channel-surface-contract.ts › ChannelSurfaceSlots` → `src/features/channels/components/info-panel.tsx › infoTab` | `infoTab?: (ctx: ChannelInfoTabContext) => ReactNode` | nothing any more: the slot is `infoExtras`, a record of NAMED REGIONS | `apps/desktop-ui/src/pages/home/relationship-record.tsx` → `apps/desktop-ui/src/pages/home/person-roster-actions.tsx` (the `belowRoster` region) | none — the body is unconditional | **DONE 2026-09-17** |
+| R1 ✅ | **FIXED — wave 1A.** `src/features/channels/components/channel-surface-contract.ts › ChannelSurfaceSlots` → `src/features/channels/components/info-panel.tsx › infoTab` | `infoTab?: (ctx: ChannelInfoTabContext) => ReactNode` | nothing any more: the slot is `infoExtras`, a record of NAMED REGIONS | `apps/desktop-ui/src/pages/home/relationship-record.tsx` → `src/features/home/components/channels/person-roster-actions.tsx` (the `belowRoster` region) | none — the body is unconditional | **DONE 2026-09-17** |
 | R2 ✔ | `src/shared/ui/skeleton.tsx › TwoPaneListSkeleton` | `detail` | `DetailDocSkeleton` | `src/features/channels/components/channels-skeleton.tsx › ChannelsSkeleton` | nothing — a ghost mints no data | keep |
 | R3 ✔ | `apps/desktop-ui/src/components/skeletons/shell-skeleton.tsx › ShellChromeSkeleton` | `rail` | `AccountRailSkeleton` | `apps/desktop-ui/src/components/app-shell/app-shell.tsx` | nothing; the replacement is *richer* (live rail over ghost), which is the shape a good replacing slot has | keep |
 | R4 ✔ | `src/features/agent-templates/components/agent-templates-core.tsx` | `loadingSkeleton` | `PageShellSkeleton` | `apps/desktop-ui/src/pages/agents/index.tsx` | nothing | keep — `docs/INVARIANTS.md` already rules this idiom sound |
@@ -138,7 +138,7 @@ is a two-line type change (§6.5), not a Wave 1 item.
 | `gate` (the ONE `useRefetchGate`) | ✔ since 2026-08-25 | uses it |
 | `headerEdit` (write + mirrored `canManageChannel`) | ✔ since 2026-09-17 | uses it |
 | `mentions` bundle (page, order, `onOpen`, `onMarkAllRead`) | ✔ since 2026-09-15 | uses it |
-| **`channelName`** — the derived display name `peerNamedHeader` decided | ✘ | re-derives: `apps/desktop-ui/src/pages/home/home-rows.ts › channelTitle` |
+| **`channelName`** — the derived display name `peerNamedHeader` decided | ✘ | re-derives: `src/features/home/components/channels/home-rows.ts › channelTitle` |
 | **`members`** — `channel-surface-data.ts › useChannelMembers` | ✘ | mounts it **twice more** (`person-info-tab.tsx`, `person-members.tsx`) |
 | **`index`** (`AuthorIndex`, carrying `currentUserId`) | ✘ | **never resolves the viewer — §4.3** |
 | **`activityBins` / `activityLoading`** | ✘ | mounts a **second** `useOverviewSeries` in `person-thread-activity.tsx` |

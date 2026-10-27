@@ -3,7 +3,7 @@
  * `HOME_PATH` (onboarding names a `kind='home'` container, which has no workspace
  * shell); `WORKSPACE_HOME_PATH` is pinned only for the non-home fallback branch.
  *
- * Sources: `HOME_PATH` — `apps/desktop-ui/src/components/app-shell/account-rail.tsx`
+ * Sources: `HOME_PATH` — `src/shared/layout/app-shell/account-rail-core.tsx`
  * (root route in `routes.tsx`; copies in `dopl-desktop-app/main/deep-link-target.js`
  * › ROOT_ROUTES and `./service.ts` › completeOnboarding). `WORKSPACE_HOME_PATH` —
  * `apps/desktop-ui/src/routes.tsx` (copies in `routes.test.tsx`, `deep-link-target.js`

@@ -14,9 +14,9 @@ import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selecti
 import { EMPTY_PEERS, EMPTY_WORKSPACE_ROLE, type Channel } from "@/features/channels/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError } from "#/components/page-states";
-import { channelPeople } from "./home-rows";
+import { channelPeople } from "@/features/home/components/channels/home-rows";
 import { HomeIdentityPanelsSkeleton } from "./home-skeleton";
-import type { HomeViewer } from "./home-settings-control";
+import type { HomeViewer } from "@/features/home/components/shell/home-settings-control";
 import { HomeKnowledgeDialog } from "./identity-card-knowledge";
 import { useCardLaunch } from "./identity-card-launch";
 import {

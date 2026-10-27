@@ -5,16 +5,20 @@ import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { SearchItem } from "@/features/search/contracts";
 import { HeaderSearch } from "@/features/search/components/header-search";
 import { apiSearchFetcher } from "@/features/search/search-client";
-import type { BootPayload } from "#/pages/boot/use-boot-state";
 import { HomeHeaderRow } from "./home-frame";
-import { HomeSettingsControl, type HomeViewer } from "./home-settings-control";
-import { HOME_TABS, type HomeTab } from "./home-tabs";
+import {
+  HomeSettingsControl,
+  type HomeIdentity,
+  type HomeViewer,
+} from "./home-settings-control";
+import { HOME_TABS, type HomeTab } from "@/features/home/tabs";
 
 const NEW_CHANNEL_BTN = cn(pillButton("ink", "lg"), "pl-3");
 
 /**
  * /home's header strip: New channel over the channel column, the face tabs, then search and the
- * operator's Profile pill. No state lives here; every value is the page's.
+ * operator's Profile pill. No state lives here; every value is the page's. Declared in `src/` so
+ * the UI-staging playground mounts the same header.
  */
 export function HomeHeader({
   identity,
@@ -26,8 +30,9 @@ export function HomeHeader({
   onQueryChange,
   onSearchNavigate,
   onNewChannel,
+  onNavigate,
 }: {
-  identity: BootPayload;
+  identity: HomeIdentity;
   viewer: HomeViewer | null;
   onWorkspaceChanged: () => void;
   tab: HomeTab;
@@ -37,6 +42,8 @@ export function HomeHeader({
   /** A search-popup row was taken; the page opens what it names. */
   onSearchNavigate: (item: SearchItem) => void;
   onNewChannel: () => void;
+  /** The host router's navigate (the settings modal's workspace switches). */
+  onNavigate: (path: string) => void;
 }) {
   return (
     <HomeHeaderRow
@@ -68,6 +75,7 @@ export function HomeHeader({
             identity={identity}
             viewer={viewer}
             onWorkspaceChanged={onWorkspaceChanged}
+            onNavigate={onNavigate}
           />
         </>
       }

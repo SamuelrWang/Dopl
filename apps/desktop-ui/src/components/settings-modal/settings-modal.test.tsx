@@ -234,7 +234,7 @@ describe("settings modal", () => {
       })
     );
 
-    // Standalone billing page, plan included (`lib/open-in-browser.ts`).
+    // Standalone billing page, plan included (`shared/lib/open-in-browser.ts`).
     expect(openExternal).toHaveBeenCalledWith(
       `https://www.usedopl.com/billing/${SEGMENT}?billing=upgrade&plan=team`
     );

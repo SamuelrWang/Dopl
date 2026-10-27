@@ -42,6 +42,8 @@ export interface SpaBridgeSurface {
   getAuthState(): Promise<{ signedIn: boolean; userId: string | null }>;
   onAuthState?(cb: (s: { signedIn: boolean; userId: string | null }) => void): () => void;
   openExternal(url: string): Promise<{ ok: boolean }>;
+  /** Main clears stored tokens and pushes a signed-out `onAuthState`. */
+  signOut?(): Promise<{ ok: boolean }>;
   /** Remote image → `data:` URI, proxied by main (null = refused/failed).
    *  ⚠ Mirrored in `apps/desktop-ui/src/lib/dopl-bridge.ts`. Optional — an older
    *  main has no handler and the caller falls back to initials. */

@@ -4,14 +4,14 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { channelRowFaces } from "@/features/channels/lib/channel-display";
 import type { BootPayload } from "#/pages/boot/use-boot-state";
 import { RelationshipRecord } from "./relationship-record";
-import { PendingLinkCard } from "./link-out-panel";
+import { PendingLinkCard } from "@/features/home/components/channels/link-out-panel";
 import { HomeIdentityPanels } from "./identity-panels";
 import { HomeKnowledgePanels } from "@/features/knowledge/components/home/home-knowledge-panels";
 import { HomeOntologyPanels } from "@/features/ontology/components/home-ontology-panels";
 import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import type { ActivityJump } from "./use-activity-jump";
-import { channelPeople, channelRowId, type HomeRow } from "./home-rows";
-import { openHomeSettings, type HomeViewer } from "./home-settings-control";
+import { channelPeople, channelRowId, type HomeRow } from "@/features/home/components/channels/home-rows";
+import { openHomeSettings, type HomeViewer } from "@/features/home/components/shell/home-settings-control";
 import { useHomeChannels } from "./use-home-channels";
 import {
   IDENTITIES_PANE,

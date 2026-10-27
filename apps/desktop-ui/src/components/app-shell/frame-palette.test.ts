@@ -52,17 +52,17 @@ const read = (rel: string) =>
   readFileSync(join(REPO, rel), "utf8").replace(/\r\n/g, "\n");
 
 const SHELL_CSS = "src/shared/layout/app-shell/app-shell.module.css";
-const RAIL_CSS = "apps/desktop-ui/src/components/app-shell/account-rail.module.css";
+const RAIL_CSS = "src/shared/layout/app-shell/account-rail.module.css";
 const KIT_CSS = "apps/desktop-ui/src/styles/kit.css";
 const WEB_KIT_CSS = "src/app/globals.css";
 const SPA_TOKENS = "apps/desktop-ui/src/styles/tokens.css";
 const SHELL_TSX = "apps/desktop-ui/src/components/app-shell/app-shell.tsx";
-const RAIL_TSX = "apps/desktop-ui/src/components/app-shell/account-rail.tsx";
+const RAIL_TSX = "src/shared/layout/app-shell/account-rail-core.tsx";
 const HOME_PAGE = "apps/desktop-ui/src/pages/home/index.tsx";
-const HOME_FRAME = "apps/desktop-ui/src/pages/home/home-frame.tsx";
+const HOME_FRAME = "src/features/home/components/shell/home-frame.tsx";
 const HOME_SKELETON = "apps/desktop-ui/src/pages/home/home-skeleton.tsx";
 const LAYOUT_SHELL = "src/shared/layout/layout-shell.tsx";
-const HOME_CSS_MODULE = "apps/desktop-ui/src/pages/home/home.module.css";
+const HOME_CSS_MODULE = "src/features/home/components/shell/home.module.css";
 
 const shellCss = read(SHELL_CSS);
 const railCss = read(RAIL_CSS);

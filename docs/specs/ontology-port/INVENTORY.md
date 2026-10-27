@@ -51,7 +51,7 @@ Every staging copy diffed against its source (`diff -u <source> <staging copy>`)
 | `hooks/use-board-display.ts`, `use-rows-collapsed.ts`, `use-last-opened.ts`, `use-object-draft.ts` | same | storage-key / import rewires only |
 | `home/ontology-panels.tsx`, `home/ontology-share.tsx`, `home/home-panes.tsx` | desktop hosts | data rewires only (store calls for API calls) |
 | `revisions/components/*` | `src/features/revisions/components/*` | import rewires only (verbatim) |
-| `ui-staging/staging.css › .uis-onto-pane` | `apps/desktop-ui/src/pages/home/home.module.css › .page[data-face="ontology"] .pane` | white record pane (`--bg-overlay`) |
+| `ui-staging/staging.css › .uis-onto-pane` | `src/features/home/components/shell/home.module.css › .page[data-face="ontology"] .pane` | white record pane (`--bg-overlay`) |
 
 ## 3. Reverse gaps (product behaviour the staging copies stubbed or dropped) and how each is kept
 

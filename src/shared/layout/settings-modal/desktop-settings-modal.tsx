@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router";
 import { workspaceSegment as canonicalSegment } from "@/features/workspaces/url";
 import type { Role } from "@/features/workspaces/types";
 import {
@@ -14,13 +13,10 @@ import {
   canShowNotificationsSection,
 } from "@/shared/layout/settings-modal/sections/notifications-section-core";
 import { AgentDefaultsSettings } from "@/features/channels/components/agent-defaults-settings";
-import { useApiQuery } from "#/hooks/use-api-query";
-// ⚠ Deep import, not the `#/components/app-shell` barrel: that barrel exports
-// the shell, which imports THIS file, and the cycle is what `account-rail.tsx`'s
-// own `HOME_PATH` docblock warns about from the other side.
-import { HOME_PATH } from "#/components/app-shell/account-rail";
-import { AccountActions } from "./account-actions";
-import { BillingPane } from "./billing-pane";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
+import { HOME_PATH } from "@/shared/layout/app-shell/account-rail-core";
+import { AccountActions } from "./desktop-account-actions";
+import { BillingPane } from "./desktop-billing-pane";
 // ⚠ `TurnCapRow` NO LONGER IMPORTED (2026-09-07, Samuel: "Remove the turn/cost limit"). Its
 // module (`turn-cap-row.tsx`), its hook (`use-turn-cap.ts`) and its suite are deleted in the same
 // change, along with the `settings:*TurnCap` IPC pair and the preload bindings behind them.
@@ -40,10 +36,12 @@ interface Props {
   /** ⚠ See `workspaceSegment`. A rename lands on `/{segment}/settings` now, and
    *  that page owns its own invalidation. */
   onWorkspaceChanged?: () => void;
+  /** The host router's navigate; the modal closes before it moves. */
+  onNavigate: (path: string) => void;
 }
 
 /**
- * DESKTOP binding of `@/shared/layout/settings-modal/settings-modal-core` —
+ * DESKTOP binding of `./settings-modal-core` —
  * gear opens a modal over the current page (the `/settings` route still works
  * for deep links).
  *
@@ -54,7 +52,8 @@ interface Props {
  * What the renderer cannot do arrives as SLOTS: multipart icon
  * upload absent (the bridge carries JSON only), account deletion links out,
  * Plans & Billing reroutes its two Stripe actions to the browser
- * (`./billing-pane`).
+ * (`./desktop-billing-pane`). Declared in `src/` so the UI-staging playground mounts this same
+ * modal over its in-memory bridge; the SPA mounts it from `#/components/settings-modal`.
  */
 export function SettingsModal({
   open,
@@ -64,8 +63,8 @@ export function SettingsModal({
   workspaceSegment,
   workspaceId,
   role,
+  onNavigate,
 }: Props) {
-  const navigate = useNavigate();
 
   // Main owns the session here, so the authoritative role comes off the
   // membership endpoint — the SAME cache entry `useWorkspaceAccess` fills, and
@@ -91,11 +90,11 @@ export function SettingsModal({
           // panes over the NEW workspace's page.
           onOpenHome={() => {
             onOpenChange(false);
-            navigate(HOME_PATH);
+            onNavigate(HOME_PATH);
           }}
           onOpenWorkspace={(ws) => {
             onOpenChange(false);
-            navigate(`/${canonicalSegment(ws)}`);
+            onNavigate(`/${canonicalSegment(ws)}`);
           }}
         />
       }

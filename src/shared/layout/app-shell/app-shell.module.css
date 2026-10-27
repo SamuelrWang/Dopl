@@ -124,7 +124,7 @@
 }
 
 /* THE ROUTED PAGE, as a white card floating in the gray — /home's record pane
-   (`pages/home/home-frame.tsx`), whose line is 1px since 2026-10-26 while this one
+   (`home/components/shell/home-frame.tsx`), whose line is 1px since 2026-10-26 while this one
    keeps 2px. Stated here rather than as utilities on the mount because it is shell
    chrome; pinned in `apps/desktop-ui/src/components/app-shell/frame-palette.test.ts`.
 

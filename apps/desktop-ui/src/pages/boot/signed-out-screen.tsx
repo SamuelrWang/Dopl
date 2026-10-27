@@ -7,7 +7,7 @@ import {
 import { LoginFormCore } from "@/features/auth/components/login-form-core";
 import type { LoginActions } from "@/features/auth/hooks/use-login-core";
 import { getBridge } from "#/lib/dopl-bridge";
-import { openInBrowser } from "#/lib/open-in-browser";
+import { openInBrowser } from "@/shared/lib/open-in-browser";
 // ⚠ Data URI (`?inline`): packaged renderer is a `file://` doc under
 // `img-src 'self' data: blob:`, so the web form's absolute `/favicons/...` src
 // resolves to filesystem root and never loads.

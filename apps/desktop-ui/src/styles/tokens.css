@@ -302,7 +302,7 @@
      workspace pages adopt /home's frame model and palette — the two surfaces
      must match."* They are consumed by /home AND by the workspace shell —
      `src/shared/layout/app-shell/app-shell.module.css` (root/surface/sidebar),
-     `apps/desktop-ui/src/components/app-shell/account-rail.module.css` (the
+     `src/shared/layout/app-shell/account-rail.module.css` (the
      rail) and the kit's `.page-float` (every full-page card in the app). Do NOT
      re-add a page-scoping claim to these names.
 

@@ -21,7 +21,7 @@ import { SkeletonSurface } from "#/components/skeletons/skeleton-surface";
 import { AccountRailSkeleton } from "#/components/skeletons/shell-skeleton";
 import { IDENTITY_GRID_RAIL } from "@/features/agent-identities/components/identity-section";
 import { HOME_CHANNEL_WELLS, type HomeChannelWellId } from "./channel-wells";
-import { HomeFrame, HomeHeaderRow, HomeListColumn } from "./home-frame";
+import { HomeFrame, HomeHeaderRow, HomeListColumn } from "@/features/home/components/shell/home-frame";
 import { HOME_DEFAULT_TAB, HOME_TABS, type HomeTab } from "./home-tabs";
 
 /**

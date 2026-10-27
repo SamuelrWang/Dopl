@@ -13,7 +13,7 @@ import {
   homeChannels,
   homeRows,
   linkGrantLabel,
-} from "./home-rows";
+} from "@/features/home/components/channels/home-rows";
 
 /**
  * The left pane's row math, tested where it is PURE — no DOM, no bridge.

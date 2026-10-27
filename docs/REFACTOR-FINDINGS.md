@@ -1021,7 +1021,7 @@ COMMIT;
 - Status: open
 
 ### F-164: Two boot-chain follow-ups
-- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `apps/desktop-ui/src/components/settings-modal/settings-modal.tsx:64`; the dedicated provisioning route under `src/app/api/workspaces/` (DELETED 2026-09-02 — see the follow-up below)
+- Location: `apps/desktop-ui/src/pages/chats/index.tsx:49,56`; `src/shared/layout/settings-modal/desktop-settings-modal.tsx`; the dedicated provisioning route under `src/app/api/workspaces/` (DELETED 2026-09-02 — see the follow-up below)
 - Found during: launch-readiness P0-2 (2026-08-07)
 - Severity: smell
 - **Rewritten down to the follow-ups 2026-08-08.** The collapse landed: launch → actionable screen is now `bridge.getAuthState()` (IPC, local, no network) → `POST /api/boot` → the page's own data. 5 round trips → 1.
@@ -2975,7 +2975,7 @@ at four members"*. Samuel made that call: build the list.
   back to `[]` and paint every channel as SOLO on the first paint after the upgrade — a FALSE sentence,
   where degrading to one face is merely the old correct one. Its meaning is now STATED ("the member who
   joined first") rather than "whichever row came back first", which is what made it non-deterministic.
-- **The UI reads the roster, not the head:** `pages/home/home-rows.ts › channelPeople` is the ONE read
+- **The UI reads the roster, not the head:** `home/components/channels/home-rows.ts › channelPeople` is the ONE read
   of `peers` and owns the cache merge; `› channelTitle` counts past two names (`Grace, Priya +2`);
   `› channelSubline` swaps a single peer's email for `N people`; `relationship-list.tsx` draws
   `shared/ui/avatar-stack.tsx › AvatarStack` at 2+; the Info tab header does the same one size up.
@@ -6470,7 +6470,7 @@ exactly how this was lost.
 ### F-402 — a home container's channel can still carry `is_direct = true`, so a THIRD surface named it after its peer (2026-09-01) — ✅ MASKED, the DATA is still open
 
 Samuel's ruling of the same day — **a channel's identity is its own name, never its roster's** —
-was applied at `apps/desktop-ui/src/pages/home/home-rows.ts › channelTitle`, which the /home list
+was applied at `src/features/home/components/channels/home-rows.ts › channelTitle`, which the /home list
 row and the Info tab both read. **The record pane's HEADER reads a different derivation**:
 `src/features/channels/lib/channel-display.ts › channelDisplayName`, via
 `channels/components/channel-surface.tsx`, and that one returns the peer's display name whenever
@@ -9796,7 +9796,7 @@ existing on different days.**
 Re-derive before acting on this, rather than trusting the measurement:
 `grep -rn "selected-ring" src apps/desktop-ui/src | grep -v globals.css | grep -v kit.css` — on
 2026-09-17 that returned three COMMENTS (`home-card-marks.tsx`, `home-channel-row.tsx`,
-`pages/home/home.module.css`) and no class usage.
+`home/components/shell/home.module.css`) and no class usage.
 
 ⚠ **THE RECIPE ITSELF WAS DECLARED TWICE** — `src/app/globals.css` and
 `apps/desktop-ui/src/styles/kit.css` — and `--focus-line` / `--focus-halo`, the tokens it composes,
@@ -10183,7 +10183,7 @@ The claim had been restated in five places from one sentence, which is how it su
 
 ### F-723 — the operator read as OFFLINE in their own home channel: /home's roster passed no viewer (2026-09-17)
 
-- Location: /home's own roster — a second `MemberRoster` call site that passed no viewer — against `src/features/channels/components/member-roster.tsx › MemberRoster`'s `viewerUserId` and `src/features/channels/components/view-model.ts › isPresentForViewer`. ⚠ **THE CALL SITE IS GONE, WHICH IS THE FIX**: wave 1A deleted the forked body, and what survives of that file is `apps/desktop-ui/src/pages/home/person-roster-actions.tsx › PersonRosterActions`, which draws no members at all.
+- Location: /home's own roster — a second `MemberRoster` call site that passed no viewer — against `src/features/channels/components/member-roster.tsx › MemberRoster`'s `viewerUserId` and `src/features/channels/components/view-model.ts › isPresentForViewer`. ⚠ **THE CALL SITE IS GONE, WHICH IS THE FIX**: wave 1A deleted the forked body, and what survives of that file is `src/features/home/components/channels/person-roster-actions.tsx › PersonRosterActions`, which draws no members at all.
 - ⚠ **Id note:** re-derived across every live branch at file time (the header's loop), not from `master` — `master`'s highest is `F-717` and wave 1B holds `F-720`–`F-722`. ⚠ **Re-derive AGAIN before merge:** `master` moved under wave 1B mid-wave and cost it a three-entry renumber.
 - Found during: **wave 1A**, executing `docs/specs/workspace-parity/08-slot-audit.md` §4.3, which found it by reading the slot contract rather than the screen.
 - **THE MECHANISM, IN THREE FILES AND ONE EXPRESSION.** `isPresentForViewer` is `if (viewerUserId && member.userId === viewerUserId && isSpaRenderer()) return true;` before it falls through to the `lastSeenAt` heartbeat. `MemberRoster` forwards `viewerUserId` and nothing else touches it. The shared Info tab has passed `index.currentUserId` since 2026-09-08; /home's replacement body mounted its own `useChannelMembers` and passed **no viewer at all**, so the override could not fire — **in the desktop renderer, which is the only place `isSpaRenderer()` is ever true.** The operator therefore read as OFFLINE in their own home channel while the workspace channels page, on the same machine in the same second, showed them online.

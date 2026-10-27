@@ -6,8 +6,8 @@ import {
   type WellItem,
 } from "@/features/channels/components/collapse-wells";
 import { channelRowFaces } from "@/features/channels/lib/channel-display";
-import { HomeListColumn } from "./home-frame";
-import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "./home-rows";
+import { HomeListColumn } from "@/features/home/components/shell/home-frame";
+import { channelPeople, channelTitle, hasLinkOut, type HomeRow } from "@/features/home/components/channels/home-rows";
 import {
   HOME_CHANNEL_WELLS,
   HOME_CHANNEL_WELLS_KEY,

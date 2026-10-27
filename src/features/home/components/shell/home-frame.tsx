@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import shell from "@/shared/layout/app-shell/app-shell.module.css";
-import type { HomeTab } from "./home-tabs";
+import type { HomeTab } from "@/features/home/tabs";
 import home from "./home.module.css";
 
 /**

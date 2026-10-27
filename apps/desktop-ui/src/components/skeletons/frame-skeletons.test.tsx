@@ -153,7 +153,7 @@ describe("the shell's own loading state mirrors the shell", () => {
    */
   it("the rail ghost mounts account-rail's own classes, never restated numbers", () => {
     expect(SHELL_SKELETON).toContain(
-      'import rail from "#/components/app-shell/account-rail.module.css"'
+      'import rail from "@/shared/layout/app-shell/account-rail.module.css"'
     );
     for (const cls of ["rail.rail", "rail.tile", "rail.workspaces"]) {
       expect(SHELL_SKELETON).toContain(cls);
@@ -238,7 +238,7 @@ describe("the /home shapes are /home's own geometry", () => {
       expect(HOME_SKELETON).toContain(symbol);
     }
     expect(file("../../pages/home/index.tsx")).toContain("<HomeFrame");
-    expect(file("../../pages/home/home-header.tsx")).toContain("<HomeHeaderRow");
+    expect(file("../../../../../src/features/home/components/shell/home-header.tsx")).toContain("<HomeHeaderRow");
     expect(file("../../pages/home/relationship-list.tsx")).toContain("<HomeListColumn");
 
     const { container } = render(<HomePageSkeleton />);

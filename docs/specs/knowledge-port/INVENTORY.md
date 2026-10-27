@@ -8,7 +8,7 @@ components in place, mount them from the playground, delete the staging copies.
 
 | Layer | Files | Who renders it |
 |---|---|---|
-| /home Knowledge face (shared since this port) | `src/features/knowledge/components/home/{home-knowledge-panels,home-knowledge-base-view,home-knowledge-cards}.tsx`, `home-knowledge.module.css › .kbCards / .kbCell`, `knowledge/components/knowledge-skeletons.tsx` (both base shapes and `HomeKnowledgePanelsSkeleton`), `shared/ui/section-panel-ghost.tsx`; desktop-only: `pages/home/home.module.css › .page[data-face="knowledge"] .pane` | desktop /home and the playground |
+| /home Knowledge face (shared since this port) | `src/features/knowledge/components/home/{home-knowledge-panels,home-knowledge-base-view,home-knowledge-cards}.tsx`, `home-knowledge.module.css › .kbCards / .kbCell`, `knowledge/components/knowledge-skeletons.tsx` (both base shapes and `HomeKnowledgePanelsSkeleton`), `shared/ui/section-panel-ghost.tsx`; desktop-only: `home/components/shell/home.module.css › .page[data-face="knowledge"] .pane` | desktop /home and the playground |
 | Opened base (shared) | `src/features/knowledge/components/knowledge-v2/**` (controller, trees, list rail, detail panel, header, info face, entry view, CSS module) | desktop /home, desktop workspace knowledge page, web channels-v2 pages, landing preview, playground |
 | Document | `knowledge/components/doc-pane.tsx`, `doc-pane-chrome.tsx` | same |
 | Settings popup | `knowledge/components/base-settings-{modal,general,folders}.tsx`, `kb-sharing-section.tsx`, `kb-scope-controls.tsx`, `kb-channel-grants-section.tsx`, `agent-write-toggle.tsx` | same; `kb-scope-controls` also in the create dialog |

@@ -6,8 +6,8 @@ import {
   SettingsRow,
   SettingsRows,
 } from "@/shared/layout/settings-modal/sections/settings-panel";
-import { getBridge } from "#/lib/dopl-bridge";
-import { accountPagePath, openInBrowser } from "#/lib/open-in-browser";
+import { getSpaBridge } from "@/shared/lib/spa-bridge";
+import { accountPagePath, openInBrowser } from "@/shared/lib/open-in-browser";
 
 /**
  * Desktop Account pane footer — replaces the web section's `DeleteAccount`.
@@ -18,7 +18,7 @@ import { accountPagePath, openInBrowser } from "#/lib/open-in-browser";
  * sign-out + redirect is not reproducible here.
  */
 export function AccountActions({ workspaceSegment }: { workspaceSegment: string }) {
-  const bridge = getBridge();
+  const bridge = getSpaBridge();
   const canSignOut = typeof bridge?.signOut === "function";
 
   return (

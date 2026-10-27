@@ -3,13 +3,24 @@ import { firstNameOf } from "@/shared/lib/person-name";
 import { cn } from "@/shared/lib/utils";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { pillButton } from "@/shared/ui/pill-button";
-import { SettingsModal, type SettingsSection } from "#/components/settings-modal";
-import type { BootPayload } from "#/pages/boot/use-boot-state";
+import type { Role, Workspace } from "@/features/workspaces/types";
+import { SettingsModal } from "@/shared/layout/settings-modal/desktop-settings-modal";
+import type { SettingsSection } from "@/shared/layout/settings-modal/settings-modal-core";
 
 /** The operator as the Profile pill shows them, from `GET /api/user/profile`. */
 export interface HomeViewer {
   displayName: string | null;
   avatarUrl: string | null;
+}
+
+/** What /home knows about the operator from boot (the SPA's `BootPayload` satisfies it). */
+export interface HomeIdentity {
+  userId: string;
+  /** Null until the operator is onboarded (nothing provisioned). */
+  workspace: Workspace | null;
+  /** Canonical `{slug}-{publicId}` of that workspace. */
+  segment: string | null;
+  role: Role | null;
 }
 
 const PROFILE_PILL = cn(pillButton("white", "lg"), "gap-2 pl-1 pr-3.5");
@@ -35,11 +46,14 @@ export function HomeSettingsControl({
   identity,
   viewer,
   onWorkspaceChanged,
+  onNavigate,
 }: {
-  identity: BootPayload;
+  identity: HomeIdentity;
   viewer: HomeViewer | null;
   /** A rename or icon change lands in the account rail, which is the page's read. */
   onWorkspaceChanged: () => void;
+  /** The host router's navigate, for the modal's workspace switches. */
+  onNavigate: (path: string) => void;
 }) {
   // Seeded, not defaulted on open: Escape-then-reopen must not flash the wrong pane.
   const [open, setOpen] = useState(false);
@@ -81,6 +95,7 @@ export function HomeSettingsControl({
         workspaceId={identity.workspace.id}
         role={identity.role ?? "viewer"}
         onWorkspaceChanged={onWorkspaceChanged}
+        onNavigate={onNavigate}
       />
     </>
   );
