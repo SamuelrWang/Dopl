@@ -1,0 +1,629 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`desktop adapter > presence + notify only, zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "presence.read",
+    "latency_class": "realtime",
+    "limits": {
+      "online_window_s": 150,
+    },
+    "risk_tier": "T0",
+    "since_adapter": "desktop@0.1.0",
+  },
+  {
+    "capability": "present.notify",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "desktop@0.1.0",
+  },
+]
+`;
+
+exports[`even_g2 adapter > describe() is zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "presence.read",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "even_g2@0.1.0",
+  },
+  {
+    "capability": "present.notify",
+    "latency_class": "interactive",
+    "limits": {
+      "body_bytes": 400,
+      "charset": "ascii+box",
+      "line_bytes": 100,
+      "max_lines": 4,
+      "title_bytes": 64,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "even_g2@0.1.0",
+  },
+  {
+    "capability": "present.display",
+    "latency_class": "interactive",
+    "limits": {
+      "brightness_levels": 5,
+      "charset": "ascii+box",
+      "color": "mono",
+      "height_px": 248,
+      "list_item_bytes": 63,
+      "list_items": 20,
+      "max_blocks": 12,
+      "max_lines_per_text": 10,
+      "max_text_blocks": 8,
+      "max_text_bytes": 960,
+      "selectable_list_items": 19,
+      "width_px": 576,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "even_g2@0.1.0",
+  },
+  {
+    "capability": "ask.choice",
+    "latency_class": "interactive",
+    "limits": {
+      "hold_s": 200,
+      "max_options": 4,
+      "min_options": 2,
+      "option_bytes": 40,
+      "question_bytes": 120,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "even_g2@0.1.0",
+  },
+  {
+    "capability": "input.utterance",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "even_g2@0.1.0",
+  },
+  {
+    "capability": "input.tap",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "even_g2@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > desktop: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "presence.read",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.notify",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.display",
+    "latency_class": "interactive",
+    "limits": {
+      "charset": "utf-8",
+      "color": "rgb",
+      "height_px": 400,
+      "max_blocks": 24,
+      "max_text_bytes": 2000,
+      "width_px": 640,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.choice",
+    "latency_class": "interactive",
+    "limits": {
+      "max_options": 12,
+      "min_options": 2,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.confirm",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.text",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.screen",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.utterance",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > glasses: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "presence.read",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.notify",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.display",
+    "latency_class": "interactive",
+    "limits": {
+      "charset": "utf-8",
+      "color": "rgb",
+      "height_px": 400,
+      "max_blocks": 24,
+      "max_text_bytes": 2000,
+      "width_px": 640,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.speak",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.choice",
+    "latency_class": "interactive",
+    "limits": {
+      "max_options": 12,
+      "min_options": 2,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.confirm",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.text",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.photo",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.audio",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.utterance",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.tap",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > home_device: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "state.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "telemetry.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.set",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T3",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.lock",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T4",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > home_hub: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "state.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "presence.read",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.display",
+    "latency_class": "interactive",
+    "limits": {
+      "charset": "utf-8",
+      "color": "rgb",
+      "height_px": 400,
+      "max_blocks": 24,
+      "max_text_bytes": 2000,
+      "width_px": 640,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.speak",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.confirm",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.utterance",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.media",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T3",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > phone: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "state.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "presence.read",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.notify",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.display",
+    "latency_class": "interactive",
+    "limits": {
+      "charset": "utf-8",
+      "color": "rgb",
+      "height_px": 400,
+      "max_blocks": 24,
+      "max_text_bytes": 2000,
+      "width_px": 640,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.speak",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.haptic",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.choice",
+    "latency_class": "interactive",
+    "limits": {
+      "max_options": 12,
+      "min_options": 2,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.confirm",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.text",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.photo",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.audio",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.video_stream",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.utterance",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.tap",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > robot: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "state.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "telemetry.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.photo",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "capture.video_stream",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T2",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.motion.move",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T4",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.motion.gripper",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T4",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > vehicle: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "state.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "telemetry.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.notify",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.speak",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.navigate",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T3",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.lock",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T4",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "act.motion.vehicle",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T4",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
+
+exports[`simulator adapter descriptors > watch: zod-valid and snapshotted 1`] = `
+[
+  {
+    "capability": "presence.read",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "telemetry.read",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T0",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.notify",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "present.haptic",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.choice",
+    "latency_class": "interactive",
+    "limits": {
+      "max_options": 12,
+      "min_options": 2,
+    },
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "ask.confirm",
+    "latency_class": "interactive",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.tap",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+  {
+    "capability": "input.button",
+    "latency_class": "realtime",
+    "limits": {},
+    "risk_tier": "T1",
+    "since_adapter": "simulator@0.1.0",
+  },
+]
+`;
