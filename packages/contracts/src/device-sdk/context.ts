@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 
-import { CapabilityIdSchema, CapabilityScopeSchema, DeviceKindSchema, RiskTierSchema } from "./capabilities.js";
+import { CapabilityIdSchema, CapabilityScopeSchema, DeviceKindSchema, RiskTierSchema } from "./capabilities";
 
 export const POSTURES = ["glanceable", "hands_free", "seated", "driving", "unknown"] as const;
 export const PostureSchema = z.enum(POSTURES);

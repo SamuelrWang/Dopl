@@ -116,6 +116,9 @@ export const SELF_AUTH_ROUTES = [
   // Glasses device API + Hey-Even shim: per-device bearers, checked by the route itself.
   "/api/glasses/device/",
   "/api/glasses/hey-even",
+  // Device SDK `/v1`: developer API keys, checked by `withDeveloperKey`, which answers a missing key
+  // with the C10 error shape (the proxy's own 401 body is not C10).
+  "/api/v1/",
   // Playground machine surface: /session provisions anonymously (per-IP limited inside); /mcp/<token> self-authenticates by the guest bearer. The /playground PAGE is PUBLIC_ROUTES.
   "/api/playground",
   "/api/oauth",

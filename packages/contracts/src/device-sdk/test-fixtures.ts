@@ -2,7 +2,7 @@
 import { expect } from "vitest";
 import type { z } from "zod";
 
-import type { Device } from "./capabilities.js";
+import type { Device } from "./capabilities";
 
 /** parse → equal, and JSON-serialise → parse → equal: the wire shape survives both ways. */
 export function expectRoundTrip<S extends z.ZodType>(schema: S, value: z.input<S>): void {

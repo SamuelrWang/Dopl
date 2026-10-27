@@ -49,6 +49,10 @@ jobs:
       - name: Test @dopl/desktop-ui (the bundled SPA)
         run: npm test -w @dopl/desktop-ui
 
+      # The frozen Device SDK contracts (zod schemas under `./device-sdk`) carry their own suite.
+      - name: Test @dopl/contracts
+        run: npm test -w @dopl/contracts
+
   # The desktop app is a separate npm project (own lockfile). Its suite is `node --test` over
   # source-extraction truth tables; no Electron binary is launched.
   desktop:
@@ -101,6 +105,10 @@ jobs:
       # (also the only compile cover for its unrouted leftovers under `pages/`).
       - name: Typecheck @dopl/desktop-ui (the bundled SPA)
         run: npm run typecheck -w @dopl/desktop-ui
+
+      # `packages/` is outside the root program too; the contracts package has its own tsconfig.
+      - name: Typecheck @dopl/contracts
+        run: npm run typecheck -w @dopl/contracts
 
       # 0 errors and 0 warnings.
       - name: Lint

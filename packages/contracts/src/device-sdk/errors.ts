@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 
-import { DeviceKindSchema } from "./capabilities.js";
+import { DeviceKindSchema } from "./capabilities";
 
 export const ERROR_TYPES = [
   "invalid_request_error",
