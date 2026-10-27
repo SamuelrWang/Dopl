@@ -22,6 +22,7 @@ import type {
   TaskStatus,
 } from "@/features/channels/types";
 import type { ChannelFixture } from "./staging-fixture-types";
+import { EXTRA_AGENT_IDS as TEAM } from "./staging-agents";
 import { taskDetails } from "./staging-task-details";
 
 function messageLink(f: ChannelFixture, bodyPrefix: string): TaskLink | null {
@@ -56,6 +57,16 @@ function task(
 export function seedTasks(f: ChannelFixture): ChannelTaskDetail[] {
   if (f.channel.id !== DEMO_CHANNEL.id) return [];
   return [
+    // The "Code cleanup" agent team's run: one subtask per seat, each owned by its agent.
+    task(
+      "task-cleanup-run",
+      "Cleanup pass · Code cleanup",
+      person(U.samuel),
+      [agent(TEAM.teamCoder), agent(TEAM.teamComments), agent(TEAM.teamTester)],
+      "in_progress",
+      threadLink(THREAD_IDS.teardown),
+      12
+    ),
     task(
       "task-teardown",
       "Fix session teardown leaks",

@@ -9,6 +9,7 @@
  */
 
 import { AGENT_IDS, minsAgo } from "./demo-imports";
+import { EXTRA_AGENT_IDS } from "./staging-agents";
 import { U } from "@/features/marketing/components/banner-demo/demo-data";
 import {
   agentActor,
@@ -60,6 +61,20 @@ const note = (author: TaskActor, minutesAgo: number, body: string): ChannelTaskN
 const inDays = (d: number) => minsAgo(-d * 24 * 60);
 
 const DETAILS: Record<string, Details> = {
+  "task-cleanup-run": {
+    description:
+      "Launched from the Code cleanup agent team (template: Cleanup pass). One module, one pull request; behaviour must not change.",
+    dueAt: null,
+    subtasks: [
+      sub("Refactor the module", a(EXTRA_AGENT_IDS.teamCoder), "done", "Coder 1 of 1"),
+      sub("Rewrite the comments", a(EXTRA_AGENT_IDS.teamComments), "in_progress", "Comment writer 1 of 1"),
+      sub("Prove nothing broke", a(EXTRA_AGENT_IDS.teamTester), "todo", "Code tester 1 of 1"),
+    ],
+    notes: [
+      note(a(EXTRA_AGENT_IDS.teamCoder), 4, "Refactor pushed: three duplicated helpers folded into one, no signature changed."),
+      note(a(EXTRA_AGENT_IDS.teamComments), 2, "Halfway through. Dropping comments that restate the code."),
+    ],
+  },
   "task-teardown": {
     description:
       "The socket closes before teardown finishes, so a session can end without its final post or closing record. Three symptoms, one coder each.",

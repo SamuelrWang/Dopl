@@ -52,7 +52,7 @@ describe("channel tasks on the staging page (product UI, in-memory store)", () =
     const labels = screen.getAllByRole("tab").map((t) => t.textContent ?? "");
     const tasksAt = labels.findIndex((l) => l.startsWith("Tasks"));
     expect(labels[tasksAt + 1]).toBe("Settings");
-    const pill = screen.getByRole("button", { name: "4 tasks" });
+    const pill = screen.getByRole("button", { name: "5 tasks" });
     const recipients = screen.getByRole("status", { name: "Recipients" });
     expect(recipients.contains(pill)).toBe(false);
     expect(recipients.parentElement?.contains(pill)).toBe(true);
@@ -62,7 +62,7 @@ describe("channel tasks on the staging page (product UI, in-memory store)", () =
   it("a quick-view row opens the closed column on that task's detail, and checking moves progress", async () => {
     const consoleError = vi.spyOn(console, "error");
     render(<StagingChannelsPage />);
-    const pill = await screen.findByRole("button", { name: "4 tasks" });
+    const pill = await screen.findByRole("button", { name: "5 tasks" });
     const slide = () => document.querySelector(".channel-info-slide");
     fireEvent.click(screen.getAllByRole("button", { name: "Channel info" })[0]);
     await waitFor(() => expect(slide()?.getAttribute("data-open")).toBe("false"));

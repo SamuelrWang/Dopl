@@ -29,6 +29,9 @@ export const EXTRA_AGENT_IDS = {
   clientGen: "clientg1",
   uiCritic: "uicrit01",
   tokenSync: "tokensy1",
+  teamCoder: "tmcoder1",
+  teamComments: "tmcomnt1",
+  teamTester: "tmtestr1",
 } as const;
 
 /** Colours for the extras, walked through the product's own picker after the demo's seven. */
@@ -113,6 +116,25 @@ const EXTRAS: Extra[] = [
       description: "Keeps the design tokens and the CSS in step",
       color: EXTRA_COLORS[5],
     },
+  },
+  // The "Code cleanup" agent team's three seats (`identities-staging/data/agent-teams.ts`).
+  {
+    id: EXTRA_AGENT_IDS.teamCoder,
+    owner: U.samuel,
+    runtime: "claude",
+    entry: { displayName: "Coder", description: "Code cleanup · refactors the module", color: EXTRA_COLORS[6] },
+  },
+  {
+    id: EXTRA_AGENT_IDS.teamComments,
+    owner: U.samuel,
+    runtime: "claude",
+    entry: { displayName: "Comment Writer", description: "Code cleanup · rewrites the comments", color: EXTRA_COLORS[7] },
+  },
+  {
+    id: EXTRA_AGENT_IDS.teamTester,
+    owner: U.samuel,
+    runtime: "codex",
+    entry: { displayName: "Code Tester", description: "Code cleanup · proves nothing broke", color: EXTRA_COLORS[8] },
   },
 ];
 

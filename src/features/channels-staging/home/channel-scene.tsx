@@ -45,6 +45,7 @@ import { CURRENT_USER_ID, VIEWER } from "../data/demo-imports";
 import { stagingAgentIndex, stagingOwnerPhoto } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
 import { StagingSettingsTab } from "./settings-tab";
+import { StagingAgentTeamsSlot } from "./agent-teams-slot";
 import { AddPersonDialog } from "@/features/home/components/channels/add-person-dialog";
 import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
 import type { TaskLink } from "@/features/channels/types";
@@ -297,6 +298,7 @@ export function StagingChannelScene({
             ),
           }}
         />
+        {chrome === "page" && <StagingAgentTeamsSlot key={channel.id} channelName={channel.name} />}
       </div>
       {viewAgent && (
         <DemoAgentView
