@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { after, type NextRequest } from "next/server";
 import type { RouteContextArg } from "@/shared/auth/with-auth";
 import { ERROR_CODE_INFO, type ApiKeyScope, type ErrorCode, type EventOutcome, type RouteDecision } from "../types";
@@ -24,6 +25,7 @@ import { touchApiKeyLastUsed, verifyApiKey, type ResolvedDeveloperKey } from "./
  *
  * ⚠ PUBLISHABLE KEYS (`pk_…`) ARE REFUSED UNLESS THE ROUTE OPTS IN with `publishable: true`, and only a
  * route whose required scopes are `connect` alone may opt in (checked when the route is defined).
+ * Every response carries `Request-Id` (equal to the call's `dev_events.event_id` when one is logged).
  * Separate from `withUserAuth` on purpose: no Dopl session, no OAuth token, no cookie is read here.
  */
 
@@ -92,6 +94,17 @@ export function withDeveloperKey(handler: DeveloperKeyHandler, options: Develope
 
   return async (request: NextRequest, routeContext: RouteContextArg): Promise<Response> => {
     const started = performance.now();
+    // One id per call: the `Request-Id` response header AND the event row's `event_id`, so a
+    // developer quoting the header finds the exact `dev_events` row.
+    const requestId = randomUUID();
+    const stamp = (res: Response): Response => {
+      try {
+        res.headers.set("Request-Id", requestId);
+      } catch {
+        // Immutable headers (a fetched Response): leave it unstamped rather than fail the call.
+      }
+      return res;
+    };
     let resolved: ResolvedDeveloperKey | null = null;
     let annotation: DevEventAnnotation = {};
     const event: DevEventHandle = {
@@ -112,6 +125,7 @@ export function withDeveloperKey(handler: DeveloperKeyHandler, options: Develope
           bytes_in: byteLength(request.headers.get("content-length")),
           bytes_out: bytesOut,
           ...rest,
+          event_id: requestId,
           org_id: resolved.orgId,
           project_id: resolved.projectId,
           env: resolved.env,
@@ -127,7 +141,7 @@ export function withDeveloperKey(handler: DeveloperKeyHandler, options: Develope
     const refuse = (code: ErrorCode, message: string) => {
       const res = devSdkError(code, message);
       record(res.status, code, 0);
-      return res;
+      return stamp(res);
     };
 
     const raw = readBearer(request);
@@ -163,6 +177,6 @@ export function withDeveloperKey(handler: DeveloperKeyHandler, options: Develope
       throw err;
     }
     record(res.status, devSdkErrorCode(res), byteLength(res.headers.get("content-length")));
-    return res;
+    return stamp(res);
   };
 }
