@@ -611,3 +611,23 @@ Workers append a `## <slice>` section per question: the question, what was chose
 ## Channel picker rows (branch `ui/playground-channel-rows`)
 
 - Line two's fallback when a channel has no description: chose first names ("with Grace, Anthony") when peopled and "Just you" when solo, rather than the last activity (the row facts carry no preview, and that fence is deliberate). Where: `ui-staging/staging-channel-rail.tsx › subline`; desktop untouched until Samuel approves.
+
+## Batch green (branch `chore/batch-green`)
+
+1. **Caller gap over the pill recipe.** `pillButton` now carries a per-size gap (`sm` gap-1, `lg`
+   gap-1.5), but two callers keep the gap they had before the recipe had one: `channels/components/bits.tsx
+   › TAB_ACTION` (gap-1 on `lg`) and `agent-identities/components/identity-card-actions.tsx ›
+   LaunchIntoChannelButton` (gap-1.5 on `sm`). Chose to keep both callers' gaps (TAB_ACTION's own pin
+   already listed gap-1 as an intended extra) and pin "recipe face minus gap, plus the caller's gap"
+   in `bits-tab-action.test.ts` and `panel-buttons.test.tsx`. Question: should both take the recipe's
+   gap instead?
+2. **Agent window inset radius.** `agent-window-frame.ts › INSET_PANEL` is still `rounded-[14px]`
+   (the radii-to-tokens pass exempted the agent window's px geometry), but that pass had rewritten
+   `apps/desktop-ui/src/pages/agent-window/frame.test.ts` to expect `rounded-xl`. Chose the code:
+   the pin expects `rounded-[14px]` again.
+3. **update-required.html lift.** The page carries literal copies of the kit's auth buttons. Besides
+   the `translateY(calc(-1 * var(--lift)))` the drift test asks for, it now also copies the kit's
+   still hit-box band (`--lift: 1px`, `::after` below the hovered button), so it behaves like the kit
+   rather than only matching the six diffed rules. Not seen in a running window.
+4. **Skipped:** the `rls-redteam` CI job (needs Docker and `supabase start`, not started on
+   Samuel's instruction). It still has to pass in CI.
