@@ -10,7 +10,7 @@ import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Muted, PageHeader, Table, Td, since } from "../_components/ui";
+import { Card, Chip, Chips, Table, ov, since } from "../_components/ui";
 
 const KIND_OPTIONS = [
   { key: "secret", label: "Secret" },
@@ -35,42 +35,49 @@ export function KeysSection() {
   const [kind, setKind] = useState<ApiKey["kind"]>("secret");
   const [scopes, setScopes] = useState<ApiKey["scopes"]>([...API_KEY_SCOPES]);
   const [revealed, setRevealed] = useState<string | null>(null);
+  const active = keys.filter((k) => !k.revoked_at).length;
 
   const toggle = (s: ApiKey["scopes"][number]) =>
     setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
 
   return (
     <>
-      <PageHeader
-        title="API keys"
-        action={
-          <button type="button" className={pillButton("ink", "lg")} onClick={() => setCreating((v) => !v)}>
-            <Plus size={PILL_ICON.lg} aria-hidden="true" />
-            Create key
-          </button>
-        }
-      />
-
       {revealed && (
-        <Card title="New key" aside={<button type="button" className={pillButton("quiet", "sm")} onClick={() => setRevealed(null)}>Done</button>}>
+        <Card
+          title="New key"
+          aside={
+            <button type="button" className={pillButton("outline", "sm")} onClick={() => setRevealed(null)}>
+              Done
+            </button>
+          }
+        >
           <div className="card-well flex items-center justify-between gap-3 px-3 py-2.5">
             <code className="truncate font-mono text-body text-text-primary">{revealed}</code>
             <CopyButton text={revealed} />
           </div>
-          <Muted>Shown once.</Muted>
+          <p className={ov.note}>Shown once</p>
         </Card>
       )}
 
       {creating && !revealed && (
-        <Card title={`Create ${env} key`}>
+        <Card title={`New ${env} key`}>
           <SegmentedControl options={KIND_OPTIONS} value={kind} onChange={setKind} ariaLabel="Key kind" />
-          <div className="flex flex-wrap gap-2">
-            {(kind === "publishable" ? (["connect"] as const) : API_KEY_SCOPES).map((s) => (
-              <label key={s} className="flex cursor-pointer items-center gap-1.5 rounded-full border border-border-default px-2.5 py-1 font-mono text-caption text-text-primary">
-                <input type="checkbox" checked={kind === "publishable" || scopes.includes(s)} disabled={kind === "publishable"} onChange={() => toggle(s)} />
-                {s}
-              </label>
-            ))}
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Scopes">
+            {(kind === "publishable" ? (["connect"] as const) : API_KEY_SCOPES).map((s) => {
+              const on = kind === "publishable" || scopes.includes(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={on}
+                  disabled={kind === "publishable"}
+                  onClick={() => toggle(s)}
+                  className={cn(pillButton(on ? "ink" : "outline", "xs", { raise: false }), "font-mono disabled:opacity-60")}
+                >
+                  {s}
+                </button>
+              );
+            })}
           </div>
           <div className="flex gap-2">
             <button
@@ -91,33 +98,42 @@ export function KeysSection() {
         </Card>
       )}
 
-      <Table columns={["Key", "Kind", "Scopes", "Created", "Last used", "Status", ""]}>
-        {keys.map((k) => (
-          <tr key={k.id} className={cn(k.revoked_at && "opacity-50")}>
-            <Td mono className="whitespace-nowrap">
-              {masked(k)}
-            </Td>
-            <Td>{k.kind === "secret" ? "Secret" : "Publishable"}</Td>
-            <Td>
-              <div className="flex flex-wrap gap-1">
-                {k.scopes.map((s) => (
-                  <Chip key={s}>{s}</Chip>
-                ))}
-              </div>
-            </Td>
-            <Td className="whitespace-nowrap text-text-secondary">{since(k.created_at)}</Td>
-            <Td className="whitespace-nowrap text-text-secondary">{since(k.last_used_at)}</Td>
-            <Td className="whitespace-nowrap">{keyStatus(k)}</Td>
-            <Td className="text-right">
-              {!k.revoked_at && (
-                <button type="button" className={pillButton("quiet", "xs")} onClick={() => revokeKey(k.id)}>
-                  Revoke
-                </button>
-              )}
-            </Td>
-          </tr>
-        ))}
-      </Table>
+      <Card
+        title="API keys"
+        count={active}
+        aside={
+          <button type="button" className={pillButton("ink", "sm")} onClick={() => setCreating((v) => !v)}>
+            <Plus size={PILL_ICON.sm} aria-hidden="true" />
+            Create key
+          </button>
+        }
+      >
+        <Table columns={["Key", "Kind", "Scopes", "Created", "Last used", "Status", ""]}>
+          {keys.map((k) => (
+            <tr key={k.id} className={cn(k.revoked_at && "opacity-50")}>
+              <td className="whitespace-nowrap font-mono text-small">{masked(k)}</td>
+              <td>{k.kind === "secret" ? "Secret" : "Publishable"}</td>
+              <td>
+                <Chips>
+                  {k.scopes.map((s) => (
+                    <Chip key={s}>{s}</Chip>
+                  ))}
+                </Chips>
+              </td>
+              <td className="whitespace-nowrap text-text-muted">{since(k.created_at)}</td>
+              <td className="whitespace-nowrap text-text-muted">{since(k.last_used_at)}</td>
+              <td className="whitespace-nowrap">{keyStatus(k)}</td>
+              <td className="text-right">
+                {!k.revoked_at && (
+                  <button type="button" className={pillButton("quiet", "xs")} onClick={() => revokeKey(k.id)}>
+                    Revoke
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      </Card>
     </>
   );
 }

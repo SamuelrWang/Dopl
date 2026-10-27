@@ -8,7 +8,7 @@ import { cn } from "@/shared/lib/utils";
 import { SearchField } from "@/shared/ui/search-field";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Chip, Muted, PageHeader, Table, Td, TierChip, deviceName, since } from "../_components/ui";
+import { Card, Chip, Chips, Table, TierChip, deviceName, ov, since } from "../_components/ui";
 
 /** The tiers a scope reaches: one id → its tier; a family wildcard → every tier in that family. */
 export function tiersOf(scope: CapabilityScope): RiskTier[] {
@@ -31,12 +31,16 @@ function statusPill(c: Connection) {
 export function UsersSection() {
   const { fx } = usePortal();
   const [query, setQuery] = useState("");
-  const users = [...new Set(fx.connections.map((c) => c.external_user_id))].filter((u) => u.includes(query.trim()));
+  const all = [...new Set(fx.connections.map((c) => c.external_user_id))];
+  const users = all.filter((u) => u.includes(query.trim()));
 
   return (
-    <>
-      <PageHeader title="End users" action={<SearchField value={query} onChange={setQuery} placeholder="external_user_id" />} />
-      <Table columns={["external_user_id", "Device", "Status", "Granted scopes", "Tiers", "Connected"]}>
+    <Card
+      title="End users"
+      count={users.length === all.length ? all.length : `${users.length} of ${all.length}`}
+      aside={<SearchField value={query} onChange={setQuery} placeholder="external_user_id" size="sm" className="w-52" />}
+    >
+      <Table columns={["User", "Device", "Status", "Granted scopes", "Tiers", "Connected"]}>
         {users.flatMap((u) =>
           fx.connections
             .filter((c) => c.external_user_id === u)
@@ -44,41 +48,37 @@ export function UsersSection() {
               const tiers = RISK_TIERS.filter((t) => c.grants.some((g) => tiersOf(g.scope).includes(t)));
               return (
                 <tr key={c.id} className={cn(c.status === "revoked" && "opacity-50")}>
-                  <Td mono className="whitespace-nowrap">
-                    {i === 0 ? u : ""}
-                  </Td>
-                  <Td>
-                    <div className="flex flex-col">
-                      <span className="whitespace-nowrap">{deviceName(c.device)}</span>
-                      <span className="font-mono text-micro text-text-muted">{c.id}</span>
-                    </div>
-                  </Td>
-                  <Td className="whitespace-nowrap">{statusPill(c)}</Td>
-                  <Td>
-                    <div className="flex flex-wrap gap-1">
+                  <td className="whitespace-nowrap font-mono text-small">{i === 0 ? u : ""}</td>
+                  <td>
+                    <span className="flex flex-col py-1.5">
+                      <span className="whitespace-nowrap font-medium">{deviceName(c.device)}</span>
+                      <span className={cn(ov.rowMeta, "font-mono")}>{c.id}</span>
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap">{statusPill(c)}</td>
+                  <td>
+                    <Chips>
                       {c.grants.map((g) => (
                         <Chip key={g.scope}>
                           {g.scope}
-                          {g.expires_at && <span className="ml-1 text-text-muted">· {since(g.expires_at)}</span>}
+                          {g.expires_at && ` · ${since(g.expires_at)}`}
                         </Chip>
                       ))}
-                    </div>
-                  </Td>
-                  <Td>
-                    <div className="flex gap-1">
+                    </Chips>
+                  </td>
+                  <td>
+                    <Chips>
                       {tiers.map((t) => (
                         <TierChip key={t} tier={t} />
                       ))}
-                    </div>
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    <Muted>{since(c.created_at)}</Muted>
-                  </Td>
+                    </Chips>
+                  </td>
+                  <td className="whitespace-nowrap text-text-muted">{since(c.created_at)}</td>
                 </tr>
               );
             })
         )}
       </Table>
-    </>
+    </Card>
   );
 }

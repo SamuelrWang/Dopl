@@ -1,93 +1,113 @@
 /**
- * Small presentational bits the portal sections share. Kit classes and tokens only
- * (docs/DESIGN-SYSTEM.md); no hand-rolled colours.
+ * The portal's presentational bits, all composed from the /home Overview face's recipes
+ * (`home/components/overview/overview.module.css`, `OverviewCard`) and the kit
+ * (`StatusPill`, `.card-well`). No colour, size or shadow is declared here.
  */
 import type { ReactNode } from "react";
 import type { RiskTier } from "@dopl/contracts/device-sdk";
+import { RISK_TIER_DEFAULT_POLICY } from "@dopl/contracts/device-sdk";
 import { cn } from "@/shared/lib/utils";
-import { IDENTITY_NAME_TEXT, LABEL_TEXT_MUTED, SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
+import { StatusPill } from "@/shared/ui/status-pill";
+import ov from "@/features/home/components/overview/overview.module.css";
 import { DEMO_NOW } from "../_data/fixtures";
 
-export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
+export { OverviewCard as Card, Bars } from "@/features/home/components/overview/overview-card";
+export { ov };
+
+/** A grey kit pill holding an identifier: a scope, a capability, a limit. */
+export function Chip({ children, mono = true }: { children: ReactNode; mono?: boolean }) {
+  return <StatusPill className={cn(mono && "font-mono")}>{children}</StatusPill>;
+}
+
+/** T3 and T4 ask the user on their device, so they take the "needs you" tone; the rest stay grey. */
+export function TierChip({ tier }: { tier: RiskTier }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <h1 className={SECTION_HEADING_TEXT}>{title}</h1>
-      {action}
-    </div>
+    <span title={RISK_TIER_DEFAULT_POLICY[tier]}>
+      <StatusPill tone={tier === "T3" || tier === "T4" ? "attention" : "neutral"} className="font-mono">
+        {tier}
+      </StatusPill>
+    </span>
   );
 }
 
-/** A white card with an optional 14px title row. */
-export function Card({ title, aside, children, className }: { title?: string; aside?: ReactNode; children: ReactNode; className?: string }) {
+export function Chips({ children }: { children: ReactNode }) {
+  return <span className="flex flex-wrap items-center gap-1 py-1.5">{children}</span>;
+}
+
+/** The Overview's summary strip: one white card, cells split by hairlines. */
+export function Strip({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <section className={cn("white-card flex min-w-0 flex-col gap-3 p-4", className)}>
-      {title && (
-        <div className="flex items-center justify-between gap-3">
-          <h2 className={IDENTITY_NAME_TEXT}>{title}</h2>
-          {aside}
-        </div>
-      )}
+    <section className={cn("white-card", ov.card, ov.strip)} aria-label={label}>
       {children}
     </section>
   );
 }
 
-export function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+export function Cell({ label, value, of, sub }: { label: string; value: string; of?: string; sub?: string }) {
   return (
-    <div className="white-card flex min-w-0 flex-col gap-1.5 p-4">
-      <span className={LABEL_TEXT_MUTED}>{label}</span>
-      <span className="font-mono text-stat tabular-nums text-text-primary">{value}</span>
-      {sub && <span className="text-caption text-text-secondary">{sub}</span>}
+    <div className={ov.cell}>
+      <span className={ov.cellLabel}>{label}</span>
+      <span className={ov.figure}>
+        {value}
+        {of && <span className={ov.of}>{of}</span>}
+      </span>
+      {sub && <span className={ov.rowMeta}>{sub}</span>}
     </div>
   );
 }
 
-/** A plain table on a white card: hairline header, hairline rows. */
-export function Table({ columns, children }: { columns: string[]; children: ReactNode }) {
+/** Label-over-value facts in a well. */
+export function Facts({ facts, cols = 3 }: { facts: Array<[string, string]>; cols?: 2 | 3 }) {
   return (
-    <div className="white-card min-w-0 overflow-x-auto">
-      <table className="w-full border-collapse text-left text-body">
+    <dl className={cn("card-well grid gap-x-4 gap-y-2.5 px-3.5 py-3", cols === 3 ? "grid-cols-3" : "grid-cols-2")}>
+      {facts.map(([k, v]) => (
+        <div key={k} className="flex min-w-0 flex-col gap-0.5">
+          <dt className={ov.cellLabel}>{k}</dt>
+          <dd className="truncate font-mono text-small text-text-primary">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** A JSON body in a well. */
+export function Json({ value }: { value: unknown }) {
+  return (
+    <pre className="card-well overflow-x-auto px-3.5 py-3 font-mono text-caption leading-relaxed text-text-secondary">
+      {JSON.stringify(value, null, 2)}
+    </pre>
+  );
+}
+
+/** The Overview's table: caption headers on a hairline, 36px rows split by hairlines. */
+export function Table({ columns, children }: { columns: Array<string | { label: string; num?: boolean }>; children: ReactNode }) {
+  return (
+    <div className="min-w-0 overflow-x-auto">
+      <table className={ov.table}>
         <thead>
-          <tr className="border-b border-border-default">
-            {columns.map((c) => (
-              <th key={c} className={cn(LABEL_TEXT_MUTED, "whitespace-nowrap px-3 py-2.5 font-semibold")}>
-                {c}
-              </th>
-            ))}
+          <tr>
+            {columns.map((c) => {
+              const col = typeof c === "string" ? { label: c } : c;
+              return (
+                <th key={col.label || "actions"} scope="col" className={cn("whitespace-nowrap", col.num && ov.num)}>
+                  {col.label}
+                </th>
+              );
+            })}
           </tr>
         </thead>
-        <tbody className="divide-y divide-border-subtle">{children}</tbody>
+        <tbody>{children}</tbody>
       </table>
     </div>
   );
 }
 
-export function Td({ children, className, mono }: { children: ReactNode; className?: string; mono?: boolean }) {
-  return <td className={cn("px-3 py-2.5 align-top text-text-primary", mono && "font-mono text-small", className)}>{children}</td>;
-}
-
-/** A small grey chip: scopes, capabilities, ids. */
-export function Chip({ children, mono = true }: { children: ReactNode; mono?: boolean }) {
+/** A table cell's button that opens its row: the Overview's `.open`, whose `::after` covers the row. */
+export function RowOpen({ label, expanded, onClick, children }: { label: string; expanded: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <span className={cn("inline-flex items-center rounded-full bg-bg-inset px-2 py-0.5 text-caption text-text-secondary", mono && "font-mono")}>
+    <button type="button" className={cn(ov.open, "whitespace-nowrap")} aria-label={label} aria-expanded={expanded} onClick={onClick}>
       {children}
-    </span>
-  );
-}
-
-const TIER_TONE: Record<RiskTier, string> = {
-  T0: "text-text-secondary",
-  T1: "text-text-secondary",
-  T2: "text-caution",
-  T3: "text-warning",
-  T4: "text-danger",
-};
-
-export function TierChip({ tier }: { tier: RiskTier }) {
-  return (
-    <span className={cn("inline-flex items-center rounded-full border border-border-default px-1.5 py-px font-mono text-micro font-semibold", TIER_TONE[tier])}>
-      {tier}
-    </span>
+    </button>
   );
 }
 
@@ -120,6 +140,9 @@ export const KIND_LABEL: Record<string, string> = {
   vehicle: "Vehicle",
   robot: "Robot",
 };
+
+/** The SDK's device kind as the product's glyph kind (`DeviceKindIcon`): a desktop is a computer. */
+export const glyphKind = (kind: string): string => (kind === "desktop" ? "computer" : kind);
 
 export function deviceName(d: { adapter_id: string; kind: string; model: string }): string {
   if (d.adapter_id === "simulator") return `Simulated ${KIND_LABEL[d.kind]?.toLowerCase() ?? d.kind}`;

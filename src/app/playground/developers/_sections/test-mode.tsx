@@ -4,11 +4,11 @@ import { useState } from "react";
 import type { Connection, DeliverRequest, DeliverResponse, ErrorCode, ErrorResponse } from "@dopl/contracts/device-sdk";
 import { ERROR_CODE_INFO, TEST_MAGIC_DEVICE_IDS, errorDocUrl } from "@dopl/contracts/device-sdk";
 import { cn } from "@/shared/lib/utils";
+import { EmptyState } from "@/shared/ui/empty-state";
 import { pillButton } from "@/shared/ui/pill-button";
-import { LABEL_TEXT_MUTED } from "@/shared/ui/section-heading";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Muted, PageHeader, Table, Td, deviceName } from "../_components/ui";
+import { Card, Chip, Chips, Json, Table, deviceName, ov } from "../_components/ui";
 
 const MAGIC = Object.entries(TEST_MAGIC_DEVICE_IDS) as Array<[keyof typeof TEST_MAGIC_DEVICE_IDS, ErrorCode]>;
 
@@ -43,17 +43,12 @@ export function TestModeSection() {
 
   if (env !== "test") {
     return (
-      <>
-        <PageHeader title="Test mode" />
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <Muted>Simulators run in the test environment only.</Muted>
-            <button type="button" className={pillButton("ink", "md")} onClick={() => setEnv("test")}>
-              Switch to test
-            </button>
-          </div>
-        </Card>
-      </>
+      <Card title="Test mode">
+        <EmptyState variant="outline" title="Simulators run in test only" />
+        <button type="button" className={cn(pillButton("ink", "md"), "self-start")} onClick={() => setEnv("test")}>
+          Switch to test
+        </button>
+      </Card>
     );
   }
 
@@ -61,60 +56,67 @@ export function TestModeSection() {
 
   return (
     <>
-      <PageHeader title="Test mode" />
-      <Table columns={["Simulator", "external_user_id", "Capabilities", "Behaviour"]}>
-        {sims.map((c) => {
-          const magic = MAGIC.find(([id]) => c.external_user_id === id);
-          return (
-            <tr key={c.id}>
-              <Td className="whitespace-nowrap">
-                <div className="flex flex-col">
-                  <span>{deviceName(c.device)}</span>
-                  <span className="font-mono text-micro text-text-muted">{c.device.id}</span>
-                </div>
-              </Td>
-              <Td mono>{c.external_user_id}</Td>
-              <Td>
-                <div className="flex flex-wrap gap-1">
-                  {c.device.capabilities.map((d) => (
-                    <Chip key={d.capability}>{d.capability}</Chip>
-                  ))}
-                </div>
-              </Td>
-              <Td className="whitespace-nowrap">
-                {magic ? (
-                  <StatusPill tone="attention">{magic[1]}</StatusPill>
-                ) : (
-                  <StatusPill tone="live" dot bare>
-                    Succeeds
-                  </StatusPill>
-                )}
-              </Td>
-            </tr>
-          );
-        })}
-      </Table>
+      <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start gap-3.5">
+        <Card title="Simulators" count={sims.length}>
+          <Table columns={["Simulator", "User", "Capabilities", "Behaviour"]}>
+            {sims.map((c) => {
+              const magic = MAGIC.find(([id]) => c.external_user_id === id);
+              return (
+                <tr key={c.id}>
+                  <td>
+                    <span className="flex flex-col py-1.5">
+                      <span className="whitespace-nowrap font-medium">{deviceName(c.device)}</span>
+                      <span className={cn(ov.rowMeta, "font-mono")}>{c.device.id}</span>
+                    </span>
+                  </td>
+                  <td className="font-mono text-small">{c.external_user_id}</td>
+                  <td>
+                    <Chips>
+                      {c.device.capabilities.map((d) => (
+                        <Chip key={d.capability}>{d.capability}</Chip>
+                      ))}
+                    </Chips>
+                  </td>
+                  <td className="whitespace-nowrap">
+                    {magic ? (
+                      <StatusPill tone="attention" className="font-mono">
+                        {magic[1]}
+                      </StatusPill>
+                    ) : (
+                      <StatusPill tone="live" dot bare>
+                        Succeeds
+                      </StatusPill>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </Table>
+        </Card>
 
-      <Card title="Magic ids">
-        <ul className="flex flex-col divide-y divide-border-subtle">
-          {MAGIC.map(([id, code]) => (
-            <li key={id} className="flex items-center justify-between gap-3 py-2">
-              <code className="font-mono text-body text-text-primary">{id}</code>
-              <div className="flex items-center gap-2">
+        <Card title="Magic ids" count={MAGIC.length}>
+          <ul className={ov.rows}>
+            {MAGIC.map(([id, code]) => (
+              <li key={id} className={ov.row}>
+                <span className={ov.rowMain}>
+                  <span className={cn(ov.rowTitle, "font-mono")}>{id}</span>
+                  <span className={ov.rowMeta}>HTTP {ERROR_CODE_INFO[code].status}</span>
+                </span>
                 <Chip>{code}</Chip>
-                <Muted>HTTP {ERROR_CODE_INFO[code].status}</Muted>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Card>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
 
       <Card title="Send a test delivery">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Simulator">
           {sims.map((c) => (
             <button
               key={c.id}
               type="button"
+              role="radio"
+              aria-checked={c.id === target}
               onClick={() => setTarget(c.id)}
               className={cn(pillButton(c.id === target ? "ink" : "outline", "sm", { raise: false }), "font-mono")}
             >
@@ -122,7 +124,7 @@ export function TestModeSection() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             disabled={!chosen}
@@ -142,12 +144,10 @@ export function TestModeSection() {
           >
             Send
           </button>
-          <span className="font-mono text-caption text-text-muted">
-            POST /v1/users/{chosen?.external_user_id ?? "…"}/deliver
-          </span>
+          <span className="font-mono text-caption text-text-muted">POST /v1/users/{chosen?.external_user_id ?? "…"}/deliver</span>
         </div>
         {result && (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
             {(
               [
                 ["Request", result.request],
@@ -155,10 +155,8 @@ export function TestModeSection() {
               ] as const
             ).map(([label, body]) => (
               <div key={label} className="flex min-w-0 flex-col gap-1.5">
-                <span className={LABEL_TEXT_MUTED}>{label}</span>
-                <pre className="card-well overflow-x-auto px-3.5 py-3 font-mono text-caption leading-relaxed text-text-secondary">
-                  {JSON.stringify(body, null, 2)}
-                </pre>
+                <span className={ov.cellLabel}>{label}</span>
+                <Json value={body} />
               </div>
             ))}
           </div>

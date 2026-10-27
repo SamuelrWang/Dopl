@@ -3,12 +3,12 @@
 import { Fragment, useState } from "react";
 import type { DeviceEventRow, ErrorCode, EventOutcome } from "@dopl/contracts/device-sdk";
 import { ERROR_CODE_INFO } from "@dopl/contracts/device-sdk";
-import { cn } from "@/shared/lib/utils";
 import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
-import { RAISED_INPUT } from "@/shared/ui/wells";
+import { SelectMenu } from "@/shared/ui/select-menu";
+import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Chip, KIND_LABEL, Muted, PageHeader, Table, Td, TierChip, clock } from "../_components/ui";
+import { Card, Chip, Json, KIND_LABEL, RowOpen, Table, TierChip, clock, ov } from "../_components/ui";
 
 type OutcomeFilter = "all" | EventOutcome;
 const OUTCOMES: ReadonlyArray<{ key: OutcomeFilter; label: string }> = [
@@ -18,11 +18,19 @@ const OUTCOMES: ReadonlyArray<{ key: OutcomeFilter; label: string }> = [
   { key: "denied", label: "Denied" },
 ];
 
-const OUTCOME_TONE: Record<EventOutcome, string> = {
-  ok: "text-success",
-  error: "text-danger",
-  denied: "text-warning",
-};
+function Outcome({ e }: { e: DeviceEventRow }) {
+  if (e.outcome === "ok")
+    return (
+      <StatusPill tone="live" dot bare>
+        ok
+      </StatusPill>
+    );
+  return (
+    <StatusPill tone={e.outcome === "error" ? "attention" : "neutral"} className="font-mono">
+      {e.error_code ?? e.outcome}
+    </StatusPill>
+  );
+}
 
 export function EventsSection() {
   const { activity } = usePortal();
@@ -45,86 +53,86 @@ export function EventsSection() {
   );
 
   return (
-    <>
-      <PageHeader title="Events" action={<Muted>{rows.length} of {events.length}</Muted>} />
-      <div className="flex flex-wrap items-center gap-3">
+    <Card title="Events" count={`${rows.length} of ${events.length}`}>
+      <div className="flex flex-wrap items-center gap-2">
         <SegmentedControl options={OUTCOMES} value={outcome} onChange={setOutcome} ariaLabel="Outcome" />
-        <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Device kind" className={cn(RAISED_INPUT, "h-8 w-auto px-2.5")}>
-          <option value="all">All devices</option>
-          {kinds.map((k) => (
-            <option key={k} value={k}>
-              {KIND_LABEL[k]}
-            </option>
-          ))}
-        </select>
-        <select value={code} onChange={(e) => setCode(e.target.value)} aria-label="Error code" className={cn(RAISED_INPUT, "h-8 w-auto px-2.5 font-mono")}>
-          <option value="all">All errors</option>
-          {codes.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <SearchField value={query} onChange={setQuery} placeholder="User, device or event id" size="sm" className="w-56" />
+        <SelectMenu
+          variant="outline"
+          ariaLabel="Device kind"
+          value={kind}
+          onChange={setKind}
+          options={[{ value: "all", label: "All devices" }, ...kinds.map((k) => ({ value: k, label: KIND_LABEL[k] ?? k }))]}
+        />
+        <SelectMenu
+          variant="outline"
+          ariaLabel="Error code"
+          value={code}
+          onChange={setCode}
+          options={[{ value: "all", label: "All errors" }, ...codes.map((c) => ({ value: c, label: c }))]}
+        />
+        <SearchField value={query} onChange={setQuery} placeholder="User, device or event id" size="sm" className="ml-auto w-56" />
       </div>
-      <Table columns={["Time", "Capability", "User", "Route", "Tier", "Outcome", "Latency"]}>
-        {rows.map((e) => (
-          <Fragment key={e.event_id}>
-            <tr className="cursor-pointer hover:bg-surface-raised-1" onClick={() => setOpenId(openId === e.event_id ? null : e.event_id)}>
-              <Td mono className="whitespace-nowrap text-text-secondary">
-                {clock(e.ts)}
-              </Td>
-              <Td mono className="whitespace-nowrap">
-                {e.capability}
-                {e.intent && <span className="ml-1.5 text-text-muted">{e.intent}</span>}
-              </Td>
-              <Td mono className="whitespace-nowrap text-text-secondary">
-                {e.external_user_id ?? "—"}
-              </Td>
-              <Td className="whitespace-nowrap">
-                {e.route_decision ? (
-                  <span className="font-mono text-small">
-                    {e.route_decision.target} → {e.device_kind}
-                    <span className="ml-1.5 text-text-muted">{e.route_decision.reason}</span>
-                  </span>
-                ) : (
-                  <Muted>{e.device_kind ? `from ${e.device_kind}` : "—"}</Muted>
-                )}
-              </Td>
-              <Td>{e.risk_tier && <TierChip tier={e.risk_tier} />}</Td>
-              <Td className="whitespace-nowrap">
-                <span className={cn("font-mono text-small font-medium", OUTCOME_TONE[e.outcome])}>{e.error_code ?? e.outcome}</span>
-              </Td>
-              <Td mono className="whitespace-nowrap text-right tabular-nums">
-                {e.latency_ms.api + (e.latency_ms.device_delivery ?? 0)} ms
-              </Td>
-            </tr>
-            {openId === e.event_id && (
+      <Table columns={["Time", "Capability", "User", "Route", "Tier", "Outcome", { label: "Latency", num: true }]}>
+        {rows.map((e) => {
+          const open = openId === e.event_id;
+          return (
+            <Fragment key={e.event_id}>
               <tr>
-                <td colSpan={7} className="px-3 pb-3">
-                  <EventDetail e={e} />
+                <td className="font-mono text-small text-text-muted">
+                  <RowOpen label={`Event ${e.event_id}`} expanded={open} onClick={() => setOpenId(open ? null : e.event_id)}>
+                    {clock(e.ts)}
+                  </RowOpen>
+                </td>
+                <td className="whitespace-nowrap font-mono text-small">
+                  {e.capability}
+                  {e.intent && <span className="ml-1.5 text-text-muted">{e.intent}</span>}
+                </td>
+                <td className="whitespace-nowrap font-mono text-small text-text-secondary">{e.external_user_id ?? "—"}</td>
+                <td className="whitespace-nowrap font-mono text-small">
+                  {e.route_decision ? (
+                    <>
+                      {e.route_decision.target} → {e.device_kind}
+                      <span className="ml-1.5 text-text-muted">{e.route_decision.reason}</span>
+                    </>
+                  ) : (
+                    <span className="text-text-muted">{e.device_kind ? `from ${e.device_kind}` : "—"}</span>
+                  )}
+                </td>
+                <td>{e.risk_tier && <TierChip tier={e.risk_tier} />}</td>
+                <td className="whitespace-nowrap">
+                  <Outcome e={e} />
+                </td>
+                <td className={`${ov.num} whitespace-nowrap font-mono text-small`}>
+                  {e.latency_ms.api + (e.latency_ms.device_delivery ?? 0)} ms
                 </td>
               </tr>
-            )}
-          </Fragment>
-        ))}
+              {open && (
+                <tr>
+                  <td colSpan={7} className="pb-2.5">
+                    <EventDetail e={e} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          );
+        })}
       </Table>
-    </>
+    </Card>
   );
 }
 
 function EventDetail({ e }: { e: DeviceEventRow }) {
   const info = e.error_code ? ERROR_CODE_INFO[e.error_code] : null;
   return (
-    <div className="card-well flex flex-col gap-2 px-3.5 py-3">
+    <div className="flex flex-col gap-2">
       {info && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1">
           <Chip>{info.type}</Chip>
           <Chip>HTTP {info.status}</Chip>
-          <Chip>{info.retryable ? "retryable" : "not retryable"}</Chip>
+          <Chip mono={false}>{info.retryable ? "Retryable" : "Not retryable"}</Chip>
         </div>
       )}
-      <pre className="overflow-x-auto font-mono text-caption leading-relaxed text-text-secondary">{JSON.stringify(e, null, 2)}</pre>
+      <Json value={e} />
     </div>
   );
 }
