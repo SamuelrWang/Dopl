@@ -14,6 +14,15 @@ vi.mock("@/shared/supabase/admin", async () => {
 import { fakeStore, resetFakeStore } from "./fake-dev-db";
 import { mintApiKey, resetLastUsedThrottleForTests, revokeApiKey } from "./keys";
 import { readBearer, withDeveloperKey } from "./with-developer-key";
+import { devSdkError } from "./errors";
+import { flushDevEvents, setDevEventSinkForTests } from "./events";
+import type { DeviceEventRow } from "../types";
+
+let events: DeviceEventRow[] = [];
+const logged = async () => {
+  await flushDevEvents();
+  return events;
+};
 
 const PROJECT = "proj-1";
 const ctx = { params: Promise.resolve({}) };
@@ -30,6 +39,8 @@ async function expectC10(res: Response, status: number, code: string) {
 }
 
 beforeEach(() => {
+  events = [];
+  setDevEventSinkForTests({ write: async (rows) => void events.push(...rows) });
   resetFakeStore();
   resetLastUsedThrottleForTests();
   ok.mockClear();
@@ -117,5 +128,71 @@ describe("withDeveloperKey", () => {
     const touches = fakeStore.updates.filter((u) => "last_used_at" in u.patch);
     expect(touches).toHaveLength(1);
     expect(touches[0].filters).toEqual([["id", key.id]]);
+  });
+});
+
+describe("withDeveloperKey — the C8 event row (A2)", () => {
+  const secretKey = async () => (await mintApiKey({ projectId: PROJECT, env: "test", kind: "secret" })).secret;
+
+  it("passes a handler's route_decision and annotations through to the one row", async () => {
+    const secret = await secretKey();
+    const decision = { target: "auto", reason: "only online device", candidates: ["dev-1", "dev-2"] };
+    const handler = withDeveloperKey(
+      async (_r, c) => {
+        c.event.setRouteDecision(decision);
+        c.event.annotate({ device_id: "dev-1", device_kind: "glasses", capability: "present.display", latency_ms: { device_delivery: 40 } });
+        return NextResponse.json({ ok: true });
+      },
+      { scopes: [] }
+    );
+    expect((await handler(req(`Bearer ${secret}`), ctx)).status).toBe(200);
+    const rows = await logged();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      route_decision: decision,
+      device_id: "dev-1",
+      device_kind: "glasses",
+      capability: "present.display",
+      outcome: "ok",
+    });
+    expect(rows[0].latency_ms.device_delivery).toBe(40);
+    expect(rows[0].latency_ms.api).toBeGreaterThanOrEqual(0);
+  });
+
+  it("records a handler's own C10 error code, without reading the body", async () => {
+    const secret = await secretKey();
+    const handler = withDeveloperKey(async () => devSdkError("device_offline", "offline"), { scopes: [] });
+    expect((await handler(req(`Bearer ${secret}`), ctx)).status).toBe(409);
+    expect(await logged()).toEqual([expect.objectContaining({ outcome: "error", error_code: "device_offline" })]);
+  });
+
+  it("logs one `denied` row for a revoked key (its project is known) and one for a missing scope", async () => {
+    const { secret, key } = await mintApiKey({ projectId: PROJECT, env: "test", kind: "secret", scopes: ["devices:read"] });
+    await withDeveloperKey(ok, { scopes: ["actions:write"] })(req(`Bearer ${secret}`), ctx);
+    await revokeApiKey({ projectId: PROJECT, keyId: key.id });
+    await withDeveloperKey(ok, { scopes: [] })(req(`Bearer ${secret}`), ctx);
+    const rows = await logged();
+    expect(rows.map((r) => [r.outcome, r.error_code])).toEqual([
+      ["denied", "insufficient_scope"],
+      ["denied", "unauthenticated"],
+    ]);
+  });
+
+  it("a handler that throws still logs exactly one `error` row, and the throw propagates", async () => {
+    const secret = await secretKey();
+    const handler = withDeveloperKey(async () => {
+      throw new Error("kaboom");
+    }, { scopes: [] });
+    await expect(handler(req(`Bearer ${secret}`), ctx)).rejects.toThrow("kaboom");
+    expect(await logged()).toEqual([expect.objectContaining({ outcome: "error", error_code: null })]);
+  });
+
+  it("a broken event sink never fails the call", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    setDevEventSinkForTests({ write: async () => Promise.reject(new Error("db down")) });
+    const secret = await secretKey();
+    const res = await withDeveloperKey(ok, { scopes: [] })(req(`Bearer ${secret}`), ctx);
+    expect(res.status).toBe(200);
+    await expect(flushDevEvents()).resolves.toBeUndefined();
   });
 });
