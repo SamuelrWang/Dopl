@@ -130,6 +130,7 @@ export function reads(over: Partial<HomeOverviewReads> = {}): HomeOverviewReads 
     needs: read(NO_NEEDS),
     wallet: { loading: false, credits: CREDITS, isPaid: false },
     devices: { devices: DEVICES, failed: false },
+    preview: null,
     ...over,
   };
 }

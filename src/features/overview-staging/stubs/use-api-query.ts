@@ -9,6 +9,8 @@ import {
   homeNeeds,
 } from "../overview-mock-data";
 import { USAGE_SCOPE_ALL } from "@/features/home/overview-types";
+import { HOME_PREVIEW_PATH, OverviewPreviewSchema } from "@/features/home/preview-types";
+import PREVIEW_SEED from "../overview-preview-seed.json";
 import { monthKey } from "@/features/home/overview-period";
 import type { OverviewRead } from "@/features/home/components/overview/use-home-overview-reads";
 import { useStagingState, type StagingLoad } from "./staging-state";
@@ -36,6 +38,8 @@ function resolvePath(path: string, load: StagingLoad): unknown {
       return tokenSpendReport(empty);
     case "/api/home/needs":
       return homeNeeds(empty);
+    case HOME_PREVIEW_PATH:
+      return { overview: empty ? null : OverviewPreviewSchema.parse(PREVIEW_SEED), identities: null };
     default:
       throw new Error(`No staging fixture for ${url.pathname}`);
   }

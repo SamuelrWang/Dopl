@@ -9,6 +9,9 @@
   --ove-credits-h: 288px;
   --ove-tokens-h: 160px;
   --ove-cols-h: calc(var(--ove-credits-h) + var(--ove-gap) + var(--ove-tokens-h));
+  /* With the preview's Agents and Activity the columns hold three cards each. */
+  --ove-agents-h: 336px;
+  --ove-full-h: 900px;
   --ove-pair-h: 332px;
   min-width: 0;
   flex: 1;
@@ -123,6 +126,15 @@
 .slotCredits {
   height: var(--ove-credits-h);
 }
+.slotTokens {
+  height: var(--ove-tokens-h);
+}
+.slotAgents {
+  height: var(--ove-agents-h);
+}
+.grid[data-full="true"] {
+  height: var(--ove-full-h);
+}
 .pair {
   display: grid;
   height: var(--ove-pair-h);
@@ -133,6 +145,7 @@
 /* One column: every card is as tall as its content, so nothing scrolls inside it. */
 @container (max-width: 720px) {
   .grid,
+  .grid[data-full="true"],
   .pair {
     height: auto;
     grid-template-columns: minmax(0, 1fr);

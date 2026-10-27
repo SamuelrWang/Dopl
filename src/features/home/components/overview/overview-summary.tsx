@@ -2,6 +2,9 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import { ThinMeter } from "@/shared/ui/usage-meter";
 import { OVER_METER, creditAllowance } from "./overview-credits";
+import { EMPTY_PREVIEW_LIST } from "@/features/home/preview-types";
+import { agentTally } from "./overview-agents";
+import { deviceViews, onlineCount } from "./overview-devices";
 import { needsCount } from "./overview-needs";
 import type { HomeOverviewReads } from "./use-home-overview-reads";
 import styles from "./overview.module.css";
@@ -36,15 +39,21 @@ export function SummaryStrip({
   wallet,
   devices,
   needs,
-}: Pick<HomeOverviewReads, "wallet" | "devices" | "needs">) {
+  preview,
+}: Pick<HomeOverviewReads, "wallet" | "devices" | "needs" | "preview">) {
   const allowance = wallet.loading ? null : creditAllowance(wallet.credits);
-  const rows = devices.failed ? null : devices.devices;
+  const rows =
+    devices.failed || !devices.devices
+      ? null
+      : deviceViews(devices.devices, preview?.devices ?? EMPTY_PREVIEW_LIST);
+  const agents = preview?.hosts ? agentTally(preview.hosts) : null;
   return (
     <section className={cn("white-card", styles.card, styles.strip)} aria-label="Summary">
-      <Cell label="Need you" value={needsCount({ wallet, needs }) ?? UNKNOWN} />
+      {agents && <Cell label="Working" value={String(agents.working)} of={`/ ${agents.total}`} />}
+      <Cell label="Need you" value={needsCount({ wallet, needs, preview }) ?? UNKNOWN} />
       <Cell
         label="Devices online"
-        value={rows ? String(rows.filter((device) => device.online).length) : UNKNOWN}
+        value={rows ? String(onlineCount(rows)) : UNKNOWN}
         of={rows ? `/ ${rows.length}` : undefined}
       />
       <Cell

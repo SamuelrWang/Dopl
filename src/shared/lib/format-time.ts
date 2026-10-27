@@ -48,6 +48,17 @@ export function formatRelativeTime(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString();
 }
 
+function clockTime(date: Date): string {
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+/** Wall-clock only ("2:34 PM"), whatever the day. Null/invalid renders an em dash. */
+export function formatClockTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = parseDate(iso);
+  return Number.isNaN(date.getTime()) ? "—" : clockTime(date);
+}
+
 /**
  * Absolute channel timestamp: wall-clock ("2:34 PM") for today, else calendar
  * date + time ("Jul 26, 2:34 PM"), with the year appended off the current year.
@@ -58,10 +69,7 @@ export function formatChannelTimestamp(iso: string | null | undefined): string {
   if (!iso) return "—";
   const date = parseDate(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  const time = date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const time = clockTime(date);
   const now = new Date();
   const sameDay =
     date.getFullYear() === now.getFullYear() &&

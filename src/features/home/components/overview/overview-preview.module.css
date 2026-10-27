@@ -1,0 +1,159 @@
+/* The Overview parts drawn from an account's preview data (agents, activity, reach order, add
+   device). Tokens only; rows, marks and tags come from overview.module.css. */
+
+/* agents, grouped under the computer that runs them */
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.groupHead {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-default);
+}
+.groupName {
+  overflow: hidden;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.groupHead > :last-child {
+  margin-left: auto;
+}
+
+/* reach order: the first device inked, a 30s wait before each next one */
+.chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.step > [data-shape="tile"] {
+  width: 22px;
+  height: 22px;
+}
+.step[data-first="true"] > [data-shape="tile"] {
+  border-color: var(--surface-cta);
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+}
+.stepName {
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-muted);
+}
+
+/* add device: a kind picker, then the pairing code */
+.add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: none;
+  font-size: var(--text-caption);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.kind > [data-shape="tile"] {
+  width: 20px;
+  height: 20px;
+  border: 0;
+}
+.kind[aria-pressed="true"] {
+  border-color: var(--text-primary);
+}
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.code {
+  padding: 2px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+}
+
+/* activity feed rows */
+.feed {
+  min-height: 38px;
+}
+.time {
+  width: 58px;
+  color: var(--text-muted);
+}
+.hops {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+}
+.hop {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  text-decoration: line-through;
+  white-space: nowrap;
+}
+.hop[data-landed="true"] {
+  font-weight: 500;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.level {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.level[data-level="warn"] {
+  background: var(--warning);
+}
+.level[data-level="error"] {
+  background: var(--danger);
+}
+.live {
+  border-color: color-mix(in oklch, var(--success) 40%, transparent);
+  color: var(--success);
+}
