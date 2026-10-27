@@ -10,10 +10,13 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+/** Each round lets a bridge answer schedule the next timer (latency, then the query's render). */
 const tick = async (ms = 400) => {
-  await act(async () => {
-    vi.advanceTimersByTime(ms);
-  });
+  for (let round = 0; round < 3; round += 1) {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
 };
 
 function dialog(name: string) {
@@ -39,7 +42,7 @@ describe("/popups staging", () => {
     await tick();
     const catalog = () => within(document.querySelector(".pps-catalog") as HTMLElement);
 
-    // ── Settings: every row, opened through the real `openHomeSettings` registry ──
+    // ── Settings: every row, opened on the header Profile pill's modal (`openStagingSettings`) ──
     const panes: Array<[string, string]> = [
       ["Workspaces", "Northwind"],
       ["Agents", "Claude Code"],
@@ -114,12 +117,6 @@ describe("/popups staging", () => {
     expect(screen.getByText("Requested")).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     await tick();
-    const stagedRail = within(document.querySelector(".pps-rail-strip") as HTMLElement);
-    fireEvent.click(stagedRail.getByLabelText("New workspace"));
-    await tick(600);
-    expect(screen.getByText("Team workspaces")).toBeTruthy();
-    fireEvent.keyDown(document, { key: "Escape" });
-    await tick();
 
     // ── Channel Info → People ──
     fireEvent.click(screen.getByText("Add person"));
@@ -168,13 +165,14 @@ describe("/popups staging", () => {
     fireEvent.click(screen.getByText("Close window"));
 
     // ── Frame triggers (every staging page gets these from `StagingFrame`) ──
-    const frameRail = within(document.querySelector(".lp-demo-rail") as HTMLElement);
+    const frameRail = within(document.querySelector('nav[aria-label="Account"]') as HTMLElement);
     fireEvent.click(frameRail.getByLabelText("New workspace"));
     await tick(600);
-    expect(screen.getByText("Request Access")).toBeTruthy();
+    // The rail's own gate reads the request the catalog already sent.
+    expect(screen.getByText("Requested")).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     await tick();
-    const top = within(document.querySelector(".lp-demo-top") as HTMLElement);
+    const top = within(document.querySelector("main.page-float > div") as HTMLElement);
     fireEvent.click(top.getByRole("button", { name: /New channel/ }));
     await tick();
     expect(screen.getByLabelText("New channel name")).toBeTruthy();
@@ -184,13 +182,16 @@ describe("/popups staging", () => {
     expect(screen.getByRole("listbox", { name: "Search results" })).toBeTruthy();
     fireEvent.keyDown(top.getByLabelText("Search"), { key: "Escape" });
     await tick();
+    // The product pill reopens the modal on the pane it last showed.
     fireEvent.click(top.getByTitle("Profile"));
     await tick();
-    expect(within(dialog("Settings")).getAllByText("Display name").length).toBeGreaterThan(0);
+    expect(dialog("Settings")).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     await tick();
     // A toast's action opens its window (the actionable consent toast's Review → agent window).
-    fireEvent.click(screen.getByText("Review"));
+    fireEvent.click(catalog().getByText("Toast: actionable (button)"));
+    await tick(100);
+    fireEvent.click(screen.getAllByText("Review")[0]);
     await tick();
     expect(document.querySelector('.pps-window aside[aria-label="Agent view"]')).toBeTruthy();
     fireEvent.click(screen.getByText("Close window"));

@@ -8,6 +8,15 @@ vi.mock("next/link", () => ({
     <a href={href} {...rest}>{children}</a>
   ),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
+
+const tick = async (ms: number) => {
+  for (let round = 0; round < 3; round += 1) {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+};
 
 describe("/overview staging", () => {
   it("renders the Overview and opens Settings without a network call", async () => {
@@ -15,14 +24,15 @@ describe("/overview staging", () => {
     globalThis.ResizeObserver ??= class { observe() {} disconnect() {} unobserve() {} } as never;
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     render(<OverviewStagingPage />);
-    await act(async () => { vi.advanceTimersByTime(1000); });
+    await tick(1000);
     expect(screen.getByRole("region", { name: "Summary" })).toBeTruthy();
     fireEvent.click(within(screen.getByRole("region", { name: "Credits" })).getByText("Get more credits"));
-    await act(async () => { vi.advanceTimersByTime(100); });
+    await tick(400);
     expect(screen.getAllByText("Plans & Billing").length).toBeGreaterThan(0);
     expect(document.body.textContent).toMatch(/\$\d/);
     expect(document.body.textContent).toContain("Max");
     fireEvent.click(screen.getByText("Workspaces"));
+    await tick(400);
     expect(screen.getByText("Northwind")).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.useRealTimers();

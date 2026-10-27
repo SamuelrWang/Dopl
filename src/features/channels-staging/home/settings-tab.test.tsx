@@ -4,8 +4,10 @@
  * capabilities (no Add members, no Delete channel) and destructive rows that confirm without
  * doing anything.
  */
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useStagingAppBridge } from "@/features/ui-staging/staging-app-bridge";
 import { techDebtFixture } from "../data/tech-debt-fixture";
 import { CURRENT_USER_ID } from "../data/demo-imports";
 import { StagingSettingsTab } from "./settings-tab";
@@ -20,20 +22,28 @@ function rowNames(): string[] {
   );
 }
 
-function channelTab() {
+/** The playground bridge the frame installs: the launch record is main's, played in memory. */
+function WithBridge({ children }: { children: ReactNode }) {
+  return useStagingAppBridge() ? children : null;
+}
+
+async function channelTab() {
   render(
-    <StagingSettingsTab
-      channel={fixture.channel}
-      members={fixture.members}
-      thread={null}
-      currentUserId={CURRENT_USER_ID}
-    />
+    <WithBridge>
+      <StagingSettingsTab
+        channel={fixture.channel}
+        members={fixture.members}
+        thread={null}
+        currentUserId={CURRENT_USER_ID}
+      />
+    </WithBridge>
   );
+  await screen.findByText("Runtime");
 }
 
 describe("the staged Settings tab", () => {
-  it("draws the product's channel face: agent settings with Responder, then the channel", () => {
-    channelTab();
+  it("draws the product's channel face: agent settings with Responder, then the channel", async () => {
+    await channelTab();
     expect(screen.getByRole("heading", { name: "Agent Settings" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Channel" })).toBeTruthy();
     const agent = within(screen.getByRole("region", { name: "Agent Settings" }));
@@ -60,7 +70,7 @@ describe("the staged Settings tab", () => {
   });
 
   it("changes a setting on local state and opens the Details readings", async () => {
-    channelTab();
+    await channelTab();
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     const well = screen.getByRole("list", { name: "Permissions by runtime" });
     expect(within(well).getByText(/Claude · Accept edits/)).toBeTruthy();
@@ -71,7 +81,7 @@ describe("the staged Settings tab", () => {
   });
 
   it("confirms Make public, then flips the staged visibility", async () => {
-    channelTab();
+    await channelTab();
     fireEvent.click(screen.getByRole("button", { name: "Make public" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /public/i }));

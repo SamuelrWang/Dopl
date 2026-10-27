@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { SettingsSection } from "@/shared/layout/settings-modal/settings-modal-core";
 import { cn } from "@/shared/lib/utils";
 import { HomeOverview } from "@/features/home/components/overview/home-overview";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
 import { STAGING_CHANNELS_HREF } from "@/features/ui-staging/staging-channel-rail";
 import { STAGING_HOME_WORKSPACE_ID } from "@/features/ui-staging/staging-stubs";
-import { StagingSettingsModal } from "@/features/settings-staging/staging-settings-modal";
+import { openStagingSettings } from "@/features/ui-staging/staging-popups-provider";
 import { HOME_CHANNELS, type StagingPlan } from "./overview-mock-data";
 import {
   DEFAULT_STAGING_STATE,
@@ -26,8 +25,6 @@ import { useStagingOverviewReads } from "./stubs/use-staging-overview-reads";
  */
 export function OverviewStagingPage() {
   const [state, setState] = useState<StagingState>(DEFAULT_STAGING_STATE);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [section, setSection] = useState<SettingsSection>("billing");
   const router = useRouter();
 
   return (
@@ -36,23 +33,13 @@ export function OverviewStagingPage() {
         <HomeOverview
           homeWorkspaceId={STAGING_HOME_WORKSPACE_ID}
           homeChannels={HOME_CHANNELS}
-          onOpenSettings={(next) => {
-            setSection(next);
-            setSettingsOpen(true);
-          }}
+          onOpenSettings={(next) => openStagingSettings(next, state.plan)}
           onOpenChannel={() => router.push(STAGING_CHANNELS_HREF)}
           onOpenMessage={() => router.push(STAGING_CHANNELS_HREF)}
           onOpenTask={() => router.push(STAGING_CHANNELS_HREF)}
           useReads={useStagingOverviewReads}
         />
       </StagingFrame>
-      <StagingSettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        section={section}
-        onSectionChange={setSection}
-        plan={state.plan}
-      />
       <StagingToolbar state={state} onChange={setState} />
     </StagingStateProvider>
   );

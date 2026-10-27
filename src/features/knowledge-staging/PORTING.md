@@ -30,5 +30,5 @@ real route's refusal.
 | `knowledge-staging-page.tsx` | `pages/home/home-panes.tsx › HomePane`'s Knowledge branch (props from boot) |
 | `ui-staging/staging-scenario-switch.tsx` (shared) | nothing: the floating "States" pill (channel / role / home space); identities uses it too |
 
-On this page the record pane is white (`ui-staging/staging.css › .uis-white-pane`, shared with the
-ontology face), the twin of the desktop's `home.module.css › .page[data-face="knowledge"] .pane`.
+The record pane is white through the product frame's own rule
+(`home/components/shell/home.module.css › .page[data-face="knowledge"] .pane`).

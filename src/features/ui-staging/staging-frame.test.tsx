@@ -4,11 +4,8 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { StagingFrame } from "./staging-frame";
 import { useStagingPopups } from "./staging-popups-provider";
 
-vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
-    <a href={href} {...rest}>{children}</a>
-  ),
-}));
+/** The product header strip: the panel's first row. */
+const header = () => within(document.querySelector("main.page-float > div") as HTMLElement);
 
 const tick = async (ms = 400) => {
   await act(async () => {
@@ -41,7 +38,7 @@ describe("StagingFrame popup triggers", () => {
       </StagingFrame>
     );
     await tick();
-    const top = within(document.querySelector(".lp-demo-top") as HTMLElement);
+    const top = header();
 
     fireEvent.click(top.getByRole("button", { name: /New channel/ }));
     await tick();
@@ -49,13 +46,13 @@ describe("StagingFrame popup triggers", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close new channel form" }));
     await tick();
 
-    // The product search pill: focus opens the popup on the seeded recents, typing answers
-    // from the story's fixtures, Escape clears and closes.
+    // The product search pill: focus opens the popup, typing answers from the story's fixtures
+    // through the bridge's `/api/search`, Escape clears and closes.
     const field = top.getByLabelText("Search");
     fireEvent.focus(field);
     expect(screen.getByRole("listbox", { name: "Search results" })).toBeTruthy();
-    expect(screen.getByText("rollback")).toBeTruthy();
     fireEvent.change(field, { target: { value: "upload" } });
+    await tick(600);
     await tick(600);
     expect(document.querySelector('[data-search-row="stg-art-uploads"]')).toBeTruthy();
     expect(document.querySelector('[data-search-row="stg-msg-9012"] mark')?.textContent).toBe("upload");
@@ -69,7 +66,8 @@ describe("StagingFrame popup triggers", () => {
     const settings = screen.getByRole("dialog", { name: "Settings" });
     expect(within(settings).getAllByText("Display name").length).toBeGreaterThan(0);
     fireEvent.click(within(settings).getByRole("tab", { name: /Devices/ }));
-    await tick();
+    await tick(600);
+    await tick(600);
     expect(within(settings).getAllByText("Daniel’s MacBook Pro").length).toBeGreaterThan(0);
     fireEvent.keyDown(document, { key: "Escape" });
     await tick();
@@ -115,8 +113,8 @@ describe("StagingFrame channel picker", () => {
       expect(column).toBeTruthy();
       // Real rows, not just the width placeholder.
       expect(column.querySelectorAll(".lp-demo-sw-row").length).toBeGreaterThan(0);
-      // Heads the column, at the column's own width (`.lp-demo-top-cell`).
-      const top = within(document.querySelector(".lp-demo-top") as HTMLElement);
+      // Heads the column, in the header's list-width lead cell.
+      const top = header();
       expect(top.getByRole("button", { name: /New channel/ })).toBeTruthy();
     },
     20_000

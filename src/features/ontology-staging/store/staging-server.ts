@@ -10,7 +10,7 @@ import { graphReducer, type GraphAction, type GraphState } from "@/features/onto
 import { attributeFromField } from "@/features/ontology/field-kinds";
 import type { Ontology, OntologyObject, OntologyShare } from "@/features/ontology/types";
 import type { Revision } from "@/features/revisions/types";
-import type { SpaBridgeSurface } from "@/shared/lib/spa-bridge";
+import type { BridgeResponse, StagingBridgeLayer } from "@/features/ui-staging/staging-bridge";
 import {
   DEMO_KNOWLEDGE_BASES,
   DEMO_KNOWLEDGE_ENTRIES,
@@ -30,7 +30,6 @@ export type StagingScenario =
   | "cap-near"
   | "cap-over";
 
-type BridgeResponse = Awaited<ReturnType<SpaBridgeSurface["apiRequest"]>>;
 type Body = Record<string, unknown>;
 
 const LATENCY_MS = 250;
@@ -57,7 +56,7 @@ function sharingPatch(graph: GraphState, id: string, patch: Partial<Ontology>): 
   };
 }
 
-export function createStagingServer(scenario: StagingScenario): Pick<SpaBridgeSurface, "apiRequest"> {
+export function createStagingServer(scenario: StagingScenario): Pick<StagingBridgeLayer, "apiRequest"> {
   let graph: GraphState = graphReducer(
     { ontologies: [], objects: {} },
     { type: "SNAPSHOT_SET", snapshot: scenario === "empty" ? { ontologies: [], objects: {} } : demoSnapshot() }
@@ -120,7 +119,7 @@ export function createStagingServer(scenario: StagingScenario): Pick<SpaBridgeSu
     });
   };
 
-  function route(method: string, url: URL, body: Body): BridgeResponse | Promise<BridgeResponse> {
+  function route(method: string, url: URL, body: Body): BridgeResponse | null | Promise<BridgeResponse> {
     // `/api/<area>/<kind>/<id>/<sub>/<revision>/…`: the two ids become placeholders in the key.
     const parts = url.pathname.split("/").filter(Boolean).slice(1);
     const id = parts[2];
@@ -223,7 +222,7 @@ export function createStagingServer(scenario: StagingScenario): Pick<SpaBridgeSu
       case "GET billing/status":
         return billing();
     }
-    return fail(404, "NOT_FOUND", `Staging has no route for ${method} ${url.pathname}.`);
+    return null;
   }
 
   return {

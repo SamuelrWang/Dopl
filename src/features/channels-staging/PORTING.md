@@ -15,7 +15,7 @@ and the Tasks tab and quick view. A change there changes the web app and the des
 | Staging file | Demo source | Desktop / product file it mirrors |
 |---|---|---|
 | `home/channel-scene.tsx` | `demo-scene.tsx › DemoScene` (record-pane half) | `pages/home/relationship-record.tsx` (record pane: message pane + info slide + agent view) |
-| `home/settings-tab.tsx` (stub host) | — | Mounts `channels/components/settings-tab.tsx › ChannelsSettingsTab`, `settings-agent.tsx › ChannelAgentSettingsView`, `settings-channel-agents.tsx` and `thread-settings-tab.tsx` over local state, standing in for the write hosts (`channel-manage.tsx`, `thread-manage.tsx`, `settings-agent-container.tsx`); the launch record is `settings-staging/stubs/use-launch-selection.ts` |
+| `home/settings-tab.tsx` (stub host) | — | Mounts `channels/components/settings-tab.tsx › ChannelsSettingsTab`, `settings-agent.tsx › ChannelAgentSettingsView`, `settings-channel-agents.tsx` and `thread-settings-tab.tsx` over local state, standing in for the write hosts (`channel-manage.tsx`, `thread-manage.tsx`, `settings-agent-container.tsx`); the launch record is the product `use-launch-selection.ts` over the bridge's in-memory `channels.{get,set}LaunchPosture` (`settings-staging/desktop-ops.ts`) |
 
 The channel column is the shared `ui-staging/staging-channel-rail.tsx › StagingChannelRail`
 (rows select in place through this page's `onSelect`).
@@ -24,14 +24,12 @@ The channel column is the shared `ui-staging/staging-channel-rail.tsx › Stagin
 Create are intercepted in the capture phase (the product hands both to `useThreadWrites`, a network
 mutation); "Add person" is the desktop dialog.
 
-On this page the record pane is white and the panel under the top bar takes `--home-card`
-(`ui-staging/staging.css › .uis-ch-pane`). Port target: desktop `pages/home` record pane +
-`.page-float` panel surfaces.
+The panel and record pane are the product frame's (`home.module.css › .page[data-face="channels"]`:
+a white pane on the `--home-card` panel).
 
-The desktop dialogs ("Add person", "New channel", the link row's `PendingLinkCard`) are
-`popups-staging/pages/home/{add-person-dialog,new-channel-dialog,link-out-panel}.tsx`; this page sees
-their writes through `popups-staging/stubs/home-writes.ts › onStagingChannelCreated /
-onStagingLinkRevoked`. Port them from `popups-staging/PORTING.md`.
+The dialogs ("Add person", "New channel", the link row's `PendingLinkCard`) are the product's
+(`src/features/home/components/channels/`); this page sees their writes through the bridge's
+`popups-staging/home-server.ts › onStagingChannelCreated / onStagingLinkRevoked`.
 
 Imported from the demo as-is: `demo-agent-view.tsx`, `demo-data.ts`, `demo-transcript.ts`,
 `demo-narration.ts`, `demo-info-data.ts`, `demo-identities.ts`, `demo-home-rows.ts`,
@@ -57,6 +55,5 @@ Also imported by `/popups` (its thread and agent windows' bodies,
 ## Shared frame (`src/features/ui-staging/`)
 
 - `staging-frame.tsx`: the `channelColumn` prop (a face's own column in the 290px slot); the frame's
-  provider opens the shared New channel dialog.
-- `staging-top-bar.tsx`: `STAGING_ROUTES` has `channels`, and every tab points at its public
-  `/playground/<face>` alias.
+  provider opens the product New channel dialog; `STAGING_ROUTES` points every header tab at its
+  public `/playground/<face>` alias.

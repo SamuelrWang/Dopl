@@ -35,7 +35,7 @@ import {
 } from "@/features/popups-staging/components/page-states";
 import { SignedOutScreen } from "@/features/popups-staging/stubs/desktop-shell";
 import { useWorkspaceAccess } from "@/features/popups-staging/stubs/desktop-shell";
-import { useApiQuery } from "@/features/settings-staging/stubs/api";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 
 /**
  * `/:workspaceSegment/agent-window/:channelId?thread=` — THE AGENT WINDOW'S PAGE

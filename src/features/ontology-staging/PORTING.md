@@ -32,6 +32,6 @@ directly), `cap-near` / `cap-over` (the object cap from `/api/billing/status`).
 
 ## Frame
 
-The white record pane is `ui-staging/staging.css › .uis-white-pane` (shared with the knowledge
-playground), the frame's twin of
-`apps/desktop-ui/src/pages/home/home.module.css › .page[data-face="ontology"] .pane`.
+The frame is the product shell, so the white record pane is
+`src/features/home/components/shell/home.module.css › .page[data-face="ontology"] .pane` itself. The
+staging server is one layer of the playground bridge (`ui-staging/staging-bridge.ts`).

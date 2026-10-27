@@ -9,10 +9,8 @@
  * left-hand channel picker and the new channel button should still be on those
  * pages as well").
  *
- * The button that HEADS this column is the top bar's "New channel" pill
- * (`staging-top-bar.tsx`, `.lp-demo-top-cell` is `var(--home-list-w)` wide), which
- * mirrors desktop `home-header.tsx`'s lead cell. It is already frame-level, so it
- * rides along on every page with this column.
+ * The button that HEADS this column is the product header's "New channel" pill
+ * (`home/components/shell/home-header.tsx`, its lead cell is `var(--home-list-w)` wide).
  *
  * STAGING COPY of `marketing/components/banner-demo/demo-home-faces.tsx ›
  * DemoChannelSwitcher` (+ its `Row`). Markup and class names are identical

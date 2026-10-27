@@ -1,16 +1,9 @@
 /* ─────────────────────────────────────────────────────────────────────
-   UI STAGING — the stage around the landing demo's app window.
-   ⚠ Page-scoped: only `staging-frame.tsx` imports this (and marketing.css,
-   whose `.lp-demo-*` rules draw the window's chrome). Every selector here is
-   `.uis-`-prefixed so nothing leaks into the rest of the web app.
-
-   DESKTOP CSS BRIDGE: `apps/desktop-ui/src/styles/{tokens,kit}.css` are a
-   hand-copied SUBSET of `src/app/globals.css` (checked 2026-10-22: every kit
-   class and every token var in the desktop sheets exists in globals.css), so
-   the web app already serves the desktop's tokens + kit recipes. The only
-   desktop-host difference that matters inside a pane is the font: desktop
-   bodies use `var(--font-app)`, while the hero inherits Helvetica from the
-   landing's `.lp` wrapper. The stage pins the desktop's face below.
+   UI STAGING — the stage around the desktop window, and the playground's own
+   channel column. The window's contents are the PRODUCT shell
+   (`staging-frame.tsx`); nothing here restyles it.
+   ⚠ Imported by `staging-frame.tsx`, so it reaches every `/playground/*`
+   route: scope every rule under `.uis-` (or `.uis-window`).
    ───────────────────────────────────────────────────────────────────── */
 
 .uis-stage {
@@ -25,8 +18,11 @@
 
 /* The window — `marketing.css › .lp-banner-demo-slot`'s recipe (radius, frame
    ground, hairline, drop), minus its opacity flip and `pointer-events: none`:
-   this window is meant to be clicked. Fixed 26px inset, the slot's own. */
+   this window is meant to be clicked. Fixed 26px inset, the slot's own.
+   `--shell-rail-w` is the one token whose value differs between the trees:
+   the web carries 0px (it has no rail), desktop `tokens.css` 54px. */
 .uis-window {
+  --shell-rail-w: 54px;
   position: absolute;
   inset: 26px;
   border-radius: 14px;
@@ -38,64 +34,19 @@
   overflow: hidden;
 }
 
-/* The record pane without the channel column beside it: the pane gets the
-   12px left gutter the column's own padding would otherwise give it. */
-.uis-record-solo {
-  margin-left: 12px !important;
-}
-
-/* Clickable top-bar tabs (the demo's are inert spans). Same face; links only. */
-a.lp-demo-top-tab {
-  text-decoration: none;
-  cursor: pointer;
-}
-.lp-demo-top-tab[data-disabled="true"] {
-  cursor: default;
-  opacity: 0.55;
-}
-
-/* Frame triggers (the demo draws them as inert spans; here they open the staged popups via
-   `staging-popups-provider.tsx`). Same faces; only the button resets + pointer. */
-button.uis-rail-create,
-button.lp-demo-top-profile {
-  cursor: pointer;
-  font: inherit;
-}
-button.uis-rail-create {
-  border: 0;
-  color: inherit;
-}
-button.lp-demo-top-profile {
-  font-size: var(--text-small);
-  font-weight: 500;
-}
-.uis-top-trail {
-  position: relative;
-}
-
-/* ── THE SHARED CHANNEL PICKER (Samuel, 2026-10-22) ──────────────────
-   The frame now draws the channel column on EVERY face
-   (`staging-channel-rail.tsx`), as desktop /home does. These are the
-   behaviour resets the staged rail needs over the demo's inert column;
-   every FACE rule below in this file (white rows, lift, hover) already
-   applies to it, because the markup keeps the demo's `.lp-demo-sw*`
-   classes. Port target: `apps/desktop-ui/src/pages/home/relationship-list.tsx`
-   (rows + wells) and `shared/ui/home-channel-row.tsx` (the row face).
-
-   A long list scrolls inside the column instead of being clipped
-   (`marketing.css › .lp-demo-sw` is `overflow: hidden`, right for the
-   hero's fixed six rows, wrong for a picker). */
+/* ── THE PLAYGROUND'S CHANNEL COLUMN (`staging-channel-rail.tsx`) ────
+   The demo's `.lp-demo-sw*` rows, made clickable. A long list scrolls
+   inside the column (`.lp-demo-sw` is `overflow: hidden`, right for the
+   hero's fixed rows, wrong for a picker). */
 .uis-window .uis-sw {
   overflow-y: auto;
 }
-/* A row that LINKS (any face but `/channels`, which selects in place). Same
-   card face; link resets only. */
+/* A row that LINKS (any face but `/channels`, which selects in place). */
 .uis-window a.lp-demo-sw-row {
   text-decoration: none;
   color: inherit;
 }
-/* The well heading is a toggle button, not a caption: it fills the heading
-   row and inherits every type property from `.lp-demo-sw-head`. */
+/* The well heading is a toggle button, not a caption. */
 .uis-window .uis-sw-head-btn {
   display: flex;
   width: 100%;
@@ -107,86 +58,11 @@ button.lp-demo-top-profile {
   text-transform: inherit;
   cursor: pointer;
 }
-
-/* ── WHITE PANEL TRIAL (Samuel, 2026-10-22) ──────────────────────────
-   The floating panel behind the top bar (New channel pill, page tabs,
-   channel picker) and the channel column: white instead of the kit's
-   `--home-panel` grey (#f1f3f5). DESIGN-LANGUAGE.md §1 "White surfaces,
-   not grey". Background only — the token itself is left alone, because
-   the settings modal reads it.
-   Port target if approved: `globals.css › .page-float` / `--home-panel`. */
-.uis-window .lp-demo-panel.page-float {
-  background: #ffffff;
-}
-
-/* ── TOP TABS (Samuel, 2026-10-22) ───────────────────────────────────
-   Overview / Channels / Knowledge / Identities / Ontology: 13px (was
-   `--text-small` 12px; 14px read clunky) and all black (was `--text-muted`).
-   Selected = the 2px underline only, same weight as the rest.
-   Port target: `marketing.css › .lp-demo-top-tab` → desktop /home header. */
-.uis-window .lp-demo-top-tab {
-  font-size: var(--text-lead);
-  color: var(--text-primary);
-}
-.uis-window .lp-demo-top-tab:hover {
-  color: var(--text-primary);
-  opacity: 0.7;
-}
-.uis-window .lp-demo-top-tab[data-selected="true"] {
-  opacity: 1;
-}
-
-/* ── LIFT ON THE WHITE PANEL (Samuel, 2026-10-22) ────────────────────
-   With the panel white, the white channel rows and top-bar pills lost
-   their edge. Stronger cast shadows instead of a grey fill. */
+/* The rows wear the kit's `.raise`; marketing.css's unlayered rest shadow
+   outranks the kit's layered one, so the lift is restated here. */
 .uis-window .lp-demo-sw-row {
   box-shadow: var(--shadow-raise);
 }
-.uis-window .lp-demo-top-profile {
-  box-shadow: var(--shadow-card-lift);
-}
-.uis-window .lp-demo-top-new {
-  box-shadow: var(--shadow-raise-ink);
-}
-
-/* ── HOVER LIFT (Samuel, 2026-10-22) ─────────────────────────────────
-   The clickable rows and pills wear the kit's `.raise` / `.raise-pill` / `.raise-ink` (the lift,
-   its still hit box and the motion). Only the shadows are restated, here and above, because
-   marketing.css's unlayered rest shadows outrank the kit's layered ones. */
-.uis-window .lp-demo-sw-row:hover,
-.uis-window button.lp-demo-top-profile:hover {
+.uis-window .lp-demo-sw-row:hover {
   box-shadow: var(--shadow-raise-hover);
-}
-.uis-window button.lp-demo-top-new:hover {
-  box-shadow: var(--shadow-raise-ink-hover);
-}
-
-/* ── CHANNELS: WHITE PANE ON A TINTED SHELL (Samuel, 2026-10-24) ──────
-   *"can we make the inside panel white, and the outer panel, where the new
-   channel button sits on, the current background of the inside panel? Want
-   to see what that looks like"*. A TRIAL, /playground/channels only: the
-   page passes `recordClassName="uis-ch-pane"`, so every other face keeps
-   the shared frame's surfaces. The two values simply swap: the record pane
-   (was `--home-card`, #fbfcfc) goes #ffffff, and the panel the top bar and
-   the channel column sit on (was #ffffff) takes `--home-card`. The pane's
-   1px `--home-panel-line` border and 14px radius are untouched, which is
-   what keeps its edge reading against the shell. Port target if approved:
-   desktop `pages/home` record pane + `.page-float` panel surfaces. */
-.uis-window .lp-demo-record.uis-ch-pane {
-  background: #ffffff;
-}
-.uis-window .lp-demo-panel:has(.lp-demo-record.uis-ch-pane) {
-  background: var(--home-card);
-}
-
-
-/* ── WHITE PANE (Samuel: ontology, then knowledge) ─────────────────────
-   A face that passes `recordClassName="uis-white-pane"` (/playground/ontology,
-   /playground/knowledge, /playground/identities) gets a white record pane instead of `--home-card`.
-   The surrounding panel stays as the frame paints it; the pane's hairline
-   keeps its edge, and white cards keep theirs and the soft shadow. Port target:
-   `home.module.css` → `.page[data-face="ontology"] .pane` and
-   `.page[data-face="knowledge"] .pane`. */
-.uis-window .lp-demo-record.uis-white-pane {
-  background: var(--bg-overlay);
 }

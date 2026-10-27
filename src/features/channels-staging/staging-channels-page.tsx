@@ -16,11 +16,11 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
 import { StagingChannelRail } from "@/features/ui-staging/staging-channel-rail";
 import { StagingChannelScene } from "./home/channel-scene";
-import { PendingLinkCard } from "@/features/popups-staging/pages/home/link-out-panel";
+import { PendingLinkCard } from "@/features/home/components/channels/link-out-panel";
 import {
   onStagingChannelCreated,
   onStagingLinkRevoked,
-} from "@/features/popups-staging/stubs/home-writes";
+} from "@/features/popups-staging/home-server";
 import { rowFacts } from "./data/staging-rows";
 import { seedChannel, stagingQueryClient } from "./data/staging-query-seed";
 import { useStagingChannels } from "./store/use-staging-channels";
@@ -34,8 +34,9 @@ function Mounted() {
   // The product Tasks tab and quick view read this.
   const tasksApi = useStagingTasks(store.rows);
 
-  // The frame's "New channel" pill and a link card's Revoke are the shared popups-staging copies
-  // (1:1 with desktop); their stubbed writes report here so the column gains / drops the row.
+  // The frame's "New channel" pill and a link card's Revoke are the product dialogs; their writes
+  // land on the playground bridge (`popups-staging/home-server.ts`), which reports them here so
+  // the column gains / drops the row.
   const latest = useRef({ createChannel, revokeLink });
   useEffect(() => {
     latest.current = { createChannel, revokeLink };
@@ -55,9 +56,6 @@ function Mounted() {
     <QueryClientProvider client={qc}>
       <StagingFrame
         tab="channels"
-        /* Channels-only surface swap (Samuel, 2026-10-24): white pane, tinted shell.
-           `ui-staging/staging.css › .uis-ch-pane`. */
-        recordClassName="uis-ch-pane"
         channelColumn={
           <StagingChannelRail
             rows={store.rows.map(rowFacts)}

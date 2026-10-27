@@ -13,26 +13,21 @@ import {
   daysAgoIso,
   minsAgoIso,
 } from "@/features/ui-staging/staging-stubs";
-import { STAGING_WORKSPACES } from "@/features/settings-staging/settings-mock-data";
-import { NewChannelDialog } from "./pages/home/new-channel-dialog";
-import { PersonRosterActions, PersonRosterRowAction } from "./pages/home/person-roster-actions";
-import { LinkOutPanel } from "./pages/home/link-out-panel";
-import { RequestWorkspaceAccessDialog } from "./features/workspaces/components/request-workspace-access-dialog";
-import { AccountRail } from "./components/app-shell/account-rail";
+import {
+  PersonRosterActions,
+  PersonRosterRowAction,
+} from "@/features/home/components/channels/person-roster-actions";
+import { LinkOutPanel } from "@/features/home/components/channels/link-out-panel";
 import ThreadWindowPage from "./pages/thread-window";
 import AgentWindowPage from "./pages/agent-window";
 import { StagingWindowStateProvider, type StagingWindowState } from "./stubs/desktop-shell";
-import { pushStagingToast } from "./stubs/spa-bridge";
+import { pushStagingToast } from "./toast-ops";
 import { StagingChannelWindowsProvider } from "./stubs/channel-windows";
 
 /**
- * STAGING ONLY — every staged popup behind the one contract the wiring pass hooks into real
- * triggers: `{ open, onClose }`. Each wraps the staged COPY (the file that ports back); nothing in
- * this file ports back.
- *
- * Components that own their own trigger on desktop (`AddPersonDialog`'s "Add person" pill,
- * `HomeSettingsControl`'s "Profile" pill, `AccountRail`'s "+" tile) are exported as-is from their
- * copies as well — `StagingChannelPeople` and `StagingAccountRail` below mount them in context.
+ * STAGING ONLY — the catalog's fixtures around the PRODUCT popups: the four toast faces main
+ * raises, a channel's People card (the product roster actions and Link out panel on a fake
+ * channel), and the two pop-out window stand-ins.
  */
 
 export interface PopupProps {
@@ -40,59 +35,9 @@ export interface PopupProps {
   onClose: () => void;
 }
 
-/* ─────────────────────────── /home header ─────────────────────────── */
-
-/** "New channel" (`pages/home/new-channel-dialog.tsx`). */
-export function StagingNewChannelDialog({ open, onClose }: PopupProps) {
-  return (
-    <NewChannelDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-      onCreated={() => onClose()}
-    />
-  );
-}
-
-/* ─────────────────────────── account rail ─────────────────────────── */
-
-/** The rail's gated "+ New workspace" popup (`request-workspace-access-dialog.tsx`). */
-export function StagingRequestWorkspaceAccess({ open, onClose }: PopupProps) {
-  return (
-    <RequestWorkspaceAccessDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-    />
-  );
-}
-
-/** The staged account rail itself (Home, workspace tiles, the dashed "+" that opens the gate). */
-export function StagingAccountRail() {
-  const [active, setActive] = useState<string | null>(null);
-  return (
-    <div className="pps-rail-strip">
-      <AccountRail
-        workspaces={STAGING_WORKSPACES}
-        activeWorkspacePublicId={active}
-        onNavigate={(path) => {
-          const ws = STAGING_WORKSPACES.find((w) => path.endsWith(w.publicId));
-          setActive(ws ? ws.publicId : null);
-        }}
-      />
-    </div>
-  );
-}
-
 /* ─────────────────────────── app-level ─────────────────────────── */
 
-/* The app-level runtime sign-in prompt (`components/runtime-sign-in-prompt.tsx`) and
-   `IncomingToasts` are mounted ONCE, app-level, by `ui-staging/staging-popups-provider.tsx` (as
-   desktop `app.tsx` mounts them). Raise the prompt with `raiseStagingSignInPrompt(runtime)`. */
-
-/** The four toast faces `IncomingToasts` (staged copy, mounted by the catalog) raises from main. */
+/** The toast faces the PRODUCT `IncomingToasts` (mounted by the frame) raises from main. */
 export const STAGING_TOASTS: ReadonlyArray<{ label: string; fire: () => void }> = [
   {
     label: "Toast: mention (card clickable)",
@@ -173,9 +118,9 @@ const STAGING_MEMBERS = STAGING_PEOPLE.map(
 );
 
 /**
- * The People section of a channel's Info tab with the popups it raises: "Add person"
- * (`add-person-dialog.tsx`, its own trigger), each row's Remove / Leave confirm
- * (`person-roster-actions.tsx`), and the open-invitation panel with Revoke (`link-out-panel.tsx`).
+ * The People section of a channel's Info tab with the popups it raises, all product: "Add person"
+ * (its own trigger), each row's Remove / Leave confirm, and the open-invitation panel with Revoke
+ * (`home/components/channels/`).
  */
 export function StagingChannelPeople() {
   return (

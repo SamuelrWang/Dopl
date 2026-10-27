@@ -4,7 +4,9 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { MessageSquareOff } from "lucide-react";
-import type { DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { DesktopNarrationEntry, DesktopSessionSummary } from "@/shared/lib/spa-bridge";
+import type { ChannelMessage } from "@/features/channels/types";
+import type { AuthorIndex } from "@/features/channels/components/view-model";
 import type { AgentWindowTab } from "@/shared/lib/spa-bridge-window";
 import { toast } from "@/shared/ui/toast";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -12,8 +14,22 @@ import { indexMembers } from "@/features/channels/components/view-model";
 import { LaunchAgentDialog } from "@/features/channels/components/launch-agent-dialog";
 import type { AgentLaunchPanel } from "@/features/channels/components/use-agent-launch";
 import { agentColorOrNull } from "@/shared/lib/agent-colors";
+import { cn } from "@/shared/lib/utils";
 import { StagingChannelScene } from "@/features/channels-staging/home/channel-scene";
-import { DemoAgentView } from "@/features/marketing/components/banner-demo/demo-agent-view";
+import { AgentWorkingOn } from "@/features/channels/components/agent-window";
+import { AgentHeldGates } from "@/features/channels/components/agent-held-gate";
+import { PostureControls } from "@/features/channels/components/agent-posture";
+import { AgentStats } from "@/features/channels/components/agent-stats";
+import { AgentStream } from "@/features/channels/components/agent-stream";
+import { splitEndNote } from "@/features/channels/components/agent-stream-lanes";
+import { agentSentMessages } from "@/features/channels/components/agent-panel";
+import { useAgentIdentity } from "@/features/channels/components/agent-face";
+import {
+  agentDisplayName,
+  agentLiveness,
+  postDestination,
+} from "@/features/channels/components/agents-model";
+import { COMPOSER_BOTTOM, ComposerInputRow } from "@/features/channels/components/composer-input";
 import { useStagingChannels } from "@/features/channels-staging/store/use-staging-channels";
 import { initialRows } from "@/features/channels-staging/data/staging-rows";
 import { seedChannel, stagingQueryClient } from "@/features/channels-staging/data/staging-query-seed";
@@ -25,10 +41,10 @@ import { CURRENT_USER_ID, VIEWER } from "@/features/channels-staging/data/demo-i
 
 /**
  * STUBS of what the thread-window and agent-window pages import from the channels feature and the
- * window bridge. The window CHROME (shell, tabs, rail) is real. The BODIES are the /channels
- * staging face, IMPORTED (not copied) from `src/features/channels-staging/`: its in-memory store
- * (`useStagingChannels`), its record pane (`StagingChannelScene`, here forced into one thread) and
- * its agent view (the landing demo's `DemoAgentView`, `layout="fill"`). The agent window's "+" draws the product's
+ * window bridge. The window CHROME (shell, tabs, rail) is real. The BODIES are product parts on
+ * the /channels staging store (`useStagingChannels`): the thread window is its record pane
+ * (`StagingChannelScene`, `chrome="window"`, held on one thread), the agent window the product
+ * body's parts (`ChannelsAgentWindow` below). The agent window's "+" draws the product's
  * `LaunchAgentDialog` on that store's launch controls, the same pair /channels' composer uses.
  *
  * One store per open window (`StagingChannelWindowsProvider`, mounted by
@@ -93,10 +109,10 @@ export function onAgentWindowTabs(
 export type { AgentWindowTab };
 
 /**
- * `@/features/channels/components/thread-window › ChannelsThreadWindow` — the /channels staging
- * record pane, held on one thread (`?thread=`), Info closed. Posting, the agent view and the
- * thread's cards all work as on /channels. The crumb's "back to channel" is a no-op here: a
- * pop-out IS one exchange.
+ * `@/features/channels/components/thread-window › ChannelsThreadWindow` — the product message
+ * pane with `chrome="window"` (titled by the thread), on the /channels staging store, held on one
+ * thread (`?thread=`), Info closed. Posting, the agent view and the thread's cards work as on
+ * /channels.
  */
 export function ChannelsThreadWindow({
   threadId,
@@ -121,10 +137,9 @@ export function ChannelsThreadWindow({
     );
   }
   return (
-    // `.lp-demo-record` is the scene's record-pane box (`marketing.css`); the window drops its
-    // card chrome.
-    <div className="lp-demo-record antialiased" style={WINDOW_RECORD} data-frame-skin>
+    <div className="page-float relative flex antialiased">
       <StagingChannelScene
+        chrome="window"
         fixture={fixture}
         thread={thread}
         openAgentKey={store.openAgentKey}
@@ -137,12 +152,12 @@ export function ChannelsThreadWindow({
   );
 }
 
-const WINDOW_RECORD = { margin: 0, border: 0, borderRadius: 0 } as const;
-
 /**
- * `@/features/channels/components/agent-window › ChannelsAgentWindow` — /channels staging's agent
- * view for the active tab's session, filling the window (no slide, no header: the window's chrome
- * names the agent). Its 1:1 composer sends in memory with the canned reply.
+ * `@/features/channels/components/agent-window › ChannelsAgentWindow` — the product window body's
+ * parts in the product's order (`AgentWorkingOn`, `PostureControls` with `AgentStats`,
+ * `AgentHeldGates`, `AgentStream`), over /channels staging's session for the active tab. The one
+ * stand-in is the composer: the product `AgentComposer` reaches main's `sessions.message`, so this
+ * mounts its input row on the store's in-memory 1:1 send (with the canned reply).
  */
 export function ChannelsAgentWindow({
   channelId,
@@ -177,20 +192,87 @@ export function ChannelsAgentWindow({
     );
   }
   return (
-    <DemoAgentView
-      layout="fill"
-      open
+    <StagingAgentBody
       agent={agent}
-      ownerPhoto={stagingOwnerPhoto(agent.agentId)}
-      entries={channel.narration[agent.agentId ?? ""] ?? []}
+      channelId={channelId}
+      threadId={threadId}
+      narration={channel.narration[agent.agentId ?? ""] ?? []}
       messages={channel.messages}
-      currentUserId={CURRENT_USER_ID}
-      viewer={VIEWER}
       roster={roster}
-      color={roster.agents.get(agent.agentId ?? "")?.color ?? null}
-      onClose={() => {}}
       onSend={(text) => store.actions.sendDm(agent.agentId ?? "", text)}
     />
+  );
+}
+
+function StagingAgentBody({
+  agent,
+  channelId,
+  threadId,
+  narration,
+  messages,
+  roster,
+  onSend,
+}: {
+  agent: DesktopSessionSummary;
+  channelId: string;
+  threadId: string;
+  narration: DesktopNarrationEntry[];
+  messages: ChannelMessage[];
+  roster: AuthorIndex;
+  onSend: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const color = roster.agents.get(agent.agentId ?? "")?.color ?? null;
+  const face = useAgentIdentity({
+    photo: stagingOwnerPhoto(agent.agentId),
+    name: agentDisplayName(agent),
+    color,
+    runtime: agent.runtimeId,
+  });
+  const ended = agent.state === "ended";
+  const { entries, endNote } = ended ? splitEndNote(narration) : { entries: narration, endNote: null };
+  const text = draft.trim();
+  return (
+    <aside aria-label="Agent view" className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <AgentWorkingOn agent={agent} endNote={endNote} />
+      <PostureControls
+        agent={agent}
+        channelId={channelId}
+        threadId={threadId}
+        stats={<AgentStats agent={agent} showStarted={false} />}
+      />
+      <AgentHeldGates agent={agent} className="shrink-0 px-4 pt-2.5" />
+      <AgentStream
+        liveness={agentLiveness(agent)}
+        entries={entries}
+        supported
+        sent={agentSentMessages(messages, threadId, CURRENT_USER_ID, agent.agentId)}
+        delivered={messages}
+        destination={postDestination(agent)}
+        viewer={VIEWER}
+        roster={roster}
+        self={face}
+        color={color}
+        className="px-4"
+      />
+      <div className={cn("shrink-0 pt-3", COMPOSER_BOTTOM, "px-4")}>
+        <ComposerInputRow
+          face="pill"
+          value={draft}
+          onChange={setDraft}
+          placeholder={`Message ${agentDisplayName(agent)}`}
+          ariaLabel="Message your agent"
+          onSend={() => {
+            if (!text) return;
+            onSend(text);
+            setDraft("");
+          }}
+          sendDisabled={text.length === 0}
+          sendTitle={text ? "Send" : "Write a message first"}
+          sendLabel="Send"
+        />
+      </div>
+    </aside>
   );
 }
 

@@ -19,9 +19,9 @@ segmented background is staging-only chrome and never ports.
 
 ## Settings modal
 
-"Get more credits" and "Add device" open `@/features/settings-staging/staging-settings-modal ›
-StagingSettingsModal` on Plans & Billing / Devices. Its copies and porting map live in
-`src/features/settings-staging/PORTING.md`.
+"Get more credits" and "Add device" open the header's PRODUCT Settings modal on Plans & Billing /
+Devices through `ui-staging/staging-popups-provider.tsx › openStagingSettings`, with billing answering
+for the toolbar's plan (`src/features/settings-staging/PORTING.md`).
 
 ## Stubs and staging-only files (do NOT port)
 

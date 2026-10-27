@@ -1,23 +1,24 @@
 "use client";
 
+import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { SettingsSection } from "@/shared/layout/settings-modal/settings-modal-core";
 import { cn } from "@/shared/lib/utils";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { StagingFrame } from "@/features/ui-staging/staging-frame";
-import { useStagingPopups } from "@/features/ui-staging/staging-popups-provider";
-import { raiseStagingSignInPrompt } from "@/features/settings-staging/stubs/runtime-signin";
-import { HomeSettingsControl, openHomeSettings } from "./pages/home/home-settings-control";
-import { STAGING_IDENTITY } from "./stubs/desktop-shell";
-import { STAGING_TOASTS, StagingAccountRail, StagingChannelPeople } from "./staging-popups";
+import {
+  openStagingSettings,
+  useStagingPopups,
+} from "@/features/ui-staging/staging-popups-provider";
+import { raiseStagingSignInPrompt } from "@/features/settings-staging/desktop-ops";
+import { STAGING_TOASTS, StagingChannelPeople } from "./staging-popups";
 
 /**
- * `/popups` — the catalog of every staged global popup and window, in the shared staging frame.
- * A plain list of buttons, one per popup. Every button opens the SAME instance the frame's own
- * trigger opens (`ui-staging/staging-popups-provider.tsx › useStagingPopups`): the top bar's
- * "New channel", search and profile pills, the rail's "+", toast clicks. The Settings rows go
- * through the desktop's own `openHomeSettings` registry (the black Profile pill below owns it).
- * Staging only; nothing here ports back.
+ * `/popups` — the catalog of every global popup and window, in the shared staging frame: a plain
+ * list of buttons, one per popup, each opening the SAME product instance the frame's own trigger
+ * opens (`ui-staging/staging-popups-provider.tsx`). The Settings rows open the header Profile
+ * pill's modal through `openStagingSettings`. Staging only.
  */
 
 const SETTINGS_ROWS: ReadonlyArray<{ id: SettingsSection; label: string }> = [
@@ -31,10 +32,13 @@ const SETTINGS_ROWS: ReadonlyArray<{ id: SettingsSection; label: string }> = [
 ];
 
 export function PopupsCatalogPage() {
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   return (
-    <StagingFrame tab="channels" recordClassName="flex-col">
-      <Catalog />
-    </StagingFrame>
+    <QueryClientProvider client={client}>
+      <StagingFrame tab="channels" recordClassName="flex-col">
+        <Catalog />
+      </StagingFrame>
+    </QueryClientProvider>
   );
 }
 
@@ -44,20 +48,13 @@ function Catalog() {
     <div className="pps-catalog">
       <Group title="Settings (Profile)">
         {SETTINGS_ROWS.map((row) => (
-          <OpenScaleButton key={row.id} onClick={() => openHomeSettings(row.id)}>
+          <OpenScaleButton key={row.id} onClick={() => openStagingSettings(row.id)}>
             {row.label}
           </OpenScaleButton>
         ))}
-        <OpenScaleButton onClick={() => popups.openSettings("billing", "free")}>
+        <OpenScaleButton onClick={() => openStagingSettings("billing", "free")}>
           Plans & Billing (free plan)
         </OpenScaleButton>
-        {/* The real control: `home-settings-control.tsx` owns the modal and the registry the
-            buttons above call. (The frame's profile pill opens the provider's instance.) */}
-        <HomeSettingsControl
-          identity={STAGING_IDENTITY}
-          viewer={null}
-          onWorkspaceChanged={() => {}}
-        />
       </Group>
 
       <Group title="/home header">
@@ -70,7 +67,6 @@ function Catalog() {
           New workspace (request access)
         </OpenScaleButton>
       </Group>
-      <StagingAccountRail />
 
       <Group title="Channel Info → People">
         <p className="text-caption text-text-muted">Add person, Remove, Leave and Revoke open from the card.</p>

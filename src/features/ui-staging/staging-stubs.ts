@@ -5,6 +5,7 @@
  */
 
 import type { AvatarPerson } from "@/shared/ui/avatar";
+import type { HomeIdentity } from "@/features/home/components/shell/home-settings-control";
 import { VIEWER } from "@/features/marketing/components/banner-demo/demo-home-rows";
 
 /** The operator (the landing demo's viewer, Daniel Ortiz). */
@@ -41,3 +42,22 @@ export const STAGING_NOW_MS = Date.UTC(2026, 9, 22, 17, 0, 0);
 export const minsAgoIso = (m: number) =>
   new Date(STAGING_NOW_MS - m * 60_000).toISOString();
 export const daysAgoIso = (d: number) => minsAgoIso(d * 24 * 60);
+
+/** What /home's header reads from boot: the operator in their own home space, as owner. */
+export const STAGING_IDENTITY: HomeIdentity = {
+  userId: STAGING_USER_ID,
+  workspace: {
+    id: STAGING_HOME_WORKSPACE_ID,
+    ownerId: STAGING_USER_ID,
+    name: "Home",
+    slug: "home",
+    publicId: "home00",
+    description: null,
+    iconUrl: null,
+    kind: "home",
+    createdAt: daysAgoIso(200),
+    updatedAt: daysAgoIso(1),
+  },
+  segment: STAGING_HOME_SEGMENT,
+  role: "owner",
+};

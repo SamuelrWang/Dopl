@@ -1,8 +1,8 @@
 /**
  * The playground's search answers: what /home's search would find in the staged story
  * (#tech-debt and its neighbours, the Platform knowledge, the shared identities), served
- * through the product's fixture fetcher, so typing filters and highlights client-side and
- * nothing touches `/api/search`. Rows are shaped as the server sends them
+ * through the product's fixture fetcher as the playground bridge's `/api/search`
+ * (`../staging-app-bridge.ts`), so the product header's search runs unchanged. Rows are shaped as the server sends them
  * (`search/server/service-groups.ts › toItem`): a message is titled by its channel, a
  * thread's subtitle is its channel, a channel's is its description. Account scope, so the
  * container-only kinds (members, skills, chats) are absent here as they are on /home.
@@ -145,7 +145,5 @@ const ROWS: FixtureRow[] = [
     avatarUrls: ANTHONY.avatarUrl ? [ANTHONY.avatarUrl] : undefined,
   },
 ];
-
-export const STAGING_SEARCH_RECENTS = ["upload suite", "rollback", "release"];
 
 export const stagingSearchFetcher = createFixtureFetcher(ROWS);

@@ -53,7 +53,7 @@ export function KnowledgeStagingPage() {
 
   return (
     <QueryClientProvider client={client}>
-      <StagingFrame tab="knowledge" recordClassName="uis-white-pane">
+      <StagingFrame tab="knowledge">
         {ready ? (
           <HomeKnowledgePanels
             // `home-panes.tsx` keys this face by the selected row; the staging states join the key

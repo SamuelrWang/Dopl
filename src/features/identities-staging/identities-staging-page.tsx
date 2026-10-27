@@ -69,7 +69,7 @@ export function IdentitiesStagingPage() {
 
   return (
     <QueryClientProvider client={qc}>
-      <StagingFrame tab="identities" recordClassName="uis-white-pane">
+      <StagingFrame tab="identities">
         {mounted && (
           <IdentitiesScene
             // The desktop keys this face by its pane token, so a channel switch remounts it.

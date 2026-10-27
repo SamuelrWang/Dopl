@@ -6,7 +6,8 @@
  * `settings-channel-agents.tsx › ChannelAgentsSettings`, `thread-settings-tab.tsx`) over local
  * state. Only the hosts are stood in: `channel-manage.tsx` / `thread-manage.tsx` and the
  * settings container hold live writes and the desktop bridge, which staging must never call.
- * The launch record is `settings-staging`'s in-memory stub; `memberManagement` is off, as on
+ * The launch record is the product hook over the playground bridge's in-memory
+ * `channels.{get,set}LaunchPosture` (`settings-staging/desktop-ops.ts`); `memberManagement` is off, as on
  * /home (Add members and Delete channel stay hidden there).
  */
 
@@ -24,7 +25,7 @@ import type {
   ChannelMember,
   ChannelThread,
 } from "@/features/channels/types";
-import { useLaunchSelection } from "@/features/settings-staging/stubs/use-launch-selection";
+import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
 
 const DEFAULT_FOLDER = "~/Dopl";
 const noop = () => {};

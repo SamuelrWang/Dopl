@@ -45,7 +45,7 @@ import { CURRENT_USER_ID, VIEWER } from "../data/demo-imports";
 import { stagingAgentIndex, stagingOwnerPhoto } from "../data/staging-agents";
 import type { ChannelFixture } from "../data/staging-fixture-types";
 import { StagingSettingsTab } from "./settings-tab";
-import { AddPersonDialog } from "@/features/popups-staging/pages/home/add-person-dialog";
+import { AddPersonDialog } from "@/features/home/components/channels/add-person-dialog";
 import { ChannelsInfoPanel } from "@/features/channels/components/info-panel";
 import type { TaskLink } from "@/features/channels/types";
 import {
@@ -88,9 +88,12 @@ export function StagingChannelScene({
   actions,
   agentsVersion,
   tasks,
+  chrome = "page",
 }: {
   /** Absent draws no tasks UI (the /popups windows pass none). */
   tasks?: SceneTasks;
+  /** `"window"`: the pop-out thread window's pane (`thread-window.tsx`), titled by the thread. */
+  chrome?: "page" | "window";
   fixture: ChannelFixture;
   thread: ChannelThread | null;
   openAgentKey: string | null;
@@ -217,7 +220,8 @@ export function StagingChannelScene({
         key={`pane-${channel.id}`}
         channelId={channel.id}
         workspaceId={channel.workspaceId}
-        channelName={channel.name}
+        chrome={chrome}
+        channelName={chrome === "window" && thread ? thread.title : channel.name}
         thread={thread}
         rows={rows}
         index={index}

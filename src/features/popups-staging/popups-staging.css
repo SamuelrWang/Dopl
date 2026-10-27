@@ -45,13 +45,3 @@
   overflow-y: auto;
   padding: 20px 24px 40px;
 }
-
-/* The desktop's `tokens.css` sets `--shell-rail-w: 54px`; the web's globals
-   carry 0px (the web has no rail), so the staged rail re-declares it here. */
-.pps-rail-strip {
-  --shell-rail-w: 54px;
-  display: inline-flex;
-  border-radius: 12px;
-  overflow: hidden;
-  height: 260px;
-}

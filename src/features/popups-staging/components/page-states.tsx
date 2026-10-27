@@ -1,9 +1,11 @@
-// STAGING COPY of apps/desktop-ui/src/components/page-states.tsx (tree of 2026-10-22). Only import paths differ from the source (data hooks,
-// desktop libs and unstaged channel bodies → src/features/popups-staging/stubs). See src/features/popups-staging/PORTING.md.
+// STAGING COPY of apps/desktop-ui/src/components/page-states.tsx (tree of 2026-10-26). Only import paths differ from the source
+// (react-router and `#/lib/api` → stubs / the shared client). See src/features/popups-staging/PORTING.md.
 import { useRouteError } from "@/features/popups-staging/stubs/desktop-shell";
+import { PageError } from "@/shared/ui/page-error";
 import { PageShellSkeleton, TwoPaneListSkeleton } from "@/shared/ui/skeleton";
-import { userFacingMessage } from "@/shared/api/user-facing-message";
 import { ApiError } from "@/shared/api/api-client";
+
+export { PageError };
 
 /**
  * The two states every page renders besides its content, plus the router-level
@@ -53,34 +55,6 @@ export function PageLoading({
  */
 export function isUnauthorized(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
-}
-
-function reloadApp(): void {
-  window.location.reload();
-}
-
-export function PageError({
-  error,
-  onRetry,
-}: {
-  error: unknown;
-  onRetry?: () => void;
-}) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3" role="alert">
-      <p className="text-body text-text-primary">{userFacingMessage(error)}</p>
-      <div className="flex items-center gap-2">
-        {onRetry ? (
-          <button type="button" className="btn-light text-small px-3 py-1" onClick={onRetry}>
-            Try again
-          </button>
-        ) : null}
-        <button type="button" className="btn-light text-small px-3 py-1" onClick={reloadApp}>
-          Reload
-        </button>
-      </div>
-    </div>
-  );
 }
 
 /** Router `errorElement` — catches render/loader throws under the app layout. */

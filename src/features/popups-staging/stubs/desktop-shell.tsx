@@ -1,85 +1,19 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
-import type { Role, Workspace } from "@/features/workspaces/types";
+import type { Role } from "@/features/workspaces/types";
 import { ApiError } from "@/shared/api/api-client";
-import {
-  StagingSettingsModal,
-  type SettingsSection,
-} from "@/features/settings-staging/staging-settings-modal";
 import {
   STAGING_HOME_SEGMENT,
   STAGING_HOME_WORKSPACE_ID,
   STAGING_USER_ID,
-  daysAgoIso,
 } from "@/features/ui-staging/staging-stubs";
 import { MY_SESSIONS } from "@/features/channels-staging/data/demo-imports";
 
 /**
- * STUBS of the desktop-only modules the staged popups import. Each names what it stands in for.
+ * STUBS of the desktop-only modules the two staged window pages import (`react-router`,
+ * `#/hooks/use-workspace-access`, the signed-out screen). Each names what it stands in for.
  */
-
-/* `apps/desktop-ui/src/pages/boot/use-boot-state.ts › BootPayload` (the fields the popups read). */
-export interface BootPayload {
-  isOnboarded: boolean;
-  surveyCompleted: boolean;
-  userId: string;
-  workspace: Workspace | null;
-  segment: string | null;
-  needsRedirect: boolean;
-  role: Role | null;
-  myAccess: null;
-}
-
-export const STAGING_IDENTITY: BootPayload = {
-  isOnboarded: true,
-  surveyCompleted: true,
-  userId: STAGING_USER_ID,
-  workspace: {
-    id: STAGING_HOME_WORKSPACE_ID,
-    ownerId: STAGING_USER_ID,
-    name: "Home",
-    slug: "home",
-    publicId: "home00",
-    description: null,
-    iconUrl: null,
-    kind: "home",
-    createdAt: daysAgoIso(200),
-    updatedAt: daysAgoIso(1),
-  },
-  segment: STAGING_HOME_SEGMENT,
-  needsRedirect: false,
-  role: "owner",
-  myAccess: null,
-};
-
-/* `apps/desktop-ui/src/components/settings-modal › SettingsModal` (the desktop props) → the staged
-   modal. */
-export type { SettingsSection };
-export function SettingsModal({
-  open,
-  onOpenChange,
-  section,
-  onSectionChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  section: SettingsSection;
-  onSectionChange: (section: SettingsSection) => void;
-  workspaceSegment: string;
-  workspaceId: string;
-  role: Role;
-  onWorkspaceChanged?: () => void;
-}) {
-  return (
-    <StagingSettingsModal
-      open={open}
-      onClose={() => onOpenChange(false)}
-      section={section}
-      onSectionChange={onSectionChange}
-    />
-  );
-}
 
 /* ─── window pages: `react-router`, `#/hooks/use-workspace-access`, and the channel bodies ─── */
 
