@@ -1,0 +1,46 @@
+{
+  "name": "@dopl/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client for the Dopl Device SDK API, plus a project-scoped MCP server (deliver, context, actions). Private until published.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/server.d.ts",
+      "default": "./dist/mcp/server.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dopl-sdk-mcp": "dist/mcp/bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dopl/contracts": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SamuelrSun/usedopl.git",
+    "directory": "packages/sdk"
+  }
+}
