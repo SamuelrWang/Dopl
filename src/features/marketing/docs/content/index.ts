@@ -1,8 +1,12 @@
 import { CONNECT_ROWS, CURSOR_INSTALL_URL } from "./connect";
 import { DOC_TABS } from "./nav";
-import { API_PAGES, CHANGELOG_PAGES } from "./pages-api";
+import { API_PAGES } from "./pages-api";
+import { CONCEPT_PAGES } from "./pages-concepts";
 import { DEVICE_PAGES } from "./pages-devices";
+import { GUIDE_PAGES } from "./pages-guides";
 import { OVERVIEW_PAGES } from "./pages-overview";
+import { ROUTING_PAGES } from "./pages-routing";
+import { CHANGELOG_PAGES, SDK_PAGES } from "./pages-sdks";
 import { USE_CASE_PAGES } from "./pages-use-cases";
 import { DOC_STATUS_LABEL } from "./types";
 import type { DocBlock, DocPage, DocStatus, DocTab, NavLink } from "./types";
@@ -11,13 +15,17 @@ export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_STATUS_LABEL, DOC_TABS };
 export type * from "./types";
 
 /** The landing page of `/docs` (bare `/docs` 308s here — `next.config.ts › redirects`). */
-export const DOCS_HOME = "start-here";
+export const DOCS_HOME = "overview";
 
 export const DOC_PAGES: DocPage[] = [
   ...OVERVIEW_PAGES,
+  ...CONCEPT_PAGES,
+  ...ROUTING_PAGES,
+  ...GUIDE_PAGES,
   ...USE_CASE_PAGES,
   ...DEVICE_PAGES,
   ...API_PAGES,
+  ...SDK_PAGES,
   ...CHANGELOG_PAGES,
 ];
 
@@ -118,6 +126,8 @@ function blockText(b: DocBlock): string[] {
       ];
     case "changelog":
       return b.entries.map((e) => `## ${e.date}: ${e.title}\n${plain(e.description)}`);
+    case "flow":
+      return [b.items.map((it, i) => `${i + 1}. **${it.title}**: ${it.detail}`).join("\n")];
   }
 }
 

@@ -1,13 +1,20 @@
 import {
+  Activity,
+  ArrowRight,
   Bell,
   Check,
+  Code,
+  FlaskConical,
   Glasses,
+  KeyRound,
   Laptop,
+  Layers,
   Link2,
   MessageCircleQuestion,
   Monitor,
   MonitorSmartphone,
   Route,
+  ShieldCheck,
   Smartphone,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +34,12 @@ const ICONS: Record<DocIcon, LucideIcon> = {
   phone: Smartphone,
   notch: Laptop,
   desktop: MonitorSmartphone,
+  key: KeyRound,
+  shield: ShieldCheck,
+  layers: Layers,
+  activity: Activity,
+  code: Code,
+  test: FlaskConical,
 };
 
 export function DocBlocks({ blocks }: { blocks: DocBlock[] }) {
@@ -193,6 +206,20 @@ function Block({ block: b }: { block: DocBlock }) {
             </tbody>
           </table>
         </div>
+      );
+    case "flow":
+      return (
+        <figure className="docs-flow" aria-label={b.label}>
+          {b.items.map((it, i) => (
+            <div key={it.title} className="docs-flow-step">
+              {i > 0 && <ArrowRight size={16} className="docs-flow-arrow" aria-hidden />}
+              <div className="docs-flow-node">
+                <span className="docs-flow-title">{it.title}</span>
+                <span className="docs-flow-detail">{it.detail}</span>
+              </div>
+            </div>
+          ))}
+        </figure>
       );
     case "changelog":
       return (

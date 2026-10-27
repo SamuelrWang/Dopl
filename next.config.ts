@@ -62,9 +62,19 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/terms", destination: "/services-agreement", permanent: true },
-      // The docs land on Start here; config redirects run before the proxy, so bare
-      // `/docs` needs no public-route entry (`/docs/` has one).
-      { source: "/docs", destination: "/docs/start-here", permanent: true },
+      // The docs land on Overview (`docs/content/index.ts › DOCS_HOME`); config redirects run
+      // before the proxy, so bare `/docs` needs no public-route entry (`/docs/` has one).
+      // Temporary since B2 (2026-10-27): the home moved once, and a 308 is cached by browsers.
+      { source: "/docs", destination: "/docs/overview", permanent: false },
+      // B2 docs restructure (2026-10-27): slugs that left the sidebar keep working. Temporary
+      // until the new structure has settled.
+      { source: "/docs/start-here", destination: "/docs/overview", permanent: false },
+      { source: "/docs/use-cases/connect-devices", destination: "/docs/guides/connect-a-device", permanent: false },
+      { source: "/docs/use-cases/routing", destination: "/docs/concepts/context-profiles-and-routing", permanent: false },
+      { source: "/docs/devices/meta-ray-ban", destination: "/docs/devices/meta", permanent: false },
+      { source: "/docs/devices/:device(phone-push|mac-notch|apple-watch)", destination: "/docs/devices", permanent: false },
+      // C10 `doc_url` (`@dopl/contracts/device-sdk › ERROR_DOC_BASE`) points at /docs/errors/<code>.
+      { source: "/docs/errors/:code", destination: "/docs/api-reference/errors", permanent: false },
       // The API reference's pre-contract pages (2026-10-20) were renamed to the frozen Device
       // SDK contract (`docs/specs/device-sdk/openapi.yaml`); show/ask/notify are Deliver intents.
       { source: "/docs/api-reference/:intent(show|ask|notify)", destination: "/docs/api-reference/deliver", permanent: false },
