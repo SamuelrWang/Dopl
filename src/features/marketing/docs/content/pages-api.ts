@@ -407,7 +407,7 @@ export const API_PAGES: DocPage[] = [
     examplePath: `/devices/${DEVICE_ID}`,
     pathParams: [pathId("The device to read.")],
     notes: [
-      "This route is part of the contract but is not served yet. Until it is, read a device and its descriptors from the `device` that [Exchange a public token](/docs/api-reference/connections-exchange) and [List connections](/docs/api-reference/connections) return.",
+      "`capabilities` comes from the device's adapter and `online` from when it was last seen. A device in another project or environment, or one that was revoked, returns `not_found`. Secret key, scope `devices:read`.",
     ],
     status: "200",
     response: json(EXAMPLE_DEVICE),
