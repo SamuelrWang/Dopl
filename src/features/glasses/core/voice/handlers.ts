@@ -1,6 +1,6 @@
 import { json } from "../http";
 import { glassesMessageSource } from "@/features/channels/server/message-source-stamp";
-import { UNAUTHORIZED, authedDevice, resolveDeviceDeps, type DeviceHandlerDeps } from "../messages/device-handlers";
+import { UNAUTHORIZED, authedDevice, authedSdkDevice, resolveDeviceDeps, type DeviceHandlerDeps } from "../messages/device-handlers";
 import type { GlassesDevice } from "../devices/types";
 import { PCM_MAX_BYTES, type SttProvider } from "./stt";
 import { recordDevicePost } from "../messages/reply-mirror";
@@ -29,6 +29,8 @@ export interface VoiceHandlerDeps extends DeviceHandlerDeps {
 export const UTTERANCE_RPM = 20;
 export const NO_TARGET = "Open a channel on your glasses first.";
 export const LIMITED = "Too many voice requests from this device; try again in a minute.";
+/** What `/voice` answers a Device SDK G2 (403): the plugin shows `error` (glasses-mcp `core/app/voice.ts`). */
+export const SDK_VOICE_REFUSAL = { error: "Voice is not available on this device.", code: "capability_unsupported" };
 
 /** Where this device's utterance goes, as utterance deps; null when no target is usable. */
 export async function utteranceDepsFor(
@@ -54,7 +56,12 @@ export function createVoiceHandlers(input: VoiceHandlerDeps) {
   return {
     async voice(request: Request): Promise<Response> {
       const device = await authedDevice(deps, request);
-      if (!device) return json(request, UNAUTHORIZED, 401);
+      if (!device) {
+        // A Device SDK G2 (A8b): no channel to post into and no owner to meter, so a soft refusal the
+        // plugin shows as a card (it re-pairs on a 401 only); the PCM is never read.
+        if (await authedSdkDevice(deps, request)) return json(request, SDK_VOICE_REFUSAL, 403);
+        return json(request, UNAUTHORIZED, 401);
+      }
       const utterance = await utteranceDepsFor(deps, device, request);
       if (!utterance) return json(request, { error: NO_TARGET }, 409);
       const stt = deps.stt();
