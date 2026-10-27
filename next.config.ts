@@ -72,7 +72,9 @@ const nextConfig: NextConfig = {
       { source: "/docs/use-cases/connect-devices", destination: "/docs/guides/connect-a-device", permanent: false },
       { source: "/docs/use-cases/routing", destination: "/docs/concepts/context-profiles-and-routing", permanent: false },
       { source: "/docs/devices/meta-ray-ban", destination: "/docs/devices/meta", permanent: false },
-      { source: "/docs/devices/:device(phone-push|mac-notch|apple-watch)", destination: "/docs/devices", permanent: false },
+      // B3 (2026-10-27): the phone came back as its own Coming soon page (D2 fallback surface).
+      { source: "/docs/devices/phone-push", destination: "/docs/devices/phone", permanent: false },
+      { source: "/docs/devices/:device(mac-notch|apple-watch)", destination: "/docs/devices", permanent: false },
       // C10 `doc_url` (`@dopl/contracts/device-sdk › ERROR_DOC_BASE`) points at /docs/errors/<code>.
       { source: "/docs/errors/:code", destination: "/docs/api-reference/errors", permanent: false },
       // The API reference's pre-contract pages (2026-10-20) were renamed to the frozen Device

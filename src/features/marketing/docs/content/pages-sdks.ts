@@ -1,4 +1,4 @@
-import { PLANNED } from "./shared";
+import { PROJECT_MCP, TYPESCRIPT_SDK } from "./pages-sdk-client";
 import type { DocPage } from "./types";
 
 /**
@@ -94,7 +94,7 @@ export const SDK_PAGES: DocPage[] = [
       { type: "h2", text: "Building a product on Dopl" },
       {
         type: "p",
-        text: "This server acts for one signed in Dopl user. For software that reaches your own users' devices, the Device SDK adds project keys, a REST API, typed SDKs and a project MCP server; it is in development, and the [API reference](/docs/api-reference) describes its planned contract.",
+        text: "This server acts for one signed in Dopl user. For software that reaches your own users' devices, the Device SDK adds project keys, a REST API, a TypeScript SDK and a project MCP server. It is built and in testing with design partners, and the [API reference](/docs/api-reference) describes it.",
       },
     ],
   },
@@ -103,57 +103,18 @@ export const SDK_PAGES: DocPage[] = [
     tab: "sdks",
     group: "SDKs",
     title: "TypeScript SDK",
-    description: "A typed client for the Device SDK API",
+    description: "A typed client for the Device SDK API, with show, ask and notify helpers",
     status: "coming_soon",
-    blocks: [
-      PLANNED,
-      {
-        type: "p",
-        text: "The TypeScript SDK will be a typed client for every route in the [API reference](/docs/api-reference), with the request and response types taken from the same contract. A Python SDK follows.",
-      },
-      { type: "h2", text: "Helpers" },
-      {
-        type: "p",
-        text: "On top of [Deliver](/docs/api-reference/deliver), the SDK adds `show`, `ask` and `notify`, which call Deliver with the matching intent. They are methods, not separate routes, so the API keeps one way to deliver.",
-      },
-      { type: "h2", text: "Until it ships" },
-      {
-        type: "p",
-        text: "Every guide shows the plain HTTP request, so you can call the API with `fetch` as soon as it is live, the way the [Quickstart](/docs/quickstart) does.",
-      },
-    ],
+    blocks: TYPESCRIPT_SDK,
   },
   {
     slug: "sdks/project-mcp",
     tab: "sdks",
     group: "MCP",
     title: "Project MCP server",
-    description: "Three tools that give an MCP agent your project's devices",
+    description: "Three tools that give an MCP agent your project's users and devices",
     status: "coming_soon",
-    blocks: [
-      PLANNED,
-      {
-        type: "p",
-        text: "The project MCP server is scoped to one project key, so an agent connected to it acts for your product and your end users rather than for one Dopl account.",
-      },
-      {
-        type: "table",
-        columns: ["Tool", "What it does"],
-        rows: [
-          ["`deliver`", "Deliver by intent, routed by Dopl, like [Deliver](/docs/api-reference/deliver)"],
-          ["`context`", "Read a user's device context and matched profile, like [Get context](/docs/api-reference/context)"],
-          ["`actions`", "Run or read one capability on one device, like [Run a device action](/docs/api-reference/device-actions)"],
-        ],
-      },
-      {
-        type: "p",
-        text: "Three tools instead of one per device or capability keeps the tool definitions small, so connecting Dopl costs your agent very little context. The server also adds the user's context to its tool results, so the agent always knows which device it is writing for.",
-      },
-      {
-        type: "p",
-        text: "The [hosted MCP server](/docs/sdks/hosted-mcp) for individual Dopl users stays as it is.",
-      },
-    ],
+    blocks: PROJECT_MCP,
   },
 ];
 
