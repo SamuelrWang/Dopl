@@ -6,9 +6,10 @@ import { TAB_ACTION, TAB_ACTION_INK, TAB_ACTION_SHELL } from "./bits";
 const classes = (s: string) => [...new Set(s.split(/\s+/).filter(Boolean))].sort();
 
 describe("TAB_ACTION is the ink lg pill, not a second cut of it (X10)", () => {
-  it("composes the shared page-action face", () => {
+  it("composes the shared page-action face, with its own gap", () => {
     expect(TAB_ACTION).toContain("raise-ink");
     for (const token of pillButton("ink", "lg").split(/\s+/)) {
+      if (token.startsWith("gap-")) continue;
       expect(classes(TAB_ACTION)).toContain(token);
     }
   });

@@ -183,7 +183,11 @@ describe("the CARD-scale pill survives where the ruling did not reach", () => {
   it("🔒 `LaunchIntoChannelButton` is the small ink pill, not a 3D or full-width face", () => {
     render(<LaunchIntoChannelButton onClick={() => {}} disabled={false} busy={false} />);
     const launch = faceOf("Launch");
-    for (const cls of pillButton("ink", "sm").split(/\s+/)) expect(launch.has(cls)).toBe(true);
+    // The recipe's face, with the card's own icon gap in place of the size's.
+    for (const cls of pillButton("ink", "sm").split(/\s+/)) {
+      if (!cls.startsWith("gap-")) expect(launch.has(cls)).toBe(true);
+    }
+    expect(launch.has("gap-1.5")).toBe(true);
     expect(launch.has("w-full")).toBe(false);
     expect(launch.has("btn-light")).toBe(false);
   });
