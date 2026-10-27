@@ -1,0 +1,90 @@
+import "server-only";
+import type { SdkGlassesDevice, SdkGlassesPort } from "@/features/glasses/core/devices/sdk-device";
+import { EVEN_G2_INFO } from "@/features/glasses/platforms/even-g2/info";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import type { ActionStatus } from "../../types";
+import { markDelivered, settle, withStatus, type LensActionStore } from "./lens-actions";
+import { sdkGlassesStore } from "./sdk-glasses-store";
+
+/**
+ * {@link SdkGlassesPort} over the service role (A8): the glasses device routes
+ * (`glasses-runtime.ts › deviceHandlers`) authenticate an SDK G2 here.
+ *
+ * 🔒 AUTH: the bearer's sha256 must be a LIVE `device_credentials` row of kind `device_token`
+ * (written by `connect/pairing-port.ts › setTokenHash` when the glasses collected it) whose device is
+ * live, SDK-owned (`project_id` set) and an `even_g2`. Prosumer tokens are never in that table (A3 did
+ * not backfill credentials), and the prosumer lookup runs FIRST, so this is only ever reached on a miss.
+ */
+
+const db = () => supabaseAdmin();
+
+function must<T>(res: { data: T; error: { message: string } | null }, op: string): T {
+  if (res.error) throw new Error(`[device-sdk] sdk glasses ${op} failed: ${res.error.message}`);
+  return res.data;
+}
+
+/** `dev_actions` rows moved by their `result.lens_message_id` (conditional on status: never regress). */
+export const supabaseLensActions: LensActionStore = {
+  async move(deviceId, ids, from, patch) {
+    const rows = must(
+      await db()
+        .from("dev_actions")
+        .select("id, status, result, response")
+        .eq("device_id", deviceId)
+        .in("result->>lens_message_id", ids)
+        .in("status", from),
+      "lens action read"
+    ) as Array<{ id: string; status: ActionStatus; result: Record<string, unknown> | null; response: Record<string, unknown> }> | null;
+    for (const r of rows ?? []) {
+      const update: Record<string, unknown> = {
+        status: patch.status,
+        response: withStatus(r.response ?? {}, patch.status),
+        updated_at: new Date().toISOString(),
+      };
+      if (patch.result) update.result = { ...(r.result ?? {}), ...patch.result };
+      must(await db().from("dev_actions").update(update).eq("id", r.id).eq("device_id", deviceId).in("status", from), "lens action update");
+    }
+  },
+};
+
+export const sdkGlassesPort: SdkGlassesPort = {
+  store: sdkGlassesStore,
+
+  async deviceFromTokenHash(hash) {
+    const cred = must(
+      await db().from("device_credentials").select("device_id").eq("hash", hash).eq("kind", "device_token").is("revoked_at", null).maybeSingle(),
+      "credential lookup"
+    ) as { device_id: string } | null;
+    if (!cred) return null;
+    const device = must(
+      await db()
+        .from("devices")
+        .select("id, project_id, env")
+        .eq("id", cred.device_id)
+        .eq("adapter_id", EVEN_G2_INFO.id)
+        .not("project_id", "is", null)
+        .is("revoked_at", null)
+        .maybeSingle(),
+      "device lookup"
+    ) as { id: string; project_id: string; env: string } | null;
+    return device ? ({ id: device.id, projectId: device.project_id, env: device.env } satisfies SdkGlassesDevice) : null;
+  },
+
+  async touch(deviceId, now) {
+    must(await db().from("devices").update({ last_seen: now }).eq("id", deviceId).is("revoked_at", null), "touch");
+    must(
+      await db().from("device_credentials").update({ last_used_at: now }).eq("device_id", deviceId).eq("kind", "device_token").is("revoked_at", null),
+      "credential touch"
+    );
+  },
+
+  async revokeToken(deviceId, now) {
+    must(
+      await db().from("device_credentials").update({ revoked_at: now }).eq("device_id", deviceId).eq("kind", "device_token").is("revoked_at", null),
+      "revoke"
+    );
+  },
+
+  delivered: (deviceId, ids) => markDelivered(supabaseLensActions, deviceId, ids),
+  settled: (deviceId, row) => settle(supabaseLensActions, deviceId, row),
+};

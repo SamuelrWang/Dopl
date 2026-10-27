@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
-import { deviceAdapters } from "../adapters/registry";
+import { wiredDeviceAdapters } from "./device-adapters";
 import type { ZodType } from "zod";
 import type { RouteDecision } from "../types";
 import type { DeliveryDeps, ServiceResult } from "./delivery-common";
@@ -15,7 +15,7 @@ import type { DeveloperKeyContext } from "./with-developer-key";
  * on the call's one event row (🔒 every deliver logs `route_decision`; so does every A5 route).
  */
 
-const productionDeps: DeliveryDeps = { store: supabaseDeliveryStore, grants: supabaseGrantStore, adapters: deviceAdapters };
+const productionDeps: DeliveryDeps = { store: supabaseDeliveryStore, grants: supabaseGrantStore, adapters: wiredDeviceAdapters };
 let deps: DeliveryDeps = productionDeps;
 
 export const deliveryDeps = (): DeliveryDeps => deps;
