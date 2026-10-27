@@ -17,7 +17,7 @@ const ADD_JSON = `{
 /** Google Home / Nest over Cast on the local network, sent from the user's Mac. */
 export const GOOGLE_HOME_PAGE: DocPage = {
   slug: "devices/google-home",
-  tab: "about",
+  section: "devices",
   group: "Devices",
   title: "Google Home",
   description: "Speak on Google Home and Nest speakers, and show cards on a Nest Hub",

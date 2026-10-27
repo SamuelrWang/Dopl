@@ -1,4 +1,4 @@
-import type { DocPage, DocParam, HttpMethod } from "./types";
+import type { DocPage, DocParam, EndpointRow, HttpMethod } from "./types";
 
 const API = "https://api.usedopl.com/v1";
 
@@ -46,7 +46,7 @@ function endpoint(
 ): DocPage {
   return {
     slug: `api-reference/${slug}`,
-    tab: "api",
+    section: "api",
     group: method === "GET" ? "Devices" : "Intents",
     title,
     description,
@@ -68,39 +68,7 @@ function endpoint(
   };
 }
 
-export const API_PAGES: DocPage[] = [
-  {
-    slug: "api-reference",
-    tab: "api",
-    group: "Overview",
-    title: "About the Dopl API",
-    description: "Understanding the structure of Dopl API requests and responses",
-    blocks: [
-      {
-        type: "p",
-        text: "The Dopl API is REST-based. Every request authenticates with an API key in the `Authorization: Bearer` header.",
-      },
-      {
-        type: "p",
-        text: "An agent states an **intent** — `show`, `ask` or `notify` — for a user. Dopl picks the user's device and renders it there.",
-      },
-      { type: "h2", text: "Interfaces" },
-      { type: "h3", text: "Hosted MCP" },
-      { type: "p", text: "Connect any MCP host to `https://www.usedopl.com/api/mcp`. Sign in with OAuth or an API key." },
-      { type: "h3", text: "SDKs" },
-      {
-        type: "code",
-        tabs: [
-          { label: "TypeScript", code: "npm install @dopl/client" },
-          { label: "Python", code: "pip install dopl" },
-        ],
-      },
-      { type: "h3", text: "CLI" },
-      { type: "code", tabs: [{ label: "CLI", code: 'dopl notify usr_123 --text "Build finished"' }] },
-      { type: "h3", text: "REST" },
-      { type: "p", text: `Base URL: \`${API}\`. Requests and responses are JSON.` },
-    ],
-  },
+const ENDPOINT_PAGES: DocPage[] = [
   endpoint(
     "show",
     "Show",
@@ -161,10 +129,57 @@ export const API_PAGES: DocPage[] = [
   ),
 ];
 
+/** The endpoint table rows of one group, read off the endpoint pages themselves. */
+function endpointRows(group: string): EndpointRow[] {
+  return ENDPOINT_PAGES.filter((p) => p.group === group).flatMap((p) =>
+    p.blocks.flatMap((b) =>
+      b.type === "endpoint" ? [{ method: b.method, path: b.path, href: p.slug, description: p.description }] : []
+    )
+  );
+}
+
+export const API_PAGES: DocPage[] = [
+  {
+    slug: "api-reference",
+    section: "api",
+    group: "Overview",
+    title: "About the Dopl API",
+    description: "Understanding the structure of Dopl API requests and responses",
+    blocks: [
+      {
+        type: "p",
+        text: "The Dopl API is REST-based. Every request authenticates with an API key in the `Authorization: Bearer` header.",
+      },
+      {
+        type: "p",
+        text: "An agent states an **intent** — `show`, `ask` or `notify` — for a user. Dopl picks the user's device and renders it there.",
+      },
+      { type: "endpoints", label: "Intents", rows: endpointRows("Intents") },
+      { type: "endpoints", label: "Devices", rows: endpointRows("Devices") },
+      { type: "h2", text: "Interfaces" },
+      { type: "h3", text: "Hosted MCP" },
+      { type: "p", text: "Connect any MCP host to `https://www.usedopl.com/api/mcp`. Sign in with OAuth or an API key." },
+      { type: "h3", text: "SDKs" },
+      {
+        type: "code",
+        tabs: [
+          { label: "TypeScript", code: "npm install @dopl/client" },
+          { label: "Python", code: "pip install dopl" },
+        ],
+      },
+      { type: "h3", text: "CLI" },
+      { type: "code", tabs: [{ label: "CLI", code: 'dopl notify usr_123 --text "Build finished"' }] },
+      { type: "h3", text: "REST" },
+      { type: "p", text: `Base URL: \`${API}\`. Requests and responses are JSON.` },
+    ],
+  },
+  ...ENDPOINT_PAGES,
+];
+
 export const CHANGELOG_PAGES: DocPage[] = [
   {
     slug: "changelog",
-    tab: "changelog",
+    section: "changelog",
     group: "Product updates",
     title: "Changelog",
     description: "",

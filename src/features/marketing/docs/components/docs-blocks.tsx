@@ -1,33 +1,10 @@
-import {
-  Bell,
-  Check,
-  Glasses,
-  Laptop,
-  Link2,
-  MessageCircleQuestion,
-  Monitor,
-  MonitorSmartphone,
-  Route,
-  Smartphone,
-  type LucideIcon,
-} from "lucide-react";
+import { Info } from "lucide-react";
 import Link from "next/link";
 
-import { docHref, slugify, type DocBlock, type DocIcon, type ListItem } from "../content";
+import { docHref, slugify, type DocBlock, type DocParam, type ListItem } from "../content";
+import { DOC_ICONS } from "./docs-icons";
 import { CodeGroup, DocsConnect, PromptWindow } from "./docs-interactive";
 import { RichText } from "./rich-text";
-
-const ICONS: Record<DocIcon, LucideIcon> = {
-  show: Monitor,
-  ask: MessageCircleQuestion,
-  notify: Bell,
-  connect: Link2,
-  route: Route,
-  glasses: Glasses,
-  phone: Smartphone,
-  notch: Laptop,
-  desktop: MonitorSmartphone,
-};
 
 export function DocBlocks({ blocks }: { blocks: DocBlock[] }) {
   return (
@@ -39,23 +16,32 @@ export function DocBlocks({ blocks }: { blocks: DocBlock[] }) {
   );
 }
 
-function Item({ item, check }: { item: string | ListItem; check: boolean }) {
+function Item({ item }: { item: string | ListItem }) {
   const { text, blocks } = typeof item === "string" ? { text: item, blocks: undefined } : item;
-  if (check) {
-    return (
-      <li className="lp-ctl-item docs-check-item">
-        <Check size={15} strokeWidth={2} className="lp-ctl-check" aria-hidden />
-        <span>
-          <RichText text={text} />
-        </span>
-      </li>
-    );
-  }
   return (
     <li>
       <RichText text={text} />
       {blocks && <DocBlocks blocks={blocks} />}
     </li>
+  );
+}
+
+/** One field: monospace name, then "required" and the type; the description beneath. */
+function Param({ p }: { p: DocParam }) {
+  return (
+    <div className="docs-param">
+      <div className="docs-param-head">
+        <code className="docs-param-name">{p.name}</code>
+        <span className="docs-param-meta">
+          {p.required && <span>required</span>}
+          {p.location && <span>{p.location}</span>}
+          <span>{p.type}</span>
+        </span>
+      </div>
+      <p className="docs-param-desc">
+        <RichText text={p.description} />
+      </p>
+    </div>
   );
 }
 
@@ -73,22 +59,25 @@ function Block({ block: b }: { block: DocBlock }) {
       return <h3 id={slugify(b.text)}>{b.text}</h3>;
     case "quote":
       return (
-        <blockquote>
-          <RichText text={b.text} />
-        </blockquote>
+        <div className="docs-callout">
+          <Info size={18} strokeWidth={1.8} className="docs-callout-icon" aria-hidden />
+          <p>
+            <RichText text={b.text} />
+          </p>
+        </div>
       );
     case "list": {
-      const items = b.items.map((it, i) => <Item key={i} item={it} check={!b.ordered} />);
-      return b.ordered ? <ol>{items}</ol> : <ul className="lp-ctl-list docs-check-list">{items}</ul>;
+      const items = b.items.map((it, i) => <Item key={i} item={it} />);
+      return b.ordered ? <ol>{items}</ol> : <ul>{items}</ul>;
     }
     case "cards":
       return (
         <div className="docs-cards">
           {b.items.map((c) => {
-            const Icon = ICONS[c.icon];
+            const Icon = DOC_ICONS[c.icon];
             return (
               <Link key={c.title} href={docHref(c.href)} className="lp-mp-card docs-card">
-                <Icon size={16} className="docs-card-icon" aria-hidden />
+                <Icon size={22} strokeWidth={1.6} aria-hidden />
                 <span className="docs-card-title">{c.title}</span>
                 <span className="docs-card-desc">
                   <RichText text={c.description} />
@@ -102,14 +91,12 @@ function Block({ block: b }: { block: DocBlock }) {
       return (
         <div className="docs-steps">
           {b.items.map((s, i) => (
-            <div key={s.title} className="docs-step">
-              <div className="docs-step-line" aria-hidden />
-              <div className="docs-step-number">{i + 1}</div>
-              <p className="docs-step-title">{s.title}</p>
-              <div className="docs-step-content">
-                <DocBlocks blocks={s.blocks} />
-              </div>
-            </div>
+            <section key={s.title} className="docs-step">
+              <h3>
+                {i + 1}. {s.title}
+              </h3>
+              <DocBlocks blocks={s.blocks} />
+            </section>
           ))}
         </div>
       );
@@ -143,29 +130,20 @@ function Block({ block: b }: { block: DocBlock }) {
       );
     case "endpoint":
       return (
-        <div className="docs-endpoint">
-          <span className="docs-method" data-method={b.method}>
-            {b.method}
-          </span>
-          <code>{b.path}</code>
-        </div>
+        <h2 className="docs-endpoint" id={slugify(b.path)}>
+          <code>
+            {b.method} {b.path}
+          </code>
+        </h2>
       );
     case "params":
       return (
         <section className="docs-params">
-          <h2 id={slugify(b.title)}>{b.title}</h2>
+          <h3 id={slugify(b.title)} className="docs-params-title">
+            {b.title}
+          </h3>
           {b.params.map((p) => (
-            <div key={p.name} className="docs-param">
-              <div className="docs-param-head">
-                <code className="docs-param-name">{p.name}</code>
-                <span className="docs-chip">{p.type}</span>
-                {p.location && <span className="docs-chip">{p.location}</span>}
-                {p.required && <span className="docs-chip docs-chip-required">required</span>}
-              </div>
-              <p>
-                <RichText text={p.description} />
-              </p>
-            </div>
+            <Param key={p.name} p={p} />
           ))}
         </section>
       );
@@ -194,20 +172,44 @@ function Block({ block: b }: { block: DocBlock }) {
           </table>
         </div>
       );
+    case "endpoints":
+      return (
+        <div className="docs-table-wrap">
+          <table className="docs-table docs-table-endpoints">
+            <thead>
+              <tr>
+                <th>{b.label}</th>
+                <th aria-hidden />
+              </tr>
+            </thead>
+            <tbody>
+              {b.rows.map((r) => (
+                <tr key={r.path}>
+                  <td>
+                    <Link href={docHref(r.href)}>
+                      <code>
+                        {r.method} {r.path}
+                      </code>
+                    </Link>
+                  </td>
+                  <td>{r.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     case "changelog":
       return (
         <div className="docs-changelog">
           {b.entries.map((e) => (
-            <article key={e.title} id={slugify(e.date.split(" ")[0])} className="docs-changelog-entry">
-              <span className="docs-changelog-date">{e.date}</span>
-              <div>
-                <h2>{e.title}</h2>
-                <p className="docs-changelog-desc">
-                  <RichText text={e.description} />
-                </p>
-                <div className="docs-changelog-media" aria-hidden />
-              </div>
-            </article>
+            <section key={e.title} id={slugify(e.date)} className="docs-changelog-entry">
+              <p className="docs-changelog-date">{e.date}</p>
+              <h3>{e.title}</h3>
+              <p>
+                <RichText text={e.description} />
+              </p>
+            </section>
           ))}
         </div>
       );

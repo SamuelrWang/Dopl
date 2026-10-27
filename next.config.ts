@@ -43,9 +43,9 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/terms", destination: "/services-agreement", permanent: true },
-      // The docs land on Start here; config redirects run before the proxy, so bare
+      // The docs land on their home page; config redirects run before the proxy, so bare
       // `/docs` needs no public-route entry (`/docs/` has one).
-      { source: "/docs", destination: "/docs/start-here", permanent: true },
+      { source: "/docs", destination: "/docs/home", permanent: true },
     ];
   },
   /**

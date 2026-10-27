@@ -4,7 +4,7 @@ import type { DocPage } from "./types";
 function available(slug: string, title: string, description: string, supports: string[]): DocPage {
   return {
     slug: `devices/${slug}`,
-    tab: "about",
+    section: "devices",
     group: "Devices",
     title,
     description,
@@ -24,7 +24,7 @@ function available(slug: string, title: string, description: string, supports: s
 function comingSoon(slug: string, title: string, description: string): DocPage {
   return {
     slug: `devices/${slug}`,
-    tab: "about",
+    section: "devices",
     group: "Devices",
     title,
     description: `${description} (coming soon)`,

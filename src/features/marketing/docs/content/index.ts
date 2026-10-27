@@ -1,16 +1,17 @@
 import { CONNECT_TABS } from "./connect";
-import { DOC_TABS } from "./nav";
+import { DOC_SECTIONS } from "./nav";
 import { API_PAGES, CHANGELOG_PAGES } from "./pages-api";
 import { DEVICE_PAGES } from "./pages-devices";
 import { OVERVIEW_PAGES } from "./pages-overview";
 import { USE_CASE_PAGES } from "./pages-use-cases";
-import type { DocBlock, DocPage, DocTab, NavLink } from "./types";
+import type { DocBlock, DocPage, DocSection } from "./types";
 
-export { CONNECT_TABS, DOC_TABS };
+export { CONNECT_TABS, DOC_SECTIONS };
+export { DOCS_HOME_COPY, HOME_CARDS, HOME_LISTS } from "./home";
 export type * from "./types";
 
-/** The landing page of `/docs` (bare `/docs` 308s here — `next.config.ts › redirects`). */
-export const DOCS_HOME = "start-here";
+/** The docs home (`src/app/docs/home/page.tsx`); bare `/docs` 308s here — `next.config.ts › redirects`. */
+export const DOCS_HOME = "home";
 
 export const DOC_PAGES: DocPage[] = [
   ...OVERVIEW_PAGES,
@@ -30,8 +31,13 @@ export function docHref(slug: string): string {
   return `/docs/${slug}`;
 }
 
-export function getDocTab(page: DocPage): DocTab {
-  return DOC_TABS.find((t) => t.id === page.tab) ?? DOC_TABS[0];
+export function getDocSection(page: DocPage): DocSection {
+  return DOC_SECTIONS.find((s) => s.id === page.section) ?? DOC_SECTIONS[0];
+}
+
+/** Where a section's sidebar row lands: its first page. */
+export function sectionHref(section: DocSection): string {
+  return docHref(section.groups[0].links[0].slug);
 }
 
 /** Heading anchor ids: lowercase, non-alphanumerics collapsed to `-`. */
@@ -42,26 +48,14 @@ export function slugify(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/** The "On this page" list: every top-level h2 (and h3 under it). */
-export function tableOfContents(page: DocPage): { id: string; text: string; depth: 2 | 3 }[] {
-  return page.blocks.flatMap((b) =>
-    b.type === "h2" || b.type === "h3"
-      ? [{ id: slugify(b.text), text: b.text, depth: b.type === "h2" ? (2 as const) : (3 as const) }]
-      : []
-  );
-}
-
-/** Sidebar rows of one tab, flattened, page links only (no `#fragment` rows). */
-function pageLinks(tab: DocTab): NavLink[] {
-  return tab.groups.flatMap((g) => g.links).filter((l) => !l.slug.includes("#"));
-}
-
-/** Previous / next page within the same header tab, in sidebar order. */
-export function neighbours(page: DocPage): { prev?: NavLink; next?: NavLink } {
-  const links = pageLinks(getDocTab(page));
-  const i = links.findIndex((l) => l.slug === page.slug);
-  if (i < 0) return {};
-  return { prev: links[i - 1], next: links[i + 1] };
+/** The page's anchors, listed under it in the sidebar: headings, field groups, changelog entries. */
+export function tableOfContents(page: DocPage): { id: string; text: string }[] {
+  return page.blocks.flatMap((b) => {
+    if (b.type === "h2" || b.type === "h3") return [{ id: slugify(b.text), text: b.text }];
+    if (b.type === "params") return [{ id: slugify(b.title), text: b.title }];
+    if (b.type === "changelog") return b.entries.map((e) => ({ id: slugify(e.date), text: e.title }));
+    return [];
+  });
 }
 
 /** Strip the inline marks to plain text, keeping link URLs. */
@@ -109,10 +103,15 @@ function blockText(b: DocBlock): string[] {
       ];
     case "changelog":
       return b.entries.map((e) => `## ${e.date} — ${e.title}\n${plain(e.description)}`);
+    case "endpoints":
+      return [
+        `**${b.label}**`,
+        ...b.rows.map((r) => `- [\`${r.method} ${r.path}\`](${docHref(r.href)}): ${r.description}`),
+      ];
   }
 }
 
-/** The page as Markdown — what the "Copy page" button puts on the clipboard. */
+/** The page as Markdown — what the copy button beside the H1 puts on the clipboard. */
 export function pageToMarkdown(page: DocPage): string {
   const head = [`# ${page.title}`, page.description].filter(Boolean);
   return [...head, ...page.blocks.flatMap(blockText)].join("\n\n");

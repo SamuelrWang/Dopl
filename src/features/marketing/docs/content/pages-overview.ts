@@ -10,9 +10,9 @@ await dopl.notify(userId, { text })`;
 export const OVERVIEW_PAGES: DocPage[] = [
   {
     slug: "start-here",
-    tab: "about",
+    section: "quickstart",
     group: "Overview",
-    title: "Start here",
+    title: "Quickstart",
     description: "Explore common use cases and integrate Dopl immediately",
     blocks: [
       { type: "h2", text: "Let your agent connect Dopl" },
@@ -135,7 +135,7 @@ export const OVERVIEW_PAGES: DocPage[] = [
   },
   {
     slug: "security",
-    tab: "about",
+    section: "security",
     group: "Overview",
     title: "Security",
     description: "How Dopl protects your users and their devices",
@@ -164,7 +164,7 @@ export const OVERVIEW_PAGES: DocPage[] = [
   },
   {
     slug: "pricing",
-    tab: "about",
+    section: "pricing",
     group: "Overview",
     title: "Pricing",
     description: "Pay per connected user, per month",
