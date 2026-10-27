@@ -75,14 +75,17 @@ Tests: `pages/home/overview-{panels,credit-bar,unmetered-caption,usage-filter}.t
 
 ## 4. Data the staging look needs that the product lacks
 
+Since `feat/preview-data` each draws from the account's preview data (`account_preview_data`,
+`GET /api/home/preview`, INVARIANTS §4A) when the account has a row, and is absent otherwise.
+
 | Staging data | Product | Shipped as |
 |---|---|---|
-| Needs-you asks (approvals, open questions) | none since "Waiting on you" was cut 2026-09-05 | out-of-credits row only |
-| Agents by computer, run time, Working/Waiting | `channel_sessions` has no device column; /home board cut 2026-09-20 | hidden, with the Working cell |
-| Activity routing + logs | no routing ledger, no device log | hidden |
-| Reach order (fallback chain, 30s waits) | no router | hidden |
-| Device In use, battery, "through" host, Away | not on `ConnectedDevice` | hidden; Online / last seen only |
-| Add device kinds + pairing code | pairing lives in Settings › Devices (`PairGlasses`) | the button opens that section |
+| Needs-you asks (approvals, open questions) | none since "Waiting on you" was cut 2026-09-05 | preview `needs` rows beside the real decisions and tasks |
+| Agents by computer, run time, Working/Waiting | `channel_sessions` has no device column; /home board cut 2026-09-20 | preview `hosts`, with the Working cell |
+| Activity routing + logs | no routing ledger, no device log | preview `routes` / `logs` |
+| Reach order (fallback chain, 30s waits) | no router | preview `reachOrder` |
+| Device In use, battery, "through" host, Away | not on `ConnectedDevice` | preview `devices` laid over the real rows; else Online / last seen |
+| Add device kinds + pairing code | pairing lives in Settings › Devices (`PairGlasses`) | preview `addDevice`: kind picker + code, Pair opens Settings; else the button opens that section |
 
 ## 5. Dead code after the port
 

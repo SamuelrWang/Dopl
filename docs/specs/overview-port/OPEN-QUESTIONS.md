@@ -4,7 +4,8 @@ Each: the question, what was chosen, where.
 
 1. **Cards with no data behind them.** Agents by computer, Activity (Routing / Logs), the reach
    order, device In use / battery / "through" host, and the Needs-you asks are mock in staging.
-   Chose: not shipped; Needs you carried the one real state (a spent allowance) until item 13. Where:
+   Chose: not shipped; Needs you carried the one real state (a spent allowance) until item 13.
+   Superseded by item 14: they draw from an account's preview data. Where:
    `src/features/home/components/overview/home-overview.tsx`, INVENTORY §4.
 2. **Where Devices sits.** Staging puts Devices last in the side column, beside Agents and Activity.
    With those two hidden the main column would hold Needs you alone at 900px. Chose: Needs you +
@@ -49,6 +50,20 @@ Each: the question, what was chosen, where.
     staging task and decision rows both go to `/playground/channels`; (e) the type lives in
     `src/features/home/needs-types.ts`, not `@dopl/contracts` (one tree consumes it). Where:
     `overview-needs.tsx`, `server/service-needs.ts`.
+
+14. **Preview data (branch `feat/preview-data`).** Samuel: "just hardcode in data to my account
+    specifically so that it will all show". Chose: a service-role table `account_preview_data`
+    keyed `(user_id, surface)` and `GET /api/home/preview`, so no user id sits in code; item 1's
+    cards draw only from it. Sub-choices: (a) approval / question rows carry no Approve / Deny /
+    Answer buttons (they would act on nothing); (b) the time columns print wall-clock only
+    (`formatClockTime`), so a seed does not read as days old; (c) a preview device that matches no
+    real row by id or name is listed as its own row when it names a `kind` (the phone has no source);
+    (d) the Add device kind picker shows the seeded code and its Pair opens Settings › Devices, so
+    pairing still works; (e) either Agents or Activity switches the grid to staging's three-card
+    columns, with Devices moving under Tokens; (f) the playground's demo computers are renamed to
+    the seed's ("Samuel's MacBook Pro", "Samuel's Mac Studio") so the merge shows there too. Where:
+    `overview-agents.tsx`, `overview-devices.tsx`, `overview-needs.tsx`, `home-overview.tsx`,
+    `overview-staging/overview-preview-seed.json`.
 
 ## For Samuel (review, 2026-10-26): reversals of earlier rulings the staging look brings
 
