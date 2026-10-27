@@ -55,13 +55,10 @@ const ACCOUNT_RAIL_TSX = join(
   "..",
   "..",
   "..",
-  "..",
-  "apps",
-  "desktop-ui",
-  "src",
-  "components",
+  "shared",
+  "layout",
   "app-shell",
-  "account-rail.tsx"
+  "account-rail-core.tsx"
 );
 
 /** `HOME_PATH` as the SPA actually declares it — the only source. */
@@ -70,8 +67,8 @@ function spaHomePath(): string {
   const match = /export const HOME_PATH = "([^"]+)"/.exec(src);
   expect(
     match,
-    "could not find HOME_PATH in apps/desktop-ui/src/components/app-shell/" +
-      "account-rail.tsx — if it moved, this alarm, routes.tsx's root route and " +
+    "could not find HOME_PATH in src/shared/layout/app-shell/" +
+      "account-rail-core.tsx — if it moved, this alarm, routes.tsx's root route and " +
       "dopl-desktop-app/main/deep-link-target.js all need updating"
   ).not.toBeNull();
   return match![1];

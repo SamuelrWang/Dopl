@@ -73,9 +73,12 @@ describe("no concave surfaces", () => {
   // A derivation that answered `[]` would make every /home case vacuously green.
   it("derives the /home surfaces, and reaches BOTH tabs' files", () => {
     expect(HOME_FILES.length).toBeGreaterThan(10);
-    for (const name of ["home-panes.tsx", "identity-panels.tsx", "link-out-panel.tsx"]) {
+    for (const name of ["home-panes.tsx", "identity-panels.tsx"]) {
       expect(HOME_FILES).toContain(path.join(HOME_DIR, name));
     }
+    expect(HOME_SRC_FILES).toContain(
+      path.join(REPO, "src", "features", "home", "components", "channels", "link-out-panel.tsx")
+    );
   });
 
   it.each([...HOME_NOT_SURFACES])("the opt-out entry %s still exists", (name) => {

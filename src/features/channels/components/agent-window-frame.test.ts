@@ -94,7 +94,7 @@ describe("the active tab's underline is the popup field's underline", () => {
   });
 
   it("is the chrome's one underline — declared once, not re-spelled at the tab", () => {
-    expect(chrome).toContain("TAB_UNDERLINE");
+    expect(chrome).toContain("<TabUnderline />");
     expect(chrome, "the chrome grew its own underline rule").not.toMatch(/h-\[2px\]/);
   });
 });
