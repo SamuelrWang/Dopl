@@ -34,23 +34,50 @@ export interface Bar {
   value: number;
   /** "Sep 3 · 120 credits": the bar's hover title and its accessible name. */
   label: string;
+  /** "Sep 3": what the date axis prints under the bar when it is one of the thinned ticks. */
+  tick: string;
 }
 
-/** A bar strip scaled to its tallest bar; a measured zero still draws a tick. */
+const AXIS_TICKS = 6;
+
+/** Evenly spaced bar indexes, first and last always included. */
+function tickIndexes(count: number): number[] {
+  if (count <= AXIS_TICKS) return Array.from({ length: count }, (_, i) => i);
+  return Array.from({ length: AXIS_TICKS }, (_, i) => Math.round((i * (count - 1)) / (AXIS_TICKS - 1)));
+}
+
+/** A bar strip scaled to its tallest bar over a thinned date axis; a measured zero still draws a tick. */
 export function Bars({ bars, label, dim = false }: { bars: readonly Bar[]; label: string; dim?: boolean }) {
   const peak = Math.max(1, ...bars.map((bar) => bar.value));
+  const last = bars.length - 1;
   return (
-    <span className={styles.bars} role="list" aria-label={label} data-dim={dim || undefined}>
-      {bars.map((bar) => (
-        <i
-          key={bar.key}
-          role="listitem"
-          aria-label={bar.label}
-          title={bar.label}
-          data-zero={bar.value === 0 || undefined}
-          style={{ height: `${Math.max(bar.value > 0 ? 6 : 2, (bar.value / peak) * 100)}%` }}
-        />
-      ))}
-    </span>
+    <div className={styles.plot}>
+      <span className={styles.bars} role="list" aria-label={label} data-dim={dim || undefined}>
+        {bars.map((bar) => (
+          <i
+            key={bar.key}
+            role="listitem"
+            aria-label={bar.label}
+            title={bar.label}
+            data-zero={bar.value === 0 || undefined}
+            style={{ height: `${Math.max(bar.value > 0 ? 6 : 2, (bar.value / peak) * 100)}%` }}
+          />
+        ))}
+      </span>
+      <span className={styles.axis} aria-hidden>
+        {tickIndexes(bars.length).map((index) => {
+          const edge = index === 0 ? "start" : index === last ? "end" : undefined;
+          return (
+            <span
+              key={bars[index].key}
+              data-edge={edge}
+              style={edge ? undefined : { left: `${((index + 0.5) / bars.length) * 100}%` }}
+            >
+              {bars[index].tick}
+            </span>
+          );
+        })}
+      </span>
+    </div>
   );
 }

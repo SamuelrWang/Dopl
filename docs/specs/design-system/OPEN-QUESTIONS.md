@@ -1,3 +1,5 @@
+RESOLVED 2026-10-27 (Samuel): the current desktop app is the approved design; every open look/copy question here is settled as currently built unless reopened. Bars gain bottom date labels (no y-axis).
+
 # Design system — open questions for Samuel (2026-10-26)
 
 Each: the question, what was chosen, where. Every control named here renders on

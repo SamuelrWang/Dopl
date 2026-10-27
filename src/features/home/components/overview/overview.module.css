@@ -288,14 +288,27 @@
   background: var(--border-default);
 }
 
-/* a bar strip, tallest bar = full height */
+/* a bar strip, tallest bar = full height, over its date axis. The plot takes the body's spare
+   height up to a 64px strip and lets the strip shorten in a tighter card, so no card grows. */
+.plot {
+  display: flex;
+  min-height: 0;
+  max-height: calc(64px + 4px + 1lh);
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-caption);
+}
 .bars {
   display: flex;
-  height: 64px;
-  flex: none;
+  min-height: 32px;
+  flex: 1 1 0%;
   align-items: flex-end;
   gap: 2px;
   transition: opacity 150ms ease;
+}
+.bars[data-dim="true"] {
+  opacity: 0.6;
 }
 .bars > i {
   flex: 1 1 0%;
@@ -306,8 +319,26 @@
 .bars > i[data-zero="true"] {
   background: var(--surface-raised-4);
 }
-.bars[data-dim="true"] {
-  opacity: 0.6;
+.axis {
+  position: relative;
+  height: 1lh;
+  flex: none;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.axis > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+.axis > span[data-edge="start"] {
+  left: 0;
+  transform: none;
+}
+.axis > span[data-edge="end"] {
+  right: 0;
+  transform: none;
 }
 
 /* the channels table */

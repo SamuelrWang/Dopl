@@ -159,11 +159,10 @@ function DailyCredits({
   return (
     <>
       <Bars
-        bars={points.map((point) => ({
-          key: point.at,
-          value: point.count,
-          label: `${utcDayLabel(point.at)} · ${point.count.toLocaleString()} credits`,
-        }))}
+        bars={points.map((point) => {
+          const tick = utcDayLabel(point.at);
+          return { key: point.at, value: point.count, label: `${tick} · ${point.count.toLocaleString()} credits`, tick };
+        })}
         label={`Daily credits, ${monthLabel(month)}`}
         dim={series.isPlaceholderData}
       />

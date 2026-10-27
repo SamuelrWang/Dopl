@@ -34,7 +34,8 @@ function TokenDays({ report }: { report: TokenSpendReport }) {
       <Bars
         bars={days.map((day) => {
           const tokens = byDay.get(day) ?? 0;
-          return { key: day, value: tokens, label: `${localDayLabel(day)} · ${formatTokens(tokens)} tokens` };
+          const tick = localDayLabel(day);
+          return { key: day, value: tokens, label: `${tick} · ${formatTokens(tokens)} tokens`, tick };
         })}
         label={`Tokens per day, last ${TOKEN_SPEND_WINDOW_DAYS} days`}
       />

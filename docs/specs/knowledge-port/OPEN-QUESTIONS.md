@@ -1,3 +1,5 @@
+RESOLVED 2026-10-27 (Samuel): the current desktop app is the approved design; every open look/copy question here is settled as currently built unless reopened. Bars gain bottom date labels (no y-axis).
+
 # Knowledge port: open questions (branch `ui/port-knowledge`, 2026-10-26)
 
 ## Knowledge port
