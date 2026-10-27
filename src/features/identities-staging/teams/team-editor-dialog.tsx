@@ -38,7 +38,7 @@ function blankTeam(createdBy: string): StagingAgentTeam {
     id: freshId("team"),
     name: "",
     description: "",
-    scope: "personal",
+    scope: "home",
     createdBy,
     slots: [slot],
     templates: [

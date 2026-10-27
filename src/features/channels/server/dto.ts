@@ -66,7 +66,7 @@ export { CHANNEL_MESSAGE_COLS, CHANNEL_THREAD_ACTIVITY_COLS } from "./dto-rows";
  * keystone below already follows in so many words: an ABSENT column (the
  * migration is not applied) is the same answer to a caller as a NULL one. The
  * numbering columns are added by a HELD migration
- * (`supabase/migrations-held/20261122120000`), so until Samuel applies it this
+ * (`supabase/migrations-held/20261124120000`), so until Samuel applies it this
  * returns `null` on every row and every reader falls back to `seq`.
  *
  * ⚠ A deliberate local twin of `collab-dto.ts › bigintOrNull`, which is

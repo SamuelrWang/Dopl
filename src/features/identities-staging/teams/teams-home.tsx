@@ -50,7 +50,7 @@ export function TeamsHome({
   const [editing, setEditing] = useState<{ team: StagingAgentTeam | null } | null>(null);
 
   const shared = teams.filter((t) => t.scope === "shared");
-  const personal = teams.filter((t) => t.scope === "personal");
+  const personal = teams.filter((t) => t.scope === "home");
   const viewing = teams.find((t) => t.id === viewingId);
   const markerFor = (team: StagingAgentTeam) =>
     team.createdBy === currentUserId ? null : `by ${nameOf(team.createdBy) ?? "a member"}`;

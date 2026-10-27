@@ -31,8 +31,8 @@ export interface StagingAgentTeam {
   id: string;
   name: string;
   description: string;
-  /** "shared" = Shared in this channel; "personal" = the viewer's Home space. */
-  scope: "shared" | "personal";
+  /** "shared" = Shared in this channel; "home" = the viewer's Home space. */
+  scope: "shared" | "home";
   createdBy: string;
   slots: StagingTeamSlot[];
   templates: StagingTeamTemplate[];
@@ -62,7 +62,7 @@ export const SEED_AGENT_TEAMS: StagingAgentTeam[] = [
     id: "team-cleanup",
     name: "Code cleanup",
     description: "Tidies a module end to end: refactor, comment, then prove nothing broke.",
-    scope: "personal",
+    scope: "home",
     createdBy: STAGING_USER_ID,
     slots: [
       { id: "slot-coder", identityId: "id-coder", label: "Coder", seats: 1 },
@@ -118,7 +118,7 @@ export const SEED_AGENT_TEAMS: StagingAgentTeam[] = [
     id: "team-research",
     name: "Research",
     description: "Two researchers split the sources, an editor turns the notes into one brief.",
-    scope: "personal",
+    scope: "home",
     createdBy: STAGING_USER_ID,
     slots: [
       { id: "slot-research", identityId: "id-researcher", label: "Researcher", seats: 2 },
@@ -148,7 +148,7 @@ export const SEED_AGENT_TEAMS: StagingAgentTeam[] = [
     id: "team-hiring",
     name: "Hiring",
     description: "Screens the week's applicants and books the loops.",
-    scope: "personal",
+    scope: "home",
     createdBy: STAGING_USER_ID,
     slots: [
       { id: "slot-screen", identityId: "id-recruiter", label: "Screener", seats: 2 },

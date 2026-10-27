@@ -1,5 +1,5 @@
 /**
- * `20261122120000_channel_per_channel_numbering.sql`, READ AS THE CONTRACT IT IS.
+ * `20261124120000_channel_per_channel_numbering.sql`, READ AS THE CONTRACT IT IS.
  *
  * ⚠ **THIS IS NOT A REPLAY, AND IT CANNOT BE.** Docker is unavailable on this
  * machine, and the file is HELD — `supabase/migrations-held/` is excluded from
@@ -42,7 +42,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
-const NAME = "20261122120000_channel_per_channel_numbering.sql";
+const NAME = "20261124120000_channel_per_channel_numbering.sql";
 const HELD_DIR = resolve(process.cwd(), "supabase", "migrations-held");
 const APPLIED_DIR = resolve(process.cwd(), "supabase", "migrations");
 

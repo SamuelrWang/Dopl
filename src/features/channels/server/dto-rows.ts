@@ -153,7 +153,7 @@ export type ChannelMessageRow = {
   metadata: unknown;
   client_msg_id: string | null;
   created_at: string;
-  // ── THE TWO NUMBERS (held migration `20261122120000`) ───────────────────
+  // ── THE TWO NUMBERS (held migration `20261124120000`) ───────────────────
   // ⚠ **OPTIONAL BECAUSE THE COLUMNS DO NOT EXIST YET, AND THAT IS THE POINT.**
   // The migration that adds them is HELD (`supabase/migrations-held/`), so until
   // Samuel applies it these are absent from every row, `CHANNEL_MESSAGE_COLS`

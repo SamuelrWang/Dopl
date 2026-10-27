@@ -265,7 +265,7 @@ export type ChannelMessage = {
   seq: number;
   /**
    * **THE PER-CHANNEL NUMBER A PERSON CITES — `#12` IN THIS ROOM** (held
-   * migration `20261122120000`).
+   * migration `20261124120000`).
    *
    * ⚠ **AN IDENTITY, NOT A COUNT** — assigned at insert, never moved, gappy after
    * a delete. Not a count of what is on screen either: the channel view drops

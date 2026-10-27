@@ -41,7 +41,7 @@ export interface ArtifactMember {
   /**
    * The per-channel number to SHOW instead of `seq`, when the row has one.
    *
-   * ⚠ **`null` UNTIL THE HELD MIGRATION LANDS** (`20261122120000`), so the card
+   * ⚠ **`null` UNTIL THE HELD MIGRATION LANDS** (`20261124120000`), so the card
    * falls back to `seq` and reads exactly as it does today. `seq` above stays
    * because it is the ORDER and the citation key — the sort and the span are
    * both on it, and only the printed face moves.

@@ -324,7 +324,7 @@ export class ChannelCiteUnresolvedError extends ChannelError {
  * disagree by the gap between a channel's own count and the table's, so quietly
  * treating `no=12` as `seq=12` would resolve — to the wrong message, in some
  * other room, with a pill confidently pointing at it. The column arrives with
- * `supabase/migrations-held/20261122120000`; until it is applied the honest
+ * `supabase/migrations-held/20261124120000`; until it is applied the honest
  * answer is that this namespace is not live yet.
  */
 export class ChannelCiteNumberUnavailableError extends ChannelError {

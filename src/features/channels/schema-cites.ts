@@ -45,7 +45,7 @@ export const CiteInputSchema = z
      * The PER-CHANNEL number — the `#N` a reader sees on a row in this channel.
      *
      * ⚠ Unresolvable until the held numbering migration
-     * (`supabase/migrations-held/20261122120000`) is applied, because the column
+     * (`supabase/migrations-held/20261124120000`) is applied, because the column
      * it reads does not exist yet. Refused explicitly rather than silently
      * dropped — see `service-writes-metadata-cites.ts`.
      */

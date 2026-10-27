@@ -41,7 +41,7 @@ export async function resolveCites(
   // disagree by the gap between a channel's own count and the table's, so
   // falling back would resolve — to the wrong message, in some other room, with
   // a pill confidently pointing at it. The column arrives with
-  // `supabase/migrations-held/20261122120000`; flipping this on is a change HERE
+  // `supabase/migrations-held/20261124120000`; flipping this on is a change HERE
   // plus a per-channel finder, and nothing else in the lane moves.
   for (const entry of cites) {
     if (entry.no !== undefined) {
