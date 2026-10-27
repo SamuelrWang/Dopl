@@ -10,7 +10,12 @@ import { useAgentIdentities } from "@/features/agent-identities/hooks/use-agent-
 import { groupByVisibility } from "@/features/agent-identities/lib/visibility";
 import { AGENT_RUN_PRESENTER } from "@/features/channels/components/agent-run-presenter";
 import { useDesktopSessions } from "@/features/channels/components/use-desktop-sessions";
+import { signInToRuntime } from "@/features/channels/components/runtime-signin";
 import { useLaunchSelection } from "@/features/channels/hooks/use-launch-selection";
+import { signInFailedCopy } from "@/features/channels/lib/runtime-copy";
+import { HOME_PREVIEW_PATH, type HomePreview } from "@/features/home/preview-types";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
+import { toast } from "@/shared/ui/toast";
 import { EMPTY_PEERS, EMPTY_WORKSPACE_ROLE, type Channel } from "@/features/channels/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { PageError } from "#/components/page-states";
@@ -53,6 +58,7 @@ export function HomeIdentityPanels({
   const launch = useLaunchSelection({ kind: "defaults" });
   const { sessions } = useDesktopSessions();
   const roster = useRoster(channel, currentUserId, viewer);
+  const preview = useApiQuery<HomePreview>(HOME_PREVIEW_PATH).data?.identities ?? null;
 
   // The container read is unfiltered: `?shelf=` is a tenancy and the container is not the
   // caller's personal one. The create gate is the WORKSPACE role (has `guest`), not
@@ -81,6 +87,10 @@ export function HomeIdentityPanels({
     if (identity.runtime) runtimeIds.add(identity.runtime);
   }
   const runtimes = [...runtimeIds].map((id) => ({ id, label: runtimeLabel(id) }));
+  const fixRuntime = (id: string) =>
+    void signInToRuntime(id).then((res) => {
+      if (!res.ok) toast({ title: signInFailedCopy({ id, label: runtimeLabel(id) }) });
+    });
 
   if (channel !== null && containerList.error) {
     return <PageError error={containerList.error} onRetry={() => containerList.refetch()} />;
@@ -96,6 +106,7 @@ export function HomeIdentityPanels({
           channel === null
             ? null
             : {
+                channelName: channel.name,
                 identities: shared,
                 markerFor: roster.markerFor,
                 canCreate: canCreateShared,
@@ -112,6 +123,8 @@ export function HomeIdentityPanels({
         }}
         card={{ photoFor: roster.photoFor, runtimeLabel, catalogs: launch.catalogs }}
         sessions={sessions}
+        preview={preview}
+        onFixRuntime={fixRuntime}
         agents={AGENT_RUN_PRESENTER}
         runtimes={runtimes}
         currentUserId={currentUserId}

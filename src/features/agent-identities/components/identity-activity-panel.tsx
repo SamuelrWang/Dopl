@@ -5,9 +5,13 @@ import type { AgentRunPresenter } from "@/shared/lib/agent-run-presenter";
 import { SegmentedControl, segmentedIds } from "@/shared/ui/segmented-control";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { StatusPill } from "@/shared/ui/status-pill";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { useRuntimeLogo } from "@/shared/ui/runtime-logo";
 import type { AgentIdentity } from "../client/types";
+import { channelLabel, type RecentItem } from "../lib/identity-preview";
 import { agoLabel, type IdentityRun } from "../lib/identity-runs";
 import { IdentityPanel } from "./identity-section";
+import { PermissionChip } from "./identity-view-preview";
 
 type Tab = "now" | "recent";
 
@@ -19,22 +23,27 @@ const PANEL_IDS = "identity-activity";
 /**
  * WHAT YOUR ROLES ARE DOING: the page's right rail. Active now is one small white card per live
  * agent (two lines: face, name, when it started; state, thread); Recent is rows, because a logged
- * event in a card face reads as one more agent. Every agent here is the operator's own (this
- * machine's feed), so every face is theirs. Each card and row opens its identity's view.
+ * event in a card face reads as one more agent: finished agents and, from the account's preview,
+ * logged actions. Every agent here is the operator's own (this machine's feed), so every agent
+ * face is theirs; a logged action wears its identity's owner. Each card and row opens its
+ * identity's view.
  */
 export function IdentityActivityPanel({
   active,
   recent,
   agents,
   viewerPhoto,
+  photoFor,
   currentUserId,
   ownerName,
   onOpen,
 }: {
   active: ReadonlyArray<IdentityRun>;
-  recent: ReadonlyArray<IdentityRun>;
+  recent: ReadonlyArray<RecentItem>;
   agents: AgentRunPresenter;
   viewerPhoto: string | null;
+  /** An identity owner's photo, for a logged action's face. */
+  photoFor: (identity: AgentIdentity) => string | null;
   currentUserId: string;
   /** A member's display name, or `null` when the roster cannot name them. */
   ownerName: (userId: string) => string | null;
@@ -52,9 +61,8 @@ export function IdentityActivityPanel({
       ),
     [active, recent, currentUserId, ownerName]
   );
-  const shown = (tab === "now" ? active : recent).filter((run) =>
-    ownedBy(run.identity, owner, currentUserId)
-  );
+  const activeShown = active.filter((run) => ownedBy(run.identity, owner, currentUserId));
+  const recentShown = recent.filter((item) => ownedBy(item.identity, owner, currentUserId));
   const all = tab === "now" ? active : recent;
   const ids = segmentedIds(PANEL_IDS, tab);
 
@@ -88,7 +96,7 @@ export function IdentityActivityPanel({
         className="pb-2.5"
       />
       <div role="tabpanel" id={ids.panel} aria-labelledby={ids.tab}>
-        {shown.length === 0 ? (
+        {(tab === "now" ? activeShown : recentShown).length === 0 ? (
           <Quiet>
             {all.length > 0
               ? "Nothing matches this filter."
@@ -98,7 +106,7 @@ export function IdentityActivityPanel({
           </Quiet>
         ) : tab === "now" ? (
           <div className="flex flex-col gap-2">
-            {shown.map((run) => (
+            {activeShown.map((run) => (
               <RunCard
                 key={run.session.sessionId}
                 run={run}
@@ -110,15 +118,24 @@ export function IdentityActivityPanel({
           </div>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {shown.map((run) => (
-              <RecentRow
-                key={run.session.sessionId}
-                run={run}
-                agents={agents}
-                photo={viewerPhoto}
-                onOpen={onOpen}
-              />
-            ))}
+            {recentShown.map((item) =>
+              item.kind === "run" ? (
+                <RecentRow
+                  key={item.session.sessionId}
+                  run={item}
+                  agents={agents}
+                  photo={viewerPhoto}
+                  onOpen={onOpen}
+                />
+              ) : (
+                <LogRow
+                  key={`${item.identity.id}-${item.action.at}-${item.action.action}`}
+                  item={item}
+                  photo={photoFor(item.identity)}
+                  onOpen={onOpen}
+                />
+              )
+            )}
           </div>
         )}
       </div>
@@ -191,6 +208,46 @@ function RecentRow({ run, agents, photo, onOpen }: RunProps) {
             <span className="flex-none tabular-nums">{agoLabel(session.endedAt)}</span>
           )}
         </span>
+      </span>
+    </button>
+  );
+}
+
+/** A logged action: what it did, then whose identity, where and when, and its permission. */
+function LogRow({
+  item,
+  photo,
+  onOpen,
+}: {
+  item: Extract<RecentItem, { kind: "log" }>;
+  photo: string | null;
+  onOpen: (identity: AgentIdentity) => void;
+}) {
+  const { identity, action } = item;
+  const logo = useRuntimeLogo()(identity.runtime);
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(identity)}
+      className="flex w-full min-w-0 cursor-pointer items-start gap-2.5 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-surface-raised-1"
+    >
+      <IdentityFace size={30} photo={photo} runtimeLogo={logo} ring="neutral" />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="line-clamp-2 text-small font-medium text-text-primary" title={action.action}>
+          {action.action}
+        </span>
+        <span className="flex min-w-0 items-center gap-2 text-caption text-text-muted">
+          <span className="min-w-0 flex-1 truncate" title={identity.name}>
+            {identity.name}
+            {action.channelName && ` · ${channelLabel(action.channelName)}`}
+          </span>
+          <span className="flex-none tabular-nums">{agoLabel(item.at)}</span>
+        </span>
+        {action.permission !== "auto" && (
+          <span className="self-start">
+            <PermissionChip permission={action.permission} />
+          </span>
+        )}
       </span>
     </button>
   );

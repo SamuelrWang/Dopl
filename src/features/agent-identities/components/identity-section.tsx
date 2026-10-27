@@ -32,6 +32,8 @@ interface IdentityCardStats {
   running: number;
   /** Epoch ms; `null` = nothing on record, which is not "never used". */
   lastUsed: number | null;
+  /** Never used, as the account's preview states it; said only with no use on record. */
+  notUsedYet?: boolean;
   /** Members who can wear a SHARED identity; empty on a private one. */
   wornBy: ReadonlyArray<AvatarStackUser>;
 }
@@ -177,14 +179,13 @@ export function RuntimeMark({ logo }: { logo: string | null }) {
   );
 }
 
+/** The 14px cell a chip's or a row's mark sits in. */
+export const FACT_MARK = "flex size-3.5 flex-none items-center justify-center text-text-muted";
+
 export function FactChip({ mark, children }: { mark?: ReactNode; children: ReactNode }) {
   return (
     <span className={IDENTITY_ROW}>
-      {mark && (
-        <span className="flex size-3.5 flex-none items-center justify-center text-text-muted">
-          {mark}
-        </span>
-      )}
+      {mark && <span className={FACT_MARK}>{mark}</span>}
       <span className="min-w-0 truncate">{children}</span>
     </span>
   );
@@ -221,7 +222,8 @@ function IdentityCard({
   // The model names the runtime, so it is the chip's text when set; the runtime stands in when not.
   const runsOn = agentModelShortLabel(identity.model, host.catalogs) ?? runtimeName;
   const sources = (identity.knowledge ?? EMPTY_KNOWLEDGE).length;
-  const stateLine = stats && (stats.running > 0 || stats.lastUsed !== null);
+  const neverUsed = !!stats?.notUsedYet && stats.running === 0 && stats.lastUsed === null;
+  const stateLine = stats && (stats.running > 0 || stats.lastUsed !== null || neverUsed);
 
   const body = (
     <>
@@ -280,6 +282,7 @@ function IdentityCard({
           {stats.lastUsed !== null && (
             <span className="min-w-0 truncate text-text-muted">Used {agoLabel(stats.lastUsed)}</span>
           )}
+          {neverUsed && <span className="min-w-0 truncate text-text-muted">Not used yet</span>}
         </span>
       )}
     </>

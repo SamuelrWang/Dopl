@@ -25,7 +25,9 @@ import {
   groupByVisibility,
 } from "@/features/agent-identities/lib/visibility";
 import { toast } from "@/shared/ui/toast";
+import { IdentitiesPreviewSchema } from "@/features/home/preview-types";
 import { meetsMinRole } from "@/features/workspaces/types";
+import PREVIEW_SEED from "../identities-preview-seed.json";
 import {
   REFUSED_LAUNCH,
   STAGING_CATALOGS,
@@ -41,6 +43,8 @@ import { useStagingIdentitySave } from "../store/use-staging-identity-save";
 
 const runtimeLabel = (id: string) => STAGING_RUNTIMES.find((r) => r.id === id)?.label ?? id;
 const names = new Map(STAGING_PEERS.map((p) => [p.userId, p.displayName]));
+/** The `account_preview_data` payload an account gets, parsed as `GET /api/home/preview` does. */
+const PREVIEW = IdentitiesPreviewSchema.parse(PREVIEW_SEED);
 
 export function IdentitiesScene({
   channel,
@@ -79,6 +83,7 @@ export function IdentitiesScene({
       <IdentitiesHome
         shared={
           channel && {
+            channelName: channel.name,
             identities: shared,
             markerFor: (identity) => authorMarker(identity, currentUserId, names),
             canCreate: meetsMinRole(channel.myWorkspaceRole, "member"),
@@ -103,6 +108,8 @@ export function IdentitiesScene({
         }}
         card={{ photoFor: (i) => photoOf(i.createdBy), runtimeLabel, catalogs: STAGING_CATALOGS }}
         sessions={sessions}
+        preview={PREVIEW}
+        onFixRuntime={(id) => toast({ title: `Signing in to ${runtimeLabel(id)}`, variant: "invert" })}
         agents={AGENT_RUN_PRESENTER}
         runtimes={STAGING_RUNTIMES}
         currentUserId={currentUserId}

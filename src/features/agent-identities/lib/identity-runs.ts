@@ -17,7 +17,7 @@ export interface IdentityRun {
 }
 
 /** `main/session-summary-text.js › displayText`'s collapse, so a name compares as the desktop wrote it. */
-function normalName(value: string | null | undefined): string {
+export function normalName(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
@@ -51,7 +51,7 @@ export function joinRuns(
 }
 
 /** When an agent last did anything: its last activity, else when it ended, else when it started. */
-function touchedAt(session: DesktopSessionSummary): number | null {
+export function touchedAt(session: DesktopSessionSummary): number | null {
   return session.lastActivityAt ?? session.endedAt ?? session.startedAt ?? null;
 }
 

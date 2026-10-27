@@ -44,10 +44,11 @@ const ENDED: DesktopSessionSummary = {
 
 function mount(over: Partial<IdentitiesHomeProps> = {}) {
   const props: IdentitiesHomeProps = {
-    shared: { identities: [SHARED], markerFor: () => "by Priya", canCreate: true, peers: [PEER] },
+    shared: { channelName: "releases", identities: [SHARED], markerFor: () => "by Priya", canCreate: true, peers: [PEER] },
     personal: { identities: [MINE], state: { kind: "ready" }, canCreate: true },
     card: {},
     sessions: [LIVE, ENDED],
+    preview: null,
     agents: AGENTS,
     runtimes: [],
     currentUserId: "user-1",
@@ -108,13 +109,13 @@ describe("the identities face", () => {
 
   it("offers a Create new cell in an empty Shared section, to creators only", () => {
     const props = mount({
-      shared: { identities: [], markerFor: () => null, canCreate: true, peers: [] },
+      shared: { channelName: "releases", identities: [], markerFor: () => null, canCreate: true, peers: [] },
     });
     const shared = screen.getByRole("region", { name: "Shared in this channel" });
     fireEvent.click(within(shared).getByRole("button", { name: "Create new" }));
     expect(props.onCreate).toHaveBeenCalledWith("container");
     cleanup();
-    mount({ shared: { identities: [], markerFor: () => null, canCreate: false, peers: [] } });
+    mount({ shared: { channelName: "releases", identities: [], markerFor: () => null, canCreate: false, peers: [] } });
     const guest = screen.getByRole("region", { name: "Shared in this channel" });
     expect(within(guest).queryByRole("button", { name: "Create new" })).toBeNull();
   });

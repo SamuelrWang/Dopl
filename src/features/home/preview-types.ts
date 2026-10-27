@@ -112,46 +112,68 @@ export type PreviewNeed = z.output<typeof PreviewNeedSchema>;
 export type PreviewPresence = z.output<typeof presence>;
 export type OverviewPreview = z.output<typeof OverviewPreviewSchema>;
 
+/** The glyph a tool row wears (`identity-view-preview.tsx › TOOL_GLYPH`). */
+export const IDENTITY_TOOL_MARKS = [
+  "repo",
+  "terminal",
+  "channels",
+  "calendar",
+  "sheet",
+  "mail",
+  "glasses",
+  "search",
+] as const;
+
 const IdentityToolSchema = z.object({
   name: text,
-  access: z.enum(["read", "write", "ask"]).optional(),
-  detail: text.optional(),
-});
-
-const IdentityEscalationSchema = z.object({
-  when: text,
-  to: text,
+  mark: z.enum(IDENTITY_TOOL_MARKS).optional().catch(undefined),
+  /** `false` = connected but not granted to this identity. */
+  allowed: z.boolean().catch(true),
+  /** What it lets the identity do, one short phrase. */
+  detail: text.optional().catch(undefined),
 });
 
 const IdentityActionSchema = z.object({
   at: instant,
   action: text,
-  permission: z.enum(["allowed", "asked", "denied"]),
-  channelName: text,
+  /** `auto` is the ordinary case and draws no chip. */
+  permission: z.enum(["auto", "approved", "waiting", "paused"]).catch("auto"),
+  channelName: text.optional().catch(undefined),
 });
 
 const IdentityPreviewSchema = z
   .object({
-    /** The identity this entry dresses, by id; `name` matches when the id is absent. */
-    identityId: z.string().uuid().optional(),
-    name: text.optional(),
-    channels: lenientList(z.object({ id: text, name: text })).default([]),
-    tools: lenientList(IdentityToolSchema).default([]),
-    rules: lenientList(text).default([]),
-    escalations: lenientList(IdentityEscalationSchema).default([]),
-    actionLog: lenientList(IdentityActionSchema).default([]),
-    reauth: z
-      .object({ runtime: text, state: z.enum(["signed_out", "expired"]) })
-      .nullable()
-      .default(null),
+    /** The identity this entry dresses, by id; `name` (whitespace-collapsed) matches otherwise. */
+    identityId: z.string().uuid().optional().catch(undefined),
+    name: text.optional().catch(undefined),
+    /** Channel names a shared identity reaches. */
+    channels: lenientList(text).catch([]),
+    tools: lenientList(IdentityToolSchema).catch([]),
+    rules: lenientList(text).catch([]),
+    escalations: lenientList(text).catch([]),
+    actionLog: lenientList(IdentityActionSchema).catch([]),
+    /** Reads "Not used yet" while the identity has no runs and no logged action. */
+    notUsedYet: z.boolean().catch(false),
   })
   .refine((entry) => entry.identityId !== undefined || entry.name !== undefined);
 
-export const IdentitiesPreviewSchema = z
-  .object({ identities: lenientList(IdentityPreviewSchema) })
-  .catch({ identities: [] });
+const RuntimeAuthSchema = z.object({
+  runtime: text,
+  state: z.enum(["signed_out", "expired"]),
+});
 
+export const IdentitiesPreviewSchema = z
+  .object({
+    identities: lenientList(IdentityPreviewSchema).catch([]),
+    /** Runtimes that cannot launch until signed in again. */
+    runtimes: lenientList(RuntimeAuthSchema).catch([]),
+  })
+  .catch({ identities: [], runtimes: [] });
+
+export type IdentityToolMark = (typeof IDENTITY_TOOL_MARKS)[number];
 export type IdentityPreview = z.output<typeof IdentityPreviewSchema>;
+export type IdentityAction = z.output<typeof IdentityActionSchema>;
+export type RuntimeAuth = z.output<typeof RuntimeAuthSchema>;
 export type IdentitiesPreview = z.output<typeof IdentitiesPreviewSchema>;
 
 export interface HomePreview {

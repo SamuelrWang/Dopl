@@ -1,0 +1,75 @@
+{
+  "identities": [
+    {
+      "name": "Release Captain",
+      "channels": ["releases", "tech-debt"],
+      "tools": [
+        { "name": "GitHub", "mark": "repo", "allowed": true, "detail": "Reads the release branch and cuts the tag" },
+        { "name": "Dopl channels", "mark": "channels", "allowed": true, "detail": "Posts the notes when the build is green" },
+        { "name": "Calendar", "mark": "calendar", "allowed": false, "detail": "Would hold the release window" }
+      ],
+      "rules": [
+        "Walk the checklist in order and stop at the first red gate",
+        "Never cut a release on a Friday",
+        "Post the notes in #releases, never in a thread"
+      ],
+      "escalations": ["A gate that fails twice", "Any change to a migration"],
+      "actionLog": [
+        { "at": "2026-10-26T17:18:00Z", "action": "Cut 1.7.24 and posted the notes", "permission": "auto", "channelName": "releases" },
+        { "at": "2026-10-26T16:52:00Z", "action": "Held the build on a red typecheck", "permission": "waiting", "channelName": "tech-debt" },
+        { "at": "2026-10-26T16:40:00Z", "action": "Reran the flaky device suite", "permission": "approved", "channelName": "releases" }
+      ]
+    },
+    {
+      "name": "SQL Reviewer",
+      "channels": ["api-v2-migration"],
+      "tools": [
+        { "name": "GitHub", "mark": "repo", "allowed": true, "detail": "Reads every migration in the diff" },
+        { "name": "Terminal", "mark": "terminal", "allowed": false, "detail": "Would run the migration locally" }
+      ],
+      "rules": [
+        "Read every migration byte for byte before approving",
+        "Refuse a destructive statement with no down path"
+      ],
+      "escalations": ["A drop or a rename on a live table"],
+      "actionLog": [
+        { "at": "2026-10-26T17:42:00Z", "action": "Approved 0142_add_identity_shelf", "permission": "approved", "channelName": "tech-debt" },
+        { "at": "2026-10-26T17:38:00Z", "action": "Refused 0141 for a missing down path", "permission": "auto", "channelName": "tech-debt" }
+      ]
+    },
+    {
+      "name": "Design Critic",
+      "channels": ["design-review"],
+      "rules": ["Name the rule, never a preference", "One finding per screen, the worst one"],
+      "notUsedYet": true
+    },
+    {
+      "name": "Flake Hunter",
+      "channels": ["flaky-tests"]
+    },
+    {
+      "name": "Coder",
+      "tools": [
+        { "name": "GitHub", "mark": "repo", "allowed": true, "detail": "Reads the repo and opens pull requests" },
+        { "name": "Terminal", "mark": "terminal", "allowed": true, "detail": "Runs the typecheck and the targeted tests" }
+      ],
+      "rules": ["Read INVARIANTS before the first edit", "Never push to master"],
+      "escalations": ["A schema change", "Anything that touches billing"],
+      "actionLog": [
+        { "at": "2026-10-26T17:56:00Z", "action": "Rebuilt the identity card", "permission": "auto", "channelName": "tech-debt" },
+        { "at": "2026-10-26T17:30:00Z", "action": "Opened a worktree for the card work", "permission": "approved" }
+      ]
+    },
+    {
+      "name": "Researcher",
+      "actionLog": [
+        { "at": "2026-10-26T11:20:00Z", "action": "Paused by you", "permission": "paused" }
+      ]
+    },
+    {
+      "name": "Writer",
+      "notUsedYet": true
+    }
+  ],
+  "runtimes": [{ "runtime": "codex", "state": "expired" }]
+}
