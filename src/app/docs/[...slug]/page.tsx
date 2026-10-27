@@ -16,7 +16,7 @@ export function generateStaticParams(): Params[] {
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const page = getDocPage((await params).slug.join("/"));
-  return { title: page ? `${page.title} — Dopl Docs` : "Dopl Docs" };
+  return { title: page ? `${page.title} | Dopl Docs` : "Dopl Docs" };
 }
 
 export default async function DocsRoute({ params }: { params: Promise<Params> }) {

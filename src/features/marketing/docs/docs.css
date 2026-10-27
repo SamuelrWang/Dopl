@@ -780,3 +780,39 @@ body.legal-active {
   .docs-cards { grid-template-columns: minmax(0, 1fr); }
   .docs-changelog-entry { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
+
+/* ── Status badge (Live / Beta / Coming soon) ──────────────────────────
+   Grayscale like the rest of the page: the pill fill is the `#f1f1f0`
+   already used above, the outline is `--line`. Live reads in `--ink`;
+   Beta and Coming soon read in `--docs-soft`. */
+.docs-title-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.docs-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--docs-soft);
+}
+.docs-status[data-status="live"] {
+  background: #f1f1f0;
+  border-color: transparent;
+  color: var(--ink);
+}
+.docs-nav-link .docs-status {
+  margin-left: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+}

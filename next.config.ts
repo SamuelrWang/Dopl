@@ -65,6 +65,10 @@ const nextConfig: NextConfig = {
       // The docs land on Start here; config redirects run before the proxy, so bare
       // `/docs` needs no public-route entry (`/docs/` has one).
       { source: "/docs", destination: "/docs/start-here", permanent: true },
+      // The API reference's pre-contract pages (2026-10-20) were renamed to the frozen Device
+      // SDK contract (`docs/specs/device-sdk/openapi.yaml`); show/ask/notify are Deliver intents.
+      { source: "/docs/api-reference/:intent(show|ask|notify)", destination: "/docs/api-reference/deliver", permanent: false },
+      { source: "/docs/api-reference/endpoints", destination: "/docs/api-reference/connections", permanent: false },
     ];
   },
   /**

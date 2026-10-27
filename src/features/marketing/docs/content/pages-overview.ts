@@ -1,12 +1,5 @@
 import type { DocPage } from "./types";
 
-const SDK_EXAMPLE = `import { Dopl } from "@dopl/client"
-
-const dopl = new Dopl({ apiKey })
-await dopl.show(userId, blocks)
-const answer = await dopl.ask(userId, { question, options })
-await dopl.notify(userId, { text })`;
-
 export const OVERVIEW_PAGES: DocPage[] = [
   {
     slug: "start-here",
@@ -14,18 +7,17 @@ export const OVERVIEW_PAGES: DocPage[] = [
     group: "Overview",
     title: "Start here",
     description: "Explore common use cases and integrate Dopl immediately",
+    status: "live",
     blocks: [
       { type: "h2", text: "Let your agent connect Dopl" },
       { type: "p", text: "Copy this instruction into your agent:" },
       {
         type: "prompt",
         text:
-          "Connect yourself to Dopl by following [https://www.usedopl.com/skill.md](https://www.usedopl.com/skill.md). " +
-          "Use [https://www.usedopl.com/llms.txt](https://www.usedopl.com/llms.txt) for documentation. Complete the setup " +
-          "supported by this environment, guide me through required signup and authorization, then verify the " +
-          "connection by listing my devices.",
+          "Connect yourself to Dopl's hosted MCP server at `https://www.usedopl.com/api/mcp`. Guide me through " +
+          "signing in with OAuth, then verify the connection by calling `dopl_get_map`.",
       },
-      { type: "p", text: "The platform-specific instructions below remain available for manual setup." },
+      { type: "p", text: "Or follow the steps below to set it up yourself." },
       { type: "h2", text: "Common use cases" },
       {
         type: "cards",
@@ -45,25 +37,25 @@ export const OVERVIEW_PAGES: DocPage[] = [
           {
             icon: "notify",
             title: "Notify",
-            description: "Tap your user on the shoulder, wherever they are",
+            description: "Tap your user on the shoulder",
             href: "use-cases/notify",
           },
           {
             icon: "connect",
             title: "Connect your users' devices",
-            description: "Let your users link their hardware to your agent",
+            description: "Planned: let your users link their hardware to your agent",
             href: "use-cases/connect-devices",
           },
           {
             icon: "route",
             title: "Route to the right device",
-            description: "Dopl picks the device your user is on right now",
+            description: "Planned: Dopl picks the device your user is on right now",
             href: "use-cases/routing",
           },
           {
             icon: "glasses",
             title: "Devices",
-            description: "Glasses, phone, Mac notch and desktop today",
+            description: "Every supported device and where it stands",
             href: "devices/even-realities-g2",
           },
         ],
@@ -100,32 +92,11 @@ export const OVERVIEW_PAGES: DocPage[] = [
             blocks: [
               {
                 type: "p",
-                text: "You're writing software that uses Dopl: a backend, a SaaS, an agent runtime, a CI script.",
+                text: "The Device SDK, for software that uses Dopl from a backend, a SaaS product, an agent runtime or a CI script, is in development. It adds project API keys, a REST API, typed SDKs and a Connect widget your users open from your product.",
               },
               {
-                type: "list",
-                ordered: true,
-                items: [
-                  "Generate an API key from the Developers tab of the [dashboard](/). The key is shown once; store it in a secret manager and never commit it.",
-                  {
-                    text: "Install for your runtime:",
-                    blocks: [
-                      {
-                        type: "code",
-                        tabs: [
-                          { label: "TypeScript", code: "npm install @dopl/client" },
-                          { label: "Python", code: "pip install dopl" },
-                          { label: "CLI", code: "npm install -g @dopl/cli" },
-                        ],
-                      },
-                    ],
-                  },
-                  {
-                    text: "Show, ask and notify:",
-                    blocks: [{ type: "code", tabs: [{ label: "TypeScript", code: SDK_EXAMPLE }] }],
-                  },
-                  "No SDK for your language? Use the [REST API](/docs/api-reference) at `api.usedopl.com` with the same key.",
-                ],
+                type: "p",
+                text: "The [API reference](/docs/api-reference) describes its planned contract. Until it ships, connect through the hosted MCP server above.",
               },
             ],
           },
@@ -139,24 +110,29 @@ export const OVERVIEW_PAGES: DocPage[] = [
     group: "Overview",
     title: "Security",
     description: "How Dopl protects your users and their devices",
+    status: "live",
     blocks: [
       { type: "h2", text: "Access" },
       {
         type: "list",
         items: [
-          "Every device link is approved by its owner. An agent never reaches a device the user did not connect.",
-          "API keys are shown once, scoped to one project, and revocable from the dashboard.",
-          "Hosted MCP connections sign in with OAuth; tokens can be revoked per agent.",
+          "Glasses pair only through a code their owner enters while signed in to Dopl, and the owner can unpair them at any time.",
+          "Hosted MCP connections sign in with OAuth, and each connected agent app can be disconnected from Settings.",
+          "The glasses tools appear only on connections belonging to a user who has paired glasses.",
         ],
       },
       { type: "h2", text: "Data" },
       {
         type: "list",
         items: [
-          "Content is encrypted in transit (TLS 1.2+) and at rest.",
-          "Dopl stores what it needs to deliver and answer an intent, and nothing it renders is used to train models.",
-          "Answers go back only to the agent that asked.",
+          "Data is encrypted in transit with TLS and at rest by Dopl's database provider.",
+          "Dopl does not use your content, or the inputs and output of your agents, to train models. See the [Privacy Policy](/privacy).",
         ],
+      },
+      { type: "h2", text: "Planned for the Device SDK" },
+      {
+        type: "p",
+        text: "Project secret keys that are stored hashed and can be rotated, scoped grants that expire, and confirmation for physical actions enforced outside the model.",
       },
       { type: "h2", text: "Reporting" },
       { type: "p", text: "Found a vulnerability? Email [security@usedopl.com](mailto:security@usedopl.com)." },
@@ -167,26 +143,21 @@ export const OVERVIEW_PAGES: DocPage[] = [
     tab: "about",
     group: "Overview",
     title: "Pricing",
-    description: "Pay per connected user, per month",
+    description: "How the Device SDK will be priced",
+    status: "coming_soon",
     blocks: [
-      { type: "h2", text: "Plans" },
       {
-        type: "table",
-        columns: ["Plan", "Price", "Includes"],
-        rows: [
-          ["Free", "$0", "Up to 10 connected users"],
-          ["Usage", "$0.50 per connected user / month", "Every device, unlimited intents"],
-          ["Enterprise", "Contact us", "White-label device apps, SSO, SLA"],
-        ],
+        type: "quote",
+        text: "Device SDK pricing is not set yet. It will be published here before the SDK launches.",
       },
       {
         type: "p",
-        text: "A connected user is an end user with at least one linked device during the month. Placeholder pricing — final numbers to come.",
+        text: "Today, glasses tool calls through the hosted MCP server use Dopl credits from your plan, one credit per call.",
       },
       { type: "h2", text: "Enterprise and white-label" },
       {
         type: "p",
-        text: "Ship Dopl's device apps under your own brand. Email [sales@usedopl.com](mailto:sales@usedopl.com).",
+        text: "Interested in shipping Dopl under your own brand? Email [sales@usedopl.com](mailto:sales@usedopl.com).",
       },
     ],
   },

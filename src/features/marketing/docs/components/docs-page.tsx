@@ -18,6 +18,7 @@ import { DocBlocks } from "./docs-blocks";
 import { DocsHeader } from "./docs-header";
 import { AskBar, CodeGroup, CopyPageButton, PageFeedback } from "./docs-interactive";
 import { DocsSidebar } from "./docs-sidebar";
+import { StatusBadge } from "./status-badge";
 import { SocialLinks } from "./social-links";
 
 const SITE = "https://www.usedopl.com";
@@ -62,7 +63,10 @@ export function DocsPage({ page }: { page: DocPage }) {
             <header className="docs-page-head">
               <p className="lp-ctl-eyebrow docs-eyebrow">{page.group}</p>
               <div className="docs-title-row">
-                <h1>{page.title}</h1>
+                <div className="docs-title-main">
+                  <h1>{page.title}</h1>
+                  <StatusBadge status={page.status} />
+                </div>
                 <CopyPageButton markdown={pageToMarkdown(page)} url={`${SITE}${docHref(page.slug)}`} />
               </div>
               {page.description && <p className="docs-subtitle">{page.description}</p>}

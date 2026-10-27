@@ -65,6 +65,20 @@ export type DocBlock =
 
 export type DocTabId = "about" | "api" | "changelog";
 
+/**
+ * Whether what a page describes works today. ⚠ The truth source is the status table in
+ * `docs/specs/device-sdk/SPEC-v1.md` §4: a page is `live` only when everything it tells a
+ * reader to do works in production now. `beta` works with known limits; `coming_soon` is
+ * planned and must be phrased as planned (no install commands, no "available").
+ */
+export type DocStatus = "live" | "beta" | "coming_soon";
+
+export const DOC_STATUS_LABEL: Record<DocStatus, string> = {
+  live: "Live",
+  beta: "Beta",
+  coming_soon: "Coming soon",
+};
+
 /** The sticky right column on an API Reference page: request, then responses by status. */
 export interface ApiAside {
   title: string;
@@ -80,6 +94,8 @@ export interface DocPage {
   group: string;
   title: string;
   description: string;
+  /** Rendered as a badge beside the H1 and on the page's sidebar row. */
+  status: DocStatus;
   blocks: DocBlock[];
   aside?: ApiAside;
 }

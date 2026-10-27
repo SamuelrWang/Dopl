@@ -2,8 +2,8 @@ import type { DocTab } from "./types";
 
 /**
  * The header tabs and each tab's sidebar. Order here IS the sidebar order and the
- * prev/next order. A device that does not work yet says "(coming soon)" in its label —
- * never list one as available.
+ * prev/next order. A row's status badge comes from its page's `status` (`index.ts ›
+ * statusOf`), so labels never carry "(coming soon)" themselves.
  */
 export const DOC_TABS: DocTab[] = [
   {
@@ -36,10 +36,10 @@ export const DOC_TABS: DocTab[] = [
           { label: "Phone push", slug: "devices/phone-push" },
           { label: "Mac notch", slug: "devices/mac-notch" },
           { label: "Desktop", slug: "devices/desktop" },
-          { label: "Apple Watch (coming soon)", slug: "devices/apple-watch" },
-          { label: "Cars (coming soon)", slug: "devices/cars" },
-          { label: "Meta Ray-Ban (coming soon)", slug: "devices/meta-ray-ban" },
-          { label: "Robots (coming soon)", slug: "devices/robots" },
+          { label: "Apple Watch", slug: "devices/apple-watch" },
+          { label: "Cars", slug: "devices/cars" },
+          { label: "Meta Ray-Ban", slug: "devices/meta-ray-ban" },
+          { label: "Robots", slug: "devices/robots" },
         ],
       },
     ],
@@ -58,24 +58,27 @@ export const DOC_TABS: DocTab[] = [
             slug: "api-reference#interfaces",
             children: [
               { label: "Hosted MCP", slug: "api-reference#hosted-mcp" },
-              { label: "SDKs", slug: "api-reference#sdks" },
-              { label: "CLI", slug: "api-reference#cli" },
               { label: "REST", slug: "api-reference#rest" },
+              { label: "SDKs", slug: "api-reference#sdks" },
+              { label: "Connect widget", slug: "api-reference#connect-widget" },
             ],
           },
         ],
       },
       {
-        title: "Intents",
+        title: "Actions",
         links: [
-          { label: "Show", slug: "api-reference/show", method: "POST" },
-          { label: "Ask", slug: "api-reference/ask", method: "POST" },
-          { label: "Notify", slug: "api-reference/notify", method: "POST" },
+          { label: "Deliver", slug: "api-reference/deliver", method: "POST" },
+          { label: "Run a device action", slug: "api-reference/device-actions", method: "POST" },
+          { label: "Get an action", slug: "api-reference/actions", method: "GET" },
         ],
       },
       {
-        title: "Devices",
-        links: [{ label: "List endpoints", slug: "api-reference/endpoints", method: "GET" }],
+        title: "Connect",
+        links: [
+          { label: "Create a Connect session", slug: "api-reference/connect-sessions", method: "POST" },
+          { label: "List connections", slug: "api-reference/connections", method: "GET" },
+        ],
       },
     ],
   },

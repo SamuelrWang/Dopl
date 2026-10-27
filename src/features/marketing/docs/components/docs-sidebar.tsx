@@ -1,7 +1,8 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { docHref, type DocTab, type NavLink } from "../content";
+import { docHref, statusOf, type DocTab, type NavLink } from "../content";
+import { StatusBadge } from "./status-badge";
 
 function isActive(link: NavLink, slug: string): boolean {
   return link.slug === slug;
@@ -9,6 +10,9 @@ function isActive(link: NavLink, slug: string): boolean {
 
 function Row({ link, slug }: { link: NavLink; slug: string }) {
   const active = isActive(link, slug);
+  // Only a page row carries a badge, and only when it is not live: a `#fragment` row
+  // belongs to its page, and "Live" on every row would be noise.
+  const status = link.slug.includes("#") ? undefined : statusOf(link.slug);
   return (
     <Link
       href={docHref(link.slug)}
@@ -22,6 +26,7 @@ function Row({ link, slug }: { link: NavLink; slug: string }) {
         </span>
       )}
       <span>{link.label}</span>
+      {status && status !== "live" && <StatusBadge status={status} />}
     </Link>
   );
 }
