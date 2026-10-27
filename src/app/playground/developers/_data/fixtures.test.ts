@@ -36,7 +36,7 @@ describe.each(ENVIRONMENTS)("developer portal demo fixtures (%s)", (env) => {
       expect(e.env).toBe(env);
     }
     for (const w of act.webhooks) expect(WebhookEventNameSchema.parse(w.event_type)).toBe(w.event_type);
-    expect(act.series).toHaveLength(14);
+    expect(act.series).toHaveLength(30);
   });
 
   it("the glasses default is the one guidance text, plus exactly one project override", () => {

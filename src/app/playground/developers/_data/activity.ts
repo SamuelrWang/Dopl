@@ -1,5 +1,5 @@
 /**
- * The demo account's ACTIVITY: `dev_events` rows (C8), the webhook outbox, and the 14-day request
+ * The demo account's ACTIVITY: `dev_events` rows (C8), the webhook outbox, and the 30-day request
  * series behind the Overview chart. Generated deterministically from `./fixtures.ts` so test and
  * live each tell a consistent story (same users, same devices, same magic ids).
  */
@@ -177,7 +177,9 @@ function buildWebhooks(fx: EnvFixtures, events: DeviceEventRow[]): WebhookOutbox
   return rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-/* ───────────────────────────── 14-day series ───────────────────────────── */
+/* ───────────────────────────── 30-day series ───────────────────────────── */
+
+export const SERIES_DAYS = 30;
 
 export interface DayPoint {
   /** `YYYY-MM-DD`. */
@@ -188,9 +190,9 @@ export interface DayPoint {
 
 function buildSeries(env: Environment): DayPoint[] {
   const r = rng(env === "live" ? 77 : 11);
-  return Array.from({ length: 14 }, (_, i) => {
-    const day = ago((13 - i) * 24 * 60).slice(0, 10);
-    const base = env === "live" ? 3200 + i * 260 : 140 + i * 9;
+  return Array.from({ length: SERIES_DAYS }, (_, i) => {
+    const day = ago((SERIES_DAYS - 1 - i) * 24 * 60).slice(0, 10);
+    const base = env === "live" ? 3200 + i * 120 : 140 + i * 4;
     const requests = Math.round(base * (0.8 + r() * 0.4));
     return { day, requests, errors: Math.round(requests * (0.01 + r() * 0.025)) };
   });

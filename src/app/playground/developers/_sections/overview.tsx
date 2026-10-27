@@ -41,7 +41,7 @@ export function OverviewSection() {
     <>
       <PageHeader title="Overview" />
       <Strip label="Summary">
-        <Cell label="Requests today" value={fmt.format(last.requests)} sub={`${fmt.format(total)} in 14 days`} />
+        <Cell label="Requests today" value={fmt.format(last.requests)} sub={`${fmt.format(total)} in 30 days`} />
         <Cell label="Connected users" value={fmt.format(users.size)} sub={`${fx.connections.length} connections`} />
         <Cell label="Devices online" value={String(online)} of={`/ ${fx.devices.length}`} />
         <Cell
@@ -52,13 +52,13 @@ export function OverviewSection() {
       </Strip>
 
       <div className={TWO_COLS}>
-        <Card title="Requests" aside={<span className="text-text-muted">14 days</span>}>
+        <Card title="Requests" aside={<span className="text-text-muted">30 days</span>}>
           <span className={ov.figure}>{fmt.format(total)}</span>
-          <Bars bars={bars(series, (d) => d.requests, "requests")} label="Requests per day, last 14 days" />
+          <Bars bars={bars(series, (d) => d.requests, "requests")} label="Requests per day, last 30 days" />
         </Card>
-        <Card title="Errors" aside={<span className="text-text-muted">14 days</span>}>
+        <Card title="Errors" aside={<span className="text-text-muted">30 days</span>}>
           <span className={ov.figure}>{fmt.format(errors)}</span>
-          <Bars bars={bars(series, (d) => d.errors, "errors")} label="Errors per day, last 14 days" dim />
+          <Bars bars={bars(series, (d) => d.errors, "errors")} label="Errors per day, last 30 days" dim />
         </Card>
       </div>
 
