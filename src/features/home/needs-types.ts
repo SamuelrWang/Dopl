@@ -1,3 +1,4 @@
+import type { AgentColorKey } from "@dopl/contracts";
 import type { TaskStatus } from "@/features/channels/types";
 
 /** `GET /api/home/needs` — what is waiting on the reader across their home channels. */
@@ -12,13 +13,27 @@ interface HomeNeedPlace {
   channelName: string;
 }
 
+/**
+ * Who asked. A person: their name and photo. An agent: its operator-given name (`null` when its
+ * session row is gone), its owner's photo, colour and runtime as last reported.
+ */
+export type HomeNeedAuthor =
+  | { kind: "person"; name: string; photo: string | null }
+  | {
+      kind: "agent";
+      name: string | null;
+      photo: string | null;
+      color: AgentColorKey | null;
+      runtime: string | null;
+    };
+
 /** An unanswered decision card the reader may answer. */
 export interface HomeNeedDecision extends HomeNeedPlace {
   messageId: string;
   seq: number;
   threadId: string | null;
   question: string;
-  author: { kind: "person" | "agent"; name: string };
+  author: HomeNeedAuthor;
   postedAt: string;
 }
 

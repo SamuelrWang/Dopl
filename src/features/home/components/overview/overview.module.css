@@ -222,6 +222,15 @@
 .tick {
   margin: 4px;
 }
+.rowAside {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  font-size: var(--text-label);
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* a row's leading mark: a device glyph, a person's initial, a need's icon */
 .mark {
   display: grid;

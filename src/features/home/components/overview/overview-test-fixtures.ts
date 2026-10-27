@@ -85,7 +85,7 @@ export const NEEDS: HomeNeeds = {
       seq: 42,
       threadId: "th-1",
       question: "Ship the migration tonight?",
-      author: { kind: "agent", name: "Sam Wang" },
+      author: { kind: "agent", name: "Coder", photo: null, color: "agent-03", runtime: "claude" },
       postedAt: "2026-09-02T10:00:00.000Z",
     },
   ],

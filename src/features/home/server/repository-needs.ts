@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ESCALATION_METADATA_KEY } from "@/features/channels/escalation";
 import { mentionContainmentFilter } from "@/features/channels/server/repository-mentions";
 import { TASK_READ_COLS, type ChannelTaskReadRow } from "@/features/channels/server/dto-tasks";
+import { sessionRowsWhere } from "@/features/channels/server/repository-sessions";
 
 /**
  * The Needs you reads. Admin client; every channel id comes from the service's fence
@@ -74,4 +75,23 @@ export async function listAssignedOpenTasks(
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as unknown as ChannelTaskReadRow[];
+}
+
+export type AgentFaceRow = {
+  name: string;
+  display_name: string | null;
+  color: string | null;
+  runtime: string | null;
+};
+
+/** What a decision row's face needs per agent: its name, colour and runtime, newest session first. */
+export async function listAgentFaceRows(
+  workspaceIds: readonly string[],
+  agentIds: readonly string[]
+): Promise<AgentFaceRow[]> {
+  if (workspaceIds.length === 0 || agentIds.length === 0) return [];
+  return sessionRowsWhere<AgentFaceRow>(
+    (q) => q.in("workspace_id", [...workspaceIds]).in("name", [...agentIds]),
+    "name,display_name,color,runtime"
+  );
 }

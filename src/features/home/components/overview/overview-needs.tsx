@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
-import { CircleHelp, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { formatRelativeTime, formatShortDate } from "@/shared/lib/format-time";
+import { agentFaceName } from "@/shared/lib/agent-name";
+import { IdentityFace } from "@/shared/ui/identity-face";
+import { AgentFace } from "@/features/channels/components/agent-face";
 import { TASK_TICK, TaskProgress } from "@/features/channels/components/task-bits";
 import {
   EMPTY_HOME_NEED_DECISIONS,
   EMPTY_HOME_NEED_TASKS,
+  type HomeNeedAuthor,
   type HomeNeedDecision,
   type HomeNeedTask,
 } from "@/features/home/needs-types";
@@ -36,16 +40,19 @@ export function needsCount({
   return `${over + decisions.length + tasks.length}${clipped ? "+" : ""}`;
 }
 
+/** A row that opens its item: the leading mark, the title over its meta, the channel at the end. */
 function NeedRow({
   mark,
   title,
   meta,
+  channelName,
   label,
   onOpen,
 }: {
   mark: ReactNode;
   title: ReactNode;
   meta: ReactNode;
+  channelName: string;
   label: string;
   onOpen: () => void;
 }) {
@@ -56,21 +63,27 @@ function NeedRow({
         <span className={styles.rowTitle}>{title}</span>
         <span className={styles.rowMeta}>{meta}</span>
       </button>
+      <span className={styles.rowAside}>#{channelName}</span>
     </li>
   );
 }
 
+const FACE_PX = 24;
+
+/** The asker: an agent as its identity (owner's photo in its colour ring, runtime badge), a person as their photo. */
+function AuthorFace({ author, name }: { author: HomeNeedAuthor; name: string }) {
+  if (author.kind === "person") return <IdentityFace size={FACE_PX} photo={author.photo} name={name} />;
+  return <AgentFace size={FACE_PX} photo={author.photo} name={name} color={author.color} runtime={author.runtime} />;
+}
+
 function DecisionRow({ need, onOpen }: { need: HomeNeedDecision; onOpen: () => void }) {
-  const by = need.author.kind === "agent" ? "Agent" : need.author.name || "Someone";
+  const by = need.author.kind === "agent" ? agentFaceName(need.author.name) : need.author.name || "Someone";
   return (
     <NeedRow
-      mark={
-        <span className={styles.mark} aria-hidden="true">
-          <CircleHelp size={13} />
-        </span>
-      }
+      mark={<AuthorFace author={need.author} name={by} />}
       title={need.question || "Needs your decision"}
-      meta={`Needs your decision · #${need.channelName} · ${by} · ${formatRelativeTime(need.postedAt)}`}
+      meta={`Needs your decision · ${by} · ${formatRelativeTime(need.postedAt)}`}
+      channelName={need.channelName}
       label={`Open decision: ${need.question}`}
       onOpen={onOpen}
     />
@@ -89,11 +102,11 @@ function TaskRow({ need, onOpen }: { need: HomeNeedTask; onOpen: () => void }) {
       }
       meta={[
         need.status === "in_progress" ? "In progress" : "Open",
-        `#${need.channelName}`,
         need.dueAt ? `Due ${formatShortDate(need.dueAt)}` : null,
       ]
         .filter(Boolean)
         .join(" · ")}
+      channelName={need.channelName}
       label={`Open task: ${need.title}`}
       onOpen={onOpen}
     />

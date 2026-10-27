@@ -6,17 +6,22 @@ import { mapTaskRow, type ChannelTaskReadRow } from "@/features/channels/server/
 import { listAccountChannelRefs } from "@/features/channels/server/repository-account";
 import { listAnsweredEscalationIds } from "@/features/channels/server/repository-messages";
 import { threadIdOf } from "@/features/channels/server/service-mentions";
-import { listProfileSummaries } from "@/features/workspaces/server/repository";
+import { listProfileSummaries, type ProfileSummary } from "@/features/workspaces/server/repository";
+import { authorAgentIdOf } from "@/features/channels/lib/agent-post-stamp";
+import { agentColorOrNull } from "@/shared/lib/agent-colors";
 import {
   HOME_NEEDS_LIMIT,
+  type HomeNeedAuthor,
   type HomeNeedDecision,
   type HomeNeeds,
   type HomeNeedTask,
 } from "../needs-types";
 import * as repo from "./repository";
 import {
+  listAgentFaceRows,
   listAssignedOpenTasks,
   listDecisionCandidates,
+  type AgentFaceRow,
   type DecisionCandidateRow,
 } from "./repository-needs";
 
@@ -66,10 +71,38 @@ export function answerableDecisions(
   return [...byId.values()].sort((a, b) => Number(b.seq) - Number(a.seq));
 }
 
+/** The face facts for a card's author: the agent that wrote it (by the one parser), else the person. */
+export function authorOf(
+  row: DecisionCandidateRow,
+  owner: ProfileSummary | undefined,
+  agents: ReadonlyMap<string, AgentFaceRow>
+): HomeNeedAuthor {
+  const photo = owner?.avatarUrl ?? null;
+  if (row.author_kind !== "agent") {
+    return { kind: "person", name: owner?.displayName || owner?.email || "", photo };
+  }
+  const agentId = authorAgentIdOf({ clientMsgId: row.client_msg_id, metadata: row.metadata });
+  const session = agentId ? agents.get(agentId) : undefined;
+  return {
+    kind: "agent",
+    name: session?.display_name?.trim() || null,
+    photo,
+    color: agentColorOrNull(session?.color),
+    runtime: session?.runtime || null,
+  };
+}
+
+/** Newest session row per agent id (the read is newest first). */
+function agentFacesById(rows: readonly AgentFaceRow[]): Map<string, AgentFaceRow> {
+  const out = new Map<string, AgentFaceRow>();
+  for (const row of rows) if (!out.has(row.name)) out.set(row.name, row);
+  return out;
+}
+
 export function toNeedDecision(
   row: DecisionCandidateRow,
   place: HomeChannelPlace,
-  authorName: string
+  author: HomeNeedAuthor
 ): HomeNeedDecision {
   const escalation = parseStoredEscalation(row.metadata?.[ESCALATION_METADATA_KEY]);
   return {
@@ -80,7 +113,7 @@ export function toNeedDecision(
     seq: Number(row.seq),
     threadId: threadIdOf(row.metadata),
     question: escalation?.issue ?? "",
-    author: { kind: row.author_kind === "agent" ? "agent" : "person", name: authorName },
+    author,
     postedAt: row.created_at,
   };
 }
@@ -112,16 +145,26 @@ async function needDecisions(
   );
   const open = candidates.filter((row) => !answered.has(row.id));
   const kept = open.slice(0, HOME_NEEDS_LIMIT);
-  const profiles = await listProfileSummaries([
-    ...new Set(kept.flatMap((row) => (row.author_user_id ? [row.author_user_id] : []))),
+  const placeOf = (row: DecisionCandidateRow) => places.get(row.channel_id) as HomeChannelPlace;
+  const agentIds = kept.flatMap((row) => {
+    if (row.author_kind !== "agent") return [];
+    const id = authorAgentIdOf({ clientMsgId: row.client_msg_id, metadata: row.metadata });
+    return id ? [id] : [];
+  });
+  const [profiles, faceRows] = await Promise.all([
+    listProfileSummaries([
+      ...new Set(kept.flatMap((row) => (row.author_user_id ? [row.author_user_id] : []))),
+    ]),
+    listAgentFaceRows([...new Set(kept.map((row) => placeOf(row).workspaceId))], [...new Set(agentIds)]),
   ]);
-  const nameOf = (id: string | null) => {
-    const profile = id ? profiles.get(id) : undefined;
-    return profile?.displayName || profile?.email || "";
-  };
+  const agents = agentFacesById(faceRows);
   return {
     items: kept.map((row) =>
-      toNeedDecision(row, places.get(row.channel_id) as HomeChannelPlace, nameOf(row.author_user_id))
+      toNeedDecision(
+        row,
+        placeOf(row),
+        authorOf(row, row.author_user_id ? profiles.get(row.author_user_id) : undefined, agents)
+      )
     ),
     truncated:
       open.length > HOME_NEEDS_LIMIT ||

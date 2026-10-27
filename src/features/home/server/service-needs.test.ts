@@ -5,7 +5,7 @@ vi.mock("@/shared/supabase/admin", () => ({ supabaseAdmin: vi.fn() }));
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { ChannelTaskReadRow } from "@/features/channels/server/dto-tasks";
 import { listAssignedOpenTasks, listDecisionCandidates, type DecisionCandidateRow } from "./repository-needs";
-import { answerableDecisions, toNeedDecision, toNeedTask } from "./service-needs";
+import { answerableDecisions, authorOf, toNeedDecision, toNeedTask } from "./service-needs";
 
 const VIEWER = "u-viewer";
 const OTHER = "u-other";
@@ -62,17 +62,42 @@ describe("answerableDecisions", () => {
 
 describe("the payload rows", () => {
   it("names the question, the place and the thread", () => {
-    const need = toNeedDecision(card({ meta: { threadId: "th-1" } }), PLACE, "Sam");
+    const author = { kind: "person", name: "Sam", photo: null } as const;
+    const need = toNeedDecision(card({ meta: { threadId: "th-1" } }), PLACE, author);
     expect(need).toMatchObject({
       question: "Ship tonight?",
       workspaceId: "ws-1",
       channelName: "deploys",
       threadId: "th-1",
       seq: 10,
-      author: { kind: "agent", name: "Sam" },
+      author,
     });
   });
 
+  it("gives an agent author its session's name, colour and runtime and its owner's photo", () => {
+    const owner = { email: "s@x.io", displayName: "Sam", avatarUrl: "p.png" };
+    const agents = new Map([
+      ["abcdefgh", { name: "abcdefgh", display_name: " Coder ", color: "agent-03", runtime: "codex" }],
+    ]);
+    const face = { kind: "agent", name: "Coder", photo: "p.png", color: "agent-03", runtime: "codex" };
+    expect(authorOf(card({ meta: { session_id: "dopl:abcdefgh" } }), owner, agents)).toEqual(face);
+    expect(authorOf(card({ client_msg_id: "agent-abcdefgh-1" }), owner, agents)).toEqual(face);
+    expect(authorOf(card(), owner, agents)).toEqual({
+      kind: "agent",
+      name: null,
+      photo: "p.png",
+      color: null,
+      runtime: null,
+    });
+    expect(authorOf(card({ author_kind: "person" }), owner, agents)).toEqual({
+      kind: "person",
+      name: "Sam",
+      photo: "p.png",
+    });
+  });
+});
+
+describe("the task row", () => {
   it("carries a task's status, due date and subtask progress", () => {
     const row = {
       id: "t-1",

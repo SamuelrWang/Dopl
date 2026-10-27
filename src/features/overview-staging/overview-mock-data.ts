@@ -188,7 +188,7 @@ export function homeNeeds(empty = false): HomeNeeds {
         seq: 611,
         threadId: null,
         question: "Cut over the v1 endpoints this week or next?",
-        author: { kind: "agent", name: "Sam Wang" },
+        author: { kind: "agent", name: "Migrator", photo: null, color: "agent-02", runtime: "claude" },
         postedAt: hoursAgo(2),
       },
       {
@@ -199,7 +199,7 @@ export function homeNeeds(empty = false): HomeNeeds {
         seq: 3920,
         threadId: null,
         question: "Quarantine the three retrying suites?",
-        author: { kind: "person", name: GRACE.displayName },
+        author: { kind: "person", name: GRACE.displayName, photo: GRACE.avatarUrl ?? null },
         postedAt: hoursAgo(26),
       },
     ],

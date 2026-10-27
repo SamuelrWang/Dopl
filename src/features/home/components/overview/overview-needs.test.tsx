@@ -40,7 +40,8 @@ describe("Needs you", () => {
     const rows = within(needsCard()).getAllByRole("listitem").map((li) => li.textContent);
     expect(rows[0]).toContain("Out of credits");
     expect(rows[1]).toContain("Ship the migration tonight?");
-    expect(rows[1]).toContain("Needs your decision");
+    expect(rows[1]).toContain("Needs your decision · Coder");
+    expect(rows[1]).toContain("#Priya Shah");
     expect(rows[2]).toContain("Review the pricing page");
     expect(rows[2]).toContain("1/3");
     expect(needYou()).toBe("3");
