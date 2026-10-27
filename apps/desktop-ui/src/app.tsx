@@ -13,7 +13,7 @@ import { armErrorRecovery } from "#/lib/error-recovery";
 // and need a mounted host.
 import { ToastHost } from "@/shared/ui/toast";
 import { IncomingToasts } from "@/features/notifications/components/incoming-toasts";
-import { RuntimeSignInPrompt } from "#/components/runtime-sign-in-prompt";
+import { RuntimeSignInPrompt } from "@/features/channels/components/runtime-sign-in-prompt";
 import { spaRuntimeLogo } from "#/lib/runtime-logos";
 import { RuntimeLogoProvider } from "@/shared/ui/runtime-logo";
 

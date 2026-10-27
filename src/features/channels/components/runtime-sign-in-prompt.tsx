@@ -1,3 +1,5 @@
+"use client";
+
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { toast } from "@/shared/ui/toast";
 import { signInFailedCopy } from "@/features/channels/lib/runtime-copy";

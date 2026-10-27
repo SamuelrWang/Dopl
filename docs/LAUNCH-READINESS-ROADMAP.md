@@ -187,7 +187,7 @@ Full trace: composer "Request" mode → Send → `setSending(true)` dims the but
 - ~~Channels: archive/unarchive, visibility toggle, leave, join~~ — done.
 - ~~Chats: create folder (Enter re-fires → duplicate POSTs), pin/unpin (conflicting PATCHes on rapid clicks)~~ — done.
 - Ontology: **new cluster = 3 serial round-trips, zero feedback, then everything appears at once** (`use-ontology.ts:295-328`) — worst latency-to-pixel ratio in the app; reducer cases (`graph-state.ts:114,146`) and rollback module (`create-ontology-rollback.ts`) already exist, only ordering must change. Same for +Column/+Card.
-- Misc: sign out desktop (fire-and-forget, no confirm — `account-actions.tsx:31-38`), knowledge downloads (`tree-context-menu.tsx:51-59`, `detail-panel.tsx:195-203`), skills trash restore (`skills-trash-modal.tsx:174-181` — double-restore possible), "Refresh billing status" + desktop upgrade buttons (`plans-billing-core.tsx:134-141,311-330`).
+- Misc: sign out desktop (fire-and-forget, no confirm — `desktop-account-actions.tsx`), knowledge downloads (`tree-context-menu.tsx:51-59`, `detail-panel.tsx:195-203`), skills trash restore (`skills-trash-modal.tsx:174-181` — double-restore possible), "Refresh billing status" + desktop upgrade buttons (`plans-billing-core.tsx:134-141,311-330`).
 
 ### Post-mutation bugs (visibly wrong states)
 1. Create-channel selects an id not yet in the list → wrong channel shown, then jumps (`channels-view-core.tsx`, deleted 2026-08-18; the surviving create path is `channels/components/channels-core.tsx › onCreated`).

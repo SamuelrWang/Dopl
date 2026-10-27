@@ -383,7 +383,7 @@ export function ChannelsAgentWindow({
  * block's `py-2.5`, which is the equality Samuel set earlier the same day and
  * `agent-window-frame.test.ts` pins.
  */
-function AgentWorkingOn({
+export function AgentWorkingOn({
   agent,
   endNote,
 }: {
