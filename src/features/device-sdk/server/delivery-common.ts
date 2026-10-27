@@ -9,6 +9,7 @@ import type { RouteCandidate } from "../delivery/router";
 import type { DevEventAnnotation } from "./with-developer-key";
 import type { DeliveryStore, DeviceRow, GrantStore, Scope, StoredAction } from "./delivery-store";
 import { SIMULATOR_TEST_GRANT } from "./grant-store";
+import { forcedFailureOf, markForcedFailure, simulatorMagicFor } from "./test-mode";
 
 /** Everything the delivery services touch; production values in `delivery-deps.ts`. */
 export interface DeliveryDeps {
@@ -55,6 +56,9 @@ export const requestHash = (v: unknown): string => createHash("sha256").update(s
 export async function toDevice(deps: DeliveryDeps, scope: Scope, row: DeviceRow): Promise<Device | null> {
   const adapter = deps.adapters.get(row.adapter_id);
   if (!adapter || !deps.adapters.list({ env: scope.env, includeExperimental: true }).includes(adapter)) return null;
+  // 🔒 A6: simulators are test-only. The registry already hides them from `live`; this repeats it
+  // here, so a registry built without that filter still cannot serve a simulated device in live.
+  if (adapter.id === SIMULATOR_ADAPTER_ID && scope.env !== "test") return null;
   const base: Device = {
     id: row.id,
     kind: row.kind,
@@ -67,8 +71,11 @@ export async function toDevice(deps: DeliveryDeps, scope: Scope, row: DeviceRow)
     online: false,
     last_seen_at: row.last_seen ? new Date(row.last_seen).toISOString() : null,
   };
-  const health = await adapter.health(base);
-  return { ...base, capabilities: adapter.describe(base), online: health.online, last_seen_at: base.last_seen_at ?? health.last_seen };
+  const magic = await simulatorMagicFor(deps.store, scope, row);
+  const health = magic === "device_offline" ? { online: false, last_seen: null } : await adapter.health(base);
+  const device: Device = { ...base, capabilities: adapter.describe(base), online: health.online, last_seen_at: base.last_seen_at ?? health.last_seen };
+  if (magic) markForcedFailure(device, magic);
+  return device;
 }
 
 /** The end user's grant for a device. Test-mode simulator devices without a row get `SIMULATOR_TEST_GRANT`. */
@@ -82,6 +89,8 @@ export async function grantFor(deps: DeliveryDeps, scope: Scope, endUserId: stri
 export async function execute(deps: DeliveryDeps, device: Device, capability: CapabilityId, args: Record<string, unknown>): Promise<ActionResult> {
   const adapter = deps.adapters.get(device.adapter_id);
   if (!adapter) return { status: "failed", result: null, error: errorBodyOf("vendor_error", `No adapter ${device.adapter_id}.`) };
+  const forced = forcedFailureOf(device);
+  if (forced) return forced;
   try {
     return await adapter.execute(device, capability, args);
   } catch (err) {
