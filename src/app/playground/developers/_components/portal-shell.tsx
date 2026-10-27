@@ -3,7 +3,7 @@
 /**
  * The developer portal's own layout: a full-page white app with a left nav (org / project, the
  * test/live switch, the sections), a top bar, and the section's page below. Built from the kit
- * (tokens, `SegmentedControl`, `StatusPill`, the menu-row highlight); it is a standalone portal,
+ * (tokens, `SelectMenu` for the env beside the project name, `StatusPill`, the menu-row highlight); it is a standalone portal,
  * not the desktop /home frame.
  */
 
@@ -25,7 +25,7 @@ import {
 import type { Environment } from "@dopl/contracts/device-sdk";
 import { cn } from "@/shared/lib/utils";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
-import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { SelectMenu } from "@/shared/ui/select-menu";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { DEMO_ORG, DEMO_PROJECT } from "../_data/fixtures";
 import { usePortal } from "./portal-context";
@@ -42,13 +42,13 @@ export const PORTAL_SECTIONS: ReadonlyArray<{ href: string; label: string; icon:
   { href: "/events", label: "Events", icon: Activity },
   { href: "/webhooks", label: "Webhooks", icon: Webhook },
   { href: "/test-mode", label: "Test mode", icon: FlaskConical },
-  { href: "/connect", label: "Connect preview", icon: Link2 },
+  { href: "/connect", label: "Connect customization", icon: Link2 },
 ];
 
 const ENV_OPTIONS = [
-  { key: "test", label: "Test" },
-  { key: "live", label: "Live" },
-] as const satisfies ReadonlyArray<{ key: Environment; label: string }>;
+  { value: "test", label: "Test" },
+  { value: "live", label: "Live" },
+] as const satisfies ReadonlyArray<{ value: Environment; label: string }>;
 
 function useSection() {
   const pathname = usePathname();
@@ -79,9 +79,11 @@ function Sidebar() {
     <aside className="flex w-60 shrink-0 flex-col gap-5 border-r border-border-default bg-home-card px-3 py-4">
       <div className="flex flex-col gap-0.5 px-2">
         <span className="text-caption text-text-muted">{DEMO_ORG.name}</span>
-        <span className={cn(IDENTITY_NAME_TEXT, "truncate")}>{DEMO_PROJECT.name}</span>
+        <span className="flex min-w-0 items-center justify-between gap-2">
+          <span className={cn(IDENTITY_NAME_TEXT, "truncate")}>{DEMO_PROJECT.name}</span>
+          <SelectMenu variant="outline" options={ENV_OPTIONS} value={env} onChange={setEnv} ariaLabel="Environment" />
+        </span>
       </div>
-      <SegmentedControl variant="track" options={ENV_OPTIONS} value={env} onChange={setEnv} ariaLabel="Environment" className="self-start" />
       <nav aria-label="Developer portal" className="flex flex-col gap-0.5">
         {PORTAL_SECTIONS.map((s) => {
           const active = s === current;

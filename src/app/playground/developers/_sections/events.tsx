@@ -1,141 +1,128 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import type { DeviceEventRow, ErrorCode, EventOutcome } from "@dopl/contracts/device-sdk";
-import { ERROR_CODE_INFO } from "@dopl/contracts/device-sdk";
+import { useState } from "react";
+import { X } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
-import { SelectMenu } from "@/shared/ui/select-menu";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, PageHeader, Json, KIND_LABEL, RowOpen, Table, TierChip, clock, ov } from "../_components/ui";
+import { patchLogFilter } from "../_components/portal-actions";
+import { Card, Json, PageHeader, RowOpen, Table, clock, ov } from "../_components/ui";
+import { LOG_TYPE_LABEL, queryLog, type LogRow, type LogType } from "../_data/log";
 
-type OutcomeFilter = "all" | EventOutcome;
-const OUTCOMES: ReadonlyArray<{ key: OutcomeFilter; label: string }> = [
+const TYPES: ReadonlyArray<{ key: LogType | "all"; label: string }> = [
   { key: "all", label: "All" },
-  { key: "ok", label: "Ok" },
-  { key: "error", label: "Error" },
-  { key: "denied", label: "Denied" },
+  { key: "request", label: "Requests" },
+  { key: "connect", label: "Connect" },
+  { key: "delivery", label: "Deliveries" },
+  { key: "webhook", label: "Webhooks" },
 ];
 
-function Outcome({ e }: { e: DeviceEventRow }) {
-  if (e.outcome === "ok")
-    return (
-      <StatusPill tone="live" dot bare>
-        ok
-      </StatusPill>
-    );
-  return (
-    <StatusPill tone={e.outcome === "error" ? "attention" : "neutral"} className="font-mono">
-      {e.error_code ?? e.outcome}
+const PAGE = 80;
+
+function RowStatus({ row }: { row: LogRow }) {
+  return row.ok ? (
+    <StatusPill tone="live" dot bare>
+      {row.status}
+    </StatusPill>
+  ) : (
+    <StatusPill tone="attention" className="font-mono">
+      {row.status}
     </StatusPill>
   );
 }
 
+/** Plaid's activity log and Stripe's inspector: one table of every row type, one id lookup, a JSON pane. */
 export function EventsSection() {
-  const { activity } = usePortal();
-  const events = activity.events;
-  const [outcome, setOutcome] = useState<OutcomeFilter>("all");
-  const [kind, setKind] = useState("all");
-  const [code, setCode] = useState("all");
-  const [query, setQuery] = useState("");
+  const { log, keys, store } = usePortal();
+  const f = store.logFilter;
+  const [failedOnly, setFailedOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const kinds = [...new Set(events.map((e) => e.device_kind).filter((k): k is NonNullable<typeof k> => k !== null))];
-  const codes = [...new Set(events.map((e) => e.error_code).filter((c): c is ErrorCode => c !== null))];
-  const q = query.trim();
-  const rows = events.filter(
-    (e) =>
-      (outcome === "all" || e.outcome === outcome) &&
-      (kind === "all" || e.device_kind === kind) &&
-      (code === "all" || e.error_code === code) &&
-      (!q || [e.external_user_id, e.device_id, e.event_id, e.capability].some((v) => v?.includes(q)))
-  );
+  const [limit, setLimit] = useState(PAGE);
+  const rows = queryLog(log, { q: f.q, type: f.type, key_id: f.key_id, error_code: f.error_code, failedOnly });
+  const open = rows.find((r) => `${r.type}:${r.id}` === openId) ?? rows[0] ?? null;
+  const key = f.key_id ? keys.find((k) => k.id === f.key_id) : null;
 
   return (
     <>
       <PageHeader title="Events" />
-    <Card title="Log" count={`${rows.length} of ${events.length}`}>
+      <SearchField
+        value={f.q}
+        onChange={(q) => patchLogFilter({ q })}
+        placeholder="Look up any id: req_, act_, evt_, dev_, conn_, ct_, whk_, or an external_user_id"
+      />
       <div className="flex flex-wrap items-center gap-2">
-        <SegmentedControl options={OUTCOMES} value={outcome} onChange={setOutcome} ariaLabel="Outcome" />
-        <SelectMenu
-          variant="outline"
-          ariaLabel="Device kind"
-          value={kind}
-          onChange={setKind}
-          options={[{ value: "all", label: "All devices" }, ...kinds.map((k) => ({ value: k, label: KIND_LABEL[k] ?? k }))]}
+        <SegmentedControl options={TYPES} value={f.type} onChange={(type) => patchLogFilter({ type })} ariaLabel="Type" />
+        <SegmentedControl
+          options={[
+            { key: "all", label: "Any status" },
+            { key: "failed", label: "Failed" },
+          ]}
+          value={failedOnly ? "failed" : "all"}
+          onChange={(v) => setFailedOnly(v === "failed")}
+          ariaLabel="Status"
         />
-        <SelectMenu
-          variant="outline"
-          ariaLabel="Error code"
-          value={code}
-          onChange={setCode}
-          options={[{ value: "all", label: "All errors" }, ...codes.map((c) => ({ value: c, label: c }))]}
-        />
-        <SearchField value={query} onChange={setQuery} placeholder="User, device or event id" size="sm" className="ml-auto w-56" />
+        {f.key_id && (
+          <button type="button" className={cn(pillButton("outline", "xs"), "font-mono")} onClick={() => patchLogFilter({ key_id: null })}>
+            Key {key ? key.prefix : f.key_id}
+            <X size={PILL_ICON.xs} aria-label="Clear key filter" />
+          </button>
+        )}
+        {f.error_code && (
+          <button type="button" className={cn(pillButton("outline", "xs"), "font-mono")} onClick={() => patchLogFilter({ error_code: null })}>
+            {f.error_code}
+            <X size={PILL_ICON.xs} aria-label="Clear error filter" />
+          </button>
+        )}
       </div>
-      <Table columns={["Time", "Capability", "User", "Route", "Tier", "Outcome", { label: "Latency", num: true }]}>
-        {rows.map((e) => {
-          const open = openId === e.event_id;
-          return (
-            <Fragment key={e.event_id}>
-              <tr>
-                <td className="font-mono text-small text-text-muted">
-                  <RowOpen label={`Event ${e.event_id}`} expanded={open} onClick={() => setOpenId(open ? null : e.event_id)}>
-                    {clock(e.ts)}
-                  </RowOpen>
-                </td>
-                <td className="whitespace-nowrap font-mono text-small">
-                  {e.capability}
-                  {e.intent && <span className="ml-1.5 text-text-muted">{e.intent}</span>}
-                </td>
-                <td className="whitespace-nowrap font-mono text-small text-text-secondary">{e.external_user_id ?? "—"}</td>
-                <td className="whitespace-nowrap font-mono text-small">
-                  {e.route_decision ? (
-                    <>
-                      {e.route_decision.target} → {e.device_kind}
-                      <span className="ml-1.5 text-text-muted">{e.route_decision.reason}</span>
-                    </>
-                  ) : (
-                    <span className="text-text-muted">{e.device_kind ? `from ${e.device_kind}` : "—"}</span>
-                  )}
-                </td>
-                <td>{e.risk_tier && <TierChip tier={e.risk_tier} />}</td>
-                <td className="whitespace-nowrap">
-                  <Outcome e={e} />
-                </td>
-                <td className={`${ov.num} whitespace-nowrap font-mono text-small`}>
-                  {e.latency_ms.api + (e.latency_ms.device_delivery ?? 0)} ms
-                </td>
-              </tr>
-              {open && (
-                <tr>
-                  <td colSpan={7} className="pb-2.5">
-                    <EventDetail e={e} />
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          );
-        })}
-      </Table>
-    </Card>
-    </>
-  );
-}
 
-function EventDetail({ e }: { e: DeviceEventRow }) {
-  const info = e.error_code ? ERROR_CODE_INFO[e.error_code] : null;
-  return (
-    <div className="flex flex-col gap-2">
-      {info && (
-        <div className="flex flex-wrap items-center gap-1">
-          <Chip>{info.type}</Chip>
-          <Chip>HTTP {info.status}</Chip>
-          <Chip mono={false}>{info.retryable ? "Retryable" : "Not retryable"}</Chip>
-        </div>
-      )}
-      <Json value={e} />
-    </div>
+      <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start gap-3.5">
+        <Card title="Log" count={rows.length.toLocaleString()}>
+          {rows.length === 0 ? (
+            <EmptyState variant="outline" title="Nothing matches" />
+          ) : (
+            <>
+              <Table columns={["Type", "Description", "Status", "Time"]}>
+                {rows.slice(0, limit).map((r) => {
+                  const id = `${r.type}:${r.id}`;
+                  const selected = open !== null && `${open.type}:${open.id}` === id;
+                  return (
+                    <tr key={id} className={cn(selected && "bg-menu-item-hover-bg")}>
+                      <td>
+                        <RowOpen label={`${LOG_TYPE_LABEL[r.type]} ${r.id}`} expanded={selected} onClick={() => setOpenId(id)}>
+                          <StatusPill>{LOG_TYPE_LABEL[r.type]}</StatusPill>
+                        </RowOpen>
+                      </td>
+                      <td className="max-w-0 truncate font-mono text-small">{r.title}</td>
+                      <td className="whitespace-nowrap">
+                        <RowStatus row={r} />
+                      </td>
+                      <td className="whitespace-nowrap font-mono text-small text-text-muted">{clock(r.ts)}</td>
+                    </tr>
+                  );
+                })}
+              </Table>
+              {rows.length > limit && (
+                <button type="button" className={cn(pillButton("outline", "sm"), "self-center")} onClick={() => setLimit((n) => n + PAGE)}>
+                  Show more
+                </button>
+              )}
+            </>
+          )}
+        </Card>
+
+        {open && (
+          <Card title={LOG_TYPE_LABEL[open.type]} aside={<RowStatus row={open} />} className="sticky top-0">
+            <span className={cn(ov.rowMeta, "font-mono")}>
+              {open.id} · {clock(open.ts)}
+            </span>
+            <Json value={open.detail} />
+          </Card>
+        )}
+      </div>
+    </>
   );
 }

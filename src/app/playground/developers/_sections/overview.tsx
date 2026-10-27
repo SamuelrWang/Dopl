@@ -6,9 +6,10 @@ import { cn } from "@/shared/lib/utils";
 import { pillButton } from "@/shared/ui/pill-button";
 import { usePortal } from "../_components/portal-context";
 import { PORTAL_BASE } from "../_components/portal-shell";
-import { Bars, Card, Cell, Chip, PageHeader, Strip, glyphKind, ov, since } from "../_components/ui";
+import { Bars, Card, Cell, PageHeader, Strip, glyphKind, ov } from "../_components/ui";
 import { ADDABLE_TYPES } from "../_data/device-types";
 import { TypeStatusPill, typeHref } from "./devices";
+import { ConnectFunnel, ErrorGroups } from "./overview-insights";
 import type { DayPoint } from "../_data/activity";
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -22,7 +23,7 @@ function bars(series: DayPoint[], pick: (d: DayPoint) => number, unit: string) {
 const TWO_COLS = "grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3.5";
 
 export function OverviewSection() {
-  const { fx, activity, typeState } = usePortal();
+  const { fx, activity, sessions, typeState } = usePortal();
   const { series, events } = activity;
   const last = series[series.length - 1];
   const total = series.reduce((n, d) => n + d.requests, 0);
@@ -33,7 +34,6 @@ export function OverviewSection() {
   const delivered = deliveries.filter((e) => e.outcome === "ok").length;
   const types = ADDABLE_TYPES.map((t) => ({ type: t, state: typeState(t.id, null) }));
   const compatible = types.filter((t) => t.state.status === "connected").length;
-  const recentErrors = events.filter((e) => e.outcome !== "ok").slice(0, 5);
 
   return (
     <>
@@ -49,6 +49,8 @@ export function OverviewSection() {
         />
       </Strip>
 
+      <ConnectFunnel sessions={sessions} />
+
       <div className={TWO_COLS}>
         <Card title="Requests" aside={<span className="text-text-muted">30 days</span>}>
           <span className={ov.figure}>{fmt.format(total)}</span>
@@ -61,30 +63,7 @@ export function OverviewSection() {
       </div>
 
       <div className={TWO_COLS}>
-        <Card
-          title="Recent errors"
-          count={recentErrors.length}
-          aside={
-            <Link href={`${PORTAL_BASE}/events`} className={pillButton("outline", "sm")}>
-              Open events
-            </Link>
-          }
-        >
-          <ul className={ov.rows}>
-            {recentErrors.map((e) => (
-              <li key={e.event_id} className={ov.row}>
-                <span className={ov.rowMain}>
-                  <span className={ov.rowTitle}>
-                    <span className="truncate font-mono">{e.capability}</span>
-                    <Chip>{e.error_code}</Chip>
-                  </span>
-                  <span className={ov.rowMeta}>{e.external_user_id ?? "No user"}</span>
-                </span>
-                <span className={ov.rowAside}>{since(e.ts)}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <ErrorGroups events={activity.events} />
         <Card
           title="Device types"
           count={compatible}

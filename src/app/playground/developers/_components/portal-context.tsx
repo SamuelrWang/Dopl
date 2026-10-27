@@ -4,6 +4,10 @@ import { useMemo, useSyncExternalStore } from "react";
 import type { ApiKey, CapabilityDescriptor, ContextProfile, Environment } from "@dopl/contracts/device-sdk";
 import { DEMO_ENVS, DEMO_NOW, DEMO_PROJECT, type EnvFixtures } from "../_data/fixtures";
 import { DEMO_ACTIVITY, type EnvActivity } from "../_data/activity";
+import { DEMO_SESSIONS, type ConnectSessionRow } from "../_data/connect-sessions";
+import { buildLog, type LogRow } from "../_data/log";
+import { randomTail } from "./portal-actions";
+import { getServerSnapshot, getSnapshot, subscribe, update, type Snapshot } from "./portal-store";
 import {
   addType,
   goLive,
@@ -16,42 +20,10 @@ import {
 import { seedState } from "../_data/device-types";
 
 /**
- * The portal's LOCAL state: the env switch, keys created / revoked in this tab, edits to the
- * project's profile override, and the project's status per device type (`device-type-status.ts`;
- * a type nobody has touched reads its seed). A module-level store (not a layout provider) so it survives moving
- * between sections; nothing is sent anywhere, and a reload restores the fixtures. The server always
- * renders the initial snapshot.
+ * `usePortal`: the store (`./portal-store.ts`) as each section reads it: the env's fixtures with
+ * this tab's edits laid over them, the simulator's and portal's rows merged into the activity, and
+ * the unified log built from all of it. Also the device-type and key actions.
  */
-interface Snapshot {
-  env: Environment;
-  keys: Record<Environment, ApiKey[]>;
-  overrides: Record<Environment, ContextProfile | null>;
-  /** Only the device types changed in this tab; the rest read `seedState`. */
-  types: Record<string, TypeState>;
-}
-
-const INITIAL: Snapshot = {
-  env: "test",
-  keys: { test: DEMO_ENVS.test.keys, live: DEMO_ENVS.live.keys },
-  overrides: { test: null, live: null },
-  types: {},
-};
-
-let snapshot = INITIAL;
-const listeners = new Set<() => void>();
-
-function update(fn: (s: Snapshot) => Snapshot) {
-  snapshot = fn(snapshot);
-  listeners.forEach((l) => l());
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-const randomTail = (n: number) => Array.from({ length: n }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join("");
 
 function setEnv(env: Environment) {
   update((s) => ({ ...s, env }));
@@ -59,7 +31,7 @@ function setEnv(env: Environment) {
 
 /** Adds a key to the current env and returns the full secret (shown once). */
 function createKey(kind: ApiKey["kind"], scopes: ApiKey["scopes"]): string {
-  const env = snapshot.env;
+  const env = getSnapshot().env;
   const prefix = kind === "publishable" ? `pk_${env}_` : `sk_${env}_`;
   const secret = prefix + randomTail(24);
   const row: ApiKey = {
@@ -120,7 +92,13 @@ export interface PortalState extends DeviceTypeActions {
   env: Environment;
   setEnv: (env: Environment) => void;
   fx: EnvFixtures;
+  /** The fixtures' activity plus the simulator's and the portal's own rows. */
   activity: EnvActivity;
+  sessions: ConnectSessionRow[];
+  /** Requests, Connect, deliveries and webhooks in one list, newest first. */
+  log: LogRow[];
+  /** The whole store, for the sections that read their own slice (simulator, webhooks, Connect). */
+  store: Snapshot;
   keys: ApiKey[];
   createKey: typeof createKey;
   revokeKey: typeof revokeKey;
@@ -128,9 +106,17 @@ export interface PortalState extends DeviceTypeActions {
 }
 
 export function usePortal(): PortalState {
-  const s = useSyncExternalStore(subscribe, () => snapshot, () => INITIAL);
+  const s = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   return useMemo(() => {
     const base = DEMO_ENVS[s.env];
+    const raw = DEMO_ACTIVITY[s.env];
+    const test = s.env === "test";
+    const activity: EnvActivity = {
+      ...raw,
+      events: test ? [...s.sim.events, ...raw.events] : raw.events,
+      webhooks: [...s.sent[s.env], ...(test ? s.sim.webhooks : []), ...raw.webhooks],
+    };
+    const sessions = DEMO_SESSIONS[s.env];
     const override = s.overrides[s.env];
     const fx: EnvFixtures = override
       ? { ...base, profiles: base.profiles.map((p) => (p.source === "project" ? { ...p, profile: override } : p)) }
@@ -139,7 +125,10 @@ export function usePortal(): PortalState {
       env: s.env,
       setEnv,
       fx,
-      activity: DEMO_ACTIVITY[s.env],
+      activity,
+      sessions,
+      log: buildLog({ events: activity.events, webhooks: activity.webhooks, sessions, keys: s.keys[s.env] }),
+      store: s,
       keys: s.keys[s.env],
       createKey,
       revokeKey,

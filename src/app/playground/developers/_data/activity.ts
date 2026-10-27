@@ -17,7 +17,7 @@ import { CAPABILITY_RISK_TIER } from "@dopl/contracts/device-sdk";
 import { DEMO_ENVS, DEMO_ORG, DEMO_PROJECT, ago, type EnvFixtures } from "./fixtures";
 
 /** A small seeded PRNG so every render (server and client) draws the same rows. */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
     s = (s * 1664525 + 1013904223) >>> 0;
