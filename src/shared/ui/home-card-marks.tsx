@@ -2,7 +2,8 @@ import { cn } from "@/shared/lib/utils";
 
 /**
  * The channel row's marks: the quiet-line ink, the `@ N` pill, the unread dot and the "Link out"
- * chip. One declaration each, read by /home's row (`home-channel-row.tsx`), the workspace picker
+ * chip. One declaration each, read by /home's row (`home-channel-row.tsx`, which says an open
+ * invitation with the kit `StatusPill` "Invited" instead of the chip), the workspace picker
  * (`channels/components/sidebar-rows.tsx`) and the landing demo, which cannot import `apps/`.
  * On a selected (ink) row every mark inverts or dims `--text-on-cta`, never a second colour.
  */

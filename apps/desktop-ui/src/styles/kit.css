@@ -380,6 +380,11 @@
   padding-inline: 0;
   background: none;
 }
+/* `on-dark`: the neutral pill on an ink (`--surface-cta`) face, e.g. a selected row. */
+.status-pill[data-on-dark="true"] {
+  background: color-mix(in oklch, var(--text-on-cta) 16%, transparent);
+  color: var(--text-on-cta);
+}
 
 /* Frosted glass panel: the card a public page on white renders into (`/link/{token}`).
    The fill must stay translucent or the blur is computed and never seen; `-webkit-backdrop-filter`

@@ -10,6 +10,7 @@ export function StatusPill({
   tone = "neutral",
   dot = false,
   bare = false,
+  onDark = false,
   children,
   className,
 }: {
@@ -17,11 +18,18 @@ export function StatusPill({
   dot?: boolean;
   /** No pill face: the dot and the word on the card's own ground. */
   bare?: boolean;
+  /** The neutral face on an ink ground (a selected row). */
+  onDark?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <span className={cn("status-pill", className)} data-tone={tone} data-bare={bare || undefined}>
+    <span
+      className={cn("status-pill", className)}
+      data-tone={tone}
+      data-bare={bare || undefined}
+      data-on-dark={onDark || undefined}
+    >
       {dot && <span className="status-pill-dot" aria-hidden="true" />}
       {children}
     </span>

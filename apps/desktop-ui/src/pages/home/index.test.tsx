@@ -137,12 +137,12 @@ describe("home page", () => {
     // it "just doesn't make sense imo" on a row). The row's LINE TWO — the absent
     // preview, the peer stack, the `@ N` badge — is `relationship-list.test.tsx`.
     // The pending link is a row of the same list, marked as one.
-    expect(screen.getByText("Link out")).toBeInTheDocument();
+    expect(screen.getByText("Invited")).toBeInTheDocument();
     expect(screen.getByText("Not yet claimed")).toBeInTheDocument();
     // ⚠ THE LIST COLUMN HAS NO CONTROLS OF ITS OWN (Samuel, 2026-08-27). The
     // "All | Links" segmented filter above the rows is DELETED — links are no
     // longer a filterable state — and the rows themselves are untouched: the
-    // link row above is still in this list, still chipped. The only tabs left
+    // link row above is still in this list, still marked Invited. The only tabs left
     // on the page are the header's five faces, and ORDER is the assertion:
     // Overview sits LEFT of Channels (Samuel, 2026-09-01) and Ontology sits to
     // the RIGHT of Agents (Samuel, 2026-09-09: the ontology page comes in "as a

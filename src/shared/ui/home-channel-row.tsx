@@ -1,12 +1,8 @@
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { IdentityStack } from "@/shared/ui/avatar-stack";
-import {
-  LinkOutChip,
-  MentionBadge,
-  UnreadDot,
-  rowQuietInk,
-} from "@/shared/ui/home-card-marks";
+import { MentionBadge, UnreadDot, rowQuietInk } from "@/shared/ui/home-card-marks";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 /**
  * One row of /home's channel list, every derivation already done. It lives in root `src/`
@@ -32,7 +28,7 @@ export interface HomeChannelRowFacts {
   faces: readonly HomeChannelRowFace[];
   /** The channel's topic, `""` when unset. */
   description: string;
-  /** An invitation is out. */
+  /** An invitation is out: the "Invited" pill at the row's right edge. */
   linkOut: boolean;
   /** An unclaimed link row: dimmed title. */
   pending: boolean;
@@ -89,7 +85,6 @@ export function HomeChannelRow({
         </span>
       </span>
       <span className="flex min-h-4.5 w-full items-center gap-1.5">
-        {row.linkOut && <LinkOutChip onDark={selected} />}
         {row.pendingLine && (
           <span className={cn("truncate text-caption", quiet)}>{row.pendingLine}</span>
         )}
@@ -109,6 +104,7 @@ export function HomeChannelRow({
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {row.mentions === 0 && row.unread && <UnreadDot onDark={selected} />}
           <MentionBadge count={row.mentions} onDark={selected} />
+          {row.linkOut && <StatusPill onDark={selected}>Invited</StatusPill>}
         </span>
       </span>
     </button>

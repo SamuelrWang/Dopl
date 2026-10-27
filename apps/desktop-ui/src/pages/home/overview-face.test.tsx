@@ -55,7 +55,7 @@ describe("/home Overview in the page", () => {
     renderHome();
     await credits();
     await waitFor(() => expect(paths("/api/home/overview?")).toHaveLength(1));
-    fireEvent.click(await screen.findByText("Link out"));
+    fireEvent.click(await screen.findByText("Invited"));
     await waitFor(() => expect(paths("/api/home/overview?")).toHaveLength(1));
   });
 

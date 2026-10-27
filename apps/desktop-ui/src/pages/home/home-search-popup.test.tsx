@@ -135,7 +135,7 @@ describe("/home's search field", () => {
     // a query that matches no channel used to empty this column.
     expect(await screen.findByRole("listbox", { name: "Search results" })).toBeInTheDocument();
     expect(screen.getAllByText("Priya Shah").length).toBeGreaterThan(0);
-    expect(screen.getByText("Link out")).toBeInTheDocument();
+    expect(screen.getByText("Invited")).toBeInTheDocument();
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
   });
 
