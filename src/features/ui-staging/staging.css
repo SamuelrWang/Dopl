@@ -76,23 +76,15 @@ button.lp-demo-top-profile {
 /* ── THE SHARED CHANNEL PICKER (Samuel, 2026-10-22) ──────────────────
    The frame now draws the channel column on EVERY face
    (`staging-channel-rail.tsx`), as desktop /home does. These are the
-   behaviour resets the staged rail needs over the demo's inert column;
-   every FACE rule below in this file (white rows, lift, hover) already
-   applies to it, because the markup keeps the demo's `.lp-demo-sw*`
-   classes. Port target: `apps/desktop-ui/src/pages/home/relationship-list.tsx`
-   (rows + wells) and `shared/ui/home-channel-row.tsx` (the row face).
+   behaviour resets the staged column needs over the demo's inert one; the
+   rows themselves are kit + Tailwind (`white-card raise`), no rule here.
+   Port target: `apps/desktop-ui/src/pages/home/relationship-list.tsx`.
 
    A long list scrolls inside the column instead of being clipped
    (`marketing.css › .lp-demo-sw` is `overflow: hidden`, right for the
    hero's fixed six rows, wrong for a picker). */
 .uis-window .uis-sw {
   overflow-y: auto;
-}
-/* A row that LINKS (any face but `/channels`, which selects in place). Same
-   card face; link resets only. */
-.uis-window a.lp-demo-sw-row {
-  text-decoration: none;
-  color: inherit;
 }
 /* The well heading is a toggle button, not a caption: it fills the heading
    row and inherits every type property from `.lp-demo-sw-head`. */
@@ -137,11 +129,8 @@ button.lp-demo-top-profile {
 }
 
 /* ── LIFT ON THE WHITE PANEL (Samuel, 2026-10-22) ────────────────────
-   With the panel white, the white channel rows and top-bar pills lost
-   their edge. Stronger cast shadows instead of a grey fill. */
-.uis-window .lp-demo-sw-row {
-  box-shadow: var(--shadow-raise);
-}
+   With the panel white, the top-bar pills lost their edge. Stronger cast
+   shadows instead of a grey fill. */
 .uis-window .lp-demo-top-profile {
   box-shadow: var(--shadow-card-lift);
 }
@@ -150,10 +139,9 @@ button.lp-demo-top-profile {
 }
 
 /* ── HOVER LIFT (Samuel, 2026-10-22) ─────────────────────────────────
-   The clickable rows and pills wear the kit's `.raise` / `.raise-pill` / `.raise-ink` (the lift,
-   its still hit box and the motion). Only the shadows are restated, here and above, because
-   marketing.css's unlayered rest shadows outrank the kit's layered ones. */
-.uis-window .lp-demo-sw-row:hover,
+   The top-bar pills wear the kit's `.raise-pill` / `.raise-ink` (the lift, its still hit box and
+   the motion). Only the shadows are restated, here and above, because marketing.css's unlayered
+   rest shadows outrank the kit's layered ones. */
 .uis-window button.lp-demo-top-profile:hover {
   box-shadow: var(--shadow-raise-hover);
 }

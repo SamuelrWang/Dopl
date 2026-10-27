@@ -36,6 +36,26 @@ Staging-only differences in the rail, which do NOT port:
   clock-relative stamps off a module-load clock: the frame mounts the rail client-side only and
   holds the column's width with `StagingChannelRailPlaceholder` until then.
 
+## The channel row: one height in every case (playground only, awaiting Samuel)
+
+> "I want each of the channel pickers to be the same size regardless ... Ideally, all three things
+> would fit together in a good way. I don't want there to be a bunch of extra blank space"
+
+`staging-channel-rail.tsx › RowBody` is built on the product's own kit (`white-card raise`, the
+`home-card-marks.tsx` marks, `IdentityStack`), no staging CSS. Two lines, each `h-5`:
+
+| Case | Line one | Line two |
+|---|---|---|
+| description + people | name · time | description (truncates) · faces (18px, max 3, +N) · marks |
+| description, solo | name · time | description · marks |
+| no description + people | name · time | "with Grace, Anthony" (first names) · faces · marks |
+| no description, solo | name · time | "Just you" · marks |
+| unclaimed link | name (dimmed) · time | "Not yet claimed" · Invited |
+
+Port target: `shared/ui/home-channel-row.tsx › HomeChannelRow` (desktop /home and the landing demo
+both render it). The port replaces its `showDescription` either/or with the row's `subline` rule,
+moves the stack after the text and pins both lines at `h-5`; `relationship-list.tsx` already passes `description` for every channel. `/playground/channels` shows all four cases (`channels-staging/data/row-case-fixtures.ts`).
+
 ## CSS
 
 Every override is `src/features/ui-staging/staging.css`, scoped `.uis-window`, and each block
@@ -44,7 +64,6 @@ names its port target. For the picker:
 | Staging block | Port target |
 |---|---|
 | "THE SHARED CHANNEL PICKER" (scroll, link reset, well-heading button) | `pages/home/relationship-list.tsx` |
-| "LIFT ON THE WHITE PANEL" / "HOVER LIFT" (`.lp-demo-sw-row`) | `shared/ui/home-channel-row.tsx` + the kit's `.raise` (ported: the staged row wears it) |
 | "WHITE PANEL TRIAL" | `globals.css › .page-float` / `--home-panel` |
 | "TOP TABS" | `marketing.css › .lp-demo-top-tab` → `pages/home/home-header.tsx`'s `SegmentedControl` |
 
