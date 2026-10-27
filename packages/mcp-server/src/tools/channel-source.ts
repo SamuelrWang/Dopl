@@ -3,18 +3,17 @@
  * `metadata.source` (docs/specs/device-aware-messages.md) rendered as one compact tag,
  * plus ONE guidance line when the member is on glasses.
  *
- * ⚠ `GLASSES_REPLY_GUIDANCE` IS THE ONE COPY. The desktop feeds its sessions the same line
+ * ⚠ `GLASSES_REPLY_GUIDANCE` IS THE ONE COPY, declared in `glasses-reply-guidance.ts` (a leaf the
+ * Device SDK imports too) and re-exported here. The desktop feeds its sessions the same line
  * (`dopl-desktop-app/main/message-source.js`), which a desktop test holds byte-equal to this.
  * ⚠ SAID ONCE PER PAGE, never per message: MCP payload size is a budget (`tool-budget.test.ts`).
  */
 
 import type { ChannelMessage } from "@dopl/client";
+import { GLASSES_REPLY_GUIDANCE } from "./glasses-reply-guidance.js";
 import { neutralizeInline } from "./narration.js";
 
-export const GLASSES_REPLY_GUIDANCE =
-  "They are on glasses: reply in at most ~5 short plain-text lines (no tables, code or long lists). " +
-  "Choices or structure: dopl_show (it reaches the lens). " +
-  "Don't ask for what glasses can't do (approve permissions, open files, paste, type long text): do it later on their computer, or say so briefly.";
+export { GLASSES_REPLY_GUIDANCE };
 
 const KINDS = new Set(["glasses", "computer", "web", "phone"]);
 

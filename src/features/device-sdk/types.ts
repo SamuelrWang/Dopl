@@ -33,6 +33,15 @@ export {
   RISK_TIER_DEFAULT_POLICY,
   WEBHOOK_EVENT_NAMES,
   WebhookEventNameSchema,
+  // A5 — context profiles, routing, deliver, actions, policy (C4, C5, C7).
+  ACTION_STATUSES,
+  ASK_HOLD_MAX_S,
+  CapabilityIdSchema,
+  ContextProfileSchema,
+  DeliverRequestSchema,
+  DeviceActionRequestSchema,
+  DisplayBlocksSchema,
+  ProfileMatchSchema,
 } from "@dopl/contracts/device-sdk";
 
 export type {
@@ -60,4 +69,21 @@ export type {
   Grant,
   RiskTier,
   WebhookEventName,
+  // A5.
+  Action,
+  ActionResult,
+  ActionStatus,
+  ConfirmationMode,
+  ContextProfile,
+  DeliverContent,
+  DeliverIntent,
+  DeliverRequest,
+  DeliverResponse,
+  DeviceActionRequest,
+  DeviceActionResponse,
+  DeviceContext,
+  DisplayBlock,
+  ErrorBody,
+  Posture,
+  Urgency,
 } from "@dopl/contracts/device-sdk";

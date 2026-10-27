@@ -102,7 +102,7 @@ pick up the main-process change).
 - Desktop session inbound (Claude/Codex): one note line above the fence (`Sent via glasses (Even G2).`)
   plus the guidance line for glasses (`main/session-seed.js › frameContinuation`, fed from
   `session-dispatch.js` through the gate/reducer as `source`).
-- Guidance text: `packages/mcp-server/src/tools/channel-source.ts › GLASSES_REPLY_GUIDANCE`
+- Guidance text: `packages/mcp-server/src/tools/glasses-reply-guidance.ts › GLASSES_REPLY_GUIDANCE` (re-exported by `channel-source.ts`)
   (desktop restates it in `dopl-desktop-app/main/message-source.js`, parity-tested).
 
 ## Schema

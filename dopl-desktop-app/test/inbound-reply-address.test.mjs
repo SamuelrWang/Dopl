@@ -153,7 +153,7 @@ test("a member's DEVICE rides the turn: a note above the fence, plus the reply g
 
 test("the guidance line is the MCP renderer's, byte for byte", () => {
   const { GLASSES_REPLY_GUIDANCE } = require(join(MAIN, "message-source.js"));
-  const ts = readFileSync(join(MAIN, "..", "..", "packages", "mcp-server", "src", "tools", "channel-source.ts"), "utf8");
+  const ts = readFileSync(join(MAIN, "..", "..", "packages", "mcp-server", "src", "tools", "glasses-reply-guidance.ts"), "utf8");
   const block = ts.slice(ts.indexOf("export const GLASSES_REPLY_GUIDANCE ="), ts.indexOf(";", ts.indexOf("export const GLASSES_REPLY_GUIDANCE =")));
   const restated = [...block.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join("");
   assert.equal(restated, GLASSES_REPLY_GUIDANCE);
