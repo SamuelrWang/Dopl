@@ -64,3 +64,7 @@ Each: the question, what was chosen, where.
     header type name `text-heading` → `text-lead` (two steps, so both displays name a type alike),
     card and Rows record title `text-heading` → `text-title` (now the hover card's size); skeleton
     name line 18 → 14px. The object panel title stays `text-display` as the panel heading.
+
+## Rows wells
+
+14. Rows view: each object-type group (header + records) sits in `shared/ui/panel-well.ts › PANEL_WELL`, the grey Knowledge's base cards sit on (`SectionPanel`'s `bg-home-panel` ground), replacing the hairline between groups; groups are `gap-3` apart (`kanban-board.tsx › Column`). Canvas unchanged.

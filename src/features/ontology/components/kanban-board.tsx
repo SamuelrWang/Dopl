@@ -3,6 +3,7 @@
 import { Plus } from "lucide-react";
 import { useCallback, type Dispatch } from "react";
 import { cn } from "@/shared/lib/utils";
+import { PANEL_WELL } from "@/shared/ui/panel-well";
 import { pendingRow } from "@/shared/ui/pending";
 import type { GraphAction, GraphState } from "../graph-state";
 import { useBoardDisplay, type BoardDisplay } from "../hooks/use-board-display";
@@ -39,7 +40,7 @@ interface Props {
  *
  * Canvas sits on the kit's dotted ground, whose 12px pitch the geometry lands on: padding 24, lane
  * 288, gutter 12. Lanes take no fill of their own and hug their cards; the board scrolls. Rows has
- * no spatial placement, so it drops the dots and groups by a header line and a hairline.
+ * no spatial placement, so it drops the dots and puts each group in the gray well (`PANEL_WELL`).
  */
 export function KanbanBoard({
   ontology,
@@ -66,7 +67,7 @@ export function KanbanBoard({
       className={cn(
         "flex min-h-0 flex-1 overflow-auto",
         display === "rows"
-          ? "flex-col items-stretch px-5 pt-4.5 pb-7"
+          ? "flex-col items-stretch gap-3 px-5 pt-4.5 pb-7"
           : "graph-substrate kanban-substrate items-start gap-3 p-6"
       )}
     >
@@ -165,7 +166,7 @@ function Column({
       {...pendingRow(
         pendingIds.has(col.id),
         rows
-          ? "flex w-full shrink-0 flex-col border-t border-border-default pt-5.5 mt-6.5 first:mt-0 first:border-t-0 first:pt-0"
+          ? cn(PANEL_WELL, "w-full shrink-0 gap-0")
           : "flex w-72 shrink-0 flex-col gap-2 self-start"
       )}
     >
