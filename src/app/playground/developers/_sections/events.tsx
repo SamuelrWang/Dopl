@@ -8,7 +8,7 @@ import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Json, KIND_LABEL, RowOpen, Table, TierChip, clock, ov } from "../_components/ui";
+import { Card, Chip, PageHeader, Json, KIND_LABEL, RowOpen, Table, TierChip, clock, ov } from "../_components/ui";
 
 type OutcomeFilter = "all" | EventOutcome;
 const OUTCOMES: ReadonlyArray<{ key: OutcomeFilter; label: string }> = [
@@ -53,7 +53,9 @@ export function EventsSection() {
   );
 
   return (
-    <Card title="Events" count={`${rows.length} of ${events.length}`}>
+    <>
+      <PageHeader title="Events" />
+    <Card title="Log" count={`${rows.length} of ${events.length}`}>
       <div className="flex flex-wrap items-center gap-2">
         <SegmentedControl options={OUTCOMES} value={outcome} onChange={setOutcome} ariaLabel="Outcome" />
         <SelectMenu
@@ -118,6 +120,7 @@ export function EventsSection() {
         })}
       </Table>
     </Card>
+    </>
   );
 }
 

@@ -6,7 +6,7 @@ import { pillButton } from "@/shared/ui/pill-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Json, Muted, RowOpen, Table, clock, ov, since } from "../_components/ui";
+import { Card, Json, PageHeader, Muted, RowOpen, Table, clock, ov, since } from "../_components/ui";
 import type { WebhookOutboxRow } from "../_data/activity";
 
 type StatusFilter = "all" | WebhookOutboxRow["status"];
@@ -38,6 +38,7 @@ export function WebhooksSection() {
 
   return (
     <>
+      <PageHeader title="Webhooks" />
       <Card title="Endpoint">
         <div className="card-well flex items-center justify-between gap-3 px-3 py-2.5">
           <code className="truncate font-mono text-body text-text-primary">{endpoint}</code>

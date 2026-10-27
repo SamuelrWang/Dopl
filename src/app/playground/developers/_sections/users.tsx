@@ -8,7 +8,7 @@ import { cn } from "@/shared/lib/utils";
 import { SearchField } from "@/shared/ui/search-field";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Chips, Table, TierChip, deviceName, ov, since } from "../_components/ui";
+import { Card, Chip, PageHeader, Chips, Table, TierChip, deviceName, ov, since } from "../_components/ui";
 
 /** The tiers a scope reaches: one id → its tier; a family wildcard → every tier in that family. */
 export function tiersOf(scope: CapabilityScope): RiskTier[] {
@@ -35,11 +35,9 @@ export function UsersSection() {
   const users = all.filter((u) => u.includes(query.trim()));
 
   return (
-    <Card
-      title="End users"
-      count={users.length === all.length ? all.length : `${users.length} of ${all.length}`}
-      aside={<SearchField value={query} onChange={setQuery} placeholder="external_user_id" size="sm" className="w-52" />}
-    >
+    <>
+      <PageHeader title="End users" action={<SearchField value={query} onChange={setQuery} placeholder="external_user_id" className="w-60" />} />
+    <Card title="Connections" count={users.length === all.length ? all.length : `${users.length} of ${all.length}`}>
       <Table columns={["User", "Device", "Status", "Granted scopes", "Tiers", "Connected"]}>
         {users.flatMap((u) =>
           fx.connections
@@ -80,5 +78,6 @@ export function UsersSection() {
         )}
       </Table>
     </Card>
+    </>
   );
 }

@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Chips, Facts, KIND_LABEL, TierChip, deviceName, glyphKind, ov, since } from "../_components/ui";
+import { Card, Chip, PageHeader, Chips, Facts, KIND_LABEL, TierChip, deviceName, glyphKind, ov, since } from "../_components/ui";
 import { ownerOf } from "../_data/fixtures";
 
 const LIMIT_KEYS_SHOWN = 4;
@@ -17,6 +17,8 @@ export function DevicesSection() {
   const open = fx.devices.find((d) => d.id === openId) ?? null;
 
   return (
+    <>
+      <PageHeader title="Devices" />
     <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-3.5">
       <Card title="Devices" count={fx.devices.length}>
         <ul className={ov.rows}>
@@ -48,6 +50,7 @@ export function DevicesSection() {
       </Card>
       {open && <DeviceDetail device={open} owner={ownerOf(fx, open.id)} />}
     </div>
+    </>
   );
 }
 

@@ -10,7 +10,7 @@ import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Chips, Table, ov, since } from "../_components/ui";
+import { Card, Chip, PageHeader, Chips, Table, ov, since } from "../_components/ui";
 
 const KIND_OPTIONS = [
   { key: "secret", label: "Secret" },
@@ -42,6 +42,15 @@ export function KeysSection() {
 
   return (
     <>
+      <PageHeader
+        title="API keys"
+        action={
+          <button type="button" className={pillButton("ink", "lg")} onClick={() => setCreating((v) => !v)}>
+            <Plus size={PILL_ICON.lg} aria-hidden="true" />
+            Create key
+          </button>
+        }
+      />
       {revealed && (
         <Card
           title="New key"
@@ -98,16 +107,7 @@ export function KeysSection() {
         </Card>
       )}
 
-      <Card
-        title="API keys"
-        count={active}
-        aside={
-          <button type="button" className={pillButton("ink", "sm")} onClick={() => setCreating((v) => !v)}>
-            <Plus size={PILL_ICON.sm} aria-hidden="true" />
-            Create key
-          </button>
-        }
-      >
+      <Card title={env === "test" ? "Test keys" : "Live keys"} count={active}>
         <Table columns={["Key", "Kind", "Scopes", "Created", "Last used", "Status", ""]}>
           {keys.map((k) => (
             <tr key={k.id} className={cn(k.revoked_at && "opacity-50")}>

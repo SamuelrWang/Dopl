@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ConnectCandidate, ConnectPageView } from "@/features/device-sdk/server/connect/hosted";
 import { ConnectFlow } from "@/app/connect/[token]/connect-flow";
 import { pillButton } from "@/shared/ui/pill-button";
-import { Card } from "../_components/ui";
+import { PageHeader } from "../_components/ui";
 import { DEMO_PROJECT } from "../_data/fixtures";
 
 /**
@@ -69,9 +69,10 @@ export function ConnectPreviewSection() {
   }, []);
 
   return (
-    <Card
-      title="Connect"
-      aside={
+    <>
+      <PageHeader
+        title="Connect preview"
+        action={
         <button
           type="button"
           className={pillButton("outline", "sm")}
@@ -82,11 +83,11 @@ export function ConnectPreviewSection() {
         >
           Restart
         </button>
-      }
-    >
+        }
+      />
       <div className="card-well flex justify-center px-5 py-12">
         <ConnectFlow key={`${token}:${view.state}`} token={token} view={view} />
       </div>
-    </Card>
+    </>
   );
 }

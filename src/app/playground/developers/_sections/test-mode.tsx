@@ -8,7 +8,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { pillButton } from "@/shared/ui/pill-button";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Chips, Json, Table, deviceName, ov } from "../_components/ui";
+import { Card, Chip, PageHeader, Chips, Json, Table, deviceName, ov } from "../_components/ui";
 
 const MAGIC = Object.entries(TEST_MAGIC_DEVICE_IDS) as Array<[keyof typeof TEST_MAGIC_DEVICE_IDS, ErrorCode]>;
 
@@ -43,12 +43,15 @@ export function TestModeSection() {
 
   if (env !== "test") {
     return (
-      <Card title="Test mode">
+      <>
+        <PageHeader title="Test mode" />
+      <Card title="Simulators">
         <EmptyState variant="outline" title="Simulators run in test only" />
         <button type="button" className={cn(pillButton("ink", "md"), "self-start")} onClick={() => setEnv("test")}>
           Switch to test
         </button>
       </Card>
+      </>
     );
   }
 
@@ -56,6 +59,7 @@ export function TestModeSection() {
 
   return (
     <>
+      <PageHeader title="Test mode" />
       <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start gap-3.5">
         <Card title="Simulators" count={sims.length}>
           <Table columns={["Simulator", "User", "Capabilities", "Behaviour"]}>

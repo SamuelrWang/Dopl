@@ -1,18 +1,29 @@
 /**
- * The portal's presentational bits, all composed from the /home Overview face's recipes
- * (`home/components/overview/overview.module.css`, `OverviewCard`) and the kit
- * (`StatusPill`, `.card-well`). No colour, size or shadow is declared here.
+ * The portal's presentational bits, composed from kit components and recipes: `OverviewCard` /
+ * `Bars` and the Overview's row and table classes (`home/components/overview/overview.module.css`),
+ * `StatusPill`, `.card-well`. Components only; no colour, size or shadow is declared here.
  */
 import type { ReactNode } from "react";
 import type { RiskTier } from "@dopl/contracts/device-sdk";
 import { RISK_TIER_DEFAULT_POLICY } from "@dopl/contracts/device-sdk";
 import { cn } from "@/shared/lib/utils";
+import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { StatusPill } from "@/shared/ui/status-pill";
 import ov from "@/features/home/components/overview/overview.module.css";
 import { DEMO_NOW } from "../_data/fixtures";
 
 export { OverviewCard as Card, Bars } from "@/features/home/components/overview/overview-card";
 export { ov };
+
+/** The section's page title and its actions. */
+export function PageHeader({ title, action }: { title: string; action?: ReactNode }) {
+  return (
+    <div className="flex min-h-9 items-center justify-between gap-4 pb-1">
+      <h1 className={SECTION_HEADING_TEXT}>{title}</h1>
+      {action && <div className="flex items-center gap-2">{action}</div>}
+    </div>
+  );
+}
 
 /** A grey kit pill holding an identifier: a scope, a capability, a limit. */
 export function Chip({ children, mono = true }: { children: ReactNode; mono?: boolean }) {

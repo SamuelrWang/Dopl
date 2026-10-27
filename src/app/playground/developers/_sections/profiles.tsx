@@ -8,7 +8,7 @@ import { pillButton } from "@/shared/ui/pill-button";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { RAISED_INPUT } from "@/shared/ui/wells";
 import { usePortal } from "../_components/portal-context";
-import { Card, Chip, Chips, Facts, KIND_LABEL, ov } from "../_components/ui";
+import { Card, Chip, PageHeader, Chips, Facts, KIND_LABEL, ov } from "../_components/ui";
 import type { DemoProfile } from "../_data/fixtures";
 
 const overflowLabel = (o: ProfileOverflow) => (typeof o === "string" ? o : `send_to ${o.send_to}`);
@@ -21,11 +21,14 @@ function matchLabel(p: ContextProfile): string {
 export function ProfilesSection() {
   const { fx } = usePortal();
   return (
+    <>
+      <PageHeader title="Context profiles" />
     <div className="grid grid-cols-2 items-start gap-3.5">
       {fx.profiles.map((p) =>
         p.source === "project" ? <OverrideCard key={p.profile.id} row={p} /> : <ProfileCard key={p.profile.id} row={p} />
       )}
     </div>
+    </>
   );
 }
 

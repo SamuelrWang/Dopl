@@ -6,7 +6,7 @@ import { pillButton } from "@/shared/ui/pill-button";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
 import { PORTAL_BASE } from "../_components/portal-shell";
-import { Bars, Card, Cell, Chip, KIND_LABEL, Strip, glyphKind, ov, since } from "../_components/ui";
+import { Bars, Card, Cell, PageHeader, Chip, KIND_LABEL, Strip, glyphKind, ov, since } from "../_components/ui";
 import type { DayPoint } from "../_data/activity";
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -39,6 +39,7 @@ export function OverviewSection() {
 
   return (
     <>
+      <PageHeader title="Overview" />
       <Strip label="Summary">
         <Cell label="Requests today" value={fmt.format(last.requests)} sub={`${fmt.format(total)} in 14 days`} />
         <Cell label="Connected users" value={fmt.format(users.size)} sub={`${fx.connections.length} connections`} />
