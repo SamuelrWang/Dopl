@@ -1,11 +1,115 @@
-import { API, PLANNED } from "./shared";
-import type { DocPage } from "./types";
+import { PLANNED } from "./shared";
+import type { DocBlock, DocPage } from "./types";
 
 /**
  * Get started: Overview (the docs home), Quickstart, Security, Pricing. ⚠ Overview is `live`, so
  * it may only point readers at what works in production (the hosted MCP server and Even G2) and
- * must describe the Device SDK as planned; `content.test.ts` enforces the wording.
+ * must describe the Device SDK as coming soon; `content.test.ts` enforces the wording. The
+ * Quickstart uses `@dopl/sdk` exactly as `packages/sdk/src/client.ts` implements it.
  */
+
+const p = (text: string): DocBlock => ({ type: "p", text });
+const ts = (code: string[]): DocBlock => ({ type: "code", tabs: [{ label: "TypeScript", code: code.join("\n") }] });
+
+const QUICKSTART: DocBlock[] = [
+  PLANNED,
+  p(
+    "This walkthrough connects a simulated device for one of your users and reaches it from your server with the TypeScript SDK. It uses a test key, so it needs no hardware and never touches live data."
+  ),
+  {
+    type: "steps",
+    items: [
+      {
+        title: "Get a test key and the SDK",
+        blocks: [
+          p(
+            "Dopl issues your project's keys while the developer portal is being built. Test secret keys start with `sk_test_` and only ever touch test data, so keep yours on your server. `@dopl/sdk` is private during testing and is available to design partners on request from [sales@usedopl.com](mailto:sales@usedopl.com)."
+          ),
+          { type: "code", tabs: [{ label: ".env", code: "DOPL_SECRET_KEY=sk_test_…" }] },
+          ts([
+            `import { Dopl } from "@dopl/sdk";`,
+            ``,
+            `const dopl = new Dopl({ apiKey: process.env.DOPL_SECRET_KEY! });`,
+          ]),
+        ],
+      },
+      {
+        title: "Create a Connect session",
+        blocks: [
+          p(
+            "A Connect session is a short lived link for one of your users, identified by your own ID. List the scopes your agent needs and where the flow should send the user when it finishes."
+          ),
+          ts([
+            `const session = await dopl.connectSessions.create({`,
+            `  external_user_id: "usr_123",`,
+            `  requested_scopes: ["present.*", "ask.*"],`,
+            `  redirect_uri: "http://localhost:3000/connected",`,
+            `});`,
+            ``,
+            `console.log(session.url); // https://www.usedopl.com/connect/ct_…`,
+          ]),
+        ],
+      },
+      {
+        title: "Pair a simulated device",
+        blocks: [
+          p(
+            "Open `session.url`. With a test key the hosted page lists a simulated device of every kind. Choose **Simulated glasses**, press **Continue** under the pairing code it shows, then approve the scopes, which are grouped by risk tier. The page returns to your `redirect_uri` with a `public_token` query parameter."
+          ),
+        ],
+      },
+      {
+        title: "Exchange the token",
+        blocks: [
+          p("On your server, exchange the `public_token` for a durable connection. Each token works once, within 30 minutes."),
+          ts([
+            `const { connection_id, device } = await dopl.connections.exchange({ public_token });`,
+            ``,
+            `console.log(device.kind, device.model); // glasses simulated_glasses`,
+          ]),
+        ],
+      },
+      {
+        title: "Notify, show and ask",
+        blocks: [
+          p(
+            "Send by intent and leave the device to Dopl. Each helper is one call to Deliver, and the response says which device received it and why."
+          ),
+          ts([
+            `const sent = await dopl.notify("usr_123", { text: "Your build finished in 4m 12s" });`,
+            `console.log(sent.routed_to); // { device_id, kind: "glasses", reason: "fallback chain" }`,
+            ``,
+            `await dopl.show("usr_123", {`,
+            `  blocks: [{ id: "title", type: "heading", text: "Deploy ready" }],`,
+            `});`,
+            ``,
+            `const answer = await dopl.ask("usr_123", { question: "Ship it?", options: ["Yes", "No"] });`,
+            `if (answer.status === "answered") console.log(answer.answer);`,
+            `// { simulated: true, index: 0, label: "Yes" }`,
+          ]),
+          p(
+            "A simulated device answers every question at once and always picks the first option, so tests are deterministic. A real user can take up to 200 seconds, and `ask` waits that long by default."
+          ),
+        ],
+      },
+      {
+        title: "Read the action",
+        blocks: [
+          p("Every delivery is stored as an action. Read its status and result at any time with the `delivery_id`."),
+          ts([
+            `const action = await dopl.actions.get(sent.delivery_id);`,
+            ``,
+            `console.log(action.status, action.result); // done { simulated: true }`,
+          ]),
+          p(
+            "Next, shape output per device with [Context profiles and routing](/docs/concepts/context-profiles-and-routing) and force failure states with [Test mode](/docs/guides/test-mode)."
+          ),
+        ],
+      },
+    ],
+  },
+];
+
 export const OVERVIEW_PAGES: DocPage[] = [
   {
     slug: "overview",
@@ -15,10 +119,9 @@ export const OVERVIEW_PAGES: DocPage[] = [
     description: "One integration that lets your agent reach your users on any device",
     status: "live",
     blocks: [
-      {
-        type: "p",
-        text: "Dopl connects AI agents to the devices people actually use, starting with smart glasses and growing to phones, computers, the smart home, cars and robots. Your agent sends one request that says what it wants to do, and Dopl decides which of the user's devices should receive it, shapes the output to fit that device and returns the result.",
-      },
+      p(
+        "Dopl connects AI agents to the devices people actually use, starting with smart glasses and growing to phones, computers, the smart home, cars and robots. Your agent sends one request that says what it wants to do, and Dopl decides which of the user's devices should receive it, checks that the user allowed it, holds the output to that device's limits and returns the result."
+      ),
       { type: "h2", text: "How it works" },
       {
         type: "flow",
@@ -30,26 +133,24 @@ export const OVERVIEW_PAGES: DocPage[] = [
           { title: "Devices", detail: "Glasses, desktop and more, each with its own capabilities" },
         ],
       },
-      {
-        type: "p",
-        text: "The cloud keeps device credentials in its own vault, so your agent only ever holds an opaque connection. Each device publishes the capabilities it supports, and every request is checked against what the user granted before an adapter carries it to the hardware.",
-      },
+      p(
+        "The cloud keeps device credentials in its own vault, so your agent only ever holds an opaque connection. Each device publishes the capabilities it supports, and every request is checked against what the user granted before an adapter carries it to the hardware."
+      ),
       { type: "h2", text: "What Dopl handles" },
       {
         type: "list",
         items: [
-          "**Connect.** Your users pair a device from a flow that carries your brand, and they never need a Dopl account.",
+          "**Connect.** Your users pair a device from a hosted page that carries your brand, and they never need a Dopl account.",
           "**Capabilities.** One action model across every device, so your agent calls `present.display` or `ask.choice` rather than a vendor API.",
-          "**Permissions.** Grants are scoped by risk tier and can expire, and physical actions need confirmation enforced outside the model.",
-          "**Context and routing.** Each device kind has a profile that tells your agent how to write for it, which you can override, and Dopl routes each request to the right device.",
+          "**Permissions.** Users grant capabilities by risk tier, and the most sensitive actions are denied unless confirmed, by rules that run outside any model.",
+          "**Context and routing.** Each device kind has a profile that tells your agent how to write for it, which can be customized per project, and Dopl routes each request to the right device.",
           "**Analytics.** Every call records which device it reached, why, and how it went.",
         ],
       },
       { type: "h2", text: "What works today" },
-      {
-        type: "p",
-        text: "Agents reach Even Realities G2 glasses today through the [hosted MCP server](/docs/sdks/hosted-mcp): they can show cards, ask questions with options and send notifications on the lens. The Device SDK, which adds project keys, a REST API, typed SDKs and the Connect flow, is in development. Every page in these docs carries a label that says whether it is live, in beta or coming soon.",
-      },
+      p(
+        "Agents reach Even Realities G2 glasses today through the [hosted MCP server](/docs/sdks/hosted-mcp): they can show cards, ask questions with options and send notifications on the lens. The Device SDK, which adds project keys, a REST API, a TypeScript SDK, a project MCP server and the Connect flow, is built and in testing with design partners. Every page in these docs carries a label that says whether it is live, in beta or coming soon."
+      ),
       {
         type: "cards",
         items: [
@@ -62,13 +163,13 @@ export const OVERVIEW_PAGES: DocPage[] = [
           {
             icon: "code",
             title: "Quickstart",
-            description: "Deliver to a simulated device from TypeScript",
+            description: "Reach a simulated device from TypeScript",
             href: "quickstart",
           },
           {
             icon: "route",
             title: "Context profiles and routing",
-            description: "How Dopl adapts each reply to the device it lands on",
+            description: "How Dopl picks a device and holds each reply to its limits",
             href: "concepts/context-profiles-and-routing",
           },
           {
@@ -86,105 +187,9 @@ export const OVERVIEW_PAGES: DocPage[] = [
     tab: "about",
     group: "Get started",
     title: "Quickstart",
-    description: "Deliver your first message to a simulated device in a few minutes",
+    description: "Connect a simulated device and reach it from TypeScript in a few minutes",
     status: "coming_soon",
-    blocks: [
-      PLANNED,
-      {
-        type: "p",
-        text: "This walkthrough uses a test secret key and a simulated device, so you need no hardware. The examples call the REST API with `fetch`; the typed TypeScript SDK will wrap the same requests.",
-      },
-      {
-        type: "steps",
-        items: [
-          {
-            title: "Create a test key",
-            blocks: [
-              {
-                type: "p",
-                text: "Create a project and copy its test secret key. Test keys start with `sk_test_` and only ever touch test data. Keep the key on your server.",
-              },
-              { type: "code", tabs: [{ label: ".env", code: "DOPL_SECRET_KEY=sk_test_…" }] },
-            ],
-          },
-          {
-            title: "Connect a simulated device",
-            blocks: [
-              {
-                type: "p",
-                text: "Create a Connect session for one of your users and open the returned `url`. In test mode the Connect flow offers simulated devices of every kind, so you can pair one without hardware.",
-              },
-              {
-                type: "code",
-                tabs: [
-                  {
-                    label: "TypeScript",
-                    code: [
-                      `const headers = {`,
-                      `  Authorization: \`Bearer \${process.env.DOPL_SECRET_KEY}\`,`,
-                      `  "Content-Type": "application/json",`,
-                      `};`,
-                      ``,
-                      `const session = await fetch("${API}/connect_sessions", {`,
-                      `  method: "POST",`,
-                      `  headers,`,
-                      `  body: JSON.stringify({`,
-                      `    external_user_id: "usr_123",`,
-                      `    requested_scopes: ["present.*", "ask.*"],`,
-                      `  }),`,
-                      `}).then((r) => r.json());`,
-                      ``,
-                      `console.log(session.url); // open this and pick a simulated device`,
-                    ].join("\n"),
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            title: "Deliver a message",
-            blocks: [
-              {
-                type: "p",
-                text: "Send by intent and leave the target to Dopl. The response says which device received it and why.",
-              },
-              {
-                type: "code",
-                tabs: [
-                  {
-                    label: "TypeScript",
-                    code: [
-                      `const delivery = await fetch("${API}/users/usr_123/deliver", {`,
-                      `  method: "POST",`,
-                      `  headers,`,
-                      `  body: JSON.stringify({`,
-                      `    intent: "message",`,
-                      `    content: { text: "Your build finished in 4m 12s" },`,
-                      `    urgency: "normal",`,
-                      `    target: "auto",`,
-                      `    idempotency_key: crypto.randomUUID(),`,
-                      `  }),`,
-                      `}).then((r) => r.json());`,
-                      ``,
-                      `console.log(delivery.routed_to); // { device_id, kind, reason }`,
-                    ].join("\n"),
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            title: "Go further",
-            blocks: [
-              {
-                type: "p",
-                text: "Ask a question and handle the answer with [Handle answers](/docs/guides/handle-answers), shape the output per device with [Context profiles and routing](/docs/concepts/context-profiles-and-routing), and force failure states with [Test mode](/docs/guides/test-mode).",
-              },
-            ],
-          },
-        ],
-      },
-    ],
+    blocks: QUICKSTART,
   },
   {
     slug: "security",
@@ -211,13 +216,12 @@ export const OVERVIEW_PAGES: DocPage[] = [
           "Dopl does not use your content, or the inputs and output of your agents, to train models. See the [Privacy Policy](/privacy).",
         ],
       },
-      { type: "h2", text: "Planned for the Device SDK" },
-      {
-        type: "p",
-        text: "Project secret keys that are stored hashed and can be rotated, scoped grants that expire, and confirmation for physical actions enforced outside the model. [Permissions and safety](/docs/concepts/permissions-and-safety) describes the design.",
-      },
+      { type: "h2", text: "Coming with the Device SDK" },
+      p(
+        "Project keys that are stored hashed, shown once and rotated with an overlap window; connections that hold only the scopes a user approved; safety critical actions denied unless confirmed; and an event for every call. [Permissions and safety](/docs/concepts/permissions-and-safety) describes how it works."
+      ),
       { type: "h2", text: "Reporting" },
-      { type: "p", text: "Found a vulnerability? Email [security@usedopl.com](mailto:security@usedopl.com)." },
+      p("Found a vulnerability? Email [security@usedopl.com](mailto:security@usedopl.com)."),
     ],
   },
   {
@@ -232,15 +236,9 @@ export const OVERVIEW_PAGES: DocPage[] = [
         type: "quote",
         text: "Device SDK pricing is not set yet. It will be published here before the SDK launches.",
       },
-      {
-        type: "p",
-        text: "Today, glasses tool calls through the hosted MCP server use Dopl credits from your plan, one credit per call.",
-      },
+      p("Today, glasses tool calls through the hosted MCP server use Dopl credits from your plan, one credit per call."),
       { type: "h2", text: "Enterprise and white-label" },
-      {
-        type: "p",
-        text: "Interested in shipping Dopl under your own brand? Email [sales@usedopl.com](mailto:sales@usedopl.com).",
-      },
+      p("Interested in shipping Dopl under your own brand? Email [sales@usedopl.com](mailto:sales@usedopl.com)."),
     ],
   },
 ];

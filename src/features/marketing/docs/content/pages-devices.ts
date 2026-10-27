@@ -11,6 +11,7 @@ import type { DocBlock, DocPage, DocStatus } from "./types";
 export const DEVICE_ROWS: { slug: string; title: string; kind: string; transport: string; status: DocStatus }[] = [
   { slug: "even-realities-g2", title: "Even Realities G2", kind: "glasses", transport: "Dopl plugin in Even Hub", status: "live" },
   { slug: "desktop", title: "Desktop", kind: "desktop", transport: "Dopl desktop app", status: "beta" },
+  { slug: "phone", title: "Phone", kind: "phone", transport: "Push to the user's phone", status: "coming_soon" },
   { slug: "meta", title: "Meta glasses", kind: "glasses", transport: "Meta's official device toolkit", status: "coming_soon" },
   { slug: "mentra", title: "Mentra", kind: "glasses", transport: "A Dopl app on MentraOS", status: "coming_soon" },
   { slug: "home-assistant", title: "Home Assistant", kind: "home_hub", transport: "A local bridge to Home Assistant", status: "coming_soon" },
@@ -82,7 +83,7 @@ export const DEVICE_PAGES: DocPage[] = [
       },
       {
         type: "p",
-        text: "Phones and watches are planned as delivery surfaces for routing after these. Every kind will also have a simulated device for testing.",
+        text: "Watches are planned after these. The Device SDK, which is coming soon, includes a simulated device of every kind for testing.",
       },
     ],
   },
@@ -100,6 +101,10 @@ export const DEVICE_PAGES: DocPage[] = [
     { type: "h2", text: "Capability matrix" },
     { type: "p", text: "The same glasses in the Device SDK's [capability model](/docs/concepts/devices-and-capabilities):" },
     matrix(G2_MATRIX),
+    {
+      type: "p",
+      text: "The Device SDK, which is coming soon, will reach G2 glasses through this matrix. Connecting its delivery to the glasses is in progress.",
+    },
     { type: "h2", text: "Connect it" },
     {
       type: "p",
@@ -120,9 +125,15 @@ export const DEVICE_PAGES: DocPage[] = [
     { type: "h2", text: "Connect it" },
     {
       type: "p",
-      text: "Your user signs in to the desktop app and the computer appears under Devices in Settings. Device level actions through the Device SDK are planned.",
+      text: "Your user signs in to the desktop app and the computer appears under Devices in Settings. Reaching it through the Device SDK is in progress and not available yet.",
     },
   ]),
+  planned(
+    "phone",
+    "Notifications, screens and questions on your user's phone",
+    "Planned as the device Dopl turns to when a reply is too long for glasses or a watch, and the first kind in the routing fallback order. Simulated phones are available in the Device SDK's test mode.",
+    "Notifications, display and speech (`present.*`), questions (`ask.*`), voice and touch input (`input.*`) and, with an explicit grant, capture (`capture.*`)."
+  ),
   planned(
     "meta",
     "Audio first intents on Meta glasses",
