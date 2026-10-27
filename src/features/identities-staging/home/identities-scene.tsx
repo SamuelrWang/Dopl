@@ -24,6 +24,7 @@ import {
   SECTIONS_CONTAINER,
   groupByVisibility,
 } from "@/features/agent-identities/lib/visibility";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { toast } from "@/shared/ui/toast";
 import { IdentitiesPreviewSchema } from "@/features/home/preview-types";
 import { meetsMinRole } from "@/features/workspaces/types";
@@ -39,6 +40,7 @@ import { latency } from "../store/identity-store";
 import { useStagingAttachableBases } from "../store/use-staging-attachable-bases";
 import { useStagingIdentities } from "../store/use-staging-identities";
 import { useStagingIdentitySave } from "../store/use-staging-identity-save";
+import { TeamsHome } from "../teams/teams-home";
 
 
 const runtimeLabel = (id: string) => STAGING_RUNTIMES.find((r) => r.id === id)?.label ?? id;
@@ -60,6 +62,7 @@ export function IdentitiesScene({
   const [launching, setLaunching] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<{ identityId: string; message: string } | null>(null);
   const [sessions] = useState(() => stagingSessions(Date.now()));
+  const [view, setView] = useState<"identities" | "teams">("identities");
 
   const containerList = useStagingIdentities(channel?.workspaceId ?? null);
   const homeList = useStagingIdentities(homeWorkspaceId);
@@ -79,44 +82,63 @@ export function IdentitiesScene({
   }
 
   return (
-    <>
-      <IdentitiesHome
-        shared={
-          channel && {
-            channelName: channel.name,
-            identities: shared,
-            markerFor: (identity) => authorMarker(identity, currentUserId, names),
-            canCreate: meetsMinRole(channel.myWorkspaceRole, "member"),
-            peers: STAGING_PEERS,
-          }
-        }
-        personal={{
-          identities: personal,
-          state: personalState(homeWorkspaceId, homeList),
-          canCreate: homeWorkspaceId !== null,
-          footer: channel
-            ? {
-                launch: {
-                  canLaunch: true,
-                  busyId: launching,
-                  error: refusal,
-                  launch: (identity) => void launch(identity),
-                },
-                onAddKnowledge: setAttaching,
-              }
-            : undefined,
-        }}
-        card={{ photoFor: (i) => photoOf(i.createdBy), runtimeLabel, catalogs: STAGING_CATALOGS }}
-        sessions={sessions}
-        preview={PREVIEW}
-        agents={AGENT_RUN_PRESENTER}
-        runtimes={STAGING_RUNTIMES}
-        currentUserId={currentUserId}
-        viewerPhoto={photoOf(currentUserId)}
-        ownerName={nameOf}
-        onCreate={(where) => setEditing({ where, identity: null })}
-        onEdit={(where, identity) => setEditing({ where, identity })}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SegmentedControl
+        variant="underline"
+        options={[
+          { key: "identities", label: "Identities" },
+          { key: "teams", label: "Teams" },
+        ]}
+        value={view}
+        onChange={setView}
+        ariaLabel="Identities or agent teams"
+        className="flex-none border-b border-border-default px-3"
       />
+      {view === "teams" ? (
+        <TeamsHome
+          channelName={channel?.name ?? null}
+          currentUserId={currentUserId}
+          viewerPhoto={photoOf(currentUserId)}
+        />
+      ) : (
+        <IdentitiesHome
+          shared={
+            channel && {
+              channelName: channel.name,
+              identities: shared,
+              markerFor: (identity) => authorMarker(identity, currentUserId, names),
+              canCreate: meetsMinRole(channel.myWorkspaceRole, "member"),
+              peers: STAGING_PEERS,
+            }
+          }
+          personal={{
+            identities: personal,
+            state: personalState(homeWorkspaceId, homeList),
+            canCreate: homeWorkspaceId !== null,
+            footer: channel
+              ? {
+                  launch: {
+                    canLaunch: true,
+                    busyId: launching,
+                    error: refusal,
+                    launch: (identity) => void launch(identity),
+                  },
+                  onAddKnowledge: setAttaching,
+                }
+              : undefined,
+          }}
+          card={{ photoFor: (i) => photoOf(i.createdBy), runtimeLabel, catalogs: STAGING_CATALOGS }}
+          sessions={sessions}
+          preview={PREVIEW}
+          agents={AGENT_RUN_PRESENTER}
+          runtimes={STAGING_RUNTIMES}
+          currentUserId={currentUserId}
+          viewerPhoto={photoOf(currentUserId)}
+          ownerName={nameOf}
+          onCreate={(where) => setEditing({ where, identity: null })}
+          onEdit={(where, identity) => setEditing({ where, identity })}
+        />
+      )}
 
       {editing && (
         <StagingEditor
@@ -133,7 +155,7 @@ export function IdentitiesScene({
           onClose={() => setAttaching(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 
