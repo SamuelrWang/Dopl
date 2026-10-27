@@ -52,6 +52,27 @@ export const SCREEN_LIMITS: ScreenLimits = {
   label_bytes: 100,
 };
 
+/**
+ * The G2's `present.display` limits in the Device SDK's terms (`@dopl/contracts/device-sdk ›
+ * PresentDisplayLimits` plus G2-only keys), derived from the constants above so the SDK descriptor
+ * (`src/features/device-sdk/adapters/even-g2.ts`) and the compiler can never disagree. The height is
+ * the usable area above the back-button band; the lens is green-on-black with 5 brightness levels.
+ */
+export const PRESENT_DISPLAY_LIMITS = {
+  width_px: SCREEN_W,
+  height_px: CONTENT_H,
+  max_blocks: SCREEN_LIMITS.max_blocks,
+  max_text_bytes: SCREEN_LIMITS.text_bytes,
+  charset: "ascii+box",
+  color: "mono",
+  brightness_levels: 5,
+  max_text_blocks: SCREEN_LIMITS.max_text_blocks,
+  max_lines_per_text: SCREEN_LIMITS.max_lines_per_text,
+  list_items: SCREEN_LIMITS.list_items,
+  selectable_list_items: SCREEN_LIMITS.selectable_list_items,
+  list_item_bytes: SCREEN_LIMITS.list_item_bytes,
+} as const;
+
 // In the G2 font; the lighter shades ░ and ▓ are not.
 export const PROGRESS_FILLED = "█";
 export const PROGRESS_EMPTY = "▒";
