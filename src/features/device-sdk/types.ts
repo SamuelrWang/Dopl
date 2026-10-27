@@ -21,6 +21,18 @@ export {
   EVENT_ROW_FIELDS,
   DeviceEventRowSchema,
   RouteDecisionSchema,
+  // Connect (C2/C3/C7/C8), A4.
+  CAPABILITY_FAMILY,
+  CAPABILITY_IDS,
+  CAPABILITY_RISK_TIER,
+  CONNECTION_STATUSES,
+  ConnectSessionCreateRequestSchema,
+  ConnectionExchangeRequestSchema,
+  ConnectBrandingSchema,
+  ExternalUserIdSchema,
+  RISK_TIER_DEFAULT_POLICY,
+  WEBHOOK_EVENT_NAMES,
+  WebhookEventNameSchema,
 } from "@dopl/contracts/device-sdk";
 
 export type {
@@ -33,4 +45,19 @@ export type {
   DeviceEventRow,
   EventOutcome,
   RouteDecision,
+  CapabilityDescriptor,
+  CapabilityId,
+  CapabilityScope,
+  Connection,
+  ConnectBranding,
+  ConnectSessionCreateRequest,
+  ConnectSessionCreateResponse,
+  ConnectionExchangeResponse,
+  ConnectionListResponse,
+  Device,
+  DeviceAdapter,
+  DeviceKind,
+  Grant,
+  RiskTier,
+  WebhookEventName,
 } from "@dopl/contracts/device-sdk";

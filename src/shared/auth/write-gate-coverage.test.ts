@@ -102,6 +102,14 @@ const EXEMPT: Record<string, string> = {
     "Glasses Hey-Even chat-completions shim — per-device Hey Even key (features/glasses/platforms/even-g2/hey-even.ts › deviceFromHeyEvenKey).",
   "glasses/hey-even/v1/chat/completions/route.ts":
     "Glasses Hey-Even chat-completions shim, OpenAI path — same handler and key as glasses/hey-even/route.ts.",
+  // Device SDK (A4): developer API keys via withDeveloperKey (C1), not a Dopl user's OAuth token;
+  // the key's own coarse scopes are the gate.
+  "v1/connect_sessions/route.ts":
+    "Device SDK — developer API key (features/device-sdk/server/with-developer-key.ts › withDeveloperKey), scope `connect`; the one route a publishable key may call.",
+  "v1/connections/exchange/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `connect`.",
+  "v1/connections/[id]/route.ts": "Device SDK — developer secret key via withDeveloperKey, scope `connect` (revoke).",
+  "connect/[token]/[step]/route.ts":
+    "Device SDK hosted Connect page steps — authenticated by the connect token in the path (sha256-matched); the end user has no Dopl account (D1). Per-IP rate-limited.",
 };
 
 const files = routeFiles(API_ROOT);

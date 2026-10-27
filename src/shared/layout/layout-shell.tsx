@@ -20,6 +20,8 @@ const NON_WORKSPACE_ROOTS = new Set([
   // entry `isAppShellRoute` reads "billing" as a workspace slug and dresses the
   // page as app chrome.
   "billing",
+  // `/connect/{token}` — the Device SDK hosted Connect page (A4); draws its own surface.
+  "connect",
   "design",
   "docs",
   // Post-auth download page. Draws its own full-viewport surface, but must be
