@@ -490,6 +490,34 @@ body.legal-active {
 .docs-prose a.docs-mcp-install { color: inherit; font-weight: inherit; text-decoration-color: currentColor; text-underline-offset: 2px; }
 .docs-prose a.docs-mcp-install:hover { color: #161616; }
 
+/* ── Flow diagram: hairline white boxes joined by gray arrows ───────── */
+.docs-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin: 16px 0 24px;
+}
+.docs-flow-step { display: flex; flex: 1; min-width: 0; align-items: center; }
+.docs-flow-arrow { flex: none; margin: 0 8px; color: var(--muted); }
+.docs-flow-node {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  align-self: stretch;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+}
+.docs-flow-title { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--ink); }
+.docs-flow-detail { font-size: 13px; line-height: 18px; color: var(--docs-soft); }
+@media (max-width: 720px) {
+  .docs-flow { flex-direction: column; }
+  .docs-flow-step { flex-direction: column; align-items: stretch; }
+  .docs-flow-arrow { align-self: center; margin: 6px 0; transform: rotate(90deg); }
+}
+
 /* ── Use-case hero: photo with one white window ─────────────────────── */
 .docs-hero {
   display: flex;

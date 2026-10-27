@@ -17,7 +17,13 @@ export type DocIcon =
   | "glasses"
   | "phone"
   | "notch"
-  | "desktop";
+  | "desktop"
+  | "key"
+  | "shield"
+  | "layers"
+  | "activity"
+  | "code"
+  | "test";
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 
@@ -61,9 +67,11 @@ export type DocBlock =
   | { type: "endpoint"; method: HttpMethod; path: string }
   | { type: "params"; title: string; params: DocParam[] }
   | { type: "table"; columns: string[]; rows: Rich[][] }
-  | { type: "changelog"; entries: { date: string; title: string; description: Rich }[] };
+  | { type: "changelog"; entries: { date: string; title: string; description: Rich }[] }
+  /** A chain of hairline boxes joined by arrows (the Overview's "how it works" diagram). */
+  | { type: "flow"; label: string; items: { title: string; detail: string }[] };
 
-export type DocTabId = "about" | "api" | "changelog";
+export type DocTabId = "about" | "api" | "sdks" | "changelog";
 
 /**
  * Whether what a page describes works today. ⚠ The truth source is the status table in
