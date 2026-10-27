@@ -13,10 +13,13 @@ import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button"
 import { useRuntimeLogo } from "@/shared/ui/runtime-logo";
 import { SegmentedControl, segmentedIds } from "@/shared/ui/segmented-control";
 import { StatusPill } from "@/shared/ui/status-pill";
+import type { IdentityAction, IdentityPreview } from "@/features/home/preview-types";
 import type { AgentIdentity } from "../client/types";
+import { actionLogOf, hasRules } from "../lib/identity-preview";
 import { agoLabel } from "../lib/identity-runs";
 import { EMPTY_KNOWLEDGE, refKey, scopeChipLabel } from "../lib/knowledge-scopes";
 import { FactChip, RuntimeMark } from "./identity-section";
+import { ActionLogGroup, RulesTab } from "./identity-view-preview";
 import {
   Chips,
   Empty,
@@ -30,14 +33,15 @@ import {
 } from "./identity-view-parts";
 import styles from "./identity-view.module.css";
 
-type TabKey = "identity" | "activity" | "running";
+type TabKey = "identity" | "rules" | "activity" | "running";
 
 const PANEL_IDS = "identity-view";
 
 /**
  * THE IDENTITY VIEW: read-only, a fixed box whose body alone scrolls, one tab per question (what
- * it is, what it has done, where it is working now), and Edit one button away. Nothing here is a
- * control. The two agent tabs need this machine's session feed; with none they are not offered.
+ * it is, what it may do, what it has done, where it is working now), and Edit one button away.
+ * Nothing here is a control. Running needs this machine's session feed; Tools and rules and the
+ * action log need the account's preview entry; a tab with no source is not offered.
  */
 export function IdentityViewDialog({
   identity,
@@ -48,6 +52,7 @@ export function IdentityViewDialog({
   wearers,
   catalogs,
   runs,
+  preview,
   agents,
   onClose,
   onEdit,
@@ -64,6 +69,8 @@ export function IdentityViewDialog({
   catalogs?: ModelCatalogs | null;
   /** The sessions credited to this identity (`lib/identity-runs.ts › joinRuns`); `null` = could not ask. */
   runs: ReadonlyArray<DesktopSessionSummary> | null;
+  /** The account's preview entry for this identity (`lib/identity-preview.ts › matchPreviews`). */
+  preview: IdentityPreview | undefined;
   agents: AgentRunPresenter;
   onClose: () => void;
   onEdit: () => void;
@@ -72,7 +79,20 @@ export function IdentityViewDialog({
   const logo = useRuntimeLogo()(identity.runtime);
   const live = (runs ?? []).filter((s) => s.state !== "ended");
   const ended = (runs ?? []).filter((s) => s.state === "ended");
+  const log = actionLogOf(preview);
   const ids = segmentedIds(PANEL_IDS, tab);
+  const tabs = [
+    { key: "identity" as const, label: "Identity", shown: true },
+    { key: "rules" as const, label: "Tools and rules", shown: hasRules(preview) },
+    { key: "activity" as const, label: "Activity", shown: runs !== null || log.length > 0 },
+    {
+      key: "running" as const,
+      label: "Running",
+      count: live.length || undefined,
+      shown: runs !== null,
+    },
+  ].filter((t) => t.shown);
+  const tabbed = tabs.length > 1;
 
   return (
     <ModalShell open onClose={onClose} label={identity.name} size="panel">
@@ -98,14 +118,10 @@ export function IdentityViewDialog({
         </button>
       </div>
 
-      {runs !== null && (
+      {tabbed && (
         <SegmentedControl
           variant="underline"
-          options={[
-            { key: "identity", label: "Identity" },
-            { key: "activity", label: "Activity" },
-            { key: "running", label: "Running", count: live.length || undefined },
-          ]}
+          options={tabs}
           value={tab}
           onChange={setTab}
           ariaLabel="Identity sections"
@@ -116,7 +132,7 @@ export function IdentityViewDialog({
 
       <div
         className={styles.body}
-        {...(runs !== null ? { role: "tabpanel", id: ids.panel, "aria-labelledby": ids.tab } : {})}
+        {...(tabbed ? { role: "tabpanel", id: ids.panel, "aria-labelledby": ids.tab } : {})}
       >
         {tab === "identity" && (
           <IdentityTab
@@ -126,7 +142,10 @@ export function IdentityViewDialog({
             catalogs={catalogs}
           />
         )}
-        {tab === "activity" && <ActivityTab ended={ended} agents={agents} />}
+        {tab === "rules" && hasRules(preview) && <RulesTab entry={preview} />}
+        {tab === "activity" && (
+          <ActivityTab ended={runs === null ? null : ended} log={log} agents={agents} />
+        )}
         {tab === "running" && <RunningTab live={live} agents={agents} />}
       </div>
     </ModalShell>
@@ -223,10 +242,28 @@ interface AgentTabProps {
   agents: AgentRunPresenter;
 }
 
-function ActivityTab({ ended, agents }: AgentTabProps & { ended: ReadonlyArray<DesktopSessionSummary> }) {
-  if (ended.length === 0) {
+/** The action log when the preview has one, then the finished agents; `ended` null = no feed. */
+function ActivityTab({
+  ended,
+  log,
+  agents,
+}: AgentTabProps & {
+  ended: ReadonlyArray<DesktopSessionSummary> | null;
+  log: ReadonlyArray<IdentityAction>;
+}) {
+  const finished = ended ?? [];
+  if (finished.length === 0 && log.length === 0) {
     return <Empty>Nothing finished yet. An agent shows up here once it ends.</Empty>;
   }
+  return (
+    <>
+      {log.length > 0 && <ActionLogGroup log={log} />}
+      {finished.length > 0 && <EndedGroup ended={finished} agents={agents} />}
+    </>
+  );
+}
+
+function EndedGroup({ ended, agents }: AgentTabProps & { ended: ReadonlyArray<DesktopSessionSummary> }) {
   return (
     <Group label="Recent" hint={`${ended.length} finished`}>
       <Rows>

@@ -6,6 +6,8 @@ import { PageError } from "@/shared/ui/page-error";
 import { USAGE_SCOPE_ALL } from "@/features/home/overview-types";
 import { monthKey } from "@/features/home/overview-period";
 import { CreditsCard, type HomeChannelOption } from "./overview-credits";
+import { EMPTY_PREVIEW_LIST } from "@/features/home/preview-types";
+import { ActivityCard, AgentsCard } from "./overview-agents";
 import { DevicesCard } from "./overview-devices";
 import { ChannelsTable, ClippedLine, PeopleCard, ToolsCard } from "./overview-ledger";
 import { OverviewSkeleton } from "./overview-skeleton";
@@ -19,7 +21,9 @@ import styles from "./overview.module.css";
  * /home → Overview: one account-wide face. A summary strip; two columns that end on one line
  * (Needs you and Devices; Credits and Tokens), each card scrolling under its title; the channels
  * table; People beside MCP tools. The credit figures are the reader's personal wallet's, and the
- * scope and month move only the daily bars, never the allowance.
+ * scope and month move only the daily bars, never the allowance. An account with preview data for
+ * Agents or Activity gets the three-card columns instead (Needs you, Agents, Activity; Credits,
+ * Tokens, Devices).
  */
 export function HomeOverview({
   homeWorkspaceId,
@@ -52,19 +56,36 @@ export function HomeOverview({
   }
   if (!overview.data) return <OverviewSkeleton />;
 
+  const { preview } = reads;
+  const hosts = preview?.hosts?.length ? preview.hosts : null;
+  const routes = preview?.routes ?? EMPTY_PREVIEW_LIST;
+  const logs = preview?.logs ?? EMPTY_PREVIEW_LIST;
+  const activity = routes.length > 0 || logs.length > 0;
+  const full = Boolean(hosts) || activity;
+  const devices = (
+    <DevicesCard
+      devices={reads.devices}
+      preview={preview}
+      onAddDevice={() => onOpenSettings("devices")}
+    />
+  );
+
   return (
     <div className={styles.root}>
       <div className={styles.inner}>
-        <SummaryStrip wallet={reads.wallet} devices={reads.devices} needs={reads.needs} />
-        <div className={styles.grid}>
+        <SummaryStrip wallet={reads.wallet} devices={reads.devices} needs={reads.needs} preview={preview} />
+        <div className={styles.grid} data-full={full || undefined}>
           <div className={styles.col}>
             <NeedsCard
               wallet={reads.wallet}
               needs={reads.needs}
+              preview={preview}
               onOpenMessage={onOpenMessage}
               onOpenTask={onOpenTask}
             />
-            <DevicesCard devices={reads.devices} onAddDevice={() => onOpenSettings("devices")} />
+            {hosts && <AgentsCard hosts={hosts} />}
+            {activity && <ActivityCard routes={routes} logs={logs} />}
+            {!full && devices}
           </div>
           <div className={styles.col}>
             <CreditsCard
@@ -78,6 +99,7 @@ export function HomeOverview({
               onGetCredits={() => onOpenSettings("billing")}
             />
             <TokensCard spend={reads.spend} />
+            {full && devices}
           </div>
         </div>
         <ChannelsTable data={overview.data} channels={homeChannels} onOpenChannel={onOpenChannel} />

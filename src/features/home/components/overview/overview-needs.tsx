@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { Zap } from "lucide-react";
+import { MessageCircleQuestion, ShieldCheck, Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { formatRelativeTime, formatShortDate } from "@/shared/lib/format-time";
+import { formatClockTime, formatRelativeTime, formatShortDate } from "@/shared/lib/format-time";
+import { EMPTY_PREVIEW_LIST, type PreviewNeed } from "@/features/home/preview-types";
 import { agentFaceName } from "@/shared/lib/agent-name";
 import { IdentityFace } from "@/shared/ui/identity-face";
 import { AgentFace } from "@/features/channels/components/agent-face";
@@ -27,17 +28,18 @@ export interface NeedsNavigation {
   onOpenTask: (workspaceId: string, taskId: string) => void;
 }
 
-/** How many things wait on the reader: a spent allowance, decisions, tasks. `null` until all are known. */
-export function needsCount({
-  wallet,
-  needs,
-}: Pick<HomeOverviewReads, "wallet" | "needs">): string | null {
+type NeedsReads = Pick<HomeOverviewReads, "wallet" | "needs" | "preview">;
+
+/** How many things wait on the reader: a spent allowance, approvals and questions, decisions,
+ *  tasks. `null` until the wallet and the needs read are known. */
+export function needsCount({ wallet, needs, preview }: NeedsReads): string | null {
   if (wallet.loading || !needs.data) return null;
   const decisions = needs.data.decisions ?? EMPTY_HOME_NEED_DECISIONS;
   const tasks = needs.data.tasks ?? EMPTY_HOME_NEED_TASKS;
+  const asks = preview?.needs ?? EMPTY_PREVIEW_LIST;
   const over = creditAllowance(wallet.credits).over ? 1 : 0;
   const clipped = needs.data.truncated?.decisions || needs.data.truncated?.tasks;
-  return `${over + decisions.length + tasks.length}${clipped ? "+" : ""}`;
+  return `${over + asks.length + decisions.length + tasks.length}${clipped ? "+" : ""}`;
 }
 
 /** A row that opens its item: the leading mark, the title over its meta, the channel at the end. */
@@ -113,20 +115,44 @@ function TaskRow({ need, onOpen }: { need: HomeNeedTask; onOpen: () => void }) {
   );
 }
 
-/** What is waiting on the operator: a spent allowance, decision cards, then their tasks. */
+/** An agent's approval or open question, from the account's preview. */
+function AskRow({ need }: { need: PreviewNeed }) {
+  const approval = need.kind === "approval";
+  return (
+    <li className={styles.row}>
+      <span className={styles.mark} aria-hidden="true">
+        {approval ? <ShieldCheck size={13} /> : <MessageCircleQuestion size={13} />}
+      </span>
+      <span className={styles.rowMain}>
+        <span className={styles.rowTitle}>{need.ask}</span>
+        <span className={styles.rowMeta}>
+          {[approval ? "Approval" : "Question", need.agent, need.host, formatClockTime(need.at)]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      </span>
+      <span className={styles.rowAside}>#{need.channelName}</span>
+    </li>
+  );
+}
+
+/** What is waiting on the operator: a spent allowance, agents' asks, decision cards, then tasks. */
 export function NeedsCard({
   wallet,
   needs,
+  preview,
   onOpenMessage,
   onOpenTask,
-}: Pick<HomeOverviewReads, "wallet" | "needs"> & NeedsNavigation) {
+}: NeedsReads & NeedsNavigation) {
   const over = !wallet.loading && creditAllowance(wallet.credits).over;
+  const asks = preview?.needs ?? EMPTY_PREVIEW_LIST;
   const decisions = needs.data?.decisions ?? EMPTY_HOME_NEED_DECISIONS;
   const tasks = needs.data?.tasks ?? EMPTY_HOME_NEED_TASKS;
-  const count = needsCount({ wallet, needs });
+  const count = needsCount({ wallet, needs, preview });
   const failed = Boolean(needs.error) && !needs.data;
   const settled = !wallet.loading && needs.data !== undefined;
-  const empty = settled && !over && decisions.length === 0 && tasks.length === 0;
+  const empty =
+    settled && !over && asks.length === 0 && decisions.length === 0 && tasks.length === 0;
   return (
     <OverviewCard title="Needs you" count={count ?? undefined} className={styles.slotNeeds}>
       {failed && <p className={styles.note}>Couldn&apos;t load your tasks and decisions.</p>}
@@ -151,6 +177,9 @@ export function NeedsCard({
               </span>
             </li>
           )}
+          {asks.map((need) => (
+            <AskRow key={need.id} need={need} />
+          ))}
           {decisions.map((need) => (
             <DecisionRow
               key={need.messageId}

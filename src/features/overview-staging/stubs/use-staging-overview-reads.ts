@@ -9,6 +9,7 @@ import {
 import { usageSeriesPath } from "@/features/home/overview-period";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 import type { HomeNeeds } from "@/features/home/needs-types";
+import { HOME_PREVIEW_PATH, type HomePreview } from "@/features/home/preview-types";
 import type {
   HomeOverviewReadArgs,
   HomeOverviewReads,
@@ -40,6 +41,7 @@ export function useStagingOverviewReads({
   const spend = useApiQuery<TokenSpendReport>("/api/home/token-spend");
   const needs = useApiQuery<HomeNeeds>("/api/home/needs");
   const wallet = useWorkspaceEntitlements(homeWorkspaceId ?? undefined);
+  const preview = useApiQuery<HomePreview>(HOME_PREVIEW_PATH);
 
   const key = `${load}|${epoch}`;
   const [devicesKey, setDevicesKey] = useState<string | null>(null);
@@ -59,5 +61,6 @@ export function useStagingOverviewReads({
       devices: devicesKey === key ? connectedDevices(load === "empty") : null,
       failed: false,
     },
+    preview: preview.data?.overview ?? null,
   };
 }

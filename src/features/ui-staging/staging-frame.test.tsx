@@ -112,7 +112,7 @@ describe("StagingFrame channel picker", () => {
       const column = document.querySelector(".lp-demo-sw") as HTMLElement;
       expect(column).toBeTruthy();
       // Real rows, not just the width placeholder.
-      expect(column.querySelectorAll(".lp-demo-sw-row").length).toBeGreaterThan(0);
+      expect(within(column).getAllByRole("link").length).toBeGreaterThan(0);
       // Heads the column, in the header's list-width lead cell.
       const top = header();
       expect(top.getByRole("button", { name: /New channel/ })).toBeTruthy();

@@ -61,6 +61,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_preview_data: {
+        Row: {
+          payload: Json
+          surface: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          payload: Json
+          surface: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          payload?: Json
+          surface?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_identities: {
         Row: {
           created_at: string

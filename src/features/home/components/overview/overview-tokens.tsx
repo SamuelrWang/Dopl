@@ -49,6 +49,7 @@ export function TokensCard({ spend }: { spend: OverviewRead<TokenSpendReport> })
   return (
     <OverviewCard
       title="Tokens"
+      className={styles.slotTokens}
       aside={<span className="text-text-muted">{TOKEN_SPEND_WINDOW_DAYS} days</span>}
     >
       {spend.data ? (

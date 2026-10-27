@@ -99,3 +99,19 @@ export function Prose({ children, quoted }: { children: ReactNode; quoted?: bool
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="text-caption text-text-muted">{children}</p>;
 }
+
+/** One-line statements (rules, escalations), each its own line with its own mark. */
+export function Lines({ items, icon }: { items: ReadonlyArray<string>; icon: ReactNode }) {
+  return (
+    <ul className={styles.lines}>
+      {items.map((item) => (
+        <li key={item} className={cn(styles.line, "text-small leading-snug text-text-secondary")}>
+          <span className={cn(styles.lineMark, "text-text-muted")} aria-hidden="true">
+            {icon}
+          </span>
+          {item}
+        </li>
+      ))}
+    </ul>
+  );
+}

@@ -108,6 +108,19 @@
   align-items: center;
   gap: 8px;
 }
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.line {
+  display: flex;
+  gap: 8px;
+}
+.lineMark {
+  margin-top: 2px;
+  flex: none;
+}
 .quote {
   border-left: 2px solid var(--border-highlight);
   padding-left: 12px;

@@ -13,8 +13,11 @@
  * (`home/components/shell/home-header.tsx`, its lead cell is `var(--home-list-w)` wide).
  *
  * STAGING COPY of `marketing/components/banner-demo/demo-home-faces.tsx ›
- * DemoChannelSwitcher` (+ its `Row`). Markup and class names are identical
- * (`marketing.css › .lp-demo-sw*`); only the behaviour is staged:
+ * DemoChannelSwitcher`: the column and wells keep its `.lp-demo-sw*` classes. The ROW is a
+ * redesign on the product kit (`shared/ui/home-channel-row.tsx`'s face), fixed at two 20px
+ * lines in every case: line two is the description, the member names or "Just you"
+ * (`subline`), with the faces trailing it, so nothing hides the description and no row is
+ * shorter or emptier than another. Behaviour that is staged:
  *   - a well heading toggles its well open/closed (desktop `channel-wells`; the
  *     demo pins every well at `defaultOpen`);
  *   - a row is clickable. With `onSelect` it selects in place (what `/channels`
@@ -32,58 +35,56 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { IdentityStack } from "@/shared/ui/avatar-stack";
+import { MentionBadge, UnreadDot, rowQuietInk } from "@/shared/ui/home-card-marks";
+import { StatusPill } from "@/shared/ui/status-pill";
 import type { HomeRowMock } from "@/features/marketing/components/banner-demo/demo-home-rows";
 
 /** Where a row goes when the page has no store to select into (see the header). */
 export const STAGING_CHANNELS_HREF = "/playground/channels";
 
-function RowBody({ row }: { row: HomeRowMock }) {
+const ROW_FACE =
+  "white-card raise flex w-full cursor-pointer flex-col gap-1 border-border-subtle px-2.75 py-2.25 text-left text-inherit no-underline";
+const ROW_SELECTED = "border-surface-cta bg-surface-cta";
+
+/** Line two is never empty: the description, else who is in the channel, else that nobody else is. */
+function subline(row: HomeRowMock): string {
+  if (row.pendingLine) return row.pendingLine;
+  if (row.description) return row.description;
+  if (row.faces.length === 0) return "Just you";
+  return `with ${row.faces.map((f) => f.displayName.split(" ")[0]).join(", ")}`;
+}
+
+function RowBody({ row, selected }: { row: HomeRowMock; selected: boolean }) {
+  const quiet = rowQuietInk(selected);
   return (
     <>
-      <span className="lp-demo-sw-line">
+      <span className="flex h-5 w-full items-center justify-between gap-2">
         <span
-          className="lp-demo-sw-name"
-          style={row.pending ? { opacity: 0.6 } : undefined}
+          className={cn(
+            "truncate text-body",
+            selected ? "font-semibold text-text-on-cta" : "font-medium text-text-primary",
+            row.pending && "opacity-60"
+          )}
         >
           {row.name}
         </span>
-        <span className="lp-demo-sw-time">{formatChannelTimestamp(row.at)}</span>
+        <span className={cn("shrink-0 text-micro", quiet)}>{formatChannelTimestamp(row.at)}</span>
       </span>
-      <span className="lp-demo-sw-line">
-        {row.faces.length > 0 ? (
-          <span className="lp-demo-sw-faces">
-            {row.faces.slice(0, 3).map((f) =>
-              f.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- bundled avatar
-                <img
-                  key={f.userId}
-                  src={f.avatarUrl}
-                  alt=""
-                  title={f.displayName}
-                  draggable={false}
-                />
-              ) : null
-            )}
-          </span>
-        ) : (
-          <span className="lp-demo-sw-desc">{row.pendingLine ?? row.description}</span>
-        )}
-        <span className="lp-demo-sw-marks">
-          {row.unread && row.mentions === 0 && (
-            <span className="lp-demo-sw-dot" aria-label="Unread messages" />
-          )}
-          {row.mentions > 0 && (
-            <span
-              className="lp-demo-sw-pill lp-demo-sw-pill--ink"
-              title={`${row.mentions} unread mention${row.mentions === 1 ? "" : "s"}`}
-            >
-              @ {row.mentions}
-            </span>
-          )}
-          {row.invited && <span className="lp-demo-sw-pill">Invited</span>}
-        </span>
+      <span className="flex h-5 w-full items-center gap-1.5">
+        <span className={cn("min-w-0 flex-1 truncate text-caption", quiet)}>{subline(row)}</span>
+        <IdentityStack
+          size={18}
+          max={3}
+          faces={row.faces.map((f) => ({ key: f.userId, photo: f.avatarUrl, name: f.displayName }))}
+          label={row.faces.map((f) => f.displayName).join(", ")}
+        />
+        {row.mentions === 0 && row.unread && <UnreadDot onDark={selected} />}
+        <MentionBadge count={row.mentions} onDark={selected} />
+        {row.invited && <StatusPill onDark={selected}>Invited</StatusPill>}
       </span>
     </>
   );
@@ -104,30 +105,19 @@ function Row({
   const shared = {
     "aria-label": row.name,
     "aria-current": selected ? ("true" as const) : undefined,
-    className: "lp-demo-sw-row raise",
-    "data-selected": selected ? "true" : undefined,
+    className: cn(ROW_FACE, selected && ROW_SELECTED),
   };
+  const body = <RowBody row={row} selected={selected} />;
   if (onSelect) {
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onSelect}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
-        {...shared}
-      >
-        <RowBody row={row} />
-      </div>
+      <button type="button" onClick={onSelect} {...shared}>
+        {body}
+      </button>
     );
   }
   return (
     <Link href={href} {...shared}>
-      <RowBody row={row} />
+      {body}
     </Link>
   );
 }

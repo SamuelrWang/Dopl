@@ -14,6 +14,7 @@ import {
 } from "@/features/home/overview-types";
 import { usageSeriesPath } from "@/features/home/overview-period";
 import type { HomeNeeds } from "@/features/home/needs-types";
+import { HOME_PREVIEW_PATH, type HomePreview, type OverviewPreview } from "@/features/home/preview-types";
 import type { TokenSpendReport } from "@/shared/lib/token-spend-days";
 
 export interface OverviewRead<T> {
@@ -34,6 +35,8 @@ export interface HomeOverviewReads {
   needs: OverviewRead<HomeNeeds>;
   wallet: { loading: boolean; credits: WorkspaceCreditsStatus; isPaid: boolean };
   devices: { devices: ConnectedDevice[] | null; failed: boolean };
+  /** The account's seeded preview (`GET /api/home/preview`); `null` while unknown, absent or failed. */
+  preview: OverviewPreview | null;
 }
 
 export interface HomeOverviewReadArgs {
@@ -62,6 +65,7 @@ export function useHomeOverviewReads({
   const needs = useApiQuery<HomeNeeds>("/api/home/needs");
   const entitlements = useWorkspaceEntitlements(homeWorkspaceId ?? undefined);
   const devices = useConnectedDevices({ live: false });
+  const preview = useApiQuery<HomePreview>(HOME_PREVIEW_PATH);
   return {
     overview,
     series,
@@ -73,5 +77,6 @@ export function useHomeOverviewReads({
       isPaid: entitlements.isPaid,
     },
     devices,
+    preview: preview.data?.overview ?? null,
   };
 }

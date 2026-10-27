@@ -2,25 +2,37 @@
 
 Each one: the question, the conservative choice made, and where it lives.
 
-## Staging surfaces with no product data (not invented)
+## Staging surfaces with no product data (preview-only)
 
-1. **"All channels" scope and per-row reach.** Staging showed every channel's shared identities with
-   a scope control and "Shared in #a and #b". The product reads one container per selected channel,
-   and whether a shared identity can reach several channels is a product question (staging PORTING
-   said so). **Chose:** the shared section stays the selected channel's; no scope control; the head
-   reads "N shared in this channel · M personal"; the scope line is the section's own label.
+Samuel: "for those items that are blocked on missing data for my thing, just hardcode in data to my
+account specifically so that it will all show". Items 1–5 now draw from the account's
+`account_preview_data` row (surface `identities`, INVARIANTS §4A/§5A) and only when it has the part;
+without one each is as described under **Without a preview**. `lib/identity-preview.ts` matches
+entries by `identityId`, else by whitespace-collapsed name.
+
+1. **"All channels" scope and per-row reach.** With `channels` on any shared row: the page head's
+   "All channels" scope and "N shared across your channels · M personal", the section titled
+   "Shared", each card "Shared in #a and #b". **Chose:** "All channels" still lists only the
+   SELECTED channel's container rows (the product reads one container), dressed with their seeded
+   reach; picking a channel filters those rows by reach and never hides a personal row.
+   **Without a preview:** the section is "Shared in this channel", no scope control.
    `identities-home.tsx`, `identity-page-controls.tsx › IdentityPageHead`.
-2. **Tools and rules tab.** Tools, rules and escalations are not fields on an identity. **Chose:**
-   the tab is not shipped; the view has Identity, Activity, Running. `identity-view-dialog.tsx`.
-3. **Activity log per identity.** Staging's log rows ("Cut 1.7.24 and posted notes", permission
-   chips) have no source. **Chose:** Recent / Activity list this machine's ENDED agents (the desktop
-   keeps them seven days), titled by thread, timed by `endedAt`; no permission chip.
-   `lib/identity-runs.ts › endedRuns`.
-4. **Runtime re-auth state and the fix button.** The desktop reports only connected or not.
-   **Chose:** "X is not signed in", no button (a button with no action would be dead).
-   `identity-page-controls.tsx › RuntimeReadinessLine`.
-5. **"Not used yet".** With no session on record the product cannot say never (the feed keeps seven
-   days). **Chose:** no last-used text instead of "Not used yet". `identity-section.tsx`.
+2. **Tools and rules tab.** From `tools`/`rules`/`escalations`; the tab exists only on an identity
+   whose entry has one of them. Tools wear Allowed / Off (the kit `StatusPill`, not staging's white
+   chip, per item 8). **Without a preview:** Identity, Activity, Running.
+   `identity-view-preview.tsx › RulesTab`.
+3. **Activity log per identity.** From `actionLog` (time, action, permission, channel): the view's
+   Activity tab shows it above the finished agents; the rail's Recent merges logged actions with
+   ended agents, newest first, seven rows; a logged action also counts as the card's last use.
+   `auto` draws no chip. **Without a preview:** ended agents only.
+   `lib/identity-preview.ts › recentActivity`, `identity-view-preview.tsx › ActionLogGroup`.
+4. **Runtime re-auth state and the Fix button.** From top-level `runtimes`: "Codex needs re-auth"
+   (`expired`) or "is not signed in" (`signed_out`) per runtime in the page head, each with Fix,
+   which the desktop wires to `signInToRuntime` (the app-level prompt's flow; a failure toasts).
+   **Chose:** the line stays after a successful sign-in, because it is seeded, not measured.
+   **Without a preview:** no line (item 16).
+5. **"Not used yet".** From `notUsedYet: true`, shown only while the identity has no run and no
+   logged action. **Without a preview:** no last-used text. `identity-section.tsx`.
 
 ## Choices worth a look
 

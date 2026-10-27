@@ -35,16 +35,12 @@
 }
 
 /* ── THE PLAYGROUND'S CHANNEL COLUMN (`staging-channel-rail.tsx`) ────
-   The demo's `.lp-demo-sw*` rows, made clickable. A long list scrolls
+   The demo's column, made clickable; its rows are kit + Tailwind
+   (`white-card raise`), no rule here. A long list scrolls
    inside the column (`.lp-demo-sw` is `overflow: hidden`, right for the
    hero's fixed rows, wrong for a picker). */
 .uis-window .uis-sw {
   overflow-y: auto;
-}
-/* A row that LINKS (any face but `/channels`, which selects in place). */
-.uis-window a.lp-demo-sw-row {
-  text-decoration: none;
-  color: inherit;
 }
 /* The well heading is a toggle button, not a caption. */
 .uis-window .uis-sw-head-btn {
@@ -57,12 +53,4 @@
   letter-spacing: inherit;
   text-transform: inherit;
   cursor: pointer;
-}
-/* The rows wear the kit's `.raise`; marketing.css's unlayered rest shadow
-   outranks the kit's layered one, so the lift is restated here. */
-.uis-window .lp-demo-sw-row {
-  box-shadow: var(--shadow-raise);
-}
-.uis-window .lp-demo-sw-row:hover {
-  box-shadow: var(--shadow-raise-hover);
 }

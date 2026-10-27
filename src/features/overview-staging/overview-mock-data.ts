@@ -11,6 +11,7 @@
  *   GET /api/home/needs               → `homeNeeds()`
  *   GET /api/billing/status (credits) → `creditState(plan)`
  *   devices (computers + glasses)     → `connectedDevices()`
+ *   GET /api/home/preview             → `overview-preview-seed.json` (the seed an account gets)
  *   usage scopes                      → `HOME_CHANNELS`
  */
 import type {
@@ -285,7 +286,7 @@ export function connectedDevices(empty = false): ConnectedDevice[] {
     {
       id: "mac-mbp",
       kind: "computer",
-      name: "Daniel's MacBook Pro",
+      name: "Samuel's MacBook Pro",
       platform: "macos",
       platformLabel: "macOS",
       online: true,
@@ -307,7 +308,7 @@ export function connectedDevices(empty = false): ConnectedDevice[] {
     {
       id: "mac-studio",
       kind: "computer",
-      name: "Studio Mac",
+      name: "Samuel's Mac Studio",
       platform: "macos",
       platformLabel: "macOS",
       online: false,
