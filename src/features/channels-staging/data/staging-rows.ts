@@ -1,5 +1,6 @@
 /**
- * The column's rows, in the landing demo's own order (`demo-home-rows.ts › HOME_ROWS`), each
+ * The column's rows, in the landing demo's own order (`demo-home-rows.ts › HOME_ROWS`) plus the
+ * two topic-less channels (`row-case-fixtures.ts`), each
  * backed by a full channel fixture (or the link fixture). Built fresh per page mount, so a
  * reload is a reset — everything the page does is in-memory.
  */
@@ -14,6 +15,7 @@ import {
   flakyTestsFixture,
   miraLinkFixture,
 } from "./extra-fixtures";
+import { launchPlanFixture, scratchpadFixture } from "./row-case-fixtures";
 import { CURRENT_USER_ID } from "./demo-imports";
 import type { StagingRow } from "./staging-fixture-types";
 
@@ -23,6 +25,8 @@ export function initialRows(): StagingRow[] {
     techDebtFixture(),
     flakyTestsFixture(),
     apiV2Fixture(),
+    launchPlanFixture(),
+    scratchpadFixture(),
     designReviewFixture(),
     miraLinkFixture(),
   ];
@@ -62,7 +66,7 @@ export function rowFacts(row: StagingRow): HomeRowMock {
     well: row.favorited && row.well === "pinned" ? "pinned" : row.well,
     name: row.channel.name,
     faces,
-    description: faces.length === 0 ? row.channel.topic : "",
+    description: row.channel.topic,
     linkOut: false,
     invited: row.invited,
     pending: false,

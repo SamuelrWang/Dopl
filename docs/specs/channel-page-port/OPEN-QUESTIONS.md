@@ -607,3 +607,7 @@ Workers append a `## <slice>` section per question: the question, what was chose
    the new to only change the way stuff looks inside not the dimensions of it". The card is back to
    its original dimensions: /home spans pill-left to Profile-right (`left-0 w-auto`), the sidebar
    280px, same max-height; no content-fit growth. The footer stays "Open" / "Move".
+
+## Channel picker rows (branch `ui/playground-channel-rows`)
+
+- Line two's fallback when a channel has no description: chose first names ("with Grace, Anthony") when peopled and "Just you" when solo, rather than the last activity (the row facts carry no preview, and that fence is deliberate). Where: `ui-staging/staging-channel-rail.tsx › subline`; desktop untouched until Samuel approves.
