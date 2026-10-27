@@ -607,7 +607,3 @@ Workers append a `## <slice>` section per question: the question, what was chose
    the new to only change the way stuff looks inside not the dimensions of it". The card is back to
    its original dimensions: /home spans pill-left to Profile-right (`left-0 w-auto`), the sidebar
    280px, same max-height; no content-fit growth. The footer stays "Open" / "Move".
-
-## Switcher headings (branch `ui/switcher-headings`)
-
-The /home channel switcher's well headings now wear `RAIL_HEADING_TEXT` (`IDENTITY_NAME_TEXT` + `uppercase tracking-wide`, a new `WELL_FACES.rail` variant); chose `tracking-wide` over the quiet heading's `0.02em` and let the chevron take the heading's primary ink, while the landing demo's `.lp-demo-sw-head` is unchanged.

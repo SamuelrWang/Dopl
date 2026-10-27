@@ -161,9 +161,9 @@ function HomeListGhost() {
   );
 }
 
-/** One well: the heading bar and its caret, then the rows, on `WellsColumn`'s rail geometry. */
+/** One well: the heading bar and its caret, then the rows, on `WellsColumn`'s heading geometry. */
 function WellGhost({ label, rows }: { label: string; rows: number }) {
-  const face = WELL_FACES.rail;
+  const face = WELL_FACES.heading;
   return (
     <section aria-hidden className={face.box}>
       <div className="flex w-full min-w-0 items-center justify-between gap-2 px-1 pt-1.5">

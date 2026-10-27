@@ -122,13 +122,6 @@ moves, and Samuel names this face by pointing at a surface rather than at a size
 name came DOWN in weight (`font-semibold` → the constant's `font-medium`) in that
 change, deliberately; in a thread the crumb's channel half takes the size and keeps
 its own muted resting ink.
-**Its capitals form is `RAIL_HEADING_TEXT`** (`IDENTITY_NAME_TEXT` + `uppercase tracking-wide`,
-same file): the /home channel switcher's well headings (Pinned / Recent / Earlier; Samuel,
-2026-10-26: *"the same font styling as the Needs You Devices Channels text on the overview page,
-but of course all caps"*), via `channels/components/collapse-wells.tsx › WELL_FACES` `rail` on
-desktop `pages/home/relationship-list.tsx` and read directly by the playground's
-`ui-staging/staging-channel-rail.tsx`. The Threads and Artifacts wells and the search popup's
-sections keep `QUIET_HEADING_TEXT`.
 
 ### Font files — self-hosted, never fetched at build time (2026-10-14)
 
@@ -844,8 +837,8 @@ message-box-agent component is deleted: an agent's post is a person's post plus 
     cursor's `scrollIntoView({block:"nearest"})` walks every scrollable ancestor, so one call
     serves the section and the card.
   - **SECTION HEADING**: plain and muted, no rule and no well —
-    `shared/ui/section-heading.ts › QUIET_HEADING_TEXT`, the face the Threads and Artifacts
-    recency headings wear (`channels/components/collapse-wells.tsx` reads the same constant).
+    `shared/ui/section-heading.ts › QUIET_HEADING_TEXT`, the face /home's recency headings wear
+    (`channels/components/collapse-wells.tsx` reads the same constant).
   - **ROWS ON HAIRLINES**: each section's list is `divide-y divide-border-subtle`; the row is
     `.menu-row` + `px-2 py-1.5` floating between the lines, title `text-small font-medium`.
     ⚠ **THE KEYBOARD CURSOR WEARS `bg-menu-item-hover-bg`** — the token the kit's own `:hover`

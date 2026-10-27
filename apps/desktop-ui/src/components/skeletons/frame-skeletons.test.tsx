@@ -277,7 +277,7 @@ describe("the /home shapes are /home's own geometry", () => {
   it("ghosts one well heading per channel well, with flat rows", () => {
     const { container } = render(<HomePageSkeleton />);
     const wells = [...container.querySelectorAll("section")].filter(
-      (el) => el.className === WELL_FACES.rail.box
+      (el) => el.className === WELL_FACES.heading.box
     );
     expect(wells).toHaveLength(HOME_CHANNEL_WELLS.length);
     expect(container.querySelectorAll(".bg-home-card.rounded-xl").length).toBeGreaterThan(0);

@@ -16,8 +16,7 @@
  *
  * STAGING COPY of `marketing/components/banner-demo/demo-home-faces.tsx ›
  * DemoChannelSwitcher` (+ its `Row`). Markup and class names are identical
- * (`marketing.css › .lp-demo-sw*`) except the well heading, which wears desktop's
- * `RAIL_HEADING_TEXT` in place of `.lp-demo-sw-head`; only the behaviour is staged:
+ * (`marketing.css › .lp-demo-sw*`); only the behaviour is staged:
  *   - a well heading toggles its well open/closed (desktop `channel-wells`; the
  *     demo pins every well at `defaultOpen`);
  *   - a row is clickable. With `onSelect` it selects in place (what `/channels`
@@ -37,8 +36,6 @@ import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { HOME_CHANNEL_WELLS } from "@/features/channels/components/home-channel-wells";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import { cn } from "@/shared/lib/utils";
-import { RAIL_HEADING_TEXT } from "@/shared/ui/section-heading";
 import type { HomeRowMock } from "@/features/marketing/components/banner-demo/demo-home-rows";
 
 /** Where a row goes when the page has no store to select into (see the header). */
@@ -160,7 +157,7 @@ export function StagingChannelRail({
         const isOpen = open[well.id] ?? well.defaultOpen;
         return (
           <section key={well.id} className="lp-demo-sw-section">
-            <h3 className={cn("px-1 py-1.5", RAIL_HEADING_TEXT)}>
+            <h3 className="lp-demo-sw-head">
               <button
                 type="button"
                 aria-expanded={isOpen}

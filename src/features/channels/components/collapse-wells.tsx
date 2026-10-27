@@ -7,11 +7,7 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import {
-  IDENTITY_NAME_TEXT,
-  QUIET_HEADING_TEXT,
-  RAIL_HEADING_TEXT,
-} from "@/shared/ui/section-heading";
+import { IDENTITY_NAME_TEXT, QUIET_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { cn } from "@/shared/lib/utils";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { PANEL_ROWS, PANEL_WELL } from "@/shared/ui/panel-well";
@@ -56,34 +52,16 @@ const WELL_HEADER =
 
 /**
  * `"well"`: the gray box with the header inside it (the Agents tab). `"heading"`: no box, a quiet
- * uppercase heading over the rows (the Threads and Artifacts lists, whose rows are cards). `"rail"`:
- * the heading geometry in `RAIL_HEADING_TEXT` (/home's channel switcher). All share the collapse
- * and its bleed geometry. Exported for the loading ghosts' geometry.
+ * uppercase heading over the rows (/home's channel column and the Threads and Artifacts lists,
+ * whose rows are cards). Both share the collapse and its bleed geometry. Exported for the loading
+ * ghosts' geometry.
  */
-export type WellVariant = "well" | "heading" | "rail";
+export type WellVariant = "well" | "heading";
 
-interface WellFace {
-  box: string;
-  header: string;
-  title: string;
-  chevronBox: string;
-  chevron: number;
-  rows: string;
-}
-
-const HEADING_HEADER =
-  "flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-1 pt-1.5 text-left";
-
-const HEADING_FACE: WellFace = {
-  box: "flex min-w-0 flex-col gap-2",
-  header: `${HEADING_HEADER} ${QUIET_HEADING_TEXT}`,
-  title: "",
-  chevronBox: "flex shrink-0",
-  chevron: 13,
-  rows: "flex min-w-0 flex-col gap-1.5",
-};
-
-export const WELL_FACES: Record<WellVariant, WellFace> = {
+export const WELL_FACES: Record<
+  WellVariant,
+  { box: string; header: string; title: string; chevronBox: string; chevron: number; rows: string }
+> = {
   well: {
     box: PANEL_WELL,
     header: WELL_HEADER,
@@ -92,8 +70,15 @@ export const WELL_FACES: Record<WellVariant, WellFace> = {
     chevron: NAKED_ICON,
     rows: PANEL_ROWS,
   },
-  heading: HEADING_FACE,
-  rail: { ...HEADING_FACE, header: `${HEADING_HEADER} ${RAIL_HEADING_TEXT}` },
+  heading: {
+    box: "flex min-w-0 flex-col gap-2",
+    header:
+      `flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-1 pt-1.5 text-left ${QUIET_HEADING_TEXT}`,
+    title: "",
+    chevronBox: "flex shrink-0",
+    chevron: 13,
+    rows: "flex min-w-0 flex-col gap-1.5",
+  },
 };
 
 /**
