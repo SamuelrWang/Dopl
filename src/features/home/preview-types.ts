@@ -157,23 +157,13 @@ const IdentityPreviewSchema = z
   })
   .refine((entry) => entry.identityId !== undefined || entry.name !== undefined);
 
-const RuntimeAuthSchema = z.object({
-  runtime: text,
-  state: z.enum(["signed_out", "expired"]),
-});
-
 export const IdentitiesPreviewSchema = z
-  .object({
-    identities: lenientList(IdentityPreviewSchema).catch([]),
-    /** Runtimes that cannot launch until signed in again. */
-    runtimes: lenientList(RuntimeAuthSchema).catch([]),
-  })
-  .catch({ identities: [], runtimes: [] });
+  .object({ identities: lenientList(IdentityPreviewSchema).catch([]) })
+  .catch({ identities: [] });
 
 export type IdentityToolMark = (typeof IDENTITY_TOOL_MARKS)[number];
 export type IdentityPreview = z.output<typeof IdentityPreviewSchema>;
 export type IdentityAction = z.output<typeof IdentityActionSchema>;
-export type RuntimeAuth = z.output<typeof RuntimeAuthSchema>;
 export type IdentitiesPreview = z.output<typeof IdentitiesPreviewSchema>;
 
 export interface HomePreview {

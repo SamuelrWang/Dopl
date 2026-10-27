@@ -12,13 +12,9 @@ account specifically so that it will all show". Items 1–5 now draw from the ac
 without one each is as described under **Without a preview**. `lib/identity-preview.ts` matches
 entries by `identityId`, else by whitespace-collapsed name.
 
-1. **"All channels" scope and per-row reach.** With `channels` on any shared row: the page head's
-   "All channels" scope and "N shared across your channels · M personal", the section titled
-   "Shared", each card "Shared in #a and #b". **Chose:** "All channels" still lists only the
-   SELECTED channel's container rows (the product reads one container), dressed with their seeded
-   reach; picking a channel filters those rows by reach and never hides a personal row.
-   **Without a preview:** the section is "Shared in this channel", no scope control.
-   `identities-home.tsx`, `identity-page-controls.tsx › IdentityPageHead`.
+1. **Per-row reach.** With `channels` on any shared row, each card reads "Shared in #a and #b";
+   the section stays "Shared in this channel". The page-head row ("All channels" scope, counts,
+   re-auth line) was removed per Samuel 2026-10-27. `identities-home.tsx`.
 2. **Tools and rules tab.** From `tools`/`rules`/`escalations`; the tab exists only on an identity
    whose entry has one of them. Tools wear Allowed / Off (the kit `StatusPill`, not staging's white
    chip, per item 8). **Without a preview:** Identity, Activity, Running.
@@ -28,11 +24,7 @@ entries by `identityId`, else by whitespace-collapsed name.
    ended agents, newest first, seven rows; a logged action also counts as the card's last use.
    `auto` draws no chip. **Without a preview:** ended agents only.
    `lib/identity-preview.ts › recentActivity`, `identity-view-preview.tsx › ActionLogGroup`.
-4. **Runtime re-auth state and the Fix button.** From top-level `runtimes`: "Codex needs re-auth"
-   (`expired`) or "is not signed in" (`signed_out`) per runtime in the page head, each with Fix,
-   which the desktop wires to `signInToRuntime` (the app-level prompt's flow; a failure toasts).
-   **Chose:** the line stays after a successful sign-in, because it is seeded, not measured.
-   **Without a preview:** no line (item 16).
+4. **Runtime re-auth line and Fix.** Removed per Samuel 2026-10-27.
 5. **"Not used yet".** From `notUsedYet: true`, shown only while the identity has no run and no
    logged action. **Without a preview:** no last-used text. `identity-section.tsx`.
 

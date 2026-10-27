@@ -9,10 +9,12 @@ import { IdentitiesStagingPage } from "./identities-staging-page";
 
 afterEach(cleanup);
 
+const SHARED = "Shared in this channel";
+
 describe("/playground/identities", () => {
   it("renders the product face on staged data", async () => {
     render(<IdentitiesStagingPage />);
-    const shared = await screen.findByRole("region", { name: "Shared" });
+    const shared = await screen.findByRole("region", { name: SHARED });
     expect(within(shared).getByText("Release Captain")).toBeTruthy();
     const personal = screen.getByRole("region", { name: "Personal" });
     expect(within(personal).getByText("Coder")).toBeTruthy();
@@ -20,21 +22,18 @@ describe("/playground/identities", () => {
     expect(within(rail).getByText("Identity Cards")).toBeTruthy();
   });
 
-  it("draws the preview: reach, scope, re-auth, never used", async () => {
+  it("draws the preview: reach and never used, with no page-head row", async () => {
     render(<IdentitiesStagingPage />);
-    const shared = await screen.findByRole("region", { name: "Shared" });
+    const shared = await screen.findByRole("region", { name: SHARED });
     expect(within(shared).getByText("Shared in #tech-debt and #releases")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Which channels to show" }).textContent).toContain(
-      "All channels"
-    );
-    expect(screen.getByText("Codex needs re-auth")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Fix" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Which channels to show" })).toBeNull();
+    expect(screen.queryByText(/needs re-auth/)).toBeNull();
     expect(screen.getAllByText("Not used yet").length).toBeGreaterThan(0);
   });
 
   it("opens the read-only view with its Tools and rules tab", async () => {
     render(<IdentitiesStagingPage />);
-    const shared = await screen.findByRole("region", { name: "Shared" });
+    const shared = await screen.findByRole("region", { name: SHARED });
     fireEvent.click(within(shared).getByRole("button", { name: /Release Captain/ }));
     const view = await screen.findByRole("dialog", { name: "Release Captain" });
     expect(within(view).getByRole("button", { name: "Edit" })).toBeTruthy();

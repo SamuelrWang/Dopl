@@ -44,8 +44,6 @@ export function hasRules(entry: IdentityPreview | undefined): entry is IdentityP
   return !!entry && entry.tools.length + entry.rules.length + entry.escalations.length > 0;
 }
 
-export const ALL_CHANNELS = "all";
-
 export function channelLabel(name: string): string {
   return `#${name.replace(/^#+/, "")}`;
 }
@@ -55,9 +53,7 @@ export function sharedReach(entry: IdentityPreview | undefined, channelName: str
   return [...new Set([channelName, ...(entry?.channels ?? [])].map(channelLabel))];
 }
 
-/** A shared card's scope line; scoped to one channel, the line names that channel. */
-export function reachLabel(reach: ReadonlyArray<string>, scope: string): string {
-  if (scope !== ALL_CHANNELS) return `Shared in ${scope}`;
+export function reachLabel(reach: ReadonlyArray<string>): string {
   if (reach.length === 1) return `Shared in ${reach[0]}`;
   if (reach.length === 2) return `Shared in ${reach[0]} and ${reach[1]}`;
   return `Shared in ${reach.length} channels`;

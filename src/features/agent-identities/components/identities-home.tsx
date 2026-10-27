@@ -12,7 +12,6 @@ import { agentIdentityErrorMessage } from "../client/api";
 import type { AgentIdentity } from "../client/types";
 import type { UseAgentIdentitiesResult } from "../hooks/use-agent-identities";
 import {
-  ALL_CHANNELS,
   matchPreviews,
   reachLabel,
   recentActivity,
@@ -33,7 +32,7 @@ import {
 import { SECTIONS_CONTAINER, SECTION_PRIVATE_EVERYWHERE } from "../lib/visibility";
 import { IdentityActivityPanel } from "./identity-activity-panel";
 import { PersonalCardFooter, type CardLaunch } from "./identity-card-actions";
-import { IdentityControls, IdentityPageHead } from "./identity-page-controls";
+import { IdentityControls } from "./identity-page-controls";
 import { IdentityRailResizeHandle } from "./identity-rail-resize";
 import {
   IDENTITY_GRID_RAIL,
@@ -103,8 +102,6 @@ export interface IdentitiesHomeProps {
   sessions: Sessions;
   /** The account's seeded preview (INVARIANTS §4A); `null` = none, the face as without it. */
   preview: IdentitiesPreview | null;
-  /** Opens a runtime's sign-in from the preview's re-auth line; absent = no Fix button. */
-  onFixRuntime?: (runtime: string) => void;
   agents: AgentRunPresenter;
   /** The runtimes the filter offers. */
   runtimes: ReadonlyArray<{ id: string; label: string }>;
@@ -124,7 +121,6 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
   const { shared, personal, card, sessions, agents, currentUserId } = props;
   const [arrangement, setArrangement] = useState<IdentityArrangement>(DEFAULT_ARRANGEMENT);
   const [viewing, setViewing] = useState<{ where: IdentityHome; id: string } | null>(null);
-  const [scope, setScope] = useState(ALL_CHANNELS);
 
   const sharedRows = useMemo(() => shared?.identities ?? [], [shared]);
   const everything = useMemo(
@@ -140,21 +136,16 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
 
   const reachFor = (identity: AgentIdentity) =>
     sharedReach(index.get(identity.id), shared?.channelName ?? "");
-  // The scope control exists only when the preview says a shared row reaches another channel.
-  const scoped = sharedRows.some((i) => (index.get(i.id)?.channels.length ?? 0) > 0);
-  const scopeChannels = scoped ? [...new Set(sharedRows.flatMap(reachFor))] : [];
-  const sharedInScope =
-    !scoped || scope === ALL_CHANNELS
-      ? sharedRows
-      : sharedRows.filter((i) => reachFor(i).includes(scope));
+  // Cards name their channels only when the preview says a shared row reaches another one.
+  const reached = sharedRows.some((i) => (index.get(i.id)?.channels.length ?? 0) > 0);
 
-  const sharedShown = arrangeIdentities(sharedInScope, arrangement, order);
+  const sharedShown = arrangeIdentities(sharedRows, arrangement, order);
   const personalShown = arrangeIdentities(personal.identities, arrangement, order);
   const wornBy = shared?.peers ?? [];
   const whereOf = (identity: AgentIdentity): IdentityHome =>
     sharedRows.some((i) => i.id === identity.id) ? "container" : "home";
   const sharedScope = (identity: AgentIdentity) =>
-    scoped ? reachLabel(reachFor(identity), scope) : SECTIONS_CONTAINER[0].label;
+    reached ? reachLabel(reachFor(identity)) : SECTIONS_CONTAINER[0].label;
 
   const statsFor = (peers: ReadonlyArray<AvatarStackUser>) =>
     sessions === null && peers.length === 0 && index.size === 0
@@ -175,22 +166,6 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
     <div className="rail-layout">
       <div className="rail-layout-cols" data-rail={rail ? undefined : "off"}>
         <div className="rail-layout-main">
-          <IdentityPageHead
-            scope={
-              scoped
-                ? {
-                    value: scope,
-                    channels: scopeChannels,
-                    onChange: setScope,
-                    sharedCount: sharedInScope.length,
-                    personalCount: personal.identities.length,
-                  }
-                : null
-            }
-            reauth={props.preview?.runtimes ?? []}
-            runtimeLabel={(runtime) => card.runtimeLabel?.(runtime) ?? runtime}
-            onFix={props.onFixRuntime}
-          />
           <IdentityControls
             arrangement={arrangement}
             onArrangement={setArrangement}
@@ -211,7 +186,7 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
           ) : (
             <IdentityPanel
               id="home-agents-shared"
-              label={scoped ? "Shared" : SECTIONS_CONTAINER[0].label}
+              label={SECTIONS_CONTAINER[0].label}
               flat
             >
               <IdentityGrid
@@ -281,13 +256,7 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
           photo={card.photoFor?.(viewed) ?? null}
           runtimeLabel={viewed.runtime ? (card.runtimeLabel?.(viewed.runtime) ?? viewed.runtime) : null}
           marker={viewing.where === "container" ? (shared?.markerFor(viewed) ?? null) : null}
-          scopeLabel={
-            viewing.where === "container"
-              ? scoped
-                ? reachLabel(reachFor(viewed), ALL_CHANNELS)
-                : SECTIONS_CONTAINER[0].label
-              : null
-          }
+          scopeLabel={viewing.where === "container" ? sharedScope(viewed) : null}
           // The peers plus the viewer.
           wearers={viewing.where === "container" ? wornBy.length + 1 : 0}
           catalogs={card.catalogs}

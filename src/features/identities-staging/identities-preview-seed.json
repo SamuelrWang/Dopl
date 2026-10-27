@@ -70,6 +70,5 @@
       "name": "Writer",
       "notUsedYet": true
     }
-  ],
-  "runtimes": [{ "runtime": "codex", "state": "expired" }]
+  ]
 }

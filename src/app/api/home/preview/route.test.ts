@@ -79,9 +79,7 @@ describe("GET /api/home/preview", () => {
     expect(body.overview.hosts).toBeUndefined();
     expect(body.identities.identities).toHaveLength(1);
     expect(body.identities.identities[0]).toMatchObject({ name: "Recruiter", tools: [] });
-    // Re-auth is per runtime, on the payload, not per identity.
-    expect(body.identities.identities[0]).not.toHaveProperty("reauth");
-    expect(body.identities.runtimes).toEqual([]);
+    expect(body.identities).not.toHaveProperty("runtimes");
   });
 
   it("401s without a session and reads nothing", async () => {

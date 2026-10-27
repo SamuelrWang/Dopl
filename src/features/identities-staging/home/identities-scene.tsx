@@ -109,7 +109,6 @@ export function IdentitiesScene({
         card={{ photoFor: (i) => photoOf(i.createdBy), runtimeLabel, catalogs: STAGING_CATALOGS }}
         sessions={sessions}
         preview={PREVIEW}
-        onFixRuntime={(id) => toast({ title: `Signing in to ${runtimeLabel(id)}`, variant: "invert" })}
         agents={AGENT_RUN_PRESENTER}
         runtimes={STAGING_RUNTIMES}
         currentUserId={currentUserId}
