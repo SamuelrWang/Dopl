@@ -52,7 +52,8 @@ const ENV_OPTIONS = [
 
 function useSection() {
   const pathname = usePathname();
-  return PORTAL_SECTIONS.find((s) => pathname === PORTAL_BASE + s.href) ?? PORTAL_SECTIONS[0];
+  // A sub-route (`/devices/even_g2`) keeps its section selected.
+  return PORTAL_SECTIONS.find((s) => s.href && pathname.startsWith(PORTAL_BASE + s.href)) ?? PORTAL_SECTIONS[0];
 }
 
 export function PortalShell({ children }: { children: ReactNode }) {

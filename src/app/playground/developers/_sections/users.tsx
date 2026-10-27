@@ -38,7 +38,7 @@ export function UsersSection() {
     <>
       <PageHeader title="End users" action={<SearchField value={query} onChange={setQuery} placeholder="external_user_id" className="w-60" />} />
     <Card title="Connections" count={users.length === all.length ? all.length : `${users.length} of ${all.length}`}>
-      <Table columns={["User", "Device", "Status", "Granted scopes", "Tiers", "Connected"]}>
+      <Table columns={["User", "Device", "Device status", "Connection", "Granted scopes", "Tiers", "Connected"]}>
         {users.flatMap((u) =>
           fx.connections
             .filter((c) => c.external_user_id === u)
@@ -50,8 +50,15 @@ export function UsersSection() {
                   <td>
                     <span className="flex flex-col py-1.5">
                       <span className="whitespace-nowrap font-medium">{deviceName(c.device)}</span>
-                      <span className={cn(ov.rowMeta, "font-mono")}>{c.id}</span>
+                      <span className={cn(ov.rowMeta, "font-mono")}>
+                        {c.device.id} · {c.id}
+                      </span>
                     </span>
+                  </td>
+                  <td className="whitespace-nowrap">
+                    <StatusPill tone={c.device.online ? "live" : "neutral"} dot bare>
+                      {c.device.online ? "Online" : `Seen ${since(c.device.last_seen_at)}`}
+                    </StatusPill>
                   </td>
                   <td className="whitespace-nowrap">{statusPill(c)}</td>
                   <td>

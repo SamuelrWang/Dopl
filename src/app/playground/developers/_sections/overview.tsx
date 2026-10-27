@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
+import { cn } from "@/shared/lib/utils";
 import { pillButton } from "@/shared/ui/pill-button";
-import { StatusPill } from "@/shared/ui/status-pill";
 import { usePortal } from "../_components/portal-context";
 import { PORTAL_BASE } from "../_components/portal-shell";
-import { Bars, Card, Cell, PageHeader, Chip, KIND_LABEL, Strip, glyphKind, ov, since } from "../_components/ui";
+import { Bars, Card, Cell, Chip, PageHeader, Strip, glyphKind, ov, since } from "../_components/ui";
+import { ADDABLE_TYPES } from "../_data/device-types";
+import { TypeStatusPill, typeHref } from "./devices";
 import type { DayPoint } from "../_data/activity";
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -20,7 +22,7 @@ function bars(series: DayPoint[], pick: (d: DayPoint) => number, unit: string) {
 const TWO_COLS = "grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3.5";
 
 export function OverviewSection() {
-  const { fx, activity } = usePortal();
+  const { fx, activity, typeState } = usePortal();
   const { series, events } = activity;
   const last = series[series.length - 1];
   const total = series.reduce((n, d) => n + d.requests, 0);
@@ -29,12 +31,8 @@ export function OverviewSection() {
   const online = fx.devices.filter((d) => d.online).length;
   const deliveries = events.filter((e) => e.intent !== null);
   const delivered = deliveries.filter((e) => e.outcome === "ok").length;
-  const byKind = Object.entries(
-    fx.devices.reduce<Record<string, { all: number; online: number }>>((acc, d) => {
-      const row = acc[d.kind] ?? { all: 0, online: 0 };
-      return { ...acc, [d.kind]: { all: row.all + 1, online: row.online + (d.online ? 1 : 0) } };
-    }, {})
-  );
+  const types = ADDABLE_TYPES.map((t) => ({ type: t, state: typeState(t.id, null) }));
+  const compatible = types.filter((t) => t.state.status === "connected").length;
   const recentErrors = events.filter((e) => e.outcome !== "ok").slice(0, 5);
 
   return (
@@ -43,7 +41,7 @@ export function OverviewSection() {
       <Strip label="Summary">
         <Cell label="Requests today" value={fmt.format(last.requests)} sub={`${fmt.format(total)} in 30 days`} />
         <Cell label="Connected users" value={fmt.format(users.size)} sub={`${fx.connections.length} connections`} />
-        <Cell label="Devices online" value={String(online)} of={`/ ${fx.devices.length}`} />
+        <Cell label="Device types connected" value={String(compatible)} of={`/ ${types.length}`} sub={`${online} of ${fx.devices.length} devices online`} />
         <Cell
           label="Delivery success"
           value={`${((delivered / Math.max(1, deliveries.length)) * 100).toFixed(1)}%`}
@@ -87,20 +85,27 @@ export function OverviewSection() {
             ))}
           </ul>
         </Card>
-        <Card title="Devices" count={fx.devices.length}>
+        <Card
+          title="Device types"
+          count={compatible}
+          aside={
+            <Link href={`${PORTAL_BASE}/devices`} className={pillButton("outline", "sm")}>
+              Open devices
+            </Link>
+          }
+        >
           <ul className={ov.rows}>
-            {byKind.map(([kind, n]) => (
-              <li key={kind} className={ov.row}>
+            {types.map(({ type, state }) => (
+              <li key={type.id} className={cn(ov.row, ov.openRow)}>
                 <span className={ov.mark} data-shape="tile" aria-hidden="true">
-                  <DeviceKindIcon kind={glyphKind(kind)} size={13} strokeWidth={1.8} />
+                  <DeviceKindIcon kind={glyphKind(type.kind)} size={13} strokeWidth={1.8} />
                 </span>
                 <span className={ov.rowMain}>
-                  <span className={ov.rowTitle}>{KIND_LABEL[kind] ?? kind}</span>
+                  <Link href={typeHref(type.id)} className={cn(ov.open, ov.rowTitle)}>
+                    {type.name}
+                  </Link>
                 </span>
-                <span className={ov.mono}>{n.all}</span>
-                <StatusPill bare dot tone={n.online > 0 ? "live" : "neutral"}>
-                  {n.online} online
-                </StatusPill>
+                <TypeStatusPill state={state} />
               </li>
             ))}
           </ul>

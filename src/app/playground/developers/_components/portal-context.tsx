@@ -1,13 +1,24 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import type { ApiKey, ContextProfile, Environment } from "@dopl/contracts/device-sdk";
+import type { ApiKey, CapabilityDescriptor, ContextProfile, Environment } from "@dopl/contracts/device-sdk";
 import { DEMO_ENVS, DEMO_NOW, DEMO_PROJECT, type EnvFixtures } from "../_data/fixtures";
 import { DEMO_ACTIVITY, type EnvActivity } from "../_data/activity";
+import {
+  addType,
+  goLive,
+  recordTests,
+  removeType,
+  stepOwnDevice,
+  type CapabilityTest,
+  type TypeState,
+} from "../_data/device-type-status";
+import { seedState } from "../_data/device-types";
 
 /**
- * The portal's LOCAL state: the env switch, keys created / revoked in this tab, and edits to the
- * project's profile override. A module-level store (not a layout provider) so it survives moving
+ * The portal's LOCAL state: the env switch, keys created / revoked in this tab, edits to the
+ * project's profile override, and the project's status per device type (`device-type-status.ts`;
+ * a type nobody has touched reads its seed). A module-level store (not a layout provider) so it survives moving
  * between sections; nothing is sent anywhere, and a reload restores the fixtures. The server always
  * renders the initial snapshot.
  */
@@ -15,12 +26,15 @@ interface Snapshot {
   env: Environment;
   keys: Record<Environment, ApiKey[]>;
   overrides: Record<Environment, ContextProfile | null>;
+  /** Only the device types changed in this tab; the rest read `seedState`. */
+  types: Record<string, TypeState>;
 }
 
 const INITIAL: Snapshot = {
   env: "test",
   keys: { test: DEMO_ENVS.test.keys, live: DEMO_ENVS.live.keys },
   overrides: { test: null, live: null },
+  types: {},
 };
 
 let snapshot = INITIAL;
@@ -75,7 +89,34 @@ function saveOverride(profile: ContextProfile) {
   update((s) => ({ ...s, overrides: { ...s.overrides, [s.env]: { ...profile, version: (profile.version ?? 0) + 1 } } }));
 }
 
-export interface PortalState {
+type Descriptors = readonly CapabilityDescriptor[] | null;
+
+const typeOf = (s: Snapshot, id: string, d: Descriptors) => s.types[id] ?? seedState(id, d);
+
+function changeType(id: string, d: Descriptors, fn: (t: TypeState) => TypeState) {
+  update((s) => ({ ...s, types: { ...s.types, [id]: fn(typeOf(s, id, d)) } }));
+}
+
+const addDeviceType = (id: string, d: Descriptors) => changeType(id, d, addType);
+const removeDeviceType = (id: string, d: Descriptors) => changeType(id, d, removeType);
+const goLiveType = (id: string, d: Descriptors) => changeType(id, d, goLive);
+const stepOwnDeviceType = (id: string, d: Descriptors) => changeType(id, d, stepOwnDevice);
+function recordTypeTests(id: string, d: readonly CapabilityDescriptor[], results: CapabilityTest[]) {
+  changeType(id, d, (t) => recordTests(t, results, d.map((x) => x.capability)));
+}
+
+export interface DeviceTypeActions {
+  typeState: (id: string, d: Descriptors) => TypeState;
+  addDeviceType: typeof addDeviceType;
+  removeDeviceType: typeof removeDeviceType;
+  goLiveType: typeof goLiveType;
+  stepOwnDeviceType: typeof stepOwnDeviceType;
+  recordTypeTests: typeof recordTypeTests;
+  /** The project's first active test secret key: the one the connect code shows, masked. */
+  testKey: ApiKey | null;
+}
+
+export interface PortalState extends DeviceTypeActions {
   env: Environment;
   setEnv: (env: Environment) => void;
   fx: EnvFixtures;
@@ -94,6 +135,22 @@ export function usePortal(): PortalState {
     const fx: EnvFixtures = override
       ? { ...base, profiles: base.profiles.map((p) => (p.source === "project" ? { ...p, profile: override } : p)) }
       : base;
-    return { env: s.env, setEnv, fx, activity: DEMO_ACTIVITY[s.env], keys: s.keys[s.env], createKey, revokeKey, saveOverride };
+    return {
+      env: s.env,
+      setEnv,
+      fx,
+      activity: DEMO_ACTIVITY[s.env],
+      keys: s.keys[s.env],
+      createKey,
+      revokeKey,
+      saveOverride,
+      typeState: (id: string, d: Descriptors) => typeOf(s, id, d),
+      addDeviceType,
+      removeDeviceType,
+      goLiveType,
+      stepOwnDeviceType,
+      recordTypeTests,
+      testKey: s.keys.test.find((k) => k.kind === "secret" && !k.revoked_at) ?? null,
+    };
   }, [s]);
 }
