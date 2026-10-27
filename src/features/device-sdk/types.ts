@@ -15,6 +15,12 @@ export {
   ErrorResponseSchema,
   errorDocUrl,
   parseApiKey,
+  DEVICE_KINDS,
+  RISK_TIERS,
+  EVENT_OUTCOMES,
+  EVENT_ROW_FIELDS,
+  DeviceEventRowSchema,
+  RouteDecisionSchema,
 } from "@dopl/contracts/device-sdk";
 
 export type {
@@ -24,4 +30,7 @@ export type {
   Environment,
   ErrorCode,
   ErrorResponse,
+  DeviceEventRow,
+  EventOutcome,
+  RouteDecision,
 } from "@dopl/contracts/device-sdk";

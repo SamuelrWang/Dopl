@@ -20,5 +20,13 @@ export function devSdkError(code: ErrorCode, message: string): NextResponse<Erro
   const headers: Record<string, string> = {};
   if (info.status === 401) headers["WWW-Authenticate"] = 'Bearer realm="dopl"';
   if (code === "insufficient_scope") headers["WWW-Authenticate"] = 'Bearer realm="dopl", error="insufficient_scope"';
-  return NextResponse.json(body, { status: info.status, headers });
+  const res = NextResponse.json(body, { status: info.status, headers });
+  codeOf.set(res, code);
+  return res;
+}
+
+/** Which C10 code a response was built with (for the event row), without reading its body. */
+const codeOf = new WeakMap<Response, ErrorCode>();
+export function devSdkErrorCode(res: Response): ErrorCode | null {
+  return codeOf.get(res) ?? null;
 }

@@ -197,7 +197,13 @@ export interface ResolvedDeveloperKey {
 
 export type VerifyResult =
   | { ok: true; resolved: ResolvedDeveloperKey }
-  | { ok: false; code: Extract<ErrorCode, "unauthenticated">; message: string };
+  | {
+      ok: false;
+      code: Extract<ErrorCode, "unauthenticated">;
+      message: string;
+      /** Set only when the key's row was found (revoked / expired): its project, for the event log. */
+      known?: ResolvedDeveloperKey;
+    };
 
 interface KeyLookupRow extends DevApiKeyRow {
   key_hash: string;
@@ -233,22 +239,20 @@ export async function verifyApiKey(raw: string, now: Date = new Date()): Promise
   if (row.kind !== parsed.kind || (parsed.env !== null && row.env !== parsed.env)) {
     return { ok: false, code: "unauthenticated", message: INVALID };
   }
+  const resolved: ResolvedDeveloperKey = {
+    orgId: row.project.org_id,
+    projectId: row.project.id,
+    env: row.env,
+    apiVersion: row.project.api_version,
+    key: { id: row.id, kind: row.kind, scopes: row.scopes, prefix: row.prefix },
+  };
   if (row.revoked_at) {
-    return { ok: false, code: "unauthenticated", message: "This API key has been revoked." };
+    return { ok: false, code: "unauthenticated", message: "This API key has been revoked.", known: resolved };
   }
   if (row.expires_at && new Date(row.expires_at) <= now) {
-    return { ok: false, code: "unauthenticated", message: "This API key has expired." };
+    return { ok: false, code: "unauthenticated", message: "This API key has expired.", known: resolved };
   }
-  return {
-    ok: true,
-    resolved: {
-      orgId: row.project.org_id,
-      projectId: row.project.id,
-      env: row.env,
-      apiVersion: row.project.api_version,
-      key: { id: row.id, kind: row.kind, scopes: row.scopes, prefix: row.prefix },
-    },
-  };
+  return { ok: true, resolved };
 }
 
 /** Per-key last write, so a hot key costs one UPDATE a minute, not one per request. */

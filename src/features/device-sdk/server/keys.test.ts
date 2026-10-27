@@ -143,6 +143,8 @@ describe("mint + verify", () => {
       ok: false,
       code: "unauthenticated",
       message: "This API key has been revoked.",
+      // The row was found: its project rides along for the event log (A2), never the handler.
+      known: expect.objectContaining({ projectId: PROJECT, env: "test" }),
     });
   });
 
@@ -158,6 +160,8 @@ describe("mint + verify", () => {
       ok: false,
       code: "unauthenticated",
       message: "This API key has expired.",
+      // The row was found: its project rides along for the event log (A2), never the handler.
+      known: expect.objectContaining({ projectId: PROJECT, env: "test" }),
     });
   });
 });
