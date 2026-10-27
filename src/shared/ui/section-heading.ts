@@ -5,7 +5,11 @@ export const SECTION_HEADING_TEXT = "text-display font-semibold text-text-primar
  *  and card and pane sub-headings. */
 export const IDENTITY_NAME_TEXT = "text-title font-medium text-text-primary";
 
-/** The quiet list heading: /home's recency headings and the search popup's sections. */
+/** The 14px name face in capitals: the /home channel switcher's well headings. */
+export const RAIL_HEADING_TEXT = `${IDENTITY_NAME_TEXT} uppercase tracking-wide`;
+
+/** The quiet list heading: the Threads and Artifacts tabs' recency headings and the search popup's
+ *  sections. */
 export const QUIET_HEADING_TEXT = "text-label font-medium uppercase tracking-[0.02em] text-text-muted";
 
 /** The uppercase label: a field's or a strip's small caps name (a dialog field label, an Overview

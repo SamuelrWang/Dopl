@@ -127,7 +127,7 @@ describe("the list column's THREE WELLS", () => {
     expect(row.className).toContain("uppercase");
     expect(row.className).not.toContain("bg-");
     const well = row.closest("section")!;
-    expect(well.className).toBe(WELL_FACES.heading.box);
+    expect(well.className).toBe(WELL_FACES.rail.box);
     expect(well.className).not.toContain("bg-");
   });
 
@@ -178,7 +178,7 @@ describe("the list column's THREE WELLS", () => {
         .map((h) => h.textContent)
     ).toEqual(["Pinned", "Recent", "Earlier"]);
     const pinned = screen.getByRole("heading", { name: "Pinned" }).closest("section")!;
-    expect(pinned.className).toBe(WELL_FACES.heading.box);
+    expect(pinned.className).toBe(WELL_FACES.rail.box);
     // …and it carries NO placeholder sentence (minimal copy): the heading, the
     // chevron, and an empty column.
     expect(pinned.textContent).toBe("Pinned");

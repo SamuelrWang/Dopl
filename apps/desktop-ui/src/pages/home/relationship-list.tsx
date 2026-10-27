@@ -57,7 +57,7 @@ export function RelationshipList({
         storageKey={HOME_CHANNEL_WELLS_KEY}
         // Collapses survive navigation and reset on restart (Samuel's ruling); the tabs keep "device".
         store="session"
-        variant="heading"
+        variant="rail"
         // All three always drawn: they are the column's structure.
         showEmpty
       />

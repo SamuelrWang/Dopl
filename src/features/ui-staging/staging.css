@@ -95,7 +95,7 @@ button.lp-demo-top-profile {
   color: inherit;
 }
 /* The well heading is a toggle button, not a caption: it fills the heading
-   row and inherits every type property from `.lp-demo-sw-head`. */
+   row and inherits every type property from its `h3` (`RAIL_HEADING_TEXT`). */
 .uis-window .uis-sw-head-btn {
   display: flex;
   width: 100%;
