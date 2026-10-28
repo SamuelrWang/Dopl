@@ -13,6 +13,9 @@
 -- `dev_events.org_id` is a uuid with no FK (an event outlives its org), so the view
 -- excludes by NOT EXISTS: an event whose org row is gone stays billable rather than vanishing.
 --
+-- ⚠ `SELECT e.*` is expanded ONCE, at CREATE: a column added to `dev_events` later is NOT in the
+-- view. Any migration that alters `dev_events` columns must re-run CREATE OR REPLACE VIEW here.
+--
 -- SECURITY: `security_invoker = true`, so the view has no privileges of its own (the reader's
 -- RLS on `dev_events` / `dev_orgs` applies; both are service role only). SELECT to service_role
 -- only, the A1 pattern. service_role is in the REVOKE list too: Supabase default privileges hand
