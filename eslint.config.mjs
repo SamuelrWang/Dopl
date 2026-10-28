@@ -2,7 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
-// SDK SPLIT BOUNDARY (Plan "Dopl SDK Split - Plan" §1 + §7.2, item W0.4). Three fences, each on
+// SDK SPLIT BOUNDARY (Plan "Dopl SDK Split - Plan" §1 + §7.2, item W0.4). Four fences, each on
 // its OWN rule name, because in flat config a later block REPLACES an earlier block's options for
 // the same rule on the same file — sharing one rule would let the allowlists erase each other.
 //   1. `no-restricted-imports` on the to-be-public packages: they may not import private code.
@@ -11,8 +11,8 @@ import nextTs from "eslint-config-next/typescript";
 //      SDK's glasses bridge and the display seam may import `glasses/core/devices`.
 //   4. `no-restricted-syntax` on runtime `src/**` files: no relative import of a package's `src/`.
 // The regexes match the alias AND relative spellings, so `../../device-sdk/x` cannot slip past.
-const DEVICE_SDK_IMPORT = "^(@/features/|(\\.\\./)+(src/)?(features/)?)device-sdk(/|$)";
-const GLASSES_DEVICES_IMPORT = "^(@/features/|(\\.\\./)+(src/)?(features/)?)glasses/core/devices(/|$)";
+const DEVICE_SDK_IMPORT = "^(@/features/|(\\.\\./)+(src/)?(features/)?|\\./)device-sdk(/|$)";
+const GLASSES_DEVICES_IMPORT = "^(@/features/|(\\.\\./)+(src/)?(features/)?|\\./)glasses/core/devices(/|$)";
 const DEVICE_SDK_MSG = "Device SDK server internals are platform-only (Plan §7.2). App code reaches devices through the display seam (`@/features/display/server/*`), never `features/device-sdk/*`.";
 const GLASSES_DEVICES_MSG = "Prosumer glasses device internals (Plan §7.2): only `features/glasses/**`, `app/api/glasses/**`, the SDK glasses bridge and the display seam may import `glasses/core/devices/*`.";
 
@@ -103,6 +103,7 @@ const eslintConfig = defineConfig([
             { regex: "^@/", message: "Public SDK code may not import the private web tree (`@/*`) (Plan §1)." },
             { regex: "^(\\.\\./)+(src|apps|dopl-desktop-app)(/|$)", message: "Public SDK code may not import private repo code (Plan §1)." },
             { regex: "^(\\.\\./)+packages/", message: "No relative reach into another package. Depend on it by name." },
+            { regex: "^(\\.\\./){2,}(packages/)?(sdk|contracts|device-contracts)/", message: "No relative reach into a sibling package's files. Depend on it by name." },
             { regex: "^(\\.\\./)+(dopl-client|mcp-server)(/|$)", message: "Private package — the public SDK may not import it (Plan §1)." },
             { regex: "^@dopl/(client|mcp-server)(/|$)", message: "Private package — the public SDK may not depend on it (Plan §1)." },
           ],
