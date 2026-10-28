@@ -92,7 +92,10 @@ export const sdkGlassesPort: SdkGlassesPort = {
   migratedDeviceIds: migratedDeviceIdsCached,
 };
 
-/** Every inbox poll asks; the flag moves rarely. A failed lookup is not cached (it throws through). */
+/**
+ * Every inbox poll asks; the flag moves rarely. A failed lookup is not cached (it throws through).
+ * A revert or flag-off keeps merging the SDK queue for up to 30s: harmless, its rows are the device's own.
+ */
 const MIGRATED_TTL_MS = 30_000;
 const migratedCache = new TtlCache<string, string[]>(MIGRATED_TTL_MS, 10_000);
 

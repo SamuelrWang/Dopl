@@ -161,6 +161,7 @@ export function createSdkLens(env: { key?: string; baseUrl?: string } = {}): Sdk
         warnedNoKey = true;
         throw new SdkLensError("no_key", true);
       }
+      // `baseUrl`: the in-repo `@dopl/sdk`'s option; the standalone SDK names it `baseURL` (rename at W2.2).
       client ??= new Dopl({ apiKey: key, ...((env.baseUrl ?? process.env.DOPL_APP_SDK_BASE_URL) && { baseUrl: env.baseUrl ?? process.env.DOPL_APP_SDK_BASE_URL }) });
       return { lens: sdkUserLens(client, userId), deviceIds: state.deviceIds };
     },
