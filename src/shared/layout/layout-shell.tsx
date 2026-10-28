@@ -23,6 +23,8 @@ const NON_WORKSPACE_ROOTS = new Set([
   // `/connect/{token}` — the Device SDK hosted Connect page (A4); draws its own surface.
   "connect",
   "design",
+  // `/developers/**` — the Device SDK developer portal (W1.3); draws its own full-viewport surface.
+  "developers",
   "docs",
   // Post-auth download page. Draws its own full-viewport surface, but must be
   // listed or `isAppShellRoute` paints the app's dark rail behind it.

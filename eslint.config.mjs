@@ -118,6 +118,8 @@ const eslintConfig = defineConfig([
       "src/app/connect/**",
       "src/app/api/cron/device-sdk-events-prune/**",
       "src/app/playground/developers/**",
+      "src/app/developers/**",
+      "src/app/api/developers/**",
       "src/features/marketing/docs/**",
       "src/features/glasses/glasses-runtime.ts",
       "src/features/display/server/sdk-lens.ts",

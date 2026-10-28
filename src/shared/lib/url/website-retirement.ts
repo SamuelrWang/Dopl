@@ -84,6 +84,9 @@ const RESERVED_TOP_LEVEL = new Set([
   // two-segment rule below happens to miss it); named explicitly so it's a
   // rule, and so a child segment that ever collides can't retire the route.
   "c",
+  // `/developers/**` — the Device SDK developer portal (W1.3). Dashless, so KEEP by accident
+  // otherwise; named so a child segment that ever collides with `APP_PAGES` cannot retire it.
+  "developers",
   "docs",
   "download",
   "favicon.ico",
