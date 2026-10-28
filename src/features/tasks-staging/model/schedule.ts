@@ -40,6 +40,7 @@ export const RUN_RESULT: Record<RunResult, { label: string; tone: StatusTone }> 
   done: { label: "Done", tone: "done" },
   failed: { label: "Failed", tone: "attention" },
   missed: { label: "Missed", tone: "neutral" },
+  needs_you: { label: "Needs you", tone: "attention" },
 };
 
 /** The one line every schedule surface carries (Samuel, 2026-10-28: schedules are desktop-only). */

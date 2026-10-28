@@ -40,8 +40,11 @@ export interface RecurringSchedule {
   time: string;
 }
 
-/** `missed` = a scheduled start passed while the operator's desktop app was closed. */
-export type RunResult = "running" | "done" | "failed" | "missed";
+/**
+ * `missed` = a scheduled start passed while the operator's desktop app was closed.
+ * `needs_you` = an agent in the run is waiting on a person.
+ */
+export type RunResult = "running" | "done" | "failed" | "missed" | "needs_you";
 
 export interface SavedRun {
   id: string;
@@ -56,6 +59,10 @@ export interface SavedRun {
 
 export interface SavedTask {
   id: string;
+  /** "saved" = reusable, may repeat. "one-off" = a channel task done once. */
+  kind: "saved" | "one-off";
+  /** One-off only: when it is due, as a label ("Today 14:00"); `null` = anytime. */
+  due?: string | null;
   title: string;
   description: string;
   /** "shared" = shared in its channel; "home" = the viewer's own. */
@@ -79,6 +86,7 @@ const OFF: RecurringSchedule = { on: false, frequency: "weekly", day: "Mon", tim
 
 export const SEED_SAVED_TASKS: SavedTask[] = [
   {
+    kind: "saved",
     id: "st-standup",
     title: "Standup notes",
     description: "Reads yesterday's threads and posts who did what and what is blocked.",
@@ -98,6 +106,7 @@ export const SEED_SAVED_TASKS: SavedTask[] = [
     ],
   },
   {
+    kind: "saved",
     id: "st-digest",
     title: "Monday digest",
     description: "Sums up last week in the channel and posts what is due this week.",
@@ -119,6 +128,7 @@ export const SEED_SAVED_TASKS: SavedTask[] = [
     ],
   },
   {
+    kind: "saved",
     id: "st-release",
     title: "Cut a release",
     description: "From a green master to published notes, every migration checked first.",
@@ -139,6 +149,7 @@ export const SEED_SAVED_TASKS: SavedTask[] = [
     ],
   },
   {
+    kind: "saved",
     id: "st-migrations",
     title: "Migration review",
     description: "Checks every migration merged today before it reaches production.",
@@ -157,6 +168,7 @@ export const SEED_SAVED_TASKS: SavedTask[] = [
     ],
   },
   {
+    kind: "saved",
     id: "st-brief",
     title: "Market brief",
     description: "A two-page brief on one topic, every claim sourced.",
@@ -175,6 +187,7 @@ export const SEED_SAVED_TASKS: SavedTask[] = [
     ],
   },
   {
+    kind: "saved",
     id: "st-cleanup",
     title: "Dependency cleanup",
     description: "Bumps outdated packages, fixes what breaks and opens one pull request.",
@@ -192,5 +205,96 @@ export const SEED_SAVED_TASKS: SavedTask[] = [
     runs: [
       { id: "run-c1", when: "Oct 23, 14:00", startedBy: "Scheduled", result: "done", done: 3, total: 3 },
     ],
+  },
+  // One-off channel tasks: no schedule, one run at most.
+  {
+    kind: "one-off",
+    id: "oo-flaky",
+    title: "Fix the flaky checkout test",
+    description: "The checkout test fails one run in ten on CI. Find why and fix it.",
+    scope: "shared",
+    channelId: TECH_DEBT,
+    createdBy: STAGING_USER_ID,
+    due: "Today 10:00",
+    assignment: { kind: "identities", identityIds: ["id-flake"] },
+    steps: [
+      { id: "oo-flaky-1", title: "Reproduce the failure", pinnedIdentityId: "id-flake" },
+      { id: "oo-flaky-2", title: "Fix the fixture clock", pinnedIdentityId: "id-flake" },
+    ],
+    schedule: OFF,
+    nextRun: null,
+    runs: [{ id: "run-oo-f", when: "Today 10:00", startedBy: "You", result: "done", done: 2, total: 2 }],
+  },
+  {
+    kind: "one-off",
+    id: "oo-pricing",
+    title: "Review the pricing page copy",
+    description: "Tighten the pricing page and flag any claim we cannot back.",
+    scope: "home",
+    channelId: RESEARCH,
+    createdBy: STAGING_USER_ID,
+    due: "Today 14:00",
+    assignment: { kind: "identities", identityIds: ["id-writer"] },
+    steps: [
+      { id: "oo-pr-1", title: "Rewrite the plan blurbs", pinnedIdentityId: "id-writer" },
+      { id: "oo-pr-2", title: "Check every claim with you", pinnedIdentityId: null },
+    ],
+    schedule: OFF,
+    nextRun: null,
+    runs: [
+      { id: "run-oo-p", when: "Today 11:05", startedBy: "You", result: "needs_you", done: 1, total: 2 },
+    ],
+  },
+  {
+    kind: "one-off",
+    id: "oo-env",
+    title: "Rename the billing env vars",
+    description: "Move every billing variable to the BILLING_ prefix in one pull request.",
+    scope: "home",
+    channelId: TECH_DEBT,
+    createdBy: STAGING_USER_ID,
+    due: null,
+    assignment: { kind: "identities", identityIds: ["id-coder"] },
+    steps: [
+      { id: "oo-env-1", title: "List every billing variable", pinnedIdentityId: "id-coder" },
+      { id: "oo-env-2", title: "Rename them", pinnedIdentityId: "id-coder" },
+      { id: "oo-env-3", title: "Update the deploy docs", pinnedIdentityId: null },
+    ],
+    schedule: OFF,
+    nextRun: null,
+    runs: [{ id: "run-oo-e", when: "Today 9:20", startedBy: "You", result: "running", done: 1, total: 3 }],
+  },
+  {
+    kind: "one-off",
+    id: "oo-roadmap",
+    title: "Draft the Q4 roadmap",
+    description: "One page, three bets, each with the number it should move.",
+    scope: "shared",
+    channelId: RESEARCH,
+    createdBy: GRACE,
+    due: null,
+    assignment: { kind: "team", teamId: "team-research" },
+    steps: [
+      { id: "oo-rm-1", title: "Collect last quarter's numbers", pinnedIdentityId: null },
+      { id: "oo-rm-2", title: "Write the draft", pinnedIdentityId: null },
+    ],
+    schedule: OFF,
+    nextRun: null,
+    runs: [],
+  },
+  {
+    kind: "one-off",
+    id: "oo-flags",
+    title: "Audit unused feature flags",
+    description: "List flags nothing reads and propose which to delete.",
+    scope: "home",
+    channelId: TECH_DEBT,
+    createdBy: STAGING_USER_ID,
+    due: null,
+    assignment: { kind: "none" },
+    steps: [{ id: "oo-fl-1", title: "List every flag and its readers", pinnedIdentityId: null }],
+    schedule: OFF,
+    nextRun: null,
+    runs: [],
   },
 ];

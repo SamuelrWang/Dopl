@@ -86,7 +86,7 @@ export function SavedTaskDetail({
             className="flex-none gap-1.5 disabled:opacity-60"
           >
             <Play size={OPEN_SCALE_ICON} strokeWidth={2} aria-hidden="true" />
-            Launch
+            Run now
           </OpenScaleButton>
         )}
         <button type="button" onClick={onClose} className={styles.close} aria-label="Close saved task">
@@ -115,7 +115,10 @@ export function SavedTaskDetail({
             </Group>
             <Group label="Schedule" hint={task.schedule.on ? DESKTOP_ONLY_LINE : undefined}>
               <Facts>
-                <Fact label="Repeats" value={scheduleLabel(task.schedule)} />
+                <Fact
+                  label={task.kind === "one-off" ? "Due" : "Repeats"}
+                  value={task.kind === "one-off" ? (task.due ?? "Anytime") : scheduleLabel(task.schedule)}
+                />
                 <Fact label="Next run" value={task.nextRun ?? "Not scheduled"} />
                 <Fact label="Last run" value={latestRun(task)?.when ?? "Never"} />
                 <Fact

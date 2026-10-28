@@ -1,95 +1,93 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { Pencil, Play, Repeat } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import { useState } from "react";
 import { CreateButton } from "@/shared/ui/pill-button";
-import {
-  OPEN_SCALE_ICON_ONLY,
-  OpenScaleIconButton,
-} from "@/shared/ui/open-scale-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { toast } from "@/shared/ui/toast";
-import { IdentityRailResizeHandle } from "@/features/agent-identities/components/identity-rail-resize";
 import { IdentityPanel } from "@/features/agent-identities/components/identity-section";
-import { ROW_CARD, ROW_CARD_ROW } from "@/features/channels/components/bits";
+import { ROW_CARD } from "@/features/channels/components/bits";
 import { nameOf } from "@/features/identities-staging/data-agents";
 import { latency } from "@/features/identities-staging/store/identity-store";
-import {
-  AGENDA_DAYS,
-  NOW_LABEL,
-  NOW_MINUTES,
-  SEED_AGENDA,
-  minutesOf,
-  type AgendaEntry,
-} from "./data/agenda";
 import { STAGING_TASK_CHANNELS, channelName } from "./data/channels";
 import { SEED_SAVED_TASKS, type SavedTask } from "./data/saved-tasks";
-import { AgendaRow, NowRule } from "./components/agenda-row";
-import { AssignmentFaces } from "./components/assignee";
-import { DESKTOP_ONLY_LINE, launchedRun, latestRun, nextRunFor, scheduleLabel } from "./model/schedule";
+import { TaskRow } from "./components/task-row";
+import { WeekBar } from "./components/week-bar";
+import { DESKTOP_ONLY_LINE, launchedRun, latestRun, nextRunFor } from "./model/schedule";
+import { NOW_LABEL, TODAY_INDEX, weekChips, type WeekChip } from "./model/week";
 import { SavedTaskDetail } from "./saved/saved-task-detail";
 import { SavedTaskEditor } from "./saved/saved-task-editor";
 
 type Scope = "all" | string;
 
+type Group = "needs" | "repeating" | "oneoff";
+
+const GROUPS: ReadonlyArray<{ key: Group; label: string; empty: string; caption?: string }> = [
+  { key: "needs", label: "Needs you", empty: "Nothing is waiting on you." },
+  {
+    key: "repeating",
+    label: "Repeating",
+    empty: "No repeating tasks here yet.",
+    caption: `${DESKTOP_ONLY_LINE}.`,
+  },
+  { key: "oneoff", label: "One-off", empty: "No one-off tasks here yet." },
+];
+
+/** Needs you = a run waits on a person, or a scheduled run was missed and wants Run now. */
+function groupOf(task: SavedTask): Group {
+  const result = latestRun(task)?.result;
+  if (result === "needs_you" || result === "missed") return "needs";
+  return task.schedule.on ? "repeating" : "oneoff";
+}
+
 /**
- * STAGING MOCKUP of the Tasks page (Samuel, 2026-10-28: the agenda spine). Left: Today,
- * Tomorrow, This week and Anytime down a time line, each one-off task and each saved-task run on
- * its hour, missed runs flagged on the line with Run now. Right: the saved-task library, each
- * launchable and editable from the rail. A channel filter scopes both. Local state only.
+ * STAGING MOCKUP of the Tasks page (Samuel, 2026-10-28, second shape): a compact week bar on
+ * top, each day's runs as chips; below, every task as a dense row in Needs you, Repeating and
+ * One-off. A chip or a row opens the same task view. A channel filter scopes both. Local state.
  */
 export function TasksHome({ currentUserId }: { currentUserId: string }) {
   const [scope, setScope] = useState<Scope>("all");
-  const [agenda, setAgenda] = useState<AgendaEntry[]>(SEED_AGENDA);
-  const [saved, setSaved] = useState<SavedTask[]>(SEED_SAVED_TASKS);
+  const [tasks, setTasks] = useState<SavedTask[]>(SEED_SAVED_TASKS);
+  const [offset, setOffset] = useState(0);
+  const [launched, setLaunched] = useState<WeekChip[]>([]);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ task: SavedTask | null } | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
 
-  const inScope = (channelId: string) => scope === "all" || scope === channelId;
-  const entries = agenda.filter((e) => inScope(e.channelId));
-  const library = saved.filter((t) => inScope(t.channelId));
-  const viewing = saved.find((t) => t.id === viewingId);
-  const savedOf = (entry: AgendaEntry) => saved.find((t) => t.id === entry.savedTaskId);
+  const visible = tasks.filter((t) => scope === "all" || t.channelId === scope);
+  const visibleIds = new Set(visible.map((t) => t.id));
+  const chips = [
+    ...weekChips(visible, offset),
+    ...(offset === 0 ? launched.filter((c) => visibleIds.has(c.taskId)) : []),
+  ];
+  const viewing = tasks.find((t) => t.id === viewingId);
   const markerFor = (task: SavedTask) =>
     task.createdBy === currentUserId ? null : `by ${nameOf(task.createdBy) ?? "a member"}`;
   const update = (id: string, patch: (t: SavedTask) => SavedTask) =>
-    setSaved((all) => all.map((t) => (t.id === id ? patch(t) : t)));
+    setTasks((all) => all.map((t) => (t.id === id ? patch(t) : t)));
 
-  async function launch(task: SavedTask, replacing?: AgendaEntry) {
+  async function launch(task: SavedTask) {
     setStarting(task.id);
     await latency(900);
     setStarting(null);
-    const fresh = launchedRun(task);
-    update(task.id, (t) => ({ ...t, runs: [fresh, ...t.runs] }));
-    const run: AgendaEntry = {
-      id: `ag-${fresh.id}`,
-      day: "today",
-      time: NOW_LABEL,
-      title: task.title,
-      channelId: task.channelId,
-      savedTaskId: task.id,
-      state: "running",
-      progress: { done: 0, total: task.steps.length },
-      assignment: task.assignment,
-      note: "Launched by you",
-    };
-    setAgenda((all) => [...all.filter((e) => e.id !== replacing?.id), run]);
+    const run = launchedRun(task);
+    update(task.id, (t) => ({ ...t, runs: [run, ...t.runs] }));
+    setLaunched((all) => [
+      ...all,
+      {
+        id: `0:${run.id}`,
+        taskId: task.id,
+        dayIndex: TODAY_INDEX,
+        time: NOW_LABEL,
+        title: task.title,
+        state: "running",
+      },
+    ]);
     toast({ title: `"${task.title}" launched into #${channelName(task.channelId)}`, variant: "invert" });
   }
 
-  const dayRows = (day: (typeof AGENDA_DAYS)[number]["key"]) => {
-    const rows = entries
-      .filter((e) => e.day === day)
-      .sort((a, b) => (a.time && b.time ? minutesOf(a.time) - minutesOf(b.time) : 0));
-    const nowAt = day === "today" ? rows.findIndex((e) => e.time && minutesOf(e.time) > NOW_MINUTES) : -1;
-    return { rows, nowAt: nowAt === -1 && day === "today" ? rows.length : nowAt };
-  };
-
   return (
     <div className="rail-layout">
-      <div className="rail-layout-cols">
+      <div className="rail-layout-cols" data-rail="off">
         <div className="rail-layout-main">
           <div className="flex min-w-0 flex-wrap items-center gap-4">
             <SegmentedControl
@@ -103,99 +101,47 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
               ariaLabel="Channel"
               className="flex-none"
             />
-            <p className="ml-auto flex-none text-caption text-text-muted">
-              {`${entries.filter((e) => e.state === "missed").length} missed · ${entries.filter((e) => e.state === "running").length} running · ${entries.filter((e) => e.state === "needs_you").length} need you`}
+            <p className="flex-none text-caption text-text-muted">
+              {`${visible.length} ${visible.length === 1 ? "task" : "tasks"}`}
             </p>
+            <div className="ml-auto flex-none">
+              <CreateButton onClick={() => setEditing({ task: null })}>Task</CreateButton>
+            </div>
           </div>
 
-          {AGENDA_DAYS.map((day) => {
-            const { rows, nowAt } = dayRows(day.key);
+          <WeekBar
+            chips={chips}
+            offset={offset}
+            onOffset={setOffset}
+            onOpen={(chip) => setViewingId(chip.taskId)}
+          />
+
+          {GROUPS.map((group) => {
+            const rows = visible.filter((t) => groupOf(t) === group.key);
             return (
-              <IdentityPanel key={day.key} id={`tasks-${day.key}`} label={day.label} flat>
-                {day.date && <p className="-mt-1 pb-1 text-caption text-text-muted">{day.date}</p>}
+              <IdentityPanel key={group.key} id={`tasks-${group.key}`} label={group.label} flat>
+                {group.caption && rows.length > 0 && (
+                  <p className="-mt-1 pb-1 text-caption text-text-muted">{group.caption}</p>
+                )}
                 {rows.length === 0 ? (
-                  <p className="pb-1 text-caption text-text-muted">Nothing here.</p>
+                  <p className="pb-1 text-caption text-text-muted">{group.empty}</p>
                 ) : (
-                  <ul aria-label={day.label} className={ROW_CARD}>
-                    {rows.map((entry, i) => {
-                      const task = savedOf(entry);
-                      return (
-                        <Fragment key={entry.id}>
-                          {i === nowAt && <NowRule label={NOW_LABEL} />}
-                          <AgendaRow
-                            entry={entry}
-                            scheduleLine={task ? scheduleLabel(task.schedule) : null}
-                            assignmentFor={(e) => savedOf(e) ?? { assignment: e.assignment, steps: [] }}
-                            onOpen={() =>
-                              task
-                                ? setViewingId(task.id)
-                                : toast({ title: `Staging: would open "${entry.title}"` })
-                            }
-                            onRunNow={task ? () => void launch(task, entry) : undefined}
-                          />
-                        </Fragment>
-                      );
-                    })}
-                    {nowAt === rows.length && <NowRule label={NOW_LABEL} />}
+                  <ul aria-label={group.label} className={ROW_CARD}>
+                    {rows.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        starting={starting === task.id}
+                        onOpen={() => setViewingId(task.id)}
+                        onLaunch={() => void launch(task)}
+                      />
+                    ))}
                   </ul>
                 )}
               </IdentityPanel>
             );
           })}
         </div>
-
-        <IdentityRailResizeHandle />
-        <aside className="rail-layout-aside" aria-label="Saved tasks">
-          <IdentityPanel
-            id="tasks-saved"
-            label="Saved tasks"
-            flat
-            action={<CreateButton onClick={() => setEditing({ task: null })}>Saved task</CreateButton>}
-          >
-            {library.length === 0 ? (
-              <p className="pb-1 text-caption text-text-muted">No saved tasks in this channel yet.</p>
-            ) : (
-              <ul aria-label="Saved task library" className={ROW_CARD}>
-                {library.map((task) => {
-                  const running = latestRun(task)?.result === "running";
-                  return (
-                    <li key={task.id} className={cn(ROW_CARD_ROW, "flex min-w-0 items-center gap-2.5 py-2.5")}>
-                      <button
-                        type="button"
-                        onClick={() => setViewingId(task.id)}
-                        className="flex min-w-0 flex-1 cursor-pointer flex-col gap-1 text-left"
-                      >
-                        <span className="min-w-0 truncate text-small font-semibold text-text-primary">
-                          {task.title}
-                        </span>
-                        <span className="inline-flex min-w-0 items-center gap-1 text-label text-text-muted">
-                          <Repeat size={11} strokeWidth={2} aria-hidden="true" className="flex-none" />
-                          <span className="truncate">{scheduleLabel(task.schedule)}</span>
-                        </span>
-                        <AssignmentFaces task={task} size="xs" />
-                      </button>
-                      <OpenScaleIconButton
-                        aria-label={`Edit ${task.title}`}
-                        onClick={() => setEditing({ task })}
-                      >
-                        <Pencil size={OPEN_SCALE_ICON_ONLY} strokeWidth={2} aria-hidden="true" />
-                      </OpenScaleIconButton>
-                      <OpenScaleIconButton
-                        aria-label={`Launch ${task.title}`}
-                        disabled={running || starting === task.id}
-                        onClick={() => void launch(task)}
-                        className="disabled:opacity-60"
-                      >
-                        <Play size={OPEN_SCALE_ICON_ONLY} strokeWidth={2} aria-hidden="true" />
-                      </OpenScaleIconButton>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <p className="pt-2 text-caption text-text-muted">{`${DESKTOP_ONLY_LINE}.`}</p>
-          </IdentityPanel>
-        </aside>
       </div>
 
       {viewing && (
@@ -228,7 +174,7 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
           defaultChannelId={scope === "all" ? STAGING_TASK_CHANNELS[0].id : scope}
           onClose={() => setEditing(null)}
           onSave={(next) => {
-            setSaved((all) =>
+            setTasks((all) =>
               all.some((t) => t.id === next.id) ? all.map((t) => (t.id === next.id ? next : t)) : [...all, next]
             );
             setEditing(null);

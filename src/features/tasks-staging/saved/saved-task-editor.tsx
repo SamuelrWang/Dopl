@@ -52,6 +52,7 @@ const blankStep = (): SavedStep => ({ id: freshId("step"), title: "", pinnedIden
 
 function blankTask(createdBy: string, channelId: string): SavedTask {
   return {
+    kind: "saved",
     id: freshId("st"),
     title: "",
     description: "",
@@ -103,7 +104,7 @@ export function SavedTaskEditor({
     <FormDialog
       open
       onDiscard={onClose}
-      title={task ? "Edit saved task" : "New saved task"}
+      title={task ? "Edit task" : "New task"}
       primary={{
         label: task ? "Save" : "Create",
         disabled: !ready,
@@ -119,7 +120,7 @@ export function SavedTaskEditor({
       <UnderlineField
         id="saved-task-title"
         label="Title"
-        ariaLabel="Saved task title"
+        ariaLabel="Task title"
         placeholder="Monday digest"
         value={draft.title}
         onChange={(title) => setDraft((d) => ({ ...d, title }))}
@@ -128,7 +129,7 @@ export function SavedTaskEditor({
       <UnderlineField
         id="saved-task-description"
         label="Description"
-        ariaLabel="Saved task description"
+        ariaLabel="Task description"
         value={draft.description}
         onChange={(description) => setDraft((d) => ({ ...d, description }))}
         multiline
