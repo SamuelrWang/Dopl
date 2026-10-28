@@ -1,5 +1,5 @@
 /**
- * C5 — device context and routing profiles (docs/specs/device-sdk/SPEC-v1.md › C5; D3).
+ * C5 — device context and routing profiles (spec v1 › C5; D3).
  *
  * 🔒 **D3: DOPL NEVER REWRITES CONTENT.** A profile passes guidance to the developer's agent
  * (`prompt_append`, `output`) and Dopl only ENFORCES limits — `overflow` is `truncate`, a

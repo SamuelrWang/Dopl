@@ -1,5 +1,5 @@
 /**
- * C1 — developer API keys (docs/specs/device-sdk/SPEC-v1.md › C1).
+ * C1 — developer API keys (spec v1 › C1).
  *
  * Secret keys `sk_test_…` / `sk_live_…` are server-to-server Bearer credentials; publishable keys
  * `pk_…` may only create Connect sessions. Keys are stored hashed (only `prefix` is ever shown again)

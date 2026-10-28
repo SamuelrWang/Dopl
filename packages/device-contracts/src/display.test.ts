@@ -1,7 +1,6 @@
 /**
- * C6 display schemas: round-trips and refusals. Parity with the app's block vocabulary v2 is the
- * app's job (`src/features/display/core/sdk-display-parity.test.ts`): this package is standalone
- * and imports nothing outside itself.
+ * C6 display schemas: round-trips and refusals. Parity with the Dopl app's block vocabulary v2 is
+ * tested on the app side: this package is standalone and imports nothing outside itself.
  */
 import { describe, expect, it } from "vitest";
 

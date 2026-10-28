@@ -31,10 +31,10 @@ describe("C1 keys", () => {
   });
 
   it("parses key prefixes", () => {
-    expect(parseApiKey("sk_test_abcdefghijklmnop")).toEqual({ kind: "secret", env: "test" });
-    expect(parseApiKey("sk_live_abcdefghijklmnop")).toEqual({ kind: "secret", env: "live" });
-    expect(parseApiKey("pk_abcdefghijklmnop")).toEqual({ kind: "publishable", env: null });
-    expect(parseApiKey("sk_prod_abcdefghijklmnop")).toBeNull();
+    expect(parseApiKey("sk_test_EXAMPLE000000000")).toEqual({ kind: "secret", env: "test" }); // gitleaks:allow (documented fake)
+    expect(parseApiKey("sk_live_EXAMPLE000000000")).toEqual({ kind: "secret", env: "live" }); // gitleaks:allow (documented fake)
+    expect(parseApiKey("pk_EXAMPLE000000000")).toEqual({ kind: "publishable", env: null });
+    expect(parseApiKey("sk_prod_EXAMPLE000000000")).toBeNull(); // gitleaks:allow (documented fake)
     expect(parseApiKey("sk_test_short")).toBeNull();
   });
 });

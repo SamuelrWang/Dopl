@@ -1,9 +1,9 @@
 /**
- * C3 — the device-agnostic capability model (docs/specs/device-sdk/SPEC-v1.md › C3, C7).
+ * C3 — the device-agnostic capability model (spec v1 › C3, C7).
  *
  * Every device publishes capability descriptors; agents call capabilities, never vendor APIs.
  * Every capability has exactly one DEFAULT risk tier (`CAPABILITY_RISK_TIER`), which the policy
- * engine (C7) starts from. Frozen v1: a new id or a tier change is a Samuel ruling + changelog line.
+ * engine (C7) starts from. Frozen v1: a new id or a tier change is a maintainer ruling + changelog line.
  */
 import { z } from "zod";
 

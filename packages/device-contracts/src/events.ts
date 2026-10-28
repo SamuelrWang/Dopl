@@ -1,5 +1,5 @@
 /**
- * C8 — the event row and webhook names (docs/specs/device-sdk/SPEC-v1.md › C8; P6, D5).
+ * C8 — the event row and webhook names (spec v1 › C8; P6, D5).
  *
  * ONE row per SDK, REST or MCP call, from day one (analytics cannot be backfilled). Fields are the
  * spec's list in the spec's order; the two compound spec names are split into columns:

@@ -1,8 +1,7 @@
 /**
- * C9 — the adapter contract (internal, Dopl-maintained; docs/specs/device-sdk/SPEC-v1.md › C9; D6).
+ * C9 — the adapter contract (Dopl-maintained; spec v1 › C9; D6).
  *
- * Generalises `src/features/glasses/platforms/types.ts › GlassesPlatform` (one `even_g2` entry today)
- * beyond glasses. Adapters are versioned; the version lands in every event row (C8). D6: an adapter
+ * Generalises Dopl's glasses platform interface (one `even_g2` entry today) beyond glasses. Adapters are versioned; the version lands in every event row (C8). D6: an adapter
  * built on a reverse-engineered protocol is `experimental: true` and is not offered to paying
  * customers by default.
  */

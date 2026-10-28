@@ -1,5 +1,5 @@
 /**
- * C4 — the Actions API (docs/specs/device-sdk/SPEC-v1.md › C4; D4).
+ * C4 — the Actions API (spec v1 › C4; D4).
  *
  * Two levels, picked per call: intent-level `deliver` (Dopl routes via C5) and device-level
  * `actions/{capability}`. Every action is async and idempotent; T4 actions pass through

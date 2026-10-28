@@ -1,6 +1,6 @@
 /**
- * `@dopl/device-contracts`: the Dopl Device SDK contracts C1–C10, frozen v1 (SPEC-v1; changes only
- * by Samuel ruling + a changelog line there). Zod schemas plus their inferred types. Standalone:
+ * `@dopl/device-contracts`: the Dopl Device SDK contracts C1–C10, frozen v1 (changes only by a
+ * maintainer ruling + a changelog line). Zod schemas plus their inferred types. Standalone:
  * imports nothing but `zod` and its own files. The HTTP surface is the device-sdk `openapi.yaml`.
  *
  * Relative imports stay EXTENSIONLESS: the Next app bundles this package from source and Turbopack

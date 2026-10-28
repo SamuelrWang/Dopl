@@ -1,17 +1,16 @@
 /**
- * C6 — the cross-device display language (docs/specs/device-sdk/SPEC-v1.md › C6).
+ * C6 — the cross-device display language (spec v1 › C6).
  *
- * ⚠ **A MIRROR, NOT A RE-EXPORT.** Block vocabulary v2 lives in the app at
- * `src/features/display/core/types.ts › DisplayBlock` / `› DISPLAY_LIMITS`. This package cannot
- * import `src/` (a separate program, resolved through node_modules — INVARIANTS §1), so the nine v2
- * blocks are restated here as zod and HELD EQUAL by the app's `sdk-display-parity.test.ts`
- * (type-level mutual assignability + the limits deep-equal). Change one, change both, in the same commit.
+ * ⚠ **A MIRROR, NOT A RE-EXPORT.** Block vocabulary v2 is defined by the Dopl app (`DisplayBlock`,
+ * `DISPLAY_LIMITS`). This package is standalone and imports nothing outside itself, so the nine v2
+ * blocks are restated here as zod and HELD EQUAL by a parity test on the Dopl side (type-level
+ * mutual assignability + the limits deep-equal). Change one, change both, together.
  *
  * The SDK adds one block the app does not have yet: `image` (C6 "Additions").
  */
 import { z } from "zod";
 
-/** Mirror of `src/features/display/core/types.ts › DISPLAY_LIMITS` (parity-tested). */
+/** Mirror of the Dopl app's `DISPLAY_LIMITS` (parity-tested). */
 export const DISPLAY_LIMITS = {
   blocks: 24,
   heading: 120,

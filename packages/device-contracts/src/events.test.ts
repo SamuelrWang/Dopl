@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DeviceEventRowSchema, EVENT_ROW_FIELDS, WEBHOOK_EVENT_NAMES } from "./events.js";
 import { NOW, expectRoundTrip } from "./test-fixtures.js";
 
-/** SPEC-v1 › C8, in order; `profile_id@version` and `bytes_in/out` split into columns. */
+/** Spec v1 › C8, in order; `profile_id@version` and `bytes_in/out` split into columns. */
 const SPEC_FIELDS = [
   "event_id", "ts", "org_id", "project_id", "env", "external_user_id", "connection_id",
   "device_id", "device_kind", "vendor", "model", "firmware", "adapter_version",

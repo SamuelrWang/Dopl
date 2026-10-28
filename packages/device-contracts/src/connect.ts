@@ -1,5 +1,5 @@
 /**
- * C2 — the Connect flow, Plaid-Link style (docs/specs/device-sdk/SPEC-v1.md › C2), plus the C7
+ * C2 — the Connect flow, Plaid-Link style (spec v1 › C2), plus the C7
  * per-connection grant. End users are the developer's `external_user_id` and never hold a Dopl
  * account (D1).
  */

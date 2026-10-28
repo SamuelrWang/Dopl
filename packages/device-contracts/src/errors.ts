@@ -1,5 +1,5 @@
 /**
- * C10 — errors, versioning, test-mode magic ids (docs/specs/device-sdk/SPEC-v1.md › C10).
+ * C10 — errors, versioning, test-mode magic ids (spec v1 › C10).
  *
  * One error shape on every route: `{ error: { type, code, message, device_kind?, retryable, doc_url } }`.
  * Every code has a type, an HTTP status, a retryable default and a doc slug; `doc_url` is
@@ -86,7 +86,7 @@ export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 /** Dated API versions, pinned per project (Stripe style). */
 export const ApiVersionSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export type ApiVersion = z.infer<typeof ApiVersionSchema>;
-/** The version these contracts freeze (SPEC-v1, 2026-10-27). */
+/** The version these contracts freeze (spec v1, 2026-10-27). */
 export const DEVICE_SDK_API_VERSION = "2026-10-27";
 
 /** Test mode: device ids that force a failure state (Plaid-sandbox style). */

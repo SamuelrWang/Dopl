@@ -5,7 +5,7 @@ capabilities, Connect, actions, context, display blocks, events, errors and the 
 Shared by `@dopl/sdk`, the `/api/v1` server and device adapters.
 
 **Standalone.** Depends on `zod` only and imports nothing outside `src/`
-(`packages/sdk/src/standalone.test.ts` enforces it). Contract changes need a Samuel ruling plus a
+(`packages/sdk/src/standalone.test.ts` enforces it). Contract changes need a maintainer ruling plus a
 changelog line in the spec.
 
 **Build.** `npm run build` emits ESM + `.d.ts` to `dist/` (the `exports` target). Source relative

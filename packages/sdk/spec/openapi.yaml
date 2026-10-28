@@ -5,8 +5,8 @@ info:
   summary: The /v1 surface of the Dopl Device SDK (frozen contracts v1).
   description: |
     Field-for-field mirror of `packages/device-contracts/src/*` (zod). The TypeScript contracts
-    are the source of truth; a change to either is a change to both, and only by Samuel ruling plus
-    a changelog line in `docs/specs/device-sdk/SPEC-v1.md`.
+    are the source of truth; a change to either is a change to both, and only by a maintainer ruling
+    plus a changelog line.
 
     Every action is async and idempotent. Every error uses the one `ErrorResponse` shape (C10).
   license:
@@ -14,7 +14,7 @@ info:
     identifier: LicenseRef-Proprietary
 servers:
   - url: https://api.usedopl.com/v1
-    description: Planned host (not live yet; see PLAN-trackA A1).
+    description: Planned host (not live yet).
 security:
   - secretKey: []
 tags:
