@@ -8,7 +8,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { NAKED_ICON, NAKED_ICON_BUTTON } from "@/shared/ui/naked-icon-button";
 import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { byTaskOrder, isActiveTask } from "../lib/task-model";
-import { TASK_TICK, TaskAssignees, TaskTickMark } from "./task-bits";
+import { TaskAssignees, TaskTickFace, taskTickClass } from "./task-bits";
 import { workingTaskFaces, type TaskFaceOf } from "./task-faces";
 import type { ChannelTask } from "../types";
 
@@ -126,8 +126,8 @@ export function TasksQuickView({
                     onClick={() => go(t.id)}
                     className="grid min-h-8.5 w-full grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-surface-raised-1"
                   >
-                    <span data-status={t.status} aria-hidden="true" className={TASK_TICK}>
-                      <TaskTickMark status={t.status} />
+                    <span data-status={t.status} aria-hidden="true" className={taskTickClass(t)}>
+                      <TaskTickFace task={t} />
                     </span>
                     <span className="truncate text-caption text-text-primary">{t.title}</span>
                     <TaskAssignees actors={t.assignees} faceOf={faceOf} />

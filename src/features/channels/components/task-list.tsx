@@ -10,13 +10,13 @@ import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
 import { StatusPill } from "@/shared/ui/status-pill";
 import { byTaskOrder, isActiveTask } from "../lib/task-model";
 import {
-  TASK_TICK,
   TASK_TICK_CONTROL,
   TaskAssignees,
   TaskLinkChip,
   TaskProgress,
-  TaskTickMark,
+  TaskTickFace,
   nextStatus,
+  taskTickClass,
 } from "./task-bits";
 import { ROW_CARD, ROW_CARD_ROW } from "./bits";
 import { STATUS_TONE, TASK_STATUS_LABEL, type TaskFaceOf } from "./task-faces";
@@ -61,13 +61,13 @@ function TaskRow({
           aria-label={`${next.verb} ${task.title}`}
           title={next.verb}
           onClick={() => onSetStatus(task, next.status)}
-          className={cn(TASK_TICK, TASK_TICK_CONTROL)}
+          className={cn(taskTickClass(task), TASK_TICK_CONTROL)}
         >
-          <TaskTickMark status={task.status} />
+          <TaskTickFace task={task} />
         </button>
       ) : (
-        <span data-status={task.status} aria-hidden="true" className={TASK_TICK}>
-          <TaskTickMark status={task.status} />
+        <span data-status={task.status} aria-hidden="true" className={taskTickClass(task)}>
+          <TaskTickFace task={task} />
         </span>
       )}
       <span className="flex min-w-0 flex-col gap-0.75">
