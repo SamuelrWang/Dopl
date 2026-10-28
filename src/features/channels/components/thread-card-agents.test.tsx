@@ -128,7 +128,8 @@ describe("Opened by", () => {
     expect(openedByLabel("Diana Taylor", true)).toBe("Opened by Diana's agent");
     // The opening agent's own name wins when it is known; blank or unknown keeps the old words.
     expect(openedByLabel("You", true, "UI Fixer")).toBe("Opened by UI Fixer");
-    expect(openedByLabel("Diana Taylor", true, "Scout")).toBe("Opened by Scout");
+    expect(openedByLabel("Diana Taylor", true, "Researcher")).toBe("Opened by Researcher (Diana)");
+    expect(openedByLabel("Member", true, "Researcher")).toBe("Opened by Researcher");
     expect(openedByLabel("You", true, "  ")).toBe("Opened by your agent");
     expect(openedByLabel("You", false, "UI Fixer")).toBe("Opened by you");
   });

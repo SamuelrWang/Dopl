@@ -87,7 +87,12 @@ export function openedByLabel(
 ): string {
   const me = authorLabel === "You";
   const named = agent ? agentName?.trim() : null;
-  if (named) return `Opened by ${named}`;
+  if (named) {
+    // Samuel, 2026-10-28: another member's agent carries its owner's first name; own agents do not.
+    // `labelFor`'s "Member" is its unknown-author floor, so it names nobody.
+    const owner = me || authorLabel === "Member" ? "" : firstNameOf(authorLabel, "");
+    return owner ? `Opened by ${named} (${owner})` : `Opened by ${named}`;
+  }
   if (agent) return me ? "Opened by your agent" : `Opened by ${firstName(authorLabel)}'s agent`;
   return me ? "Opened by you" : `Opened by ${authorLabel}`;
 }
