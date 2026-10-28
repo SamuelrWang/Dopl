@@ -1,71 +1,142 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 
-import { docHref, statusOf, type DocTab, type NavLink } from "../content";
+import {
+  DOC_SECTIONS,
+  DOCS_HOME,
+  docHref,
+  getDocSection,
+  sectionHref,
+  statusOf,
+  tableOfContents,
+  type DocPage,
+  type DocSection,
+} from "../content";
+import { NAV_ICONS } from "./docs-icons";
 import { StatusBadge } from "./status-badge";
 
-function isActive(link: NavLink, slug: string): boolean {
-  return link.slug === slug;
+/** A sidebar row's badge: only for pages that are not live. */
+function RowBadge({ slug }: { slug: string }) {
+  const status = statusOf(slug);
+  return status && status !== "live" ? <StatusBadge status={status} /> : null;
 }
 
-function Row({ link, slug }: { link: NavLink; slug: string }) {
-  const active = isActive(link, slug);
-  // Only a page row carries a badge, and only when it is not live: a `#fragment` row
-  // belongs to its page, and "Live" on every row would be noise.
-  const status = link.slug.includes("#") ? undefined : statusOf(link.slug);
+function NavIcon({ id }: { id: keyof typeof NAV_ICONS }) {
+  const Icon = NAV_ICONS[id];
   return (
-    <Link
-      href={docHref(link.slug)}
-      className="docs-nav-link"
-      data-active={active || undefined}
-      aria-current={active ? "page" : undefined}
-    >
-      {link.method && (
-        <span className="docs-method docs-method-sm" data-method={link.method}>
-          {link.method === "DELETE" ? "DEL" : link.method}
-        </span>
-      )}
-      <span>{link.label}</span>
-      {status && status !== "live" && <StatusBadge status={status} />}
-    </Link>
+    <span className="docs-nav-icon" aria-hidden>
+      <Icon size={20} strokeWidth={1.6} />
+    </span>
   );
 }
 
-/** A row with children: a chevron that expands in place (`<details>`, no client JS). */
-function NestedRow({ link, slug }: { link: NavLink; slug: string }) {
+/** Every section: `item` sections as one row, `group` sections as a heading over their pages. */
+function HomeView() {
+  const items = DOC_SECTIONS.filter((s) => s.home === "item");
+  const groups = DOC_SECTIONS.filter((s) => s.home === "group");
   return (
-    <details className="docs-nav-nested">
-      <summary className="docs-nav-link">
-        <span>{link.label}</span>
-        <ChevronRight size={12} className="docs-nav-chevron" aria-hidden />
-      </summary>
-      <ul className="docs-nav-children">
-        {link.children!.map((child) => (
-          <li key={child.slug}>
-            <Row link={child} slug={slug} />
+    <>
+      <ul className="docs-nav-top">
+        <li>
+          <Link href={docHref(DOCS_HOME)} className="docs-nav-item" data-active aria-current="page">
+            <NavIcon id="home" />
+            Home
+          </Link>
+        </li>
+        {items.map((s) => (
+          <li key={s.id}>
+            <Link href={sectionHref(s)} className="docs-nav-item">
+              <NavIcon id={s.id} />
+              {s.title}
+            </Link>
           </li>
         ))}
       </ul>
-    </details>
+      {groups.map((s) => (
+        <section key={s.id} className="docs-nav-group">
+          <Link href={sectionHref(s)} className="docs-nav-group-title">
+            <NavIcon id={s.id} />
+            {s.title}
+          </Link>
+          <ul>
+            {s.groups
+              .flatMap((g) => g.links)
+              .map((l) => (
+                <li key={l.slug}>
+                  <Link href={docHref(l.slug)} className="docs-nav-child">
+                    {l.label}
+                    <RowBadge slug={l.slug} />
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        </section>
+      ))}
+    </>
   );
 }
 
-/** The left column: one tab's groups, each a title and its rows. */
-export function DocsSidebar({ tab, slug }: { tab: DocTab; slug: string }) {
+/** One section: "All docs", its title, its pages, and the active page's anchors beneath it. */
+function SectionView({ section, page }: { section: DocSection; page: DocPage }) {
+  const anchors = tableOfContents(page);
   return (
-    <div className="docs-nav">
-      {tab.groups.map((group) => (
-        <div key={group.title} className="docs-nav-group">
-          <p className="docs-nav-title">{group.title}</p>
+    <>
+      <Link href={docHref(DOCS_HOME)} className="docs-nav-back">
+        <span className="docs-nav-icon" aria-hidden>
+          <ChevronLeft size={16} strokeWidth={2} />
+        </span>
+        All docs
+      </Link>
+      <p className="docs-nav-section-title">
+        <NavIcon id={section.id} />
+        {section.title}
+      </p>
+      {section.groups.map((g, i) => (
+        <div key={g.title ?? i} className="docs-nav-sub">
+          {g.title && <p className="docs-nav-sub-title">{g.title}</p>}
           <ul>
-            {group.links.map((link) => (
-              <li key={link.slug}>
-                {link.children ? <NestedRow link={link} slug={slug} /> : <Row link={link} slug={slug} />}
-              </li>
-            ))}
+            {g.links.map((l) => {
+              const active = l.slug === page.slug;
+              return (
+                <li key={l.slug}>
+                  <Link
+                    href={docHref(l.slug)}
+                    className="docs-nav-page"
+                    data-active={active || undefined}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    {l.label}
+                    <RowBadge slug={l.slug} />
+                  </Link>
+                  {active && anchors.length > 0 && (
+                    <ul className="docs-nav-anchors">
+                      {anchors.map((a) => (
+                        <li key={a.id}>
+                          <a href={`#${a.id}`}>
+                            <span className="docs-nav-hash" aria-hidden>
+                              #
+                            </span>
+                            <span>{a.text}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}
-    </div>
+    </>
+  );
+}
+
+/** The sidebar's navigation: the home view on the docs home, else the page's section view. */
+export function DocsSidebarNav({ page }: { page?: DocPage }) {
+  return (
+    <nav className="docs-nav" aria-label="Docs navigation">
+      {page ? <SectionView section={getDocSection(page)} page={page} /> : <HomeView />}
+    </nav>
   );
 }

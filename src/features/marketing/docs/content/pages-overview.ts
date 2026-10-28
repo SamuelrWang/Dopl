@@ -113,7 +113,7 @@ const QUICKSTART: DocBlock[] = [
 export const OVERVIEW_PAGES: DocPage[] = [
   {
     slug: "overview",
-    tab: "about",
+    section: "core",
     group: "Get started",
     title: "Overview",
     description: "One integration that lets your agent reach your users on any device",
@@ -149,7 +149,7 @@ export const OVERVIEW_PAGES: DocPage[] = [
       },
       { type: "h2", text: "What works today" },
       p(
-        "Agents reach Even Realities G2 glasses today through the [hosted MCP server](/docs/sdks/hosted-mcp): they can show cards, ask questions with options and send notifications on the lens. The Device SDK, which adds project keys, a REST API, a TypeScript SDK, a project MCP server and the Connect flow, is built and in testing with design partners. Every page in these docs carries a label that says whether it is live, in beta or coming soon."
+        "Agents reach Even Realities G2 glasses today through the [hosted MCP server](/docs/sdks/hosted-mcp): they can show cards, ask questions with options and send notifications on the lens. The Device SDK, which adds project keys, a REST API, a TypeScript SDK, a project MCP server and the Connect flow, is live for design partners: Dopl issues your project's keys while the developer portal is being built, and `@dopl/sdk` is available on request. Every page in these docs carries a label that says whether it is live, in beta or coming soon."
       ),
       {
         type: "cards",
@@ -184,16 +184,16 @@ export const OVERVIEW_PAGES: DocPage[] = [
   },
   {
     slug: "quickstart",
-    tab: "about",
+    section: "quickstart",
     group: "Get started",
     title: "Quickstart",
     description: "Connect a simulated device and reach it from TypeScript in a few minutes",
-    status: "coming_soon",
+    status: "beta",
     blocks: QUICKSTART,
   },
   {
     slug: "security",
-    tab: "about",
+    section: "security",
     group: "Get started",
     title: "Security",
     description: "How Dopl protects your users and their devices",
@@ -226,7 +226,7 @@ export const OVERVIEW_PAGES: DocPage[] = [
   },
   {
     slug: "pricing",
-    tab: "about",
+    section: "pricing",
     group: "Get started",
     title: "Pricing",
     description: "How the Device SDK will be priced",

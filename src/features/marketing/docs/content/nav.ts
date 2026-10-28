@@ -1,71 +1,78 @@
-import { DEVICE_ROWS } from "./pages-devices";
-import type { DocTab } from "./types";
+import { CATEGORY_ROWS } from "./pages-categories";
+import type { DocSection } from "./types";
 
 /**
- * The header tabs and each tab's sidebar. Order here IS the sidebar order and the
- * prev/next order. A row's status badge comes from its page's `status` (`index.ts ›
- * statusOf`), so labels never carry "(coming soon)" themselves. A slug removed from here keeps
- * working through a temporary redirect in `next.config.ts › redirects`.
+ * The sidebar. On the docs home it lists every section — `item` sections as one row each,
+ * `group` sections as a heading with their pages beneath. On any other page it swaps to that
+ * page's section alone, under an "All docs" back link. Order here IS the sidebar order.
+ *
+ * Devices are organised by CATEGORY (a capability group such as display glasses or smart home),
+ * never by brand: models live inside their category page. Core holds what every category shares
+ * (keys, connecting users, permissions, routing, events, test mode) and category pages link to
+ * it instead of repeating it. A row's status badge comes from its page's `status`, so labels never
+ * carry "(coming soon)" themselves. A slug removed from here keeps working through a temporary
+ * redirect in `next.config.ts › redirects`.
  */
-export const DOC_TABS: DocTab[] = [
+export const DOC_SECTIONS: DocSection[] = [
   {
-    id: "about",
-    label: "Docs",
-    slug: "overview",
+    id: "quickstart",
+    title: "Quickstart",
+    home: "item",
+    groups: [{ links: [{ label: "Quickstart", slug: "quickstart" }] }],
+  },
+  {
+    id: "devices",
+    title: "Devices",
+    home: "group",
     groups: [
       {
-        title: "Get started",
+        links: [
+          { label: "All device categories", slug: "devices" },
+          ...CATEGORY_ROWS.map((c) => ({ label: c.title, slug: `devices/${c.slug}` })),
+        ],
+      },
+    ],
+  },
+  {
+    id: "core",
+    title: "Core",
+    home: "group",
+    groups: [
+      {
+        title: "Set up",
         links: [
           { label: "Overview", slug: "overview" },
-          { label: "Quickstart", slug: "quickstart" },
-          { label: "Security", slug: "security" },
-          { label: "Pricing", slug: "pricing" },
-        ],
-      },
-      {
-        title: "Concepts",
-        links: [
           { label: "Projects, environments and keys", slug: "concepts/projects-and-keys" },
           { label: "End users and connections", slug: "concepts/users-and-connections" },
-          { label: "Devices and capabilities", slug: "concepts/devices-and-capabilities" },
+          { label: "Connect a device", slug: "guides/connect-a-device" },
+        ],
+      },
+      {
+        title: "Send and receive",
+        links: [
+          { label: "Deliver a message", slug: "guides/deliver-a-message" },
+          { label: "Handle answers", slug: "guides/handle-answers" },
+          { label: "Capabilities", slug: "concepts/devices-and-capabilities" },
           { label: "Permissions and safety", slug: "concepts/permissions-and-safety" },
           { label: "Context profiles and routing", slug: "concepts/context-profiles-and-routing" },
-          { label: "Displays", slug: "concepts/displays" },
-          { label: "Events and analytics", slug: "concepts/events-and-analytics" },
-        ],
-      },
-      {
-        title: "Guides",
-        links: [
-          { label: "Connect a device", slug: "guides/connect-a-device" },
-          { label: "Deliver a message", slug: "guides/deliver-a-message" },
           { label: "Customize the glasses profile", slug: "guides/customize-the-glasses-profile" },
+          { label: "Displays", slug: "concepts/displays" },
           { label: "Build a custom display", slug: "guides/custom-display" },
-          { label: "Handle answers", slug: "guides/handle-answers" },
+        ],
+      },
+      {
+        title: "Operate",
+        links: [
+          { label: "Events and webhooks", slug: "concepts/events-and-analytics" },
           { label: "Test mode", slug: "guides/test-mode" },
-        ],
-      },
-      {
-        title: "Glasses today",
-        links: [
-          { label: "Show on a device", slug: "use-cases/show" },
-          { label: "Ask and get an answer", slug: "use-cases/ask" },
-          { label: "Notify", slug: "use-cases/notify" },
-        ],
-      },
-      {
-        title: "Devices",
-        links: [
-          { label: "All devices", slug: "devices" },
-          ...DEVICE_ROWS.map((d) => ({ label: d.title, slug: `devices/${d.slug}` })),
         ],
       },
     ],
   },
   {
     id: "api",
-    label: "API Reference",
-    slug: "api-reference",
+    title: "API reference",
+    home: "item",
     groups: [
       {
         title: "Overview",
@@ -77,57 +84,54 @@ export const DOC_TABS: DocTab[] = [
       {
         title: "Connect",
         links: [
-          { label: "Create a Connect session", slug: "api-reference/connect-sessions", method: "POST" },
-          { label: "Exchange a public token", slug: "api-reference/connections-exchange", method: "POST" },
-          { label: "List connections", slug: "api-reference/connections", method: "GET" },
-          { label: "Revoke a connection", slug: "api-reference/revoke-connection", method: "DELETE" },
+          { label: "Create a Connect session", slug: "api-reference/connect-sessions" },
+          { label: "Exchange a public token", slug: "api-reference/connections-exchange" },
+          { label: "List connections", slug: "api-reference/connections" },
+          { label: "Revoke a connection", slug: "api-reference/revoke-connection" },
         ],
       },
-      {
-        title: "Context",
-        links: [{ label: "Get context", slug: "api-reference/context", method: "GET" }],
-      },
+      { title: "Context", links: [{ label: "Get context", slug: "api-reference/context" }] },
       {
         title: "Actions",
         links: [
-          { label: "Deliver", slug: "api-reference/deliver", method: "POST" },
-          { label: "Run a device action", slug: "api-reference/device-actions", method: "POST" },
-          { label: "Get an action", slug: "api-reference/actions", method: "GET" },
+          { label: "Deliver", slug: "api-reference/deliver" },
+          { label: "Run a device action", slug: "api-reference/device-actions" },
+          { label: "Get an action", slug: "api-reference/actions" },
         ],
       },
-      {
-        title: "Devices",
-        links: [{ label: "Get a device", slug: "api-reference/devices", method: "GET" }],
-      },
+      { title: "Devices", links: [{ label: "Get a device", slug: "api-reference/devices" }] },
     ],
   },
   {
     id: "sdks",
-    label: "SDKs and MCP",
-    slug: "sdks/hosted-mcp",
+    title: "SDKs and MCP",
+    home: "item",
     groups: [
       {
-        title: "MCP",
         links: [
           { label: "Hosted MCP", slug: "sdks/hosted-mcp" },
           { label: "Project MCP server", slug: "sdks/project-mcp" },
+          { label: "TypeScript SDK", slug: "sdks/typescript" },
         ],
-      },
-      {
-        title: "SDKs",
-        links: [{ label: "TypeScript", slug: "sdks/typescript" }],
       },
     ],
   },
   {
+    id: "security",
+    title: "Security",
+    home: "item",
+    groups: [{ links: [{ label: "Security", slug: "security" }] }],
+  },
+  {
+    id: "pricing",
+    title: "Pricing",
+    home: "item",
+    groups: [{ links: [{ label: "Pricing", slug: "pricing" }] }],
+  },
+  {
     id: "changelog",
-    label: "Changelog",
-    slug: "changelog",
-    groups: [
-      {
-        title: "2026",
-        links: [{ label: "October", slug: "changelog#october" }],
-      },
-    ],
+    title: "Changelog",
+    home: "item",
+    groups: [{ links: [{ label: "Changelog", slug: "changelog" }] }],
   },
 ];

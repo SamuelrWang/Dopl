@@ -1,12 +1,12 @@
 "use client";
 
-import { Search, Sparkles } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { GET_STARTED_URL } from "../../constants";
 import { Logo } from "../../components/logo";
-import { ASK_INPUT_ID } from "./docs-interactive";
 
 export interface SearchEntry {
   title: string;
@@ -14,78 +14,100 @@ export interface SearchEntry {
   href: string;
 }
 
-export interface HeaderTab {
-  label: string;
-  href: string;
-  active: boolean;
-}
-
-function focusAsk() {
-  document.getElementById(ASK_INPUT_ID)?.focus();
-}
-
 /**
- * Two rows: brand · Search ⌘K · Ask Assistant ⌘I · Main site, then the section tabs with
- * the active one underlined. Search filters page titles; it is not full-text yet.
+ * The docs frame: a full-height sidebar (logo + "Docs", then `nav`) and, over the content
+ * column only, a top bar — Search on the left, "Main site" and "Get API key" on the right.
+ * Below 1024px the sidebar slides in behind the menu button.
+ *
+ * The drawer remembers the path it opened on, so following a link closes it with no effect.
  */
-export function DocsHeader({ tabs, entries }: { tabs: HeaderTab[]; entries: SearchEntry[] }) {
+export function DocsFrame({ nav, entries, children }: { nav: ReactNode; entries: SearchEntry[]; children: ReactNode }) {
+  const pathname = usePathname();
+  const [openOn, setOpenOn] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const navOpen = openOn !== null && openOn === pathname;
+  const sidebar = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      const key = e.key.toLowerCase();
-      if (key === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setSearchOpen((v) => !v);
-      } else if (key === "i") {
-        e.preventDefault();
-        focusAsk();
+      } else if (e.key === "Escape") {
+        setOpenOn(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Close the drawer on a press outside it — a document listener, not a scrim `onClick`
+  // (INVARIANTS §15).
+  useEffect(() => {
+    if (!navOpen) return;
+    const onDown = (e: PointerEvent) => {
+      const target = e.target as Element;
+      if (sidebar.current?.contains(target) || target.closest?.(".docs-menu-btn")) return;
+      setOpenOn(null);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [navOpen]);
+
   return (
-    <header className="docs-header">
-      <div className="docs-header-top">
-        <div className="docs-header-brand">
+    <div className="lp docs" data-nav-open={navOpen || undefined}>
+      <aside ref={sidebar} className="docs-sidebar">
+        <div className="docs-sidebar-head">
           <Logo />
-        </div>
-        <div className="docs-header-center">
-          <button type="button" className="lp-btn lp-btn--3d-light docs-search-btn" onClick={() => setSearchOpen(true)}>
-            <Search size={16} aria-hidden />
-            <span className="docs-search-label">Search...</span>
-            <kbd>⌘K</kbd>
-          </button>
-          <button type="button" className="lp-btn lp-btn--3d-light docs-assistant-btn" onClick={focusAsk}>
-            <Sparkles size={14} aria-hidden />
-            <span>Ask Assistant</span>
-            <kbd>⌘I</kbd>
-          </button>
-        </div>
-        <div className="docs-header-end">
-          <Link href="/" className="lp-ctl-secondary">
-            Main site
-          </Link>
-        </div>
-      </div>
-      <nav className="docs-header-tabs" aria-label="Sections">
-        {tabs.map((t) => (
-          <Link
-            key={t.href}
-            href={t.href}
-            className="docs-header-tab"
-            data-active={t.active || undefined}
-            aria-current={t.active ? "page" : undefined}
+          <span className="docs-sidebar-label">Docs</span>
+          <button
+            type="button"
+            className="lp-icon-btn docs-close-btn"
+            aria-label="Close navigation"
+            onClick={() => setOpenOn(null)}
           >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+            <X size={16} aria-hidden />
+          </button>
+        </div>
+        {nav}
+      </aside>
+
+      <div className="docs-main">
+        <header className="docs-topbar">
+          <div className="docs-topbar-start">
+            <button
+              type="button"
+              className="lp-icon-btn docs-menu-btn"
+              aria-label="Open navigation"
+              aria-expanded={navOpen}
+              onClick={() => setOpenOn(navOpen ? null : pathname)}
+            >
+              <Menu size={16} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="lp-btn lp-btn--sm lp-btn--3d-light docs-search-btn"
+              onClick={() => setSearchOpen(true)}
+            >
+              <span className="docs-search-label">Search</span>
+              <Search size={16} aria-hidden />
+            </button>
+          </div>
+          <div className="docs-topbar-end">
+            <Link href="/" className="lp-ctl-secondary docs-main-site">
+              Main site
+            </Link>
+            <a href={GET_STARTED_URL} className="lp-btn lp-btn--sm lp-btn--3d">
+              Get API key
+            </a>
+          </div>
+        </header>
+
+        {children}
+      </div>
+
       {searchOpen && <SearchDialog entries={entries} onClose={() => setSearchOpen(false)} />}
-    </header>
+    </div>
   );
 }
 
@@ -125,7 +147,7 @@ function SearchDialog({ entries, onClose }: { entries: SearchEntry[]; onClose: (
           <input
             autoFocus
             value={query}
-            placeholder="Search..."
+            placeholder="Search"
             aria-label="Search the docs"
             onChange={(e) => {
               setQuery(e.target.value);

@@ -1,29 +1,28 @@
 import { CONNECT_ROWS, CURSOR_INSTALL_URL } from "./connect";
-import { DOC_TABS } from "./nav";
+import { DOC_SECTIONS } from "./nav";
 import { API_PAGES } from "./pages-api";
+import { CATEGORY_PAGES } from "./pages-categories";
 import { CONCEPT_PAGES } from "./pages-concepts";
-import { DEVICE_PAGES } from "./pages-devices";
 import { GUIDE_PAGES } from "./pages-guides";
 import { OVERVIEW_PAGES } from "./pages-overview";
 import { ROUTING_PAGES } from "./pages-routing";
 import { CHANGELOG_PAGES, SDK_PAGES } from "./pages-sdks";
-import { USE_CASE_PAGES } from "./pages-use-cases";
 import { DOC_STATUS_LABEL } from "./types";
-import type { DocBlock, DocPage, DocStatus, DocTab, NavLink } from "./types";
+import type { CapabilityCard, DocBlock, DocPage, DocSection, DocStatus } from "./types";
 
-export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_STATUS_LABEL, DOC_TABS };
+export { CONNECT_ROWS, CURSOR_INSTALL_URL, DOC_SECTIONS, DOC_STATUS_LABEL };
+export { DOCS_HOME_COPY, HOME_CARDS, HOME_LISTS } from "./home";
 export type * from "./types";
 
-/** The landing page of `/docs` (bare `/docs` 308s here — `next.config.ts › redirects`). */
-export const DOCS_HOME = "overview";
+/** The docs home (`src/app/docs/home/page.tsx`); bare `/docs` 308s here — `next.config.ts › redirects`. */
+export const DOCS_HOME = "home";
 
 export const DOC_PAGES: DocPage[] = [
   ...OVERVIEW_PAGES,
+  ...CATEGORY_PAGES,
   ...CONCEPT_PAGES,
   ...ROUTING_PAGES,
   ...GUIDE_PAGES,
-  ...USE_CASE_PAGES,
-  ...DEVICE_PAGES,
   ...API_PAGES,
   ...SDK_PAGES,
   ...CHANGELOG_PAGES,
@@ -35,7 +34,7 @@ export function getDocPage(slug: string): DocPage | undefined {
   return BY_SLUG.get(slug);
 }
 
-/** The status of the page a nav slug points at (a `#fragment` row reads its page's status). */
+/** The status of the page a nav slug points at. */
 export function statusOf(slug: string): DocStatus | undefined {
   return BY_SLUG.get(slug.split("#")[0])?.status;
 }
@@ -44,8 +43,13 @@ export function docHref(slug: string): string {
   return `/docs/${slug}`;
 }
 
-export function getDocTab(page: DocPage): DocTab {
-  return DOC_TABS.find((t) => t.id === page.tab) ?? DOC_TABS[0];
+export function getDocSection(page: DocPage): DocSection {
+  return DOC_SECTIONS.find((s) => s.id === page.section) ?? DOC_SECTIONS[0];
+}
+
+/** Where a section's sidebar row lands: its first page. */
+export function sectionHref(section: DocSection): string {
+  return docHref(section.groups[0].links[0].slug);
 }
 
 /** Heading anchor ids: lowercase, non-alphanumerics collapsed to `-`. */
@@ -56,31 +60,39 @@ export function slugify(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/** The "On this page" list: every top-level h2 (and h3 under it). */
-export function tableOfContents(page: DocPage): { id: string; text: string; depth: 2 | 3 }[] {
-  return page.blocks.flatMap((b) =>
-    b.type === "h2" || b.type === "h3"
-      ? [{ id: slugify(b.text), text: b.text, depth: b.type === "h2" ? (2 as const) : (3 as const) }]
-      : []
-  );
+/** A capability card's anchor: its title and capability, so a receive and a send card never collide. */
+export function capabilityAnchor(card: Pick<CapabilityCard, "title" | "capability">): string {
+  return slugify(`${card.title} ${card.capability}`);
 }
 
-/** Sidebar rows of one tab, flattened, page links only (no `#fragment` rows). */
-function pageLinks(tab: DocTab): NavLink[] {
-  return tab.groups.flatMap((g) => g.links).filter((l) => !l.slug.includes("#"));
-}
-
-/** Previous / next page within the same header tab, in sidebar order. */
-export function neighbours(page: DocPage): { prev?: NavLink; next?: NavLink } {
-  const links = pageLinks(getDocTab(page));
-  const i = links.findIndex((l) => l.slug === page.slug);
-  if (i < 0) return {};
-  return { prev: links[i - 1], next: links[i + 1] };
+/** The page's anchors, listed under it in the sidebar: headings, capability cards, field groups, changelog entries. */
+export function tableOfContents(page: DocPage): { id: string; text: string }[] {
+  return page.blocks.flatMap((b) => {
+    if (b.type === "h2" || b.type === "h3") return [{ id: slugify(b.text), text: b.text }];
+    if (b.type === "capability") return [{ id: capabilityAnchor(b), text: b.title }];
+    if (b.type === "params") return [{ id: slugify(b.title), text: b.title }];
+    if (b.type === "changelog") return b.entries.map((e) => ({ id: slugify(e.date), text: e.title }));
+    return [];
+  });
 }
 
 /** Strip the inline marks to plain text, keeping link URLs. */
 function plain(text: string): string {
   return text.replace(/\*\*(.+?)\*\*/g, "$1");
+}
+
+const label = (s: DocStatus | null) => (s ? DOC_STATUS_LABEL[s] : "Not supported");
+
+function capabilityText(c: CapabilityCard): string[] {
+  return [
+    `### ${c.title} (\`${c.capability}\`)`,
+    plain(c.what),
+    `**Limits**\n${c.limits.map((l) => `- ${plain(l)}`).join("\n")}`,
+    `**Permission**: ${c.tier}. ${plain(c.permission)}`,
+    ...c.code.map((t) => `\`\`\`${t.label}\n${t.code}\n\`\`\``),
+    ...c.response.map((t) => `Response ${t.label}:\n\`\`\`json\n${t.code}\n\`\`\``),
+    `**Supported on**\n${c.support.map((m) => `- ${m.model}: ${label(m.status)}${m.note ? `. ${plain(m.note)}` : ""}`).join("\n")}`,
+  ];
 }
 
 function blockText(b: DocBlock): string[] {
@@ -120,10 +132,22 @@ function blockText(b: DocBlock): string[] {
       return [`## ${b.title}`, ...b.params.map((p) => `- \`${p.name}\` (${p.type}): ${plain(p.description)}`)];
     case "table":
       return [
-        `| ${b.columns.join(" | ")} |`,
-        `| ${b.columns.map(() => "---").join(" | ")} |`,
-        ...b.rows.map((r) => `| ${r.map(plain).join(" | ")} |`),
+        [
+          `| ${b.columns.join(" | ")} |`,
+          `| ${b.columns.map(() => "---").join(" | ")} |`,
+          ...b.rows.map((r) => `| ${r.map(plain).join(" | ")} |`),
+        ].join("\n"),
       ];
+    case "support":
+      return [
+        [
+          `| Capability | ${b.models.join(" | ")} |`,
+          `| --- | ${b.models.map(() => "---").join(" | ")} |`,
+          ...b.rows.map((r) => `| \`${r.capability}\` | ${r.cells.map(label).join(" | ")} |`),
+        ].join("\n"),
+      ];
+    case "capability":
+      return capabilityText(b);
     case "changelog":
       return b.entries.map((e) => `## ${e.date}: ${e.title}\n${plain(e.description)}`);
     case "flow":
@@ -131,7 +155,7 @@ function blockText(b: DocBlock): string[] {
   }
 }
 
-/** The page as Markdown — what the "Copy page" button puts on the clipboard. */
+/** The page as Markdown — what the copy button beside the H1 puts on the clipboard. */
 export function pageToMarkdown(page: DocPage): string {
   const head = [`# ${page.title}`, `Status: ${DOC_STATUS_LABEL[page.status]}`, page.description].filter(Boolean);
   return [...head, ...page.blocks.flatMap(blockText)].join("\n\n");

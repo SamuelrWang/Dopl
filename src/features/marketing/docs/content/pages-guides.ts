@@ -11,7 +11,7 @@ import type { DocBlock, DocPage } from "./types";
  */
 
 function guide(slug: string, title: string, description: string, blocks: DocBlock[]): DocPage {
-  return { slug: `guides/${slug}`, tab: "about", group: "Guides", title, description, status: "coming_soon", blocks: [PLANNED, ...blocks] };
+  return { slug: `guides/${slug}`, section: "core", group: "Guides", title, description, status: "beta", blocks: [PLANNED, ...blocks] };
 }
 
 const step = (title: string, ...blocks: DocBlock[]) => ({ title, blocks });
@@ -286,7 +286,7 @@ export const GUIDE_PAGES: DocPage[] = [
       ],
     },
     p(
-      "An `ask.answered` webhook comes with the developer portal. Agents reach glasses with the same flow today through `glasses_ask` on the [hosted MCP server](/docs/use-cases/ask)."
+      "An `ask.answered` webhook comes with the developer portal. Agents reach glasses with the same flow today through `glasses_ask` on the [hosted MCP server](/docs/sdks/hosted-mcp)."
     ),
   ]),
   guide("test-mode", "Test mode", "Build and run CI against simulated devices", [

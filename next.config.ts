@@ -62,19 +62,23 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: "/terms", destination: "/services-agreement", permanent: true },
-      // The docs land on Overview (`docs/content/index.ts › DOCS_HOME`); config redirects run
-      // before the proxy, so bare `/docs` needs no public-route entry (`/docs/` has one).
-      // Temporary since B2 (2026-10-27): the home moved once, and a 308 is cached by browsers.
-      { source: "/docs", destination: "/docs/overview", permanent: false },
-      // B2 docs restructure (2026-10-27): slugs that left the sidebar keep working. Temporary
-      // until the new structure has settled.
-      { source: "/docs/start-here", destination: "/docs/overview", permanent: false },
+      // The docs land on their home page (`docs/content/index.ts › DOCS_HOME`); config redirects
+      // run before the proxy, so bare `/docs` needs no public-route entry (`/docs/` has one).
+      // Temporary: the home moved twice on 2026-10-27, and a 308 is cached by browsers.
+      { source: "/docs", destination: "/docs/home", permanent: false },
+      // Slugs that left the sidebar keep working. Temporary until the structure has settled.
+      { source: "/docs/start-here", destination: "/docs/quickstart", permanent: false },
       { source: "/docs/use-cases/connect-devices", destination: "/docs/guides/connect-a-device", permanent: false },
       { source: "/docs/use-cases/routing", destination: "/docs/concepts/context-profiles-and-routing", permanent: false },
-      { source: "/docs/devices/meta-ray-ban", destination: "/docs/devices/meta", permanent: false },
-      // B3 (2026-10-27): the phone came back as its own Coming soon page (D2 fallback surface).
-      { source: "/docs/devices/phone-push", destination: "/docs/devices/phone", permanent: false },
-      { source: "/docs/devices/:device(mac-notch|apple-watch)", destination: "/docs/devices", permanent: false },
+      // Device pages by brand became device CATEGORIES (2026-10-27); each brand is a model on its
+      // category page (`docs/content/pages-categories.ts`).
+      { source: "/docs/use-cases/:intent(show|ask|notify)", destination: "/docs/devices/display-glasses", permanent: false },
+      { source: "/docs/devices/:device(even-realities-g2|mentra)", destination: "/docs/devices/display-glasses", permanent: false },
+      { source: "/docs/devices/:device(meta|meta-ray-ban)", destination: "/docs/devices/audio-glasses", permanent: false },
+      { source: "/docs/devices/:device(google-home|home-assistant)", destination: "/docs/devices/smart-home", permanent: false },
+      { source: "/docs/devices/:device(phone|phone-push|apple-watch)", destination: "/docs/devices/phones", permanent: false },
+      { source: "/docs/devices/:device(desktop|mac-notch)", destination: "/docs/devices/computers", permanent: false },
+      { source: "/docs/devices/cars", destination: "/docs/devices/vehicles", permanent: false },
       // C10 `doc_url` (`@dopl/contracts/device-sdk › ERROR_DOC_BASE`) points at /docs/errors/<code>.
       { source: "/docs/errors/:code", destination: "/docs/api-reference/errors", permanent: false },
       // The API reference's pre-contract pages (2026-10-20) were renamed to the frozen Device

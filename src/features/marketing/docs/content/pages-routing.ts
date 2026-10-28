@@ -51,11 +51,11 @@ const lim = (n: number | null) => (n === null ? "None" : String(n));
 export const ROUTING_PAGES: DocPage[] = [
   {
     slug: "concepts/context-profiles-and-routing",
-    tab: "about",
+    section: "core",
     group: "Concepts",
     title: "Context profiles and routing",
     description: "How Dopl picks a device, tells your agent how to write for it and holds the output to its limits",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       p(
@@ -210,11 +210,11 @@ export const ROUTING_PAGES: DocPage[] = [
   },
   {
     slug: "concepts/displays",
-    tab: "about",
+    section: "core",
     group: "Concepts",
     title: "Displays",
     description: "One block vocabulary for every screen, from a glasses lens to a desktop",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       p(
@@ -251,11 +251,11 @@ export const ROUTING_PAGES: DocPage[] = [
   },
   {
     slug: "concepts/events-and-analytics",
-    tab: "about",
+    section: "core",
     group: "Concepts",
     title: "Events and analytics",
     description: "One event for every call, recorded from the first request",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       p(

@@ -5,6 +5,9 @@ import { TEST_MAGIC_DEVICE_IDS, type RiskTier } from "@dopl/contracts/device-sdk
 import { describe, expect, it } from "vitest";
 
 import { createEvenG2Adapter } from "@/features/device-sdk/adapters/even-g2";
+import { desktopUnavailable } from "@/features/device-sdk/server/device-adapters";
+import { createEvenG2Dispatcher, SDK_ASK_TTL_S, SDK_NOTIFY_TTL_S, SDK_SCREEN_TTL_S } from "@/features/device-sdk/server/glasses/even-g2-dispatch";
+import { createFakeGlassesStore } from "@/features/glasses/core/testing/fake-store";
 import { DOPL_KIND_PROFILES } from "@/features/device-sdk/delivery/default-profiles";
 import { capabilitiesFor } from "@/features/device-sdk/delivery/intents";
 import { confirmationModeFor, DEFAULT_RATE_LIMIT } from "@/features/device-sdk/delivery/policy";
@@ -13,6 +16,7 @@ import { defaultGranted } from "@/features/device-sdk/server/connect/scopes";
 
 import { DOC_PAGES, getDocPage, pageToMarkdown } from "./index";
 import { G2_ASK_DESCRIPTOR, TIER_ROWS } from "./pages-concepts";
+import { CATEGORIES, G2_TTL_S } from "./pages-categories";
 import { DEFAULT_PROFILE_ROWS, FALLBACK_ORDER, INTENT_ROWS } from "./pages-routing";
 import { MCP_TOOL_ROWS, SDK_METHOD_ROWS } from "./pages-sdk-client";
 import { API } from "./shared";
@@ -153,7 +157,47 @@ describe("docs against test mode", () => {
     for (const page of DOC_PAGES) expect(pageToMarkdown(page), page.slug).not.toMatch(/test\/reset/);
   });
 
-  it("keeps the phone page coming soon", () => {
-    expect(getDocPage("devices/phone")?.status).toBe("coming_soon");
+  it("keeps the phones category coming soon", () => {
+    expect(getDocPage("devices/phones")?.status).toBe("coming_soon");
+  });
+});
+
+describe("category badges against the production dispatchers", () => {
+  const device = {
+    id: "dev_g2",
+    kind: "glasses",
+    vendor: "even_realities",
+    model: "even_g2",
+    firmware: null,
+    adapter_id: "even_g2",
+    adapter_version: "0.1.0",
+    capabilities: [],
+    online: true,
+    last_seen_at: "2026-10-27T17:00:00Z",
+  } as const;
+
+  it("delivers every capability the Display glasses page badges Live on Even G2, with the card's own args", async () => {
+    const dispatch = createEvenG2Dispatcher({ store: createFakeGlassesStore().store, now: () => Date.parse("2026-10-27T17:00:00Z") });
+    const glasses = CATEGORIES.find((c) => c.slug === "display-glasses")!;
+    let checked = 0;
+    for (const spec of [...glasses.sends, ...glasses.receives]) {
+      if (!spec.support.some((s) => s.model === "Even Realities G2" && s.status === "live")) continue;
+      if (spec.call === "answer") continue; // the answer settles the ask.choice action sent above
+      const res = await dispatch({ ...device } as never, spec.capability, (spec.args ?? {}) as Record<string, unknown>);
+      expect(res.status, `${spec.capability}: ${res.error?.message ?? ""}`).not.toBe("failed");
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThanOrEqual(4);
+  });
+
+  it("states the G2 lens lifetimes the dispatcher uses", () => {
+    expect(G2_TTL_S).toEqual({ notify: SDK_NOTIFY_TTL_S, screen: SDK_SCREEN_TTL_S, ask: SDK_ASK_TTL_S });
+  });
+
+  it("badges nothing Live on the desktop, which the API refuses", async () => {
+    const res = await desktopUnavailable({ ...device, kind: "desktop" } as never, "present.notify", {});
+    expect(res.error?.code).toBe("capability_unsupported");
+    const computers = CATEGORIES.find((c) => c.slug === "computers")!;
+    for (const spec of [...computers.sends, ...computers.receives]) for (const s of spec.support) expect(s.status).not.toBe("live");
   });
 });

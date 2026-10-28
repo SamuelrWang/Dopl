@@ -47,11 +47,11 @@ export const G2_ASK_DESCRIPTOR = {
 export const CONCEPT_PAGES: DocPage[] = [
   {
     slug: "concepts/projects-and-keys",
-    tab: "about",
+    section: "core",
     group: "Concepts",
     title: "Projects, environments and keys",
     description: "How your organization, projects, test and live data, and API keys fit together",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       {
@@ -105,11 +105,11 @@ export const CONCEPT_PAGES: DocPage[] = [
   },
   {
     slug: "concepts/users-and-connections",
-    tab: "about",
+    section: "core",
     group: "Concepts",
     title: "End users and connections",
     description: "Your users stay yours, and each device they link becomes a connection",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       {
@@ -159,11 +159,11 @@ export const CONCEPT_PAGES: DocPage[] = [
   },
   {
     slug: "concepts/devices-and-capabilities",
-    tab: "about",
+    section: "core",
     group: "Concepts",
     title: "Devices and capabilities",
     description: "One action model for every device, sorted by risk",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       {
@@ -207,11 +207,11 @@ export const CONCEPT_PAGES: DocPage[] = [
   },
   {
     slug: "concepts/permissions-and-safety",
-    tab: "about",
+    section: "core",
     group: "Concepts",
     title: "Permissions and safety",
     description: "Grants from the consent screen, risk tiers and confirmation that the model cannot skip",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       {

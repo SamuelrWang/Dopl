@@ -57,3 +57,11 @@ export const CONNECT_ROWS: ConnectRow[] = [
     copy: MCP_URL,
   },
 ];
+
+/** The docs connect window's tabs (`../components/docs-interactive.tsx › DocsConnect`), read off {@link CONNECT_ROWS}. */
+export const CONNECT_TABS: { id: ConnectRow["id"]; label: string; command: string; hint: string }[] = CONNECT_ROWS.map((r) => ({
+  id: r.id,
+  label: { claude: "Claude", codex: "Codex", cursor: "Cursor", any: "Any MCP client" }[r.id],
+  command: r.copy,
+  hint: r.comment,
+}));

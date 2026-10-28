@@ -3,15 +3,15 @@ import type { DocBlock, DocPage, DocParam, HttpMethod } from "./types";
 
 /**
  * The API Reference tab, hand written from `docs/specs/device-sdk/openapi.yaml` until a generator
- * is picked, with behaviour taken from the built routes (`src/app/api/v1/*`). ⚠ Built on master,
- * NOT DEPLOYED: every page here is `coming_soon`. Paths, fields and status codes match the
+ * is picked, with behaviour taken from the built routes (`src/app/api/v1/*`). ⚠ Deployed in 1.43.0
+ * (2026-10-27) for design partners: every page here is `beta`. Paths, fields and status codes match the
  * contract exactly (`content.test.ts` parses the file and checks every path). `GET /devices/{id}`
- * is in the contract but has no route yet, and its page says so.
+ * was served in A9.
  */
 
 const PLANNED: DocBlock = {
   type: "quote",
-  text: "Coming soon. This endpoint is built and in testing, and is not live in production yet. Today, agents reach devices through the [hosted MCP server](/docs/sdks/hosted-mcp).",
+  text: "Beta. This endpoint is live for design partners, with keys that Dopl issues while the developer portal is being built.",
 };
 
 const AUTH: DocParam = {
@@ -93,11 +93,11 @@ interface EndpointSpec {
 function endpoint(e: EndpointSpec): DocPage {
   return {
     slug: `api-reference/${e.slug}`,
-    tab: "api",
+    section: "api",
     group: e.group,
     title: e.title,
     description: e.description,
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       { type: "endpoint", method: e.method, path: `/v1${e.path}` },
@@ -149,14 +149,14 @@ const p = (text: string): DocBlock => ({ type: "p", text });
 export const API_PAGES: DocPage[] = [
   {
     slug: "api-reference",
-    tab: "api",
+    section: "api",
     group: "Overview",
     title: "About the Dopl API",
     description: "The REST API of the Device SDK",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       p(
-        "Agents reach Dopl today through the [hosted MCP server](/docs/sdks/hosted-mcp). The Device SDK adds a REST API for your own product and your own users, with a TypeScript SDK and a project MCP server on top of it. It is built and in testing with design partners, and not live in production yet."
+        "Agents reach Dopl today through the [hosted MCP server](/docs/sdks/hosted-mcp). The Device SDK adds a REST API for your own product and your own users, with a TypeScript SDK and a project MCP server on top of it. It is live for design partners: Dopl issues your project's keys while the developer portal is being built, and `@dopl/sdk` is available on request."
       ),
       { type: "h2", text: "Base URL" },
       p(`JSON over HTTPS at \`${API}\`.`),
@@ -182,11 +182,11 @@ export const API_PAGES: DocPage[] = [
   },
   {
     slug: "api-reference/errors",
-    tab: "api",
+    section: "api",
     group: "Overview",
     title: "Errors",
     description: "One error shape on every route",
-    status: "coming_soon",
+    status: "beta",
     blocks: [
       PLANNED,
       {

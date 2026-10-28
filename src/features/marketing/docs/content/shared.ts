@@ -1,8 +1,8 @@
 import type { DocBlock, HttpMethod } from "./types";
 
 /**
- * Pieces every Device SDK page shares. ⚠ The `/v1` routes are BUILT on master (A1–A7) but NOT
- * DEPLOYED, so every page that uses them stays `coming_soon`. The contract is
+ * Pieces every Device SDK page shares. ⚠ The `/v1` routes are deployed (1.43.0, 2026-10-27) but
+ * keys are issued by Dopl and `@dopl/sdk` is private, so the pages that use them are `beta`. The contract is
  * `docs/specs/device-sdk/openapi.yaml` (mirroring `@dopl/contracts/device-sdk`), and
  * `content.test.ts` holds every `/v1` path in a code sample to a path in that file.
  */
@@ -14,10 +14,10 @@ import type { DocBlock, HttpMethod } from "./types";
  */
 export const API = "https://www.usedopl.com/api/v1";
 
-/** The first block of every page that describes the Device SDK, which is built but not deployed. */
+/** The first block of every page that describes the Device SDK: deployed (1.43.0, 2026-10-27), keys issued by Dopl, package private. */
 export const PLANNED: DocBlock = {
   type: "quote",
-  text: "Coming soon. The Device SDK is built and in testing with design partners, and is not live in production yet. Today, agents reach devices through the [hosted MCP server](/docs/sdks/hosted-mcp).",
+  text: "Beta. The Device SDK is live for design partners: Dopl issues your project's keys while the developer portal is being built, and `@dopl/sdk` is available on request. Agents that act for one signed in Dopl user can use the [hosted MCP server](/docs/sdks/hosted-mcp) instead.",
 };
 
 /** A cURL request against the API with a test secret key. */
