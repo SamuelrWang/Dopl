@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Plus } from "lucide-react";
 import { EmptyLine, EmptyState } from "@/shared/ui/empty-state";
 import { SectionPanel } from "@/shared/ui/section-panel";
 import { PageError } from "@/shared/ui/page-error";
@@ -56,22 +56,13 @@ export type HomeKnowledgeChannel = Pick<Channel, "id" | "workspaceId" | "myWorks
  * ⚠ ONE LAYOUT FOR ALL THREE TABS (`index.tsx`): this renders INSIDE the record
  * pane, never moving the conversation column and never going full-width.
  *
- * 🔒 **BOTH SECTION BUTTONS READ "+ Knowledge base"** (Samuel, 2026-09-09:
- * *"have it for both, say, + Knowledge base. for both"*), on the page's black
- * `h-9` pill (`pill-button.tsx › CreateButton`) — the SECTION names the
- * destination, so the button says only what it makes. **The two accessible names
- * are identical on purpose**: reach them through their section
- * (`getByRole("region", { name: … })`), as the desktop's `pages/home/knowledge-panels.test.tsx` does.
+ * 🔒 **ONE "+ Knowledge base", TOP RIGHT, CREATING INTO PERSONAL** (Samuel, 2026-10-28, replacing
+ * the 2026-09-09 one-button-per-section ruling): the page matches the Identities page's control row.
+ * The Shared section keeps its create as the Identities page does: a dashed "Create new" cell after
+ * its cards (member+ only), which makes the base AND shares it here.
  *
- * 🔒 **THE SECTIONS ARE FLAT (Samuel, 2026-08-27, over a screenshot).** The old
- * `SectionBox` — header strip over a `bg-bg-inset` body with a concave inset
- * shadow — read as a rectangle pressed INTO the record pane. They are
- * `shared/ui/section-panel.tsx › SectionPanel` now: no border line, no inset
- * shadow, heading and cards directly on one ground. **The cards stay raised** —
- * raised-on-flat-gray is the point, and the drag-resize grip went with the box.
- * ⚠ **THE GROUND IS NOT STATED IN THIS FILE** — `shared/ui/section-panel.tsx ›
- * SECTION_PANEL_GROUND` grounds every section on every host from one string
- * (R-38, 2026-09-17), so a re-tune cannot land on one tab only.
+ * 🔒 **THE SECTIONS ARE PLAIN HEADINGS ON THE PAGE** (Samuel, 2026-10-28): `SectionPanel flat`, the
+ * Identities page's section face. No gray ground behind either group; the cards stay raised.
  */
 export function HomeKnowledgePanels({
   channel,
@@ -178,8 +169,8 @@ export function HomeKnowledgePanels({
   // nobody read.
   const containerRole: Role =
     channel?.myWorkspaceRole ?? EMPTY_WORKSPACE_ROLE;
-  /** The SHARED section's create, mirroring `POST /api/knowledge/bases`'s
-   *  `minRole: "member"`. See the button for why it is a mirror and not a fence. */
+  /** The SHARED section's create, mirroring `POST /api/knowledge/bases`'s `minRole: "member"` (F-343).
+   *  ⚠ The matching picture, never the fence: the server is still the fence. Hidden for a guest. */
   const canCreateShared = meetsMinRole(containerRole, "member");
   // ⚠ Where a base opened from THIS section lives, and who the caller is there.
   // The home mount takes boot's real membership role, as it always did.
@@ -268,7 +259,20 @@ export function HomeKnowledgePanels({
     homeWorkspaceId !== null && homeList.data === undefined;
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    // 🔒 THE IDENTITIES PAGE'S FRAME (Samuel, 2026-10-28): the same `rail-layout` columns (no rail),
+    // a control row with ONE create at its right end, then flat sections on the page itself.
+    <div className="rail-layout">
+      <div className="rail-layout-cols" data-rail="off">
+        <div className="rail-layout-main">
+      <div className="flex min-w-0 flex-wrap items-center gap-4">
+        {/* ⚠ ONE BUTTON, THE PERSONAL CREATE — the same default the Identities page's top
+            button has (`identities-home.tsx`, `onCreate("home")`). The per-section buttons are gone. */}
+        <div className="ml-auto flex-none">
+          <CreateButton disabled={homeTarget === null} onClick={() => setCreateOpen("home")}>
+            Knowledge base
+          </CreateButton>
+        </div>
+      </div>
       {channel === null ? (
         // ⚠ IN THE SECTION'S PLACE, not the pane's. Same sentence as before, now
         // scoped to the thing it is actually about.
@@ -280,34 +284,9 @@ export function HomeKnowledgePanels({
       ) : (
       /* ⚠ FLAT, AND THE GROUND IS NOT STATED HERE — see "THE SECTIONS ARE
          FLAT" in this file's docblock. */
-      <SectionPanel
-        id="home-kb-shared"
-        label="Shared in this channel"
-        action={
-          // ⚠ CREATES **AND SHARES**, in one server call — a base in this
-          // channel's container plus a `visible` grant on this channel, rolled
-          // back together if either half fails (`createBase`). A create that
-          // landed ungranted would be invisible on this very surface, which is
-          // the rule the removed private scope used to hide.
-          // 🔒 **GATED ON THE CALLER'S REAL ROLE (2026-09-17, F-343's
-          // consequence 1).** `POST /api/knowledge/bases` is `minRole: "member"`,
-          // so a GUEST peer's click was a 403 the dialog surfaced as an error —
-          // correct, and a dead control (INVARIANTS §5). The pane could not tell
-          // a member from a guest until `Channel.myWorkspaceRole` existed; it can now, so
-          // it asks the SAME ladder the server asks (`meetsMinRole(…, "member")`)
-          // rather than restating the floor as a second predicate.
-          // ⚠ **THE SERVER FENCE IS UNCHANGED AND IS STILL THE FENCE** — this is
-          // the matching picture, never the reason a floor could move.
-          // ⚠ HIDDEN, NOT DISABLED: a guest is not being refused mid-act, they are
-          // simply not offered one.
-          canCreateShared ? (
-            <CreateButton onClick={() => setCreateOpen("channel")}>
-              Knowledge base
-            </CreateButton>
-          ) : null
-        }
+      <SectionPanel id="home-kb-shared" label="Shared in this channel" flat
       >
-        {shared.length === 0 ? (
+        {shared.length === 0 && !canCreateShared ? (
           <EmptyLine>Nothing is shared into this channel yet.</EmptyLine>
         ) : (
           // ⚠ NO `p-3` — the panel supplies the padding now. It was here
@@ -324,33 +303,26 @@ export function HomeKnowledgePanels({
                 onToggleStar={containerStar}
               />
             ))}
+            {/* ⚠ THE SHARED CREATE, AS THE IDENTITIES PAGE DRAWS ITS OWN (`identity-section.tsx ›
+                IdentityGrid`'s dashed cell): creates in this channel's container AND shares it, in one
+                server call (`createBase`). The page's top button is the Personal create. */}
+            {canCreateShared && (
+              <button
+                type="button"
+                aria-label="Create a knowledge base shared in this channel"
+                onClick={() => setCreateOpen("channel")}
+                className="flex min-h-[104px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong text-small font-medium text-text-muted transition-colors hover:border-border-highlight hover:text-text-secondary"
+              >
+                <Plus size={16} strokeWidth={2} aria-hidden="true" />
+                Create new
+              </button>
+            )}
           </div>
         )}
       </SectionPanel>
       )}
 
-      <SectionPanel
-        id="home-kb-personal"
-        label="Personal"
-        action={
-          // ⚠ THE PERSONAL-ARMING SWITCH WAS REMOVED HERE (2026-09-06, Samuel's
-          // reversal of task 11): agent sessions reach their operator's personal
-          // shelf by default now, so there is no per-room switch to offer.
-          <CreateButton
-            disabled={homeTarget === null}
-            onClick={() => setCreateOpen("home")}
-          >
-            Knowledge base
-          </CreateButton>
-        }
-        // ⚠ THE CAPTION IS DELETED (Samuel, 2026-09-09: *"remove this line:
-        // Yours alone. To share knowledge in a channel, create it there."*). It
-        // was the RULING rather than an explainer when it landed on 2026-08-27,
-        // and the minimal-copy ruling has since tightened to label + control
-        // (INVARIANTS §5): the heading says "Personal" and the button beside it
-        // says what it makes, so the sentence was a third statement of one
-        // fact. **Do not put an explainer line back in either panel** — the
-        // caption slot survives on `SectionPanel` for a caller with a real rule.
+      <SectionPanel id="home-kb-personal" label="Personal" flat
       >
         {/* ⚠ THE FAIL-CLOSED BACKFILL NOTICE WAS REMOVED HERE (2026-09-06
             reversal of task 11): there is no arming regression to explain now
@@ -419,6 +391,8 @@ export function HomeKnowledgePanels({
           }}
         />
       )}
+        </div>
+      </div>
     </div>
   );
 }

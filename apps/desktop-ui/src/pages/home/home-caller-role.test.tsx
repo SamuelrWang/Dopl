@@ -194,16 +194,13 @@ describe("the Knowledge face's shared create (F-343 consequence 1)", () => {
     await openKnowledge();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Knowledge base")).toBeNull();
+    expect(sharedCreate("Create a knowledge base shared in this channel")).toBeNull();
     // ⚠ PERSONAL IS UNTOUCHED: it writes to the caller's OWN home workspace, at
     // boot's real membership role, and a guest in somebody's channel is not a
     // guest on their own shelf. Gating it on the container's role would take a
     // capability away over an unrelated fact.
-    expect(
-      within(screen.getByRole("region", { name: "Personal" })).getByRole("button", {
-        name: "Knowledge base",
-      })
-    ).toBeTruthy();
+    // The Personal create is the page's top-right button since 2026-10-28 (one per page).
+    expect(screen.getByRole("button", { name: "Knowledge base" })).toBeTruthy();
   });
 
   it("is THERE for a member", async () => {
@@ -212,7 +209,7 @@ describe("the Knowledge face's shared create (F-343 consequence 1)", () => {
     await openKnowledge();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Knowledge base")).toBeTruthy();
+    expect(sharedCreate("Create a knowledge base shared in this channel")).toBeTruthy();
   });
 
   it("FAILS CLOSED on a stale cached payload", async () => {
@@ -221,7 +218,7 @@ describe("the Knowledge face's shared create (F-343 consequence 1)", () => {
     await openKnowledge();
     await screen.findByRole("region", { name: "Shared in this channel" });
 
-    expect(sharedCreate("Knowledge base")).toBeNull();
+    expect(sharedCreate("Create a knowledge base shared in this channel")).toBeNull();
   });
 });
 

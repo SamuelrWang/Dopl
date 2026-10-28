@@ -154,10 +154,10 @@ describe("the two sections", () => {
     renderHome();
     await openKnowledge();
 
-    // Two sentences, two states, on screen AT THE SAME TIME — which is the part
-    // the pill made impossible to assert.
+    // Two states on screen AT THE SAME TIME. ⚠ For a member the empty Shared section is its
+    // dashed "Create new" cell (the Identities page's rule, 2026-10-28); the sentence is a guest's.
     expect(
-      await screen.findByText("Nothing is shared into this channel yet.")
+      await screen.findByRole("button", { name: "Create a knowledge base shared in this channel" })
     ).toBeInTheDocument();
     expect(
       await screen.findByText("You haven't created a private base here yet.")
@@ -263,9 +263,10 @@ describe("§8 stale cache", () => {
     // ⚠ WITH NO GRANTS, EVERY SECTION IS EMPTY — and that is the correct
     // rendering since 2026-08-27, not a degraded one: this fixture's bases live
     // in the CONTAINER, and a container base with no grant belongs nowhere on
-    // /home. The pin is that the pane says so instead of throwing.
+    // /home. The pin is that the pane paints an empty Shared section (for this member, its
+    // "Create new" cell) instead of throwing.
     expect(
-      await screen.findByText("Nothing is shared into this channel yet.")
+      await screen.findByRole("button", { name: "Create a knowledge base shared in this channel" })
     ).toBeInTheDocument();
     expect(screen.queryByText("Agent only")).not.toBeInTheDocument();
     expect(screen.queryByText("Call notes")).not.toBeInTheDocument();
@@ -361,15 +362,14 @@ describe("creating", () => {
         c.path.split("?")[0] === "/api/knowledge/bases" && c.opts.method === "POST"
     );
 
-  /** 🔒 BOTH CREATE BUTTONS READ "Knowledge base" SINCE 2026-09-09 (Samuel:
-   *  *"have it for both, say, + Knowledge base. for both"*), so the only thing
-   *  telling them apart is the SECTION — which is also the only thing that
-   *  differs about what they write. This IS the assertion that one label still
-   *  covers two destinations; a button-name lookup would be ambiguous. */
+  /** 🔒 ONE "+ Knowledge base" AT THE TOP OF THE PAGE MAKES A PERSONAL BASE (Samuel, 2026-10-28);
+   *  the Shared section's own create is its dashed "Create new" cell, named for where it writes. */
   const createIn = (section: string) =>
-    within(screen.getByRole("region", { name: section })).getByRole("button", {
-      name: "Knowledge base",
-    });
+    section === "Personal"
+      ? screen.getByRole("button", { name: "Knowledge base" })
+      : within(screen.getByRole("region", { name: section })).getByRole("button", {
+          name: "Create a knowledge base shared in this channel",
+        });
 
   it("the PERSONAL button writes to the home workspace, on the home shelf", async () => {
     renderHome();

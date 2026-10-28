@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeRequestOpts, BridgeResponse } from "#/lib/dopl-bridge";
 import { bridgeCalls, installBridge, ok } from "#/test-utils/bridge";
@@ -73,10 +73,8 @@ describe("🔒 with no channels, PERSONAL still renders", () => {
     await openKnowledge();
     await screen.findByText("Fundraise memos");
 
-    const personal = screen.getByRole("region", { name: "Personal" });
-    expect(
-      within(personal).getByRole("button", { name: /Knowledge base/ })
-    ).toBeEnabled();
+    // The Personal create is the page's top-right button since 2026-10-28.
+    expect(screen.getByRole("button", { name: "Knowledge base" })).toBeEnabled();
   });
 
   it("says the sentence about the SHARED section, and only there", async () => {
