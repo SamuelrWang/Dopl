@@ -73,7 +73,12 @@ export function AgentLiveness({
  */
 export function AgentStatusPill({ tone, label }: AgentLivenessState) {
   const face = tone === "working" ? "live" : tone === "ended" ? "ended" : "neutral";
-  return <StatusPill dot tone={face}>{label}</StatusPill>;
+  // Samuel, 2026-10-28: the ended pill is text only, no dot. Other tones keep theirs.
+  return (
+    <StatusPill dot={tone !== "ended"} tone={face}>
+      {label}
+    </StatusPill>
+  );
 }
 
 /**
