@@ -18,7 +18,7 @@ import type {
 } from "@dopl/contracts/device-sdk";
 import { CAPABILITY_RISK_TIER } from "@dopl/contracts/device-sdk";
 import { DOPL_KIND_PROFILES } from "@/features/device-sdk/delivery/default-profiles";
-import { GLASSES_REPLY_GUIDANCE } from "../../../../../packages/mcp-server/src/tools/glasses-reply-guidance";
+import { GLASSES_REPLY_GUIDANCE } from "@/features/device-sdk/delivery/glasses-guidance";
 
 /** The demo's clock: every relative time on the page is measured from here. */
 export const DEMO_NOW = "2026-10-27T12:00:00.000Z";

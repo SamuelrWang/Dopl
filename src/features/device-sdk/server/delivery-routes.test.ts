@@ -19,7 +19,7 @@ import { setDeliveryDepsForTests } from "./delivery-routes";
 import { MemoryDeliveryStore, MemoryGrantStore } from "./delivery-store-memory";
 import { createAdapterRegistry } from "../adapters/registry";
 import { createSimulatorAdapter } from "../adapters/simulator";
-import { GLASSES_REPLY_GUIDANCE } from "../../../../packages/mcp-server/src/tools/glasses-reply-guidance";
+import { GLASSES_REPLY_GUIDANCE } from "../delivery/glasses-guidance";
 import {
   ActionSchema,
   DeliverResponseSchema,

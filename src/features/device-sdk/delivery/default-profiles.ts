@@ -6,10 +6,10 @@
  * laptop means long ones (Samuel, 2026-10-27). A project overrides any of these with a
  * `context_profiles` row (`resolve-profile.ts`).
  *
- * 🔒 THE GLASSES TEXT IS NOT RESTATED HERE: it is `GLASSES_REPLY_GUIDANCE`, imported from the MCP
- * server's leaf module, the one copy the MCP renderer and the desktop also use.
+ * 🔒 THE GLASSES TEXT IS NOT RESTATED HERE: it is `GLASSES_REPLY_GUIDANCE` from `./glasses-guidance`,
+ * held byte-equal to the MCP leaf the app renderer and the desktop use (`glasses-guidance.test.ts`).
  */
-import { GLASSES_REPLY_GUIDANCE } from "../../../../packages/mcp-server/src/tools/glasses-reply-guidance";
+import { GLASSES_REPLY_GUIDANCE } from "./glasses-guidance";
 import type { ContextProfile, DeviceKind } from "../types";
 
 /** Every Dopl default is version 1 until its text changes; events record `profile_id` + version. */

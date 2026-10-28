@@ -3,7 +3,7 @@
  * table (presence, capability, grant, urgency) and D3 enforcement (truncate vs send_to vs callback).
  */
 import { describe, expect, it } from "vitest";
-import { GLASSES_REPLY_GUIDANCE } from "../../../../packages/mcp-server/src/tools/glasses-reply-guidance";
+import { GLASSES_REPLY_GUIDANCE } from "./glasses-guidance";
 import { GLASSES_REPLY_GUIDANCE as MCP_COPY } from "../../../../packages/mcp-server/src/tools/channel-source";
 import { createSimulatorAdapter } from "../adapters/simulator";
 import { ContextProfileSchema, DEVICE_KINDS, type ContextProfile, type Device, type DeviceKind } from "../types";
@@ -52,7 +52,7 @@ describe("default profiles", () => {
     for (const p of DOPL_MODEL_PROFILES) ContextProfileSchema.parse(p);
   });
 
-  it("🔒 the glasses default IS GLASSES_REPLY_GUIDANCE (one source, byte-identical to the MCP copy)", () => {
+  it("🔒 the glasses default IS GLASSES_REPLY_GUIDANCE (byte-identical to the MCP copy)", () => {
     expect(DOPL_KIND_PROFILES.glasses.prompt_append).toBe(GLASSES_REPLY_GUIDANCE);
     expect(MCP_COPY).toBe(GLASSES_REPLY_GUIDANCE);
   });

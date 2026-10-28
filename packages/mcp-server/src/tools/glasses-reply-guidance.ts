@@ -2,10 +2,11 @@
  * ⚠ `GLASSES_REPLY_GUIDANCE` IS THE ONE COPY of the line an agent reads when its member is on glasses.
  *
  * A LEAF MODULE ON PURPOSE (no imports): `channel-source.ts` re-exports it for the MCP renderer, and
- * the Device SDK's default glasses profile (`src/features/device-sdk/delivery/default-profiles.ts`)
- * imports THIS file by path — the Next bundle cannot follow `channel-source.ts`'s `./narration.js`
- * import (Turbopack does not map `.js` → `.ts`; INVARIANTS §1). The desktop feeds its sessions the
- * same line (`dopl-desktop-app/main/message-source.js`), held byte-equal to this file by a desktop test.
+ * app tests import it by path (the Next bundle cannot follow `channel-source.ts`'s `./narration.js`
+ * import; Turbopack does not map `.js` → `.ts`; INVARIANTS §1). Two copies are held byte-equal to
+ * this file by tests that read it as a file: the desktop's (`dopl-desktop-app/main/message-source.js`)
+ * and the Device SDK's default glasses profile (`src/features/device-sdk/delivery/glasses-guidance.ts`,
+ * which no longer imports this package: SDK split boundary, Plan §7.2).
  */
 export const GLASSES_REPLY_GUIDANCE =
   "They are on glasses: reply in at most ~5 short plain-text lines (no tables, code or long lists). " +

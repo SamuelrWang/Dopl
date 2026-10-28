@@ -9,7 +9,7 @@ import {
   TEST_MAGIC_DEVICE_IDS,
   WebhookEventNameSchema,
 } from "@dopl/contracts/device-sdk";
-import { GLASSES_REPLY_GUIDANCE } from "../../../../../packages/mcp-server/src/tools/glasses-reply-guidance";
+import { GLASSES_REPLY_GUIDANCE } from "@/features/device-sdk/delivery/glasses-guidance";
 import { DEMO_ACTIVITY } from "./activity";
 import { DEMO_ENVS } from "./fixtures";
 

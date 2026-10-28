@@ -2,6 +2,20 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
+// SDK SPLIT BOUNDARY (Plan "Dopl SDK Split - Plan" §1 + §7.2, item W0.4). Three fences, each on
+// its OWN rule name, because in flat config a later block REPLACES an earlier block's options for
+// the same rule on the same file — sharing one rule would let the allowlists erase each other.
+//   1. `no-restricted-imports` on the to-be-public packages: they may not import private code.
+//   2. `no-restricted-imports` on `src/**`: only platform code may import the Device SDK server.
+//   3. `@typescript-eslint/no-restricted-imports` on `src/**`: only the prosumer glasses tree, the
+//      SDK's glasses bridge and the display seam may import `glasses/core/devices`.
+//   4. `no-restricted-syntax` on runtime `src/**` files: no relative import of a package's `src/`.
+// The regexes match the alias AND relative spellings, so `../../device-sdk/x` cannot slip past.
+const DEVICE_SDK_IMPORT = "^(@/features/|(\\.\\./)+(src/)?(features/)?)device-sdk(/|$)";
+const GLASSES_DEVICES_IMPORT = "^(@/features/|(\\.\\./)+(src/)?(features/)?)glasses/core/devices(/|$)";
+const DEVICE_SDK_MSG = "Device SDK server internals are platform-only (Plan §7.2). App code reaches devices through the display seam (`@/features/display/server/*`), never `features/device-sdk/*`.";
+const GLASSES_DEVICES_MSG = "Prosumer glasses device internals (Plan §7.2): only `features/glasses/**`, `app/api/glasses/**`, the SDK glasses bridge and the display seam may import `glasses/core/devices/*`.";
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -58,7 +72,100 @@ const eslintConfig = defineConfig([
             { group: ["@/app/*"], message: "Next app-router tree — never bundled into the SPA. Reuse lives under @/features/* and @/shared/*." },
             { group: ["@/features/*/server/*", "@/shared/supabase/admin", "@/shared/auth/*"], message: "Server-only module — the renderer talks to the API, never to services or Supabase." },
             { group: ["next", "next/*"], message: "No Next in the SPA." },
+            { regex: DEVICE_SDK_IMPORT, message: DEVICE_SDK_MSG },
+            { regex: GLASSES_DEVICES_IMPORT, message: GLASSES_DEVICES_MSG },
           ],
+        },
+      ],
+    },
+  },
+
+  // SDK SPLIT FENCE 1 — the public tree (`@dopl/sdk`, the device contracts, the contracts package
+  // they ship from today) imports nothing private: no `@/` alias, no `src/`, no sibling private
+  // package (`@dopl/client`, `@dopl/mcp-server`), no reach into another package's `src/`. W0.3
+  // moves `contracts/src/device-sdk` to `packages/device-contracts`; that path is fenced already.
+  {
+    files: [
+      "packages/sdk/**/*.{ts,tsx,mts}",
+      "packages/device-contracts/**/*.{ts,tsx,mts}",
+      "packages/contracts/**/*.{ts,tsx,mts}",
+    ],
+    ignores: [
+      // The one existing hit: app-parity test, moved out to `src/features/display/core/` by W0.3
+      // (`sdk/contracts-split`). Delete this line when that lands.
+      "packages/contracts/src/device-sdk/display.test.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { regex: "^@/", message: "Public SDK code may not import the private web tree (`@/*`) (Plan §1)." },
+            { regex: "^(\\.\\./)+(src|apps|dopl-desktop-app)(/|$)", message: "Public SDK code may not import private repo code (Plan §1)." },
+            { regex: "^(\\.\\./)+packages/", message: "No relative reach into another package. Depend on it by name." },
+            { regex: "^(\\.\\./)+(dopl-client|mcp-server)(/|$)", message: "Private package — the public SDK may not import it (Plan §1)." },
+            { regex: "^@dopl/(client|mcp-server)(/|$)", message: "Private package — the public SDK may not depend on it (Plan §1)." },
+          ],
+        },
+      ],
+    },
+  },
+
+  // SDK SPLIT FENCE 2 — Device SDK server imports. Allowlist = what stays in the platform with it
+  // (Plan §2): the `/api/v1` routes, Connect, the events-prune cron, the developer portal, the
+  // docs, plus `glasses-runtime.ts` (the composition root that wires the SDK glasses ports).
+  {
+    files: ["src/**/*.{ts,tsx,mts}"],
+    ignores: [
+      "src/features/device-sdk/**",
+      "src/app/api/v1/**",
+      "src/app/api/connect/**",
+      "src/app/connect/**",
+      "src/app/api/cron/device-sdk-events-prune/**",
+      "src/app/playground/developers/**",
+      "src/features/marketing/docs/**",
+      "src/features/glasses/glasses-runtime.ts",
+    ],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [{ regex: DEVICE_SDK_IMPORT, message: DEVICE_SDK_MSG }] }],
+    },
+  },
+
+  // SDK SPLIT FENCE 3 — prosumer glasses device internals. Allowlist = the prosumer tree itself,
+  // its device API, the SDK's glasses bridge (`device-sdk/**`: even-g2 adapter, Connect pairing,
+  // `sdk-glasses-port`) and THE SEAM W1.2 swaps for an SDK call (`display/server/{service,lens}`).
+  {
+    files: ["src/**/*.{ts,tsx,mts}"],
+    ignores: [
+      "src/features/glasses/**",
+      "src/app/api/glasses/**",
+      "src/features/device-sdk/**",
+      "src/features/display/server/service.ts",
+      "src/features/display/server/service.test.ts",
+      "src/features/display/server/lens.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": ["error", { patterns: [{ regex: GLASSES_DEVICES_IMPORT, message: GLASSES_DEVICES_MSG }] }],
+    },
+  },
+
+  // SDK SPLIT FENCE 4 — runtime web code never imports another package's SOURCE by relative path
+  // (`../../packages/mcp-server/src/...`). That is how the Device SDK came to depend on the app's
+  // MCP package (fixed in W0.4). Tests may still compare across packages; runtime code depends on
+  // a package by name or owns its copy.
+  {
+    files: ["src/**/*.{ts,tsx,mts}"],
+    ignores: ["src/**/*.test.{ts,tsx,mts}", "src/**/test-*.{ts,tsx}", "src/**/fake-*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportDeclaration[source.value=/^(\\.\\.\\/)+packages\\/[\\w.-]+\\/src\\//]",
+          message: "Runtime code may not import a package's src/ by relative path. Depend on the package by name, or own the copy and hold it with a parity test.",
+        },
+        {
+          selector: "ImportExpression[source.value=/^(\\.\\.\\/)+packages\\/[\\w.-]+\\/src\\//]",
+          message: "Runtime code may not import a package's src/ by relative path.",
         },
       ],
     },
