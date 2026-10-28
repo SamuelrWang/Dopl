@@ -80,20 +80,14 @@ const eslintConfig = defineConfig([
     },
   },
 
-  // SDK SPLIT FENCE 1 — the public tree (`@dopl/sdk`, the device contracts, the contracts package
-  // they ship from today) imports nothing private: no `@/` alias, no `src/`, no sibling private
-  // package (`@dopl/client`, `@dopl/mcp-server`), no reach into another package's `src/`. W0.3
-  // moves `contracts/src/device-sdk` to `packages/device-contracts`; that path is fenced already.
+  // SDK SPLIT FENCE 1 — the public tree (`@dopl/sdk`, `@dopl/device-contracts`) and the type-only
+  // `@dopl/contracts` import nothing private: no `@/` alias, no `src/`, no sibling private package
+  // (`@dopl/client`, `@dopl/mcp-server`), no relative reach into another package's files.
   {
     files: [
       "packages/sdk/**/*.{ts,tsx,mts}",
       "packages/device-contracts/**/*.{ts,tsx,mts}",
       "packages/contracts/**/*.{ts,tsx,mts}",
-    ],
-    ignores: [
-      // The one existing hit: app-parity test, moved out to `src/features/display/core/` by W0.3
-      // (`sdk/contracts-split`). Delete this line when that lands.
-      "packages/contracts/src/device-sdk/display.test.ts",
     ],
     rules: {
       "no-restricted-imports": [
