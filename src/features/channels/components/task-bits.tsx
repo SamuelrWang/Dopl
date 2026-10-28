@@ -50,11 +50,13 @@ const RING_BOX = 16;
 const RING_STROKE = 2.5;
 const RING_R = (RING_BOX - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
+/** Arc length of the gap, measured on the stroke's centre line: about a 0.7px hairline. */
+const RING_GAP = 0.7;
 
 function TaskProgressRing({ done, total }: { done: number; total: number }) {
   const complete = done >= total;
-  // One gap per segment, shrunk with the count so many steps still read as segments.
-  const gap = total > 1 ? Math.min(1.75, (RING_C / total) * 0.3) : 0;
+  // A fixed hairline gap between segments (Samuel, 2026-10-28: the proportional gap read too wide).
+  const gap = total > 1 ? RING_GAP : 0;
   const seg = RING_C / total - gap;
   return (
     <span className="relative grid size-4 place-items-center" aria-hidden="true">
