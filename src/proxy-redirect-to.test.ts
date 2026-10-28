@@ -200,13 +200,10 @@ describe("a signed-in visitor to /login", () => {
     expect(loc).not.toContain("redirectTo");
   });
 
-  it("leaves the landing page's bounce alone", async () => {
-    // `?redirectTo=` on `/` has no producer and no meaning, so only /login opts
-    // in — and `/`'s query (utm and friends) rides along exactly as it did
-    // before, untouched by this change.
-    const loc = await location("/?redirectTo=%2Finvite%2Ftok_x");
-    expect(new URL(loc!, ORIGIN).pathname).toBe("/get-started");
-    expect(loc).toBe("/get-started?redirectTo=%2Finvite%2Ftok_x");
+  it("leaves the landing page alone", async () => {
+    // `?redirectTo=` on `/` has no producer and no meaning, and a signed-in
+    // visitor stays on the landing page (Samuel, 2026-10-27).
+    expect(await location("/?redirectTo=%2Finvite%2Ftok_x")).toBeNull();
   });
 });
 

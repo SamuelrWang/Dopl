@@ -164,8 +164,10 @@ export async function proxy(request: NextRequest) {
   // twice: the retirement map below, and the default signed-in landing here.
   const retired = isWebsiteRetired();
 
-  // If authenticated, redirect the landing page and every auth entry route in.
-  if (userId && (pathname === "/" || isAuthEntryRoute(pathname))) {
+  // If authenticated, redirect every auth entry route in. The landing page is
+  // NOT one of them (Samuel, 2026-10-27): a signed-in visitor stays on `/`, and
+  // only pressing Log in (an auth entry route) takes them into the app.
+  if (userId && isAuthEntryRoute(pathname)) {
     // Q4: the cycle arrives at `/login` (sole server-component redirect
     // target), but `/login` 307s to `/authenticate`, so the two share the
     // counter — `shared/auth/auth-routes.ts › LOOP_COUNTED_AUTH_ROUTES`.
@@ -199,10 +201,8 @@ export async function proxy(request: NextRequest) {
     // it can never make the middleware emit an off-origin `Location`.
     //
     // BOTH auth entry routes participate (the switch between them navigates,
-    // carrying the query). The landing page does not: no producer, no meaning.
-    const target = isAuthEntryRoute(pathname)
-      ? explicitPostAuthTarget(request.nextUrl.searchParams.get("redirectTo"))
-      : null;
+    // carrying the query).
+    const target = explicitPostAuthTarget(request.nextUrl.searchParams.get("redirectTo"));
 
     const url = request.nextUrl.clone();
     if (target) {
@@ -223,9 +223,8 @@ export async function proxy(request: NextRequest) {
       url.pathname = retired ? RETIREMENT_LANDING : DEFAULT_SIGNED_IN_DESTINATION;
       // A `redirectTo` that reached here was either consumed above or rejected
       // as hostile; either way it has no business riding to the destination,
-      // where it used to sit as decoration. The landing page's query (utm and
-      // friends) is left alone.
-      if (isAuthEntryRoute(pathname)) url.search = "";
+      // where it used to sit as decoration.
+      url.search = "";
     }
     const response = redirectPreservingSession(url, supabaseResponse);
     if (isLoopCountedAuthRoute(pathname)) {

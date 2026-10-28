@@ -182,8 +182,8 @@ describe("expired access token + valid refresh token", () => {
     expect(res.headers.get("location")).toBeNull(); // and the user stays authed
   });
 
-  it("still bounces / into the app after a refresh (claims are the fresh ones)", async () => {
-    const res = await proxy(req("/"));
+  it("still bounces /login into the app after a refresh (claims are the fresh ones)", async () => {
+    const res = await proxy(req("/login"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe(`${ORIGIN}/get-started`);
   });
@@ -241,11 +241,14 @@ describe("pages", () => {
   // WEBSITE_RETIRED is on — `/canvas` is retired, and pointing the default
   // landing at a retired page costs a hop AND defeats the Q4 breaker's midpoint
   // memory. Both states are proven in proxy-retirement.test.ts.
-  it("landing page is public when signed out, bounces in when signed in", async () => {
+  // Samuel, 2026-10-27: a session is not a reason to skip the landing page.
+  // Only Log in (`/login`, below) takes a signed-in visitor into the app.
+  it("landing page serves whether signed out or signed in", async () => {
     expect((await proxy(req("/"))).status).toBe(200);
     signedIn();
     const res = await proxy(req("/"));
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/get-started`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
   });
 
   it("/login is public when signed out, bounces in when signed in", async () => {
