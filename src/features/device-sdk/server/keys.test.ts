@@ -209,6 +209,16 @@ describe("rotate", () => {
     expect(fakeStore.keys.length).toBe(before);
   });
 
+  it("releases its claim when the mint fails, so a retry can rotate", async () => {
+    const old = await mintApiKey({ projectId: PROJECT, env: "live", kind: "secret" });
+    fakeStore.failNextInsert = true;
+    await expect(rotateApiKey({ projectId: PROJECT, keyId: old.key.id })).rejects.toThrow(/mintApiKey failed/);
+    expect(fakeStore.keys.find((k) => k.id === old.key.id)?.expires_at).toBeNull();
+    expect((await verifyApiKey(old.secret)).ok).toBe(true);
+    const retry = await rotateApiKey({ projectId: PROJECT, keyId: old.key.id });
+    expect((await verifyApiKey(retry.secret)).ok).toBe(true);
+  });
+
   it("claims the old key before minting: a lost race mints nothing", async () => {
     const old = await mintApiKey({ projectId: PROJECT, env: "test", kind: "secret" });
     // Concurrent rotations both read the key un-rotated; only one claim UPDATE can match.

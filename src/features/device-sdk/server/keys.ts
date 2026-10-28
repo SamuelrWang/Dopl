@@ -165,7 +165,9 @@ export class KeyNotRotatableError extends Error {
  * ⚠ THE CLAIM IS ATOMIC: the old key's `expires_at` is set by an UPDATE conditioned on
  * `expires_at IS NULL AND revoked_at IS NULL`, BEFORE the replacement is minted. Two concurrent
  * rotations (two tabs, a retry) race on that UPDATE; exactly one wins, the other is refused.
- * If minting then fails, the old key still expires after the overlap and the caller sees an error.
+ * If minting then fails, the claim is released (expires_at back to NULL, conditioned on our value)
+ * and the mint error is rethrown, so the developer is never left with an expiring key and no way to
+ * rotate it.
  */
 export async function rotateApiKey(input: {
   projectId: string;
@@ -204,12 +206,29 @@ export async function rotateApiKey(input: {
     throw new KeyNotRotatableError("KEY_ROTATING", "This key is already being rotated");
   }
 
-  const minted = await mintApiKey({
-    projectId: prev.project_id,
-    env: prev.env,
-    kind: prev.kind,
-    scopes: prev.scopes,
-  });
+  let minted: MintedKey;
+  try {
+    minted = await mintApiKey({
+      projectId: prev.project_id,
+      env: prev.env,
+      kind: prev.kind,
+      scopes: prev.scopes,
+    });
+  } catch (err) {
+    // Release OUR claim (only if it is still ours: same expires_at value), so the old key stays
+    // live and a retry can rotate. Best effort: a failed release must not hide the mint error.
+    await db
+      .from(TABLE)
+      .update({ expires_at: null })
+      .eq("id", prev.id)
+      .eq("project_id", prev.project_id)
+      .eq("expires_at", expiresAt)
+      .then(
+        () => undefined,
+        () => undefined
+      );
+    throw err;
+  }
   return { ...minted, previous: { id: prev.id, expires_at: expiresAt } };
 }
 

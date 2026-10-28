@@ -12,15 +12,20 @@ export const fakeStore = {
   projects: new Map<string, { id: string; org_id: string; api_version: string }>(),
   keys: [] as Row[],
   updates: [] as Array<{ table: string; patch: Row; filters: Array<[string, unknown]> }>,
+  /** Make the next insert fail the way PostgREST does (`{ data: null, error }`). */
+  failNextInsert: false,
 };
 
 export function resetFakeStore(): void {
   fakeStore.projects.clear();
   fakeStore.keys = [];
   fakeStore.updates = [];
+  fakeStore.failNextInsert = false;
 }
 
-class Query implements PromiseLike<{ data: unknown; error: null }> {
+type Result = { data: unknown; error: { message: string } | null };
+
+class Query implements PromiseLike<Result> {
   private filters: Array<[string, unknown]> = [];
   private op: "select" | "insert" | "update" = "select";
   private payload: Row = {};
@@ -69,8 +74,12 @@ class Query implements PromiseLike<{ data: unknown; error: null }> {
     return this.filters.every(([c, v]) => (row[c] ?? null) === v);
   }
 
-  private run(): { data: unknown; error: null } {
+  private run(): Result {
     let rows: Row[];
+    if (this.op === "insert" && fakeStore.failNextInsert) {
+      fakeStore.failNextInsert = false;
+      return { data: null, error: { message: "fake insert failure" } };
+    }
     if (this.op === "insert") {
       const row: Row = {
         id: randomUUID(),
@@ -100,8 +109,8 @@ class Query implements PromiseLike<{ data: unknown; error: null }> {
     return { data: visible[0] ?? null, error: null };
   }
 
-  then<A = { data: unknown; error: null }, B = never>(
-    onfulfilled?: ((value: { data: unknown; error: null }) => A | PromiseLike<A>) | null,
+  then<A = Result, B = never>(
+    onfulfilled?: ((value: Result) => A | PromiseLike<A>) | null,
     onrejected?: ((reason: unknown) => B | PromiseLike<B>) | null
   ): PromiseLike<A | B> {
     return Promise.resolve(this.run()).then(onfulfilled, onrejected);
