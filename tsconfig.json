@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@dopl/device-contracts": ["./packages/device-contracts/src/index.ts"]
     }
   },
   "include": [

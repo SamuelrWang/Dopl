@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { DEVICE_KINDS, ENVIRONMENTS } from "@dopl/contracts/device-sdk";
+import { DEVICE_KINDS, ENVIRONMENTS } from "@dopl/device-contracts";
 import { describe, expect, it } from "vitest";
 
 import { livePolicies, tableIsLive } from "@/features/knowledge/migration-replay";

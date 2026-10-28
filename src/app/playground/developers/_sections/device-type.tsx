@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus } from "lucide-react";
-import type { CapabilityDescriptor, CapabilityId } from "@dopl/contracts/device-sdk";
+import type { CapabilityDescriptor, CapabilityId } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { EmptyState } from "@/shared/ui/empty-state";

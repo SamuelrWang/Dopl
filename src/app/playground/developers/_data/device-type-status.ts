@@ -6,7 +6,7 @@
  *        ▲                     ▲                                          │
  *        └────── remove ───────┴──────────── a test fails ◀───────────────┘
  */
-import type { CapabilityId } from "@dopl/contracts/device-sdk";
+import type { CapabilityId } from "@dopl/device-contracts";
 
 export type TypeStatus = "not_connected" | "added" | "connected";
 

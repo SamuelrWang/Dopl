@@ -1,5 +1,5 @@
 /** API key rotation with a grace window (Stripe's pattern). Pure; `keys.test.ts` pins it. */
-import type { ApiKey } from "@dopl/contracts/device-sdk";
+import type { ApiKey } from "@dopl/device-contracts";
 import { DEMO_NOW } from "./fixtures";
 
 export const ROTATE_GRACE_HOURS = 24;

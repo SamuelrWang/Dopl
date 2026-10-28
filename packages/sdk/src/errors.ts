@@ -6,7 +6,7 @@
  * side) still becomes a `DoplError`, with `code` from {@link SdkOnlyErrorCode} so callers switch on
  * one field either way.
  */
-import type { DeviceKind, ErrorBody, ErrorCode, ErrorType } from "@dopl/contracts/device-sdk";
+import type { DeviceKind, ErrorBody, ErrorCode, ErrorType } from "@dopl/device-contracts";
 
 /** Codes the SDK itself raises when the server sent no C10 body. Never sent by the API. */
 export type SdkOnlyErrorCode = "network_error" | "unexpected_response" | "publishable_key_not_allowed" | "timeout";

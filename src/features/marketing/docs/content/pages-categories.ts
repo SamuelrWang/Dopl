@@ -1,4 +1,4 @@
-import { ASK_HOLD_MAX_S, type CapabilityId, type DeviceKind } from "@dopl/contracts/device-sdk";
+import { ASK_HOLD_MAX_S, type CapabilityId, type DeviceKind } from "@dopl/device-contracts";
 
 import { GLASSES_LIMITS as L } from "@/features/glasses/core/validation";
 import { PRESENT_DISPLAY_LIMITS as D } from "@/features/glasses/platforms/even-g2/display";

@@ -6,7 +6,7 @@ import {
   PresentDisplayLimitsSchema,
   type Device,
   type DeviceAdapter,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import { evenG2 } from "@/features/glasses/platforms/even-g2";

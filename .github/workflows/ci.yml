@@ -49,9 +49,9 @@ jobs:
       - name: Test @dopl/desktop-ui (the bundled SPA)
         run: npm test -w @dopl/desktop-ui
 
-      # The frozen Device SDK contracts (zod schemas under `./device-sdk`) carry their own suite.
-      - name: Test @dopl/contracts
-        run: npm test -w @dopl/contracts
+      # The frozen Device SDK contracts (zod schemas), a standalone public package with its own suite.
+      - name: Test @dopl/device-contracts
+        run: npm test -w @dopl/device-contracts
 
       # The Device SDK client + project MCP (mocked fetch). Includes the openapi.yaml drift test.
       - name: Test @dopl/sdk
@@ -114,8 +114,15 @@ jobs:
       - name: Typecheck @dopl/contracts
         run: npm run typecheck -w @dopl/contracts
 
+      - name: Typecheck @dopl/device-contracts
+        run: npm run typecheck -w @dopl/device-contracts
+
       - name: Typecheck @dopl/sdk
         run: npm run typecheck -w @dopl/sdk
+
+      # The public SDK must build standalone (its prebuild builds @dopl/device-contracts first).
+      - name: Build @dopl/sdk
+        run: npm run build -w @dopl/sdk
 
       # 0 errors and 0 warnings.
       - name: Lint

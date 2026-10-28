@@ -26,7 +26,7 @@ import {
   DeviceActionResponseSchema,
   DeviceContextSchema,
   ErrorResponseSchema,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 import type { ActionResult, CapabilityId, ContextProfile, Device, DeviceEventRow } from "../types";
 import { GET as contextGET } from "@/app/api/v1/users/[external_user_id]/context/route";
 import { POST as deliverPOST } from "@/app/api/v1/users/[external_user_id]/deliver/route";

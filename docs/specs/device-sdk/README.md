@@ -5,8 +5,8 @@ The source of truth is **[SPEC-v1.md](SPEC-v1.md)**: contracts C1–C10 and deci
 
 The spec lives as code in two places, which must agree field for field:
 
-- **TypeScript + zod:** `packages/contracts/src/device-sdk/` (import from `@dopl/contracts/device-sdk`;
-  the root `@dopl/contracts` barrel re-exports the types only). Tests sit next to each file.
+- **TypeScript + zod:** `packages/device-contracts/src/` (import from `@dopl/device-contracts`;
+  a standalone package, `zod` its only dependency). Tests sit next to each file.
 - **HTTP surface:** [openapi.yaml](openapi.yaml), OpenAPI 3.1 for `/v1`. Validate with
   `npx --yes @redocly/cli@latest lint docs/specs/device-sdk/openapi.yaml`.
 

@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-/** The device-sdk schema tests. The root config collects `src/**` only, so this package runs its own. */
+/** The device-contracts schema tests. The root config collects `src/**` only, so this package runs its own. */
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],

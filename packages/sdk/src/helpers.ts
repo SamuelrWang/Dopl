@@ -11,7 +11,7 @@ import type {
   DeliverTarget,
   DisplayBlock,
   Urgency,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 
 import type { DeliverParams, Dopl } from "./client.js";
 import { DOC_BASE, DoplError } from "./errors.js";

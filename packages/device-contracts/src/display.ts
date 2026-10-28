@@ -4,8 +4,8 @@
  * ⚠ **A MIRROR, NOT A RE-EXPORT.** Block vocabulary v2 lives in the app at
  * `src/features/display/core/types.ts › DisplayBlock` / `› DISPLAY_LIMITS`. This package cannot
  * import `src/` (a separate program, resolved through node_modules — INVARIANTS §1), so the nine v2
- * blocks are restated here as zod and HELD EQUAL by `display.test.ts` (type-level mutual
- * assignability + the limits deep-equal). Change one, change both, in the same commit.
+ * blocks are restated here as zod and HELD EQUAL by the app's `sdk-display-parity.test.ts`
+ * (type-level mutual assignability + the limits deep-equal). Change one, change both, in the same commit.
  *
  * The SDK adds one block the app does not have yet: `image` (C6 "Additions").
  */

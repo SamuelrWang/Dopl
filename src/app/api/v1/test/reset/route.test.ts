@@ -12,7 +12,7 @@ vi.mock("@/shared/supabase/admin", async () => {
   return { supabaseAdmin: () => m.fakeDb };
 });
 
-import { ErrorResponseSchema } from "@dopl/contracts/device-sdk";
+import { ErrorResponseSchema } from "@dopl/device-contracts";
 import { fakeStore, resetFakeStore } from "@/features/device-sdk/server/fake-dev-db";
 import { setDevEventSinkForTests } from "@/features/device-sdk/server/events";
 import { mintApiKey } from "@/features/device-sdk/server/keys";

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import type { CapabilityScope, RiskTier } from "@dopl/contracts/device-sdk";
+import type { CapabilityScope, RiskTier } from "@dopl/device-contracts";
 import type { ConnectCandidate, ConnectPageView } from "@/features/device-sdk/server/connect/hosted";
 import { ConnectFlow } from "@/app/connect/[token]/connect-flow";
 import { cn } from "@/shared/lib/utils";

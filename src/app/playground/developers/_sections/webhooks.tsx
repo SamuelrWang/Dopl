@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { Plus } from "lucide-react";
-import type { WebhookEventName } from "@dopl/contracts/device-sdk";
+import type { WebhookEventName } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";

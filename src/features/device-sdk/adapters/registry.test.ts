@@ -1,4 +1,4 @@
-import { DEVICE_KINDS, type DeviceAdapter } from "@dopl/contracts/device-sdk";
+import { DEVICE_KINDS, type DeviceAdapter } from "@dopl/device-contracts";
 import { describe, expect, it } from "vitest";
 
 import { glassesPlatform } from "@/features/glasses/platforms/registry";

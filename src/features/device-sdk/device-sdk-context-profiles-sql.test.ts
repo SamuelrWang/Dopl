@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { readMigrations, stripSqlLineComments } from "@/shared/supabase/migration-files";
 import { livePolicies, liveRlsEnabled } from "@/shared/supabase/rls-policy-scan";
 import { ACTION_STATUSES, ENVIRONMENTS } from "./types";
-import { DELIVER_INTENTS } from "@dopl/contracts/device-sdk";
+import { DELIVER_INTENTS } from "@dopl/device-contracts";
 
 const FILE = "20261122500000_device_sdk_context_profiles.sql";
 const migration = readMigrations().find((m) => m.name === FILE);

@@ -2,7 +2,7 @@
  * `simulator` — a simulated device of every kind, for test mode (SPEC-v1 › C10 "Test mode").
  *
  * Deterministic: no I/O, no randomness. A device whose id is a C10 magic id
- * (`@dopl/contracts/device-sdk › TEST_MAGIC_DEVICE_IDS`), exactly or as `<magic>_<suffix>`, forces
+ * (`@dopl/device-contracts › TEST_MAGIC_DEVICE_IDS`), exactly or as `<magic>_<suffix>`, forces
  * that failure on every `execute`; `sim_device_offline` is also offline in `health`. Every other
  * call that passes the capability and argument checks completes `done` with a simulated result.
  *
@@ -26,7 +26,7 @@ import {
   type DeviceEvent,
   type DeviceKind,
   type ErrorCode,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 
 import { descriptor, executeVia, failed, noEvents } from "./shared";
 

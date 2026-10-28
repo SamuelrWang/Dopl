@@ -4,7 +4,7 @@
  * (server components) and tests import this; the client sections receive the result as props.
  */
 import "server-only";
-import type { CapabilityDescriptor, Device } from "@dopl/contracts/device-sdk";
+import type { CapabilityDescriptor, Device } from "@dopl/device-contracts";
 import { deviceAdapters } from "@/features/device-sdk/adapters/registry";
 import { DEMO_NOW } from "./fixtures";
 import { ADDABLE_TYPES, deviceType } from "./device-types";

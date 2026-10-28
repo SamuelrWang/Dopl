@@ -12,8 +12,8 @@ import type {
   ErrorCode,
   EventOutcome,
   WebhookEventName,
-} from "@dopl/contracts/device-sdk";
-import { CAPABILITY_RISK_TIER } from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
+import { CAPABILITY_RISK_TIER } from "@dopl/device-contracts";
 import { DEMO_ENVS, DEMO_ORG, DEMO_PROJECT, ago, type EnvFixtures } from "./fixtures";
 
 /** A small seeded PRNG so every render (server and client) draws the same rows. */

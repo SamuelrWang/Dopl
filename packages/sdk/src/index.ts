@@ -1,5 +1,5 @@
 /**
- * `@dopl/sdk`: the TypeScript client for the Dopl Device SDK API (docs/specs/device-sdk/openapi.yaml).
+ * `@dopl/sdk`: the TypeScript client for the Dopl Device SDK API (spec/openapi.yaml).
  * The project-scoped MCP server lives at the `@dopl/sdk/mcp` subpath and the `dopl-sdk-mcp` bin.
  */
 export { Dopl, ROUTES, newIdempotencyKey } from "./client.js";
@@ -33,4 +33,4 @@ export type {
   ErrorCode,
   ErrorType,
   Urgency,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";

@@ -1,4 +1,4 @@
-import { ErrorBodySchema, TEST_MAGIC_DEVICE_IDS, type Device } from "@dopl/contracts/device-sdk";
+import { ErrorBodySchema, TEST_MAGIC_DEVICE_IDS, type Device } from "@dopl/device-contracts";
 import { describe, expect, it } from "vitest";
 
 import { createSimulatorAdapter, magicFailure } from "./simulator";

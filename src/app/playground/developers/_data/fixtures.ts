@@ -1,7 +1,7 @@
 /**
  * THE DEMO DEVELOPER ACCOUNT for `/playground/developers` — hard-coded, no DB, no API, no auth.
  *
- * Every row is typed with the frozen Device SDK contracts (`@dopl/contracts/device-sdk`), so the
+ * Every row is typed with the frozen Device SDK contracts (`@dopl/device-contracts`), so the
  * portal renders the same shapes the `/v1` API returns; `fixtures.test.ts` parses each one through
  * its zod schema. Events, webhooks and the chart series live in `./activity.ts`.
  */
@@ -15,8 +15,8 @@ import type {
   DeviceKind,
   Environment,
   Grant,
-} from "@dopl/contracts/device-sdk";
-import { CAPABILITY_RISK_TIER } from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
+import { CAPABILITY_RISK_TIER } from "@dopl/device-contracts";
 import { DOPL_KIND_PROFILES } from "@/features/device-sdk/delivery/default-profiles";
 import { GLASSES_REPLY_GUIDANCE } from "@/features/device-sdk/delivery/glasses-guidance";
 

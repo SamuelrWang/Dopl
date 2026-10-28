@@ -8,7 +8,7 @@ import {
   ERROR_CODE_INFO,
   type CapabilityId,
   type Device,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 import { describe, expect, it } from "vitest";
 
 import { createEvenG2Adapter } from "@/features/device-sdk/adapters/even-g2";

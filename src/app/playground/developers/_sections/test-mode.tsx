@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import type { DeviceKind, ErrorCode } from "@dopl/contracts/device-sdk";
-import { ERROR_CODE_INFO, TEST_MAGIC_DEVICE_IDS } from "@dopl/contracts/device-sdk";
+import type { DeviceKind, ErrorCode } from "@dopl/device-contracts";
+import { ERROR_CODE_INFO, TEST_MAGIC_DEVICE_IDS } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import { EmptyState } from "@/shared/ui/empty-state";

@@ -8,7 +8,7 @@
  * Transport (C9): Dopl's own app on the machine → `on_device_runtime`; not experimental (D6).
  */
 
-import type { CapabilityDescriptor, Device, DeviceAdapter, DeviceEvent, PairingFlow, PairingSession } from "@dopl/contracts/device-sdk";
+import type { CapabilityDescriptor, Device, DeviceAdapter, DeviceEvent, PairingFlow, PairingSession } from "@dopl/device-contracts";
 
 import { COMPUTER_ONLINE_WINDOW_MS } from "@/features/devices/server/devices-service";
 

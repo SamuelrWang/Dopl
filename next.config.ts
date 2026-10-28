@@ -79,7 +79,7 @@ const nextConfig: NextConfig = {
       { source: "/docs/devices/:device(phone|phone-push|apple-watch)", destination: "/docs/devices/phones", permanent: false },
       { source: "/docs/devices/:device(desktop|mac-notch)", destination: "/docs/devices/computers", permanent: false },
       { source: "/docs/devices/cars", destination: "/docs/devices/vehicles", permanent: false },
-      // C10 `doc_url` (`@dopl/contracts/device-sdk › ERROR_DOC_BASE`) points at /docs/errors/<code>.
+      // C10 `doc_url` (`@dopl/device-contracts › ERROR_DOC_BASE`) points at /docs/errors/<code>.
       { source: "/docs/errors/:code", destination: "/docs/api-reference/errors", permanent: false },
       // The API reference's pre-contract pages (2026-10-20) were renamed to the frozen Device
       // SDK contract (`docs/specs/device-sdk/openapi.yaml`); show/ask/notify are Deliver intents.

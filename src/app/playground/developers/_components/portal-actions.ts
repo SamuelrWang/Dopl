@@ -1,5 +1,5 @@
 /** Store writes for the simulator, the log filter, webhooks, key rotation and Connect customization. */
-import type { CapabilityId, DeviceKind, WebhookEventName } from "@dopl/contracts/device-sdk";
+import type { CapabilityId, DeviceKind, WebhookEventName } from "@dopl/device-contracts";
 import type { WebhookOutboxRow } from "../_data/activity";
 import type { ConnectConfig } from "../_data/connect-config";
 import { rotateKey } from "../_data/keys";

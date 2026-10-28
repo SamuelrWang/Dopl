@@ -3,8 +3,8 @@
  * type, so Events can show them in one table and resolve any id (request, action, device, user,
  * connection, webhook, event, Connect token) with one search box. Pure; `log.test.ts` pins it.
  */
-import type { ApiKey, DeviceEventRow, Environment, ErrorCode } from "@dopl/contracts/device-sdk";
-import { ERROR_CODE_INFO } from "@dopl/contracts/device-sdk";
+import type { ApiKey, DeviceEventRow, Environment, ErrorCode } from "@dopl/device-contracts";
+import { ERROR_CODE_INFO } from "@dopl/device-contracts";
 import type { WebhookOutboxRow } from "./activity";
 import { STEP_LABEL, type ConnectSessionRow } from "./connect-sessions";
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import type { CapabilityDescriptor } from "@dopl/contracts/device-sdk";
+import type { CapabilityDescriptor } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { DeviceKindIcon } from "@/features/devices/components/device-glyph";
 import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";

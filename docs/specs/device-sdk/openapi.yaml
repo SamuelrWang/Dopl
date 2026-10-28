@@ -4,7 +4,7 @@ info:
   version: "2026-10-27"
   summary: The /v1 surface of the Dopl Device SDK (frozen contracts v1).
   description: |
-    Field-for-field mirror of `packages/contracts/src/device-sdk/*` (zod). The TypeScript contracts
+    Field-for-field mirror of `packages/device-contracts/src/*` (zod). The TypeScript contracts
     are the source of truth; a change to either is a change to both, and only by Samuel ruling plus
     a changelog line in `docs/specs/device-sdk/SPEC-v1.md`.
 

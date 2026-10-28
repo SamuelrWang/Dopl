@@ -3,7 +3,7 @@ import type { DocBlock, HttpMethod } from "./types";
 /**
  * Pieces every Device SDK page shares. ⚠ The `/v1` routes are deployed (1.43.0, 2026-10-27) but
  * keys are issued by Dopl and `@dopl/sdk` is private, so the pages that use them are `beta`. The contract is
- * `docs/specs/device-sdk/openapi.yaml` (mirroring `@dopl/contracts/device-sdk`), and
+ * `docs/specs/device-sdk/openapi.yaml` (mirroring `@dopl/device-contracts`), and
  * `content.test.ts` holds every `/v1` path in a code sample to a path in that file.
  */
 

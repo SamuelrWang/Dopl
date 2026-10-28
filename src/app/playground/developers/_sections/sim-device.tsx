@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CapabilityId, WebhookEventName } from "@dopl/contracts/device-sdk";
+import type { CapabilityId, WebhookEventName } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { pillButton } from "@/shared/ui/pill-button";
 import { SelectMenu } from "@/shared/ui/select-menu";

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { Connection } from "@dopl/contracts/device-sdk";
-import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, RISK_TIERS } from "@dopl/contracts/device-sdk";
-import type { CapabilityId, CapabilityScope, RiskTier } from "@dopl/contracts/device-sdk";
+import type { Connection } from "@dopl/device-contracts";
+import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, RISK_TIERS } from "@dopl/device-contracts";
+import type { CapabilityId, CapabilityScope, RiskTier } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { SearchField } from "@/shared/ui/search-field";
 import { StatusPill } from "@/shared/ui/status-pill";

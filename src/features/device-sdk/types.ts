@@ -2,7 +2,7 @@
  * DEVICE SDK — the one path from `src/` to the frozen contracts (INVARIANTS §1: no feature module
  * imports `@dopl/contracts` directly; its own tree's types file re-exports).
  *
- * The values here (prefixes, regexes, the C10 error table) come from the `@dopl/contracts/device-sdk`
+ * The values here (prefixes, regexes, the C10 error table) come from the `@dopl/device-contracts`
  * SUBPATH, the package's one runtime corner. Never redefine them in `src/`.
  */
 export {
@@ -42,7 +42,7 @@ export {
   DeviceActionRequestSchema,
   DisplayBlocksSchema,
   ProfileMatchSchema,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 
 export type {
   ApiKey,
@@ -86,4 +86,4 @@ export type {
   ErrorBody,
   Posture,
   Urgency,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";

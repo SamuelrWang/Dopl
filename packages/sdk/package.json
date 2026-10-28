@@ -28,12 +28,13 @@
     "node": ">=18.17"
   },
   "scripts": {
+    "prebuild": "npm run build --prefix ../device-contracts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
-    "@dopl/contracts": "^0.1.0",
+    "@dopl/device-contracts": "^0.1.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.3.6"
   },

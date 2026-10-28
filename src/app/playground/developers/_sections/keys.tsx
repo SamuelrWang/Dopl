@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import type { ApiKey } from "@dopl/contracts/device-sdk";
-import { API_KEY_SCOPES } from "@dopl/contracts/device-sdk";
+import type { ApiKey } from "@dopl/device-contracts";
+import { API_KEY_SCOPES } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { PILL_ICON, pillButton } from "@/shared/ui/pill-button";

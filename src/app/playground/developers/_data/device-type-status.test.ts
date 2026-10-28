@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DeviceActionRequestSchema, DeliverRequestSchema, DeliverResponseSchema, DeviceContextSchema, ActionSchema } from "@dopl/contracts/device-sdk";
-import type { CapabilityId } from "@dopl/contracts/device-sdk";
+import { DeviceActionRequestSchema, DeliverRequestSchema, DeliverResponseSchema, DeviceContextSchema, ActionSchema } from "@dopl/device-contracts";
+import type { CapabilityId } from "@dopl/device-contracts";
 import { NOT_CONNECTED, addType, goLive, recordTests, removeType, stepOwnDevice, type CapabilityTest } from "./device-type-status";
 import { ADDABLE_TYPES, DEVICE_TYPES, deviceType, endpointFor, seedState, simulate } from "./device-types";
 import { describeAll, describeType } from "./device-descriptors";

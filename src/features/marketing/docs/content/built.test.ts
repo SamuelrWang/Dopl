@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { TEST_MAGIC_DEVICE_IDS, type RiskTier } from "@dopl/contracts/device-sdk";
+import { TEST_MAGIC_DEVICE_IDS, type RiskTier } from "@dopl/device-contracts";
 import { describe, expect, it } from "vitest";
 
 import { createEvenG2Adapter } from "@/features/device-sdk/adapters/even-g2";

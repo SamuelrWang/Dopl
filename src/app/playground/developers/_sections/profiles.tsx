@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { ContextProfile, ProfileOverflow } from "@dopl/contracts/device-sdk";
-import { ContextProfileSchema } from "@dopl/contracts/device-sdk";
+import type { ContextProfile, ProfileOverflow } from "@dopl/device-contracts";
+import { ContextProfileSchema } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { pillButton } from "@/shared/ui/pill-button";
 import { StatusPill } from "@/shared/ui/status-pill";

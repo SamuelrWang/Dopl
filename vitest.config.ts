@@ -6,6 +6,9 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "src"),
       "server-only": path.resolve(__dirname, "vitest.server-only-shim.ts"),
+      // In-repo consumers read the device contracts from SOURCE (same as tsconfig `paths`, which
+      // Next also honours); the package's own `exports` point at its built `dist/` for publishing.
+      "@dopl/device-contracts": path.resolve(__dirname, "packages/device-contracts/src/index.ts"),
     },
   },
   test: {

@@ -8,7 +8,7 @@ import {
   ENVIRONMENTS,
   TEST_MAGIC_DEVICE_IDS,
   WebhookEventNameSchema,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 import { GLASSES_REPLY_GUIDANCE } from "@/features/device-sdk/delivery/glasses-guidance";
 import { DEMO_ACTIVITY } from "./activity";
 import { DEMO_ENVS } from "./fixtures";

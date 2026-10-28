@@ -8,15 +8,10 @@
     ".": {
       "types": "./src/index.ts"
     },
-    "./device-sdk": {
-      "types": "./src/device-sdk/index.ts",
-      "default": "./src/device-sdk/index.ts"
-    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "engines": {
     "node": ">=18.17"

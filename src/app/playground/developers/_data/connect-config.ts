@@ -2,8 +2,8 @@
  * CONNECT CUSTOMIZATION: what the end user's Connect flow shows (branding, device types, default
  * scopes, redirect URIs), as a draft and a published copy. Pure.
  */
-import type { CapabilityFamily, CapabilityId, CapabilityScope, ConnectBranding, RiskTier } from "@dopl/contracts/device-sdk";
-import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, RISK_TIERS } from "@dopl/contracts/device-sdk";
+import type { CapabilityFamily, CapabilityId, CapabilityScope, ConnectBranding, RiskTier } from "@dopl/device-contracts";
+import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, RISK_TIERS } from "@dopl/device-contracts";
 import { DEMO_PROJECT } from "./fixtures";
 
 export interface ConnectConfig {

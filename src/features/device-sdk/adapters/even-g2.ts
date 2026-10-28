@@ -11,7 +11,7 @@
  * `on_device_runtime` and — D6 — NOT experimental.
  */
 
-import { ASK_HOLD_MAX_S, type CapabilityDescriptor, type DeviceAdapter, type PairingFlow, type PairingSession, type DeviceEvent, type Device } from "@dopl/contracts/device-sdk";
+import { ASK_HOLD_MAX_S, type CapabilityDescriptor, type DeviceAdapter, type PairingFlow, type PairingSession, type DeviceEvent, type Device } from "@dopl/device-contracts";
 
 import { isOnline } from "@/features/glasses/core/devices/service";
 import { GLASSES_LIMITS } from "@/features/glasses/core/validation";

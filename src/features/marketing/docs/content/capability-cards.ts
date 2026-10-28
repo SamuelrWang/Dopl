@@ -1,4 +1,4 @@
-import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, WEBHOOK_EVENT_NAMES, type CapabilityId } from "@dopl/contracts/device-sdk";
+import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, WEBHOOK_EVENT_NAMES, type CapabilityId } from "@dopl/device-contracts";
 
 import { TIER_ROWS } from "./pages-concepts";
 import { curl, DEVICE_ID, json } from "./shared";
@@ -8,7 +8,7 @@ import type { CapabilityCard, CodeTab, ModelSupport, Rich } from "./types";
  * The ONE capability card every device category uses. A category says which capability, what it
  * means on that kind of device, its limits and which models support it; everything else (tier,
  * permission, the TypeScript and cURL calls, the example response) is derived here from the
- * contracts (`@dopl/contracts/device-sdk › CAPABILITY_RISK_TIER`) and the frozen routes in
+ * contracts (`@dopl/device-contracts › CAPABILITY_RISK_TIER`) and the frozen routes in
  * `docs/specs/device-sdk/openapi.yaml`, so no two cards can disagree on them.
  *
  * How the agent reaches a capability:

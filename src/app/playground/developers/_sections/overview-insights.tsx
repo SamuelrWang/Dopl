@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { DeviceEventRow } from "@dopl/contracts/device-sdk";
+import type { DeviceEventRow } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { pillButton } from "@/shared/ui/pill-button";

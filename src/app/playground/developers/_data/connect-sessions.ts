@@ -2,7 +2,7 @@
  * Connect SESSIONS (C2) and the funnel over them: started → device chosen → paired → consented →
  * connected. Deterministic per env, like `./activity.ts`, so server and client draw the same rows.
  */
-import type { DeviceKind, Environment } from "@dopl/contracts/device-sdk";
+import type { DeviceKind, Environment } from "@dopl/device-contracts";
 import { rng } from "./activity";
 import { DEMO_ENVS, ago } from "./fixtures";
 

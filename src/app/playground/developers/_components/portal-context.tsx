@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import type { ApiKey, CapabilityDescriptor, ContextProfile, Environment } from "@dopl/contracts/device-sdk";
+import type { ApiKey, CapabilityDescriptor, ContextProfile, Environment } from "@dopl/device-contracts";
 import { DEMO_ENVS, DEMO_NOW, DEMO_PROJECT, type EnvFixtures } from "../_data/fixtures";
 import { DEMO_ACTIVITY, type EnvActivity } from "../_data/activity";
 import { DEMO_SESSIONS, type ConnectSessionRow } from "../_data/connect-sessions";

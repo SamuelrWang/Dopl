@@ -4,8 +4,8 @@
  * `StatusPill`, `.card-well`. Components only; no colour, size or shadow is declared here.
  */
 import type { ReactNode } from "react";
-import type { RiskTier } from "@dopl/contracts/device-sdk";
-import { RISK_TIER_DEFAULT_POLICY } from "@dopl/contracts/device-sdk";
+import type { RiskTier } from "@dopl/device-contracts";
+import { RISK_TIER_DEFAULT_POLICY } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { SECTION_HEADING_TEXT } from "@/shared/ui/section-heading";
 import { StatusPill } from "@/shared/ui/status-pill";

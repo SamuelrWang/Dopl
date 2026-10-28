@@ -4,7 +4,7 @@
  * gets its capabilities from that adapter's C3 descriptors (`./device-descriptors.ts`, server side).
  *
  * `simulate` answers a capability test the way the simulator would in test mode, computed locally
- * (nothing is sent): the request is the real `/v1` call, typed with `@dopl/contracts/device-sdk`.
+ * (nothing is sent): the request is the real `/v1` call, typed with `@dopl/device-contracts`.
  */
 import type {
   Action,
@@ -18,8 +18,8 @@ import type {
   DeviceContext,
   DeviceKind,
   WebhookEventName,
-} from "@dopl/contracts/device-sdk";
-import { CAPABILITY_FAMILY } from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
+import { CAPABILITY_FAMILY } from "@dopl/device-contracts";
 import { DEMO_NOW } from "./fixtures";
 import type { CapabilityTest, TypeState } from "./device-type-status";
 import { NOT_CONNECTED, recordTests } from "./device-type-status";

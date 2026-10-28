@@ -1,7 +1,7 @@
 /**
- * `new Dopl({ apiKey, baseUrl? })`: one method per route in `docs/specs/device-sdk/openapi.yaml`,
+ * `new Dopl({ apiKey, baseUrl? })`: one method per route in `spec/openapi.yaml`,
  * plus the `show` / `ask` / `notify` helpers over `deliver` (D4). Request and response types come
- * from `@dopl/contracts/device-sdk` (type imports only, so nothing of the server ships here).
+ * from `@dopl/device-contracts` (type imports only, so nothing of the server ships here).
  *
  * The route table is {@link ROUTES}; `openapi-drift.test.ts` fails when the spec gains a path or
  * method this client lacks.
@@ -20,7 +20,7 @@ import type {
   Device,
   DeviceActionResponse,
   DeviceContext,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 
 import { DOC_BASE, DoplError } from "./errors.js";
 import { createTransport, seg, type FetchLike, type Transport } from "./http.js";

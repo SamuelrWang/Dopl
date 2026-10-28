@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiKeySchema, DeliverRequestSchema, DeviceEventRowSchema, WebhookEventNameSchema } from "@dopl/contracts/device-sdk";
+import { ApiKeySchema, DeliverRequestSchema, DeviceEventRowSchema, WebhookEventNameSchema } from "@dopl/device-contracts";
 import { DEMO_ACTIVITY } from "./activity";
 import { CONNECT_STEPS, DEMO_SESSIONS, funnel, type ConnectSessionRow } from "./connect-sessions";
 import { DEMO_ENVS, DEMO_NOW } from "./fixtures";

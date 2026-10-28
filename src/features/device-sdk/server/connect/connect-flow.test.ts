@@ -5,7 +5,7 @@
  * `src/app/api/v1/connections/connect-routes.test.ts`.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { ConnectionSchema, ConnectionExchangeResponseSchema } from "@dopl/contracts/device-sdk";
+import { ConnectionSchema, ConnectionExchangeResponseSchema } from "@dopl/device-contracts";
 import { deviceAdapters } from "../../adapters/registry";
 import { pairingStatus, startPairing, type ConnectPairingPort } from "@/features/glasses/core/devices/pairing";
 import { createFakeDeviceStore } from "@/features/glasses/core/testing/fake-device-store";

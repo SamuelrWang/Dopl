@@ -4,8 +4,8 @@
  * renders `INITIAL`. Read through `usePortal` (`./portal-context.tsx`); written by its actions and
  * `./portal-actions.ts`.
  */
-import type { ApiKey, ContextProfile, DeviceEventRow, Environment, WebhookEventName } from "@dopl/contracts/device-sdk";
-import { WEBHOOK_EVENT_NAMES } from "@dopl/contracts/device-sdk";
+import type { ApiKey, ContextProfile, DeviceEventRow, Environment, WebhookEventName } from "@dopl/device-contracts";
+import { WEBHOOK_EVENT_NAMES } from "@dopl/device-contracts";
 import type { WebhookOutboxRow } from "../_data/activity";
 import { DEFAULT_CONNECT_CONFIG, type ConnectConfig } from "../_data/connect-config";
 import type { TypeState } from "../_data/device-type-status";

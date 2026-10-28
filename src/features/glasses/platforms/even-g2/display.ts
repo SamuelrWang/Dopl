@@ -53,7 +53,7 @@ export const SCREEN_LIMITS: ScreenLimits = {
 };
 
 /**
- * The G2's `present.display` limits in the Device SDK's terms (`@dopl/contracts/device-sdk ›
+ * The G2's `present.display` limits in the Device SDK's terms (`@dopl/device-contracts ›
  * PresentDisplayLimits` plus G2-only keys), derived from the constants above so the SDK descriptor
  * (`src/features/device-sdk/adapters/even-g2.ts`) and the compiler can never disagree. The height is
  * the usable area above the back-button band; the lens is green-on-black with 5 brightness levels.

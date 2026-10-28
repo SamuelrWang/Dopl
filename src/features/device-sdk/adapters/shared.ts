@@ -3,7 +3,7 @@
  * the C10 error body, argument checks against a descriptor's limits, and the one execute pipeline
  * (supported? → args valid? → transport port).
  *
- * The frozen contracts live in `@dopl/contracts/device-sdk` (SPEC-v1 C3/C9/C10): import, never redefine.
+ * The frozen contracts live in `@dopl/device-contracts` (SPEC-v1 C3/C9/C10): import, never redefine.
  */
 
 import {
@@ -20,7 +20,7 @@ import {
   type ErrorBody,
   type ErrorCode,
   type LatencyClass,
-} from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
 
 /** A descriptor at the capability's C3 default tier; `since` is `<adapter_id>@<version>`. */
 export function descriptor(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ApiKey, CapabilityDescriptor, ConnectSessionCreateRequest, DeliverRequest } from "@dopl/contracts/device-sdk";
+import type { ApiKey, CapabilityDescriptor, ConnectSessionCreateRequest, DeliverRequest } from "@dopl/device-contracts";
 import { CopyButton } from "@/shared/ui/copy-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { Card } from "../_components/ui";

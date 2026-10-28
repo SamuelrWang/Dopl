@@ -76,7 +76,7 @@ export interface ModelSupport {
  * response, and which models support it.
  */
 export interface CapabilityCard {
-  /** A C3 capability id (`@dopl/contracts/device-sdk › CAPABILITY_IDS`). */
+  /** A C3 capability id (`@dopl/device-contracts › CAPABILITY_IDS`). */
   capability: string;
   title: string;
   /** What it does and when to use it. */

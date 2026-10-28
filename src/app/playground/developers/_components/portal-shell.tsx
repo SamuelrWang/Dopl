@@ -22,7 +22,7 @@ import {
   Webhook,
   type LucideIcon,
 } from "lucide-react";
-import type { Environment } from "@dopl/contracts/device-sdk";
+import type { Environment } from "@dopl/device-contracts";
 import { cn } from "@/shared/lib/utils";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { SelectMenu } from "@/shared/ui/select-menu";

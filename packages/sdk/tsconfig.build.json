@@ -4,7 +4,8 @@
     "noEmit": false,
     "outDir": "dist",
     "rootDir": "src",
-    "declaration": true
+    "declaration": true,
+    "paths": {}
   },
   "exclude": ["src/**/*.test.ts", "src/test-helpers.ts"]
 }

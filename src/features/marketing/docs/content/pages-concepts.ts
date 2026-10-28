@@ -4,7 +4,7 @@ import type { DocPage } from "./types";
 /**
  * Concepts, first half: projects and keys (C1), end users and connections (C2), devices and
  * capabilities (C3), permissions and safety (C7). ⚠ Every value here mirrors
- * `@dopl/contracts/device-sdk` and the built behaviour in `src/features/device-sdk/` (policy:
+ * `@dopl/device-contracts` and the built behaviour in `src/features/device-sdk/` (policy:
  * `delivery/policy.ts`; consent: `server/connect/scopes.ts`); `content.test.ts` checks the
  * capability tiers, the tier policy and the rate limit against them. All `coming_soon`: built on
  * master, not deployed.

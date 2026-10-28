@@ -13,8 +13,8 @@ import type {
   ErrorCode,
   ErrorResponse,
   WebhookEventName,
-} from "@dopl/contracts/device-sdk";
-import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, ERROR_CODE_INFO, TEST_MAGIC_DEVICE_IDS, errorDocUrl } from "@dopl/contracts/device-sdk";
+} from "@dopl/device-contracts";
+import { CAPABILITY_FAMILY, CAPABILITY_RISK_TIER, ERROR_CODE_INFO, TEST_MAGIC_DEVICE_IDS, errorDocUrl } from "@dopl/device-contracts";
 import type { WebhookOutboxRow } from "./activity";
 import { DEMO_ENVS, DEMO_ORG, DEMO_PROJECT } from "./fixtures";
 

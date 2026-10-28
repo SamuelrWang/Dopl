@@ -7,7 +7,7 @@
  * wired by A4 Connect and A5 delivery). Build a wired one with {@link createAdapterRegistry}.
  */
 
-import type { DeviceAdapter, DeviceKind, Environment } from "@dopl/contracts/device-sdk";
+import type { DeviceAdapter, DeviceKind, Environment } from "@dopl/device-contracts";
 
 import { createDesktopAdapter } from "./desktop";
 import { createEvenG2Adapter } from "./even-g2";
