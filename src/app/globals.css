@@ -913,6 +913,15 @@ html {
 .status-pill[data-tone="done"] .status-pill-dot {
   background: var(--success);
 }
+/* `ended`: the ink face, the black pill an ended agent wears everywhere else (`AgentPill`). */
+.status-pill[data-tone="ended"] {
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+}
+.status-pill[data-tone="ended"] .status-pill-dot {
+  background: var(--text-on-cta);
+  opacity: 0.6;
+}
 /* `bare`: the dot and the word alone, on a card that already frames them. */
 .status-pill[data-bare="true"] {
   padding-inline: 0;

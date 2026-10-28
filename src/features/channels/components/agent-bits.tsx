@@ -66,9 +66,14 @@ export function AgentLiveness({
   );
 }
 
-/** The same verdict on the kit's status pill (`StatusPill`): only a working agent greens the dot. */
+/**
+ * The same verdict on the kit's status pill (`StatusPill`): only a working agent greens the dot,
+ * and an ENDED agent wears the ink face (Samuel, 2026-10-28: ended was the same gray as
+ * idle/waiting). Idle and waiting stay neutral.
+ */
 export function AgentStatusPill({ tone, label }: AgentLivenessState) {
-  return <StatusPill dot tone={tone === "working" ? "live" : "neutral"}>{label}</StatusPill>;
+  const face = tone === "working" ? "live" : tone === "ended" ? "ended" : "neutral";
+  return <StatusPill dot tone={face}>{label}</StatusPill>;
 }
 
 /**

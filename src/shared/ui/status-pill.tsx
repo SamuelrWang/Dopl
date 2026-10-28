@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 
 /** `live` greens only the dot (DESIGN-LANGUAGE §1: green is for live); `attention` and `done`
- *  tint the whole pill in their status token. */
-export type StatusTone = "neutral" | "live" | "attention" | "done";
+ *  tint the whole pill in their status token; `ended` is the ink (black) face. */
+export type StatusTone = "neutral" | "live" | "attention" | "done" | "ended";
 
 /** THE status pill (kit `.status-pill`): an optional dot and one word. */
 export function StatusPill({
