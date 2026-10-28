@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
-import { rotateApiKey } from "@/features/device-sdk/server/keys";
+import { KeyNotRotatableError, rotateApiKey } from "@/features/device-sdk/server/keys";
 import { getKeyProject, listPortalProjects } from "@/features/device-sdk/server/portal";
 import { canManageKeys } from "@/features/device-sdk/portal/scope";
 
@@ -18,7 +18,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * ⚠ `sessionOnly`: this mints a credential, so an agent's OAuth token is refused (the
  * credential-minting class in `write-gate-coverage.test.ts`). ⚠ Reach is checked HERE: the key's
  * project must be one of the caller's (`listPortalProjects`) with an owner or admin role. A key
- * the caller cannot see answers 404, the same as one that does not exist.
+ * the caller cannot see answers 404, the same as one that does not exist. A revoked, expired or
+ * already-rotating key answers 409 (`KEY_REVOKED` / `KEY_EXPIRED` / `KEY_ROTATING`).
  */
 export const POST = withUserAuth(
   async (_request, { userId, params }) => {
@@ -32,7 +33,14 @@ export const POST = withUserAuth(
       if (!canManageKeys(project.role)) {
         throw new HttpError(403, "FORBIDDEN", "Only an org owner or admin can rotate keys");
       }
-      if (key.revoked) throw new HttpError(409, "KEY_REVOKED", "A revoked key cannot be rotated");
+      // Only a live, never-rotated key rotates: an expired key would mint a working credential off
+      // a dead one; a key in its overlap window would get a second live replacement. The same
+      // refusals hold atomically inside `rotateApiKey` (the check→rotate race lands there).
+      if (key.revokedAt) throw new KeyNotRotatableError("KEY_REVOKED", "A revoked key cannot be rotated");
+      if (key.expiresAt && Date.parse(key.expiresAt) <= Date.now()) {
+        throw new KeyNotRotatableError("KEY_EXPIRED", "An expired key cannot be rotated");
+      }
+      if (key.expiresAt) throw new KeyNotRotatableError("KEY_ROTATING", "This key is already being rotated");
 
       const rotated = await rotateApiKey({ projectId: project.id, keyId });
       return NextResponse.json(
@@ -40,7 +48,9 @@ export const POST = withUserAuth(
         { headers: { "Cache-Control": "no-store" } }
       );
     } catch (err) {
-      return toHttpErrorResponse("developers/keys/rotate", err);
+      return toHttpErrorResponse("developers/keys/rotate", err, (e) =>
+        e instanceof KeyNotRotatableError ? new HttpError(409, e.code, e.message) : null
+      );
     }
   },
   { sessionOnly: true }

@@ -188,4 +188,35 @@ describe("rotate", () => {
     await revokeApiKey({ projectId: PROJECT, keyId: old.key.id });
     await expect(rotateApiKey({ projectId: PROJECT, keyId: old.key.id })).rejects.toThrow(/revoked/);
   });
+
+  it("refuses to rotate an expired key (no live credential off a dead one)", async () => {
+    const old = await mintApiKey({ projectId: PROJECT, env: "live", kind: "secret" });
+    const now = new Date();
+    await rotateApiKey({ projectId: PROJECT, keyId: old.key.id, overlapMs: 1_000, now });
+    const later = new Date(now.getTime() + 5_000);
+    await expect(rotateApiKey({ projectId: PROJECT, keyId: old.key.id, now: later })).rejects.toMatchObject({
+      code: "KEY_EXPIRED",
+    });
+  });
+
+  it("refuses to rotate a key already in its overlap window (one live replacement only)", async () => {
+    const old = await mintApiKey({ projectId: PROJECT, env: "test", kind: "secret" });
+    await rotateApiKey({ projectId: PROJECT, keyId: old.key.id });
+    const before = fakeStore.keys.length;
+    await expect(rotateApiKey({ projectId: PROJECT, keyId: old.key.id })).rejects.toMatchObject({
+      code: "KEY_ROTATING",
+    });
+    expect(fakeStore.keys.length).toBe(before);
+  });
+
+  it("claims the old key before minting: a lost race mints nothing", async () => {
+    const old = await mintApiKey({ projectId: PROJECT, env: "test", kind: "secret" });
+    // Concurrent rotations both read the key un-rotated; only one claim UPDATE can match.
+    const results = await Promise.allSettled([
+      rotateApiKey({ projectId: PROJECT, keyId: old.key.id }),
+      rotateApiKey({ projectId: PROJECT, keyId: old.key.id }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(fakeStore.keys.filter((k) => k.project_id === PROJECT && k.id !== old.key.id && k.env === "test")).toHaveLength(1);
+  });
 });

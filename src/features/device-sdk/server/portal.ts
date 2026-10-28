@@ -103,16 +103,22 @@ export async function listProjectKeys(projectId: string, env: Environment): Prom
   return (data ?? []) as DevApiKeyRow[];
 }
 
-/** The key's project and kind, for the rotate route's ownership check. */
-export async function getKeyProject(keyId: string): Promise<{ projectId: string; revoked: boolean } | null> {
+/**
+ * The key's project and lifecycle, for the rotate route's checks. `null` when no such key.
+ * Rotatable = not revoked, never rotated (`expires_at` unset); `keys.ts › rotateApiKey` re-checks
+ * atomically, this read only lets the route answer the common refusals cleanly.
+ */
+export async function getKeyProject(
+  keyId: string
+): Promise<{ projectId: string; revokedAt: string | null; expiresAt: string | null } | null> {
   const { data, error } = await supabaseAdmin()
     .from("dev_api_keys")
-    .select("id, project_id, revoked_at")
+    .select("id, project_id, revoked_at, expires_at")
     .eq("id", keyId)
     .maybeSingle();
   if (error) throw new Error(`getKeyProject failed: ${error.message}`);
-  const row = data as { project_id: string; revoked_at: string | null } | null;
-  return row ? { projectId: row.project_id, revoked: row.revoked_at !== null } : null;
+  const row = data as { project_id: string; revoked_at: string | null; expires_at: string | null } | null;
+  return row ? { projectId: row.project_id, revokedAt: row.revoked_at, expiresAt: row.expires_at } : null;
 }
 
 export interface LogPage {

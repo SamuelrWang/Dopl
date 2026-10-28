@@ -32,7 +32,14 @@ vi.mock("@/features/device-sdk/server/portal", () => ({
   getKeyProject: (...a: unknown[]) => getKeyProject(...a),
   listPortalProjects: (...a: unknown[]) => listPortalProjects(...a),
 }));
-vi.mock("@/features/device-sdk/server/keys", () => ({ rotateApiKey: (...a: unknown[]) => rotateApiKey(...a) }));
+vi.mock("@/features/device-sdk/server/keys", () => {
+  class KeyNotRotatableError extends Error {
+    constructor(readonly code: string, message: string) {
+      super(message);
+    }
+  }
+  return { KeyNotRotatableError, rotateApiKey: (...a: unknown[]) => rotateApiKey(...a) };
+});
 
 import { POST } from "./route";
 
@@ -69,7 +76,7 @@ describe("rotate route", () => {
   });
 
   it("404s a key in someone else's project", async () => {
-    getKeyProject.mockResolvedValue({ projectId: "p-other", revoked: false });
+    getKeyProject.mockResolvedValue({ projectId: "p-other", revokedAt: null, expiresAt: null });
     listPortalProjects.mockResolvedValue([project("p1", "owner")]);
     const res = await call();
     expect(res.status).toBe(404);
@@ -77,20 +84,37 @@ describe("rotate route", () => {
   });
 
   it("403s a developer member", async () => {
-    getKeyProject.mockResolvedValue({ projectId: "p1", revoked: false });
+    getKeyProject.mockResolvedValue({ projectId: "p1", revokedAt: null, expiresAt: null });
     listPortalProjects.mockResolvedValue([project("p1", "developer")]);
     expect((await call()).status).toBe(403);
     expect(rotateApiKey).not.toHaveBeenCalled();
   });
 
-  it("409s a revoked key", async () => {
-    getKeyProject.mockResolvedValue({ projectId: "p1", revoked: true });
+  it.each([
+    ["revoked", { revokedAt: "2026-10-01T00:00:00.000Z", expiresAt: null }, "KEY_REVOKED"],
+    ["expired", { revokedAt: null, expiresAt: "2020-01-01T00:00:00.000Z" }, "KEY_EXPIRED"],
+    ["in its overlap window", { revokedAt: null, expiresAt: "2999-01-01T00:00:00.000Z" }, "KEY_ROTATING"],
+  ])("409s a %s key without minting", async (_label, life, code) => {
+    getKeyProject.mockResolvedValue({ projectId: "p1", ...life });
     listPortalProjects.mockResolvedValue([project("p1", "admin")]);
-    expect((await call()).status).toBe(409);
+    const res = await call();
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code } });
+    expect(rotateApiKey).not.toHaveBeenCalled();
+  });
+
+  it("maps a lost check→rotate race to 409, not 500", async () => {
+    getKeyProject.mockResolvedValue({ projectId: "p1", revokedAt: null, expiresAt: null });
+    listPortalProjects.mockResolvedValue([project("p1", "owner")]);
+    const { KeyNotRotatableError } = await import("@/features/device-sdk/server/keys");
+    rotateApiKey.mockRejectedValue(new KeyNotRotatableError("KEY_ROTATING", "This key is already being rotated"));
+    const res = await call();
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: "KEY_ROTATING" } });
   });
 
   it("rotates for an owner and returns the secret once, no-store", async () => {
-    getKeyProject.mockResolvedValue({ projectId: "p1", revoked: false });
+    getKeyProject.mockResolvedValue({ projectId: "p1", revokedAt: null, expiresAt: null });
     listPortalProjects.mockResolvedValue([project("p1", "owner")]);
     rotateApiKey.mockResolvedValue({
       secret: "sk_test_RAW",

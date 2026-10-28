@@ -146,9 +146,26 @@ export async function revokeApiKey(input: { projectId: string; keyId: string }):
   return Array.isArray(data) && data.length > 0;
 }
 
+/** Why a key cannot be rotated. `code` is the portal route's 409 error code. */
+export class KeyNotRotatableError extends Error {
+  constructor(readonly code: "KEY_REVOKED" | "KEY_EXPIRED" | "KEY_ROTATING", message: string) {
+    super(message);
+    this.name = "KeyNotRotatableError";
+  }
+}
+
 /**
  * Mint a replacement with the same env, kind and scopes, and give the outgoing key an
- * `expires_at` overlap window (never later than an expiry it already has).
+ * `expires_at` overlap window.
+ *
+ * ⚠ ONLY A LIVE, UN-ROTATED KEY ROTATES. A revoked key, an expired key, or a key already in its
+ * overlap window (`expires_at` set) is refused with `KeyNotRotatableError`: rotating an expired
+ * key would mint a working credential off a dead one, and rotating one already rotating would
+ * leave several live replacements.
+ * ⚠ THE CLAIM IS ATOMIC: the old key's `expires_at` is set by an UPDATE conditioned on
+ * `expires_at IS NULL AND revoked_at IS NULL`, BEFORE the replacement is minted. Two concurrent
+ * rotations (two tabs, a retry) race on that UPDATE; exactly one wins, the other is refused.
+ * If minting then fails, the old key still expires after the overlap and the caller sees an error.
  */
 export async function rotateApiKey(input: {
   projectId: string;
@@ -165,11 +182,27 @@ export async function rotateApiKey(input: {
     .maybeSingle();
   if (error) throw new Error(`rotateApiKey failed: ${error.message}`);
   const prev = old as DevApiKeyRow | null;
-  if (!prev || prev.revoked_at) throw new Error("rotateApiKey: key not found or revoked");
-
+  if (!prev) throw new Error("rotateApiKey: key not found");
   const now = input.now ?? new Date();
-  let expiresAt = new Date(now.getTime() + (input.overlapMs ?? DEFAULT_ROTATION_OVERLAP_MS));
-  if (prev.expires_at && new Date(prev.expires_at) < expiresAt) expiresAt = new Date(prev.expires_at);
+  if (prev.revoked_at) throw new KeyNotRotatableError("KEY_REVOKED", "A revoked key cannot be rotated");
+  if (prev.expires_at && Date.parse(prev.expires_at) <= now.getTime()) {
+    throw new KeyNotRotatableError("KEY_EXPIRED", "An expired key cannot be rotated");
+  }
+  if (prev.expires_at) throw new KeyNotRotatableError("KEY_ROTATING", "This key is already being rotated");
+
+  const expiresAt = new Date(now.getTime() + (input.overlapMs ?? DEFAULT_ROTATION_OVERLAP_MS)).toISOString();
+  const { data: claimed, error: upErr } = await db
+    .from(TABLE)
+    .update({ expires_at: expiresAt })
+    .eq("id", prev.id)
+    .eq("project_id", prev.project_id)
+    .is("expires_at", null)
+    .is("revoked_at", null)
+    .select("id");
+  if (upErr) throw new Error(`rotateApiKey failed: ${upErr.message}`);
+  if (!Array.isArray(claimed) || claimed.length === 0) {
+    throw new KeyNotRotatableError("KEY_ROTATING", "This key is already being rotated");
+  }
 
   const minted = await mintApiKey({
     projectId: prev.project_id,
@@ -177,13 +210,7 @@ export async function rotateApiKey(input: {
     kind: prev.kind,
     scopes: prev.scopes,
   });
-  const { error: upErr } = await db
-    .from(TABLE)
-    .update({ expires_at: expiresAt.toISOString() })
-    .eq("id", prev.id)
-    .eq("project_id", prev.project_id);
-  if (upErr) throw new Error(`rotateApiKey failed: ${upErr.message}`);
-  return { ...minted, previous: { id: prev.id, expires_at: expiresAt.toISOString() } };
+  return { ...minted, previous: { id: prev.id, expires_at: expiresAt } };
 }
 
 /** What a verified key resolves to. */
