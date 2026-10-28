@@ -1,45 +1,49 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { OPEN_SCALE_ICON_ONLY, OpenScaleIconButton } from "@/shared/ui/open-scale-button";
+import { StatusPill } from "@/shared/ui/status-pill";
 import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
+import type { SavedTask } from "../data/saved-tasks";
+import { facesOf } from "../model/assignment";
 import { RUN_RESULT } from "../model/schedule";
 import { TODAY_INDEX, weekDays, weekLabel, type ChipState, type WeekChip } from "../model/week";
+import styles from "../tasks.module.css";
+import { IdentityMark, TeamChipFace } from "./assignee";
 
-/** Chips a day shows before "+N". */
+/** Run cards a day shows before "+N". */
 const DAY_CAP = 3;
 
-/** The chip's state mark: a check, a live dot, a hollow ring, or the amber dot for "needs you". */
-function ChipMark({ state }: { state: ChipState }) {
-  if (state === "done") return <Check size={10} strokeWidth={3} className="flex-none text-text-primary" aria-hidden="true" />;
-  const dot =
-    state === "running"
-      ? "bg-success"
-      : state === "needs_you"
-        ? "bg-warning"
-        : state === "failed"
-          ? "bg-danger"
-          : "border border-border-strong";
-  return <span className={cn("size-1.5 flex-none rounded-full", dot)} aria-hidden="true" />;
+/** 11px uppercase section label, the study-notes bento head. */
+const BENTO_LABEL = "text-label font-semibold uppercase tracking-wide";
+
+const stateLabel = (state: ChipState) => (state === "upcoming" ? "Scheduled" : RUN_RESULT[state].label);
+
+/** The run's tiny assignee face: the team's, or the first identity's. */
+function RunFace({ task }: { task: SavedTask | undefined }) {
+  if (!task) return null;
+  if (task.assignment.kind === "team") return <TeamChipFace teamId={task.assignment.teamId} />;
+  const first = facesOf(task)[0];
+  return first ? <IdentityMark id={first} size="xs" /> : null;
 }
 
-const chipName = (chip: WeekChip) =>
-  `${chip.time} ${chip.title}, ${chip.state === "upcoming" ? "Scheduled" : RUN_RESULT[chip.state].label}`;
-
 /**
- * THE WEEK BAR (Samuel, 2026-10-28): seven day columns in one compact band, each day's runs as
- * small chips in time order (time, title, state mark). Today is marked; arrows step a week; a day
- * holding more than {@link DAY_CAP} runs ends in "+N", which opens the rest in place.
+ * THE WEEK BAR (Samuel, 2026-10-28): ONE horizontal band of seven equal day boxes, Mon to Sun
+ * left to right (`tasks.module.css › .week`, never stacks, scrolls sideways when narrow). Each
+ * day is a bento well holding its runs as small cards: time and state, the task name, a tiny face,
+ * a state bar on the leading edge. Today is lifted with an ink hairline.
  */
 export function WeekBar({
   chips,
+  taskOf,
   offset,
   onOffset,
   onOpen,
 }: {
   chips: readonly WeekChip[];
+  taskOf: (id: string) => SavedTask | undefined;
   offset: number;
   onOffset: (next: number) => void;
   onOpen: (chip: WeekChip) => void;
@@ -48,11 +52,16 @@ export function WeekBar({
   const days = weekDays(offset);
 
   return (
-    <section aria-label="This week's runs" className="flex min-w-0 flex-col gap-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <h2 className="text-body font-semibold text-text-primary">{weekLabel(offset)}</h2>
+    <section aria-label="This week's runs" className="flex min-w-0 flex-col gap-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <h2 className={cn(BENTO_LABEL, "text-text-secondary")}>Week</h2>
+        <span className="text-body font-semibold text-text-primary">{weekLabel(offset)}</span>
         {offset !== 0 && (
-          <button type="button" onClick={() => onOffset(0)} className={cn("text-caption text-text-muted", TEXT_LINK_BUTTON)}>
+          <button
+            type="button"
+            onClick={() => onOffset(0)}
+            className={cn("text-caption text-text-muted", TEXT_LINK_BUTTON)}
+          >
             Back to this week
           </button>
         )}
@@ -66,7 +75,7 @@ export function WeekBar({
         </span>
       </div>
 
-      <ol className="white-card m-0 grid list-none grid-cols-7 p-0">
+      <ol className={cn(styles.week, "m-0 list-none p-0")}>
         {days.map((day, i) => {
           const today = offset === 0 && i === TODAY_INDEX;
           const own = chips.filter((c) => c.dayIndex === i);
@@ -77,65 +86,76 @@ export function WeekBar({
               key={day.name}
               aria-label={`${day.name} ${day.month} ${day.date}${today ? ", today" : ""}`}
               aria-current={today ? "date" : undefined}
-              className={cn(
-                "flex min-w-0 flex-col gap-1 border-l border-border-default p-1.5 first:border-l-0",
-                today && "bg-bg-inset"
-              )}
+              className={cn("card-well", styles.day, today && styles.dayToday)}
             >
-              <span className="flex items-baseline gap-1 px-0.5 pb-0.5">
-                <span className={cn("text-label font-medium", today ? "text-text-primary" : "text-text-muted")}>
+              <span className={styles.dayHead}>
+                <span className={cn(BENTO_LABEL, today ? "text-text-primary" : "text-text-muted")}>
                   {day.name}
                 </span>
                 <span
                   className={cn(
-                    "text-label tabular-nums",
-                    today
-                      ? "rounded-full bg-text-primary px-1.5 font-semibold text-text-on-invert"
-                      : "text-text-secondary"
+                    "text-caption tabular-nums",
+                    today ? "font-semibold text-text-primary" : "text-text-secondary"
                   )}
                 >
-                  {day.date}
+                  {today ? `Today ${day.date}` : `${day.month} ${day.date}`}
                 </span>
               </span>
-              {shown.map((chip) => (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => onOpen(chip)}
-                  aria-label={chipName(chip)}
-                  title={chipName(chip)}
-                  data-state={chip.state}
-                  className="flex h-5.5 min-w-0 cursor-pointer items-center gap-1 rounded-mark bg-bg-overlay px-1 text-left text-label shadow-(--shadow-hairline) transition-colors hover:bg-bg-inset-hover"
-                >
-                  <ChipMark state={chip.state} />
-                  <span
-                    className={cn(
-                      "flex-none tabular-nums",
-                      chip.state === "missed" ? "text-text-muted line-through" : "text-text-secondary"
-                    )}
+              {shown.map((chip) => {
+                const missedOrDone = chip.state === "missed" || chip.state === "done";
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => onOpen(chip)}
+                    aria-label={`${chip.time} ${chip.title}, ${stateLabel(chip.state)}`}
+                    data-state={chip.state}
+                    className={styles.run}
                   >
-                    {chip.time}
-                  </span>
-                  <span
-                    className={cn(
-                      "min-w-0 truncate",
-                      chip.state === "missed" || chip.state === "done" ? "text-text-muted" : "text-text-primary"
+                    <span className={styles.runHead}>
+                      <span
+                        className={cn(
+                          "text-label font-medium tabular-nums",
+                          chip.state === "missed" ? "text-text-muted line-through" : "text-text-secondary"
+                        )}
+                      >
+                        {chip.time}
+                      </span>
+                      <span className="ml-auto flex items-center">
+                        <RunFace task={taskOf(chip.taskId)} />
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        styles.runTitle,
+                        "text-caption font-semibold leading-snug",
+                        missedOrDone ? "text-text-muted" : "text-text-primary"
+                      )}
+                    >
+                      {chip.title}
+                    </span>
+                    {(chip.state === "running" || chip.state === "needs_you" || chip.state === "missed") && (
+                      <StatusPill
+                        bare
+                        dot={chip.state !== "missed"}
+                        tone={RUN_RESULT[chip.state].tone}
+                      >
+                        {stateLabel(chip.state)}
+                      </StatusPill>
                     )}
-                  >
-                    {chip.title}
-                  </span>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
               {hidden > 0 && (
                 <button
                   type="button"
                   onClick={() => setOpened(i)}
-                  className={cn("self-start px-1 text-label text-text-muted", TEXT_LINK_BUTTON)}
+                  className={cn(styles.more, "text-label font-medium text-text-secondary", TEXT_LINK_BUTTON)}
                 >
-                  {`+${hidden}`}
+                  {`+${hidden} more`}
                 </button>
               )}
-              {own.length === 0 && <span className="px-1 text-label text-text-disabled">No runs</span>}
+              {own.length === 0 && <span className="px-0.5 text-label text-text-muted">No runs</span>}
             </li>
           );
         })}

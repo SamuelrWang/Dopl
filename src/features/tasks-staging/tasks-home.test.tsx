@@ -20,7 +20,7 @@ describe("/playground/tasks", () => {
     const today = within(week).getByRole("listitem", { name: /Wed Oct 28, today/ });
     expect(today.getAttribute("aria-current")).toBe("date");
     expect(within(today).getByRole("button", { name: /8:30 Standup notes, Missed/ })).toBeTruthy();
-    const more = within(today).getByRole("button", { name: /^\+\d$/ });
+    const more = within(today).getByRole("button", { name: /^\+\d more$/ });
     fireEvent.click(more);
     expect(within(today).getByRole("button", { name: /17:00 Migration review, Scheduled/ })).toBeTruthy();
   });

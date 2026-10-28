@@ -1,16 +1,17 @@
 "use client";
 
-import { Play, Repeat } from "lucide-react";
+import { CalendarClock, Hash, Play, Repeat } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
+import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { StatusPill } from "@/shared/ui/status-pill";
-import { TEXT_LINK_BUTTON } from "@/shared/ui/text-link";
-import { ROW_CARD_ROW } from "@/features/channels/components/bits";
+import { FactChip } from "@/features/agent-identities/components/identity-section";
 import { TaskTickFace, taskTickClass } from "@/features/channels/components/task-bits";
 import type { TaskStatus } from "@/features/channels/types";
 import { channelName } from "../data/channels";
 import type { RunResult, SavedTask } from "../data/saved-tasks";
 import { RUN_RESULT, latestRun, scheduleLabel } from "../model/schedule";
+import styles from "../tasks.module.css";
 import { AssignmentFaces } from "./assignee";
 
 const TICK: Record<RunResult, TaskStatus> = {
@@ -43,20 +44,19 @@ function whenLine(task: SavedTask): string {
   return scheduleLabel(task.schedule);
 }
 
-/** What the right side says: the next run, or the live state of the latest one. */
+/** The footer's quiet fact: the next run, the last one, or nothing yet. */
 function nextLine(task: SavedTask): string {
   if (task.nextRun) return `Next ${task.nextRun}`;
   const run = latestRun(task);
-  if (run) return `Last ${run.when}`;
-  return "Not started";
+  return run ? `Last ${run.when}` : "Not started";
 }
 
-/** The grid every row and the list's column heads share. */
-export const TASK_ROW_GRID =
-  "grid grid-cols-[16px_minmax(0,1fr)_96px_140px_96px] items-center gap-x-3";
-
-/** One task as a dense row: ring, title, schedule, assignees, next run, Launch. */
-export function TaskRow({
+/**
+ * One task as a compact card, the identity card's recipe (`white-card card-lift`, the 14px name
+ * face, fact chips, a hairline footer): ring and name with the live state, when and where, then
+ * who and Launch.
+ */
+export function TaskCard({
   task,
   starting,
   onOpen,
@@ -69,47 +69,53 @@ export function TaskRow({
 }) {
   const run = latestRun(task);
   const live = run && (run.result === "running" || run.result === "needs_you" || run.result === "missed");
-  const state = live ? RUN_RESULT[run.result] : null;
 
   return (
-    <li data-kind={task.kind} className={cn(ROW_CARD_ROW, TASK_ROW_GRID, "min-h-12 py-1.5")}>
-      <TaskRing task={task} />
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={`Open ${task.title}`}
-          className={cn("min-w-0 truncate p-0 text-left text-small font-medium text-text-primary", TEXT_LINK_BUTTON)}
-        >
-          {task.title}
-        </button>
-        <span className="flex min-w-0 items-center gap-1 text-label text-text-muted">
-          {task.schedule.on && <Repeat size={11} strokeWidth={2} aria-hidden="true" className="flex-none" />}
-          <span className="truncate">{`${whenLine(task)} · #${channelName(task.channelId)}`}</span>
+    <div data-kind={task.kind} className={cn("white-card card-lift", styles.card)}>
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open ${task.title}`}
+        className="flex min-w-0 cursor-pointer flex-col items-start gap-2.5 text-left"
+      >
+        <span className="flex w-full min-w-0 items-center gap-2.5">
+          <TaskRing task={task} />
+          <span className={cn("min-w-0 flex-1 truncate", IDENTITY_NAME_TEXT)}>{task.title}</span>
+          {live && run && (
+            <StatusPill tone={RUN_RESULT[run.result].tone} dot={run.result === "running"}>
+              {run.result === "running" ? `${run.done}/${run.total}` : RUN_RESULT[run.result].label}
+            </StatusPill>
+          )}
         </span>
-      </span>
-      <span className="flex min-w-0 justify-start">
+        <span className="flex w-full min-w-0 flex-wrap items-center gap-1.5">
+          <FactChip
+            mark={
+              task.schedule.on ? (
+                <Repeat size={12} strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <CalendarClock size={12} strokeWidth={2} aria-hidden="true" />
+              )
+            }
+          >
+            {whenLine(task)}
+          </FactChip>
+          <FactChip mark={<Hash size={12} strokeWidth={2} aria-hidden="true" />}>
+            {channelName(task.channelId)}
+          </FactChip>
+        </span>
+      </button>
+      <div className={styles.cardFoot}>
         <AssignmentFaces task={task} size="s" />
-      </span>
-      <span className="flex min-w-0 items-center gap-1.5">
-        {state && run ? (
-          <StatusPill tone={state.tone} dot={run.result === "running"}>
-            {run.result === "running" ? `${state.label} ${run.done}/${run.total}` : state.label}
-          </StatusPill>
-        ) : (
-          <span className="truncate text-caption tabular-nums text-text-secondary">{nextLine(task)}</span>
-        )}
-      </span>
-      <span className="flex justify-end">
+        <span className="min-w-0 flex-1 truncate text-right text-label text-text-muted">{nextLine(task)}</span>
         <OpenScaleButton
           onClick={onLaunch}
           disabled={starting || run?.result === "running"}
-          className="gap-1.5 disabled:opacity-60"
+          className="flex-none gap-1.5 disabled:opacity-60"
         >
           <Play size={OPEN_SCALE_ICON} strokeWidth={2} aria-hidden="true" />
           {starting ? "Starting…" : run?.result === "missed" ? "Run now" : "Launch"}
         </OpenScaleButton>
-      </span>
-    </li>
+      </div>
+    </div>
   );
 }

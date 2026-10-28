@@ -1,18 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/shared/lib/utils";
 import { CreateButton } from "@/shared/ui/pill-button";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { toast } from "@/shared/ui/toast";
 import { IdentityPanel } from "@/features/agent-identities/components/identity-section";
-import { ROW_CARD } from "@/features/channels/components/bits";
 import { nameOf } from "@/features/identities-staging/data-agents";
 import { latency } from "@/features/identities-staging/store/identity-store";
 import { STAGING_TASK_CHANNELS, channelName } from "./data/channels";
 import { SEED_SAVED_TASKS, type SavedTask } from "./data/saved-tasks";
-import { TaskRow } from "./components/task-row";
+import { TaskCard } from "./components/task-card";
+import styles from "./tasks.module.css";
 import { WeekBar } from "./components/week-bar";
-import { DESKTOP_ONLY_LINE, launchedRun, latestRun, nextRunFor } from "./model/schedule";
+import {
+  DESKTOP_ONLY_LINE,
+  launchedRun,
+  latestRun,
+  nextRunFor,
+} from "./model/schedule";
 import { NOW_LABEL, TODAY_INDEX, weekChips, type WeekChip } from "./model/week";
 import { SavedTaskDetail } from "./saved/saved-task-detail";
 import { SavedTaskEditor } from "./saved/saved-task-editor";
@@ -21,7 +27,12 @@ type Scope = "all" | string;
 
 type Group = "needs" | "repeating" | "oneoff";
 
-const GROUPS: ReadonlyArray<{ key: Group; label: string; empty: string; caption?: string }> = [
+const GROUPS: ReadonlyArray<{
+  key: Group;
+  label: string;
+  empty: string;
+  caption?: string;
+}> = [
   { key: "needs", label: "Needs you", empty: "Nothing is waiting on you." },
   {
     key: "repeating",
@@ -41,7 +52,7 @@ function groupOf(task: SavedTask): Group {
 
 /**
  * STAGING MOCKUP of the Tasks page (Samuel, 2026-10-28, second shape): a compact week bar on
- * top, each day's runs as chips; below, every task as a dense row in Needs you, Repeating and
+ * top, each day's runs as chips; below, every task as a compact card in Needs you, Repeating and
  * One-off. A chip or a row opens the same task view. A channel filter scopes both. Local state.
  */
 export function TasksHome({ currentUserId }: { currentUserId: string }) {
@@ -50,7 +61,9 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
   const [offset, setOffset] = useState(0);
   const [launched, setLaunched] = useState<WeekChip[]>([]);
   const [viewingId, setViewingId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ task: SavedTask | null } | null>(null);
+  const [editing, setEditing] = useState<{ task: SavedTask | null } | null>(
+    null,
+  );
   const [starting, setStarting] = useState<string | null>(null);
 
   const visible = tasks.filter((t) => scope === "all" || t.channelId === scope);
@@ -61,7 +74,9 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
   ];
   const viewing = tasks.find((t) => t.id === viewingId);
   const markerFor = (task: SavedTask) =>
-    task.createdBy === currentUserId ? null : `by ${nameOf(task.createdBy) ?? "a member"}`;
+    task.createdBy === currentUserId
+      ? null
+      : `by ${nameOf(task.createdBy) ?? "a member"}`;
   const update = (id: string, patch: (t: SavedTask) => SavedTask) =>
     setTasks((all) => all.map((t) => (t.id === id ? patch(t) : t)));
 
@@ -82,7 +97,10 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
         state: "running",
       },
     ]);
-    toast({ title: `"${task.title}" launched into #${channelName(task.channelId)}`, variant: "invert" });
+    toast({
+      title: `"${task.title}" launched into #${channelName(task.channelId)}`,
+      variant: "invert",
+    });
   }
 
   return (
@@ -94,7 +112,10 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
               variant="track"
               options={[
                 { key: "all", label: "All channels" },
-                ...STAGING_TASK_CHANNELS.map((c) => ({ key: c.id, label: `#${c.name}` })),
+                ...STAGING_TASK_CHANNELS.map((c) => ({
+                  key: c.id,
+                  label: `#${c.name}`,
+                })),
               ]}
               value={scope}
               onChange={setScope}
@@ -105,12 +126,15 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
               {`${visible.length} ${visible.length === 1 ? "task" : "tasks"}`}
             </p>
             <div className="ml-auto flex-none">
-              <CreateButton onClick={() => setEditing({ task: null })}>Task</CreateButton>
+              <CreateButton onClick={() => setEditing({ task: null })}>
+                Task
+              </CreateButton>
             </div>
           </div>
 
           <WeekBar
             chips={chips}
+            taskOf={(id) => tasks.find((t) => t.id === id)}
             offset={offset}
             onOffset={setOffset}
             onOpen={(chip) => setViewingId(chip.taskId)}
@@ -119,22 +143,35 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
           {GROUPS.map((group) => {
             const rows = visible.filter((t) => groupOf(t) === group.key);
             return (
-              <IdentityPanel key={group.key} id={`tasks-${group.key}`} label={group.label} flat>
+              <IdentityPanel
+                key={group.key}
+                id={`tasks-${group.key}`}
+                label={group.label}
+                flat
+              >
                 {group.caption && rows.length > 0 && (
-                  <p className="-mt-1 pb-1 text-caption text-text-muted">{group.caption}</p>
+                  <p className="pb-1 text-caption text-text-muted">
+                    {group.caption}
+                  </p>
                 )}
                 {rows.length === 0 ? (
-                  <p className="pb-1 text-caption text-text-muted">{group.empty}</p>
+                  <p className="pb-1 text-caption text-text-muted">
+                    {group.empty}
+                  </p>
                 ) : (
-                  <ul aria-label={group.label} className={ROW_CARD}>
+                  <ul
+                    aria-label={group.label}
+                    className={cn(styles.cards, "m-0 list-none p-0")}
+                  >
                     {rows.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        starting={starting === task.id}
-                        onOpen={() => setViewingId(task.id)}
-                        onLaunch={() => void launch(task)}
-                      />
+                      <li key={task.id} className="flex min-w-0">
+                        <TaskCard
+                          task={task}
+                          starting={starting === task.id}
+                          onOpen={() => setViewingId(task.id)}
+                          onLaunch={() => void launch(task)}
+                        />
+                      </li>
                     ))}
                   </ul>
                 )}
@@ -148,7 +185,9 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
         <SavedTaskDetail
           task={viewing}
           marker={markerFor(viewing)}
-          scopeLabel={viewing.scope === "shared" ? "Shared in this channel" : "Personal"}
+          scopeLabel={
+            viewing.scope === "shared" ? "Shared in this channel" : "Personal"
+          }
           canLaunch
           onLaunch={() => {
             setViewingId(null);
@@ -171,11 +210,15 @@ export function TasksHome({ currentUserId }: { currentUserId: string }) {
         <SavedTaskEditor
           task={editing.task}
           createdBy={currentUserId}
-          defaultChannelId={scope === "all" ? STAGING_TASK_CHANNELS[0].id : scope}
+          defaultChannelId={
+            scope === "all" ? STAGING_TASK_CHANNELS[0].id : scope
+          }
           onClose={() => setEditing(null)}
           onSave={(next) => {
             setTasks((all) =>
-              all.some((t) => t.id === next.id) ? all.map((t) => (t.id === next.id ? next : t)) : [...all, next]
+              all.some((t) => t.id === next.id)
+                ? all.map((t) => (t.id === next.id ? next : t))
+                : [...all, next],
             );
             setEditing(null);
           }}

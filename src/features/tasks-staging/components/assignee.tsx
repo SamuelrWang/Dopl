@@ -49,12 +49,18 @@ export function TeamChip({ teamId }: { teamId: string }) {
   const team = SEED_AGENT_TEAMS.find((t) => t.id === teamId);
   if (!team) return <FactChip>Deleted team</FactChip>;
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-bg-inset py-0.5 pl-0.5 pr-2 text-label text-text-secondary">
+    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-bg-inset py-0.5 pl-1 pr-2 text-label text-text-secondary">
       <TeamStack team={team} size="xs" />
       <Users size={11} strokeWidth={2} aria-hidden="true" className="flex-none text-text-muted" />
       <span className="truncate font-medium text-text-primary">{team.name}</span>
     </span>
   );
+}
+
+/** A team as its smallest face: the roster stack alone (a run card's corner). */
+export function TeamChipFace({ teamId }: { teamId: string }) {
+  const team = SEED_AGENT_TEAMS.find((t) => t.id === teamId);
+  return team ? <TeamStack team={team} size="xs" /> : null;
 }
 
 /** Who a task goes to, as a face row: a team chip, an identity stack, or "Nobody yet". */
