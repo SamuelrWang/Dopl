@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
-    "build:packages": "npm --prefix packages/dopl-client run build && npm --prefix packages/mcp-server run build",
+    "build:packages": "npm --prefix packages/dopl-client run build && npm --prefix packages/mcp-server run build && npm --prefix packages/sdk run build",
     "build": "npm run build:packages && next build",
     "start": "next start",
     "dev:ui": "npm run dev -w @dopl/desktop-ui",

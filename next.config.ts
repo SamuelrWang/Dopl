@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -44,6 +45,18 @@ const nextConfig: NextConfig = {
     "@dopl/client",
     "@modelcontextprotocol/sdk",
   ],
+  /**
+   * `@dopl/sdk` (the display seam's client, W1.2) is BUNDLED FROM ITS BUILT `dist/` (`npm run
+   * build:packages`). Its source is NodeNext ESM (`./client.js` naming `client.ts`), which neither
+   * bundler maps; tsc and vitest read the source through `tsconfig` `paths` / the vitest alias. Both
+   * bundlers get the same alias: Turbopack builds, `next dev --webpack` serves.
+   */
+  turbopack: { resolveAlias: { "@dopl/sdk": "./packages/sdk/dist/index.js" } },
+  // Webpack's tsconfig-paths resolver would beat a plain alias, so the request is swapped first.
+  webpack(config, { webpack }) {
+    config.plugins.push(new webpack.NormalModuleReplacementPlugin(/^@dopl\/sdk$/, path.resolve(__dirname, "packages/sdk/dist/index.js")));
+    return config;
+  },
   /**
    * The legal pages render `docs/legal/*.md` (`features/marketing/legal/load-legal-doc.ts`).
    * They are `force-static`, so the read happens at build; this traces the two files into
