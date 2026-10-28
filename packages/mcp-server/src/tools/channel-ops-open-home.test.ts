@@ -75,3 +75,30 @@ describe("opOpen — a room in the Home space is a home channel", () => {
     expect(c.createHomeChannel).not.toHaveBeenCalled();
   });
 });
+
+describe("opOpen — a home_channel container holds one room", () => {
+  const LINK = "link-ws";
+  const refusal = Object.assign(new Error("HOME_CHANNEL_HAS_ROOM: one room"), {
+    status: 409,
+    code: "HOME_CHANNEL_HAS_ROOM",
+    apiMessage:
+      'This container is a home channel, and a home channel holds exactly one room; it already has it, so nothing was created. To make a new room, create a new home channel: over MCP, dopl_create_workspace(name="...").',
+  });
+
+  it("relays the server's refusal (naming dopl_create_workspace), not the slug-race narration", async () => {
+    const c = client(LINK);
+    (c as unknown as Record<string, unknown>).createChannel = vi.fn(async () => {
+      throw refusal;
+    });
+    const dir = {
+      lockedWorkspaceId: () => null,
+      containerKindIndex: async () => new Map([[LINK, "home_channel"]]),
+    } as unknown as WorkspaceDirectory;
+    const res = await opOpen(c, dir, { name: "Dopl (SDK)" });
+    const text = res.content[0].text;
+    expect(res.isError).toBe(true);
+    expect(text).toContain("dopl_create_workspace(name=");
+    expect(text).not.toMatch(/transient naming conflict/);
+    expect(c.createHomeChannel).not.toHaveBeenCalled();
+  });
+});

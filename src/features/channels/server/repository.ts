@@ -149,6 +149,25 @@ export async function existingSlugs(workspaceId: string): Promise<string[]> {
   );
 }
 
+/**
+ * Every channel row in the container, INCLUDING soft-deleted ones, as the shape the
+ * home-channel one-room gate needs (`service-writes-channel.ts › createChannel`).
+ * ⚠ Soft-deleted rows count: a closed DM is still the container's room and is
+ * REVIVED by the next open, so a hidden row must still occupy the one slot.
+ */
+export async function listContainerChannelShapes(
+  workspaceId: string
+): Promise<Array<{ is_direct: boolean; direct_key: string | null }>> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channels")
+    .select("is_direct, direct_key")
+    .eq("workspace_id", workspaceId)
+    .limit(2);
+  if (error) throw error;
+  return (data ?? []) as Array<{ is_direct: boolean; direct_key: string | null }>;
+}
+
 type ChannelInsert = {
   workspace_id: string;
   created_by: string;

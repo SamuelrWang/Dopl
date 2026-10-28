@@ -14,7 +14,14 @@
 
 import { callRef } from "../call-ref.js";
 import type { ChannelVisibility, DoplClient } from "@dopl/client";
-import { ok, err, isAlreadyExists, type ToolResponse } from "./respond";
+import {
+  ok,
+  err,
+  apiErrorCode,
+  apiMessage,
+  isAlreadyExists,
+  type ToolResponse,
+} from "./respond";
 import {
   inlineOr,
   isErr,
@@ -26,6 +33,18 @@ import {
 import { NO_NAME } from "./narration";
 import { landsInHomeSpace } from "./container-destination";
 import type { WorkspaceDirectory } from "../workspace-directory.js";
+
+/** A home channel holds ONE room; the server's 409 names the recovery (`dopl_create_workspace`).
+ *  ⚠ Read off the CODE: the slug-race arm below also keys on 409 and would mis-narrate it. */
+const HOME_CHANNEL_HAS_ROOM = "HOME_CHANNEL_HAS_ROOM";
+
+function homeChannelHasRoomOr(e: unknown): ToolResponse | null {
+  if (apiErrorCode(e) !== HOME_CHANNEL_HAS_ROOM) return null;
+  return err(
+    apiMessage(e) ??
+      `This container is a home channel, which holds exactly one room; nothing was created. Make a new room with ${callRef("workspaces.create_home_channel", { name: '"..."' })}.`,
+  );
+}
 
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
 interface OpenOptions {
@@ -46,10 +65,17 @@ export async function opOpen(
   if (opts.direct) {
     const member = await resolveMemberOr(client, opts.member as string);
     if (isErr(member)) return member;
-    const channel = await client.createChannel({
-      direct: true,
-      memberUserId: member.userId,
-    });
+    let channel;
+    try {
+      channel = await client.createChannel({
+        direct: true,
+        memberUserId: member.userId,
+      });
+    } catch (e) {
+      const refused = homeChannelHasRoomOr(e);
+      if (refused) return refused;
+      throw e;
+    }
     return ok(
       [
         `Opened a direct message with ${member.label} (id: \`${channel.id}\` · slug: \`${channel.slug}\`).`,
@@ -71,6 +97,8 @@ export async function opOpen(
       visibility: opts.visibility,
     });
   } catch (e) {
+    const refused = homeChannelHasRoomOr(e);
+    if (refused) return refused;
     if (isAlreadyExists(e)) {
       // ⚠ NOT a duplicate-name collision (names auto-dedupe via slug
       // suffixing): a 409 here is a transient same-derived-slug insert race
