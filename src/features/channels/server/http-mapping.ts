@@ -15,6 +15,7 @@ import {
   ChannelForbiddenError,
   ChannelInfoCardTooLargeError,
   ChannelInHomeSpaceError,
+  HomeChannelHasRoomError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
   ChannelLifecycleKindForbiddenError,
@@ -185,6 +186,9 @@ function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelInHomeSpaceError) {
     return new HttpError(409, "CHANNEL_IN_HOME_SPACE", err.message);
+  }
+  if (err instanceof HomeChannelHasRoomError) {
+    return new HttpError(409, "HOME_CHANNEL_HAS_ROOM", err.message);
   }
   if (err instanceof DirectChannelImmutableError) {
     return new HttpError(400, "DIRECT_CHANNEL_IMMUTABLE", err.message);

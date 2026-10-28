@@ -20,6 +20,15 @@ const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 const narration_1 = require("./narration");
 const container_destination_1 = require("./container-destination");
+/** A home channel holds ONE room; the server's 409 names the recovery (`dopl_create_workspace`).
+ *  ⚠ Read off the CODE: the slug-race arm below also keys on 409 and would mis-narrate it. */
+const HOME_CHANNEL_HAS_ROOM = "HOME_CHANNEL_HAS_ROOM";
+function homeChannelHasRoomOr(e) {
+    if ((0, respond_1.apiErrorCode)(e) !== HOME_CHANNEL_HAS_ROOM)
+        return null;
+    return (0, respond_1.err)((0, respond_1.apiMessage)(e) ??
+        `This container is a home channel, which holds exactly one room; nothing was created. Make a new room with ${(0, call_ref_js_1.callRef)("workspaces.create_home_channel", { name: '"..."' })}.`);
+}
 async function opOpen(client, directory, opts) {
     // Direct branch: open (or dedup-return) a 1:1 channel — the server dedups a
     // repeat DM to the same peer, so this is idempotent.
@@ -27,10 +36,19 @@ async function opOpen(client, directory, opts) {
         const member = await (0, channel_shared_1.resolveMemberOr)(client, opts.member);
         if ((0, channel_shared_1.isErr)(member))
             return member;
-        const channel = await client.createChannel({
-            direct: true,
-            memberUserId: member.userId,
-        });
+        let channel;
+        try {
+            channel = await client.createChannel({
+                direct: true,
+                memberUserId: member.userId,
+            });
+        }
+        catch (e) {
+            const refused = homeChannelHasRoomOr(e);
+            if (refused)
+                return refused;
+            throw e;
+        }
         return (0, respond_1.ok)([
             `Opened a direct message with ${member.label} (id: \`${channel.id}\` · slug: \`${channel.slug}\`).`,
             `Post with ${(0, call_ref_js_1.callRef)("channel.send", { channel: `"${channel.id}"`, body: '"..."' })}.`,
@@ -50,6 +68,9 @@ async function opOpen(client, directory, opts) {
         });
     }
     catch (e) {
+        const refused = homeChannelHasRoomOr(e);
+        if (refused)
+            return refused;
         if ((0, respond_1.isAlreadyExists)(e)) {
             // ⚠ NOT a duplicate-name collision (names auto-dedupe via slug
             // suffixing): a 409 here is a transient same-derived-slug insert race

@@ -9,6 +9,7 @@ import {
   ChannelInHomeSpaceError,
   ChannelSlugConflictError,
   DirectChannelImmutableError,
+  HomeChannelHasRoomError,
 } from "./errors";
 import { INFO_CARD_MAX_BYTES, infoCardTextBytes } from "../info-card";
 import * as repo from "./repository";
@@ -28,6 +29,7 @@ export async function createChannel(
 ): Promise<Channel> {
   // DMs too: the Home space has exactly one member, so a DM there has no legitimate peer.
   if (ctx.workspaceKind === "home") throw new ChannelInHomeSpaceError();
+  if (ctx.workspaceKind === "link") await assertHomeChannelHasNoRoom(ctx, input);
   if (input.direct === true) {
     return createDirectChannel(ctx, input.memberUserId);
   }
@@ -61,6 +63,34 @@ export async function createChannel(
   });
 
   return getChannel(ctx, channel.id);
+}
+
+/**
+ * 🔒 **A HOME CHANNEL HOLDS EXACTLY ONE ROOM (INVARIANTS §4A).** A `kind='link'`
+ * container IS its room: the desktop sidebar keys rows by container, so a second
+ * channel inside one renders as one row selected twice and neither can be picked.
+ * Its first channel is minted by `home/server/service-writes.ts` (on a container
+ * with zero rows); every later create — named room OR a `to` DM — is refused.
+ *
+ * ⚠ ONE EXCEPTION, AND IT CREATES NOTHING: a DM open whose pair already owns the
+ * container's row (legacy pair containers) is the dedup/revive of THAT room, so it
+ * passes through to `createDirectChannel`, which returns or revives it.
+ *
+ * ⚠ Keyed on `ctx.workspaceKind`, which `withWorkspaceAuth` always resolves for
+ * the HTTP/MCP path. The home service's own contexts omit it, and they only ever
+ * create the first row of a fresh container.
+ */
+async function assertHomeChannelHasNoRoom(
+  ctx: ChannelContext,
+  input: ChannelCreateInput
+): Promise<void> {
+  const rows = await repo.listContainerChannelShapes(ctx.workspaceId);
+  if (rows.length === 0) return;
+  if (input.direct === true && rows.length === 1) {
+    const key = [ctx.userId, input.memberUserId].sort().join(":");
+    if (rows[0].is_direct && rows[0].direct_key === key) return;
+  }
+  throw new HomeChannelHasRoomError();
 }
 
 /**
