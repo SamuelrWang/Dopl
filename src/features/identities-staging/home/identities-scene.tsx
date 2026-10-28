@@ -41,7 +41,6 @@ import { useStagingAttachableBases } from "../store/use-staging-attachable-bases
 import { useStagingIdentities } from "../store/use-staging-identities";
 import { useStagingIdentitySave } from "../store/use-staging-identity-save";
 import { TeamsHome } from "../teams/teams-home";
-import { RecurringHome } from "../recurring/recurring-home";
 
 
 const runtimeLabel = (id: string) => STAGING_RUNTIMES.find((r) => r.id === id)?.label ?? id;
@@ -63,13 +62,28 @@ export function IdentitiesScene({
   const [launching, setLaunching] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<{ identityId: string; message: string } | null>(null);
   const [sessions] = useState(() => stagingSessions(Date.now()));
-  const [view, setView] = useState<"identities" | "teams" | "recurring">("identities");
+  const [view, setView] = useState<"identities" | "teams">("identities");
 
   const containerList = useStagingIdentities(channel?.workspaceId ?? null);
   const homeList = useStagingIdentities(homeWorkspaceId);
   const shared = groupByVisibility(containerList.identities).workspace;
   const personal = groupByVisibility(homeList.identities).private.filter(
     (i) => i.createdBy === currentUserId
+  );
+
+  // N1 (Samuel, 2026-10-28): a track switch leading the page's own control row, not a tab bar.
+  const switcher = (
+    <SegmentedControl
+      variant="track"
+      options={[
+        { key: "identities", label: "Identities" },
+        { key: "teams", label: "Agent teams" },
+      ]}
+      value={view}
+      onChange={setView}
+      ariaLabel="Identities or agent teams"
+      className="flex-none"
+    />
   );
 
   async function launch(identity: AgentIdentity) {
@@ -84,25 +98,12 @@ export function IdentitiesScene({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SegmentedControl
-        variant="underline"
-        options={[
-          { key: "identities", label: "Identities" },
-          { key: "teams", label: "Teams" },
-          { key: "recurring", label: "Recurring tasks" },
-        ]}
-        value={view}
-        onChange={setView}
-        ariaLabel="Identities, agent teams or recurring tasks"
-        className="flex-none border-b border-border-default px-3"
-      />
-      {view === "recurring" ? (
-        <RecurringHome channelName={channel?.name ?? null} currentUserId={currentUserId} />
-      ) : view === "teams" ? (
+      {view === "teams" ? (
         <TeamsHome
           channelName={channel?.name ?? null}
           currentUserId={currentUserId}
           viewerPhoto={photoOf(currentUserId)}
+          switcher={switcher}
         />
       ) : (
         <IdentitiesHome
@@ -141,6 +142,7 @@ export function IdentitiesScene({
           ownerName={nameOf}
           onCreate={(where) => setEditing({ where, identity: null })}
           onEdit={(where, identity) => setEditing({ where, identity })}
+          switcher={switcher}
         />
       )}
 

@@ -1,17 +1,17 @@
 "use client";
 
-import { ListChecks, Play } from "lucide-react";
+import { Crown, Play, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { IDENTITY_NAME_TEXT } from "@/shared/ui/section-heading";
 import { OPEN_SCALE_ICON, OpenScaleButton } from "@/shared/ui/open-scale-button";
 import { FactChip } from "@/features/agent-identities/components/identity-section";
 import type { StagingAgentTeam } from "../data/agent-teams";
 import { TeamStack } from "./team-faces";
-import { slotSummary } from "./team-model";
+import { identityOf, seatTotal, slotSummary } from "./team-model";
 
 export type TeamLaunchState = "idle" | "starting" | "running";
 
-/** One team as a card: its faces and name, who is in it, its task templates, and Launch. */
+/** One team as a card: its roster faces and name, who is in it, its lead, and Launch with a goal. */
 export function TeamCard({
   team,
   marker,
@@ -45,11 +45,14 @@ export function TeamCard({
           {slotSummary(team)}
         </span>
         <span className="flex w-full min-w-0 flex-wrap items-center gap-1.5">
-          {team.templates.map((t) => (
-            <FactChip key={t.id} mark={<ListChecks size={12} strokeWidth={2} aria-hidden="true" />}>
-              {t.title}
-            </FactChip>
-          ))}
+          <FactChip mark={<Users size={12} strokeWidth={2} aria-hidden="true" />}>
+            {`${seatTotal(team)} ${seatTotal(team) === 1 ? "agent" : "agents"}`}
+          </FactChip>
+          <FactChip mark={<Crown size={12} strokeWidth={2} aria-hidden="true" />}>
+            {team.leadIdentityId
+              ? `Led by ${identityOf(team.leadIdentityId)?.name ?? "a deleted identity"}`
+              : "No lead"}
+          </FactChip>
         </span>
       </button>
       {launch && (
@@ -68,7 +71,7 @@ export function TeamCard({
             className="gap-1.5 disabled:opacity-60"
           >
             <Play size={OPEN_SCALE_ICON} strokeWidth={2} aria-hidden="true" />
-            {launch === "starting" ? "Starting…" : "Launch"}
+            {launch === "starting" ? "Starting…" : "Launch with a goal"}
           </OpenScaleButton>
         </div>
       )}

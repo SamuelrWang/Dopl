@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Users } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { CreateButton } from "@/shared/ui/pill-button";
@@ -25,19 +25,24 @@ import {
 import { TeamCard, type TeamLaunchState } from "./team-card";
 import { TeamDetailDialog } from "./team-detail-dialog";
 import { TeamEditorDialog } from "./team-editor-dialog";
+import { TeamLaunchDialog } from "./team-launch-dialog";
 import { startRun } from "./team-model";
 import { TeamRunGroup } from "./team-run-group";
 
 /**
- * STAGING MOCKUP of the Identities page's Teams view (PROPOSAL §2): the identity face's two
- * sections holding team cards, the same Activity rail showing each launched team as one group,
- * a read-only team view and a staged editor. Everything is local state.
+ * STAGING MOCKUP of the Identities page's Agent teams view: the identity face's two sections
+ * holding team cards (a roster and an optional lead, no saved tasks), Launch with a goal, the same
+ * Activity rail showing each launched team as one group, a read-only team view and a staged
+ * editor. Everything is local state.
  */
 export function TeamsHome({
   channelName,
   currentUserId,
   viewerPhoto,
+  switcher,
 }: {
+  /** The page's Identities | Agent teams switch, led into the control row. */
+  switcher?: ReactNode;
   /** `null` = no channel selected: no shared section, nothing to launch into. */
   channelName: string | null;
   currentUserId: string;
@@ -48,6 +53,7 @@ export function TeamsHome({
   const [starting, setStarting] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ team: StagingAgentTeam | null } | null>(null);
+  const [goalFor, setGoalFor] = useState<StagingAgentTeam | null>(null);
 
   const shared = teams.filter((t) => t.scope === "shared");
   const personal = teams.filter((t) => t.scope === "home");
@@ -62,17 +68,14 @@ export function TeamsHome({
     return runs.some((r) => r.teamId === team.id) ? "running" : "idle";
   };
 
-  async function launch(team: StagingAgentTeam, templateId = team.templates[0]?.id) {
-    if (!channelName || !templateId) return;
+  async function launch(team: StagingAgentTeam, goal: string) {
+    if (!channelName) return;
+    setGoalFor(null);
     setStarting(team.id);
     await latency(900);
     setStarting(null);
-    setRuns((all) => [startRun(team, templateId, channelName), ...all.filter((r) => r.teamId !== team.id)]);
-    const template = team.templates.find((t) => t.id === templateId);
-    toast({
-      title: `"${team.name}" launched into #${channelName}: ${template?.title ?? "run"}`,
-      variant: "invert",
-    });
+    setRuns((all) => [startRun(team, goal, channelName), ...all.filter((r) => r.teamId !== team.id)]);
+    toast({ title: `"${team.name}" launched into #${channelName}`, variant: "invert" });
   }
 
   const grid = (rows: StagingAgentTeam[], emptyLine: string) =>
@@ -87,7 +90,7 @@ export function TeamsHome({
             marker={markerFor(team)}
             launch={launchState(team)}
             onOpen={() => setViewingId(team.id)}
-            onLaunch={() => void launch(team)}
+            onLaunch={() => setGoalFor(team)}
           />
         ))}
       </div>
@@ -98,6 +101,7 @@ export function TeamsHome({
       <div className="rail-layout-cols">
         <div className="rail-layout-main">
           <div className="flex min-w-0 flex-wrap items-center gap-4">
+            {switcher}
             <p className="flex-none text-caption text-text-muted">
               {teams.length} agent {teams.length === 1 ? "team" : "teams"}
             </p>
@@ -151,15 +155,23 @@ export function TeamsHome({
           marker={markerFor(viewing)}
           scopeLabel={scopeLabel(viewing)}
           canLaunch={channelName !== null}
-          onLaunch={(templateId) => {
+          onLaunch={() => {
             setViewingId(null);
-            void launch(viewing, templateId);
+            setGoalFor(viewing);
           }}
           onEdit={() => {
             setViewingId(null);
             setEditing({ team: viewing });
           }}
           onClose={() => setViewingId(null)}
+        />
+      )}
+      {goalFor && channelName && (
+        <TeamLaunchDialog
+          team={goalFor}
+          channelName={channelName}
+          onClose={() => setGoalFor(null)}
+          onLaunch={(goal) => void launch(goalFor, goal)}
         />
       )}
       {editing && (

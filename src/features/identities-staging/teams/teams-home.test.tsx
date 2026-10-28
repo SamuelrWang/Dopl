@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// The Teams mockup behind the Identities | Teams switch: both sections, the running team in the
-// rail, the team view's two tabs, and the staged editor.
+// The Agent teams mockup behind the Identities | Agent teams track switch: both sections, the
+// running team in the rail, the team view (roster and lead, no saved tasks), Launch with a goal,
+// and the staged editor.
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -10,7 +11,7 @@ afterEach(cleanup);
 
 async function openTeams() {
   render(<IdentitiesStagingPage />);
-  fireEvent.click(await screen.findByRole("tab", { name: "Teams" }));
+  fireEvent.click(await screen.findByRole("tab", { name: "Agent teams" }));
 }
 
 describe("/playground/identities → Teams", () => {
@@ -25,14 +26,25 @@ describe("/playground/identities → Teams", () => {
     expect(within(rail).getByText("Comment Writer")).toBeTruthy();
   });
 
-  it("opens the team view with members and ordered steps", async () => {
+  it("opens the team view with its members, its lead and no saved tasks", async () => {
     await openTeams();
     const personal = screen.getByRole("region", { name: "Personal" });
-    fireEvent.click(within(personal).getByRole("button", { name: /Code cleanup/ }));
-    const view = await screen.findByRole("dialog", { name: "Code cleanup" });
-    expect(within(view).getByText("Comment writer")).toBeTruthy();
-    fireEvent.click(within(view).getByRole("tab", { name: /Task templates/ }));
-    expect(within(view).getByText("Prove nothing broke")).toBeTruthy();
+    fireEvent.click(within(personal).getByRole("button", { name: /Research/ }));
+    const view = await screen.findByRole("dialog", { name: "Research" });
+    expect(within(view).getByText("Editor")).toBeTruthy();
+    expect(within(view).queryByRole("tab", { name: /Task templates/ })).toBeNull();
+    expect(within(view).getAllByText("Writer").length).toBeGreaterThan(0);
+  });
+
+  it("launches a team with a goal", async () => {
+    await openTeams();
+    const personal = screen.getByRole("region", { name: "Personal" });
+    fireEvent.click(within(personal).getAllByRole("button", { name: "Launch with a goal" })[0]);
+    const dialog = await screen.findByRole("dialog", { name: /Launch Code cleanup/ });
+    const launch = within(dialog).getByRole("button", { name: "Launch" }) as HTMLButtonElement;
+    expect(launch.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText("Goal for the team"), { target: { value: "Tidy billing" } });
+    expect(launch.disabled).toBe(false);
   });
 
   it("opens the staged editor from + Agent team", async () => {

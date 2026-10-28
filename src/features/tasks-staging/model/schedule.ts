@@ -1,12 +1,7 @@
-/** Read helpers over the staged recurring tasks: the lines a card prints and a fresh run. */
+/** Read helpers over the staged saved tasks: schedule lines, run results, and a fresh run. */
 
 import type { StatusTone } from "@/shared/ui/status-pill";
-import type {
-  RecurringRun,
-  RecurringRunResult,
-  RecurringSchedule,
-  RecurringTask,
-} from "../data/recurring-tasks";
+import type { RecurringSchedule, RunResult, SavedRun, SavedTask } from "../data/saved-tasks";
 
 /** "9:00", "17:00": the hour without a leading zero. */
 export function timeLabel(time: string): string {
@@ -40,25 +35,27 @@ export function nextRunFor(schedule: RecurringSchedule): string | null {
   return schedule.frequency === "weekly" ? `${schedule.day} ${at}` : `Tomorrow ${at}`;
 }
 
-/** The identities a task launches, lead first, each once. */
-export function identitiesOf(task: RecurringTask): string[] {
-  return [...new Set([task.leadId, ...task.subtasks.map((s) => s.identityId)])];
-}
-
-export const RUN_RESULT: Record<RecurringRunResult, { label: string; tone: StatusTone }> = {
+export const RUN_RESULT: Record<RunResult, { label: string; tone: StatusTone }> = {
   running: { label: "Running", tone: "live" },
   done: { label: "Done", tone: "done" },
   failed: { label: "Failed", tone: "attention" },
+  missed: { label: "Missed", tone: "neutral" },
 };
 
-export function latestRun(task: RecurringTask): RecurringRun | null {
+/** The one line every schedule surface carries (Samuel, 2026-10-28: schedules are desktop-only). */
+export const DESKTOP_ONLY_LINE = "Runs while your desktop app is open";
+
+/** Why a run shows as missed. */
+export const MISSED_LINE = "Your desktop app was closed at the scheduled time";
+
+export function latestRun(task: SavedTask): SavedRun | null {
   return task.runs[0] ?? null;
 }
 
 let nextRunId = 0;
 
 /** A run the viewer just launched: nothing done yet. */
-export function launchedRun(task: RecurringTask): RecurringRun {
+export function launchedRun(task: SavedTask): SavedRun {
   nextRunId += 1;
   return {
     id: `run-new-${nextRunId}`,
@@ -66,6 +63,6 @@ export function launchedRun(task: RecurringTask): RecurringRun {
     startedBy: "You",
     result: "running",
     done: 0,
-    total: task.subtasks.length,
+    total: task.steps.length,
   };
 }

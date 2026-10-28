@@ -16,7 +16,10 @@ export function IdentityControls({
   showing,
   total,
   action,
+  lead,
 }: {
+  /** Leads the row: a host's view switch (staging's Identities | Agent teams). */
+  lead?: ReactNode;
   arrangement: IdentityArrangement;
   onArrangement: (next: IdentityArrangement) => void;
   /** The runtimes worth filtering by. */
@@ -29,6 +32,7 @@ export function IdentityControls({
   const set = (patch: Partial<IdentityArrangement>) => onArrangement({ ...arrangement, ...patch });
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-4">
+      {lead}
       <SearchPill
         label="Search identities"
         value={arrangement.query}

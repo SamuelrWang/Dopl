@@ -8,7 +8,7 @@ import type { StagingAgentTeam, StagingTeamRun } from "../data/agent-teams";
 import { identityOf, runProgress, SEAT_STATE } from "./team-model";
 
 /**
- * A launched team as ONE group (PROPOSAL §2): the team's name and task progress, then each seat's
+ * A launched team as ONE group (PROPOSAL §2): the team's name, its goal and progress, then each seat's
  * agent with its state. The Identities activity rail and the channel Agents tab both draw it.
  */
 export function TeamRunGroup({
@@ -24,7 +24,6 @@ export function TeamRunGroup({
   onOpen?: () => void;
 }) {
   const logoFor = useRuntimeLogo();
-  const template = team.templates.find((t) => t.id === run.templateId);
   const { done, total } = runProgress(run);
   const slotOf = (slotId: string) => team.slots.find((s) => s.id === slotId);
 
@@ -36,7 +35,7 @@ export function TeamRunGroup({
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="min-w-0 truncate text-small font-semibold text-text-primary">{team.name}</span>
         <span className="min-w-0 truncate text-caption text-text-muted">
-          {template?.title ?? "Run"} · #{run.channelName}
+          {run.goal} · #{run.channelName}
         </span>
       </span>
       <span className="flex-none text-caption font-medium tabular-nums text-text-secondary">

@@ -18,22 +18,22 @@ import {
   Rows,
 } from "@/features/agent-identities/components/identity-view-parts";
 import styles from "@/features/agent-identities/components/identity-view.module.css";
-import type { RecurringTask } from "../data/recurring-tasks";
-import { SlotFace } from "../teams/team-faces";
-import { identityOf } from "../teams/team-model";
-import { RecurringStack } from "./recurring-card";
-import { RUN_RESULT, latestRun, scheduleLabel } from "./recurring-model";
+import { channelName } from "../data/channels";
+import type { SavedTask } from "../data/saved-tasks";
+import { AssignmentFaces, IdentityMark, StepOwner, TeamChip } from "../components/assignee";
+import { assignedTeam, identityOf, splitLine } from "../model/assignment";
+import { DESKTOP_ONLY_LINE, MISSED_LINE, RUN_RESULT, latestRun, scheduleLabel } from "../model/schedule";
 
-type TabKey = "subtasks" | "runs";
+type TabKey = "steps" | "runs";
 
-const PANEL_IDS = "recurring-view";
+const PANEL_IDS = "saved-task-view";
 
 /**
- * THE RECURRING TASK VIEW, in the identity view's chrome: a fixed head, underline tabs, a body
- * that alone scrolls. Subtasks lists each step with the identity that works it; Runs lists every
- * start, scheduled or launched, with how far it got.
+ * THE SAVED TASK VIEW, in the identity view's chrome: a fixed head, underline tabs, a body that
+ * alone scrolls. Steps shows who the task goes to and each step's owner (pinned or "Agents
+ * decide"); Runs lists every start, scheduled, launched or missed.
  */
-export function RecurringDetailDialog({
+export function SavedTaskDetail({
   task,
   marker,
   scopeLabel,
@@ -43,7 +43,7 @@ export function RecurringDetailDialog({
   onToggleSchedule,
   onClose,
 }: {
-  task: RecurringTask;
+  task: SavedTask;
   marker: string | null;
   scopeLabel: string;
   canLaunch: boolean;
@@ -52,20 +52,23 @@ export function RecurringDetailDialog({
   onToggleSchedule: (on: boolean) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<TabKey>("subtasks");
+  const [tab, setTab] = useState<TabKey>("steps");
   const ids = segmentedIds(PANEL_IDS, tab);
   const running = latestRun(task)?.result === "running";
-  const lead = identityOf(task.leadId);
+  const team = assignedTeam(task);
+  const split = splitLine(task);
 
   return (
     <ModalShell open onClose={onClose} label={task.title} size="panel">
       <div className={styles.head}>
-        <RecurringStack task={task} size="l" />
+        <AssignmentFaces task={task} size="l" />
         <div className={styles.headText}>
           <h2 className="min-w-0 truncate text-display font-semibold text-text-primary">{task.title}</h2>
           <p className={cn(styles.headMeta, "text-caption text-text-muted")}>
             <Repeat size={12} strokeWidth={2} className="flex-none" aria-hidden="true" />
             <span className="truncate">{scheduleLabel(task.schedule)}</span>
+            <span className="text-text-disabled">·</span>
+            <span className="truncate">{`#${channelName(task.channelId)}`}</span>
             <span className="text-text-disabled">·</span>
             <span className="truncate">{marker ?? "Yours"}</span>
             <span className="text-text-disabled">·</span>
@@ -86,7 +89,7 @@ export function RecurringDetailDialog({
             Launch
           </OpenScaleButton>
         )}
-        <button type="button" onClick={onClose} className={styles.close} aria-label="Close recurring task">
+        <button type="button" onClick={onClose} className={styles.close} aria-label="Close saved task">
           <X size="s" />
         </button>
       </div>
@@ -94,23 +97,23 @@ export function RecurringDetailDialog({
       <SegmentedControl
         variant="underline"
         options={[
-          { key: "subtasks", label: "Subtasks", count: task.subtasks.length },
+          { key: "steps", label: "Steps", count: task.steps.length },
           { key: "runs", label: "Runs", count: task.runs.length },
         ]}
         value={tab}
         onChange={setTab}
-        ariaLabel="Recurring task sections"
+        ariaLabel="Saved task sections"
         panelIdPrefix={PANEL_IDS}
         className="flex-none border-b border-border-default px-5"
       />
 
       <div className={styles.body} role="tabpanel" id={ids.panel} aria-labelledby={ids.tab}>
-        {tab === "subtasks" ? (
+        {tab === "steps" ? (
           <>
             <Group label="What it is for">
               <Prose>{task.description}</Prose>
             </Group>
-            <Group label="Schedule">
+            <Group label="Schedule" hint={task.schedule.on ? DESKTOP_ONLY_LINE : undefined}>
               <Facts>
                 <Fact label="Repeats" value={scheduleLabel(task.schedule)} />
                 <Fact label="Next run" value={task.nextRun ?? "Not scheduled"} />
@@ -127,32 +130,38 @@ export function RecurringDetailDialog({
                 />
               </Facts>
             </Group>
-            <Group label="Lead" hint="owns the task and reports when it is done">
-              <Rows>
-                <EventRow
-                  lead={<SlotFace identityId={task.leadId} size="m" />}
-                  title={lead?.name ?? "Deleted identity"}
-                  middle={lead?.description ?? undefined}
-                />
-              </Rows>
+            <Group label="Assigned to" hint="optional">
+              {team ? (
+                <span className="flex flex-col items-start gap-1.5">
+                  <TeamChip teamId={team.id} />
+                </span>
+              ) : task.assignment.kind === "identities" ? (
+                <Rows>
+                  {task.assignment.identityIds.map((id) => (
+                    <EventRow
+                      key={id}
+                      lead={<IdentityMark id={id} size="m" />}
+                      title={identityOf(id)?.name ?? "Deleted identity"}
+                    />
+                  ))}
+                </Rows>
+              ) : (
+                <Prose>Nobody yet. Launch asks who should take it.</Prose>
+              )}
+              {split && <p className="text-caption text-text-muted">{split}</p>}
             </Group>
-            <Group label="Subtasks" hint="one identity each">
+            <Group label="Steps" hint="in order">
               <Rows>
-                {task.subtasks.map((sub, i) => (
+                {task.steps.map((step, i) => (
                   <EventRow
-                    key={sub.id}
+                    key={step.id}
                     lead={
                       <span className="flex size-5 flex-none items-center justify-center rounded-full bg-bg-inset text-micro font-semibold tabular-nums text-text-secondary">
                         {i + 1}
                       </span>
                     }
-                    title={sub.title}
-                    trail={
-                      <span className="flex items-center gap-1.5 text-caption text-text-muted">
-                        <SlotFace identityId={sub.identityId} size="s" />
-                        {identityOf(sub.identityId)?.name ?? "Deleted identity"}
-                      </span>
-                    }
+                    title={step.title}
+                    trail={<StepOwner step={step} />}
                   />
                 ))}
               </Rows>
@@ -171,7 +180,7 @@ export function RecurringDetailDialog({
                   <EventRow
                     key={run.id}
                     title={run.when}
-                    middle={run.startedBy}
+                    middle={run.result === "missed" ? MISSED_LINE : run.startedBy}
                     trail={
                       <span className="flex items-center gap-2">
                         <span className="text-caption tabular-nums text-text-muted">

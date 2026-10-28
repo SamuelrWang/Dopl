@@ -21,6 +21,7 @@ import {
 } from "@/features/identities-staging/data/agent-teams";
 import { TeamStack } from "@/features/identities-staging/teams/team-faces";
 import { slotSummary, startRun } from "@/features/identities-staging/teams/team-model";
+import { TeamLaunchDialog } from "@/features/identities-staging/teams/team-launch-dialog";
 import { TeamRunGroup } from "@/features/identities-staging/teams/team-run-group";
 import { VIEWER } from "../data/demo-imports";
 
@@ -64,16 +65,15 @@ export function StagingAgentTeamsSlot({ channelName }: { channelName: string }) 
   );
   const [open, setOpen] = useState(false);
   const [starting, setStarting] = useState<string | null>(null);
+  const [goalFor, setGoalFor] = useState<StagingAgentTeam | null>(null);
 
-  const launch = (team: StagingAgentTeam) => {
-    const template = team.templates[0];
-    if (!template) return;
-    setOpen(false);
+  const launch = (team: StagingAgentTeam, goal: string) => {
+    setGoalFor(null);
     setStarting(team.id);
     window.setTimeout(() => {
       setStarting(null);
-      setRuns((all) => [startRun(team, template.id, channelName), ...all.filter((r) => r.teamId !== team.id)]);
-      toast({ title: `"${team.name}" launched: ${template.title}`, variant: "invert" });
+      setRuns((all) => [startRun(team, goal, channelName), ...all.filter((r) => r.teamId !== team.id)]);
+      toast({ title: `"${team.name}" launched into #${channelName}`, variant: "invert" });
     }, 900);
   };
 
@@ -104,7 +104,10 @@ export function StagingAgentTeamsSlot({ channelName }: { channelName: string }) 
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => launch(team)}
+                  onClick={() => {
+                    setOpen(false);
+                    setGoalFor(team);
+                  }}
                   className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-menu-item-hover-bg"
                 >
                   <TeamStack team={team} size="s" />
@@ -126,6 +129,14 @@ export function StagingAgentTeamsSlot({ channelName }: { channelName: string }) 
           )
         );
       })}
+      {goalFor && (
+        <TeamLaunchDialog
+          team={goalFor}
+          channelName={channelName}
+          onClose={() => setGoalFor(null)}
+          onLaunch={(goal) => launch(goalFor, goal)}
+        />
+      )}
     </div>,
     host
   );

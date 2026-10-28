@@ -11,11 +11,7 @@ import {
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { SEED_IDENTITIES } from "../data";
-import type {
-  StagingAgentTeam,
-  StagingTeamSlot,
-  StagingTeamStep,
-} from "../data/agent-teams";
+import type { StagingAgentTeam, StagingTeamSlot } from "../data/agent-teams";
 import { SlotFace } from "./team-faces";
 
 const SEAT_OPTIONS = [
@@ -29,6 +25,8 @@ const IDENTITY_OPTIONS = SEED_IDENTITIES.map((i) => ({ value: i.id, label: i.nam
 /** The cap a run holds to (PROPOSAL §6 defaults): five agents, three seats per slot. */
 const MAX_AGENTS = 5;
 
+const NO_LEAD = "none";
+
 let nextId = 0;
 const freshId = (prefix: string) => `${prefix}-new-${(nextId += 1)}`;
 
@@ -41,20 +39,13 @@ function blankTeam(createdBy: string): StagingAgentTeam {
     scope: "home",
     createdBy,
     slots: [slot],
-    templates: [
-      {
-        id: freshId("tpl"),
-        title: "",
-        description: "",
-        steps: [{ slotId: slot.id, title: "", instructions: "" }],
-      },
-    ],
+    leadIdentityId: null,
   };
 }
 
 /**
  * STAGED EDITOR: the popup form kit over local state. Name, members (identity, label, seats) and
- * the first task template's steps, one per member. Save hands the team back; nothing is written.
+ * an optional lead from the roster. A team holds no saved tasks. Save hands the team back.
  */
 export function TeamEditorDialog({
   team,
@@ -69,34 +60,30 @@ export function TeamEditorDialog({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<StagingAgentTeam>(() => team ?? blankTeam(createdBy));
-  const template = draft.templates[0];
   const seats = draft.slots.reduce((n, s) => n + s.seats, 0);
 
   const setSlot = (id: string, patch: Partial<StagingTeamSlot>) =>
     setDraft((d) => ({ ...d, slots: d.slots.map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
-  const setStep = (slotId: string, patch: Partial<StagingTeamStep>) =>
-    setDraft((d) => ({
-      ...d,
-      templates: d.templates.map((t, i) =>
-        i === 0 ? { ...t, steps: t.steps.map((s) => (s.slotId === slotId ? { ...s, ...patch } : s)) } : t
-      ),
-    }));
   const addSlot = () => {
     const slot: StagingTeamSlot = { id: freshId("slot"), identityId: "id-writer", label: "Writer", seats: 1 };
-    setDraft((d) => ({
-      ...d,
-      slots: [...d.slots, slot],
-      templates: d.templates.map((t, i) =>
-        i === 0 ? { ...t, steps: [...t.steps, { slotId: slot.id, title: "", instructions: "" }] } : t
-      ),
-    }));
+    setDraft((d) => ({ ...d, slots: [...d.slots, slot] }));
   };
   const removeSlot = (id: string) =>
-    setDraft((d) => ({
-      ...d,
-      slots: d.slots.filter((s) => s.id !== id),
-      templates: d.templates.map((t) => ({ ...t, steps: t.steps.filter((s) => s.slotId !== id) })),
-    }));
+    setDraft((d) => {
+      const slots = d.slots.filter((s) => s.id !== id);
+      // A lead who left the roster is no lead.
+      const lead = slots.some((s) => s.identityId === d.leadIdentityId) ? d.leadIdentityId : null;
+      return { ...d, slots, leadIdentityId: lead };
+    });
+
+  const leadOptions = [
+    { value: NO_LEAD, label: "No lead", description: "The members decide among themselves" },
+    ...[...new Set(draft.slots.map((sl) => sl.identityId))].map((id) => ({
+      value: id,
+      label: IDENTITY_OPTIONS.find((o) => o.value === id)?.label ?? "Deleted identity",
+      description: "Splits and manages the work",
+    })),
+  ];
 
   const ready = draft.name.trim() !== "" && draft.slots.length > 0 && seats <= MAX_AGENTS;
 
@@ -177,44 +164,18 @@ export function TeamEditorDialog({
         </button>
       </FormSection>
 
-      {template && (
-        <FormSection label="Task template" caption="one step per member">
-          <InlineUnderlineField
-            label="Template title"
-            value={template.title}
-            onChange={(title) =>
-              setDraft((d) => ({
-                ...d,
-                templates: d.templates.map((t, i) => (i === 0 ? { ...t, title } : t)),
-              }))
-            }
+      <FormSection label="Lead" caption="optional">
+        <span className="flex min-w-0 items-center gap-2.5">
+          {draft.leadIdentityId && <SlotFace identityId={draft.leadIdentityId} size="m" />}
+          <SelectMenu
+            value={draft.leadIdentityId ?? NO_LEAD}
+            options={leadOptions}
+            onChange={(v) => setDraft((d) => ({ ...d, leadIdentityId: v === NO_LEAD ? null : v }))}
+            ariaLabel="Lead"
+            variant="bare"
           />
-          <ol className="flex flex-col gap-3 pt-1">
-            {template.steps.map((step) => {
-              const slot = draft.slots.find((s) => s.id === step.slotId);
-              return (
-                <li key={step.slotId} className="flex flex-col gap-1.5">
-                  <span className="flex items-center gap-1.5 text-caption text-text-muted">
-                    {slot && <SlotFace identityId={slot.identityId} size="s" />}
-                    {slot?.label}
-                  </span>
-                  <InlineUnderlineField
-                    label="Step title"
-                    value={step.title}
-                    onChange={(title) => setStep(step.slotId, { title })}
-                  />
-                  <InlineUnderlineField
-                    label="Instructions for this role"
-                    value={step.instructions}
-                    onChange={(instructions) => setStep(step.slotId, { instructions })}
-                    multiline
-                  />
-                </li>
-              );
-            })}
-          </ol>
-        </FormSection>
-      )}
+        </span>
+      </FormSection>
     </FormDialog>
   );
 }

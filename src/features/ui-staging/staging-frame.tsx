@@ -25,7 +25,7 @@ import "./staging.css";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import type { HomeTab } from "@/features/home/tabs";
+import { HOME_TABS, type HomeTab } from "@/features/home/tabs";
 import { HomeFrame } from "@/features/home/components/shell/home-frame";
 import { HomeHeader } from "@/features/home/components/shell/home-header";
 import { AccountRailCore } from "@/shared/layout/app-shell/account-rail-core";
@@ -42,12 +42,27 @@ import { StagingChannelRail, StagingChannelRailPlaceholder } from "./staging-cha
 import { StagingPopupsContext, useStagingPopupsState } from "./staging-popups-provider";
 import { useStagingAppBridge } from "./staging-app-bridge";
 
-/** Each /home face's PUBLIC playground route (`src/app/playground/<face>/page.tsx`). */
-export const STAGING_ROUTES: Partial<Record<HomeTab, string>> = {
+/**
+ * The playground's tabs: the product's five plus the MOCKED Tasks page, between Identities and
+ * Ontology (Samuel, 2026-10-28). Playground only. The real nav is `src/features/home/tabs.ts ›
+ * HOME_TABS` (web + landing) and `apps/desktop-ui/src/pages/home/home-tabs.ts` (the SPA's panes);
+ * Tasks joins both when it is built.
+ */
+export type StagingTab = HomeTab | "tasks";
+
+export const STAGING_TABS: ReadonlyArray<{ key: StagingTab; label: string }> = [
+  ...HOME_TABS.slice(0, 4),
+  { key: "tasks", label: "Tasks" },
+  ...HOME_TABS.slice(4),
+];
+
+/** Each tab's PUBLIC playground route (`src/app/playground/<face>/page.tsx`). */
+export const STAGING_ROUTES: Partial<Record<StagingTab, string>> = {
   overview: "/playground/overview",
   channels: "/playground/channels",
   knowledge: "/playground/knowledge",
   identities: "/playground/identities",
+  tasks: "/playground/tasks",
   ontology: "/playground/ontology",
 };
 
@@ -60,7 +75,7 @@ export interface StagingFrameProps {
   /** The staged face: what the record pane holds. */
   children: ReactNode;
   /** Which /home tab the header selects. `null` for a page that is no /home face. */
-  tab?: HomeTab | null;
+  tab?: StagingTab | null;
   /** Draw the channel column left of the pane (desktop keeps it on every face). */
   showChannels?: boolean;
   /** The header's "New channel" handler. Default: the frame's New channel dialog. */
@@ -134,7 +149,8 @@ export function StagingFrame({
             >
               <div className={shell.root}>
                 <HomeFrame
-                  face={tab ?? "overview"}
+                  // Tasks has no face of its own yet: it stands on Identities' white pane.
+                  face={tab === "tasks" ? "identities" : (tab ?? "overview")}
                   rail={
                     <AccountRailCore
                       workspaces={STAGING_WORKSPACES}
@@ -147,7 +163,8 @@ export function StagingFrame({
                   }
                   header={
                     <QueryClientProvider client={popups.client}>
-                      <HomeHeader
+                      <HomeHeader<StagingTab>
+                        tabOptions={STAGING_TABS}
                         identity={STAGING_IDENTITY}
                         viewer={VIEWER}
                         onWorkspaceChanged={() => {}}

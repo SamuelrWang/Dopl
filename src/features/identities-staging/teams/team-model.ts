@@ -32,8 +32,8 @@ export const SEAT_STATE: Record<
 
 const RUN_COLORS = ["agent-02", "agent-05", "agent-08", "agent-11", "agent-13"] as const;
 
-/** A fresh run of `team`'s template: one working seat per slot seat. */
-export function startRun(team: StagingAgentTeam, templateId: string, channelName: string): StagingTeamRun {
+/** A fresh run of `team` toward `goal`: one working seat per slot seat. */
+export function startRun(team: StagingAgentTeam, goal: string, channelName: string): StagingTeamRun {
   const seats = team.slots.flatMap((slot) =>
     Array.from({ length: slot.seats }, (_, i) => ({
       slotId: slot.id,
@@ -42,7 +42,7 @@ export function startRun(team: StagingAgentTeam, templateId: string, channelName
   );
   return {
     teamId: team.id,
-    templateId,
+    goal,
     channelName,
     startedAgo: 0,
     seats: seats.map(

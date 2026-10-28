@@ -12,19 +12,18 @@ import {
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import { SelectMenu } from "@/shared/ui/select-menu";
 import { Switch } from "@/shared/ui/switch";
-import { SEED_IDENTITIES } from "../data";
+import { STAGING_TASK_CHANNELS } from "../data/channels";
 import {
   WEEKDAYS,
   type RecurringFrequency,
   type RecurringSchedule,
-  type RecurringSubtask,
-  type RecurringTask,
+  type SavedStep,
+  type SavedTask,
   type Weekday,
-} from "../data/recurring-tasks";
-import { SlotFace } from "../teams/team-faces";
-import { nextRunFor, scheduleLabel, timeLabel } from "./recurring-model";
-
-const IDENTITY_OPTIONS = SEED_IDENTITIES.map((i) => ({ value: i.id, label: i.name }));
+} from "../data/saved-tasks";
+import { AssigneePicker, IdentityMark } from "../components/assignee";
+import { UNPINNED_CHIP, pinOptions, splitLine } from "../model/assignment";
+import { DESKTOP_ONLY_LINE, nextRunFor, timeLabel } from "../model/schedule";
 
 const FREQUENCY_OPTIONS: ReadonlyArray<{ key: RecurringFrequency; label: string }> = [
   { key: "daily", label: "Every day" },
@@ -39,25 +38,28 @@ const TIME_OPTIONS = Array.from({ length: 14 }, (_, i) => {
   return { value, label: timeLabel(value) };
 });
 
-/** A template runs at most this many subtasks (one agent each). */
-const MAX_SUBTASKS = 6;
+const CHANNEL_OPTIONS = STAGING_TASK_CHANNELS.map((c) => ({ value: c.id, label: `#${c.name}` }));
+
+/** The pin menu's "nobody in particular" value. */
+const UNPINNED = "unpinned";
+
+const MAX_STEPS = 8;
 
 let nextId = 0;
 const freshId = (prefix: string) => `${prefix}-new-${(nextId += 1)}`;
 
-function blankSubtask(identityId = "id-coder"): RecurringSubtask {
-  return { id: freshId("sub"), title: "", identityId };
-}
+const blankStep = (): SavedStep => ({ id: freshId("step"), title: "", pinnedIdentityId: null });
 
-function blankTask(createdBy: string): RecurringTask {
+function blankTask(createdBy: string, channelId: string): SavedTask {
   return {
-    id: freshId("rt"),
+    id: freshId("st"),
     title: "",
     description: "",
     scope: "home",
+    channelId,
     createdBy,
-    leadId: "id-chief",
-    subtasks: [blankSubtask()],
+    assignment: { kind: "none" },
+    steps: [blankStep()],
     schedule: { on: false, frequency: "weekly", day: "Mon", time: "09:00" },
     nextRun: null,
     runs: [],
@@ -65,132 +67,138 @@ function blankTask(createdBy: string): RecurringTask {
 }
 
 /**
- * STAGED EDITOR: the popup form kit over local state. Title, the identity that leads the task,
- * the subtasks (each bound to one identity), and the schedule. Save hands the task back; nothing
- * is written.
+ * STAGED EDITOR: the popup form kit over local state. Only the title is required: assignment,
+ * pins and the schedule are all optional (Samuel, 2026-10-28). Empty steps are dropped on save.
  */
-export function RecurringEditorDialog({
+export function SavedTaskEditor({
   task,
   createdBy,
+  defaultChannelId,
   onSave,
   onClose,
 }: {
-  /** `null` = a new template. */
-  task: RecurringTask | null;
+  /** `null` = a new saved task. */
+  task: SavedTask | null;
   createdBy: string;
-  onSave: (task: RecurringTask) => void;
+  defaultChannelId: string;
+  onSave: (task: SavedTask) => void;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<RecurringTask>(() => task ?? blankTask(createdBy));
+  const [draft, setDraft] = useState<SavedTask>(() => task ?? blankTask(createdBy, defaultChannelId));
   const schedule = draft.schedule;
+  const split = splitLine(draft);
+  const pins = [
+    { value: UNPINNED, label: UNPINNED_CHIP },
+    ...pinOptions(draft).map((i) => ({ value: i.id, label: i.name })),
+  ];
 
   const setSchedule = (patch: Partial<RecurringSchedule>) =>
     setDraft((d) => ({ ...d, schedule: { ...d.schedule, ...patch } }));
-  const setSubtask = (id: string, patch: Partial<RecurringSubtask>) =>
-    setDraft((d) => ({
-      ...d,
-      subtasks: d.subtasks.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-    }));
-  const addSubtask = () =>
-    setDraft((d) => ({ ...d, subtasks: [...d.subtasks, blankSubtask("id-writer")] }));
-  const removeSubtask = (id: string) =>
-    setDraft((d) => ({ ...d, subtasks: d.subtasks.filter((s) => s.id !== id) }));
+  const setStep = (id: string, patch: Partial<SavedStep>) =>
+    setDraft((d) => ({ ...d, steps: d.steps.map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
 
-  const full = draft.subtasks.length >= MAX_SUBTASKS;
-  const ready =
-    draft.title.trim() !== "" &&
-    draft.subtasks.length > 0 &&
-    draft.subtasks.every((s) => s.title.trim() !== "");
+  const ready = draft.title.trim() !== "";
 
   return (
     <FormDialog
       open
       onDiscard={onClose}
-      title={task ? "Edit recurring task" : "New recurring task"}
+      title={task ? "Edit saved task" : "New saved task"}
       primary={{
         label: task ? "Save" : "Create",
         disabled: !ready,
-        hint: ready ? undefined : "Give the task and every subtask a title.",
-        onClick: () => onSave({ ...draft, nextRun: nextRunFor(draft.schedule) }),
+        hint: ready ? undefined : "Give the task a title.",
+        onClick: () =>
+          onSave({
+            ...draft,
+            steps: draft.steps.filter((s) => s.title.trim() !== ""),
+            nextRun: nextRunFor(draft.schedule),
+          }),
       }}
     >
       <UnderlineField
-        id="recurring-title"
+        id="saved-task-title"
         label="Title"
-        ariaLabel="Recurring task title"
+        ariaLabel="Saved task title"
         placeholder="Monday digest"
         value={draft.title}
         onChange={(title) => setDraft((d) => ({ ...d, title }))}
         autoFocus
       />
       <UnderlineField
-        id="recurring-description"
+        id="saved-task-description"
         label="Description"
-        ariaLabel="Recurring task description"
+        ariaLabel="Saved task description"
         value={draft.description}
         onChange={(description) => setDraft((d) => ({ ...d, description }))}
         multiline
       />
 
-      <FormSection label="Lead" caption="owns the task">
-        <span className="flex min-w-0 items-center gap-2.5">
-          <SlotFace identityId={draft.leadId} size="m" />
-          <SelectMenu
-            value={draft.leadId}
-            options={IDENTITY_OPTIONS}
-            onChange={(leadId) => setDraft((d) => ({ ...d, leadId }))}
-            ariaLabel="Lead identity"
-            variant="bare"
+      <FormSection label="Channel" caption="where it runs">
+        <SelectMenu
+          value={draft.channelId}
+          options={CHANNEL_OPTIONS}
+          onChange={(channelId) => setDraft((d) => ({ ...d, channelId }))}
+          ariaLabel="Channel"
+          variant="bare"
+        />
+      </FormSection>
+
+      <FormSection label="Assign to" caption="optional">
+        <span className="flex min-w-0 flex-col items-start gap-1">
+          <AssigneePicker
+            value={draft.assignment}
+            onChange={(assignment) => setDraft((d) => ({ ...d, assignment }))}
           />
+          {split && <span className="text-caption text-text-muted">{split}</span>}
         </span>
       </FormSection>
 
-      <FormSection label="Subtasks" caption={`${draft.subtasks.length} of ${MAX_SUBTASKS}`}>
+      <FormSection label="Steps" caption="pin an identity or let the agents decide">
         <ol className="flex flex-col gap-2">
-          {draft.subtasks.map((sub, i) => (
-            <li key={sub.id} className="flex min-w-0 items-center gap-2.5">
+          {draft.steps.map((step, i) => (
+            <li key={step.id} className="flex min-w-0 items-center gap-2.5">
               <span className="flex size-5 flex-none items-center justify-center rounded-full bg-bg-inset text-micro font-semibold tabular-nums text-text-secondary">
                 {i + 1}
               </span>
               <InlineUnderlineField
-                label="Subtask title"
-                value={sub.title}
-                onChange={(title) => setSubtask(sub.id, { title })}
+                label="Step title"
+                value={step.title}
+                onChange={(title) => setStep(step.id, { title })}
                 className="min-w-0 flex-1"
               />
-              <SlotFace identityId={sub.identityId} size="s" />
+              {step.pinnedIdentityId && <IdentityMark id={step.pinnedIdentityId} size="s" />}
               <SelectMenu
-                value={sub.identityId}
-                options={IDENTITY_OPTIONS}
-                onChange={(identityId) => setSubtask(sub.id, { identityId })}
-                ariaLabel={`Identity for subtask ${i + 1}`}
+                value={step.pinnedIdentityId ?? UNPINNED}
+                options={pins}
+                onChange={(v) => setStep(step.id, { pinnedIdentityId: v === UNPINNED ? null : v })}
+                ariaLabel={`Who does step ${i + 1}`}
                 variant="bare"
               />
               <button
                 type="button"
-                onClick={() => removeSubtask(sub.id)}
-                aria-label={`Remove subtask ${i + 1}`}
-                disabled={draft.subtasks.length === 1}
-                className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md text-text-muted hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => setDraft((d) => ({ ...d, steps: d.steps.filter((s) => s.id !== step.id) }))}
+                aria-label={`Remove step ${i + 1}`}
+                className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md text-text-muted hover:text-text-primary"
               >
                 <X size={14} />
               </button>
             </li>
           ))}
         </ol>
-        {!full && (
+        {draft.steps.length < MAX_STEPS && (
           <button
             type="button"
-            onClick={addSubtask}
+            onClick={() => setDraft((d) => ({ ...d, steps: [...d.steps, blankStep()] }))}
             className="flex cursor-pointer items-center gap-1.5 self-start text-caption font-medium text-text-secondary hover:text-text-primary"
           >
             <Plus size={13} aria-hidden="true" />
-            Add subtask
+            Add step
           </button>
         )}
       </FormSection>
 
-      <FormSection label="Repeat" caption={scheduleLabel(schedule)}>
+      <FormSection label="Repeat" caption={DESKTOP_ONLY_LINE}>
         <span className="flex items-center gap-2.5">
           <Switch
             checked={schedule.on}

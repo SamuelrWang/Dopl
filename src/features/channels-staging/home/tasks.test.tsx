@@ -23,8 +23,10 @@ globalThis.ResizeObserver ??= class {
 Element.prototype.scrollIntoView ??= () => {};
 
 const fixture = techDebtFixture();
-const tasksTab = () =>
-  screen.getAllByRole("tab").find((b) => (b.textContent ?? "").startsWith("Tasks"));
+/** The channel info panel's tabs: the playground header also has a Tasks tab (the mocked page). */
+const infoTabs = () =>
+  within(document.querySelector<HTMLElement>('aside[aria-label="Channel info"]')!).getAllByRole("tab");
+const tasksTab = () => infoTabs().find((b) => (b.textContent ?? "").startsWith("Tasks"));
 
 describe("channel tasks on the staging page (product UI, in-memory store)", () => {
   it("seeds 5-7 contract-shaped tasks for #tech-debt with every link resolved, and none elsewhere", () => {
@@ -49,7 +51,7 @@ describe("channel tasks on the staging page (product UI, in-memory store)", () =
   it("draws the Tasks tab left of Settings and the pill at the recipient line's end", async () => {
     render(<StagingChannelsPage />);
     await waitFor(() => expect(document.body.textContent).toContain("straight in. it's test only"));
-    const labels = screen.getAllByRole("tab").map((t) => t.textContent ?? "");
+    const labels = infoTabs().map((t) => t.textContent ?? "");
     const tasksAt = labels.findIndex((l) => l.startsWith("Tasks"));
     expect(labels[tasksAt + 1]).toBe("Settings");
     const pill = screen.getByRole("button", { name: "5 tasks" });

@@ -20,7 +20,7 @@ const NEW_CHANNEL_BTN = cn(pillButton("ink", "lg"), "pl-3");
  * operator's Profile pill. No state lives here; every value is the page's. Declared in `src/` so
  * the UI-staging playground mounts the same header.
  */
-export function HomeHeader({
+export function HomeHeader<T extends string = HomeTab>({
   identity,
   viewer,
   onWorkspaceChanged,
@@ -31,12 +31,16 @@ export function HomeHeader({
   onSearchNavigate,
   onNewChannel,
   onNavigate,
+  tabOptions,
 }: {
   identity: HomeIdentity;
   viewer: HomeViewer | null;
   onWorkspaceChanged: () => void;
-  tab: HomeTab;
-  onTabChange: (next: HomeTab) => void;
+  tab: T;
+  onTabChange: (next: T) => void;
+  /** The tab set; absent = {@link HOME_TABS}. The UI-staging playground mocks a page here
+   *  before it joins the product's set. */
+  tabOptions?: ReadonlyArray<{ key: T; label: string }>;
   query: string;
   onQueryChange: (next: string) => void;
   /** A search-popup row was taken; the page opens what it names. */
@@ -54,8 +58,8 @@ export function HomeHeader({
         </button>
       }
       tabs={
-        <SegmentedControl<HomeTab>
-          options={HOME_TABS}
+        <SegmentedControl<T>
+          options={tabOptions ?? (HOME_TABS as unknown as ReadonlyArray<{ key: T; label: string }>)}
           value={tab}
           onChange={onTabChange}
           variant="underline"

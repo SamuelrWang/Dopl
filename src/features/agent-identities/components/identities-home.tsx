@@ -110,6 +110,8 @@ export interface IdentitiesHomeProps {
   ownerName: (userId: string) => string | null;
   onCreate: (where: IdentityHome) => void;
   onEdit: (where: IdentityHome, identity: AgentIdentity) => void;
+  /** Leads the control row: a host's view switch. Absent = nothing (the desktop today). */
+  switcher?: ReactNode;
 }
 
 /**
@@ -170,6 +172,7 @@ export function IdentitiesHome(props: IdentitiesHomeProps) {
             arrangement={arrangement}
             onArrangement={setArrangement}
             runtimes={props.runtimes}
+            lead={props.switcher}
             showing={sharedShown.length + personalShown.length}
             total={everything.length}
             action={
