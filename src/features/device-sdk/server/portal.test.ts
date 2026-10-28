@@ -20,7 +20,7 @@ function query(table: string) {
   calls.push(call);
   const result = () => ({ data: canned.get(table)?.data ?? [], count: canned.get(table)?.count ?? 0, error: null });
   const chain: Record<string, unknown> = {};
-  for (const op of ["select", "eq", "in", "gte", "lt", "order", "limit", "is"]) {
+  for (const op of ["select", "eq", "in", "gte", "lt", "or", "order", "limit", "is"]) {
     chain[op] = (...args: unknown[]) => {
       call.ops.push([op, ...args]);
       return chain;
@@ -124,7 +124,7 @@ describe("queryPortalEvents", () => {
         intent: "notify",
         route: "auto",
         window: "1h",
-        before: "2026-10-28T11:30:00.000Z",
+        before: "2026-10-28T11:30:00.000Z~55555555-5555-4555-8555-555555555555",
       },
     });
     expect(tables()).toEqual(["dev_events"]);
@@ -137,19 +137,24 @@ describe("queryPortalEvents", () => {
     expect(ops).toContainEqual(["eq", "capability", "display.card"]);
     expect(ops).toContainEqual(["eq", "intent", "notify"]);
     expect(ops).toContainEqual(["eq", "route_decision->>target", "auto"]);
-    expect(ops).toContainEqual(["lt", "ts", "2026-10-28T11:30:00.000Z"]);
+    expect(ops).toContainEqual([
+      "or",
+      "ts.lt.2026-10-28T11:30:00.000Z,and(ts.eq.2026-10-28T11:30:00.000Z,event_id.lt.55555555-5555-4555-8555-555555555555)",
+    ]);
+    expect(ops).toContainEqual(["order", "event_id", { ascending: false }]);
     expect(ops).toContainEqual(["limit", LOG_PAGE_SIZE + 1]);
   });
 
   it("returns a cursor only when an older page exists", async () => {
     const rows = Array.from({ length: LOG_PAGE_SIZE + 1 }, (_, i) => ({
-      event_id: `e${i}`,
+      event_id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
       ts: new Date(now.getTime() - i * 1000).toISOString(),
     }));
     canned.set("dev_events", { data: rows });
     const page = await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: EMPTY_FILTERS });
     expect(page.rows).toHaveLength(LOG_PAGE_SIZE);
-    expect(page.nextBefore).toBe(rows[LOG_PAGE_SIZE - 1].ts);
+    const last = rows[LOG_PAGE_SIZE - 1];
+    expect(page.nextBefore).toBe(`${last.ts}~${last.event_id}`);
 
     canned.set("dev_events", { data: rows.slice(0, 3) });
     expect((await queryPortalEvents({ projectIds: ["p1"], env: "test", now, filters: EMPTY_FILTERS })).nextBefore).toBeNull();

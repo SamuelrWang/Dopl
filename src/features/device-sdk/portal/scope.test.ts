@@ -61,11 +61,15 @@ describe("parsePortalParams", () => {
   });
 
   it("takes the first of a repeated param, a valid event id and an ISO cursor", () => {
-    const p = parsePortalParams({ env: ["live", "test"], event: EVT, before: "2026-10-28T10:00:00Z" }, projects);
+    const p = parsePortalParams({ env: ["live", "test"], event: EVT, before: `2026-10-28T10:00:00Z~${EVT}` }, projects);
     expect(p.env).toBe("live");
     expect(p.filters.event).toBe(EVT);
-    expect(p.filters.before).toBe("2026-10-28T10:00:00.000Z");
+    expect(p.filters.before).toBe(`2026-10-28T10:00:00.000Z~${EVT}`);
     expect(parsePortalParams({ event: "x", before: "soon" }, projects).filters).toMatchObject({ event: null, before: null });
+    // A bare timestamp, a non-uuid id, or extra parts (`or` syntax smuggled in) read as no cursor.
+    for (const before of ["2026-10-28T10:00:00Z", "2026-10-28T10:00:00Z~x),ts.gt.0", `2026-10-28T10:00:00Z~${EVT}~x`]) {
+      expect(parsePortalParams({ before }, projects).filters.before).toBeNull();
+    }
   });
 
   it("reads internal=0 as hide", () => {
@@ -100,9 +104,9 @@ describe("portalQuery / withFilters", () => {
   });
 
   it("a filter change resets paging and the open row; paging keeps them", () => {
-    const base = withFilters(parsePortalParams({}, projects), { before: "2026-10-28T10:00:00.000Z", event: EVT });
+    const base = withFilters(parsePortalParams({}, projects), { before: `2026-10-28T10:00:00.000Z~${EVT}`, event: EVT });
     expect(withFilters(base, { outcome: "ok" }).filters).toMatchObject({ before: null, event: null });
-    expect(withFilters(base, { event: null }).filters.before).toBe("2026-10-28T10:00:00.000Z");
+    expect(withFilters(base, { event: null }).filters.before).toBe(`2026-10-28T10:00:00.000Z~${EVT}`);
   });
 });
 

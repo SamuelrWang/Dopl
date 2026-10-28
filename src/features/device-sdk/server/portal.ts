@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { DeviceEventRow, Environment } from "../types";
 import {
   LOG_WINDOW_MS,
+  logCursor,
+  parseLogCursor,
   type LogFilters,
   type PortalProject,
   type PortalRole,
@@ -123,7 +125,7 @@ export async function getKeyProject(
 
 export interface LogPage {
   rows: DeviceEventRow[];
-  /** `ts` of the last row when an older page exists, else null. */
+  /** `logCursor` of the last row when an older page exists, else null. */
   nextBefore: string | null;
 }
 
@@ -148,12 +150,18 @@ export async function queryPortalEvents(input: {
   if (f.capability) q = q.eq("capability", f.capability);
   if (f.intent) q = q.eq("intent", f.intent);
   if (f.route) q = q.eq("route_decision->>target", f.route);
-  if (f.before) q = q.lt("ts", f.before);
-  const { data, error } = await q.order("ts", { ascending: false }).limit(LOG_PAGE_SIZE + 1);
+  // Compound keyset `(ts, event_id) < cursor`. Both parts were validated (ISO + UUID) by
+  // `parseLogCursor`, so neither can carry PostgREST `or` syntax.
+  const cursor = parseLogCursor(f.before);
+  if (cursor) q = q.or(`ts.lt.${cursor.ts},and(ts.eq.${cursor.ts},event_id.lt.${cursor.eventId})`);
+  const { data, error } = await q
+    .order("ts", { ascending: false })
+    .order("event_id", { ascending: false })
+    .limit(LOG_PAGE_SIZE + 1);
   if (error) throw new Error(`queryPortalEvents failed: ${error.message}`);
   const all = (data ?? []) as DeviceEventRow[];
   const rows = all.slice(0, LOG_PAGE_SIZE);
-  return { rows, nextBefore: all.length > LOG_PAGE_SIZE ? rows[rows.length - 1].ts : null };
+  return { rows, nextBefore: all.length > LOG_PAGE_SIZE ? logCursor(rows[rows.length - 1]) : null };
 }
 
 /** One event, only if it belongs to one of `projectIds`. */

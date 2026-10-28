@@ -53,7 +53,10 @@ export interface LogFilters {
   window: LogWindow;
   /** Include traffic from internal orgs (`dev_orgs.internal`, e.g. "Dopl App"). */
   internal: boolean;
-  /** Keyset cursor: only rows strictly older than this ISO timestamp. */
+  /**
+   * Keyset cursor `<iso ts>~<event_id>` (`logCursor`): only rows strictly after it in
+   * `(ts DESC, event_id DESC)` order, so rows sharing a timestamp at a page edge are never skipped.
+   */
   before: string | null;
   /** The event open in the detail pane. */
   event: string | null;
@@ -92,6 +95,25 @@ function isoOrNull(value: string | null): string | null {
   return Number.isNaN(t) ? null : new Date(t).toISOString();
 }
 
+/** The cursor for the row a page ended on. */
+export function logCursor(row: { ts: string; event_id: string }): string {
+  return `${new Date(Date.parse(row.ts)).toISOString()}~${row.event_id}`;
+}
+
+/** A cursor split back into its parts, or null when malformed. Both parts are validated. */
+export function parseLogCursor(value: string | null): { ts: string; eventId: string } | null {
+  if (value === null) return null;
+  const [rawTs, eventId, extra] = value.split("~");
+  const ts = isoOrNull(rawTs ?? null);
+  if (extra !== undefined || ts === null || !eventId || !UUID.test(eventId)) return null;
+  return { ts, eventId: eventId.toLowerCase() };
+}
+
+function cursorOrNull(value: string | null): string | null {
+  const c = parseLogCursor(value);
+  return c ? `${c.ts}~${c.eventId}` : null;
+}
+
 /**
  * Raw search params → the portal's state. `project` falls back to the caller's first project
  * when absent or not theirs (a foreign id never reaches a query). `env` defaults to `test`.
@@ -116,7 +138,7 @@ export function parsePortalParams(raw: RawSearchParams, projects: readonly Porta
       intent: token(first(raw, "intent")),
       window: oneOf(first(raw, "window"), LOG_WINDOWS) ?? "24h",
       internal: first(raw, "internal") !== "0",
-      before: isoOrNull(first(raw, "before")),
+      before: cursorOrNull(first(raw, "before")),
       event: eventId !== null && UUID.test(eventId) ? eventId : null,
     },
   };
