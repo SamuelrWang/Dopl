@@ -52,16 +52,27 @@ export function sdkPlanOf(
 /** Production: the `sdk_delivery` flag and the Dopl App key from the server env. */
 export const productionSdkLens: SdkLens = createSdkLens();
 
-/** The user's SDK lens, or null (no SDK wired, flag off, or the SDK path is unavailable: prosumer path). */
+/**
+ * The user's SDK lens, or null (no SDK wired, flag off, or the SDK path is unavailable: prosumer path).
+ *
+ * 🔒 PER DEVICE: the SDK lens copy reaches only MIGRATED glasses. A user who also has a glasses link
+ * that is NOT migrated (paired after the migration) keeps the prosumer lens copy, which every one of
+ * their devices reads (a migrated one through its merged inbox), so no device misses it.
+ */
 export async function sdkLensFor(deps: ShowDeps, userId: string): Promise<{ lens: SdkUserLens | null; unavailable?: string }> {
   const sdk = deps.sdk;
   if (!sdk) return { lens: null };
+  let sel: Awaited<ReturnType<SdkLens["forUser"]>>;
   try {
-    return { lens: await sdk.forUser(userId) };
+    sel = await sdk.forUser(userId);
   } catch (err) {
     if (err instanceof SdkLensError) return { lens: null, unavailable: err.code };
     throw err;
   }
+  if (!sel) return { lens: null };
+  const links = await deps.devices.listDevices(userId);
+  if (links.some((d) => !sel.deviceIds.includes(d.id))) return { lens: null, unavailable: "unmigrated device" };
+  return { lens: sel.lens };
 }
 
 export interface LensAnswer {

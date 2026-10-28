@@ -34,7 +34,7 @@ const STATUS = [{ type: "heading", text: "Deploy" }, { type: "progress", value: 
 
 type AskArgs = Parameters<SdkUserLens["ask"]>[0];
 
-function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; screenErr?: unknown; online?: boolean } = {}) {
+function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; screenErr?: unknown; online?: boolean; deviceIds?: string[] } = {}) {
   const screens: unknown[] = [];
   const asks: AskArgs[] = [];
   let settle: ((x: SdkAskOutcome) => void) | null = null;
@@ -59,7 +59,7 @@ function fakeSdk(o: { off?: boolean; forUserErr?: unknown; stateErr?: unknown; s
   const lens: SdkLens = {
     forUser: async () => {
       if (o.forUserErr) throw o.forUserErr;
-      return o.off ? null : user;
+      return o.off ? null : { lens: user, deviceIds: o.deviceIds ?? ["dev"] };
     },
   };
   return { lens, screens, asks, settle: (x: SdkAskOutcome) => settle?.(x) };
@@ -110,6 +110,21 @@ describe("path choice", () => {
     expect((s.screens[0] as { idempotencyKey: string }).idempotencyKey.length).toBeLessThanOrEqual(255);
     expect(vi.mocked(postMessage).mock.calls[0][3]?.display?.glasses_message_id).toBeUndefined();
     expect(shownLog()).toMatchObject({ path: "sdk", targets: ["channel", "glasses"] });
+  });
+
+  it("🔒 per device: a glasses link paired after the migration keeps the prosumer lens copy (every device reads it)", async () => {
+    const s = fakeSdk({ deviceIds: ["dev"] });
+    const t = setup(s.lens);
+    const both = { ...t.deps, devices: { listDevices: async () => [{ id: "dev", last_seen: null }, { id: "new-pair", last_seen: new Date(t.clock.now()).toISOString() }] } as unknown as GlassesDeps["devices"] };
+    const r = await showDisplay(ctx, { blocks: STATUS, target: "glasses" }, undefined, both);
+    expect(r.glasses_message_id).toBe(t.rows[0].id);
+    expect(s.screens).toHaveLength(0);
+    expect(shownLog()).toMatchObject({ path: "prosumer_fallback", fallback_reason: "unmigrated device" });
+
+    logs = [];
+    const migratedOnly = setup(fakeSdk({ deviceIds: ["dev", "old-revoked"] }).lens);
+    await showDisplay(ctx, { blocks: STATUS, target: "glasses" }, undefined, migratedOnly.deps);
+    expect(shownLog()).toMatchObject({ path: "sdk" });
   });
 
   it("what the contract cannot carry faithfully keeps the prosumer lens copy, logged with its reason", async () => {

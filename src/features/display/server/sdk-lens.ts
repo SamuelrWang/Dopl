@@ -52,8 +52,11 @@ export interface SdkUserLens {
 }
 
 export interface SdkLens {
-  /** The user's SDK lens when their flag is on; null when off. Throws {@link SdkLensError} (fallback). */
-  forUser(userId: string): Promise<SdkUserLens | null>;
+  /**
+   * The user's SDK lens when their flag is on, with the ids of their MIGRATED glasses (the seam routes
+   * per device: `sdk-seam.ts › sdkLensFor`); null when off. Throws {@link SdkLensError} (fallback).
+   */
+  forUser(userId: string): Promise<{ lens: SdkUserLens; deviceIds: string[] } | null>;
 }
 
 const log = (fields: Record<string, unknown>) => console.info("[display] " + JSON.stringify({ evt: "sdk_lens", ...fields }));
@@ -144,14 +147,14 @@ export function createSdkLens(env: { key?: string; baseUrl?: string } = {}): Sdk
   let client: Dopl | null = null;
   return {
     async forUser(userId) {
-      let on: boolean;
+      let state: { on: boolean; deviceIds: string[] };
       try {
-        on = (await sdkDeliveryFor(userId)).on;
+        state = await sdkDeliveryFor(userId);
       } catch (err) {
         console.error("[display] sdk_delivery lookup failed; prosumer lens path", err);
         throw new SdkLensError("flag_lookup_failed", true);
       }
-      if (!on) return null;
+      if (!state.on) return null;
       const key = env.key ?? process.env.DOPL_APP_SDK_KEY;
       if (!key) {
         if (!warnedNoKey) console.error("[display] sdk_delivery is on but DOPL_APP_SDK_KEY is not set; prosumer lens path");
@@ -159,7 +162,7 @@ export function createSdkLens(env: { key?: string; baseUrl?: string } = {}): Sdk
         throw new SdkLensError("no_key", true);
       }
       client ??= new Dopl({ apiKey: key, ...((env.baseUrl ?? process.env.DOPL_APP_SDK_BASE_URL) && { baseUrl: env.baseUrl ?? process.env.DOPL_APP_SDK_BASE_URL }) });
-      return sdkUserLens(client, userId);
+      return { lens: sdkUserLens(client, userId), deviceIds: state.deviceIds };
     },
   };
 }

@@ -109,7 +109,7 @@ describe("createSdkLens", () => {
     sdkDeliveryFor.mockResolvedValueOnce({ on: false, deviceIds: [] });
     expect(await createSdkLens({ key: KEY }).forUser(USER)).toBeNull();
     sdkDeliveryFor.mockResolvedValueOnce({ on: true, deviceIds: ["g2"] });
-    expect(await createSdkLens({ key: KEY }).forUser(USER)).not.toBeNull();
+    expect(await createSdkLens({ key: KEY }).forUser(USER)).toMatchObject({ deviceIds: ["g2"] });
     sdkDeliveryFor.mockResolvedValueOnce({ on: true, deviceIds: ["g2"] });
     const prev = process.env.DOPL_APP_SDK_KEY;
     delete process.env.DOPL_APP_SDK_KEY;
