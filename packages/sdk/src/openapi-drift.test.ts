@@ -54,7 +54,7 @@ describe("openapi.yaml and the SDK agree", () => {
   });
 
   it("every ROUTES key names a real method on the client", () => {
-    const dopl = new Dopl({ apiKey: "sk_test_abcdefghijklmnop1234" }) as unknown as Record<string, Record<string, unknown>>;
+    const dopl = new Dopl({ apiKey: "sk_test_EXAMPLE00000000000000" }) as unknown as Record<string, Record<string, unknown>>; // gitleaks:allow (documented fake)
     for (const key of Object.keys(ROUTES)) {
       const [group, method] = key.split(".");
       expect(typeof dopl[group]?.[method], key).toBe("function");

@@ -3,8 +3,9 @@ import { vi } from "vitest";
 
 import { Dopl } from "./client.js";
 
-export const SK = "sk_test_abcdefghijklmnop1234";
-export const PK = "pk_test_abcdefghijklmnop1234";
+/** Documented fake keys: valid shape, obviously not real (`EXAMPLE` + zeros). Never put a real key here. */
+export const SK = "sk_test_EXAMPLE00000000000000"; // gitleaks:allow (documented fake)
+export const PK = "pk_test_EXAMPLE00000000000000"; // gitleaks:allow (documented fake)
 export const BASE = "https://api.example.test/v1";
 
 export interface Recorded {
