@@ -20,7 +20,15 @@
 --     (`sdk-glasses-port.ts › deviceFromTokenHash`) resolves the same bearer.
 --   * A copy is only safe if it cannot outlive the original (A3's reason for not backfilling
 --     credentials). `glasses_device_links_sdk_sync` mirrors every legacy revoke, token change and
---     delete onto the SDK side in the same transaction.
+--     delete onto the SDK side in the same transaction. ONE WAY only: an SDK-side revoke
+--     (`connect/store.ts` sets `devices.revoked_at`, e.g. a `connections.revoke`) stops SDK delivery
+--     but leaves the legacy link live, so the bearer keeps working on the app routes (it is app
+--     auth). `revert_sdk_device` clears such an SDK-only revoke (link live), so revert, then migrate,
+--     re-migrates the device.
+--   * Not mirrored: a legacy RENAME (`repository.ts › updateDevice`) does not reach
+--     `devices.display_name`; migrate copies the name at move time. Cosmetic.
+--   * The sync trigger runs as the caller (SECURITY INVOKER) and RAISES for a role that cannot
+--     bypass RLS on `devices`: under RLS it would see no row and silently skip the revoke.
 --   * Dual read (§8.4): every prosumer lookup by `user_id` (Settings > Devices, Overview tiles,
 --     `hasActiveGlasses`, pair claim, reply mirror) reads `glasses_device_links`, never `devices`
 --     (`device-migration-dual-read.test.ts` pins that), so nulling `devices.user_id` hides nothing.
@@ -136,7 +144,7 @@ BEGIN
       RAISE EXCEPTION 'migrate_prosumer_device: device % is not a glasses_device_links mirror', v_link.id;
     END IF;
     IF v_dev.revoked_at IS NOT NULL THEN
-      RAISE EXCEPTION 'migrate_prosumer_device: device % is revoked but its link is live', v_link.id;
+      RAISE EXCEPTION 'migrate_prosumer_device: device % is revoked but its link is live (an SDK-side revoke: run revert_sdk_device first)', v_link.id;
     END IF;
 
     IF v_dev.user_id IS NULL THEN
@@ -214,7 +222,8 @@ COMMENT ON FUNCTION public.migrate_prosumer_device(uuid, uuid) IS
 -- ─── Revert ────────────────────────────────────────────────────────────────────────────────
 -- Puts one migrated device back to the prosumer shape, owned by its legacy link's user. Revokes
 -- the SDK credential and connections; clears the user's flag if no migrated device is left.
--- Works on a revoked device too (the revoke stays). Returns the restored owner.
+-- Works on a revoked device too: a legacy revoke stays; an SDK-only revoke (link live) is cleared.
+-- Returns the restored owner.
 
 CREATE OR REPLACE FUNCTION public.revert_sdk_device(p_device_id uuid)
   RETURNS uuid
@@ -224,12 +233,13 @@ CREATE OR REPLACE FUNCTION public.revert_sdk_device(p_device_id uuid)
   SET search_path = public, pg_temp
 AS $function$
 DECLARE
-  v_dev  record;
-  v_user uuid;
-  v_ext  text;
+  v_dev          record;
+  v_user         uuid;
+  v_ext          text;
+  v_link_revoked timestamptz;
 BEGIN
   -- Link first, then device: the order glasses_device_links_sdk_sync and migrate lock in.
-  SELECT g.user_id INTO v_user FROM public.glasses_device_links g WHERE g.id = p_device_id FOR UPDATE;
+  SELECT g.user_id, g.revoked_at INTO v_user, v_link_revoked FROM public.glasses_device_links g WHERE g.id = p_device_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'revert_sdk_device: no glasses_device_links row for %', p_device_id;
   END IF;
@@ -260,11 +270,14 @@ BEGIN
    WHERE c.device_id = p_device_id
      AND c.revoked_at IS NULL;
 
+  -- An SDK-only revoke (link still live) is undone with the move: the device is the legacy link's
+  -- again, and the link says it is live. A legacy revoke (link revoked) stays.
   UPDATE public.devices d
      SET user_id = v_user,
          project_id = NULL,
          env = NULL,
-         end_user_id = NULL
+         end_user_id = NULL,
+         revoked_at = CASE WHEN v_link_revoked IS NULL THEN NULL ELSE d.revoked_at END
    WHERE d.id = p_device_id;
 
   IF NOT EXISTS (
@@ -365,6 +378,12 @@ AS $function$
 DECLARE
   v_dev record;
 BEGIN
+  -- Fail closed, never open: a role under RLS would see no `devices` row below and skip the revoke.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolname = current_user AND (r.rolsuper OR r.rolbypassrls))
+     AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.oid = 'public.devices'::regclass AND c.relowner = (SELECT r.oid FROM pg_roles r WHERE r.rolname = current_user)) THEN
+    RAISE EXCEPTION 'glasses_device_links_sdk_sync: role % cannot bypass RLS on devices; write glasses_device_links as the service role', current_user;
+  END IF;
+
   SELECT d.id, d.end_user_id INTO v_dev
     FROM public.devices d
    WHERE d.id = OLD.id

@@ -110,6 +110,17 @@ describe("device SDK prosumer migration", () => {
     expect(sync).toMatch(/AND d\.user_id IS NULL\s+AND d\.legacy_source = 'glasses_device_links'/);
   });
 
+  it("revert clears an SDK-only revoke (link live) and keeps a legacy one", () => {
+    expect(fnBody("revert_sdk_device")).toMatch(/revoked_at = CASE WHEN v_link_revoked IS NULL THEN NULL ELSE d\.revoked_at END/);
+  });
+
+  it("🔒 the sync trigger fails closed for a role that cannot bypass RLS", () => {
+    const sync = fnBody("glasses_device_links_sdk_sync");
+    expect(sync).toMatch(/r\.rolsuper OR r\.rolbypassrls/);
+    // The guard precedes the device lookup that RLS would silently empty.
+    expect(sync.indexOf("cannot bypass RLS")).toBeLessThan(sync.indexOf("FROM public.devices d"));
+  });
+
   it("🔒 every function is SECURITY INVOKER with a pinned search_path", () => {
     for (const f of [...FUNCTIONS.map((s) => s.slice(0, s.indexOf("("))), "glasses_device_links_sdk_sync"]) {
       const body = fnBody(f);

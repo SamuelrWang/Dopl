@@ -156,6 +156,19 @@ describe.skipIf(!liveRedteamEnabled)("REDTEAM device migration (live)", () => {
     expect(await liveConnections(linkId)).toHaveLength(1);
   });
 
+  it("an SDK-side revoke: migrate refuses, revert clears it (link live), migrate works again", async () => {
+    // What connect/store.ts › revokeDevice writes.
+    await ok(admin().from("devices").update({ revoked_at: new Date().toISOString() }).eq("id", linkId));
+    const refused = await admin().rpc("migrate_prosumer_device", { p_user_id: userId, p_project_id: projectId });
+    expect(refused.error?.message).toMatch(/run revert_sdk_device first/);
+    expect(await must(admin().rpc("revert_sdk_device", { p_device_id: linkId }))).toBe(userId);
+    expect(await device(linkId)).toMatchObject({ user_id: userId, revoked_at: null });
+    const out = await must(admin().rpc("migrate_prosumer_device", { p_user_id: userId, p_project_id: projectId }));
+    expect(out).toEqual([{ device_id: linkId, outcome: "migrated" }]);
+    expect(await liveCreds(linkId)).toEqual([{ hash: tokenHash }]);
+    expect(await liveConnections(linkId)).toHaveLength(1);
+  });
+
   it("🔒 a legacy revoke (unpair) revokes the device, credential and connection", async () => {
     await ok(admin().from("glasses_device_links").update({ revoked_at: new Date().toISOString() }).eq("id", linkId));
     expect((await device(linkId)).revoked_at).not.toBeNull();
