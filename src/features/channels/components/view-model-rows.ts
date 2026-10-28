@@ -106,6 +106,8 @@ export interface ThreadCardRow {
   authorLabel: string;
   /** The opening message was an agent's (`authorKind`); the author is still its operator. */
   agent: boolean;
+  /** Which agent opened it (`authorAgentIdOf`), so the footer can name it; `null` = cannot say. */
+  agentId: string | null;
   time: string;
   /** Every thread of the request, in addressee order. Never empty. */
   threads: ChannelThread[];
@@ -337,6 +339,7 @@ export function channelRows(
         author: personFor(message, index),
         authorLabel: labelFor(message, index),
         agent: message.authorKind === "agent",
+        agentId: message.authorKind === "agent" ? authorAgentIdOf(message) : null,
         time: formatTime(message.createdAt),
         threads: cardThreads,
         openThreadId: ownThreadOf(cardThreads, index.currentUserId).id,

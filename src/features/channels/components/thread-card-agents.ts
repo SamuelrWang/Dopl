@@ -79,8 +79,15 @@ export function runningCount(agents: readonly ThreadCardAgent[]): number {
  * The footer's attribution. An agent posts on its operator's account (INVARIANTS §5), so the row's
  * author is always a person and only the opening message's `authorKind` says an agent wrote it.
  */
-export function openedByLabel(authorLabel: string, agent: boolean): string {
+export function openedByLabel(
+  authorLabel: string,
+  agent: boolean,
+  /** The opening agent's display name (Samuel, 2026-10-28: "Opened by UI Fixer"); unknown falls back. */
+  agentName: string | null = null
+): string {
   const me = authorLabel === "You";
+  const named = agent ? agentName?.trim() : null;
+  if (named) return `Opened by ${named}`;
   if (agent) return me ? "Opened by your agent" : `Opened by ${firstName(authorLabel)}'s agent`;
   return me ? "Opened by you" : `Opened by ${authorLabel}`;
 }

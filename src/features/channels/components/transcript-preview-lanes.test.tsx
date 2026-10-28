@@ -76,6 +76,7 @@ function cardRow(over: Partial<ThreadCardRow> = {}): ThreadCardRow {
     author: { userId: PEER, email: null, displayName: "Diana Taylor", avatarUrl: null },
     authorLabel: "Diana Taylor",
     agent: false,
+    agentId: null,
     time: "10:00",
     threads: [thread()],
     openThreadId: "t-1",

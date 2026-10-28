@@ -127,6 +127,8 @@ export function ThreadCardMessage({
   onOpenAgent?: (key: string) => void;
 }) {
   const first = row.threads[0];
+  // Resolved at render off the live index, as the transcript's message rows do, so a rename re-faces it.
+  const agentName = row.agentId ? (index.agents.get(row.agentId)?.displayName ?? null) : null;
   return (
     <AuthoredRow
       id={row.id}
@@ -140,7 +142,8 @@ export function ThreadCardMessage({
     >
       <div className="white-card mt-1 flex w-full max-w-115 flex-col gap-2 rounded-xl py-3 pl-3.5 pr-3 text-left">
         <span className="flex min-w-0 items-center gap-2 text-heading font-medium text-text-primary">
-          <span className="mark-tile size-5 flex-none">
+          {/* Samuel, 2026-10-28: a plain ink icon, no tile behind it; the 20px box keeps the alignment. */}
+          <span className="grid size-5 flex-none place-items-center text-text-primary">
             <MessagesSquare size={11} strokeWidth={2.2} aria-hidden />
           </span>
           <span className="min-w-0 truncate">{first.title}</span>
@@ -168,7 +171,7 @@ export function ThreadCardMessage({
         {agents && <ThreadAgents agents={agents} onOpenAgent={onOpenAgent} />}
         <div className="flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
           <span className="min-w-0 truncate text-caption text-text-muted">
-            {openedByLabel(row.authorLabel, row.agent)}
+            {openedByLabel(row.authorLabel, row.agent, agentName)}
           </span>
           <span className="flex flex-none gap-1.5">
             {canLaunchAgent && (
