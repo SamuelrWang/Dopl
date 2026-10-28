@@ -1,5 +1,5 @@
 // The Google Home device for Dopl: status, capabilities, notify (spoken) and show (a card on a
-// Nest Hub). Same intent vocabulary as the glasses (`glasses_status/capabilities/notify/show`), so
+// Nest Hub), plus the cross-device control pair (device_status / device_command). Same intent vocabulary as the glasses (`glasses_status/capabilities/notify/show`), so
 // Google Home is the second device behind one set of intents. `ask` is NOT offered: Cast is
 // output-only (no tap or voice answer reaches a third-party sender), and capabilities says so.
 // Every network effect goes through `deps`, so tests run with no LAN.
@@ -8,6 +8,7 @@ const { discoverDevices } = require('./discovery');
 const { castMedia } = require('./cast-client');
 const { synthesizeSpeech, renderCard } = require('./render');
 const { createMediaServer } = require('./media-server');
+const { readDeviceState, sendDeviceCommand, DeviceCommandError } = require('./device-control');
 
 const LIMITS = { text: 500, title: 80, line: 120, lines: 6 };
 const CACHE_MS = 60 * 1000;
@@ -37,6 +38,8 @@ function createGoogleHome(overrides = {}) {
     speak: synthesizeSpeech,
     card: renderCard,
     media: null,
+    state: readDeviceState,
+    control: sendDeviceCommand,
     now: () => Date.now(),
     ...overrides,
   };
@@ -88,7 +91,12 @@ function createGoogleHome(overrides = {}) {
         limits: { title: LIMITS.title, line: LIMITS.line, lines: LIMITS.lines },
       },
       ask: { supported: false, reason: 'Cast is output-only: an answer cannot come back from the speaker. Use glasses_ask or dopl_show.' },
-      device_control: { supported: false, reason: 'Needs Google Home APIs / Home MCP (Google account + OAuth); not wired yet.' },
+      device_control: {
+        supported: true,
+        tools: 'device_status lists what each device is playing and the commands it accepts now; device_command sends one',
+        commands: 'set_volume, mute, unmute always; stop while an app is playing; pause / play when the app allows it',
+        not_covered: 'choosing what to play, and smart-home devices (lights, thermostats): Google Home MCP or Home Assistant',
+      },
     };
   }
 
@@ -131,7 +139,35 @@ function createGoogleHome(overrides = {}) {
     return { ok: true, device: publicRow(target), status: r.playerState || 'loaded', media_session_id: r.mediaSessionId };
   }
 
-  return { status, capabilities, notify, show, close: () => deps.media && deps.media.close() };
+  /** Live state + accepted commands. `device` omitted: every device that is not a group. */
+  async function deviceStatus(args = {}) {
+    const targets = args.device ? [await resolveDevice(args.device)] : (await devices({ refresh: true })).filter((d) => !d.group);
+    if (!targets.length) throw new GoogleHomeError('No Google Home found on this network. Same Wi-Fi as this computer?');
+    const rows = await Promise.all(targets.map(async (d) => {
+      try {
+        return { device: publicRow(d), kind: 'google_home', ...(await deps.state(d)) };
+      } catch (err) {
+        return { device: publicRow(d), kind: 'google_home', error: `unreachable: ${err && err.message ? err.message : err}` };
+      }
+    }));
+    return { count: rows.length, devices: rows };
+  }
+
+  /** One command from that device's `commands`; returns its state afterwards. */
+  async function deviceCommand(args = {}) {
+    const command = typeof args.command === 'string' ? args.command.trim().toLowerCase() : '';
+    if (!command) throw new GoogleHomeError('command is required; device_status lists each device\'s commands');
+    const target = await resolveDevice(args.device);
+    try {
+      const after = await deps.control(target, command, args.args || {});
+      return { ok: true, device: publicRow(target), command, ...after };
+    } catch (err) {
+      if (err instanceof DeviceCommandError) throw new GoogleHomeError(err.message);
+      throw err;
+    }
+  }
+
+  return { status, capabilities, notify, show, deviceStatus, deviceCommand, close: () => deps.media && deps.media.close() };
 }
 
 function matches(d, wanted) {

@@ -184,6 +184,7 @@ const AUDIO_GLASSES: Category = {
 const GH = "Google Home";
 const HA = "Home Assistant";
 const GH_LOCAL = "Built as a local MCP server in the Dopl desktop app (`google_home_notify`), not in a release yet";
+const GH_CONTROL = "Built as `device_status` and `device_command` in the same local MCP server, not in a release yet";
 
 const SMART_HOME: Category = {
   slug: "smart-home",
@@ -197,17 +198,17 @@ const SMART_HOME: Category = {
   ],
   unsupported: ["Amazon Alexa", "Apple Home"],
   notes: [
-    "Google Home is output only. Cast plays to the speaker and no answer can come back, so Google Home has nothing under What your agent receives.",
+    "Google Home cannot answer a question: Cast carries no answer back from the speaker. It does report what it is playing, its volume and the commands it accepts right now, so your agent reads those instead of guessing.",
   ],
   receives: [
-    { capability: "state.read", title: "Device state", what: "The current state of a home device, such as whether a light is on.", limits: [NOT_CONNECTED], call: "read", responseFrom: "test", support: [soon(HA)] },
+    { capability: "state.read", title: "Device state", what: "The current state of a home device, such as what a speaker is playing or whether a light is on, with the commands it accepts right now.", limits: ["Google Home: the playing app, track, player state and volume, read from the speaker when asked. Commands are listed from what the device reports, never per app."], call: "read", responseFrom: "test", support: [soon(GH, GH_CONTROL), soon(HA)] },
     { capability: "telemetry.read", title: "Sensor readings", what: "Readings such as temperature or energy use.", limits: [NOT_CONNECTED], call: "read", responseFrom: "test", support: [soon(HA)] },
   ],
   sends: [
     { capability: "present.speak", title: "Speak", what: "A message said out loud on a speaker. It interrupts what the speaker is playing.", limits: ["Google Home: 500 characters, at the speaker's current volume. The Mac must be awake on the same network."], call: "action", args: { text: "Your build finished. All tests passed." }, responseFrom: "test", support: [soon(GH, GH_LOCAL), soon(HA)] },
     { capability: "present.display", title: "Show a card", what: "A card on a smart display, optionally read aloud.", limits: ["Google Home: Nest Hub and Nest Hub Max only. Title up to 80 characters and up to 6 lines of 120."], call: "action", args: { blocks: [{ id: "title", type: "heading", text: "Flight UA 212" }] }, responseFrom: "test", support: [soon(GH, "Built as `google_home_show` in the same local MCP server, not in a release yet"), soon(HA)] },
     { capability: "act.set", title: "Set a device", what: "A reversible change such as turning on a light. The arguments are defined with the first home adapter.", limits: [NOT_CONNECTED], call: "action", responseFrom: "test", support: [soon(GH, "Planned through Google's Home APIs"), soon(HA)] },
-    { capability: "act.media", title: "Control media", what: "Play, pause or change what a speaker or TV is playing.", limits: [NOT_CONNECTED], call: "action", responseFrom: "test", support: [soon(GH), soon(HA)] },
+    { capability: "act.media", title: "Control media", what: "Stop, pause, resume or change the volume of whatever a speaker or TV is playing, from any app.", limits: ["Google Home: stop, pause, play, set_volume, mute and unmute, each only while the device lists it. Choosing what to play is not covered."], call: "action", responseFrom: "test", support: [soon(GH, GH_CONTROL), soon(HA)] },
     { capability: "act.lock", title: "Lock or unlock", what: "Locks are T4, so the default profile denies them even when the user ticked them.", limits: [NOT_CONNECTED], call: "action", responseFrom: "test", support: [soon(HA)] },
   ],
 };

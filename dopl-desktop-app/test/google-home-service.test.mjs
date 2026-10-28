@@ -115,7 +115,7 @@ function fakeServer() {
   return { tools, registerTool: (name, def, handler) => tools.set(name, { def, handler }) };
 }
 
-test('MCP: the four google_home_* tools, no ask; results are one JSON text block, refusals isError', async () => {
+test('MCP: the six tools (four google_home_*, device_status, device_command), no ask; results are one JSON text block, refusals isError', async () => {
   const server = fakeServer();
   const { home } = harness();
   registerGoogleHomeTools(server, home);

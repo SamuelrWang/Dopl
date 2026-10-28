@@ -242,15 +242,17 @@ describe("device categories", () => {
     for (const c of CATEGORIES.filter((x) => x.slug !== "display-glasses")) expect(categoryPage(c.slug).status, c.slug).toBe("coming_soon");
   });
 
-  it("shows Google Home in smart home, output only and not live", () => {
+  it("shows Google Home in smart home: not live, no answers, state and media control planned", () => {
     const page = categoryPage("smart-home");
     const cards = cardsOf(page);
     const gh = cards.filter((card) => card.support.some((s) => s.model === "Google Home"));
     expect(gh.length).toBeGreaterThan(0);
     for (const card of gh) for (const s of card.support.filter((x) => x.model === "Google Home")) expect(s.status).toBe("coming_soon");
+    // Cast carries no answer back: nothing Google Home receives is an input from the user.
     const receives = CATEGORIES.find((c) => c.slug === "smart-home")!.receives;
-    for (const spec of receives) expect(spec.support.map((s) => s.model)).not.toContain("Google Home");
-    expect(pageToMarkdown(page)).toMatch(/Google Home is output only/);
+    const ghReceives = receives.filter((spec) => spec.support.some((s) => s.model === "Google Home")).map((spec) => spec.capability);
+    expect(ghReceives).toEqual(["state.read"]);
+    expect(pageToMarkdown(page)).toMatch(/Google Home cannot answer a question/);
   });
 
   it("runs every planned category's calls against a simulated device of its kind", () => {

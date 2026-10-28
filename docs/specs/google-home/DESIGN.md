@@ -22,6 +22,15 @@ kitchen, which is why this first cut is a local MCP server and not a hosted tool
 | `glasses_notify` | `google_home_notify` (spoken; or `audio_url`) |
 | `glasses_show` | `google_home_show` (1280x720 card on a Nest Hub; `speak` reads it too) |
 | `glasses_ask` | none: Cast is output-only, no answer can come back |
+| — | `device_status` / `device_command` (2026-10-27): what is playing + the commands the device accepts now; send one |
+
+### Device control (2026-10-27)
+
+Generic by construction: the tool pair is named for devices, not Google, and the command list is read
+off the device (`device-control.js › commandsFor`), so no tool is ever added per app or per command.
+Cast gives `set_volume`, `mute`, `unmute` (receiver), `stop` (receiver STOP of the running session, any
+app) and `pause` / `play` (media namespace, when the app reports it). Choosing what to play and
+smart-home devices stay out of scope (Google Home MCP / Home Assistant).
 
 Result shape is the glasses one: one JSON text block, `isError` with a fixable sentence on refusal.
 
@@ -38,7 +47,8 @@ Result shape is the glasses one: one JSON text block, `isError` with a fixable s
 - `media-server.js` — the device pulls media by URL, so files are served on the LAN interface that
   shares the device's subnet, under a random 128-bit path, deleted after 5 minutes; anything else 404s.
 - `service.js` — device resolution (id or name; omitted = the only speaker / only screen), limits.
-- `mcp-tools.js` + `mcp-stdio.js` — the four tools; `--discover` prints rows and exits.
+- `device-control.js` — receiver/media status → state + accepted commands; one command sent.
+- `mcp-tools.js` + `mcp-stdio.js` — the six tools; `--discover` prints rows and exits.
 
 Tests: `dopl-desktop-app/test/google-home-{cast,service}.test.mjs` — fake socket, stubbed discovery,
 cast, speech, card and media; nothing reaches a device.
@@ -56,7 +66,7 @@ registered custom receiver); no answers.
    (INVARIANTS §5). Needs a queue table (migration) and a desktop pull loop.
 2. **Desktop agents get the tools by default** — inject `dopl-google-home` into Dopl-launched sessions,
    gated by containment profile like `profileOffersGlasses`.
-3. **Device control** — Google Home MCP when it leaves early access (agent connects to Google
+3. **Smart-home device control** — Google Home MCP when it leaves early access (agent connects to Google
    directly; Dopl can list it), or Home APIs via a Dopl phone app.
 4. **Resume-after-message** — a custom receiver or Home MCP if it gains a broadcast tool.
 5. **Home Assistant bridge** for users who run HA.
